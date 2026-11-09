@@ -136,6 +136,11 @@ fn undecided_message(why: &Undecided, resource: &str) -> Message {
       ("notReadyHere.undecidedUsesArchivedInstruction", Some(name.clone()))
     }
     Undecided::RunsUnknown(_) => ("notReadyHere.undecidedRunsUnknown", None),
+    Undecided::RunsArchived(_, name) => ("notReadyHere.undecidedRunsArchived", Some(name.clone())),
+    Undecided::ChoosesArchivedLocalMcpServer(_, name) => (
+      "notReadyHere.undecidedChoosesArchivedLocalMcpServer",
+      Some(name.clone()),
+    ),
     Undecided::ConnectionGone(_) => ("notReadyHere.undecidedConnectionGone", None),
     Undecided::TeamToolSecretById(_) => ("notReadyHere.undecidedTeamToolSecretById", None),
     Undecided::SecretGone(_) => ("notReadyHere.undecidedSecretGone", None),
@@ -159,6 +164,8 @@ fn undecided_code(why: &Undecided) -> &'static str {
     Undecided::UsesArchivedTool(..) => "uses_archived_tool",
     Undecided::UsesArchivedInstruction(..) => "uses_archived_instruction",
     Undecided::RunsUnknown(_) => "runs_unknown",
+    Undecided::RunsArchived(..) => "runs_archived",
+    Undecided::ChoosesArchivedLocalMcpServer(..) => "chooses_archived_mcp_server",
     Undecided::ConnectionGone(_) => "connection_gone",
     Undecided::TeamToolSecretById(_) => "team_tool_secret_by_id",
     Undecided::SecretGone(_) => "secret_gone",

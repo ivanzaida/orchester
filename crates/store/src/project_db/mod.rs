@@ -37,6 +37,7 @@ mod invocation_providers;
 mod invocation_records;
 mod joining;
 mod limits;
+mod local_archive;
 mod local_integration;
 mod mcp_servers;
 mod memory;

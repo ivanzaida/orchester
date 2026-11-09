@@ -20,7 +20,7 @@ use crate::services::{
 
 /// Whether a fix can be pressed now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Busy {
+pub(in crate::screens) enum Busy {
   Idle,
   /// A fix is being taken.
   Taking,

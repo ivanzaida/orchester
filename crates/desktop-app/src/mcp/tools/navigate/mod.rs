@@ -139,8 +139,9 @@ fn schema() -> Value {
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
-      "filter": { "type": "string", "enum": HubFilter::ALL.map(HubFilter::name), "description": "agents of a team project: the kinds its hub lists, all (the default), profiles, mcp_servers, instructions, skills or tools." },
-      "item": { "type": "string", "description": "agents of a team project: the id of the resource the hub's panel shows; the first of the list when left out." },
+      "filter": { "type": "string", "enum": HubFilter::LOCAL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills or tools, and archived in a local project (a team project shows all instead)." },
+      "item": { "type": "string", "description": "agents: the id of the resource the hub's panel shows; the first of the list when left out." },
+      "server": { "type": "string", "description": "agents of a local project: the id of the local MCP server the hub's panel shows (its connection id), in place of `item`." },
       "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
       "query": {
         "type": "string",
@@ -286,7 +287,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
-    Screen::Agents => &["project", "agent", "filter", "item"],
+    Screen::Agents => &["project", "agent", "filter", "item", "server"],
     Screen::Merges => merges::PARAMS,
     Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
       &["project"]

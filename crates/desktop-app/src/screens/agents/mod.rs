@@ -47,14 +47,12 @@ use crate::{
 /// for its links; the page shows all of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shown {
-  List,
   New(AgentTab),
   Edit(ResourceId, AgentTab),
 }
 impl Shown {
   fn page(self) -> ProjectPage {
     match self {
-      Self::List => ProjectPage::Agents,
       Self::New(tab) => ProjectPage::NewAgent(tab),
       Self::Edit(id, tab) => ProjectPage::Agent(id, tab),
     }
@@ -71,6 +69,10 @@ impl AgentsNav {
   /// What opens a place the person chose, by a browser's rules (`navigation::link`).
   pub fn to(&self, shown: Shown) -> Open {
     self.navigation.to(Route::Project(self.project, shown.page()))
+  }
+  /// What opens the Agents page, which lists the project's profiles.
+  pub fn agents(&self) -> Open {
+    self.navigation.to(Route::Project(self.project, ProjectPage::Agents))
   }
   /// What opens Import resources on its Agents tab (`G69AHh`).
   pub fn import(&self) -> Open {
@@ -89,11 +91,11 @@ impl AgentsNav {
       .navigation
       .replace(Route::Project(self.project, Shown::Edit(id, tab).page()));
   }
-  /// The list, in place of a profile that was removed.
-  pub fn removed(&self) {
+  /// The Agents page, in place of a profile that was archived.
+  pub fn archived(&self) {
     self
       .navigation
-      .replace(Route::Project(self.project, Shown::List.page()));
+      .replace(Route::Project(self.project, ProjectPage::Agents));
   }
 }
 
@@ -180,7 +182,7 @@ impl Component for AgentsScreen {
       move || retry.update(|n| *n += 1),
     );
     if let Some(failure) = failure
-      && (loaded.data.is_none() || shown == Shown::List)
+      && loaded.data.is_none()
     {
       let body = hub::list_body("agents-failed", failure.page(ctx));
       return frame(ctx, &project, Head::default(), body);
@@ -200,11 +202,6 @@ impl AgentsScreen {
   /// The list or the profile's page while the profiles are read.
   fn reading(&self, ctx: &mut Ctx, project: &ShownProject, shown: Shown) -> Element {
     match shown {
-      Shown::List => {
-        let head = list::reading_head(ctx, &self.nav);
-        let body = reading::list(ctx);
-        frame(ctx, project, head, body)
-      }
       Shown::New(_) | Shown::Edit(..) => {
         let head = list::reading_head(ctx, &self.nav);
         let body = reading::profile(ctx, &self.nav);
@@ -223,12 +220,6 @@ impl AgentsScreen {
   ) -> Element {
     let revision = self.revision.get();
     let entry = match shown {
-      Shown::List => {
-        let team = hub::team::of(&project);
-        let head = list::head(ctx, (&listed, team.as_ref()), &self.nav);
-        let body = list::list(ctx, &project, &listed, &self.nav);
-        return frame(ctx, &project, head, body);
-      }
       Shown::New(_) => None,
       Shown::Edit(id, _) => match listed.profile(id) {
         Some(entry) => Some(entry.clone()),

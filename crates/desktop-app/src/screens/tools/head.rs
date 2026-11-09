@@ -1,5 +1,5 @@
 //! The top of a tool's page (`04b` `nuoSy`): the crumb back to Tools, the head with the tool's name, kind, standing
-//! and callers and the … menu with Remove, the draft bar, and the page's tabs — Configuration, Inputs & outputs,
+//! and callers and the … menu with Archive, the draft bar, and the page's tabs — Configuration, Inputs & outputs,
 //! Access and Usage log.
 use std::sync::Arc;
 

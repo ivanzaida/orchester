@@ -97,7 +97,7 @@ impl DevtoolsInspectable for Sent {}
 pub(super) enum Ask {
   Nothing,
   Discard,
-  Remove,
+  Archive,
 }
 impl DevtoolsInspectable for Ask {}
 pub struct ToolEditor {
@@ -212,7 +212,7 @@ impl Component for ToolEditor {
         more,
         (shared, versions),
       ))
-      .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
+      .with_children(self.archive_question(ctx, &p, baseline.as_ref()));
     pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
       _ if !may_change => pane.with_children(team.as_ref().map(|team| hub::team::line(ctx, "tool-team-line", team))),
       (Some(question), _) => pane.child(question),
@@ -254,15 +254,15 @@ fn waiting(ctx: &mut Ctx, p: &EditorProps, standing: Option<(&TeamConfiguration,
 }
 
 impl ToolEditor {
-  /// The ⋯ menu of a saved tool, whose Remove asks first.
+  /// The ⋯ menu of a saved tool, whose Archive asks first.
   fn more_menu(&self) -> More {
     let (ask, open) = (self.ask.clone(), self.more.clone());
     More {
       open: self.more.clone(),
       anchor: self.anchor.clone(),
-      remove: Arc::new(move || {
+      archive: Arc::new(move || {
         open.set(false);
-        ask.set(Ask::Remove);
+        ask.set(Ask::Archive);
       }),
     }
   }

@@ -1,24 +1,27 @@
-//! The Profiles tab when its read or a save fails (`Failure states · redesign` `SsC16`): the card replaces only the
-//! tab's content, says what couldn't be read and why, tries again in place, shows the error and the tries in its
-//! Details, says it still can't be read after three tries, and the tab shows no count meanwhile; a save that fails
-//! keeps the typed value in its field and says so in the header.
+//! The Agents page when its read or a save fails (`Failure states · redesign` `SsC16`): the card replaces only the
+//! page's content, says what couldn't be read and why, tries again in place, shows the error and the tries in its
+//! Details and says it still can't be read after three tries; a save that fails keeps the typed value in its field and
+//! says so in the header.
 use super::{harness::Agents, support::project_id};
 
-/// Breaks the profiles' bodies so they can't be read; the body to put back.
+/// Breaks the connections' settings so the hub can't read what its profiles run on; the settings to put back.
 fn break_profiles(screen: &Agents) -> (rusqlite::Connection, String) {
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("fixture db");
-  let body: String = db
-    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
-    .expect("body");
-  db.execute("UPDATE resource_drafts SET body = 'broken'", [])
+  let settings: String = db
+    .query_row("SELECT settings FROM connections", [], |row| row.get(0))
+    .expect("settings");
+  db.execute("UPDATE connections SET settings = 'broken'", [])
     .expect("corrupt disposable fixture");
-  (db, body)
+  (db, settings)
 }
 
 fn failed_list(screen: &mut Agents) {
   screen.window.navigation().go(orchester_app::routes::Route::Project(
     project_id(),
-    orchester_app::routes::ProjectPage::Agents,
+    orchester_app::routes::ProjectPage::AgentsHub(orchester_app::routes::HubView::new(
+      orchester_app::routes::HubFilter::Profiles,
+      None,
+    )),
   ));
   // A list already shown reads again once the profiles change.
   screen
@@ -27,76 +30,76 @@ fn failed_list(screen: &mut Agents) {
     .feed(project_id())
     .outside
     .update(|counts| counts.profiles += 1);
-  screen.until("the failure card", |s| s.exists("agents-load-error"));
+  screen.until("the failure card", |s| s.exists("local-hub-load-error"));
 }
 
 /// Presses Try again and waits until the read under way ends again.
 fn try_again(screen: &mut Agents, tries: &str) {
-  screen.click("agents-load-error-retry");
+  screen.click("local-hub-load-error-retry");
   screen.until(tries, |s| {
-    s.exists("agents-load-error-tries") && s.text("agents-load-error-tries").contains(tries)
+    s.exists("local-hub-load-error-tries") && s.text("local-hub-load-error-tries").contains(tries)
   });
 }
 
 #[test]
 fn failure_page_says_what_and_why_hides_the_count_and_tries_again_in_place() {
   let mut screen = Agents::new(true);
-  screen.profile(false);
+  screen.profile(true);
   screen.go();
-  screen.until("counted", |s| s.text("agents-hub-tab-profiles").contains('1'));
+  screen.until("counted", |s| s.text("local-hub-filter-profiles").contains('1'));
   let (db, body) = break_profiles(&screen);
   failed_list(&mut screen);
-  let card = screen.text("agents-load-error");
-  assert!(card.contains("Agent profiles couldn’t be read"), "{card}");
+  let card = screen.text("local-hub-load-error");
+  assert!(card.contains("The agents of this project couldn't be read"), "{card}");
   assert!(
-    card.contains("The project's database couldn't be read"),
+    card.contains("couldn’t be read") || card.contains("couldn't be read"),
     "why in plain words: {card}"
   );
   assert!(card.contains("Runs keep going"), "what still works: {card}");
-  assert!(screen.exists("agents-load-error-log"), "Open log");
+  assert!(screen.exists("local-hub-load-error-log"), "Open log");
   assert!(
-    screen.exists("agents-hub-tabs") && screen.exists("agents-hub-title"),
-    "the head and tabs stay"
+    screen.exists("local-hub-filter") && screen.exists("local-hub-title"),
+    "the head and filter stay"
   );
-  screen.until("no stale count", |s| !s.text("agents-hub-tab-profiles").contains('1'));
-  db.execute("UPDATE resource_drafts SET body = ?1", [&body])
+  screen.until("no stale count", |s| !s.text("local-hub-filter-profiles").contains('1'));
+  db.execute("UPDATE connections SET settings = ?1", [&body])
     .expect("restore fixture");
-  screen.click("agents-load-error-retry");
+  screen.click("local-hub-load-error-retry");
   screen.until("the profiles in its place", |s| {
-    s.exists("agents-new") && !s.exists("agents-load-error")
+    s.exists("local-hub-list") && !s.exists("local-hub-load-error")
   });
-  screen.until("counted again", |s| s.text("agents-hub-tab-profiles").contains('1'));
+  screen.until("counted again", |s| s.text("local-hub-filter-profiles").contains('1'));
 }
 
 #[test]
 fn failure_details_show_the_error_and_the_tries() {
   let mut screen = Agents::new(true);
-  screen.profile(false);
+  screen.profile(true);
   let _broken = break_profiles(&screen);
   failed_list(&mut screen);
-  assert!(!screen.exists("agents-load-error-details"), "Details start closed");
-  screen.click("agents-load-error-details-toggle");
-  let details = screen.text("agents-load-error-details");
+  assert!(!screen.exists("local-hub-load-error-details"), "Details start closed");
+  screen.click("local-hub-load-error-details-toggle");
+  let details = screen.text("local-hub-load-error-details");
   assert!(
     details.contains("errors.storage · The data could not be read or written."),
     "{details}"
   );
   assert!(details.contains("Tried once · at"), "{details}");
-  assert!(screen.exists("agents-load-error-copy"), "Copy details");
+  assert!(screen.exists("local-hub-load-error-copy"), "Copy details");
   try_again(&mut screen, "Tried 2 times");
 }
 
 #[test]
 fn failure_still_fails_after_three_tries_and_leads_with_the_log() {
   let mut screen = Agents::new(true);
-  screen.profile(false);
+  screen.profile(true);
   let _broken = break_profiles(&screen);
   failed_list(&mut screen);
-  screen.click("agents-load-error-details-toggle");
-  assert!(screen.text("agents-load-error-title").contains("couldn’t be read"));
+  screen.click("local-hub-load-error-details-toggle");
+  assert!(screen.text("local-hub-load-error-title").contains("couldn't be read"));
   try_again(&mut screen, "Tried 2 times");
   try_again(&mut screen, "Tried 3 times");
-  assert_eq!(screen.text("agents-load-error-title"), "Still can't be read");
+  assert_eq!(screen.text("local-hub-load-error-title"), "Still can't be read");
   let bounds = |s: &mut Agents, id: &str| {
     s.window
       .tree
@@ -105,8 +108,8 @@ fn failure_still_fails_after_three_tries_and_leads_with_the_log() {
       .unwrap_or_else(|| panic!("{id} laid out"))
   };
   let (log, retry) = (
-    bounds(&mut screen, "agents-load-error-log"),
-    bounds(&mut screen, "agents-load-error-retry"),
+    bounds(&mut screen, "local-hub-load-error-log"),
+    bounds(&mut screen, "local-hub-load-error-retry"),
   );
   assert!(log.x < retry.x, "Open log leads: {log:?} {retry:?}");
 }

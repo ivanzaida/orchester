@@ -83,7 +83,7 @@ pub fn secret(text: &str) -> SecretName {
   SecretName::new(text).expect("valid secret name")
 }
 
-fn at(millis: i64) -> Timestamp {
+pub fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
 }
 

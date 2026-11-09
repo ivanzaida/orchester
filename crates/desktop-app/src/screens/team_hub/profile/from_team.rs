@@ -86,7 +86,7 @@ fn listed_row(ctx: &Ctx, name: &str, key: &str, listed: Vec<String>, sub: Option
 }
 
 /// A reasoning effort in words: the levels the CLIs name, else the value as the team wrote it.
-fn effort_words(ctx: &Ctx, effort: &str) -> String {
+pub(in crate::screens) fn effort_words(ctx: &Ctx, effort: &str) -> String {
   let key = match effort {
     "low" => "team_hub.profile.effortLevel.low",
     "medium" => "team_hub.profile.effortLevel.medium",

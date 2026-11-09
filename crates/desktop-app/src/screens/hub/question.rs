@@ -1,6 +1,6 @@
 //! An in-place question of the hub (`06c · In-place questions` `P7wAQe`): it opens in place of the bar, row or field
 //! that asked it, never in a modal — its title, one sentence, what it would touch, then its action and the way back.
-//! A question that loses something (Discard draft, Remove) is in the danger tone; the others are neutral.
+//! A question that loses something (Discard draft) is in the danger tone; the others are neutral.
 
 use std::sync::Arc;
 
@@ -64,11 +64,6 @@ impl Question {
       lines: Vec::new(),
       failure: None,
     }
-  }
-
-  pub(crate) fn line(mut self, glyph: Icon, text: impl Into<Arc<str>>) -> Self {
-    self.lines.push((glyph, text.into()));
-    self
   }
 
   /// The action's and the way back's own element ids, where a screen named them before the hub.

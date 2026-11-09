@@ -36,6 +36,7 @@ pub mod import;
 mod inspect;
 pub mod instructions;
 pub mod links;
+pub mod local_archive;
 pub mod memory;
 pub mod mentions;
 pub mod merge_queue;

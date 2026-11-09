@@ -24,21 +24,21 @@ use crate::screens::team_hub::{
 };
 
 /// How one part stands.
-pub(super) enum State {
+pub(in crate::screens) enum State<F = Fix> {
   Ready(Arc<str>),
   Missing {
     words: Arc<str>,
-    fix: Option<Fix>,
+    fix: Option<F>,
     /// Nothing can stand in for it: the glyph is `danger`, not `warning`.
     blocking: bool,
   },
 }
 
-pub(super) struct Part {
+pub(in crate::screens) struct Part<F = Fix> {
   /// What the part's controls are called in element ids.
   pub id: String,
   pub label: Arc<str>,
-  pub state: State,
+  pub state: State<F>,
 }
 
 /// The connection, then each MCP server, then each secret of the profile, as `entry`'s standing says they are.

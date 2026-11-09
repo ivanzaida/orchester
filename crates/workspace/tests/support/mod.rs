@@ -11,6 +11,7 @@ use std::{
 
 use orchester_core::{
   blob::ContentHash,
+  connection::mcp::McpServerSelection,
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId, UserId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
@@ -20,8 +21,8 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Resource, ResourceKind, Slug,
-    Step, StepKey, StepKind, VersionNumber,
+    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Resource, ResourceKind,
+    Slug, Step, StepKey, StepKind, VersionNumber,
   },
   revision::Revision,
   run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
@@ -287,6 +288,45 @@ impl Fixture {
     }
   }
 
+  /// Builder's next version chooses the local MCP server `server`, and the runs the fixture starts from now on pin it.
+  pub fn choose_local_server(&mut self, server: ConnectionId) {
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = self.snapshot.body().steps()[0].kind.clone()
+    else {
+      panic!("the fixture's first step has a Builder profile");
+    };
+    let latest = self
+      .db
+      .latest_version::<AgentProfile>(builder)
+      .expect("read")
+      .expect("published");
+    let body = latest
+      .body()
+      .clone()
+      .with_mcp_servers(McpServerSelection::new(vec![server]).expect("one server"));
+    self
+      .db
+      .save_draft(builder, &Draft::new(body, Some(latest.number()), at(6)))
+      .expect("draft");
+    let next = self.db.publish_draft::<AgentProfile>(builder, at(7)).expect("publish");
+    let delivery = self.db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+    let pipeline = self
+      .db
+      .latest_version::<Pipeline>(delivery)
+      .expect("read")
+      .expect("published");
+    let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
+    let profiles = BTreeMap::from([(builder, next)]);
+    let published = PublishedVersions {
+      profiles: &profiles,
+      tools: &tools,
+      instructions: &instructions,
+      skills: &BTreeMap::new(),
+    };
+    self.snapshot = RunSnapshot::build(delivery, &pipeline, published).expect("snapshot");
+  }
+
   /// The team MCP server `id` named `called`, kept in this project as a synced one is.
   pub fn keep_team_server(&mut self, id: ResourceId, called: &str) {
     let server = Resource::new(
@@ -393,6 +433,20 @@ impl Fixture {
     )
     .expect("absolute executable");
     orchester_core::store::ConnectionStore::create_connection(&mut self.db, &connection).expect("kept");
+  }
+
+  /// What a run of `task` starts from, as [`Fixture::pending_run`] makes it, for a test that creates runs itself.
+  pub fn new_run_for(&self, task: TaskId) -> NewRun {
+    NewRun {
+      task,
+      snapshot: self.snapshot.clone(),
+      branch: BranchName::new("orchester/orc-run-0").expect("branch"),
+      base: Revision::new(&"a".repeat(40)).expect("revision"),
+      base_branch: None,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
+      budget: Some(budget(1_000_000)),
+      max_duration: Some(Duration::from_secs(1_800)),
+    }
   }
 
   /// A run of `task`, created at `now` and not started.

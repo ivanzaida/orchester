@@ -92,6 +92,7 @@ impl ProjectDb {
       return Err(StoreError::NotSharedTask(new.task).into());
     }
     organization::check_readiness(&transaction, new.task)?;
+    super::archived::refuse(&transaction, &new.snapshot)?;
     let run = insert_new_run(&transaction, &key, new, now)?;
     snapshot_new_run(&transaction, run.id(), run.task(), &project)?;
     if let Some(inputs) = inputs {

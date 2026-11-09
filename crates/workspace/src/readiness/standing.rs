@@ -30,6 +30,12 @@ pub enum Undecided {
   UsesArchivedInstruction(ResourceId, String),
   /// A pipeline runs a profile or tool, or merges with an integrator, that this computer has no version of.
   RunsUnknown(ResourceId),
+  /// A step of a local pipeline names a profile or tool that was archived here: its id and its name. The pipeline keeps
+  /// naming it and cannot start until it is restored or the step names another (ORC-842).
+  RunsArchived(ResourceId, String),
+  /// A local profile chooses a local MCP server that was archived here: its id and its name. The profile cannot run
+  /// until the server is restored or the profile stops choosing it.
+  ChoosesArchivedLocalMcpServer(ConnectionId, String),
   /// A local profile runs on a connection that is not an agent connection of the project.
   ConnectionGone(ConnectionId),
   /// A tool of a team project holds a project secret by id. A team names its secrets, so nobody can say whether the

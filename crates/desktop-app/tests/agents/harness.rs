@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{AgentTab, HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
@@ -26,20 +26,28 @@ pub struct Agents {
 }
 impl Agents {
   pub fn new(connection: bool) -> Self {
-    Self::with(connection.then_some(CODEX_VERSION))
+    Self::with(connection.then_some(CODEX_VERSION), false)
+  }
+  /// [`Self::new`] with a secret store that refuses every value.
+  pub fn refusing_secrets() -> Self {
+    Self::with(Some(CODEX_VERSION), true)
   }
   /// The project with a Codex connection whose last check found `version`, the one Autopilot needs or newer.
   pub fn on_codex(version: &str) -> Self {
-    Self::with(Some(version))
+    Self::with(Some(version), false)
   }
-  fn with(codex_version: Option<&str>) -> Self {
+  fn with(codex_version: Option<&str>, refusing_secrets: bool) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data::at(
       tempfile::tempdir_in(scratch).expect("test directory"),
       tokio::runtime::Runtime::new().expect("runtime"),
     );
-    let launch = data.launch();
+    let launch = if refusing_secrets {
+      data.launch_refusing_secrets()
+    } else {
+      data.launch()
+    };
     let project = data.add_kontur(launch.workspace().expect("workspace"));
     let root = project.repo_root;
     if let Some(version) = codex_version {
@@ -78,25 +86,27 @@ impl Agents {
     }
     id
   }
+  /// Opens the Agents page of the local project on Profiles: the master-detail of `local_hub`.
   pub fn go(&mut self) {
-    self
-      .window
-      .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Agents));
-    // *New profile* stands over the bones while the profiles read (ORC-110).
-    self.until("agents", |s| s.exists("agents-new") && !s.exists("agents-loading"));
+    self.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::AgentsHub(HubView::new(HubFilter::Profiles, None)),
+    ));
+    // *New agent* stands in the head while the profiles read.
+    self.until("agents", |s| {
+      s.exists("local-hub-new") && !s.exists("local-hub-loading")
+    });
   }
+  /// Opens the page of the profile `id`.
   pub fn open(&mut self, id: ResourceId) {
-    self
-      .window
-      .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Agents));
-    // Waits for the profile's row, not *New profile*: a member of a shared project has no New (`list::head`).
-    let row = format!("agent-{id}");
-    self.until("agents", |s| s.exists(&row) && !s.exists("agents-loading"));
-    self.click(&row);
+    // From the Agents page, as a person comes to it: a profile page already open is left first.
+    self.go();
+    self.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::Agent(id, AgentTab::default()),
+    ));
     // A member of a shared project reads the role as text, with no input: the row stands on both pages.
-    self.until("editor", |s| s.exists("agent-role-row"));
+    self.until("editor", |s| s.exists("agent-role-row") && !s.exists("local-hub-new"));
   }
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
     let deadline = std::time::Instant::now() + Duration::from_secs(15);

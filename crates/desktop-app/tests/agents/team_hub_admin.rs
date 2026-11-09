@@ -121,9 +121,8 @@ fn team_hub_corrects_a_route_to_the_resource_it_shows_and_keeps_the_chosen_one_b
 }
 
 #[test]
-fn a_local_project_keeps_the_profiles_list_on_agents() {
+fn a_local_project_has_its_own_master_detail_on_agents() {
   let mut agents = Agents::new(true);
   agents.go();
-  assert!(agents.exists("agents-new"));
   assert!(!agents.exists("screen-team-hub") && !agents.exists("team-hub-list"));
 }

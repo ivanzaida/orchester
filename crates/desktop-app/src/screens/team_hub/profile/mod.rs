@@ -11,10 +11,10 @@
 
 mod bar;
 mod computer;
-mod fix;
-mod from_team;
-mod parts;
-mod ready;
+pub(in crate::screens) mod fix;
+pub(in crate::screens) mod from_team;
+pub(in crate::screens) mod parts;
+pub(in crate::screens) mod ready;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -133,7 +133,12 @@ impl Component for ProfilePanel {
       .with_children(member::lock_line(ctx, &props.team))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, sheet, &self.chosen))
-      .child(ready::section(ctx, &parts, missing.len(), (&press, busy)))
+      .child(ready::section(
+        ctx,
+        (&ctx.t("team_hub.readiness.title"), &parts),
+        missing.len(),
+        (&press, busy),
+      ))
       .with_children(self.failure(ctx));
     let scroll = ScrollVertical::new(body)
       .id("team-hub-panel-scroll")

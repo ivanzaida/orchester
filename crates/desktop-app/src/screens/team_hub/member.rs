@@ -44,7 +44,7 @@ pub(super) fn role(ctx: &Ctx) -> Text {
 /// The glyph, title and detail of a kind with nothing published.
 const fn empty_of(filter: HubFilter) -> (Icon, &'static str, &'static str) {
   match filter {
-    HubFilter::All => (
+    HubFilter::All | HubFilter::Archived => (
       Icon::Users,
       "team_hub.member.empty.all.title",
       "team_hub.member.empty.all.detail",

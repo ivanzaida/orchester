@@ -80,6 +80,30 @@
 # good in an earlier window (the bundle schema one ahead: "Update Orchester…", Try again and Dismiss). Dismiss, or a
 # later window, tells it no more.
 #
+# -Scenario local-hub is Kontur's Agents hub (`Agents · v2` L1-L14, ORC-842): the local project's master-detail with
+# its profiles (Builder and Reviewer choose kontur-docs), its MCP servers (pencil-design has no program on this computer,
+# one is off, one remote) and a filter with *Archived*. Open the Agents page: MCP servers lists them with no version
+# (L2), a server is edited in place with Save and Cancel (L8; a save that fails stays in place, L12). -Scenario
+# local-hub-archive adds a run working on Feature delivery: the panel's ... menu > Archive on Builder or Reviewer
+# lists what names it and the run that will stop (L11), which only a person's press confirms. -Scenario
+# local-hub-archived is Reviewer, postgres-dev and a skill already archived with the runs they stopped: the Archived
+# filter lists them (L13) and an archived one's panel has Restore (L14).
+# -Scenario local-hub-claude is local-hub with Claude Code connections to choose from (Claude 2, Home and Claude · Kontur, each
+# checked at a version of its own), Writer on Claude 2 and Builder, whose connection the project no longer has: Agents >
+# Profiles > Builder lists it under Needs you, its panel asks which of the Claude Code connections runs it (the select lists
+# only those) and the pinned "Use Claude 2 for Builder" publishes the next version on it (L1). The scenario has no page of its
+# own: open the Agents hub on Profiles with the app's `navigate` tool (route agents, filter profiles). In the same panel the
+# Agent CLI, Model, Reasoning effort and MCP servers (Add) are selects in place: a choice makes the profile's draft (the
+# chips and a draft note say so), the pinned bar becomes Publish vN and Discard draft, and a choice that widens what agents may
+# do (a server, another CLI) asks first. "More settings..." opens the profile's editor for what the rows do not draw. Tools,
+# instructions and skills have the frame with Edit, which opens the editor the kind has.
+# -Scenario local-hub-secret adds figma, whose variable FIGMA_API_KEY takes the secret FIGMA_TOKEN with no value: MCP servers >
+# figma, Replace (Set value) types a value in a dialog, Save keeps it in the QA copy's keychain in memory, which accepts
+# (L8). -Scenario local-hub-secret-refused is the same with a QA copy whose secret store refuses every value, so Save after
+# typing a value is refused as L12 draws it, with no person's press: the refusal stands above the form naming FIGMA_TOKEN,
+# the field is marked, nothing is saved. (A change of Arguments or Program widens what agents may do and asks first, which
+# only a person's press confirms; the secret value alone does not.)
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),

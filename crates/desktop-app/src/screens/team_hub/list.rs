@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// The list's width (`List` `gETjg`).
-pub(super) const LIST_WIDTH: f32 = 440.0;
+pub(in crate::screens) const LIST_WIDTH: f32 = 440.0;
 /// A group's title row (`Section · Needs you here` `o6TEKq`).
 const SECTION_HEIGHT: f32 = 32.0;
 

@@ -106,6 +106,16 @@ impl Data {
     runs_read_in_process(self.launch_with(self.no_runner()))
   }
 
+  /// [`Self::launch`] with a secret store that refuses every value it is given.
+  pub fn launch_refusing_secrets(&self) -> Launch {
+    runs_read_in_process(signed_in::launch_with_vault(
+      &self.database(),
+      self.no_runner(),
+      self.runtime.handle(),
+      signed_in::refusing_keychain(),
+    ))
+  }
+
   /// [`Self::launch`] with the runner program `runner`.
   pub fn launch_with(&self, runner: PathBuf) -> Launch {
     signed_in::launch(&self.database(), runner, self.runtime.handle())

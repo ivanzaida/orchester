@@ -9,6 +9,11 @@
     },
     "baseBranchGone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
   },
+  "localArchive": {
+    "runsUnreadable": "The runs that use it could not be read, so nothing was archived. Try again.",
+    "gone": "This project no longer has it, so there is nothing to archive.",
+    "runsLeftRunning": "It is archived, but {{count}} of the runs that use it could not be stopped and keep working on it. Stop them from their tasks."
+  },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
     "preflight": {
@@ -1052,6 +1057,20 @@
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
       "networkHostsDetail": "Only the listed hosts can be reached.",
       "networkOnDetail": "Commands and web tools can reach the network."
+    },
+    "localConnection": {
+      "gone": "This project no longer has the profile, so no connection was chosen.",
+      "draftFirst": "The profile has edits that are not published. Open its editor to choose the connection with them, or discard them first; nothing was changed.",
+      "notOfKind": "That is not a connection of the profile's CLI in this project, so nothing was changed.",
+      "widens": "Using that connection would widen what the profile's agents may do. Open the profile's editor to confirm it; nothing was changed."
+    },
+    "localEdit": {
+      "noConnection": "The project has no connection of that kind for the profile to run on, so nothing was changed.",
+      "modelNotOffered": "The profile's connection does not offer that model, so nothing was changed.",
+      "effortNotOffered": "The profile's model does not offer that reasoning effort, so nothing was changed.",
+      "serversInvalid": "The profile cannot choose those MCP servers, so nothing was changed.",
+      "staleDraft": "This draft was started from an older version than the latest. Open the profile's editor to compare them and publish.",
+      "promptsInEditor": "This draft changes what the profile's role tells its agents, which this panel does not show. Open More settings… to read it and publish it there."
     }
   },
   "connections": {
@@ -1120,7 +1139,14 @@
         "headerInvalid": "{{header}} is not a header name: use letters, digits and - _ . ! # $ % & ' * + ^ ` | ~",
         "headerTooLong": "A header name is at most {{max}} characters long",
         "headerReserved": "The agent's CLI sets {{header}} itself; choose another header",
-        "nameIsId": "A name cannot look like a server's id. Use small letters, digits, - and _, starting with a letter."
+        "nameIsId": "A name cannot look like a server's id. Use small letters, digits, - and _, starting with a letter.",
+        "secretStoreRefused": "the system's secret store refused {{secret}}",
+        "secretTooLong": "{{secret}} is longer than the system's secret store keeps ({{max}} bytes at most)",
+        "secretStoreUnsupported": "this computer has no secret store for {{secret}} yet",
+        "secretStoreFailed": "the system's secret store failed on {{secret}}",
+        "secretNotTaken": "This server does not take that secret.",
+        "notRestored": "the system's secret store refused {{secret}}, and the server could not be put back as it was: check its fields",
+        "notRestoredOther": "the save failed, and the server could not be put back as it was: check its fields"
       }
     },
     "provider": {
@@ -1819,8 +1845,7 @@
       "skill": "Publishing the skill gives every agent it applies to its description in the prompt and its body and reference files to read.",
       "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
       "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
-      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions.",
-      "removalPersonOnly": "Only a person removes this here: removing it changes what agents are told or which steps they run. Input from an MCP client is taken only while you let automation change agent permissions."
+      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
     }
   },
   "statusBar": {
@@ -2268,6 +2293,8 @@
     "undecidedUsesArchivedTool": "{{resource}} names the team tool {{name}}, which the team archived, so it cannot run until an admin restores {{name}} or removes it from {{resource}}.",
     "undecidedUsesArchivedInstruction": "{{resource}} names the team instruction {{name}}, which the team archived, so it cannot run until an admin restores {{name}} or removes it from {{resource}}.",
     "undecidedRunsUnknown": "The pipeline runs {{resource}}, which this computer has no version of yet. Wait for it to sync, or ask a team Admin.",
+    "undecidedRunsArchived": "The pipeline {{resource}} runs {{name}}, which was archived, so it cannot start until {{name}} is restored or a step runs another.",
+    "undecidedChoosesArchivedLocalMcpServer": "{{resource}} chooses the MCP server {{name}}, which was archived, so it cannot run until {{name}} is restored or {{resource}} stops choosing it.",
     "undecidedConnectionGone": "{{resource}} runs on a connection this project no longer has. Choose another connection for it.",
     "undecidedTeamToolSecretById": "The tool {{resource}} holds a project secret by id, which the team cannot name, so it is not known whether this computer has its value. Ask a team Admin to publish it again.",
     "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has or has archived. Choose another secret for it.",

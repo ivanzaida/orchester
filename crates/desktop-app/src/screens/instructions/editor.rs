@@ -340,9 +340,9 @@ impl Editor {
     let more = team::may_change(team.as_ref()).then(|| page_head::More {
       open: self.more.clone(),
       anchor: self.anchor.clone(),
-      remove: {
+      archive: {
         let ask = self.ask.clone();
-        std::sync::Arc::new(move || ask.set(Ask::Remove))
+        std::sync::Arc::new(move || ask.set(Ask::Archive))
       },
     });
     let shared = standing.map(|(team, standing)| {
@@ -366,7 +366,7 @@ impl Editor {
         more,
         (shared, versions),
       ))
-      .with_children(editor_actions::remove_question(self, ctx, props, saved))
+      .with_children(editor_actions::archive_question(self, ctx, props, saved))
       .child(bar)
       .into()
   }

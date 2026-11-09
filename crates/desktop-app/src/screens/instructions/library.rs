@@ -198,7 +198,7 @@ fn line_row(
     Line::Orphan { entry, gone } => rule_row(ctx, data, (entry, None), selection, Some(*gone)),
     Line::Removed(name) => Entry::new(
       format!("instructions-removed-{index}"),
-      ctx.t_args("hub.remove.removed", [("name", &**name)]),
+      ctx.t_args("hub.archive.line", [("name", &**name)]),
     )
     .into(),
   }

@@ -189,6 +189,16 @@ fn undecided_json(why: &Undecided) -> Value {
       part["why"] = json!("runs_unknown");
       part["resource"] = json!(id.to_string());
     }
+    Undecided::RunsArchived(id, name) => {
+      part["why"] = json!("runs_archived");
+      part["resource"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
+    Undecided::ChoosesArchivedLocalMcpServer(id, name) => {
+      part["why"] = json!("chooses_archived_mcp_server");
+      part["server"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
     Undecided::ConnectionGone(connection) => {
       part["why"] = json!("connection_gone");
       part["fix"] = fix(Some("save_profile_draft"), None);

@@ -58,6 +58,7 @@ mod error;
 mod facts;
 mod guard;
 mod local;
+mod local_mcp;
 mod needs;
 mod not_ready;
 mod programs;
@@ -79,6 +80,7 @@ pub(crate) use self::{bundle::missing as bundle_missing, team::body as team_prof
 pub use self::{
   error::ReadinessError,
   guard::NotStarted,
+  local_mcp::{LocalMcpReadiness, local_mcp_servers},
   not_ready::{MissingPart, NotReadyHere, NotReadyPart, UndecidedPart},
   programs::McpPrograms,
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},

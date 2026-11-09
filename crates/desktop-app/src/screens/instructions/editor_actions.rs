@@ -1,5 +1,5 @@
 //! What an instruction's page shows besides its fields: a write that failed with its retry, what publishing kept for
-//! runs already under way, the reload of a rule that changed elsewhere, and Discard draft and Remove asked in place.
+//! runs already under way, the reload of a rule that changed elsewhere, and Discard draft and Archive asked in place.
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::SpacingSize},
   components::{Column, Text},
@@ -12,6 +12,7 @@ use orchester_core::{
 use orchester_workspace::{
   agents::data::VersionState,
   instructions::{data::InstructionEntry, publication::RetainedRun},
+  local_archive::Archivable,
   tasks::outside::Outside,
 };
 
@@ -22,7 +23,7 @@ use super::{
   work::{Change, Failure, Write},
 };
 use crate::{
-  screens::hub::{discard, removal},
+  screens::{hub::discard, local_hub::archive},
   theme::HubText,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -37,7 +38,7 @@ use crate::{
 pub enum Ask {
   Nothing,
   Discard,
-  Remove,
+  Archive,
 }
 impl DevtoolsInspectable for Ask {}
 
@@ -175,25 +176,26 @@ pub(super) fn question(
   ))
 }
 
-/// Remove, asked under the head; a removed rule leaves a *Removed* line in its group of the list.
-pub(super) fn remove_question(
+/// Archive, asked under the head; an archived rule leaves an *Archived* line in its group of the list.
+pub(super) fn archive_question(
   editor: &Editor,
   ctx: &mut Ctx,
   props: &Props,
   saved: Option<&InstructionEntry>,
 ) -> Option<Element> {
-  let entry = saved.filter(|_| editor.ask.get() == Ask::Remove)?;
+  let entry = saved.filter(|_| editor.ask.get() == Ask::Archive)?;
   let (keep, selection) = (editor.ask.clone(), props.selection.clone());
   let (part, name) = (PromptPart::of(entry.body.scope()), entry.name.clone());
-  Some(removal::question(
+  Some(archive::confirm::question(
     ctx,
-    removal::RemoveProps {
-      project: props.project.clone(),
-      resource: entry.id,
+    archive::confirm::Props {
+      root: props.project.open.repo_root.clone(),
+      project: props.project.open.project.id(),
+      what: Archivable::Resource(entry.id),
       kind: ResourceKind::Instruction,
       name: entry.name.clone(),
       on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
-      on_removed: std::sync::Arc::new(move || {
+      on_archived: std::sync::Arc::new(move || {
         selection.removed.update(|removed| removed.0.push((part, name.clone())));
         selection.dirty.set(false);
         selection.saved(View::default());

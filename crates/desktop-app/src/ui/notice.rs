@@ -33,6 +33,9 @@ use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoticeTone {
+  /// A fact about the thing the notice stands in (an edit not saved yet, an archived resource): `surface_raised` in a
+  /// `border` stroke, its glyph `text_muted` (`Edit bar` `Z4FS4` in L8, `Notice · archived` `E4N09` in L14).
+  Neutral,
   Info,
   Warning,
   Danger,
@@ -43,6 +46,7 @@ impl NoticeTone {
   /// The tone's name, as tools read it from an element's `tone`.
   pub const fn name(self) -> &'static str {
     match self {
+      Self::Neutral => "neutral",
       Self::Info => "info",
       Self::Warning => "warning",
       Self::Danger => "danger",
@@ -53,6 +57,11 @@ impl NoticeTone {
   /// The fill, the stroke and the icon's color.
   pub(crate) const fn colors(self) -> (PaletteColor, PaletteColor, PaletteColor) {
     match self {
+      Self::Neutral => (
+        PaletteColor::SurfaceRaised,
+        PaletteColor::Border,
+        PaletteColor::TextMuted,
+      ),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info, PaletteColor::Info),
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, PaletteColor::Warning),
       Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, PaletteColor::Danger),
@@ -63,7 +72,7 @@ impl NoticeTone {
   /// The icon a notice of this tone shows unless it names its own.
   const fn icon(self) -> Icon {
     match self {
-      Self::Info => Icon::Info,
+      Self::Neutral | Self::Info => Icon::Info,
       Self::Warning => Icon::TriangleAlert,
       Self::Danger => Icon::CircleAlert,
       Self::Success => Icon::CircleCheck,
@@ -188,26 +197,8 @@ impl From<Notice> for Element {
     }
     let (fill, stroke, mark) = notice.tone.colors();
     let flat = notice.flat;
+    let text = words(&notice, flat);
     let mark = notice.mark.unwrap_or(mark);
-    let text = Column::new()
-      .id(format!("{}-text", notice.id))
-      .spacing(if flat {
-        ExtraSpacing::Snug.role()
-      } else if notice.layout == NoticeLayout::Stacked {
-        ExtraSpacing::Fine.role()
-      } else {
-        ExtraSpacing::Tight.role()
-      })
-      .child(
-        Text::new(&notice.title)
-          .id(format!("{}-title", notice.id))
-          .variant(notice.title_style.unwrap_or_else(|| ExtraTypography::Strong.role())),
-      )
-      .with_children(notice.body.as_deref().map(|body| {
-        Text::new(body)
-          .id(format!("{}-body", notice.id))
-          .variant(ExtraTypography::Prose.role())
-      }));
     let actions = (!notice.actions.is_empty()).then(|| {
       Row::new()
         .spacing(SpacingSize::Sm)
@@ -240,12 +231,16 @@ impl From<Notice> for Element {
       .background(fill)
       .describe("tone", notice.tone.name());
     let (row, mark_size) = if flat {
-      (
+      let row = row
+        .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+        .rounded(RadiusSize::Md);
+      // Only a neutral one has a stroke: the others are their tone's fill alone.
+      let row = if notice.tone == NoticeTone::Neutral {
+        row.border(Border::inside(BorderSize::Sm, stroke))
+      } else {
         row
-          .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-          .rounded(RadiusSize::Md),
-        IconSize::Md,
-      )
+      };
+      (row, IconSize::Md)
     } else {
       (
         row
@@ -261,6 +256,29 @@ impl From<Notice> for Element {
       .with_children(actions)
       .into()
   }
+}
+
+/// A notice's title and its explanation under it.
+fn words(notice: &Notice, flat: bool) -> Column {
+  Column::new()
+    .id(format!("{}-text", notice.id))
+    .spacing(if flat {
+      ExtraSpacing::Snug.role()
+    } else if notice.layout == NoticeLayout::Stacked {
+      ExtraSpacing::Fine.role()
+    } else {
+      ExtraSpacing::Tight.role()
+    })
+    .child(
+      Text::new(&notice.title)
+        .id(format!("{}-title", notice.id))
+        .variant(notice.title_style.unwrap_or_else(|| ExtraTypography::Strong.role())),
+    )
+    .with_children(notice.body.as_deref().map(|body| {
+      Text::new(body)
+        .id(format!("{}-body", notice.id))
+        .variant(ExtraTypography::Prose.role())
+    }))
 }
 
 fn inspector_notice(notice: Notice) -> Element {

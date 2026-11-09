@@ -12,7 +12,7 @@ use crate::ui::icon::Icon;
 /// A fix this computer takes by itself; a part this panel does not fix (a server this app cannot run, a keychain
 /// that cannot say, a reviewer's connection) has none, and no action stands in its place.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Fix {
+pub(in crate::screens) enum Fix {
   /// Keep the connection the person chose among several as the profile's.
   UseConnection,
   /// Go where a connection of the CLI kind is added.
@@ -23,7 +23,7 @@ pub(super) enum Fix {
 }
 
 impl Fix {
-  pub(super) fn of(part: &Missing) -> Option<Self> {
+  pub(in crate::screens) fn of(part: &Missing) -> Option<Self> {
     match part {
       Missing::Connection {
         problem: ConnectionProblem::PickNeeded,
@@ -45,7 +45,7 @@ impl Fix {
   }
 
   /// The words at a row's end.
-  pub(super) const fn link_key(&self) -> &'static str {
+  pub(in crate::screens) const fn link_key(&self) -> &'static str {
     match self {
       Self::UseConnection => "team_hub.fix.link.use",
       Self::AddConnection => "team_hub.fix.link.add",
@@ -56,7 +56,7 @@ impl Fix {
   }
 
   /// The glyph of the pinned action.
-  pub(super) const fn glyph(&self) -> Icon {
+  pub(in crate::screens) const fn glyph(&self) -> Icon {
     match self {
       Self::UseConnection => Icon::Check,
       Self::AddConnection => Icon::Plus,
@@ -67,7 +67,7 @@ impl Fix {
   }
 
   /// What the id of the action's control says it is.
-  pub(super) const fn name(&self) -> &'static str {
+  pub(in crate::screens) const fn name(&self) -> &'static str {
     match self {
       Self::UseConnection => "use",
       Self::AddConnection => "add",
@@ -75,5 +75,22 @@ impl Fix {
       Self::SetPath(_) => "set-path",
       Self::AddValue(_) => "add-value",
     }
+  }
+}
+
+/// What a row of *Ready here?* shows of a fix: the words of its link and what its control is called in element ids. A
+/// team project's [`Fix`] and a local project's offer it alike, so one section draws both.
+pub(in crate::screens) trait Offer {
+  fn link_key(&self) -> &'static str;
+  fn name(&self) -> &'static str;
+}
+
+impl Offer for Fix {
+  fn link_key(&self) -> &'static str {
+    Self::link_key(self)
+  }
+
+  fn name(&self) -> &'static str {
+    Self::name(self)
   }
 }

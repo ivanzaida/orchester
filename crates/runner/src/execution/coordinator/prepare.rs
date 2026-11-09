@@ -154,6 +154,9 @@ pub(super) fn record(
     .map_err(|error| match error {
       RunStoreError::TaskNotQueued(_) => Rejection::TaskNotQueued,
       RunStoreError::TaskChangedMeanwhile(_) => Rejection::TaskChangedMeanwhile,
+      RunStoreError::UsesArchived(name) => Rejection::Failed {
+        detail: format!("the run would use {name}, which was archived"),
+      },
       other => read_failed("cannot record the run", other),
     })?;
   let resolved = resolve_task(db, &run)?;

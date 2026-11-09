@@ -173,10 +173,21 @@ pub enum IconSize {
   Lg,
   /// 18: an empty state's glyph (`WOjtr`).
   Xl,
+  /// 20: the glyph of a panel that has nothing picked, with no tile of its own (`hpojF` in L13 `MXma9`).
+  Panel,
 }
 
 impl IconSize {
-  pub const ALL: [Self; 7] = [Self::Xs, Self::Sm, Self::Base, Self::Md, Self::Nav, Self::Lg, Self::Xl];
+  pub const ALL: [Self; 8] = [
+    Self::Xs,
+    Self::Sm,
+    Self::Base,
+    Self::Md,
+    Self::Nav,
+    Self::Lg,
+    Self::Xl,
+    Self::Panel,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -191,6 +202,7 @@ impl IconSize {
       Self::Nav => "icon_nav",
       Self::Lg => "icon_lg",
       Self::Xl => "icon_xl",
+      Self::Panel => "icon_panel",
     }
   }
 
@@ -203,6 +215,7 @@ impl IconSize {
       Self::Nav => 15.0,
       Self::Lg => 16.0,
       Self::Xl => 18.0,
+      Self::Panel => 20.0,
     }
   }
 }

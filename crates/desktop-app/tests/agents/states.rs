@@ -18,20 +18,23 @@ fn agents_loading_is_visible_before_the_read_finishes() {
     orchester_app::routes::ProjectPage::Agents,
   ));
   screen.window.pass();
-  assert!(screen.exists("agents-loading"));
-  screen.until("loaded", |s| s.exists("agents-new"));
+  assert!(screen.exists("local-hub-loading"));
+  screen.until("loaded", |s| {
+    s.exists("local-hub-filter") && !s.exists("local-hub-loading")
+  });
 }
 
 #[test]
-fn agents_empty_with_and_without_connections() {
+fn agents_empty_says_so_and_new_agent_is_in_the_head() {
   for connection in [false, true] {
     let mut screen = Agents::new(connection);
     screen.go();
-    assert!(screen.text("agents-empty").contains("No agent profiles yet"));
-    assert_eq!(screen.exists("agents-open-connections"), !connection);
-    assert_eq!(screen.exists("agents-empty-new"), connection);
+    screen.until("the empty state", |s| s.exists("local-hub-empty"));
+    assert!(screen.text("local-hub-empty").contains("Nothing of this kind yet"));
+    assert!(screen.exists("local-hub-new") && !screen.exists("local-hub-list"));
   }
 }
+
 #[test]
 fn agents_list_and_published_editor() {
   let mut screen = Agents::new(true);
@@ -84,24 +87,24 @@ fn agents_draft_and_stale_draft_states() {
 #[test]
 fn agents_failed_load_can_retry() {
   let mut screen = Agents::new(true);
-  screen.profile(false);
+  screen.profile(true);
   let path = screen.root.join(".orchester/orchester.db");
   let db = rusqlite::Connection::open(path).expect("db");
   let body: String = db
-    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
-    .expect("body");
-  db.execute("UPDATE resource_drafts SET body = 'broken'", [])
+    .query_row("SELECT settings FROM connections", [], |row| row.get(0))
+    .expect("settings");
+  db.execute("UPDATE connections SET settings = 'broken'", [])
     .expect("corrupt fixture");
   screen.window.navigation().go(orchester_app::routes::Route::Project(
     super::support::project_id(),
     orchester_app::routes::ProjectPage::Agents,
   ));
-  screen.until("failure", |s| s.exists("agents-load-error"));
-  assert!(!screen.exists("agents-empty"));
-  db.execute("UPDATE resource_drafts SET body = ?1", [&body])
+  screen.until("failure", |s| s.exists("local-hub-load-error"));
+  assert!(!screen.exists("local-hub-empty"));
+  db.execute("UPDATE connections SET settings = ?1", [&body])
     .expect("restore fixture");
-  screen.click("agents-load-error-retry");
-  screen.until("retried", |s| s.exists("agents-new"));
+  screen.click("local-hub-load-error-retry");
+  screen.until("retried", |s| s.exists("local-hub-empty") || s.exists("local-hub-list"));
 }
 #[test]
 fn agents_profile_form_fits_the_initial_viewport_and_published_card_has_no_draft() {
@@ -134,26 +137,28 @@ fn agents_profile_form_fits_the_initial_viewport_and_published_card_has_no_draft
 #[test]
 fn agents_failed_refetch_replaces_retained_data_and_retry_restores_it() {
   let mut screen = Agents::new(true);
-  let id = screen.profile(false);
+  let id = screen.profile(true);
   screen.go();
-  assert!(screen.exists(&format!("agent-{id}")));
+  screen.until("the profile's row", |s| s.exists(&format!("local-hub-row-{id}")));
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("fixture db");
   let body: String = db
-    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
-    .expect("body");
-  db.execute("UPDATE resource_drafts SET body = 'broken'", [])
+    .query_row("SELECT settings FROM connections", [], |row| row.get(0))
+    .expect("settings");
+  db.execute("UPDATE connections SET settings = 'broken'", [])
     .expect("corrupt disposable fixture");
   let feed = screen.window.projects().feed(super::support::project_id());
   feed.outside.update(|counts| counts.profiles += 1);
-  screen.until("failed refetch", |s| s.exists("agents-load-error"));
-  assert!(!screen.exists(&format!("agent-{id}")), "stale profile is hidden");
-  assert!(!screen.exists("agents-new"));
-  assert!(screen.text("agents-load-error").contains("couldn't be read"));
-  db.execute("UPDATE resource_drafts SET body = ?1", [&body])
+  screen.until("failed refetch", |s| s.exists("local-hub-load-error"));
+  assert!(
+    !screen.exists(&format!("local-hub-row-{id}")),
+    "stale profile is hidden"
+  );
+  assert!(screen.text("local-hub-load-error").contains("couldn't be read"));
+  db.execute("UPDATE connections SET settings = ?1", [&body])
     .expect("restore fixture");
-  screen.click("agents-load-error-retry");
-  screen.until("retry restored profiles", |s| s.exists(&format!("agent-{id}")));
-  assert!(!screen.exists("agents-load-error"));
+  screen.click("local-hub-load-error-retry");
+  screen.until("retry restored profiles", |s| s.exists(&format!("local-hub-row-{id}")));
+  assert!(!screen.exists("local-hub-load-error"));
 }
 
 #[test]

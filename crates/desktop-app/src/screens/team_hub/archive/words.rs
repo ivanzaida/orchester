@@ -19,7 +19,7 @@ pub(super) const fn kind_key(kind: SharedResourceKind) -> &'static str {
 }
 
 /// `names` as a person says them: *Builder*, *Builder and Designer*, *Builder, Designer and Reviewer*.
-pub(super) fn listed(ctx: &Ctx, names: &[&str]) -> Arc<str> {
+pub(in crate::screens) fn listed(ctx: &Ctx, names: &[&str]) -> Arc<str> {
   match names {
     [] => Arc::from(""),
     [only] => Arc::from(*only),

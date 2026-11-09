@@ -240,8 +240,19 @@ fn navigate_opens_the_agents_hub_on_a_filter_and_an_item_and_refuses_what_it_doe
     repeated.expect("a filter alone")["route"]["params"],
     json!({ "project": PROJECT, "filter": "skills" })
   );
+  // A local project's hub also has Archived and names a local MCP server by its connection id.
+  let server = navigate(
+    &navigation,
+    &json!({ "route": "agents", "project": PROJECT, "filter": "archived", "server": PROFILE }),
+  )
+  .expect("a server under Archived");
+  assert_eq!(
+    server["route"]["params"],
+    json!({ "project": PROJECT, "filter": "archived", "server": PROFILE })
+  );
   for refused in [
     json!({ "route": "agents", "project": PROJECT, "filter": "pipelines" }),
+    json!({ "route": "agents", "project": PROJECT, "item": PROFILE, "server": PROFILE }),
     json!({ "route": "agents", "project": PROJECT, "item": "not-an-id" }),
     json!({ "route": "agents", "project": PROJECT, "agent": PROFILE, "filter": "skills" }),
   ] {

@@ -129,7 +129,7 @@ pub(super) fn checked(
   secrets: &[Secret],
 ) -> Result<mcp::McpServerDraft, ToolError> {
   let taken: Vec<McpServerName> = db
-    .mcp_servers()?
+    .all_mcp_servers()?
     .into_iter()
     .filter(|server| Some(server.id()) != stored.map(McpServer::id))
     .map(|server| server.name().clone())
@@ -170,6 +170,10 @@ pub(super) fn save_refusal(error: &McpSaveError) -> ToolError {
     McpSaveError::Store(orchester_store::StoreError::ConnectionNotFound(_)) => "not_found",
     McpSaveError::InUse(_) => "in_use",
     McpSaveError::Changed(_) => "changed_meanwhile",
+    McpSaveError::SecretStore { .. } => "secret_store_refused",
+    McpSaveError::SecretGone(_) => "secret_gone",
+    McpSaveError::SecretNotTaken(_) => "secret_not_taken",
+    McpSaveError::NotRestored { .. } => "not_restored",
     McpSaveError::Store(_) | McpSaveError::Server(_) => "project_data",
   };
   let mut reasons = vec![error.message()];
