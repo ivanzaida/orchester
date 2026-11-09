@@ -27,8 +27,8 @@ pub(crate) use self::authorization::authorization_message;
 pub use self::{
   authorization::{AuthorizationChoice, AuthorizationText},
   save::{
-    McpSaveError, RefusedField, ServerUse, profiles_using, program_problem_message, remove_in, save_in, server_uses,
-    set_enabled_in, store_in, store_with_values,
+    McpSaveError, RefusedField, ServerUse, create_with_values, profiles_using, program_problem_message, remove_in,
+    save_in, server_uses, set_enabled_in, store_in, store_with_values,
   },
   widening::{Allowed, enabling, widenings},
 };
@@ -110,6 +110,17 @@ pub struct McpServerDraft {
   pub transport: McpTransport,
   pub environment: McpEnvironment,
   pub exempt_tools: ExemptTools,
+}
+
+impl McpServerDraft {
+  /// The secrets the server takes, which are the ones a value can be given for: its authorization's secret on an
+  /// endpoint, its variables' on a program.
+  pub fn secrets(&self) -> Vec<SecretId> {
+    match &self.transport {
+      McpTransport::Http(http) => http.authorization().secret().into_iter().collect(),
+      McpTransport::Stdio(_) => self.environment.secrets().collect(),
+    }
+  }
 }
 
 impl McpServerText {

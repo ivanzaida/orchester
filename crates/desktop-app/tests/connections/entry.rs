@@ -65,7 +65,8 @@ fn connections_entry_enter_adds_a_model_and_new_secret_opens_its_fields() {
 
 #[test]
 fn connections_entry_enter_adds_a_tool_that_runs_without_asking() {
-  let mut seeded = Seeded::new("connections");
+  // A team's project keeps the Add MCP server page; a local project's is the Agents hub's form.
+  let mut seeded = Seeded::shared("connections");
   seeded.add(NewConnection::McpServer);
   assert_eq!(
     seeded.text("connection-mcp-exempt-tools-note"),

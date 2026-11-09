@@ -37,15 +37,10 @@ pub(super) fn save(
     async move {
       let spec = operations::connection_save(&open, save.draft.name.as_str());
       let vault = services.vault.clone();
+      let values = save.values.values_for(&save.draft.secrets());
       let stored = async move {
         background::run(move || {
-          store_with_values(
-            &save.root,
-            vault.get(),
-            (id, save.draft, &save.allowed),
-            &save.values.values(),
-          )
-          .map_err(|error| {
+          store_with_values(&save.root, vault.get(), (id, save.draft, &save.allowed), &values).map_err(|error| {
             refused.set(Refusal::of(&error.field()));
             error.message()
           })

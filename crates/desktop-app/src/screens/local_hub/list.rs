@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
   routes::HubFilter,
-  screens::team_hub::list::LIST_WIDTH,
+  screens::team_hub::{create::new_row, list::LIST_WIDTH, model::Kind},
   theme::{ExtraSpacing, HubText},
 };
 
@@ -38,6 +38,8 @@ pub(super) struct Shown<'a> {
   pub now: Timestamp,
   /// The MCP server whose panel has edits that are not saved, and whether a save was refused.
   pub unsaved: Option<(Archivable, Unsaved)>,
+  /// The kind whose form is open in the panel: its *New* row stands over the groups, chosen.
+  pub adding: Option<Kind>,
 }
 
 pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
@@ -62,6 +64,7 @@ pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
+    .with_children(shown.adding.map(|kind| new_row(ctx, kind)))
     .with_children(sections);
   ScrollVertical::new(groups)
     .id("local-hub-list-scroll")

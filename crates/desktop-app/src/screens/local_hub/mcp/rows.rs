@@ -19,6 +19,7 @@ use orchester_workspace::connections::{
 
 use super::{
   editor::Editor,
+  form::Form,
   secrets::{self, Mark, Taken},
 };
 use crate::{
@@ -34,7 +35,7 @@ use crate::{
 };
 
 /// What a render of the rows is told about the panel.
-pub(super) struct Look<'a> {
+pub(in crate::screens) struct Look<'a> {
   pub saved: &'a McpServerText,
   pub typed: &'a McpServerText,
   pub listed: &'a ProjectConnections,
@@ -46,11 +47,23 @@ pub(super) struct Look<'a> {
   pub secrets: (&'a [Taken], Mark),
   /// The save was refused for the program.
   pub program_refused: bool,
+  /// The server is being made: nothing is saved yet to differ from, and the program is required.
+  pub creating: bool,
 }
 
-impl Editor {
+impl Look<'_> {
+  /// *changed, not saved yet* under a field whose text is not what was saved; a server being made has nothing saved.
+  fn changed(&self, ctx: &Ctx, now: &str, before: &str) -> Option<Sub> {
+    (!self.creating && now != before).then(|| Sub {
+      words: ctx.t("local_hub.mcp.changedSub"),
+      color: PaletteColor::Warning,
+    })
+  }
+}
+
+impl Form {
   /// The rows of *Server*, the secret rows and the switch, in one outline.
-  pub(super) fn server_rows(&self, ctx: &mut Ctx, look: &Look<'_>) -> Vec<Row> {
+  pub(in crate::screens) fn server_rows(&self, ctx: &mut Ctx, look: &Look<'_>) -> Vec<Row> {
     let mut rows = vec![self.runs_as(ctx)];
     match self.fields.transport.get() {
       TransportChoice::Stdio => {
@@ -112,8 +125,10 @@ impl Editor {
         )
       })
     });
-    let program_sub = if look.typed.program != look.saved.program {
-      changed_sub(ctx, &look.typed.program, &look.saved.program)
+    let program_sub = if look.creating {
+      Some(Sub::quiet(ctx.t("local_hub.mcp.programSub")))
+    } else if look.typed.program != look.saved.program {
+      look.changed(ctx, &look.typed.program, &look.saved.program)
     } else if found {
       Some(Sub::quiet(ctx.t("local_hub.mcp.found")))
     } else {
@@ -132,9 +147,12 @@ impl Editor {
       ctx.t("connections.mcp.property.program"),
       self.fields.program.clone(),
     )
-    .mono()
     .placeholder(ctx.t("local_hub.mcp.programNone"))
     .leading(if found { Icon::CircleCheck } else { Icon::File });
+    // The words of an empty field are the design's sans; a path is mono.
+    if !look.typed.program.is_empty() {
+      input = input.mono();
+    }
     if look.program_refused {
       input = input.invalid();
     } else if let Some(error) = shown(ctx, look, &look.errors.program, &look.typed.program) {
@@ -162,12 +180,13 @@ impl Editor {
           .child(input.render(ctx)),
       )
       .child(choose);
-    rows::row(
-      "local-hub-mcp-row-program",
-      &ctx.t("connections.mcp.property.program"),
-      program_sub,
-      program,
-    )
+    let label = ctx.t("connections.mcp.property.program");
+    let label = if look.creating {
+      ctx.t_args("team_new.required", [("label", &*label)])
+    } else {
+      label
+    };
+    rows::row("local-hub-mcp-row-program", &label, program_sub, program)
   }
 
   /// *Arguments*, in one line where no argument has a space in it.
@@ -188,6 +207,11 @@ impl Editor {
       .mono()
       .compact_text_area()
     };
+    let arguments = if look.creating {
+      arguments.placeholder(ctx.t("local_new.mcp.argumentsNone"))
+    } else {
+      arguments
+    };
     let arguments = match shown(ctx, look, &look.errors.arguments, &look.typed.arguments) {
       Some(error) => arguments.error(error),
       None => arguments,
@@ -195,7 +219,7 @@ impl Editor {
     rows::row(
       "local-hub-mcp-row-arguments",
       &ctx.t("connections.mcp.property.arguments"),
-      changed_sub(ctx, &look.typed.arguments, &look.saved.arguments),
+      look.changed(ctx, &look.typed.arguments, &look.saved.arguments),
       arguments.render(ctx),
     )
   }
@@ -216,7 +240,7 @@ impl Editor {
     rows::row(
       "local-hub-mcp-row-folder",
       &ctx.t("connections.mcp.property.folder"),
-      changed_sub(ctx, &look.typed.working_directory, &look.saved.working_directory),
+      look.changed(ctx, &look.typed.working_directory, &look.saved.working_directory),
       folder.render(ctx),
     )
   }
@@ -242,23 +266,26 @@ impl Editor {
     rows::row(
       "local-hub-mcp-row-variables",
       &ctx.t("connections.mcp.variables"),
-      changed_sub(ctx, &look.typed.variables, &look.saved.variables),
+      look.changed(ctx, &look.typed.variables, &look.saved.variables),
       control,
     )
   }
 
-  /// A remote server's endpoint and authorization, as the form draws them.
+  /// A remote server's endpoint, authorization and what the authorization asks for, one row each as the program's.
   fn remote_rows(&self, ctx: &mut Ctx, look: &Look<'_>) -> Vec<Row> {
-    let elements = self.fields.remote_elements(ctx, (look.listed, look.errors), look.tried);
-    vec![rows::row(
-      "local-hub-mcp-row-remote",
-      &ctx.t("connections.mcp.property.endpoint"),
-      None,
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .with_children(elements),
-    )]
+    self
+      .fields
+      .remote_elements(ctx, (look.listed, look.errors), look.tried)
+      .into_iter()
+      .map(|part| {
+        rows::row(
+          &format!("{}-row", part.id),
+          &part.label,
+          part.hint.map(Sub::quiet),
+          part.control,
+        )
+      })
+      .collect()
   }
 
   /// *Run without asking*: the tools, written in one line.
@@ -268,8 +295,17 @@ impl Editor {
       ctx.t("local_hub.mcp.tools"),
       self.tools_line.clone(),
     )
-    .mono()
-    .placeholder(ctx.t("local_hub.mcp.toolsNone"));
+    .placeholder(ctx.t(if look.creating {
+      "local_new.mcp.toolsNone"
+    } else {
+      "local_hub.mcp.toolsNone"
+    }));
+    // A form that makes a server shows its words in the design's sans until a name is typed; tool names are mono.
+    let tools = if look.creating && look.typed.exempt_tools.is_empty() {
+      tools
+    } else {
+      tools.mono()
+    };
     let tools = match shown(ctx, look, &look.errors.exempt_tools, &look.typed.exempt_tools) {
       Some(error) => tools.error(error),
       None => tools,
@@ -281,31 +317,36 @@ impl Editor {
       tools.render(ctx),
     )
   }
+}
 
+impl Editor {
   /// The secret rows, then *On · Runs may use it*.
   pub(super) fn after_rows(&self, ctx: &mut Ctx, look: &Look<'_>, server_on: bool) -> Vec<Row> {
-    let mut rows = secrets::rows_of(ctx, &self.asking, look.secrets);
-    rows.push(self.switch_row(ctx, server_on));
+    let mut rows = secrets::rows_of(ctx, &self.form.asking, look.secrets);
+    let switch = self.switch.clone();
+    rows.push(switch_row(ctx, (server_on, "local_hub.mcp.onHint"), move |on| {
+      switch.run(on)
+    }));
     rows
   }
+}
 
-  fn switch_row(&self, ctx: &Ctx, on: bool) -> Row {
-    let switch = self.switch.clone();
-    let toggle = Toggle::new("local-hub-mcp-on", ToggleKind::Switch, on, ctx.t("local_hub.mcp.on"))
-      .hide_label()
-      .on_change(move |on| switch.run(on));
-    let value = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Center)
-      .child(toggle)
-      .child(
-        Text::new(&ctx.t("local_hub.mcp.onHint"))
-          .variant(HubText::Value.role())
-          .flex(1.0),
-      );
-    rows::row("local-hub-mcp-on-row", &ctx.t("local_hub.mcp.on"), None, value)
-  }
+/// *On* with the switch at `on` and the words `hint` says after it; a change of it calls `on_change`.
+pub(in crate::screens) fn switch_row(
+  ctx: &Ctx,
+  (on, hint): (bool, &str),
+  on_change: impl Fn(bool) + Send + Sync + 'static,
+) -> Row {
+  let toggle = Toggle::new("local-hub-mcp-on", ToggleKind::Switch, on, ctx.t("local_hub.mcp.on"))
+    .hide_label()
+    .on_change(on_change);
+  let value = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .child(toggle)
+    .child(Text::new(&ctx.t(hint)).variant(HubText::Value.role()).flex(1.0));
+  rows::row("local-hub-mcp-on-row", &ctx.t("local_hub.mcp.on"), None, value)
 }
 
 /// The error under a field, once it holds something or a save was tried.
@@ -319,12 +360,4 @@ fn shown(
     .as_ref()
     .filter(|_| look.tried || !typed.trim().is_empty())
     .map(|error| message_text(ctx, error))
-}
-
-/// *changed, not saved yet* under a field whose text is not what was saved.
-fn changed_sub(ctx: &Ctx, now: &str, before: &str) -> Option<Sub> {
-  (now != before).then(|| Sub {
-    words: ctx.t("local_hub.mcp.changedSub"),
-    color: PaletteColor::Warning,
-  })
 }

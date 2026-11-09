@@ -22,7 +22,7 @@ use orchester_workspace::agents::data;
 
 use super::{harness::Agents, support::project_id};
 
-const SAVE: &str = "local-hub-mcp-save";
+pub(super) const SAVE: &str = "local-hub-mcp-save";
 const CANCEL: &str = "local-hub-mcp-cancel";
 
 /// A local MCP server called `name` that runs the program `docs-mcp`, which no computer has.
@@ -97,10 +97,11 @@ fn local_hub_head_offers_share_with_a_team_and_new_of_the_filter() {
   );
   agents.click("local-hub-new");
   agents.click("local-hub-new-instructions");
-  assert!(matches!(
+  assert_eq!(
     agents.window.navigation().route_now(),
-    Route::Project(_, ProjectPage::Instructions(_))
-  ));
+    Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Instructions))),
+    "the form of the hub"
+  );
 }
 
 #[test]
@@ -450,7 +451,7 @@ fn local_hub_archiving_an_instruction_from_its_panel_stays_in_the_hub() {
 
 /// The server `figma`, whose variable `FIGMA_API_KEY` takes the secret `FIGMA_TOKEN`, which has no value; its program
 /// is this test's own, which exists outside the project.
-fn figma(agents: &Agents) -> ConnectionId {
+pub(super) fn figma(agents: &Agents) -> ConnectionId {
   use std::collections::BTreeMap;
 
   use orchester_core::{
@@ -493,10 +494,10 @@ fn figma(agents: &Agents) -> ConnectionId {
   server.id()
 }
 
-const TYPED: &str = "hunter2-typed-value";
+pub(super) const TYPED: &str = "hunter2-typed-value";
 
 /// Types `TYPED` as the new value of `FIGMA_TOKEN` in the panel: its dialog, then *Use this value*.
-fn type_secret(agents: &mut Agents) {
+pub(super) fn type_secret(agents: &mut Agents) {
   agents.until("the secret's row", |s| s.exists("local-hub-secret-FIGMA_TOKEN-replace"));
   agents.click("local-hub-secret-FIGMA_TOKEN-replace");
   agents.until("its dialog", |s| s.exists("local-hub-secret-value"));

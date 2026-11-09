@@ -14,13 +14,13 @@
 pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
 pub(in crate::screens) mod bar;
-mod create;
+pub(in crate::screens) mod create;
 mod fill;
 mod head;
 pub(in crate::screens) mod list;
 mod mcp;
 mod member;
-mod model;
+pub(in crate::screens) mod model;
 pub(in crate::screens) mod panel;
 mod plain;
 pub(in crate::screens) mod profile;
@@ -299,8 +299,9 @@ fn hub_body(
         repo_root: project.open.repo_root.clone(),
         project: id,
         kind,
-        listing: listing.clone(),
-        team: team.clone(),
+        mode: create::Mode::Team,
+        taken: listing.shown(kind.filter()).map(|entry| entry.name.clone()).collect(),
+        team: Some(team.clone()),
       },
     ),
     (None, Some(selected)) => resource_panel(

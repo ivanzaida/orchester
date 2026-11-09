@@ -1146,7 +1146,9 @@
         "secretStoreFailed": "the system's secret store failed on {{secret}}",
         "secretNotTaken": "This server does not take that secret.",
         "notRestored": "the system's secret store refused {{secret}}, and the server could not be put back as it was: check its fields",
-        "notRestoredOther": "the save failed, and the server could not be put back as it was: check its fields"
+        "notRestoredOther": "the save failed, and the server could not be put back as it was: check its fields",
+        "notRemoved": "the system's secret store refused {{secret}}, and the new server could not be removed again: it was made without that value",
+        "notRemovedOther": "making the server failed, and it could not be removed again: it was made anyway"
       }
     },
     "provider": {

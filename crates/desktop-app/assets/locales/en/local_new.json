@@ -1,0 +1,43 @@
+{
+  "local_new": {
+    "notCreated": "not created yet · Create makes v1",
+    "notCreatedMcp": "not created yet · Create adds it to this project",
+    "section": {
+      "profile": "Profile",
+      "mcp": "Server",
+      "instruction": "Instruction",
+      "skill": "Skill",
+      "tool": "Tool"
+    },
+    "bar": {
+      "hint": "Create makes v1 on this computer",
+      "hintMcp": "Create adds it on this computer"
+    },
+    "nameTaken": {
+      "profile": "This project already has an agent profile named {{name}} · pick another name",
+      "instruction": "This project already has an instruction named {{name}} · pick another name",
+      "skill": "This project already has a skill named {{name}} · pick another name",
+      "tool": "This project already has a tool named {{name}} · pick another name"
+    },
+    "mcp": {
+      "nameSub": "Unique in this project",
+      "argumentsNone": "e.g. --stdio",
+      "toolsNone": "Tool names · listed after the first start",
+      "onHint": "Runs may use it once created"
+    },
+    "profile": {
+      "connection": "Connection",
+      "connectionSub": "Asked when you have several",
+      "connectionAuto": "Chosen for you when there is one of its kind",
+      "connectionAsk": "Choose one of its kind",
+      "connectionOnly": "The only one of its kind · chosen for you",
+      "servers": "MCP servers",
+      "serversNone": "None",
+      "serversTooMany": "A profile chooses at most {{max}} MCP servers",
+      "serversDuplicate": "An MCP server is chosen twice",
+      "lists": "Instructions, tools, skills",
+      "listsSub": "Picked from this project's lists",
+      "listsValue": "Not available here yet: a new profile starts with none of them."
+    }
+  }
+}

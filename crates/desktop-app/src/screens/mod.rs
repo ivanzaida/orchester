@@ -54,7 +54,7 @@ use orchester_core::id::ProjectId;
 
 use crate::{
   project::{ProjectState, Projects, ShownProject, TeamRead},
-  routes::{HubFilter, HubView, ProjectPage, Route},
+  routes::{AgentTab, HubFilter, HubView, NewConnection, ProjectPage, Route},
 };
 
 /// The screen at the router's path.
@@ -163,7 +163,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     }
     ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
     ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
-    ProjectPage::NewAgent(tab) => agents::screen(ctx, project, agents::Shown::New(*tab)),
+    ProjectPage::NewAgent(tab) => new_agent(ctx, project, *tab),
     ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
     ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
     ProjectPage::Skills(_) | ProjectPage::NewSkill | ProjectPage::Skill(_) | ProjectPage::ImportSkills => {
@@ -174,6 +174,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Connections(view) => {
       project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))
     }
+    ProjectPage::NewConnection(NewConnection::McpServer) => new_mcp_server(ctx, project),
     ProjectPage::NewConnection(kind) => {
       project_settings::screen(ctx, project, project_settings::Shown::NewConnection(*kind))
     }
@@ -188,6 +189,24 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Files(view) => files::screen(ctx, project, view),
     ProjectPage::Import(tab) => import::screen(ctx, project, *tab),
   }
+}
+
+/// New profile: the hub's form in a local project (`Agents · v2` L3), else the page of its own.
+fn new_agent(ctx: &mut Ctx, project: &ShownProject, tab: AgentTab) -> Element {
+  local_hub::form_or(ctx, project, HubFilter::Profiles, |ctx| {
+    agents::screen(ctx, project, agents::Shown::New(tab))
+  })
+}
+
+/// New MCP server: the hub's form in a local project (L4), else the connections' page of its own.
+fn new_mcp_server(ctx: &mut Ctx, project: &ShownProject) -> Element {
+  local_hub::form_or(ctx, project, HubFilter::McpServers, |ctx| {
+    project_settings::screen(
+      ctx,
+      project,
+      project_settings::Shown::NewConnection(NewConnection::McpServer),
+    )
+  })
 }
 
 /// The Agents hub is master–detail (`Agents · v2`) in a team project ([`team_hub`]) and in a local one ([`local_hub`]).

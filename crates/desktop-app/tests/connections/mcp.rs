@@ -14,7 +14,9 @@ const TOOLS: &str = "get_editor_state\nget_guidelines\nbatch_get\nsnapshot_layou
 
 #[test]
 fn connections_mcp_server_is_added_with_its_tools_that_run_without_asking() {
-  let mut seeded = Seeded::new("connections");
+  // A team's project keeps the Add MCP server page; a local project's is the Agents hub's form
+  // (`tests/agents/local_hub_create_remote.rs`).
+  let mut seeded = Seeded::shared("connections");
   seeded.add(NewConnection::McpServer);
   seeded.set("connection-mcp-name", "Pencil Design");
   assert!(

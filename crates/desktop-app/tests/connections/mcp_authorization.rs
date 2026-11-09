@@ -1,4 +1,5 @@
-//! A remote MCP server's authorization as a person sets it in Add MCP server: each scheme with its fields, the
+//! A remote MCP server's authorization as a person sets it in a team project's Add MCP server page (a local project's
+//! is the Agents hub's form, `tests/agents/local_hub_create_remote.rs`): each scheme with its fields, the
 //! secret it sends chosen from the project's secrets, what Save says while one is missing, and what the inspector
 //! shows of it (the secret by its name, never its value).
 
@@ -67,7 +68,7 @@ fn authorization(seeded: &Seeded, name: &str) -> McpAuthorization {
 
 #[test]
 fn connections_mcp_remote_server_is_saved_with_each_authorization() {
-  let mut seeded = Seeded::new("connections");
+  let mut seeded = Seeded::shared("connections");
   let (token, label) = sentry_token(&seeded);
   add_remote(
     &mut seeded,
@@ -119,7 +120,7 @@ fn connections_mcp_remote_server_is_saved_with_each_authorization() {
 
 #[test]
 fn connections_mcp_authorization_fields_say_why_they_cannot_be_used() {
-  let mut seeded = Seeded::new("connections");
+  let mut seeded = Seeded::shared("connections");
   seeded.add(NewConnection::McpServer);
   seeded.set("connection-mcp-name", "docs");
   seeded.click("connection-mcp-http");
