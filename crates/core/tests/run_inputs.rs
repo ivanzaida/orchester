@@ -394,3 +394,29 @@ fn run_inputs_connection_kind_absent_in_older_bindings_and_local_runs_stay_usabl
     RunInputs::new(content(&fixture, InputsOrigin::Local), older, LocalConsent::default()).expect("local inputs");
   assert_eq!(local.check_connection(fixture.profile, &connection), Ok(()));
 }
+
+#[test]
+fn run_inputs_bind_a_local_mcp_server_by_its_id_in_the_bindings_or_a_profiles_selection() {
+  let fixture = fixture();
+  let (bound_for_run, chosen, other) = (
+    ConnectionId::generate(),
+    ConnectionId::generate(),
+    ConnectionId::generate(),
+  );
+  let mut bindings = bound(&fixture);
+  assert!(
+    !bindings.binds_local_mcp(other),
+    "a run that binds no server binds none"
+  );
+  bindings.local_mcp = vec![bound_for_run, chosen];
+  bindings.profiles[0].mcp_servers = vec![chosen];
+  assert!(bindings.binds_local_mcp(bound_for_run));
+  assert!(bindings.binds_local_mcp(chosen));
+  assert!(!bindings.binds_local_mcp(other));
+  bindings.local_mcp = Vec::new();
+  assert!(
+    bindings.binds_local_mcp(chosen),
+    "the profile's selection alone binds it"
+  );
+  assert!(!bindings.binds_local_mcp(bound_for_run));
+}
