@@ -107,3 +107,44 @@ fn team_qa_closed_by_a_task_with_no_record_keeps_the_plain_words() {
     "Marking it done ended its claim."
   );
 }
+
+#[test]
+fn team_qa_closed_by_a_blocked_task_with_no_record_keeps_the_plain_word() {
+  let (mut window, _server) = on(State::Claims, "KON-16");
+  assert_eq!(
+    window.text("task-team-blocked-title"),
+    "Blocked",
+    "an older server does not say who blocked it, so the card names no person and no time"
+  );
+  assert_eq!(window.text("task-team-blocked-badge"), "Blocked");
+  assert_eq!(window.text("task-team-blocked-reason"), "Waiting for the staging key");
+  assert_eq!(
+    window.text("task-team-blocked-detail"),
+    "Nothing runs while it is blocked."
+  );
+}
+
+#[test]
+fn team_qa_closed_by_reopening_a_task_closed_by_a_person_clears_the_line() {
+  let (mut window, _server) = on(State::ClosedAdmin, "KON-8");
+  assert_stamped(&window.text("task-team-closed-title"), "Done · marked by mara at ");
+
+  window.press("task-reopen");
+  window.until("Reopen's choices", |window| window.texts("task-reopen-todo").is_some());
+  window.press("task-reopen-todo");
+  window.until("the task to be open again", |window| {
+    window.texts("task-team-closed-title").is_none()
+  });
+  for id in ["task-team-closed-badge", "task-team-closed-detail", "task-reopen"] {
+    assert!(!offered(&mut window, id), "{id} is gone with the closed card");
+  }
+  window.until("an open task an Admin can close", |window| {
+    offered(window, "task-team-done")
+  });
+
+  window.press("task-team-done");
+  window.until("the task to be closed again", |window| {
+    window.texts("task-team-closed-title").is_some()
+  });
+  assert_stamped(&window.text("task-team-closed-title"), "Done · marked by you at ");
+}
