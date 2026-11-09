@@ -106,9 +106,12 @@ fn local_archive_hides_an_archived_server_from_every_list_a_picker_reads() {
     ProjectAgents::load_in(root).expect("agents").mcp.is_empty(),
     "the profile editor's section"
   );
-  assert!(
-    ProjectConnections::load_in(root).expect("connections").mcp.is_empty(),
-    "the connections read"
+  let connections = ProjectConnections::load_in(root).expect("connections");
+  assert!(connections.mcp.is_empty(), "the connections read");
+  assert_eq!(
+    *connections.mcp_names,
+    [(server.id(), server.name().clone())],
+    "its name stays taken until it is restored"
   );
   assert!(
     Assignables::load(&ProjectDb::open(root).expect("open"))

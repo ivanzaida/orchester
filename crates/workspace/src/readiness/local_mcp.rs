@@ -62,18 +62,13 @@ pub fn local_mcp_servers(
   repo_root: &Path,
   vault: &dyn SecretVault,
 ) -> Result<Vec<LocalMcpReadiness>, ReadinessError> {
-  let archived: Vec<ConnectionId> = db.archived_mcp_servers()?.into_iter().map(|(id, _)| id).collect();
   let path = db
     .project_environment()?
     .get("PATH")
     .map(OsString::from)
     .or_else(orchester_exec::search_path::search_path);
   let mut found = Vec::new();
-  for server in db
-    .mcp_servers()?
-    .into_iter()
-    .filter(|server| !archived.contains(&server.id()))
-  {
+  for server in db.mcp_servers()? {
     let standing = standing_of(db, &server, (repo_root, path.as_deref()), vault)?;
     found.push(LocalMcpReadiness { server, standing });
   }

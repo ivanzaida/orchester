@@ -10,7 +10,8 @@ use orchester_core::{
   account::AgentAccount,
   connection::{
     AgentConnection, AgentProvider, ApiProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionError,
-    GitHubConnection, mcp::McpServer,
+    GitHubConnection,
+    mcp::{McpServer, McpServerName},
   },
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -53,6 +54,9 @@ pub struct ProjectConnections {
   pub connections: Arc<Vec<AgentConnection>>,
   pub github: Arc<Vec<GitHubConnection>>,
   pub mcp: Arc<Vec<McpServer>>,
+  /// The id and name of every MCP server of the project, the archived ones too: a name an archived server holds is
+  /// taken until it is restored.
+  pub mcp_names: Arc<Vec<(ConnectionId, McpServerName)>>,
   pub decisions: Arc<Vec<orchester_core::connection::DecisionConnection>>,
   /// The project's secrets that are not archived.
   pub secrets: Arc<Vec<Secret>>,
@@ -115,6 +119,13 @@ impl ProjectConnections {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
       mcp: Arc::new(store.mcp_servers()?),
+      mcp_names: Arc::new(
+        store
+          .all_mcp_servers()?
+          .iter()
+          .map(|server| (server.id(), server.name().clone()))
+          .collect(),
+      ),
       decisions: Arc::new(decisions),
       secrets: Arc::new(secrets),
       archived_keys: Arc::new(archived_keys),

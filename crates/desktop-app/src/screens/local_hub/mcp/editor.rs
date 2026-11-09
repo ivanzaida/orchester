@@ -176,10 +176,10 @@ impl Component for Editor {
     let pending = &self.asking.pending;
     let changed = typed != text || !pending.is_empty();
     let taken: Vec<_> = listed
-      .mcp
+      .mcp_names
       .iter()
-      .filter(|other| other.id() != server.id())
-      .map(|other| other.name().clone())
+      .filter(|(id, _)| *id != server.id())
+      .map(|(_, name)| name.clone())
       .collect();
     let checked = typed.draft(&taken, &listed.secrets);
     let errors = checked
