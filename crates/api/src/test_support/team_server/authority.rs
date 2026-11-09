@@ -11,6 +11,7 @@
 //! unavailable`. Who reads them stands as [`TeamServer::stand_as`] says; the v1 members read names the Admins and
 //! server admins [`TeamServer::members_named`] gives.
 
+mod closing;
 mod commands;
 mod delivery;
 pub(super) mod edits;
