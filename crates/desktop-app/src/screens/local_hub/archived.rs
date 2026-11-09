@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Text},
+  components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -212,74 +212,72 @@ fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Element {
   .into()
 }
 
+/// One row of the read-only table: its label and its value, in mono where it is a path or a name.
+fn read_row(id: &str, label: &str, value: &str, mono: bool) -> Row {
+  let id = format!("local-hub-archived-{id}");
+  let shown = format!("{id}-value");
+  let value = if mono {
+    rows::mono(&shown, value)
+  } else {
+    rows::words(&shown, value)
+  };
+  rows::row(&id, label, None, value)
+}
+
+/// What a program runs with: its path, arguments and folder; a remote server's address.
+fn how_it_runs(ctx: &Ctx, text: &McpServerText) -> Vec<Row> {
+  match text.transport {
+    TransportChoice::Stdio => {
+      let (folder, mono) = if text.working_directory.is_empty() {
+        (ctx.t("connections.mcp.theWorktree").to_string(), false)
+      } else {
+        (text.working_directory.clone(), true)
+      };
+      vec![
+        read_row(
+          "program",
+          &ctx.t("connections.mcp.property.program"),
+          &text.program,
+          true,
+        ),
+        read_row(
+          "arguments",
+          &ctx.t("connections.mcp.property.arguments"),
+          &text.arguments.lines().collect::<Vec<_>>().join(" "),
+          true,
+        ),
+        read_row("folder", &ctx.t("connections.mcp.property.folder"), &folder, mono),
+      ]
+    }
+    TransportChoice::Http => vec![read_row(
+      "url",
+      &ctx.t("connections.mcp.property.endpoint"),
+      &text.url,
+      true,
+    )],
+  }
+}
+
 /// *Server · read-only until it is restored* over what the server was, as values (`Server` in L14).
 fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
-  let line = |id: &str, label: &str, value: String, mono: bool| {
-    let id = format!("local-hub-archived-{id}");
-    let value = if mono {
-      rows::mono(&format!("{id}-value"), &value)
-    } else {
-      rows::words(&format!("{id}-value"), &value)
-    };
-    rows::row(&id, label, None, value)
-  };
-  let worktree = ctx.t("connections.mcp.theWorktree").to_string();
   let tools = text.exempt_tools.lines().collect::<Vec<_>>().join(", ");
   let tools = if tools.is_empty() {
     ctx.t("local_hub.profile.none").to_string()
   } else {
     tools
   };
-  let mut rows = vec![line(
-    "runs-as",
-    &ctx.t("local_hub.mcp.runsAs"),
-    ctx
-      .t(match text.transport {
-        TransportChoice::Stdio => "local_hub.mcp.asProgram",
-        TransportChoice::Http => "local_hub.mcp.asRemote",
-      })
-      .to_string(),
-    false,
-  )];
-  match text.transport {
-    TransportChoice::Stdio => {
-      rows.push(line(
-        "program",
-        &ctx.t("connections.mcp.property.program"),
-        text.program.clone(),
-        true,
-      ));
-      rows.push(line(
-        "arguments",
-        &ctx.t("connections.mcp.property.arguments"),
-        text.arguments.lines().collect::<Vec<_>>().join(" "),
-        true,
-      ));
-      let folder = if text.working_directory.is_empty() {
-        (worktree, false)
-      } else {
-        (text.working_directory.clone(), true)
-      };
-      rows.push(line(
-        "folder",
-        &ctx.t("connections.mcp.property.folder"),
-        folder.0,
-        folder.1,
-      ));
-    }
-    TransportChoice::Http => rows.push(line(
-      "url",
-      &ctx.t("connections.mcp.property.endpoint"),
-      text.url.clone(),
-      true,
-    )),
-  }
-  rows.push(line("tools", &ctx.t("local_hub.mcp.tools"), tools, true));
+  let runs_as = ctx.t(match text.transport {
+    TransportChoice::Stdio => "local_hub.mcp.asProgram",
+    TransportChoice::Http => "local_hub.mcp.asRemote",
+  });
+  let mut rows = vec![read_row("runs-as", &ctx.t("local_hub.mcp.runsAs"), &runs_as, false)];
+  rows.extend(how_it_runs(ctx, text));
+  rows.push(read_row("tools", &ctx.t("local_hub.mcp.tools"), &tools, true));
   if text.transport == TransportChoice::Stdio && !text.variables.is_empty() {
-    rows.push(line(
+    rows.push(read_row(
       "variables",
       &ctx.t("connections.mcp.variables"),
-      variables_read(ctx, &text.variables),
+      &variables_read(ctx, &text.variables),
       true,
     ));
   }
