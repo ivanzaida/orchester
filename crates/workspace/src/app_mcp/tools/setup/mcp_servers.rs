@@ -170,6 +170,8 @@ pub(super) fn save_refusal(error: &McpSaveError) -> ToolError {
     McpSaveError::Store(orchester_store::StoreError::ConnectionNotFound(_)) => "not_found",
     McpSaveError::InUse(_) => "in_use",
     McpSaveError::Changed(_) => "changed_meanwhile",
+    McpSaveError::SecretStore { .. } => "secret_store_refused",
+    McpSaveError::SecretGone(_) => "secret_gone",
     McpSaveError::Store(_) | McpSaveError::Server(_) => "project_data",
   };
   let mut reasons = vec![error.message()];

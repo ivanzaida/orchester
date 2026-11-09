@@ -8,9 +8,10 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::mcp::{McpServer, McpServerError, McpTransport, StdioServer},
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ResourceId, SecretId},
   resource::{AgentProfile, ModelId, ResourceKind},
-  store::{McpServerStore, ResourceStore},
+  secret::{self, SecretError, SecretName, SecretValue, SecretVault, VaultError},
+  store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -39,6 +40,12 @@ pub enum McpSaveError {
   /// The server changed since the save was asked for, so it widens what was not allowed: these reasons.
   #[error("the MCP server changed meanwhile")]
   Changed(Vec<Message>),
+  /// The secret store did not keep the new value of a secret the server's variables take; the server is as it was.
+  #[error("the secret store did not keep the value of {secret}: {source}")]
+  SecretStore { secret: SecretName, source: VaultError },
+  /// A value was to replace a secret the project does not have, or has archived.
+  #[error("the secret {0} is gone")]
+  SecretGone(SecretId),
 }
 
 impl McpSaveError {
@@ -53,7 +60,45 @@ impl McpSaveError {
       Self::Program(problem) => program_problem_message(problem),
       Self::InUse(roles) => Message::new("connections.mcp.errors.inUse").with("profiles", roles.join(", ")),
       Self::Changed(_) => Message::new("connections.mcp.errors.changedMeanwhile"),
+      Self::SecretStore { secret, source } => secret_store_message(secret, source),
+      Self::SecretGone(_) => Message::new("errors.secretGone"),
     }
+  }
+}
+
+/// The field of a save that a refusal is about, which the panel marks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefusedField {
+  Program,
+  /// The value of this secret.
+  Secret(SecretName),
+  /// No one field: the save as a whole.
+  None,
+}
+
+impl McpSaveError {
+  pub fn field(&self) -> RefusedField {
+    match self {
+      Self::Program(_) => RefusedField::Program,
+      Self::SecretStore { secret, .. } => RefusedField::Secret(secret.clone()),
+      _ => RefusedField::None,
+    }
+  }
+}
+
+/// Why the secret store did not keep the value of `secret`, in words that fit after *Couldn't save …:*. The value is
+/// never in them.
+fn secret_store_message(secret: &SecretName, source: &VaultError) -> Message {
+  let key = match source {
+    VaultError::AccessDenied(_) => "connections.mcp.errors.secretStoreRefused",
+    VaultError::TooLong { .. } => "connections.mcp.errors.secretTooLong",
+    VaultError::Unsupported => "connections.mcp.errors.secretStoreUnsupported",
+    VaultError::Failed(_) | VaultError::NotFound => "connections.mcp.errors.secretStoreFailed",
+  };
+  let message = Message::new(key).with("secret", secret.to_string());
+  match source {
+    VaultError::TooLong { max } => message.with("max", max.to_string()),
+    _ => message,
   }
 }
 
@@ -112,6 +157,37 @@ pub fn store_in(
   server.set_exempt_tools(draft.exempt_tools);
   db.save_mcp_server(&server)?;
   Ok(server.id())
+}
+
+/// [`store_in`] for the server `id`, and the new `values` of the secrets its variables take, in `vault`, as one save:
+/// when the secret store does not keep a value the server is put back as it was (what an earlier value of `values`
+/// replaced stays replaced: the store cannot say what it held).
+pub fn store_with_values(
+  repo_root: &Path,
+  vault: &dyn SecretVault,
+  (id, draft, allowed): (ConnectionId, McpServerDraft, &Allowed),
+  values: &[(SecretId, SecretValue)],
+) -> Result<(), McpSaveError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let before = db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  store_in(repo_root, Some(id), draft, allowed)?;
+  let project = db.project().id();
+  for (secret_id, value) in values {
+    let name = db.secret(*secret_id)?.map(|found| found.name().clone());
+    match secret::replace_value(&mut db, vault, project, *secret_id, value, Timestamp::now()) {
+      Ok(_) => {}
+      Err(failure) => {
+        db.save_mcp_server(&before)?;
+        return Err(match (failure, name) {
+          (SecretError::Vault(source), Some(secret)) => McpSaveError::SecretStore { secret, source },
+          (SecretError::Store(error) | SecretError::ValueLeftBehind { source: error, .. }, _) => error.into(),
+          (SecretError::RotationNotRecorded { source, .. }, _) => source.into(),
+          _ => McpSaveError::SecretGone(*secret_id),
+        });
+      }
+    }
+  }
+  Ok(())
 }
 
 /// `transport` with its program fixed, unless it is the program `stored` already has.

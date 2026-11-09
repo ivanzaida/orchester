@@ -1130,7 +1130,11 @@
         "headerInvalid": "{{header}} is not a header name: use letters, digits and - _ . ! # $ % & ' * + ^ ` | ~",
         "headerTooLong": "A header name is at most {{max}} characters long",
         "headerReserved": "The agent's CLI sets {{header}} itself; choose another header",
-        "nameIsId": "A name cannot look like a server's id. Use small letters, digits, - and _, starting with a letter."
+        "nameIsId": "A name cannot look like a server's id. Use small letters, digits, - and _, starting with a letter.",
+        "secretStoreRefused": "the system's secret store refused {{secret}}",
+        "secretTooLong": "{{secret}} is longer than the system's secret store keeps ({{max}} bytes at most)",
+        "secretStoreUnsupported": "this computer has no secret store for {{secret}} yet",
+        "secretStoreFailed": "the system's secret store failed on {{secret}}"
       }
     },
     "provider": {
