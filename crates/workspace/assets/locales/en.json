@@ -1069,7 +1069,8 @@
       "modelNotOffered": "The profile's connection does not offer that model, so nothing was changed.",
       "effortNotOffered": "The profile's model does not offer that reasoning effort, so nothing was changed.",
       "serversInvalid": "The profile cannot choose those MCP servers, so nothing was changed.",
-      "staleDraft": "This draft was started from an older version than the latest. Open the profile's editor to compare them and publish."
+      "staleDraft": "This draft was started from an older version than the latest. Open the profile's editor to compare them and publish.",
+      "promptsInEditor": "This draft changes what the profile's role tells its agents, which this panel does not show. Open More settings… to read it and publish it there."
     }
   },
   "connections": {

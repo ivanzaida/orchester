@@ -255,7 +255,7 @@ fn local_hub_archive_a_profile_lists_it_as_archived() {
 }
 
 /// Builder, a Claude model on a connection the project no longer has, published as v1; and two Claude Code connections.
-fn builder_without_connection(agents: &Agents) -> (ResourceId, [ConnectionId; 2]) {
+pub(super) fn builder_without_connection(agents: &Agents) -> (ResourceId, [ConnectionId; 2]) {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let claude = ["Claude 2", "Home"].map(|label| {
     let connection = AgentConnection::new(

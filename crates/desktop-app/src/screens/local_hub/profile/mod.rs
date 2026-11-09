@@ -119,7 +119,8 @@ struct ProfilePanel {
   settled: Signal<u64>,
   /// *Discard draft* asks.
   discarding: Signal<bool>,
-  /// Who pressed Publish: what it changes in the role's prompts is a person's, or automation's under their consent.
+  /// Who pressed *Use … for …* when it takes an account the profile lost: that is a person's decision, or automation's
+  /// under their consent.
   gate: Option<InputGate>,
 }
 
@@ -172,7 +173,14 @@ impl Component for ProfilePanel {
     let busy = self.busy(reading);
     let target = self.target(profile);
     let fix = pinned_fix(profile, target, &parts);
-    let press = |fix: &Fix| self.press(fix, (&project, id), target.map(|choice| choice.id), &navigation);
+    let press = |fix: &Fix| {
+      self.press(
+        fix,
+        (&project, id),
+        (target.map(|choice| choice.id), profile.current.is_none()),
+        &navigation,
+      )
+    };
     let head_end = head_end(ctx, &project, &entry, id);
     let widening = self
       .pending
@@ -189,8 +197,10 @@ impl Component for ProfilePanel {
         more_settings(ctx, &project, id, &navigation),
       ],
     };
-    let discard = (self.discarding.get() && profile.draft)
-      .then(|| draft::discard_question(ctx, (&project, id, &entry), (&self.discarding, &self.settled)));
+    let discard = profile
+      .draft_saved_at
+      .filter(|_| self.discarding.get())
+      .map(|shown| draft::discard_question(ctx, (&project, id, &entry), (shown, &self.discarding, &self.settled)));
     let body = body()
       .child(head_named(
         &entry.name,
@@ -212,10 +222,9 @@ impl Component for ProfilePanel {
       ))
       .with_children(self.refusal(ctx))
       .with_children(discard);
-    let bar = if profile.draft {
-      Some(draft::bar(ctx, &entry, (self.publish(), self.discard()), busy))
-    } else {
-      fix.map(|fix| pinned(ctx, &entry, (profile, target, &fix), press(&fix), busy))
+    let bar = match profile.draft_saved_at {
+      Some(shown) => Some(draft::bar(ctx, &entry, (self.publish(shown), self.discard()), busy)),
+      None => fix.map(|fix| pinned(ctx, &entry, (profile, target, &fix), press(&fix), busy)),
     };
     frame(entry.what, body, bar)
   }
@@ -244,14 +253,13 @@ impl ProfilePanel {
     })
   }
 
-  /// *Publish vN*: who pressed it decides what publishing changes in the role's prompts.
-  fn publish(&self) -> Press {
-    let (save, pending, gate) = (self.save.clone(), self.pending.clone(), self.gate.clone());
+  /// *Publish vN* of the draft saved at `shown`, the one the panel shows.
+  fn publish(&self, shown: Timestamp) -> Press {
+    let (save, pending) = (self.save.clone(), self.pending.clone());
     Press::run(move || {
-      let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
       pending.set(None);
       save.run(edit::Ask {
-        what: edit::Do::Publish { decided },
+        what: edit::Do::Publish { shown },
         allowed: Vec::new(),
       });
     })
@@ -278,13 +286,19 @@ impl ProfilePanel {
     &self,
     fix: &Fix,
     (project, profile): (&ShownProject, ResourceId),
-    target: Option<ConnectionId>,
+    (target, takes_account): (Option<ConnectionId>, bool),
     navigation: &Navigation,
   ) -> Press {
     match fix {
       Fix::UseConnection => {
-        let take = self.take.clone();
+        let (take, gate) = (self.take.clone(), self.gate.clone());
         Press::run(move || {
+          // A profile whose connection is gone takes the account as a widening nobody was asked about: only a person
+          // decides that.
+          if takes_account && !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+            tracing::warn!("synthetic input reached a protected permission decision; not taken");
+            return;
+          }
           if let Some(connection) = target {
             take.run((profile, connection));
           }

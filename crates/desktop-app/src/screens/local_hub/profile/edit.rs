@@ -13,7 +13,10 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::id::{ProjectId, ResourceId};
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  time::Timestamp,
+};
 use orchester_workspace::{
   agents::{
     editor::Outcome,
@@ -37,8 +40,8 @@ use crate::{
 pub(super) enum Do {
   /// Change one field of the draft.
   Edit(Edit),
-  /// Publish the draft; `decided`: a person pressed it (or automation they let decide).
-  Publish { decided: bool },
+  /// Publish the draft the panel showed, saved at `shown`: another draft is refused.
+  Publish { shown: Timestamp },
 }
 
 /// A write and what the person already allowed it to widen.
@@ -76,7 +79,7 @@ pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
     async move {
       let outcome = background::run(move || match &asked.what {
         Do::Edit(edit) => local_edit::edit(&root, id, edit, &asked.allowed),
-        Do::Publish { decided } => local_edit::publish(&root, id, &asked.allowed, *decided),
+        Do::Publish { shown } => local_edit::publish(&root, id, *shown, &asked.allowed),
       })
       .await??;
       Ok(Done { ask, outcome })

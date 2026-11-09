@@ -10,8 +10,10 @@ use std::path::Path;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, ModelId},
+  resource::{AgentProfile, ModelId, VersionNumber},
+  time::Timestamp,
 };
+use orchester_store::ProjectDb;
 
 use super::{
   data::{ProfileEntry, ProjectAgents, VersionState},
@@ -21,7 +23,10 @@ use super::{
     stored_effort,
   },
 };
-use crate::messages::{self, Message};
+use crate::{
+  messages::{self, Message},
+  prompt_changes, removal,
+};
 
 /// One field of a local profile, changed to a new value.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,26 +60,55 @@ pub fn edit(root: &Path, profile: ResourceId, edit: &Edit, allowed: &[Message]) 
   apply(root, entry, next, Action::Save, allowed)
 }
 
-/// Publishes the draft of the local profile `profile` as its next version, with what the person allowed to widen. A
-/// draft that was started from an older version than the latest is not published here: its editor compares the two.
-/// `decided`: a person pressed Publish (or automation they let decide), which what publishing changes in the role's
-/// prompts needs.
-pub fn publish(root: &Path, profile: ResourceId, allowed: &[Message], decided: bool) -> Result<Outcome, Message> {
-  let entry = editor::entry_in(root, profile)?;
+/// Publishes the draft of the local profile `profile` as its next version, with what the person allowed to widen, while
+/// it is still the draft saved at `shown`, the one the panel showed: another draft, or none, is refused as the editor
+/// refuses it ([`editor::apply`] compares what was shown), and nothing is published. A draft that was started from an
+/// older version than the latest is not published here either: its editor compares the two. Nor is one that changes
+/// what the role's prompts say (its role, responsibilities or instructions): the panel does not show those, so pressing
+/// *Publish* there is not a decision about them, and the editor, where they are shown, publishes it.
+pub fn publish(root: &Path, profile: ResourceId, shown: Timestamp, allowed: &[Message]) -> Result<Outcome, Message> {
+  let (entry, saved) = stored(root, profile)?;
   match entry.state {
     VersionState::Draft { .. } => {}
     VersionState::StaleDraft { .. } => return Err(Message::new("agents.localEdit.staleDraft")),
     VersionState::Published(_) => return Err(Message::new("appMcp.errors.noDraft")),
   }
+  still_shown(saved, shown)?;
+  let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  if !prompt_changes::profile_in(&db, profile, &entry.profile)
+    .map_err(|error| messages::store_error(&error))?
+    .is_empty()
+  {
+    return Err(Message::new("agents.localEdit.promptsInEditor"));
+  }
   let body = entry.profile.clone();
-  let request = request(root, entry, body, Action::Publish, allowed)?;
-  editor::apply(
-    root,
-    &Request {
-      prompt_decided: decided,
-      ..request
-    },
-  )
+  editor::apply(root, &request(root, entry, body, Action::Publish, allowed)?)
+}
+
+/// Discards the draft of the local profile `profile` while it is still the one saved at `shown`: the latest published
+/// version is the profile again, and its number comes back. Another draft is refused and nothing is lost.
+pub fn discard(root: &Path, profile: ResourceId, shown: Timestamp) -> Result<VersionNumber, Message> {
+  let (entry, saved) = stored(root, profile)?;
+  still_shown(saved, shown)?;
+  removal::discard_in::<AgentProfile>(root, profile, &entry.profile)
+}
+
+/// The stored profile and when its draft was saved, read together.
+fn stored(root: &Path, profile: ResourceId) -> Result<(ProfileEntry, Option<Timestamp>), Message> {
+  let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
+  let entry = listed
+    .profile(profile)
+    .cloned()
+    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  Ok((entry, listed.draft_times.get(&profile).copied()))
+}
+
+fn still_shown(saved: Option<Timestamp>, shown: Timestamp) -> Result<(), Message> {
+  if saved == Some(shown) {
+    Ok(())
+  } else {
+    Err(Message::new("errors.draftChanged"))
+  }
 }
 
 fn apply(

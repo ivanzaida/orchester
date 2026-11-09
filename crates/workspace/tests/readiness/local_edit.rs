@@ -8,13 +8,13 @@ use orchester_core::{
   },
   id::{ConnectionId, ResourceId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, RepositoryAccess},
-  store::ConnectionStore,
+  resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, RepositoryAccess},
+  store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_workspace::agents::{
   editor::Outcome,
-  local_edit::{Edit, edit, publish},
+  local_edit::{Edit, discard, edit, publish},
   local_hub::LocalHub,
 };
 
@@ -61,10 +61,15 @@ fn checked(fixture: &Fixture, provider: AgentProvider, label: &str, models: &[(&
 }
 
 fn builder_on(connection: ConnectionId, model: &str) -> AgentProfile {
+  telling(connection, model, "Build.")
+}
+
+/// Builder that tells its agents `instructions`.
+fn telling(connection: ConnectionId, model: &str, instructions: &str) -> AgentProfile {
   AgentProfile::new(
     name("Builder"),
     String::new(),
-    PromptText::new("Build.").expect("prompt"),
+    PromptText::new(instructions).expect("prompt"),
     connection,
     ModelId::new(model).expect("model"),
     ProviderSettings::default(),
@@ -116,7 +121,7 @@ fn readiness_local_edit_a_field_is_a_draft_and_publishing_makes_the_next_version
   assert_eq!(sheet.options.models, ["gpt-a", "gpt-b"]);
 
   assert_eq!(
-    publish(&fixture.root, builder, &[], true).expect("published"),
+    publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect("published"),
     Outcome::Saved(builder)
   );
   let read = hub(&fixture);
@@ -220,17 +225,82 @@ fn readiness_local_edit_choosing_a_server_asks_first_and_an_archived_one_cannot_
   assert_eq!(refused.key, "appMcp.errors.mcpServerMissing");
 }
 
+/// When the draft the panel would show now was saved.
+fn shown(fixture: &Fixture, profile: ResourceId) -> Timestamp {
+  hub(fixture)
+    .profile(profile)
+    .and_then(|sheet| sheet.draft_saved_at)
+    .expect("a draft")
+}
+
 #[test]
-fn readiness_local_edit_only_a_draft_is_published() {
+fn readiness_local_edit_a_profile_without_a_draft_has_nothing_to_publish() {
   let (fixture, builder, _) = project();
 
-  let none = publish(&fixture.root, builder, &[], true).expect_err("no draft");
+  let none = publish(&fixture.root, builder, Timestamp::now(), &[]).expect_err("no draft");
   assert_eq!(none.key, "appMcp.errors.noDraft");
 
   edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("a draft");
+  let at = shown(&fixture, builder);
   assert_eq!(
-    publish(&fixture.root, builder, &[], false).expect("nothing in the prompts changed"),
-    Outcome::Saved(builder),
-    "a publication that changes no prompt needs no one to decide"
+    publish(&fixture.root, builder, at, &[]).expect("published"),
+    Outcome::Saved(builder)
   );
+  let again = publish(&fixture.root, builder, at, &[]).expect_err("published already");
+  assert_eq!(again.key, "appMcp.errors.noDraft", "the draft is the version now");
+}
+
+#[test]
+fn readiness_local_edit_publish_and_discard_act_on_the_draft_the_panel_showed() {
+  let (fixture, builder, _) = project();
+  edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("a draft");
+  let showed = shown(&fixture, builder);
+
+  // The draft is saved again, here or in the profile's editor, after the panel showed it.
+  std::thread::sleep(std::time::Duration::from_millis(5));
+  edit(&fixture.root, builder, &Edit::Effort(Some("high".into())), &[]).expect("another draft");
+  assert_ne!(shown(&fixture, builder), showed, "the draft moved");
+
+  let refused = publish(&fixture.root, builder, showed, &[]).expect_err("not the draft shown");
+  assert_eq!(refused.key, "errors.draftChanged");
+  let refused = discard(&fixture.root, builder, showed).expect_err("not the draft shown");
+  assert_eq!(refused.key, "errors.draftChanged");
+  let read = hub(&fixture);
+  let sheet = read.profile(builder).expect("a sheet");
+  assert!(sheet.draft, "nothing was published or lost");
+  assert_eq!(sheet.effort.as_deref(), Some("high"));
+
+  let number = discard(&fixture.root, builder, shown(&fixture, builder)).expect("the shown draft goes");
+  assert_eq!(number.get(), 1, "the published version is the profile again");
+  let read = hub(&fixture);
+  let sheet = read.profile(builder).expect("a sheet");
+  assert!(!sheet.draft);
+  assert_eq!(sheet.effort, None);
+}
+
+#[test]
+fn readiness_local_edit_a_draft_that_changes_the_prompts_is_published_in_the_editor() {
+  let (fixture, builder, [codex, _]) = project();
+  let latest = fixture
+    .db()
+    .latest_version::<AgentProfile>(builder)
+    .expect("read")
+    .expect("published");
+  let body = telling(codex, "gpt-a", "Build, and also review everything.");
+  fixture
+    .db()
+    .save_draft(builder, &Draft::new(body, Some(latest.number()), Timestamp::now()))
+    .expect("a draft that changes what the role tells its agents");
+
+  let refused = publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect_err("the panel shows no prompt");
+  assert_eq!(refused.key, "agents.localEdit.promptsInEditor");
+  assert!(
+    hub(&fixture).profile(builder).expect("a sheet").draft,
+    "the draft is kept for the editor"
+  );
+
+  // A change of a field the panel draws, on top of that draft, does not make the prompts the panel's to publish.
+  edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("saved into the draft");
+  let refused = publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect_err("still refused");
+  assert_eq!(refused.key, "agents.localEdit.promptsInEditor");
 }

@@ -6,13 +6,10 @@
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
-use orchester_core::{
-  id::ResourceId,
-  resource::{AgentProfile, VersionNumber},
-};
+use orchester_core::{id::ResourceId, resource::VersionNumber, time::Timestamp};
 use orchester_workspace::{
-  agents::{editor, local_hub::LocalProfile},
-  display, removal,
+  agents::{local_edit, local_hub::LocalProfile},
+  display,
   tasks::outside::Outside,
 };
 
@@ -86,12 +83,12 @@ pub(super) fn bar(ctx: &Ctx, entry: &Entry, presses: (Press, Press), busy: Busy)
   )
 }
 
-/// *Discard draft v5?* over the page while `open` holds: the draft goes only while it is still the one the panel
-/// shows, and the selects then show the version again (`settled` counts the writes that ended).
+/// *Discard draft v5?* over the page while `open` holds: the draft goes only while it is still the one the panel shows,
+/// the one saved at `shown`, and the selects then show the version again (`settled` counts the writes that ended).
 pub(super) fn discard_question(
   ctx: &mut Ctx,
   (project, id, entry): (&ShownProject, ResourceId, &Entry),
-  (open, settled): (&Signal<bool>, &Signal<u64>),
+  (shown, open, settled): (Timestamp, &Signal<bool>, &Signal<u64>),
 ) -> Element {
   let root: PathBuf = project.open.repo_root.clone();
   let published = entry.number.map_or(0, VersionNumber::get);
@@ -101,10 +98,7 @@ pub(super) fn discard_question(
     DiscardProps {
       project: project.clone(),
       versions: (published + 1, published),
-      discard: Arc::new(move || {
-        let draft = editor::entry_in(&root, id)?;
-        removal::discard_in::<AgentProfile>(&root, id, &draft.profile)
-      }),
+      discard: Arc::new(move || local_edit::discard(&root, id, shown)),
       change: Outside::Profiles,
       on_keep: Arc::new(move || keep.set(false)),
       on_discarded: Arc::new(move || {
