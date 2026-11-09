@@ -1,8 +1,8 @@
 //! What a run control asks of the page's project: run a ready draft (queue it, then start its first
 //! run), start a queued task's first run, pause, resume, continue or cancel its run. Each goes to the
 //! runner of the project the page shows, whichever tab is active. Work on a shared task goes on only
-//! under the person's claim, a team run's under the authority its start recorded; Pause and Cancel
-//! need none.
+//! under the person's claim, a team run's under the authority its start recorded (a team run whose record was never
+//! written is refused: it has neither); Pause and Cancel need none.
 
 use std::{path::Path, sync::Arc};
 
@@ -26,7 +26,7 @@ use orchester_workspace::{
     cancel_run::{Stop, stop_named_run_in},
     data::{SaveTarget, published_pipelines},
     detail::run_store_error,
-    recorded::{RunRoute, route_of_run},
+    recorded::{RunRoute, route_with_record},
     run::{QueueFailure, control_message, queue_in},
   },
   workspace::{OpenProject, Workspace},
@@ -135,7 +135,9 @@ pub fn control_action(
 /// The claim work on `task` goes on under, `run` going on again when given: a team run's is the claim and the work its
 /// start through the team server recorded, which its heartbeat renews and its reports name (`team_work`), so nothing is
 /// taken again here, and a team run the server fenced (taken over, membership removed, another device) goes on no
-/// more; any other work takes or confirms the task's claim.
+/// more. A run created with team inputs whose team record was never written has no claim or work to report under and
+/// is refused. Any other run, a stream-era run of a cached team task included, takes or confirms the task's claim as it
+/// did before team runs were recorded.
 async fn work_claim(
   project: &OpenProject,
   servers: &Servers,
@@ -170,8 +172,8 @@ fn run_route(root: &Path, run: RunId) -> Result<(RunRoute, Option<TeamRun>), Mes
   else {
     return Ok((RunRoute::Local, None));
   };
-  let route = route_of_run(&db, &found).map_err(|error| messages::store_error(&error))?;
   let team = db.team_run(run).map_err(|error| messages::store_error(&error))?;
+  let route = route_with_record(&db, &found, team.as_ref()).map_err(|error| messages::store_error(&error))?;
   Ok((route, team))
 }
 
