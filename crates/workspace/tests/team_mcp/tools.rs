@@ -93,6 +93,42 @@ fn team_mcp_reads_come_from_the_team_server() {
 }
 
 #[test]
+fn team_mcp_reads_say_who_closed_and_who_blocked_a_team_task() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let person = json!({"id": "01a183cf-b73c-71db-8a62-bd509770cd4e", "display_name": "Dana"});
+  let read = || {
+    checkout
+      .call("get_task", &json!({"project": "Kontur", "key": "kon-7"}))
+      .expect("read")
+  };
+
+  seen.lock().task_fields = json!({
+    "workflow": "done",
+    "closed": {"how": {"kind": "person", "by": person}, "at": 1_700_000_000_000_i64}
+  });
+  let closed = read();
+  assert_eq!(
+    closed["closed"],
+    json!({"how": {"kind": "person", "by": person}, "at": 1_700_000_000_000_i64}),
+    "{closed}"
+  );
+  assert!(closed["blocked"].is_null(), "{closed}");
+
+  seen.lock().task_fields = json!({
+    "blocked_reason": "Waiting for the staging key",
+    "blocked": {"by": person, "at": 1_700_000_060_000_i64}
+  });
+  let blocked = read();
+  assert_eq!(
+    blocked["blocked"],
+    json!({"by": person, "at": 1_700_000_060_000_i64}),
+    "{blocked}"
+  );
+  assert!(blocked["closed"].is_null(), "{blocked}");
+}
+
+#[test]
 fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   let (server, seen) = server();
   let checkout = Checkout::new(Some(&server), &[]);

@@ -37,6 +37,9 @@ pub struct Seen {
   /// The changes the last task edit sent, as sent.
   pub edited_changes: Value,
   pub created_pipeline: Value,
+  /// The fields a test lays over the task the server reads (an object, or null for none): the records of who closed
+  /// it or blocked it, as a server of this contract sends them.
+  pub task_fields: Value,
   /// The team MCP server the Builder profile's version names, as the local server id a stopgap start looks it up by.
   pub publisher_mcp_server: Option<ConnectionId>,
 }
@@ -143,14 +146,18 @@ fn route(
   };
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
   let task_read = || {
-    json!({
+    let mut read = json!({
       "id": task, "number": 7, "key": "KON-7", "former_key": null, "revision": 1, "title": "Say hello",
       "brief": "Append one line.", "criteria": ["README.md ends with hello"], "pipeline": pipeline.to_string(),
       "limits": null, "workflow": "todo", "priority": "medium", "tags": [], "blocking": [], "blocked_reason": null,
       "module": module, "release": null, "status": "queued", "has_run": false, "created": attribution(),
       "updated": attribution(), "claim": null, "run": null, "assignee": null, "work": null, "effective_claim": null,
       "capabilities": capabilities(project)
-    })
+    });
+    if let (Some(read), Some(fields)) = (read.as_object_mut(), seen.lock().task_fields.as_object()) {
+      read.extend(fields.clone());
+    }
+    read
   };
   let summary = || {
     json!({
