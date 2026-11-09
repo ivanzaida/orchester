@@ -15,7 +15,6 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::StoreError;
 use orchester_workspace::tasks::{detail::TaskDetail, hold::held_work, recorded};
 use serde_json::json;
 
