@@ -19,7 +19,14 @@ use super::{
 
 /// The Tasks list on `state`, with `key`'s row menu open (T7 `lCoNt`, T8 `vdSWS`, T10 `tlw0r`).
 fn row_menu(state: State, key: &str) -> (Window, TeamServer) {
-  row_menu_in(state, TaskListTab::All, key)
+  // The list's two lines under the header leave room for the first rows of a view only: a task is read in the view
+  // that holds it near the top.
+  let tab = if key == "KON-25" {
+    TaskListTab::Backlog
+  } else {
+    TaskListTab::Active
+  };
+  row_menu_in(state, tab, key)
 }
 
 /// [`row_menu`] on the list's `tab`, where a task far down the list has its row.
@@ -165,6 +172,26 @@ fn team_qa_lifecycle_menu_reopen_task_lists_where_the_task_goes_back_to() {
   window.until("the server to take the reopening", |_| {
     server.task_now(1).is_some_and(|(revision, ..)| revision == 2)
   });
+}
+
+/// A closed task reads closed in the list, whatever its runs never said: Done and Canceled in their own words, not
+/// *Ready to queue*.
+#[test]
+fn team_qa_lifecycle_menu_closed_tasks_read_closed_in_the_list() {
+  let (mut window, _server) = prepared(State::AdminWork);
+  window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Tasks(TaskList::new(TaskListTab::Done)),
+  ));
+  window.until("the Done tab", |window| window.texts("task-row-KON-1").is_some());
+  assert_eq!(window.text("task-state-KON-1"), "Done");
+  assert_eq!(window.text("task-state-KON-15"), "Canceled");
+  for key in ["KON-1", "KON-15"] {
+    assert!(
+      !window.text(&format!("task-row-{key}")).contains("Ready to queue"),
+      "{key} is not ready to queue"
+    );
+  }
 }
 
 /// A member's menu on a Done task: only Open and Copy key, and the line saying only Admins reopen it.

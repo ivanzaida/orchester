@@ -16,7 +16,11 @@ use orchester_workspace::tasks::{
   needs_you::WaitingKind,
 };
 
-use crate::ui::{icon::Icon, message::message_text};
+use crate::ui::{
+  icon::Icon,
+  message::message_text,
+  status::{workflow_key, workflow_look},
+};
 
 /// What a row says about where its task stands.
 #[derive(Clone, Debug, PartialEq)]
@@ -145,6 +149,9 @@ const fn kind_key(kind: NeedKind) -> &'static str {
 
 /// Where a task nothing waits for stands.
 fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
+  if let Some(closed) = closed(ctx, row) {
+    return closed;
+  }
   let said = message_text(ctx, &row.detail);
   let (glyph, glyph_color, color) = mark(row);
   let words = match (&row.readiness, row.run_step()) {
@@ -159,6 +166,26 @@ fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
     words,
     color,
   }
+}
+
+/// A task closed as Done or Canceled that no run speaks for: its status as the workflow says it, in the glyph and words
+/// of the Done and Canceled status everywhere else, never *Ready to queue* or an open circle.
+fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
+  let status = row.organization.status();
+  let unspoken = matches!(
+    row.readiness,
+    ReadinessKind::Ready | ReadinessKind::Missing | ReadinessKind::Blocked | ReadinessKind::Run(TaskPhase::Draft)
+  );
+  if !status.is_closed() || !unspoken {
+    return None;
+  }
+  let (glyph, glyph_color) = workflow_look(status);
+  Some(Phrase {
+    glyph,
+    glyph_color,
+    words: ctx.t(workflow_key(status)),
+    color: PaletteColor::TextMuted,
+  })
 }
 
 fn step_args(step: &CurrentStep) -> [(&'static str, String); 2] {

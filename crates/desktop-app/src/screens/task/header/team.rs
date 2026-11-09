@@ -123,6 +123,10 @@ pub fn release(ctx: &mut Ctx, task: &TaskContext) -> Option<Control> {
 /// the task and someone else's claim holds it; `None` otherwise.
 pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let team = task.team.as_ref()?;
+  let closed = team.task.task.organization().status();
+  if closed.is_closed() {
+    return Some(super::run_line::closed(ctx, task, closed));
+  }
   let claim = team.task.claim.as_ref();
   let (status, words, about) = match (lost(ctx, task), claim) {
     (Some(lost), _) => lost,

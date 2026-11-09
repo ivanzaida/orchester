@@ -76,6 +76,11 @@ fn team_qa_lifecycle_the_holder_marks_their_task_done() {
   assert_eq!(window.text("task-team-closed-title"), "Done");
   assert_eq!(window.text("task-team-closed-badge"), "Done");
   assert_eq!(
+    window.text("task-status-label"),
+    "Done",
+    "the header says it too, not a draft with no runs"
+  );
+  assert_eq!(
     window.text("task-team-closed-detail"),
     "Marking it done ended its claim."
   );
@@ -206,6 +211,11 @@ fn team_qa_lifecycle_a_member_reads_a_canceled_task() {
   let (mut window, _server) = on(State::Claims, "KON-15");
   assert_eq!(window.text("task-team-closed-title"), "Canceled");
   assert_eq!(window.text("task-team-closed-detail"), "Canceling it ended its claim.");
+  assert_eq!(window.text("task-status-label"), "Canceled", "and so does the header");
+  assert!(
+    !offered(&mut window, "task-run-line"),
+    "a task that never ran has no run line"
+  );
   assert_eq!(
     window.text("task-team-lifecycle-lock-text"),
     "Only Admins reopen a team task: dana-k (Admin) and olha (Server admin)."
