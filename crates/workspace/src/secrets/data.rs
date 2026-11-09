@@ -9,7 +9,7 @@ use orchester_core::{
   id::{ConnectionId, DecisionConnectionId, ResourceId, SecretId},
   resource::{ResourceKind, Tool},
   secret::{self, NewSecret, Secret, SecretError, SecretValue, SecretVault},
-  store::{McpServerStore, ResourceStore, SecretStore},
+  store::{ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};

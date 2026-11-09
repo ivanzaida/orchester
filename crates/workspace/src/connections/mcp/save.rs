@@ -46,6 +46,16 @@ pub enum McpSaveError {
   /// A value was to replace a secret the project does not have, or has archived.
   #[error("the secret {0} is gone")]
   SecretGone(SecretId),
+  /// A value was given for a secret the server's variables and authorization do not take.
+  #[error("the server does not take the secret {0}")]
+  SecretNotTaken(SecretId),
+  /// The save failed for `cause` after the server was stored, and putting it back as it was failed too: it keeps the
+  /// settings of the save.
+  #[error("{cause}; and the server could not be put back as it was: {restore}")]
+  NotRestored {
+    cause: Box<McpSaveError>,
+    restore: StoreError,
+  },
 }
 
 impl McpSaveError {
@@ -62,6 +72,16 @@ impl McpSaveError {
       Self::Changed(_) => Message::new("connections.mcp.errors.changedMeanwhile"),
       Self::SecretStore { secret, source } => secret_store_message(secret, source),
       Self::SecretGone(_) => Message::new("errors.secretGone"),
+      Self::SecretNotTaken(_) => Message::new("connections.mcp.errors.secretNotTaken"),
+      Self::NotRestored { cause, restore } => {
+        tracing::error!(%restore, %cause, "cannot put the MCP server back as it was");
+        match cause.field() {
+          RefusedField::Secret(secret) => {
+            Message::new("connections.mcp.errors.notRestored").with("secret", secret.to_string())
+          }
+          _ => Message::new("connections.mcp.errors.notRestoredOther"),
+        }
+      }
     }
   }
 }
@@ -81,6 +101,7 @@ impl McpSaveError {
     match self {
       Self::Program(_) => RefusedField::Program,
       Self::SecretStore { secret, .. } => RefusedField::Secret(secret.clone()),
+      Self::NotRestored { cause, .. } => cause.field(),
       _ => RefusedField::None,
     }
   }
@@ -161,7 +182,9 @@ pub fn store_in(
 
 /// [`store_in`] for the server `id`, and the new `values` of the secrets its variables take, in `vault`, as one save:
 /// when the secret store does not keep a value the server is put back as it was (what an earlier value of `values`
-/// replaced stays replaced: the store cannot say what it held).
+/// replaced stays replaced: the store cannot say what it held). A value for a secret the server does not take, or the
+/// project does not have, is refused before anything is stored. When the server cannot be put back either, the error
+/// says both ([`McpSaveError::NotRestored`]).
 pub fn store_with_values(
   repo_root: &Path,
   vault: &dyn SecretVault,
@@ -170,24 +193,44 @@ pub fn store_with_values(
 ) -> Result<(), McpSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let before = db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  let taken = taken_secrets(&draft);
+  for (secret_id, _) in values {
+    if !taken.contains(secret_id) {
+      return Err(match db.secret(*secret_id)? {
+        Some(_) => McpSaveError::SecretNotTaken(*secret_id),
+        None => McpSaveError::SecretGone(*secret_id),
+      });
+    }
+  }
   store_in(repo_root, Some(id), draft, allowed)?;
   let project = db.project().id();
   for (secret_id, value) in values {
     let name = db.secret(*secret_id)?.map(|found| found.name().clone());
-    match secret::replace_value(&mut db, vault, project, *secret_id, value, Timestamp::now()) {
-      Ok(_) => {}
-      Err(failure) => {
-        db.save_mcp_server(&before)?;
-        return Err(match (failure, name) {
-          (SecretError::Vault(source), Some(secret)) => McpSaveError::SecretStore { secret, source },
-          (SecretError::Store(error) | SecretError::ValueLeftBehind { source: error, .. }, _) => error.into(),
-          (SecretError::RotationNotRecorded { source, .. }, _) => source.into(),
-          _ => McpSaveError::SecretGone(*secret_id),
-        });
-      }
+    if let Err(failure) = secret::replace_value(&mut db, vault, project, *secret_id, value, Timestamp::now()) {
+      let cause = match (failure, name) {
+        (SecretError::Vault(source), Some(secret)) => McpSaveError::SecretStore { secret, source },
+        (SecretError::Store(error) | SecretError::ValueLeftBehind { source: error, .. }, _) => error.into(),
+        (SecretError::RotationNotRecorded { source, .. }, _) => source.into(),
+        _ => McpSaveError::SecretGone(*secret_id),
+      };
+      return Err(match db.save_mcp_server(&before) {
+        Ok(()) => cause,
+        Err(restore) => McpSaveError::NotRestored {
+          cause: Box::new(cause),
+          restore,
+        },
+      });
     }
   }
   Ok(())
+}
+
+/// The secrets the saved server takes: its authorization's, or its variables'.
+fn taken_secrets(draft: &McpServerDraft) -> Vec<SecretId> {
+  match &draft.transport {
+    McpTransport::Http(http) => http.authorization().secret().into_iter().collect(),
+    McpTransport::Stdio(_) => draft.environment.secrets().collect(),
+  }
 }
 
 /// `transport` with its program fixed, unless it is the program `stored` already has.

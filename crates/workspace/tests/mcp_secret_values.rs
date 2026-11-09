@@ -3,7 +3,7 @@
 //! that refuses leaves the server as it was and says which secret it refused, without the value anywhere in it.
 //! Run with `cargo test -p orchester-workspace --test mcp_secret_values secret`.
 
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use orchester_core::{
   id::{ProjectId, SecretId},
@@ -185,4 +185,199 @@ fn secret_of_an_unknown_id_is_refused_as_gone_and_changes_nothing() {
 
   assert!(matches!(refused, McpSaveError::SecretGone(_)), "{refused:?}");
   assert!(db.mcp_server(id).expect("read").is_some());
+}
+
+fn second_secret(db: &mut ProjectDb) -> Secret {
+  let other = Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("OTHER_TOKEN").expect("valid name"),
+      kind: SecretKind::AccessToken,
+      environment: Environment::Staging,
+    },
+    Timestamp::from_unix_millis(2),
+  );
+  db.create_secret(&other).expect("secret");
+  other
+}
+
+/// The server `both` taking both secrets, and the text it was saved from.
+fn taking_both(
+  repo: &TempDir,
+  db: &mut ProjectDb,
+  token: &Secret,
+) -> (orchester_core::id::ConnectionId, Secret, McpServerText) {
+  let other = second_secret(db);
+  let text = McpServerText {
+    name: "both".to_owned(),
+    program: std::env::current_exe()
+      .expect("the test program")
+      .to_string_lossy()
+      .into_owned(),
+    arguments: "--stdio".to_owned(),
+    variables: "DOCS_TOKEN=${secret:DOCS_TOKEN@staging}\nOTHER_TOKEN=${secret:OTHER_TOKEN@staging}".to_owned(),
+    ..McpServerText::new_server()
+  };
+  let secrets = [token.clone(), other.clone()];
+  let id = save_in(repo.path(), None, text.draft(&[], &secrets).expect("valid")).expect("saved");
+  (id, other, text)
+}
+
+/// A secret store that keeps every value but one, and runs `after` once it refused that one.
+struct RefusingOne {
+  refused: VaultKey,
+  kept: MemoryVault,
+  after: Box<dyn Fn() + Send + Sync>,
+}
+
+impl SecretVault for RefusingOne {
+  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
+    if *key == self.refused {
+      (self.after)();
+      return Err(VaultError::AccessDenied("refused by the test".to_owned()));
+    }
+    self.kept.store(key, value)
+  }
+
+  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
+    self.kept.read(key)
+  }
+
+  fn exists(&self, key: &VaultKey) -> Result<bool, VaultError> {
+    self.kept.exists(key)
+  }
+
+  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
+    self.kept.delete(key)
+  }
+}
+
+#[test]
+fn secret_store_refusing_the_second_value_names_it_and_restores_the_server() {
+  let (repo, mut db, _, token, _) = project();
+  let (id, other, both) = taking_both(&repo, &mut db, &token);
+  let vault = RefusingOne {
+    refused: other.vault_key(db.project().id()),
+    kept: MemoryVault::default(),
+    after: Box::new(|| {}),
+  };
+  let changed = McpServerText {
+    arguments: "--stdio\n--port\n3845".to_owned(),
+    ..both
+  };
+  let draft = changed.draft(&[], &[token.clone(), other.clone()]).expect("valid");
+  let first = SecretValue::new(TYPED.to_owned()).expect("a value");
+  let second = SecretValue::new("another-typed-value".to_owned()).expect("a value");
+
+  let refused = store_with_values(
+    repo.path(),
+    &vault,
+    (id, draft, &Allowed::Anything),
+    &[(token.id(), first), (other.id(), second)],
+  )
+  .expect_err("the second value is refused");
+
+  assert_eq!(
+    refused.field(),
+    RefusedField::Secret(other.name().clone()),
+    "the second one is named"
+  );
+  let stored = db.mcp_server(id).expect("read").expect("stored");
+  assert_eq!(
+    McpServerText::of(&stored, &[token.clone(), other]).arguments,
+    "--stdio",
+    "the server is as it was"
+  );
+  assert_eq!(
+    vault.read(&token.vault_key(db.project().id())).expect("kept").expose(),
+    TYPED,
+    "the first value stays replaced: the store cannot say what it held"
+  );
+}
+
+#[test]
+fn secret_store_refusal_and_a_failed_restore_are_both_reported() {
+  let (repo, mut db, _, token, _) = project();
+  let (id, other, both) = taking_both(&repo, &mut db, &token);
+  let root: PathBuf = repo.path().to_owned();
+  let vault = RefusingOne {
+    refused: other.vault_key(db.project().id()),
+    kept: MemoryVault::default(),
+    after: Box::new(move || {
+      // Another window took the server's old name while the value was refused, so it cannot be put back.
+      let plain = McpServerText {
+        name: "both".to_owned(),
+        program: std::env::current_exe()
+          .expect("the test program")
+          .to_string_lossy()
+          .into_owned(),
+        ..McpServerText::new_server()
+      };
+      save_in(&root, None, plain.draft(&[], &[]).expect("valid")).expect("another server");
+    }),
+  };
+  let renamed = McpServerText {
+    name: "both-renamed".to_owned(),
+    ..both
+  };
+  let draft = renamed.draft(&[], &[token, other.clone()]).expect("valid");
+  let value = SecretValue::new(TYPED.to_owned()).expect("a value");
+
+  let refused = store_with_values(
+    repo.path(),
+    &vault,
+    (id, draft, &Allowed::Anything),
+    &[(other.id(), value)],
+  )
+  .expect_err("refused, and not restored");
+
+  assert!(matches!(refused, McpSaveError::NotRestored { .. }), "{refused:?}");
+  assert_eq!(
+    refused.field(),
+    RefusedField::Secret(other.name().clone()),
+    "the refused secret is still marked"
+  );
+  let message = refused.message();
+  assert_eq!(message.key, "connections.mcp.errors.notRestored");
+  assert_eq!(message.args, [("secret", "OTHER_TOKEN".to_owned())]);
+  let said = format!("{refused} {refused:?}");
+  assert!(
+    said.contains("refused") && said.contains("put back"),
+    "both are in it: {said}"
+  );
+  assert!(!said.contains(TYPED));
+}
+
+#[test]
+fn secret_the_server_does_not_take_is_refused_before_anything_is_stored() {
+  let (repo, mut db, id, token, text) = project();
+  let stranger = second_secret(&mut db);
+  let changed = McpServerText {
+    arguments: "--stdio\n--port\n3845".to_owned(),
+    ..text
+  };
+  let draft = changed.draft(&[], std::slice::from_ref(&token)).expect("valid");
+  let vault = MemoryVault::default();
+  let value = SecretValue::new(TYPED.to_owned()).expect("a value");
+
+  let refused = store_with_values(
+    repo.path(),
+    &vault,
+    (id, draft, &Allowed::Anything),
+    &[(stranger.id(), value)],
+  )
+  .expect_err("a secret of the project that the server does not take");
+
+  assert!(matches!(refused, McpSaveError::SecretNotTaken(_)), "{refused:?}");
+  assert_eq!(refused.message().key, "connections.mcp.errors.secretNotTaken");
+  let stored = db.mcp_server(id).expect("read").expect("stored");
+  assert_eq!(
+    McpServerText::of(&stored, &[token]).arguments,
+    "--stdio",
+    "nothing was stored"
+  );
+  assert!(
+    vault.read(&stranger.vault_key(db.project().id())).is_err(),
+    "no value was kept"
+  );
 }

@@ -1135,7 +1135,10 @@
         "secretStoreRefused": "the system's secret store refused {{secret}}",
         "secretTooLong": "{{secret}} is longer than the system's secret store keeps ({{max}} bytes at most)",
         "secretStoreUnsupported": "this computer has no secret store for {{secret}} yet",
-        "secretStoreFailed": "the system's secret store failed on {{secret}}"
+        "secretStoreFailed": "the system's secret store failed on {{secret}}",
+        "secretNotTaken": "This server does not take that secret.",
+        "notRestored": "the system's secret store refused {{secret}}, and the server could not be put back as it was: check its fields",
+        "notRestoredOther": "the save failed, and the server could not be put back as it was: check its fields"
       }
     },
     "provider": {

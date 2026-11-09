@@ -172,6 +172,8 @@ pub(super) fn save_refusal(error: &McpSaveError) -> ToolError {
     McpSaveError::Changed(_) => "changed_meanwhile",
     McpSaveError::SecretStore { .. } => "secret_store_refused",
     McpSaveError::SecretGone(_) => "secret_gone",
+    McpSaveError::SecretNotTaken(_) => "secret_not_taken",
+    McpSaveError::NotRestored { .. } => "not_restored",
     McpSaveError::Store(_) | McpSaveError::Server(_) => "project_data",
   };
   let mut reasons = vec![error.message()];
