@@ -71,7 +71,7 @@ fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, S
   // A team task's run is delivered with its module (`merge_run` requests that), which is not the chat's to do on its
   // own: left to the person.
   if db.team_run(run.id())?.is_some() {
-    return Ok(Some(MergeLeft::NotReady));
+    return Ok(Some(MergeLeft::TeamDelivery));
   }
   let Some(task) = recorded::task_of(db, run.task())? else {
     return Ok(Some(MergeLeft::NotReady));
@@ -142,14 +142,6 @@ pub(super) async fn check(scope: &ChatScope, arguments: &JsonObject) -> Result<(
   blocking(move || {
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &named)?;
-    // Said as it is, not as a run that is not ready: the module's delivery is a person's to request in a turn nobody
-    // asked for.
-    if db.team_run(run.id())?.is_some() {
-      return Err(ToolError::refused(
-        "left_to_person",
-        vec![Message::new("orchestrator.tools.mergeLeft.teamDelivery").with("run", run.number().get().to_string())],
-      ));
-    }
     match left(&db, run.id(), Merge::Branch)? {
       None => Ok(()),
       Some(why) => Err(ToolError::refused(
@@ -181,5 +173,6 @@ pub fn left_message(why: &MergeLeft, number: u32) -> Message {
     MergeLeft::Held => Message::new("orchestrator.tools.mergeLeft.held").with("run", run),
     MergeLeft::OptedOut => Message::new("orchestrator.tools.mergeLeft.optedOut").with("run", run),
     MergeLeft::DeliveredByQueue => Message::new("orchestrator.tools.mergeLeft.deliveredByQueue").with("run", run),
+    MergeLeft::TeamDelivery => Message::new("orchestrator.tools.mergeLeft.teamDelivery").with("run", run),
   }
 }

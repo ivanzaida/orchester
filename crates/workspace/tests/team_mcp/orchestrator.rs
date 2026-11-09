@@ -67,7 +67,7 @@ fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
   assert_eq!(
     merging_in(&db, team.run).expect("rule"),
     Merging::Left {
-      why: MergeLeft::NotReady
+      why: MergeLeft::TeamDelivery
     }
   );
   assert!(!completes_in(&db, team.run).expect("rule"), "no completion either");

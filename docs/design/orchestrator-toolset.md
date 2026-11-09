@@ -96,7 +96,7 @@ drive*, and says what changed.**
      `scoped_integration_required`).
      The rule is read when the end is kept (the entry says whether the turn merges the run or why it is left to the
      person, `merging`) and again when the turn calls `merge_run`: a run it leaves to the person by then is refused
-     (`left_to_person`), naming why. A team task's run (told by its team record) is always left to the person: it goes into
+     (`left_to_person`), naming why. A team task's run (told by its team record) is always left to the person (`merging` says `team_delivery`): it goes into
      its module's branch and reaches the base branch with the module's delivery, which the chat does not request on its
      own. One automatic merge attempt per run end: the turn merges only the run whose
      success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_run` of that run that
