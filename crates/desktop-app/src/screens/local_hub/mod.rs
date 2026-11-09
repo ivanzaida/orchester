@@ -47,7 +47,7 @@ use self::{
   model::{Entry, Listing, chosen, view_of},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, guard::LeaveGuard},
   project::ShownProject,
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::team_hub::list::LIST_WIDTH,
@@ -87,30 +87,48 @@ struct LocalHubScreen {
   leaving: Signal<Option<Route>>,
   /// The question that asks it.
   asking: Signal<bool>,
+  /// Holds every other departure (Back, a tab, the sidebar) while an MCP server's edits are not saved.
+  guard: LeaveGuard,
 }
 
 impl Component for LocalHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let unsaved: UnsavedSignal = ctx.signal(None);
+    let edits = unsaved.clone();
     let this = Self {
       retry: ctx.signal(0),
       failure: LastFailure::default(),
-      unsaved: ctx.signal(None),
+      unsaved,
       leaving: ctx.signal(None),
       asking: ctx.signal(false),
+      guard: Navigation::of(ctx).guard(move || edits.get_untracked().is_some()),
     };
-    let (leaving, asking) = (this.leaving.clone(), this.asking.clone());
-    // Each follows the other only when it differs, or they would write each other for ever.
-    let (shut, held) = (this.asking.clone(), this.leaving.clone());
+    // The question follows what waits for an answer, and what waits follows the question closing; each writes only
+    // when it differs, or they would write each other for ever.
+    let asking = this.asking.clone();
     ctx.watch(&this.leaving, move |route| {
-      if shut.get_untracked() != route.is_some() {
+      if asking.get_untracked() != route.is_some() {
         asking.set(route.is_some());
       }
     });
+    let asking = this.asking.clone();
+    ctx.watch(&this.guard.attempt(), move |attempt| {
+      if asking.get_untracked() != attempt.is_some() {
+        asking.set(attempt.is_some());
+      }
+    });
+    let (leaving, guard) = (this.leaving.clone(), this.guard.clone());
     ctx.watch(&this.asking, move |open| {
-      if !open && held.get_untracked().is_some() {
+      if *open {
+        return;
+      }
+      if leaving.get_untracked().is_some() {
         leaving.set(None);
+      }
+      if guard.attempt().get_untracked().is_some() {
+        guard.keep_editing();
       }
     });
     this
@@ -163,7 +181,7 @@ impl Component for LocalHubScreen {
         ctx,
         (&self.leaving, &self.asking),
         (listing, &self.unsaved),
-        &navigation,
+        (&navigation, &self.guard),
       )
     });
     Column::new()

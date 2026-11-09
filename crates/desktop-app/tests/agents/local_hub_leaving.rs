@@ -124,3 +124,79 @@ fn local_hub_leaving_without_edits_goes_at_once() {
   });
   assert!(!agents.exists(DISCARD), "nothing to lose, nothing asked");
 }
+
+/// Edits the server `docs`'s panel, opened after the Profiles filter, and returns where Back goes and where the panel
+/// is.
+fn editing_after_profiles(agents: &mut Agents) -> (Route, Route) {
+  let docs = server(agents, "docs");
+  open(agents, HubView::new(HubFilter::Profiles, None));
+  let before = agents.window.navigation().route_now();
+  show(agents, docs);
+  edit(agents);
+  (before, agents.window.navigation().route_now())
+}
+
+/// Leaves by `leave`, which the navigation holds: the question comes, nothing moves, *Keep editing* keeps what was
+/// typed, and leaving again and *Discard changes* goes. Returns the route after.
+fn held_then_goes(agents: &mut Agents, here: &Route, leave: impl Fn(&mut Agents)) -> Route {
+  leave(agents);
+  agents.until("the question", |s| s.exists(DISCARD));
+  assert_eq!(
+    &agents.window.navigation().route_now(),
+    here,
+    "nothing moved while it asks"
+  );
+  agents.click(KEEP);
+  agents.until("kept", |s| !s.exists(DISCARD));
+  assert_eq!(
+    agents.value("connection-mcp-arguments"),
+    "--stdio",
+    "Keep editing keeps what was typed"
+  );
+  assert_eq!(&agents.window.navigation().route_now(), here);
+
+  leave(agents);
+  agents.until("the question again", |s| s.exists(DISCARD));
+  agents.click(DISCARD);
+  agents.until("the place", |s| s.window.navigation().route_now() != *here);
+  agents.window.navigation().route_now()
+}
+
+#[test]
+fn local_hub_leaving_by_back_with_unsaved_edits_asks_first() {
+  let mut agents = Agents::new(true);
+  let (before, here) = editing_after_profiles(&mut agents);
+
+  let after = held_then_goes(&mut agents, &here, |agents| agents.window.navigation().back());
+
+  assert_eq!(after, before, "Back went where it goes");
+}
+
+#[test]
+fn local_hub_leaving_by_another_tab_with_unsaved_edits_asks_first() {
+  let mut agents = Agents::new(true);
+  let (_, here) = editing_after_profiles(&mut agents);
+  let tab = agents.window.navigation().tabs_now().active().id();
+
+  held_then_goes(&mut agents, &here, |agents| agents.window.navigation().open_tab());
+
+  assert_ne!(
+    agents.window.navigation().tabs_now().active().id(),
+    tab,
+    "the new tab is shown after Discard changes"
+  );
+}
+
+#[test]
+fn local_hub_leaving_by_the_sidebar_with_unsaved_edits_asks_first() {
+  let mut agents = Agents::new(true);
+  let (_, here) = editing_after_profiles(&mut agents);
+  assert!(agents.exists("nav-pipelines"), "the window has the sidebar");
+
+  let after = held_then_goes(&mut agents, &here, |agents| agents.click("nav-pipelines"));
+
+  assert!(
+    matches!(after, Route::Project(_, ProjectPage::Pipelines)),
+    "the sidebar's place: {after:?}"
+  );
+}
