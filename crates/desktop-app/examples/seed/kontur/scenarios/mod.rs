@@ -61,6 +61,7 @@ mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
 pub mod team;
+mod team_computer;
 mod team_hub;
 mod team_hub_mcp;
 mod team_hub_waiting;

@@ -15,7 +15,6 @@ pub mod state;
 use std::fs;
 
 use orchester_core::{
-  connection::{AgentProvider, SignIn},
   id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
   resource::ResourceKind,
@@ -27,6 +26,7 @@ use orchester_store::{AppDb, ArchiveStop, Archived, ProjectDb};
 use rusqlite::{Connection, params};
 
 use self::state::{FILE, State};
+use super::team_computer;
 use crate::kontur::{
   Kontur, SeedError, files, git, io_error as io, name,
   shapes::{self, Shape},
@@ -208,7 +208,7 @@ pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// says when run 8 ended beside when Take over was pressed (`Status line` `g9ufW`, ORC-840b).
 pub fn not_ready_after_run(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
-  claude_connection(kontur)?;
+  team_computer::claude_connection(kontur)?;
   git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
   Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
   with_runs(
@@ -256,26 +256,10 @@ pub fn start_past_failure(kontur: &mut Kontur) -> Result<(), SeedError> {
 fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.
-  claude_connection(kontur)?;
+  team_computer::claude_connection(kontur)?;
   // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
   git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
   write_marker(kontur, state)
-}
-
-/// The Claude Code connection `Claude · Kontur`, which the team's profiles run on without asking.
-fn claude_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let bin = kontur.repo.join(".orchester").join("qa-bin");
-  let program = bin.join("claude");
-  fs::create_dir_all(&bin).map_err(io(&bin))?;
-  fs::write(&program, "").map_err(io(&program))?;
-  let at = kontur.ago(4);
-  super::connections::cli(
-    kontur,
-    ("Claude · Kontur", AgentProvider::ClaudeCodeCli, program),
-    ("2.1.89", SignIn::SignedIn, &["claude-sonnet-5-5"]),
-    at,
-  )
-  .map(|_| ())
 }
 
 /// The team's resources of `team-hub` for a copy that joins the stand-in team server as an Admin, which holds the
@@ -378,40 +362,8 @@ pub fn edit_archived(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
-  forms_computer(kontur)?;
+  team_computer::forms_computer(kontur)?;
   write_marker(kontur, state)
-}
-
-/// The agent connections of the Kontur catalogue, signed in, so the hub's create forms offer a CLI and its models
-/// (`Agents · v2` A9): a copy that joins the stand-in team server in a state of the team's resources has no other.
-fn forms_computer(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let bin = kontur.repo.join(".orchester").join("qa-bin");
-  fs::create_dir_all(&bin).map_err(io(&bin))?;
-  let at = kontur.ago(4);
-  for (named, provider, file, models) in [
-    (
-      "Claude · Kontur",
-      AgentProvider::ClaudeCodeCli,
-      "claude",
-      &["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"][..],
-    ),
-    (
-      "Codex · Kontur",
-      AgentProvider::CodexCli,
-      "codex",
-      &["gpt-5.5", "gpt-5.4-mini"][..],
-    ),
-  ] {
-    let program = bin.join(file);
-    fs::write(&program, "").map_err(io(&program))?;
-    super::connections::cli(
-      kontur,
-      (named, provider, program),
-      ("2.1.89", SignIn::SignedIn, models),
-      at,
-    )?;
-  }
-  Ok(())
 }
 
 /// An Admin on the hub's team MCP servers, which the stand-in team server holds with Builder, that names
@@ -420,7 +372,7 @@ fn forms_computer(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// `team-hub-archive`); confirming it is a person's.
 pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
-  forms_computer(kontur)?;
+  team_computer::forms_computer(kontur)?;
   write_marker(kontur, State::TeamArchive)
 }
 
