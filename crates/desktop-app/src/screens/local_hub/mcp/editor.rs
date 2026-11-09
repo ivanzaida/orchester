@@ -444,7 +444,7 @@ fn taken_secrets(
   listed: &ProjectConnections,
 ) -> Vec<Taken> {
   let ids: Vec<SecretId> = match draft {
-    Some(draft) => draft.environment.secrets().collect(),
+    Some(draft) => draft.secrets(),
     None => server.secrets(),
   };
   let lacking: Vec<&SecretName> = match &entry.standing {

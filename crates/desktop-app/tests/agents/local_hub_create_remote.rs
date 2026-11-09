@@ -83,7 +83,7 @@ fn local_hub_create_a_remote_server_lays_out_one_label_a_row() {
 }
 
 /// Whether the secret store holds a value for `secret`.
-fn kept(agents: &Agents, secret: &Secret) -> Option<String> {
+pub(super) fn kept(agents: &Agents, secret: &Secret) -> Option<String> {
   let services = agents.window.launch.services().expect("services");
   let read = services.vault.get().read(&secret.vault_key(project_id()));
   read.ok().map(|value| value.expose().to_owned())
