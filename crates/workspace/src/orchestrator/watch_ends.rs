@@ -155,10 +155,11 @@ impl Work {
   }
 
   /// A module ends its subscription when all its tasks are closed: its local tasks as stored, and the team tasks the
-  /// server puts in it. While some team task could not be read, which module it is in is not known, so it goes on.
+  /// server puts in it. Until the reading knows them all it goes on: before the first reading, while the server could
+  /// not be asked, and for a team task recorded since the reading was made. An ending is not undone.
   fn module_ended(&self, id: ModuleId) -> Option<Ended> {
     let module = self.modules.iter().find(|module| module.id() == id)?;
-    if self.team.has_unreadable() {
+    if !self.team.knows_module(id, &self.team_ids) {
       return None;
     }
     let local = self

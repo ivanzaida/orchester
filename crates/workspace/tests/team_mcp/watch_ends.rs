@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use orchester_core::{
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId, ModuleId, ProjectId},
+  id::{ChatId, ChatMessageId, ModuleId, ProjectId, TaskId},
   module::{Module, ModuleDetails, ModuleState},
   name::Name,
   orchestrator::{
@@ -17,7 +17,10 @@ use orchester_core::{
   secret::{SecretValue, SecretVault, VaultKey},
   sharing::TaskRevision,
   store::{RunStore, TaskStore},
-  task::organization::{ChangeActor, WorkflowStatus},
+  task::{
+    identity::TeamTaskRef,
+    organization::{ChangeActor, WorkflowStatus},
+  },
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -27,10 +30,12 @@ use orchester_workspace::orchestrator::{
   waits::{Followed, Switches, check_merges_in, follow_in},
   watching::WatchReads,
 };
+use parking_lot::Mutex;
 use serde_json::json;
 
 use crate::{
   Checkout,
+  reads::Seen,
   team_runs::{Started, started},
   team_server::MEMBER,
   tools::server,
@@ -315,4 +320,157 @@ fn module_watch(checkout: &Checkout, module: ModuleId) -> WatchTarget {
     }])
     .expect("cached");
   WatchTarget::Module(module)
+}
+
+/// Records another team task of the server's project, which the server may or may not hold.
+fn record_team_task(checkout: &Checkout, id: TaskId) {
+  let mut db = checkout.db();
+  let link = db.sharing().expect("link").expect("linked");
+  let team = TeamTaskRef {
+    server: link.server,
+    project: link.project,
+    task: id,
+  };
+  db.record_team_task(team, TaskRevision::FIRST).expect("identity");
+}
+
+#[test]
+fn team_mcp_a_module_watch_waits_for_a_reading_even_when_its_local_tasks_are_done() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &["Say hello"]);
+  record_team_task(&checkout, server.task);
+  let (chat, project) = watching(&checkout, |checkout| module_watch(checkout, server.module));
+  let local = checkout.db().tasks().expect("tasks")[0].id();
+  let mut db = checkout.db();
+  db.set_task_module(local, Some(server.module), ChangeActor::Person, at(20))
+    .expect("in the module");
+  db.close_task_organization(local, WorkflowStatus::Done, (ChangeActor::Person, at(21)))
+    .expect("closed");
+  drop(db);
+
+  // Nothing was read from the server yet: the team task in the module may be open, and an ending is not undone.
+  assert_eq!(follow(&checkout, project), Followed::default());
+  assert!(is_watched(&checkout, chat));
+
+  // The server says the team task is open: the watch goes on. Closed, it ends, on one list request and no task read.
+  refreshed(&checkout);
+  assert_eq!(follow(&checkout, project), Followed::default());
+  server_task(&seen, "done");
+  refreshed(&checkout);
+  assert!(follow(&checkout, project).kept);
+  assert_eq!(
+    ends(&checkout, chat)[0].reason,
+    EndReason::ModuleClosed { done: 2, canceled: 0 }
+  );
+  let seen = seen.lock();
+  assert_eq!((seen.task_lists, seen.task_gets), (2, 0));
+}
+
+fn server_task(seen: &Mutex<Seen>, workflow: &str) {
+  seen.lock().task_fields = json!({ "workflow": workflow });
+}
+
+#[test]
+fn team_mcp_a_team_task_recorded_after_the_reading_keeps_a_module_watch_waiting_until_it_is_read() {
+  let team = started();
+  let (chat, project) = watching(&team.checkout, |checkout| module_watch(checkout, team.server.module));
+  server_says(&team, "done");
+  refreshed(&team.checkout);
+
+  // A team task the project recorded since is not in the reading: whether it is in the module is not known.
+  record_team_task(&team.checkout, TaskId::generate());
+  assert_eq!(follow(&team.checkout, project), Followed::default());
+  assert!(is_watched(&team.checkout, chat));
+
+  // The next reading covers it (the server has no such task, so it is in no module) and the watch ends.
+  refreshed(&team.checkout);
+  assert!(follow(&team.checkout, project).kept);
+  assert_eq!(
+    ends(&team.checkout, chat)[0].reason,
+    EndReason::ModuleClosed { done: 1, canceled: 0 }
+  );
+}
+
+#[test]
+fn team_mcp_a_module_watch_reads_the_module_list_page_by_page_and_no_task_alone() {
+  let team = started();
+  let (chat, project) = watching(&team.checkout, |checkout| module_watch(checkout, team.server.module));
+  let (second, third) = (TaskId::generate(), TaskId::generate());
+  record_team_task(&team.checkout, second);
+  record_team_task(&team.checkout, third);
+  let module = team.server.module;
+  {
+    let mut seen = team.seen.lock();
+    seen.page_size = 1;
+    seen.more_tasks = vec![
+      json!({"id": second, "number": 8, "key": "KON-8", "workflow": "done", "module": module}),
+      json!({"id": third, "number": 9, "key": "KON-9", "workflow": "todo", "module": module}),
+    ];
+  }
+  server_says(&team, "done");
+
+  let lists_before = team.seen.lock().task_lists;
+  refreshed(&team.checkout);
+  assert_eq!(follow(&team.checkout, project), Followed::default());
+  assert!(is_watched(&team.checkout, chat));
+  {
+    let seen = team.seen.lock();
+    assert_eq!(
+      (seen.task_lists - lists_before, seen.task_gets),
+      (3, 0),
+      "three pages, no task read by itself"
+    );
+  }
+
+  team.seen.lock().more_tasks[1] =
+    json!({"id": third, "number": 9, "key": "KON-9", "workflow": "canceled", "module": module});
+  refreshed(&team.checkout);
+  assert!(follow(&team.checkout, project).kept);
+  assert_eq!(
+    ends(&team.checkout, chat)[0].reason,
+    EndReason::ModuleClosed { done: 2, canceled: 1 }
+  );
+}
+
+#[test]
+fn team_mcp_one_team_task_the_server_fails_on_does_not_block_the_watches_after_it() {
+  let team = started();
+  let broken = TaskId::generate();
+  record_team_task(&team.checkout, broken);
+  team.seen.lock().broken_task = Some(broken);
+  // The broken task's watch comes first, as the reading goes in the order the watches are kept.
+  let (stuck, project) = watching(&team.checkout, |_| WatchTarget::Task(broken));
+  let (healthy, _) = watching(&team.checkout, |_| team_task(&team));
+  server_says(&team, "done");
+
+  assert!(refreshed(&team.checkout).changed);
+  assert!(follow(&team.checkout, project).kept);
+  assert!(!is_watched(&team.checkout, healthy), "the healthy task's watch ended");
+  assert_eq!(ends(&team.checkout, healthy)[0].reason, EndReason::TaskDone);
+  assert!(is_watched(&team.checkout, stuck));
+  assert_eq!(
+    cannot_read(&team.checkout, stuck),
+    Some("orchestrator.watch.unreadable")
+  );
+}
+
+#[test]
+fn team_mcp_a_missing_project_is_not_a_missing_task() {
+  let team = started();
+  let gone = TaskId::generate();
+  record_team_task(&team.checkout, gone);
+  let (chat, project) = watching(&team.checkout, |_| WatchTarget::Task(gone));
+
+  // The server holds no such task and answers for the project: the watch is left to the person, with no note.
+  refreshed(&team.checkout);
+  assert_eq!(follow(&team.checkout, project), Followed::default());
+  assert_eq!(cannot_read(&team.checkout, chat), None);
+
+  // The same `404` for a project or a member that is gone says nothing of the task: the note shows.
+  team.seen.lock().no_member = true;
+  assert!(refreshed(&team.checkout).changed);
+  assert_eq!(cannot_read(&team.checkout, chat), Some("orchestrator.watch.unreadable"));
+  team.seen.lock().no_member = false;
+  assert!(refreshed(&team.checkout).changed);
+  assert_eq!(cannot_read(&team.checkout, chat), None);
 }

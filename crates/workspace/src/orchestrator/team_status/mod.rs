@@ -9,6 +9,12 @@
 //! app asks again every [`POLL`] while [`Refreshed::polling`] says a subscription needs it. A reading that cannot be
 //! made (signed out, the server unreachable, a refusal) is not an answer: the subscription goes on, and its listing
 //! says why ([`TeamReading::cannot_read`]) until a later reading sees the task.
+//!
+//! The cost of a reading is bounded by what is watched, never by the project's size: one `GET tasks/{id}` for each
+//! team task a *task* subscription names, and for each watched *module* one request of the task list, filtered to that
+//! module, per `MAX_PAGE_LIMIT` (200) tasks the module holds. A pass stops at the first sign that the server cannot be
+//! asked (signed out, unreachable, a membership that ended); a task it refuses or cannot decode leaves only that task,
+//! or that module, unread.
 
 mod read;
 
@@ -51,17 +57,37 @@ pub struct TeamTask {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TeamReading {
   tasks: HashMap<TaskId, TeamTask>,
-  /// The tasks the server could not be asked about, or did not answer.
+  /// The watched modules whose recorded team tasks the server listed in full.
+  listed: HashSet<ModuleId>,
+  /// The project's team tasks when the reading was made: one recorded since is not in it, and the reading says nothing
+  /// of which module it is in.
+  covered: HashSet<TaskId>,
+  /// The team tasks a task subscription names that the server could not be asked about, or did not answer.
   unreadable: HashSet<TaskId>,
+  /// The watched modules whose tasks the server could not be asked to list, or did not answer.
+  unreadable_modules: HashSet<ModuleId>,
 }
 
-/// The reading of each project, by its folder, with the tasks it was made for and when.
+/// What a reading is made for: the project's recorded team tasks, and of them and the project's modules what the
+/// subscriptions watch.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Wants {
+  /// Every team task the project recorded, in the order it recorded them.
+  team: Vec<TaskId>,
+  /// The team tasks a task subscription names, each read by itself.
+  tasks: Vec<TaskId>,
+  /// The modules a module subscription names, each read as the server's list of its tasks.
+  modules: Vec<ModuleId>,
+}
+
+/// The reading of each project, by its folder, with what it was made for and when it began.
 static READINGS: LazyLock<Mutex<HashMap<PathBuf, Kept>>> = LazyLock::new(Default::default);
 
 struct Kept {
   reading: TeamReading,
-  wanted: Vec<TaskId>,
-  at: Instant,
+  wanted: Wants,
+  /// When the reading began: one that began earlier never replaces one that began later.
+  began: Instant,
 }
 
 impl TeamReading {
@@ -82,17 +108,18 @@ impl TeamReading {
     self.tasks.values()
   }
 
-  /// Whether some watched team task could not be read, so a module's tasks are not all known.
-  pub(super) fn has_unreadable(&self) -> bool {
-    !self.unreadable.is_empty()
+  /// Whether the team tasks in `module` are all known, given the project's team tasks `team` now: the project has
+  /// none, or the server listed the module in a reading made when every one of them was recorded.
+  pub(super) fn knows_module(&self, module: ModuleId, team: &HashSet<TaskId>) -> bool {
+    team.is_empty() || (self.listed.contains(&module) && team.is_subset(&self.covered))
   }
 
-  /// Whether the subscription to `target` waits because the team server could not be asked about a team task it
-  /// depends on: the task itself, or, for a module, any team task that may be in it.
+  /// Whether the subscription to `target` waits because the team server could not be asked about what it depends on:
+  /// the team task itself, or, for a module, the list of its tasks.
   pub fn cannot_read(&self, target: WatchTarget) -> bool {
     match target {
       WatchTarget::Task(id) => self.unreadable.contains(&id),
-      WatchTarget::Module(_) => self.has_unreadable(),
+      WatchTarget::Module(id) => self.unreadable_modules.contains(&id),
       WatchTarget::WithoutModule | WatchTarget::Project => false,
     }
   }
@@ -107,7 +134,7 @@ pub struct Refreshed {
   pub polling: bool,
 }
 
-/// Reads the project at `root`'s watched team tasks from their team server unless a reading for the same tasks is
+/// Reads the project at `root`'s watched team tasks from their team server unless a reading for the same wants is
 /// younger than `max_age`, and keeps it for [`TeamReading::of`]. Does nothing, and asks the server nothing, while no
 /// subscription of the project needs a team task's status. Blocks on SQLite and, for a reading, on the server.
 pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Result<Refreshed, Message> {
@@ -115,7 +142,7 @@ pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Resul
   let wanted = background::run(move || wanted_in(&folder))
     .await?
     .map_err(|error| messages::store_error(&error))?;
-  let Some((link, tasks)) = wanted else {
+  let Some((link, wants)) = wanted else {
     let dropped = READINGS.lock().remove(root);
     return Ok(Refreshed {
       changed: dropped.is_some_and(|kept| kept.reading != TeamReading::default()),
@@ -125,20 +152,29 @@ pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Resul
   let young = READINGS
     .lock()
     .get(root)
-    .is_some_and(|kept| kept.wanted == tasks && kept.at.elapsed() < max_age);
+    .is_some_and(|kept| kept.wanted == wants && kept.began.elapsed() < max_age);
   if young {
     return Ok(Refreshed {
       changed: false,
       polling: true,
     });
   }
-  let reading = read::tasks(servers, &link, &tasks).await;
-  let before = READINGS.lock().insert(
+  let began = Instant::now();
+  let reading = read::pass(servers, &link, &wants).await;
+  let mut readings = READINGS.lock();
+  if readings.get(root).is_some_and(|kept| kept.began > began) {
+    // Another refresh began after this one and finished first: its reading is the newer.
+    return Ok(Refreshed {
+      changed: false,
+      polling: true,
+    });
+  }
+  let before = readings.insert(
     root.to_owned(),
     Kept {
       reading: reading.clone(),
-      wanted: tasks,
-      at: Instant::now(),
+      wanted: wants,
+      began,
     },
   );
   Ok(Refreshed {
@@ -147,21 +183,32 @@ pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Resul
   })
 }
 
-/// The server project the project at `root` is linked to and the team tasks whose status its subscriptions need, in
-/// the order the project recorded them: those a task subscription names, or all of the project's when a module is
-/// watched (the server says which module each is in). `None` when no subscription needs any.
-fn wanted_in(root: &Path) -> Result<Option<(SharingLink, Vec<TaskId>)>, StoreError> {
+/// Drops the reading of the project at `root`, which is closed: nothing reads it again until it is opened.
+pub fn forget(root: &Path) {
+  READINGS.lock().remove(root);
+}
+
+/// The server project the project at `root` is linked to and what its subscriptions need of its team tasks: those a
+/// task subscription names, and the modules a module subscription names (the server says which module each team task
+/// is in). `None` when no subscription needs any, or the project has no team task recorded.
+fn wanted_in(root: &Path) -> Result<Option<(SharingLink, Wants)>, StoreError> {
   let db = ProjectDb::open(root)?;
   let Some(link) = db.sharing()? else {
     return Ok(None);
   };
+  let team = db.team_task_ids()?;
+  if team.is_empty() {
+    return Ok(None);
+  }
   let subscriptions = db.active_subscriptions()?;
-  let targets: Vec<WatchTarget> = subscriptions.as_slice().iter().map(Subscription::target).collect();
-  let modules = targets.iter().any(|target| matches!(target, WatchTarget::Module(_)));
-  let tasks: Vec<TaskId> = db
-    .team_task_ids()?
-    .into_iter()
-    .filter(|id| modules || targets.contains(&WatchTarget::Task(*id)))
-    .collect();
-  Ok((!tasks.is_empty()).then_some((link, tasks)))
+  let mut wants = Wants::default();
+  for target in subscriptions.as_slice().iter().map(Subscription::target) {
+    match target {
+      WatchTarget::Task(id) if team.contains(&id) && !wants.tasks.contains(&id) => wants.tasks.push(id),
+      WatchTarget::Module(id) if !wants.modules.contains(&id) => wants.modules.push(id),
+      _ => {}
+    }
+  }
+  wants.team = team;
+  Ok((!wants.tasks.is_empty() || !wants.modules.is_empty()).then_some((link, wants)))
 }
