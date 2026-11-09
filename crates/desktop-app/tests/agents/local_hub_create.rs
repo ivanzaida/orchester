@@ -46,9 +46,9 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
   (HubFilter::Tools, "New tool", "New tool", "Tool", "tool"),
 ];
 
-const TYPED: &str = "hunter2-typed-value";
+pub(super) const TYPED: &str = "hunter2-typed-value";
 
-fn form_route(filter: HubFilter) -> Route {
+pub(super) fn form_route(filter: HubFilter) -> Route {
   Route::Project(project_id(), ProjectPage::hub(HubView::adding(filter)))
 }
 
@@ -56,13 +56,13 @@ fn hub_route(filter: HubFilter) -> Route {
   Route::Project(project_id(), ProjectPage::hub(HubView::new(filter, None)))
 }
 
-fn show_form(agents: &mut Agents, filter: HubFilter) {
+pub(super) fn show_form(agents: &mut Agents, filter: HubFilter) {
   agents.window.navigation().go(form_route(filter));
   agents.until("the form", |s| s.exists("local-hub-new-create"));
 }
 
 /// How many resources of `kind` this computer holds.
-fn held(agents: &Agents, kind: ResourceKind) -> usize {
+pub(super) fn held(agents: &Agents, kind: ResourceKind) -> usize {
   ProjectDb::open(&agents.root)
     .expect("database")
     .resources(kind)
@@ -70,7 +70,7 @@ fn held(agents: &Agents, kind: ResourceKind) -> usize {
     .len()
 }
 
-fn servers(agents: &Agents) -> usize {
+pub(super) fn servers(agents: &Agents) -> usize {
   ProjectDb::open(&agents.root)
     .expect("database")
     .mcp_servers()
@@ -79,7 +79,7 @@ fn servers(agents: &Agents) -> usize {
 }
 
 /// Chooses the option `label` of the select `id`, as a person's press on it would, once the select lists it.
-fn choose(agents: &mut Agents, id: &str, label: &str) {
+pub(super) fn choose(agents: &mut Agents, id: &str, label: &str) {
   agents.until("the option", |s| {
     s.window
       .tree
@@ -124,11 +124,16 @@ fn assert_v1_and_no_draft<B: orchester_core::resource::ResourceBody>(agents: &Ag
 }
 
 /// The project's secret `FIGMA_TOKEN`, which no value is kept for.
-fn figma_token(agents: &Agents) -> Secret {
+pub(super) fn figma_token(agents: &Agents) -> Secret {
+  project_secret(agents, "FIGMA_TOKEN")
+}
+
+/// A secret of the project named `name`, which no value is kept for.
+pub(super) fn project_secret(agents: &Agents, name: &str) -> Secret {
   let token = Secret::new(
     SecretId::generate(),
     NewSecret {
-      name: SecretName::new("FIGMA_TOKEN").expect("name"),
+      name: SecretName::new(name).expect("name"),
       kind: SecretKind::AccessToken,
       environment: Environment::Development,
     },
@@ -143,7 +148,7 @@ fn figma_token(agents: &Agents) -> Secret {
 
 /// Types `TYPED` as the value of `FIGMA_TOKEN`, which the variable typed in the form takes: its row, its dialog, then
 /// *Use this value*.
-fn type_figma_value(agents: &mut Agents) {
+pub(super) fn type_figma_value(agents: &mut Agents) {
   agents.until("the secret's row", |s| s.exists("local-hub-secret-FIGMA_TOKEN-replace"));
   agents.click("local-hub-secret-FIGMA_TOKEN-replace");
   agents.until("its dialog", |s| s.exists("local-hub-secret-value"));
