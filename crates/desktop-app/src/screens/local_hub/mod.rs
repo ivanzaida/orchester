@@ -42,6 +42,7 @@ use orchester_workspace::{
 
 use self::{
   head::FilterShown,
+  leave::Leave,
   mcp::UnsavedSignal,
   model::{Entry, Listing, chosen, view_of},
 };
@@ -123,6 +124,7 @@ impl Component for LocalHubScreen {
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
     let listing = hub.map(Listing::of);
     let navigation = Navigation::of(ctx);
+    let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().is_some());
     let selected = listing.as_ref().and_then(|listing| listing.selected(&view)).cloned();
     let id = project.open.project.id();
     let now = Timestamp::now();
@@ -136,10 +138,9 @@ impl Component for LocalHubScreen {
           project: id,
           filter: view.filter,
           selected: selected.as_ref().map(|entry| entry.what),
-          navigation: &navigation,
+          leave: &leave,
           now,
           unsaved: self.unsaved.get(),
-          leaving: &self.leaving,
         };
         self.hub_body(
           ctx,
@@ -178,8 +179,8 @@ impl Component for LocalHubScreen {
           .right(HubSpacing::Side.role()),
       )
       .spacing(crate::theme::ExtraSpacing::Inset.role())
-      .child(head::head(ctx, id, view.filter, &navigation))
-      .child(head::filter(ctx, listing.as_ref(), &shown, &navigation))
+      .child(head::head(ctx, id, view.filter, &leave))
+      .child(head::filter(ctx, listing.as_ref(), &shown, &leave))
       .child(
         Column::new()
           .id("local-hub-body")

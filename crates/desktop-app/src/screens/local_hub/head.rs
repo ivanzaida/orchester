@@ -17,11 +17,11 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::local_archive::Archivable;
 
 use super::{
+  leave::Leave,
   model::{Listing, view_of},
   new_menu::new_menu,
 };
 use crate::{
-  navigation::Navigation,
   routes::{
     AgentTab, HubFilter, ImportTab, InstructionsTab, InstructionsView, NewConnection, ProjectPage, ProjectSettingsTab,
     Route,
@@ -39,28 +39,28 @@ use crate::{
 const HEAD_HEIGHT: f32 = 32.0;
 
 /// *Agents*, and at its right that the project is local, *Share with a team…* and the New of the filter's kind.
-pub(super) fn head(ctx: &mut Ctx, project: ProjectId, filter: HubFilter, navigation: &Navigation) -> Row {
+pub(super) fn head(ctx: &mut Ctx, project: ProjectId, filter: HubFilter, leave: &Leave) -> Row {
   let share = ActionButton::new("local-hub-share", ButtonKind::Secondary, ctx.t("local_hub.share"))
     .icon(Icon::Users)
-    .opens(navigation.to(Route::Project(
+    .press(leave.press(Route::Project(
       project,
       ProjectPage::Settings(ProjectSettingsTab::Sharing),
     )));
   let memory = ActionButton::new("local-hub-memory", ButtonKind::Ghost, ctx.t("local_hub.memory"))
     .icon(Icon::Brain)
-    .opens(navigation.to(Route::Project(project, ProjectPage::Memory(None))));
+    .press(leave.press(Route::Project(project, ProjectPage::Memory(None))));
   let import = import_of(filter).map(|page| {
     ActionButton::new("local-hub-import", ButtonKind::Ghost, ctx.t("local_hub.import"))
       .icon(Icon::Download)
-      .opens(navigation.to(Route::Project(project, page)))
+      .press(leave.press(Route::Project(project, page)))
   });
   // A filter of one kind makes one of it; All and Archived hold no one kind, so *New* offers each.
   let new: Element = match new_of(filter) {
     Some((page, words)) => ActionButton::new("local-hub-new", ButtonKind::Primary, ctx.t(words))
       .icon(Icon::Plus)
-      .opens(navigation.to(Route::Project(project, page)))
+      .press(leave.press(Route::Project(project, page)))
       .into(),
-    None => new_menu(ctx, project),
+    None => new_menu(ctx, project, leave),
   };
   Row::new()
     .id("local-hub-head")
@@ -140,9 +140,9 @@ pub(super) struct FilterShown {
 }
 
 /// The filter: a segment per kind and *Archived* with its count, and what the open one holds.
-pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, navigation: &Navigation) -> Row {
+pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, leave: &Leave) -> Row {
   let segments = HubFilter::LOCAL.into_iter().map(|choice| {
-    let navigation = navigation.clone();
+    let leave = leave.clone();
     let item = shown
       .selected
       .filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
@@ -156,7 +156,7 @@ pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, 
       format!("local-hub-filter-{}", choice.name()),
       face,
       choice == shown.filter,
-      move || navigation.go(route.clone()),
+      move || leave.go(route.clone()),
     )
   });
   Row::new()

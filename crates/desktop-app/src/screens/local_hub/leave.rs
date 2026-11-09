@@ -1,6 +1,8 @@
-//! Opening another entry while a local MCP server's edits are not saved (`Agents · MCP server · editing` L8): the panel
-//! would be gone with them, so the hub asks first, in a dialog over the page. *Keep editing* leaves everything as it
-//! is; *Discard changes* puts back what was saved and opens the entry.
+//! Leaving a local MCP server's panel while its edits are not saved (`Agents · MCP server · editing` L8): the panel
+//! would be gone with them, and a typed secret value with it, so the hub asks first, in a dialog over the page. Every
+//! way out of the panel asks the same question through [`Leave`]: another row, a filter, *New*, *Share with a team…*,
+//! *Memory* and *Import*. *Keep editing* leaves everything as it is; *Discard changes* puts back what was saved and
+//! goes where the person pressed.
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_workspace::local_archive::Archivable;
@@ -13,8 +15,57 @@ use crate::{
     button::{ActionButton, ButtonKind},
     dialog::{Dialog, Tone},
     icon::Icon,
+    pressable::Press,
   },
 };
+
+/// Where a press that leaves the panel goes: straight to its place, or, while a server's edits are not saved, to the
+/// question first.
+#[derive(Clone)]
+pub(super) struct Leave {
+  navigation: Navigation,
+  /// Where a press waits for the person's answer.
+  leaving: Signal<Option<Route>>,
+  /// Whether a server's edits are not saved.
+  unsaved: bool,
+}
+
+/// Two leaves are alike while the question applies the same way: the navigation and the signal are the screen's own,
+/// the same for as long as it lives.
+impl PartialEq for Leave {
+  fn eq(&self, other: &Self) -> bool {
+    self.unsaved == other.unsaved
+  }
+}
+
+impl Leave {
+  pub(super) fn new(navigation: &Navigation, leaving: &Signal<Option<Route>>, unsaved: bool) -> Self {
+    Self {
+      navigation: navigation.clone(),
+      leaving: leaving.clone(),
+      unsaved,
+    }
+  }
+
+  /// A press that opens `route`, after the question while edits are not saved.
+  pub(super) fn press(&self, route: Route) -> Press {
+    if self.unsaved {
+      let leaving = self.leaving.clone();
+      Press::run(move || leaving.set(Some(route.clone())))
+    } else {
+      Press::Open(self.navigation.to(route))
+    }
+  }
+
+  /// Opens `route` now, or asks first while edits are not saved.
+  pub(super) fn go(&self, route: Route) {
+    if self.unsaved {
+      self.leaving.set(Some(route));
+    } else {
+      self.navigation.go(route);
+    }
+  }
+}
 
 /// The question while a press on a row waits, naming the server whose edits it would drop.
 pub(super) fn question(

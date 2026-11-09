@@ -13,9 +13,8 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 
-use super::head::new_of;
+use super::{head::new_of, leave::Leave};
 use crate::{
-  navigation::Navigation,
   routes::{HubFilter, Route},
   screens::hub::page_head::MORE_MENU_WIDTH,
   ui::{
@@ -37,11 +36,19 @@ const KINDS: [(HubFilter, Icon); 5] = [
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub project: ProjectId,
+  /// Where a press goes: to the question first while a server's edits are not saved.
+  pub leave: Leave,
 }
 impl DevtoolsInspectable for Props {}
 
-pub(super) fn new_menu(ctx: &mut Ctx, project: ProjectId) -> Element {
-  ctx.mount_keyed::<NewMenu>("local-hub-new-menu", Props { project })
+pub(super) fn new_menu(ctx: &mut Ctx, project: ProjectId, leave: &Leave) -> Element {
+  ctx.mount_keyed::<NewMenu>(
+    "local-hub-new-menu",
+    Props {
+      project,
+      leave: leave.clone(),
+    },
+  )
 }
 
 struct NewMenu {
@@ -60,8 +67,7 @@ impl Component for NewMenu {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project } = ctx.props::<Props>().clone();
-    let navigation = Navigation::of(ctx);
+    let Props { project, leave } = ctx.props::<Props>().clone();
     let toggle = self.open.clone();
     let button = ActionButton::new("local-hub-new", ButtonKind::Primary, ctx.t("local_hub.new.any"))
       .icon(Icon::Plus)
@@ -71,11 +77,11 @@ impl Component for NewMenu {
       .into_iter()
       .filter_map(|(filter, glyph)| {
         let (page, words) = new_of(filter)?;
-        let navigation = navigation.clone();
+        let leave = leave.clone();
         let route = Route::Project(project, page);
         Some(
           MenuItem::new(format!("local-hub-new-{}", filter.name()), ctx.t(words), move || {
-            navigation.go(route.clone());
+            leave.go(route.clone());
           })
           .icon(glyph)
           .render(ctx, &self.open),

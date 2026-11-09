@@ -23,11 +23,7 @@ use crate::{
   routes::{HubFilter, ProjectPage, Route},
   screens::team_hub::row::tag_chip,
   theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
-  ui::{
-    agent_mark::AgentMark,
-    icon::icon,
-    pressable::{Press, inert, opening},
-  },
+  ui::{agent_mark::AgentMark, icon::icon, pressable::inert},
 };
 
 /// The element id of an entry's parts.
@@ -45,14 +41,8 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     inert(lurq::components::Button::empty())
   } else {
     let route = Route::Project(shown.project, ProjectPage::hub(view_of(shown.filter, Some(entry.what))));
-    match shown.unsaved {
-      // Opening another entry would drop the edits: the hub asks first.
-      Some(_) => {
-        let leaving = shown.leaving.clone();
-        Press::run(move || leaving.set(Some(route.clone()))).button()
-      }
-      None => opening(shown.navigation.to(route)),
-    }
+    // Opening another entry would drop unsaved edits: the hub asks first.
+    shown.leave.press(route).button()
   };
   let start = if chosen {
     ExtraSpacing::Inset.role()

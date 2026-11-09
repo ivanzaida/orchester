@@ -9,6 +9,7 @@ mod failure;
 mod harness;
 mod hub;
 mod local_hub;
+mod local_hub_leaving;
 mod models;
 mod project_sets;
 mod reads;

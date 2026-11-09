@@ -26,7 +26,7 @@ const SAVE: &str = "local-hub-mcp-save";
 const CANCEL: &str = "local-hub-mcp-cancel";
 
 /// A local MCP server called `name` that runs the program `docs-mcp`, which no computer has.
-fn server(agents: &Agents, name: &str) -> ConnectionId {
+pub(super) fn server(agents: &Agents, name: &str) -> ConnectionId {
   let server = McpServer::new(
     ConnectionId::generate(),
     McpServerName::new(name).expect("name"),
@@ -44,7 +44,7 @@ fn server(agents: &Agents, name: &str) -> ConnectionId {
   server.id()
 }
 
-fn open(agents: &mut Agents, view: HubView) {
+pub(super) fn open(agents: &mut Agents, view: HubView) {
   agents
     .window
     .navigation()
@@ -54,7 +54,7 @@ fn open(agents: &mut Agents, view: HubView) {
   });
 }
 
-fn show(agents: &mut Agents, server: ConnectionId) {
+pub(super) fn show(agents: &mut Agents, server: ConnectionId) {
   open(agents, HubView::on_server(HubFilter::McpServers, server));
   agents.until("the server's panel", |s| s.exists("local-hub-mcp-server"));
 }
