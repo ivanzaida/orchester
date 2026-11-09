@@ -20,7 +20,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::HubFilter,
-  theme::{ExtraSpacing, HubSpacing, HubText},
+  theme::{ExtraSpacing, HubText},
 };
 
 /// The list's width (`List` `gETjg`).
@@ -69,8 +69,7 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
     .spacing(SpacingSize::Sm)
     .with_children(shown.adding.map(|kind| create::new_row(ctx, kind)))
     .with_children(groups)
-    .with_children(archived)
-    .with_children(note(ctx, shown.filter));
+    .with_children(archived);
   ScrollVertical::new(groups)
     .id("team-hub-list-scroll")
     .width(Dimension::Px(LIST_WIDTH))
@@ -112,26 +111,4 @@ fn section_named(ctx: &lurq::app::ctx::Ctx, (name, key, color): (&str, &str, Pal
         .color(color)
         .nowrap(),
     )
-}
-
-/// Why every resource of the filter is ready, under the list (`Why` `e1C14P` in `Agents · Instructions` `c3jU1R`): the
-/// kinds with nothing to fill in on a computer.
-fn note(ctx: &lurq::app::ctx::Ctx, filter: HubFilter) -> Option<Row> {
-  let key = match filter {
-    HubFilter::Instructions => "team_hub.note.instructions",
-    HubFilter::Skills => "team_hub.note.skills",
-    _ => return None,
-  };
-  Some(
-    Row::new()
-      .id("team-hub-note")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, HubSpacing::NoteY.role()))
-      .child(
-        Text::new(&ctx.t(key))
-          .id("team-hub-note-text")
-          .variant(HubText::ListNote.role())
-          .flex(1.0),
-      ),
-  )
 }
