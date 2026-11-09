@@ -59,8 +59,40 @@
       "step": "{{number}} {{step}}"
     },
     "team": {
-      "readOnly": "Only Admins change this task: {{admins}}. You read it, run it and claim it.",
-      "readOnlyUnnamed": "Only Admins change this task. You read it, run it and claim it.",
+      "readOnly": "Only Admins change this task: {{admins}}. You read it, run it, claim it and close what you hold.",
+      "readOnlyUnnamed": "Only Admins change this task. You read it, run it, claim it and close what you hold.",
+      "lifecycle": {
+        "you": "you",
+        "doneTitle": "Done · marked by {{who}} at {{time}}",
+        "canceledTitle": "Canceled by {{who}} at {{time}}",
+        "closedDetail": "Closing it ended its claim.",
+        "blockedTitle": "Blocked by {{who}} at {{time}}",
+        "done": "Mark as done",
+        "cancel": "Cancel task",
+        "clearBlocked": "Clear blocked",
+        "lockOpen": "Only {{holder}} (the claim) and Admins close this task: {{admins}}.",
+        "lockOpenUnnamed": "Only {{holder}} (the claim) and Admins close this task.",
+        "lockOpenFree": "Only the person who claims it and Admins close this task: {{admins}}.",
+        "lockOpenFreeUnnamed": "Only the person who claims it and Admins close this task.",
+        "lockClosed": "Only Admins reopen a team task: {{admins}}.",
+        "lockClosedUnnamed": "Only Admins reopen a team task.",
+        "reopen": {
+          "label": "Reopen",
+          "todo": "Back to Todo",
+          "todoDetail": "ready to claim",
+          "backlog": "Back to Backlog",
+          "backlogDetail": "not planned yet",
+          "free": "A reopened task is free: nobody holds it, and nothing runs until someone claims it."
+        },
+        "block": {
+          "label": "Mark as blocked",
+          "title": "Mark {{task}} as blocked",
+          "reason": "Why is it blocked?",
+          "placeholder": "What it waits for",
+          "confirm": "Mark as blocked",
+          "cancel": "Cancel"
+        }
+      },
       "run": {
         "onHolder": "{{pipeline}} · on {{holder}}'s computer",
         "onYourOther": "{{pipeline}} · on your other computer",
@@ -136,6 +168,11 @@
       },
       "refused": {
         "claimTitle": "Couldn't claim {{task}}",
+        "doneTitle": "Couldn't mark {{task}} as done",
+        "cancelTitle": "Couldn't cancel {{task}}",
+        "reopenTitle": "Couldn't reopen {{task}}",
+        "blockTitle": "Couldn't mark {{task}} as blocked",
+        "clearBlockedTitle": "Couldn't clear the block on {{task}}",
         "takeOverTitle": "Couldn't take over {{task}}",
         "releaseTitle": "Couldn't release {{task}}",
         "runTitle": "Couldn't start {{task}}'s run",

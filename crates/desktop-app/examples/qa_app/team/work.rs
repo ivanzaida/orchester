@@ -98,6 +98,9 @@ const OLHA_ASKED: (i64, (&str, &str)) = (
   ),
 );
 
+/// The task mara holds in `team-admin-work`, and how many minutes ago her work last renewed the claim.
+const ADMIN_SEES: (u32, i64) = (13, 5);
+
 /// What a team run records of the start that made it: its operation, and the claim and work it reports under.
 type Authorized = (OperationId, ClaimId, WorkId);
 
@@ -110,6 +113,12 @@ pub fn task(state: State, task: &mut AuthorityTask) {
     State::NotReadyAfterRun if task.number == NOT_READY_TASK => {
       task.claim = claim(MARA, 22, true);
       task.work = Some("paused");
+      task.assignee = task.claim.map(|claim| claim.holder);
+    }
+    // An Admin reads mara's claim on KON-13: Mark as done and Cancel task close it for her (decision D4, T2 `o4K8uq`).
+    State::AdminWork if task.number == ADMIN_SEES.0 => {
+      task.claim = claim(MARA, ADMIN_SEES.1, false);
+      task.work = Some("running");
       task.assignee = task.claim.map(|claim| claim.holder);
     }
     State::Claims => {

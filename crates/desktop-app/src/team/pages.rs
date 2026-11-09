@@ -9,8 +9,8 @@
 use orchester_api::{
   UserRef,
   v2::{
-    Action, Capabilities, ClaimRead, ExecutionState, MAX_PAGE_LIMIT, ModuleListRequest, ModuleSummary, PageRequest,
-    PendingAuthorization, SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
+    Action, Capabilities, ClaimRead, ExecutionState, LifecycleAction, MAX_PAGE_LIMIT, ModuleListRequest, ModuleSummary,
+    PageRequest, PendingAuthorization, SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
   },
 };
 use orchester_core::{
@@ -66,6 +66,23 @@ pub fn minutes(from: Timestamp, to: Timestamp) -> String {
   ((to.unix_millis() - from.unix_millis()) / 60_000).max(0).to_string()
 }
 
+/// What the server's capabilities let the person do with a task's lifecycle (decision D4): each is the capability
+/// action of that name, which the server tells with its reason, so nothing here is a role kept on this computer. A
+/// closed task's *Done* and *Cancel* are not offered, nor an open task's *Reopen*: the state is told before the person.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Lifecycle {
+  /// Mark as done: the claim's holder's or an Admin's.
+  pub complete: bool,
+  /// Cancel task: an Admin's.
+  pub cancel: bool,
+  /// Reopen a Done or Canceled task to Backlog or Todo: an Admin's.
+  pub reopen: bool,
+  /// Move between Backlog and Todo: an Admin's.
+  pub triage: bool,
+  /// Mark as blocked and Clear blocked: the claim's holder's or an Admin's.
+  pub block: bool,
+}
+
 /// What the server's capabilities let the person do with a task or a module: advisory, as every command is checked
 /// again there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -77,6 +94,7 @@ pub struct Abilities {
   pub branch: bool,
   /// Authorize the module's delivery (an Admin's).
   pub authorize: bool,
+  pub lifecycle: Lifecycle,
 }
 
 /// A team task as its page shows it: the task, its revision, the slug of a pipeline this computer has none for, its
@@ -92,8 +110,17 @@ pub struct TeamTask {
   pub claim: Option<TeamClaim>,
   pub work: Option<ExecutionState>,
   pub abilities: Abilities,
+  /// Who changed the task last and when: who closed a Done or Canceled task, who set its blocked reason.
+  pub updated: TeamUpdated,
   pub fences: Vec<(RunId, TeamFence)>,
   pub unsent: Vec<(RunId, usize)>,
+}
+
+/// Who changed a task last, and when.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TeamUpdated {
+  pub by: TeamPerson,
+  pub at: Timestamp,
 }
 
 /// A team module as its row and its page show it: the module, its revision, its progress and forecast as the server
@@ -239,6 +266,7 @@ fn abilities(capabilities: &Capabilities, subject: Subject) -> Abilities {
     release: allowed(&["claim", "release"]),
     branch: allowed(&["module", "branch", "set"]),
     authorize: allowed(&["delivery", "authorize"]),
+    lifecycle: lifecycle(capabilities, subject),
   }
 }
 
@@ -257,6 +285,10 @@ fn team_task_of(read: &TaskRead, pipelines: &listed::TeamPipelines, who: &Who) -
     claim: read.effective_claim.as_ref().map(|read| claim(read, who)),
     work: read.work.as_ref().map(|work| work.state),
     abilities: abilities(&read.capabilities, Subject::Task { id: read.task.id }),
+    updated: TeamUpdated {
+      by: person(&read.task.updated.by, who.you),
+      at: Timestamp::from_unix_millis(read.task.updated.at),
+    },
     fences: who.here.fences.clone(),
     unsent: who.here.unsent.clone(),
   })
@@ -286,4 +318,22 @@ fn team_module_of(summary: &ModuleSummary, who: &Who) -> Result<TeamModule, Team
       authorization: pending.authorization(),
     }),
   })
+}
+
+/// What `capabilities` allow of the lifecycle of `subject`: the actions the server lists for it and allows.
+fn lifecycle(capabilities: &Capabilities, subject: Subject) -> Lifecycle {
+  let allowed = |wanted: LifecycleAction| {
+    capabilities.actions.iter().any(|action| {
+      *action.action() == Action::Task(wanted)
+        && action.subject().is_none_or(|named| named == subject)
+        && action.is_allowed()
+    })
+  };
+  Lifecycle {
+    complete: allowed(LifecycleAction::Complete),
+    cancel: allowed(LifecycleAction::Cancel),
+    reopen: allowed(LifecycleAction::Reopen),
+    triage: allowed(LifecycleAction::Triage),
+    block: allowed(LifecycleAction::Block),
+  }
 }

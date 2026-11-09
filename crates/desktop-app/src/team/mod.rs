@@ -17,6 +17,7 @@ pub mod deliver;
 pub mod edit;
 pub mod invalidation;
 pub mod last_start;
+pub mod lifecycle;
 pub mod lock;
 pub mod outage;
 pub mod pages;

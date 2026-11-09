@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::ctx::{Ctx, FutureAction},
-  core::Signal,
+  core::{ElementRef, Signal},
   node::Element,
 };
 use orchester_api::v2::{AuthorityRef, Subject};
@@ -24,9 +24,11 @@ use orchester_workspace::{
   team_work::{self, TeamWorkError},
 };
 
+mod lifecycle;
 mod standing;
 mod words;
 
+pub use lifecycle::{blocking_dialog, reopen_menu};
 pub use standing::start_standing;
 use words::{acted_words, started_words};
 
@@ -57,6 +59,18 @@ pub enum TeamAsk {
   TakeOver,
   Release,
   Run,
+  /// Mark the task as done (decision D4): the claim's holder's or an Admin's, and it ends the claim.
+  Done,
+  /// Cancel the task: an Admin's, and it ends the claim.
+  Cancel,
+  /// Reopen the closed task to Todo, which leaves it free (an Admin's).
+  BackToTodo,
+  /// Reopen the closed task to Backlog, which leaves it free (an Admin's).
+  BackToBacklog,
+  /// Set the blocked reason the person typed (the claim's holder's or an Admin's); the claim stays.
+  Block,
+  /// Clear the blocked reason.
+  ClearBlocked,
   /// Dismiss the notice of a start that was settled for good: the page does not tell it again.
   Dismiss,
 }
@@ -85,6 +99,14 @@ pub struct TakingOver {
   /// Taking another member's stale claim over ends their authority, which only a person decides: no MCP tool takes a
   /// claim over either.
   pub person: PersonOnly,
+  /// Mark as blocked asks for its reason in a dialog, which is open.
+  pub blocking: Signal<bool>,
+  /// The reason typed in that dialog.
+  pub reason: Signal<String>,
+  /// Reopen's two choices are open.
+  pub reopening: Signal<bool>,
+  /// What Reopen's choices open beside.
+  pub reopen_anchor: ElementRef,
 }
 
 impl TakingOver {
@@ -93,6 +115,10 @@ impl TakingOver {
       open: ctx.signal(false),
       pressed: ctx.signal(None),
       person: PersonOnly::new(ctx),
+      blocking: ctx.signal(false),
+      reason: ctx.signal(String::new()),
+      reopening: ctx.signal(false),
+      reopen_anchor: ElementRef::default(),
     }
   }
 }
@@ -105,6 +131,12 @@ pub struct TeamControls {
   pub taking_over: Signal<bool>,
   /// When the person last asked for a start in this window; none for a start recorded before it.
   pub pressed: Signal<Option<Pressed>>,
+  /// Mark as blocked's dialog is open, and the reason it holds.
+  pub blocking: Signal<bool>,
+  pub reason: Signal<String>,
+  /// Reopen's two choices are open.
+  pub reopening: Signal<bool>,
+  pub reopen_anchor: ElementRef,
   person: PersonOnly,
 }
 
@@ -147,27 +179,33 @@ pub fn provide(ctx: &mut Ctx, (project, shown): (&ShownProject, Option<Arc<TeamT
   let services = Services::of(ctx);
   let name = project.open.project.name().as_str().to_owned();
   let means = (Acting::of(&services), services.runners, services.programs);
+  let reason = taking_over.reason.clone();
   let action = ctx.future_action(move |ask: TeamAsk| {
-    let (shown, project) = (shown.clone(), name.clone());
+    let (shown, project, reason) = (shown.clone(), name.clone(), reason.clone());
     let (acting, runners, programs) = (means.0.clone(), means.1.clone(), means.2.clone());
     async move {
       let Some(shown) = shown else {
         return Ok(TeamAnswer::Acted(ask, Acted::Failed));
       };
-      Ok(carry_out(ask, &shown, project, (acting, runners, programs)).await)
+      let reason = reason.get_untracked();
+      Ok(carry_out(ask, (&shown, reason), project, (acting, runners, programs)).await)
     }
   });
   ctx.provide(TeamControls {
     action,
     taking_over: taking_over.open.clone(),
     pressed: taking_over.pressed.clone(),
+    blocking: taking_over.blocking.clone(),
+    reason: taking_over.reason.clone(),
+    reopening: taking_over.reopening.clone(),
+    reopen_anchor: taking_over.reopen_anchor.clone(),
     person: taking_over.person.clone(),
   });
 }
 
 async fn carry_out(
   ask: TeamAsk,
-  shown: &TeamTaskShown,
+  (shown, reason): (&TeamTaskShown, String),
   project: String,
   (acting, runners, programs): (Acting, Runners, Programs),
 ) -> TeamAnswer {
@@ -194,6 +232,12 @@ async fn carry_out(
       TeamAnswer::Acted(ask, acting.act(source, action).await.0)
     }
     TeamAsk::Dismiss => TeamAnswer::Acted(ask, dismissed(&acting, shown).await),
+    TeamAsk::Done
+    | TeamAsk::Cancel
+    | TeamAsk::BackToTodo
+    | TeamAsk::BackToBacklog
+    | TeamAsk::Block
+    | TeamAsk::ClearBlocked => TeamAnswer::Acted(ask, lifecycle::carry_out(ask, (shown, reason), &acting).await),
     TeamAsk::TakeOver => {
       let Some(observed) = claim.map(|claim| claim.id) else {
         return TeamAnswer::Acted(ask, Acted::Failed);
@@ -432,6 +476,11 @@ pub fn refusal(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     TeamAsk::Release => "summary.team.refused.releaseTitle",
     TeamAsk::Run => "summary.team.refused.runTitle",
     TeamAsk::Dismiss => "summary.team.refused.dismissTitle",
+    TeamAsk::Done => "summary.team.refused.doneTitle",
+    TeamAsk::Cancel => "summary.team.refused.cancelTitle",
+    TeamAsk::BackToTodo | TeamAsk::BackToBacklog => "summary.team.refused.reopenTitle",
+    TeamAsk::Block => "summary.team.refused.blockTitle",
+    TeamAsk::ClearBlocked => "summary.team.refused.clearBlockedTitle",
   };
   let open = controls.taking_over.clone();
   let again = controls.clone();

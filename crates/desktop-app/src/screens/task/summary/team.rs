@@ -1,6 +1,7 @@
 //! What a team task's Summary adds (`01c` `Tb55G`, `docs/design/team-authority.md` §1–3): for a member, one calm line
 //! naming who changes the task (`Read-only line` `drVo6`); what the last team action did not do (`DpoZG` in `02f`,
-//! [`team_controls::refusal`]); the claim its work runs under as one strip ([`super::claim`]); and the properties
+//! [`team_controls::refusal`]); the claim its work runs under as one strip ([`super::claim`]) with its lifecycle
+//! ([`super::lifecycle`], decision D4); and the properties
 //! *Assignee* and *Claim* first, *Module* after the pipeline and *Merges into* the module's branch in place of *Base*
 //! (`iqkBC`, `RwzsJ`, `q254Rz`, `P81IsR`), each read-only.
 
@@ -39,8 +40,9 @@ pub fn top(ctx: &mut Ctx, task: &TaskContext) -> Vec<Element> {
     lock::locked("task-team-read-only", &words).into()
   });
   let refusal = team_controls::refusal(ctx, task);
-  let claim = super::claim::line(ctx, task);
-  lock.into_iter().chain(refusal).chain(claim).collect()
+  let claim = super::lifecycle::closed(ctx, task).or_else(|| super::claim::line(ctx, task));
+  let lifecycle = super::lifecycle::parts(ctx, task);
+  lock.into_iter().chain(refusal).chain(claim).chain(lifecycle).collect()
 }
 
 /// A property's row, as the Summary's other properties are.
