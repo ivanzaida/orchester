@@ -46,13 +46,27 @@ fn local_hub_review_a_run_that_could_not_be_stopped_is_said_before_the_lists_rea
   );
   assert!(
     agents.exists(&format!("local-hub-row-{profile}")),
-    "the list has not read the archive yet, so the notice's panel is still there"
+    "the list has not read the archive yet"
+  );
+
+  // Something else changes meanwhile and the lists read again: the profile is archived, so its row and its panel go,
+  // and the notice stays, because the hub holds it and not the panel.
+  agents
+    .window
+    .projects()
+    .feed(project_id())
+    .outside
+    .update(|counts| counts.connections += 1);
+  agents.until("the entry leaves the list", |s| {
+    !s.exists(&format!("local-hub-row-{profile}")) && !s.exists("local-hub-more")
+  });
+  assert!(
+    agents.exists("team-hub-archive-left-running"),
+    "the notice outlives the panel it was asked from"
   );
 
   agents.click("team-hub-archive-close");
-  agents.until("the entry leaves the list", |s| {
-    !s.exists("team-hub-archive-left-running") && !s.exists(&format!("local-hub-row-{profile}"))
-  });
+  agents.until("the notice closes", |s| !s.exists("team-hub-archive-left-running"));
 }
 
 #[test]

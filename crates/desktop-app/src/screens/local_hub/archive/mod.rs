@@ -1,7 +1,9 @@
 //! Archive in a local resource's panel (`…` in the head of `Agents · Archive · used by · confirmation` L11): the head's
-//! menu holds *Archive*, which opens the confirmation ([`confirm`]) over the page. The editors of a profile, tool,
-//! instruction and skill ask the same confirmation from their own … menus ([`confirm::question`]); archiving is never
-//! refused for being used.
+//! menu holds *Archive*, which asks the hub to open the confirmation ([`confirm`]) over the page. The hub hosts it
+//! ([`Asking`]), not the panel: the entry leaves the lists once it is archived and its panel goes, while the
+//! confirmation may still be saying that a run could not be stopped. The editors of a profile, tool, instruction and
+//! skill ask the same confirmation from their own … menus ([`confirm::question`]); archiving is never refused for
+//! being used.
 
 pub(in crate::screens) mod confirm;
 
@@ -40,7 +42,41 @@ pub(in crate::screens) struct Target {
 }
 impl DevtoolsInspectable for Target {}
 
-/// The … menu of a panel's head for the entry `target` names, with the confirmation it opens.
+/// The entry whose archive confirmation the hub shows, which the hub provides to the panels below it.
+#[derive(Clone)]
+pub(super) struct Asking(Signal<Option<Target>>);
+
+impl PartialEq for Asking {
+  fn eq(&self, other: &Self) -> bool {
+    self.0.id() == other.0.id()
+  }
+}
+
+impl Asking {
+  pub(super) fn new(ctx: &mut Ctx) -> Self {
+    Self(ctx.signal(None))
+  }
+
+  /// The confirmation over the page while an entry asked for it; it ends with the archive or when it is left.
+  pub(super) fn question(&self, ctx: &mut Ctx) -> Option<Element> {
+    let target = self.0.get()?;
+    let (keep, done) = (self.0.clone(), self.0.clone());
+    Some(confirm::question(
+      ctx,
+      Props {
+        root: target.root,
+        project: target.project,
+        what: target.what,
+        kind: target.kind,
+        name: target.name,
+        on_keep: Arc::new(move || keep.set(None)),
+        on_archived: Arc::new(move || done.set(None)),
+      },
+    ))
+  }
+}
+
+/// The … menu of a panel's head for the entry `target` names; *Archive* asks the hub for the confirmation.
 pub(super) fn menu(ctx: &mut Ctx, target: Target) -> Element {
   let key = format!("local-hub-archive-{:?}", target.what);
   ctx.mount_keyed::<ArchiveMenu>(&key, target)
@@ -50,8 +86,7 @@ struct ArchiveMenu {
   /// The … menu.
   menu: Signal<bool>,
   anchor: ElementRef,
-  /// The confirmation.
-  open: Signal<bool>,
+  asking: Asking,
 }
 
 impl Component for ArchiveMenu {
@@ -61,15 +96,17 @@ impl Component for ArchiveMenu {
     Self {
       menu: ctx.signal(false),
       anchor: ctx.element_ref(),
-      open: ctx.signal(false),
+      asking: ctx
+        .use_context::<Asking>()
+        .expect("the hub provides the archive question to the panels it shows"),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let target = ctx.props::<Target>().clone();
     let item = MenuItem::new("local-hub-archive", ctx.t("local_hub.archive.action"), {
-      let open = self.open.clone();
-      move || open.set(true)
+      let (asking, target) = (self.asking.0.clone(), target);
+      move || asking.set(Some(target.clone()))
     })
     .icon(Icon::Archive)
     .render(ctx, &self.menu);
@@ -82,24 +119,8 @@ impl Component for ArchiveMenu {
     let panel = menu_panel("local-hub-more-menu")
       .width(Dimension::Px(MORE_MENU_WIDTH))
       .child(item);
-    let confirmation = self.open.get().then(|| {
-      let (keep, done) = (self.open.clone(), self.open.clone());
-      confirm::question(
-        ctx,
-        Props {
-          root: target.root,
-          project: target.project,
-          what: target.what,
-          kind: target.kind,
-          name: target.name,
-          on_keep: Arc::new(move || keep.set(false)),
-          on_archived: Arc::new(move || done.set(false)),
-        },
-      )
-    });
     Column::new()
       .child(button)
       .child(menu_at_end(self.anchor.clone(), self.menu.clone(), panel))
-      .with_children(confirmation)
   }
 }

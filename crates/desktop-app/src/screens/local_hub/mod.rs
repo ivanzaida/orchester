@@ -41,6 +41,7 @@ use orchester_workspace::{
 };
 
 use self::{
+  archive::Asking,
   head::FilterShown,
   leave::Leave,
   mcp::UnsavedSignal,
@@ -87,6 +88,8 @@ struct LocalHubScreen {
   leaving: Signal<Option<Route>>,
   /// The question that asks it.
   asking: Signal<bool>,
+  /// The entry whose archive confirmation shows over the page, which outlives the entry's panel.
+  archiving: Asking,
   /// Holds every other departure (Back, a tab, the sidebar) while an MCP server's edits are not saved.
   guard: LeaveGuard,
 }
@@ -97,12 +100,15 @@ impl Component for LocalHubScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let unsaved: UnsavedSignal = ctx.signal(None);
     let edits = unsaved.clone();
+    let archiving = Asking::new(ctx);
+    ctx.provide(archiving.clone());
     let this = Self {
       retry: ctx.signal(0),
       failure: LastFailure::default(),
       unsaved,
       leaving: ctx.signal(None),
       asking: ctx.signal(false),
+      archiving,
       guard: Navigation::of(ctx).guard(move || edits.get_untracked().is_some()),
     };
     // The question follows what waits for an answer, and what waits follows the question closing; each writes only
@@ -208,6 +214,7 @@ impl Component for LocalHubScreen {
           .child(body),
       )
       .with_children(leaving)
+      .with_children(self.archiving.question(ctx))
   }
 }
 
