@@ -237,11 +237,14 @@ fn team_hub_keeps_the_filter_and_the_chosen_resource_in_the_route() {
 }
 
 #[test]
-fn team_hub_pins_edit_for_an_admin_where_the_kind_has_an_editor() {
+fn team_hub_links_to_no_editor_page_and_edits_an_mcp_server_in_its_panel() {
   let mut agents = Agents::new(true);
   let [skill, _, github, _] = team(&agents);
   open(&mut agents, HubView::new(HubFilter::All, Some(skill)));
-  assert!(agents.exists("team-hub-actions") && agents.exists("team-hub-edit"));
+  // A skill's panel has its … menu and no Edit to the old editor's page, and nothing pinned.
+  assert!(agents.exists("team-hub-more"));
+  assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
+  assert!(!agents.exists("team-hub-actions"));
   // An MCP server is edited in its panel (Edit in its head, ORC-836); its bar stays the fix of what this computer
   // lacks (nobody has decided on `github` here: switching it on).
   open(&mut agents, HubView::new(HubFilter::All, Some(github)));
@@ -256,8 +259,21 @@ fn team_hub_says_so_when_the_filter_holds_nothing() {
     project_id(),
     ProjectPage::hub(HubView::new(HubFilter::Tools, None)),
   ));
-  agents.until("empty", |s| s.exists("team-hub-empty"));
+  agents.until("empty", |s| s.exists("team-hub-empty-body"));
   assert_eq!(agents.text("team-hub-filter-tools-count"), "0");
+  // One state across the body for an admin: what the kind is, and *New tool*, which opens its form.
+  assert!(!agents.exists("team-hub-master-detail"));
+  assert_eq!(agents.text("team-hub-empty-title"), "No tools yet");
+  assert_eq!(
+    agents.text("team-hub-empty-detail"),
+    "Commands and requests agents may run, with their approvals."
+  );
+  assert_eq!(agents.text("team-hub-empty-new"), "New tool");
+  agents.click("team-hub-empty-new");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Tools)))
+  );
 }
 
 #[test]

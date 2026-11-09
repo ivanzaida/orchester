@@ -1,12 +1,11 @@
-//! Skills, the Agents hub's third tab (`03 Skills` `w0NiG0`): the skills by scope with what this repository holds, a
-//! skill's page (`03b` `QbDWX`), and importing the repository's files with its result (`03c` `cC55E`).
+//! Skills, the Agents hub's third tab (`03 Skills` `w0NiG0`): the skills by scope, and a skill's page (`03b`
+//! `QbDWX`).
 mod editor;
 mod inspector;
 mod library;
-mod repository;
 mod scope;
 mod state;
-pub(crate) mod words;
+mod words;
 mod work;
 use lurq::{
   app::{
@@ -65,13 +64,9 @@ impl Component for SkillsScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
     let body = self.body(ctx, &project);
-    // A member of a shared project adds and imports none of the team's skills.
+    // A member of a shared project adds none of the team's skills.
     let head = if hub::team::may_change(hub::team::of(&project).as_ref()) {
       Head::actions([
-        ActionButton::new("skills-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
-          .icon(Icon::FolderOpen)
-          .opens(self.view.panel.to(Panel::Import))
-          .into(),
         ActionButton::new("skills-new", ButtonKind::Primary, ctx.t("skills.new"))
           .icon(Icon::Plus)
           .opens(self.view.panel.to(Panel::New))
@@ -163,11 +158,10 @@ impl SkillsScreen {
       .into()
   }
 
-  /// The list, the import page or a skill's page, as `panel` names it; a skill no longer there says so.
+  /// The list or a skill's page, as `panel` names it; a skill no longer there says so.
   fn content(ctx: &mut Ctx, panel: &Panel, props: PageProps, (read_reset, pending): (u64, bool)) -> Element {
     let entry = match *panel {
       Panel::Library(_) => return ctx.mount_keyed::<library::Library>("skills-library", props),
-      Panel::Import => return ctx.mount_keyed::<repository::Import>("skills-import", props),
       Panel::Edit(id) => match props.data.listed.entry(id).cloned() {
         Some(entry) => Some(entry),
         None if pending => return library::reading(ctx),

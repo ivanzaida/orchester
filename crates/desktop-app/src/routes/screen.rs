@@ -1,6 +1,6 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, FIRST_DOWNLOAD, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, REVIEW,
-  SETTINGS, TASKS, files::FILES, join_team, project_screen_path,
+  ADD_PROJECT, CONNECTIONS, EDIT, FIRST_DOWNLOAD, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, REVIEW, SETTINGS, TASKS,
+  files::FILES, join_team, project_screen_path,
 };
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
@@ -38,12 +38,10 @@ pub enum Screen {
   ProjectSettings,
   /// The code viewer.
   Files,
-  /// Import resources, which no sidebar item names (`Baggg` in `G69AHh`).
-  ImportResources,
 }
 
 impl Screen {
-  pub const ALL: [Self; 28] = [
+  pub const ALL: [Self; 27] = [
     Self::AllProjects,
     Self::AddProject,
     Self::JoinTeam,
@@ -71,7 +69,6 @@ impl Screen {
     Self::EditConnection,
     Self::ProjectSettings,
     Self::Files,
-    Self::ImportResources,
   ];
   /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`), Modules under
   /// Tasks (ORC-48, no frame yet), and Files under Usage (`Nav · Files` `E0b2rn` in `o1Uea4`).
@@ -124,7 +121,6 @@ impl Screen {
       Self::EditConnection => "edit_connection",
       Self::ProjectSettings => "project_settings",
       Self::Files => "files",
-      Self::ImportResources => "import_resources",
     }
   }
 
@@ -162,7 +158,6 @@ impl Screen {
       Self::EditConnection => "shell.screens.editConnection",
       Self::ProjectSettings => "shell.screens.projectSettings",
       Self::Files => "shell.screens.files",
-      Self::ImportResources => "shell.screens.importResources",
     }
   }
 
@@ -197,7 +192,6 @@ impl Screen {
       Self::Connections => Some(CONNECTIONS),
       Self::ProjectSettings => Some(SETTINGS),
       Self::Files => Some(FILES),
-      Self::ImportResources => Some(IMPORT),
     }
   }
 

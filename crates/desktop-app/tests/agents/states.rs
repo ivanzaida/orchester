@@ -29,8 +29,9 @@ fn agents_empty_says_so_and_new_agent_is_in_the_head() {
   for connection in [false, true] {
     let mut screen = Agents::new(connection);
     screen.go();
-    screen.until("the empty state", |s| s.exists("local-hub-empty"));
-    assert!(screen.text("local-hub-empty").contains("Nothing of this kind yet"));
+    screen.until("the empty state", |s| s.exists("local-hub-empty-body"));
+    assert_eq!(screen.text("local-hub-empty-title"), "No agent profiles yet");
+    assert_eq!(screen.text("local-hub-empty-new"), "New agent");
     assert!(screen.exists("local-hub-new") && !screen.exists("local-hub-list"));
   }
 }

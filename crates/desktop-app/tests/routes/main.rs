@@ -92,7 +92,6 @@ fn every_route() -> Vec<Route> {
     )),
     at(ProjectPage::NewSkill),
     at(ProjectPage::Skill(PROJECT.parse().expect("a skill id"))),
-    at(ProjectPage::ImportSkills),
     at(ProjectPage::NewPipeline),
     at(ProjectPage::NewEmptyPipeline),
     at(ProjectPage::Pipeline(

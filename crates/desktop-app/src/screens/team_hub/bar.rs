@@ -1,45 +1,15 @@
 //! The pinned actions of every panel of the hub (`Actions` `x3uhYJ` in `t4mtQL`, `o8tFHR` in `NDZXC`, `WpN6M` in
-//! `SpRvd`, `hDhr8` in `c3jU1R`): the buttons of the fix of the first missing part (or the admin's *Edit*) at its
-//! start and, at its end, what the person is told about it.
+//! `SpRvd`, `hDhr8` in `c3jU1R`): the buttons of the fix of the first missing part at its start and,
+//! at its end, what the person is told about it.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
-  },
+  app::theme::{BorderSize, PaletteColor, SpacingSize},
   components::{Row, Text},
   layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::model::Entry;
-use crate::{
-  navigation::link::Open,
-  theme::{HubSpacing, HubText},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-  },
-};
-
-/// *Edit*, which opens `open`, and what publishing makes of `entry`'s version (`Actions` `hDhr8` in `c3jU1R`): the
-/// bar of a resource that has nothing to fix on this computer.
-pub(super) fn edit(ctx: &Ctx, entry: &Entry, open: Open) -> Element {
-  let button = ActionButton::new(
-    "team-hub-action-edit",
-    ButtonKind::Primary,
-    ctx.t("team_hub.panel.edit"),
-  )
-  .icon(Icon::Pencil)
-  .pinned()
-  .opens(open);
-  let hint = entry.number.and_then(|number| number.next()).map(|next| {
-    ctx
-      .t_args("team_hub.panel.publishNext", [("version", next.to_string())])
-      .to_string()
-  });
-  bar(vec![button.into()], hint)
-}
+use crate::theme::{HubSpacing, HubText};
 
 /// The bar with `buttons` at its start and `hint` at its end; the kind's panels each say what they put in them.
 pub(in crate::screens) fn bar(buttons: Vec<Element>, hint: Option<String>) -> Element {

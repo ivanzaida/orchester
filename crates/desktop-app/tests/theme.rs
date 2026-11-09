@@ -17,8 +17,6 @@ mod decision_test;
 mod dialog;
 #[path = "theme/hub.rs"]
 mod hub;
-#[path = "theme/import.rs"]
-mod import;
 #[path = "theme/instructions.rs"]
 mod instructions;
 #[path = "theme/local_integration.rs"]

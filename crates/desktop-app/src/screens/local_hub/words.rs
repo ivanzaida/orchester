@@ -5,18 +5,20 @@ use std::sync::Arc;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
-  resource::ResourceKind,
+  id::ResourceId,
+  resource::{InstructionScope, ResourceKind},
   sharing::{ConnectionProblem, Missing},
   time::Timestamp,
 };
 use orchester_workspace::{
-  agents::team_hub::Form,
+  agents::{team_hub::Form, team_profile::Listed, team_text::Added},
   display,
+  instructions::data::PipelineChoice,
   readiness::{Group, ReadinessStanding, Undecided},
 };
 
 use super::model::Entry;
-use crate::screens::team_hub::words::{cli_key, date};
+use crate::screens::team_hub::words::{added, cli_key, date};
 
 /// What a kind is called in a row's tag under All and Archived (`team_hub.kind.tag.*`); a kind the hub lists has one.
 pub(super) const fn kind_tag_key(kind: ResourceKind) -> Option<&'static str> {
@@ -214,4 +216,25 @@ pub(super) fn missing(ctx: &Ctx, entry: &Entry, part: &Missing) -> Arc<str> {
     | Missing::McpUnsupported { .. }
     | Missing::McpProgram { .. } => ctx.t("local_hub.line.undecided"),
   }
+}
+
+/// Where `scope` adds an instruction or a skill, in the words the team hub says it in, with the names `pipelines` have.
+pub(super) fn added_to(ctx: &Ctx, scope: &InstructionScope, pipelines: &[PipelineChoice]) -> Arc<str> {
+  let pipeline = |id: ResourceId| Listed {
+    id,
+    name: pipelines
+      .iter()
+      .find(|pipeline| pipeline.id == id)
+      .map_or_else(|| id.to_string(), |pipeline| pipeline.name.to_string()),
+  };
+  let shown = match scope {
+    InstructionScope::Project => Added::Project,
+    InstructionScope::AgentRole { role } => Added::Role(role.to_string()),
+    InstructionScope::Pipeline { pipeline: id } => Added::Pipeline(pipeline(*id)),
+    InstructionScope::Step { pipeline: id, step } => Added::Step {
+      pipeline: pipeline(*id),
+      step: step.to_string(),
+    },
+  };
+  added(ctx, &shown)
 }

@@ -263,12 +263,14 @@ impl Form {
       .spacing(SpacingSize::Sm)
       .child(variables.render(ctx))
       .child(Row::new().child(self.fields.add_secret(ctx, &look.listed.secrets)));
+    // The field is several lines high: its label stands at its top, not at its middle.
     rows::row(
       "local-hub-mcp-row-variables",
       &ctx.t("connections.mcp.variables"),
       look.changed(ctx, &look.typed.variables, &look.saved.variables),
       control,
     )
+    .align_items(Alignment::Start)
   }
 
   /// A remote server's endpoint, authorization and what the authorization asks for, one row each as the program's.

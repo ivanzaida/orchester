@@ -1,5 +1,5 @@
-//! What the list shows instead of rows. A project without tasks says so in the middle of the panel, with New task and
-//! Import resources (`Empty` `GQZ6J` in `03 No tasks yet` `f54MO`: a 40 tile, `No tasks yet` in 15/600 and one
+//! What the list shows instead of rows. A project without tasks says so in the middle of the panel, with New task
+//! (`Empty` `GQZ6J` in `03 No tasks yet` `f54MO`: a 40 tile, `No tasks yet` in 15/600 and one
 //! sentence in 12.5 `text_secondary`, 6 apart, the actions 16 under them); while the tasks are read, the loader
 //! (`Reading` `O8pgq`); when they cannot be read, why, with Try again (`Notice · Tasks cannot be read` `kXWCj`); a view
 //! whose rows the search or the filters hide says so, with Clear (`No matches` `WaehI`); a view without tasks says
@@ -28,7 +28,7 @@ use super::header::new_task;
 use crate::{
   navigation::Navigation,
   project::ProjectFeed,
-  routes::{ImportTab, ProjectPage, Route, TaskListTab},
+  routes::TaskListTab,
   shell::needs_you::PanelOpen,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, TasksSpacing},
   ui::{
@@ -47,13 +47,10 @@ const EMPTY_TILE: f32 = 40.0;
 const EMPTY_COLUMN: f32 = 420.0;
 const NO_ROWS_TILE: f32 = 36.0;
 
-/// The project has no task yet: New task, or Import resources from another project. New task is locked for
-/// `read_only`'s reason, said under the actions, once the person is no longer a member of the shared list.
+/// The project has no task yet: New task, locked for `read_only`'s reason, said under it, once the person is no longer
+/// a member of the shared list.
 pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId, read_only: Option<Arc<str>>) -> Element {
   let navigation = Navigation::of(ctx);
-  let import = ActionButton::new("tasks-empty-import", ButtonKind::Secondary, ctx.t("tasks.empty.import"))
-    .icon(Icon::Download)
-    .opens(navigation.to(Route::Project(project, ProjectPage::Import(ImportTab::All))));
   let new = new_task(ctx, "tasks-empty-new-task", project, &navigation);
   let new = match read_only.clone() {
     Some(reason) => new.unavailable(reason),
@@ -81,13 +78,7 @@ pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId, read_only: Option
     .align_items(Alignment::Center)
     .child(tile(Icon::ListChecks, EMPTY_TILE))
     .child(words)
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(new)
-        .child(import),
-    )
+    .child(new)
     .with_children(read_only.map(|reason| reason_at_end("tasks-empty-new-task-reason", &reason)));
   Column::new()
     .id("tasks-empty")

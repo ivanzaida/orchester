@@ -100,59 +100,6 @@ fn skills_window_publication_matches_ordinary_saved_domain_data_without_permissi
   assert_eq!(native.body(), direct.body());
 }
 #[test]
-fn skills_window_repository_files_turn_on_by_client_input_only_under_the_persons_switch() {
-  let (mut s, project, repo) = controlled();
-  let mut db = ProjectDb::open(&repo).expect("db");
-  db.save_repository_agent_files(RepositoryAgentFiles::Off).expect("off");
-  s.ok("navigate", &json!({"route":"skills","project":project.to_string()}));
-  s.until("empty skills", |s| s.shows("skill-repository-files"));
-  s.click_by_client("skill-repository-files").expect("may ask");
-  s.until("question", |s| s.shows("skill-files-confirm-confirm"));
-  assert!(!db.repository_agent_files().expect("setting").is_on());
-  s.click_by_client("skill-files-confirm-keep").expect("ordinary discard");
-  s.until("discarded", |s| !s.shows("skill-files-confirm-confirm"));
-  assert!(!db.repository_agent_files().expect("setting").is_on());
-  s.click_by_client("skill-repository-files").expect("renew review");
-  s.until("question again", |s| s.shows("skill-files-confirm-confirm"));
-  // Turning them on puts the repository's words in every prompt: a client's confirmation is not taken (ORC-30).
-  s.click_by_client("skill-files-confirm-confirm")
-    .expect("the click is delivered");
-  s.until("the refusal", |s| s.shows("skill-files-person-only"));
-  for _ in 0..5 {
-    s.pass();
-  }
-  assert!(s.shows("skill-files-confirm-confirm"), "the question stays");
-  assert!(!db.repository_agent_files().expect("setting").is_on());
-  s.click_by_person("skill-files-confirm-confirm");
-  s.until("enabled", |_| db.repository_agent_files().expect("setting").is_on());
-  let off = s.ok(
-    "set_repository_agent_files",
-    &json!({"project":project.to_string(),"enabled":false}),
-  );
-  assert_eq!(off["repository_agent_files"], false);
-  // Turning them on again over MCP puts the repository's words in every prompt: the person's switch decides (ORC-30).
-  let refused = s.refused(
-    "set_repository_agent_files",
-    &json!({"project":project.to_string(),"enabled":true}),
-  );
-  assert_eq!(refused["code"], "person_only", "{refused}");
-  assert!(!db.repository_agent_files().expect("setting").is_on());
-  s.launch
-    .as_ref()
-    .expect("launch")
-    .workspace()
-    .expect("workspace")
-    .set_automation_changes_permissions(true)
-    .expect("a person lets automation decide");
-  let on = s.ok(
-    "set_repository_agent_files",
-    &json!({"project":project.to_string(),"enabled":true}),
-  );
-  assert_eq!(on["repository_agent_files"], true);
-  assert!(db.repository_agent_files().expect("setting").is_on());
-}
-
-#[test]
 fn project_settings_turn_on_repository_files_by_client_input_only_under_the_persons_switch() {
   const ON: bool = true;
   const OFF: bool = false;

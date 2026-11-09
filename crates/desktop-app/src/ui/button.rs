@@ -384,6 +384,25 @@ impl ActionButton {
   }
 }
 
+/// `button` as wide as the widest of `sizes`, each laid out as a button with its own words: a slot whose label changes
+/// with what is open keeps one width, so nothing beside it moves (the Agents hub's New of each kind). The sizers take no
+/// height and show nothing.
+pub fn as_wide_as_widest(id: &str, button: ActionButton, sizes: impl IntoIterator<Item = ActionButton>) -> Column {
+  let sizers = sizes.into_iter().map(|size| {
+    Row::new()
+      .height(Dimension::Px(0.0))
+      .clip()
+      .opacity(0.0)
+      .pointer_events_none()
+      .child(size.room())
+  });
+  Column::new()
+    .id(id.to_owned())
+    .align_items(Alignment::Stretch)
+    .with_children(sizers)
+    .child(button.fill_width())
+}
+
 impl ActionButton {
   /// The frame without its content: 28 high with its content centered, or stacked as wide as its parent, 8 over
   /// and under and 12 at the sides, its content at the start.

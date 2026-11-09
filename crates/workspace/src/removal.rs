@@ -7,6 +7,7 @@ use std::path::Path;
 use orchester_core::{
   id::ResourceId,
   resource::{ResourceBody, ResourceKind, VersionNumber},
+  store::ResourceStore,
 };
 use orchester_store::ProjectDb;
 
@@ -35,5 +36,14 @@ pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
 pub fn discard_in<B: ResourceBody>(root: &Path, id: ResourceId, expected: &B) -> Result<VersionNumber, Message> {
   ProjectDb::open(root)
     .and_then(|mut db| db.discard_draft_matching(id, expected))
+    .map_err(|error| messages::store_error(&error))
+}
+
+/// The latest published version of resource `id`: what it is again once its draft is discarded. `None` while it was
+/// never published.
+pub fn published_in<B: ResourceBody + Clone>(root: &Path, id: ResourceId) -> Result<Option<B>, Message> {
+  ProjectDb::open(root)
+    .and_then(|db| db.latest_version::<B>(id))
+    .map(|version| version.map(|version| version.body().clone()))
     .map_err(|error| messages::store_error(&error))
 }

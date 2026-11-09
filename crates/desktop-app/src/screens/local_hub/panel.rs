@@ -1,7 +1,9 @@
 //! The parts a local project's panels share (`Detail` in L1, L2): the frame (the body scrolling over the action pinned
 //! at its bottom), the chips under a head (how the entry stands, who uses it) and *Ready?*, what the entry's readiness
-//! lacks. An MCP server's panel is [`super::mcp`], an archived entry's [`super::archived`], a profile's, tool's,
-//! instruction's and skill's [`super::editing`].
+//! lacks, the head's end of a resource with versions, and a panel in bones while what it edits is read for the first
+//! time. An MCP server's panel is [`super::mcp`], an archived entry's
+//! [`super::archived`], a profile's [`super::profile`], an instruction's [`super::instruction`], a skill's
+//! [`super::skill`] and a tool's [`super::editing`].
 
 use std::sync::Arc;
 
@@ -14,19 +16,53 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_core::id::ResourceId;
 use orchester_workspace::{
   local_archive::Archivable,
   readiness::{Group, ReadinessStanding},
 };
 
-use super::{model::Entry, words};
+use super::{
+  archive,
+  model::Entry,
+  save_bar::{self, Save},
+  words,
+};
 use crate::{
+  project::ShownProject,
+  screens::{
+    hub::versions::{VersionsProps, versions_button},
+    team_hub::{
+      panel::{body, head_named},
+      rows::{self, Sub},
+    },
+  },
   theme::{HubSpacing, HubText, IconSize},
   ui::{
     chip::{BadgeTone, badge},
     icon::{Icon, icon},
+    skeleton,
   },
 };
+
+/// How long a value of words is in bones, and the bone in a field's frame.
+const BONE_WORDS: f32 = 140.0;
+const BONE_VALUE: f32 = 96.0;
+
+/// What a row's value is in bones: words, a one-line field or choice, or a text area at least this high.
+#[derive(Clone, Copy)]
+pub(super) enum Bone {
+  Words,
+  Field,
+  Area(f32),
+}
+
+/// A row in bones: its label and the words under it real (keys), its value a bone.
+pub(super) struct BoneRow {
+  pub label: &'static str,
+  pub sub: Option<&'static str>,
+  pub bone: Bone,
+}
 
 /// The panel of `what`: `body` scrolls over the pinned `bar`.
 pub(super) fn frame(what: Archivable, body: Column, bar: Option<Element>) -> Element {
@@ -68,6 +104,101 @@ pub(super) fn chips_of(badges: Vec<(Arc<str>, BadgeTone)>, end: Option<Arc<str>>
         .min_width(Dimension::Px(0.0))
         .text_overflow(TextOverflow::Elipsis)
     }))
+}
+
+/// How the entry stands, as the chips after its version: only a draft so far, what it needs, or ready.
+pub(super) fn standing_chips(ctx: &Ctx, entry: &Entry) -> Vec<(Arc<str>, BadgeTone)> {
+  let mut chips = Vec::new();
+  if let Some(number) = entry.number {
+    chips.push((Arc::from(number.to_string()), BadgeTone::Neutral));
+  }
+  chips.push(match (entry.number, entry.group, entry.standing.as_ref()) {
+    (None, ..) => (ctx.t("local_hub.chip.draft"), BadgeTone::Info),
+    (Some(_), Group::NeedsYouHere, Some(standing)) => (words::needs(ctx, entry, standing), BadgeTone::Warning),
+    _ => (ctx.t("local_hub.chip.ready"), BadgeTone::Success),
+  });
+  chips
+}
+
+/// *Versions* and the … menu at the end of the head of the resource `id`, 8 apart; *Versions*' ids start with
+/// `prefix`.
+pub(super) fn head_end(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  entry: &Entry,
+  (id, prefix): (ResourceId, &str),
+) -> Element {
+  let versions = versions_button(
+    ctx,
+    VersionsProps {
+      id: prefix.into(),
+      root: project.open.repo_root.clone(),
+      resource: (entry.kind, id),
+      local: true,
+    },
+  );
+  let more = archive::menu(
+    ctx,
+    archive::Target {
+      root: project.open.repo_root.clone(),
+      project: project.open.project.id(),
+      what: entry.what,
+      kind: entry.kind,
+      name: Arc::from(entry.name.as_str()),
+    },
+  );
+  Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(versions)
+    .child(more)
+    .into()
+}
+
+/// The panel of the resource `id` (`entry`) while what it edits is read for the first time: the head, its end and the
+/// chips the hub knows already, then the section `title` (a key) with `rows` in bones, and the bar with *Save* and
+/// *Cancel* off, so that the editor takes their place without the panel moving. The ids start with `prefix`.
+pub(super) fn bones(
+  ctx: &mut Ctx,
+  (project, entry, id): (&ShownProject, &Entry, ResourceId),
+  prefix: &str,
+  (title, rows): (&str, &[BoneRow]),
+) -> Element {
+  let head = head_named(
+    &entry.name,
+    (
+      ctx.t(words::kind_where_key(entry.kind)).to_string(),
+      entry.number.map(|number| number.to_string()),
+    ),
+    Some(head_end(ctx, project, entry, (id, prefix))),
+  );
+  let rows = rows
+    .iter()
+    .enumerate()
+    .map(|(index, row)| bone_row(ctx, &format!("{prefix}-bone-{index}"), row))
+    .collect();
+  let section = rows::section(&format!("{prefix}-bones"), &ctx.t(title), Vec::new(), rows);
+  let body = body()
+    .child(head)
+    .child(chips_of(standing_chips(ctx, entry), None))
+    .child(skeleton::pulsing(section));
+  let bar = save_bar::bar(ctx, prefix, (Save::Unchanged, None), save_bar::makes(ctx, entry.number));
+  frame(entry.what, body, Some(bar))
+}
+
+fn bone_row(ctx: &Ctx, id: &str, row: &BoneRow) -> Row {
+  let value: Element = match row.bone {
+    Bone::Words => skeleton::line(ctx, HubText::Value.role(), BONE_WORDS).into(),
+    Bone::Field => skeleton::field(ctx, BONE_WORDS, BONE_VALUE)
+      .width(Dimension::Pct(100.0))
+      .into(),
+    Bone::Area(height) => skeleton::bone(BONE_WORDS, height).width(Dimension::Pct(100.0)).into(),
+  };
+  let row_of = rows::row(id, &ctx.t(row.label), row.sub.map(|sub| Sub::quiet(ctx.t(sub))), value);
+  match row.bone {
+    Bone::Area(_) => row_of.align_items(Alignment::Start),
+    Bone::Words | Bone::Field => row_of,
+  }
 }
 
 /// *Ready?*: the parts that are missing, one row each; none for an entry that lacks nothing.

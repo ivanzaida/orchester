@@ -1,6 +1,5 @@
 {
   "overview": {
-    "importResources": "Import resources",
     "openOrchestrator": "Open Orchestrator",
     "newTask": "New task",
     "separator": " · ",
@@ -138,8 +137,6 @@
       "agents": "Agents ↗",
       "pipelines": "Pipelines ↗",
       "newTask": "New task ↗",
-      "import": "Agent files already in the repository (CLAUDE.md, AGENTS.md, skills) come in as drafts.",
-      "importLink": "Import resources ↗",
       "reading": "Reading the agents, pipelines and connections…"
     },
     "runner": {

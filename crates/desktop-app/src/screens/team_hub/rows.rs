@@ -15,7 +15,7 @@ use lurq::{
 };
 
 use crate::{
-  screens::team_hub::row::tag_chip,
+  screens::hub::agent_row::tag_chip,
   theme::{ExtraSpacing, HubSpacing, HubText},
   ui::chip::{BadgeTone, badge},
 };

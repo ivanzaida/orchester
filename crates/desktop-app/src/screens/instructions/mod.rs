@@ -1,16 +1,14 @@
 //! Instructions, the Agents hub's second tab (`02 Instructions` `jtiqe`): one list in the order prompts assemble them,
 //! a rule's page with its prompt preview and variables beside it (`02b` `Sn37u`, `02d` `JXvc0`), a new rule that
-//! chooses its scope on the page (`02e` `dMYPx`), and the import page (`02c` `P21bwh`). The rule shown and the panel
-//! beside it are the route's ([`View`]), so Back and Forward step through them.
+//! chooses its scope on the page (`02e` `dMYPx`). The rule shown and the panel beside it are the route's ([`View`]), so
+//! Back and Forward step through them.
 mod autosave;
 mod availability;
 mod editor;
 mod editor_actions;
 mod editor_notes;
 mod empty;
-mod fields;
-mod frame;
-pub(crate) mod import;
+pub(in crate::screens) mod fields;
 mod leaving;
 mod library;
 mod library_groups;
@@ -20,7 +18,7 @@ mod preview;
 mod rule;
 mod scope_choice;
 mod sources;
-mod state;
+pub(in crate::screens) mod state;
 mod variable_detail;
 mod variables;
 mod viewer;
@@ -174,19 +172,14 @@ impl Component for InstructionsScreen {
   }
 }
 impl InstructionsScreen {
-  /// Import from repository and New instruction, in the scope of the rule shown; none for a member of a shared
-  /// project.
+  /// New instruction, in the scope of the rule shown; none for a member of a shared project.
   fn head(&self, ctx: &Ctx, view: View) -> Head {
     let project = &ctx.props::<Props>().0;
     if !hub::team::may_change(hub::team::of(project).as_ref()) {
       return Head::default();
     }
-    let tab = view.tab().unwrap_or_default();
+    let tab = view.tab();
     Head::actions([
-      ActionButton::new("instructions-import", ButtonKind::Ghost, ctx.t("instructions.import"))
-        .icon(Icon::FolderOpen)
-        .opens(self.selection.to(View::Import))
-        .into(),
       ActionButton::new("instructions-new", ButtonKind::Primary, ctx.t("instructions.new"))
         .icon(Icon::Plus)
         .opens(self.selection.to(View::new_rule(tab)))
@@ -206,17 +199,8 @@ impl InstructionsScreen {
       self.selection.created.set(state::Saved::default());
     }
     let (tab, entry, panel) = match view {
-      View::Import => {
-        return ctx.mount_keyed::<import::Import>(
-          "instruction-import",
-          import::Props {
-            project,
-            selection: self.selection.clone(),
-          },
-        );
-      }
       View::Rule(_, None, _) if data.entries.is_empty() => {
-        return frame::empty(ctx, &project, &self.selection);
+        return empty::empty(ctx, &project, &self.selection);
       }
       View::Rule(_, None, _) => return library::list(ctx, &data, &self.selection),
       View::Rule(tab, Some(id), panel) => {

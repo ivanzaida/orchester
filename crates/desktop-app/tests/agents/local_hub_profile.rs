@@ -66,14 +66,15 @@ fn local_hub_profile_a_changed_field_is_a_draft_that_publishes_as_the_next_versi
     "local-hub-profile-cli-pick",
     "local-hub-profile-model-pick",
     "local-hub-profile-effort-pick",
-    "local-hub-profile-more-settings",
   ] {
     assert!(agents.exists(part), "{part} is in the panel");
   }
-  assert!(
-    !agents.exists("team-hub-edit"),
-    "no Edit button: the fields are in place"
-  );
+  for link in ["local-hub-edit", "local-hub-profile-more-settings"] {
+    assert!(
+      !agents.exists(link),
+      "{link}: no link to the editor's page, the fields are in place"
+    );
+  }
   assert!(!agents.exists("local-hub-profile-draft"), "no draft before a change");
 
   choose(&mut agents, "local-hub-profile-effort-pick", "High");

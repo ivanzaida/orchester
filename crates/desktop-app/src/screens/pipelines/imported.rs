@@ -15,8 +15,9 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, ResourceId},
   import::{Content, Entity},
+  resource::{InstructionScope, ResourceKind, ToolKind},
   time::Timestamp,
 };
 use orchester_workspace::import::{
@@ -24,10 +25,9 @@ use orchester_workspace::import::{
   review::Subject,
 };
 
-use super::{words, work::page_of};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route},
+  routes::{InstructionsTab, InstructionsView, ProjectPage, ProjectSettingsTab, Route},
   theme::{ExtraSpacing, ExtraTypography, GroupText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -81,14 +81,14 @@ pub fn strip(ctx: &mut Ctx, project: ProjectId, imported: &Imported) -> Element 
 
 /// "3 drafts created · 2 local resources reused · 2 left unresolved".
 fn totals(ctx: &Ctx, imported: &Imported) -> Arc<str> {
-  let mut all = vec![words::counted(
+  let mut all = vec![counted(
     ctx,
     imported.created,
     "import.result.created.one",
     "import.result.created.other",
   )];
   if imported.reused > 0 {
-    all.push(words::counted(
+    all.push(counted(
       ctx,
       imported.reused,
       "import.totals.reused.one",
@@ -96,14 +96,14 @@ fn totals(ctx: &Ctx, imported: &Imported) -> Arc<str> {
     ));
   }
   if imported.unresolved > 0 {
-    all.push(words::counted(
+    all.push(counted(
       ctx,
       imported.unresolved,
       "import.totals.unresolved.one",
       "import.totals.unresolved.other",
     ));
   }
-  words::parts(ctx, &all)
+  parts(ctx, &all)
 }
 
 /// The step column's groups on the import, in `target`, this project, by its name: Imported, then what came with
@@ -180,8 +180,19 @@ fn link(ctx: &mut Ctx, project: ProjectId, came: &WithIt) -> GroupRow {
     .press(Press::Open(open))
 }
 
-fn glyph(content: &Content) -> Icon {
-  words::glyph(Subject::of_content(content))
+/// The glyph of what a resource is (`Kind icon` in `Mapping row` `ul8cc`).
+const fn glyph(content: &Content) -> Icon {
+  match Subject::of_content(content) {
+    Subject::Pipeline => Icon::Workflow,
+    Subject::AgentProfile => Icon::Bot,
+    Subject::Instruction => Icon::BookOpen,
+    Subject::Tool(ToolKind::Http) | Subject::McpServer { remote: true } => Icon::Globe,
+    Subject::Tool(ToolKind::Command) => Icon::Terminal,
+    Subject::Tool(ToolKind::Database) => Icon::Database,
+    Subject::Connection(_) => Icon::Plug,
+    Subject::McpServer { remote: false } => Icon::Server,
+    Subject::Secret(_) => Icon::KeyRound,
+  }
 }
 
 /// "Build preview · Draft v1", "Website preview · Draft v1 · renamed", "Builder v2 · reused".
@@ -216,5 +227,59 @@ fn missing_row(index: usize, missing: &Missing) -> GroupRow {
   match missing.source {
     Entity::Secret(_) => row.mono(),
     Entity::Resource(_) | Entity::Connection(_) | Entity::McpServer(_) => row,
+  }
+}
+
+/// `all` one after the other, set apart as the locale sets a list's parts.
+fn parts(ctx: &Ctx, all: &[Arc<str>]) -> Arc<str> {
+  match all {
+    [] => Arc::from(""),
+    [one] => one.clone(),
+    [first, second] => ctx.t_args("import.parts.two", [("first", &**first), ("second", &**second)]),
+    [first, second, rest @ ..] => {
+      let third = parts(ctx, rest);
+      ctx.t_args(
+        "import.parts.three",
+        [("first", &**first), ("second", &**second), ("third", &*third)],
+      )
+    }
+  }
+}
+
+/// `one` for one, else `other` with the count.
+fn counted(ctx: &Ctx, count: usize, one: &'static str, other: &'static str) -> Arc<str> {
+  if count == 1 {
+    ctx.t(one)
+  } else {
+    ctx.t_args(other, [("count", count.to_string())])
+  }
+}
+
+/// The page that shows the resource `id` of `kind`: a pipeline's editor, an agent profile, an instruction in its
+/// scope's tab (Project when its content is not known), a tool, or a skill.
+fn page_of(id: ResourceId, kind: ResourceKind, content: Option<&Content>) -> ProjectPage {
+  match kind {
+    ResourceKind::Pipeline => ProjectPage::Pipeline(id, Default::default()),
+    ResourceKind::AgentProfile => ProjectPage::Agent(id, Default::default()),
+    ResourceKind::Instruction => {
+      let tab = match content {
+        Some(Content::Instruction(instruction)) => match instruction.scope() {
+          InstructionScope::Project => InstructionsTab::Project,
+          InstructionScope::AgentRole { .. } => InstructionsTab::Roles,
+          InstructionScope::Pipeline { .. } => InstructionsTab::Pipelines,
+          InstructionScope::Step { .. } => InstructionsTab::Steps,
+        },
+        _ => InstructionsTab::Project,
+      };
+      ProjectPage::Instructions(InstructionsView::rule(tab, Some(id)))
+    }
+    ResourceKind::Tool => ProjectPage::Tool(id, Default::default()),
+    ResourceKind::Skill => ProjectPage::Skill(id),
+    // No import makes a test suite, service or stack, and they have no page yet: Project settings will list them.
+    ResourceKind::TestSuite
+    | ResourceKind::Service
+    | ResourceKind::Stack
+    | ResourceKind::TeamReviewer
+    | ResourceKind::McpServer => ProjectPage::Settings(ProjectSettingsTab::default()),
   }
 }

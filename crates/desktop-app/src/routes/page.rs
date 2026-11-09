@@ -13,10 +13,10 @@ use orchester_workspace::{
 };
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, IMPORT, ImportTab, InstructionsView, JoinTarget,
-  MERGE, MERGE_QUEUE, MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR,
-  OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
-  SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, InstructionsView, JoinTarget, MERGE, MERGE_QUEUE,
+  MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat,
+  OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen, SecretsView,
+  SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
   query::{Params, with_query},
@@ -87,7 +87,6 @@ pub enum ProjectPage {
   Skills(SkillsFilter),
   NewSkill,
   Skill(ResourceId),
-  ImportSkills,
   Tools,
   NewTool,
   Tool(ResourceId, ToolTab),
@@ -109,8 +108,6 @@ pub enum ProjectPage {
   Join(JoinTarget),
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
-  /// Import resources on its kind tab.
-  Import(ImportTab),
 }
 
 impl ProjectPage {
@@ -165,7 +162,6 @@ impl ProjectPage {
       Screen::NewConnection => Self::NewConnection(NewConnection::default()),
       Screen::ProjectSettings => Self::Settings(ProjectSettingsTab::default()),
       Screen::Files => Self::Files(FilesView::default()),
-      Screen::ImportResources => Self::Import(ImportTab::default()),
     })
   }
 
@@ -199,7 +195,7 @@ impl ProjectPage {
       Self::Agents | Self::AgentsHub(_) | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
       Self::Memory(_) => Screen::Memory,
-      Self::Skills(_) | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
+      Self::Skills(_) | Self::NewSkill | Self::Skill(_) => Screen::Skills,
       Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
       Self::Secrets(_) => Screen::Secrets,
       Self::Connections(_) => Screen::Connections,
@@ -209,7 +205,6 @@ impl ProjectPage {
         Screen::ProjectSettings
       }
       Self::Files(_) => Screen::Files,
-      Self::Import(_) => Screen::ImportResources,
     }
   }
 
@@ -235,7 +230,6 @@ impl ProjectPage {
       Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
-      Self::ImportSkills => with_query(format!("{project_root}/skills"), &[("skill", Some("import"))]),
       Self::NewTool => with_query(format!("{project_root}/tools"), &[("tool", Some("new"))]),
       Self::Tool(id, tab) => with_query(
         format!("{project_root}/tools"),
@@ -262,7 +256,6 @@ impl ProjectPage {
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
-      Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
       Self::TaskMerge(key, number) => format!("{tasks}/{key}/{MERGE}/{}", number.get()),
       Self::TaskReview(key) => format!("{}/{key}", segment(Screen::Review)),
       Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
@@ -311,7 +304,6 @@ impl ProjectPage {
       ["skills"] => match params.take("skill")?.as_deref() {
         None => SkillsFilter::take(params).map(Self::Skills),
         Some("new") => Ok(Self::NewSkill),
-        Some("import") => Ok(Self::ImportSkills),
         Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
       },
       ["tools"] => tools(params),
@@ -337,7 +329,6 @@ impl ProjectPage {
       }
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
-      [IMPORT] => ImportTab::take(params).map(Self::Import),
       ["memory"] => MemoryTab::take(params),
       [SETTINGS] => settings(params),
       // The Pull requests page is gone (ORC-803); an address in a tab's history, whatever its query, opens the

@@ -7,7 +7,7 @@
 mod instruction;
 mod skill;
 
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use lurq::{
   app::{
@@ -18,22 +18,19 @@ use lurq::{
   components::{Column, Row, Text},
   node::Element,
 };
-use orchester_core::id::ProjectId;
 use orchester_workspace::{
   agents::team_text::{Added, TeamInstructionSheet, TeamSkillSheet},
   sharing::team::TeamConfiguration,
 };
 
 use super::{
-  archive, bar,
+  archive,
   fill::nothing_here,
   member,
   model::{Entry, Listing},
   panel, rows, words,
 };
 use crate::{
-  navigation::Navigation,
-  routes::{InstructionsTab, InstructionsView, ProjectPage, Route},
   services::Services,
   theme::HubText,
 };
@@ -48,7 +45,6 @@ pub(super) enum Sheet {
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub repo_root: PathBuf,
-  pub project: ProjectId,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
   pub listing: Listing,
@@ -74,7 +70,6 @@ impl Component for PlainPanel {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
       repo_root,
-      project,
       team,
       listing,
       entry,
@@ -93,39 +88,16 @@ impl Component for PlainPanel {
         skill::sections(ctx, sheet),
       ),
     };
-    let route = team.may_change.then(|| editor(&entry, project, &sheet));
-    let navigation = Navigation::of(ctx);
-    let head_edit = panel::with_more(
-      route.clone().map(|route| panel::edit_button(ctx, navigation.to(route))),
-      archive::menu(ctx, &repo_root, &entry, team.may_change),
-    );
+    let head_end = archive::menu(ctx, &repo_root, &entry, team.may_change);
     let version = words::published_line(ctx, now, &entry, published);
     let body = panel::body()
-      .child(panel::head_of(&entry, (kind, version), head_edit))
+      .child(panel::head_of(&entry, (kind, version), head_end))
       .child(chips(ctx, &listing, &entry, &sheet))
       .with_children(member::lock_line(ctx, &team))
       .with_children(shown)
       .child(on_this_computer(ctx, &sheet));
-    let bar = route.map(|route| bar::edit(ctx, &entry, navigation.to(route)));
-    panel::frame(&entry, body, bar)
+    panel::frame(&entry, body, None)
   }
-}
-
-/// The editor the resource has today: the skill's page, and the instruction's page of its scope.
-fn editor(entry: &Entry, project: ProjectId, sheet: &Sheet) -> Route {
-  let page = match sheet {
-    Sheet::Skill(_) => ProjectPage::Skill(entry.id),
-    Sheet::Instruction(sheet) => {
-      let tab = match sheet.added {
-        Added::Project => InstructionsTab::Project,
-        Added::Role(_) => InstructionsTab::Roles,
-        Added::Pipeline(_) => InstructionsTab::Pipelines,
-        Added::Step { .. } => InstructionsTab::Steps,
-      };
-      ProjectPage::Instructions(InstructionsView::rule(tab, Some(entry.id)))
-    }
-  };
-  Route::Project(project, page)
 }
 
 /// *Team · v6*, *Ready here* and what the panel says of where it is used at their end.
@@ -165,26 +137,13 @@ fn used_by_row(ctx: &Ctx, names: &[String]) -> Row {
   )
 }
 
-/// Where a resource is added, in words.
-fn added_words(ctx: &Ctx, added: &Added) -> Arc<str> {
-  match added {
-    Added::Project => ctx.t("team_hub.plain.added.project"),
-    Added::Role(role) => ctx.t_args("team_hub.plain.added.role", [("role", role.as_str())]),
-    Added::Pipeline(pipeline) => ctx.t_args("team_hub.plain.added.pipeline", [("pipeline", pipeline.name.as_str())]),
-    Added::Step { pipeline, step } => ctx.t_args(
-      "team_hub.plain.added.step",
-      [("step", step.as_str()), ("pipeline", pipeline.name.as_str())],
-    ),
-  }
-}
-
 /// The *Added to* row.
 fn added_row(ctx: &Ctx, added: &Added) -> Row {
   rows::row(
     "team-hub-from-team-added",
     &ctx.t("team_hub.plain.addedTo"),
     None,
-    rows::words("team-hub-from-team-added-value", &added_words(ctx, added)),
+    rows::words("team-hub-from-team-added-value", &words::added(ctx, added)),
   )
 }
 

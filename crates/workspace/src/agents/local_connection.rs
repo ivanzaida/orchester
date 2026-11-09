@@ -92,12 +92,12 @@ fn saved(outcome: &Outcome) -> Result<(), Message> {
   }
 }
 
-/// Throws away the draft `body` that [`use_connection`] saved and could not publish, so that no half of the change is
-/// left behind. A failure to discard is logged and not reported over the refusal that caused it: the hub shows the
-/// draft that remains.
-fn discard_saved(root: &Path, profile: ResourceId, body: &AgentProfile) {
+/// Throws away the draft `body` that [`use_connection`] or the hub's Save ([`super::local_edit::save`]) saved and could
+/// not publish, so that no half of the change is left behind. A failure to discard is logged and not reported over the
+/// refusal that caused it: the hub shows the draft that remains.
+pub(super) fn discard_saved(root: &Path, profile: ResourceId, body: &AgentProfile) {
   let discarded = ProjectDb::open(root).and_then(|mut db| db.discard_draft_matching(profile, body));
   if let Err(error) = discarded {
-    tracing::error!(%error, "cannot discard the draft of a connection change that was refused");
+    tracing::error!(%error, "cannot discard the draft of a change that was refused");
   }
 }

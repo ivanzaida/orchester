@@ -32,7 +32,6 @@ mod fonts;
 mod form;
 mod groups;
 mod hub;
-mod import;
 pub mod instructions;
 mod lifecycle;
 mod local_integration;
@@ -98,8 +97,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   groups::GroupText,
-  hub::{HUB_NEW_MENU_WIDTH, HUB_READING_OPACITY, HubSpacing, HubText},
-  import::{ImportSpacing, ImportText},
+  hub::{HubSpacing, HubText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   markdown::{blank_line_between_blocks, code_lines},
@@ -197,7 +195,6 @@ pub fn install(app: &mut App, mode: Mode) {
   delivery::install(theme);
   merge_attempt::install(theme);
   review::install(theme);
-  import::install(theme);
   hub::install(theme);
   failure::install(theme);
   modules::install(theme);

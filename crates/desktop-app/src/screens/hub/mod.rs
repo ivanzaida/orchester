@@ -5,13 +5,12 @@
 //! hub at their tab. Each tab's screen draws the hub around its body with [`page`], so its actions and save state
 //! stay its own.
 
+pub(crate) mod agent_row;
+pub(crate) mod agents;
 pub(crate) mod bones;
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
-pub(crate) mod import_detail;
-pub(crate) mod import_preview;
-pub(crate) mod import_result;
-pub(crate) mod import_rows;
+pub(crate) mod new_button;
 pub(crate) mod page_head;
 pub(crate) mod parts;
 pub(crate) mod pills;

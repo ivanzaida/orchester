@@ -2,8 +2,8 @@
 //! its name), its chips (`Chips` `Zi28O`: *Team · vN* and how it stands here) and what its readiness lacks, with the
 //! one action that moves it on pinned at its bottom (`Actions` `x3uhYJ`). The panel of each kind is its own task
 //! (ORC-832…834): a profile's is [`super::profile`], an MCP server's [`super::mcp`], a tool's [`super::tool`], an
-//! instruction's and a skill's [`super::plain`]; where a resource has no sheet of its kind the panel is this frame, and
-//! its pinned action is only Edit, which opens the editor the kind has today.
+//! instruction's and a skill's [`super::plain`]; where a resource has no sheet of its kind the panel is this frame, with
+//! nothing pinned.
 
 use std::sync::Arc;
 
@@ -16,23 +16,19 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ProjectId;
 use orchester_workspace::{
   readiness::{Group, ReadinessStanding},
   sharing::team::TeamConfiguration,
 };
 
 use super::{
-  bar, member,
-  model::{Entry, Kind, Listing},
+  member,
+  model::{Entry, Listing},
   words,
 };
 use crate::{
-  navigation::{Navigation, link::Open},
-  routes::{AgentTab, ProjectPage, Route, ToolTab},
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
-    button::{ActionButton, ButtonKind},
     chip::{BadgeTone, badge},
     icon::{Icon, icon},
   },
@@ -40,9 +36,7 @@ use crate::{
 
 /// What the panel needs besides the resource.
 pub(super) struct Shown<'a> {
-  pub project: ProjectId,
   pub team: &'a TeamConfiguration,
-  pub navigation: &'a Navigation,
 }
 
 pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>) -> Element {
@@ -51,7 +45,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
     .child(chips(ctx, listing, entry))
     .with_children(member::lock_line(ctx, shown.team))
     .with_children(readiness(ctx, listing, entry));
-  frame(entry, body, actions(ctx, entry, shown)).into()
+  frame(entry, body, None).into()
 }
 
 /// The column a panel's sections stand in, 24 from its sides and 20 apart.
@@ -154,14 +148,6 @@ pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<
     ),
     (edit, more) => edit.or(more),
   }
-}
-
-/// *Edit* in a head (`Edit` in `Agents · All · admin` `t4mtQL`).
-pub(in crate::screens) fn edit_button(ctx: &Ctx, open: Open) -> Element {
-  ActionButton::new("team-hub-edit", ButtonKind::Ghost, ctx.t("team_hub.panel.edit"))
-    .icon(Icon::Pencil)
-    .opens(open)
-    .into()
 }
 
 pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
@@ -267,25 +253,3 @@ fn readiness(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Option<Column> {
   )
 }
 
-/// The editor the kind has today, which a change of the team's resource opens; an MCP server has none yet.
-pub(super) fn editor(entry: &Entry, project: ProjectId) -> Option<Route> {
-  let page = match entry.kind {
-    Kind::Profile => ProjectPage::Agent(entry.id, AgentTab::default()),
-    Kind::Skill => ProjectPage::Skill(entry.id),
-    Kind::Tool => ProjectPage::Tool(entry.id, ToolTab::default()),
-    Kind::McpServer | Kind::Instruction => return None,
-  };
-  Some(Route::Project(project, page))
-}
-
-/// The pinned actions: Edit for an admin, where the kind has an editor; no bar when there is nothing to do, and
-/// nothing disabled in its place (`Member view`, notes rule 15).
-fn actions(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Option<Element> {
-  let route = editor(entry, shown.project).filter(|_| shown.team.may_change)?;
-  let open: Open = shown.navigation.to(route);
-  let edit = ActionButton::new("team-hub-edit", ButtonKind::Primary, ctx.t("team_hub.panel.edit"))
-    .icon(Icon::Pencil)
-    .pinned()
-    .opens(open);
-  Some(bar::bar(vec![edit.into()], None))
-}

@@ -210,11 +210,7 @@ impl Editor {
       .as_ref()
       .filter(|imported| imported.shows_result(editing.opened.latest.is_some()))
     {
-      notices.push(crate::screens::import::imported::strip(
-        ctx,
-        props.project.open.project.id(),
-        imported,
-      ));
+      notices.push(super::imported::strip(ctx, props.project.open.project.id(), imported));
     }
     notices.extend(super::leaving::question(
       ctx,
