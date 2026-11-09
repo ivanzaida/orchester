@@ -112,6 +112,17 @@ pub struct McpServerDraft {
   pub exempt_tools: ExemptTools,
 }
 
+impl McpServerDraft {
+  /// The secrets the server takes, which are the ones a value can be given for: its authorization's secret on an
+  /// endpoint, its variables' on a program.
+  pub fn secrets(&self) -> Vec<SecretId> {
+    match &self.transport {
+      McpTransport::Http(http) => http.authorization().secret().into_iter().collect(),
+      McpTransport::Stdio(_) => self.environment.secrets().collect(),
+    }
+  }
+}
+
 impl McpServerText {
   /// A new server: a program the CLI starts, nothing entered yet.
   pub fn new_server() -> Self {

@@ -259,7 +259,7 @@ fn check_values_taken(
   draft: &McpServerDraft,
   values: &[(SecretId, SecretValue)],
 ) -> Result<(), McpSaveError> {
-  let taken = taken_secrets(draft);
+  let taken = draft.secrets();
   for (secret_id, _) in values {
     if !taken.contains(secret_id) {
       return Err(match db.secret(*secret_id)? {
@@ -305,14 +305,6 @@ fn not_removed(cause: McpSaveError, removal: StoreError) -> McpSaveError {
   McpSaveError::NotRemoved {
     cause: Box::new(cause),
     removal,
-  }
-}
-
-/// The secrets the saved server takes: its authorization's, or its variables'.
-fn taken_secrets(draft: &McpServerDraft) -> Vec<SecretId> {
-  match &draft.transport {
-    McpTransport::Http(http) => http.authorization().secret().into_iter().collect(),
-    McpTransport::Stdio(_) => draft.environment.secrets().collect(),
   }
 }
 
