@@ -149,6 +149,7 @@
       "addValueAction": "Set {{server}}'s secret value",
       "draftFirst": "Publish or discard the draft first",
       "addServer": "Add",
+      "chooseCli": "Choose a CLI",
       "moreSettings": "More settings…"
     },
     "draft": {
