@@ -133,7 +133,12 @@ impl Component for ProfilePanel {
       .with_children(member::lock_line(ctx, &props.team))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, sheet, &self.chosen))
-      .child(ready::section(ctx, &parts, missing.len(), (&press, busy)))
+      .child(ready::section(
+        ctx,
+        (&ctx.t("team_hub.readiness.title"), &parts),
+        missing.len(),
+        (&press, busy),
+      ))
       .with_children(self.failure(ctx));
     let scroll = ScrollVertical::new(body)
       .id("team-hub-panel-scroll")

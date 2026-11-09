@@ -155,7 +155,12 @@ impl Component for ProfilePanel {
       ))
       .child(chips_of(chips(ctx, &entry, profile, &parts), used_by(ctx, profile)))
       .child(table::section(ctx, profile, &self.chosen))
-      .child(section(ctx, &parts, missing, (&press, busy)))
+      .child(section(
+        ctx,
+        (&ctx.t("local_hub.readiness.title"), &parts),
+        missing,
+        (&press, busy),
+      ))
       .with_children(self.refusal(ctx));
     let bar = fix.map(|fix| pinned(ctx, &entry, (profile, target, &fix), press(&fix), busy));
     frame(entry.what, body, bar)
@@ -201,7 +206,7 @@ impl ProfilePanel {
         })
       }
       Fix::AddConnection => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
-      Fix::OpenServer(server) => Press::Open(navigation.to(Route::Project(
+      Fix::SetPath(server) | Fix::AddValue(server) => Press::Open(navigation.to(Route::Project(
         project.open.project.id(),
         ProjectPage::hub(view_of(HubFilter::McpServers, Some(Archivable::McpServer(*server)))),
       ))),
@@ -230,9 +235,9 @@ fn pinned_fix(profile: &LocalProfile, target: Option<&ConnectionChoice>, parts: 
   connection.or_else(|| {
     parts.iter().find_map(|part| match &part.state {
       State::Missing {
-        fix: Some(Fix::OpenServer(server)),
+        fix: Some(fix @ (Fix::SetPath(_) | Fix::AddValue(_))),
         ..
-      } => Some(Fix::OpenServer(*server)),
+      } => Some(fix.clone()),
       _ => None,
     })
   })
@@ -269,15 +274,19 @@ fn pinned(
       Icon::Plus,
       ctx.t("team_hub.fix.hint.add"),
     ),
-    Fix::OpenServer(server) => {
+    Fix::SetPath(server) | Fix::AddValue(server) => {
       let name = profile
         .mcp_servers
         .iter()
         .find_map(|(id, name)| (id == server).then_some(name.as_str()))
         .unwrap_or_default();
+      let (action, glyph) = match fix {
+        Fix::AddValue(_) => ("local_hub.profile.addValueAction", Icon::KeyRound),
+        _ => ("team_hub.fix.action.setPath", Icon::FolderOpen),
+      };
       (
-        ctx.t_args("team_hub.fix.action.setPath", [("server", name)]),
-        Icon::FolderOpen,
+        ctx.t_args(action, [("server", name)]),
+        glyph,
         ctx.t("local_hub.profile.openHint"),
       )
     }

@@ -85,11 +85,18 @@ fn main() -> Result<(), Box<dyn Error>> {
   // A team scenario joins with a code, which needs no sign-in: its server is this computer's.
   let team_state = team::State::beside(&location.database)?;
   let runtime = Runtime::new()?;
+  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
+  let asked = |file: &str| location.database.with_file_name(file).exists();
+  let keychain = if asked(qa_app_asks::SECRET_STORE_REFUSES) {
+    signed_in::refusing_keychain()
+  } else {
+    signed_in::keychain()
+  };
   let launch = Launch::begin_with_vault(
     &location.database,
     app_paths::runner_path()?,
     runtime.handle(),
-    (log, signed_in::keychain()),
+    (log, keychain),
   );
   // A QA copy reports its panics as `qa`, though it is a debug build (the person's decision, ORC-156), once its
   // database is open and while its setting allows; kept to the end of `main`. Its runners are told too, though a debug
@@ -102,8 +109,6 @@ fn main() -> Result<(), Box<dyn Error>> {
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
-  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
-  let asked = |file: &str| location.database.with_file_name(file).exists();
   let sign_in = sign_in || asked(qa_app_asks::SIGN_IN);
   // Kept to the end of `main`, as the other team server is.
   let _joined = match launch.services() {

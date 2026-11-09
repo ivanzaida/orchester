@@ -273,7 +273,7 @@ fn secret_names(
   servers: &[&orchester_core::connection::mcp::McpServer],
 ) -> Result<Vec<SecretName>, StoreError> {
   let mut names: Vec<SecretName> = Vec::new();
-  for id in servers.iter().flat_map(|server| server.environment().secrets()) {
+  for id in servers.iter().flat_map(|server| server.secrets()) {
     if let Some(secret) = db.secret(id)?
       && !names.contains(secret.name())
     {

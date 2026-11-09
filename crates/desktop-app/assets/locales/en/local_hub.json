@@ -141,7 +141,8 @@
       "none": "None",
       "version": "{{version}} · published {{date}}",
       "useHint": "Asked once per profile; a connection added later doesn't change it",
-      "openHint": "Opens the server's panel, where it is set"
+      "openHint": "Opens the server's panel, where it is set",
+      "addValueAction": "Set {{server}}'s secret value"
     },
     "ready": {
       "ready": "Ready",

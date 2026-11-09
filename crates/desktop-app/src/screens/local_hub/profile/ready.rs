@@ -27,8 +27,10 @@ pub(super) enum Fix {
   UseConnection,
   /// Go where a connection of the CLI is added.
   AddConnection,
-  /// Open the MCP server's panel, where its program path and secret values are set.
-  OpenServer(ConnectionId),
+  /// Open the MCP server's panel, where its program path is set.
+  SetPath(ConnectionId),
+  /// Open the MCP server's panel, where the value of a secret it takes is set.
+  AddValue(ConnectionId),
 }
 
 impl Offer for Fix {
@@ -36,7 +38,8 @@ impl Offer for Fix {
     match self {
       Self::UseConnection => "team_hub.fix.link.use",
       Self::AddConnection => "team_hub.fix.link.add",
-      Self::OpenServer(_) => "team_hub.fix.link.setPath",
+      Self::SetPath(_) => "team_hub.fix.link.setPath",
+      Self::AddValue(_) => "team_hub.fix.link.addValue",
     }
   }
 
@@ -44,7 +47,8 @@ impl Offer for Fix {
     match self {
       Self::UseConnection => "use",
       Self::AddConnection => "add",
-      Self::OpenServer(_) => "open-server",
+      Self::SetPath(_) => "set-path",
+      Self::AddValue(_) => "add-value",
     }
   }
 }
@@ -126,12 +130,12 @@ fn server(ctx: &Ctx, hub: &LocalHub, id: ConnectionId, name: &str) -> Part<Fix> 
   let state = match missing.first() {
     Some(Missing::LocalMcpProgram { .. }) => State::Missing {
       words: ctx.t("local_hub.line.programHere"),
-      fix: Some(Fix::OpenServer(id)),
+      fix: Some(Fix::SetPath(id)),
       blocking: false,
     },
     Some(Missing::LocalSecret { name, .. }) => State::Missing {
       words: ctx.t_args("local_hub.line.secret", [("name", name.to_string())]),
-      fix: Some(Fix::OpenServer(id)),
+      fix: Some(Fix::AddValue(id)),
       blocking: false,
     },
     _ if hub.mcp_server(id).is_some_and(|found| !found.server().enabled()) => {
@@ -155,7 +159,7 @@ fn secret(ctx: &Ctx, hub: &LocalHub, profile: &LocalProfile, name: &SecretName) 
   let state = match lacking {
     Some((id, _)) => State::Missing {
       words: ctx.t("local_hub.ready.noValue"),
-      fix: Some(Fix::OpenServer(*id)),
+      fix: Some(Fix::AddValue(*id)),
       blocking: false,
     },
     None => State::Ready(ctx.t("local_hub.ready.valueSet")),

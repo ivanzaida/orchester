@@ -9,25 +9,28 @@
 //! - `local-hub-archived`: the same after archiving Reviewer, a skill and postgres-dev, each with the runs it stopped
 //!   (L13, L14).
 
+use std::collections::BTreeMap;
+
 use orchester_core::{
   connection::{
     AgentProvider, SignIn,
-    mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
+    mcp::{McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
   },
-  id::{ConnectionId, ResourceId, RunId, TaskId},
+  id::{ConnectionId, ResourceId, RunId, SecretId, TaskId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
   resource::{
-    AgentProfile, CommandProgram, Draft, InstructionScope, ModelId, PromptText, ProviderSettings, RepositoryAccess,
-    ResourceKind,
+    AgentProfile, CommandArg, CommandProgram, Draft, InstructionScope, ModelId, PromptText, ProviderSettings,
+    RepositoryAccess, ResourceKind, VariableName,
   },
-  store::{McpServerStore, ResourceStore},
+  secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
+  store::{McpServerStore, ResourceStore, SecretStore},
 };
 use orchester_store::{ArchiveStop, Archived};
 use rusqlite::Connection;
 
 use super::{
   agents_library::{instruction, publish, skill},
-  connections,
+  connections, qa_app_asks,
 };
 use crate::kontur::{
   Kontur, SeedError,
@@ -78,6 +81,59 @@ fn base(kontur: &mut Kontur) -> Result<Catalogue, SeedError> {
     )?],
   )?;
   Ok(catalogue)
+}
+
+/// `local-hub-secret`: the hub with figma, a program that runs when the name `npx` is found on this computer and whose
+/// variable `FIGMA_API_KEY` takes the secret `FIGMA_TOKEN`, which has no value yet: in its panel *Replace* (*Set
+/// value*) types one and *Save* keeps it in the QA app's keychain in memory, which accepts (L8).
+pub fn secret(kontur: &mut Kontur) -> Result<(), SeedError> {
+  base(kontur)?;
+  figma(kontur).map(drop)
+}
+
+/// `local-hub-secret-refused`: [`secret`] with a QA app whose secret store refuses every value, so *Save* with a typed
+/// value is refused as L12 draws it and nothing is saved, not even the other fields.
+pub fn secret_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
+  secret(kontur)?;
+  kontur.ask_qa_app(qa_app_asks::SECRET_STORE_REFUSES)
+}
+
+/// figma, with `FIGMA_API_KEY` taking the secret `FIGMA_TOKEN`.
+fn figma(kontur: &mut Kontur) -> Result<ConnectionId, SeedError> {
+  let at = kontur.ago(50);
+  let token = Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("FIGMA_TOKEN").map_err(|error| invalid(&error))?,
+      kind: SecretKind::AccessToken,
+      environment: Environment::Development,
+    },
+    at,
+  );
+  kontur.db.create_secret(&token)?;
+  let transport = McpTransport::Stdio(StdioServer::new(
+    CommandProgram::new("npx").map_err(|error| invalid(&error))?,
+    ["figma-developer-mcp", "--stdio"]
+      .iter()
+      .map(|arg| CommandArg::new(arg).map_err(|error| invalid(&error)))
+      .collect::<Result<Vec<_>, _>>()?,
+    None,
+  ));
+  let variables = McpEnvironment::new(BTreeMap::from([(
+    VariableName::new("FIGMA_API_KEY").map_err(|error| invalid(&error))?,
+    McpEnvValue::Secret(token.id()),
+  )]))
+  .map_err(|error| invalid(&error))?;
+  let figma = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("figma").map_err(|error| invalid(&error))?,
+    transport,
+    variables,
+    at,
+  )
+  .map_err(|error| invalid(&error))?;
+  kontur.db.create_mcp_server(&figma)?;
+  Ok(figma.id())
 }
 
 /// `local-hub-claude`: Writer runs on the Claude Code connection Claude 2, and Home is another one to choose; each

@@ -21,7 +21,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::id::ConnectionId;
-use orchester_workspace::{connections::mcp::McpServerText, local_archive::Archivable};
+use orchester_workspace::connections::mcp::McpServerText;
 
 use self::editor::EditorProps;
 pub(super) use self::editor::UnsavedSignal;

@@ -11,3 +11,6 @@ pub const JOIN_TEAM: &str = "qa-app-join-team";
 pub const TEAM_HOLDS_TASK: &str = "qa-app-team-holds-task";
 /// Signed in, its session has no two-factor code, as when the account turned two-factor authentication on after it.
 pub const SESSION_WITHOUT_TWO_FACTOR: &str = "qa-app-session-without-two-factor";
+/// Its secret store refuses every value it is given, as one that is locked does: a QA copy's keychain is in memory, so
+/// this is how a refusal that needs no person is reached (`Agents · MCP server · save refused`).
+pub const SECRET_STORE_REFUSES: &str = "qa-app-secret-store-refuses";

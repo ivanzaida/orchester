@@ -24,10 +24,11 @@ use crate::{
   },
 };
 
-/// The section of `parts`, `missing` of which the readiness counts; `press` is what a press on a part's fix does.
+/// The section of `parts` under the heading `title`, `missing` of which the readiness counts; `press` is what a press
+/// on a part's fix does.
 pub(in crate::screens) fn section<F: Offer>(
   ctx: &Ctx,
-  parts: &[Part<F>],
+  (title, parts): (&str, &[Part<F>]),
   missing: usize,
   (press, busy): (&dyn Fn(&F) -> Press, Busy),
 ) -> Column {
@@ -52,12 +53,7 @@ pub(in crate::screens) fn section<F: Offer>(
     .color(color)
     .nowrap();
   let rows = parts.iter().map(|part| part_row(ctx, part, (press, busy))).collect();
-  rows::section(
-    "team-hub-readiness",
-    &ctx.t("team_hub.readiness.title"),
-    vec![count.into()],
-    rows,
-  )
+  rows::section("team-hub-readiness", title, vec![count.into()], rows)
 }
 
 fn part_row<F: Offer>(ctx: &Ctx, part: &Part<F>, (press, busy): (&dyn Fn(&F) -> Press, Busy)) -> Row {
