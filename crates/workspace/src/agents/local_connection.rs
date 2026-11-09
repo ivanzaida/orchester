@@ -58,11 +58,8 @@ pub fn use_connection(root: &Path, profile: ResourceId, connection: ConnectionId
     allowed: allowed.clone(),
     prompt_decided: false,
   };
-  saved(editor::apply(root, &save)?)?;
-  publish_saved(root, profile, body.clone(), allowed).map_err(|error| {
-    discard_saved(root, profile, &body);
-    error
-  })
+  saved(&editor::apply(root, &save)?)?;
+  publish_saved(root, profile, body.clone(), allowed).inspect_err(|_| discard_saved(root, profile, &body))
 }
 
 /// The draft the save made, published as the next version.
@@ -80,7 +77,7 @@ fn publish_saved(
     allowed,
     prompt_decided: false,
   };
-  saved(editor::apply(root, &publish)?)?;
+  saved(&editor::apply(root, &publish)?)?;
   editor::entry_in(root, profile)?
     .state
     .published()
@@ -88,7 +85,7 @@ fn publish_saved(
 }
 
 /// A write that asks about what it widens did not happen: the person decides that in the editor.
-fn saved(outcome: Outcome) -> Result<(), Message> {
+fn saved(outcome: &Outcome) -> Result<(), Message> {
   match outcome {
     Outcome::Saved(_) => Ok(()),
     Outcome::Confirm(_) => Err(Message::new("agents.localConnection.widens")),

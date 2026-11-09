@@ -64,6 +64,8 @@ pub(super) struct Asked {
   pub reasons: Vec<Message>,
 }
 
+impl DevtoolsInspectable for Asked {}
+
 pub(super) type Pending = Signal<Option<Asked>>;
 pub(super) type Save = FutureAction<Ask, Done, Message>;
 

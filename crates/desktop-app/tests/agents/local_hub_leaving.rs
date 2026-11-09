@@ -25,11 +25,11 @@ fn edit(agents: &mut Agents) {
 
 /// Presses `id`, which leaves the panel: the question comes, nothing moves, *Keep editing* keeps what was typed, and
 /// *Discard changes* goes to `place`.
-fn asks_then_goes(agents: &mut Agents, from: Route, id: &str, place: Route) {
+fn asks_then_goes(agents: &mut Agents, from: &Route, id: &str, place: &Route) {
   agents.click(id);
   agents.until("the question", |s| s.exists(DISCARD));
   assert_eq!(
-    agents.window.navigation().route_now(),
+    &agents.window.navigation().route_now(),
     from,
     "{id}: nothing moved while it asks"
   );
@@ -44,7 +44,7 @@ fn asks_then_goes(agents: &mut Agents, from: Route, id: &str, place: Route) {
   agents.click(id);
   agents.until("the question again", |s| s.exists(DISCARD));
   agents.click(DISCARD);
-  agents.until("the place", |s| s.window.navigation().route_now() == place);
+  agents.until("the place", |s| s.window.navigation().route_now() == *place);
 }
 
 #[test]
@@ -56,9 +56,9 @@ fn local_hub_leaving_a_filter_with_unsaved_edits_asks_first() {
 
   asks_then_goes(
     &mut agents,
-    hub(HubView::on_server(HubFilter::McpServers, docs)),
+    &hub(HubView::on_server(HubFilter::McpServers, docs)),
     "local-hub-filter-profiles",
-    hub(HubView::new(HubFilter::Profiles, None)),
+    &hub(HubView::new(HubFilter::Profiles, None)),
   );
 }
 
@@ -81,7 +81,7 @@ fn local_hub_leaving_by_the_head_with_unsaved_edits_asks_first() {
     open(&mut agents, HubView::on_server(HubFilter::All, docs));
     agents.until("the server's panel", |s| s.exists("local-hub-mcp-server"));
     edit(&mut agents);
-    asks_then_goes(&mut agents, here.clone(), id, Route::Project(project_id(), place));
+    asks_then_goes(&mut agents, &here, id, &Route::Project(project_id(), place));
   }
 }
 

@@ -140,7 +140,7 @@ impl Component for ProfilePanel {
       }
     });
     let profile = ctx.props::<Props>().id;
-    let save = edit::save(ctx, project.open.repo_root.clone(), profile);
+    let save = edit::save(ctx, project.open.repo_root, profile);
     let (pending, settled) = (ctx.signal(None), ctx.signal(0_u64));
     edit::follow(ctx, &save, &pending, &settled, id);
     Self {
