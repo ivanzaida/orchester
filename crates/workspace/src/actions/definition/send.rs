@@ -131,17 +131,54 @@ async fn refused(
   conflict(operation, refusal, seen)
 }
 
-/// A member's refusal of a task patch that closes, reopens or moves the task: the lifecycle's, not the team
-/// configuration's (decision D4). A patch that changes no workflow status keeps the route's own refusal.
+/// A member's refusal of a task patch that closes, reopens or moves the task (decision D4). The words say what the
+/// patch asked, not which part the server objected to: a patch of the lifecycle's fields alone is the lifecycle's
+/// refusal, one that also changes other fields says both. A patch that changes no workflow status keeps the route's own
+/// refusal.
 fn lifecycle_not_admin(edit: &DefinitionEdit, code: ErrorCode) -> Option<Refusal> {
   match (edit, code) {
     (DefinitionEdit::Task { patch, .. }, ErrorCode::NotAdmin | ErrorCode::Forbidden)
       if patch.changes.workflow.is_some() =>
     {
-      Some(Refusal::TaskLifecycle(LifecycleRefusal::NotAdmin))
+      Some(Refusal::TaskLifecycle(if changes_beyond_lifecycle(&patch.changes) {
+        LifecycleRefusal::NotAdminWithDetails
+      } else {
+        LifecycleRefusal::NotAdmin
+      }))
     }
     _ => None,
   }
+}
+
+/// Whether `changes` set a field other than the lifecycle's (workflow status and blocked reason). Every field is named,
+/// so a field added to [`TaskChanges`] has to be decided here.
+fn changes_beyond_lifecycle(changes: &TaskChanges) -> bool {
+  let TaskChanges {
+    title,
+    brief,
+    criteria,
+    pipeline,
+    limits,
+    priority,
+    tags,
+    blocking,
+    module,
+    release,
+    status: _,
+    workflow: _,
+    blocked_reason: _,
+    actor: _,
+  } = changes;
+  title.is_some()
+    || brief.is_some()
+    || criteria.is_some()
+    || pipeline.is_some()
+    || limits.is_some()
+    || priority.is_some()
+    || tags.is_some()
+    || blocking.is_some()
+    || module.is_some()
+    || release.is_some()
 }
 
 /// A conflict's outcome by what the subject as it is now says of the edit.

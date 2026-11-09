@@ -24,7 +24,7 @@ use orchester_core::{
   secret::SecretValue,
   task::{
     TaskDetails, TaskLimits,
-    organization::{TaskOrganization, WorkflowStatus},
+    organization::{Priority, TaskOrganization, WorkflowStatus},
   },
 };
 use orchester_workspace::{
@@ -356,4 +356,27 @@ fn team_lifecycle_the_servers_reasons_are_the_refusals_the_screens_name() {
     Some(LifecycleRefusal::MissingReason)
   );
   assert_eq!(LifecycleRefusal::of_reason("anything_else"), None);
+}
+
+#[test]
+fn team_lifecycle_a_member_cancelling_with_other_changes_is_refused_in_words_that_cover_both() {
+  let team = Team::start(Standing::Member, vec![task(1, "todo", Some(YOU))]);
+
+  // The server does not say which part of the patch it objected to, so a patch that also changes the priority is not
+  // called a cancel's refusal.
+  let refused = refusal(team.organize(1, |organization| {
+    organization
+      .with_status(WorkflowStatus::Canceled)
+      .with_priority(Priority::High)
+  }));
+  assert!(
+    matches!(refused, Refusal::TaskLifecycle(LifecycleRefusal::NotAdminWithDetails)),
+    "{refused:?}"
+  );
+  let refused = refusal(team.set(1, WorkflowStatus::Canceled));
+  assert!(
+    not_admin(&refused),
+    "the cancel alone keeps the lifecycle's words: {refused:?}"
+  );
+  assert_eq!(team.read(1).content.workflow, WorkflowStatus::Todo);
 }

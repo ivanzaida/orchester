@@ -419,3 +419,29 @@ fn team_mcp_a_member_cancelling_is_refused_in_the_lifecycles_words() {
   let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye"});
   assert_eq!(reasons(edit), json!(["sharing.errors.notAdmin"]));
 }
+
+#[test]
+fn team_mcp_a_member_cancelling_with_other_changes_is_refused_by_the_change_the_server_met() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let reasons = |args: serde_json::Value| {
+    let error = checkout.call("update_task", &args).expect_err("refused");
+    assert_eq!(error["error"]["code"], "not_admin", "{error}");
+    error["error"]["reasons"].clone()
+  };
+
+  // The details go on their own patch, before the organization's: the title is what the server refused, and the cancel
+  // was not sent.
+  let with_title = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "canceled", "title": "Say goodbye"});
+  assert_eq!(reasons(with_title), json!(["sharing.errors.notAdmin"]));
+  assert_eq!(seen.lock().task_edits, 1, "only the title reached the server");
+  assert!(seen.lock().edited_changes["workflow"].is_null());
+
+  // The organization's fields share one patch, so the refusal does not say which of the two it met.
+  let with_priority = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "canceled", "priority": "high"});
+  assert_eq!(
+    reasons(with_priority),
+    json!(["appMcp.errors.teamLifecycleNotAdminWithDetails"])
+  );
+  assert_eq!(seen.lock().edited_changes["workflow"], "canceled");
+}

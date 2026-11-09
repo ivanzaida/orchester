@@ -232,6 +232,7 @@
         "claimHeld": "The team server refused to release your claim on the task, so it may still be held.",
         "notHolder": "Only the person who holds this task's claim, or an Admin, does this. The claim may have changed; the page shows it as it is now.",
         "notAdmin": "Only Admins cancel, reopen or move a team task. Nothing was changed.",
+        "notAdminWithDetails": "Only Admins change a team task's details or cancel, reopen or move it. Nothing was changed.",
         "stopRunFirst": "A run of this task is still working or waits for you. Stop it first, then mark the task done or cancel it.",
         "missingReason": "A blocked reason can't be empty."
       },

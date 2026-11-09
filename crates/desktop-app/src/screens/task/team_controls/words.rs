@@ -39,6 +39,7 @@ pub(super) fn acted_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, acted: &A
     Acted::Lifecycle(refusal) => match refusal {
       LifecycleRefusal::NotHolder => "summary.team.refused.notHolder",
       LifecycleRefusal::NotAdmin => "summary.team.refused.notAdmin",
+      LifecycleRefusal::NotAdminWithDetails => "summary.team.refused.notAdminWithDetails",
       LifecycleRefusal::StopRunFirst => "summary.team.refused.stopRunFirst",
       LifecycleRefusal::MissingReason => "summary.team.refused.missingReason",
     },
