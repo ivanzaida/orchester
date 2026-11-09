@@ -230,6 +230,7 @@
       "need": {
         "connectionNone": "no {{cli}} connection here · add one",
         "connectionPick": "more than one {{cli}} connection here · choose one",
+        "connectionSignIn": "{{cli}} is signed out here · sign in",
         "decisionNone": "reviewer · no decision connection here · add one",
         "decisionPick": "reviewer · several decision connections here · choose one",
         "mcpOff": "MCP server · switched off on this computer",
@@ -247,6 +248,7 @@
         "addValue": "Add value",
         "choose": "Choose",
         "addConnection": "Add connection",
+        "signIn": "Sign in",
         "switchOn": "Switch on",
         "arrow": "{{fix}} →"
       },

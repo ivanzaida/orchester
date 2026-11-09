@@ -242,7 +242,7 @@ impl ProfilePanel {
       })
     };
     match fix {
-      Fix::AddConnection => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
+      Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
       Fix::UseConnection => {
         let (action, profile, chosen) = (self.actions.pick.clone(), props.entry.id, self.chosen.clone());
         let connections = props.sheet.connections.clone();

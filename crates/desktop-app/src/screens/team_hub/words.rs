@@ -295,6 +295,9 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
         ConnectionProblem::PickNeeded => ctx.t_args("team_hub.line.connectionPick", [("cli", &*cli)]),
       }
     }
+    Missing::ConnectionSignIn { cli, .. } => {
+      ctx.t_args("team_hub.line.connectionSignIn", [("cli", &*ctx.t(cli_key(*cli)))])
+    }
     Missing::DecisionConnection { .. } => ctx.t("team_hub.line.decisionConnection"),
     Missing::McpOff { server } if *server == entry.id && entry.kind == Kind::McpServer => {
       ctx.t("team_hub.line.mcpUndecided")

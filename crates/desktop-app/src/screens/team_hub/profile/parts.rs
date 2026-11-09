@@ -52,10 +52,18 @@ pub(super) fn parts(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &TeamPro
 
 fn connection(ctx: &Ctx, sheet: &TeamProfileSheet, missing: &[Missing]) -> Part {
   let cli = ctx.t(cli_key(sheet.cli));
+  let signed_out = missing
+    .iter()
+    .any(|part| matches!(part, Missing::ConnectionSignIn { .. }));
   let state = match missing.iter().find_map(|part| match part {
     Missing::Connection { problem, .. } => Some(*problem),
     _ => None,
   }) {
+    _ if signed_out => State::Missing {
+      words: ctx.t_args("team_hub.ready.signedOut", [("cli", &*cli)]),
+      fix: Some(Fix::SignIn),
+      blocking: true,
+    },
     Some(ConnectionProblem::NoneOfKind) => State::Missing {
       words: ctx.t_args("team_hub.ready.noneOfKind", [("cli", &*cli)]),
       fix: Some(Fix::AddConnection),
@@ -147,6 +155,7 @@ fn problem_state(ctx: &Ctx, listing: &Listing, server: ResourceId, part: &Missin
     Missing::Secret { name } => ctx.t_args("team_hub.line.secret", [("name", name.to_string())]),
     Missing::SecretUnreadable { name } => ctx.t_args("team_hub.line.secretUnreadable", [("name", name.to_string())]),
     Missing::Connection { .. }
+    | Missing::ConnectionSignIn { .. }
     | Missing::DecisionConnection { .. }
     | Missing::LocalMcpProgram { .. }
     | Missing::LocalSecret { .. } => ctx.t("team_hub.ready.ready"),

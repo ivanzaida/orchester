@@ -54,6 +54,14 @@ fn missing(ctx: &Ctx, missing: &Missing, name: &str, team: bool) -> Words {
         need: ctx.t_args(key, [("cli", ctx.t(cli_key(*cli)).as_ref())]),
       }
     }
+    Missing::ConnectionSignIn { cli, .. } => Words {
+      glyph: Glyph::Mark(AgentMark::of(*cli)),
+      what: Arc::from(name),
+      need: ctx.t_args(
+        "summary.notReady.need.connectionSignIn",
+        [("cli", ctx.t(cli_key(*cli)).as_ref())],
+      ),
+    },
     Missing::DecisionConnection { problem, .. } => {
       let key = match problem {
         ConnectionProblem::NoneOfKind => "summary.notReady.need.decisionNone",

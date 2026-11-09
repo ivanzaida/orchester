@@ -17,6 +17,8 @@ pub(in crate::screens) enum Fix {
   UseConnection,
   /// Go where a connection of the CLI kind is added.
   AddConnection,
+  /// Go where the connection the profile runs on is signed in.
+  SignIn,
   SwitchOn(ResourceId),
   SetPath(ResourceId),
   AddValue(SecretName),
@@ -33,6 +35,7 @@ impl Fix {
         problem: ConnectionProblem::NoneOfKind,
         ..
       } => Some(Self::AddConnection),
+      Missing::ConnectionSignIn { .. } => Some(Self::SignIn),
       Missing::McpOff { server } => Some(Self::SwitchOn(*server)),
       Missing::McpProgram { server, .. } => Some(Self::SetPath(*server)),
       Missing::Secret { name } => Some(Self::AddValue(name.clone())),
@@ -49,6 +52,7 @@ impl Fix {
     match self {
       Self::UseConnection => "team_hub.fix.link.use",
       Self::AddConnection => "team_hub.fix.link.add",
+      Self::SignIn => "team_hub.fix.link.signIn",
       Self::SwitchOn(_) => "team_hub.fix.link.switchOn",
       Self::SetPath(_) => "team_hub.fix.link.setPath",
       Self::AddValue(_) => "team_hub.fix.link.addValue",
@@ -60,6 +64,7 @@ impl Fix {
     match self {
       Self::UseConnection => Icon::Check,
       Self::AddConnection => Icon::Plus,
+      Self::SignIn => Icon::LogIn,
       Self::SwitchOn(_) => Icon::Power,
       Self::SetPath(_) => Icon::FolderOpen,
       Self::AddValue(_) => Icon::KeyRound,
@@ -71,6 +76,7 @@ impl Fix {
     match self {
       Self::UseConnection => "use",
       Self::AddConnection => "add",
+      Self::SignIn => "sign-in",
       Self::SwitchOn(_) => "switch-on",
       Self::SetPath(_) => "set-path",
       Self::AddValue(_) => "add-value",

@@ -307,7 +307,7 @@ impl ProfilePanel {
           }
         })
       }
-      Fix::AddConnection => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
+      Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
       Fix::SetPath(server) | Fix::AddValue(server) => Press::Open(navigation.to(Route::Project(
         project.open.project.id(),
         ProjectPage::hub(view_of(HubFilter::McpServers, Some(Archivable::McpServer(*server)))),
@@ -331,8 +331,13 @@ impl ProfilePanel {
 /// has none of its CLI), else the first server to fix.
 fn pinned_fix(profile: &LocalProfile, target: Option<&ConnectionChoice>, parts: &[Part<Fix>]) -> Option<Fix> {
   let changed = target.is_some_and(|choice| Some(choice.id) != profile.current);
+  let signed_out = profile
+    .connections
+    .iter()
+    .any(|choice| Some(choice.id) == profile.current && choice.signed_out);
   let connection = match (profile.cli, profile.connections.is_empty(), profile.current) {
     (None, ..) => None,
+    (Some(_), false, Some(_)) if signed_out && !changed => Some(Fix::SignIn),
     (Some(_), true, None) => Some(Fix::AddConnection),
     (Some(_), false, None) => Some(Fix::UseConnection),
     (Some(_), false, Some(_)) if changed => Some(Fix::UseConnection),
@@ -366,6 +371,19 @@ fn pinned(
       ),
       Icon::Check,
       ctx.t("local_hub.profile.useHint"),
+    ),
+    Fix::SignIn => (
+      ctx.t_args(
+        "team_hub.fix.action.signIn",
+        [(
+          "cli",
+          &*profile
+            .cli
+            .map_or_else(|| ctx.t("local_hub.ready.ready"), |cli| ctx.t(cli_key(cli))),
+        )],
+      ),
+      Icon::LogIn,
+      ctx.t("team_hub.fix.hint.signIn"),
     ),
     Fix::AddConnection => (
       ctx.t_args(

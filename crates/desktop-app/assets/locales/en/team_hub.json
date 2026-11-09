@@ -72,6 +72,7 @@
       "many": "{{count}} things missing here",
       "connectionNone": "No {{cli}} connection on this computer",
       "connectionPick": "Choose a {{cli}} connection here",
+      "connectionSignIn": "Sign in to {{cli}} here",
       "decisionConnection": "Needs a connection here",
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
@@ -192,6 +193,7 @@
       "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
       "noneOfKind": "No {{cli}} connection here",
       "pickNeeded": "Choose a {{cli}} connection here",
+      "signedOut": "{{cli}} is signed out here",
       "programHere": "Set its program path here",
       "programSet": "Ready · program path set",
       "programGone": "The program is not at its path any more",
@@ -207,6 +209,7 @@
       "link": {
         "use": "Use a connection →",
         "add": "Add →",
+        "signIn": "Sign in →",
         "switchOn": "Switch on →",
         "setPath": "Set path →",
         "addValue": "Add value →"
@@ -215,6 +218,7 @@
       "action": {
         "use": "Use {{connection}} for {{profile}}",
         "add": "Add a {{cli}} connection",
+        "signIn": "Sign in to {{cli}}",
         "switchOn": "Switch on {{server}}",
         "setPath": "Set {{server}}'s program path",
         "addValue": "Add value for {{name}}"
@@ -223,7 +227,8 @@
         "then": "Then {{what}}",
         "done": "{{profile}} runs here once nothing is missing",
         "use": "Asked once per profile · kept on this computer",
-        "add": "Opens Settings › Accounts"
+        "add": "Opens Settings › Accounts",
+        "signIn": "Opens Settings › Accounts"
       }
     },
     "secretDialog": {

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, Connection, ConnectionKind, REASONING_EFFORT,
+    AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT,
     mcp::{McpServer, McpTransport},
   },
   id::{ConnectionId, ResourceId},
@@ -268,6 +268,7 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
         id: found.id(),
         name: found.name().to_string(),
         version: found.version().map(str::to_owned),
+        signed_out: found.status() == ConnectionStatus::SignInRequired,
       })
       .collect();
     profiles.push((

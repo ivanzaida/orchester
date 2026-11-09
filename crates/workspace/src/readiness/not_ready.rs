@@ -32,7 +32,7 @@ impl MissingPart {
   /// `missing`, its resource named by `name_of`.
   pub fn new(missing: Missing, name_of: &dyn Fn(ResourceId) -> String) -> Self {
     let name = match &missing {
-      Missing::Connection { profile, .. } => name_of(*profile),
+      Missing::Connection { profile, .. } | Missing::ConnectionSignIn { profile, .. } => name_of(*profile),
       Missing::DecisionConnection { reviewer, .. } => name_of(*reviewer),
       Missing::McpOff { server } | Missing::McpUnsupported { server, .. } | Missing::McpProgram { server, .. } => {
         name_of(*server)
@@ -59,6 +59,9 @@ impl MissingPart {
           ConnectionProblem::PickNeeded => "notReadyHere.connectionPickNeeded",
         };
         named(key, "profile").with("cli", cli_name(*cli).to_owned())
+      }
+      Missing::ConnectionSignIn { cli, .. } => {
+        named("notReadyHere.connectionSignIn", "profile").with("cli", cli_name(*cli).to_owned())
       }
       Missing::DecisionConnection { problem, .. } => {
         let key = match problem {

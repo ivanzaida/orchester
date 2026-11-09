@@ -3,7 +3,7 @@
 use std::{fs, path::Path};
 
 use orchester_core::{
-  connection::ConnectionKind,
+  connection::{ConnectionKind, ConnectionStatus},
   id::{ConnectionId, ResourceId, SecretId},
   secret::SecretVault,
   sharing::Here,
@@ -22,6 +22,9 @@ pub(super) fn base(db: &ProjectDb, vault: &dyn SecretVault) -> Result<Here, Stor
   for connection in db.connections()? {
     if let ConnectionKind::Agent(provider) = connection.kind() {
       here = here.with_connection(connection.id(), *provider);
+      if connection.status() == ConnectionStatus::SignInRequired {
+        here = here.with_signed_out(connection.id());
+      }
     }
   }
   for connection in db.decision_connections()? {

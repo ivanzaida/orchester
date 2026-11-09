@@ -4,7 +4,7 @@
 //! (`docs/design/team-configuration.md`, "What a computer fills in").
 
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionKind, REASONING_EFFORT},
+  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, ResourceKind, TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
@@ -37,6 +37,8 @@ pub struct ConnectionChoice {
   pub name: String,
   /// The CLI's version its last check found.
   pub version: Option<String>,
+  /// Its last check found the CLI signed out: a profile that runs on it is not ready until the person signs in.
+  pub signed_out: bool,
 }
 
 /// One team profile as the panel shows it.
@@ -124,6 +126,7 @@ fn sheet(
       id: connection.id(),
       name: connection.name().to_string(),
       version: connection.version().map(str::to_owned),
+      signed_out: connection.status() == ConnectionStatus::SignInRequired,
     })
     .collect();
   let picked = db

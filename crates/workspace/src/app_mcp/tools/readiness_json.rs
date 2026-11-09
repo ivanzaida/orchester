@@ -85,6 +85,11 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
         fix(Some("pick_profile_connection"), None),
       ),
     },
+    Missing::ConnectionSignIn { cli, connection, .. } => part_of(
+      "connection_sign_in",
+      json!({ "cli": cli, "connection": connection.to_string() }),
+      fix(None, Some("person")),
+    ),
     Missing::McpOff { server } => part_of(
       "mcp_off",
       json!({ "server": server_json(*server, all) }),

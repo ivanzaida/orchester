@@ -290,6 +290,11 @@ fn local_hub_profile_publish_of_a_draft_that_changes_the_prompts_is_left_to_the_
 
 /// A Claude Code connection whose last check found `claude-a` (with two efforts) and `claude-b`.
 fn claude(agents: &Agents) -> ConnectionId {
+  claude_signed(agents, SignIn::SignedIn)
+}
+
+/// [`claude`] whose last check found the CLI as `sign_in` says.
+fn claude_signed(agents: &Agents, sign_in: SignIn) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Claude 2").expect("name"),
@@ -309,7 +314,7 @@ fn claude(agents: &Agents) -> ConnectionId {
       at: Timestamp::now(),
       result: CheckResult::Available {
         version: "1.0.0".into(),
-        sign_in: SignIn::SignedIn,
+        sign_in,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,
           vec![model("claude-a", &["low", "high"]), model("claude-b", &[])],
@@ -525,4 +530,21 @@ fn local_hub_profile_a_persons_pointer_press_takes_the_account_and_choosing_in_t
       .is_some_and(|entry| entry.profile.connection() == home)
   });
   assert!(!agents.exists("local-hub-fix-use-person-only"));
+}
+
+/// A profile on a connection whose CLI is signed out is not ready (ORC-848 D11): *Ready?* says so and the pinned fix is
+/// to sign in.
+#[test]
+fn local_hub_profile_a_signed_out_connection_is_not_ready_and_the_fix_is_to_sign_in() {
+  let mut agents = Agents::new(true);
+  let connection = claude_signed(&agents, SignIn::SignedOut);
+  let profile = builder_on_claude(&agents, connection);
+  show(&mut agents, profile);
+
+  agents.until("the sign-in fix", |s| s.exists("local-hub-fix-sign-in"));
+  assert!(agents.text("local-hub-fix-sign-in").contains("Sign in to Claude Code"));
+  assert_eq!(
+    agents.text("team-hub-ready-connection-words"),
+    "Claude Code is signed out here"
+  );
 }

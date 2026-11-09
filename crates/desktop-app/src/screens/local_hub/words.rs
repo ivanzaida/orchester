@@ -201,6 +201,9 @@ pub(super) fn missing(ctx: &Ctx, entry: &Entry, part: &Missing) -> Arc<str> {
         ConnectionProblem::PickNeeded => ctx.t_args("local_hub.line.connectionPick", [("cli", &*cli)]),
       }
     }
+    Missing::ConnectionSignIn { cli, .. } => {
+      ctx.t_args("local_hub.line.connectionSignIn", [("cli", &*ctx.t(cli_key(*cli)))])
+    }
     Missing::LocalMcpProgram { .. } if entry.kind == ResourceKind::McpServer => ctx.t("local_hub.line.programHere"),
     Missing::LocalMcpProgram { name, .. } => ctx.t_args("local_hub.line.programOf", [("server", name.to_string())]),
     Missing::LocalSecret { name, .. } | Missing::Secret { name } | Missing::SecretUnreadable { name } => {
