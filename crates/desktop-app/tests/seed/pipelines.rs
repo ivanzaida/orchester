@@ -224,3 +224,46 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
   assert!(matches!(flow("Independent chains"), Err(FlowError::Branches(_))));
   assert!(flow("Empty draft").expect("no steps are drawn").is_empty());
 }
+
+fn pipeline_named(seed: &Seed, title: &str) -> orchester_core::id::ResourceId {
+  seed
+    .db()
+    .resources(ResourceKind::Pipeline)
+    .unwrap()
+    .iter()
+    .find(|row| row.name().as_str() == title)
+    .unwrap_or_else(|| panic!("a pipeline {title}"))
+    .id()
+}
+
+#[test]
+fn seed_pipelines_save_refused_refuses_to_store_a_draft_and_keeps_what_is_stored() {
+  use orchester_workspace::pipelines::local_edit::{Held, save};
+
+  let seed = Seed::of("pipelines-save-refused");
+  let id = pipeline_named(&seed, "Feature delivery");
+  let before = OpenedPipeline::load_in(seed.repo(), id).unwrap();
+  let mut held = Held::start(std::sync::Arc::new(before.body.clone()));
+  held.change(|edit| edit.set_description("Refused"));
+
+  let refused = save(seed.repo(), id, held.base(), held.edit(), &[]).unwrap_err();
+  assert_ne!(refused.key, "errors.draftChanged", "the store refused it: {refused:?}");
+  assert_eq!(OpenedPipeline::load_in(seed.repo(), id).unwrap(), before, "nothing was stored");
+}
+
+#[test]
+fn seed_pipelines_ready_draft_has_every_step_ready_and_was_never_published() {
+  let seed = Seed::of("pipelines-ready-draft");
+  let id = pipeline_named(&seed, "Ready draft");
+  let opened = OpenedPipeline::load_in(seed.repo(), id).unwrap();
+  assert!(opened.latest.is_none(), "never published");
+  assert!(opened.draft_saved_at.is_some(), "a draft");
+  assert_eq!(opened.body.steps().len(), 1);
+  assert!(
+    opened
+      .body
+      .steps()
+      .iter()
+      .all(|step| narrowing::check_step(step, &opened.assignables).is_ok())
+  );
+}
