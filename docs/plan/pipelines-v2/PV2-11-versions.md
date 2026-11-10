@@ -1,9 +1,9 @@
 # PV2-11 · Versions list, a version read-only, Restore
 
-- **Status:** blocked (PV2-10)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-10
-- **Branch:** —
+- **Branch:** `claude/pv2-11-versions`
 - **Tokens:** —
 
 ## Goal

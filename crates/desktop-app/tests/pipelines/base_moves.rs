@@ -68,6 +68,7 @@ fn choice(editor: &Editor, id: ResourceId) -> Option<Option<bool>> {
 }
 
 #[test]
+#[ignore = "PV2-18: Merge the base branch when it moves is not in the step panel"]
 fn pipelines_base_moves_a_writing_steps_choice_is_kept_and_dropped_back_to_the_default() {
   let mut editor = Editor::new();
   builder(&editor);

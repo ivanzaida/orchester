@@ -63,6 +63,7 @@ pub mod skills;
 mod slash;
 mod sources;
 mod startup;
+mod step_strip;
 mod task;
 mod task_form;
 mod tasks;
@@ -132,6 +133,7 @@ pub use self::{
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
+  step_strip::{StripSpacing, StripText, chip_radius, strip_scrollbar},
   task::{NOT_READY_ROW_HEIGHT, TaskRadius, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
@@ -169,6 +171,7 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   pipelines::install(theme);
+  step_strip::install(theme);
   agents::install(theme);
   instructions::install(theme);
   startup::install(theme);

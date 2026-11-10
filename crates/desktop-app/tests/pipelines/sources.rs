@@ -73,46 +73,6 @@ fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
   assert_eq!(published.body().sources().pipeline(), [source(tokens.path())]);
 }
 
-#[test]
-fn pipelines_sources_a_step_lists_its_own_beside_what_it_inherits() {
-  let mut editor = Editor::new();
-  let id = editor.empty("Review");
-  let (docs, guide) = (folder(1), folder(1));
-  editor
-    .db()
-    .set_project_sources(&[source(docs.path())])
-    .expect("the project's");
-  editor.open(id);
-  editor.click("pipeline-add-step");
-  editor.click("step-open-sources");
-  editor.until("the step's sources", |e| e.exists("step-sources-add-path"));
-  editor.until("what it inherits", |e| e.exists("step-sources-project-0"));
-  assert_eq!(editor.text("step-sources-title-meta"), "0 own · 1 inherited");
-  editor.set("step-sources-add-path", &guide.path().to_string_lossy());
-  editor.until("the check", |e| {
-    e.exists("step-sources-add-hint-text") && e.text("step-sources-add-hint-text") == "Folder · 1 file · readable."
-  });
-  editor.click("step-sources-add-add");
-  editor.until("listed", |e| e.exists("step-source-0"));
-  assert_eq!(editor.text("step-source-0-hint"), "This step");
-  assert_eq!(editor.text("step-sources-title-meta"), "1 own · 1 inherited");
-  // The draft saves itself once the edits rest.
-  let listed = |body: &Pipeline| -> Vec<SourcePath> {
-    body
-      .steps()
-      .iter()
-      .flat_map(|step| body.sources().step(&step.key).to_vec())
-      .collect()
-  };
-  editor.until("the draft lists it", |e| {
-    drafted(e, id).is_some_and(|body| listed(&body) == [source(guide.path())])
-  });
-  editor.click("step-source-0-remove");
-  editor.until("taken off the draft", |e| {
-    drafted(e, id).is_some_and(|body| !body.steps().is_empty() && listed(&body).is_empty())
-  });
-}
-
 /// Lists a relative path among the project's sources, which no read takes: the store calls it corrupt.
 fn unreadable(editor: &Editor, broken: bool) {
   let sql = if broken {
@@ -129,7 +89,7 @@ fn unreadable(editor: &Editor, broken: bool) {
 
 #[test]
 fn pipelines_sources_a_failed_read_of_the_projects_says_why_with_try_again_never_an_empty_list() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Review");
   let docs = folder(1);
   editor

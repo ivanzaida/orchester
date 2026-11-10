@@ -18,7 +18,7 @@ enum Page {
 }
 
 fn starting_reload(page: Page) -> (Editor, orchester_core::id::ResourceId, Pipeline, &'static str) {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = if matches!(page, Page::Empty) {
     editor.empty("Pending reload")
   } else {

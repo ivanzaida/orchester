@@ -1,10 +1,10 @@
 # PV2-10 · Edit in place: Save makes vN, Cancel puts it back
 
-- **Status:** in progress (also builds the pipeline's settings rows, moved from PV2-09: the edit model owns every editable field)
+- **Status:** done (2026-11-11; review round 2 PASS, design verification round 2 no blocking/major; merged `cca2e89e9`; UX follow-ups in PV2-17)
 - **Kind:** UI + workspace
 - **Depends on:** PV2-04
-- **Branch:** `claude/pv2-10-save-and-cancel`
-- **Tokens:** —
+- **Branch:** `claude/pv2-10-save-and-cancel` (`7ad606a47` … `45197b906`)
+- **Tokens:** 113.0M (out 342k) across 2 implementation rounds + 2 merges, 2 reviews, 2 design verifications
 
 ## Goal
 

@@ -110,15 +110,21 @@ fn pipeline_leaving_by_new_pipeline_with_unsaved_changes_asks_first() {
 }
 
 #[test]
-fn pipeline_leaving_by_a_card_with_unsaved_changes_asks_first() {
+fn pipeline_leaving_a_card_opens_the_step_in_the_panel_and_keeps_the_edit() {
   let (mut agents, [ready, ..], _) = editing(|ids| ids[0]);
-  let here = view(PipelinesFilter::All, Some(ready));
 
+  // The step opens in the panel, which is not leaving it: nothing is asked and the edit stays.
   agents.click("pipeline-hub-flow-step-step");
-  agents.until("the question", |s| s.exists(DISCARD));
-  assert_eq!(agents.window.navigation().route_now(), here);
-  agents.click(KEEP);
-  agents.until("kept", |s| !s.exists(DISCARD));
+  agents.until("the step", |s| s.exists("pipeline-hub-step-head"));
+  assert!(!agents.exists(DISCARD), "opening a step asks nothing");
+  assert!(
+    agents
+      .text(&format!("pipeline-hub-row-{ready}-line"))
+      .starts_with("Unsaved changes"),
+    "the edit is still held"
+  );
+  agents.click("pipeline-hub-step-back");
+  agents.until("the pipeline", |s| s.exists(DESCRIPTION));
   assert_eq!(agents.value(DESCRIPTION), "Not saved yet");
 }
 

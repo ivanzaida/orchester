@@ -31,7 +31,11 @@ use orchester_core::{
 };
 use orchester_workspace::pipelines::flow::FlowRead;
 
-pub(super) use self::{fix::Fix, words::number};
+pub(super) use self::{
+  fix::Fix,
+  reorder::{copy_name, copy_of},
+  words::number,
+};
 use super::edit::Edit;
 use crate::{
   navigation::{Navigation, link::Open},

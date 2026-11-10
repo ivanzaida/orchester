@@ -87,7 +87,7 @@ enum Page {
 /// while it locks the page: confirming saves what was asked about, not the locked edit. Gives the editor,
 /// the pipeline and the field it edited.
 fn locked_edit_while_asked(page: Page) -> (Editor, ResourceId, &'static str) {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-step-step");

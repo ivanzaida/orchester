@@ -24,7 +24,7 @@ use orchester_core::{
 use orchester_workspace::pipelines::flow::{PipelineFlow, StepCard};
 
 use super::{
-  reorder::{Cards, Drive, Move, returned_to_by},
+  reorder::{Cards, Drive, Move, copy_name, returned_to_by},
   state::{Held, Reorder},
 };
 use crate::{
@@ -158,12 +158,6 @@ fn remove_row(ctx: &Ctx, menu: &Menu<'_>, card: &StepCard) -> MenuItem {
     }
   };
   item.icon(Icon::Trash2).danger()
-}
-
-/// What a copy of the step called `name` is called, which `name` itself when it leaves no room for the word.
-fn copy_name(ctx: &Ctx, name: &str) -> Option<Name> {
-  // A name at the limit cannot be extended; its copy keeps the name and is told apart by its number.
-  Name::new(&ctx.t_args("pipeline_hub.copyName", [("name", name)])).ok()
 }
 
 /// *Move up*, *Move down*, the neighbours to run in parallel with and *Run on its own*, then the line before the rest.

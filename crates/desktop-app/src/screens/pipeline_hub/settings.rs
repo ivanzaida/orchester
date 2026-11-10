@@ -7,8 +7,13 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, components::Column, core::Signal};
+use lurq::{
+  app::ctx::Ctx,
+  components::Column,
+  core::{ElementRef, Signal},
+};
 use orchester_core::resource::{Deliverable, PipelineEdit};
+use orchester_workspace::pipelines::sources::Listing;
 
 use super::{
   edit::Edit,
@@ -35,6 +40,8 @@ pub(super) struct Settings<'a> {
   pub locked: bool,
   /// How many saves stored the edit: the box is mounted anew after each, so it no longer has the focus.
   pub saved: u64,
+  /// The *A run delivers* row, which the Deliver chip of an open step brings into view.
+  pub delivers: &'a ElementRef,
 }
 
 pub(super) fn section(ctx: &mut Ctx, settings: &Settings<'_>) -> Column {
@@ -85,6 +92,7 @@ fn pipeline_sources(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components:
     SourcesProps {
       root: settings.project.open.repo_root.clone(),
       project: settings.project.open.project.name().as_str().into(),
+      listing: Listing::Pipeline,
       current: settings.current.clone(),
       edit: settings.edit.clone(),
       locked: settings.locked,
@@ -132,6 +140,7 @@ fn delivers(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components::Row {
     Some(Sub::quiet(ctx.t(words(shown).1))),
     select,
   )
+  .ref_element(settings.delivers.clone())
 }
 
 /// The words of what `delivers` means: its name and what it leaves.

@@ -38,18 +38,19 @@ orchestration tool reported it; `—` until known.
 | [PV2-03](PV2-03-runs-on-picker.md) | The compact *Runs on* picker as a shared component | UI | — | done | `claude/pv2-03-runs-on-picker` → `c37c1caad` | 51.4M (out 209k) |
 | [PV2-04](PV2-04-page-shell.md) | The page: filter, grouped list, panel, Save bar | UI | — | done | `claude/pv2-04-page-shell` → `27cde7e2c` | 97.7M (out 270k) |
 | [PV2-05](PV2-05-steps-flow.md) | Steps drawn as the flow they run in | UI | PV2-04 | done | `claude/pv2-05-steps-flow` → `1b2aa8df7` | 77.6M (out 258k) |
-| [PV2-06](PV2-06-reorder-in-flow.md) | Reorder steps in the flow: drag, ⋯ menu, keys | UI | PV2-01, PV2-05 | blocked | — | — |
-| [PV2-07](PV2-07-step-panel.md) | A step in the panel: strip, groups, Instructions | UI | PV2-04, PV2-05 | blocked | — | — |
-| [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | blocked | — | — |
+| [PV2-06](PV2-06-reorder-in-flow.md) | Reorder steps in the flow: drag, ⋯ menu, keys | UI | PV2-01, PV2-05 | in progress | `claude/pv2-06-reorder` | — |
+| [PV2-07](PV2-07-step-panel.md) | A step in the panel: strip, groups, Instructions | UI | PV2-04, PV2-05 | done | `claude/pv2-07-step-panel` → `c3419c6ec` | 148.3M (out 349k) |
+| [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | in progress | `claude/pv2-08-agent-field` | — |
 | [PV2-09](PV2-09-settings-and-ready.md) | Pipeline settings, Ready? and Needs you | UI | PV2-04 | done | `claude/pv2-09-ready` → `75aa67e32` | 61.7M (out 231k) |
-| [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | in progress | `claude/pv2-10-save-and-cancel` | — |
-| [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | blocked | — | — |
+| [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | done | `claude/pv2-10-save-and-cancel` → `cca2e89e9` | 113.0M (out 342k) |
+| [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | in progress | `claude/pv2-11-versions` | — |
 | [PV2-12](PV2-12-menu-archive.md) | The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab | UI | PV2-04 | done | `claude/pv2-12-menu-archive` → `824561513` | 74.8M (out 239k) |
 | [PV2-13](PV2-13-page-states.md) | Loading, none yet, empty tabs, read failure | UI | PV2-04 | done | `claude/pv2-13-page-states` → `ba2db9eea` | 42.0M (out 136k) |
 | [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | blocked | — | — |
 | [PV2-15](PV2-15-orchestrator-picker.md) | The orchestrator chat adopts the compact picker | UI | PV2-03, PV2-16 | done | `claude/pv2-15-orchestrator-picker` → `e0c34aa8a` | 108.2M (out 318k) |
 | [PV2-16](PV2-16-design-orchestrator-picker.md) | Design: the orchestrator's picker states with the compact picker | design | — | done | Pencil (unsaved) | 2.51M (out 27k) |
-| [PV2-17](PV2-17-readiness-polish.md) | Readiness polish: one story in the chip, Ready? and the cards | UI | PV2-09, PV2-10 | blocked | — | — |
+| [PV2-17](PV2-17-readiness-polish.md) | Readiness and save polish: one story in chips, Ready?, cards and the bar | UI | PV2-09, PV2-10 | todo | — | — |
+| [PV2-18](PV2-18-step-panel-rest.md) | The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool | design + UI | PV2-07 | todo (design first) | — | — |
 
 ## Order
 

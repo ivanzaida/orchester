@@ -72,7 +72,15 @@ impl Drive {
     if self.locked() {
       return;
     }
-    self.settle(duplicate(&self.edit, &self.current, key, name), Some(key));
+    let mut copied = (*self.current).clone();
+    let outcome = match copy_of(&mut copied, key, name) {
+      Some(_) => {
+        self.edit.change(|held| *held = copied);
+        Ok(())
+      }
+      None => Err(MoveError::UnknownStep(key.clone())),
+    };
+    self.settle(outcome, Some(key));
   }
 
   /// Removes step `key`, which no other step returns to on failure ([`returned_to_by`]).
@@ -187,33 +195,36 @@ pub(super) fn add_after(
   Ok(())
 }
 
-/// Copies step `key` to run beside it. The core's copy waits for what the step waits for and nothing waits for it,
-/// which would leave a step that waits for only part of what runs before it, a branch no single line shows: the steps
-/// that wait for the step wait for the copy too.
-pub(super) fn duplicate(
-  edit: &Edit,
-  current: &PipelineEdit,
+/// The copy of step `key`, named `name` when it has one, so that it can be told from the step; `None` when the edit has
+/// no such step. The core's copy waits for what the step waits for and nothing waits for it, which would leave a step
+/// that waits for only part of what runs before it, a branch no single line shows: the steps that wait for the step
+/// wait for the copy too, so the copy runs beside it. The card's menu and the open step's head both copy through this.
+pub(in crate::screens::pipeline_hub) fn copy_of(
+  edit: &mut PipelineEdit,
   key: &StepKey,
   name: Option<Name>,
-) -> Result<(), MoveError> {
-  let mut copied = current.clone();
-  let Some(copy) = copied.duplicate_step(key) else {
-    return Err(MoveError::UnknownStep(key.clone()));
-  };
+) -> Option<StepKey> {
+  let copy = edit.duplicate_step(key)?;
   if let Some(name) = name {
-    copied.update(&copy, |step| step.name = name);
+    edit.update(&copy, |step| step.name = name);
   }
-  let dependents: Vec<StepKey> = copied
+  let dependents: Vec<StepKey> = edit
     .steps()
     .iter()
     .filter(|step| step.key != copy && step.depends_on.contains(key))
     .map(|step| step.key.clone())
     .collect();
   for dependent in &dependents {
-    copied.set_dependency(dependent, &copy, true);
+    edit.set_dependency(dependent, &copy, true);
   }
-  edit.change(|held| *held = copied);
-  Ok(())
+  Some(copy)
+}
+
+/// What a copy of the step called `name` is called (*Research copy*), or none when `name` leaves no room for the word,
+/// which keeps the step's own name.
+pub(in crate::screens::pipeline_hub) fn copy_name(ctx: &Ctx, name: &str) -> Option<Name> {
+  // A name at the limit cannot be extended; its copy keeps the name and is told apart by its number.
+  Name::new(&ctx.t_args("pipeline_hub.copyName", [("name", name)])).ok()
 }
 
 /// The number and name of each step as the flow shows them, for the words that name steps.

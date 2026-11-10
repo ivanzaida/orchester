@@ -37,6 +37,7 @@ mod save;
 mod settings;
 mod sources;
 mod states;
+mod step;
 mod step_line;
 mod steps;
 mod undecided;
@@ -55,6 +56,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
+  resource::StepKey,
   time::Timestamp,
 };
 use orchester_workspace::messages::Message;
@@ -68,7 +70,7 @@ use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   project::ShownProject,
   queries::{self, Again, Session, hub as hub_query, hub::PipelineHubRead},
-  routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
+  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
   screens::{
     hub::agents,
     local_hub::{
@@ -89,15 +91,18 @@ use crate::{
 pub struct Props {
   pub project: ShownProject,
   pub view: PipelinesView,
+  /// The step the panel shows open, which the route holds; none for the pipeline's own panel.
+  pub step: Option<StepKey>,
 }
 impl DevtoolsInspectable for Props {}
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView, step: Option<StepKey>) -> Element {
   ctx.mount_keyed::<PipelineHubScreen>(
     &format!("pipeline-hub-{}", project.open.project.id()),
     Props {
       project: project.clone(),
       view,
+      step,
     },
   )
 }
@@ -130,6 +135,7 @@ impl Component for PipelineHubScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let unsaved: UnsavedSignal = ctx.signal(Unsaved::default());
     let edits = unsaved.clone();
+    let project = ctx.props::<Props>().project.open.project.id();
     let this = Self {
       retry: ctx.signal(0),
       again: Again::default(),
@@ -137,7 +143,13 @@ impl Component for PipelineHubScreen {
       unsaved,
       leaving: ctx.signal(None),
       asking: ctx.signal(false),
-      guard: Navigation::of(ctx).guard(move || edits.get_untracked().0.is_some()),
+      guard: Navigation::of(ctx).guard_within(
+        {
+          let edits = edits.clone();
+          move || edits.get_untracked().0.is_some()
+        },
+        shows_edited(project, edits),
+      ),
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
@@ -147,7 +159,7 @@ impl Component for PipelineHubScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, view } = ctx.props::<Props>().clone();
+    let Props { project, view, step } = ctx.props::<Props>().clone();
     let loaded = self.read(ctx, &project);
     let failed = self.failure.follow(&loaded);
     let unreadable = failed.is_some();
@@ -170,7 +182,7 @@ impl Component for PipelineHubScreen {
           &project,
           (listing, view),
           (selected.as_ref(), &leave, reading),
-          (default, self.hosted()),
+          (default, self.hosted(), step),
         )
       }
       (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
@@ -290,7 +302,7 @@ fn hub_body(
   project: &ShownProject,
   (listing, view): (&Listing, PipelinesView),
   (selected, leave, reading): (Option<&Entry>, &Leave, bool),
-  (default, hosted): (Option<ResourceId>, Hosted),
+  (default, hosted, step): (Option<ResourceId>, Hosted, Option<StepKey>),
 ) -> Element {
   let id = project.open.project.id();
   let Some(entry) = selected else {
@@ -315,6 +327,7 @@ fn hub_body(
       assignables: listing.assignables().clone(),
       default: default == Some(entry.id),
       hosted,
+      step,
     },
   );
   agents::master_detail("pipeline-hub", reading, (list, panel))
@@ -396,6 +409,23 @@ const fn label_key(filter: PipelinesFilter) -> &'static str {
     PipelinesFilter::All => "pipeline_hub.filter.all",
     PipelinesFilter::Drafts => "pipeline_hub.filter.drafts",
     PipelinesFilter::Archived => "pipeline_hub.filter.archived",
+  }
+}
+
+/// Whether `route` shows the pipeline whose panel holds changes that are not saved (`edits`), in its own view or with
+/// one of its steps open: moving between them leaves the edit where it is, so the navigation does not ask.
+fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> bool + Send + Sync + 'static {
+  move |route| {
+    let Some(edited) = edits.get_untracked().0 else {
+      return false;
+    };
+    match route {
+      Route::Project(at, ProjectPage::PipelinesHub(view)) => *at == project && view.item == Some(edited),
+      Route::Project(at, ProjectPage::Pipeline(pipeline, PipelineView::Step(_))) => {
+        *at == project && *pipeline == edited
+      }
+      _ => false,
+    }
   }
 }
 

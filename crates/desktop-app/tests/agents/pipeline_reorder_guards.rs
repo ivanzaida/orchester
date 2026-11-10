@@ -13,6 +13,7 @@ use super::{
   harness::Agents,
   pipeline_flow::{add, agent, open, store},
   pipeline_reorder::{alt, card, flow, focus, hover, open_menu, point, stored},
+  pipeline_step::step_route,
 };
 
 fn key(name: &str) -> StepKey {
@@ -247,4 +248,45 @@ fn pipeline_reorder_a_reorder_that_crosses_an_approval_gate_asks_before_it_saves
   });
   assert_eq!(stored(&agents, id), before, "nothing is saved until Allow");
   agents.press_until("pipeline-hub-confirm-confirm", "saved", |s| stored(s, id) != before);
+}
+
+#[test]
+fn pipeline_reorder_removing_a_step_drops_its_invalid_text_and_a_new_copy_starts_clean() {
+  let mut agents = Agents::new(true);
+  let (id, [research, ..]) = flow(&agents, false);
+  open(&mut agents, id);
+  let copy = key("step-copy");
+
+  // A copy whose budget holds text that is not a number: the bar says what to fix.
+  open_menu(&mut agents, &research);
+  agents.click("pipeline-hub-flow-menu-duplicate");
+  agents.until("the copy", |s| s.exists(&card(&copy)));
+  agents.window.navigation().go(step_route(id, &copy));
+  agents.until("the copy's step", |s| s.exists("pipeline-hub-step-budget"));
+  agents.set("pipeline-hub-step-budget", "many");
+  agents.until("the bar says what to fix", |s| {
+    s.text("team-hub-actions-hint").starts_with("Fix Step budget")
+  });
+
+  // Back to the flow, remove the copy: nothing is left to fix.
+  agents.click("pipeline-hub-step-back");
+  agents.until("the flow", |s| s.exists(&card(&copy)));
+  open_menu(&mut agents, &copy);
+  agents.click("pipeline-hub-flow-menu-remove");
+  agents.until("the copy is gone", |s| !s.exists(&card(&copy)));
+  agents.until("nothing to fix", |s| {
+    !s.text("team-hub-actions-hint").starts_with("Fix")
+  });
+
+  // A new copy takes the same key; the removed one's text does not come back with it.
+  open_menu(&mut agents, &research);
+  agents.click("pipeline-hub-flow-menu-duplicate");
+  agents.until("the new copy", |s| s.exists(&card(&copy)));
+  agents.window.navigation().go(step_route(id, &copy));
+  agents.until("the new copy's step", |s| s.exists("pipeline-hub-step-budget"));
+  assert_eq!(agents.value("pipeline-hub-step-budget"), "", "no stale text in the box");
+  assert!(
+    !agents.text("team-hub-actions-hint").starts_with("Fix"),
+    "and nothing to fix in the bar"
+  );
 }
