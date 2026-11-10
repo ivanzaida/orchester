@@ -11,7 +11,10 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  pipelines::{hub::PipelineHub, library::VersionState},
+  pipelines::{
+    hub::{HubError, PipelineHub},
+    library::VersionState,
+  },
   readiness::Group,
 };
 
@@ -152,4 +155,51 @@ fn readiness_pipeline_hub_carries_each_pipelines_steps_as_the_flow_they_run_in()
     drawn.stages[0].cards[1].runs.is_unassigned(),
     "its second step has no profile yet"
   );
+}
+
+#[test]
+fn readiness_pipeline_hub_a_published_pipeline_with_a_draft_shows_the_drafts_steps_and_counts_them() {
+  use orchester_core::resource::Draft;
+
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let id = fixture.own("delivery", &pipeline(&[Some(builder)], Some(builder)));
+  let version = fixture
+    .db()
+    .latest_version::<Pipeline>(id)
+    .expect("read")
+    .expect("published")
+    .number();
+  fixture
+    .db()
+    .save_draft(
+      id,
+      &Draft::new(
+        pipeline(&[Some(builder), Some(builder), Some(builder)], Some(builder)),
+        Some(version),
+        at(30),
+      ),
+    )
+    .expect("a draft");
+
+  let read = hub(&fixture);
+  let found = read.pipelines().iter().find(|found| found.id == id).expect("listed");
+  assert_eq!(found.state, VersionState::PublishedWithDraft(version));
+  assert!(found.flow.draft, "the panel draws the draft, not the published version");
+  let drawn = found.flow.flow.as_ref().expect("drawn");
+  assert_eq!(drawn.stages.iter().map(|stage| stage.cards.len()).sum::<usize>(), 3);
+  assert_eq!(
+    (found.step_count, drawn.len()),
+    (3, 3),
+    "the list's count and the panel's are the steps, Deliver not among them"
+  );
+  assert!(drawn.deliver.is_some());
+}
+
+#[test]
+fn readiness_pipeline_hub_a_pipeline_that_vanishes_while_it_is_read_fails_the_read_in_words() {
+  let error = HubError::Unreadable(ResourceId::generate());
+  assert_eq!(error.message().key, "pipelines.flow.unreadable");
+  assert!(error.to_string().contains("no draft or version"));
 }

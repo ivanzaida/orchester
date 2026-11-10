@@ -13,8 +13,8 @@ use orchester_core::{
   },
 };
 use orchester_workspace::pipelines::{
-  data::{Assignables, ProfileChoice, ToolChoice},
-  flow::{PipelineFlow, Runs},
+  data::{Assignables, DraftProfileChoice, ProfileChoice, ToolChoice},
+  flow::{Conflicts, Ending, PipelineFlow, Runs},
 };
 
 fn key(value: &str) -> StepKey {
@@ -134,7 +134,8 @@ fn the_cards_are_numbered_stage_by_stage_with_parallel_steps_in_one_stage() {
     ]
   );
   assert_eq!(flow.deliver.as_ref().map(|deliver| deliver.number), Some(6));
-  assert_eq!(flow.len(), 6);
+  assert_eq!(flow.len(), 5, "the steps: Deliver is numbered after them but is not one");
+  assert_eq!(flow.len(), pipeline.steps().len());
 }
 
 #[test]
@@ -250,7 +251,7 @@ fn the_deliver_card_says_how_it_merges_and_who_resolves_conflicts() {
   let deliver = flow.deliver.expect("deliver step");
   assert_eq!(deliver.mode, DeliverMode::ApproveToMerge);
   assert_eq!(deliver.method, MergeMethod::Squash);
-  assert_eq!(deliver.conflicts.as_deref(), Some("Builder"));
+  assert_eq!(deliver.conflicts, Conflicts::Profile(Arc::from("Builder")));
 }
 
 #[test]
@@ -281,7 +282,7 @@ fn conflicts_go_to_the_person_when_no_step_can_write() {
     .expect("valid steps")
     .with_deliver(pipeline.deliver().cloned());
   let flow = PipelineFlow::of(&pipeline, &assignables).expect("drawable");
-  assert_eq!(flow.deliver.expect("deliver step").conflicts, None);
+  assert_eq!(flow.deliver.expect("deliver step").conflicts, Conflicts::Person);
 }
 
 #[test]
@@ -292,7 +293,8 @@ fn a_pipeline_without_a_deliver_step_ends_in_what_it_delivers() {
     .with_delivers(Deliverable::Report);
   let flow = PipelineFlow::of(&report, &assignables).expect("drawable");
   assert!(flow.deliver.is_none());
-  assert_eq!(flow.delivers, Deliverable::Report);
+  assert_eq!(Ending::of(&report), Ending::Delivers(Deliverable::Report));
+  assert_eq!(Ending::of(&pipeline), Ending::Merged);
   assert_eq!(flow.len(), 5);
 }
 
@@ -331,17 +333,18 @@ fn steps_without_a_profile_or_tool_or_with_an_unpublished_one_need_you() {
     [
       &Runs::NoProfile,
       &Runs::NoTool,
-      &Runs::ProfileNotPublished,
-      &Runs::ToolNotPublished
+      &Runs::ProfileNotPublished { id: someone },
+      &Runs::ToolNotPublished { id: someone }
     ]
   );
   assert!(runs.iter().all(|runs| runs.needs_you()));
-  assert!(Runs::NoProfile.is_unassigned() && !Runs::ProfileNotPublished.is_unassigned());
+  assert!(Runs::NoProfile.is_unassigned() && !Runs::ProfileNotPublished { id: someone }.is_unassigned());
 }
 
 #[test]
 fn a_tool_a_step_cannot_run_yet_needs_you() {
   let http = tool("Webhook", ToolKind::Http);
+  let http_id = http.id;
   let steps = vec![step("a", StepKind::Tool { tool: Some(http.id) }, &[])];
   let assignables = Assignables {
     tools: vec![http],
@@ -352,6 +355,7 @@ fn a_tool_a_step_cannot_run_yet_needs_you() {
   assert_eq!(
     runs,
     &Runs::ToolNotRunnable {
+      id: http_id,
       name: Arc::from("Webhook")
     }
   );
@@ -373,4 +377,38 @@ fn independent_chains_are_said_to_be_undrawable_rather_than_guessed() {
     PipelineFlow::of(&pipeline, &assignables),
     Err(FlowError::Branches(key("b")))
   );
+}
+
+#[test]
+fn conflicts_name_a_profile_that_is_not_published_rather_than_the_person() {
+  let (pipeline, mut assignables) = feature();
+  let position = assignables
+    .profiles
+    .iter()
+    .position(|profile| &*profile.name == "Builder")
+    .expect("the builder");
+  let builder = assignables.profiles.remove(position);
+  assignables.draft_profiles.push(DraftProfileChoice {
+    id: builder.id,
+    name: builder.name.clone(),
+    model: builder.model.clone(),
+  });
+  let flow = PipelineFlow::of(&pipeline, &assignables).expect("drawable");
+  assert_eq!(
+    flow.deliver.expect("deliver step").conflicts,
+    Conflicts::ProfileNotPublished(Arc::from("Builder"))
+  );
+}
+
+#[test]
+fn a_card_knows_whether_its_step_runs_a_tool() {
+  let (pipeline, assignables) = feature();
+  let flow = PipelineFlow::of(&pipeline, &assignables).expect("drawable");
+  let tools: Vec<(usize, bool)> = flow
+    .stages
+    .iter()
+    .flat_map(|stage| &stage.cards)
+    .map(|card| (card.number, card.is_tool()))
+    .collect();
+  assert_eq!(tools, [(1, false), (2, false), (3, false), (4, true), (5, false)]);
 }

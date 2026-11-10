@@ -31,10 +31,15 @@ pub enum Runs {
   NoProfile,
   NoTool,
   /// The step names a profile that has no published version (or none any more).
-  ProfileNotPublished,
-  ToolNotPublished,
+  ProfileNotPublished {
+    id: ResourceId,
+  },
+  ToolNotPublished {
+    id: ResourceId,
+  },
   /// A published tool a step cannot run in this version.
   ToolNotRunnable {
+    id: ResourceId,
     name: Arc<str>,
   },
 }
@@ -71,6 +76,13 @@ pub struct StepCard {
   pub on_failure: Option<ReturnsTo>,
 }
 
+impl StepCard {
+  /// Whether the step runs a tool, not an agent.
+  pub const fn is_tool(&self) -> bool {
+    self.access.is_none()
+  }
+}
+
 /// An approval gate: the run waits for the person after `step`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Gate {
@@ -93,16 +105,42 @@ pub struct DeliverCard {
   pub number: usize,
   pub mode: DeliverMode,
   pub method: MergeMethod,
-  /// The profile that resolves conflicts; `None` when no step can, so conflicts go to the person.
-  pub conflicts: Option<Arc<str>>,
+  pub conflicts: Conflicts,
+}
+
+/// Who resolves a merge conflict.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Conflicts {
+  /// A published profile, which the integrating step runs.
+  Profile(Arc<str>),
+  /// The profile the integrating step runs exists but has no published version, so it cannot resolve anything yet.
+  ProfileNotPublished(Arc<str>),
+  /// No step can, so conflicts go to the person.
+  Person,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineFlow {
   pub stages: Vec<Stage>,
   pub deliver: Option<DeliverCard>,
-  /// What a run of the pipeline delivers, which the line's end says.
-  pub delivers: Deliverable,
+}
+
+/// How the line ends, which the end marker says: in a merge, or in what the run delivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ending {
+  /// The pipeline has a Deliver step, so the run ends in a merge.
+  Merged,
+  Delivers(Deliverable),
+}
+
+impl Ending {
+  pub fn of(pipeline: &Pipeline) -> Self {
+    if pipeline.deliver().is_some() {
+      Self::Merged
+    } else {
+      Self::Delivers(pipeline.delivers())
+    }
+  }
 }
 
 impl PipelineFlow {
@@ -145,13 +183,13 @@ impl PipelineFlow {
       deliver: pipeline
         .deliver()
         .map(|deliver| deliver_card(pipeline, deliver, total + 1, assignables)),
-      delivers: pipeline.delivers(),
     })
   }
 
-  /// How many numbered cards the flow has, the Deliver step among them.
+  /// How many steps the flow has: the count every place that says *Steps N* gives. The Deliver card is numbered after
+  /// them but is not a step.
   pub fn len(&self) -> usize {
-    self.stages.iter().map(|stage| stage.cards.len()).sum::<usize>() + usize::from(self.deliver.is_some())
+    self.stages.iter().map(|stage| stage.cards.len()).sum()
   }
 
   pub fn is_empty(&self) -> bool {
@@ -194,13 +232,14 @@ fn runs(step: &Step, assignables: &Assignables) -> Runs {
       ..
     } => assignables
       .profile(*id)
-      .map_or(Runs::ProfileNotPublished, |profile| Runs::Profile {
+      .map_or(Runs::ProfileNotPublished { id: *id }, |profile| Runs::Profile {
         name: profile.name.clone(),
         model: model.as_ref().unwrap_or(&profile.model).as_str().into(),
       }),
     StepKind::Tool { tool: Some(id) } => match assignables.tool(*id) {
-      None => Runs::ToolNotPublished,
+      None => Runs::ToolNotPublished { id: *id },
       Some(tool) if !tool.runnable => Runs::ToolNotRunnable {
+        id: *id,
         name: tool.name.clone(),
       },
       Some(tool) => Runs::Tool {
@@ -213,8 +252,14 @@ fn runs(step: &Step, assignables: &Assignables) -> Runs {
 fn deliver_card(pipeline: &Pipeline, deliver: &DeliverStep, number: usize, assignables: &Assignables) -> DeliverCard {
   let conflicts = integrating_step(pipeline, deliver, |_| true)
     .and_then(|step| step.kind.executor())
-    .and_then(|profile| assignables.profile(profile))
-    .map(|profile| profile.name.clone());
+    .map_or(Conflicts::Person, |id| match assignables.profile(id) {
+      Some(profile) => Conflicts::Profile(profile.name.clone()),
+      None => assignables
+        .draft_profiles
+        .iter()
+        .find(|draft| draft.id == id)
+        .map_or(Conflicts::Person, |draft| Conflicts::ProfileNotPublished(draft.name.clone())),
+    });
   DeliverCard {
     number,
     mode: deliver.mode(),
@@ -228,6 +273,8 @@ fn deliver_card(pipeline: &Pipeline, deliver: &DeliverStep, number: usize, assig
 pub struct FlowRead {
   /// Whether the steps are the draft's; otherwise the latest published version's.
   pub draft: bool,
+  /// How the line ends, which is known even when the steps cannot be drawn.
+  pub ending: Ending,
   /// The flow, or why the steps cannot be drawn as one line.
   pub flow: Result<PipelineFlow, FlowError>,
 }
@@ -244,6 +291,7 @@ impl FlowRead {
     };
     Ok(Some(Self {
       draft,
+      ending: Ending::of(&body),
       flow: PipelineFlow::of(&body, assignables),
     }))
   }

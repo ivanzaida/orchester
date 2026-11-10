@@ -13,6 +13,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
+use thiserror::Error;
 
 use super::{
   data::Assignables,
@@ -21,13 +22,37 @@ use super::{
   problems::problem_view,
 };
 use crate::{
-  messages::Message,
+  messages::{self, Message},
   readiness::{Group, ReadinessError, ReadinessStanding},
   workspace::Workspace,
 };
 
 /// Joins the steps of a cycle in a problem's words.
 const CYCLE_ARROW: &str = "→";
+
+/// Why the hub could not be read.
+#[derive(Debug, Error)]
+pub enum HubError {
+  #[error(transparent)]
+  Readiness(#[from] ReadinessError),
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  /// A pipeline the library listed has neither a draft nor a version any more (another process removed it while the
+  /// hub was read), so its steps cannot be drawn. The read fails rather than list a pipeline without them.
+  #[error("pipeline {0} has no draft or version to draw")]
+  Unreadable(ResourceId),
+}
+
+impl HubError {
+  /// What to tell the person.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Readiness(error) => error.message(),
+      Self::Store(error) => messages::store_error(error),
+      Self::Unreadable(_) => Message::new("pipelines.flow.unreadable"),
+    }
+  }
+}
 
 /// One pipeline of the project.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,7 +130,7 @@ impl Workspace {
   /// The pipelines hub of the local project at `repo_root`. Reads the database and the keychain's list of what it has,
   /// so it blocks: run it on the background pool, on an explicit change and never on a timer
   /// ([`Workspace::project_readiness`]).
-  pub fn pipeline_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<PipelineHub, ReadinessError> {
+  pub fn pipeline_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<PipelineHub, HubError> {
     let db = ProjectDb::open(repo_root)?;
     let readiness = self.readiness_in(&db, repo_root, vault)?;
     let assignables = Assignables::load(&db)?;
@@ -116,10 +141,7 @@ impl Workspace {
         VersionState::DraftOnly => draft_problem(&db, entry.id)?,
         _ => None,
       };
-      // The library lists only pipelines that have a draft or a version, so there is one to draw.
-      let Some(flow) = FlowRead::of(&db, entry.id, &assignables)? else {
-        continue;
-      };
+      let flow = FlowRead::of(&db, entry.id, &assignables)?.ok_or(HubError::Unreadable(entry.id))?;
       pipelines.push(of_entry(entry, (standing, problem), Arc::new(flow)));
     }
     Ok(PipelineHub {
