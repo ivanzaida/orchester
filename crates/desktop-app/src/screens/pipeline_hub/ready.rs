@@ -171,17 +171,17 @@ fn part(ctx: &Ctx, problem: &Problem, index: usize) -> Part<Fix> {
     },
     Problem::Missing(part) => about_runs(
       ctx,
-      format!("missing-{index}"),
+      &format!("missing-{index}"),
       missing(ctx, ResourceKind::Pipeline, part),
       Some(Fix::Agents),
     ),
-    Problem::Undecided(why) => about_runs(ctx, "undecided".to_owned(), undecided_words(ctx, why, &[]), None),
+    Problem::Undecided(why) => about_runs(ctx, "undecided", undecided_words(ctx, why, &[]), None),
   }
 }
 
 /// A row about what the steps run as a whole, not about one step.
-fn about_runs(ctx: &Ctx, id: String, words: Arc<str>, fix: Option<Fix>) -> Part<Fix> {
-  about(ctx, (&id, "pipeline_hub.ready.profilesAndTools"), words, fix)
+fn about_runs(ctx: &Ctx, id: &str, words: Arc<str>, fix: Option<Fix>) -> Part<Fix> {
+  about(ctx, (id, "pipeline_hub.ready.profilesAndTools"), words, fix)
 }
 
 fn about(ctx: &Ctx, (id, label): (&str, &str), words: Arc<str>, fix: Option<Fix>) -> Part<Fix> {
