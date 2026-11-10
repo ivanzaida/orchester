@@ -95,10 +95,7 @@
       "nameSub": "Lowercase with dashes; agents load it by this name",
       "namePlaceholder": "e.g. review-diff",
       "nameTaken": "The team already has a skill named {{name}} · pick another name",
-      "description": "Description",
-      "descriptionPlaceholder": "When agents should use it, in one or two sentences",
-      "files": "Files",
-      "filesSub": "SKILL.md is made from the description. Adding files, importing a folder and choosing the CLIs that load it are not in this form yet"
+      "descriptionPlaceholder": "When agents should use it, in one or two sentences"
     },
     "tool": {
       "name": "Name",

@@ -116,8 +116,12 @@ fn team_qa_create_a_skill_a_tool_and_an_mcp_server_are_the_servers_at_v1() {
   let (_, server) = made(
     HubFilter::Skills,
     &[
-      ("team-new-skill-name", "review-diff"),
-      ("team-new-skill-description", "Review a diff before it merges."),
+      ("team-new-skill-name-input", "review-diff"),
+      ("team-new-skill-description-input", "Review a diff before it merges."),
+      (
+        "team-new-skill-skill-md-input",
+        "# review-diff\n\nRead the diff file by file.",
+      ),
     ],
     "review-diff",
   );

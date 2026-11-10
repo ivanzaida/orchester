@@ -47,11 +47,11 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
 ];
 
 /// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's, an
-/// instruction's is the form an edit has too.
+/// instruction's and a skill's are the form an edit has too.
 fn name_field(name: &str) -> String {
   match name {
     "profile" => "team-new-profile-role-name-input".to_owned(),
-    "instruction" => "team-new-instruction-name-input".to_owned(),
+    "instruction" | "skill" => format!("team-new-{name}-name-input"),
     _ => format!("team-new-{name}-name"),
   }
 }
@@ -60,7 +60,7 @@ fn name_field(name: &str) -> String {
 fn name_sub(name: &str) -> String {
   match name {
     "profile" => "team-new-profile-role-name-sub".to_owned(),
-    "instruction" => "team-new-instruction-name-sub".to_owned(),
+    "instruction" | "skill" => format!("team-new-{name}-name-sub"),
     _ => format!("team-new-{name}-name-row-sub"),
   }
 }
@@ -254,8 +254,15 @@ fn local_hub_create_an_instruction_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_skill_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Skills);
-  agents.set("team-new-skill-name", "review-diff");
-  agents.set("team-new-skill-description", "Review a diff for the project's rules.");
+  agents.set("team-new-skill-name-input", "review-diff");
+  agents.set(
+    "team-new-skill-description-input",
+    "Review a diff for the project's rules.",
+  );
+  agents.set(
+    "team-new-skill-skill-md-input",
+    "# review-diff\n\nRead the diff file by file.",
+  );
   agents.click("local-hub-new-create");
   agents.until("the new skill's panel", |s| {
     matches!(

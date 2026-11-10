@@ -5,10 +5,10 @@
 //! version someone published first is refused, and the fields reload from the server's latest, which the notice over
 //! them says (A30); while the team server cannot be reached what was typed stays and Save waits for it (A31).
 //!
-//! The kind's own fields are its panel's ([`super::plain`], [`super::tool`]); this is what they share: the version they
-//! are made on, Save's action and what it answered ([`view`]).
+//! The kind's own fields are the form that makes one ([`crate::screens::hub::forms`],
+//! [`crate::screens::hub::profile_form`]); this is what the edits share: the version they are made on, Save's action
+//! and what it answered ([`view`]).
 
-mod fields;
 mod view;
 
 use std::{fmt::Debug, future::Future, path::PathBuf, sync::Arc};
@@ -33,10 +33,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-pub(super) use self::{
-  fields::TextSection,
-  view::{Parts, View},
-};
+pub(super) use self::view::{Parts, View};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   services::Services,

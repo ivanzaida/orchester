@@ -157,7 +157,7 @@ fn team_hub_create_a_required_field_says_so_and_nothing_is_made() {
     (HubFilter::Profiles, "team-new-profile-role-name-sub"),
     (HubFilter::McpServers, "team-new-mcp-name-row-sub"),
     (HubFilter::Instructions, "team-new-instruction-name-sub"),
-    (HubFilter::Skills, "team-new-skill-name-row-sub"),
+    (HubFilter::Skills, "team-new-skill-name-sub"),
     (HubFilter::Tools, "team-new-tool-name-row-sub"),
   ];
   for (filter, sub) in required {

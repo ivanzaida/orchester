@@ -1,5 +1,6 @@
-//! A team instruction is made and edited with one form (`Agents · v2` A10 for a new one, A27 for an admin's edit): the
-//! form that makes one draws the same fields, in the same order, as the admin's edit of one the team holds. On the QA state `team-edit`, against the stand-in team server.
+//! A team instruction and skill are made and edited with one form each (`Agents · v2` A10, A11 for a new one, A27,
+//! A28 for an admin's edit): the form that makes one draws the same fields, in the same order, as the admin's edit
+//! of one the team holds. On the QA state `team-edit`, against the stand-in team server.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_hub_forms`
 
@@ -25,14 +26,24 @@ struct Kind {
   sections: &'static [&'static str],
 }
 
-const KINDS: [Kind; 1] = [Kind {
-  filter: HubFilter::Instructions,
-  kind: ResourceKind::Instruction,
-  seeded: "Project rules",
-  name: "instruction",
-  rows: &["format"],
-  sections: &["text"],
-}];
+const KINDS: [Kind; 2] = [
+  Kind {
+    filter: HubFilter::Instructions,
+    kind: ResourceKind::Instruction,
+    seeded: "Project rules",
+    name: "instruction",
+    rows: &["format"],
+    sections: &["text"],
+  },
+  Kind {
+    filter: HubFilter::Skills,
+    kind: ResourceKind::Skill,
+    seeded: "review-diff",
+    name: "skill",
+    rows: &["description", "files"],
+    sections: &["skill-md"],
+  },
+];
 
 /// What the form's parts say, in order: each row's label, and each section's, with *· required* (a new one's mark)
 /// left out; and whether each takes typing (a field) or shows a value.

@@ -1,13 +1,14 @@
 //! The forms of an instruction, a skill and a tool, each one form for making the resource and for editing it (`Agents ·
 //! v2` `acFkz`: A10 `hGdGu`, A11 `p4aSf`, A12 `T4rWil`, L5–L7 for a new one; A27 `uVUZ4`, A28 `qfrbn`, A29 `FrraS` for
 //! an edit). A kind's fields, their checks and the body they make are the same whether it is made or edited
-//! ([`InstructionFields`]); the panel around them decides the head, the bar, what the
+//! ([`InstructionFields`], [`SkillFields`]); the panel around them decides the head, the bar, what the
 //! fields start from and where the body goes, and adds the rows that exist only around a resource that is made (*Used
 //! by*) or only before (*Added to*). As the agent profile's form ([`super::profile_form`]) does, the rows are the
 //! edit's look: a key 170 wide, a field that cannot be saved says why under its label, and a text an agent reads is a
 //! section of its own whose label is marked *· required* while it is made and *· changed* while an edit differs.
 
 mod instruction;
+mod skill;
 
 use std::sync::Arc;
 
@@ -22,7 +23,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-pub(in crate::screens) use self::instruction::InstructionFields;
+pub(in crate::screens) use self::{instruction::InstructionFields, skill::SkillFields};
 use crate::{
   screens::team_hub::rows::{self, Sub},
   theme::HubText,
@@ -70,6 +71,10 @@ pub(in crate::screens) struct Drawn<B> {
 #[derive(Clone, Copy, PartialEq)]
 enum Look {
   Plain,
+  /// An identifier or a program, in Geist Mono.
+  Mono,
+  /// A paragraph, at least this high; the row's key stays at the top.
+  Area(f32),
 }
 
 /// One field's row: its part of the ids, the keys of its words, how it looks and whether a new resource needs it.
@@ -124,6 +129,8 @@ impl<B> Form<'_, B> {
     }
     input = match line.look {
       Look::Plain => input,
+      Look::Mono => input.mono(),
+      Look::Area(height) => input.text_area().area_height(height),
     };
     if let Some(first) = first {
       input = input.element(first.clone());
@@ -141,7 +148,12 @@ impl<B> Form<'_, B> {
       }
       None => line.sub.map(|sub| Sub::quiet(ctx.t(sub))),
     };
-    rows::row(&id, &label, sub, input.render(ctx))
+    let row = rows::row(&id, &label, sub, input.render(ctx));
+    if matches!(line.look, Look::Area(_)) {
+      row.align_items(Alignment::Start)
+    } else {
+      row
+    }
   }
 
   /// The name row of `line`, when the form has a name field.

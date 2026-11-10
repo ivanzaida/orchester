@@ -50,8 +50,15 @@ fn local_hub_create_an_instruction_is_not_refused_to_synthetic_input() {
 fn local_hub_create_a_skill_is_not_refused_to_synthetic_input() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Skills);
-  agents.set("team-new-skill-name", "review-diff");
-  agents.set("team-new-skill-description", "Review a diff for the project's rules.");
+  agents.set("team-new-skill-name-input", "review-diff");
+  agents.set(
+    "team-new-skill-description-input",
+    "Review a diff for the project's rules.",
+  );
+  agents.set(
+    "team-new-skill-skill-md-input",
+    "# review-diff\n\nRead the diff file by file.",
+  );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   agents.until("the skill is made", |s| held(s, ResourceKind::Skill) == 1);
   assert!(!agents.exists("team-new-person-only"));

@@ -165,17 +165,7 @@
       "title": "Instruction"
     },
     "skill": {
-      "title": "Skill",
-      "name": "Name",
-      "nameSub": "Lowercase with dashes; agents load it by this name",
-      "description": "Description",
-      "descriptionSub": "Tells agents when to use it",
-      "descriptionPlaceholder": "When agents should use it, in one or two sentences",
-      "body": "SKILL.md",
-      "bodySub": "Markdown the agent reads when it loads the skill",
-      "bodyPlaceholder": "Write what the agent does with this skill…",
-      "files": "Files",
-      "filesSub": "Its reference files are not changed here"
+      "title": "Skill"
     },
     "text": {
       "gone": "It is no longer in this project."

@@ -1,12 +1,13 @@
-//! A local instruction is made and edited with one form (L5 for a new one; its panel, edited in place, as A27 draws
-//! an edit): the form that makes one draws the same fields, in the same order, as the panel of one the project holds.
+//! A local instruction and skill are made and edited with one form each (L5, L6 for a new one; their panels, edited in
+//! place, as A27 and A28 draw an edit): the form that makes one draws the same fields, in the same order, as the panel
+//! of one the project holds, and a skill's panel keeps its name field.
 //! `cargo test -p orchester-app --test agents local_hub_forms`.
 
 use orchester_app::routes::{HubFilter, HubView};
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceBody, Slug},
+  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceBody, Skill, Slug},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -56,12 +57,27 @@ fn local_hub_forms_create_and_edit_draw_the_same_fields() {
     InstructionScope::Project,
   )
   .expect("instruction");
-  let kinds = [(
-    HubFilter::Instructions,
-    published(&agents, "style", &rule),
-    "instruction",
-    &["format", "text"][..],
-  )];
+  let skill = Skill::new(
+    "Runs the checks.".into(),
+    "Run them all.".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("skill");
+  let kinds = [
+    (
+      HubFilter::Instructions,
+      published(&agents, "style", &rule),
+      "instruction",
+      &["format", "text"][..],
+    ),
+    (
+      HubFilter::Skills,
+      published(&agents, "checks", &skill),
+      "skill",
+      &["name", "description", "files", "skill-md"][..],
+    ),
+  ];
   for (filter, id, name, parts) in kinds {
     open(&mut agents, HubView::new(filter, Some(id)));
     let panel = format!("local-hub-{name}");
