@@ -115,7 +115,7 @@ pub use self::{
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   permissions::{PermissionsSpacing, PermissionsText},
-  pipelines::{PipelinesSpacing, PipelinesText},
+  pipelines::{PIPELINES_BONE_FADE, PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
   review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
