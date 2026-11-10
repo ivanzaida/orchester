@@ -177,7 +177,7 @@ impl ProfileEdit {
     )?;
     let sections = vec![
       self.role_section(ctx, role_error).into(),
-      self.from_team(ctx, sheet, config).into(),
+      self.team_section(ctx, sheet, config).into(),
     ];
     Some(Drawn { parts, sections })
   }
@@ -249,7 +249,7 @@ impl ProfileEdit {
 
   /// *From the team*: the CLI and model as the version has them, the lists the profile gives with *Add*, and the
   /// secrets it needs.
-  fn from_team(&self, ctx: &mut Ctx, sheet: &TeamProfileSheet, config: Option<&TeamConfig>) -> Column {
+  fn team_section(&self, ctx: &mut Ctx, sheet: &TeamProfileSheet, config: Option<&TeamConfig>) -> Column {
     let mut rows = vec![
       rows::row(
         "team-hub-from-team-cli",

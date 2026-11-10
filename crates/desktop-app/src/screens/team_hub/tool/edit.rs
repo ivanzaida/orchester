@@ -164,7 +164,7 @@ impl Component for ToolEditor {
       .child(head)
       .with_children(parts.notice)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
-      .child(self.from_team(ctx, sheet, &errors))
+      .child(self.team_section(ctx, sheet, &errors))
       .child(computer::section(ctx, entry, sheet));
     panel::frame(entry, body, Some(parts.bar)).into()
   }
@@ -172,7 +172,7 @@ impl Component for ToolEditor {
 
 impl ToolEditor {
   /// *From the team*: its kind, then its fields; what cannot be saved says why under the field's label.
-  fn from_team(&self, ctx: &mut Ctx, sheet: &TeamToolSheet, errors: &CommandErrors) -> Column {
+  fn team_section(&self, ctx: &mut Ctx, sheet: &TeamToolSheet, errors: &CommandErrors) -> Column {
     let error = |message: &Option<Message>| message.as_ref().map(|message| message_text(ctx, message));
     let program_error = error(&errors.program);
     let timeout_error = error(&errors.timeout);

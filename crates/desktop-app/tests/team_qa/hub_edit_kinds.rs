@@ -2,8 +2,8 @@
 //! server (`Agents · v2` A27 `uVUZ4`, A28 `qfrbn`, A29 `FrraS`, A30 `U5e2m`, A31 `rHN6u`;
 //! `docs/design/team-configuration-live.md` rule 6): Save publishes the next version at once; a version a teammate
 //! published first is refused, and the panel reloads from it and says who published it; while the team server cannot
-//! be reached what was typed stays, Save publishes nothing and Cancel still puts back the version. On the QA state `team-edit`; a member's read-only
-//! panels are `--test agents team_hub_member`'s.
+//! be reached what was typed stays, Save publishes nothing and Cancel still puts back the version. On the QA state
+//! `team-edit`; a member's read-only panels are `--test agents team_hub_member`'s.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_hub_edit_kinds`
 
@@ -65,9 +65,7 @@ impl Opened {
   /// Types `value` into `field` and waits for Save to say what it publishes.
   fn type_into(&mut self, field: &str, value: &str) {
     self.window.set(field, value);
-    self
-      .window
-      .until("the panel to hold the change", |window| unsaved(window));
+    self.window.until("the panel to hold the change", unsaved);
   }
 
   /// Presses Save and waits for the stand-in to hold `count` versions and the panel to read the latest.

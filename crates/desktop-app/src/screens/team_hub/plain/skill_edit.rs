@@ -1,8 +1,8 @@
 //! An admin's panel of a team skill, edited in place (`A28 · Agents · Skill · admin · editing` `qfrbn`): the head, the
 //! chips with *Unsaved changes* while it differs from the version it is made on, *From the team* with its description
 //! as a text area, its files and *Used by* (read-only: a profile gives it), *SKILL.md* as a text area, *On this
-//! computer* (nothing) and the fixed Save/Cancel bar ([`super::super::edit`]). Its reference files and where it is added
-//! stay as the version has them: the files are not changed here, as in a local skill's panel.
+//! computer* (nothing) and the fixed Save/Cancel bar ([`super::super::edit`]). Its reference files and where it is
+//! added stay as the version has them: the files are not changed here, as in a local skill's panel.
 
 use std::sync::Arc;
 
