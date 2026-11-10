@@ -1,6 +1,6 @@
 # PV2-12 · The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab
 
-- **Status:** in progress
+- **Status:** in progress (fix round 2)
 - **Kind:** UI
 - **Depends on:** PV2-04
 - **Branch:** `claude/pv2-12-menu-archive`

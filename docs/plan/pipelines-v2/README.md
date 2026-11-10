@@ -37,12 +37,12 @@ orchestration tool reported it; `—` until known.
 | [PV2-02](PV2-02-step-runs-on.md) | Core: a step's connection and effort | core | — | canceled | — | — |
 | [PV2-03](PV2-03-runs-on-picker.md) | The compact *Runs on* picker as a shared component | UI | — | done | `claude/pv2-03-runs-on-picker` → `c37c1caad` | 51.4M (out 209k) |
 | [PV2-04](PV2-04-page-shell.md) | The page: filter, grouped list, panel, Save bar | UI | — | done | `claude/pv2-04-page-shell` → `27cde7e2c` | 97.7M (out 270k) |
-| [PV2-05](PV2-05-steps-flow.md) | Steps drawn as the flow they run in | UI | PV2-04 | in progress | `claude/pv2-05-steps-flow` | — |
+| [PV2-05](PV2-05-steps-flow.md) | Steps drawn as the flow they run in | UI | PV2-04 | done | `claude/pv2-05-steps-flow` → `1b2aa8df7` | 77.6M (out 258k) |
 | [PV2-06](PV2-06-reorder-in-flow.md) | Reorder steps in the flow: drag, ⋯ menu, keys | UI | PV2-01, PV2-05 | blocked | — | — |
 | [PV2-07](PV2-07-step-panel.md) | A step in the panel: strip, groups, Instructions | UI | PV2-04, PV2-05 | blocked | — | — |
 | [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | blocked | — | — |
 | [PV2-09](PV2-09-settings-and-ready.md) | Pipeline settings, Ready? and Needs you | UI | PV2-04 | todo | — | — |
-| [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | todo | — | — |
+| [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | in progress | `claude/pv2-10-save-and-cancel` | — |
 | [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | blocked | — | — |
 | [PV2-12](PV2-12-menu-archive.md) | The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab | UI | PV2-04 | in progress | `claude/pv2-12-menu-archive` | — |
 | [PV2-13](PV2-13-page-states.md) | Loading, none yet, empty tabs, read failure | UI | PV2-04 | done | `claude/pv2-13-page-states` → `ba2db9eea` | 42.0M (out 136k) |

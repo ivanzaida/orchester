@@ -1,9 +1,9 @@
 # PV2-10 · Edit in place: Save makes vN, Cancel puts it back
 
-- **Status:** todo (PV2-04 merged; waits for a slot and its hot files)
+- **Status:** in progress (also builds the pipeline's settings rows, moved from PV2-09: the edit model owns every editable field)
 - **Kind:** UI + workspace
 - **Depends on:** PV2-04
-- **Branch:** —
+- **Branch:** `claude/pv2-10-save-and-cancel`
 - **Tokens:** —
 
 ## Goal
