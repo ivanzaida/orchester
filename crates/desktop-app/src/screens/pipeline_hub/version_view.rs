@@ -99,8 +99,8 @@ pub(super) fn parts(ctx: &mut Ctx, parts: &Parts<'_>) -> Vec<Element> {
   ]
 }
 
-/// *Viewing v2* over what *Restore v2* does (and, while the edit has changes, that they are kept), with *Restore v2*
-/// and *Back*.
+/// *Read-only* over what *Restore v2* does (and, while the edit has changes, that they are kept), with *Restore v2* and
+/// *Back*: the head already names the version shown.
 fn notice(ctx: &Ctx, parts: &Parts<'_>) -> Element {
   let Parts {
     entry,
@@ -123,7 +123,7 @@ fn notice(ctx: &Ctx, parts: &Parts<'_>) -> Element {
       restore_button.on_click(move || restore())
     }
     Restore::Same => {
-      restore_button.unavailable(ctx.t_args("pipeline_hub.versions.restoreSame", [("version", version.clone())]))
+      restore_button.unavailable(ctx.t_args("pipeline_hub.versions.restoreSame", [("version", version)]))
     }
     Restore::Busy => restore_button.disabled(),
   };
@@ -136,7 +136,7 @@ fn notice(ctx: &Ctx, parts: &Parts<'_>) -> Element {
   let mut notice = Notice::new(
     "pipeline-hub-version-viewing",
     NoticeTone::Neutral,
-    ctx.t_args("pipeline_hub.versions.viewing", [("version", version)]),
+    ctx.t("pipeline_hub.versions.viewing"),
   )
   .icon(Icon::History)
   .title_style(HubText::NoticeTitle.role())

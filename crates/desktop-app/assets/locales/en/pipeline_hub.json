@@ -324,7 +324,7 @@
       "metaNoRun": "Published {{date}} · no runs on it",
       "metaOneRun": "Published {{date}} · 1 run on it",
       "metaRuns": "Published {{date}} · {{count}} runs on it",
-      "viewing": "Viewing {{version}} · read-only",
+      "viewing": "Read-only",
       "restore": "Restore {{version}}",
       "restoreSame": "The panel already holds {{version}}.",
       "restoreHint": "Restore puts {{version}} in the editor as unsaved changes · Save makes {{next}}",
