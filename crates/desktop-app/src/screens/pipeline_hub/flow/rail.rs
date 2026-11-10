@@ -40,6 +40,9 @@ pub(super) enum Node {
   Parallel,
   /// The end of the line: a dot (`Node` `H2joy6`); nothing below it.
   End,
+  /// Only the line, for what stands between the start and the end without being a step: the note that there are none,
+  /// or that they cannot be drawn.
+  Line,
 }
 
 impl Node {
@@ -47,7 +50,7 @@ impl Node {
     match self {
       Self::Step(_) | Self::NotReady(_) => STEP_TOP,
       Self::Parallel => GROUP_TOP,
-      Self::Start | Self::Gate | Self::End => 0.0,
+      Self::Start | Self::Gate | Self::End | Self::Line => 0.0,
     }
   }
 
@@ -73,7 +76,7 @@ pub(super) fn row(ctx: &Ctx, id: &str, node: &Node, (cell, room): (Element, Spac
   if node.top() > 0.0 {
     rail = rail.child(line(format!("{id}-above")).height(Dimension::Px(node.top())));
   }
-  rail = rail.child(mark(id, node));
+  rail = rail.with_children(mark(id, node));
   if node.continues() {
     rail = rail.child(line(format!("{id}-below")).flex(1.0));
   }
@@ -93,7 +96,7 @@ pub(super) fn row(ctx: &Ctx, id: &str, node: &Node, (cell, room): (Element, Spac
     .into()
 }
 
-fn mark(id: &str, node: &Node) -> Row {
+fn mark(id: &str, node: &Node) -> Option<Row> {
   let round = || {
     Row::new()
       .id(format!("{id}-node"))
@@ -109,7 +112,7 @@ fn mark(id: &str, node: &Node) -> Row {
       .background(PaletteColor::SurfaceRaised)
       .border_inside(BorderSize::Sm, color)
   };
-  match node {
+  Some(match node {
     Node::Start => {
       outlined(PaletteColor::BorderStrong).child(icon(Icon::Play, IconSize::Xs, PaletteColor::TextSecondary))
     }
@@ -123,6 +126,7 @@ fn mark(id: &str, node: &Node) -> Row {
     Node::Parallel => {
       outlined(PaletteColor::BorderStrong).child(icon(Icon::Split, IconSize::Xs, PaletteColor::TextSecondary))
     }
+    Node::Line => return None,
     Node::End => outlined(PaletteColor::BorderStrong).child(
       Row::new()
         .width(Dimension::Px(DOT))
@@ -130,7 +134,7 @@ fn mark(id: &str, node: &Node) -> Row {
         .rounded(ExtraRadius::Full.role())
         .background(PaletteColor::Success),
     ),
-  }
+  })
 }
 
 fn number_text(id: &str, number: usize) -> Text {

@@ -10,7 +10,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::pipelines::flow::{DeliverCard, StepCard};
+use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, StepCard};
 
 use super::words;
 use crate::{
@@ -27,8 +27,17 @@ pub(super) enum Place {
   InGroup,
 }
 
-/// The card of `step`; `open` is the button that opens the step.
-pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, (open, place): (Button, Place)) -> Element {
+/// How a card is pressed and where it stands: `open` opens the step; `fix` is the pill of a step that cannot run, which
+/// opens what it names.
+pub(super) struct Opening {
+  pub open: Button,
+  pub fix: Option<(Button, std::sync::Arc<str>)>,
+  pub place: Place,
+}
+
+/// The card of `step`.
+pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening) -> Element {
+  let Opening { open, fix, place } = opening;
   let id = format!("pipeline-hub-flow-step-{}", step.key);
   let not_ready = step.runs.needs_you();
   let mut top = Row::new()
@@ -37,6 +46,8 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, (open, place): (B
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center);
   if place == Place::InGroup {
+    // A card without a pill keeps the pill row's height, so the titles of a group's cards share one baseline.
+    top = top.min_height(Dimension::Px(ControlHeight::Helper.value()));
     top = top.child(
       Text::new(&words::number(step.number))
         .id(format!("{id}-number"))
@@ -47,6 +58,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, (open, place): (B
     .child(name(&id, &step.name))
     .child(Row::new().flex(1.0))
     .with_children(words::choose(ctx, &step.runs).map(|choose| choose_chip(&id, &choose)))
+    .with_children(fix.map(|(button, label)| button.id(format!("{id}-fix")).child(choose_chip(&format!("{id}-fix"), &label))))
     .with_children(
       step
         .access
@@ -58,7 +70,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, (open, place): (B
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(top)
-    .child(runs_line(ctx, &id, step, not_ready));
+    .child(second_line(&id, "runs", &words::runs(ctx, &step.runs), not_ready));
   if let Some(route) = &step.on_failure {
     body = body.child(
       Row::new()
@@ -67,7 +79,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, (open, place): (B
         .align_items(Alignment::Center)
         .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
         .child(
-          Text::new(&words::failure(ctx, route))
+          Text::new(&words::failure(ctx, step, route))
             .id(format!("{id}-failure-words"))
             .variant(FlowText::Line.role())
             .color(PaletteColor::TextMuted),
@@ -100,14 +112,12 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Bu
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(top)
-    .child(
-      Text::new(&words::deliver(ctx, deliver))
-        .id(format!("{id}-line"))
-        .variant(FlowText::Line.role())
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .min_width(Dimension::Px(0.0)),
-    );
+    .child(second_line(
+      id,
+      "line",
+      &words::deliver(ctx, deliver),
+      matches!(deliver.conflicts, Conflicts::ProfileNotPublished(_)),
+    ));
   surface(open, id, false, body)
     .describe("number", words::number(deliver.number))
     .into()
@@ -122,16 +132,16 @@ fn name(id: &str, name: &str) -> Text {
     .min_width(Dimension::Px(0.0))
 }
 
-/// What the card runs, or in `warning` with a glyph what keeps the step from running.
-fn runs_line(ctx: &lurq::app::ctx::Ctx, id: &str, step: &StepCard, not_ready: bool) -> Element {
-  let words = words::runs(ctx, &step.runs);
-  let line = Text::new(&words)
-    .id(format!("{id}-runs"))
+/// A card's second line: what it runs, or how it merges. In `warning` with a glyph when something keeps it from
+/// working.
+fn second_line(id: &str, part: &str, words: &str, warning: bool) -> Element {
+  let line = Text::new(words)
+    .id(format!("{id}-{part}"))
     .variant(FlowText::Line.role())
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
     .min_width(Dimension::Px(0.0));
-  if !not_ready {
+  if !warning {
     return line.into();
   }
   Row::new()

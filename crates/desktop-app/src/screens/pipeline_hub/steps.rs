@@ -18,10 +18,6 @@ use crate::{
   project::ShownProject,
   routes::{PipelineView, ProjectPage, Route},
   theme::{ExtraSpacing, HubText},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-  },
 };
 
 /// What the body shows of `entry`: the head and the flow; nothing for an archived pipeline, which has no steps to open.
@@ -30,26 +26,19 @@ pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry) -> Vec
     return Vec::new();
   };
   let navigation = Navigation::of(ctx);
-  let count = read.flow.as_ref().map_or(entry.step_count, |flow| flow.len());
   vec![
-    head(ctx, project, &navigation, (entry, count)),
-    flow::flow(ctx, (project, &navigation), entry.id, &read.flow),
+    head(ctx, project, &navigation, entry),
+    flow::flow(ctx, (project, &navigation), entry.id, read),
   ]
 }
 
 /// *Steps 6* and, at the end, *Edit steps*.
-fn head(ctx: &Ctx, project: &ShownProject, navigation: &Navigation, (entry, count): (&Entry, usize)) -> Element {
+fn head(ctx: &Ctx, project: &ShownProject, navigation: &Navigation, entry: &Entry) -> Element {
   let route = Route::Project(
     project.open.project.id(),
     ProjectPage::Pipeline(entry.id, PipelineView::default()),
   );
-  let edit = ActionButton::new(
-    "pipeline-hub-edit-steps",
-    ButtonKind::Ghost,
-    ctx.t("pipeline_hub.panel.openSteps"),
-  )
-  .icon(Icon::Pencil)
-  .opens(navigation.to(route));
+  let edit = flow::edit_steps(ctx, "pipeline-hub-edit-steps", navigation.to(route));
   Row::new()
     .id("pipeline-hub-steps")
     .width(Dimension::Pct(100.0))
@@ -65,7 +54,7 @@ fn head(ctx: &Ctx, project: &ShownProject, navigation: &Navigation, (entry, coun
             .variant(HubText::PanelLabel.role()),
         )
         .child(
-          Text::new(&count.to_string())
+          Text::new(&entry.step_count.to_string())
             .id("pipeline-hub-steps-count")
             .variant(HubText::PanelHint.role()),
         ),

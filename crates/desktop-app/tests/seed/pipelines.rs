@@ -214,16 +214,10 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
 
   let problems = flow("Publication problems").expect("incomplete executors are drawn");
   let runs: Vec<&Runs> = problems.stages.iter().map(|stage| &stage.cards[0].runs).collect();
-  assert_eq!(
-    runs,
-    [
-      &Runs::NoProfile,
-      &Runs::ProfileNotPublished,
-      &Runs::ToolNotRunnable {
-        name: "Unsupported database".into()
-      }
-    ]
-  );
+  assert!(matches!(runs[0], Runs::NoProfile));
+  assert!(matches!(runs[1], Runs::ProfileNotPublished { .. }));
+  assert!(matches!(runs[2], Runs::ToolNotRunnable { name, .. } if &**name == "Unsupported database"));
+  assert_eq!(runs.len(), 3);
 
   let gated = flow("Gated group").expect("a gated group is drawn");
   assert_eq!((gated.stages[1].cards.len(), gated.stages[1].gates.len()), (2, 2));
