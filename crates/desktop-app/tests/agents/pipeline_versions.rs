@@ -16,14 +16,14 @@ use super::{
   pipeline_hub::{open, setup},
 };
 
-const BUTTON: &str = "pipeline-hub-versions-button";
-const SAVE: &str = "pipeline-hub-save";
-const CANCEL: &str = "pipeline-hub-cancel";
-const DESCRIPTION: &str = "pipeline-hub-description";
-const RESTORE: &str = "pipeline-hub-version-restore";
+pub(super) const BUTTON: &str = "pipeline-hub-versions-button";
+pub(super) const SAVE: &str = "pipeline-hub-save";
+pub(super) const CANCEL: &str = "pipeline-hub-cancel";
+pub(super) const DESCRIPTION: &str = "pipeline-hub-description";
+pub(super) const RESTORE: &str = "pipeline-hub-version-restore";
 
 /// The versions the database holds of `id`, oldest first.
-fn versions(agents: &Agents, id: ResourceId) -> Vec<Pipeline> {
+pub(super) fn versions(agents: &Agents, id: ResourceId) -> Vec<Pipeline> {
   let db = ProjectDb::open(&agents.root).expect("database");
   let mut versions = db.versions::<Pipeline>(id).expect("versions");
   versions.sort_by_key(|version| version.number());
@@ -31,7 +31,7 @@ fn versions(agents: &Agents, id: ResourceId) -> Vec<Pipeline> {
 }
 
 /// Publishes a second version of `id`, which has the description `description`, behind the page.
-fn publish_second(agents: &Agents, id: ResourceId, description: &str) {
+pub(super) fn publish_second(agents: &Agents, id: ResourceId, description: &str) {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let latest = db.latest_version::<Pipeline>(id).expect("read").expect("published");
   let body = latest.body().clone().with_description(description.into());
@@ -41,7 +41,7 @@ fn publish_second(agents: &Agents, id: ResourceId, description: &str) {
 }
 
 /// The panel of `ready` with a second version behind it, open.
-fn two_versions() -> (Agents, ResourceId) {
+pub(super) fn two_versions() -> (Agents, ResourceId) {
   let (mut agents, [ready, ..]) = setup();
   publish_second(&agents, ready, "Plan, then build");
   open(&mut agents, PipelinesFilter::All, Some(ready));
@@ -49,7 +49,7 @@ fn two_versions() -> (Agents, ResourceId) {
   (agents, ready)
 }
 
-fn open_list(agents: &mut Agents) {
+pub(super) fn open_list(agents: &mut Agents) {
   agents.click(BUTTON);
   agents.until("both versions", |s| {
     s.exists("pipeline-hub-version-2") && s.exists("pipeline-hub-version-1")

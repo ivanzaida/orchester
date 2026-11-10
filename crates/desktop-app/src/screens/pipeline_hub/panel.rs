@@ -277,8 +277,11 @@ impl PipelinePanel {
   }
 
   /// What the panel tells the list and the bar of the edit it shows: whether it has changes, which a save's note and
-  /// the description's box then follow.
+  /// the description's box then follow. The question before *Restore* goes with the version it was asked about.
   fn follow_edit(&self, current: &PipelineEdit, changed: bool) {
+    if self.restoring.get_untracked() && self.viewing.get_untracked().is_none() {
+      self.restoring.set(false);
+    }
     mark_unsaved(&self.unsaved, self.id, changed);
     if changed {
       self.notes.forget_stale(current);
@@ -316,9 +319,9 @@ impl PipelinePanel {
           project,
           entry,
           assignables,
-          now: Timestamp::now(),
           viewed,
           restore,
+          changed,
           back: self.back_to_editing(),
         },
       ));
@@ -327,10 +330,13 @@ impl PipelinePanel {
     frame(entry, shown, pinned, None)
   }
 
-  /// *Back to editing*: the panel shows the edit, or what is stored, again.
+  /// *Back*: the panel shows the edit, or what is stored, again.
   fn back_to_editing(&self) -> Arc<dyn Fn() + Send + Sync> {
-    let viewing = self.viewing.clone();
-    Arc::new(move || viewing.set(None))
+    let (viewing, restoring) = (self.viewing.clone(), self.restoring.clone());
+    Arc::new(move || {
+      restoring.set(false);
+      viewing.set(None);
+    })
   }
 
   /// What *Restore* does for `viewed`: nothing while a save is under way or asks, or while the panel already holds the

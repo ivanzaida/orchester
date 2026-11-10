@@ -165,7 +165,10 @@ impl Component for Head {
       title,
       (
         ctx.t("pipeline_hub.panel.where").to_string(),
-        Some(words::head_version(ctx, props.now, entry)),
+        Some(props.viewing.get().map_or_else(
+          || words::head_version(ctx, props.now, entry),
+          |viewed| words::head_viewing(ctx, props.now, &viewed),
+        )),
       ),
       Some(end.into()),
     );
@@ -207,12 +210,11 @@ impl Head {
     let toggle = self.versions.clone();
     let button = ActionButton::new(
       "pipeline-hub-versions-button",
-      ButtonKind::Secondary,
+      ButtonKind::Ghost,
       ctx.t("pipeline_hub.versions.button"),
     )
     .icon(Icon::History)
-    .small()
-    .held(self.versions.get())
+    .menu_open(self.versions.get())
     .element_ref(self.versions_anchor.clone())
     .on_click(move || toggle.update(|open| *open = !*open));
     let list = if self.versions.get() {

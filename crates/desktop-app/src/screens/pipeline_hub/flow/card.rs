@@ -213,5 +213,11 @@ fn surface(open: Option<Button>, id: &str, not_ready: bool, body: Column) -> But
     .background(PaletteColor::SurfacePanel)
     .border_inside(BorderSize::Sm, outline)
     .rounded(RadiusSize::Md);
-  if pressable { card.hovered_style(hovered) } else { card }.child(body)
+  // A card that only shows its step does nothing, so the keyboard does not stop on it.
+  if pressable {
+    card.hovered_style(hovered)
+  } else {
+    card.focusable(false)
+  }
+  .child(body)
 }

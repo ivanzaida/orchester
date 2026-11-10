@@ -11,6 +11,7 @@ use super::{
   model::Entry,
   step_line,
   undecided::{Said, undecided_words},
+  version_view::Viewed,
 };
 use crate::{
   screens::{
@@ -118,6 +119,20 @@ pub(super) fn head_version(ctx: &Ctx, now: Timestamp, entry: &Entry) -> String {
       [
         ("version", number.to_string()),
         ("date", date(ctx, now, at).to_string()),
+      ],
+    )
+    .to_string()
+}
+
+/// What stands after *Pipeline* in the head while the panel shows a version read-only: *Viewing v2 · published Nov 3*,
+/// so the head never names the latest version for a body that is an older one.
+pub(super) fn head_viewing(ctx: &Ctx, now: Timestamp, viewed: &Viewed) -> String {
+  ctx
+    .t_args(
+      "pipeline_hub.panel.viewing",
+      [
+        ("version", viewed.number.to_string()),
+        ("date", date(ctx, now, viewed.published_at).to_string()),
       ],
     )
     .to_string()

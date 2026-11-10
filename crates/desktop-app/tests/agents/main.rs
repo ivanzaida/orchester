@@ -30,6 +30,7 @@ mod pipeline_menu_edit;
 mod pipeline_save;
 mod pipeline_save_notes;
 mod pipeline_versions;
+mod pipeline_versions_states;
 mod project_sets;
 mod reads;
 mod regressions;

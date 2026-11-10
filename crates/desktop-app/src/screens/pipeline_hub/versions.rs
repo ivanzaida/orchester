@@ -13,7 +13,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -31,20 +31,23 @@ use super::version_view::{Viewed, ViewedSignal};
 use crate::{
   project::ShownProject,
   screens::team_hub::words::date,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    menu::{foot, menu_panel, separator},
+    menu::{menu_panel, separator},
     message::message_text,
     pressable::Press,
     skeleton::{self, Skeleton},
   },
 };
 
-/// The list's width (`Versions menu` `zpuln`).
+/// The list's width, a row's height and the heading's (`Versions menu` `zpuln`, `Version · v3` `t0FUmY`, `Heading`
+/// `xjDQF`).
 pub(super) const WIDTH: f32 = 300.0;
+const ROW_HEIGHT: f32 = 44.0;
+const HEADING_HEIGHT: f32 = 30.0;
 
 /// The versions' bones while they are read: how wide each row's lines are.
 const BONES: [(f32, f32); 3] = [(24.0, 190.0), (24.0, 180.0), (24.0, 170.0)];
@@ -118,11 +121,7 @@ impl Component for Versions {
       .child(heading(ctx, &props.name))
       .with_children(body)
       .child(separator)
-      .child(foot(
-        ctx,
-        "pipeline-hub-versions-foot",
-        &ctx.t("pipeline_hub.versions.foot"),
-      ))
+      .child(foot(ctx))
   }
 }
 
@@ -136,7 +135,7 @@ impl Versions {
           .child(
             Text::new(&ctx.t("pipeline_hub.versions.none"))
               .id("pipeline-hub-versions-none")
-              .variant(TypographyStyle::Caption),
+              .variant(HubText::PanelHint.role()),
           )
           .into(),
       ];
@@ -160,30 +159,30 @@ impl Versions {
     let current = matches!(held_by, Use::Tasks(_));
     let id = format!("pipeline-hub-version-{}", number.get());
     let mut top = Row::new()
-      .spacing(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .child(
         Text::new(&number.to_string())
           .id(format!("{id}-number"))
-          .variant(TypographyStyle::Description)
+          .variant(HubText::PanelLink.role())
           .nowrap(),
       );
     if current {
       top = top.child(
         Text::new(&ctx.t("pipeline_hub.versions.current"))
           .id(format!("{id}-current"))
-          .variant(TypographyStyle::Caption)
+          .variant(HubText::PanelHint.role())
           .nowrap(),
       );
     }
     let meta = Text::new(&meta(ctx, props.now, (version.published_at, held_by)))
       .id(format!("{id}-meta"))
-      .variant(TypographyStyle::Caption)
+      .variant(HubText::PanelHint.role())
       .nowrap();
     let text = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(ExtraSpacing::Fine.role())
       .child(top)
       .child(meta);
     let hovered = self.hovered.get() == Some(number.get());
@@ -197,7 +196,7 @@ impl Versions {
       })
     };
     let (open, viewing) = (props.open.clone(), props.viewing.clone());
-    let shown = Viewed::of(version, held_by);
+    let shown = Viewed::of(version);
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     Press::run(move || {
       viewing.set(Some(shown.clone()));
@@ -208,9 +207,10 @@ impl Versions {
     .describe("version", number.to_string())
     .describe("current", if current { "true" } else { "false" })
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ROW_HEIGHT))
     .rounded(RadiusSize::Sm)
-    .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
-    .spacing(SpacingSize::Sm)
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .on_mouse_enter(move || enter.set(Some(number.get())))
@@ -255,8 +255,9 @@ fn heading(ctx: &Ctx, name: &str) -> Element {
   Row::new()
     .id("pipeline-hub-versions-heading")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Sm))
-    .spacing(SpacingSize::Md)
+    .height(Dimension::Px(HEADING_HEIGHT))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
       Text::new(&ctx.t("pipeline_hub.versions.title"))
@@ -268,7 +269,7 @@ fn heading(ctx: &Ctx, name: &str) -> Element {
     .child(
       Text::new(name)
         .id("pipeline-hub-versions-name")
-        .variant(TypographyStyle::Caption)
+        .variant(HubText::PanelHint.role())
         .nowrap()
         .min_width(Dimension::Px(0.0)),
     )
@@ -278,15 +279,35 @@ fn heading(ctx: &Ctx, name: &str) -> Element {
 /// *View ›*, at the end of the row under the pointer.
 fn view_more(ctx: &Ctx, id: &str) -> Element {
   Row::new()
-    .spacing(SpacingSize::Xs)
+    .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(
       Text::new(&ctx.t("pipeline_hub.versions.view"))
         .id(format!("{id}-view"))
-        .variant(TypographyStyle::Description)
+        .variant(HubText::PanelLink.role())
         .nowrap(),
     )
-    .child(icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
+    .into()
+}
+
+/// The foot: the words under the separator, 4 over, 6 under and 8 at their sides (`Foot` `dQ9Iz`).
+fn foot(ctx: &Ctx) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Xs)
+        .bottom(ExtraSpacing::Snug.role())
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm),
+    )
+    .child(
+      Text::new(&ctx.t("pipeline_hub.versions.foot"))
+        .id("pipeline-hub-versions-foot")
+        .variant(HubText::Hint.role())
+        .width(Dimension::Pct(100.0)),
+    )
     .into()
 }
 

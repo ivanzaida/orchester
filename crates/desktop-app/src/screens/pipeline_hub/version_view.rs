@@ -19,18 +19,14 @@ use orchester_core::{
   resource::{Pipeline, PipelineEdit, VersionNumber},
   time::Timestamp,
 };
-use orchester_workspace::pipelines::{
-  data::Assignables,
-  flow::FlowRead,
-  history::{PublishedVersion, Use},
-};
+use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead, history::PublishedVersion};
 
-use super::{flow, model::Entry, settings, versions};
+use super::{flow, model::Entry, settings};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   screens::team_hub::rows::{self, Sub},
-  theme::{ExtraSpacing, HubText},
+  theme::{ExtraSpacing, ExtraTypography, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -44,8 +40,6 @@ pub(super) struct Viewed {
   pub number: VersionNumber,
   pub published_at: Timestamp,
   pub body: Arc<Pipeline>,
-  /// What holds it, as the list said.
-  pub held_by: Use,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Viewed {}
@@ -53,12 +47,11 @@ impl lurq::app::component::DevtoolsInspectable for Viewed {}
 pub(super) type ViewedSignal = lurq::core::Signal<Option<Viewed>>;
 
 impl Viewed {
-  pub(super) fn of(version: &PublishedVersion, held_by: Use) -> Self {
+  pub(super) fn of(version: &PublishedVersion) -> Self {
     Self {
       number: version.number,
       published_at: version.published_at,
       body: version.body.clone(),
-      held_by,
     }
   }
 }
@@ -78,10 +71,11 @@ pub(super) struct Parts<'a> {
   pub project: &'a ShownProject,
   pub entry: &'a Entry,
   pub assignables: &'a Assignables,
-  pub now: Timestamp,
   pub viewed: &'a Viewed,
   pub restore: Restore,
-  /// *Back to editing*.
+  /// The edit the panel holds has changes that are not saved: *Back* returns to them, and they are kept meanwhile.
+  pub changed: bool,
+  /// *Back*.
   pub back: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -105,12 +99,14 @@ pub(super) fn parts(ctx: &mut Ctx, parts: &Parts<'_>) -> Vec<Element> {
   ]
 }
 
-/// *Viewing v2*, when it was published and what holds it, over *Restore v2* and *Back to editing*.
+/// *Viewing v2* over what *Restore v2* does (and, while the edit has changes, that they are kept), with *Restore v2*
+/// and *Back*.
 fn notice(ctx: &Ctx, parts: &Parts<'_>) -> Element {
   let Parts {
-    now,
+    entry,
     viewed,
     restore,
+    changed,
     back,
     ..
   } = parts;
@@ -132,25 +128,64 @@ fn notice(ctx: &Ctx, parts: &Parts<'_>) -> Element {
     Restore::Busy => restore_button.disabled(),
   };
   let back = back.clone();
-  Notice::new(
+  let kept = changed.then(|| {
+    Text::new(&ctx.t("pipeline_hub.versions.keptChanges"))
+      .id("pipeline-hub-version-kept")
+      .variant(ExtraTypography::Prose.role())
+  });
+  let mut notice = Notice::new(
     "pipeline-hub-version-viewing",
     NoticeTone::Neutral,
     ctx.t_args("pipeline_hub.versions.viewing", [("version", version)]),
   )
   .icon(Icon::History)
   .title_style(HubText::NoticeTitle.role())
-  .body(versions::meta(ctx, *now, (viewed.published_at, viewed.held_by)))
-  .flat()
-  .action(restore_button)
-  .action(
-    ActionButton::new(
-      "pipeline-hub-version-back",
-      ButtonKind::Secondary,
-      ctx.t("pipeline_hub.versions.back"),
+  .body(what_restore_does(ctx, entry, viewed, matches!(restore, Restore::Same)))
+  .flat();
+  if let Some(kept) = kept {
+    notice = notice.part(kept);
+  }
+  notice
+    .action(restore_button)
+    .action(
+      ActionButton::new(
+        "pipeline-hub-version-back",
+        ButtonKind::Secondary,
+        back_label(ctx, entry, *changed),
+      )
+      .on_click(move || back()),
     )
-    .on_click(move || back()),
-  )
-  .into()
+    .into()
+}
+
+/// *Restore puts v2 in the editor as unsaved changes · Save makes v4*, or, when the editor already holds the version,
+/// that it does.
+fn what_restore_does(ctx: &Ctx, entry: &Entry, viewed: &Viewed, same: bool) -> Arc<str> {
+  let version = viewed.number.to_string();
+  if same {
+    return ctx.t_args("pipeline_hub.versions.restoreSame", [("version", version)]);
+  }
+  match entry.number.and_then(VersionNumber::next) {
+    Some(next) => ctx.t_args(
+      "pipeline_hub.versions.restoreHint",
+      [("version", version), ("next", next.to_string())],
+    ),
+    None => ctx.t_args("pipeline_hub.versions.restoreHintOnly", [("version", version)]),
+  }
+}
+
+/// Where *Back* goes: *Back to your changes* while the edit has some, *Back to the draft* while the pipeline has a
+/// saved draft that is not published, else *Back to v3*, the latest version.
+fn back_label(ctx: &Ctx, entry: &Entry, changed: bool) -> Arc<str> {
+  if changed {
+    return ctx.t("pipeline_hub.versions.backChanges");
+  }
+  match entry.number {
+    Some(latest) if !entry.unpublished => {
+      ctx.t_args("pipeline_hub.versions.backLatest", [("version", latest.to_string())])
+    }
+    _ => ctx.t("pipeline_hub.versions.backDraft"),
+  }
 }
 
 /// *Steps 6*, as the panel's own head says it, without *Edit steps*: a version is not edited.
