@@ -1,5 +1,6 @@
 //! The open step's polish of PV2-17: retries that survive a change of where changes requested go, the Agent field
-//! saying why a tool cannot run, and a model override dropped, and said, when the step moves to another CLI.
+//! saying why a tool cannot run, a model override dropped, and said, when the step moves to another CLI, and a gone
+//! profile or tool said the same way on its flow card and in the field.
 //! `cargo test -p orchester-app --test agents pipeline_step_polish`.
 
 use std::collections::BTreeMap;
@@ -9,7 +10,8 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId},
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, ApprovalMode, DatabaseQuery, DeniedBehavior, Slug, StepKind, Tool, ToolAction,
+    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, CommandProgram, DatabaseQuery, DeniedBehavior, Slug,
+    StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
@@ -18,9 +20,10 @@ use orchester_store::ProjectDb;
 
 use super::{
   harness::Agents,
+  pipeline_flow::open,
   pipeline_hub::setup,
   pipeline_step::{CANCEL, chain, keys, open_step, save_until, stored},
-  pipeline_step_agent::{FIELD, PICKER, executor, field_has, item, overriding, profile_on},
+  pipeline_step_agent::{FIELD, PICKER, agent, executor, field_has, item, overriding, profile_on, single},
 };
 
 /// Whether the retries box is there and holds `text`.
@@ -208,4 +211,74 @@ fn pipeline_step_polish_a_profile_on_another_cli_drops_the_model_override_and_sa
     )
   });
   agents.until("said until Save", |s| !s.exists("pipeline-hub-step-agent-dropped"));
+}
+
+#[test]
+fn pipeline_step_polish_a_gone_profile_reads_the_same_on_the_card_and_offers_to_choose_another() {
+  let (mut agents, _) = setup();
+  let retired = profile_on(&agents, "Retired", Some(agents.listed().connections[0].id()));
+  let pipeline = single(&agents, agent(retired, None));
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(retired, Timestamp::now())
+    .expect("archived");
+  let plan = keys(&agents, pipeline)[0].clone();
+  open(&mut agents, pipeline);
+  let card = format!("pipeline-hub-flow-step-{plan}");
+  agents.until("the card", |s| s.exists(&card));
+  let said = agents.text(&format!("{card}-runs"));
+  assert_eq!(said, "Profile no longer available");
+  assert_eq!(agents.text(&format!("{card}-choose-words")), "Choose another");
+  assert!(
+    !agents.exists(&format!("{card}-fix")),
+    "no Open profile: there is no profile to open"
+  );
+
+  open_step(&mut agents, pipeline, &plan);
+  assert_eq!(
+    agents.text("pipeline-hub-step-agent-name"),
+    said,
+    "the field names it as the card does"
+  );
+}
+
+#[test]
+fn pipeline_step_polish_a_tool_with_only_a_draft_is_named_and_said_to_be_unpublished_not_gone() {
+  let (mut agents, _) = setup();
+  let body = Tool::new(
+    "",
+    ToolAction::Command(CommandAction::new(
+      CommandProgram::new("cargo").expect("program"),
+      Vec::new(),
+    )),
+    None,
+  )
+  .expect("tool");
+  let tool = ProjectDb::open(&agents.root)
+    .expect("database")
+    .create_resource(
+      Slug::new("lint").expect("slug"),
+      Name::new("Lint").expect("name"),
+      &body,
+      Timestamp::now(),
+    )
+    .expect("the tool")
+    .id();
+  let pipeline = single(&agents, StepKind::Tool { tool: Some(tool) });
+  let plan = keys(&agents, pipeline)[0].clone();
+  open(&mut agents, pipeline);
+  let card = format!("pipeline-hub-flow-step-{plan}");
+  agents.until("the card", |s| s.exists(&card));
+  assert_eq!(agents.text(&format!("{card}-runs")), "Tool not published yet");
+  assert!(
+    agents.exists(&format!("{card}-fix")),
+    "Open tool, where it is published"
+  );
+
+  open_step(&mut agents, pipeline, &plan);
+  assert_eq!(agents.text("pipeline-hub-step-agent-name"), "Lint");
+  assert_eq!(
+    agents.text("pipeline-hub-step-agent-runs"),
+    "This tool has no published version yet"
+  );
 }

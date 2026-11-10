@@ -190,7 +190,7 @@ fn lifted_card(ctx: &Ctx, card: &StepCard, width: f32) -> Column {
     .child(top)
     .child(
       Row::new().padding(Padding::new().left(Dimension::Px(INDENT))).child(
-        Text::new(&words::runs(ctx, &card.runs))
+        Text::new(&words::runs(ctx, card))
           .variant(FlowText::Line.role())
           .nowrap(),
       ),

@@ -95,8 +95,6 @@
       "toolUnavailable": "This tool can't run as a step yet",
       "toolDecides": "Its exit code decides the step",
       "toolDecidesAfter": "· its exit code decides the step",
-      "profileGone": "This profile is no longer available",
-      "toolGone": "This tool is no longer available",
       "runsOn": "{{cli}} · {{connection}} · {{model}}",
       "runsOnConnection": "{{connection}} · {{model}}",
       "modelOverride": "· model: {{model}}"
@@ -336,7 +334,12 @@
       "upOutOfGroup": "Move up, out of the group",
       "downOutOfGroup": "Move down, out of the group",
       "overrideDropped": "Model override dropped: it was for {{cli}}",
-      "overrideDroppedTool": "Model override dropped: a tool runs no model"
+      "overrideDroppedTool": "Model override dropped: a tool runs no model",
+      "profileGone": "Profile no longer available",
+      "toolGone": "Tool no longer available",
+      "toolUnpublished": "This tool has no published version yet",
+      "chooseAnother": "Choose another",
+      "chooseAnotherAgent": "Choose another profile or tool"
     }
   }
 }

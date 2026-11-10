@@ -368,7 +368,13 @@ fn a_profile_that_was_archived_is_said_to_be_no_longer_available_not_to_be_nothi
   open_step(&mut agents, pipeline, &plan);
   assert_eq!(
     agents.text("pipeline-hub-step-agent-name"),
-    "This profile is no longer available"
+    "Profile no longer available",
+    "as the flow's card says it"
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-step-agent-runs"),
+    "Choose another profile or tool",
+    "and what to do"
   );
   assert!(
     field_has(&mut agents, "not-ready"),
@@ -380,7 +386,7 @@ fn a_profile_that_was_archived_is_said_to_be_no_longer_available_not_to_be_nothi
   agents.until("the picker", |s| s.exists(&item(1)));
   assert_eq!(
     agents.text(&format!("{}-name", item(1))),
-    "This profile is no longer available",
+    "Profile no longer available",
     "the picker lists what the step names, after the profiles the project has"
   );
 }
@@ -396,9 +402,10 @@ fn a_tool_that_was_archived_is_said_to_be_no_longer_available() {
     .expect("archived");
   let plan = keys(&agents, pipeline)[0].clone();
   open_step(&mut agents, pipeline, &plan);
+  assert_eq!(agents.text("pipeline-hub-step-agent-name"), "Tool no longer available");
   assert_eq!(
-    agents.text("pipeline-hub-step-agent-name"),
-    "This tool is no longer available"
+    agents.text("pipeline-hub-step-agent-runs"),
+    "Choose another profile or tool"
   );
   assert!(field_has(&mut agents, "not-ready"));
 }

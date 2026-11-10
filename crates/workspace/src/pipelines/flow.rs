@@ -74,6 +74,9 @@ pub struct StepCard {
   /// What an agent step may do to the repository; `None` for a tool step.
   pub access: Option<RepositoryAccess>,
   pub on_failure: Option<ReturnsTo>,
+  /// The profile or tool `runs` says is not published is gone here (archived or removed), not only unpublished: there
+  /// is nothing to publish, the step has to run something else.
+  pub gone: bool,
 }
 
 impl StepCard {
@@ -211,6 +214,7 @@ fn card(
     key: step.key.clone(),
     number,
     name: step.name.as_str().into(),
+    gone: step.kind.executor().is_some_and(|id| assignables.gone(id)),
     runs: runs(step, assignables),
     access,
     on_failure: step.on_failure.as_ref().and_then(|route| {

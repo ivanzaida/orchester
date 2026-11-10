@@ -517,7 +517,7 @@ impl Draw<'_> {
           blurred.settle_refusal();
         })
     });
-    let fix = Fix::of(&step.runs).and_then(|fix| self.opens.fix(fix).map(|button| (button, fix.words(ctx))));
+    let fix = Fix::of_card(step).and_then(|fix| self.opens.fix(fix).map(|button| (button, fix.words(ctx))));
     let handle = shown.then(|| drag::handle(ctx, self.drive, step, element));
     let more = (shown && self.drag.is_none()).then(|| menu::more_button(ctx, reorder, step, reorder.more_anchor(&key)));
     card::step(

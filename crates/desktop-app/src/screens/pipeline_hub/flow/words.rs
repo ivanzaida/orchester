@@ -12,9 +12,12 @@ pub(in crate::screens::pipeline_hub) fn number(number: usize) -> String {
   format!("{number:02}")
 }
 
-/// The second line of a card: *Explorer · claude-sonnet-5-5*, *Tool · Checks*, or what is wrong with the step.
-pub(super) fn runs(ctx: &Ctx, runs: &Runs) -> Arc<str> {
-  match runs {
+/// The second line of a card: *Explorer · claude-sonnet-5-5*, *Tool · Checks*, or what is wrong with the step; a
+/// profile or tool that is gone in the words the step's Agent field uses for it.
+pub(super) fn runs(ctx: &Ctx, card: &StepCard) -> Arc<str> {
+  match &card.runs {
+    Runs::ProfileNotPublished { .. } if card.gone => ctx.t("pipeline_hub.stepFlow.profileGone"),
+    Runs::ToolNotPublished { .. } if card.gone => ctx.t("pipeline_hub.stepFlow.toolGone"),
     Runs::Profile { name, model } => ctx.t_args(
       "pipeline_hub.flow.profileModel",
       [("profile", name.as_ref()), ("model", model.as_ref())],
@@ -28,11 +31,13 @@ pub(super) fn runs(ctx: &Ctx, runs: &Runs) -> Arc<str> {
   }
 }
 
-/// What a card offers when its step has nothing to run yet: *Choose profile*, *Choose tool*.
-pub(super) fn choose(ctx: &Ctx, runs: &Runs) -> Option<Arc<str>> {
-  match runs {
+/// What a card offers when its step has nothing to run: *Choose profile*, *Choose tool*, or *Choose another* when what
+/// it ran is gone. Pressing the card opens the step, whose Agent field chooses.
+pub(super) fn choose(ctx: &Ctx, card: &StepCard) -> Option<Arc<str>> {
+  match card.runs {
     Runs::NoProfile => Some(ctx.t("pipeline_hub.flow.chooseProfile")),
     Runs::NoTool => Some(ctx.t("pipeline_hub.flow.chooseTool")),
+    _ if card.gone => Some(ctx.t("pipeline_hub.stepFlow.chooseAnother")),
     _ => None,
   }
 }
