@@ -78,6 +78,19 @@ fn live<'a>(all: &'a [Invalid], edit: &'a PipelineEdit) -> impl Iterator<Item = 
   })
 }
 
+/// Forgets the invalid text of steps `edit` no longer has. A step removed and a copy made later can take the same key,
+/// and the removed one's text would stand in the new one's box.
+pub(super) fn forget_gone(faulty: &Faulty, edit: &PipelineEdit) {
+  if faulty
+    .get_untracked()
+    .iter()
+    .all(|invalid| edit.step(&invalid.step).is_some())
+  {
+    return;
+  }
+  faulty.update(|all| all.retain(|invalid| edit.step(&invalid.step).is_some()));
+}
+
 /// Whether a step of `edit` holds text that is not valid, which Save must not store around.
 pub(super) fn holds_invalid(faulty: &Faulty, edit: &PipelineEdit) -> bool {
   live(&faulty.get(), edit).next().is_some()

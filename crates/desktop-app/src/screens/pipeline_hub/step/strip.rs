@@ -89,6 +89,10 @@ struct More {
   after: bool,
   /// The strip's room in whole pixels, which places the panel at its end: a strip that is resized draws it again.
   room: i32,
+  /// Where the strip is scrolled to in whole pixels. A scroll made from the strip's own handlers is not one lurq draws
+  /// by itself (a wheel the strip takes is not left to lurq's own scrolling, which is what asks for the frame), so the
+  /// strip draws again whenever it moves.
+  at: i32,
 }
 impl DevtoolsInspectable for More {}
 
@@ -120,6 +124,7 @@ impl Measured {
       before: at > EPSILON,
       after: at + room < content - EPSILON,
       room: room.round() as i32,
+      at: at.round() as i32,
     };
     if self.more.get_untracked() != more {
       self.more.set(more);
@@ -142,13 +147,18 @@ impl Measured {
       .set_scroll_pending((offset - (room - width) / 2.0).clamp(0.0, most), 0.0);
   }
 
+  /// Scrolls to `x` (clamped to what the chips need) at once and draws the strip, from a handler: the offset is known
+  /// now, unlike the open step's, which waits for the chips to be laid out ([`Self::show_current`]).
+  fn scroll_to(&self, x: f32) {
+    let most = (self.content.width() - self.viewport.width()).max(0.0);
+    self.scroll.set_scroll(x.clamp(0.0, most), 0.0);
+    self.settle();
+  }
+
   /// ‹ or ›: one screen towards `direction` (-1 or 1), the chips that show between the two panels.
   fn page(&self, direction: f32) {
-    let (room, content) = (self.viewport.width(), self.content.width());
-    let most = (content - room).max(0.0);
-    let screen = (room - 2.0 * ARROW_ZONE).max(0.0);
-    let to = (self.scroll.scroll_x() + direction * screen).clamp(0.0, most);
-    self.scroll.set_scroll_pending(to, 0.0);
+    let screen = (self.viewport.width() - 2.0 * ARROW_ZONE).max(0.0);
+    self.scroll_to(self.scroll.scroll_x() + direction * screen);
   }
 }
 
@@ -252,8 +262,10 @@ impl Strip {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STRIP_HEIGHT))
       .on_scroll(move |event: ScrollEvent| {
-        // lurq's sideways scroller leaves a vertical wheel to the containers around it: the strip takes the stronger
-        // delta, a wheel's or a swipe's.
+        // What lurq hands the strip is a sideways delta: Shift+wheel (the shell delivers it with none up or down) and a
+        // swipe. A wheel that only goes up or down is left to the containers around the strip and does not come here.
+        // The strip takes the stronger delta of what does, and scrolls at once: a handler that takes the scroll
+        // is not also lurq's own scrolling, which is what would draw it.
         let (room, content) = (measured.viewport.width(), measured.content.width());
         let most = (content - room).max(0.0);
         if most <= 0.0 {
@@ -265,10 +277,7 @@ impl Strip {
         } else {
           event.delta_x
         };
-        measured
-          .scroll
-          .set_scroll_pending((measured.scroll.scroll_x() - delta).clamp(0.0, most), 0.0);
-        measured.settle();
+        measured.scroll_to(measured.scroll.scroll_x() - delta);
       })
       .into()
   }
@@ -294,7 +303,6 @@ impl Strip {
     let button = Focus::Keyboard
       .apply(pressable(move || {
         measured.page(direction);
-        measured.settle();
       }))
       .id(id.to_owned())
       .describe("a11y_name", ctx.t(label))

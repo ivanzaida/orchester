@@ -100,7 +100,7 @@ pub use self::{
   dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, NARROW_DIALOG_WIDTH},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
-  flow::FlowText,
+  flow::{DRAGGED_OPACITY, FlowText},
   fonts::mono_space,
   groups::GroupText,
   hub::{HubSpacing, HubText},

@@ -203,6 +203,7 @@ impl Component for PipelinePanel {
     self.settle(&stored);
     let edit = Edit::new(&self.holding, stored).following(&self.stored);
     let current = edit.current();
+    step::forget_gone(&self.faulty, &current);
     let changed = edit.is_changed();
     self.follow_edit(&current, changed);
     let read = if edit.holds() {
@@ -256,7 +257,7 @@ struct Shown<'a> {
   edit: &'a Edit,
   /// What the panel shows: the edit, or the stored pipeline.
   current: &'a PipelineEdit,
-  read: &'a FlowRead,
+  read: &'a Arc<FlowRead>,
   /// A save is under way, or a question about it waits: nothing is changed now.
   locked: bool,
   changed: bool,
@@ -345,7 +346,7 @@ impl PipelinePanel {
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
       .child(chips::chips(ctx, entry, default))
-      .with_children(steps::parts(ctx, project, entry, read))
+      .with_children(steps::parts(ctx, project, entry, (read, edit, current), locked))
       .child(settings::section(
         ctx,
         &Settings {

@@ -1067,6 +1067,7 @@
         "pipelineSteps": "steps added or removed",
         "pipelineSources": "other sources",
         "pipelineStep": "step {{step}} less strict",
+        "pipelineStopsWaiting": "step {{step}} stops waiting for {{waited}}",
         "approvalGate": "step {{step}} without approval",
         "stepToolCalls": "step {{step}} tool calls not asked about",
         "program": "program {{program}} in place of {{before}}",

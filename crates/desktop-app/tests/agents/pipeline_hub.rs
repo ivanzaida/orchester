@@ -220,10 +220,17 @@ fn pipeline_hub_lists_the_archived_pipelines_under_their_own_tab() {
 }
 
 #[test]
-fn pipeline_hub_the_panel_opens_the_editor_the_pipeline_has_and_back_returns_to_the_hub() {
+fn pipeline_hub_the_editor_the_pipeline_has_still_opens_and_back_returns_to_the_hub() {
   let (mut agents, [ready, ..]) = project();
   open(&mut agents, PipelinesFilter::All, Some(ready));
-  agents.click("pipeline-hub-edit-steps");
+  assert!(
+    !agents.exists("pipeline-hub-edit-steps"),
+    "steps that draw as one line are edited in the flow, which has Add step"
+  );
+  agents.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Pipeline(ready, PipelineView::default()),
+  ));
   agents.until("the editor", |s| {
     s.window.navigation().route_now()
       == Route::Project(project_id(), ProjectPage::Pipeline(ready, PipelineView::default()))
