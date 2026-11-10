@@ -1,9 +1,9 @@
 # PV2-06 · Reorder steps in the flow: drag, ⋯ menu, keys
 
-- **Status:** blocked (PV2-01, PV2-05)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-01, PV2-05
-- **Branch:** —
+- **Branch:** `claude/pv2-06-reorder`
 - **Tokens:** —
 
 ## Goal

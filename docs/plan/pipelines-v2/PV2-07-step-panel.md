@@ -1,9 +1,9 @@
 # PV2-07 · A step in the panel: strip, groups, Instructions
 
-- **Status:** blocked (PV2-04, PV2-05)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-04, PV2-05
-- **Branch:** —
+- **Branch:** `claude/pv2-07-step-panel`
 - **Tokens:** —
 
 ## Goal

@@ -1,8 +1,8 @@
 # PV2-17 · Readiness polish: one story in the chip, *Ready?* and the cards
 
-- **Status:** blocked (PV2-10)
+- **Status:** todo
 - **Kind:** UI
-- **Depends on:** PV2-09 (merged), PV2-10 (the Save bar)
+- **Depends on:** PV2-09, PV2-10 (merged)
 - **Branch:** —
 - **Tokens:** —
 
@@ -30,3 +30,20 @@ Make the chip, the list line, *Ready?* and the step cards agree, and give every 
 - Each point tested; an independent design verification of P1, P8 and the states named above (seeds
   `pipelines-flow`, `pipelines`, `pipelines-not-ready`).
 - `tools/check.ps1` passes.
+
+## Added from PV2-10's design verification and review (2026-11-11)
+
+7. **Save after a draft that cannot publish**: when nothing changed and publishing would fail (steps not ready, no
+   steps), Save is disabled and the hint says what to fix (*Fix the missing steps to publish*), instead of an enabled
+   *Save makes v1* that fails again.
+8. **The v1 hint on a ready draft**: *Save publishes it as v1* when every step is ready (today it always says *New task
+   offers it once every step is ready*).
+9. **The saved notice**: pinned above the bar like the refusal (today it ends the scroll area); its words follow
+   readiness (*Saved as v4 · the next run uses it* only when the pipeline can run; otherwise *Saved as v4 · runs can
+   start once every step is ready*).
+10. **The draft-saved notice** names every missing step (or the count), not only the first.
+11. **Closing the tab** with unsaved changes says *close* in its question, not *opening anything else*.
+12. Review minors: `pipeline_hub/save.rs:224` discards a `Result` with `.ok()` without a comment (AGENTS rule 7 —
+    must be fixed before the module goes to master); import `lurq::core::Ref` in `save.rs`; a refusal for an
+    unchanged edit stays until the next Save (offer Cancel or clear it); after a Save in the *Drafts* tab the pipeline
+    leaves the tab and the notice disappears with the panel — keep the panel on it (switch tab) or say where it went.
