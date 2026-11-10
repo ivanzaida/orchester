@@ -417,8 +417,9 @@ impl Draw<'_> {
       words,
     }) = self.landing
       && has(target)
+      && let Some((text, refused)) = words.under_card()
     {
-      notes.push(landing::parallel_words(words));
+      notes.push(landing::card_words(text, refused));
     }
     if let Some(Refused { key: Some(key), error }) = self.drive.reorder.refused.get().as_ref()
       && has(key)
@@ -430,9 +431,9 @@ impl Draw<'_> {
     {
       let text = ctx.t_args(
         "pipeline_hub.flow.move.refusedAdd",
-        [("reason", self.cards.reason(ctx, error).to_string())],
+        [("reason", self.cards.reason(ctx, error, None).to_string())],
       );
-      notes.push(landing::parallel_words(&Words::Refused(text.to_string())));
+      notes.push(landing::card_words(&text, true));
     }
     let menu = Menu {
       drive: self.drive,
@@ -452,10 +453,10 @@ impl Draw<'_> {
       "pipeline_hub.flow.move.refused",
       [
         ("name", self.cards.name(key).to_string()),
-        ("reason", self.cards.reason(ctx, error).to_string()),
+        ("reason", self.cards.reason(ctx, error, Some(key)).to_string()),
       ],
     );
-    landing::parallel_words(&Words::Refused(text.to_string()))
+    landing::card_words(&text, true)
   }
 
   /// The card of `step`, with its handle and ⋯ while the pointer or the keys are on it.
@@ -483,31 +484,34 @@ impl Draw<'_> {
       _ => Look::Plain,
     };
     let (enter, leave, gained, lost) = (key.clone(), key.clone(), key.clone(), key.clone());
-    let (hovered, left, focused, blurred) = (
-      reorder.hovered.clone(),
-      reorder.hovered.clone(),
-      reorder.focused.clone(),
-      reorder.focused.clone(),
-    );
+    let (hovered, left, focused, blurred) = (reorder.clone(), reorder.clone(), reorder.clone(), reorder.clone());
     let open = self.opens.button(PipelineView::Step(step.key.clone())).map(|button| {
       Focus::Keyboard
         .apply(button)
         .ref_element(element.clone())
-        .on_mouse_enter(move || hovered.set(Held(Some(enter.clone()))))
+        .on_mouse_enter(move || {
+          hovered.hovered.set(Held(Some(enter.clone())));
+          hovered.settle_refusal();
+        })
         .on_mouse_leave(move || {
-          left.update(|held| {
+          left.hovered.update(|held| {
             if held.is(&leave) {
               *held = Held::default();
             }
           });
+          left.settle_refusal();
         })
-        .on_focus(move || focused.set(Held(Some(gained.clone()))))
+        .on_focus(move || {
+          focused.focused.set(Held(Some(gained.clone())));
+          focused.settle_refusal();
+        })
         .on_blur(move || {
-          blurred.update(|held| {
+          blurred.focused.update(|held| {
             if held.is(&lost) {
               *held = Held::default();
             }
           });
+          blurred.settle_refusal();
         })
     });
     let fix = Fix::of(&step.runs).and_then(|fix| self.opens.fix(fix).map(|button| (button, fix.words(ctx))));

@@ -73,7 +73,7 @@ fn pipeline_reorder_a_move_that_breaks_a_failure_route_says_why_and_changes_noth
   let mut agents = Agents::new(true);
   let (id, [research, plan, ..]) = flow(&agents, true);
   open(&mut agents, id);
-  let reason = "02 Plan returns to 01 Research on failure, so 01 Research has to run before it.";
+  let reason = "it returns to 01 Research on failure.";
 
   open_menu(&mut agents, &plan);
   assert_eq!(
@@ -291,7 +291,7 @@ fn pipeline_reorder_a_drag_over_a_place_that_breaks_a_failure_route_says_why_and
   agents.until("the line", |s| s.exists("pipeline-hub-flow-row-landing"));
   assert_eq!(
     agents.text("pipeline-hub-flow-landing"),
-    "Can't move Plan: 02 Plan returns to 01 Research on failure, so 01 Research has to run before it."
+    "Can't move Plan: it returns to 01 Research on failure."
   );
   release(&mut agents);
   agents.until("set down", |s| !s.exists("pipeline-hub-flow-row-landing"));

@@ -105,6 +105,17 @@ impl Reorder {
     }
   }
 
+  /// A refusal says why under the card it is about, while the pointer or the keys are on that card: once neither is, it
+  /// goes. One that is not about a card (a step added at the end) stays until the next change.
+  pub(super) fn settle_refusal(&self) {
+    let Some(Refused { key: Some(key), .. }) = self.refused.get_untracked() else {
+      return;
+    };
+    if !self.hovered.get_untracked().is(&key) && !self.focused.get_untracked().is(&key) {
+      self.refused.set(None);
+    }
+  }
+
   /// Forgets where the cards stood: a draw lays them out again.
   pub(super) fn clear_layout(&self) {
     self.stages.lock().clear();

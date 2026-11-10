@@ -31,6 +31,7 @@ mod pipeline_reorder;
 mod pipeline_reorder_changes;
 mod pipeline_reorder_guards;
 mod pipeline_reorder_readonly;
+mod pipeline_reorder_words;
 mod pipeline_save;
 mod pipeline_save_notes;
 mod pipeline_step;

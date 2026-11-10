@@ -90,7 +90,7 @@ fn refusal(ctx: &Ctx, cards: &Cards, drag: &Drag, error: &MoveError) -> String {
       "pipeline_hub.flow.move.refused",
       [
         ("name", drag.card.name.to_string()),
-        ("reason", cards.reason(ctx, error).to_string()),
+        ("reason", cards.reason(ctx, error, Some(&drag.key)).to_string()),
       ],
     )
     .to_string()
@@ -172,9 +172,18 @@ pub(super) fn line(ctx: &Ctx, words: &Words) -> Element {
     .rounded(crate::theme::ExtraRadius::Full.role())
     .background(color);
   let text: Vec<Element> = match words {
-    Words::Goes { title, hint } => vec![title_text(title).into(), hint_text(hint).into()],
-    Words::Refused(reason) => vec![hint_text(reason).color(PaletteColor::Warning).into()],
-    Words::Parallel(_) => Vec::new(),
+    Words::Goes { title, hint } => vec![
+      title_text(title).into(),
+      wrapping(hint, FlowText::Hint, PaletteColor::TextMuted),
+    ],
+    Words::Refused(text) | Words::Parallel(text) => {
+      let tone = if refused {
+        PaletteColor::Warning
+      } else {
+        PaletteColor::TextPrimary
+      };
+      vec![wrapping(text, FlowText::Hint, tone)]
+    }
   };
   let cell = Column::new()
     .id("pipeline-hub-flow-landing")
@@ -196,18 +205,30 @@ pub(super) fn line(ctx: &Ctx, words: &Words) -> Element {
   )
 }
 
-/// What dropping on a card does, under its stage.
-pub(super) fn parallel_words(words: &Words) -> Element {
-  let (text, color) = match words {
-    Words::Refused(reason) => (reason.as_str(), PaletteColor::Warning),
-    Words::Parallel(words) => (words.as_str(), PaletteColor::TextPrimary),
-    Words::Goes { .. } => ("", PaletteColor::TextPrimary),
+impl Words {
+  /// What stands under a card dropped on, and whether it refuses; none for the words of a line between two places.
+  pub(super) fn under_card(&self) -> Option<(&str, bool)> {
+    match self {
+      Self::Parallel(words) => Some((words, false)),
+      Self::Refused(reason) => Some((reason, true)),
+      Self::Goes { .. } => None,
+    }
+  }
+}
+
+/// What dropping on a card does, or why a move was refused, under its stage: wraps to the panel's width, so a long
+/// reason is whole.
+pub(super) fn card_words(text: &str, refused: bool) -> Element {
+  let tone = if refused {
+    PaletteColor::Warning
+  } else {
+    PaletteColor::TextPrimary
   };
   Row::new()
     .id("pipeline-hub-flow-landing-parallel")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(ExtraSpacing::Snug.role()))
-    .child(title_text(text).color(color))
+    .child(wrapping(text, FlowText::Landing, tone))
     .into()
 }
 
@@ -218,6 +239,13 @@ fn title_text(text: &str) -> Text {
     .nowrap()
 }
 
-fn hint_text(text: &str) -> Text {
-  Text::new(text).variant(FlowText::Hint.role()).nowrap()
+/// `text` that takes the room the row has and wraps within it, instead of running past the panel's edge.
+fn wrapping(text: &str, style: FlowText, tone: PaletteColor) -> Element {
+  Text::new(text)
+    .id("pipeline-hub-flow-landing-words")
+    .variant(style.role())
+    .color(tone)
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .into()
 }

@@ -114,7 +114,7 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
       MenuItem::unavailable(
         id("moves"),
         ctx.t("pipeline_hub.flow.move.up"),
-        menu.cards.reason(ctx, &error),
+        menu.cards.reason(ctx, &error, Some(&card.key)),
       )
       .icon(Icon::ArrowUp)
       .render(ctx, open),
@@ -146,10 +146,7 @@ fn remove_row(ctx: &Ctx, menu: &Menu<'_>, card: &StepCard) -> MenuItem {
       label,
       ctx.t_args(
         "pipeline_hub.flow.move.reason.removeTarget",
-        [
-          ("step", menu.cards.label(ctx, &step).to_string()),
-          ("target", menu.cards.label(ctx, &card.key).to_string()),
-        ],
+        [("step", menu.cards.label(ctx, &step).to_string())],
       ),
     ),
     None => {
@@ -173,7 +170,7 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
         MenuItem::new(id, label, move || drive.apply(&step, &change, false))
       }
       MoveOffer::Unavailable => MenuItem::unavailable(id, label, edge(ctx, part)),
-      MoveOffer::Refused(error) => MenuItem::unavailable(id, label, menu.cards.reason(ctx, error)),
+      MoveOffer::Refused(error) => MenuItem::unavailable(id, label, menu.cards.reason(ctx, error, Some(&card.key))),
     };
     item.icon(glyph)
   };
@@ -213,7 +210,9 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
             drive.apply(&step, &Move::Beside(neighbour.clone()), false);
           })
         }
-        (MoveOffer::Refused(error), _) => MenuItem::unavailable(id, label, menu.cards.reason(ctx, error)),
+        (MoveOffer::Refused(error), _) => {
+          MenuItem::unavailable(id, label, menu.cards.reason(ctx, error, Some(&card.key)))
+        }
         _ => MenuItem::unavailable(id, label, ctx.t("pipeline_hub.flow.move.reason.broken")),
       };
       row.icon(Icon::Split).render(ctx, open)

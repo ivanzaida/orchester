@@ -71,7 +71,7 @@ fn pipeline_reorder_a_step_another_step_returns_to_cannot_be_removed_and_says_wh
   open_menu(&mut agents, &research);
   assert_eq!(
     agents.text("pipeline-hub-flow-menu-remove-detail"),
-    "02 Plan returns to 01 Research on failure, so 01 Research can't be removed."
+    "02 Plan returns to it on failure, so it can't be removed."
   );
   agents.click("pipeline-hub-flow-menu-remove");
   assert!(agents.exists(&card(&research)), "the faded row removes nothing");
@@ -247,6 +247,15 @@ fn pipeline_reorder_a_reorder_that_crosses_an_approval_gate_asks_before_it_saves
     s.exists("pipeline-hub-confirm-confirm")
   });
   assert_eq!(stored(&agents, id), before, "nothing is saved until Allow");
+  let asked = agents.text("pipeline-hub-confirm");
+  assert!(
+    asked.contains("Step Build would no longer wait for Plan"),
+    "the question names the step and what it stops waiting for: {asked}"
+  );
+  assert!(
+    !asked.contains("not provably"),
+    "an order change is not worded as a wiring that cannot be proven: {asked}"
+  );
   agents.press_until("pipeline-hub-confirm-confirm", "saved", |s| stored(s, id) != before);
 }
 

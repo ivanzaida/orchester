@@ -285,19 +285,35 @@ impl Cards {
     }
   }
 
-  /// Why `error` refused a move, as a sentence.
-  pub(super) fn reason(&self, ctx: &Ctx, error: &MoveError) -> Arc<str> {
+  /// Why `error` refused a move of step `moved` (none for a step added), as a sentence that names the moved step as
+  /// *it*, so a step that appears in the move's words once is not named twice.
+  pub(super) fn reason(&self, ctx: &Ctx, error: &MoveError, moved: Option<&StepKey>) -> Arc<str> {
     match error {
       MoveError::UnknownStep(_) => ctx.t("pipeline_hub.flow.move.reason.unknownStep"),
       MoveError::WithItself(_) => ctx.t("pipeline_hub.flow.move.reason.withItself"),
       MoveError::Broken(_) => ctx.t("pipeline_hub.flow.move.reason.broken"),
-      MoveError::RetryTargetNotUpstream { step, target } => ctx.t_args(
-        "pipeline_hub.flow.move.reason.retryTarget",
-        [
-          ("step", self.label(ctx, step).to_string()),
-          ("target", self.label(ctx, target).to_string()),
-        ],
-      ),
+      MoveError::RetryTargetNotUpstream { step, target } => {
+        let (key, args) = match moved {
+          Some(moved) if moved == target => (
+            "pipeline_hub.flow.move.reason.returnsToIt",
+            [("step", self.label(ctx, step).to_string())],
+          ),
+          Some(moved) if moved == step => (
+            "pipeline_hub.flow.move.reason.itReturnsTo",
+            [("target", self.label(ctx, target).to_string())],
+          ),
+          _ => {
+            return ctx.t_args(
+              "pipeline_hub.flow.move.reason.returnsTo",
+              [
+                ("step", self.label(ctx, step).to_string()),
+                ("target", self.label(ctx, target).to_string()),
+              ],
+            );
+          }
+        };
+        ctx.t_args(key, args)
+      }
     }
   }
 }

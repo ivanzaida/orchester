@@ -239,8 +239,10 @@
           "unknownStep": "it is not a step of this pipeline.",
           "withItself": "a step can't run in parallel with itself.",
           "broken": "the steps have no order to change until their dependencies are fixed.",
-          "removeTarget": "{{step}} returns to {{target}} on failure, so {{target}} can't be removed.",
-          "retryTarget": "{{step}} returns to {{target}} on failure, so {{target}} has to run before it."
+          "removeTarget": "{{step}} returns to it on failure, so it can't be removed.",
+          "returnsToIt": "{{step}} returns to it on failure.",
+          "itReturnsTo": "it returns to {{target}} on failure.",
+          "returnsTo": "{{step}} returns to {{target}} on failure."
         }
       },
       "branches": {
