@@ -1,10 +1,10 @@
 # PV2-07 · A step in the panel: strip, groups, Instructions
 
-- **Status:** in progress
+- **Status:** done (2026-11-11; review 2 PASS, design verification 2 no blocking/major; merged `c3419c6ec`; follow-ups in PV2-17, the fields only the old step editor had in PV2-18)
 - **Kind:** UI
 - **Depends on:** PV2-04, PV2-05
-- **Branch:** `claude/pv2-07-step-panel`
-- **Tokens:** —
+- **Branch:** `claude/pv2-07-step-panel` (`3dab99c8a` … `d3e611be5`)
+- **Tokens:** 148.3M (out 349k) across 2 implementation rounds, 2 reviews, 2 design verifications
 
 ## Goal
 

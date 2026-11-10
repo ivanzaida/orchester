@@ -39,8 +39,8 @@ orchestration tool reported it; `—` until known.
 | [PV2-04](PV2-04-page-shell.md) | The page: filter, grouped list, panel, Save bar | UI | — | done | `claude/pv2-04-page-shell` → `27cde7e2c` | 97.7M (out 270k) |
 | [PV2-05](PV2-05-steps-flow.md) | Steps drawn as the flow they run in | UI | PV2-04 | done | `claude/pv2-05-steps-flow` → `1b2aa8df7` | 77.6M (out 258k) |
 | [PV2-06](PV2-06-reorder-in-flow.md) | Reorder steps in the flow: drag, ⋯ menu, keys | UI | PV2-01, PV2-05 | in progress | `claude/pv2-06-reorder` | — |
-| [PV2-07](PV2-07-step-panel.md) | A step in the panel: strip, groups, Instructions | UI | PV2-04, PV2-05 | in progress | `claude/pv2-07-step-panel` | — |
-| [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | blocked | — | — |
+| [PV2-07](PV2-07-step-panel.md) | A step in the panel: strip, groups, Instructions | UI | PV2-04, PV2-05 | done | `claude/pv2-07-step-panel` → `c3419c6ec` | 148.3M (out 349k) |
+| [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | in progress | `claude/pv2-08-agent-field` | — |
 | [PV2-09](PV2-09-settings-and-ready.md) | Pipeline settings, Ready? and Needs you | UI | PV2-04 | done | `claude/pv2-09-ready` → `75aa67e32` | 61.7M (out 231k) |
 | [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | done | `claude/pv2-10-save-and-cancel` → `cca2e89e9` | 113.0M (out 342k) |
 | [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | in progress | `claude/pv2-11-versions` | — |
