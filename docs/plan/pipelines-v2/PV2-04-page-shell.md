@@ -1,10 +1,10 @@
 # PV2-04 · The page: filter, grouped list, panel, Save bar
 
-- **Status:** todo
+- **Status:** done (2026-11-10; review round 3 PASS, design verification round 2 PASS; merged `27cde7e2c`)
 - **Kind:** UI
 - **Depends on:** — (the design is read from Pencil's open document until PV2-00)
-- **Branch:** —
-- **Tokens:** —
+- **Branch:** `claude/pv2-04-page-shell` (`be3c181f7` … `d73317098`)
+- **Tokens:** 97.7M — implementation 63.0M + 13.2M + 1.0M, review 6.1M + 2.7M + 0.9M, design verification 6.1M + 4.6M (output 270k)
 
 ## Goal
 

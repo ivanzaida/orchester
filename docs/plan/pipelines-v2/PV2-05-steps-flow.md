@@ -1,9 +1,9 @@
 # PV2-05 · Steps drawn as the flow they run in
 
-- **Status:** blocked (PV2-04)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-04
-- **Branch:** —
+- **Branch:** `claude/pv2-05-steps-flow`
 - **Tokens:** —
 
 ## Goal

@@ -1,6 +1,6 @@
 # PV2-12 · The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab
 
-- **Status:** blocked (PV2-04)
+- **Status:** todo (PV2-04 merged; waits for a slot and its hot files)
 - **Kind:** UI
 - **Depends on:** PV2-04
 - **Branch:** —
