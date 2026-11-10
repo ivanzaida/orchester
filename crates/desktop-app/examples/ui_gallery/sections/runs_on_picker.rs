@@ -1,6 +1,7 @@
 //! The compact *Runs on* picker (`Runs on picker` `ZcGGy` on `Pipelines · v2` `pCzIS`; K1 `lCApz`, K2 `rjPcV`): open
 //! over fixture connections, applying each choice to its own chosen state as a screen would. Type to see K2
-//! (searching).
+//! (searching); Tab and Shift+Tab move the keys between the rail, the models and the efforts. A second picker holds
+//! twelve connections, so that its rail scrolls sideways.
 
 use std::sync::Arc;
 
@@ -10,7 +11,7 @@ use orchester_app::ui::{
   runs_on_picker::{Chosen, Connection, Mark, Model, Pick, RunsOnPicker},
 };
 
-use super::cell;
+use super::{cell, line};
 use crate::gallery::State;
 
 fn model(id: &str, efforts: &[&str]) -> Model {
@@ -74,23 +75,54 @@ fn connections() -> Vec<Connection> {
   ]
 }
 
+/// Twelve connections, more than the rail has room for: six of Claude Code, four of Codex and two API providers.
+fn many_connections() -> Vec<Connection> {
+  let (claude, codex) = (Mark::Agent(AgentMark::Claude), Mark::Agent(AgentMark::OpenAi));
+  (0..12)
+    .map(|index| {
+      let mark = match index {
+        0..=5 => claude,
+        6..=9 => codex,
+        _ => Mark::Cloud,
+      };
+      connection(
+        &format!("c{index}"),
+        &format!("Connection {}", index + 1),
+        mark,
+        vec![model("model-a", &["low", "high"]), model("model-b", &[])],
+      )
+    })
+    .collect()
+}
+
 pub fn section(ctx: &mut Ctx, state: &State) -> Element {
-  let chosen = state.runs_on.clone();
+  let (chosen, many) = (state.runs_on.clone(), state.runs_on_many.clone());
   let picker = RunsOnPicker::new(
     "g-runs-on",
     (connections(), state.runs_on.get()),
-    move |pick| chosen.update(|chosen| apply(chosen, pick)),
+    move |pick| chosen.update(|chosen| apply(chosen, pick, &connections())),
     || {},
   );
-  cell("Runs on picker · ZcGGy (K1 · type for K2)", picker.element(ctx)).into()
+  let overflowing = RunsOnPicker::new(
+    "g-runs-on-many",
+    (many_connections(), state.runs_on_many.get()),
+    move |pick| many.update(|chosen| apply(chosen, pick, &many_connections())),
+    || {},
+  );
+  line([
+    cell("Runs on picker · ZcGGy (K1 · type for K2)", picker.element(ctx)),
+    cell("Twelve connections · the rail scrolls", overflowing.element(ctx)),
+  ])
+  .into()
 }
 
-/// What the picker's caller does with a choice: runs on it, with the connection's first model when it is chosen.
-fn apply(chosen: &mut Chosen, pick: Pick) {
+/// What the picker's caller does with a choice among `connections`: runs on it, with the connection's first model when
+/// it is chosen.
+fn apply(chosen: &mut Chosen, pick: Pick, connections: &[Connection]) {
   match pick {
     Pick::Connection(id) => {
-      let first = connections()
-        .into_iter()
+      let first = connections
+        .iter()
         .find(|connection| connection.id == id)
         .and_then(|connection| connection.models.first().map(|first| first.id.clone()));
       *chosen = Chosen {
@@ -100,10 +132,10 @@ fn apply(chosen: &mut Chosen, pick: Pick) {
       };
     }
     Pick::Model { connection, model } => {
-      let offered = connections()
-        .into_iter()
+      let offered = connections
+        .iter()
         .find(|candidate| candidate.id == connection)
-        .and_then(|candidate| candidate.models.into_iter().find(|candidate| candidate.id == model))
+        .and_then(|candidate| candidate.models.iter().find(|candidate| candidate.id == model))
         .is_some_and(|candidate| {
           chosen
             .effort
@@ -125,6 +157,15 @@ pub fn start() -> Chosen {
   Chosen {
     connection: "work".into(),
     model: Some("claude-opus-5-5".into()),
+    effort: Some("high".into()),
+  }
+}
+
+/// What the twelve-connection picker starts with chosen: the ninth, which the rail has to scroll to show.
+pub fn start_many() -> Chosen {
+  Chosen {
+    connection: "c8".into(),
+    model: Some("model-a".into()),
     effort: Some("high".into()),
   }
 }

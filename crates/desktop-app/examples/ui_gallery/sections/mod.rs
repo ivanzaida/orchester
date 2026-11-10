@@ -19,7 +19,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-pub use self::runs_on_picker::start as runs_on_start;
+pub use self::runs_on_picker::{start as runs_on_start, start_many as runs_on_many_start};
 use crate::gallery::{Section, State};
 
 pub fn section(ctx: &mut Ctx, section: Section, state: &State) -> Element {
