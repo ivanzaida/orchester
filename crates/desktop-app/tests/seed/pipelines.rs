@@ -224,3 +224,36 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
   assert!(matches!(flow("Independent chains"), Err(FlowError::Branches(_))));
   assert!(flow("Empty draft").expect("no steps are drawn").is_empty());
 }
+
+#[test]
+fn seed_pipelines_not_ready_has_a_draft_whose_review_step_has_no_profile_and_three_ready_pipelines() {
+  let seed = Seed::of("pipelines-not-ready");
+  let db = seed.db();
+  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let opened = |name: &str| {
+    let id = rows.iter().find(|r| r.name().as_str() == name).unwrap().id();
+    OpenedPipeline::load_in(seed.repo(), id).unwrap()
+  };
+  assert_eq!(rows.len(), 4);
+  let draft = opened("Dependency update");
+  assert!(draft.latest.is_none(), "a draft never published");
+  let [update, review] = draft.body.steps() else {
+    panic!("two steps")
+  };
+  assert!(matches!(update.kind, StepKind::Agent { profile: Some(_), .. }));
+  assert_eq!(review.name.as_str(), "Review");
+  assert!(matches!(review.kind, StepKind::Agent { profile: None, .. }));
+  assert!(draft.body.deliver().is_some(), "Deliver is the last card");
+  for name in ["Feature delivery", "Quick fix", "Release notes"] {
+    let ready = opened(name);
+    assert!(ready.latest.is_some(), "{name} is published");
+    assert!(
+      ready
+        .body
+        .steps()
+        .iter()
+        .all(|step| matches!(step.kind, StepKind::Agent { profile: Some(_), .. })),
+      "{name} runs a profile in every step"
+    );
+  }
+}
