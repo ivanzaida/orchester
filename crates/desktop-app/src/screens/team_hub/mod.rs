@@ -180,7 +180,7 @@ impl Component for TeamHubScreen {
     } else {
       head::Reach::Answered
     };
-    let status = head::status(ctx, &team, reach);
+    let status = head::status(ctx, admin, reach);
     agents::frame(
       ctx,
       agents::Frame {

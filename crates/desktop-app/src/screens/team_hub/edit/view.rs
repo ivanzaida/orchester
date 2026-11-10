@@ -1,5 +1,5 @@
 //! What an admin's edit puts in its panel besides the fields (`Agents · v2` A26–A31): *Unsaved changes* after
-//! *Team · vN* while the fields differ from the version they are made on, the notice over the panel's sections for what
+//! *Team · vN* while the fields differ from the version they are made on, the notice under the chips for what
 //! the last Save was answered (A30 a newer version, a refusal) or that the team server cannot be reached while changes
 //! wait (A31), and the fixed bar of Save and Cancel with what Save makes at its end.
 
@@ -113,7 +113,6 @@ fn unreachable(ctx: &Ctx) -> Element {
   .title_style(HubText::NoticeTitle.role())
   .body(ctx.t("team_hub.edit.waiting.body"))
   .stacked()
-  .flat()
   .into()
 }
 
@@ -172,6 +171,5 @@ fn refusal(ctx: &Ctx, refused: &EditRefused, base: VersionNumber, by: Option<&st
     .title_style(HubText::NoticeTitle.role())
     .body(body)
     .stacked()
-    .flat()
     .into()
 }

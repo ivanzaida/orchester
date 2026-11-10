@@ -16,7 +16,8 @@ use std::path::Path;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, ChosenResources, ModelId, ResourceKind},
+  name::Name,
+  resource::{AgentProfile, ChosenResources, ModelId, PromptText, ResourceKind},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -27,7 +28,7 @@ use super::{
   editor::{self, Action, Outcome, Request},
   form::{
     ModelSelection, ProfileErrors, ProfileForm, access_for_connection, effort_options, first_model, listed_models,
-    stored_effort,
+    prompt_error, role_error, stored_effort,
   },
   local_connection::discard_saved,
   local_given::is_check,
@@ -62,6 +63,16 @@ pub enum Edit {
   Connection(ConnectionId),
   /// Its role as typed: the name, what it answers for and the role instructions.
   Role(RoleText),
+}
+
+impl Edit {
+  /// Whether it leaves the connection, the model and the effort the profile runs with as they are.
+  const fn keeps_runtime(&self) -> bool {
+    !matches!(
+      self,
+      Self::Cli(_) | Self::Model(_) | Self::Effort(_) | Self::Connection(_)
+    )
+  }
 }
 
 /// Which of a profile's lists of the project's resources an edit changes.
@@ -329,6 +340,9 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
     Edit::TakeBack(kind, resource) => *fields.given(*kind) = kind.of(current).without(*resource),
     Edit::Role(_) => {}
   }
+  if fields.connection.is_none() && edit.keeps_runtime() {
+    return kept_runtime(current, &role, &fields);
+  }
   ProfileForm {
     role: &role.role,
     responsibilities: &role.responsibilities,
@@ -345,6 +359,28 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
   }
   .profile()
   .map_err(|errors| first_error(&errors))
+}
+
+/// `current` whose connection is gone, with `role` and `fields` changed but its connection, model and settings kept as
+/// they are: the editor's form needs the connection to rebuild them, and a change of its role, MCP servers or what it
+/// gives its agents does not touch them (L17 `b7Tbxb`: the role is edited while the profile still has to choose a
+/// connection).
+fn kept_runtime(current: &AgentProfile, role: &RoleText, fields: &Fields<'_>) -> Result<AgentProfile, Message> {
+  let name = Name::new(&role.role).map_err(|error| role_error(&error))?;
+  let instructions = PromptText::new(&role.instructions).map_err(|error| prompt_error(&error))?;
+  Ok(
+    AgentProfile::new(
+      name,
+      role.responsibilities.trim().to_owned(),
+      instructions,
+      current.connection(),
+      current.model().clone(),
+      current.settings().clone(),
+    )
+    .with_permissions(fields.permissions.clone())
+    .with_mcp_servers(fields.servers.clone())
+    .with_given(fields.instructions.clone(), fields.skills.clone(), fields.tools.clone()),
+  )
 }
 
 fn selection(ids: Vec<ConnectionId>) -> Result<McpServerSelection, Message> {

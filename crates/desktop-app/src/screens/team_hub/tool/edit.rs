@@ -162,8 +162,8 @@ impl Component for ToolEditor {
       .collect();
     let body = panel::body()
       .child(head)
-      .with_children(parts.notice)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
+      .with_children(parts.notice)
       .child(self.team_section(ctx, sheet, &errors))
       .child(computer::section(ctx, entry, sheet));
     panel::frame(entry, body, Some(parts.bar)).into()

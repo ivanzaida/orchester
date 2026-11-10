@@ -138,8 +138,8 @@ impl Component for SkillEditor {
     .render(ctx, &self.body, (text != base.body.body(), body_error));
     let body = panel::body()
       .child(head)
-      .with_children(parts.notice)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
+      .with_children(parts.notice)
       .child(from_team(ctx, vec![description_row, files, used_by]))
       .child(document)
       .child(on_this_computer(ctx, &Sheet::Skill(sheet.clone())));

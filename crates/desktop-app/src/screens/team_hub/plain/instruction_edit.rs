@@ -112,8 +112,8 @@ impl Component for InstructionEditor {
     .render(ctx, &self.text, (text != base.body.text().as_str(), error));
     let body = panel::body()
       .child(head)
-      .with_children(parts.notice)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
+      .with_children(parts.notice)
       .child(from_team(
         ctx,
         vec![
