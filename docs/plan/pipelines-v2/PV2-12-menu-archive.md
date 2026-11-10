@@ -1,10 +1,10 @@
 # PV2-12 · The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab
 
-- **Status:** in progress (fix round 2)
+- **Status:** done (2026-11-10; review round 2 PASS, design verification round 2 PASS; merged `824561513`)
 - **Kind:** UI
 - **Depends on:** PV2-04
-- **Branch:** `claude/pv2-12-menu-archive`
-- **Tokens:** —
+- **Branch:** `claude/pv2-12-menu-archive` (`595b9f2f6` … `5d73e6445`)
+- **Tokens:** 74.8M across 2 implementation rounds, 2 reviews, 2 design verifications (output 239k)
 
 ## Goal
 
