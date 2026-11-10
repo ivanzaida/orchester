@@ -63,8 +63,8 @@ impl<B: Body> Edit<B> {
     } else {
       match view.made {
         Ok(body) => {
-          let (edit, number) = (self.clone(), base.number);
-          Save::Ready(Press::run(move || edit.press_save(body.clone(), number)))
+          let (edit, number, was) = (self.clone(), base.number, base.body.clone());
+          Save::Ready(Press::run(move || edit.press_save(body.clone(), (number, &was))))
         }
         Err(why) => Save::Waits(why),
       }

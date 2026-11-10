@@ -7,6 +7,7 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_hub_edit_kinds`
 
+use lurq::app::events::with_synthetic_input;
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::{
   routes::{HubFilter, HubView},
@@ -71,6 +72,11 @@ impl Opened {
   /// Presses Save and waits for the stand-in to hold `count` versions and the panel to read the latest.
   fn saved(&mut self, count: usize) {
     self.window.press(SAVE);
+    self.published(count);
+  }
+
+  /// Waits for the stand-in to hold `count` versions and the panel to read the latest.
+  fn published(&mut self, count: usize) {
     let id = self.id;
     let server = &self.server;
     self.window.until("the server to number it", |_| {
@@ -112,6 +118,19 @@ fn team_qa_hub_edit_kinds_an_instructions_save_publishes_its_next_version() {
     text,
     &json!("Keep each commit small.\n\nRun the tests before you hand off.")
   );
+}
+
+/// An instruction's text widens nothing agents may do, so an MCP client's Save publishes it too.
+#[test]
+fn team_qa_hub_edit_kinds_automation_saves_an_instructions_text() {
+  let mut opened = instruction(("team-edit", State::TeamEdit));
+  opened
+    .window
+    .until("the text to edit", |window| window.texts(TEXT).is_some());
+  opened.type_into(TEXT, "Keep each commit small.");
+  with_synthetic_input(|| opened.window.press(SAVE));
+  opened.published(2);
+  assert!(opened.window.texts("team-hub-edit-refused").is_none());
 }
 
 #[test]
