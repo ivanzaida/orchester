@@ -42,6 +42,7 @@ mod invocation_permissions;
 mod joining;
 mod list;
 mod local_archive;
+mod local_drafts;
 mod local_integration;
 mod mcp;
 mod memory;
@@ -143,5 +144,6 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
     super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
     super::ProjectMigration::TeamOutbox => team_outbox::MIGRATION,
+    super::ProjectMigration::LocalDrafts => local_drafts::MIGRATION,
   }
 }

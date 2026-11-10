@@ -30,8 +30,8 @@ use parking_lot::Mutex;
 
 use super::edit::Holding;
 
-/// Choices checked together, made in order on `base` (what the panel held when they started; `None` for what is
-/// stored), and the count of *Cancel* they were made under.
+/// Choices checked together, made in order on `base` (what the panel held when they started; `None` for the published
+/// version), and the count of *Cancel* they were made under.
 struct Batch {
   epoch: u64,
   base: Option<AgentProfile>,

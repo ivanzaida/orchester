@@ -7,14 +7,15 @@
 //! cannot hold is saved.
 //!
 //! The Agents hub's panel holds its changes instead, and stores nothing until Save ([`hold`], [`save`]): each choice is
-//! made by the same rules on what the panel holds, and Save publishes it as the next version at once.
+//! made by the same rules on what the panel holds, starting from the latest published version (the panel has no
+//! drafts, decided by the person 2026-11-09), and Save publishes it as the next version at once.
 
 use std::path::Path;
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, ChosenResources, ModelId, ResourceKind, VersionNumber},
+  resource::{AgentProfile, ChosenResources, ModelId, ResourceKind},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -33,7 +34,7 @@ use super::{
 };
 use crate::{
   messages::{self, Message},
-  prompt_changes, removal,
+  prompt_changes,
 };
 
 /// One field of a local profile, changed to a new value.
@@ -97,22 +98,25 @@ pub struct Held {
   pub changed: bool,
 }
 
-/// `edit` made to what the panel of the local profile `profile` holds: `held`, or what is stored (its draft, else its
-/// latest version) while it holds nothing yet. Nothing is stored.
+/// `edit` made to what the panel of the local profile `profile` holds: `held`, or its latest published version while
+/// it holds nothing yet, never a draft stored of it. Nothing is stored.
 pub fn hold(root: &Path, profile: ResourceId, held: Option<&AgentProfile>, edit: &Edit) -> Result<Held, Message> {
   let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
-  let entry = listed
-    .profile(profile)
-    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  if listed.profile(profile).is_none() {
+    return Err(Message::new("agents.localConnection.gone"));
+  }
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   offered(&db, edit)?;
-  let body = changed(&listed, held.unwrap_or(&entry.profile), edit)?;
-  let shown = profile_as(&db, profile, &body)
-    .map_err(|error| messages::store_error(&error))?
-    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
   let published = db
     .latest_version::<AgentProfile>(profile)
     .map_err(|error| messages::store_error(&error))?;
+  let current = held
+    .or_else(|| published.as_ref().map(|version| version.body()))
+    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  let body = changed(&listed, current, edit)?;
+  let shown = profile_as(&db, profile, &body)
+    .map_err(|error| messages::store_error(&error))?
+    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
   Ok(Held {
     changed: published.as_ref().map(|version| version.body()) != Some(&body),
     body,
@@ -120,17 +124,12 @@ pub fn hold(root: &Path, profile: ResourceId, held: Option<&AgentProfile>, edit:
   })
 }
 
-/// Publishes what the panel of the local profile `profile` holds as its next version at once: `held`, or its stored
-/// draft while the panel holds nothing else. `allowed` is what the person already allowed to widen:
-/// [`Outcome::Confirm`] lists what it widens beyond that, and nothing is stored. All or nothing: the draft the save
-/// makes is thrown away when the publication is refused. Refused, as the panel's *Publish* was, for a stored draft
-/// started from an older version, and for one that changes what the role's prompts say, which the panel does not show.
-pub fn save(
-  root: &Path,
-  profile: ResourceId,
-  held: Option<&AgentProfile>,
-  allowed: &[Message],
-) -> Result<Outcome, Message> {
+/// Publishes what the panel of the local profile `profile` holds, `held`, as its next version at once, over a draft
+/// stored meanwhile too, which it replaces. `allowed` is what the person already allowed to widen: [`Outcome::Confirm`]
+/// lists what it widens beyond that, and nothing is stored. All or nothing: the draft the save makes is thrown away
+/// when the publication is refused. Refused, as the panel's *Publish* was, while the stored draft is one started from
+/// an older version, and for a body that changes what the role's prompts say, which the panel does not show.
+pub fn save(root: &Path, profile: ResourceId, held: &AgentProfile, allowed: &[Message]) -> Result<Outcome, Message> {
   let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
   let entry = listed
     .profile(profile)
@@ -139,7 +138,7 @@ pub fn save(
   if matches!(entry.state, VersionState::StaleDraft { .. }) {
     return Err(Message::new("agents.localEdit.staleDraft"));
   }
-  let body = held.cloned().unwrap_or_else(|| entry.profile.clone());
+  let body = held.clone();
   let had_draft = entry.state.has_draft();
   if !had_draft && body == entry.profile {
     return Ok(Outcome::Saved(profile));
@@ -205,14 +204,6 @@ pub fn publish(root: &Path, profile: ResourceId, shown: Timestamp, allowed: &[Me
   }
   let body = entry.profile.clone();
   editor::apply(root, &request(root, entry, body, Action::Publish, allowed)?)
-}
-
-/// Discards the draft of the local profile `profile` while it is still the one saved at `shown`: the latest published
-/// version is the profile again, and its number comes back. Another draft is refused and nothing is lost.
-pub fn discard(root: &Path, profile: ResourceId, shown: Timestamp) -> Result<VersionNumber, Message> {
-  let (entry, saved) = stored(root, profile)?;
-  still_shown(saved, shown)?;
-  removal::discard_in::<AgentProfile>(root, profile, &entry.profile)
 }
 
 /// The stored profile and when its draft was saved, read together.

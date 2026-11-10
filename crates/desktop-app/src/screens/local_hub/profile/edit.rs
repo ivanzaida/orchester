@@ -36,22 +36,22 @@ use crate::{
   ui::{icon::Icon, message::message_text},
 };
 
-/// What the panel holds of the profile: `None` while it holds what is stored.
+/// What the panel holds of the profile: `None` while it holds its published version.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct Holding(pub Option<Held>);
 impl DevtoolsInspectable for Holding {}
 
 impl Holding {
-  /// The body the next choice is made on, and Save publishes: `None` for what is stored.
+  /// The body the next choice is made on, and Save publishes: `None` for the published version.
   pub(super) fn body(&self) -> Option<AgentProfile> {
     self.0.as_ref().map(|held| held.body.clone())
   }
 }
 
-/// A save and what the person already allowed it to widen.
+/// A save of what the panel holds and what the person already allowed it to widen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Ask {
-  pub held: Option<AgentProfile>,
+  pub held: AgentProfile,
   pub allowed: Vec<Message>,
 }
 
@@ -80,7 +80,7 @@ pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
   ctx.future_action(move |ask: Ask| {
     let (root, asked) = (root.clone(), ask.clone());
     async move {
-      let outcome = background::run(move || local_edit::save(&root, id, asked.held.as_ref(), &asked.allowed)).await??;
+      let outcome = background::run(move || local_edit::save(&root, id, &asked.held, &asked.allowed)).await??;
       Ok(Done { ask, outcome })
     }
   })

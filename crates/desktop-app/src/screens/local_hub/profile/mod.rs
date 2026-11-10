@@ -7,10 +7,11 @@
 //! draws it ([`table`], [`pick`], [`add_menu`]): the CLI, the connection, the model, the reasoning effort, the MCP
 //! servers, instructions, skills and tools are selects, and each choice changes only what the panel holds, at once and
 //! without locking anything it shows ([`choices`]). *Save* publishes it as the next
-//! version at once ([`edit`]); *Cancel* puts back what is stored.
+//! version at once ([`edit`]); *Cancel* puts back what is published.
 //!
-//! A draft stored before (by the profile's page) opens as the panel's changes over the published version: *Save*
-//! publishes it, with what the panel changed on top, and *Cancel* throws it away.
+//! The panel has no drafts (decided by the person 2026-11-09): it opens on the published version, unchanged, even when
+//! a draft of the profile is stored (an MCP client's), which *Save* replaces with what it publishes and *Cancel* leaves
+//! alone.
 
 pub(in crate::screens) mod add_menu;
 mod choices;
@@ -25,24 +26,22 @@ use std::sync::Arc;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::Ctx,
   },
   core::{Ref, Signal},
   node::Element,
 };
 use orchester_core::{
   id::{ConnectionId, ResourceId},
-  time::Timestamp,
+  resource::AgentProfile,
 };
 use orchester_workspace::{
   agents::{
-    local_edit::{self, Edit},
+    local_edit::Edit,
     local_hub::{LocalHub, LocalProfile},
   },
-  background,
   local_archive::Archivable,
   messages::Message,
-  tasks::outside::Outside,
 };
 
 use self::{
@@ -67,7 +66,6 @@ use crate::{
     panel::{body, head_named},
     profile::ready::section,
   },
-  services::Services,
   ui::{field::field_error, message::message_text, pressable::Press},
 };
 
@@ -109,8 +107,6 @@ struct ProfilePanel {
   choices: Choices,
   /// Publishes what the panel holds.
   save: edit::Save,
-  /// Throws away the draft stored before, the one saved at the time it takes.
-  cancel: FutureAction<Timestamp, (), Message>,
   /// What a save would widen, which waits for the person.
   pending: edit::Pending,
   /// The connection the panel shows, which a choice in the select differs from.
@@ -140,17 +136,17 @@ impl Component for ProfilePanel {
     };
     edit::follow(ctx, &save, &followed, project);
     let saving = (save.clone(), pending.clone(), held.clone());
-    let choices = Choices::new(ctx, (root.clone(), props.id), &held, move || {
-      publish(&saving.0, &saving.1, saving.2.get_untracked().body());
+    let choices = Choices::new(ctx, (root, props.id), &held, move || {
+      if let Some(body) = saving.2.get_untracked().body() {
+        publish(&saving.0, &saving.1, body);
+      }
     });
-    let cancel = cancel(ctx, (root, project, props.id));
     let current = props.profile.current;
     let this = Self {
       chosen: ctx.signal(current.map_or_else(String::new, |connection| connection.to_string())),
       held,
       choices,
       save,
-      cancel,
       pending,
       shown_connection: ctx.create_ref(current),
       listed,
@@ -175,7 +171,7 @@ impl Component for ProfilePanel {
     let choosing = self.choices.checking();
     self.keep_select(shown, choosing);
     // A choice under way is a change already: *Save* and *Cancel* take it at once, *Save* once it is held.
-    let changed = choosing || listed.draft || holding.0.as_ref().is_some_and(|held| held.changed);
+    let changed = choosing || holding.0.as_ref().is_some_and(|held| held.changed);
     let refused = self.refusal();
     mark_unsaved(&self.unsaved, self.what, (changed, refused.is_some()));
     let parts = ready::parts(ctx, &hub, shown);
@@ -225,7 +221,7 @@ impl Component for ProfilePanel {
       PREFIX,
       (
         self.save_now(changed),
-        (changed && busy == Busy::Idle).then(|| self.cancel_now(&listed)),
+        (changed && busy == Busy::Idle).then(|| self.cancel_now()),
       ),
       save_bar::makes(ctx, entry.number),
     );
@@ -284,9 +280,9 @@ impl ProfilePanel {
     }
   }
 
-  /// A save or a cancel is under way: nothing is changed meanwhile. A choice being checked locks nothing.
+  /// A save is under way: nothing is changed meanwhile. A choice being checked locks nothing.
   fn busy(&self) -> Busy {
-    if self.save.state().get().is_pending() || self.cancel.state().get().is_pending() {
+    if self.save.state().get().is_pending() {
       Busy::Taking
     } else {
       Busy::Idle
@@ -320,29 +316,20 @@ impl ProfilePanel {
     Save::Ready(Press::run(move || {
       if choices.waits() {
         choices.save_after();
-      } else {
-        publish(&save, &pending, held.get_untracked().body());
+      } else if let Some(body) = held.get_untracked().body() {
+        publish(&save, &pending, body);
       }
     }))
   }
 
-  /// *Cancel*: the panel shows what is stored again at once, the choices being checked dropped; a draft stored before
-  /// is thrown away too.
-  fn cancel_now(&self, listed: &LocalProfile) -> Press {
-    let (held, pending, choices, cancel) = (
-      self.held.clone(),
-      self.pending.clone(),
-      self.choices.clone(),
-      self.cancel.clone(),
-    );
-    let draft = listed.draft_saved_at;
+  /// *Cancel*: the panel shows the published version again at once, the choices being checked dropped. A draft stored
+  /// meanwhile is left as it is: the panel never showed it.
+  fn cancel_now(&self) -> Press {
+    let (held, pending, choices) = (self.held.clone(), self.pending.clone(), self.choices.clone());
     Press::run(move || {
       choices.drop_all();
       held.set(Holding::default());
       clear(&pending);
-      if let Some(saved) = draft {
-        cancel.run(saved);
-      }
     })
   }
 
@@ -372,19 +359,18 @@ impl ProfilePanel {
     }
   }
 
-  /// Why the last choice, save or cancel did nothing, as the workspace said.
+  /// Why the last choice or save did nothing, as the workspace said.
   fn refusal(&self) -> Option<Message> {
-    let (save, cancel) = (self.save.state().get(), self.cancel.state().get());
+    let save = self.save.state().get();
     self
       .choices
       .refusal()
       .or_else(|| save.error.clone().filter(|_| save.is_rejected()))
-      .or_else(|| cancel.error.clone().filter(|_| cancel.is_rejected()))
   }
 }
 
-/// Publishes `held` (`None` for what is stored), dropping a question a save asked before.
-fn publish(save: &edit::Save, pending: &edit::Pending, held: Option<orchester_core::resource::AgentProfile>) {
+/// Publishes `held`, what the panel holds, dropping a question a save asked before.
+fn publish(save: &edit::Save, pending: &edit::Pending, held: AgentProfile) {
   clear(pending);
   save.run(Ask {
     held,
@@ -397,23 +383,4 @@ fn clear(pending: &edit::Pending) {
   if pending.get_untracked().is_some() {
     pending.set(None);
   }
-}
-
-/// Throws away the draft of the profile `id` saved at the time it takes, while it is still that one; the screens that
-/// show the profiles read them again.
-fn cancel(
-  ctx: &mut Ctx,
-  (root, project, id): (std::path::PathBuf, orchester_core::id::ProjectId, ResourceId),
-) -> FutureAction<Timestamp, (), Message> {
-  let changes = Services::of(ctx).changes;
-  ctx.future_action(move |shown: Timestamp| {
-    let (root, changes) = (root.clone(), changes.clone());
-    async move {
-      background::run(move || local_edit::discard(&root, id, shown)).await??;
-      for change in [Outside::Profiles, Outside::Pipelines] {
-        changes.record(project, change);
-      }
-      Ok(())
-    }
-  })
 }
