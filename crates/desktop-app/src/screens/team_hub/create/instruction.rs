@@ -105,6 +105,7 @@ impl Fields {
       ),
     ];
     Body {
+      lead: None,
       rows,
       computer: Some("team_new.computer.instruction"),
       make: checked.make,

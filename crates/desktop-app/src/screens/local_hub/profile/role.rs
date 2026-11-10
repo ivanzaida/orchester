@@ -45,6 +45,8 @@ pub(super) fn section(
     on_role: change(|role, value| role.role = value),
     on_responsibilities: change(|role, value| role.responsibilities = value),
     on_instructions: change(|role, value| role.instructions = value),
+    name_said: None,
+    first: None,
     role: text,
   };
   role::section(ctx, props)

@@ -14,7 +14,7 @@ use lurq::app::{
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
-  resource::{AgentProfile, Instruction, ResourceKind, Skill, Tool},
+  resource::{AgentProfile, Instruction, ResourceKind, Skill, TeamAgentProfile, Tool},
   secret::SecretVault,
   time::Timestamp,
 };
@@ -58,6 +58,8 @@ impl Eq for LocalMcp {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Make {
   Profile(Box<AgentProfile>),
+  /// A team project's profile, as the team holds it.
+  TeamProfile(Box<TeamAgentProfile>),
   McpServer(Box<NewTeamMcpServer>),
   /// The form of a local project's MCP server, which has no versions.
   LocalMcpServer(Box<LocalMcp>),
@@ -71,6 +73,7 @@ impl Make {
   fn name(&self) -> String {
     match self {
       Self::Profile(profile) => profile.role().as_str().to_owned(),
+      Self::TeamProfile(profile) => profile.role().as_str().to_owned(),
       Self::McpServer(input) => input.name.clone(),
       Self::LocalMcpServer(local) => local.draft.name.as_str().to_owned(),
       Self::Instruction(name, _) | Self::Tool(name, _) => name.as_str().to_owned(),
@@ -81,7 +84,7 @@ impl Make {
   /// The screens that show what it makes.
   const fn outside(&self) -> Outside {
     match self {
-      Self::Profile(_) => Outside::Profiles,
+      Self::Profile(_) | Self::TeamProfile(_) => Outside::Profiles,
       Self::McpServer(_) | Self::LocalMcpServer(_) => Outside::Connections,
       Self::Instruction(..) => Outside::Instructions,
       Self::Skill(..) => Outside::Skills,
@@ -94,7 +97,7 @@ impl Make {
   pub(super) const fn needs_a_person(&self) -> bool {
     matches!(
       self,
-      Self::Profile(_) | Self::McpServer(_) | Self::LocalMcpServer(_) | Self::Tool(..)
+      Self::Profile(_) | Self::TeamProfile(_) | Self::McpServer(_) | Self::LocalMcpServer(_) | Self::Tool(..)
     )
   }
 }
@@ -175,10 +178,10 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
     .ok_or_else(|| Failed::Said(Message::new("teamConfig.reading")))?;
   let id = ResourceId::generate();
   let (kind, name, publication) = match request.make {
-    Make::Profile(profile) => (
+    Make::TeamProfile(profile) => (
       ResourceKind::AgentProfile,
       profile.role().clone(),
-      Publication::of_profile(root, id, &profile, &config).map_err(refused)?,
+      Publication::of_body(root, id, &*profile).map_err(refused)?,
     ),
     Make::McpServer(input) => {
       let server =
@@ -205,7 +208,8 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
       name,
       Publication::of_body(root, id, &*tool).map_err(refused)?,
     ),
-    Make::LocalMcpServer(_) => return Err(Failed::Said(Message::new("team_new.localOnly"))),
+    // A team project's form makes the team's form of a profile.
+    Make::LocalMcpServer(_) | Make::Profile(_) => return Err(Failed::Said(Message::new("team_new.localOnly"))),
   };
   Ok(NewTeamResource {
     id,
@@ -230,8 +234,8 @@ fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Archi
         .map_err(|error| said(error.message()));
     }
     Make::Profile(profile) => create_decided(root, *profile, request.decided).map_err(said),
-    // A team MCP server is the team's alone: a local project's form makes a local one.
-    Make::McpServer(_) => return Err(said(Message::new("team_new.teamOnly"))),
+    // A team MCP server and a team profile are the team's alone: a local project's form makes local ones.
+    Make::McpServer(_) | Make::TeamProfile(_) => return Err(said(Message::new("team_new.teamOnly"))),
     Make::Instruction(name, body) => instructions::create_in(root, name, &body)
       .map(|entry| entry.id)
       .map_err(|error| said(error.message())),

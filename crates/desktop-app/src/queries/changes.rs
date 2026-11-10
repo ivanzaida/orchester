@@ -38,8 +38,8 @@ pub enum ProjectRead {
   HubInstructions,
   /// What a local skill's panel edits over: the skills, the profiles and pipelines their scopes name.
   HubSkills,
-  /// What the form that makes a profile chooses from: the agent connections, the profiles, the pipelines' steps and the
-  /// repository's agent files.
+  /// What the form that makes a profile chooses from: the agent connections, the profiles, the pipelines' steps, the
+  /// repository's agent files and the project's instructions, skills and tools.
   ProfileForm,
 }
 
@@ -113,13 +113,20 @@ pub const fn touched(kind: Outside) -> &'static [ProjectRead] {
       ProjectRead::HubSkills,
       ProjectRead::ProfileForm,
     ],
-    Outside::Tools => &[ProjectRead::TeamHub, ProjectRead::LocalHub],
+    // A new profile's form offers the project's instructions, skills and tools.
+    Outside::Tools => &[ProjectRead::TeamHub, ProjectRead::LocalHub, ProjectRead::ProfileForm],
     Outside::Instructions => &[
       ProjectRead::TeamHub,
       ProjectRead::LocalHub,
       ProjectRead::HubInstructions,
+      ProjectRead::ProfileForm,
     ],
-    Outside::Skills => &[ProjectRead::TeamHub, ProjectRead::LocalHub, ProjectRead::HubSkills],
+    Outside::Skills => &[
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::HubSkills,
+      ProjectRead::ProfileForm,
+    ],
     Outside::Tasks => &[],
   }
 }

@@ -154,7 +154,7 @@ fn team_hub_create_a_required_field_says_so_and_nothing_is_made() {
   team(&agents);
   let before: Vec<_> = KINDS.iter().map(|(.., kind)| held(&agents, *kind)).collect();
   let required = [
-    (HubFilter::Profiles, "team-new-profile-name-row-sub"),
+    (HubFilter::Profiles, "team-new-profile-role-name-sub"),
     (HubFilter::McpServers, "team-new-mcp-name-row-sub"),
     (HubFilter::Instructions, "team-new-instruction-name-row-sub"),
     (HubFilter::Skills, "team-new-skill-name-row-sub"),
@@ -162,8 +162,11 @@ fn team_hub_create_a_required_field_says_so_and_nothing_is_made() {
   ];
   for (filter, sub) in required {
     show_form(&mut agents, filter);
-    // Before Create is pressed the row says what the field is.
-    assert!(!agents.text(sub).starts_with("Required"), "{filter:?}");
+    // Before Create is pressed the row says what the field is, or nothing (a profile's *Role*).
+    assert!(
+      !agents.exists(sub) || !agents.text(sub).starts_with("Required"),
+      "{filter:?}"
+    );
     agents.click("team-hub-new-create");
     agents.until("the field says it is required", |s| s.text(sub).starts_with("Required"));
     assert_eq!(agents.window.navigation().route_now(), form_route(filter), "{filter:?}");

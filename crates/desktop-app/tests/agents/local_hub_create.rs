@@ -46,6 +46,24 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
   (HubFilter::Tools, "New tool", "New tool", "Tool", "tool"),
 ];
 
+/// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's.
+fn name_field(name: &str) -> String {
+  if name == "profile" {
+    "team-new-profile-role-name-input".to_owned()
+  } else {
+    format!("team-new-{name}-name")
+  }
+}
+
+/// What the name's row says under its label, of the kind whose rows are named after `name`.
+fn name_sub(name: &str) -> String {
+  if name == "profile" {
+    "team-new-profile-role-name-sub".to_owned()
+  } else {
+    format!("team-new-{name}-name-row-sub")
+  }
+}
+
 pub(super) const TYPED: &str = "hunter2-typed-value";
 
 pub(super) fn form_route(filter: HubFilter) -> Route {
@@ -270,7 +288,7 @@ fn local_hub_create_a_command_tool_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Reviewer");
+  agents.set("team-new-profile-role-name-input", "Reviewer");
   choose(&mut agents, "team-new-profile-cli", "Codex");
   assert!(
     agents
@@ -425,7 +443,7 @@ fn local_hub_create_cancel_makes_nothing_and_goes_back_to_the_kind() {
     .collect();
   for (filter, _, _, _, name) in KINDS {
     show_form(&mut agents, filter);
-    agents.set(&format!("team-new-{name}-name"), "Whatever");
+    agents.set(&name_field(name), "Whatever");
     agents.click("local-hub-new-cancel");
     agents.until("the kind's list", |s| {
       s.window.navigation().route_now() == hub_route(filter) && !s.exists("local-hub-new-create")
@@ -447,8 +465,11 @@ fn local_hub_create_a_required_field_says_so_and_nothing_is_made() {
   let mut agents = Agents::new(true);
   for (filter, _, _, _, name) in KINDS {
     show_form(&mut agents, filter);
-    let sub = format!("team-new-{name}-name-row-sub");
-    assert!(!agents.text(&sub).starts_with("Required"), "{name}");
+    let sub = name_sub(name);
+    assert!(
+      !agents.exists(&sub) || !agents.text(&sub).starts_with("Required"),
+      "{name}"
+    );
     agents.click("local-hub-new-create");
     agents.until("the field says it is required", |s| {
       s.text(&sub).starts_with("Required")
@@ -464,13 +485,13 @@ fn local_hub_create_a_name_the_project_has_keeps_create_off_with_the_reason() {
   let mut agents = Agents::new(true);
   agents.profile(true);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Builder");
+  agents.set("team-new-profile-role-name-input", "Builder");
   agents.until("the name says why", |s| {
-    s.text("team-new-profile-name-row-sub")
+    s.text("team-new-profile-role-name-sub")
       == "This project already has an agent profile named Builder · pick another name"
   });
   assert_eq!(agents.text("team-hub-actions-hint"), "Fix the name to create it");
-  agents.set("team-new-profile-name", "Planner");
+  agents.set("team-new-profile-role-name-input", "Planner");
   agents.until("the reason is gone", |s| {
     s.text("team-hub-actions-hint") == "Create makes v1 on this computer"
   });
@@ -516,7 +537,7 @@ fn local_hub_create_the_old_new_pages_of_a_profile_and_an_mcp_server_open_the_hu
 fn local_hub_create_a_profile_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Reviewer");
+  agents.set("team-new-profile-role-name-input", "Reviewer");
   choose(&mut agents, "team-new-profile-cli", "Codex");
   choose(&mut agents, "team-new-profile-model", "test-model");
   with_synthetic_input(|| agents.click("local-hub-new-create"));

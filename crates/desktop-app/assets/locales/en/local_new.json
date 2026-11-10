@@ -31,13 +31,8 @@
       "connectionAuto": "Chosen for you when there is one of its kind",
       "connectionAsk": "Choose one of its kind",
       "connectionOnly": "The only one of its kind · chosen for you",
-      "servers": "MCP servers",
-      "serversNone": "None",
       "serversTooMany": "A profile chooses at most {{max}} MCP servers",
-      "serversDuplicate": "An MCP server is chosen twice",
-      "lists": "Instructions, tools, skills",
-      "listsSub": "Picked from this project's lists",
-      "listsValue": "A new profile starts with none of them: choose them in its panel once it is created."
+      "serversDuplicate": "An MCP server is chosen twice"
     },
     "instruction": {
       "givenTo": "Given to",

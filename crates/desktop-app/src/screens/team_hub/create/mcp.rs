@@ -175,6 +175,7 @@ impl Fields {
       rows.push(self.exempt_row(ctx, shown));
     }
     Body {
+      lead: None,
       rows,
       computer: Some(if program {
         "team_new.computer.mcpProgram"

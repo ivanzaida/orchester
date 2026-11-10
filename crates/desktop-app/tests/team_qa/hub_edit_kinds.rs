@@ -218,6 +218,9 @@ fn team_qa_hub_edit_kinds_a_profiles_role_and_what_it_gives_are_published_as_its
     .find(|resource| resource.name().as_str() == "Project rules")
     .expect("the seed's Project rules")
     .id();
+  // Tall enough that the menu under the profile's runs-on selects is in the window, where a pointer presses it.
+  opened.window.tree.resize(1440, 2400);
+  opened.window.pass();
   opened.window.press("local-hub-profile-add-instructions-button");
   opened.window.press(&format!("local-hub-profile-instructions-{rules}"));
   opened.type_into(

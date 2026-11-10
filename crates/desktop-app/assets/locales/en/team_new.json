@@ -36,22 +36,10 @@
       "tool": "Each computer then adds the value of each secret the tool names."
     },
     "profile": {
-      "name": "Name",
-      "nameSub": "Shown in pipelines, runs and approvals",
-      "namePlaceholder": "e.g. Builder",
       "nameTaken": "The team already has an agent profile named {{name}} · pick another name",
-      "responsibility": "Responsibility",
-      "responsibilityPlaceholder": "One line on what this agent is for",
-      "cli": "Agent CLI",
-      "cliSub": "A kind, e.g. Claude Code or Codex; never a connection",
       "cliPlaceholder": "Choose from the catalog",
-      "model": "Model",
       "modelPlaceholder": "From the CLI's list",
-      "effort": "Reasoning effort",
-      "effortDefault": "CLI default",
-      "lists": "Instructions, MCP servers, tools, skills",
-      "listsSub": "Picked from the team's lists",
-      "listsValue": "Not available here yet: a new profile starts with none of them."
+      "effortDefault": "CLI default"
     },
     "mcp": {
       "name": "Name",

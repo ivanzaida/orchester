@@ -29,7 +29,7 @@ use super::{
 use crate::{
   navigation::link::Open,
   screens::{
-    hub::agent_row::tag_chip,
+    hub::given,
     team_hub::{
       profile::from_team::effort_words,
       rows::{self, Sub},
@@ -196,15 +196,17 @@ fn mcp_servers(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       Edit::RemoveServer(server)
     });
   });
-  let list = List {
-    id: "local-hub-profile-mcp",
+  let list = given::List {
+    id: "local-hub-profile-mcp".to_owned(),
     what: "server",
     label: ctx.t("team_hub.profile.mcpServers"),
-    chosen: &profile.mcp_servers,
-    offered: &profile.options.servers,
+    sub: None,
+    chosen: profile.mcp_servers.clone(),
+    offered: profile.options.servers.clone(),
     on_toggle,
+    locked: rows.busy,
   };
-  list_row(ctx, list, rows.busy)
+  given::row(ctx, list)
 }
 
 /// *Instructions*, *Skills* or *Tools*: the project's ones of `kind` it gives its agents in tags, and *Add*, a menu of
@@ -228,84 +230,17 @@ fn given(ctx: &mut Ctx, rows: &Rows<'_>, kind: GivenKind) -> Row {
     GivenKind::Skill => ("local-hub-profile-skills", "skill", "local_hub.profile.skills"),
     GivenKind::Tool => ("local-hub-profile-tools", "tool", "local_hub.profile.tools"),
   };
-  let list = List {
-    id,
+  let list = given::List {
+    id: id.to_owned(),
     what,
     label: ctx.t(label),
-    chosen: profile.given.of(kind),
-    offered: profile.options.given.of(kind),
+    sub: None,
+    chosen: profile.given.of(kind).to_vec(),
+    offered: profile.options.given.of(kind).to_vec(),
     on_toggle,
+    locked: rows.busy,
   };
-  list_row(ctx, list, rows.busy)
-}
-
-/// A row of what the profile chooses from a list of the project's: its MCP servers, instructions, skills or tools.
-struct List<'a, I> {
-  /// The row's element id; its value's is this with `-value`.
-  id: &'static str,
-  /// What one entry is, singular, for the menu's ids ([`add_menu::Props::what`]).
-  what: &'static str,
-  label: Arc<str>,
-  chosen: &'a [(I, String)],
-  /// The project's others, which the menu offers unchecked.
-  offered: &'a [(I, String)],
-  on_toggle: add_menu::Toggle<I>,
-}
-
-/// The chosen ones in tags (*None* while there are none), and *Add*, whose menu checks them and offers the others.
-fn list_row<I>(ctx: &mut Ctx, list: List<'_, I>, locked: bool) -> Row
-where
-  I: Copy + PartialEq + std::fmt::Display + Send + Sync + 'static,
-{
-  let value_id = format!("{}-value", list.id);
-  let item = |(id, name): &(I, String), chosen| add_menu::Item {
-    id: *id,
-    name: name.clone(),
-    chosen,
-  };
-  let items: Vec<add_menu::Item<I>> = list
-    .chosen
-    .iter()
-    .map(|entry| item(entry, true))
-    .chain(list.offered.iter().map(|entry| item(entry, false)))
-    .collect();
-  let tags: Vec<Element> = if list.chosen.is_empty() {
-    vec![
-      Text::new(&ctx.t("local_hub.profile.none"))
-        .id(format!("{value_id}-none"))
-        .variant(HubText::Value.role())
-        .color(PaletteColor::TextMuted)
-        .into(),
-    ]
-  } else {
-    list
-      .chosen
-      .iter()
-      .enumerate()
-      .map(|(index, (_, name))| tag_chip(&format!("{value_id}-{index}"), name).into())
-      .collect()
-  };
-  let add = (!items.is_empty()).then(|| {
-    add_menu::add(
-      ctx,
-      add_menu::Props {
-        what: list.what,
-        items,
-        label: ctx.t("local_hub.profile.add"),
-        locked,
-        on_toggle: list.on_toggle,
-      },
-    )
-  });
-  let value = Row::new()
-    .id(value_id)
-    .width(Dimension::Pct(100.0))
-    .wrap()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .with_children(tags)
-    .with_children(add);
-  rows::row(list.id, &list.label, None, value)
+  given::row(ctx, list)
 }
 
 /// *Connection*: the one it runs on, chosen from the connections of its CLI when there are several or its own is gone.

@@ -95,6 +95,7 @@ impl Fields {
       Some("team_new.tool.kindOff")
     };
     Body {
+      lead: None,
       rows,
       computer: Some("team_new.computer.tool"),
       make,
