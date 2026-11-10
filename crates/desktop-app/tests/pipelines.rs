@@ -13,8 +13,8 @@ use pipelines_support::Editor;
 fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
   let mut editor = Editor::new();
   editor.go(ProjectPage::Pipelines);
-  editor.until("empty library", |e| e.exists("pipelines-empty"));
-  editor.click("pipeline-new");
+  editor.until("the empty hub", |e| e.exists("pipeline-hub-empty-new"));
+  editor.click("pipeline-hub-empty-new");
   editor.set("pipeline-name", "Dependency updates");
   editor.set("pipeline-description", "Keep dependencies current.");
   editor.click("pipeline-start-2");
@@ -32,9 +32,9 @@ fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
     "an empty draft offers its starter steps"
   );
   editor.click("pipeline-parent");
-  editor.until("library row", |e| e.exists(&format!("pipeline-row-{id}")));
-  assert!(editor.text(&format!("pipeline-row-{id}")).contains("Draft"));
-  editor.click(&format!("pipeline-row-{id}"));
+  editor.until("hub row", |e| e.exists(&format!("pipeline-hub-row-{id}")));
+  assert_eq!(editor.text(&format!("pipeline-hub-row-{id}-version")), "draft");
+  editor.click("pipeline-hub-edit-steps");
   editor.until("reopened editor", |e| e.exists("pipeline-add-step"));
   assert_eq!(editor.selected(), id);
 }

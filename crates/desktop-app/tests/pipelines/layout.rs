@@ -1,7 +1,8 @@
 //! Layout contracts of the pipeline page: its fields, New pipeline's starts, Versions and the Settings tab.
+use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{resource::Pipeline, store::ResourceStore};
 
-use crate::pipelines_support::Editor;
+use crate::{pipelines_support::Editor, support::project_id};
 
 #[test]
 fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_typed_text() {
@@ -64,26 +65,13 @@ fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_ty
 }
 
 #[test]
-fn pipelines_empty_library_entries_select_the_requested_start_on_the_creation_page() {
-  for (action, empty) in [("pipeline-empty-create", false), ("pipeline-empty-start", true)] {
+fn pipelines_creation_routes_select_the_requested_start_on_the_creation_page() {
+  for (page, empty) in [(ProjectPage::NewPipeline, false), (ProjectPage::NewEmptyPipeline, true)] {
     let mut editor = Editor::new();
-    editor.go(orchester_app::routes::ProjectPage::Pipelines);
-    editor.until("empty library", |e| e.exists("pipelines-empty"));
-    assert!(editor.exists("pipeline-empty-create") && editor.exists("pipeline-empty-start"));
-    assert!(
-      editor
-        .text("pipelines-empty")
-        .contains("Nothing runs until you publish it")
-    );
-    assert!(
-      editor
-        .text("pipeline-empty-starter")
-        .contains("6 steps · 2 approval gates")
-    );
-    editor.click(action);
+    editor.window.navigation().go(Route::Project(project_id(), page));
     editor.until("new pipeline page", |e| e.exists("pipeline-name"));
     let route = editor.window.navigation().route_now();
-    assert_eq!(orchester_app::routes::Route::parse(&route.path()).unwrap(), route);
+    assert_eq!(Route::parse(&route.path()).unwrap(), route);
     assert!(
       editor
         .db()
