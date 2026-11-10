@@ -152,6 +152,9 @@ const INVITE_PATTERN: &str = "/settings/invite";
 const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
+/// New pipeline's and a pipeline's routes under the Pipelines layout (`table`): the patterns after the screen's own.
+const NEW_PIPELINE_REST: &str = "/new";
+const PIPELINE_REST: &str = "/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 /// A file of the code viewer: its path is the rest of the address, however many segments it has.
 const FILE_PATTERN: &str = "/project/:project/files/**path";
