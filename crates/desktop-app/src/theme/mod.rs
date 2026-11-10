@@ -103,7 +103,7 @@ pub use self::{
   markdown::{blank_line_between_blocks, code_lines},
   memory::{MemorySpacing, MemoryText},
   merge_attempt::{AttemptSpacing, AttemptText},
-  metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  metrics::{ControlHeight, ExtraRadius, ExtraSpacing, text_area_scrollbar},
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
