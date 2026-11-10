@@ -284,3 +284,25 @@ fn pipeline_save_note_a_source_that_is_added_or_removed_asks_in_words_that_fit_b
     "it does not say something was added: {removed}"
   );
 }
+
+#[test]
+fn pipeline_save_note_ready_describes_the_edit_while_the_panel_holds_one() {
+  const LABEL: &str = "team-hub-readiness-label";
+  let (mut agents, [ready, ..]) = project();
+  open(&mut agents, PipelinesFilter::All, Some(ready));
+  agents.until("the panel", |s| s.exists(SAVE));
+  assert_eq!(agents.text(LABEL), "Ready?", "the version tasks use");
+
+  // The panel shows the edit, so Ready? is about the edit and says it is a draft.
+  agents.set(DESCRIPTION, "Changed");
+  agents.until("about the edit", |s| s.text(LABEL) == "Ready? · this draft");
+  assert_eq!(agents.text("team-hub-readiness-count"), "all set");
+  agents.click(CANCEL);
+  agents.until("about the version again", |s| s.text(LABEL) == "Ready?");
+
+  // After a save the panel shows the new version.
+  agents.set(DESCRIPTION, "Changed again");
+  agents.until("about the edit", |s| s.text(LABEL) == "Ready? · this draft");
+  agents.press_until(SAVE, "v2", |s| counts(s, ready).0 == 2);
+  agents.until("about the version", |s| s.text(LABEL) == "Ready?");
+}
