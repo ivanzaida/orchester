@@ -265,7 +265,7 @@ fn readiness_local_edit_the_panel_holds_the_published_version_and_its_save_repla
   assert!(held.changed);
 
   assert_eq!(
-    save(&fixture.root, builder, &held.body, &[]).expect("saved"),
+    save(&fixture.root, builder, &held.body, (&[], false)).expect("saved"),
     Outcome::Saved(builder)
   );
   assert!(drafted(&fixture, builder).is_none(), "the draft is replaced");
