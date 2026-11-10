@@ -298,7 +298,11 @@ fn link(repo: &Path, server: &TeamServer, (id, role): (ServerId, Option<MemberRo
     removed_at: None,
     address: Some(format!("{}/{SLUG}", server.url())),
   };
-  ProjectDb::open(repo)?.start_sharing(&link, &[], (&[], &Default::default()))?;
+  let mut db = ProjectDb::open(repo)?;
+  if db.sharing()?.is_some() {
+    return hub::move_link(repo, &link);
+  }
+  db.start_sharing(&link, &[], (&[], &Default::default()))?;
   Ok(())
 }
 
