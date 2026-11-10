@@ -54,7 +54,6 @@ fn cache(db: &mut ProjectDb, id: ResourceId, body: &Pipeline) {
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: body.clone(),
-    waits_here: false,
   };
   db.cache_shared_version(id, &version).expect("its version");
 }

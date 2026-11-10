@@ -19,7 +19,6 @@ pub(crate) mod question;
 mod tabs;
 pub(crate) mod team;
 pub(crate) mod versions;
-mod waiting_bar;
 
 use lurq::{
   app::{ctx::Ctx, theme::TypographyStyle},

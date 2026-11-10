@@ -14,7 +14,7 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{DraftChange, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
 
 fn at(millis: i64) -> Timestamp {
@@ -239,76 +239,5 @@ fn removals_a_draft_never_published_cannot_be_discarded() {
     .expect("create profile")
     .id();
   let refused = fixture.db.discard_draft_matching(reviewer, &body);
-  assert!(matches!(refused, Err(StoreError::NotPublished(_))), "{refused:?}");
-}
-
-#[test]
-fn removals_settle_draft_reads_and_writes_in_one_transaction() {
-  let mut fixture = Fixture::new();
-  let builder = fixture.builder;
-  let first = orchester_core::resource::VersionNumber::FIRST;
-  let typed = profile("Typed");
-
-  // Nothing to settle: no draft and a body that is the version's own leaves nothing behind.
-  fixture
-    .db
-    .settle_draft::<AgentProfile>(builder, |kept, latest| {
-      assert!(kept.is_none());
-      assert_eq!(latest.number(), first);
-      Ok(DraftChange::Keep)
-    })
-    .expect("kept");
-  assert!(fixture.db.draft::<AgentProfile>(builder).expect("draft").is_none());
-
-  fixture
-    .db
-    .settle_draft::<AgentProfile>(builder, |_, _| {
-      Ok(DraftChange::Replace(Draft::new(typed.clone(), Some(first), at(7))))
-    })
-    .expect("replaced");
-  assert_eq!(
-    fixture
-      .db
-      .draft::<AgentProfile>(builder)
-      .expect("draft")
-      .expect("kept")
-      .body(),
-    &typed
-  );
-
-  // A decision that fails writes nothing.
-  let failed = fixture
-    .db
-    .settle_draft::<AgentProfile>(builder, |_, _| Err(StoreError::DraftChanged(builder)));
-  assert!(matches!(failed, Err(StoreError::DraftChanged(_))), "{failed:?}");
-  assert!(fixture.db.draft::<AgentProfile>(builder).expect("draft").is_some());
-
-  // The draft the decision read is the one it discards.
-  fixture
-    .db
-    .settle_draft::<AgentProfile>(builder, |kept, _| {
-      assert_eq!(kept.map(Draft::body), Some(&typed));
-      Ok(DraftChange::Discard)
-    })
-    .expect("discarded");
-  assert!(fixture.db.draft::<AgentProfile>(builder).expect("draft").is_none());
-}
-
-#[test]
-fn removals_settle_draft_of_a_resource_never_published_is_refused() {
-  let mut fixture = Fixture::new();
-  let reviewer = fixture
-    .db
-    .create_resource(
-      Slug::new("reviewer").expect("slug"),
-      name("Reviewer"),
-      &profile(""),
-      at(6),
-    )
-    .expect("create profile")
-    .id();
-  let refused = fixture
-    .db
-    .settle_draft::<AgentProfile>(reviewer, |_, _| Ok(DraftChange::Discard));
   assert!(matches!(refused, Err(StoreError::NotPublished(_))), "{refused:?}");
 }

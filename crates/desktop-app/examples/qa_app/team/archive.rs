@@ -1,10 +1,11 @@
-//! What the archive states (`team-archive`, `team-archived`, ORC-838) do once Kontur joined the stand-in team server:
-//! the server holds the team's MCP servers and the profile Builder, which names `pencil-design`, so what *Used by*
-//! lists and what the stopped run's card says Builder still uses are the server's own answers. `team-archive` also has
-//! two runs that pin `pencil-design`, which the confirmation lists as the runs that stop. `team-archived` is what a
-//! person's *Archive and stop N runs* leaves behind, which no MCP client can press: `pencil-design` is gone from this
-//! computer's lists, as the server's `resource.archived` leaves it, and the run the seed recorded as stopped by it is
-//! run 8 of KON-12. Fixture data for QA, never shipped.
+//! What the archive states (`team-archive`, `team-archived`, ORC-838) do around Kontur's join of the stand-in team
+//! server: before it, the server holds the team's MCP servers and the profile Builder, which names `pencil-design`, so
+//! what the read after the join holds, what *Used by* lists and what the stopped run's card says Builder still uses are
+//! the server's own answers. `team-archive` also has two runs that pin `pencil-design`, which the confirmation lists as
+//! the runs that stop. `team-archived` is what a person's *Archive and stop N runs* leaves behind, which no MCP client
+//! can press: `pencil-design` is archived on the server and gone from this computer's lists, as the server's
+//! `resource.archived` leaves it, and the run the seed recorded as stopped by it is run 8 of KON-12. Fixture data for
+//! QA, never shipped.
 
 use std::{error::Error, path::Path};
 
@@ -18,22 +19,23 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ResourceSharing};
 
 use super::State;
 
-/// Holds the resources the archive states need on `server`, and makes the result state's changes.
-pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(), Box<dyn Error>> {
+/// Holds the resources the archive states need on `server`, before Kontur at `root` joins it: `pencil-design` archived
+/// there for `team-archived`.
+pub fn hold(state: State, (server, root): (&TeamServer, &Path)) -> Result<(), Box<dyn Error>> {
   if !state.archives() {
     return Ok(());
   }
-  let mut db = ProjectDb::open(root)?;
+  let db = ProjectDb::open(root)?;
   let mut pencil = None;
   for resource in db.resources(ResourceKind::McpServer)? {
     let cached = db
       .cached_version::<TeamMcpServer>(resource.id(), VersionNumber::FIRST)?
       .ok_or("the seed caches v1 of each team MCP server")?;
-    hold(
+    hold_one(
       server,
       (
         SharedResourceKind::McpServer,
@@ -51,11 +53,16 @@ pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(),
     }
   }
   let pencil = pencil.ok_or("the seed's pencil-design")?;
-  let builder = db
-    .resources(ResourceKind::AgentProfile)?
-    .into_iter()
-    .find(|resource| resource.name().as_str() == "Builder")
-    .ok_or("the seed's Builder")?;
+  // The team's Builder: the catalogue has a local one of the same name.
+  let mut builder = None;
+  for resource in db.resources(ResourceKind::AgentProfile)? {
+    let shared = matches!(db.resource_sharing(resource.id())?, Some(ResourceSharing::Shared(_)));
+    if shared && resource.name().as_str() == "Builder" {
+      builder = Some(resource);
+      break;
+    }
+  }
+  let builder = builder.ok_or("the seed's team Builder")?;
   let cached = db
     .cached_version::<AgentProfile>(builder.id(), VersionNumber::FIRST)?
     .ok_or("the seed caches v1 of Builder")?;
@@ -74,7 +81,7 @@ pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(),
       )
     })
     .collect();
-  hold(
+  hold_one(
     server,
     (
       SharedResourceKind::AgentProfile,
@@ -87,16 +94,26 @@ pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(),
       references,
     },
   );
+  if state == State::TeamArchived {
+    server.archive("kontur", pencil);
+  }
+  Ok(())
+}
+
+/// Makes the result state's changes once Kontur joined `server`.
+pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(), Box<dyn Error>> {
   match state {
-    State::TeamArchive => pin_runs(server, pencil),
+    State::TeamArchive => pin_runs(server, super::edit::pencil(root)?),
     // The server's archive reached this computer: the server is not asked again, the resource leaves the lists.
-    State::TeamArchived => db.mark_shared_archived(pencil, true, Timestamp::now()).map(drop)?,
+    State::TeamArchived => ProjectDb::open(root)?
+      .mark_shared_archived(super::edit::pencil(root)?, true, Timestamp::now())
+      .map(drop)?,
     _ => {}
   }
   Ok(())
 }
 
-fn hold(
+fn hold_one(
   server: &TeamServer,
   (kind, id, slug, name): (SharedResourceKind, ResourceId, &str, &str),
   version: VersionContent,

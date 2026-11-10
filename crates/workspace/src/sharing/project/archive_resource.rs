@@ -1,6 +1,7 @@
 //! An admin archives a team resource (`docs/design/team-configuration.md`, decision 11): the team server marks it
 //! archived (`PATCH …/resources/{resource}`, made on the revision this computer has) and every computer follows through
-//! its event stream, where the runs that pin the resource stop ([`crate::sharing::sync`]). Nothing is marked here
+//! its event stream, where the runs that pin the resource stop ([`crate::sharing::sync`]). The revision is the one the
+//! team's configuration in memory holds ([`crate::team_config`]). Nothing is marked here
 //! first: the stream's `resource.archived` is what stops the runs, and it stops them only for a mark that is new.
 //! While the server cannot be reached nothing is sent and the archive fails at once; it has no outbox. It stops work on
 //! every computer, so it is a person's alone: automation is refused before anything is sent.
@@ -12,7 +13,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   run::Answerer,
 };
-use orchester_store::{ProjectDb, ResourceSharing, StoreError};
+use orchester_store::StoreError;
 
 use super::ProjectServer;
 use crate::{
@@ -81,11 +82,14 @@ fn prepare(
     .map_err(|error| failed(&error))?
     .ok_or_else(|| failed(&SharingError::Store(StoreError::NotShared)))?;
   server.writable().map_err(|error| failed(&error))?;
-  let db = ProjectDb::open(root).map_err(|error| failed(&error.into()))?;
-  let Some(ResourceSharing::Shared(revision)) = db.resource_sharing(resource).map_err(|error| failed(&error.into()))?
-  else {
-    return Err(failed(&SharingError::Store(StoreError::ResourceNotFound(resource))));
-  };
+  let revision = servers
+    .inner
+    .workspace
+    .team
+    .read(root)
+    .config()
+    .and_then(|config| config.resource(resource).map(|found| found.revision))
+    .ok_or_else(|| failed(&SharingError::Store(StoreError::ResourceNotFound(resource))))?;
   let patch = ResourcePatch {
     idempotency_key: IdempotencyKey::generate(),
     revision,

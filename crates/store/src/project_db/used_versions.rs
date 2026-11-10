@@ -1,6 +1,4 @@
-//! Which version of a resource this computer uses, and which number the next one takes. A teammate's version that
-//! waits for the person's *Use v<N> here* ([`super::shared_versions`]) is left out of the first, but still counted by
-//! the second.
+//! Which version of a resource this computer uses, and which number the next one takes.
 
 use orchester_core::{
   id::ResourceId,
@@ -11,8 +9,8 @@ use rusqlite::Connection;
 use super::resources::{load_versions, version_number};
 use crate::StoreError;
 
-/// The version this computer uses of `resource`: its newest, except a teammate's version that waits for the person's
-/// *Use v<N> here* ([`super::shared_versions`]). Runs, editors, Always allow and publishing all start from it.
+/// The version this computer uses of `resource`: its newest. Runs, editors, Always allow and publishing all start from
+/// it.
 pub(super) fn used_here<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
@@ -20,14 +18,14 @@ pub(super) fn used_here<B: ResourceBody>(
   Ok(
     load_versions(
       connection,
-      "WHERE resource_id = ?1 AND id NOT IN (SELECT version_id FROM waiting_versions) ORDER BY number DESC LIMIT 1",
+      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
       [resource.to_string()],
     )?
     .pop(),
   )
 }
 
-/// The number of the newest version this computer has of `resource`, waiting or not; the next version follows it.
+/// The number of the newest version this computer has of `resource`; the next version follows it.
 pub(super) fn newest_number(
   connection: &Connection,
   resource: ResourceId,

@@ -27,12 +27,8 @@ use orchester_core::{
 };
 use orchester_store::{CachedVersion, ProjectDb, StoreError};
 
-use super::{
-  ConfigServer, blocking, body, reference, resource,
-  share_mcp::McpPlan,
-  team_body::{self, Publication},
-};
-use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, project::convert};
+use super::{ConfigServer, blocking, body, reference, resource, share_mcp::McpPlan, team_body};
+use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, project::convert, team_edit::Publication};
 
 /// The kinds Share uploads from the project's resources, those other resources name first: a tool before the profiles
 /// that use it, profiles before the pipelines whose steps run them. The team MCP servers go before all of them
@@ -335,7 +331,5 @@ fn confirmed<B>(version: &SharedVersion, local_body: B) -> CachedVersion<B> {
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
     local_body,
-    // This computer published it, so it never waits for a *Use v<N> here*.
-    waits_here: false,
   }
 }

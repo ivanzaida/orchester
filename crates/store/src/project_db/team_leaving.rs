@@ -46,10 +46,7 @@ pub(super) fn remove_team_configuration(transaction: &Transaction<'_>) -> Result
 
 fn delete_rows(transaction: &Transaction<'_>) -> Result<(), StoreError> {
   transaction.execute_batch(
-    "DELETE FROM shared_publishes;
-     DELETE FROM waiting_versions WHERE version_id IN (SELECT id FROM resource_versions
-       WHERE resource_id IN (SELECT id FROM team_resources));
-     DELETE FROM shared_version_references WHERE version_id IN (SELECT id FROM resource_versions
+    "DELETE FROM shared_version_references WHERE version_id IN (SELECT id FROM resource_versions
        WHERE resource_id IN (SELECT id FROM team_resources));
      DELETE FROM shared_version_bodies WHERE version_id IN (SELECT id FROM resource_versions
        WHERE resource_id IN (SELECT id FROM team_resources));

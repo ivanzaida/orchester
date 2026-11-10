@@ -27,7 +27,6 @@ use orchester_workspace::{
 use crate::{
   navigation::Navigation,
   routes::{PipelineView, ProjectPage, Route},
-  screens::hub::team,
   theme::{ExtraSpacing, GroupText, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -45,7 +44,7 @@ pub struct RowProps {
   /// The project's repository, where *Make default* stores the default.
   pub root: std::path::PathBuf,
   pub entry: LibraryEntry,
-  /// The team's configuration while the project is shared: the row shows its publisher (01 `cHvkL`).
+  /// The team's configuration while the project is shared: its pipelines are not changed here.
   pub team: Option<TeamConfiguration>,
 }
 impl DevtoolsInspectable for RowProps {}
@@ -82,27 +81,11 @@ impl Component for LibraryRow {
     if let Some(error) = make_default.state().get().error {
       row = row.toned_hint(message_text(ctx, &error), HintTone::Danger);
     }
-    // A member of a shared project duplicates none of the team's pipelines.
-    if !matches!(entry.state, VersionState::DraftOnly) && team::may_change(props.team.as_ref()) {
+    // A team's pipeline is duplicated or made the default nowhere here.
+    if !matches!(entry.state, VersionState::DraftOnly) && props.team.is_none() {
       row = row.end(self.menu(ctx, &props, &make_default));
     }
-    let row = match props
-      .team
-      .as_ref()
-      .and_then(|team| Some((team, team.standing(entry.id)?)))
-    {
-      Some((team, standing)) => {
-        let draft = match entry.state {
-          VersionState::DraftOnly => Some(None),
-          VersionState::PublishedWithDraft(version) => Some(Some(version)),
-          VersionState::Published(_) => None,
-        };
-        row
-          .end(team::publisher(ctx, &format!("{id}-publisher"), team, standing))
-          .end(team::row_state(ctx, &format!("{id}-state"), standing, draft))
-      }
-      None => row.end(state(ctx, entry, &id)),
-    };
+    let row = row.end(state(ctx, entry, &id));
     row.end(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
   }
 }

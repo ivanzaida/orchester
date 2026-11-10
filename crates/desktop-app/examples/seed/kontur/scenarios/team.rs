@@ -301,20 +301,6 @@ pub fn edit_refused_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
   edit_in(kontur, State::TeamEditRefusedAdmin)
 }
 
-/// As [`edit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the outbox, with
-/// *Cancel sending* (`team-edit-waiting`, A16 `x3ywL`). The program path is set, so the row says only *Waiting to send
-/// · v2*.
-pub fn edit_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditWaiting)
-}
-
-/// As [`edit`], a version that waited and that the server rejected once it answered: the outbox holds it refused, with
-/// the reason, the form of the refused version and *Publish for the team* (`team-edit-rejected`, A17 `rJbPm`). The
-/// program path is set, so the row says only *Your draft on v1 · publish refused*.
-pub fn edit_rejected(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditRejected)
-}
-
 /// As [`edit`], `pencil-design` needing the variable `PENCIL_TOKEN`: the edit form has *Variables it needs* (A13
 /// `WMtxm`).
 pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -326,38 +312,6 @@ pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
     },
   )?;
   write_marker(kontur, State::TeamEditVariables)
-}
-
-/// As [`edit`], a new MCP server `figma-local` that waited and that the server refused as the name being taken once it
-/// answered: taken back whole, and the hub says what and why (`team-create-name-taken`, A15 `dLqHC`).
-pub fn create_name_taken(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamCreateNameTaken)
-}
-
-/// As [`edit`], with a draft of `pencil-design` kept on v1 and olha's v2 published meanwhile and read here: one quiet
-/// line says so, with *View changes* (`team-edit-newer`, A18 `bk4i9`). The QA app makes it without a press.
-pub fn edit_newer(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditNewer)
-}
-
-/// As [`edit_newer`], after a *Publish for the team* that the server answered with the conflict: the page compares v1,
-/// olha's v2 and the draft field by field, the arguments both changed (`team-edit-conflicting`, A19 `DV8OI`; *Discard
-/// my draft* opens A20 `CAPhQ`). The QA app makes it without a press.
-pub fn edit_conflicting(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditConflicting)
-}
-
-/// As [`edit_conflicting`], with no field both changed, so *Rebase my draft* needs no pick
-/// (`team-edit-conflict-clean`).
-pub fn edit_conflict_clean(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditConflictClean)
-}
-
-/// As [`edit`], olha archived `pencil-design` while the draft was kept and the *Publish for the team* that followed was
-/// refused: the draft stays, *Restore* is the way back (`team-edit-archived`, A21 `yqYj9`). The QA app makes it without
-/// a press.
-pub fn edit_archived(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditArchived)
 }
 
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
@@ -552,6 +506,12 @@ fn origin(kontur: &Kontur) -> Result<(), SeedError> {
 pub(super) fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   kontur.catalogue()?;
   write_marker(kontur, state)
+}
+
+/// Leaves the marker by which the QA app serves the Agents hub's team from a stand-in team server, as a member's when
+/// `member` (`team-hub`, `team-hub-member`).
+pub(super) fn served(kontur: &Kontur, member: bool) -> Result<(), SeedError> {
+  write_marker(kontur, if member { State::TeamHubMember } else { State::TeamHub })
 }
 
 fn write_marker(kontur: &Kontur, state: State) -> Result<(), SeedError> {

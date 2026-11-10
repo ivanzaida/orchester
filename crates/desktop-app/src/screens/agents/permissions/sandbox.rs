@@ -14,9 +14,9 @@ use lurq::{
 };
 use orchester_core::{connection::AgentProvider, permission::CodexSandbox};
 
-use super::{super::fields::Fields, Context, section};
+use super::{super::fields::Fields, section};
 use crate::{
-  screens::hub::{parts::field, team},
+  screens::hub::parts::field,
   theme::{HubSpacing, HubText},
   ui::{
     icon::Icon,
@@ -25,9 +25,9 @@ use crate::{
   },
 };
 
-/// Whether the page offers the switch: on a Codex connection of a project that is not shared.
-pub(super) fn offered(context: &Context<'_>, provider: Option<AgentProvider>) -> bool {
-  provider == Some(AgentProvider::CodexCli) && team::of(context.project).is_none()
+/// Whether the page offers the switch: on a Codex connection. The page is a local project's alone.
+pub(super) fn offered(provider: Option<AgentProvider>) -> bool {
+  provider == Some(AgentProvider::CodexCli)
 }
 
 /// The section: *Codex sandbox* with its state and switch, the warning under it while off, and `asked` last.

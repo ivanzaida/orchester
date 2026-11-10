@@ -1,7 +1,7 @@
 //! The create forms of the Agents hub (`Agents · v2` `acFkz`, A7–A12, ORC-835): New in the head opens the kind's form
-//! in the panel as a page, with only Create and Cancel (no draft: Create makes v1 and sends it to the team server, and
-//! nothing shows as created before the server takes it). The team's part and what each computer fills in afterwards
-//! stand apart. `cargo test -p orchester-app --test agents team_hub_create`.
+//! in the panel as a page, with only Create and Cancel (no draft: Create makes v1 on the team server at once, and
+//! nothing shows as created before the server takes it; with no server to take it, nothing is made). The team's part
+//! and what each computer fills in afterwards stand apart. `cargo test -p orchester-app --test agents team_hub_create`.
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
@@ -60,13 +60,10 @@ fn show_form(agents: &mut Agents, filter: HubFilter) {
   agents.until("the form", |s| s.exists("team-hub-new-create"));
 }
 
-/// How many resources of `kind` this computer holds, and how many versions wait for the team server.
-fn held(agents: &Agents, kind: ResourceKind) -> (usize, usize) {
+/// How many resources of `kind` this computer holds: a team's new resource is made on the team server, never here.
+fn held(agents: &Agents, kind: ResourceKind) -> usize {
   let db = ProjectDb::open(&agents.root).expect("database");
-  (
-    db.resources(kind).expect("resources").len(),
-    db.waiting_publishes().expect("the outbox").len(),
-  )
+  db.resources(kind).expect("resources").len()
 }
 
 #[test]
@@ -209,22 +206,18 @@ fn team_hub_create_a_resource_the_team_server_cannot_take_is_refused_in_place_an
   agents.set("team-new-instruction-name", "Release notes");
   agents.set("team-new-instruction-text", "Write them for customers.");
   let before = held(&agents, ResourceKind::Instruction);
-  agents.press_until("team-hub-new-create", "the answer", |s| {
-    s.exists("team-new-refused") || s.exists("team-new-waiting")
-  });
+  agents.click("team-hub-new-create");
+  agents.until("the answer", |s| s.exists("team-new-refused"));
   // Said where the person is, with the form still there to fix; nothing shows as created before the server takes it.
   assert_eq!(
     agents.window.navigation().route_now(),
     form_route(HubFilter::Instructions)
   );
-  assert!(agents.exists("team-new-refused") != agents.exists("team-new-waiting"));
-  if agents.exists("team-new-refused") {
-    assert_eq!(
-      held(&agents, ResourceKind::Instruction),
-      before,
-      "a refused resource is taken back whole"
-    );
-  }
+  assert_eq!(
+    held(&agents, ResourceKind::Instruction),
+    before,
+    "nothing of a refused resource is kept"
+  );
 }
 
 #[test]

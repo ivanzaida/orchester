@@ -17,7 +17,6 @@ use rusqlite::params;
 use super::{
   ProjectDb,
   resources::{encode, load_draft},
-  shared_versions::stop_waiting,
   used_versions::{newest_number, used_here},
 };
 use crate::StoreError;
@@ -48,7 +47,6 @@ impl ProjectDb {
         now.unix_millis()
       ],
     )?;
-    stop_waiting(&transaction, profile, version.number())?;
     if let Some(draft) = load_draft::<AgentProfile>(&transaction, profile)? {
       let body = draft.body().clone();
       // A draft whose commands are no list any more keeps them as the person set them.

@@ -159,7 +159,6 @@ fn cache_team<B: ResourceBody>(
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references,
     local_body: body,
-    waits_here: false,
   };
   db.cache_shared_version(id, &version).expect("cached");
   id
@@ -397,9 +396,11 @@ fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_never_set_by_
   assert_eq!(team.connection_changes(), changes);
 
   team.served.let_automation_widen(true);
-  let made = team.served.ok("update_mcp_server", &named);
-  assert_eq!(made["server"]["launch"]["program"], "uvx", "{made}");
-  assert_eq!(made["server"]["published_version"], 2, "{made}");
+  let sent = team.served.refused("update_mcp_server", &named);
+  assert_eq!(
+    sent["code"], "team_server_not_reached",
+    "allowed, it gets as far as the team server, which this project's link names none of: {sent}"
+  );
   assert!(
     !team.program_set(team.program_server),
     "no tool sets the path on this computer"

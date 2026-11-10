@@ -1,36 +1,42 @@
 //! `share_pipeline`: an Admin of a team project makes one of their own local pipelines, hidden there
-//! (`docs/architecture/server.md` row 80), a team pipeline. Its newest version is copied as a new team pipeline's first
-//! version and sent through the shared configuration's publishing ([`crate::sharing::Servers::send_published`]), with
-//! what its body names as references by name and role, never a secret's value. The agent profiles and tools its steps
-//! run, and its Deliver step's integrator, must be the team's already: a pipeline that names one of this computer's own
-//! is refused, naming it, since the team's copy would name what the server does not have. Every member's agents may
-//! then run it, so it is a person's decision unless a person lets automation change agent permissions. The local
-//! pipeline stays as it is, hidden, its slug shared with the copy while the project is the team's.
+//! (`docs/architecture/server.md` row 80), a team pipeline. Its newest version is created on the team server as a new
+//! team pipeline's first version at once (`docs/design/team-configuration-live.md`, rule 6), with what its body names
+//! as references by name and role, never a secret's value; while the server cannot be reached nothing is created. The
+//! agent profiles and tools its steps run, and its Deliver step's integrator, must be the team's already, as the team's
+//! configuration was read this session: a pipeline that names one of this computer's own is refused, naming it, since
+//! the team's copy would name what the server does not have. Every member's agents may then run it, so it is a person's
+//! decision unless a person lets automation change agent permissions. The local pipeline stays as it is, hidden.
 
 use orchester_core::{
+  id::ResourceId,
   resource::{Pipeline, Resource, ResourceKind},
-  store::ResourceStore,
-  time::Timestamp,
+  sharing::LocalEntities,
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
 };
 use orchester_store::{ProjectDb, ResourceSharing, StoreError};
 use serde_json::{Value, json};
 
-use super::{pipelines::InPipeline, widening};
+use super::{
+  created::{create_team, not_team_form},
+  pipelines::InPipeline,
+  team_fill_ins::team_config,
+  widening,
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
   messages::Message,
-  sharing::sync::{non_team_name, team_executors},
+  sharing::{SharingError, sync::team_body, team_edit::NewTeamResource},
   tasks::outside::Outside,
 };
 
 pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Value, ToolError> {
   let shared = services.clone();
-  let (root, copy) = blocking(move || {
+  let (open, new) = blocking(move || {
     let open = shared.project(&args.project)?;
-    let mut db = ProjectDb::open(&open.repo_root)?;
+    let db = ProjectDb::open(&open.repo_root)?;
     if db.sharing()?.is_none() {
       return Err(ToolError::refused(
         "team_project_required",
@@ -40,40 +46,44 @@ pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Val
     if !db.may_change_configuration()? {
       return Err(StoreError::NotAdmin.into());
     }
+    let config = team_config(&shared, &open.repo_root)?;
     let local = own_pipeline(&db, &args.pipeline)?;
     let version = db
       .latest_version::<Pipeline>(local.id())?
       .ok_or(StoreError::NotPublished(local.id()))?;
-    refuse_local_executors(&db, version.body())?;
+    let id = ResourceId::generate();
+    if let Err(error) = team_body::check_team_pipeline(&config, id, version.body()) {
+      return Err(local_executors(error));
+    }
     let widens = Message::new("appMcp.widens.teamPipeline").with("pipeline", local.name().as_str().to_owned());
     widening::allowed(&shared, vec![widens])?;
-    let copy = db.copy_for_the_team::<Pipeline>(local.id(), Timestamp::now())?;
-    shared.changes.record(open.project.id(), Outside::Pipelines);
-    shared.changes.record(open.project.id(), Outside::Tasks);
-    Ok((open.repo_root, copy))
+    let (connections, mcp_servers, secrets) = (db.connections()?, db.mcp_servers()?, db.secrets()?);
+    let entities = LocalEntities {
+      connections: &connections,
+      mcp_servers: &mcp_servers,
+      secrets: &secrets,
+    };
+    let body = serde_json::to_value(version.body()).map_err(|error| StoreError::Corrupt {
+      what: "resource body",
+      detail: error.to_string(),
+    })?;
+    let publication = team_body::unchanged(id, body, entities).map_err(not_team_form)?;
+    Ok((
+      open,
+      NewTeamResource {
+        id,
+        kind: ResourceKind::Pipeline,
+        name: local.name().clone(),
+        publication,
+      },
+    ))
   })
   .await?;
-  // The copy waits for the server once kept here: a send that fails leaves it waiting, sent again on reconnect.
-  let not_sent = services.servers.send_published(&root).await.err();
-  let id = copy.id();
-  let team = blocking(move || {
-    let db = ProjectDb::open(&root)?;
-    Ok(matches!(db.resource_sharing(id)?, Some(ResourceSharing::Shared(_))))
-  })
-  .await?;
-  let mut result = json!({
-    "pipeline": {
-      "id": id.to_string(),
-      "name": copy.name().as_str(),
-      "slug": copy.slug().as_str(),
-      "state": if team { "team" } else { "waiting" },
-    }
-  });
-  if let Some(reason) = not_sent {
-    tracing::warn!(key = reason.key, "a pipeline shared for the team waits to be sent");
-    result["not_sent"] = json!({ "code": "team_share_waiting" });
-  }
-  Ok(result)
+  let name = new.name.as_str().to_owned();
+  let id = create_team(services, &open.repo_root, new).await?;
+  services.changes.record(open.project.id(), Outside::Pipelines);
+  services.changes.record(open.project.id(), Outside::Tasks);
+  Ok(json!({ "pipeline": { "id": id.to_string(), "name": name, "state": "team" } }))
 }
 
 /// The local pipeline `named` by its id or, ignoring case, its name: a pipeline of this computer's own, not the team's.
@@ -96,14 +106,13 @@ fn own_pipeline(db: &ProjectDb, named: &str) -> Result<Resource, ToolError> {
     .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
 }
 
-/// Refused, naming the first, when `pipeline` runs an agent profile or tool, or merges with an integrator, that is not
-/// the team's (a resource the server has, or the Admin's new one waiting to be sent).
-fn refuse_local_executors(db: &ProjectDb, pipeline: &Pipeline) -> Result<(), ToolError> {
-  let Some(name) = non_team_name(db, pipeline, &team_executors(db)?)? else {
-    return Ok(());
-  };
-  Err(ToolError::refused(
-    "team_resources_required",
-    vec![Message::new("appMcp.errors.sharePipelineLocalExecutors").with("resource", name)],
-  ))
+/// The refusal of a pipeline that runs an agent profile or tool, or merges with an integrator, that is not the team's.
+fn local_executors(error: SharingError) -> ToolError {
+  match error {
+    SharingError::PipelineNamesNonTeam { name, .. } => ToolError::refused(
+      "team_resources_required",
+      vec![Message::new("appMcp.errors.sharePipelineLocalExecutors").with("resource", name)],
+    ),
+    error => not_team_form(error),
+  }
 }

@@ -27,7 +27,7 @@ mod model;
 mod panel;
 pub(in crate::screens) mod profile;
 mod row;
-mod save_bar;
+pub(in crate::screens) mod save_bar;
 mod skill;
 mod words;
 

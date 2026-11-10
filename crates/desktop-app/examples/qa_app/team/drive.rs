@@ -70,14 +70,9 @@ pub fn to(
     | State::TeamEditRejects
     | State::TeamEditPublished
     | State::TeamEditRefusedAdmin
-    | State::TeamEditWaiting
-    | State::TeamEditRejected
     | State::TeamEditVariables
-    | State::TeamCreateNameTaken
-    | State::TeamEditNewer
-    | State::TeamEditConflicting
-    | State::TeamEditConflictClean
-    | State::TeamEditArchived
+    | State::TeamHub
+    | State::TeamHubMember
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure

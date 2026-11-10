@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// What *Save* can do now.
-pub(super) enum Save {
+pub(in crate::screens) enum Save {
   /// Nothing differs from what is stored.
   Unchanged,
   /// What the panel holds cannot be saved, and why.
@@ -35,7 +35,7 @@ pub(super) enum Save {
 
 /// The bar: *Save*, then *Cancel* (`None` while nothing differs, or a save is under way), and `hint` at its end. The
 /// buttons' ids start with `prefix`.
-pub(super) fn bar(
+pub(in crate::screens) fn bar(
   ctx: &Ctx,
   prefix: &str,
   (save, cancel): (Save, Option<Press>),
@@ -68,7 +68,7 @@ pub(super) fn bar(
 }
 
 /// What the bar of a resource with versions says at its end: *Save* makes the version after `published`.
-pub(super) fn makes(ctx: &Ctx, published: Option<VersionNumber>) -> (String, PaletteColor) {
+pub(in crate::screens) fn makes(ctx: &Ctx, published: Option<VersionNumber>) -> (String, PaletteColor) {
   let next = published
     .and_then(VersionNumber::next)
     .map_or_else(String::new, |next| next.to_string());

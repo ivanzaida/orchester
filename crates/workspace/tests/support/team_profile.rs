@@ -33,7 +33,6 @@ pub(super) fn keep_as_team_profile(
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references,
     local_body: version.body().clone(),
-    waits_here: false,
   };
   db.cache_shared_version(profile, &confirmed)
     .expect("the team version is cached");

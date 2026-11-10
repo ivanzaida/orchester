@@ -8,14 +8,10 @@
 
 mod reviewer;
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
-use orchester_core::{
-  resource::{Resource, ResourceKind},
-  run::Answerer,
-  store::ResourceStore,
-};
-use orchester_store::{ConnectionPick, ProjectDb, ResourceSharing};
+use orchester_core::{resource::ResourceKind, run::Answerer};
+use orchester_store::{ConnectionPick, ProjectDb};
 use rmcp::{handler::server::common::schema_for_type, schemars::JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -32,7 +28,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  team_config::{TeamRead, TeamResource},
+  team_config::{TeamConfig, TeamRead, TeamResource},
   team_fill_ins::FillInError,
 };
 
@@ -145,12 +141,7 @@ pub(super) fn team_named(
   kind: ResourceKind,
   named: &str,
 ) -> Result<Option<TeamResource>, ToolError> {
-  let read = services.workspace.team_read(repo_root);
-  let config = match &read {
-    TeamRead::Read { config, .. } => config,
-    TeamRead::Reading => return Err(refusal(FillInError::TeamReading)),
-    TeamRead::Unreachable(unreached) => return Err(refusal(FillInError::TeamUnreachable(unreached.clone()))),
-  };
+  let config = team_config(services, repo_root)?;
   let listed = config.resources(kind);
   // An id names one resource for certain; a name could also read as another's id.
   let found = listed
@@ -160,30 +151,14 @@ pub(super) fn team_named(
   Ok(found.map(|resource| (*resource).clone()))
 }
 
-/// The team's resource of `kind` that `named` names, by its id or its name; `None` in a project that is not shared
-/// with a team, and for a name that is none of the team's.
-pub(super) fn team_resource_named(
-  db: &ProjectDb,
-  kind: ResourceKind,
-  named: &str,
-) -> Result<Option<Resource>, ToolError> {
-  if db.sharing()?.is_none() {
-    return Ok(None);
+/// The team's configuration of the project at `repo_root` read this session. Refused `team_unreachable` (or
+/// `team_reading`) while none was read.
+pub(super) fn team_config(services: &Services, repo_root: &Path) -> Result<Arc<TeamConfig>, ToolError> {
+  match services.workspace.team_read(repo_root) {
+    TeamRead::Read { config, .. } => Ok(config),
+    TeamRead::Reading => Err(refusal(FillInError::TeamReading)),
+    TeamRead::Unreachable(unreached) => Err(refusal(FillInError::TeamUnreachable(unreached))),
   }
-  let mut by_name = None;
-  for resource in db.resources(kind)? {
-    if !matches!(db.resource_sharing(resource.id())?, Some(ResourceSharing::Shared(_))) {
-      continue;
-    }
-    // An id names one resource for certain; a name could also read as another's id.
-    if resource.id().to_string() == named {
-      return Ok(Some(resource));
-    }
-    if by_name.is_none() && resource.name().as_str() == named {
-      by_name = Some(resource);
-    }
-  }
-  Ok(by_name)
 }
 
 pub(super) fn require_team_project(db: &ProjectDb) -> Result<(), ToolError> {

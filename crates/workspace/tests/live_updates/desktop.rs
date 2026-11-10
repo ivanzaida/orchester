@@ -65,6 +65,8 @@ pub struct Desktop {
   /// The project, with its tasks and runs.
   pub fixture: Fixture,
   pub servers: Servers,
+  /// The workspace the servers hold, whose memory holds the team's configuration.
+  pub workspace: Workspace,
   pub server: ServerId,
   pub keychain: Arc<Keychain>,
 }
@@ -121,11 +123,12 @@ impl Desktop {
       removed: parking_lot::Mutex::default(),
       refuse_deletes: AtomicBool::new(false),
     });
-    let servers = Servers::new(workspace, Vault::with(keychain.clone()), version);
+    let servers = Servers::new(workspace.clone(), Vault::with(keychain.clone()), version);
     Self {
       _data: data,
       fixture,
       servers,
+      workspace,
       server: stored.id,
       keychain,
     }

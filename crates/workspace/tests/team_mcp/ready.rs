@@ -49,7 +49,6 @@ pub(crate) fn cache_profile(db: &mut ProjectDb, id: ResourceId, team: &TeamAgent
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: local,
-    waits_here: false,
   };
   db.cache_shared_version(id, &version).expect("the profile's version");
 }

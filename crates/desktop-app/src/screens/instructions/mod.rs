@@ -172,12 +172,8 @@ impl Component for InstructionsScreen {
   }
 }
 impl InstructionsScreen {
-  /// New instruction, in the scope of the rule shown; none for a member of a shared project.
+  /// New instruction, in the scope of the rule shown.
   fn head(&self, ctx: &Ctx, view: View) -> Head {
-    let project = &ctx.props::<Props>().0;
-    if !hub::team::may_change(hub::team::of(project).as_ref()) {
-      return Head::default();
-    }
     let tab = view.tab();
     Head::actions([
       ActionButton::new("instructions-new", ButtonKind::Primary, ctx.t("instructions.new"))

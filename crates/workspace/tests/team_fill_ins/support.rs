@@ -167,7 +167,6 @@ fn cache_profile(db: &mut ProjectDb, slug: &str, team: &TeamAgentProfile) -> Res
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: local,
-    waits_here: false,
   };
   db.cache_shared_version(id, &version).expect("the team form cached");
   id
@@ -250,9 +249,7 @@ impl Team {
       name("Kontur"),
     );
     let mut db = ProjectDb::create(&root, project).expect("create project");
-    share(&mut db, server);
-    let claude = connection(&mut db, &root, AgentProvider::ClaudeCodeCli, "claude");
-    let codex = connection(&mut db, &root, AgentProvider::CodexCli, "codex");
+    // Made before the project is the team's: a team project makes no resource of its kind here.
     let local_profile = db
       .create_resource(
         Slug::new("local").expect("slug"),
@@ -262,6 +259,9 @@ impl Team {
       )
       .expect("a local profile")
       .id();
+    share(&mut db, server);
+    let claude = connection(&mut db, &root, AgentProvider::ClaudeCodeCli, "claude");
+    let codex = connection(&mut db, &root, AgentProvider::CodexCli, "codex");
     drop(db);
     let kept = team_resources();
     let [claude_profile, open_profile, program_server, remote_server] = kept.each_ref().map(|resource| resource.id);

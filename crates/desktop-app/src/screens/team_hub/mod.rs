@@ -37,7 +37,6 @@ pub(in crate::screens) mod profile;
 pub(in crate::screens) mod row;
 pub(in crate::screens) mod rows;
 mod secret;
-mod taken_back;
 mod tool;
 mod unreachable;
 pub(super) mod unread;
@@ -134,12 +133,13 @@ impl Component for TeamHubScreen {
     let reading = loaded.is_pending();
     let (hub, unreached) = read_of(loaded.data.as_ref().filter(|_| failed.is_none()));
     let nothing_read = hub.is_none() && unreached.is_some();
-    // Nothing is created or published while the team server cannot be reached.
+    // Nothing is created or saved while the team server cannot be reached; a form an admin opened stays open.
+    let admin = team.may_change;
     let team = TeamConfiguration {
       may_change: team.may_change && unreached.is_none(),
       ..team
     };
-    let listing = hub.map(|hub| Listing::of(hub, &team));
+    let listing = hub.map(Listing::of);
     let navigation = Navigation::of(ctx);
     // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing
@@ -150,12 +150,12 @@ impl Component for TeamHubScreen {
     let body = match (failed, hub.zip(listing.as_ref())) {
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
-        if !reading {
+        if !reading && !read_behind(ctx, &project, view, listing) {
           keep_route_on_shown(&project, view, selected, &navigation);
         }
         hub_body(
           ctx,
-          (&project, &team),
+          (&project, &team, (admin, unreached.as_ref())),
           (hub, listing),
           (&view, &navigation),
           (reading, &self.retry),
@@ -172,11 +172,6 @@ impl Component for TeamHubScreen {
       let form = Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))));
       new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
     });
-    // A draft nobody can publish, and a version in the outbox, are not *saved* work of an editor that is open.
-    let draft_saved = selected
-      .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
-      .is_some_and(|entry| entry.draft && !entry.read_only && entry.outbox.is_none());
-    let notices = taken_back::notices(ctx, &team, &project.open.repo_root);
     let reach = if unreached.is_some() {
       head::Reach::Unreachable
     } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
@@ -184,7 +179,7 @@ impl Component for TeamHubScreen {
     } else {
       head::Reach::Answered
     };
-    let status = head::status(ctx, &team, (reach, draft_saved));
+    let status = head::status(ctx, &team, reach);
     agents::frame(
       ctx,
       agents::Frame {
@@ -193,7 +188,7 @@ impl Component for TeamHubScreen {
         status,
         new,
         tabs: tabs(id, (listing.as_ref(), nothing_read), selected, &navigation),
-        notices,
+        notices: Vec::new(),
         body,
         over: Vec::new(),
       },
@@ -227,6 +222,9 @@ impl TeamHubScreen {
   }
 }
 
+/// Whether the person is an admin of the team, reachable or not, and why its server cannot be reached now.
+type Admin<'a> = (bool, Option<&'a Unreached>);
+
 /// The hub `read` holds, and why the team server cannot be reached; neither while the hub is being read.
 fn read_of(read: Option<&TeamHubRead>) -> (Option<&TeamHub>, Option<Unreached>) {
   match read {
@@ -248,6 +246,21 @@ fn again(services: &Services, root: &std::path::Path) {
       Err(_) => {}
     }
   });
+}
+
+/// Whether the route names a resource the team's configuration holds that the hub's answer does not list yet: one just
+/// created, which the hub reads again behind. The route stays on it.
+fn read_behind(ctx: &mut Ctx, project: &ShownProject, view: HubView, listing: &Listing) -> bool {
+  view
+    .item
+    .filter(|item| listing.find(*item).is_none())
+    .is_some_and(|item| {
+      Services::of(ctx)
+        .workspace
+        .team_read(&project.open.repo_root)
+        .config()
+        .is_some_and(|config| config.live(item).is_some())
+    })
 }
 
 /// A route that names a resource the filter does not hold (one removed, or of another kind) shows the first one of the
@@ -298,7 +311,7 @@ fn tabs(
 /// answer while it is read again.
 fn hub_body(
   ctx: &mut Ctx,
-  (project, team): (&ShownProject, &TeamConfiguration),
+  (project, team, reach): (&ShownProject, &TeamConfiguration, Admin<'_>),
   (hub, listing): (&TeamHub, &Listing),
   (view, navigation): (&HubView, &Navigation),
   (reading, retry): (bool, &Signal<u64>),
@@ -333,7 +346,15 @@ fn hub_body(
         team: Some(team.clone()),
       },
     ),
-    (None, Some(selected)) => resource_panel(ctx, (project, team, hub), (listing, selected), (reading, retry)),
+    (None, Some(selected)) => {
+      let shown = panel::Shown { team };
+      detail(
+        ctx,
+        (project, team, reach),
+        (hub, listing, selected),
+        (&shown, reading, retry),
+      )
+    }
     (None, None) => return Element::from(Row::new()),
   };
   agents::master_detail("team-hub", reading, (list, panel))
@@ -362,21 +383,10 @@ fn empty(
   agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![action.into()])
 }
 
-/// The panel of the resource `selected`: its kind's own, or the frame the kinds without one share.
-fn resource_panel(
-  ctx: &mut Ctx,
-  (project, team, hub): (&ShownProject, &TeamConfiguration, &TeamHub),
-  (listing, selected): (&Listing, &model::Entry),
-  (reading, retry): (bool, &Signal<u64>),
-) -> Element {
-  let shown = panel::Shown { team };
-  detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry))
-}
-
 /// The panel of `selected`: the one of its kind where the team holds what it shows, else the frame every kind has.
 fn detail(
   ctx: &mut Ctx,
-  (project, team): (&ShownProject, &TeamConfiguration),
+  (project, team, (admin, unreached)): (&ShownProject, &TeamConfiguration, Admin<'_>),
   (hub, listing, selected): (&TeamHub, &Listing, &model::Entry),
   (shown, reading, retry): (&panel::Shown<'_>, bool, &Signal<u64>),
 ) -> Element {
@@ -410,6 +420,8 @@ fn detail(
           repo_root,
           project: id,
           team: team.clone(),
+          admin,
+          unreached: unreached.map(|unreached| unreached.reason.clone()),
           reading,
           reread: retry.clone(),
           listing: listing.clone(),

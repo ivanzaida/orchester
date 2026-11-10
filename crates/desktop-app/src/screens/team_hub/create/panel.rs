@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
@@ -20,12 +20,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::{ProjectId, ResourceId};
+use orchester_core::id::ProjectId;
 use orchester_workspace::{
   agents::data::ProjectAgents,
   connections::data::ProjectConnections,
-  local_archive::Archivable,
-  messages::Message,
   sharing::{team::TeamConfiguration, team_edit::Refusal},
 };
 
@@ -48,13 +46,10 @@ use crate::{
     local_hub::view_of,
     team_hub::{bar, model::Kind, panel as shared, rows},
   },
-  services::Services,
   theme::{HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::field_error,
     icon::{Icon, icon},
-    message::message_text,
   },
 };
 
@@ -130,9 +125,6 @@ struct NewPanel {
   /// Create was pressed: a required field that is empty says so.
   tried: Signal<bool>,
   work: Work,
-  /// *Cancel sending*: takes back the new resource that waits in the outbox, and the form goes with it. Only a team's
-  /// project has a resource that waits.
-  cancel: Option<FutureAction<ResourceId, (), Message>>,
   gate: Option<InputGate>,
   /// The name field, which has the focus when the form opens (the design draws it focused).
   first: ElementRef,
@@ -145,38 +137,20 @@ impl Component for NewPanel {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
-    let work = work::work(ctx, (props.repo_root.clone(), props.project));
+    let work = work::work(ctx, (props.repo_root.clone(), props.project, props.mode));
     let navigation = Navigation::of(ctx);
     let (project, filter) = (props.project, props.kind.filter());
     // Created, and taken by the team server: the hub shows it, and its form is gone with the route.
     ctx.watch(&work.state(), move |state| {
-      let Some(made) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
-        return;
-      };
-      if !made.waiting {
-        let shown = Route::Project(project, ProjectPage::hub(view_of(filter, Some(made.what))));
+      if let Some(made) = state.data.filter(|_| state.is_fulfilled()) {
+        let shown = Route::Project(project, ProjectPage::hub(view_of(filter, Some(made))));
         navigation.replace(shown);
       }
-    });
-    let cancel = (props.mode == Mode::Team).then(|| {
-      let (servers, root) = (Services::of(ctx).servers, props.repo_root.clone());
-      let cancel = ctx.future_action(move |id: ResourceId| {
-        let (servers, root) = (servers.clone(), root.clone());
-        async move { servers.cancel_created(&root, id).await }
-      });
-      let back = Navigation::of(ctx);
-      ctx.watch(&cancel.state(), move |state| {
-        if state.is_fulfilled() {
-          back.replace(Route::Project(project, ProjectPage::hub(HubView::new(filter, None))));
-        }
-      });
-      cancel
     });
     Self {
       form: Form::new(ctx, props.kind, props.mode),
       tried: ctx.signal(false),
       work,
-      cancel,
       gate: ctx.use_context::<InputGate>(),
       first: ElementRef::default(),
       focus_first: ctx.signal(true),
@@ -198,14 +172,6 @@ impl Component for NewPanel {
     }
     let state = self.work.state().get();
     let pending = state.is_pending();
-    let waiting = state
-      .data
-      .as_ref()
-      .filter(|made| made.waiting && state.is_fulfilled())
-      .and_then(|made| match made.what {
-        Archivable::Resource(id) => Some(id),
-        Archivable::McpServer(_) => None,
-      });
     let refused = state.error.filter(|_| !pending);
     let refused_name = taken_by_server(refused.as_ref());
     let agents = self.agents(ctx, kind, &repo_root);
@@ -214,7 +180,7 @@ impl Component for NewPanel {
       mode,
       taken: &taken,
       tried: self.tried.get(),
-      locked: pending || waiting.is_some(),
+      locked: pending,
       agents: agents.as_ref(),
       connections: connections.as_ref(),
       first: &self.first,
@@ -233,8 +199,7 @@ impl Component for NewPanel {
       ))
       .spacing(HubSpacing::BodyTop.role())
       .child(head(ctx, kind, mode))
-      .with_children(self.refusal(ctx, refused.as_ref(), waiting, team.as_ref()))
-      .with_children(self.cancel_failure(ctx))
+      .with_children(refusal(ctx, refused.as_ref(), team.as_ref()))
       .with_children(sections(ctx, (kind, mode), body.rows, body.computer))
       .with_children(body.overlay);
     let scroll = ScrollVertical::new(content)
@@ -242,13 +207,7 @@ impl Component for NewPanel {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
-    let bar = self.bar(
-      ctx,
-      &body.make,
-      (body.off, pending || waiting.is_some()),
-      (project, kind, mode),
-      &navigation,
-    );
+    let bar = self.bar(ctx, &body.make, (body.off, pending), (project, kind, mode), &navigation);
     Column::new()
       .id(format!("{prefix}-hub-panel"))
       .describe("state", "new")
@@ -262,43 +221,6 @@ impl Component for NewPanel {
 }
 
 impl NewPanel {
-  /// Why nothing was created, or that it waits for the team server: in place, under the note.
-  fn refusal(
-    &self,
-    ctx: &Ctx,
-    refused: Option<&Failed>,
-    waiting: Option<ResourceId>,
-    team: Option<&TeamConfiguration>,
-  ) -> Option<Element> {
-    if let (Some(id), Some(action)) = (waiting, self.cancel.clone()) {
-      let cancel = ActionButton::new(
-        "team-new-cancel-sending",
-        ButtonKind::Secondary,
-        ctx.t("team_new.waiting.cancel"),
-      )
-      .icon(Icon::X);
-      let cancel = if action.state().get().is_pending() {
-        cancel.loading()
-      } else {
-        cancel.on_click(move || action.run(id))
-      };
-      return Some(notices::waiting(ctx, cancel));
-    }
-    // Only a team's server says a role changed, and then its configuration names the admins.
-    let admins = refused
-      .and(team)
-      .map_or_else(Default::default, |team| admins(ctx, team));
-    refused.map(|failed| notices::refused(ctx, failed, &admins))
-  }
-
-  /// Why *Cancel sending* did nothing: it is being sent right now, the server took the resource meanwhile, or the
-  /// resource holds more than its first version.
-  fn cancel_failure(&self, ctx: &Ctx) -> Option<Element> {
-    let state = self.cancel.as_ref()?.state().get();
-    let why = state.error.as_ref().filter(|_| state.is_rejected())?;
-    Some(field_error("team-new-cancel-error", &message_text(ctx, why)).into())
-  }
-
   /// This computer's connections, which the profile form's CLI and model choices come from, from the session's cache.
   fn agents(&self, ctx: &mut Ctx, kind: Kind, root: &Path) -> Option<ProjectAgents> {
     if kind != Kind::Profile {
@@ -368,6 +290,15 @@ impl NewPanel {
     };
     bar::bar_saying(vec![create.into(), cancel.into()], Some(hint))
   }
+}
+
+/// Why nothing was created, in place, under the note.
+fn refusal(ctx: &Ctx, refused: Option<&Failed>, team: Option<&TeamConfiguration>) -> Option<Element> {
+  // Only a team's server says a role changed, and then its configuration names the admins.
+  let admins = refused
+    .and(team)
+    .map_or_else(Default::default, |team| admins(ctx, team));
+  refused.map(|failed| notices::refused(ctx, failed, &admins))
 }
 
 /// A name the team server said is taken, which the list this computer holds did not have.

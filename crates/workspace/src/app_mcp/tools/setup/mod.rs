@@ -9,7 +9,7 @@ mod api_providers;
 mod complete;
 mod connection_specs;
 mod connections;
-mod created;
+pub(super) mod created;
 mod decision_connections;
 mod given_by;
 mod instructions;
@@ -20,9 +20,7 @@ mod mcp_server_specs;
 mod mcp_server_text;
 mod mcp_servers;
 mod merge;
-pub use self::team_mcp_window::{
-  Header, Invalid, NewTeamMcpServer, Runs, create_team_mcp_server, team_mcp_names, team_mcp_server,
-};
+pub use self::team_mcp_window::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_names, team_mcp_server};
 pub(crate) use self::{
   mcp_preview::preview as preview_mcp,
   mcp_servers::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer},
@@ -239,7 +237,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "share_pipeline",
-    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version becomes a new team pipeline's first version, sent to                   the team server as Publish for the team sends one (names and roles of what it uses, never a                   secret's value), and team tasks can then name it by its new id. The agent profiles and tools its                   steps run must be the team's already (team_resources_required names those that are not). Refused                   in a local project (team_project_required) and for a member (not_admin); every member's agents may                   run it, so it is person_only unless a person turned on Let automation change agent permissions.                   The local pipeline stays as it is, hidden, under the slug <slug>-local. state is team once the                   server took it, or waiting (with not_sent) until it can be sent.",
+    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version is created on the team server at once as a new team                   pipeline's first version (names and roles of what it uses, never a secret's value), and team tasks                   can then name it by its new id. The agent profiles and tools its steps run must be the team's                   already (team_resources_required names those that are not). Refused in a local project                   (team_project_required), for a member (not_admin), and while the team server cannot be reached                   (team_unreachable: nothing is created); every member's agents may run it, so it is person_only                   unless a person turned on Let automation change agent permissions. The local pipeline stays as it                   is, hidden.",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: false,
   },
@@ -389,6 +387,11 @@ pub async fn call(
   arguments: JsonObject,
 ) -> Option<Result<Value, ToolError>> {
   let named = |specs: &[Spec]| specs.iter().any(|spec| spec.name == name);
+  if created::DRAFT_TOOLS.contains(&name)
+    && let Err(refused) = created::refuse_team_drafts(services, &arguments).await
+  {
+    return Some(Err(refused));
+  }
   if named(project_tools::SPECS) {
     return Some(project_tools::call(services, translate, name, Value::Object(arguments)).await);
   }

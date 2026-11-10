@@ -1,6 +1,7 @@
 //! The shared projects' live event streams (`docs/architecture/server.md`, "Live updates"): one per shared project on
 //! this computer while its server takes this computer's token and the person is a member, each following the project's
-//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]), reporting this computer's
+//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`], in memory: [`live`]),
+//! reporting this computer's
 //! catalog while it is open ([`catalog`]) and saying how it stands ([`state`]). Started with the connection monitor and
 //! kept in step with the servers and the projects: a project shared, joined or made local, a sign-in or sign-out
 //! starts or ends its stream.
@@ -36,18 +37,15 @@ pub(super) use self::state::SyncStates;
 pub use self::{
   archive::{ArchiveError, Pinning, pinning, pinning_mcp_server},
   catalog::CATALOG_CHECK,
-  config::{
-    ConfigServer, FillInOutcome, RemoteResourceStore, ShareFillIns, Waiting, keep_uploaded_configuration,
-    upload_configuration, use_here, waiting,
-  },
+  config::{ConfigServer, FillInOutcome, ShareFillIns, keep_uploaded_configuration, upload_configuration},
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
 pub(crate) use self::{
   archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
-  config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors},
+  config::{refresh_profile, refresh_team_profiles, team_body},
 };
-use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};
+use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
 use crate::{
   background,
   messages::Message,
@@ -176,37 +174,6 @@ struct Live {
   current: Arc<AtomicBool>,
 }
 
-impl Live {
-  /// Sends the versions of the team's configuration published here while the server could not be reached, now that
-  /// the stream connected again (row 36). One the server does not take waits on its version with why; the stream goes
-  /// on either way.
-  async fn send_published(&self) {
-    let project = self.project.clone();
-    let shared = project.link().project;
-    let root = project.repo_root().to_owned();
-    let servers = self.servers.clone();
-    let sent = background::run(move || -> Result<_, SharingError> {
-      let lane = servers.send_lane(project.repo_root());
-      let _sending = send_turn(&lane);
-      let db = orchester_store::ProjectDb::open(project.repo_root())?;
-      let mut taken = Vec::new();
-      let sent = RemoteResourceStore::new(db, project)?.send_waiting(&mut taken);
-      Ok((taken, sent))
-    })
-    .await;
-    match sent {
-      Ok(Ok((taken, sent))) => {
-        self.servers.note_taken_back(&root, taken);
-        if let Err(error) = sent {
-          tracing::warn!(%error, project = %shared, "versions published here wait to be sent");
-        }
-      }
-      Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
-      Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
-    }
-  }
-}
-
 impl Source for Live {
   async fn open(&self, cursor: Option<u64>) -> Result<EventStream, StreamEnd> {
     let entry = self.project.entry();
@@ -228,10 +195,7 @@ impl Source for Live {
     };
     let opened = client.events(&token, self.project.link().project, cursor).await;
     match &opened {
-      Ok(_) => {
-        self.servers.reached(server);
-        self.send_published().await;
-      }
+      Ok(_) => self.servers.reached(server),
       Err(StreamEnd::Unauthorized) => self.servers.refused(server).await,
       Err(_) => {}
     }

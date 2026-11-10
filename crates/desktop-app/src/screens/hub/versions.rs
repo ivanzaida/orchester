@@ -16,13 +16,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  id::ResourceId,
-  resource::{ResourceKind, VersionNumber},
-};
+use orchester_core::{id::ResourceId, resource::ResourceKind};
 use orchester_workspace::{
   background, messages,
-  sharing::compare::{self, FieldChange, HistoryEntry},
+  sharing::compare::{self, HistoryEntry},
 };
 
 use super::{
@@ -40,8 +37,6 @@ use crate::{
   },
 };
 
-/// *Compare with vN*'s popover (`Compare with v5` `oeExg` opens it; the design draws no frame of its own).
-const COMPARE_WIDTH: f32 = 560.0;
 /// *Versions*' popover.
 const VERSIONS_WIDTH: f32 = 380.0;
 
@@ -82,65 +77,6 @@ pub(crate) fn field_names(ctx: &Ctx, fields: &[Arc<str>]) -> String {
     .map(|field| field_name(ctx, field).to_string())
     .collect::<Vec<_>>()
     .join(&ctx.t("sharing.config.separator"))
-}
-
-/// *Compare with vN*'s panel: each field the version published here holds differently from `latest`, the two values
-/// side by side.
-pub(crate) fn compare_panel(ctx: &Ctx, id: &str, latest: VersionNumber, changes: &[FieldChange]) -> Column {
-  let latest = latest.get().to_string();
-  let mut fields = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Md);
-  if changes.is_empty() {
-    fields = fields.child(
-      Text::new(&ctx.t_args("sharing.config.compare.same", [("latest", latest.clone())]))
-        .id(format!("{id}-same"))
-        .variant(HubText::Hint.role())
-        .width(Dimension::Pct(100.0)),
-    );
-  }
-  for change in changes {
-    let side = |label: Arc<str>, value: &str| {
-      let value = if value.is_empty() {
-        ctx.t("sharing.config.compare.none")
-      } else {
-        Arc::from(value)
-      };
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Hair.role())
-        .child(Text::new(&label).variant(HubText::Hint.role()))
-        .child(
-          Text::new(&value)
-            .variant(HubText::Value.role())
-            .width(Dimension::Pct(100.0)),
-        )
-    };
-    fields = fields.child(
-      Column::new()
-        .id(format!("{id}-field-{}", change.field))
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Tight.role())
-        .child(Text::new(&field_name(ctx, &change.field)).variant(HubText::Kind.role()))
-        .child(
-          Row::new()
-            .width(Dimension::Pct(100.0))
-            .spacing(SpacingSize::Md)
-            .align_items(Alignment::Start)
-            .child(side(
-              ctx.t_args("sharing.config.compare.latest", [("latest", latest.clone())]),
-              &change.from,
-            ))
-            .child(side(ctx.t("sharing.config.compare.mine"), &change.to)),
-        ),
-    );
-  }
-  popover_panel(id, COMPARE_WIDTH)
-    .child(
-      Text::new(&ctx.t_args("sharing.config.compare.title", [("latest", latest)]))
-        .id(format!("{id}-title"))
-        .variant(HubText::GroupTitle.role()),
-    )
-    .child(scrolled(id, fields))
 }
 
 /// `content` scrolling where the popover is too short for it, clear of its scrollbar at its end.

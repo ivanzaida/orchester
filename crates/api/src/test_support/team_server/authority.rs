@@ -46,8 +46,8 @@ use crate::{client::CLIENT_VERSION_HEADER, releases::ReleaseVersion};
 /// The cursor before the first change the stand-in commits.
 const FIRST_CURSOR: u64 = 7;
 /// How often an open subscription looks for a change, and how long it stays silent before a keep-alive.
-const STREAM_POLL: Duration = Duration::from_millis(50);
-const KEEP_ALIVE: Duration = Duration::from_secs(1);
+pub(super) const STREAM_POLL: Duration = Duration::from_millis(50);
+pub(super) const KEEP_ALIVE: Duration = Duration::from_secs(1);
 
 /// The caller's standing in the workspace, as its capabilities say it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

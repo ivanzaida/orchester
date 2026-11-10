@@ -467,6 +467,11 @@ pub async fn call(
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;
   }
+  if setup::created::DRAFT_TOOLS.contains(&name)
+    && let Err(refused) = setup::created::refuse_team_drafts(services, &arguments).await
+  {
+    return Some(Err(refused));
+  }
   Some(dispatch(services, translate, name, Value::Object(arguments)).await)
 }
 

@@ -23,7 +23,6 @@ mod models;
 mod project_sets;
 mod reads;
 mod regressions;
-mod shared;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
