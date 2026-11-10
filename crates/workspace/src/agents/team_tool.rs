@@ -9,7 +9,12 @@ use orchester_core::{
   resource::{ApprovalMode, HttpMethod, RequestTarget, ResourceKind, Tool, ToolAction},
 };
 
-use super::{team_mcp::Published, team_profile::TeamProfileSheet, team_sheets};
+use super::{
+  team_body_edit::Latest,
+  team_mcp::Published,
+  team_profile::TeamProfileSheet,
+  team_sheets::{self, latest_of},
+};
 use crate::team_config::TeamConfig;
 
 /// Where an HTTP tool puts the value of an argument.
@@ -65,6 +70,8 @@ pub struct TeamToolSheet {
   pub used_by: Vec<String>,
   /// Who published its latest version.
   pub published: Option<Published>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<Tool>>,
 }
 
 /// A sheet for each team tool whose latest version is a tool this computer reads.
@@ -88,6 +95,7 @@ pub(super) fn sheets(
           sheet.tools.iter().any(|used| used.id == resource.id)
         }),
         published: team_sheets::published(resource),
+        edit: latest_of(resource, &tool),
       },
     ));
   }

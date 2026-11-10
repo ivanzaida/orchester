@@ -12,7 +12,6 @@ use lurq::{
   },
   components::Row,
   core::Signal,
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::Skill;
@@ -36,6 +35,7 @@ use super::{BODY_AREA, DESCRIPTION_AREA, PREFIX, Props, UnsavedSignal};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   screens::{
+    hub,
     local_hub::{
       leave::{clear_unsaved, mark_unsaved},
       model::Entry,
@@ -343,19 +343,14 @@ impl Editor {
 
 /// The row of the text area `area`, typing into `value`; its label stays at the top.
 fn area_row(ctx: &mut Ctx, area: &Area, value: &Signal<String>) -> Row {
-  let label = ctx.t(area.label);
-  let input = FieldInput::new(format!("{PREFIX}-{}-input", area.part), label.clone(), value.clone())
-    .placeholder(ctx.t(area.placeholder))
-    .width(Dimension::Pct(100.0))
-    .text_area()
-    .area_height(area.height);
-  rows::row(
-    &format!("{PREFIX}-{}", area.part),
-    &label,
-    Some(Sub::quiet(ctx.t(area.sub))),
-    input.render(ctx),
-  )
-  .align_items(Alignment::Start)
+  hub::area::Area {
+    id: format!("{PREFIX}-{}", area.part),
+    label: ctx.t(area.label),
+    sub: ctx.t(area.sub),
+    placeholder: ctx.t(area.placeholder),
+    height: area.height,
+  }
+  .row(ctx, value, None)
 }
 
 /// Publishes what a save takes, recorded in the session's activity; the screens that show the skills read them again.

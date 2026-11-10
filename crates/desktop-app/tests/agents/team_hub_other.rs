@@ -143,6 +143,8 @@ fn team_hub_other_a4_an_instruction_shows_its_text_where_it_is_added_and_who_use
   let [skill, rules, ..] = team(&agents);
   let cargo = command(&agents);
   builder(&agents, [rules, skill, cargo]);
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Instructions, (rules, "Project rules"));
   assert_eq!(agents.text("team-hub-panel-title"), "Project rules");
   assert_eq!(agents.text("team-hub-panel-kind"), "Instruction");
@@ -168,8 +170,8 @@ fn team_hub_other_a4_an_instruction_shows_its_text_where_it_is_added_and_who_use
     agents.text("team-hub-nothing-text"),
     "Nothing to fill in on this computer: an instruction is the same everywhere."
   );
-  // The admin changes it from the hub, not on the old editor's page: the head has only the … menu.
-  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  // A member reads it: nothing in the head and no bar.
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu");
   assert!(
     !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
     "no link to the editor's page and nothing pinned"
@@ -202,6 +204,8 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
       cached(&mut db, ("handoff", "Handoff"), json!(handoff), &handoff),
     )
   };
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Instructions, (style, "Rust style"));
   assert_eq!(agents.text("team-hub-from-team-reaches-label"), "Roles");
   assert_eq!(agents.text("team-hub-from-team-reaches-value-0-label"), "Builder");
@@ -224,7 +228,7 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
     !agents.exists("team-hub-chips-end"),
     "nobody uses it and it is not every run's"
   );
-  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu");
   assert!(
     !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
     "no link to the editor's page and nothing pinned"
@@ -251,6 +255,8 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
     cached(&mut db, ("write-tests", "write-tests"), json!(with_file), &with_file)
   };
   builder(&agents, [rules, tests, command(&agents)]);
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Skills, (tests, "write-tests"));
   assert_eq!(agents.text("team-hub-panel-kind"), "Skill");
   assert_eq!(
@@ -283,7 +289,7 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
     agents.text("team-hub-from-team-used-by-value"),
     "No profile uses it yet"
   );
-  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu");
   assert!(
     !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
     "no link to the editor's page and nothing pinned"
@@ -374,6 +380,8 @@ fn team_hub_other_a_command_tool_needs_nothing_here() {
   let mut agents = Agents::new(true);
   team(&agents);
   let cargo = command(&agents);
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Tools, (cargo, "cargo-check"));
   assert_eq!(agents.text("team-hub-panel-kind"), "Tool · Command");
   assert_eq!(agents.text("team-hub-chip-here-label"), "Ready here");
@@ -418,21 +426,22 @@ fn team_hub_other_a_member_reads_the_panels_with_no_edit_and_no_bar() {
   );
 }
 
-/// Only a panel with something to do here pins a bar, at the bar's height; an instruction's, a skill's and a ready
-/// tool's pin none.
+/// Only a panel with something to do here pins a bar, at the bar's height: an admin's instruction and skill pin Save's
+/// (A27, A28), and a tool that is not a command pins none.
 #[test]
 fn team_hub_other_only_a_panel_with_a_fix_pins_its_bar_at_its_height() {
   let mut agents = Agents::new(true);
   let [skill, rules, github, _] = team(&agents);
   let sentry = sentry(&agents);
-  for (filter, resource) in [
-    (HubFilter::Instructions, rules),
-    (HubFilter::Skills, skill),
-    (HubFilter::Tools, sentry),
+  for (filter, resource, saves) in [
+    (HubFilter::Instructions, rules, true),
+    (HubFilter::Skills, skill, true),
+    (HubFilter::Tools, sentry, false),
   ] {
     open(&mut agents, HubView::new(filter, Some(resource)));
     agents.until("the panel", |s| s.exists("team-hub-panel-title"));
-    assert!(!agents.exists("team-hub-actions"), "{filter:?}: nothing pinned");
+    assert_eq!(agents.exists("team-hub-actions"), saves, "{filter:?}");
+    assert_eq!(agents.exists("team-hub-edit-save"), saves, "{filter:?}");
   }
   // Nobody has decided on `github` here: its bar is the fix that switches it on.
   open(&mut agents, HubView::new(HubFilter::McpServers, Some(github)));
@@ -469,4 +478,12 @@ fn team_hub_other_a_tools_keys_are_170_wide_from_the_team_and_on_this_computer()
     (team_key - computer_key).abs() < 0.5,
     "{team_key} against {computer_key}"
   );
+}
+
+/// The person is no longer an admin: they read the team's resources as a member does.
+pub(super) fn as_member(agents: &Agents) {
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .record_sharing_state(None, None, None)
+    .expect("the role");
 }

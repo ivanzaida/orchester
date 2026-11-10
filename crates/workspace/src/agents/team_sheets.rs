@@ -4,7 +4,7 @@
 
 use orchester_core::id::ResourceId;
 
-use super::{team_mcp::Published, team_profile::TeamProfileSheet};
+use super::{team_body_edit::Latest, team_mcp::Published, team_profile::TeamProfileSheet};
 use crate::team_config::{TeamConfig, TeamResource};
 
 /// Who published the latest version of `resource` and when; `None` while it has none.
@@ -26,4 +26,12 @@ pub(super) fn used_by(
     .filter(|(_, sheet)| uses(sheet))
     .filter_map(|(profile, _)| config.name(*profile).map(str::to_owned))
     .collect()
+}
+
+/// What an admin's edit of `resource` starts from: its latest version, whose body this computer read as `body`.
+pub(super) fn latest_of<B: Clone>(resource: &TeamResource, body: &B) -> Option<Latest<B>> {
+  Some(Latest {
+    number: resource.number()?,
+    body: body.clone(),
+  })
 }

@@ -7,6 +7,7 @@
 //! is nothing to fill in for it here: the panel says so and offers no action, and holds no state of its own.
 
 mod computer;
+mod edit;
 mod from_team;
 
 use std::{path::PathBuf, sync::Arc};
@@ -18,10 +19,13 @@ use lurq::{
   },
   node::Element,
 };
+use orchester_core::id::ProjectId;
 use orchester_workspace::{
   agents::team_tool::TeamToolSheet,
+  messages::Message,
   readiness::{ReadinessStanding, Undecided},
   sharing::team::TeamConfiguration,
+  tools::form::CommandText,
 };
 
 use super::{
@@ -34,6 +38,12 @@ use crate::{services::Services, ui::chip::BadgeTone};
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub repo_root: PathBuf,
+  pub project: ProjectId,
+  /// The person is an admin of the team, reachable or not: they edit a command tool in place, and what they typed
+  /// stays while the server is lost.
+  pub admin: bool,
+  /// Why the team server cannot be reached now; Save waits for it.
+  pub unreached: Option<Message>,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
   pub listing: Listing,
@@ -43,7 +53,16 @@ pub(super) struct Props {
 impl DevtoolsInspectable for Props {}
 
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
-  ctx.mount_keyed::<ToolPanel>(&format!("team-hub-tool-{}", props.entry.id), props)
+  let key = format!("team-hub-tool-{}", props.entry.id);
+  let command = props
+    .sheet
+    .edit
+    .as_ref()
+    .is_some_and(|latest| CommandText::of(&latest.body).is_some());
+  if props.admin && command {
+    return ctx.mount_keyed::<edit::ToolEditor>(&key, edit::EditorProps { props });
+  }
+  ctx.mount_keyed::<ToolPanel>(&key, props)
 }
 
 /// The panel of one tool, keyed by the resource so its scroll never carries over to another.
@@ -63,6 +82,7 @@ impl Component for ToolPanel {
       listing,
       entry,
       sheet,
+      ..
     } = ctx.props::<Props>().clone();
     let now = Services::of(ctx).clock.now();
     let head_end = archive::menu(ctx, &repo_root, &entry, team.may_change);

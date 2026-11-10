@@ -8,12 +8,10 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::PaletteColor,
   },
   components::Row,
   core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::resource::Instruction;
 use orchester_workspace::{
@@ -35,6 +33,7 @@ use super::{PREFIX, Props, TEXT_AREA, UnsavedSignal};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   screens::{
+    hub::area::Area,
     instructions::{fields::Fields, state::Tab},
     local_hub::{
       leave::{clear_unsaved, mark_unsaved},
@@ -45,15 +44,11 @@ use crate::{
     },
     team_hub::{
       panel::{body, head_named},
-      rows::{self, Sub},
+      rows,
     },
   },
   services::Services,
-  ui::{
-    field::{FieldInput, field_error},
-    message::message_text,
-    pressable::Press,
-  },
+  ui::{field::field_error, message::message_text, pressable::Press},
 };
 
 #[derive(Clone)]
@@ -212,23 +207,14 @@ impl Editor {
 
   /// *Text*: the instruction's Markdown, its label at the top; a text that cannot be saved says why under the label.
   fn text_row(&self, ctx: &mut Ctx, error: Option<&Message>) -> Row {
-    let label = ctx.t("local_hub.instruction.text");
-    let mut input = FieldInput::new(format!("{PREFIX}-text-input"), label.clone(), self.fields.text.clone())
-      .placeholder(ctx.t("local_hub.instruction.textPlaceholder"))
-      .width(Dimension::Pct(100.0))
-      .text_area()
-      .area_height(TEXT_AREA);
-    if error.is_some() {
-      input = input.invalid();
+    Area {
+      id: format!("{PREFIX}-text"),
+      label: ctx.t("local_hub.instruction.text"),
+      sub: ctx.t("local_hub.instruction.textSub"),
+      placeholder: ctx.t("local_hub.instruction.textPlaceholder"),
+      height: TEXT_AREA,
     }
-    let sub = match error {
-      Some(error) => Sub {
-        words: message_text(ctx, error),
-        color: PaletteColor::Danger,
-      },
-      None => Sub::quiet(ctx.t("local_hub.instruction.textSub")),
-    };
-    rows::row(&format!("{PREFIX}-text"), &label, Some(sub), input.render(ctx)).align_items(Alignment::Start)
+    .row(ctx, &self.fields.text, error.map(|error| message_text(ctx, error)))
   }
 
   /// What *Save* does now: nothing while nothing differs, why it waits while the fields cannot be saved or a variable

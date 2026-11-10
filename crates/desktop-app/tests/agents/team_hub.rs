@@ -264,10 +264,11 @@ fn team_hub_links_to_no_editor_page_and_edits_an_mcp_server_in_its_panel() {
   let mut agents = Agents::new(true);
   let [skill, _, github, _] = team(&agents);
   open(&mut agents, HubView::new(HubFilter::All, Some(skill)));
-  // A skill's panel has its … menu and no Edit to the old editor's page, and nothing pinned.
+  // A skill's panel has its … menu and no Edit to the old editor's page: an admin edits it in place, under Save
+  // and Cancel (A28 `qfrbn`).
   assert!(agents.exists("team-hub-more"));
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
-  assert!(!agents.exists("team-hub-actions"));
+  assert!(agents.exists("team-hub-edit-save"));
   // An MCP server is edited in its panel (Edit in its head, ORC-836); its bar stays the fix of what this computer
   // lacks (nobody has decided on `github` here: switching it on).
   open(&mut agents, HubView::new(HubFilter::All, Some(github)));

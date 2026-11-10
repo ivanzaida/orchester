@@ -304,6 +304,10 @@
       "files": "Files"
     },
     "tool": {
+      "program": "Program",
+      "argumentsSub": "One per line",
+      "argumentsPlaceholder": "An argument on each line",
+      "timeoutField": "Time limit, seconds",
       "where": "Tool · {{kind}}",
       "kind": {
         "command": "Command",
@@ -363,7 +367,39 @@
       "unreachable": {
         "title": "Can't reach the team · nothing was saved"
       },
-      "fixFields": "Fix the marked fields to save"
+      "fixFields": "Fix the marked fields to save",
+      "tooMany": "A profile lists at most {{max}} of each kind",
+      "add": "Add",
+      "role": "Role",
+      "roleNote": "· from the team, the same on every computer",
+      "responsibilities": "Responsibilities",
+      "responsibilitiesSub": "What it answers for",
+      "responsibilitiesPlaceholder": "What this role answers for",
+      "roleInstructions": "Role instructions",
+      "roleInstructionsSub": "First in the agent's prompt, before the instructions it is given",
+      "roleInstructionsPlaceholder": "What an agent in this role reads first, in Markdown",
+      "changedMark": "· changed",
+      "textRequired": "Write the text to save",
+      "descriptionRequired": "Write a description to save",
+      "descriptionSub": "What an agent reads to decide whether to load it",
+      "descriptionPlaceholder": "What the skill does and when an agent should load it",
+      "filesSub": "Its reference files are not changed here",
+      "skillDocument": "SKILL.md",
+      "skillDocumentPlaceholder": "What an agent reads once it loads the skill, in Markdown",
+      "textPlaceholder": "What every agent given it reads, in Markdown",
+      "usedBySub": "Given by these profiles; changed in a profile",
+      "unsaved": "Unsaved changes",
+      "makes": "Save publishes {{version}} for the whole team · runs keep their version",
+      "makesUnchanged": "No changes · Save publishes {{version}} for the whole team",
+      "needsServer": "Save needs the team server · it can't be reached now",
+      "waiting": {
+        "title": "Can't reach the team server",
+        "body": "Your changes stay in the panel while it is open. Save publishes them once the team server answers again."
+      },
+      "newer": {
+        "title": "{{name}} published {{version}} while you edited",
+        "body": "The team keeps one latest version, so yours was not saved. The panel shows {{version}} now; make your changes again on it."
+      }
     }
   }
 }
