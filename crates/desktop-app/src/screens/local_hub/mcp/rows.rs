@@ -289,7 +289,7 @@ impl Form {
     let variables = FieldInput::new(
       "connection-mcp-variables",
       ctx.t("connections.mcp.variables"),
-      self.fields.variables.clone(),
+      self.variables_line.clone(),
     )
     .mono()
     .compact_text_area();

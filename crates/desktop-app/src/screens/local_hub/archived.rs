@@ -277,7 +277,7 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
     rows.push(read_row(
       "variables",
       &ctx.t("connections.mcp.variables"),
-      &variables_read(ctx, &text.variables),
+      &super::mcp::variables::Notation::new(ctx).shown(&text.variables),
       true,
     ));
   }
@@ -293,27 +293,4 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
     ],
     rows,
   )
-}
-
-/// `FIGMA_API_KEY ← secret FIGMA_TOKEN` for a variable that takes a secret, `NAME=value` for the others.
-fn variables_read(ctx: &Ctx, variables: &str) -> String {
-  variables
-    .lines()
-    .map(|line| match line.split_once('=') {
-      Some((name, value)) => match value.strip_prefix("${secret:").and_then(|rest| rest.strip_suffix('}')) {
-        Some(secret) => ctx
-          .t_args(
-            "local_hub.archived.takesSecret",
-            [
-              ("name", name.to_owned()),
-              ("secret", secret.split('@').next().unwrap_or(secret).to_owned()),
-            ],
-          )
-          .to_string(),
-        None => line.to_owned(),
-      },
-      None => line.to_owned(),
-    })
-    .collect::<Vec<_>>()
-    .join("\n")
 }

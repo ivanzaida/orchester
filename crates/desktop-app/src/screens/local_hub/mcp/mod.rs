@@ -13,6 +13,7 @@ mod form;
 mod notes;
 mod rows;
 mod secrets;
+pub(super) mod variables;
 
 use std::{
   collections::hash_map::DefaultHasher,

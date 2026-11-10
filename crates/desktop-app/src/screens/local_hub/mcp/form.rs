@@ -12,6 +12,7 @@ use orchester_workspace::{connections::mcp::McpServerText, messages::Message};
 use super::{
   actions::{self, Lines},
   secrets::Asking,
+  variables,
 };
 use crate::screens::connections::mcp_form::fields::Fields;
 
@@ -26,6 +27,8 @@ pub(in crate::screens) struct Form {
   pub(super) one_line_arguments: bool,
   /// The tools that run without asking, in one line.
   pub(super) tools_line: Signal<String>,
+  /// The variables as the field shows them: one that takes a secret as `NAME ← secret SECRET`.
+  pub(super) variables_line: Signal<String>,
 }
 
 impl Form {
@@ -34,6 +37,7 @@ impl Form {
     let fields = Fields::new(ctx, text);
     let choose = actions::choose(ctx, fields.program.clone());
     let lines = Lines::new(ctx, &fields, text);
+    let variables_line = variables::line(ctx, &fields.variables);
     Self {
       fields,
       choose,
@@ -41,6 +45,7 @@ impl Form {
       arguments_line: lines.arguments,
       one_line_arguments: lines.one_line,
       tools_line: lines.tools,
+      variables_line,
     }
   }
 }

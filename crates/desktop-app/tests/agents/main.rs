@@ -25,6 +25,7 @@ mod local_hub_review;
 mod local_hub_role;
 mod local_hub_saved;
 mod local_hub_tool;
+mod local_hub_variables;
 mod models;
 mod project_sets;
 mod reads;
