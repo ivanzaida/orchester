@@ -63,5 +63,6 @@ mod team_hub_reads;
 mod usage;
 
 mod pipeline_flow_polish;
+mod pipeline_step_polish;
 mod usage_navigation;
 mod writable_folders;

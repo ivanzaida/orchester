@@ -7,7 +7,10 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::resource::{ResourceKind, Step};
+use orchester_core::{
+  connection::AgentProvider,
+  resource::{ResourceKind, Step},
+};
 use orchester_workspace::{
   pipelines::{
     data::{Assignables, ProfileChoice, ToolChoice},
@@ -33,6 +36,10 @@ pub(super) struct Choices {
   pub items: Vec<Item>,
   /// What each item runs the step as, in the order of `items`.
   pub executors: Vec<Executor>,
+  /// The CLI each item runs on, in the order of `items`, when it is known: a published profile's.
+  pub clis: Vec<Option<AgentProvider>>,
+  /// The CLI the step's own agent runs on, when it is known.
+  pub cli: Option<AgentProvider>,
   /// What stands out about the step's agent.
   pub flag: Option<Flag>,
 }
@@ -64,12 +71,14 @@ pub(super) fn choices(ctx: &Ctx, assignables: &Assignables, step: &Step) -> Choi
   let model = overridden.as_ref().map(|model| model.as_str());
   let mut items = Vec::new();
   let mut executors = Vec::new();
+  let mut clis = Vec::new();
   let mut lost = false;
   for profile in &assignables.profiles {
     let executor = Executor::Profile(profile.id);
     let own = if current == executor { model } else { None };
     items.push(profile_item(ctx, assignables, profile, own));
     executors.push(executor);
+    clis.push(profile.provider);
   }
   if let Executor::Profile(id) = current
     && assignables.profile(id).is_none()
@@ -91,11 +100,13 @@ pub(super) fn choices(ctx: &Ctx, assignables: &Assignables, step: &Step) -> Choi
         }
       },
     );
+    clis.push(None);
     executors.push(current);
   }
   for tool in &assignables.tools {
     items.push(tool_item(ctx, assignables, tool));
     executors.push(Executor::Tool(tool.id));
+    clis.push(None);
   }
   if let Executor::Tool(id) = current
     && assignables.tool(id).is_none()
@@ -103,10 +114,17 @@ pub(super) fn choices(ctx: &Ctx, assignables: &Assignables, step: &Step) -> Choi
     lost = true;
     items.push(gone(ctx, id.to_string(), Group::Tools, "pipeline_hub.agent.toolGone"));
     executors.push(current);
+    clis.push(None);
   }
+  let cli = match current {
+    Executor::Profile(id) => assignables.profile(id).and_then(|profile| profile.provider),
+    Executor::Tool(_) | Executor::Unset => None,
+  };
   let mut chosen = Choices {
     items,
     executors,
+    clis,
+    cli,
     flag: None,
   };
   chosen.flag = if current == Executor::Unset {

@@ -2,7 +2,8 @@
 //! and model boxes. It shows the profile's mark, its name and what it runs on, and opens the Agent picker under it,
 //! from its start. A step is run by an agent profile or a tool, never by a model: the profile says what it runs on. A
 //! step that overrides the model as it was stored keeps it, and the field and the picker's chosen row say so (*model:
-//! <id>*). Choosing changes the edit the panel holds and nothing else.
+//! <id>*). Choosing a profile on another CLI, or a tool, drops the override, and the field says so under its box until
+//! the next save or *Cancel*. Choosing changes the edit the panel holds and nothing else.
 
 use std::sync::Arc;
 
@@ -12,19 +13,19 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Row, Text},
+  components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::ProjectId, resource::StepKey};
+use orchester_core::{connection::AgentProvider, id::ProjectId, resource::StepKey};
 use orchester_workspace::pipelines::fields::Executor;
 
 use super::choices::Flag;
 use crate::{
   navigation::Navigation,
   routes::{AgentTab, ProjectPage, Route},
-  screens::pipeline_hub::edit::Edit,
+  screens::{pipeline_hub::edit::Edit, team_hub::words::cli_key},
   theme::{AgentPickerText, ControlHeight, DISABLED_OPACITY, ExtraSpacing, IconSize},
   ui::{
     agent_picker::{self, Actions, AgentPicker, Item},
@@ -43,6 +44,9 @@ pub(super) struct Props {
   pub value: Executor,
   pub choices: Arc<[Item]>,
   pub executors: Arc<[Executor]>,
+  /// The CLI each choice runs on, when it is known, and the one the step's agent runs on now.
+  pub clis: Arc<[Option<AgentProvider>]>,
+  pub cli: Option<AgentProvider>,
   pub flag: Option<Flag>,
   pub name: Arc<str>,
   pub unset: Arc<str>,
@@ -59,6 +63,8 @@ impl PartialEq for Props {
       self.value,
       &self.choices,
       &self.executors,
+      &self.clis,
+      self.cli,
       self.flag,
       &self.name,
       &self.unset,
@@ -69,6 +75,8 @@ impl PartialEq for Props {
       other.value,
       &other.choices,
       &other.executors,
+      &other.clis,
+      other.cli,
       other.flag,
       &other.name,
       &other.unset,
@@ -87,6 +95,9 @@ pub(super) fn field(ctx: &mut Ctx, props: Props) -> Element {
 struct Agent {
   anchor: ElementRef,
   open: Signal<bool>,
+  /// What the field says under its box after a choice dropped the step's model override; it lasts until the field is
+  /// mounted anew, after a save or *Cancel*.
+  dropped: Signal<Option<Arc<str>>>,
 }
 
 impl Component for Agent {
@@ -96,6 +107,7 @@ impl Component for Agent {
     Self {
       anchor: ElementRef::new(),
       open: ctx.signal(false),
+      dropped: ctx.signal(None),
     }
   }
 
@@ -106,16 +118,28 @@ impl Component for Agent {
     }
     let open = self.open.get();
     let trigger = self.trigger(ctx, &props, open);
-    let row = Row::new().width(Dimension::Pct(100.0)).child(trigger);
-    if !open {
-      return row;
+    let mut row = Row::new().width(Dimension::Pct(100.0)).child(trigger);
+    if open {
+      row = row.child(popover(
+        self.anchor.clone(),
+        self.open.clone(),
+        PopoverSide::Below,
+        self.picker(ctx, &props),
+      ));
     }
-    row.child(popover(
-      self.anchor.clone(),
-      self.open.clone(),
-      PopoverSide::Below,
-      self.picker(ctx, &props),
-    ))
+    let Some(dropped) = self.dropped.get() else {
+      return Element::from(row);
+    };
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(row)
+      .child(
+        Text::new(&dropped)
+          .id("pipeline-hub-step-agent-dropped")
+          .variant(AgentPickerText::FieldRuns.role()),
+      )
+      .into()
   }
 }
 
@@ -133,6 +157,12 @@ impl Agent {
       props.executors.clone(),
       props.choices.clone(),
     );
+    let (clis, from, note, words) = (
+      props.clis.clone(),
+      props.cli,
+      self.dropped.clone(),
+      dropped_words(ctx, props.cli),
+    );
     let open = self.open.clone();
     let picked = open.clone();
     let (navigation, project) = (Navigation::of(ctx), props.project);
@@ -145,10 +175,14 @@ impl Agent {
         on_pick: Box::new(move |key| {
           picked.set(false);
           if let Some(at) = items.iter().position(|item| item.key == key) {
-            let executor = executors[at];
+            let (executor, to) = (executors[at], clis[at]);
+            let mut dropped = None;
             edit.change(|current| {
-              current.update(&step, |step| executor.apply(step));
+              current.update(&step, |step| dropped = executor.apply_on(step, (from, to)));
             });
+            if dropped.is_some() {
+              note.set(Some(words.clone()));
+            }
           }
         }),
         on_close: Box::new(move || open.set(false)),
@@ -250,5 +284,17 @@ impl Agent {
         PaletteColor::TextMuted,
       ))
       .into()
+  }
+}
+
+/// What the field says once a choice dropped the step's model override (*Model override dropped: it was for Codex*),
+/// naming the CLI the step ran on, `from`; one that is not known leaves a choice that drops it only a tool's.
+fn dropped_words(ctx: &Ctx, from: Option<AgentProvider>) -> Arc<str> {
+  match from {
+    Some(cli) => ctx.t_args(
+      "pipeline_hub.stepFlow.overrideDropped",
+      [("cli", ctx.t(cli_key(cli)).to_string())],
+    ),
+    None => ctx.t("pipeline_hub.stepFlow.overrideDroppedTool"),
   }
 }

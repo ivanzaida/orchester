@@ -54,6 +54,8 @@ fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::R
       flag: choices.flag,
       choices: choices.items.into(),
       executors: choices.executors.into(),
+      clis: choices.clis.into(),
+      cli: choices.cli,
       name: label.clone(),
       unset: ctx.t("pipeline_hub.agent.choose"),
       locked: open.locked,

@@ -4,6 +4,7 @@
 use std::num::NonZeroU32;
 
 use orchester_core::{
+  connection::AgentProvider,
   id::ResourceId,
   name::Name,
   permission::StepPermissions,
@@ -66,6 +67,23 @@ impl Executor {
       },
       (Self::Unset, StepKind::Tool { .. }) => StepKind::Tool { tool: None },
     };
+  }
+
+  /// [`Self::apply`], keeping the step's model override only while the step runs on the CLI it was set for: a model
+  /// one CLI knows means nothing to another. `from` is the CLI of the profile that ran the step and `to` that of the
+  /// one that runs it now, each `None` when it is not known (no profile, or one not published here): an override is
+  /// not dropped on a guess. A tool runs no model, so the override goes with a tool too. Returns the override dropped.
+  pub fn apply_on(
+    self,
+    step: &mut Step,
+    (from, to): (Option<AgentProvider>, Option<AgentProvider>),
+  ) -> Option<ModelId> {
+    let before = ModelChoice::of(step).0;
+    self.apply(step);
+    let elsewhere = matches!(self, Self::Tool(_)) || matches!((from, to), (Some(from), Some(to)) if from != to);
+    let dropped = before.filter(|_| elsewhere)?;
+    ModelChoice(None).apply(step);
+    Some(dropped)
   }
 }
 

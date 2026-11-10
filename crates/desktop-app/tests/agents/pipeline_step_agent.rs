@@ -28,20 +28,20 @@ use super::{
   pipeline_step::{CANCEL, keys, open_step, route, save_until, stored},
 };
 
-const FIELD: &str = "pipeline-hub-step-agent";
-const PICKER: &str = "pipeline-hub-step-agent-picker";
+pub(super) const FIELD: &str = "pipeline-hub-step-agent";
+pub(super) const PICKER: &str = "pipeline-hub-step-agent-picker";
 
-fn item(place: usize) -> String {
+pub(super) fn item(place: usize) -> String {
   format!("{PICKER}-item-{place}")
 }
 
 /// What the step at `place` of the stored pipeline runs.
-fn executor(agents: &Agents, pipeline: ResourceId, place: usize) -> StepKind {
+pub(super) fn executor(agents: &Agents, pipeline: ResourceId, place: usize) -> StepKind {
   stored(agents, pipeline).steps()[place].kind.clone()
 }
 
 /// A command tool `Checks` that runs `cargo`, published.
-fn checks(agents: &Agents) -> ResourceId {
+pub(super) fn checks(agents: &Agents) -> ResourceId {
   let body = Tool::new(
     "",
     ToolAction::Command(CommandAction::new(
@@ -67,7 +67,7 @@ fn checks(agents: &Agents) -> ResourceId {
 
 /// A published profile `name` on `connection` (`None`: one the project does not have, as when the connection is removed
 /// after the profile was published).
-fn profile_on(agents: &Agents, name: &str, connection: Option<ConnectionId>) -> ResourceId {
+pub(super) fn profile_on(agents: &Agents, name: &str, connection: Option<ConnectionId>) -> ResourceId {
   let profile = AgentProfile::new(
     Name::new(name).expect("name"),
     String::new(),
@@ -92,11 +92,11 @@ fn profile_on(agents: &Agents, name: &str, connection: Option<ConnectionId>) -> 
 }
 
 /// A published pipeline whose only step runs `profile` and overrides the model with `model`.
-fn overriding(agents: &Agents, profile: ResourceId, model: &str) -> ResourceId {
+pub(super) fn overriding(agents: &Agents, profile: ResourceId, model: &str) -> ResourceId {
   single(agents, agent(profile, Some(model)))
 }
 
-fn agent(profile: ResourceId, model: Option<&str>) -> StepKind {
+pub(super) fn agent(profile: ResourceId, model: Option<&str>) -> StepKind {
   StepKind::Agent {
     profile: Some(profile),
     repository: RepositoryAccess::ReadOnly,
@@ -106,7 +106,7 @@ fn agent(profile: ResourceId, model: Option<&str>) -> StepKind {
 }
 
 /// A published pipeline whose only step, *Plan*, is `kind`.
-fn single(agents: &Agents, kind: StepKind) -> ResourceId {
+pub(super) fn single(agents: &Agents, kind: StepKind) -> ResourceId {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let key = edit.add_step(Name::new("Plan").expect("name"), None);
   edit.update(&key, |step| step.kind = kind);
@@ -273,7 +273,7 @@ fn a_profile_that_is_not_ready_says_why_in_the_list_and_can_still_be_chosen() {
 }
 
 /// Whether the Agent field carries the class `class`.
-fn field_has(agents: &mut Agents, class: &str) -> bool {
+pub(super) fn field_has(agents: &mut Agents, class: &str) -> bool {
   agents
     .window
     .tree

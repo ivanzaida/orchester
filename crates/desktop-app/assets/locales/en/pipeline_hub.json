@@ -334,7 +334,9 @@
     },
     "stepFlow": {
       "upOutOfGroup": "Move up, out of the group",
-      "downOutOfGroup": "Move down, out of the group"
+      "downOutOfGroup": "Move down, out of the group",
+      "overrideDropped": "Model override dropped: it was for {{cli}}",
+      "overrideDroppedTool": "Model override dropped: a tool runs no model"
     }
   }
 }
