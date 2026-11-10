@@ -19,7 +19,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    menu::{MenuItem, menu_at_end, menu_panel},
+    menu::{MenuItem, menu, menu_panel},
   },
 };
 
@@ -120,6 +120,6 @@ where
       .with_children(rows);
     Column::new()
       .child(button)
-      .child(menu_at_end(self.anchor.clone(), self.open.clone(), panel))
+      .child(menu(self.anchor.clone(), self.open.clone(), panel))
   }
 }
