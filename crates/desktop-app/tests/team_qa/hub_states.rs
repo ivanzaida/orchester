@@ -12,6 +12,8 @@ fn starts(of: (&str, State)) {
     (HubView::new(HubFilter::Profiles, None), None)
   });
   assert_eq!(window.text("team-hub-panel-kind"), "Agent profile");
+  // The team holds its own profiles alone: the catalogue's stay this computer's and are not the team's (A1 `t4mtQL`).
+  assert_eq!(window.text("team-hub-filter-profiles-count"), "2");
 }
 
 #[test]

@@ -321,3 +321,31 @@ fn team_hub_rows_show_what_a_server_is_and_its_version_under_the_kind_s_filter()
   assert!(!agents.exists(&format!("team-hub-row-{skill}-version")));
   assert!(!agents.exists("team-hub-note-text"));
 }
+
+#[test]
+fn team_hub_panel_says_why_a_profile_cannot_be_told_ready() {
+  let mut agents = Agents::new(true);
+  let profile = agents.profile(true);
+  team(&agents);
+  // The team holds the profile as it was published before the team's form of profiles, which this computer cannot
+  // read what it asks of: the panel says why instead of standing empty under its chips.
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let body = db.latest_version::<AgentProfile>(profile).expect("read").expect("v1");
+  share(
+    &mut db,
+    profile,
+    serde_json::to_value(body.body()).expect("body"),
+    body.body(),
+  );
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  assert_eq!(
+    agents.text("team-hub-chip-here"),
+    "Can't tell yet whether it is ready here"
+  );
+  assert!(agents.text("team-hub-readiness").starts_with("Ready here?"));
+  assert!(
+    agents
+      .text("team-hub-undecided-text")
+      .starts_with("Its latest version was published before the team's form of its kind"),
+  );
+}
