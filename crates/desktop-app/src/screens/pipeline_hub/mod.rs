@@ -18,16 +18,20 @@
 
 mod archived;
 mod bones;
+mod chips;
 mod flow;
 mod list;
 mod menu;
 mod model;
 mod panel;
 mod panel_head;
+mod ready;
 mod rename;
 mod row;
 mod states;
+mod step_line;
 mod steps;
+mod undecided;
 mod words;
 
 use std::sync::Arc;

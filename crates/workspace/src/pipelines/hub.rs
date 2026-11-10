@@ -20,6 +20,7 @@ use super::{
   flow::FlowRead,
   library::{LibraryEntry, VersionState, library},
   problems::problem_view,
+  ready::{UndecidedMember, undecided_members},
 };
 use crate::{
   messages::{self, Message},
@@ -69,6 +70,8 @@ pub struct HubPipeline {
   pub standing: Option<ReadinessStanding>,
   /// What keeps a pipeline without a version from being published, the first problem of its draft.
   pub problem: Option<Message>,
+  /// Every profile or tool its latest version runs that cannot be told to be ready; the standing names only the first.
+  pub undecided: Vec<UndecidedMember>,
   /// Its steps as the panel draws them: the draft's, or the latest version's.
   pub flow: Arc<FlowRead>,
 }
@@ -137,12 +140,16 @@ impl Workspace {
     let mut pipelines = Vec::new();
     for entry in library(&db)? {
       let standing = readiness.pipeline(entry.id).map(|found| found.standing().clone());
+      let undecided = match &standing {
+        Some(ReadinessStanding::Undecided(_)) => undecided_members(&db, entry.id, &readiness)?,
+        _ => Vec::new(),
+      };
       let problem = match entry.state {
         VersionState::DraftOnly => draft_problem(&db, entry.id)?,
         _ => None,
       };
       let flow = FlowRead::of(&db, entry.id, &assignables)?.ok_or(HubError::Unreadable(entry.id))?;
-      pipelines.push(of_entry(entry, (standing, problem), Arc::new(flow)));
+      pipelines.push(of_entry(entry, (standing, problem, undecided), Arc::new(flow)));
     }
     Ok(PipelineHub {
       pipelines,
@@ -153,7 +160,7 @@ impl Workspace {
 
 fn of_entry(
   entry: LibraryEntry,
-  (standing, problem): (Option<ReadinessStanding>, Option<Message>),
+  (standing, problem, undecided): (Option<ReadinessStanding>, Option<Message>, Vec<UndecidedMember>),
   flow: Arc<FlowRead>,
 ) -> HubPipeline {
   HubPipeline {
@@ -165,6 +172,7 @@ fn of_entry(
     published_at: entry.last_published,
     standing,
     problem,
+    undecided,
     flow,
   }
 }

@@ -34,6 +34,9 @@ pub(super) enum Node {
   Step(usize),
   /// A step that cannot run as it is: its node's outline in `warning` (`Node` `nNbyv` in P8).
   NotReady(usize),
+  /// The Deliver step: a `git-merge` glyph in a node of its own, level with its card's first line. It is not a step, so
+  /// it carries no number and *Steps N* never stands over N + 1 numbered cards.
+  Deliver,
   /// An approval gate on the line (`Gate` `V2URU`).
   Gate,
   /// A group of steps that run side by side (`Node` `ntPkr`).
@@ -48,7 +51,7 @@ pub(super) enum Node {
 impl Node {
   const fn top(&self) -> f32 {
     match self {
-      Self::Step(_) | Self::NotReady(_) => STEP_TOP,
+      Self::Step(_) | Self::NotReady(_) | Self::Deliver => STEP_TOP,
       Self::Parallel => GROUP_TOP,
       Self::Start | Self::Gate | Self::End | Self::Line => 0.0,
     }
@@ -118,6 +121,9 @@ fn mark(id: &str, node: &Node) -> Option<Row> {
     }
     Node::Step(number) => outlined(PaletteColor::BorderStrong).child(number_text(id, *number)),
     Node::NotReady(number) => outlined(PaletteColor::Warning).child(number_text(id, *number)),
+    Node::Deliver => {
+      outlined(PaletteColor::BorderStrong).child(icon(Icon::GitMerge, IconSize::Xs, PaletteColor::TextSecondary))
+    }
     Node::Gate => {
       round()
         .background(PaletteColor::WarningMuted)

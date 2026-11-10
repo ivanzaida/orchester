@@ -16,6 +16,7 @@ pub mod levels;
 pub mod library;
 pub mod narrowing;
 pub mod problems;
+pub mod ready;
 pub mod rename;
 pub mod sources;
 pub mod task_use;

@@ -24,13 +24,23 @@
       "oneStepTasks": "1 step · used by {{tasks}} tasks",
       "stepsNoTask": "{{steps}} steps · not used yet",
       "stepsOneTask": "{{steps}} steps · used by 1 task",
-      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks"
+      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks",
+      "noProfile": "{{number}} {{step}} has no agent profile",
+      "noTool": "{{number}} {{step}} has no tool",
+      "profileNotPublished": "{{number}} {{step}} runs a profile that is not published yet",
+      "toolNotPublished": "{{number}} {{step}} runs a tool that is not published yet",
+      "toolNotRunnable": "{{number}} {{step}} runs {{tool}}, which can't run as a step yet",
+      "stepsNotReady": "{{count}} steps not ready",
+      "connectionGone": "{{name}} has no connection",
+      "connectionGoneMany": "{{name}} and {{count}} more have no connection"
     },
     "chip": {
       "ready": "Ready",
       "draft": "draft",
       "archived": "Archived",
-      "default": "Default"
+      "default": "Default",
+      "stepNotReady": "1 step not ready",
+      "stepsNotReady": "{{count}} steps not ready"
     },
     "menu": {
       "more": "More actions for {{name}}",
@@ -83,6 +93,7 @@
       "parallelAll": "all must pass",
       "gate": "Waits for your approval",
       "gateBefore": "you approve {{step}} before {{next}} starts",
+      "gateBeforeDeliver": "you approve {{step}} before Deliver starts",
       "gateEnd": "you approve {{step}} before the run ends",
       "readOnly": "read-only",
       "canWrite": "can write",
@@ -145,6 +156,26 @@
         "title": "Nothing archived",
         "detail": "An archived pipeline leaves the lists and New task's picker, and the runs that use it stop."
       }
+    },
+    "ready": {
+      "title": "Ready?",
+      "choose": "Choose →",
+      "open": "Open →",
+      "step": "Step {{number}} {{name}}",
+      "noProfile": "No agent profile",
+      "noTool": "No tool",
+      "toolNotRunnable": "{{tool}} can't run as a step yet",
+      "ready": "Ready",
+      "profilesAndTools": "Profiles and tools",
+      "allReady": "{{names}} · ready",
+      "none": "No step runs a profile or tool yet",
+      "connectionGone": "Its connection is gone",
+      "titleDraft": "Ready? · this draft",
+      "draft": "Draft",
+      "noSteps": "No steps yet",
+      "notPublished": "Not published yet",
+      "addStep": "Add step →",
+      "editSteps": "Edit steps →"
     }
   }
 }

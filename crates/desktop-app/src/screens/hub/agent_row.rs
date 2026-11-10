@@ -32,8 +32,8 @@ pub(crate) struct AgentRow<'a> {
   pub kind: String,
   pub mark: Element,
   pub name: &'a str,
-  /// The line under the name and its color.
-  pub line: (&'a str, PaletteColor),
+  /// The line under the name: [`line`] for one that is cut without a word, or text that shows its full value when cut.
+  pub line: Element,
   pub tag: Option<Row>,
   /// The version at its end, already worded (*v4*).
   pub version: Option<String>,
@@ -80,7 +80,7 @@ pub(crate) fn agent_row(row: AgentRow<'_>) -> Element {
 }
 
 /// The name over its line (`Text` in `U9RFS`).
-fn text(id: &str, name: &str, (line, color): (&str, PaletteColor)) -> Column {
+fn text(id: &str, name: &str, line: Element) -> Column {
   Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -91,15 +91,18 @@ fn text(id: &str, name: &str, (line, color): (&str, PaletteColor)) -> Column {
         .variant(HubText::RowName.role())
         .nowrap(),
     )
-    .child(
-      Text::new(line)
-        .id(format!("{id}-line"))
-        .variant(HubText::RowLine.role())
-        .color(color)
-        .width(Dimension::Pct(100.0))
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
-    )
+    .child(line)
+}
+
+/// The line under a name, cut with an ellipsis where its row runs out of room (`Text` in `U9RFS`).
+pub(crate) fn line(id: &str, words: &str, color: PaletteColor) -> Text {
+  Text::new(words)
+    .id(format!("{id}-line"))
+    .variant(HubText::RowLine.role())
+    .color(color)
+    .width(Dimension::Pct(100.0))
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
 }
 
 /// A tag (`Tag` `uJ2rP`).

@@ -13,6 +13,7 @@ mod local_connection;
 mod local_edit;
 mod local_hub;
 mod pipeline_hub;
+mod pipeline_ready;
 mod pipelines;
 mod reviewers;
 mod servers;
