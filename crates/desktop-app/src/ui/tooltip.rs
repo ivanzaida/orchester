@@ -27,6 +27,9 @@ pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
 pub const SHOWN_CLASS: &str = "tooltip-shown";
 /// The widest a tooltip's words run before they wrap.
 const TEXT_MAX_WIDTH: f32 = 400.0;
+/// The widest the words of a tooltip with a note run before they wrap (`Tooltip · account switch` `oL5mO`: 236 less 8
+/// at each side).
+const NOTE_TEXT_WIDTH: f32 = 220.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tooltip {
@@ -129,9 +132,11 @@ impl Tooltip {
     }
   }
 
-  /// A second line under its words: they become its title, 2 over the note, and the panel is 6 over and under them.
+  /// A second line under its words: they become its title, 2 over the note, and the panel is 6 over and under them,
+  /// both wrapping at 220.
   pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
     self.note = Some(note.into());
+    self.wrap_at = NOTE_TEXT_WIDTH;
     self
   }
 
@@ -243,7 +248,7 @@ impl Tooltip {
           Text::new(note)
             .variant(TypographyStyle::Caption)
             .color(PaletteColor::TextInverse)
-            .max_width(Dimension::Px(self.wrap_at)),
+            .width(Dimension::Px(self.wrap_at)),
         ),
       ),
       None => panel.child(words),

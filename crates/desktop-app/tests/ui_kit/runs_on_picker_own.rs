@@ -254,3 +254,16 @@ fn the_list_opens_scrolled_to_the_chosen_model() {
     "the chosen model, the last of six, shows whole in a list of four rows: {chosen:?} {list:?}"
   );
 }
+
+#[test]
+fn a_tooltip_note_wraps_at_220_in_a_panel_236_wide() {
+  let others = with("home", |connection| {
+    connection.tip = "Claude Code · Home".into();
+    connection.tip_note = Some("Another account starts a new session: earlier messages aren't remembered.".into());
+  });
+  let mut open = open_over(others, chosen());
+  let kit = &mut open.kit;
+  kit.rest_on(&item("home"));
+  let panel = kit.bounds(&format!("{}-tip-tooltip", item("home")));
+  assert_close(panel.width, 236.0, "the panel's width: 220 of words and 8 at each side");
+}
