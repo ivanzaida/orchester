@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Column, core::Signal};
 use orchester_core::resource::{Deliverable, PipelineEdit};
+use orchester_workspace::pipelines::sources::Listing;
 
 use super::{
   edit::Edit,
@@ -85,6 +86,7 @@ fn pipeline_sources(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components:
     SourcesProps {
       root: settings.project.open.repo_root.clone(),
       project: settings.project.open.project.name().as_str().into(),
+      listing: Listing::Pipeline,
       current: settings.current.clone(),
       edit: settings.edit.clone(),
       locked: settings.locked,
