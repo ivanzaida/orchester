@@ -38,6 +38,7 @@ mod pipeline_save_notes;
 mod pipeline_step;
 mod pipeline_step_fields;
 mod pipeline_step_leaving;
+mod pipeline_step_scroll;
 mod pipeline_versions;
 mod pipeline_versions_states;
 mod pipeline_versions_views;
