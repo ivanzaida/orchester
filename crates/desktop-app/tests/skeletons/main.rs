@@ -13,5 +13,6 @@ mod in_place;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod pipelines;
 #[path = "../support/mod.rs"]
 mod support;

@@ -3,7 +3,6 @@
     "title": "Pipelines",
     "new": "New pipeline",
     "reading": "Reading the pipelines…",
-    "loadFailed": "The pipelines of this project couldn't be read",
     "filter": {
       "all": "All",
       "drafts": "Drafts",
@@ -41,6 +40,13 @@
       "used": "used by {{count}} tasks",
       "steps": "Steps",
       "openSteps": "Edit steps"
+    },
+    "states": {
+      "failed": {
+        "title": "Couldn't read the pipelines",
+        "detail": "Nothing was changed. Try again; if it keeps failing, Orchester's log has the details."
+      },
+      "newUnavailable": "The pipelines can't be read yet, so there is nothing to add to."
     },
     "empty": {
       "all": {

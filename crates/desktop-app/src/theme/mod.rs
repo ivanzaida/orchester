@@ -133,8 +133,8 @@ pub use self::{
   task::{NOT_READY_ROW_HEIGHT, TaskRadius, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
-    DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
-    SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar, skeleton_line,
+    DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, PIPELINES_BONE_FADE, SKELETON_DELAY, SKELETON_DIM,
+    SKELETON_FADE, SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar, skeleton_line,
   },
   team_state::TeamStateText,
   todo_list::TodoText,

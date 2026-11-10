@@ -23,6 +23,9 @@ pub const SKELETON_STEPS: u32 = 16;
 pub const SKELETON_DIM: f32 = 0.55;
 /// The list skeleton's lower lines fade (`05 · Loading` `R1nQlx`): its last group head, then its last four rows.
 pub const SKELETON_FADE: [f32; 5] = [0.85, 0.7, 0.55, 0.4, 0.25];
+/// The Pipelines page's list rows and step cards in bones: the first two whole, then fading (`Item bone` `vaAc2`, `Step
+/// bone` `FfeE8` in P5 `TF9O3`).
+pub const PIPELINES_BONE_FADE: [f32; 4] = [1.0, 1.0, 0.7, 0.45];
 /// The last card bone of a board column of three or more (`Card bone` `vR9Ky` in `17 · Loading` `Z1PMlo`).
 pub const SKELETON_LAST_CARD: f32 = 0.55;
 /// A card that is lifted away, or whose drop waits for the person, where it was (`KON-27` in `YhQ1y`, `KON-16` in
