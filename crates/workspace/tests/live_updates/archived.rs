@@ -13,7 +13,7 @@ use orchester_core::{
 use orchester_workspace::sharing::sync::{SystemClock, follow};
 
 use super::{
-  ALICE, LIVE, Member, TeamServer, Workspace,
+  ALICE, Member, SETTLED, TeamServer, Workspace,
   config::{team_builder, team_references},
   seen_within,
 };
@@ -42,10 +42,10 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
     let (member, root) = (member.clone(), workspace.root.clone());
     tokio::spawn(async move { follow(&*member, &root, &SystemClock).await })
   };
-  seen_within(LIVE, "the snapshot's profile", || listed(&workspace, profile)).await;
+  seen_within(SETTLED, "the snapshot's profile", || listed(&workspace, profile)).await;
 
   server.archive(profile, true);
-  seen_within(LIVE, "the profile leaves the list", || !listed(&workspace, profile)).await;
+  seen_within(SETTLED, "the profile leaves the list", || !listed(&workspace, profile)).await;
   assert_eq!(
     archived(&member),
     [(profile, Some("Alice Moreau".to_owned()))],
@@ -65,7 +65,7 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
   );
 
   server.archive(profile, false);
-  seen_within(LIVE, "the profile is back", || listed(&workspace, profile)).await;
+  seen_within(SETTLED, "the profile is back", || listed(&workspace, profile)).await;
   assert_eq!(
     archived(&member),
     [(profile, Some("Alice Moreau".to_owned()))],
@@ -92,7 +92,7 @@ async fn live_updates_a_snapshot_keeps_an_archived_profile_out_of_the_list() {
     let (member, root) = (member.clone(), workspace.root.clone());
     tokio::spawn(async move { follow(&*member, &root, &SystemClock).await })
   };
-  seen_within(LIVE, "the snapshot's other profile", || listed(&workspace, other)).await;
+  seen_within(SETTLED, "the snapshot's other profile", || listed(&workspace, other)).await;
   assert!(!listed(&workspace, profile), "archived before this computer joined");
   assert_eq!(
     archived(&member),

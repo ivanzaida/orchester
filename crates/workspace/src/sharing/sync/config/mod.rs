@@ -31,7 +31,7 @@ use serde_json::Value;
 use self::profile::cache_profile;
 pub(crate) use self::{
   profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles},
-  team_body::{non_team_name, team_executors, team_form},
+  team_body::{non_team_name, team_executors},
 };
 pub use self::{
   publish::{ConfigServer, RemoteResourceStore},

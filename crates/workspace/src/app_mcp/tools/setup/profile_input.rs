@@ -5,7 +5,9 @@
 //! MCP servers on a connection whose agents Orchester runs itself, and the Codex sandbox off only for a Codex
 //! connection of a local project. Permissions and MCP servers broader than the profile's latest published version
 //! (before its first: the most restrictive its CLI enforces, no server) are a person's decision ([`widening`]), the
-//! Codex sandbox turned off among them; narrowing them is always taken.
+//! Codex sandbox turned off among them; narrowing them is always taken. The profile also chooses the project's
+//! instructions, skills and tools its agents are given (`docs/design/team-configuration.md`, "Decided 2026-11-09"):
+//! nothing else gives an agent of a local run one.
 
 use std::path::Path;
 
@@ -21,8 +23,8 @@ use orchester_core::{
     WritableFolders,
     browser::{AllowedSites, BrowserAccess},
   },
-  resource::{AgentProfile, ModelId, RepositoryAccess},
-  store::McpServerStore,
+  resource::{AgentProfile, ChosenResources, ModelId, RepositoryAccess, Resource},
+  store::{McpServerStore, ResourceStore},
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -40,6 +42,8 @@ use crate::{
     data::{ProfileChange, ProjectAgents, apply_in},
     folders::with_folder,
     form::{ModelSelection, ProfileForm, effort_options, listed_models},
+    local_edit::GivenKind,
+    local_given::is_check,
     permissions::{not_enforceable, with_command, with_site},
     servers,
   },
@@ -80,6 +84,14 @@ pub struct SaveProfileDraft {
   /// MCP servers of the project its agents get, by id or name.
   #[serde(default)]
   pub mcp_servers: Vec<String>,
+  /// The project's instructions its agents are given (not the role `instructions` above), by id, slug or name; no
+  /// instruction reaches an agent any other way. Left out, a profile being changed keeps its own and a new one gets
+  /// none.
+  pub instruction_resources: Option<Vec<String>>,
+  /// The project's skills its agents are offered, by id, slug or name. Left out, kept as for instruction_resources.
+  pub skills: Option<Vec<String>>,
+  /// The project's tools its agents may call, by id, slug or name. Left out, kept as for instruction_resources.
+  pub tools: Option<Vec<String>>,
   /// The profile's `revision` as get_profile or the last save returned it: the draft is saved only while it
   /// is unchanged, else refused as draft_changed. Left out, the save goes over a change saved meanwhile.
   pub expected_revision: Option<String>,
@@ -216,7 +228,8 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
     offered(&connection, &permissions, &args)?;
     let project_servers = db.mcp_servers()?;
     let servers = mcp_servers(&project_servers, &args.mcp_servers)?;
-    let profile = form(&args, &connection, &permissions, &servers)?;
+    let given = given(&db, &args, existing.map(|entry| &entry.profile))?;
+    let profile = form(&args, &connection, (&permissions, &servers), &given)?;
     servers::check(&project_servers, existing.map(|entry| &entry.profile), &profile)
       .map_err(|reason| refused("mcp_server_not_offered", reason))?;
     let id = existing.map(|entry| entry.id);
@@ -273,8 +286,8 @@ fn create_published(
 fn form(
   args: &SaveProfileDraft,
   connection: &AgentConnection,
-  permissions: &AgentPermissions,
-  servers: &McpServerSelection,
+  (permissions, servers): (&AgentPermissions, &McpServerSelection),
+  [instructions, skills, tools]: &[ChosenResources; 3],
 ) -> Result<AgentProfile, ToolError> {
   let model = args.model.trim();
   let listed = ModelId::new(model)
@@ -301,6 +314,9 @@ fn form(
     effort: args.effort.as_deref(),
     permissions,
     mcp_servers: servers,
+    instruction_resources: instructions,
+    skills,
+    tools,
   }
   .profile()
   .map_err(|errors| {
@@ -441,6 +457,56 @@ fn mcp_servers(servers: &[McpServer], named: &[String]) -> Result<McpServerSelec
     let reason = Message::new("appMcp.errors.mcpServersInvalid").with("max", McpServerSelection::MAX.to_string());
     refused("invalid_mcp_servers", reason)
   })
+}
+
+/// The instructions, skills and tools the profile gives its agents: each list given, resolved among the project's
+/// resources of its kind that are not archived, a tool only when an agent can call it as a check; one left out is
+/// `kept`'s, a new profile's empty.
+fn given(
+  db: &ProjectDb,
+  args: &SaveProfileDraft,
+  kept: Option<&AgentProfile>,
+) -> Result<[ChosenResources; 3], ToolError> {
+  let list = |named: Option<&Vec<String>>, kind: GivenKind| -> Result<ChosenResources, ToolError> {
+    let Some(named) = named else {
+      return Ok(kept.map_or(ChosenResources::EMPTY, |profile| kind.of(profile).clone()));
+    };
+    let resources = db.resources(kind.resource_kind())?;
+    let ids = named
+      .iter()
+      .map(|name| {
+        resources
+          .iter()
+          .find(|found| {
+            found.id().to_string() == *name
+              || found.slug().as_str() == name
+              || found.name().as_str().to_lowercase() == name.to_lowercase()
+          })
+          .map(Resource::id)
+          .ok_or_else(|| ToolError::not_found(missing(kind), name))
+      })
+      .collect::<Result<Vec<ResourceId>, _>>()?;
+    for (name, id) in named.iter().zip(&ids) {
+      if kind == GivenKind::Tool && !is_check(db, *id)? {
+        let reason = Message::new("appMcp.errors.toolNotCheck").with("tool", name.clone());
+        return Err(refused("tool_not_a_check", reason));
+      }
+    }
+    ChosenResources::new(ids).map_err(|_| refused("invalid_given", Message::new("appMcp.errors.givenTwice")))
+  };
+  Ok([
+    list(args.instruction_resources.as_ref(), GivenKind::Instruction)?,
+    list(args.skills.as_ref(), GivenKind::Skill)?,
+    list(args.tools.as_ref(), GivenKind::Tool)?,
+  ])
+}
+
+const fn missing(kind: GivenKind) -> Missing {
+  match kind {
+    GivenKind::Instruction => Missing::Instruction,
+    GivenKind::Skill => Missing::Skill,
+    GivenKind::Tool => Missing::Tool,
+  }
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
   conversation::Message,
-  resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget, PromptText, Rendered, Variable},
+  resource::{Exclusion, InjectionEvent, Instruction, PromptText, Rendered, Variable},
 };
 
 /// What a resumed session of a gated step is told when a reviewer sent its plan back.
@@ -66,16 +66,15 @@ pub struct AssembledPrompt {
 
 impl Composition {
   pub(super) fn new(input: &PromptInput<'_>, event: InjectionEvent, delivery: ResultDelivery) -> Self {
-    let target = InstructionTarget {
-      pipeline: input.pipeline.id,
-      step: &input.step.key,
-      profile: input.profile.id,
-      role: input.profile.body.role(),
-    };
+    let target = input.profile.at(input.pipeline.id, &input.step.key);
     let mut included: Vec<(PromptPart, PromptSection)> = Vec::new();
     let mut excluded = Vec::new();
     for source in input.instructions {
-      match source.body.applies(target, event) {
+      let applies = input
+        .profile
+        .gets_instruction(target, source.resource, source.body)
+        .and_then(|()| source.body.injected_at(event));
+      match applies {
         Ok(()) => {
           let part = PromptPart::of(source.body.scope());
           included.push((part, instruction_section(input, source, (part, event))));

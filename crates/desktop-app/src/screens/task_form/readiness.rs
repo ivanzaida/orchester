@@ -252,7 +252,6 @@ pub(super) fn reason(ctx: &Ctx, view: &View) -> Option<Reason> {
 const fn undecided_key(why: &Undecided) -> &'static str {
   match why {
     Undecided::NotTeamForm => "task_form.readiness.undecided.notTeamForm",
-    Undecided::CannotBePublished(_) => "task_form.readiness.undecided.cannotBePublished",
     Undecided::ChoosesMcpServer(_) => "task_form.readiness.undecided.choosesMcpServer",
     Undecided::ChoosesArchivedMcpServer(..) => "task_form.readiness.undecided.choosesArchivedMcpServer",
     Undecided::UsesArchivedTool(..) => "task_form.readiness.undecided.usesArchivedTool",

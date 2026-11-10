@@ -17,7 +17,7 @@ use orchester_store::{AppDb, ProjectDb, ServerAdmin, SharedMember};
 use super::{
   harness::Agents,
   support::project_id,
-  team_hub::{open, team, team_as, team_with_profile_and_tool},
+  team_hub::{keep_team, open, team, team_as, team_with_profile_and_tool},
   team_hub_mcp::{Switch, program_body, program_file, remote_body, server, show, switch_of, team_server},
   team_hub_profile::{builder, claude, show as show_profile},
 };
@@ -204,6 +204,7 @@ fn publish_nothing(agents: &Agents, resources: [ResourceId; 4]) {
   for resource in resources {
     db.set_resource_sharing(resource, None).expect("local");
   }
+  keep_team(agents);
 }
 
 #[test]

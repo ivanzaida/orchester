@@ -92,6 +92,7 @@ pub fn excluded(ctx: &Ctx, reason: Exclusion) -> Arc<str> {
     Exclusion::OtherPipeline => "instructions.excludedPipeline",
     Exclusion::OtherStep => "instructions.excludedStep",
     Exclusion::OtherEvent => "instructions.excludedEvent",
+    Exclusion::NotChosen => "instructions.excludedNotChosen",
   })
 }
 /// What the draft bar says of a draft automation saved over Orchester's MCP server (ORC-30).

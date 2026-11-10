@@ -41,6 +41,7 @@ mod base_moved;
 mod code_index;
 mod composition;
 mod finish;
+mod given;
 mod memory;
 mod native;
 mod retry;
@@ -54,6 +55,7 @@ use thiserror::Error;
 pub use self::{
   base_moved::{BaseMerge, BaseMoved, MERGE_SAFELY, notice_text},
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
+  given::GivenBy,
   native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport, ReturnedWork},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
@@ -95,10 +97,12 @@ pub struct ProfileInfo<'a> {
   pub id: ResourceId,
   pub version: VersionNumber,
   pub body: &'a AgentProfile,
+  /// Whether its body's lists or the pinned bodies' scopes decide what its agents get.
+  pub given: GivenBy,
 }
 
-/// An instruction resource offered to the prompt; whether it is injected depends on its scope,
-/// targets and events.
+/// An instruction resource offered to the prompt; whether it is injected depends on whether the agent gets it
+/// ([`GivenBy`]) and on its events.
 #[derive(Clone, Copy, Debug)]
 pub struct InstructionSource<'a> {
   pub resource: ResourceId,

@@ -13,7 +13,7 @@ use orchester_core::{
   name::Name,
   permission::AgentPermissions,
   resource::{AgentProfile, Instruction, Skill, SkillFile, Slug, StepKey, Tool, VersionNumber},
-  run::{PinnedVersion, Run, bundle::file_sha256, inputs::RunInputs},
+  run::{GivenBy, PinnedVersion, Run, bundle::file_sha256, inputs::RunInputs},
   task::Task,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -61,6 +61,16 @@ impl RunResolver {
     match self {
       Self::Inputs(inputs) if inputs.is_team() => Some(inputs),
       Self::Inputs(_) | Self::Published => None,
+    }
+  }
+
+  /// How the run decides what its agents get: a local run made without inputs by what each step's profile version
+  /// chooses; one made from inputs (every team run) by the pinned bodies' scopes, since the inputs' profiles carry no
+  /// lists.
+  pub(in crate::execution) const fn given(&self) -> GivenBy {
+    match self {
+      Self::Inputs(_) => GivenBy::Scope,
+      Self::Published => GivenBy::Profile,
     }
   }
 

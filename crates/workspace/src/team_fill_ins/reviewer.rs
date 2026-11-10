@@ -9,9 +9,9 @@ use orchester_core::{
   resource::{ResourceKind, TeamReviewer},
   run::Answerer,
   sharing::ConnectionRole,
-  store::{ConnectionStore, ResourceStore},
+  store::ConnectionStore,
 };
-use orchester_store::{ConnectionPick, ProjectDb, StoreError};
+use orchester_store::{ConnectionPick, ProjectDb};
 
 use super::{FillInError, connection::check_fits, team};
 use crate::{tasks::outside::Outside, workspace::Workspace};
@@ -27,11 +27,10 @@ impl Workspace {
     connection: ConnectionId,
   ) -> Result<(), FillInError> {
     let mut db = ProjectDb::open(repo_root)?;
-    team::require_resource(&db, reviewer, ResourceKind::TeamReviewer)?;
+    let named = self.team_reviewer(&db, repo_root, reviewer)?;
     let found = db
       .connection(connection)?
       .ok_or(FillInError::ConnectionNotFound(connection))?;
-    let named = newest(&db, reviewer)?;
     if matches!(named, Some(TeamReviewer::Decision { .. })) {
       return Err(FillInError::ReviewerIsDecision(reviewer));
     }
@@ -58,11 +57,10 @@ impl Workspace {
     by: Answerer,
   ) -> Result<(), FillInError> {
     let mut db = ProjectDb::open(repo_root)?;
-    team::require_resource(&db, reviewer, ResourceKind::TeamReviewer)?;
+    let named = self.team_reviewer(&db, repo_root, reviewer)?;
     let found = db
       .decision_connection(connection)?
       .ok_or(FillInError::DecisionConnectionNotFound(connection))?;
-    let named = newest(&db, reviewer)?;
     if matches!(named, Some(TeamReviewer::Language { .. })) {
       return Err(FillInError::ReviewerIsLanguage(reviewer));
     }
@@ -78,12 +76,22 @@ impl Workspace {
   }
 }
 
-/// The body of the newest version of `reviewer`; `None` when it has none. A version that is not a team reviewer body
-/// (one that names a connection) is [`FillInError::ReviewerNotTeamForm`].
-fn newest(db: &ProjectDb, reviewer: ResourceId) -> Result<Option<TeamReviewer>, FillInError> {
-  match db.latest_version::<TeamReviewer>(reviewer) {
-    Ok(version) => Ok(version.map(|version| version.body().clone())),
-    Err(StoreError::Corrupt { .. }) => Err(FillInError::ReviewerNotTeamForm(reviewer)),
-    Err(other) => Err(other.into()),
+impl Workspace {
+  /// The body of the latest version of the team reviewer `reviewer` of the project at `repo_root`, whose database `db`
+  /// is; `None` when it has none. A version that is not a team reviewer body (one that names a connection) is
+  /// [`FillInError::ReviewerNotTeamForm`].
+  fn team_reviewer(
+    &self,
+    db: &ProjectDb,
+    repo_root: &Path,
+    reviewer: ResourceId,
+  ) -> Result<Option<TeamReviewer>, FillInError> {
+    team::server_of(db)?;
+    let config = team::config(self, repo_root)?;
+    match team::require_resource(&config, reviewer, ResourceKind::TeamReviewer)?.body::<TeamReviewer>() {
+      None => Ok(None),
+      Some(Ok(body)) => Ok(Some(body)),
+      Some(Err(_)) => Err(FillInError::ReviewerNotTeamForm(reviewer)),
+    }
   }
 }

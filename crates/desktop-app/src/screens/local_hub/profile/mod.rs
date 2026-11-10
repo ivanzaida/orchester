@@ -1,20 +1,22 @@
 //! The panel of a local profile (`Agents · Profile` L1 `fFxoM`, `docs/design/team-configuration.md` rule 11): the head
 //! with the version and its *Versions*, the chips (how it stands, who uses it), *Profile* (CLI, connection, model,
-//! effort, MCP servers, secrets), *Ready?* with the fix of what is missing, and the pinned *Save* and *Cancel*
-//! ([`super::save_bar`]). The parts are the team profile's ([`crate::screens::team_hub::profile`]) over the local
-//! profile store. The profile is edited in place, as the design draws it ([`table`], [`pick`], [`servers`]): the CLI,
-//! the connection, the model, the reasoning effort and the MCP servers are selects, and each choice changes only what
-//! the panel holds, at once and without locking anything it shows ([`choices`]). *Save* publishes it as the next
+//! effort, MCP servers, secrets, and the instructions, skills and tools it gives its agents, which nothing else gives
+//! them: `docs/design/team-configuration.md`, "Decided 2026-11-09"), *Ready?* with the fix of what is missing, and
+//! the pinned *Save* and *Cancel* ([`super::save_bar`]). The parts are the team profile's
+//! ([`crate::screens::team_hub::profile`]) over the local profile store. The profile is edited in place, as the design
+//! draws it ([`table`], [`pick`], [`add_menu`]): the CLI, the connection, the model, the reasoning effort, the MCP
+//! servers, instructions, skills and tools are selects, and each choice changes only what the panel holds, at once and
+//! without locking anything it shows ([`choices`]). *Save* publishes it as the next
 //! version at once ([`edit`]); *Cancel* puts back what is stored.
 //!
 //! A draft stored before (by the profile's page) opens as the panel's changes over the published version: *Save*
 //! publishes it, with what the panel changed on top, and *Cancel* throws it away.
 
+pub(in crate::screens) mod add_menu;
 mod choices;
 mod edit;
 pub(in crate::screens) mod pick;
 mod ready;
-pub(in crate::screens) mod servers;
 mod table;
 mod words;
 

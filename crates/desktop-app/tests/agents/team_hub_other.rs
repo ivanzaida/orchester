@@ -198,8 +198,8 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
   let (style, handoff) = {
     let mut db = ProjectDb::open(&agents.root).expect("database");
     (
-      cached(&mut db, ("rust-style", "Rust style"), json!({}), &style),
-      cached(&mut db, ("handoff", "Handoff"), json!({}), &handoff),
+      cached(&mut db, ("rust-style", "Rust style"), json!(style), &style),
+      cached(&mut db, ("handoff", "Handoff"), json!(handoff), &handoff),
     )
   };
   show(&mut agents, HubFilter::Instructions, (style, "Rust style"));
@@ -248,7 +248,7 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
   .expect("skill");
   let tests = {
     let mut db = ProjectDb::open(&agents.root).expect("database");
-    cached(&mut db, ("write-tests", "write-tests"), json!({}), &with_file)
+    cached(&mut db, ("write-tests", "write-tests"), json!(with_file), &with_file)
   };
   builder(&agents, [rules, tests, command(&agents)]);
   show(&mut agents, HubFilter::Skills, (tests, "write-tests"));

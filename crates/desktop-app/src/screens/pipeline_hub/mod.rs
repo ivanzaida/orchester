@@ -380,7 +380,7 @@ fn tabs(
       agents::Tab {
         name: choice.name(),
         label: label_key(choice),
-        count: listing.map(|listing| listing.count(choice)),
+        count: agents::TabCount::of(listing.map(|listing| listing.count(choice))),
         open: Arc::new(move || leave.go(route.clone())),
       }
     })

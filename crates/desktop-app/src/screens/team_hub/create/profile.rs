@@ -3,8 +3,8 @@
 //! chosen on each computer afterwards, so the CLI is a kind, one choice for each CLI this computer has a connection
 //! of; the model and effort are those that connection lists. In a local project everything is the person's own, so
 //! the profile names its connection (chosen for it when the CLI has one, else from those of its kind) and the MCP
-//! servers it chooses. The instructions, tools and skills a profile picks from the lists are not in this form yet: a
-//! profile of this computer cannot hold them, and the form says so.
+//! servers it chooses. The instructions, tools and skills a profile picks from the lists are not in this form: a local
+//! profile starts with none and chooses them in its panel once it is created, and the form says so.
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::PaletteColor},
@@ -21,7 +21,7 @@ use orchester_core::{
   },
   id::ConnectionId,
   permission::AgentPermissions,
-  resource::ModelId,
+  resource::{ChosenResources, ModelId},
 };
 use orchester_workspace::agents::form::{
   ModelOption, ModelSelection, ProfileForm, access_for_connection, effort_options, model_options,
@@ -34,7 +34,7 @@ use super::{
 use crate::{
   screens::{
     hub::agent_row::tag_chip,
-    local_hub::profile::servers,
+    local_hub::profile::add_menu,
     team_hub::{rows, words::cli_key},
   },
   theme::HubText,
@@ -330,16 +330,16 @@ impl Fields {
         })
         .collect()
     };
-    let items: Vec<servers::Item> = available
+    let items: Vec<add_menu::Item<_>> = available
       .iter()
-      .map(|server| servers::Item {
+      .map(|server| add_menu::Item {
         id: server.id(),
         name: server.name().as_str().to_owned(),
         chosen: chosen.contains(&server.id()),
       })
       .collect();
     let signal = self.servers.clone();
-    let on_toggle: servers::Toggle = std::sync::Arc::new(move |server, choose| {
+    let on_toggle: add_menu::Toggle<_> = std::sync::Arc::new(move |server, choose| {
       signal.update(|chosen| {
         chosen.0.retain(|found| *found != server);
         if choose {
@@ -348,11 +348,12 @@ impl Fields {
       });
     });
     let add = (!items.is_empty()).then(|| {
-      servers::add(
+      add_menu::add(
         ctx,
-        servers::Props {
+        add_menu::Props {
+          what: "server",
           items,
-          label: ctx.t("local_hub.profile.addServer"),
+          label: ctx.t("local_hub.profile.add"),
           locked: shown.locked,
           on_toggle,
         },
@@ -407,6 +408,9 @@ impl Fields {
       effort: Some(effort.as_str()).filter(|effort| !effort.is_empty()),
       permissions: &permissions,
       mcp_servers: &servers,
+      instruction_resources: &ChosenResources::EMPTY,
+      skills: &ChosenResources::EMPTY,
+      tools: &ChosenResources::EMPTY,
     }
     .profile()
     // Why it is not valid is said at each field's row, which reads the same form.

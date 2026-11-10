@@ -1,7 +1,8 @@
 //! *Profile* of a local profile (`Profile` `Gk3js` in L1): the CLI it runs with, the connection it runs on, its model
-//! and reasoning effort, the MCP servers it chooses and the secrets those take. The CLI, the connection, the model, the
-//! effort and the servers are selects in place: each choice changes only what the panel holds until *Save*
-//! ([`super::edit`]); the secrets are the servers' and only shown.
+//! and reasoning effort, the MCP servers it chooses and the secrets those take, and the project's instructions, skills
+//! and tools it gives its agents (`docs/design/team-configuration.md`, "Decided 2026-11-09"). The CLI, the connection,
+//! the model, the effort, the servers and the three lists are selects in place: each choice changes only what the panel
+//! holds until *Save* ([`super::edit`]); the secrets are the servers' and only shown.
 
 use std::sync::Arc;
 
@@ -15,12 +16,15 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::ConnectionId;
-use orchester_workspace::agents::{local_edit::Edit, local_hub::LocalProfile};
+use orchester_core::id::{ConnectionId, ResourceId};
+use orchester_workspace::agents::{
+  local_edit::{Edit, GivenKind},
+  local_hub::LocalProfile,
+};
 
 use super::{
+  add_menu,
   pick::{self, Pick},
-  servers,
 };
 use crate::{
   navigation::link::Open,
@@ -78,6 +82,7 @@ pub(super) fn section(ctx: &mut Ctx, rows: &Rows<'_>) -> Column {
       ),
     ));
   }
+  list.extend(GivenKind::ALL.map(|kind| given(ctx, rows, kind)));
   rows::section("local-hub-profile", &ctx.t("local_hub.profile.title"), Vec::new(), list)
 }
 
@@ -183,67 +188,124 @@ fn effort(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
 /// *MCP servers*: the ones it chooses in tags, and *Add*, a menu of the project's servers.
 fn mcp_servers(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
   let profile = rows.profile;
-  let id = "local-hub-profile-mcp-value";
-  let chosen = profile.mcp_servers.iter().map(|(server, name)| servers::Item {
-    id: *server,
-    name: name.clone(),
-    chosen: true,
-  });
-  let others = profile.options.servers.iter().map(|(server, name)| servers::Item {
-    id: *server,
-    name: name.clone(),
-    chosen: false,
-  });
-  let items: Vec<servers::Item> = chosen.chain(others).collect();
   let edit = rows.on_edit.clone();
-  let on_toggle: servers::Toggle = Arc::new(move |server: ConnectionId, choose| {
+  let on_toggle: add_menu::Toggle<ConnectionId> = Arc::new(move |server, choose| {
     edit(if choose {
       Edit::AddServer(server)
     } else {
       Edit::RemoveServer(server)
     });
   });
-  let tags: Vec<Element> = if profile.mcp_servers.is_empty() {
+  let list = List {
+    id: "local-hub-profile-mcp",
+    what: "server",
+    label: ctx.t("team_hub.profile.mcpServers"),
+    chosen: &profile.mcp_servers,
+    offered: &profile.options.servers,
+    on_toggle,
+  };
+  list_row(ctx, list, rows.busy)
+}
+
+/// *Instructions*, *Skills* or *Tools*: the project's ones of `kind` it gives its agents in tags, and *Add*, a menu of
+/// the project's others.
+fn given(ctx: &mut Ctx, rows: &Rows<'_>, kind: GivenKind) -> Row {
+  let profile = rows.profile;
+  let edit = rows.on_edit.clone();
+  let on_toggle: add_menu::Toggle<ResourceId> = Arc::new(move |resource, choose| {
+    edit(if choose {
+      Edit::Give(kind, resource)
+    } else {
+      Edit::TakeBack(kind, resource)
+    });
+  });
+  let (id, what, label) = match kind {
+    GivenKind::Instruction => (
+      "local-hub-profile-instructions",
+      "instruction",
+      "local_hub.profile.instructions",
+    ),
+    GivenKind::Skill => ("local-hub-profile-skills", "skill", "local_hub.profile.skills"),
+    GivenKind::Tool => ("local-hub-profile-tools", "tool", "local_hub.profile.tools"),
+  };
+  let list = List {
+    id,
+    what,
+    label: ctx.t(label),
+    chosen: profile.given.of(kind),
+    offered: profile.options.given.of(kind),
+    on_toggle,
+  };
+  list_row(ctx, list, rows.busy)
+}
+
+/// A row of what the profile chooses from a list of the project's: its MCP servers, instructions, skills or tools.
+struct List<'a, I> {
+  /// The row's element id; its value's is this with `-value`.
+  id: &'static str,
+  /// What one entry is, singular, for the menu's ids ([`add_menu::Props::what`]).
+  what: &'static str,
+  label: Arc<str>,
+  chosen: &'a [(I, String)],
+  /// The project's others, which the menu offers unchecked.
+  offered: &'a [(I, String)],
+  on_toggle: add_menu::Toggle<I>,
+}
+
+/// The chosen ones in tags (*None* while there are none), and *Add*, whose menu checks them and offers the others.
+fn list_row<I>(ctx: &mut Ctx, list: List<'_, I>, locked: bool) -> Row
+where
+  I: Copy + PartialEq + std::fmt::Display + Send + Sync + 'static,
+{
+  let value_id = format!("{}-value", list.id);
+  let item = |(id, name): &(I, String), chosen| add_menu::Item {
+    id: *id,
+    name: name.clone(),
+    chosen,
+  };
+  let items: Vec<add_menu::Item<I>> = list
+    .chosen
+    .iter()
+    .map(|entry| item(entry, true))
+    .chain(list.offered.iter().map(|entry| item(entry, false)))
+    .collect();
+  let tags: Vec<Element> = if list.chosen.is_empty() {
     vec![
       Text::new(&ctx.t("local_hub.profile.none"))
-        .id(format!("{id}-none"))
+        .id(format!("{value_id}-none"))
         .variant(HubText::Value.role())
         .color(PaletteColor::TextMuted)
         .into(),
     ]
   } else {
-    profile
-      .mcp_servers
+    list
+      .chosen
       .iter()
       .enumerate()
-      .map(|(index, (_, name))| tag_chip(&format!("{id}-{index}"), name).into())
+      .map(|(index, (_, name))| tag_chip(&format!("{value_id}-{index}"), name).into())
       .collect()
   };
   let add = (!items.is_empty()).then(|| {
-    servers::add(
+    add_menu::add(
       ctx,
-      servers::Props {
+      add_menu::Props {
+        what: list.what,
         items,
-        label: ctx.t("local_hub.profile.addServer"),
-        locked: rows.busy,
-        on_toggle,
+        label: ctx.t("local_hub.profile.add"),
+        locked,
+        on_toggle: list.on_toggle,
       },
     )
   });
   let value = Row::new()
-    .id(id)
+    .id(value_id)
     .width(Dimension::Pct(100.0))
     .wrap()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .with_children(tags)
     .with_children(add);
-  rows::row(
-    "local-hub-profile-mcp",
-    &ctx.t("team_hub.profile.mcpServers"),
-    None,
-    value,
-  )
+  rows::row(list.id, &list.label, None, value)
 }
 
 /// *Connection*: the one it runs on, chosen from the connections of its CLI when there are several or its own is gone.

@@ -30,24 +30,41 @@ use crate::{
 /// The head's height (`Header` `NRqwv`).
 const HEAD_HEIGHT: f32 = 32.0;
 
-/// One tab of a hub: its name (in its element id and the route), its words' key, how many it holds (`None` while that
-/// is read), and what a press does.
+/// One tab of a hub: its name (in its element id and the route), its words' key, how many it holds, and what a press
+/// does.
 pub(crate) struct Tab {
   pub name: &'static str,
   pub label: &'static str,
-  pub count: Option<usize>,
+  pub count: TabCount,
   pub open: Arc<dyn Fn() + Send + Sync>,
 }
 
 impl Tab {
   /// The tab of the Agents hub's kind `filter`.
-  pub(crate) fn of(filter: HubFilter, count: Option<usize>, open: Arc<dyn Fn() + Send + Sync>) -> Self {
+  pub(crate) fn of(filter: HubFilter, count: TabCount, open: Arc<dyn Fn() + Send + Sync>) -> Self {
     Self {
       name: filter.name(),
       label: label_key(filter),
       count,
       open,
     }
+  }
+}
+
+/// What a tab says after its label.
+#[derive(Clone, Copy)]
+pub(crate) enum TabCount {
+  /// The count is read: its bone holds the place.
+  Reading,
+  Counted(usize),
+  /// Nothing can be counted: the team server could not be reached and nothing was read (A25 `Zhcif`).
+  Unknown,
+}
+
+impl TabCount {
+  /// The count `listing` gives, while it is read.
+  pub(crate) fn of(counted: Option<usize>) -> Self {
+    counted.map_or(Self::Reading, Self::Counted)
   }
 }
 
@@ -140,8 +157,9 @@ fn tabs(ctx: &mut Ctx, prefix: &str, current: &str, tabs: Vec<Tab>) -> Stack {
       )
       .compact();
       match tab.count {
-        Some(count) => page_tab.count(count, false),
-        None => page_tab.count_reading(),
+        TabCount::Counted(count) => page_tab.count(count, false),
+        TabCount::Reading => page_tab.count_reading(),
+        TabCount::Unknown => page_tab,
       }
     })
     .collect();
@@ -218,8 +236,22 @@ pub(crate) fn empty(prefix: &str, glyph: Icon, (title, detail): (&str, &str), mo
       .variant(role.role())
       .text_align(TextAlign::Center)
   };
+  let state = Column::new()
+    .id(format!("{prefix}-empty"))
+    .describe("state", "empty")
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Center)
+    .child(glyph_tile(&format!("{prefix}-empty"), glyph))
+    .child(line(format!("{prefix}-empty-title"), title, HubText::EmptyTitle))
+    .child(line(format!("{prefix}-empty-detail"), detail, HubText::EmptyDetail))
+    .with_children(more);
+  framed(&format!("{prefix}-empty-body"), state.into())
+}
+
+/// `state` centered in the body's outline (`Body` `lNzIn`, `C5tPU7` in A25), standing for the list and the panel.
+pub(crate) fn framed(id: &str, state: Element) -> Element {
   Column::new()
-    .id(format!("{prefix}-empty-body"))
+    .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
@@ -227,16 +259,6 @@ pub(crate) fn empty(prefix: &str, glyph: Icon, (title, detail): (&str, &str), mo
     .clip()
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(
-      Column::new()
-        .id(format!("{prefix}-empty"))
-        .describe("state", "empty")
-        .spacing(ExtraSpacing::Loose.role())
-        .align_items(Alignment::Center)
-        .child(glyph_tile(&format!("{prefix}-empty"), glyph))
-        .child(line(format!("{prefix}-empty-title"), title, HubText::EmptyTitle))
-        .child(line(format!("{prefix}-empty-detail"), detail, HubText::EmptyDetail))
-        .with_children(more),
-    )
+    .child(state)
     .into()
 }

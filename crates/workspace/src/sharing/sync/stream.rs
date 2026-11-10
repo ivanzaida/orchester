@@ -21,11 +21,13 @@ use super::{
   SyncState,
   apply::{self, Applied, Pages},
   catalog::{self, CATALOG_CHECK},
-  config,
+  config, live,
 };
 use crate::{
   background,
+  messages::Message,
   sharing::{Schedule, SharingError, connection},
+  team_config::TeamConfigs,
 };
 
 /// A shared project's server as its stream reads it, signed in as the person.
@@ -58,6 +60,16 @@ pub trait Source: Send + Sync {
 
   /// The project's stream reached `state`.
   fn state(&self, state: SyncState);
+
+  /// Where the team's configuration read from the server is kept this session ([`live`]).
+  fn configs(&self) -> &TeamConfigs;
+
+  /// What to tell the person when the server could not be reached for `error`.
+  fn unreached(&self, error: &SharingError) -> Message;
+
+  /// Ends when the person asks to reach the server again now (*Try again*): a stream that waits to connect again
+  /// connects at once.
+  fn retried(&self) -> impl Future<Output = ()> + Send;
 }
 
 /// The waits between connections: the system clock in the app, a settable one in tests.
@@ -109,6 +121,9 @@ pub async fn follow(source: &impl Source, root: &Path, clock: &impl Clock) -> St
   let mut trouble_since = None;
   loop {
     let (opened, ending) = connect(source, root, clock).await;
+    if let Some(error) = unreached(&ending) {
+      live::unreached(source, root, &error);
+    }
     match ending {
       Ending::Stream(StreamEnd::Unauthorized) => return Stopped::SignedOut,
       Ending::Stream(end) if apply::ends_membership(&end) => {
@@ -132,7 +147,22 @@ pub async fn follow(source: &impl Source, root: &Path, clock: &impl Clock) -> St
     }
     let since = *trouble_since.get_or_insert_with(Timestamp::now);
     source.state(SyncState::after_failure(failures, since));
-    clock.wait(Schedule::DEFAULT.backoff(failures, clock.jitter())).await;
+    tokio::select! {
+      () = clock.wait(Schedule::DEFAULT.backoff(failures, clock.jitter())) => {}
+      () = source.retried() => tracing::debug!("a project's stream connects again as asked"),
+    }
+  }
+}
+
+/// Why the team's configuration cannot be read after a connection ended as `ending`; `None` for an ending that says
+/// nothing of the server (the cache failed here).
+fn unreached(ending: &Ending) -> Option<SharingError> {
+  match ending {
+    Ending::Stream(StreamEnd::Unauthorized) => Some(SharingError::SignedOut),
+    Ending::Stream(StreamEnd::Forbidden | StreamEnd::Revoked) => Some(SharingError::NotMember),
+    Ending::Stream(StreamEnd::Failed(error)) => Some(SharingError::Client(error.clone())),
+    Ending::Stream(StreamEnd::Closed | StreamEnd::Unreadable) => Some(SharingError::Offline),
+    Ending::Cache(_) => None,
   }
 }
 
@@ -162,6 +192,15 @@ async fn connect(source: &impl Source, root: &Path, clock: &impl Clock) -> (bool
 /// otherwise leave the team's configuration out of the cache until its next version. Resources that cannot be read
 /// now do not hold the tasks' deltas: the next connect reads them again.
 async fn resume(source: &impl Source, root: &Path, resumed: bool, stream: &mut EventStream) -> Ending {
+  // A read refused because the session or the membership just ended is said unreachable here; the stream itself then
+  // ends as the server says (`revoked`, `401`, `403`), which tells signed out from not a member.
+  match live::fill(source, root).await {
+    Ok(()) => source.changed(),
+    Err(error) => {
+      tracing::warn!(%error, "the team's configuration could not be read; the next connect reads it");
+      live::unreached(source, root, &error);
+    }
+  }
   if resumed {
     match resources(source, root).await {
       Ok(()) => {}
@@ -212,7 +251,15 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
         };
         snapshot(source, root, pages, end.cursor).await
       }
-      event => blocking(root, move |root| apply::delta(root, &event)).await,
+      event => match live::follow(source, root, &event).await {
+        Ok(changed) => {
+          if changed {
+            source.changed();
+          }
+          blocking(root, move |root| apply::delta(root, &event)).await
+        }
+        Err(error) => Err(error),
+      },
     };
     let result = match applied {
       Ok(Applied::Unchanged) => continue,

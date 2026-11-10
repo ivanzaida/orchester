@@ -17,7 +17,7 @@ use orchester_core::{
 use orchester_workspace::sharing::sync::{SystemClock, Waiting, follow, use_here, waiting};
 use serde_json::{Value, json};
 
-use super::{ALICE, LIVE, Member, TeamServer, Workspace, seen_within};
+use super::{ALICE, Member, SETTLED, TeamServer, Workspace, seen_within};
 
 fn program(command: &str, args: &[&str]) -> Value {
   json!({
@@ -52,7 +52,7 @@ async fn live_updates_a_team_mcp_server_is_cached_with_its_versions_and_not_writ
   );
   let workspace = Workspace::linked(&server);
   let following = workspace.follow(Member::of(&server, ALICE));
-  seen_within(LIVE, "the snapshot's MCP server", || {
+  seen_within(SETTLED, "the snapshot's MCP server", || {
     latest(&workspace, knowledge).is_some()
   })
   .await;
@@ -82,7 +82,7 @@ async fn live_updates_a_team_mcp_server_is_cached_with_its_versions_and_not_writ
     program("uvx", &[]),
     Vec::new(),
   );
-  seen_within(LIVE, "v2 cached", || {
+  seen_within(SETTLED, "v2 cached", || {
     workspace
       .db()
       .cached_version::<TeamMcpServer>(knowledge, version_two())
@@ -127,10 +127,10 @@ async fn live_updates_an_archived_team_mcp_server_leaves_the_list_and_stops_its_
     let (member, root) = (member.clone(), workspace.root.clone());
     tokio::spawn(async move { follow(&*member, &root, &SystemClock).await })
   };
-  seen_within(LIVE, "the snapshot's MCP server", || listed(&workspace, knowledge)).await;
+  seen_within(SETTLED, "the snapshot's MCP server", || listed(&workspace, knowledge)).await;
 
   server.archive(knowledge, true);
-  seen_within(LIVE, "the MCP server leaves the list", || {
+  seen_within(SETTLED, "the MCP server leaves the list", || {
     !listed(&workspace, knowledge)
   })
   .await;
@@ -145,7 +145,7 @@ async fn live_updates_an_archived_team_mcp_server_leaves_the_list_and_stops_its_
   );
 
   server.archive(knowledge, false);
-  seen_within(LIVE, "the MCP server is back", || listed(&workspace, knowledge)).await;
+  seen_within(SETTLED, "the MCP server is back", || listed(&workspace, knowledge)).await;
   assert_eq!(
     member.archived.lock().expect("archived").as_slice(),
     [(knowledge, Some("Alice Moreau".to_owned()))],

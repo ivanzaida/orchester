@@ -20,6 +20,7 @@ use orchester_core::{
 };
 use orchester_store::PublishState;
 use orchester_workspace::{
+  agents::team_hub::TeamHubRead,
   app_mcp::setup::{NewTeamMcpServer, Runs},
   sharing::team_edit::{EditRefused, Edited},
 };
@@ -519,10 +520,13 @@ fn team_qa_hub_edit_discard_says_why_it_failed() {
 fn pencil_fields(window: &Window, id: ResourceId) -> NewTeamMcpServer {
   let services = window.launch.services().expect("the session");
   let root = window.data.repo("repo-kontur");
-  let hub = services
+  let TeamHubRead::Read(hub) = services
     .workspace
     .team_hub(&root, services.vault.get())
-    .expect("the hub reads");
+    .expect("the hub reads")
+  else {
+    panic!("the team's configuration was read from the stand-in server");
+  };
   hub
     .mcp_server(id)
     .and_then(|sheet| sheet.edit.as_ref())

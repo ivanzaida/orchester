@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId, SecretId},
+  id::{ResourceId, SecretId},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    DatabaseQuery, DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction,
-    InstructionScope, ModelId, PromptText, ProviderSettings, RequestTarget, Skill, SkillFile, SkillFilePath,
+    AccessPolicy, AccessWindow, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram, DatabaseQuery,
+    DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope,
+    ModelId, PromptText, ProviderSettings, RequestTarget, ResourceKind, Skill, SkillFile, SkillFilePath,
     TeamAgentProfile, Tool, ToolAction,
   },
 };
@@ -18,7 +18,7 @@ use orchester_workspace::agents::{
   team_tool::{ArgumentPlace, ToolRuns, ToolSecret},
 };
 
-use crate::support::{MemoryVault, Team, cached, name, team_resource};
+use crate::support::{MemoryVault, Team, hub, name};
 
 fn policy(approval: ApprovalMode) -> AccessPolicy {
   AccessPolicy::new(
@@ -49,12 +49,11 @@ fn builder(team: &Team, (instruction, skill, tool): (ResourceId, ResourceId, Res
   .expect("skills")
   .with_tools(vec![tool])
   .expect("tools");
-  let local = AgentProfile::from_team(&body, ConnectionId::generate());
-  let mut db = team.db();
-  let id = team_resource(&mut db, "team-builder", local.clone(), Vec::new());
-  let mut version = cached(local, Vec::new());
-  version.server_body = serde_json::to_value(&body).expect("json");
-  db.cache_shared_version(id, &version).expect("cached");
+  team.keep(
+    "team-builder",
+    ResourceKind::AgentProfile,
+    serde_json::to_value(&body).expect("json"),
+  );
 }
 
 /// An HTTP tool with one argument that holds the project secret `secret` by id.
@@ -97,17 +96,13 @@ fn database_tool() -> Tool {
 #[test]
 fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_names_by_id() {
   let team = Team::new();
-  let mut db = team.db();
   let secret = SecretId::generate();
   let (http_id, command_id, database_id) = (
-    team_resource(&mut db, "sentry", http_tool(secret), Vec::new()),
-    team_resource(&mut db, "cargo", command_tool(), Vec::new()),
-    team_resource(&mut db, "orders", database_tool(), Vec::new()),
+    team.team_resource("sentry", &http_tool(secret)),
+    team.team_resource("cargo", &command_tool()),
+    team.team_resource("orders", &database_tool()),
   );
-  let hub = team
-    .workspace
-    .team_hub(&team.root, &MemoryVault::default())
-    .expect("hub");
+  let hub = hub(&team, &MemoryVault::default());
   let sheet = hub.tool(http_id).expect("a sheet");
   assert_eq!(sheet.description, "Issues");
   assert_eq!(sheet.secret, ToolSecret::ById(secret));
@@ -155,7 +150,6 @@ fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_names_by_id() {
 #[test]
 fn team_fill_ins_other_instruction_and_skill_sheets_list_where_they_are_added_and_who_uses_them() {
   let team = Team::new();
-  let mut db = team.db();
   let rules = Instruction::new(
     PromptText::new("Be careful.").expect("prompt"),
     AgentTargets::Roles(BTreeSet::from([name("Builder")])),
@@ -186,16 +180,13 @@ fn team_fill_ins_other_instruction_and_skill_sheets_list_where_they_are_added_an
     CommandAction::new(CommandProgram::new("cargo").expect("program"), Vec::new()),
   );
   let (rules_id, handoff_id, skill_id, tool_id) = (
-    team_resource(&mut db, "rules", rules, Vec::new()),
-    team_resource(&mut db, "handoff", handoff, Vec::new()),
-    team_resource(&mut db, "review", skill, Vec::new()),
-    team_resource(&mut db, "cargo", tool, Vec::new()),
+    team.team_resource("rules", &rules),
+    team.team_resource("handoff", &handoff),
+    team.team_resource("review", &skill),
+    team.team_resource("cargo", &tool),
   );
   builder(&team, (rules_id, skill_id, tool_id));
-  let hub = team
-    .workspace
-    .team_hub(&team.root, &MemoryVault::default())
-    .expect("hub");
+  let hub = hub(&team, &MemoryVault::default());
   let sheet = hub.instruction(rules_id).expect("a sheet");
   assert_eq!(sheet.text, "Be careful.");
   assert_eq!(sheet.added, Added::Project);

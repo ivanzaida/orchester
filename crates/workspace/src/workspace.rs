@@ -170,6 +170,8 @@ pub struct Workspace {
   browser_folders: browser::BrowserFolders,
   /// The changes made to settings and project data, which this workspace's setting writers count themselves.
   pub(crate) changes: OutsideChanges,
+  /// The configuration of each team project, read from its team server this session ([`crate::team_config`]).
+  pub(crate) team: crate::team_config::TeamConfigs,
 }
 
 impl PartialEq for Workspace {
@@ -191,7 +193,31 @@ impl Workspace {
       account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
       browser_folders: browser::BrowserFolders::default(),
       changes: OutsideChanges::default(),
+      team: crate::team_config::TeamConfigs::default(),
     }
+  }
+
+  /// How the configuration of the team project at `repo_root` stands this session, as its team server was read.
+  pub fn team_read(&self, repo_root: &Path) -> crate::team_config::TeamRead {
+    self.team.read(repo_root)
+  }
+
+  /// Keeps `config` as the configuration of the team project at `repo_root`, as a read of its team server would: for a
+  /// test with no team server to read.
+  #[cfg(feature = "test-support")]
+  pub fn keep_team_config_for_test(&self, repo_root: &Path, config: crate::team_config::TeamConfig) {
+    self.team.fill(repo_root, config);
+  }
+
+  /// Says the team server of the project at `repo_root` cannot be reached for `reason`, as a failed read would: for a
+  /// test with no team server to fail.
+  #[cfg(feature = "test-support")]
+  pub fn team_unreached_for_test(&self, repo_root: &Path, reason: crate::messages::Message) {
+    let unreached = crate::team_config::Unreached {
+      reason,
+      at: orchester_core::time::Timestamp::now(),
+    };
+    self.team.unreached(repo_root, unreached);
   }
 
   /// The changes this workspace's setting writers count, which the session's screens and MCP tools count theirs in.

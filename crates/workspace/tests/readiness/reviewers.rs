@@ -40,7 +40,7 @@ fn decision_connection(fixture: &Fixture, label: &str, url: &str) -> DecisionCon
 #[test]
 fn readiness_a_language_reviewer_needs_a_connection_of_its_cli_kind_and_a_pick_among_several() {
   let fixture = Fixture::team();
-  let id = fixture.team_resource("reviewer", language("claude_code_cli"));
+  let id = fixture.team_resource("reviewer", &language("claude_code_cli"));
   fixture.connection(orchester_core::connection::AgentProvider::CodexCli, "codex");
 
   let read = fixture.read();
@@ -82,7 +82,7 @@ fn readiness_a_language_reviewer_needs_a_connection_of_its_cli_kind_and_a_pick_a
 #[test]
 fn readiness_a_decision_reviewer_needs_a_decision_connection() {
   let fixture = Fixture::team();
-  let id = fixture.team_resource("decisions", decision());
+  let id = fixture.team_resource("decisions", &decision());
   fixture.connection(orchester_core::connection::AgentProvider::ClaudeCodeCli, "claude");
 
   assert_eq!(
@@ -103,22 +103,11 @@ fn readiness_a_decision_reviewer_needs_a_decision_connection() {
 #[test]
 fn readiness_a_reviewer_that_names_a_connection_is_not_read_and_says_so() {
   let fixture = Fixture::team();
-  let id = fixture.team_resource("old", language("claude_code_cli"));
   let old: Value = json!({
     "kind": "language", "connection": {"kind": "connection", "name": "Team language", "role": "claude_code_cli"},
     "model": "m-1", "effort": null
   });
-  let stored = json!({"schema": <TeamReviewer as ResourceBody>::SCHEMA, "body": old}).to_string();
-  let database = rusqlite::Connection::open(fixture.root.join(".orchester").join("orchester.db")).expect("database");
-  let changed = database
-    .execute(
-      "UPDATE shared_version_bodies SET local_body = ?1 \
-       WHERE version_id IN (SELECT id FROM resource_versions WHERE resource_id = ?2)",
-      rusqlite::params![stored, id.to_string()],
-    )
-    .expect("the old form");
-  assert_eq!(changed, 1);
-  drop(database);
+  let id = fixture.team_raw("old", <TeamReviewer as ResourceBody>::KIND, old);
 
   let read = fixture.read();
   let found = read.resource(id).expect("listed");

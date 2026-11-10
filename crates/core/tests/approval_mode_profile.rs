@@ -80,7 +80,7 @@ fn approval_mode_profile_is_versioned_with_the_permissions() {
     &list,
     "Manual's allowed commands are the profile's list"
   );
-  assert_eq!(AgentProfile::SCHEMA, 5);
+  assert_eq!(AgentProfile::SCHEMA, 6);
 }
 
 #[test]

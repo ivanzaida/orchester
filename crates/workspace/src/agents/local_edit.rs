@@ -1,5 +1,6 @@
 //! Editing the fields of a local profile in its panel (`Agents · Profile` L1, `docs/design/team-configuration.md`
-//! rule 11): the Agent CLI, the model, the reasoning effort and the MCP servers it chooses are changed one at a time,
+//! rule 11 and "Decided 2026-11-09"): the Agent CLI, the model, the reasoning effort, the MCP servers it chooses and
+//! the project's instructions, skills and tools it gives its agents are changed one at a time,
 //! each a save of the profile's draft as the editor's autosave makes it, and *Publish vN* publishes that draft. The
 //! rules are the editor's ([`super::editor::apply`]): a change that widens what its agents may do asks first, which
 //! only a person answers, and the profile is rebuilt by the editor's own form ([`ProfileForm`]), so nothing a field
@@ -13,7 +14,7 @@ use std::path::Path;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, ModelId, VersionNumber},
+  resource::{AgentProfile, ChosenResources, ModelId, ResourceKind, VersionNumber},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -27,6 +28,7 @@ use super::{
     stored_effort,
   },
   local_connection::discard_saved,
+  local_given::is_check,
   local_hub::{LocalProfile, profile_as},
 };
 use crate::{
@@ -48,8 +50,42 @@ pub enum Edit {
   AddServer(ConnectionId),
   /// No longer chooses the MCP server.
   RemoveServer(ConnectionId),
+  /// Gives its agents a project instruction, skill or tool as well, by its id; it must be one of the project's that is
+  /// not archived.
+  Give(GivenKind, ResourceId),
+  /// No longer gives its agents the instruction, skill or tool.
+  TakeBack(GivenKind, ResourceId),
   /// Runs on another connection of its CLI, with the same model and effort.
   Connection(ConnectionId),
+}
+
+/// Which of a profile's lists of the project's resources an edit changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GivenKind {
+  Instruction,
+  Skill,
+  Tool,
+}
+
+impl GivenKind {
+  pub const ALL: [Self; 3] = [Self::Instruction, Self::Skill, Self::Tool];
+
+  pub const fn resource_kind(self) -> ResourceKind {
+    match self {
+      Self::Instruction => ResourceKind::Instruction,
+      Self::Skill => ResourceKind::Skill,
+      Self::Tool => ResourceKind::Tool,
+    }
+  }
+
+  /// The profile's list of this kind.
+  pub const fn of(self, profile: &AgentProfile) -> &ChosenResources {
+    match self {
+      Self::Instruction => profile.instruction_resources(),
+      Self::Skill => profile.skills(),
+      Self::Tool => profile.tools(),
+    }
+  }
 }
 
 /// What the panel of a local profile holds: changes that are not stored, and how the panel shows them.
@@ -68,8 +104,9 @@ pub fn hold(root: &Path, profile: ResourceId, held: Option<&AgentProfile>, edit:
   let entry = listed
     .profile(profile)
     .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
-  let body = changed(&listed, held.unwrap_or(&entry.profile), edit)?;
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  offered(&db, edit)?;
+  let body = changed(&listed, held.unwrap_or(&entry.profile), edit)?;
   let shown = profile_as(&db, profile, &body)
     .map_err(|error| messages::store_error(&error))?
     .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
@@ -136,6 +173,8 @@ pub fn edit(root: &Path, profile: ResourceId, edit: &Edit, allowed: &[Message]) 
     .profile(profile)
     .cloned()
     .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  offered(&db, edit)?;
   let next = changed(&listed, &entry.profile, edit)?;
   if next == entry.profile {
     return Ok(Outcome::Saved(profile));
@@ -228,6 +267,25 @@ fn request(
   })
 }
 
+/// Refuses to give a resource that is not one of the project's of its kind, or that was archived, and a tool that is no
+/// check an agent can call ([`orchester_core::resource::Tool::is_check`]); taking one back is never refused.
+fn offered(db: &ProjectDb, edit: &Edit) -> Result<(), Message> {
+  let Edit::Give(kind, resource) = edit else {
+    return Ok(());
+  };
+  let offered = db
+    .resources(kind.resource_kind())
+    .map_err(|error| messages::store_error(&error))?
+    .iter()
+    .any(|found| found.id() == *resource);
+  let callable = *kind != GivenKind::Tool || is_check(db, *resource).map_err(|error| messages::store_error(&error))?;
+  if offered && callable {
+    Ok(())
+  } else {
+    Err(Message::new("agents.localEdit.givenGone"))
+  }
+}
+
 /// `current` with `edit` made, by the editor's own form.
 fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Result<AgentProfile, Message> {
   let connection = listed
@@ -240,6 +298,9 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
     effort: stored_effort(current),
     permissions: current.permissions().clone(),
     servers: current.mcp_servers().clone(),
+    instructions: current.instruction_resources().clone(),
+    skills: current.skills().clone(),
+    tools: current.tools().clone(),
   };
   match edit {
     Edit::Cli(provider) => fields.use_cli(listed, *provider)?,
@@ -257,6 +318,8 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
       fields.servers = selection(ids)?;
     }
     Edit::Connection(connection) => fields.use_connection(listed, *connection)?,
+    Edit::Give(kind, resource) => *fields.given(*kind) = kind.of(current).with(*resource),
+    Edit::TakeBack(kind, resource) => *fields.given(*kind) = kind.of(current).without(*resource),
   }
   ProfileForm {
     role: current.role().as_str(),
@@ -268,6 +331,9 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
     effort: fields.effort.as_deref(),
     permissions: &fields.permissions,
     mcp_servers: &fields.servers,
+    instruction_resources: &fields.instructions,
+    skills: &fields.skills,
+    tools: &fields.tools,
   }
   .profile()
   .map_err(|errors| first_error(&errors))
@@ -284,9 +350,20 @@ struct Fields<'a> {
   effort: Option<String>,
   permissions: orchester_core::permission::AgentPermissions,
   servers: McpServerSelection,
+  instructions: ChosenResources,
+  skills: ChosenResources,
+  tools: ChosenResources,
 }
 
 impl<'a> Fields<'a> {
+  const fn given(&mut self, kind: GivenKind) -> &mut ChosenResources {
+    match kind {
+      GivenKind::Instruction => &mut self.instructions,
+      GivenKind::Skill => &mut self.skills,
+      GivenKind::Tool => &mut self.tools,
+    }
+  }
+
   fn use_cli(&mut self, listed: &'a ProjectAgents, provider: AgentProvider) -> Result<(), Message> {
     let chosen = listed
       .connections
@@ -295,13 +372,11 @@ impl<'a> Fields<'a> {
       .ok_or_else(|| Message::new("agents.localEdit.noConnection"))?;
     let model = first_model(chosen).ok_or_else(|| Message::new("errors.modelRequired"))?;
     let (permissions, servers) = access_for_connection(&self.permissions, &self.servers, provider, Platform::current());
-    *self = Self {
-      connection: Some(chosen),
-      model: model.as_str().to_owned(),
-      effort: None,
-      permissions,
-      servers,
-    };
+    self.connection = Some(chosen);
+    self.model = model.as_str().to_owned();
+    self.effort = None;
+    self.permissions = permissions;
+    self.servers = servers;
     Ok(())
   }
 

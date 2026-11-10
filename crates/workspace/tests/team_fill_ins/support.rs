@@ -12,18 +12,24 @@ use orchester_core::{
   id::{ConnectionId, ProjectId, ResourceId, ServerId, UserId},
   name::Name,
   project::{Project, ProjectKey},
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, Slug, TeamMcpServer, VersionNumber},
+  resource::{
+    AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, ResourceKind, Slug, TeamAgentProfile,
+    VersionNumber,
+  },
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
-use orchester_store::{
-  AppDb, CachedVersion, ConnectionPick, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink, StoredServer,
+use orchester_store::{AppDb, CachedVersion, ConnectionPick, ProjectDb, ResourceSharing, SharingLink, StoredServer};
+use orchester_workspace::{
+  agents::team_hub::{TeamHub, TeamHubRead},
+  tasks::outside::Outside,
+  team_config::{TeamConfig, TeamResource, TeamVersion},
+  workspace::Workspace,
 };
-use orchester_workspace::{tasks::outside::Outside, workspace::Workspace};
 use parking_lot::Mutex;
-use serde_json::json;
+use serde_json::{Value, json};
 use tempfile::TempDir;
 
 pub const FAKE: &str = "fake-value-7Qx2";
@@ -65,7 +71,8 @@ impl SecretVault for LockedVault {
   }
 }
 
-/// A team project on a registered team server, with the team's profiles and MCP servers cached, and a local profile.
+/// A team project on a registered team server, with the team's profiles and MCP servers kept in the workspace's memory
+/// as a read of the team server keeps them, and a local profile.
 pub struct Team {
   _dir: TempDir,
   pub root: PathBuf,
@@ -74,13 +81,15 @@ pub struct Team {
   pub server: ServerId,
   pub claude: ConnectionId,
   pub codex: ConnectionId,
-  /// A team profile whose newest version names the Claude Code CLI kind.
+  /// A team profile whose latest version names the Claude Code CLI kind.
   pub claude_profile: ResourceId,
-  /// A team profile whose newest version names no connection: its CLI kind is not known.
+  /// A team profile whose latest version is not in the team's form: its CLI kind is not known.
   pub open_profile: ResourceId,
   pub local_profile: ResourceId,
   pub program_server: ResourceId,
   pub remote_server: ResourceId,
+  /// The team's resources as its server answers them.
+  team: Mutex<Vec<TeamResource>>,
 }
 
 pub fn name(text: &str) -> Name {
@@ -98,34 +107,46 @@ pub fn profile() -> AgentProfile {
   )
 }
 
-pub fn cached<B>(local_body: B, references: Vec<ReferenceTarget>) -> CachedVersion<B> {
-  CachedVersion {
-    number: VersionNumber::FIRST,
-    published_at: Timestamp::from_unix_millis(20),
-    publisher: SharedPerson {
-      id: UserId::generate(),
-      name: "Olena".to_owned(),
-    },
-    server_body: json!({}),
-    hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references,
-    local_body,
-    waits_here: false,
+/// A team profile Builder that runs on `cli`.
+pub fn team_profile(cli: AgentProvider) -> TeamAgentProfile {
+  TeamAgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    (
+      cli,
+      ModelId::new("gpt-5.5").expect("model"),
+      ProviderSettings::default(),
+    ),
+  )
+}
+
+/// The team's resource `slug` whose latest version v1 is `body` as the server sent it.
+fn team_resource_of(id: ResourceId, slug: &str, kind: ResourceKind, body: Value) -> TeamResource {
+  TeamResource {
+    id,
+    kind,
+    name: name(slug),
+    archived: false,
+    revision: TaskRevision::try_from(1).expect("revision"),
+    latest: Some(TeamVersion {
+      number: VersionNumber::FIRST,
+      body,
+      published_by: "Olena".to_owned(),
+      published_at: Timestamp::from_unix_millis(20),
+    }),
   }
 }
 
-/// Creates `body` as a team resource at v1 with `references`.
-pub fn team_resource<B: orchester_core::resource::ResourceBody>(
-  db: &mut ProjectDb,
-  slug: &str,
-  body: B,
-  references: Vec<ReferenceTarget>,
-) -> ResourceId {
+/// Caches `team` in the project's database at v1 as the stream caches a team profile, with a local body that names no
+/// connection of this computer: for what reads and refreshes the cache's local body.
+fn cache_profile(db: &mut ProjectDb, slug: &str, team: &TeamAgentProfile) -> ResourceId {
+  let local = AgentProfile::from_team(team, ConnectionId::generate());
   let id = db
     .create_resource(
       Slug::new(slug).expect("slug"),
       name(slug),
-      &body,
+      &local,
       Timestamp::from_unix_millis(10),
     )
     .expect("resource")
@@ -135,12 +156,21 @@ pub fn team_resource<B: orchester_core::resource::ResourceBody>(
     Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
   )
   .expect("shared");
-  db.cache_shared_version(id, &cached(body, references)).expect("cached");
+  let version = CachedVersion {
+    number: VersionNumber::FIRST,
+    published_at: Timestamp::from_unix_millis(20),
+    publisher: SharedPerson {
+      id: UserId::generate(),
+      name: "Olena".to_owned(),
+    },
+    server_body: serde_json::to_value(team).expect("a team profile serializes"),
+    hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
+    references: Vec::new(),
+    local_body: local,
+    waits_here: false,
+  };
+  db.cache_shared_version(id, &version).expect("the team form cached");
   id
-}
-
-pub fn mcp_server(body: serde_json::Value) -> TeamMcpServer {
-  serde_json::from_value(body).expect("a team MCP server")
 }
 
 pub fn connection(db: &mut ProjectDb, root: &Path, provider: AgentProvider, label: &str) -> ConnectionId {
@@ -176,6 +206,21 @@ pub fn share(db: &mut ProjectDb, server: ServerId) {
   .expect("shared");
 }
 
+/// The team's two profiles (one in the team's form, one not) and two MCP servers (a program and a remote one).
+fn team_resources() -> [TeamResource; 4] {
+  let claude = serde_json::to_value(team_profile(AgentProvider::ClaudeCodeCli)).expect("json");
+  let open = serde_json::to_value(profile()).expect("json");
+  let program = json!({"name": "knowledge", "launch": {"kind": "program", "program": "npx"}});
+  let remote = json!({"name": "issues", "launch": {"kind": "remote", "url": "https://mcp.example.org/x"}});
+  [
+    ("claude-builder", ResourceKind::AgentProfile, claude),
+    ("open-builder", ResourceKind::AgentProfile, open),
+    ("knowledge", ResourceKind::McpServer, program),
+    ("issues", ResourceKind::McpServer, remote),
+  ]
+  .map(|(slug, kind, body)| team_resource_of(ResourceId::generate(), slug, kind, body))
+}
+
 impl Team {
   pub fn new() -> Self {
     let dir = tempfile::tempdir().expect("temporary directory");
@@ -208,21 +253,6 @@ impl Team {
     share(&mut db, server);
     let claude = connection(&mut db, &root, AgentProvider::ClaudeCodeCli, "claude");
     let codex = connection(&mut db, &root, AgentProvider::CodexCli, "codex");
-    let cli_kind = ReferenceTarget::CliKind(AgentProvider::ClaudeCodeCli);
-    let claude_profile = team_resource(&mut db, "claude-builder", profile(), vec![cli_kind]);
-    let open_profile = team_resource(&mut db, "open-builder", profile(), Vec::new());
-    let program_server = team_resource(
-      &mut db,
-      "knowledge",
-      mcp_server(json!({"name":"knowledge","launch":{"kind":"program","program":"npx"}})),
-      Vec::new(),
-    );
-    let remote_server = team_resource(
-      &mut db,
-      "issues",
-      mcp_server(json!({"name":"issues","launch":{"kind":"remote","url":"https://mcp.example.org/x"}})),
-      Vec::new(),
-    );
     let local_profile = db
       .create_resource(
         Slug::new("local").expect("slug"),
@@ -233,7 +263,9 @@ impl Team {
       .expect("a local profile")
       .id();
     drop(db);
-    Self {
+    let kept = team_resources();
+    let [claude_profile, open_profile, program_server, remote_server] = kept.each_ref().map(|resource| resource.id);
+    let team = Self {
       workspace: Workspace::new(app),
       _dir: dir,
       root,
@@ -246,7 +278,44 @@ impl Team {
       local_profile,
       program_server,
       remote_server,
-    }
+      team: Mutex::new(kept.into()),
+    };
+    team.keep_team();
+    team
+  }
+
+  /// Keeps the team's resources in the workspace's memory, as a read of the team server does.
+  fn keep_team(&self) {
+    let config = TeamConfig::new(self.team.lock().iter().cloned());
+    self.workspace.keep_team_config_for_test(&self.root, config);
+  }
+
+  fn add(&self, resource: TeamResource) {
+    self.team.lock().push(resource);
+    self.keep_team();
+  }
+
+  /// The team's resource `slug` of `kind` whose latest version v1 is `body` as the server sent it, which may be in no
+  /// form this computer reads.
+  pub fn keep(&self, slug: &str, kind: ResourceKind, body: Value) -> ResourceId {
+    let resource = team_resource_of(ResourceId::generate(), slug, kind, body);
+    let id = resource.id;
+    self.add(resource);
+    id
+  }
+
+  /// The team's resource `slug` whose latest version v1 is `body`, in its kind's team form.
+  pub fn team_resource<B: ResourceBody>(&self, slug: &str, body: &B) -> ResourceId {
+    self.keep(slug, B::KIND, serde_json::to_value(body).expect("json"))
+  }
+
+  /// The team's profile `slug` at v1, as [`Self::team_resource`] keeps it and also cached in the project's database,
+  /// whose local body a fill-in refreshes.
+  pub fn cached_profile(&self, slug: &str, team: &TeamAgentProfile) -> ResourceId {
+    let id = cache_profile(&mut self.db(), slug, team);
+    let body = serde_json::to_value(team).expect("json");
+    self.add(team_resource_of(id, slug, ResourceKind::AgentProfile, body));
+    id
   }
 
   pub fn db(&self) -> ProjectDb {
@@ -294,6 +363,14 @@ impl Team {
     let path = self.root.join("mcp-server");
     fs::write(&path, "#!/bin/sh\n").expect("a program");
     path
+  }
+}
+
+/// The hub of the team's project, whose configuration the tests keep in memory.
+pub fn hub(team: &Team, vault: &MemoryVault) -> TeamHub {
+  match team.workspace.team_hub(&team.root, vault).expect("hub") {
+    TeamHubRead::Read(hub) => *hub,
+    other => panic!("the team's configuration is kept in memory, yet the hub read {other:?}"),
   }
 }
 
