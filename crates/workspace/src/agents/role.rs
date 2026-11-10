@@ -4,7 +4,7 @@
 
 use orchester_core::{
   name::Name,
-  resource::{AgentProfile, PromptText},
+  resource::{AgentProfile, PromptText, TeamAgentProfile},
 };
 
 use super::form::{prompt_error, role_error};
@@ -24,6 +24,15 @@ pub struct RoleText {
 impl RoleText {
   /// The role of `profile`.
   pub fn of(profile: &AgentProfile) -> Self {
+    Self {
+      role: profile.role().as_str().to_owned(),
+      responsibilities: profile.responsibilities().to_owned(),
+      instructions: profile.instructions().as_str().to_owned(),
+    }
+  }
+
+  /// The role of the team profile `profile`.
+  pub fn of_team(profile: &TeamAgentProfile) -> Self {
     Self {
       role: profile.role().as_str().to_owned(),
       responsibilities: profile.responsibilities().to_owned(),

@@ -5,17 +5,12 @@
 //! needs (read-only: they follow from what it uses). *On this computer* and *Ready here?* stay the panel's own. Save
 //! publishes the body the fields make as the next version at once ([`super::super::edit`]).
 //!
-//! The *Role* section is drawn here for a team profile; the local panel's Role component (`L17` `b7Tbxb`, being made
-//! in `screens/hub/`) is the one both should share once it lands.
+//! The *Role* section is the hub's, as a local profile's panel has it (`L17` `b7Tbxb`, [`role`]).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    component::DevtoolsInspectable,
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
+  app::{component::DevtoolsInspectable, ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
@@ -27,14 +22,20 @@ use orchester_core::{
   resource::{PromptText, ResourceKind, TeamAgentProfile},
 };
 use orchester_workspace::{
-  agents::{form::prompt_error, team_profile::TeamProfileSheet},
-  messages::{self, Message},
+  agents::{
+    role::{RoleErrors, RoleText},
+    team_profile::TeamProfileSheet,
+  },
+  messages::Message,
   team_config::TeamConfig,
 };
 
 use crate::{
   screens::{
-    hub::{agent_row::tag_chip, area::Area},
+    hub::{
+      agent_row::tag_chip,
+      role::{self, Change},
+    },
     local_hub::profile::add_menu,
     team_hub::{
       edit::{Edit, Parts, Target, View},
@@ -44,12 +45,8 @@ use crate::{
     },
   },
   theme::HubText,
-  ui::{field::FieldInput, message::message_text},
+  ui::message::message_text,
 };
-
-/// The responsibilities' area is at least 64 high, the role instructions' 180 (`Role` in `WSw0W`).
-const RESPONSIBILITIES_AREA: f32 = 64.0;
-const ROLE_INSTRUCTIONS_AREA: f32 = 180.0;
 
 /// The team's resources the profile gives its agents, by kind, as the fields hold them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -100,9 +97,7 @@ const LISTS: [List; 4] = [
 /// What the panel keeps of an admin's edit of a team profile. Cloning shares it.
 #[derive(Clone)]
 pub(super) struct ProfileEdit {
-  role: Signal<String>,
-  responsibilities: Signal<String>,
-  instructions: Signal<String>,
+  role: Signal<RoleText>,
   given: Signal<Given>,
   edit: Edit<TeamAgentProfile>,
 }
@@ -115,23 +110,12 @@ pub(super) struct Drawn {
 
 impl ProfileEdit {
   pub(super) fn new(ctx: &mut Ctx, target: Target, sheet: &TeamProfileSheet) -> Self {
-    let (role, responsibilities, instructions) = (
-      ctx.signal(String::new()),
-      ctx.signal(String::new()),
-      ctx.signal(String::new()),
-    );
+    let role = ctx.signal(RoleText::default());
     let given = ctx.signal(Given::default());
     let load = {
-      let (role, responsibilities, instructions, given) = (
-        role.clone(),
-        responsibilities.clone(),
-        instructions.clone(),
-        given.clone(),
-      );
+      let (role, given) = (role.clone(), given.clone());
       Arc::new(move |body: &TeamAgentProfile| {
-        role.set(body.role().as_str().to_owned());
-        responsibilities.set(body.responsibilities().to_owned());
-        instructions.set(body.instructions().as_str().to_owned());
+        role.set(RoleText::of_team(body));
         given.set(Given {
           instructions: body.instruction_resources().to_vec(),
           mcp_servers: body.mcp_servers().to_vec(),
@@ -141,13 +125,7 @@ impl ProfileEdit {
       })
     };
     let edit = Edit::new(ctx, target, sheet.edit.as_ref(), load);
-    Self {
-      role,
-      responsibilities,
-      instructions,
-      given,
-      edit,
-    }
+    Self { role, given, edit }
   }
 
   /// The edit's parts and sections, over the team's configuration `config` (what *Add* offers); `None` while it has no
@@ -164,9 +142,6 @@ impl ProfileEdit {
       sheet.edit.as_ref(),
       made.as_ref().map_or(true, |body| *body != base.body),
     );
-    let role_error = Name::new(&self.role.get())
-      .err()
-      .map(|error| message_text(ctx, &messages::name_error(&error)));
     let parts = self.edit.parts(
       ctx,
       View {
@@ -175,22 +150,22 @@ impl ProfileEdit {
         published_by: None,
       },
     )?;
-    let sections = vec![
-      self.role_section(ctx, role_error).into(),
-      self.team_section(ctx, sheet, config).into(),
-    ];
+    let sections = vec![self.role_section(ctx), self.team_section(ctx, sheet, config).into()];
     Some(Drawn { parts, sections })
   }
 
   /// The profile the fields make over `base`, which keeps its CLI, model, settings, permissions and secrets.
   fn made(&self, ctx: &Ctx, base: &TeamAgentProfile) -> Result<TeamAgentProfile, Arc<str>> {
-    let role = Name::new(&self.role.get()).map_err(|error| message_text(ctx, &messages::name_error(&error)))?;
-    let instructions =
-      PromptText::new(&self.instructions.get()).map_err(|error| message_text(ctx, &prompt_error(&error)))?;
+    let text = self.role.get();
+    if let Some(why) = text.errors().as_ref().and_then(RoleErrors::first) {
+      return Err(message_text(ctx, why));
+    }
+    let role = Name::new(&text.role).expect("a role without errors has a name");
+    let instructions = PromptText::new(&text.instructions).expect("a role without errors has a prompt");
     let given = self.given.get();
     TeamAgentProfile::new(
       role,
-      self.responsibilities.get().trim().to_owned(),
+      text.responsibilities.trim().to_owned(),
       instructions,
       (base.cli(), base.model().clone(), base.settings().clone()),
     )
@@ -208,42 +183,24 @@ impl ProfileEdit {
     })
   }
 
-  /// *Role*: the role, what it answers for and the role instructions, the first part of the agent's prompt.
-  fn role_section(&self, ctx: &mut Ctx, role_error: Option<Arc<str>>) -> Column {
-    let label = ctx.t("team_hub.edit.role");
-    let mut role =
-      FieldInput::new("team-hub-role-name-input", label.clone(), self.role.clone()).width(Dimension::Pct(100.0));
-    let sub = role_error.map(|words| Sub {
-      words,
-      color: PaletteColor::Danger,
-    });
-    if sub.is_some() {
-      role = role.invalid();
-    }
-    let rows = vec![
-      rows::row("team-hub-role-name", &label, sub, role.render(ctx)),
-      Area {
-        id: "team-hub-role-responsibilities".to_owned(),
-        label: ctx.t("team_hub.edit.responsibilities"),
-        sub: ctx.t("team_hub.edit.responsibilitiesSub"),
-        placeholder: ctx.t("team_hub.edit.responsibilitiesPlaceholder"),
-        height: RESPONSIBILITIES_AREA,
-      }
-      .row(ctx, &self.responsibilities, None),
-      Area {
-        id: "team-hub-role-instructions".to_owned(),
-        label: ctx.t("team_hub.edit.roleInstructions"),
-        sub: ctx.t("team_hub.edit.roleInstructionsSub"),
-        placeholder: ctx.t("team_hub.edit.roleInstructionsPlaceholder"),
-        height: ROLE_INSTRUCTIONS_AREA,
-      }
-      .row(ctx, &self.instructions, None),
-    ];
-    rows::section(
-      "team-hub-role",
-      &label,
-      vec![note("team-hub-role-note", &ctx.t("team_hub.edit.roleNote"))],
-      rows,
+  /// *Role*: the hub's section ([`role`]) over the role as typed; what cannot be saved says why in its field.
+  fn role_section(&self, ctx: &mut Ctx) -> Element {
+    let text = self.role.get();
+    let change = |set: fn(&mut RoleText, String)| -> Change {
+      let held = self.role.clone();
+      Arc::new(move |value| held.update(|role| set(role, value)))
+    };
+    role::section(
+      ctx,
+      role::Props {
+        id: "team-hub-role".to_owned(),
+        errors: text.errors(),
+        locked: false,
+        on_role: change(|role, value| role.role = value),
+        on_responsibilities: change(|role, value| role.responsibilities = value),
+        on_instructions: change(|role, value| role.instructions = value),
+        role: text,
+      },
     )
   }
 
