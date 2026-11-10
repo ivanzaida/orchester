@@ -188,7 +188,8 @@ impl Component for Editor {
       program_refused: field == Some(Refusal::Program),
       creating: false,
     };
-    let mut rows = self.form.server_rows(ctx, &look);
+    let mut rows = vec![self.form.name_row(ctx, &look, None)];
+    rows.extend(self.form.server_rows(ctx, &look));
     rows.extend(self.after_rows(ctx, &look, server.enabled()));
     let used = notes::used_by(ctx, entry);
     let note = match (refused, &field) {
@@ -262,6 +263,7 @@ impl Editor {
         labels.push(ctx.t(key));
       }
     };
+    note(typed.name != saved.name, "team_new.mcp.name");
     note(typed.transport != saved.transport, "local_hub.mcp.runsAs");
     note(typed.program != saved.program, "connections.mcp.property.program");
     note(typed.arguments != saved.arguments, "connections.mcp.property.arguments");

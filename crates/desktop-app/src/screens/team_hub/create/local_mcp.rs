@@ -4,19 +4,18 @@
 //! the variables, the values of the secrets they take, and whether runs may use it), with its name over them. A local
 //! MCP server has no versions: Create makes the server and the values go to the secret store with it.
 
-use lurq::{app::ctx::Ctx, components::Row, core::Signal};
+use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::connection::mcp::McpServerName;
-use orchester_workspace::connections::mcp::McpServerText;
+use orchester_workspace::connections::{
+  data::ProjectConnections,
+  mcp::{McpServerErrors, McpServerText},
+};
 
 use super::{
-  fields::{self, Body, Error, Look as FieldLook, Shown, Spec},
+  fields::{Body, Shown},
   work::{LocalMcp, Make},
 };
 use crate::screens::local_hub::mcp::{Form, Look, Mark, Taken, rows_of, switch_row};
-
-const NAME: Spec = Spec::new("mcp-name", "team_new.mcp.name")
-  .sub("local_new.mcp.nameSub")
-  .required();
 
 pub(super) struct Fields {
   form: Form,
@@ -34,12 +33,25 @@ impl Fields {
 
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
     let typed = self.form.fields.text();
+    let saved = McpServerText::new_server();
     let Some(listed) = shown.connections else {
       // The project's secrets and server names are read: the name can be typed meanwhile.
+      let unread = ProjectConnections::default();
+      let look = Look {
+        saved: &saved,
+        typed: &typed,
+        listed: &unread,
+        errors: &McpServerErrors::default(),
+        tried: shown.tried,
+        program: None,
+        secrets: (&[], Mark::None),
+        program_refused: false,
+        creating: true,
+      };
       return Body {
         lead: None,
         after: Vec::new(),
-        rows: vec![self.name_row(ctx, shown, None)],
+        rows: vec![self.form.name_row(ctx, &look, Some(shown.first))],
         computer: None,
         make: None,
         off: None,
@@ -53,11 +65,6 @@ impl Fields {
       .err()
       .map(|errors| (**errors).clone())
       .unwrap_or_default();
-    let name_says = if typed.name.trim().is_empty() {
-      shown.tried.then_some(Error::Required)
-    } else {
-      errors.name.clone().map(Error::Said)
-    };
     let taken: Vec<Taken> = checked.as_ref().map_or_else(
       |_| Vec::new(),
       |draft| {
@@ -73,7 +80,6 @@ impl Fields {
           .collect()
       },
     );
-    let saved = McpServerText::new_server();
     let look = Look {
       saved: &saved,
       typed: &typed,
@@ -85,7 +91,7 @@ impl Fields {
       program_refused: false,
       creating: true,
     };
-    let mut rows = vec![self.name_row(ctx, shown, name_says.as_ref())];
+    let mut rows = vec![self.form.name_row(ctx, &look, Some(shown.first))];
     rows.extend(self.form.server_rows(ctx, &look));
     rows.extend(rows_of(ctx, &self.form.asking, look.secrets));
     let on = self.on.clone();
@@ -107,16 +113,5 @@ impl Fields {
       off: None,
       overlay: self.form.asking.dialog(ctx, true),
     }
-  }
-
-  fn name_row(&self, ctx: &mut Ctx, shown: &Shown<'_>, error: Option<&Error>) -> Row {
-    fields::name_row(
-      ctx,
-      shown,
-      &NAME,
-      error,
-      (&self.form.fields.name, "team_new.mcp.namePlaceholder"),
-      FieldLook::Plain,
-    )
   }
 }
