@@ -7,7 +7,7 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
-  id::ConnectionId,
+  id::{AgentAccountId, ConnectionId},
   orchestrator::{OrchestratorSettings, WatchSettings, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
@@ -181,6 +181,13 @@ impl OrchestratorSetup {
   pub fn provider(&self) -> Option<AgentProvider> {
     let settings = self.settings.as_ref()?;
     Some(self.connection(settings.connection())?.provider())
+  }
+
+  /// The account `connection`'s CLI runs as, which the conversation's session is kept under; `None` for a connection
+  /// the project does not have or one with no account assigned.
+  pub fn account(&self, connection: ConnectionId) -> Option<AgentAccountId> {
+    let found = self.connection(connection)?;
+    found.account().id(found.provider())
   }
 
   /// What `connection`'s CLI runs on; `None` for a connection the project does not have.

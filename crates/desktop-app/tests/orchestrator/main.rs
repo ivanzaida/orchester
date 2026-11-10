@@ -50,6 +50,7 @@ mod repository;
 mod review;
 mod rewind;
 mod runs_on;
+mod runs_on_notes;
 mod runs_on_search;
 mod scroll;
 mod settings;

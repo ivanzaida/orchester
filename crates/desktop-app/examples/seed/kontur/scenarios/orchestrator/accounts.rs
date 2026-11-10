@@ -62,6 +62,8 @@ pub enum CodexPlan {
 /// The connections the Orchestrator may be set up on: *Claude · Work* and *Codex · Default*.
 pub struct SignIns {
   pub work: ConnectionId,
+  /// The account *Claude · Work* runs on.
+  pub work_account: AgentAccountId,
   pub codex: ConnectionId,
 }
 
@@ -111,6 +113,7 @@ pub fn add(kontur: &mut Kontur, programs: (&Path, &Path), codex: CodexPlan) -> R
     identity: None,
     used: None,
   })?;
+  let work_account = work.id();
   let work = connection(
     kontur,
     ("Claude · Work", AgentProvider::ClaudeCodeCli, programs.0),
@@ -131,7 +134,11 @@ pub fn add(kontur: &mut Kontur, programs: (&Path, &Path), codex: CodexPlan) -> R
     ("Codex · Client", AgentProvider::CodexCli, programs.1),
     (&client, &["gpt-5.5"], &[]),
   )?;
-  Ok(SignIns { work, codex })
+  Ok(SignIns {
+    work,
+    work_account,
+    codex,
+  })
 }
 
 fn add_account(
