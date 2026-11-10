@@ -1,7 +1,7 @@
 //! The panel of the chosen pipeline (`Detail` `KGBgh` in `Pipelines · v2` P1): its head (what it is and its version
 //! over its name), the chips under it (its version, whether it can run or what it lacks, and the tasks that use it),
-//! and the body, which [`super::steps`] fills. The body scrolls; the Save bar of PV2-10 will be pinned under it. The head
-//! with its ⋯ menu is [`super::panel_head`]; an archived pipeline's panel is [`super::archived`].
+//! and the body, which [`super::steps`] fills. The body scrolls; the Save bar of PV2-10 will be pinned under it. The
+//! head with its ⋯ menu is [`super::panel_head`]; an archived pipeline's panel is [`super::archived`].
 
 use std::sync::Arc;
 

@@ -1,13 +1,13 @@
-//! The ⋯ in a pipeline's head (`Pipeline menu` `x6ZrKL` in `Pipelines · v2` P11 `nrTt0`): *Rename*, which makes the title
-//! editable in place, *Duplicate*, which opens New pipeline filled from this one, *Make default for New task* (on the
-//! default pipeline *Default for New task* with a check, which does nothing more), a separator and *Archive* with how
-//! many tasks use the pipeline. A pipeline that was never published cannot be copied or made the default, and its rows
-//! say so.
+//! The ⋯ in a pipeline's head (`Pipeline menu` `x6ZrKL` in `Pipelines · v2` P11 `nrTt0`): *Rename*, which makes the
+//! title editable in place, *Duplicate*, which opens New pipeline filled from this one, *Make default for New task* (on
+//! the default pipeline *Default for New task* with a check, which does nothing more), a separator and *Archive* with
+//! how many tasks use the pipeline. A pipeline that was never published cannot be copied or made the default, and its
+//! rows say so.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, ctx::FutureAction},
+  app::ctx::{Ctx, FutureAction},
   components::Column,
   core::Signal,
   node::dimension::Dimension,

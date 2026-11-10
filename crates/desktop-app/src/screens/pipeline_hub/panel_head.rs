@@ -1,5 +1,5 @@
-//! The head of the chosen pipeline's panel (`Head` in `Pipelines · v2` P1 `s7LMyQ`, its ⋯ in P11 `nrTt0`): what it is and
-//! its version over its name, and at its end the ⋯ menu ([`menu`]). *Rename* makes the name editable in place
+//! The head of the chosen pipeline's panel (`Head` in `Pipelines · v2` P1 `s7LMyQ`, its ⋯ in P11 `nrTt0`): what it is
+//! and its version over its name, and at its end the ⋯ menu ([`menu`]). *Rename* makes the name editable in place
 //! ([`rename`]); *Archive* asks the hub for the confirmation it hosts, which outlives this panel; *Make default for New
 //! task* stores the pipeline as the project's default and says why when it could not.
 

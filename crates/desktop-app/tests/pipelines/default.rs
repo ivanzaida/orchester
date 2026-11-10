@@ -1,6 +1,6 @@
-//! The project's default pipeline (ORC-106): made from the Pipelines hub's panel `…` menu (PV2-12), shown with a *Default*
-//! tag on its row and chip in its panel, stored with the project and chosen at first in New task; and *Duplicate*, which
-//! opens New pipeline copying it.
+//! The project's default pipeline (ORC-106): made from the Pipelines hub's panel `…` menu (PV2-12), shown with a
+//! *Default* tag on its row and chip in its panel, stored with the project and chosen at first in New task; and
+//! *Duplicate*, which opens New pipeline copying it.
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore};
 

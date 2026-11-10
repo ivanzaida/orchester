@@ -1,5 +1,5 @@
-//! The ⋯ in the Pipelines hub's panel head (`Pipelines · v2` P11 `nrTt0`) and the Archived tab (PV2-12): Rename in place,
-//! Archive with its confirmation, and Restore. Duplicate and Make default are in `tests/pipelines/default.rs`.
+//! The ⋯ in the Pipelines hub's panel head (`Pipelines · v2` P11 `nrTt0`) and the Archived tab (PV2-12): Rename in
+//! place, Archive with its confirmation, and Restore. Duplicate and Make default are in `tests/pipelines/default.rs`.
 //! `cargo test -p orchester-app --test agents pipeline_hub_menu`.
 
 use orchester_app::routes::PipelinesFilter;

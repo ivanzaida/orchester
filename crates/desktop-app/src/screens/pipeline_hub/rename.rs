@@ -1,7 +1,7 @@
-//! The pipeline's name edited in place (P11 `nrTt0`: *Rename* makes the title editable): the title's text becomes a field
-//! in the same 16/600, in a `border_focus` ring (`danger` once the name was refused), with the reason under it. Enter
-//! saves, Esc and leaving the field keep the name the pipeline had. A name another pipeline has is refused with the
-//! reason and the field stays open.
+//! The pipeline's name edited in place (P11 `nrTt0`: *Rename* makes the title editable): the title's text becomes a
+//! field in the same 16/600, in a `border_focus` ring (`danger` once the name was refused), with the reason under it.
+//! Enter saves, Esc and leaving the field keep the name the pipeline had. A name another pipeline has is refused with
+//! the reason and the field stays open.
 
 use lurq::{
   app::{
