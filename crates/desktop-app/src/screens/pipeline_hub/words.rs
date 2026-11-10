@@ -7,7 +7,10 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{resource::ResourceKind, time::Timestamp};
 use orchester_workspace::readiness::ReadinessStanding;
 
-use super::{model::Entry, ready::undecided_words};
+use super::{
+  model::Entry,
+  undecided::{Said, undecided_words},
+};
 use crate::{
   screens::{
     local_hub::words::{archived_at, missing},
@@ -15,12 +18,6 @@ use crate::{
   },
   ui::message::message_text,
 };
-
-/// What a row says and the color it says it in.
-pub(super) struct Said {
-  pub text: Arc<str>,
-  pub color: PaletteColor,
-}
 
 /// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), that a draft is
 /// not published yet, or the steps and tasks.
@@ -60,7 +57,7 @@ pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
       [only] => missing(ctx, ResourceKind::Pipeline, only),
       many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
     }),
-    ReadinessStanding::Undecided(why) => Some(undecided_words(ctx, why)),
+    ReadinessStanding::Undecided(why) => Some(undecided_words(ctx, why, &entry.undecided)),
   }
 }
 

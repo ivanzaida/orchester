@@ -30,7 +30,9 @@
       "profileNotPublished": "{{number}} {{step}} runs a profile that is not published yet",
       "toolNotPublished": "{{number}} {{step}} runs a tool that is not published yet",
       "toolNotRunnable": "{{number}} {{step}} runs {{tool}}, which can't run as a step yet",
-      "stepsNotReady": "{{count}} steps not ready"
+      "stepsNotReady": "{{count}} steps not ready",
+      "connectionGone": "{{name}} has no connection",
+      "connectionGoneMany": "{{name}} and {{count}} more have no connection"
     },
     "chip": {
       "ready": "Ready",
@@ -166,7 +168,13 @@
       "profilesAndTools": "Profiles and tools",
       "allReady": "{{names}} · ready",
       "none": "No step runs a profile or tool yet",
-      "connectionGone": "A profile its steps run has no connection"
+      "connectionGone": "Its connection is gone",
+      "titleDraft": "Ready? · this draft",
+      "draft": "Draft",
+      "noSteps": "No steps yet",
+      "notPublished": "Not published yet",
+      "addStep": "Add step →",
+      "editSteps": "Edit steps →"
     }
   }
 }
