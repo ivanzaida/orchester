@@ -1,6 +1,6 @@
 # PV2-09 · Pipeline settings, Ready? and Needs you
 
-- **Status:** todo (PV2-04 merged; waits for a slot and its hot files)
+- **Status:** todo — scope: *Ready?*, *Needs you*, the head chips and a seed scenario with a draft (the settings rows moved to PV2-10); starts after PV2-12 merges (shared panel files)
 - **Kind:** UI
 - **Depends on:** PV2-04
 - **Branch:** —

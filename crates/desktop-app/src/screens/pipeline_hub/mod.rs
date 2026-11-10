@@ -4,6 +4,12 @@
 //! tab and the chosen pipeline are the route's ([`PipelinesView`]). A team project keeps the page it has
 //! ([`super::pipelines`]).
 //!
+//! The panel's head holds the ⋯ menu ([`panel_head`], [`menu`]): *Rename* in place ([`rename`]), *Duplicate*, *Make
+//! default for New task* and *Archive*, whose confirmation the hub hosts so that it outlives the panel; an archived
+//! pipeline's panel has *Restore* ([`archived`]). The default pipeline is tagged in its row and in the panel's chips.
+//! *Rename* and *Make default* keep the edit the panel holds; *Duplicate* and *Archive* leave the panel, so they ask
+//! first while it has changes ([`leave`]).
+//!
 //! What the panel's body holds is [`steps`]: today the way into the editor the pipeline has; the flow, the settings and
 //! the Save bar are built on it.
 //!
@@ -12,14 +18,18 @@
 //! profiles, tools or connections and a run's start or end; never on a timer. A read that failed shows its failure
 //! ([`states`]), no counts and *New pipeline* unavailable; the first read shows bones ([`bones`]).
 
+mod archived;
 mod bar;
 mod bones;
 mod edit;
 mod flow;
 mod leave;
 mod list;
+mod menu;
 mod model;
 mod panel;
+mod panel_head;
+mod rename;
 mod row;
 mod save;
 mod settings;
@@ -43,21 +53,25 @@ use orchester_core::{
   id::{ProjectId, ResourceId},
   time::Timestamp,
 };
-use orchester_workspace::{messages::Message, pipelines::hub::PipelineHub};
+use orchester_workspace::messages::Message;
 
 use self::{
-  leave::{Unsaved, UnsavedSignal},
+  leave::{Hosted, Unsaved, UnsavedSignal},
   model::{Entry, Listing},
   states::Retry,
 };
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   project::ShownProject,
-  queries::{self, Again, Session, hub as hub_query},
+  queries::{self, Again, Session, hub as hub_query, hub::PipelineHubRead},
   routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
   screens::{
     hub::agents,
-    local_hub::{head, leave::Leave},
+    local_hub::{
+      archive::{Asking, Target},
+      head,
+      leave::Leave,
+    },
   },
   theme::HubSpacing,
   ui::{
@@ -98,6 +112,10 @@ struct PipelineHubScreen {
   asking: Signal<bool>,
   /// Holds every other departure (Back, a tab, the sidebar) while a panel's changes are not saved.
   guard: LeaveGuard,
+  /// The pipeline whose archive confirmation shows over the page, which outlives the pipeline's panel.
+  archiving: Asking,
+  /// The pipeline the person pressed *Archive* on while its changes are not saved: it waits for their answer.
+  archive_waits: Signal<Option<Target>>,
 }
 
 impl Component for PipelineHubScreen {
@@ -114,6 +132,8 @@ impl Component for PipelineHubScreen {
       leaving: ctx.signal(None),
       asking: ctx.signal(false),
       guard: Navigation::of(ctx).guard(move || edits.get_untracked().0.is_some()),
+      archiving: Asking::new(ctx),
+      archive_waits: ctx.signal(None),
     };
     this.follow_question(ctx);
     this
@@ -126,7 +146,8 @@ impl Component for PipelineHubScreen {
     let unreadable = failed.is_some();
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(Listing::of);
+    let listing = hub.map(|read| Listing::of(&read.hub));
+    let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
@@ -141,7 +162,8 @@ impl Component for PipelineHubScreen {
           ctx,
           &project,
           (listing, view),
-          (selected.as_ref(), &leave, (self.unsaved.clone(), reading)),
+          (selected.as_ref(), &leave, reading),
+          (default, self.hosted()),
         )
       }
       (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
@@ -155,10 +177,11 @@ impl Component for PipelineHubScreen {
       leave::question(
         ctx,
         (&self.leaving, &self.asking),
-        (listing, &self.unsaved),
+        (listing, &self.hosted()),
         (&navigation, &self.guard),
       )
     });
+    let over: Vec<Element> = leaving.into_iter().chain(self.archiving.question(ctx)).collect();
     agents::frame(
       ctx,
       agents::Frame {
@@ -170,7 +193,7 @@ impl Component for PipelineHubScreen {
         tabs: tabs(id, listing.as_ref(), selected.as_ref().map(|entry| entry.id), &leave),
         notices: Vec::new(),
         body,
-        over: leaving.into_iter().collect(),
+        over,
       },
     )
   }
@@ -192,7 +215,13 @@ impl PipelineHubScreen {
         asking.set(attempt.is_some());
       }
     });
-    let (leaving, guard) = (self.leaving.clone(), self.guard.clone());
+    let asking = self.asking.clone();
+    ctx.watch(&self.archive_waits, move |target| {
+      if asking.get_untracked() != target.is_some() {
+        asking.set(target.is_some());
+      }
+    });
+    let (leaving, waits, guard) = (self.leaving.clone(), self.archive_waits.clone(), self.guard.clone());
     ctx.watch(&self.asking, move |open| {
       if *open {
         return;
@@ -200,16 +229,29 @@ impl PipelineHubScreen {
       if leaving.get_untracked().is_some() {
         leaving.set(None);
       }
+      if waits.get_untracked().is_some() {
+        waits.set(None);
+      }
       if guard.attempt().get_untracked().is_some() {
         guard.keep_editing();
       }
     });
   }
 
+  /// What the panel is given of what the screen hosts: where the list hears of its changes and the confirmations that
+  /// outlive it.
+  fn hosted(&self) -> Hosted {
+    Hosted {
+      unsaved: self.unsaved.clone(),
+      archiving: self.archiving.clone(),
+      archive_waits: self.archive_waits.clone(),
+    }
+  }
+
   /// The pipelines as the project's database has them, from the session's cache: the last answer at once, read again
   /// behind it on each visit, when a pipeline, a profile, a tool or a connection changed and when a run changes state
   /// (`queries::changes`); and on *Try again*.
-  fn read(&self, ctx: &mut Ctx, project: &ShownProject) -> FutureState<PipelineHub, Message> {
+  fn read(&self, ctx: &mut Ctx, project: &ShownProject) -> FutureState<PipelineHubRead, Message> {
     let session = Session::of(ctx);
     let query = ctx.query(hub_query::pipeline_hub(session, project.open.repo_root.clone()));
     self.again.follow(self.retry.get(), &query);
@@ -232,7 +274,8 @@ fn hub_body(
   ctx: &mut Ctx,
   project: &ShownProject,
   (listing, view): (&Listing, PipelinesView),
-  (selected, leave, (unsaved, reading)): (Option<&Entry>, &Leave, (UnsavedSignal, bool)),
+  (selected, leave, reading): (Option<&Entry>, &Leave, bool),
+  (default, hosted): (Option<ResourceId>, Hosted),
 ) -> Element {
   let id = project.open.project.id();
   let Some(entry) = selected else {
@@ -244,8 +287,9 @@ fn hub_body(
     filter: view.filter,
     selected: Some(entry.id),
     leave,
-    unsaved: unsaved.get(),
+    unsaved: hosted.unsaved.get(),
     now,
+    default,
   };
   let list = list::list(ctx, listing, &shown);
   let panel = panel::panel(
@@ -254,7 +298,8 @@ fn hub_body(
       project: project.clone(),
       entry: entry.clone(),
       assignables: listing.assignables().clone(),
-      unsaved,
+      default: default == Some(entry.id),
+      hosted,
     },
   );
   agents::master_detail("pipeline-hub", reading, (list, panel))

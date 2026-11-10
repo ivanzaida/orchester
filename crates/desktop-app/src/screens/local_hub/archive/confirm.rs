@@ -10,7 +10,10 @@
 //! Opening the confirmation is anyone's, automation's included: it changes nothing. Confirming it is a person's alone,
 //! as every other change that stops work is.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -25,6 +28,7 @@ use orchester_core::{id::ProjectId, resource::ResourceKind};
 use orchester_workspace::{
   local_archive::{self, Archivable},
   messages::Message,
+  pipelines::task_use::{TaskUse, tasks_using},
   readiness::archive_blocks_profiles,
   used_by::{self, RunLine, UsedByError},
 };
@@ -74,7 +78,7 @@ pub(in crate::screens) fn question(ctx: &mut Ctx, props: Props) -> Element {
 
 /// What uses the resource, as the project's database answered.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Used(UsedBy, Vec<RunLine>);
+struct Used(UsedBy, Vec<RunLine>, Option<Vec<TaskUse>>);
 impl DevtoolsInspectable for Used {}
 
 struct Confirmation {
@@ -167,8 +171,9 @@ impl Component for Confirmation {
 
 impl Confirmation {
   /// What uses the resource.
-  fn read(&self, ctx: &mut Ctx, props: &Props) -> Option<Result<(UsedBy, Vec<RunLine>), ReadFailed>> {
+  fn read(&self, ctx: &mut Ctx, props: &Props) -> Option<Result<Used, ReadFailed>> {
     let services = Services::of(ctx);
+    let kind = props.kind;
     let state = ctx
       .future(
         (props.root.clone(), props.what, self.retry.get()),
@@ -186,24 +191,25 @@ impl Confirmation {
               .map_err(|error: UsedByError| ReadFailed {
                 not_reached: error.is_not_reached(),
               })?;
-            Ok(Used(used, lines))
+            let tasks = tasks_of(&root, what, kind).await?;
+            Ok(Used(used, lines, tasks))
           }
         },
       )
       .state()
       .get();
     match (&state.data, &state.error) {
-      (Some(used), _) if !state.is_pending() => Some(Ok((used.0.clone(), used.1.clone()))),
+      (Some(used), _) if !state.is_pending() => Some(Ok(used.clone())),
       (_, Some(failed)) if !state.is_pending() => Some(Err(*failed)),
       _ => None,
     }
   }
 
   fn confirmation(&self, ctx: &mut Ctx, props: &Props) -> Element {
-    let (read, lines) = match self.read(ctx, props) {
-      Some(Ok((used, lines))) => (Some(Ok(used)), lines),
-      Some(Err(failed)) => (Some(Err(failed)), Vec::new()),
-      None => (None, Vec::new()),
+    let (read, lines, tasks) = match self.read(ctx, props) {
+      Some(Ok(Used(used, lines, tasks))) => (Some(Ok(used)), lines, tasks),
+      Some(Err(failed)) => (Some(Err(failed)), Vec::new(), None),
+      None => (None, Vec::new(), None),
     };
     let archiving = self.archive.state().get();
     let (action, person) = (self.archive.clone(), self.person.clone());
@@ -227,6 +233,7 @@ impl Confirmation {
       State {
         read,
         lines,
+        tasks,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
         stopped: archiving.data.clone().flatten().filter(|_| !archiving.is_pending()),
@@ -235,4 +242,16 @@ impl Confirmation {
       (&self.open, &self.retry, confirm),
     )
   }
+}
+
+/// The tasks that name the pipeline `what` is, which are what archiving it leaves unable to start a run; `None` for any
+/// other kind, which nothing but a task could name.
+async fn tasks_of(root: &Path, what: Archivable, kind: ResourceKind) -> Result<Option<Vec<TaskUse>>, ReadFailed> {
+  let (ResourceKind::Pipeline, Archivable::Resource(id)) = (kind, what) else {
+    return Ok(None);
+  };
+  tasks_using(root, id)
+    .await
+    .map(Some)
+    .map_err(|_| ReadFailed { not_reached: false })
 }

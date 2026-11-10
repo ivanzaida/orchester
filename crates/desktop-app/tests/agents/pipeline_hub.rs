@@ -64,7 +64,7 @@ pub(super) fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>,
   id
 }
 
-fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) {
+pub(super) fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) {
   let details = (0..tasks)
     .map(|number| TaskDetails {
       title: Name::new(&format!("Task {number}")).expect("name"),

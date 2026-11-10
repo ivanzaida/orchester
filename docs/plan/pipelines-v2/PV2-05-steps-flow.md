@@ -1,10 +1,10 @@
 # PV2-05 · Steps drawn as the flow they run in
 
-- **Status:** in progress
+- **Status:** done (2026-11-10; review round 2 PASS, design verification round 2 PASS; merged `1b2aa8df7`)
 - **Kind:** UI
 - **Depends on:** PV2-04
-- **Branch:** `claude/pv2-05-steps-flow`
-- **Tokens:** —
+- **Branch:** `claude/pv2-05-steps-flow` (`adf08ae19` … `c985b8281`)
+- **Tokens:** 77.6M across implementation (2 rounds + a merge), 2 reviews and 2 design verifications (output 258k)
 
 ## Goal
 

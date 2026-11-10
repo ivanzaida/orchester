@@ -6,7 +6,8 @@
 //! The panel edits the pipeline in place ([`super::edit`]): every change to it and its steps is held until *Save*,
 //! which stores it and publishes it as the next version ([`super::save`]); *Cancel* puts back what is stored. The panel
 //! is keyed by its pipeline, so an edit never carries over to another one; the hub asks before it goes
-//! ([`super::leave`]).
+//! ([`super::leave`]). The head with its ⋯ menu is [`super::panel_head`]; an archived pipeline's panel is
+//! [`super::archived`], which has no Save bar.
 
 use std::sync::Arc;
 
@@ -28,20 +29,19 @@ use orchester_workspace::{
 };
 
 use super::{
+  archived,
   bar::{self, Said},
   edit::{Edit, Holding},
-  leave::{Unsaved, UnsavedSignal, clear_unsaved, mark_unsaved},
+  leave::{Hosted, Unsaved, UnsavedSignal, clear_unsaved, mark_unsaved},
   model::Entry,
-  save::{self, Ask, Followed, Kept, Pending, Save},
+  panel_head::{self, Props as HeadProps},
+  save::{self, Ask, Asked, Followed, Kept, Pending, Save},
   settings::{self, Settings},
   steps, words,
 };
 use crate::{
   project::ShownProject,
-  screens::{
-    local_hub::save_bar::Save as SaveState,
-    team_hub::panel::{body, head_named},
-  },
+  screens::{local_hub::save_bar::Save as SaveState, team_hub::panel::body},
   theme::{ExtraSpacing, HubText},
   ui::{
     chip::{BadgeTone, badge},
@@ -55,19 +55,43 @@ pub(super) struct Props {
   pub entry: Entry,
   /// What steps can run, which the flow of an edit is drawn with.
   pub assignables: Arc<Assignables>,
-  /// What the list says of edits that are not saved, which the panel keeps.
-  pub unsaved: UnsavedSignal,
+  /// Whether New task offers this pipeline first.
+  pub default: bool,
+  /// What the screen hosts for the panel: the list's word of unsaved changes, and the archive confirmation.
+  pub hosted: Hosted,
 }
 
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    (&self.project, &self.entry, &self.assignables) == (&other.project, &other.entry, &other.assignables)
+    (
+      &self.project,
+      &self.entry,
+      &self.assignables,
+      self.default,
+      &self.hosted,
+    ) == (
+      &other.project,
+      &other.entry,
+      &other.assignables,
+      other.default,
+      &other.hosted,
+    )
   }
 }
 impl DevtoolsInspectable for Props {}
 
-/// The panel of the pipeline `props.entry`, keyed by it.
+/// The panel of the pipeline `props.entry`, keyed by it; an archived pipeline's panel has no edit to hold.
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
+  if props.entry.archived.is_some() {
+    return archived::panel(
+      ctx,
+      archived::Props {
+        project: props.project,
+        entry: props.entry,
+        now: Timestamp::now(),
+      },
+    );
+  }
   ctx.mount_keyed::<PipelinePanel>(&format!("pipeline-hub-panel-{}", props.entry.id), props)
 }
 
@@ -106,7 +130,7 @@ impl Component for PipelinePanel {
       pending: ctx.signal(None),
       kept: ctx.signal(None),
       stored: ctx.create_ref(props.entry.body.clone()),
-      unsaved: props.unsaved,
+      unsaved: props.hosted.unsaved,
       id,
     };
     save::follow(
@@ -130,24 +154,18 @@ impl Component for PipelinePanel {
       project,
       entry,
       assignables,
-      ..
+      default,
+      hosted,
     } = ctx.props::<Props>().clone();
-    let now = Timestamp::now();
-    let head = head_named(
-      &entry.name,
-      (
-        ctx.t("pipeline_hub.panel.where").to_string(),
-        Some(words::head_version(ctx, now, &entry)),
-      ),
-      None,
-    );
-    let mut body = body()
-      .spacing(ExtraSpacing::Inset.role())
-      .child(head)
-      .child(chips(ctx, &entry));
-    let (Some(stored), Some(listed)) = (entry.body.clone(), entry.flow.clone()) else {
-      return frame(&entry, body, Vec::new(), None);
-    };
+    // `panel` leaves the pipelines that have no steps to hold, the archived ones, to their own panel.
+    let stored = entry
+      .body
+      .clone()
+      .expect("a pipeline that is not archived has its steps");
+    let listed = entry
+      .flow
+      .clone()
+      .expect("a pipeline that is not archived has its flow");
     self.stored.set(Some(stored.clone()));
     self.settle(&stored);
     let edit = Edit::new(&self.holding, stored);
@@ -168,7 +186,21 @@ impl Component for PipelinePanel {
     let asked = self.pending.get();
     let saving = self.save.state().get().is_pending();
     let locked = saving || asked.is_some();
-    body = body
+    let head = panel_head::head(
+      ctx,
+      HeadProps {
+        project: project.clone(),
+        entry: entry.clone(),
+        default,
+        now: Timestamp::now(),
+        hosted,
+        holds_changes: changed,
+      },
+    );
+    let body = body()
+      .spacing(ExtraSpacing::Inset.role())
+      .child(head)
+      .child(chips(ctx, &entry, default))
       .with_children(steps::parts(ctx, &project, &entry, &read))
       .child(settings::section(
         ctx,
@@ -180,17 +212,7 @@ impl Component for PipelinePanel {
           locked,
         },
       ));
-    let refused = self.refusal();
-    let kept = self.kept.get();
-    let mut pinned: Vec<Element> = Vec::new();
-    if let Some(asked) = &asked {
-      pinned.push(save::question(ctx, asked, (&self.save, &self.pending)));
-    }
-    match (&refused, &kept) {
-      (Some(reason), _) => pinned.push(bar::notice(ctx, &entry, &Said::Refused(reason))),
-      (None, Some(why)) => pinned.push(bar::notice(ctx, &entry, &Said::Kept(why))),
-      (None, None) => {}
-    }
+    let pinned = self.pinned(ctx, &entry, asked.as_ref());
     let bar = bar::bar(
       ctx,
       (
@@ -216,6 +238,20 @@ impl PipelinePanel {
     if holding.saved_over.as_ref().is_some_and(|over| over != stored) {
       self.holding.set(Holding::default());
     }
+  }
+
+  /// What is pinned over the bar: the question a save asks, and what the last save said.
+  fn pinned(&self, ctx: &mut Ctx, entry: &Entry, asked: Option<&Asked>) -> Vec<Element> {
+    let mut pinned: Vec<Element> = Vec::new();
+    if let Some(asked) = asked {
+      pinned.push(save::question(ctx, asked, (&self.save, &self.pending)));
+    }
+    match (self.refusal(), self.kept.get()) {
+      (Some(reason), _) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
+      (None, Some(why)) => pinned.push(bar::notice(ctx, entry, &Said::Kept(&why))),
+      (None, None) => {}
+    }
+    pinned
   }
 
   /// A change makes what the last save said stale: the draft it kept, and the question it asked.
@@ -328,7 +364,7 @@ fn frame(entry: &Entry, body: Column, pinned: Vec<Element>, bar: Option<Element>
 }
 
 /// The chips under the head, then *used by 13 tasks* at their end; it ends in an ellipsis when it runs out of room.
-fn chips(ctx: &Ctx, entry: &Entry) -> Row {
+pub(super) fn chips(ctx: &Ctx, entry: &Entry, default: bool) -> Row {
   let used = entry.archived.is_none().then(|| words::used_by(ctx, entry));
   Row::new()
     .id("pipeline-hub-chips")
@@ -336,7 +372,7 @@ fn chips(ctx: &Ctx, entry: &Entry) -> Row {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .with_children(
-      standing(ctx, entry)
+      standing(ctx, entry, default)
         .into_iter()
         .enumerate()
         .map(|(index, (words, tone))| badge(&format!("pipeline-hub-chip-{index}"), tone, &words)),
@@ -353,8 +389,8 @@ fn chips(ctx: &Ctx, entry: &Entry) -> Row {
 }
 
 /// How the pipeline stands, as the chips: its version, then that it is ready or what it lacks; for a draft that it is
-/// one, then its first problem when it has one; for an archived one that it is.
-fn standing(ctx: &Ctx, entry: &Entry) -> Vec<(Arc<str>, BadgeTone)> {
+/// one, then its first problem when it has one; for an archived one that it is; last, that New task offers it first.
+fn standing(ctx: &Ctx, entry: &Entry, default: bool) -> Vec<(Arc<str>, BadgeTone)> {
   let version = entry
     .number
     .map(|number| (Arc::from(number.to_string()), BadgeTone::Neutral));
@@ -371,5 +407,6 @@ fn standing(ctx: &Ctx, entry: &Entry) -> Vec<(Arc<str>, BadgeTone)> {
       None => (ctx.t("pipeline_hub.chip.ready"), BadgeTone::Success),
     }]
   };
-  version.into_iter().chain(rest).collect()
+  let default = default.then(|| (ctx.t("pipeline_hub.chip.default"), BadgeTone::Info));
+  version.into_iter().chain(rest).chain(default).collect()
 }

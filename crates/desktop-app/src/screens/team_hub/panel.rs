@@ -100,6 +100,18 @@ pub(in crate::screens) fn head_named(
   (kind, version): (String, Option<String>),
   end: Option<Element>,
 ) -> Row {
+  let title = Text::new(name)
+    .id("team-hub-panel-title")
+    .variant(HubText::PanelTitle.role());
+  head_titled(title.into(), (kind, version), end)
+}
+
+/// [`head_named`] with `title` in the place of the name's text, for a head that lets the name be edited in place.
+pub(in crate::screens) fn head_titled(
+  title: Element,
+  (kind, version): (String, Option<String>),
+  end: Option<Element>,
+) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -126,11 +138,7 @@ pub(in crate::screens) fn head_named(
         .min_width(Dimension::Px(0.0))
         .spacing(SpacingSize::Xs)
         .child(where_)
-        .child(
-          Text::new(name)
-            .id("team-hub-panel-title")
-            .variant(HubText::PanelTitle.role()),
-        ),
+        .child(title),
     )
     .with_children(end)
 }

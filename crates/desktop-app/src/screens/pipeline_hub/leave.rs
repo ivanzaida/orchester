@@ -2,8 +2,9 @@
 //! dialog over the page, as the Agents hub does ([`crate::screens::local_hub::leave`]). Every way out of the panel asks
 //! the same question: the hub's own presses through that module's `Leave` (another pipeline, a filter, *New pipeline*),
 //! and every other departure through the navigation's [`LeaveGuard`] (Back and Forward, a tab switched or closed, the
-//! sidebar, a link, *Edit steps*, a card). *Keep editing* leaves everything as it is; *Discard changes* drops the edit
-//! and goes where the person pressed.
+//! sidebar, a link, *Edit steps*, a card, the ⋯ menu's *Duplicate*). The ⋯ menu's *Archive* asks it too, before the
+//! archive confirmation: an archived pipeline has no panel to keep the edit in. *Keep editing* leaves everything as it
+//! is; *Discard changes* drops the edit and goes where the person pressed.
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -16,6 +17,7 @@ use super::model::Listing;
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   routes::Route,
+  screens::local_hub::archive::{Asking, Target},
   ui::{
     button::{ActionButton, ButtonKind},
     dialog::{Dialog, Tone},
@@ -29,6 +31,35 @@ pub(super) struct Unsaved(pub Option<ResourceId>);
 impl DevtoolsInspectable for Unsaved {}
 
 pub(super) type UnsavedSignal = Signal<Unsaved>;
+
+/// What the screen hosts for the panel of the chosen pipeline: where the list hears of its changes, and the
+/// confirmations that outlive the panel.
+#[derive(Clone)]
+pub(super) struct Hosted {
+  pub unsaved: UnsavedSignal,
+  /// The archive confirmation over the page.
+  pub archiving: Asking,
+  /// The pipeline whose *Archive* waits for the question about its unsaved changes.
+  pub archive_waits: Signal<Option<Target>>,
+}
+
+impl PartialEq for Hosted {
+  fn eq(&self, other: &Self) -> bool {
+    self.archiving == other.archiving
+  }
+}
+
+impl Hosted {
+  /// *Archive* on `target`: the archive confirmation, after the question about the panel's changes while it `holds`
+  /// some.
+  pub(super) fn archive(&self, target: Target, holds: bool) {
+    if holds {
+      self.archive_waits.set(Some(target));
+    } else {
+      self.archiving.ask(target);
+    }
+  }
+}
 
 /// Tells the list that `pipeline` has changes that are not saved (`changed`); set only when it differs so the page is
 /// not read again for nothing.
@@ -51,16 +82,17 @@ pub(super) fn clear_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId) {
 pub(super) fn question(
   ctx: &Ctx,
   (leaving, open): (&Signal<Option<Route>>, &Signal<bool>),
-  (listing, unsaved): (&Listing, &UnsavedSignal),
+  (listing, hosted): (&Listing, &Hosted),
   (navigation, guard): (&Navigation, &LeaveGuard),
 ) -> Option<Element> {
   let route = leaving.get();
-  if route.is_none() && !guard.requested() {
+  let archiving = hosted.archive_waits.get();
+  if route.is_none() && archiving.is_none() && !guard.requested() {
     return None;
   }
-  let name = listing.name_of(unsaved.get().0?)?.to_owned();
+  let name = listing.name_of(hosted.unsaved.get().0?)?.to_owned();
   let discard = {
-    let (unsaved, open, navigation, guard) = (unsaved.clone(), open.clone(), navigation.clone(), guard.clone());
+    let (hosted, open, navigation, guard) = (hosted.clone(), open.clone(), navigation.clone(), guard.clone());
     ActionButton::new(
       "pipeline-hub-leave-discard",
       ButtonKind::Danger,
@@ -68,10 +100,11 @@ pub(super) fn question(
     )
     .icon(Icon::X)
     .on_click(move || {
-      unsaved.set(Unsaved(None));
-      match &route {
-        Some(route) => navigation.go(route.clone()),
-        None => guard.leave(&navigation),
+      hosted.unsaved.set(Unsaved(None));
+      match (&route, &archiving) {
+        (Some(route), _) => navigation.go(route.clone()),
+        (None, Some(target)) => hosted.archiving.ask(target.clone()),
+        (None, None) => guard.leave(&navigation),
       }
       open.set(false);
     })
