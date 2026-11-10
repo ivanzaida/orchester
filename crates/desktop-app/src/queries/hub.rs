@@ -61,7 +61,7 @@ pub async fn local_hub(session: Session, root: PathBuf) -> Result<LocalHub, Mess
 }
 
 /// The project's instructions with the profiles and pipelines they can name, and the published version of each that
-/// has a draft, which a local instruction's panel compares with.
+/// has a draft, which a local instruction's panel starts from and compares with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstructionsRead {
   pub data: ProjectInstructions,
@@ -81,7 +81,7 @@ pub async fn instructions(session: Session, root: PathBuf) -> Result<Instruction
 }
 
 /// What the Skills editor checks a write against (the project's skills, the scopes they can take), and the published
-/// version of each skill that has a draft, which a local skill's panel compares with.
+/// version of each skill that has a draft, which a local skill's panel starts from and compares with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillsRead {
   pub data: EditorData,

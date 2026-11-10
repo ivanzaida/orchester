@@ -350,4 +350,6 @@ pub enum ProjectMigration {
   ProfileGiven,
   /// The outbox of the team's configuration dropped.
   TeamOutbox,
+  /// A local project's drafts of its published profiles, instructions, skills and tools dropped.
+  LocalDrafts,
 }

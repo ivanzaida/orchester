@@ -1,8 +1,8 @@
-//! The editor of a local skill's panel: the skill's name, description and SKILL.md over the skill as it is stored, and
-//! the pinned *Save* and *Cancel*. Typing changes only the fields. *Save* publishes what they hold as the next version
-//! at once ([`editor::save_and_publish_in`]: the name at once, as every save of a skill does), under the person's
-//! consent when an MCP client presses it; *Cancel* puts the stored skill back in the fields, and throws away a draft
-//! stored before. A refusal says why in place and keeps what was typed.
+//! The editor of a local skill's panel: the skill's name, description and SKILL.md over its published version, and the
+//! pinned *Save* and *Cancel*. Typing changes only the fields. *Save* publishes what they hold as the next version at
+//! once ([`editor::save_and_publish_in`]: the name at once, as every save of a skill does), over a draft stored
+//! meanwhile too, under the person's consent when an MCP client presses it; *Cancel* puts the stored name and the
+//! published version back in the fields. A refusal says why in place and keeps what was typed.
 
 use lurq::{
   app::{
@@ -15,16 +15,14 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::Skill;
-use orchester_store::StoreError;
 use orchester_workspace::{
   activity::skill_operations,
   agents::data::VersionState,
   background,
   local_archive::Archivable,
-  messages::{self, Message},
-  removal,
+  messages::Message,
   skills::{
-    data::{ProjectSkills, SkillEntry},
+    data::SkillEntry,
     editor::{self, EditorData, SkillForm, publish_reason},
   },
   tasks::outside::Outside,
@@ -84,10 +82,10 @@ const BODY: Area = Area {
 pub(super) struct EditorProps {
   pub props: Props,
   pub data: EditorData,
-  /// The skill as it was read when the panel opened: its draft's content when it has one, which the fields start from.
-  /// The editor keeps what it stores itself from then on.
+  /// The skill as it was read when the panel opened, with a draft stored before if it has one: what a save is checked
+  /// against. The editor keeps what it stores itself from then on.
   pub entry: SkillEntry,
-  /// Its latest published version, what the fields are compared with.
+  /// Its latest published version, which the fields start from and are compared with; its draft while it has only one.
   pub published: Skill,
 }
 impl PartialEq for EditorProps {
@@ -128,8 +126,6 @@ pub(super) struct Editor {
   body: Signal<String>,
   stored: Signal<Stored>,
   save: FutureAction<Saving, Stored, Message>,
-  /// Throws away the draft stored before, and reads what is stored then.
-  cancel: FutureAction<SkillEntry, Stored, Message>,
   /// Publishing reaches agents: an MCP client's input publishes only under the person's consent.
   gate: Option<InputGate>,
   unsaved: UnsavedSignal,
@@ -146,27 +142,23 @@ impl Component for Editor {
       published,
       ..
     } = ctx.props::<EditorProps>().clone();
-    let stored = ctx.signal(Stored {
-      entry: entry.clone(),
-      published,
-    });
     let save = save(ctx, &props.project.open);
-    let cancel = cancel(ctx, &props.project.open);
-    for done in [save.state(), cancel.state()] {
-      let stored = stored.clone();
-      ctx.watch(&done, move |state| {
-        if let Some(now) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-          stored.set(now.clone());
-        }
-      });
-    }
+    let saved = ctx.signal(Stored {
+      entry: entry.clone(),
+      published: published.clone(),
+    });
+    let stored = saved.clone();
+    ctx.watch(&save.state(), move |state| {
+      if let Some(now) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
+        saved.set(now.clone());
+      }
+    });
     Self {
       name: ctx.signal(entry.name.to_string()),
-      description: ctx.signal(entry.body.description().to_owned()),
-      body: ctx.signal(entry.body.body().to_owned()),
+      description: ctx.signal(published.description().to_owned()),
+      body: ctx.signal(published.body().to_owned()),
       stored,
       save,
-      cancel,
       gate: ctx.use_context::<InputGate>(),
       unsaved: props.unsaved.clone(),
       what: props.entry.what,
@@ -181,20 +173,17 @@ impl Component for Editor {
       name: &name,
       description: &self.description.get(),
       body: &self.body.get(),
-      files: stored.entry.body.files().to_vec(),
-      scope: stored.entry.body.scope().clone(),
+      files: stored.published.files().to_vec(),
+      scope: stored.published.scope().clone(),
     }
     .skill(&data, Some(stored.entry.id));
-    let changed = stored.entry.state.has_draft()
-      || parsed.as_ref().map_or(true, |body| {
-        *body != stored.published || *stored.entry.name != *name.trim()
-      });
-    let (saving, cancelling) = (self.save.state().get(), self.cancel.state().get());
-    let refused = saving
-      .error
-      .clone()
-      .filter(|_| saving.is_rejected())
-      .or_else(|| cancelling.error.clone().filter(|_| cancelling.is_rejected()));
+    let differs = parsed.as_ref().map_or(true, |body| {
+      *body != stored.published || *stored.entry.name != *name.trim()
+    });
+    // A skill that has only a draft so far has it to publish: what it holds is not out yet.
+    let changed = differs || stored.entry.state.published().is_none();
+    let saving = self.save.state().get();
+    let refused = saving.error.clone().filter(|_| saving.is_rejected());
     mark_unsaved(
       &self.unsaved,
       self.what,
@@ -216,19 +205,19 @@ impl Component for Editor {
         PREFIX,
         &ctx.t("local_hub.skill.title"),
         Vec::new(),
-        self.rows(ctx, (&stored.entry, entry), parsed.as_ref().err()),
+        self.rows(ctx, (&stored.published, entry), parsed.as_ref().err()),
       ))
       .with_children(
         refused
           .map(|error| -> Element { field_error(&format!("{PREFIX}-refused"), &message_text(ctx, &error)).into() }),
       )
       .with_children(readiness(ctx, entry));
-    let busy = saving.is_pending() || cancelling.is_pending();
+    let busy = saving.is_pending();
     let save = self.save_now(ctx, (&stored, &name, &parsed), (changed, busy));
     let bar = save_bar::bar(
       ctx,
       PREFIX,
-      (save, (changed && !busy).then(|| self.cancel_now(&stored))),
+      (save, (differs && !busy).then(|| self.cancel_now(&stored))),
       save_bar::makes(ctx, stored.entry.state.published()),
     );
     frame(entry.what, body, Some(bar))
@@ -244,7 +233,7 @@ impl Drop for Editor {
 impl Editor {
   /// *Name*, *Used by* (the profiles that give it to their agents: shown, not chosen), *Description*, *SKILL.md* and
   /// *Files*.
-  fn rows(&self, ctx: &mut Ctx, (stored, entry): (&SkillEntry, &Entry), error: Option<&Message>) -> Vec<Row> {
+  fn rows(&self, ctx: &mut Ctx, (published, entry): (&Skill, &Entry), error: Option<&Message>) -> Vec<Row> {
     let mut name = FieldInput::new(
       format!("{PREFIX}-name-input"),
       ctx.t("local_hub.skill.name"),
@@ -262,8 +251,8 @@ impl Editor {
       }
       None => Sub::quiet(ctx.t("local_hub.skill.nameSub")),
     };
-    let files = std::iter::once("SKILL.md".to_owned())
-      .chain(stored.body.files().iter().map(|file| file.path.as_str().to_owned()));
+    let files =
+      std::iter::once("SKILL.md".to_owned()).chain(published.files().iter().map(|file| file.path.as_str().to_owned()));
     vec![
       rows::row(
         &format!("{PREFIX}-name"),
@@ -325,18 +314,15 @@ impl Editor {
     }))
   }
 
-  /// *Cancel*: the fields take the stored name and the published version at once; a draft stored before is thrown
-  /// away too.
+  /// *Cancel*: the fields take the stored name and the published version at once. A draft stored meanwhile is left as
+  /// it is: the panel never showed it.
   fn cancel_now(&self, stored: &Stored) -> Press {
     let fields = (self.name.clone(), self.description.clone(), self.body.clone());
-    let (cancel, stored) = (self.cancel.clone(), stored.clone());
+    let stored = stored.clone();
     Press::run(move || {
       fields.0.set(stored.entry.name.to_string());
       fields.1.set(stored.published.description().to_owned());
       fields.2.set(stored.published.body().to_owned());
-      if stored.entry.state.has_draft() {
-        cancel.run(stored.entry.clone());
-      }
     })
   }
 }
@@ -378,31 +364,6 @@ fn save(ctx: &mut Ctx, project: &OpenProject) -> FutureAction<Saving, Stored, Me
         .await?;
       services.changes.record(project.project.id(), Outside::Skills);
       Ok(Stored::published(saved))
-    }
-  })
-}
-
-/// Throws away the draft `entry` holds, while it still is the stored one, and reads the skill then.
-fn cancel(ctx: &mut Ctx, project: &OpenProject) -> FutureAction<SkillEntry, Stored, Message> {
-  let (project, services) = (project.clone(), Services::of(ctx));
-  ctx.future_action(move |entry: SkillEntry| {
-    let (project, services) = (project.clone(), services.clone());
-    async move {
-      let root = project.repo_root.clone();
-      let stored = background::run(move || {
-        removal::discard_in::<Skill>(&root, entry.id, &entry.body)?;
-        ProjectSkills::load_in(&root)
-          .and_then(|listed| {
-            listed
-              .entry(entry.id)
-              .cloned()
-              .ok_or(StoreError::ResourceNotFound(entry.id))
-          })
-          .map_err(|error| messages::store_error(&error))
-      })
-      .await??;
-      services.changes.record(project.project.id(), Outside::Skills);
-      Ok(Stored::published(stored))
     }
   })
 }

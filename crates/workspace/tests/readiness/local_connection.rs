@@ -90,7 +90,10 @@ fn readiness_local_connection_using_one_publishes_the_next_version_on_it() {
   let sheet = read.profile(builder).expect("a sheet");
   assert_eq!(sheet.current, Some(claude_2));
   assert_eq!(sheet.connection.as_deref(), Some("claude-2"));
-  assert!(!sheet.draft, "nothing is left unpublished");
+  assert!(
+    fixture.db().draft::<AgentProfile>(builder).expect("read").is_none(),
+    "nothing is left unpublished"
+  );
   let found = read
     .readiness()
     .resources()
@@ -170,7 +173,10 @@ fn readiness_local_connection_moving_from_a_connection_that_is_there_to_another_
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
   assert_eq!(sheet.current, Some(home), "still on the connection it had");
-  assert!(!sheet.draft, "the refused save left no draft behind");
+  assert!(
+    fixture.db().draft::<AgentProfile>(builder).expect("read").is_none(),
+    "the refused save left no draft behind"
+  );
 }
 
 #[test]
@@ -201,6 +207,9 @@ fn readiness_local_connection_a_publication_that_is_refused_leaves_no_draft_behi
   assert_eq!(refused.key, "appMcp.errors.connectionRunsNoAgents");
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
-  assert!(!sheet.draft, "the draft the save made was discarded");
+  assert!(
+    fixture.db().draft::<AgentProfile>(builder).expect("read").is_none(),
+    "the draft the save made was discarded"
+  );
   assert_eq!(sheet.current, Some(first.id()), "nothing changed");
 }
