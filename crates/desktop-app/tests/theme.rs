@@ -31,6 +31,8 @@ mod orchestrator;
 mod pipelines;
 #[path = "theme/projects.rs"]
 mod projects;
+#[path = "theme/runs_on_picker.rs"]
+mod runs_on_picker;
 #[path = "theme/side_question.rs"]
 mod side_question;
 #[path = "theme/skills.rs"]

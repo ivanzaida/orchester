@@ -22,6 +22,8 @@ mod markdown_code_scroll;
 mod markdown_link_layout;
 mod mention_links;
 mod prompt_input;
+mod runs_on_picker;
+mod runs_on_picker_areas;
 mod slash_argument;
 mod textarea_focus;
 mod todo_list;

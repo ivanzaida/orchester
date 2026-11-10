@@ -3,6 +3,23 @@
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "tabCount": "{{label}} {{count}}",
+    "runsOnPicker": {
+      "search": "Search models…",
+      "clear": "Clear search",
+      "noModels": "This connection lists no models",
+      "noMatch": "No model matches",
+      "use": "5h {{used}}%",
+      "effort": {
+        "label": "Reasoning effort",
+        "default": "Default",
+        "minimal": "Min",
+        "low": "Low",
+        "medium": "Med",
+        "high": "High",
+        "xhigh": "X-high",
+        "max": "Max"
+      }
+    },
     "chat": {
       "copyMessage": "Copy message",
       "codeLanguageFile": "{{language}} · {{file}}",
