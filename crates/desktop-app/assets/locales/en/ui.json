@@ -8,7 +8,13 @@
       "clear": "Clear search",
       "noModels": "This connection lists no models",
       "noMatch": "No model matches",
+      "badModelName": "A name has no spaces, max 200 characters.",
+      "searchOrType": "Search or type a model…",
+      "useTyped": "Use {{model}}",
+      "typeEffort": "Type an effort…",
+      "typeEffortHint": "The provider lists no efforts. Empty is Default.",
       "use": "5h {{used}}%",
+      "useUnread": "5h not read",
       "effort": {
         "label": "Reasoning effort",
         "default": "Default",

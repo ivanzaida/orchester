@@ -29,8 +29,14 @@ fn connection(id: &str, name: &str, mark: Mark, models: Vec<Model>) -> Connectio
     caption: "Claude Code · Max plan".into(),
     tip: format!("Claude Code · {name}").into(),
     five_hour: Some(41),
+    use_unread: false,
     limit: false,
     unavailable: None,
+    detail: None,
+    tip_note: None,
+    typed_model: false,
+    typed_effort: false,
+    notice: None,
     models,
   }
 }

@@ -24,6 +24,7 @@ mod mention_links;
 mod prompt_input;
 mod runs_on_picker;
 mod runs_on_picker_areas;
+mod runs_on_picker_own;
 mod slash_argument;
 mod textarea_focus;
 mod todo_list;
