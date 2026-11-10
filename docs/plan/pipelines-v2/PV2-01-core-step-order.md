@@ -1,10 +1,10 @@
 # PV2-01 · Core: move steps and run them in parallel
 
-- **Status:** todo
+- **Status:** done (2026-11-10, review PASS; merged `310ce4f39`)
 - **Kind:** core (no UI)
 - **Depends on:** —
-- **Branch:** —
-- **Tokens:** —
+- **Branch:** `claude/pv2-01-step-order` (`01a9c523f`)
+- **Tokens:** 4.84M — implementation 2.86M (output 50k), review 1.98M (output 21k)
 
 ## Goal
 
