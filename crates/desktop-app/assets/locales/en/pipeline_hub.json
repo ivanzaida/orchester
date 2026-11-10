@@ -83,6 +83,7 @@
       "usedNone": "not used yet",
       "usedOne": "used by 1 task",
       "used": "used by {{count}} tasks",
+      "viewing": "Viewing {{version}} · published {{date}}",
       "steps": "Steps",
       "openSteps": "Edit steps"
     },
@@ -254,6 +255,35 @@
       "notPublished": "Not published yet",
       "addStep": "Add step →",
       "editSteps": "Edit steps →"
+    },
+    "versions": {
+      "button": "Versions",
+      "title": "Versions",
+      "current": "current",
+      "view": "View",
+      "foot": "Runs keep the version they started on.",
+      "reading": "Reading the versions…",
+      "none": "Nothing is published yet.",
+      "failed": "The versions could not be read. {{reason}}",
+      "metaNoTask": "Published {{date}} · not used yet",
+      "metaOneTask": "Published {{date}} · used by 1 task",
+      "metaTasks": "Published {{date}} · used by {{count}} tasks",
+      "metaNoRun": "Published {{date}} · no runs on it",
+      "metaOneRun": "Published {{date}} · 1 run on it",
+      "metaRuns": "Published {{date}} · {{count}} runs on it",
+      "viewing": "Viewing {{version}} · read-only",
+      "restore": "Restore {{version}}",
+      "restoreSame": "The panel already holds {{version}}.",
+      "restoreHint": "Restore puts {{version}} in the editor as unsaved changes · Save makes {{next}}",
+      "restoreHintOnly": "Restore puts {{version}} in the editor as unsaved changes",
+      "keptChanges": "Your unsaved changes are kept",
+      "backChanges": "Back to your changes",
+      "backLatest": "Back to {{version}}",
+      "backDraft": "Back to the draft",
+      "noDescription": "No description",
+      "noSources": "None",
+      "replaceTitle": "Replace your changes with {{version}}?",
+      "replaceWhat": "What you changed and have not saved is dropped, and {{version}} takes its place. Save then makes it the next version."
     }
   }
 }
