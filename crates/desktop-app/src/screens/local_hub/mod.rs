@@ -20,14 +20,14 @@ mod archived;
 mod editing;
 pub(in crate::screens) mod head;
 mod instruction;
-mod leave;
+pub(in crate::screens) mod leave;
 mod list;
 pub(in crate::screens) mod mcp;
 mod model;
 mod panel;
 pub(in crate::screens) mod profile;
 mod row;
-mod save_bar;
+pub(in crate::screens) mod save_bar;
 mod skill;
 pub(in crate::screens) mod words;
 

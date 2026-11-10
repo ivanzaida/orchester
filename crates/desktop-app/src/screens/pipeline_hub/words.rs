@@ -23,8 +23,20 @@ pub(super) struct Said {
 }
 
 /// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), that a draft is
-/// not published yet, or the steps and tasks.
-pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
+/// not published yet, or the steps and tasks; with `unsaved` (its panel holds changes) that they are not saved, in
+/// front of the rest.
+pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: bool) -> Said {
+  let said = state(ctx, now, entry);
+  if !unsaved {
+    return said;
+  }
+  Said {
+    text: ctx.t_args("pipeline_hub.line.unsaved", [("rest", said.text.to_string())]),
+    color: PaletteColor::Warning,
+  }
+}
+
+fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
   if let Some(at) = entry.archived {
     return Said {
       text: archived_at(ctx, now, at),

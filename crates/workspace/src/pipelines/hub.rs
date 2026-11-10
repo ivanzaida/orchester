@@ -131,8 +131,8 @@ impl PipelineHub {
   }
 
   /// What the steps of the pipelines can run, which the flow of an edit is drawn with.
-  pub fn assignables(&self) -> &Assignables {
-    &self.assignables
+  pub fn assignables(&self) -> Arc<Assignables> {
+    Arc::clone(&self.assignables)
   }
 }
 

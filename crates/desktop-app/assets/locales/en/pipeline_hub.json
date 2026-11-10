@@ -23,7 +23,8 @@
       "oneStepTasks": "1 step · used by {{tasks}} tasks",
       "stepsNoTask": "{{steps}} steps · not used yet",
       "stepsOneTask": "{{steps}} steps · used by 1 task",
-      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks"
+      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks",
+      "unsaved": "Unsaved changes · {{rest}}"
     },
     "chip": {
       "ready": "Ready",
@@ -40,6 +41,44 @@
       "used": "used by {{count}} tasks",
       "steps": "Steps",
       "openSteps": "Edit steps"
+    },
+    "bar": {
+      "makesFirst": "Save makes {{version}} · New task offers it once every step is ready",
+      "widenTitle": "Allow these changes to the pipeline?",
+      "allow": "Allow and save",
+      "keep": "Keep editing",
+      "refusedTitle": "Couldn't save {{name}}: {{reason}}",
+      "refusedBody": "Nothing was saved and what you changed stays here. Save tries again.",
+      "keptTitle": "Saved as a draft of {{name}}, not published"
+    },
+    "leave": {
+      "title": "Discard the unsaved changes to {{name}}?",
+      "what": "Opening anything else now puts {{name}} back as it was saved. Save it first to keep the changes.",
+      "keep": "Keep editing",
+      "discard": "Discard changes"
+    },
+    "settings": {
+      "title": "Pipeline",
+      "description": "Description",
+      "descriptionNone": "What this pipeline is for",
+      "starts": "Starts",
+      "onTaskStart": "On task start",
+      "failure": "When a step fails",
+      "failureSub": "A step that stops without a result restarts once, then waits for your decision.",
+      "failureValue": "Restart once, then ask",
+      "sources": "Sources for every step",
+      "addSource": "Add",
+      "delivers": "A run delivers",
+      "deliverOption": {
+        "changes": "Repository changes",
+        "changesSub": "Its commits are merged into the base branch.",
+        "report": "A report",
+        "reportSub": "Its last step's report is the result; no repository changes are expected.",
+        "outside": "Work outside the repository",
+        "outsideSub": "Done through MCP tools, e.g. a design or tickets: its report and the tool calls that changed something.",
+        "changesOrReport": "Changes or a report",
+        "changesOrReportSub": "Its commits are merged when it makes any; otherwise its report is the result."
+      }
     },
     "flow": {
       "onStart": "ON TASK START",

@@ -12,12 +12,18 @@
 //! profiles, tools or connections and a run's start or end; never on a timer. A read that failed shows its failure
 //! ([`states`]), no counts and *New pipeline* unavailable; the first read shows bones ([`bones`]).
 
+mod bar;
 mod bones;
+mod edit;
 mod flow;
+mod leave;
 mod list;
 mod model;
 mod panel;
 mod row;
+mod save;
+mod settings;
+mod sources;
 mod states;
 mod steps;
 mod words;
@@ -40,15 +46,19 @@ use orchester_core::{
 use orchester_workspace::{messages::Message, pipelines::hub::PipelineHub};
 
 use self::{
+  leave::{Unsaved, UnsavedSignal},
   model::{Entry, Listing},
   states::Retry,
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, guard::LeaveGuard},
   project::ShownProject,
   queries::{self, Again, Session, hub as hub_query},
   routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
-  screens::{hub::agents, local_hub::head},
+  screens::{
+    hub::agents,
+    local_hub::{head, leave::Leave},
+  },
   theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -80,17 +90,33 @@ struct PipelineHubScreen {
   again: Again,
   /// Why the pipelines couldn't be read, kept while they are read again.
   failure: LastFailure,
+  /// The pipeline whose panel has changes that are not saved, which its row says.
+  unsaved: UnsavedSignal,
+  /// Where the person pressed a row while changes are not saved: it waits for their answer ([`leave`]).
+  leaving: Signal<Option<Route>>,
+  /// The question that asks it.
+  asking: Signal<bool>,
+  /// Holds every other departure (Back, a tab, the sidebar) while a panel's changes are not saved.
+  guard: LeaveGuard,
 }
 
 impl Component for PipelineHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let unsaved: UnsavedSignal = ctx.signal(Unsaved::default());
+    let edits = unsaved.clone();
+    let this = Self {
       retry: ctx.signal(0),
       again: Again::default(),
       failure: LastFailure::default(),
-    }
+      unsaved,
+      leaving: ctx.signal(None),
+      asking: ctx.signal(false),
+      guard: Navigation::of(ctx).guard(move || edits.get_untracked().0.is_some()),
+    };
+    this.follow_question(ctx);
+    this
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -102,6 +128,7 @@ impl Component for PipelineHubScreen {
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
     let listing = hub.map(Listing::of);
     let navigation = Navigation::of(ctx);
+    let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
     let body = match (failed, listing.as_ref()) {
@@ -114,7 +141,7 @@ impl Component for PipelineHubScreen {
           ctx,
           &project,
           (listing, view),
-          (selected.as_ref(), &navigation, reading),
+          (selected.as_ref(), &leave, (self.unsaved.clone(), reading)),
         )
       }
       (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
@@ -122,8 +149,16 @@ impl Component for PipelineHubScreen {
     let new = if unreadable {
       states::new_unavailable(ctx)
     } else {
-      new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &navigation, id)
+      new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &leave, id)
     };
+    let leaving = listing.as_ref().and_then(|listing| {
+      leave::question(
+        ctx,
+        (&self.leaving, &self.asking),
+        (listing, &self.unsaved),
+        (&navigation, &self.guard),
+      )
+    });
     agents::frame(
       ctx,
       agents::Frame {
@@ -132,21 +167,45 @@ impl Component for PipelineHubScreen {
         current: view.filter.name(),
         status: head::status(ctx),
         new: Some(new),
-        tabs: tabs(
-          id,
-          listing.as_ref(),
-          selected.as_ref().map(|entry| entry.id),
-          &navigation,
-        ),
+        tabs: tabs(id, listing.as_ref(), selected.as_ref().map(|entry| entry.id), &leave),
         notices: Vec::new(),
         body,
-        over: Vec::new(),
+        over: leaving.into_iter().collect(),
       },
     )
   }
 }
 
 impl PipelineHubScreen {
+  /// The question follows what waits for an answer, and what waits follows the question closing; each writes only when
+  /// it differs, or they would write each other for ever.
+  fn follow_question(&self, ctx: &mut Ctx) {
+    let asking = self.asking.clone();
+    ctx.watch(&self.leaving, move |route| {
+      if asking.get_untracked() != route.is_some() {
+        asking.set(route.is_some());
+      }
+    });
+    let asking = self.asking.clone();
+    ctx.watch(&self.guard.attempt(), move |attempt| {
+      if asking.get_untracked() != attempt.is_some() {
+        asking.set(attempt.is_some());
+      }
+    });
+    let (leaving, guard) = (self.leaving.clone(), self.guard.clone());
+    ctx.watch(&self.asking, move |open| {
+      if *open {
+        return;
+      }
+      if leaving.get_untracked().is_some() {
+        leaving.set(None);
+      }
+      if guard.attempt().get_untracked().is_some() {
+        guard.keep_editing();
+      }
+    });
+  }
+
   /// The pipelines as the project's database has them, from the session's cache: the last answer at once, read again
   /// behind it on each visit, when a pipeline, a profile, a tool or a connection changed and when a run changes state
   /// (`queries::changes`); and on *Try again*.
@@ -173,36 +232,45 @@ fn hub_body(
   ctx: &mut Ctx,
   project: &ShownProject,
   (listing, view): (&Listing, PipelinesView),
-  (selected, navigation, reading): (Option<&Entry>, &Navigation, bool),
+  (selected, leave, (unsaved, reading)): (Option<&Entry>, &Leave, (UnsavedSignal, bool)),
 ) -> Element {
   let id = project.open.project.id();
   let Some(entry) = selected else {
-    return empty(ctx, view.filter, navigation, id);
+    return empty(ctx, view.filter, leave, id);
   };
   let now = Timestamp::now();
   let shown = list::Shown {
     project: id,
     filter: view.filter,
     selected: Some(entry.id),
-    navigation,
+    leave,
+    unsaved: unsaved.get(),
     now,
   };
   let list = list::list(ctx, listing, &shown);
-  let panel = panel::panel(ctx, project, entry, now);
+  let panel = panel::panel(
+    ctx,
+    panel::Props {
+      project: project.clone(),
+      entry: entry.clone(),
+      assignables: listing.assignables().clone(),
+      unsaved,
+    },
+  );
   agents::master_detail("pipeline-hub", reading, (list, panel))
 }
 
 /// *New pipeline*, which opens the page that makes one: the head's is the primary button, the empty body's the
 /// secondary.
-fn new_button(ctx: &Ctx, (id, kind): (&str, ButtonKind), navigation: &Navigation, project: ProjectId) -> Element {
+fn new_button(ctx: &Ctx, (id, kind): (&str, ButtonKind), leave: &Leave, project: ProjectId) -> Element {
   ActionButton::new(id.to_owned(), kind, ctx.t("pipeline_hub.new"))
     .icon(Icon::Plus)
-    .opens(navigation.to(Route::Project(project, ProjectPage::NewPipeline)))
+    .press(leave.press(Route::Project(project, ProjectPage::NewPipeline)))
     .into()
 }
 
 /// The open tab holds nothing: what a pipeline is, with *New pipeline* when the project has none.
-fn empty(ctx: &Ctx, filter: PipelinesFilter, navigation: &Navigation, project: ProjectId) -> Element {
+fn empty(ctx: &Ctx, filter: PipelinesFilter, leave: &Leave, project: ProjectId) -> Element {
   let (glyph, title, detail) = match filter {
     PipelinesFilter::All => (
       Icon::Workflow,
@@ -228,12 +296,7 @@ fn empty(ctx: &Ctx, filter: PipelinesFilter, navigation: &Navigation, project: P
         .id("pipeline-hub-empty-action-gap")
         .height(Dimension::Px(HubSpacing::ActionGap.value()))
         .into(),
-      new_button(
-        ctx,
-        ("pipeline-hub-empty-new", ButtonKind::Secondary),
-        navigation,
-        project,
-      ),
+      new_button(ctx, ("pipeline-hub-empty-new", ButtonKind::Secondary), leave, project),
     ]
   });
   agents::empty(
@@ -250,19 +313,19 @@ fn tabs(
   project: ProjectId,
   listing: Option<&Listing>,
   selected: Option<ResourceId>,
-  navigation: &Navigation,
+  leave: &Leave,
 ) -> Vec<agents::Tab> {
   PipelinesFilter::ALL
     .into_iter()
     .map(|choice| {
       let item = selected.filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
       let route = Route::Project(project, ProjectPage::pipelines(PipelinesView::new(choice, item)));
-      let navigation = navigation.clone();
+      let leave = leave.clone();
       agents::Tab {
         name: choice.name(),
         label: label_key(choice),
         count: listing.map(|listing| listing.count(choice)),
-        open: Arc::new(move || navigation.go(route.clone())),
+        open: Arc::new(move || leave.go(route.clone())),
       }
     })
     .collect()

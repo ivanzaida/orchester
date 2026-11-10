@@ -1,9 +1,10 @@
 //! The panel's body (`Steps` `uSoll` in `Pipelines · v2` P1): the section's head over the steps drawn as the flow they
-//! run in ([`super::flow`]). The pipeline's settings and *Ready?* (PV2-09) and the Save bar (PV2-10) are built on this.
+//! run in ([`super::flow`]), drawn from the edit the panel holds ([`super::edit`]) while there is one. *Ready?* is
+//! PV2-09's.
 //!
-//! The head's *Add step* needs the page to keep an unsaved edit (PV2-10), and a card's drag handle and ⋯ are PV2-06's,
-//! so none is drawn yet: *Edit steps* opens the editor the pipeline has today, through its own route, where steps are
-//! added, moved and removed until then.
+//! The page keeps the edit now (PV2-10), but the head's *Add step* is PV2-07's and a card's drag handle and ⋯ are
+//! PV2-06's, so none is drawn yet: *Edit steps* opens the editor the pipeline has today, through its own route (the
+//! leave guard asks first while the edit has changes), where steps are added, moved and removed until then.
 
 use lurq::{
   app::ctx::Ctx,
@@ -11,6 +12,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
+use orchester_workspace::pipelines::flow::FlowRead;
 
 use super::{flow, model::Entry};
 use crate::{
@@ -20,11 +22,12 @@ use crate::{
   theme::{ExtraSpacing, HubText},
 };
 
-/// What the body shows of `entry`: the head and the flow; nothing for an archived pipeline, which has no steps to open.
-pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry) -> Vec<Element> {
-  let (Some(read), None) = (&entry.flow, entry.archived) else {
+/// What the body shows of `entry`: the head and the flow `read`, which is the edit's while the panel holds one;
+/// nothing for an archived pipeline, which has no steps to open.
+pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry, read: &FlowRead) -> Vec<Element> {
+  if entry.archived.is_some() {
     return Vec::new();
-  };
+  }
   let navigation = Navigation::of(ctx);
   vec![
     head(ctx, project, &navigation, entry),

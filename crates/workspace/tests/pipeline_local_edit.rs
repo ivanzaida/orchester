@@ -31,40 +31,48 @@ struct Fixture {
 
 /// A project with a published tool and a pipeline of one step that runs it, stored as its draft only.
 fn fixture() -> Fixture {
-  let folder = tempfile::tempdir().unwrap();
-  std::fs::create_dir(folder.path().join(".git")).unwrap();
+  let folder = tempfile::tempdir().expect("the fixture is valid");
+  std::fs::create_dir(folder.path().join(".git")).expect("the fixture is valid");
   let mut db = ProjectDb::create(
     folder.path(),
     Project::new(
       ProjectId::generate(),
-      ProjectKey::new("TEST").unwrap(),
-      Name::new("Test").unwrap(),
+      ProjectKey::new("TEST").expect("the fixture is valid"),
+      Name::new("Test").expect("the fixture is valid"),
     ),
   )
-  .unwrap();
+  .expect("the fixture is valid");
   let now = Timestamp::now();
   let tool = Tool::new(
     "",
-    ToolAction::Command(CommandAction::new(CommandProgram::new("cargo").unwrap(), vec![])),
+    ToolAction::Command(CommandAction::new(
+      CommandProgram::new("cargo").expect("the fixture is valid"),
+      vec![],
+    )),
     None,
   )
-  .unwrap();
+  .expect("the fixture is valid");
   let tool_id = db
-    .create_resource(Slug::new("tool").unwrap(), Name::new("Tool").unwrap(), &tool, now)
-    .unwrap()
+    .create_resource(
+      Slug::new("tool").expect("the fixture is valid"),
+      Name::new("Tool").expect("the fixture is valid"),
+      &tool,
+      now,
+    )
+    .expect("the fixture is valid")
     .id();
-  db.publish_draft::<Tool>(tool_id, now).unwrap();
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).unwrap());
-  let step = edit.add_step(Name::new("Check").unwrap(), None);
+  db.publish_draft::<Tool>(tool_id, now).expect("the fixture is valid");
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("the fixture is valid"));
+  let step = edit.add_step(Name::new("Check").expect("the fixture is valid"), None);
   edit.update(&step, |step| step.kind = StepKind::Tool { tool: Some(tool_id) });
   let pipeline = db
     .create_resource(
-      Slug::new("pipeline").unwrap(),
-      Name::new("Pipeline").unwrap(),
-      &edit.validate().unwrap(),
+      Slug::new("pipeline").expect("the fixture is valid"),
+      Name::new("Pipeline").expect("the fixture is valid"),
+      &edit.validate().expect("the fixture is valid"),
       now,
     )
-    .unwrap()
+    .expect("the fixture is valid")
     .id();
   Fixture {
     folder,
@@ -76,7 +84,7 @@ fn fixture() -> Fixture {
 
 impl Fixture {
   fn opened(&self) -> OpenedPipeline {
-    OpenedPipeline::load(&self.db, self.pipeline).unwrap()
+    OpenedPipeline::load(&self.db, self.pipeline).expect("the fixture is valid")
   }
 
   /// Saves what a page that opened the pipeline and made `change` holds.
@@ -87,7 +95,10 @@ impl Fixture {
   }
 
   fn versions(&self) -> Vec<Pipeline> {
-    let mut versions = self.db.versions::<Pipeline>(self.pipeline).unwrap();
+    let mut versions = self
+      .db
+      .versions::<Pipeline>(self.pipeline)
+      .expect("the fixture is valid");
     versions.sort_by_key(|version| version.number());
     versions.iter().map(|version| version.body().clone()).collect()
   }
@@ -196,7 +207,14 @@ fn save_of_an_edit_started_before_the_pipeline_changed_is_refused() {
     .unwrap();
 
   let allowed = [first_version()];
-  let refused = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &allowed).unwrap_err();
+  let refused = save(
+    pipeline.folder.path(),
+    pipeline.pipeline,
+    held.base(),
+    held.edit(),
+    &allowed,
+  )
+  .unwrap_err();
   assert_eq!(refused.key, "errors.draftChanged");
   assert_eq!(pipeline.versions().len(), 1);
 }
@@ -209,7 +227,14 @@ fn a_stored_draft_is_where_an_edit_starts_and_save_publishes_it() {
   assert!(!held.is_changed(), "opening a stored draft is not a change");
 
   let allowed = [first_version()];
-  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &allowed).unwrap();
+  let saved = save(
+    pipeline.folder.path(),
+    pipeline.pipeline,
+    held.base(),
+    held.edit(),
+    &allowed,
+  )
+  .unwrap();
   assert_eq!(saved, Saved::Published(VersionNumber::FIRST));
 }
 

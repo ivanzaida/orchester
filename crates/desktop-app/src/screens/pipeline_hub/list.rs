@@ -17,13 +17,13 @@ use orchester_core::{
 use orchester_workspace::readiness::Group;
 
 use super::{
+  leave::Unsaved,
   model::{Entry, GROUPS, Listing},
   row::row,
 };
 use crate::{
-  navigation::Navigation,
   routes::PipelinesFilter,
-  screens::{hub::section::section, team_hub::list::LIST_WIDTH},
+  screens::{hub::section::section, local_hub::leave::Leave, team_hub::list::LIST_WIDTH},
   theme::ExtraSpacing,
 };
 
@@ -32,7 +32,10 @@ pub(super) struct Shown<'a> {
   pub project: ProjectId,
   pub filter: PipelinesFilter,
   pub selected: Option<ResourceId>,
-  pub navigation: &'a Navigation,
+  /// Where a press that opens another pipeline goes: after the question while the chosen one has unsaved changes.
+  pub leave: &'a Leave,
+  /// The pipeline whose changes are not saved, which its row says.
+  pub unsaved: Unsaved,
   pub now: Timestamp,
 }
 

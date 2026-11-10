@@ -14,10 +14,7 @@ use crate::{
   routes::{PipelinesView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row},
   theme::IconSize,
-  ui::{
-    icon::{Icon, icon},
-    pressable::Press,
-  },
+  ui::icon::{Icon, icon},
 };
 
 pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
@@ -26,11 +23,11 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     shown.project,
     ProjectPage::pipelines(PipelinesView::new(shown.filter, Some(entry.id))),
   );
-  let said = words::line(ctx, shown.now, entry);
+  let said = words::line(ctx, shown.now, entry, shown.unsaved.0 == Some(entry.id));
   agent_row(AgentRow {
     id: &id,
     chosen: shown.selected == Some(entry.id),
-    open: Press::Open(shown.navigation.to(route)).button(),
+    open: shown.leave.press(route).button(),
     group: entry.group,
     kind: "pipeline".to_owned(),
     mark: icon(Icon::Workflow, IconSize::Lg, mark_color(entry)).into(),

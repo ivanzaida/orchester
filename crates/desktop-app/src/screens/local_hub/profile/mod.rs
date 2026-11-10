@@ -12,7 +12,7 @@
 
 mod choices;
 mod edit;
-mod pick;
+pub(in crate::screens) mod pick;
 mod ready;
 pub(in crate::screens) mod servers;
 mod table;
