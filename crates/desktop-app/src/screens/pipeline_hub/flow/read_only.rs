@@ -78,7 +78,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Vec<Element> {
 fn stage_row(ctx: &Ctx, opens: &Opens<'_>, stage: &Stage) -> Element {
   let sm = SpacingSize::Sm;
   let card = |step: &StepCard, place: Place| {
-    let fix = Fix::of(&step.runs).and_then(|fix| opens.fix(fix).map(|button| (button, fix.words(ctx))));
+    let fix = Fix::of_card(step).and_then(|fix| opens.fix(fix).map(|button| (button, fix.words(ctx))));
     card::step(
       ctx,
       step,

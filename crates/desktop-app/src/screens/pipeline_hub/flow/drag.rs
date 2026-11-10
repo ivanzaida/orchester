@@ -105,7 +105,7 @@ fn ended(drive: &Drive, key: &StepKey) {
     Drop::Before(before) => Move::Before(before),
     Drop::OnCard(target) => Move::Beside(target),
   };
-  drive.apply(key, &change, false);
+  drive.land(key, &change);
 }
 
 /// Esc: sets a lifted card down, which ends its drag without a drop. Whether there was one.
@@ -190,7 +190,7 @@ fn lifted_card(ctx: &Ctx, card: &StepCard, width: f32) -> Column {
     .child(top)
     .child(
       Row::new().padding(Padding::new().left(Dimension::Px(INDENT))).child(
-        Text::new(&words::runs(ctx, &card.runs))
+        Text::new(&words::runs(ctx, card))
           .variant(FlowText::Line.role())
           .nowrap(),
       ),

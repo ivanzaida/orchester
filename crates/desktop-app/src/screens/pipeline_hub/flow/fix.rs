@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::id::ResourceId;
-use orchester_workspace::pipelines::flow::Runs;
+use orchester_workspace::pipelines::flow::{Runs, StepCard};
 
 use crate::routes::{HubFilter, HubView, ProjectPage};
 
@@ -24,6 +24,15 @@ impl Fix {
       Runs::ToolNotPublished { id } | Runs::ToolNotRunnable { id, .. } => Some(Self::Tool(*id)),
       Runs::Profile { .. } | Runs::Tool { .. } | Runs::NoProfile | Runs::NoTool => None,
     }
+  }
+
+  /// What `card` offers to open: the resource it names that is not ready, unless that resource is gone (archived or
+  /// removed), which has no page to open; the card then offers to choose another ([`super::words::choose`]).
+  pub(super) const fn of_card(card: &StepCard) -> Option<Self> {
+    if card.gone {
+      return None;
+    }
+    Self::of(&card.runs)
   }
 
   /// The Agents hub on the resource.

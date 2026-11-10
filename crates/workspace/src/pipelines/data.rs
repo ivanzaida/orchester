@@ -49,6 +49,13 @@ pub struct DraftProfileChoice {
   pub model: ModelId,
 }
 
+/// Display-only draft tool: one with no published version yet. It is never returned by the published-tool lookup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DraftToolChoice {
+  pub id: ResourceId,
+  pub name: Arc<str>,
+}
+
 /// A published tool a step can call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToolChoice {
@@ -68,6 +75,7 @@ pub struct Assignables {
   pub profiles: Vec<ProfileChoice>,
   pub draft_profiles: Vec<DraftProfileChoice>,
   pub tools: Vec<ToolChoice>,
+  pub draft_tools: Vec<DraftToolChoice>,
   /// The project's MCP servers, which say what the profiles' servers run without asking.
   pub mcp_servers: Vec<McpServer>,
   /// How each published profile and tool stands on this computer, when the caller read the project's readiness
@@ -109,6 +117,7 @@ impl Assignables {
       }
     }
     let mut tools = Vec::new();
+    let mut draft_tools = Vec::new();
     for resource in store.resources(ResourceKind::Tool)? {
       if let Some(version) = store.latest_version::<Tool>(resource.id())? {
         let tool = version.body();
@@ -123,12 +132,18 @@ impl Assignables {
           },
           runnable: tool.kind().runnable() && tool.access().is_none(),
         });
+      } else if store.draft::<Tool>(resource.id())?.is_some() {
+        draft_tools.push(DraftToolChoice {
+          id: resource.id(),
+          name: resource.name().as_str().into(),
+        });
       }
     }
     Ok(Self {
       profiles,
       draft_profiles,
       tools,
+      draft_tools,
       mcp_servers: store.mcp_servers()?,
       standings: Vec::new(),
     })
@@ -159,6 +174,15 @@ impl Assignables {
 
   pub fn tool(&self, id: ResourceId) -> Option<&ToolChoice> {
     self.tools.iter().find(|tool| tool.id == id)
+  }
+
+  /// Whether the profile or tool `id` is gone here: neither published nor a draft, so it was archived or removed. A
+  /// step that names it has to run something else.
+  pub fn gone(&self, id: ResourceId) -> bool {
+    self.profile(id).is_none()
+      && self.tool(id).is_none()
+      && !self.draft_profiles.iter().any(|draft| draft.id == id)
+      && !self.draft_tools.iter().any(|draft| draft.id == id)
   }
 
   /// The published profile named `name` (ignoring case), if exactly one has that name.

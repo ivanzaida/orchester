@@ -277,6 +277,25 @@ fn the_deliver_chip_opens_the_pipeline_keeps_the_edit_and_shows_what_a_run_deliv
   });
 }
 
+#[test]
+fn the_head_counts_deliver_as_the_strip_numbers_it() {
+  let mut agents = Agents::new(true);
+  let pipeline = delivering(&mut agents);
+  let last = keys(&agents, pipeline)[2].clone();
+  open_step(&mut agents, pipeline, &last);
+  agents.until("the strip", |s| s.exists("pipeline-hub-step-chip-deliver"));
+  assert_eq!(
+    agents.text("pipeline-hub-step-chip-deliver"),
+    "04 Deliver",
+    "Deliver is numbered after the three steps"
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-step-position"),
+    "step 03 of 4",
+    "the head counts what the strip numbers, Deliver too"
+  );
+}
+
 fn rect_y(agents: &mut Agents, id: &str) -> (f32, f32) {
   let found = agents
     .window

@@ -148,19 +148,40 @@ fn pipeline_reorder_add_and_remove_go_through_the_edit() {
 }
 
 #[test]
-fn pipeline_reorder_duplicate_runs_the_copy_beside_the_step() {
+fn pipeline_reorder_duplicate_runs_the_copy_right_after_the_step() {
   let mut agents = Agents::new(true);
-  let (id, [research, ..]) = flow(&agents, false);
+  let (id, [research, plan, ..]) = flow(&agents, false);
   open(&mut agents, id);
   open_menu(&mut agents, &research);
   agents.click("pipeline-hub-flow-menu-duplicate");
   let copy = key("step-copy");
   agents.until("the copy", |s| s.exists(&card(&copy)));
-  assert!(
-    (y_of(&mut agents, &copy) - y_of(&mut agents, &research)).abs() < 1.0,
-    "side by side"
+  assert_eq!(
+    order(&mut agents, &[plan.clone(), copy.clone(), research.clone()]),
+    [research, copy, plan],
+    "the copy runs after the step, before what ran after it"
   );
-  assert!(agents.exists("pipeline-hub-flow-parallel-1"), "in a group of their own");
+  assert!(!agents.exists("pipeline-hub-flow-parallel-1"), "not beside it");
+  assert!(
+    !agents.exists("pipeline-hub-flow-undrawable"),
+    "the flow still draws as one line"
+  );
+}
+
+#[test]
+fn pipeline_reorder_duplicate_of_a_step_in_a_group_runs_the_copy_after_the_group() {
+  let mut agents = Agents::new(true);
+  let (id, [.., checks, review]) = flow(&agents, false);
+  open(&mut agents, id);
+  open_menu(&mut agents, &checks);
+  agents.click("pipeline-hub-flow-menu-duplicate");
+  let copy = key(&format!("{checks}-copy"));
+  agents.until("the copy", |s| s.exists(&card(&copy)));
+  let below = y_of(&mut agents, &copy);
+  assert!(
+    below > y_of(&mut agents, &checks) + 1.0 && below > y_of(&mut agents, &review) + 1.0,
+    "the copy stands under the whole group"
+  );
   assert!(
     !agents.exists("pipeline-hub-flow-undrawable"),
     "the flow still draws as one line"
@@ -168,7 +189,7 @@ fn pipeline_reorder_duplicate_runs_the_copy_beside_the_step() {
 }
 
 /// Presses the left button on `key`'s handle and moves to the point `to` gives, in steps; the card is lifted.
-fn lift(agents: &mut Agents, key: &StepKey, to: impl FnOnce(&mut Agents) -> (f32, f32)) {
+pub(super) fn lift(agents: &mut Agents, key: &StepKey, to: impl FnOnce(&mut Agents) -> (f32, f32)) {
   hover(agents, &card(key));
   let handle = format!("{}-handle", card(key));
   agents.until("the handle", |s| s.exists(&handle));
@@ -194,13 +215,13 @@ fn lift(agents: &mut Agents, key: &StepKey, to: impl FnOnce(&mut Agents) -> (f32
   }
 }
 
-fn release(agents: &mut Agents) {
+pub(super) fn release(agents: &mut Agents) {
   agents.window.tree.mouse_up(0.0, 0.0, MouseButton::Left);
   agents.window.pass();
 }
 
 /// The point at `share` of `key`'s card from its top, in the middle of it.
-fn on(agents: &mut Agents, key: &StepKey, share: f32) -> (f32, f32) {
+pub(super) fn on(agents: &mut Agents, key: &StepKey, share: f32) -> (f32, f32) {
   let bounds = agents
     .window
     .tree

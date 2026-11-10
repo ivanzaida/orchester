@@ -4,7 +4,12 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, layout::Alignment, node::Element};
+use lurq::{
+  app::ctx::Ctx,
+  components::{Row, Text},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
+};
 use orchester_core::resource::{PipelineEdit, RepositoryAccess, Step, StepKey, StepKind};
 use orchester_workspace::pipelines::{
   fields::{AccessChoice, Executor, RouteChoice},
@@ -26,6 +31,7 @@ use crate::{
     },
     team_hub::rows::{self, Sub},
   },
+  theme::{ControlHeight, HubText},
   ui::toggle::{Toggle, ToggleKind},
 };
 
@@ -41,9 +47,19 @@ pub(super) fn step(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Element {
   .into()
 }
 
+/// *Agent*: the field, and under its box what a choice dropped. Its label stays on the line of the box, so a note under
+/// the box moves nothing beside it.
 fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::Row {
   let label = ctx.t("pipeline_hub.step.agent");
   let choices = choices::choices(ctx, open.assignables, step);
+  let started = open.edit.started_step(&step.key).map(|started| {
+    let cli = match Executor::of(&started) {
+      Executor::Profile(id) => open.assignables.profile(id).and_then(|profile| profile.provider),
+      Executor::Tool(_) | Executor::Unset => None,
+    };
+    (started, cli)
+  });
+  let dropped = agent::dropped_note(ctx, started.as_ref(), step);
   let value = agent::field(
     ctx,
     agent::Props {
@@ -54,13 +70,26 @@ fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::R
       flag: choices.flag,
       choices: choices.items.into(),
       executors: choices.executors.into(),
+      clis: choices.clis.into(),
+      cli: choices.cli,
+      started,
+      dropped,
       name: label.clone(),
       unset: ctx.t("pipeline_hub.agent.choose"),
       locked: open.locked,
       epoch: open.epoch,
     },
   );
-  rows::row("pipeline-hub-step-agent-row", &label, None, value)
+  let id = "pipeline-hub-step-agent-row";
+  let label = Row::new()
+    .height(Dimension::Px(ControlHeight::Md.value()))
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(&label)
+        .id(format!("{id}-label"))
+        .variant(HubText::Status.role()),
+    );
+  rows::keyed(id, label, None, value).align_items(Alignment::Start)
 }
 
 /// *Instructions*: a multi-line box edited in place, with what `{{ }}` does under its label.

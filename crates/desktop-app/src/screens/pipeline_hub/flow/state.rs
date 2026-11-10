@@ -8,7 +8,7 @@ use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
   core::{ElementRect, ElementRef, Signal},
 };
-use orchester_core::resource::{MoveError, StepKey};
+use orchester_core::resource::{MoveError, PipelineEdit, StepKey};
 use orchester_workspace::pipelines::flow::StepCard;
 use parking_lot::Mutex;
 
@@ -51,6 +51,17 @@ pub(super) enum Drop {
 pub(super) struct Refused {
   pub key: Option<StepKey>,
   pub error: MoveError,
+  pub lasts: Lasts,
+}
+
+/// How long a refusal under its card is said.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Lasts {
+  /// While the pointer or the keys are on the card: a move from its menu or the keys, made where the person looks.
+  OnCard,
+  /// Until the next change: a drop, let go over a place away from the card, which would otherwise leave nothing said
+  /// once the pointer is elsewhere.
+  NextChange,
 }
 
 impl DevtoolsInspectable for Refused {}
@@ -82,6 +93,8 @@ pub(super) struct Reorder {
   pub locked: Arc<Mutex<bool>>,
   /// The flow's own element, for where the floating card is drawn.
   pub frame: ElementRef,
+  /// The edit the flow was last drawn from: a refusal that lasts until the next change goes once it differs.
+  drawn: Arc<Mutex<Option<PipelineEdit>>>,
   stages: Arc<Mutex<Vec<Stage>>>,
   anchors: Arc<Mutex<Vec<(StepKey, ElementRef)>>>,
 }
@@ -100,18 +113,47 @@ impl Reorder {
       refocus: Arc::default(),
       locked: Arc::default(),
       frame: ElementRef::default(),
+      drawn: Arc::default(),
       stages: Arc::default(),
       anchors: Arc::default(),
     }
   }
 
-  /// A refusal says why under the card it is about, while the pointer or the keys are on that card: once neither is, it
-  /// goes. One that is not about a card (a step added at the end) stays until the next change.
+  /// A refusal of a move from a card's menu or the keys says why under the card, while the pointer or the keys are on
+  /// that card: once neither is, it goes. A refused drop, and one that is not about a card (a step added at the end),
+  /// stay until the next change.
   pub(super) fn settle_refusal(&self) {
-    let Some(Refused { key: Some(key), .. }) = self.refused.get_untracked() else {
+    let Some(Refused {
+      key: Some(key),
+      lasts: Lasts::OnCard,
+      ..
+    }) = self.refused.get_untracked()
+    else {
       return;
     };
     if !self.hovered.get_untracked().is(&key) && !self.focused.get_untracked().is(&key) {
+      self.refused.set(None);
+    }
+  }
+
+  /// Notes that the flow is drawn from `current`: a refused drop is said until the edit changes in any way, a move,
+  /// *Cancel* or a save, since a refused move changes nothing.
+  pub(super) fn drawn_from(&self, current: &PipelineEdit) {
+    let mut drawn = self.drawn.lock();
+    if drawn.as_ref() == Some(current) {
+      return;
+    }
+    let changed = drawn.is_some();
+    *drawn = Some(current.clone());
+    drop(drawn);
+    let lasting = matches!(
+      self.refused.get_untracked(),
+      Some(Refused {
+        lasts: Lasts::NextChange,
+        ..
+      })
+    );
+    if changed && lasting {
       self.refused.set(None);
     }
   }

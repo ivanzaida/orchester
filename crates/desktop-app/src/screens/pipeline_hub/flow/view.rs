@@ -102,6 +102,7 @@ impl Component for FlowView {
     let navigation = Navigation::of(ctx);
     let reorder = &self.reorder;
     reorder.clear_layout();
+    reorder.drawn_from(&props.current);
     *reorder.locked.lock() = props.locked;
     if props.locked {
       release(reorder);
@@ -421,12 +422,14 @@ impl Draw<'_> {
     {
       notes.push(landing::card_words(text, refused));
     }
-    if let Some(Refused { key: Some(key), error }) = self.drive.reorder.refused.get().as_ref()
+    if let Some(Refused {
+      key: Some(key), error, ..
+    }) = self.drive.reorder.refused.get().as_ref()
       && has(key)
     {
       notes.push(self.refusal(ctx, key, error));
     }
-    if let Some(Refused { key: None, error }) = self.drive.reorder.refused.get().as_ref()
+    if let Some(Refused { key: None, error, .. }) = self.drive.reorder.refused.get().as_ref()
       && last
     {
       let text = ctx.t_args(
@@ -514,7 +517,7 @@ impl Draw<'_> {
           blurred.settle_refusal();
         })
     });
-    let fix = Fix::of(&step.runs).and_then(|fix| self.opens.fix(fix).map(|button| (button, fix.words(ctx))));
+    let fix = Fix::of_card(step).and_then(|fix| self.opens.fix(fix).map(|button| (button, fix.words(ctx))));
     let handle = shown.then(|| drag::handle(ctx, self.drive, step, element));
     let more = (shown && self.drag.is_none()).then(|| menu::more_button(ctx, reorder, step, reorder.more_anchor(&key)));
     card::step(

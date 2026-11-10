@@ -220,47 +220,50 @@ fn item(
 
 /// What an item says under its name, named `id`: why it is not ready in `warning`, else what it runs on, with what
 /// stands after it (a tool's *· its exit code decides the step*) kept whole while the command before it is cut to the
-/// room; `None` when it has nothing to say. `role` is the text's style.
+/// room; a model the step overrides stands after either of them and is cut first, so the CLI and the connection, or
+/// what to do, stay whole and a kept override is never hidden. `None` when it has nothing to say. `role` is the text's
+/// style.
 pub fn second_line(id: String, item: &Item, role: TypographyStyle) -> Option<Element> {
-  if let Some(why) = &item.warning {
-    return Some(
-      Text::new(why)
-        .id(id)
-        .variant(role)
-        .color(PaletteColor::Warning)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .into(),
-    );
-  }
-  if item.runs_on.is_empty() && item.suffix.is_none() {
-    return None;
-  }
-  let runs = (!item.runs_on.is_empty()).then(|| {
-    Text::new(&item.runs_on)
-      .id(format!("{id}-command"))
-      .variant(role)
-      .flex_shrink(1.0)
-      .min_width(Dimension::Px(0.0))
-      .nowrap()
-      .text_overflow(TextOverflow::Elipsis)
-  });
-  let suffix = item.suffix.as_ref().map(|suffix| {
+  // The lowest order gives way first: the model, then what comes before it.
+  let first = match &item.warning {
+    Some(why) => Some(cut(Text::new(why).id(format!("{id}-warning")), role, 1).color(PaletteColor::Warning)),
+    None => (!item.runs_on.is_empty()).then(|| cut(Text::new(&item.runs_on).id(format!("{id}-command")), role, 1)),
+  };
+  let model = item
+    .model
+    .as_ref()
+    .map(|model| cut(Text::new(model).id(format!("{id}-model")), role, 0));
+  let suffix = item.suffix.as_ref().filter(|_| item.warning.is_none()).map(|suffix| {
     Text::new(suffix)
       .id(format!("{id}-after"))
       .variant(role)
       .flex_shrink(0.0)
       .nowrap()
   });
+  if first.is_none() && model.is_none() && suffix.is_none() {
+    return None;
+  }
   Some(
     Line::new()
       .id(id)
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Fine.role())
-      .with_children(runs)
+      .with_children(first)
+      .with_children(model)
       .with_children(suffix)
       .into(),
   )
+}
+
+/// `text` in `role` on one line, cut with an ellipsis when the line has no room, giving way in `order`.
+fn cut(text: Text, role: TypographyStyle, order: i32) -> Text {
+  text
+    .variant(role)
+    .flex_shrink(1.0)
+    .shrink_order(order)
+    .min_width(Dimension::Px(0.0))
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
 }
 
 /// An item's mark, 14: its CLI's maker, or a glyph in `text_secondary`.
