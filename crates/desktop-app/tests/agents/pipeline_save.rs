@@ -183,6 +183,9 @@ fn pipeline_save_a_pipeline_never_published_says_its_first_version_and_asks_a_pe
   });
   assert!(stored(&agents, fresh).1.is_none());
   agents.until("the panel shows v1", |s| s.text("pipeline-hub-chip-0") == "v1");
+  agents.until("it says which version it made", |s| {
+    s.exists("pipeline-hub-bar-notice") && s.text("pipeline-hub-bar-notice") == "Saved as v1 · the next run uses it"
+  });
 }
 
 #[test]

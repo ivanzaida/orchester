@@ -83,13 +83,17 @@
       "keep": "Keep editing",
       "refusedTitle": "Couldn't save {{name}}: {{reason}}",
       "refusedBody": "Nothing was saved and what you changed stays here. Save tries again.",
-      "keptTitle": "Saved as a draft of {{name}}, not published"
+      "keptTitle": "Saved as a draft of {{name}}, not published",
+      "savedTitle": "Saved as {{version}} · the next run uses it"
     },
     "leave": {
       "title": "Discard the unsaved changes to {{name}}?",
-      "what": "Opening anything else now puts {{name}} back as it was saved. Save it first to keep the changes.",
+      "what": "Opening anything else now puts {{name}} back as it was saved. Keep editing and press Save to keep the changes.",
       "keep": "Keep editing",
-      "discard": "Discard changes"
+      "discard": "Discard changes",
+      "savingTitle": "{{name}} is being saved",
+      "savingWhat": "Wait for the save to finish, then press again. Nothing is discarded while it saves.",
+      "wait": "Wait"
     },
     "settings": {
       "title": "Pipeline",

@@ -24,8 +24,9 @@ use crate::{
   },
 };
 
-/// The bar for `entry`: *Save*, *Cancel* (`None` while nothing differs, or a save is under way) and what *Save* makes.
-pub(super) fn bar(ctx: &Ctx, (save, cancel): (Save, Option<Press>), entry: &Entry) -> Element {
+/// The bar for `entry`: *Save*, *Cancel* (`None` while nothing differs, or a save is under way) and what *Save* makes,
+/// after *Unsaved changes ·* while the edit has changes, so it shows where *Save* is pressed.
+pub(super) fn bar(ctx: &Ctx, (save, cancel): (Save, Option<Press>), (entry, changed): (&Entry, bool)) -> Element {
   let hint = match entry.number {
     Some(_) => save_bar::makes(ctx, entry.number),
     None => (
@@ -38,14 +39,25 @@ pub(super) fn bar(ctx: &Ctx, (save, cancel): (Save, Option<Press>), entry: &Entr
       lurq::app::theme::PaletteColor::TextMuted,
     ),
   };
+  let hint = if changed {
+    (
+      ctx
+        .t_args("pipeline_hub.line.unsaved", [("rest", hint.0)])
+        .to_string(),
+      hint.1,
+    )
+  } else {
+    hint
+  };
   save_bar::bar(ctx, "pipeline-hub", (save, cancel), hint)
 }
 
-/// What the last save said, over the bar: a refusal (*Couldn't save …*, nothing stored and everything typed kept) or
-/// the draft a save that could not publish kept, and why.
+/// What the last save said, over the bar: a refusal (*Couldn't save …*, nothing stored and everything typed kept), the
+/// draft a save that could not publish kept and why, or the version a save made.
 pub(super) enum Said<'a> {
   Refused(&'a Message),
   Kept(&'a Message),
+  Made(VersionNumber),
 }
 
 /// The notice for `said` about `entry`, with its padding.
@@ -64,6 +76,12 @@ pub(super) fn notice(ctx: &Ctx, entry: &Entry, said: &Said<'_>) -> Element {
     )
     .icon(Icon::CircleX)
     .body(ctx.t("pipeline_hub.bar.refusedBody")),
+    Said::Made(version) => Notice::new(
+      "pipeline-hub-saved",
+      NoticeTone::Success,
+      ctx.t_args("pipeline_hub.bar.savedTitle", [("version", version.to_string())]),
+    )
+    .icon(Icon::CircleCheck),
     Said::Kept(why) => Notice::new(
       "pipeline-hub-kept",
       NoticeTone::Warning,

@@ -41,6 +41,8 @@ pub(super) struct Hosted {
   pub archiving: Asking,
   /// The pipeline whose *Archive* waits for the question about its unsaved changes.
   pub archive_waits: Signal<Option<Target>>,
+  /// Whether the panel's save is under way: its changes are being stored, so they cannot be discarded.
+  pub saving: Signal<bool>,
 }
 
 impl PartialEq for Hosted {
@@ -77,6 +79,20 @@ pub(super) fn clear_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId) {
   }
 }
 
+/// The question while a save is under way: the changes are being stored, so there is nothing to discard and the press
+/// waits; it closes by itself when the save ends, and the person presses again.
+fn saving_question(ctx: &Ctx, name: &str, open: &Signal<bool>) -> Element {
+  Dialog::new(
+    "pipeline-hub-leave-saving",
+    Icon::Save,
+    ctx.t_args("pipeline_hub.leave.savingTitle", [("name", name.to_owned())]),
+    ctx.t("pipeline_hub.leave.wait"),
+  )
+  .tone(Tone::Neutral)
+  .what(ctx.t_args("pipeline_hub.leave.savingWhat", [("name", name.to_owned())]))
+  .render(ctx, open)
+}
+
 /// The question while a press or a departure waits, naming the pipeline whose edit it would drop. A press of the hub's
 /// own waits in `leaving`; any other departure waits in the `guard`.
 pub(super) fn question(
@@ -91,6 +107,9 @@ pub(super) fn question(
     return None;
   }
   let name = listing.name_of(hosted.unsaved.get().0?)?.to_owned();
+  if hosted.saving.get() {
+    return Some(saving_question(ctx, &name, open));
+  }
   let discard = {
     let (hosted, open, navigation, guard) = (hosted.clone(), open.clone(), navigation.clone(), guard.clone());
     ActionButton::new(

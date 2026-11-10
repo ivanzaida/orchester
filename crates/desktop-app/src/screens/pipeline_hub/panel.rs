@@ -23,10 +23,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ResourceId, resource::Pipeline, time::Timestamp};
-use orchester_workspace::{
-  messages::Message,
-  pipelines::{data::Assignables, flow::FlowRead},
-};
+use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 
 use super::{
   archived,
@@ -35,7 +32,7 @@ use super::{
   leave::{Hosted, Unsaved, UnsavedSignal, clear_unsaved, mark_unsaved},
   model::Entry,
   panel_head::{self, Props as HeadProps},
-  save::{self, Ask, Asked, Followed, Kept, Pending, Save},
+  save::{self, Ask, Asked, Followed, Notes, Pending, Save},
   settings::{self, Settings},
   steps, words,
 };
@@ -104,11 +101,13 @@ struct PipelinePanel {
   save: Save,
   /// What a save would widen, which waits for the person.
   pending: Pending,
-  /// The draft a save kept because it could not publish, and why.
-  kept: Kept,
+  /// What the last save said over the bar.
+  notes: Notes,
   /// The pipeline as the hub lists it now, which the panel keeps current.
   stored: Ref<Option<Arc<Pipeline>>>,
   unsaved: UnsavedSignal,
+  /// Whether a save is under way, which the screen's question about leaving reads.
+  saving: Signal<bool>,
   id: ResourceId,
 }
 
@@ -128,9 +127,10 @@ impl Component for PipelinePanel {
       description: ctx.signal(description),
       save: save::save(ctx, props.project.open.repo_root.clone(), id),
       pending: ctx.signal(None),
-      kept: ctx.signal(None),
+      notes: Notes::new(ctx),
       stored: ctx.create_ref(props.entry.body.clone()),
       unsaved: props.hosted.unsaved,
+      saving: props.hosted.saving,
       id,
     };
     save::follow(
@@ -139,7 +139,7 @@ impl Component for PipelinePanel {
       &Followed {
         pending: this.pending.clone(),
         holding: this.holding.clone(),
-        kept: this.kept.clone(),
+        notes: this.notes.clone(),
         stored: this.stored.clone(),
       },
       project,
@@ -173,7 +173,7 @@ impl Component for PipelinePanel {
     let changed = edit.is_changed();
     mark_unsaved(&self.unsaved, self.id, changed);
     if changed {
-      self.forget_what_was_said();
+      self.notes.forget_stale(&current);
     }
     if !changed && self.description.get_untracked() != current.description() {
       self.description.set(current.description().to_owned());
@@ -185,6 +185,7 @@ impl Component for PipelinePanel {
     };
     let asked = self.pending.get();
     let saving = self.save.state().get().is_pending();
+    mark_saving(&hosted.saving, saving);
     let locked = saving || asked.is_some();
     let head = panel_head::head(
       ctx,
@@ -210,6 +211,7 @@ impl Component for PipelinePanel {
           current: &current,
           description: &self.description,
           locked,
+          saved: self.notes.stored.get(),
         },
       ));
     let pinned = self.pinned(ctx, &entry, asked.as_ref());
@@ -219,7 +221,7 @@ impl Component for PipelinePanel {
         self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
         (changed && !saving).then(|| self.cancel_now(&edit)),
       ),
-      &entry,
+      (&entry, changed),
     );
     frame(&entry, body, pinned, Some(bar))
   }
@@ -228,6 +230,7 @@ impl Component for PipelinePanel {
 impl Drop for PipelinePanel {
   fn drop(&mut self) {
     clear_unsaved(&self.unsaved, self.id);
+    mark_saving(&self.saving, false);
   }
 }
 
@@ -246,19 +249,13 @@ impl PipelinePanel {
     if let Some(asked) = asked {
       pinned.push(save::question(ctx, asked, (&self.save, &self.pending)));
     }
-    match (self.refusal(), self.kept.get()) {
-      (Some(reason), _) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
-      (None, Some(why)) => pinned.push(bar::notice(ctx, entry, &Said::Kept(&why))),
-      (None, None) => {}
+    match (self.notes.refused.get(), self.notes.kept.get(), self.notes.made.get()) {
+      (Some((reason, _)), ..) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
+      (None, Some(why), _) => pinned.push(bar::notice(ctx, entry, &Said::Kept(&why))),
+      (None, None, Some(version)) => pinned.push(bar::notice(ctx, entry, &Said::Made(version))),
+      (None, None, None) => {}
     }
     pinned
-  }
-
-  /// A change makes what the last save said stale: the draft it kept, and the question it asked.
-  fn forget_what_was_said(&self) {
-    if self.kept.get_untracked().is_some() {
-      self.kept.set(None);
-    }
   }
 
   /// What *Save* does now: nothing while nothing differs and no draft waits to be published, else it stores and
@@ -273,11 +270,12 @@ impl PipelinePanel {
     if waiting {
       return SaveState::Unchanged;
     }
-    let (edit, save, kept) = (edit.clone(), self.save.clone(), self.kept.clone());
+    let (edit, save, notes) = (edit.clone(), self.save.clone(), self.notes.clone());
     SaveState::Ready(Press::run(move || {
-      kept.set(None);
+      let held = edit.to_save();
+      notes.begin(held.edit());
       save.run(Ask {
-        held: edit.to_save(),
+        held,
         allowed: Vec::new(),
       });
     }))
@@ -294,18 +292,18 @@ impl PipelinePanel {
 
   /// What dropping the edit puts back besides the edit: the description's box, and what the last save said.
   fn put_back(&self) -> impl Fn() + Send + Sync + use<> {
-    let (description, stored, pending, kept) = (
+    let (description, stored, pending, notes) = (
       self.description.clone(),
       self.stored.clone(),
       self.pending.clone(),
-      self.kept.clone(),
+      self.notes.clone(),
     );
     move || {
       if let Some(stored) = stored.get() {
         description.set(stored.description().to_owned());
       }
       pending.set(None);
-      kept.set(None);
+      notes.forget();
     }
   }
 
@@ -336,11 +334,13 @@ impl PipelinePanel {
       }
     });
   }
+}
 
-  /// Why the last save did nothing, as the workspace said.
-  fn refusal(&self) -> Option<Message> {
-    let save = self.save.state().get();
-    save.error.clone().filter(|_| save.is_rejected())
+/// Tells the screen whether a save is under way, so the question about leaving does not offer to drop what is being
+/// saved; set only when it differs so the page is not read again for nothing.
+fn mark_saving(saving: &Signal<bool>, now: bool) {
+  if saving.get_untracked() != now {
+    saving.set(now);
   }
 }
 

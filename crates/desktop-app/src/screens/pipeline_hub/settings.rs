@@ -33,6 +33,8 @@ pub(super) struct Settings<'a> {
   pub description: &'a Signal<String>,
   /// A save is under way: nothing is changed now.
   pub locked: bool,
+  /// How many saves stored the edit: the box is mounted anew after each, so it no longer has the focus.
+  pub saved: u64,
 }
 
 pub(super) fn section(ctx: &mut Ctx, settings: &Settings<'_>) -> Column {
@@ -68,7 +70,8 @@ pub(super) fn section(ctx: &mut Ctx, settings: &Settings<'_>) -> Column {
 fn description(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components::Row {
   let label = ctx.t("pipeline_hub.settings.description");
   let mut input = FieldInput::new("pipeline-hub-description", label.clone(), settings.description.clone())
-    .placeholder(ctx.t("pipeline_hub.settings.descriptionNone"));
+    .placeholder(ctx.t("pipeline_hub.settings.descriptionNone"))
+    .fresh(settings.saved);
   if settings.locked {
     input = input.locked();
   }

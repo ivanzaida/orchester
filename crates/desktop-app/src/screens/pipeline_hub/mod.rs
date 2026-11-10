@@ -116,6 +116,8 @@ struct PipelineHubScreen {
   archiving: Asking,
   /// The pipeline the person pressed *Archive* on while its changes are not saved: it waits for their answer.
   archive_waits: Signal<Option<Target>>,
+  /// Whether the open panel's save is under way.
+  saving: Signal<bool>,
 }
 
 impl Component for PipelineHubScreen {
@@ -134,6 +136,7 @@ impl Component for PipelineHubScreen {
       guard: Navigation::of(ctx).guard(move || edits.get_untracked().0.is_some()),
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
+      saving: ctx.signal(false),
     };
     this.follow_question(ctx);
     this
@@ -221,6 +224,13 @@ impl PipelineHubScreen {
         asking.set(target.is_some());
       }
     });
+    let (asking, unsaved) = (self.asking.clone(), self.unsaved.clone());
+    ctx.watch(&self.saving, move |saving| {
+      // A question that waited for a save which stored the edit has nothing left to ask.
+      if !*saving && unsaved.get_untracked().0.is_none() && asking.get_untracked() {
+        asking.set(false);
+      }
+    });
     let (leaving, waits, guard) = (self.leaving.clone(), self.archive_waits.clone(), self.guard.clone());
     ctx.watch(&self.asking, move |open| {
       if *open {
@@ -245,6 +255,7 @@ impl PipelineHubScreen {
       unsaved: self.unsaved.clone(),
       archiving: self.archiving.clone(),
       archive_waits: self.archive_waits.clone(),
+      saving: self.saving.clone(),
     }
   }
 

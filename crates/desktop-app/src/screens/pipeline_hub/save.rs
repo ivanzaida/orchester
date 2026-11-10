@@ -1,8 +1,8 @@
 //! What the bar of a pipeline's panel does: *Save* stores the edit the panel holds as the pipeline's draft and
 //! publishes it as the next version at once ([`local_edit::save`]). A save that widens what the pipeline's agents may
 //! do asks first, in the panel, and only a person's press answers it; a refusal says why in place, and a save that
-//! could not publish says it kept the draft and why ([`Notes`]). A save ends with the screens that read the pipelines
-//! reading them again.
+//! could not publish says it kept the draft and why, and one that did says which version it made ([`Notes`]). A save ends
+//! with the screens that read the pipelines reading them again.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -16,7 +16,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
-  resource::Pipeline,
+  resource::{Pipeline, PipelineEdit, VersionNumber},
 };
 use orchester_workspace::{
   agents::widening::answers_in_persons_place,
@@ -61,8 +61,65 @@ impl DevtoolsInspectable for Asked {}
 pub(super) type Pending = Signal<Option<Asked>>;
 pub(super) type Save = FutureAction<Ask, Done, Message>;
 
-/// A save that did not publish, which the bar says: the draft it kept and why.
-pub(super) type Kept = Signal<Option<Message>>;
+/// What the last save said, over the bar, until the edit changes or is put back.
+#[derive(Clone)]
+pub(super) struct Notes {
+  /// A save that did not publish: the draft it kept, and why.
+  pub kept: Signal<Option<Message>>,
+  /// A save that made this version.
+  pub made: Signal<Option<VersionNumber>>,
+  /// A refused save: why, and the edit it refused.
+  pub refused: Signal<Option<(Message, PipelineEdit)>>,
+  /// How many saves stored the edit; the description's field is mounted anew after each, which takes the focus off it.
+  pub stored: Signal<u64>,
+  /// The edit the save under way was asked to store, which a refusal belongs to.
+  tried: Signal<Option<PipelineEdit>>,
+}
+
+impl Notes {
+  pub(super) fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      kept: ctx.signal(None),
+      made: ctx.signal(None),
+      refused: ctx.signal(None),
+      stored: ctx.signal(0),
+      tried: ctx.signal(None),
+    }
+  }
+
+  /// A save of `edit` begins: what the last one said is over.
+  pub(super) fn begin(&self, edit: &PipelineEdit) {
+    self.forget();
+    self.tried.set(Some(edit.clone()));
+  }
+
+  /// Forgets everything the last save said.
+  pub(super) fn forget(&self) {
+    if self.kept.get_untracked().is_some() {
+      self.kept.set(None);
+    }
+    if self.made.get_untracked().is_some() {
+      self.made.set(None);
+    }
+    if self.refused.get_untracked().is_some() {
+      self.refused.set(None);
+    }
+  }
+
+  /// The panel shows the changed edit `shown`: a save that kept a draft or made a version said it of an edit that is
+  /// gone, and a refusal belongs to the edit it refused.
+  pub(super) fn forget_stale(&self, shown: &PipelineEdit) {
+    if self.kept.get_untracked().is_some() {
+      self.kept.set(None);
+    }
+    if self.made.get_untracked().is_some() {
+      self.made.set(None);
+    }
+    if self.refused.get_untracked().is_some_and(|(_, refused)| &refused != shown) {
+      self.refused.set(None);
+    }
+  }
+}
 
 /// Stores and publishes what the panel holds of the pipeline `id` in the project at `root`.
 pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
@@ -81,7 +138,7 @@ pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
 pub(super) struct Followed {
   pub pending: Pending,
   pub holding: Signal<Holding>,
-  pub kept: Kept,
+  pub notes: Notes,
   /// The pipeline as stored now, which the panel keeps current.
   pub stored: lurq::core::Ref<Option<Arc<Pipeline>>>,
 }
@@ -94,12 +151,18 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
   let Followed {
     pending,
     holding,
-    kept,
+    notes,
     stored,
   } = followed;
-  let (pending, holding, kept, stored) = (pending.clone(), holding.clone(), kept.clone(), stored.clone());
+  let (pending, holding, notes, stored) = (pending.clone(), holding.clone(), notes.clone(), stored.clone());
   ctx.watch(&save.state(), move |state| {
     if state.is_pending() {
+      return;
+    }
+    if state.is_rejected() {
+      if let (Some(why), Some(tried)) = (state.error.clone(), notes.tried.get_untracked()) {
+        notes.refused.set(Some((why, tried)));
+      }
       return;
     }
     let Some(done) = state.data.clone().filter(|_| state.is_fulfilled()) else {
@@ -122,8 +185,13 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
       }
       saved => {
         pending.set(None);
-        kept.set(match &saved {
+        notes.kept.set(match &saved {
           Saved::Drafted(why) => Some(why.clone()),
+          _ => None,
+        });
+        notes.stored.update(|count| *count += 1);
+        notes.made.set(match &saved {
+          Saved::Published(number) => Some(*number),
           _ => None,
         });
         if let Some(body) = done.ask.held.edit().validate().ok().map(Arc::new) {
