@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use super::{
   data::Assignables,
-  flow::FlowRead,
+  flow::{FlowRead, Stored},
   library::{LibraryEntry, VersionState, library},
   problems::problem_view,
   ready::{UndecidedMember, undecided_members},
@@ -29,7 +29,7 @@ use crate::{
 };
 
 /// Joins the steps of a cycle in a problem's words.
-const CYCLE_ARROW: &str = "→";
+pub(super) const CYCLE_ARROW: &str = "→";
 
 /// Why the hub could not be read.
 #[derive(Debug, Error)]
@@ -74,6 +74,10 @@ pub struct HubPipeline {
   pub undecided: Vec<UndecidedMember>,
   /// Its steps as the panel draws them: the draft's, or the latest version's.
   pub flow: Arc<FlowRead>,
+  /// The steps the flow was read from, which an edit of the page starts from.
+  pub body: Arc<Pipeline>,
+  /// Whether they differ from the latest published version, or none was published: a save has something to publish.
+  pub unpublished: bool,
 }
 
 impl HubPipeline {
@@ -115,6 +119,7 @@ pub struct ArchivedPipeline {
 pub struct PipelineHub {
   pipelines: Vec<HubPipeline>,
   archived: Vec<ArchivedPipeline>,
+  assignables: Arc<Assignables>,
 }
 
 impl PipelineHub {
@@ -126,6 +131,11 @@ impl PipelineHub {
   /// What was archived, the latest first.
   pub fn archived(&self) -> &[ArchivedPipeline] {
     &self.archived
+  }
+
+  /// What the steps of the pipelines can run, which the flow of an edit is drawn with.
+  pub fn assignables(&self) -> Arc<Assignables> {
+    Arc::clone(&self.assignables)
   }
 }
 
@@ -148,12 +158,13 @@ impl Workspace {
         VersionState::DraftOnly => draft_problem(&db, entry.id)?,
         _ => None,
       };
-      let flow = FlowRead::of(&db, entry.id, &assignables)?.ok_or(HubError::Unreadable(entry.id))?;
-      pipelines.push(of_entry(entry, (standing, problem, undecided), Arc::new(flow)));
+      let stored = FlowRead::of(&db, entry.id, &assignables)?.ok_or(HubError::Unreadable(entry.id))?;
+      pipelines.push(of_entry(entry, (standing, problem, undecided), stored));
     }
     Ok(PipelineHub {
       pipelines,
       archived: archived(&db)?,
+      assignables: Arc::new(assignables),
     })
   }
 }
@@ -161,7 +172,7 @@ impl Workspace {
 fn of_entry(
   entry: LibraryEntry,
   (standing, problem, undecided): (Option<ReadinessStanding>, Option<Message>, Vec<UndecidedMember>),
-  flow: Arc<FlowRead>,
+  stored: Stored,
 ) -> HubPipeline {
   HubPipeline {
     id: entry.id,
@@ -173,7 +184,9 @@ fn of_entry(
     standing,
     problem,
     undecided,
-    flow,
+    flow: Arc::new(stored.read),
+    body: Arc::new(stored.body),
+    unpublished: stored.unpublished,
   }
 }
 

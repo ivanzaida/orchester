@@ -24,7 +24,7 @@ use crate::{
 /// Where a press that leaves the panel goes: straight to its place, or, while a server's edits are not saved, to the
 /// question first.
 #[derive(Clone)]
-pub(super) struct Leave {
+pub(in crate::screens) struct Leave {
   navigation: Navigation,
   /// Where a press waits for the person's answer.
   leaving: Signal<Option<Route>>,
@@ -41,7 +41,7 @@ impl PartialEq for Leave {
 }
 
 impl Leave {
-  pub(super) fn new(navigation: &Navigation, leaving: &Signal<Option<Route>>, unsaved: bool) -> Self {
+  pub(in crate::screens) fn new(navigation: &Navigation, leaving: &Signal<Option<Route>>, unsaved: bool) -> Self {
     Self {
       navigation: navigation.clone(),
       leaving: leaving.clone(),
@@ -50,7 +50,7 @@ impl Leave {
   }
 
   /// A press that opens `route`, after the question while edits are not saved.
-  pub(super) fn press(&self, route: Route) -> Press {
+  pub(in crate::screens) fn press(&self, route: Route) -> Press {
     if self.unsaved {
       let leaving = self.leaving.clone();
       Press::run(move || leaving.set(Some(route.clone())))
@@ -60,7 +60,7 @@ impl Leave {
   }
 
   /// Opens `route` now, or asks first while edits are not saved.
-  pub(super) fn go(&self, route: Route) {
+  pub(in crate::screens) fn go(&self, route: Route) {
     if self.unsaved {
       self.leaving.set(Some(route));
     } else {

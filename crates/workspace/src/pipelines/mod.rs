@@ -14,6 +14,7 @@ pub mod history;
 pub mod hub;
 pub mod levels;
 pub mod library;
+pub mod local_edit;
 pub mod narrowing;
 pub mod problems;
 pub mod ready;

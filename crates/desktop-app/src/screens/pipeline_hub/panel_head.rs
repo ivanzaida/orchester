@@ -25,6 +25,7 @@ use orchester_workspace::{
 };
 
 use super::{
+  leave::Hosted,
   menu::{self, Actions},
   model::Entry,
   rename::{self, Editing},
@@ -32,10 +33,7 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  screens::{
-    local_hub::archive::{Asking, Target},
-    team_hub::panel::head_titled,
-  },
+  screens::{local_hub::archive::Target, team_hub::panel::head_titled},
   services::Services,
   theme::HubText,
   ui::{field::field_error, icon::Icon, icon_button::IconButton, message::message_text},
@@ -48,7 +46,10 @@ pub(super) struct Props {
   /// Whether New task offers this pipeline first.
   pub default: bool,
   pub now: Timestamp,
-  pub asking: Asking,
+  /// What the screen hosts: the archive confirmation, which waits for the question about unsaved changes.
+  pub hosted: Hosted,
+  /// The panel holds changes that are not saved.
+  pub holds_changes: bool,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -183,11 +184,11 @@ impl Head {
       kind: ResourceKind::Pipeline,
       name: Arc::from(&*entry.name),
     };
-    let asking = props.asking.clone();
+    let (hosted, holds) = (props.hosted.clone(), props.holds_changes);
     let actions = Actions {
       rename: Arc::new(move || editing.begin(&name)),
       make_default: self.make_default.clone(),
-      archive: Arc::new(move || asking.ask(target.clone())),
+      archive: Arc::new(move || hosted.archive(target.clone(), holds)),
     };
     let project: ProjectId = props.project.open.project.id();
     let panel = menu::panel(ctx, (project, entry, props.default), &self.menu, &actions);

@@ -98,6 +98,42 @@ pub fn publish(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
+/// `pipelines`, except that the project's database refuses to store a pipeline's draft (a trigger stands for a check
+/// that fails), so *Save* on any pipeline is refused and the panel says why next to the bar.
+pub fn save_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  rusqlite::Connection::open(kontur.database())?.execute_batch(
+    "CREATE TRIGGER qa_refuse_draft_insert BEFORE INSERT ON resource_drafts
+     BEGIN SELECT RAISE(ABORT, 'refused by the checks'); END;
+     CREATE TRIGGER qa_refuse_draft_update BEFORE UPDATE ON resource_drafts
+     BEGIN SELECT RAISE(ABORT, 'refused by the checks'); END;",
+  )?;
+  Ok(())
+}
+
+/// `pipelines` with *Ready draft* added: never published, its one step runs a published profile, so every step is
+/// ready and *Save* publishes its first version (once a person allows it).
+pub fn ready_draft(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  let builder = profile(kontur, "Ready builder", &["cargo test"], true)?;
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let build = edit.add_step(name("Build"), None);
+  edit.update(&build, |step| {
+    step.kind = StepKind::Agent {
+      profile: Some(builder),
+      model: None,
+      repository: RepositoryAccess::ReadOnly,
+      permissions: StepPermissions::default(),
+    }
+  });
+  create(
+    kontur,
+    "Ready draft",
+    &edit.validate().expect("a step with a published profile is valid"),
+  )?;
+  Ok(())
+}
+
 pub(super) fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceId, SeedError> {
   Ok(
     kontur

@@ -9,14 +9,13 @@ use lurq::{
 };
 use orchester_workspace::readiness::Group;
 
-use super::{list::Shown, model::Entry, step_line, words};
+use super::{list::Shown, model::Entry, words};
 use crate::{
   routes::{PipelinesView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
   theme::{HubText, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::Press,
     tooltip::Truncated,
   },
 };
@@ -27,7 +26,7 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     shown.project,
     ProjectPage::pipelines(PipelinesView::new(shown.filter, Some(entry.id))),
   );
-  let said = step_line::line(ctx, entry).unwrap_or_else(|| words::line(ctx, shown.now, entry));
+  let said = words::line(ctx, shown.now, entry, shown.unsaved.0 == Some(entry.id));
   let mark = icon(Icon::Workflow, IconSize::Lg, mark_color(entry));
   let line = Truncated::new(format!("{id}-line"), said.text.clone(), HubText::RowLine.role())
     .color(said.color)
@@ -35,7 +34,7 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
   agent_row(AgentRow {
     id: &id,
     chosen: shown.selected == Some(entry.id),
-    open: Press::Open(shown.navigation.to(route)).button(),
+    open: shown.leave.press(route).button(),
     group: entry.group,
     kind: "pipeline".to_owned(),
     mark: mark.into(),

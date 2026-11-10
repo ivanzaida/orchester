@@ -284,3 +284,47 @@ fn readiness_pipeline_ready_an_mcp_program_this_computer_lacks_is_a_missing_part
     "the program of the server its profile chooses: {all:?}"
   );
 }
+
+#[test]
+fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it() {
+  use orchester_core::resource::PipelineEdit;
+  use orchester_workspace::pipelines::flow::FlowRead;
+
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let id = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
+  let hub = fixture
+    .workspace
+    .pipeline_hub(&fixture.root, &fixture.vault)
+    .expect("the hub");
+  let read = listed(&fixture, id);
+  assert!(found(&read).is_empty(), "the stored version can run");
+  let read_of = |edit: &PipelineEdit| FlowRead::of_edit(edit, &hub.assignables());
+  let basis = |flow: &FlowRead| {
+    problems(Basis {
+      flow,
+      standing: read.standing.as_ref(),
+      undecided: &read.undecided,
+      published: true,
+    })
+  };
+
+  // A step added to the edit that has nothing to run is listed before anything is saved.
+  let mut edit = PipelineEdit::new(read.body.as_ref().clone());
+  edit.add_step(name("Review"), None);
+  assert!(
+    matches!(basis(&read_of(&edit)).as_slice(), [Problem::Step(step)] if step.runs.is_unassigned()),
+    "{:?}",
+    basis(&read_of(&edit))
+  );
+  assert!(found(&read).is_empty(), "the stored version is untouched");
+
+  // An edit that changes nothing lists what the stored version does, and an edit that empties the pipeline says so.
+  assert!(basis(&read_of(&PipelineEdit::new(read.body.as_ref().clone()))).is_empty());
+  let mut emptied = PipelineEdit::new(read.body.as_ref().clone());
+  for step in read.body.steps() {
+    emptied.remove_step(&step.key);
+  }
+  assert_eq!(basis(&read_of(&emptied)), [Problem::Draft(Draft::NoSteps)]);
+}

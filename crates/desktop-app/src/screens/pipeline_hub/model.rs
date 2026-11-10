@@ -3,10 +3,14 @@
 
 use std::sync::Arc;
 
-use orchester_core::{id::ResourceId, resource::VersionNumber, time::Timestamp};
+use orchester_core::{
+  id::ResourceId,
+  resource::{Pipeline, VersionNumber},
+  time::Timestamp,
+};
 use orchester_workspace::{
   messages::Message,
-  pipelines::{flow::FlowRead, hub::PipelineHub, ready::UndecidedMember},
+  pipelines::{data::Assignables, flow::FlowRead, hub::PipelineHub, ready::UndecidedMember},
   readiness::{Group, ReadinessStanding},
 };
 
@@ -32,6 +36,10 @@ pub(super) struct Entry {
   pub archived: Option<Timestamp>,
   /// Its steps as the panel draws them; none for an archived pipeline, which has no steps to open.
   pub flow: Option<Arc<FlowRead>>,
+  /// The steps the flow was read from, which an edit of the panel starts from; none for an archived pipeline.
+  pub body: Option<Arc<Pipeline>>,
+  /// Whether `body` differs from the latest published version, or none was published: *Save* has something to publish.
+  pub unpublished: bool,
 }
 
 impl Entry {
@@ -58,6 +66,8 @@ pub(super) const GROUPS: [Group; 2] = [Group::NeedsYouHere, Group::Ready];
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Listing {
   entries: Vec<Entry>,
+  /// What the steps of the pipelines can run, which the flow of an edit is drawn with.
+  assignables: Arc<Assignables>,
 }
 
 impl Listing {
@@ -79,6 +89,8 @@ impl Listing {
         undecided: found.undecided.clone(),
         archived: None,
         flow: Some(found.flow.clone()),
+        body: Some(found.body.clone()),
+        unpublished: found.unpublished,
       })
       .collect();
     entries.sort_by_cached_key(|entry| (group_rank(entry.group), entry.name.to_lowercase()));
@@ -95,8 +107,13 @@ impl Listing {
       undecided: Vec::new(),
       archived: Some(found.at),
       flow: None,
+      body: None,
+      unpublished: false,
     }));
-    Self { entries }
+    Self {
+      entries,
+      assignables: hub.assignables(),
+    }
   }
 
   /// How many entries `filter` holds.
@@ -119,6 +136,20 @@ impl Listing {
       .item
       .and_then(|id| self.shown(view.filter).find(|entry| entry.id == id))
       .or_else(|| self.shown(view.filter).next())
+  }
+
+  /// What the steps of the pipelines can run.
+  pub(super) const fn assignables(&self) -> &Arc<Assignables> {
+    &self.assignables
+  }
+
+  /// The name of the entry `id`, in the list or among the archived.
+  pub(super) fn name_of(&self, id: ResourceId) -> Option<&str> {
+    self
+      .entries
+      .iter()
+      .find(|entry| entry.id == id)
+      .map(|entry| &*entry.name)
   }
 
   /// Whether `filter` holds the entry `id`.

@@ -8,8 +8,8 @@ use std::{collections::HashMap, sync::Arc};
 use orchester_core::{
   id::ResourceId,
   resource::{
-    DeliverMode, DeliverStep, Deliverable, FlowError, MergeMethod, Pipeline, RepositoryAccess, Step, StepKey, StepKind,
-    flow_units,
+    DeliverMode, DeliverStep, Deliverable, FlowError, MergeMethod, Pipeline, PipelineEdit, RepositoryAccess, Step,
+    StepKey, StepKind, flow_units,
   },
   store::ResourceStore,
 };
@@ -281,20 +281,56 @@ pub struct FlowRead {
   pub flow: Result<PipelineFlow, FlowError>,
 }
 
+/// A pipeline as it is stored, read for the page: what it draws, and what an edit of the page starts from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stored {
+  pub read: FlowRead,
+  /// The steps the flow was read from: the draft's, or the latest version's.
+  pub body: Pipeline,
+  /// Whether `body` differs from the latest published version, or none was published: a save has something to
+  /// publish. A stored draft that equals the latest version has nothing.
+  pub unpublished: bool,
+}
+
 impl FlowRead {
-  /// The flow of pipeline `id`: its draft when it has one, otherwise its latest version; `None` when it has neither.
-  pub fn of(db: &ProjectDb, id: ResourceId, assignables: &Assignables) -> Result<Option<Self>, StoreError> {
+  /// Pipeline `id` as stored: its draft when it has one, otherwise its latest version; `None` when it has neither.
+  pub fn of(db: &ProjectDb, id: ResourceId, assignables: &Assignables) -> Result<Option<Stored>, StoreError> {
+    let latest = db.latest_version::<Pipeline>(id)?;
     let (body, draft) = match db.draft::<Pipeline>(id)? {
       Some(draft) => (draft.body().clone(), true),
-      None => match db.latest_version::<Pipeline>(id)? {
+      None => match &latest {
         Some(version) => (version.body().clone(), false),
         None => return Ok(None),
       },
     };
-    Ok(Some(Self {
-      draft,
-      ending: Ending::of(&body),
-      flow: PipelineFlow::of(&body, assignables),
+    let unpublished = latest.as_ref().is_none_or(|version| version.body() != &body);
+    Ok(Some(Stored {
+      read: Self {
+        draft,
+        ending: Ending::of(&body),
+        flow: PipelineFlow::of(&body, assignables),
+      },
+      body,
+      unpublished,
     }))
+  }
+
+  /// The flow of `edit`, which the page draws while it holds the edit. Steps that break a rule leave no flow
+  /// ([`FlowError::Broken`]); how the line ends is known all the same.
+  pub fn of_edit(edit: &PipelineEdit, assignables: &Assignables) -> Self {
+    let (ending, flow) = match edit.validate() {
+      Ok(body) => (Ending::of(&body), PipelineFlow::of(&body, assignables)),
+      Err(error) => (
+        edit
+          .deliver()
+          .map_or(Ending::Delivers(edit.delivers()), |_| Ending::Merged),
+        Err(FlowError::Broken(error)),
+      ),
+    };
+    Self {
+      draft: true,
+      ending,
+      flow,
+    }
   }
 }

@@ -18,10 +18,10 @@ use lurq::{
 use crate::ui::field::SelectField;
 
 /// What a choice does: gets the option's value.
-pub(super) type Pick = Arc<dyn Fn(String) + Send + Sync>;
+pub(in crate::screens) type Pick = Arc<dyn Fn(String) + Send + Sync>;
 
 #[derive(Clone)]
-pub(super) struct Props {
+pub(in crate::screens) struct Props {
   /// The select's element id.
   pub id: String,
   /// What tools call the select: its row's label.
@@ -68,7 +68,7 @@ impl PartialEq for Props {
 impl DevtoolsInspectable for Props {}
 
 /// The select of `props`, mounted once for as long as the panel shows it.
-pub(super) fn pick(ctx: &mut Ctx, props: Props) -> Element {
+pub(in crate::screens) fn pick(ctx: &mut Ctx, props: Props) -> Element {
   let key = props.id.clone();
   ctx.mount_keyed::<Select>(&key, props)
 }

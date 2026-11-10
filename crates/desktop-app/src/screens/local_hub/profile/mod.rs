@@ -15,7 +15,7 @@
 pub(in crate::screens) mod add_menu;
 mod choices;
 mod edit;
-mod pick;
+pub(in crate::screens) mod pick;
 mod ready;
 mod table;
 mod words;
