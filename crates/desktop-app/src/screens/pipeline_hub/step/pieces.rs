@@ -77,10 +77,12 @@ pub(super) fn order(pieces: &[Piece]) -> Vec<StepKey> {
   chips(pieces).filter_map(|chip| chip.key.clone()).collect()
 }
 
-/// Where step `key` stands: its number, and how many steps the pipeline has (the Deliver step is not counted).
+/// Where step `key` stands: its number, and how many chips the strip numbers, the Deliver step's among them, so that
+/// *step 05 of 6* stands over a strip whose last chip, Deliver, reads *06* (P2 `u2rYEH`: *step 03 of 6* over five
+/// steps and Deliver).
 pub(super) fn place(pieces: &[Piece], key: &StepKey) -> Option<(usize, usize)> {
   let number = chips(pieces).find(|chip| chip.key.as_ref() == Some(key))?.number;
-  Some((number, order(pieces).len()))
+  Some((number, chips(pieces).count()))
 }
 
 /// The steps that run before step `key`: the places where a request for changes can send the run back.
