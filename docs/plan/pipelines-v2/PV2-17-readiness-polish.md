@@ -92,3 +92,15 @@ Make the chip, the list line, *Ready?* and the step cards agree, and give every 
     shorten the override, or show the override on a line of its own.
 28. The step strip: pressing a chip that is partly hidden only scrolls it into view, so it takes two presses to open
     it. One press opens it (and scrolls it into view).
+
+## Added from PV2-06's last check (2026-11-11)
+
+29. A drop refused over a gap leaves nothing behind once released (the reason shows only during the drag): keep the
+    refusal under the card's stage after the release until the next change, or say it some other way.
+30. The *Allow* question's `pipelineStep` words still say "same wiring" (`workspace/assets/locales/en.json` ~1806):
+    wiring is `StopsWaiting`'s now.
+31. Tests: the Orchestrator's change-list line for `StopsWaiting` (`orchestrator.change.widens.pipelineStopsWaiting`);
+    a refusal cleared by the pointer leaving its card (only the keys are tested).
+32. Below about 1100 logical the hub's detail panel is crushed (strip, parallel cards and the Description row clip).
+33. Which card the keys are on: the outline only; a card keeps its handle and ⋯ while it has the keys — decide whether
+    that is cue enough.
