@@ -50,10 +50,8 @@ pub(crate) fn new_button(ctx: &Ctx, id: &str, filter: HubFilter, press: Press) -
   let button = ActionButton::new(id.to_owned(), ButtonKind::Primary, words(new_words(filter)))
     .icon(Icon::Plus)
     .press(press);
-  let sizes = KINDS
-    .iter()
-    .map(|(kind, key)| {
-      ActionButton::new(format!("{id}-size-{}", kind.name()), ButtonKind::Primary, words(key)).icon(Icon::Plus)
-    });
+  let sizes = KINDS.iter().map(|(kind, key)| {
+    ActionButton::new(format!("{id}-size-{}", kind.name()), ButtonKind::Primary, words(key)).icon(Icon::Plus)
+  });
   as_wide_as_widest(&format!("{id}-slot"), button, sizes).into()
 }

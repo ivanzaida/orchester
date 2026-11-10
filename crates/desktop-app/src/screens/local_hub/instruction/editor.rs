@@ -216,7 +216,10 @@ impl Editor {
         &format!("{PREFIX}-targets"),
         &ctx.t("local_hub.instruction.appliesTo"),
         None,
-        rows::words(&format!("{PREFIX}-targets-value"), &self.fields.targets_words(ctx, data)),
+        rows::words(
+          &format!("{PREFIX}-targets-value"),
+          &self.fields.targets_words(ctx, data),
+        ),
       ));
     }
     rows.push(rows::row(

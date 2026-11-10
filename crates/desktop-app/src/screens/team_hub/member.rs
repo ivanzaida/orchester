@@ -12,12 +12,7 @@ use lurq::{
 };
 use orchester_workspace::sharing::team::TeamConfiguration;
 
-use crate::{
-  routes::HubFilter,
-  screens::hub::team::admins,
-  team::lock::flat,
-  theme::HubText,
-};
+use crate::{routes::HubFilter, screens::hub::team::admins, team::lock::flat, theme::HubText};
 
 /// *Only team admins change this: dana-k (Admin) and olha (Server admin).* under the chips of a member's panel; none
 /// for an admin.
@@ -53,8 +48,14 @@ pub(super) const fn empty_words(filter: HubFilter) -> (&'static str, &'static st
       "team_hub.member.empty.instructions.title",
       "team_hub.member.empty.instructions.detail",
     ),
-    HubFilter::Skills => ("team_hub.member.empty.skills.title", "team_hub.member.empty.skills.detail"),
-    HubFilter::Tools => ("team_hub.member.empty.tools.title", "team_hub.member.empty.tools.detail"),
+    HubFilter::Skills => (
+      "team_hub.member.empty.skills.title",
+      "team_hub.member.empty.skills.detail",
+    ),
+    HubFilter::Tools => (
+      "team_hub.member.empty.tools.title",
+      "team_hub.member.empty.tools.detail",
+    ),
   }
 }
 

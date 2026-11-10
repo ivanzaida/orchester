@@ -30,10 +30,7 @@ use super::{
   model::{Entry, Listing},
   panel, rows, words,
 };
-use crate::{
-  services::Services,
-  theme::HubText,
-};
+use crate::{services::Services, theme::HubText};
 
 /// What the team holds of the resource shown.
 #[derive(Clone, Debug, PartialEq, Eq)]

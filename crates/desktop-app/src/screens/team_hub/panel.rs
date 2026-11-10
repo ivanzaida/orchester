@@ -2,8 +2,8 @@
 //! its name), its chips (`Chips` `Zi28O`: *Team · vN* and how it stands here) and what its readiness lacks, with the
 //! one action that moves it on pinned at its bottom (`Actions` `x3uhYJ`). The panel of each kind is its own task
 //! (ORC-832…834): a profile's is [`super::profile`], an MCP server's [`super::mcp`], a tool's [`super::tool`], an
-//! instruction's and a skill's [`super::plain`]; where a resource has no sheet of its kind the panel is this frame, with
-//! nothing pinned.
+//! instruction's and a skill's [`super::plain`]; where a resource has no sheet of its kind the panel is this frame,
+//! with nothing pinned.
 
 use std::sync::Arc;
 
@@ -252,4 +252,3 @@ fn readiness(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Option<Column> {
       ),
   )
 }
-

@@ -25,8 +25,8 @@ use super::{
 };
 use crate::{
   project::Projects,
-  services::Services,
   screens::settings::{Consent, orchester},
+  services::Services,
 };
 
 /// The application's change counts as the window last saw them.

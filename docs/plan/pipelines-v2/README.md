@@ -33,7 +33,7 @@ orchestration tool reported it; `—` until known.
 | ID | Task | Kind | Depends on | Status | Branch | Tokens |
 | --- | --- | --- | --- | --- | --- | --- |
 | [PV2-00](PV2-00-design-saved.md) | Save and commit the `Pipelines · v2` design | person | — | needs the person | — | — |
-| [PV2-01](PV2-01-core-step-order.md) | Core: move steps and run them in parallel | core | — | todo | — | — |
+| [PV2-01](PV2-01-core-step-order.md) | Core: move steps and run them in parallel | core | — | done | `claude/pv2-01-step-order` → `310ce4f39` | 4.84M (out 72k) |
 | [PV2-02](PV2-02-step-runs-on.md) | Core: a step's connection and effort | core | — | canceled | — | — |
 | [PV2-03](PV2-03-runs-on-picker.md) | The compact *Runs on* picker as a shared component | UI | — | todo | — | — |
 | [PV2-04](PV2-04-page-shell.md) | The page: filter, grouped list, panel, Save bar | UI | — | todo | — | — |

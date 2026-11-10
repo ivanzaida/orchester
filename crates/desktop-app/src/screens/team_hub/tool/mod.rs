@@ -29,10 +29,7 @@ use super::{
   model::{Entry, Listing},
   panel, words,
 };
-use crate::{
-  services::Services,
-  ui::chip::BadgeTone,
-};
+use crate::{services::Services, ui::chip::BadgeTone};
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
