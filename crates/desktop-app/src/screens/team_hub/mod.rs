@@ -160,7 +160,8 @@ impl Component for TeamHubScreen {
       ctx,
       agents::Frame {
         prefix: "team-hub",
-        filter: view.filter,
+        title: "hub.title",
+        current: view.filter.name(),
         status,
         new,
         tabs: tabs(id, listing.as_ref(), selected, &navigation),
@@ -213,11 +214,11 @@ fn tabs(
       let item = selected.filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
       let route = Route::Project(project, ProjectPage::hub(HubView::new(choice, item)));
       let navigation = navigation.clone();
-      agents::Tab {
-        filter: choice,
-        count: listing.map(|listing| listing.count(choice)),
-        open: Arc::new(move || navigation.go(route.clone())),
-      }
+      agents::Tab::of(
+        choice,
+        listing.map(|listing| listing.count(choice)),
+        Arc::new(move || navigation.go(route.clone())),
+      )
     })
     .collect()
 }

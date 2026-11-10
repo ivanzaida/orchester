@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// That the project is local.
-pub(super) fn status(ctx: &Ctx) -> Vec<Element> {
+pub(in crate::screens) fn status(ctx: &Ctx) -> Vec<Element> {
   let local = Row::new()
     .id("local-hub-local")
     .spacing(ExtraSpacing::Snug.role())
