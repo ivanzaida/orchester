@@ -1,4 +1,4 @@
-//! The read keeps nothing, so it follows the fill-ins and the versions the stream caches.
+//! The read keeps nothing, so it follows the fill-ins and the latest versions the team server was read with.
 
 use orchester_core::{
   connection::AgentProvider,
@@ -23,7 +23,7 @@ fn readiness_follows_a_new_connection_and_a_new_version() {
   );
 
   let second = VersionNumber::FIRST.next().expect("v2");
-  fixture.next_profile_version(id, second, &profile(CODEX, &[], &[]), false);
+  fixture.next_profile_version(id, second, &profile(CODEX, &[], &[]));
   let read = fixture.read();
   let found = read.resource(id).expect("listed");
   assert_eq!(
@@ -44,23 +44,5 @@ fn readiness_follows_a_new_connection_and_a_new_version() {
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
     &ReadinessStanding::Ready
-  );
-}
-
-#[test]
-fn readiness_is_about_the_version_this_computer_uses_not_one_that_waits_for_the_person() {
-  let fixture = Fixture::team();
-  fixture.connection(CLAUDE, "claude");
-  let id = fixture.team_profile("builder", &profile(CLAUDE, &[], &[]));
-
-  let second = VersionNumber::FIRST.next().expect("v2");
-  fixture.next_profile_version(id, second, &profile(CODEX, &[], &[]), true);
-  let read = fixture.read();
-  let found = read.resource(id).expect("listed");
-  assert_eq!(found.number(), VersionNumber::FIRST);
-  assert_eq!(
-    found.standing(),
-    &ReadinessStanding::Ready,
-    "v2 would need a Codex connection, but v1 runs"
   );
 }

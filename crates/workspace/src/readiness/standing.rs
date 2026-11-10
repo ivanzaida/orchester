@@ -2,21 +2,16 @@
 
 use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId},
-  resource::{ResourceKind, TeamProfileError},
+  resource::ResourceKind,
   sharing::{Missing, Readiness},
 };
 
 /// Why what a resource needs of this computer cannot be known. It is not ready, and not assumed to need nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Undecided {
-  /// The version this computer uses is not a team body it can read: a profile the server sent in a form this version
-  /// cannot read (one cached before the team configuration model is such a form) or a reviewer that names a connection
-  /// (ORC-887), or one that is neither the server's nor waiting to be sent to it.
+  /// The team's latest version is not a body of its kind's team form this version can read: a profile published
+  /// before the team configuration model, or a reviewer that names a connection (ORC-887).
   NotTeamForm,
-  /// A version of a team profile published here, which the server has not numbered, cannot be put in the team's form,
-  /// so it cannot be published either: this says why (writable folders, a local MCP server that is no team one, a
-  /// connection that is no agent connection).
-  CannotBePublished(TeamProfileError),
   /// A team profile chooses an MCP server the team does not offer here: not synced yet (an archived one is
   /// [`Self::ChoosesArchivedMcpServer`]).
   ChoosesMcpServer(ResourceId),

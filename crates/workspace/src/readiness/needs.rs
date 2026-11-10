@@ -4,11 +4,10 @@ use orchester_core::{
   id::{ConnectionId, DecisionConnectionId, ResourceId},
   resource::{Resource, ResourceKind, TeamMcpServer, VersionNumber},
   sharing::{McpNeed, Needs},
-  store::ResourceStore,
 };
-use orchester_store::{ProjectDb, StoreError};
 
 use super::{facts::Found, standing::Undecided};
+use crate::team_config::{TeamConfig, TeamResource};
 
 /// A resource and what it needs, before it is checked against what this computer has.
 pub(super) struct Entry {
@@ -34,12 +33,26 @@ impl Entry {
       found: Vec::new(),
     }
   }
+
+  /// The entry of the team's `resource`, read from its latest version `number`.
+  pub(super) fn team(resource: &TeamResource, number: VersionNumber, needs: Result<Needs, Undecided>) -> Self {
+    Self {
+      resource: resource.id,
+      kind: resource.kind,
+      name: resource.name.as_str().to_owned(),
+      number,
+      needs,
+      off_here: false,
+      found: Vec::new(),
+    }
+  }
 }
 
-/// A team MCP server the project offers, with the version it is read from.
+/// A team MCP server the project offers, with the version it is read from; `need` is `None` for one whose latest
+/// version is not in the team's form, which no profile can be given.
 pub(super) struct Server {
   pub(super) entry: Entry,
-  pub(super) need: McpNeed,
+  pub(super) need: Option<McpNeed>,
 }
 
 /// A profile's entry and the connection it runs on: the pick, or its own connection in a local project.
@@ -55,18 +68,27 @@ pub(super) struct Reviewer {
   pub(super) decision_pick: Option<DecisionConnectionId>,
 }
 
-pub(super) fn servers(db: &ProjectDb) -> Result<Vec<Server>, StoreError> {
+/// The team's MCP servers, each read from its latest version.
+pub(super) fn servers(config: &TeamConfig) -> Vec<Server> {
   let mut servers = Vec::new();
-  for resource in db.resources(ResourceKind::McpServer)? {
-    let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? else {
+  for resource in config.resources(ResourceKind::McpServer) {
+    let (Some(number), Some(body)) = (resource.number(), resource.body::<TeamMcpServer>()) else {
       continue;
     };
-    let need = McpNeed::of(resource.id(), version.body());
-    let needs = Needs::mcp_server(&need);
-    servers.push(Server {
-      entry: Entry::new(&resource, version.number(), Ok(needs)),
-      need,
-    });
+    let server = match body {
+      Ok(body) => {
+        let need = McpNeed::of(resource.id, &body);
+        Server {
+          entry: Entry::team(resource, number, Ok(Needs::mcp_server(&need))),
+          need: Some(need),
+        }
+      }
+      Err(_) => Server {
+        entry: Entry::team(resource, number, Err(Undecided::NotTeamForm)),
+        need: None,
+      },
+    };
+    servers.push(server);
   }
-  Ok(servers)
+  servers
 }

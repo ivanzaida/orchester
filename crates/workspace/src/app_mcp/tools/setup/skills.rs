@@ -1,7 +1,8 @@
 //! `list_skills` and `get_skill`: a project's skills as Skills lists and opens them (the draft if there is one,
-//! otherwise the latest version), with where each applies, its versions, and the tasks whose unfinished runs
-//! still hold one of them; `save_skill_draft` and `publish_skill` write them as the Skills editor does
-//! ([`super::skill_input`]).
+//! otherwise the latest version), with where each applies, the profiles that give it to their agents (`used_by`: in a
+//! local project nothing else does; where it applies decides it only for a team project's runs), its versions, and
+//! the tasks whose unfinished runs still hold one of them; `save_skill_draft` and `publish_skill` write them as the
+//! Skills editor does ([`super::skill_input`]).
 
 use std::path::Path;
 
@@ -21,6 +22,7 @@ use super::{
     across::{InProjects, across},
     parse, wire,
   },
+  given_by::Givers,
   instructions::scope_json,
   profiles::state_json,
   skill_input,
@@ -44,7 +46,9 @@ pub(super) const SPECS: &[Spec] = &[
     description: "A project's skills, which Orchester gives agents as files they read when a task calls for them; \
                   without `project`, every project's, each naming its project (unreadable_projects lists the \
                   projects that could not be read, with why). Each: id, name, slug, description, where it applies \
-                  (project, agent_role, pipeline or step), where it stands (draft, stale_draft or published, with \
+                  (project, agent_role, pipeline or step; it decides which agents get it only in a team project's \
+                  runs), used_by (the profiles that list it: in a local project only their agents get it), where it \
+                  stands (draft, stale_draft or published, with \
                   its published version), whether its draft is the one automation saved (draft_by_automation), the \
                   repository file it was imported from, if any, and its link in the app.",
     schema: schema_for_type::<InProjects>,
@@ -54,7 +58,8 @@ pub(super) const SPECS: &[Spec] = &[
     name: "get_skill",
     description: "One skill as its editor shows it (its draft if it has one, otherwise its latest version): \
                   description, body, reference files (path and size; their content is not returned), where it \
-                  applies, where it stands, whether automation saved its draft (draft_by_automation), its published \
+                  applies, used_by (the profiles that list it, whose agents get it in a local project), where it \
+                  stands, whether automation saved its draft (draft_by_automation), its published \
                   versions (number and when), the tasks whose unfinished runs still use a version of it (task, \
                   version, step, link), its revision, which save_skill_draft's expected_revision takes, and its link \
                   in the app.",
@@ -73,7 +78,9 @@ pub(super) const SPECS: &[Spec] = &[
                   permissions, is refused as person_only, as publish_skill is. Checked as the editor checks it: a name no other skill of the project has, ignoring case \
                   (invalid_name, name_taken); `applies_in` project, agent_role (with `role`, a role of the project's \
                   profiles), pipeline (with `pipeline`) or step (with `pipeline` and `step`, an agent step: a tool \
-                  step has no agent to load it, scope_unavailable); `files` replaces the reference files, each a \
+                  step has no agent to load it, scope_unavailable), which decides who gets it only in a team \
+                  project's runs: in a local project an agent gets a skill only when its profile lists it \
+                  (save_profile_draft skills); `files` replaces the reference files, each a \
                   `path` in the skill's folder (names separated by /: no absolute path, no . or .., no drive, not \
                   SKILL.md) with its text `content`, or without content to keep the skill's file at that path; at \
                   most 100 files of at most 1024 KiB each, each path once (invalid_files). The description and body \
@@ -128,12 +135,17 @@ pub(super) async fn call(
 
 async fn list_skills(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectSkills::load(db)?))).await?;
-  Ok(read.json("skills", translate, |open, skills| {
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok((ProjectSkills::load(db)?, Givers::read(db)?))
+    })
+  })
+  .await?;
+  Ok(read.json("skills", translate, |open, (skills, givers)| {
     skills
       .entries
       .iter()
-      .map(|entry| summary_json(skills, entry, open.project.id()))
+      .map(|entry| summary_json((skills, givers), entry, open.project.id()))
       .collect()
   }))
 }
@@ -182,7 +194,7 @@ pub(super) fn skill_json(root: &Path, id: ResourceId, project: ProjectId) -> Res
     .iter()
     .map(|file| json!({ "path": file.path.as_str(), "size": file.size }))
     .collect();
-  let mut skill = summary_json(&skills, entry, project);
+  let mut skill = summary_json((&skills, &Givers::read(&db)?), entry, project);
   skill["body"] = json!(entry.body.body());
   skill["files"] = json!(files);
   skill["versions"] = json!(versions);
@@ -205,14 +217,15 @@ pub(super) fn skill_named<'a>(skills: &'a ProjectSkills, named: &str) -> Result<
     .ok_or_else(|| ToolError::not_found(Missing::Skill, named))
 }
 
-/// A skill of `project` as `list_skills` lists it, with its link.
-fn summary_json(skills: &ProjectSkills, entry: &SkillEntry, project: ProjectId) -> Value {
+/// A skill of `project` as `list_skills` lists it, with the profiles that give it to their agents and its link.
+fn summary_json((skills, givers): (&ProjectSkills, &Givers), entry: &SkillEntry, project: ProjectId) -> Value {
   json!({
     "id": entry.id.to_string(),
     "name": &*entry.name,
     "slug": &*entry.slug,
     "description": entry.body.description(),
     "applies_in": scope_json(entry.body.scope(), |id| skills.pipeline(id).map(|pipeline| &*pipeline.name)),
+    "used_by": givers.of(entry.id),
     "state": state_json(entry.state),
     "draft_by_automation": skills.by_automation(entry),
     "imported_from": entry.origin.as_ref().map(|origin| &origin.source),

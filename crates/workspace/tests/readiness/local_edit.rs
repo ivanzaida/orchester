@@ -2,19 +2,25 @@
 //! effort and the MCP servers are changed one at a time into the profile's draft by the editor's own rules, and
 //! publishing makes the draft the next version.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
   },
   id::{ConnectionId, ResourceId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
-  resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, RepositoryAccess},
+  resource::{
+    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandProgram,
+    DeniedBehavior, Draft, InjectionEvent, Instruction, InstructionScope, ModelId, PromptText, ProviderSettings,
+    RepositoryAccess, Skill, Tool, ToolAction,
+  },
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_workspace::agents::{
   editor::Outcome,
-  local_edit::{Edit, discard, edit, publish},
+  local_edit::{Edit, GivenKind, discard, edit, publish},
   local_hub::LocalHub,
 };
 
@@ -303,4 +309,79 @@ fn readiness_local_edit_a_draft_that_changes_the_prompts_is_published_in_the_edi
   edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("saved into the draft");
   let refused = publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect_err("still refused");
   assert_eq!(refused.key, "agents.localEdit.promptsInEditor");
+}
+
+/// What a profile gives its agents (`docs/design/team-configuration.md`, "Decided 2026-11-09"): the project's
+/// instructions, skills and tools, each chosen and taken back as an MCP server is, without asking first; an archived
+/// one cannot be given, nor a tool no agent can call (a command without access rules).
+#[test]
+fn readiness_local_edit_gives_and_takes_back_instructions_skills_and_tools() {
+  let (fixture, builder, _) = project();
+  let rule = Instruction::new(
+    PromptText::new("Be brief.").expect("prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Project,
+  )
+  .expect("instruction");
+  let brief = fixture.own("brief", &rule);
+  let old = fixture.own("old", &rule);
+  let skill = Skill::new("When.".into(), "How.".into(), Vec::new(), InstructionScope::Project).expect("skill");
+  let ship = fixture.own("ship", &skill);
+  let action = CommandAction::new(CommandProgram::new("cargo").expect("program"), Vec::new());
+  let access = AccessPolicy::new(
+    BTreeMap::new(),
+    name("Local"),
+    ApprovalMode::EveryCall,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::FailStep,
+  )
+  .expect("access");
+  let check = fixture.own(
+    "check",
+    &Tool::new("Checks.", ToolAction::Command(action.clone()), Some(access)).expect("a check"),
+  );
+  let plain = fixture.own("plain", &Tool::command("Runs.", action));
+  fixture
+    .db()
+    .archive_local_resource(old, Timestamp::now())
+    .expect("archived");
+  let offered = hub(&fixture).profile(builder).expect("a sheet").options.given.clone();
+  assert_eq!(
+    offered.instructions,
+    [(brief, "brief".to_owned())],
+    "an archived one is not offered"
+  );
+  assert_eq!(
+    offered.tools,
+    [(check, "check".to_owned())],
+    "a tool no agent can call is not offered"
+  );
+
+  for (kind, id) in [
+    (GivenKind::Instruction, brief),
+    (GivenKind::Skill, ship),
+    (GivenKind::Tool, check),
+  ] {
+    let Outcome::Saved(_) = edit(&fixture.root, builder, &Edit::Give(kind, id), &[]).expect("given") else {
+      panic!("giving {kind:?} asks nothing");
+    };
+  }
+  let read = hub(&fixture);
+  let sheet = read.profile(builder).expect("a sheet");
+  assert_eq!(sheet.given.instructions, [(brief, "brief".to_owned())]);
+  assert_eq!(sheet.given.skills, [(ship, "ship".to_owned())]);
+  assert_eq!(sheet.given.tools, [(check, "check".to_owned())]);
+  assert!(sheet.options.given.instructions.is_empty());
+  assert_eq!(read.profiles_giving(ship), ["builder"]);
+
+  edit(&fixture.root, builder, &Edit::TakeBack(GivenKind::Skill, ship), &[]).expect("taken back");
+  assert!(hub(&fixture).profile(builder).expect("a sheet").given.skills.is_empty());
+
+  let refused = edit(&fixture.root, builder, &Edit::Give(GivenKind::Instruction, old), &[]).expect_err("archived");
+  assert_eq!(refused.key, "agents.localEdit.givenGone");
+  let wrong = edit(&fixture.root, builder, &Edit::Give(GivenKind::Skill, brief), &[]).expect_err("not a skill");
+  assert_eq!(wrong.key, "agents.localEdit.givenGone");
+  let uncallable = edit(&fixture.root, builder, &Edit::Give(GivenKind::Tool, plain), &[]).expect_err("no check");
+  assert_eq!(uncallable.key, "agents.localEdit.givenGone");
 }

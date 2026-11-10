@@ -37,7 +37,12 @@
       "serversDuplicate": "An MCP server is chosen twice",
       "lists": "Instructions, tools, skills",
       "listsSub": "Picked from this project's lists",
-      "listsValue": "Not available here yet: a new profile starts with none of them."
+      "listsValue": "A new profile starts with none of them: choose them in its panel once it is created."
+    },
+    "instruction": {
+      "givenTo": "Given to",
+      "givenToSub": "Agent profiles choose the instructions their agents get",
+      "givenToValue": "No agent until a profile chooses it in its panel"
     }
   }
 }

@@ -106,8 +106,8 @@ fn approval_mode_profile_schema_4_versions_read_as_manual() {
     let stored: String = raw
       .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
       .expect("stored body");
-    assert!(stored.contains(r#""schema":5"#), "{stored}");
-    let schema_4 = stored.replace(r#""schema":5"#, r#""schema":4"#);
+    assert!(stored.contains(r#""schema":6"#), "{stored}");
+    let schema_4 = stored.replace(r#""schema":6"#, r#""schema":4"#);
     raw
       .execute(
         "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, 1, ?3, 1)",

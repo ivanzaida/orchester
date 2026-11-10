@@ -1,10 +1,11 @@
 //! Skills (ORC-15, `docs/design/orchester-workspace.md`, "Instructions"): know-how an agent loads
 //! when a task needs it. A skill is a Markdown body (its `SKILL.md`), a description an agent reads
-//! to decide whether to load it, reference files beside it, and the scope that decides which agents
-//! get it (the project, a role, a pipeline or a step, as for instructions). It is versioned like
-//! every resource; a run pins the published versions in its scope. An agent is told each skill's
-//! name, description and where it was placed, and reads the body and files itself when it needs
-//! them. Skills never hold secrets: their text is sent as written, without variables.
+//! to decide whether to load it, reference files beside it, and a scope (the project, a role, a pipeline or a step, as
+//! for instructions). It is versioned like every resource. A local run's agents get the skills their profile chooses
+//! (`docs/design/team-configuration.md`, "Decided 2026-11-09"); the scope decides only for a run made from execution
+//! inputs, a team run, whose bundle's profiles list none, and the team server reads it (`docs/cloud-api.md`, used-by).
+//! An agent is told each skill's name, description and where it was placed, and reads the body and files itself when it
+//! needs them. Skills never hold secrets: their text is sent as written, without variables.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -161,7 +162,8 @@ impl Skill {
     &self.scope
   }
 
-  /// Whether `target`'s agent gets the skill.
+  /// Whether the scope admits `target`'s agent: what decides for a run made from execution inputs
+  /// ([`crate::run::GivenBy::Scope`]).
   pub fn reaches(&self, target: InstructionTarget<'_>) -> Result<(), Exclusion> {
     self.scope.admits(target)
   }

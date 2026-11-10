@@ -1,10 +1,13 @@
 //! `list_instructions`, `save_instruction_draft` and `publish_instruction`: a project's instructions as
 //! Instructions lists them, one made (*New instruction*: a name and where it applies) and its draft
 //! saved as its editor saves it, checked with the editor's rules, and published as Publish does, through
-//! the same checked writes (`instructions::editor`). Where an instruction applies and whom it reaches are
+//! the same checked writes (`instructions::editor`). Where an instruction applies and the agents it names are
 //! chosen from what the editor offers: the roles of the project's profiles, its profiles, its pipelines
-//! and their steps. A draft saved here is marked as automation's on the Instructions page; publishing it reaches
-//! agents' prompts, so it is a person's decision ([`widening::prompt_allowed`], ORC-30).
+//! and their steps. Where it applies places it in the prompt; which agents get it is, in a local project, the
+//! profiles that list it (`used_by`; `docs/design/team-configuration.md`, "Decided 2026-11-09"), and the scope and
+//! agents decide it only for a team project's runs, whose execution bundle carries no profile lists. A draft saved
+//! here is marked as automation's on the Instructions page; publishing it reaches agents' prompts, so it is a
+//! person's decision ([`widening::prompt_allowed`], ORC-30).
 
 use std::collections::BTreeSet;
 
@@ -26,6 +29,7 @@ use super::{
     wire,
   },
   created::{settle, with_waiting},
+  given_by::Givers,
   profiles::no_draft,
   widening,
 };
@@ -93,15 +97,20 @@ pub struct SaveInstructionDraft {
   pub instruction: Option<String>,
   /// A new instruction's name; an instruction keeps the name it was made with.
   pub name: Option<String>,
-  pub applies_in: AppliesIn,
+  /// Where it sits in the prompt: the role part, the project rules, the pipeline's or the step's part; in a team
+  /// project it also decides which agents get it. Left out, a new instruction's is project and an existing one keeps
+  /// its own.
+  pub applies_in: Option<AppliesIn>,
   /// With agent_role: a role of the project's profiles.
   pub role: Option<String>,
   /// With pipeline or step: the pipeline, by id or name.
   pub pipeline: Option<String>,
   /// With step: the step of that pipeline, by key or name.
   pub step: Option<String>,
-  /// Which agents it reaches; with agent_role always all of the role's.
-  pub agents: Agents,
+  /// Which agents it names; with agent_role always all of the role's. It decides who gets it only in a team project:
+  /// in a local project an agent gets it only when its profile lists it (save_profile_draft instruction_resources).
+  /// Left out, a new instruction's is all and an existing one keeps its own.
+  pub agents: Option<Agents>,
   /// With roles: roles of the project's profiles.
   #[serde(default)]
   pub agent_roles: Vec<String>,
@@ -123,16 +132,16 @@ pub async fn list_instructions(
   let services = services.clone();
   let read = blocking(move || {
     across(&services, args.project.as_deref(), |_, db| {
-      Ok(ProjectInstructions::load(db)?)
+      Ok((ProjectInstructions::load(db)?, Givers::read(db)?))
     })
   })
   .await?;
-  Ok(read.json("instructions", translate, |open, data| {
+  Ok(read.json("instructions", translate, |open, (data, givers)| {
     let project = open.project.id();
     data
       .entries
       .iter()
-      .map(|entry| entry_json(data, entry, project))
+      .map(|entry| entry_json((data, givers), entry, project))
       .collect()
   }))
 }
@@ -154,7 +163,7 @@ pub async fn get_instruction(services: &Services, args: InInstruction) -> Result
         })
       })
       .collect();
-    let mut instruction = entry_json(&data, entry, open.project.id());
+    let mut instruction = entry_json((&data, &Givers::read(&db)?), entry, open.project.id());
     instruction["versions"] = json!(versions);
     Ok(json!({ "instruction": instruction }))
   })
@@ -172,7 +181,7 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
       .as_deref()
       .map(|named| entry_named(&data, named))
       .transpose()?;
-    let body = instruction(&data, &args)?;
+    let body = instruction(&data, &args, existing)?;
     let (saved, created) = match (existing, &args.name) {
       (Some(_), Some(_)) => {
         return Err(refused(
@@ -206,11 +215,12 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
     .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
   let waiting = waiting?;
   let entry = blocking(move || {
-    let data = ProjectInstructions::load_in(&open.repo_root)?;
+    let db = orchester_store::ProjectDb::open(&open.repo_root)?;
+    let data = ProjectInstructions::load(&db)?;
     let entry = data
       .entry(id)
       .ok_or_else(|| ToolError::not_found(Missing::Instruction, id.to_string()))?;
-    Ok(entry_json(&data, entry, open.project.id()))
+    Ok(entry_json((&data, &Givers::read(&db)?), entry, open.project.id()))
   })
   .await?;
   Ok(with_waiting(json!({ "instruction": entry }), "instruction", waiting))
@@ -235,11 +245,12 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
-    let data = ProjectInstructions::load_in(&open.repo_root)?;
+    let db = orchester_store::ProjectDb::open(&open.repo_root)?;
+    let data = ProjectInstructions::load(&db)?;
     let entry = data
       .entry(id)
       .ok_or_else(|| ToolError::not_found(Missing::Instruction, id.to_string()))?;
-    Ok(json!({ "instruction": entry_json(&data, entry, open.project.id()) }))
+    Ok(json!({ "instruction": entry_json((&data, &Givers::read(&db)?), entry, open.project.id()) }))
   })
   .await
 }
@@ -253,10 +264,15 @@ fn entry_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a Ins
     .ok_or_else(|| ToolError::not_found(Missing::Instruction, named))
 }
 
-/// The instruction the editor's fields make, refused with its reasons.
-fn instruction(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<Instruction, ToolError> {
-  let scope = scope(data, args)?;
-  let targets = targets(data, args)?;
+/// The instruction the editor's fields make, refused with its reasons; where it applies and the agents it names that
+/// are left out are `existing`'s, a new instruction's the project and all agents.
+fn instruction(
+  data: &ProjectInstructions,
+  args: &SaveInstructionDraft,
+  existing: Option<&InstructionEntry>,
+) -> Result<Instruction, ToolError> {
+  let scope = scope(data, args, existing)?;
+  let targets = targets(data, args, existing)?;
   let events = match args.events {
     When::Start => Events::Start,
     When::Resume => Events::Resume,
@@ -278,8 +294,20 @@ fn instruction(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Resul
   })
 }
 
-fn scope(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<ScopeChoice, ToolError> {
-  Ok(match args.applies_in {
+fn scope(
+  data: &ProjectInstructions,
+  args: &SaveInstructionDraft,
+  existing: Option<&InstructionEntry>,
+) -> Result<ScopeChoice, ToolError> {
+  let Some(applies_in) = args.applies_in else {
+    if args.role.is_some() || args.pipeline.is_some() || args.step.is_some() {
+      return Err(ToolError::InvalidArguments(
+        "role, pipeline and step say where the instruction applies: give them with applies_in".into(),
+      ));
+    }
+    return Ok(existing.map_or(ScopeChoice::Project, |entry| ScopeChoice::of(entry.body.scope())));
+  };
+  Ok(match applies_in {
     AppliesIn::Project => ScopeChoice::Project,
     AppliesIn::AgentRole => ScopeChoice::AgentRole(
       args
@@ -310,8 +338,24 @@ fn scope(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<Scop
   })
 }
 
-fn targets(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<Vec<Target>, ToolError> {
-  Ok(match args.agents {
+fn targets(
+  data: &ProjectInstructions,
+  args: &SaveInstructionDraft,
+  existing: Option<&InstructionEntry>,
+) -> Result<Vec<Target>, ToolError> {
+  let Some(agents) = args.agents else {
+    if !args.agent_roles.is_empty() || !args.agent_profiles.is_empty() {
+      return Err(ToolError::InvalidArguments(
+        "agent_roles and agent_profiles name the agents: give them with agents".into(),
+      ));
+    }
+    // An agent role instruction is for all of the role's agents.
+    if matches!(args.applies_in, Some(AppliesIn::AgentRole)) {
+      return Ok(vec![Target::All]);
+    }
+    return Ok(existing.map_or_else(|| vec![Target::All], |entry| Target::of(entry.body.targets())));
+  };
+  Ok(match agents {
     Agents::All => vec![Target::All],
     Agents::Roles => args
       .agent_roles
@@ -371,8 +415,9 @@ pub(super) fn step_named(pipeline: &PipelineChoice, named: &str) -> Result<StepK
     .ok_or_else(|| ToolError::not_found(Missing::Step, named))
 }
 
-/// An instruction of `project` as Instructions lists it, with its link: the page, which opens on its library.
-fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry, project: ProjectId) -> Value {
+/// An instruction of `project` as Instructions lists it, with the profiles that give it to their agents and its link:
+/// the page, which opens on its library.
+fn entry_json((data, givers): (&ProjectInstructions, &Givers), entry: &InstructionEntry, project: ProjectId) -> Value {
   let body = &entry.body;
   let applies_in = scope_json(body.scope(), |id| data.pipeline(id).map(|pipeline| &*pipeline.name));
   let agents = match body.targets() {
@@ -404,6 +449,7 @@ fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry, project: Pro
     "agents": agents,
     "events": events,
     "text": body.text().as_str(),
+    "used_by": givers.of(entry.id),
     "state": state,
     "published_version": entry.state.published().map(|version| version.get()),
     "draft_by_automation": data.by_automation(entry),

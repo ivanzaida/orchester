@@ -11,7 +11,7 @@ use orchester_core::{
     Step, Variable, VersionNumber,
   },
   run::{
-    CONTINUE_PROMPT, DependencyOutput, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo,
+    CONTINUE_PROMPT, DependencyOutput, GivenBy, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo,
     PromptAssemblyError, PromptInput, PromptPart, PromptSource, RaisedLimits, RunContext, RunLimit,
   },
   task::Task,
@@ -67,6 +67,8 @@ pub(crate) struct Prompt {
   profile_id: ResourceId,
   profile: AgentProfile,
   step: Step,
+  /// What decides which instructions reach the agent: the scopes, as for a team run, unless a test says otherwise.
+  pub(crate) given: GivenBy,
   /// What the run delivers; changes unless a test says otherwise.
   pub(crate) delivers: orchester_core::resource::Deliverable,
 }
@@ -81,6 +83,7 @@ impl Prompt {
       profile_id: ResourceId::generate(),
       profile,
       step,
+      given: GivenBy::Scope,
       delivers: orchester_core::resource::Deliverable::Changes,
     }
   }
@@ -110,6 +113,7 @@ impl Prompt {
         id: self.profile_id,
         version: number(2),
         body: &self.profile,
+        given: self.given,
       },
       instructions,
       skills: &[],

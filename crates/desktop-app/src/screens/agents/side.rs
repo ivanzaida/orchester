@@ -2,7 +2,6 @@
 //! (S14 a), what else reaches its prompts, where it is used and the runs using it now. A new profile has only the
 //! first two.
 use lurq::{app::ctx::Ctx, components::Column, node::Element};
-use orchester_core::name::Name;
 
 use super::{active, editor::Props, fields::Fields, policy_panel, project_sets, prompts, uses};
 use crate::theme::HubSpacing;
@@ -19,9 +18,8 @@ pub fn render(ctx: &mut Ctx, props: &Props, fields: &Fields, blocked: Option<&'s
     .child(policy_panel::enforcement(ctx, fields, &props.listed))
     .child(sets);
   if let Some(entry) = &props.entry {
-    let role = Name::new(&fields.role.get()).unwrap_or_else(|_| entry.profile.role().clone());
     side = side
-      .child(prompts::render(ctx, &props.listed, (entry.id, &role)))
+      .child(prompts::render(ctx, &props.listed, &entry.profile))
       .child(uses::render(ctx, props, blocked))
       .child(active::render(ctx, props));
   }

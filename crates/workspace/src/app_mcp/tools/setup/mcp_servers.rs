@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 pub use super::mcp_server_input::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer};
 use super::{
   mcp_server_json::server_result,
-  team_fill_ins::{self, team_resource_named},
+  team_fill_ins::{self, team_named},
   team_mcp_servers, widening,
 };
 pub(super) use super::{
@@ -98,7 +98,9 @@ pub async fn set_mcp_server_enabled(services: &Services, args: SetMcpServerEnabl
   blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
-    if let Some(team) = team_resource_named(&db, ResourceKind::McpServer, &args.server)? {
+    if db.sharing()?.is_some()
+      && let Some(team) = team_named(&services, &open.repo_root, ResourceKind::McpServer, &args.server)?
+    {
       return team_fill_ins::switch_server(&services, &open.repo_root, &team, args.enabled);
     }
     let server = server_named(&db, &args.server)?;

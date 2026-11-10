@@ -19,7 +19,6 @@ use super::{
   team_mcp::Published,
   team_mcp_edit::{EditError, McpDraft, fields_of},
   team_mcp_merge::{Comparison, McpField, Pick, Unresolved, compare, merge},
-  team_sheets,
 };
 use crate::{
   app_mcp::setup::{Invalid, NewTeamMcpServer, team_mcp_names, team_mcp_server},
@@ -137,7 +136,12 @@ pub(super) fn newer(
     .and_then(|base| fields_of(base.body()));
   Ok(Some(Newer {
     number: *number,
-    published: team_sheets::published::<TeamMcpServer>(db, id, *number)?,
+    published: db
+      .cached_version::<TeamMcpServer>(id, *number)?
+      .map(|cached| super::team_mcp::Published {
+        by: cached.publisher.name,
+        at: cached.published_at,
+      }),
     base_number,
     comparison: compare(base.as_ref(), theirs, &mine),
     base,

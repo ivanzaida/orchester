@@ -38,9 +38,10 @@ use crate::{
   screens::{
     local_hub::{
       leave::{clear_unsaved, mark_unsaved},
-      panel::{chips_of, frame, head_end, readiness, standing_chips},
+      model::Entry,
+      panel::{chips_of, frame, head_end, readiness, standing_chips, used_by},
       save_bar::{self, Save},
-      words::{added_to, kind_where_key},
+      words::kind_where_key,
     },
     team_hub::{
       panel::{body, head_named},
@@ -215,7 +216,7 @@ impl Component for Editor {
         PREFIX,
         &ctx.t("local_hub.skill.title"),
         Vec::new(),
-        self.rows(ctx, (&stored.entry, &data), parsed.as_ref().err()),
+        self.rows(ctx, (&stored.entry, entry), parsed.as_ref().err()),
       ))
       .with_children(
         refused
@@ -241,8 +242,9 @@ impl Drop for Editor {
 }
 
 impl Editor {
-  /// *Name*, *Added to*, *Description*, *SKILL.md* and *Files*.
-  fn rows(&self, ctx: &mut Ctx, (stored, data): (&SkillEntry, &EditorData), error: Option<&Message>) -> Vec<Row> {
+  /// *Name*, *Used by* (the profiles that give it to their agents: shown, not chosen), *Description*, *SKILL.md* and
+  /// *Files*.
+  fn rows(&self, ctx: &mut Ctx, (stored, entry): (&SkillEntry, &Entry), error: Option<&Message>) -> Vec<Row> {
     let mut name = FieldInput::new(
       format!("{PREFIX}-name-input"),
       ctx.t("local_hub.skill.name"),
@@ -269,15 +271,7 @@ impl Editor {
         Some(name_sub),
         name.render(ctx),
       ),
-      rows::row(
-        &format!("{PREFIX}-added"),
-        &ctx.t("local_hub.skill.addedTo"),
-        Some(Sub::quiet(ctx.t("local_hub.skill.addedToSub"))),
-        rows::words(
-          &format!("{PREFIX}-added-value"),
-          &added_to(ctx, stored.body.scope(), &data.listed.pipelines),
-        ),
-      ),
+      used_by(ctx, PREFIX, entry),
       area_row(ctx, &DESCRIPTION, &self.description),
       area_row(ctx, &BODY, &self.body),
       rows::row(

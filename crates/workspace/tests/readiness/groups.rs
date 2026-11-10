@@ -103,7 +103,7 @@ fn readiness_a_profile_version_that_is_not_in_the_teams_form_is_undecided() {
     ModelId::new("gpt-5.5").expect("model"),
     ProviderSettings::default(),
   );
-  let id = fixture.team_resource("legacy", legacy);
+  let id = fixture.team_resource("legacy", &legacy);
 
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),

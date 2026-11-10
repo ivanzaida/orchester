@@ -170,7 +170,9 @@ fn instruction_reaches_selected_agents_at_its_events() {
   for (targets, events, expected) in cases {
     let instruction = rule(targets, events, InstructionScope::Project);
     assert_eq!(
-      instruction.applies(target, InjectionEvent::Start),
+      instruction
+        .reaches(target)
+        .and_then(|()| instruction.injected_at(InjectionEvent::Start)),
       expected,
       "{instruction:?}"
     );

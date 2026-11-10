@@ -5,6 +5,7 @@
 
 use orchester_core::{
   connection::AgentProvider,
+  id::ResourceId,
   resource::{ResourceKind, VersionNumber},
   time::Timestamp,
 };
@@ -38,7 +39,8 @@ pub(super) struct Entry {
   pub standing: Option<ReadinessStanding>,
   /// A profile's connection, its MCP servers and its pipelines.
   pub profile: Option<LocalProfile>,
-  /// The profiles that choose an MCP server.
+  /// The profiles that choose an MCP server, or give their agents an instruction, skill or tool: nothing else gives
+  /// an agent one (`docs/design/team-configuration.md`, "Decided 2026-11-09").
   pub used_by: Vec<String>,
   /// When it was archived; `None` while it is not.
   pub archived: Option<Timestamp>,
@@ -99,7 +101,7 @@ impl Listing {
         group: found.group(),
         standing: Some(found.standing().clone()),
         profile: hub.profile(id).cloned(),
-        used_by: Vec::new(),
+        used_by: giving(hub, found.kind(), id),
         archived: None,
       });
     }
@@ -114,7 +116,7 @@ impl Listing {
         group: Group::Ready,
         standing: None,
         profile: None,
-        used_by: Vec::new(),
+        used_by: giving(hub, found.kind, found.id),
         archived: None,
       });
     }
@@ -157,7 +159,7 @@ impl Listing {
       // What chose an archived server still names it, so the panel can say it was used.
       used_by: match found.what {
         Archivable::McpServer(server) => hub.profiles_choosing(server).into_iter().map(str::to_owned).collect(),
-        Archivable::Resource(_) => Vec::new(),
+        Archivable::Resource(id) => giving(hub, found.kind, id),
       },
       archived: Some(found.at),
     }));
@@ -217,6 +219,18 @@ impl Listing {
   /// Whether `filter` holds the entry `what`.
   pub(super) fn holds(&self, filter: HubFilter, what: Archivable) -> bool {
     self.shown(filter).any(|entry| entry.what == what)
+  }
+}
+
+/// The profiles that give their agents `id`, when it is an instruction, a skill or a tool.
+fn giving(hub: &LocalHub, kind: ResourceKind, id: ResourceId) -> Vec<String> {
+  if matches!(
+    kind,
+    ResourceKind::Instruction | ResourceKind::Skill | ResourceKind::Tool
+  ) {
+    hub.profiles_giving(id).into_iter().map(str::to_owned).collect()
+  } else {
+    Vec::new()
   }
 }
 

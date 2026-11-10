@@ -247,7 +247,7 @@ fn tabs(
       let leave = leave.clone();
       agents::Tab::of(
         choice,
-        listing.map(|listing| listing.count(choice)),
+        agents::TabCount::of(listing.map(|listing| listing.count(choice))),
         Arc::new(move || leave.go(route.clone())),
       )
     })

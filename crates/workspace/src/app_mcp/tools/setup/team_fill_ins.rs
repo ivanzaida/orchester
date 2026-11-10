@@ -32,6 +32,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
+  team_config::{TeamRead, TeamResource},
   team_fill_ins::FillInError,
 };
 
@@ -83,7 +84,7 @@ async fn pick_profile_connection(services: &Services, args: PickProfileConnectio
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
     require_team_project(&db)?;
-    let profile = team_resource_named(&db, ResourceKind::AgentProfile, &args.profile)?
+    let profile = team_named(&services, &open.repo_root, ResourceKind::AgentProfile, &args.profile)?
       .ok_or_else(|| ToolError::not_found(Missing::Profile, &args.profile))?;
     let connection = agent_named(&db, &args.connection)?;
     let account = match &args.account {
@@ -93,7 +94,7 @@ async fn pick_profile_connection(services: &Services, args: PickProfileConnectio
     if let Some(account) = &account {
       // The account the profile runs on now: its earlier pick's, else the connection's own.
       let effective = db
-        .connection_pick(profile.id())?
+        .connection_pick(profile.id)?
         .and_then(|earlier| earlier.account)
         .or_else(|| connection.account().id(connection.provider()));
       if effective != Some(account.id()) {
@@ -106,10 +107,10 @@ async fn pick_profile_connection(services: &Services, args: PickProfileConnectio
     };
     services
       .workspace
-      .pick_team_connection(&open.repo_root, profile.id(), pick)
+      .pick_team_connection(&open.repo_root, profile.id, pick)
       .map_err(refusal)?;
     Ok(json!({
-      "profile": { "id": profile.id().to_string(), "name": profile.name().as_str() },
+      "profile": { "id": profile.id.to_string(), "name": profile.name.as_str() },
       "connection": { "id": connection.id().to_string(), "name": connection.name().as_str() },
       "account": account.map(|account| account.id().to_string()),
     }))
@@ -122,7 +123,7 @@ async fn pick_profile_connection(services: &Services, args: PickProfileConnectio
 pub(super) fn switch_server(
   services: &Services,
   repo_root: &Path,
-  server: &Resource,
+  server: &TeamResource,
   enabled: bool,
 ) -> Result<Value, ToolError> {
   if enabled {
@@ -130,11 +131,33 @@ pub(super) fn switch_server(
   }
   services
     .workspace
-    .switch_team_mcp_on_here(repo_root, server.id(), false, Answerer::Automation)
+    .switch_team_mcp_on_here(repo_root, server.id, false, Answerer::Automation)
     .map_err(refusal)?;
-  Ok(
-    json!({ "server": { "id": server.id().to_string(), "name": server.name().as_str(), "team": true, "enabled": false } }),
-  )
+  Ok(json!({ "server": { "id": server.id.to_string(), "name": server.name.as_str(), "team": true, "enabled": false } }))
+}
+
+/// The team's resource of `kind` that `named` names, by its id or its name, in the team's configuration of the project
+/// at `repo_root` read this session; `None` for a name that is none of the team's. Refused `team_unreachable` (or
+/// `team_reading`) while that configuration cannot be read.
+pub(super) fn team_named(
+  services: &Services,
+  repo_root: &Path,
+  kind: ResourceKind,
+  named: &str,
+) -> Result<Option<TeamResource>, ToolError> {
+  let read = services.workspace.team_read(repo_root);
+  let config = match &read {
+    TeamRead::Read { config, .. } => config,
+    TeamRead::Reading => return Err(refusal(FillInError::TeamReading)),
+    TeamRead::Unreachable(unreached) => return Err(refusal(FillInError::TeamUnreachable(unreached.clone()))),
+  };
+  let listed = config.resources(kind);
+  // An id names one resource for certain; a name could also read as another's id.
+  let found = listed
+    .iter()
+    .find(|resource| resource.id.to_string() == named)
+    .or_else(|| listed.iter().find(|resource| resource.name.as_str() == named));
+  Ok(found.map(|resource| (*resource).clone()))
 }
 
 /// The team's resource of `kind` that `named` names, by its id or its name; `None` in a project that is not shared
@@ -196,6 +219,8 @@ pub(super) fn refusal(error: FillInError) -> ToolError {
     FillInError::ProgramNotAbsolute => "program_not_absolute",
     FillInError::ProgramNotAFile => "program_not_a_file",
     FillInError::RemoteServer(_) => "remote_server",
+    FillInError::TeamReading => "team_reading",
+    FillInError::TeamUnreachable(_) => "team_unreachable",
   };
   ToolError::refused(code, vec![error.message()])
 }

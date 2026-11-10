@@ -13,7 +13,7 @@ use orchester_store::ProjectDb;
 use super::{
   harness::Agents,
   support::project_id,
-  team_hub::{open, team},
+  team_hub::{keep_team, open, team},
 };
 
 fn hold(agents: &Agents) -> ReadHold {
@@ -91,6 +91,7 @@ fn team_hub_keeps_the_last_answer_while_it_is_read_again() {
     .expect("database")
     .set_resource_sharing(skill, None)
     .expect("local");
+  keep_team(&agents);
   agents
     .window
     .projects()

@@ -1026,6 +1026,7 @@
       "modelNotOffered": "The profile's connection does not offer that model, so nothing was changed.",
       "effortNotOffered": "The profile's model does not offer that reasoning effort, so nothing was changed.",
       "serversInvalid": "The profile cannot choose those MCP servers, so nothing was changed.",
+      "givenGone": "The project no longer has that instruction, skill or tool, it was archived, or it is a tool no agent can call, so nothing was changed.",
       "staleDraft": "This draft was started from an older version than the latest. Open the profile's editor to compare them and publish.",
       "promptsInEditor": "This draft changes what the profile's role tells its agents, which this panel does not show. Open More settings… to read it and publish it there."
     }
@@ -1626,6 +1627,8 @@
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
       "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
       "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
+      "givenTwice": "Name each instruction, skill and tool once.",
+      "toolNotCheck": "{{tool}} is not a check an agent can call: a profile gives its agents only command tools with access rules.",
       "copyOfRequired": "Copying needs the pipeline to copy (copy_of).",
       "copyOfNotTaken": "Only a copy names a pipeline to copy (copy_of).",
       "inStep": "Step {{step}}:",
@@ -2214,6 +2217,9 @@
       "readOnly": "This task is Not shared, so it is read-only. Share task on its page uploads it first."
     }
   },
+  "teamConfig": {
+    "reading": "The team's configuration is still being read from the team server. Try again in a moment."
+  },
   "teamFillIns": {
     "errors": {
       "personOnly": "Only a person does this: it lets agents do more here, so it is done in Orchester's window, not by automation.",
@@ -2264,7 +2270,6 @@
     "localMcpProgramMoved": "The program of the MCP server {{server}} now leads into the project's repository or off this computer, so a run would not start it. Choose its program again in Connections.",
     "localSecret": "Set a value for the secret {{secret}} on this computer: a tool of the pipeline uses it.",
     "undecidedNotTeamForm": "{{resource}} is not in the team's form on this computer yet, so it is not known what it needs: ask a team Admin to publish it again.",
-    "undecidedCannotBePublished": "{{resource}} waits to be published for the team and cannot be as it is, so it is not known what it needs here. Open it and fix what keeps it from being published.",
     "undecidedChoosesMcpServer": "{{resource}} chooses the MCP server {{server}}, which this computer has not synced from the team yet, so it is not known what it needs.",
     "undecidedChoosesArchivedMcpServer": "{{resource}} chooses the team MCP server {{name}}, which the team archived, so it cannot run until an admin restores {{name}} or removes it from {{resource}}.",
     "undecidedUsesArchivedTool": "{{resource}} names the team tool {{name}}, which the team archived, so it cannot run until an admin restores {{name}} or removes it from {{resource}}.",

@@ -170,7 +170,7 @@ fn readiness_a_local_tool_asks_whether_the_secret_exists_and_never_reads_it() {
 fn readiness_a_team_tool_holding_a_secret_by_id_is_undecided_not_ready() {
   let fixture = Fixture::team();
   let token = SecretId::generate();
-  let tool = fixture.team_resource("deploy", http_tool(token));
+  let tool = fixture.team_resource("deploy", &http_tool(token));
 
   assert_eq!(
     fixture.read().resource(tool).expect("listed").standing(),
