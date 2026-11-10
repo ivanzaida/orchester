@@ -65,7 +65,9 @@ async fn list(services: &Services, args: InProjects, translate: &Translate) -> R
       }
       let readiness = readiness_json::read(&services, db, &open.repo_root)?;
       let read = services.workspace.team_read(&open.repo_root);
-      let servers = read.config().map_or_else(Vec::new, |config| servers_of(config, &readiness));
+      let servers = read
+        .config()
+        .map_or_else(Vec::new, |config| servers_of(config, &readiness));
       Ok(Some((readiness, servers)))
     })
   })

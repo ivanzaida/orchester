@@ -80,6 +80,10 @@ const ALICE: &str = "alice-token";
 const BOB: &str = "bob-token";
 /// How soon a change made on one workspace must reach the other's cache.
 const LIVE: Duration = Duration::from_secs(1);
+/// How long a test waits for what a stream does when that promise is not what it checks: a full run of this binary
+/// starts dozens of streams, fake servers and project databases at once, which can hold a first snapshot or a
+/// reconnect past a second.
+const SETTLED: Duration = Duration::from_secs(5);
 
 /// A member's view of the project's server: its client signed in with the member's token, and the states its stream
 /// reached.
@@ -263,6 +267,20 @@ async fn seen_within(within: Duration, what: &str, mut seen: impl FnMut() -> boo
   }
 }
 
+/// Alice retitles the server's first task, still at revision 1, and this waits until `cached` reads the new title: the
+/// stream then reads events again, which it does only after the reads it makes as it opens (the team's configuration,
+/// and the resources of a stream resumed from a cursor). A session revoked during those reads ends signed out (`401`)
+/// instead of with the stream's `revoked`.
+async fn reading_events(server: &TeamServer, cached: impl Fn() -> Option<CachedTask>) {
+  Member::of(server, ALICE)
+    .retitle(server.task_ids()[0], 1, "Read after the reconnect")
+    .await;
+  seen_within(SETTLED, "a change after the reconnect", || {
+    cached().is_some_and(|task| title(&task) == "Read after the reconnect")
+  })
+  .await;
+}
+
 fn title(task: &CachedTask) -> &str {
   task.title.as_str()
 }
@@ -281,7 +299,7 @@ async fn live_updates_two_workspaces_see_each_others_task_change_claim_and_run_p
     alice.follow(Member::of(&server, ALICE)),
     bob.follow(Member::of(&server, BOB)),
   ];
-  seen_within(LIVE, "both snapshots", || {
+  seen_within(SETTLED, "both snapshots", || {
     alice.task(holder).is_some() && bob.task(holder).is_some()
   })
   .await;
@@ -349,7 +367,7 @@ async fn live_updates_a_connect_without_a_cursor_applies_the_snapshot_and_a_reco
   Member::of(&server, BOB).retitle(status, 1, "Status bar item").await;
   let workspace = Workspace::linked(&server);
   let stream = workspace.follow(Member::of(&server, ALICE));
-  seen_within(LIVE, "the snapshot's cursor", || {
+  seen_within(SETTLED, "the snapshot's cursor", || {
     workspace.link().cursor == server.cursor()
   })
   .await;
@@ -367,7 +385,7 @@ async fn live_updates_a_connect_without_a_cursor_applies_the_snapshot_and_a_reco
   seen_within(Duration::from_secs(3), "the reconnect", || server.connects().len() == 2).await;
   assert_eq!(server.connects()[1], Some(cursor));
   Member::of(&server, BOB).retitle(holder, 1, "Holder").await;
-  seen_within(LIVE, "a change after the reconnect", || {
+  seen_within(SETTLED, "a change after the reconnect", || {
     workspace.task(holder).is_some_and(|task| title(&task) == "Holder")
   })
   .await;
@@ -380,11 +398,11 @@ async fn live_updates_a_stale_delta_reads_that_task_and_revoked_stops_the_stream
   let task = server.task_ids()[0];
   let workspace = Workspace::linked(&server);
   let stream = workspace.follow(Member::of(&server, ALICE));
-  seen_within(LIVE, "the snapshot", || workspace.task(task).is_some()).await;
+  seen_within(SETTLED, "the snapshot", || workspace.task(task).is_some()).await;
 
   server.retitle_unannounced(task, "Missed");
   Member::of(&server, BOB).retitle(task, 2, "Status bar item").await;
-  seen_within(LIVE, "the task read again", || {
+  seen_within(SETTLED, "the task read again", || {
     workspace
       .task(task)
       .is_some_and(|cached| title(&cached) == "Status bar item")
@@ -406,7 +424,7 @@ async fn live_updates_a_stale_delta_reads_that_task_and_revoked_stops_the_stream
   );
 
   server.revoke(ALICE);
-  let stopped = tokio::time::timeout(LIVE, stream).await.expect("stopped at once");
+  let stopped = tokio::time::timeout(SETTLED, stream).await.expect("stopped at once");
   assert_eq!(stopped.expect("the stream's task"), Stopped::NotMember);
   assert!(workspace.link().removed_at.is_some(), "the list reads not a member");
   assert_eq!(server.connects().len(), 1, "a revoked stream does not connect again");
@@ -426,12 +444,12 @@ async fn live_updates_the_desktops_state_is_live_reconnecting_not_a_member_and_n
     ),
   ));
   let state = || desktop.servers.sync_state(desktop.root());
-  seen_within(LIVE, "live", || state() == Some(SyncState::Live)).await;
+  seen_within(SETTLED, "live", || state() == Some(SyncState::Live)).await;
   assert_eq!(desktop.servers.sync_states().len(), 1, "one state, the project's");
 
   server.refuse_streams(1);
   server.drop_streams();
-  seen_within(LIVE, "reconnecting", || {
+  seen_within(SETTLED, "reconnecting", || {
     matches!(state(), Some(SyncState::Reconnecting { .. }))
   })
   .await;
@@ -440,16 +458,21 @@ async fn live_updates_the_desktops_state_is_live_reconnecting_not_a_member_and_n
     state() == Some(SyncState::Live)
   })
   .await;
+  reading_events(&server, || {
+    let db = ProjectDb::open(desktop.root()).expect("the project database");
+    db.cached_task(server.task_ids()[0]).expect("the cache")
+  })
+  .await;
 
   server.revoke(ALICE);
-  seen_within(LIVE, "not a member", || state() == Some(SyncState::NotMember)).await;
+  seen_within(SETTLED, "not a member", || state() == Some(SyncState::NotMember)).await;
 
   ProjectDb::open(desktop.root())
     .expect("the project database")
     .make_local()
     .expect("made local");
   desktop.servers.retry_now(desktop.server);
-  seen_within(LIVE, "no state once local", || state().is_none()).await;
+  seen_within(SETTLED, "no state once local", || state().is_none()).await;
   streams.abort();
 }
 

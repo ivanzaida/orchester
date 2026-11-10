@@ -13,3 +13,5 @@ pub mod profile;
 pub mod reads;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 pub mod runner_programs;
+#[path = "../../../workspace/tests/support/team_cache.rs"]
+pub mod team_cache;

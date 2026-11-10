@@ -143,9 +143,7 @@ impl TeamHub {
 }
 
 fn found<T>(sheets: &[(ResourceId, T)], resource: ResourceId) -> Option<&T> {
-  sheets
-    .iter()
-    .find_map(|(id, sheet)| (*id == resource).then_some(sheet))
+  sheets.iter().find_map(|(id, sheet)| (*id == resource).then_some(sheet))
 }
 
 /// The archived team MCP servers that keep a draft here.

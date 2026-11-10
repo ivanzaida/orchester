@@ -68,7 +68,10 @@ pub struct TeamToolSheet {
 }
 
 /// A sheet for each team tool whose latest version is a tool this computer reads.
-pub(super) fn sheets(config: &TeamConfig, profiles: &[(ResourceId, TeamProfileSheet)]) -> Vec<(ResourceId, TeamToolSheet)> {
+pub(super) fn sheets(
+  config: &TeamConfig,
+  profiles: &[(ResourceId, TeamProfileSheet)],
+) -> Vec<(ResourceId, TeamToolSheet)> {
   let mut sheets = Vec::new();
   for resource in config.resources(ResourceKind::Tool) {
     let Some(Ok(tool)) = resource.body::<Tool>() else {

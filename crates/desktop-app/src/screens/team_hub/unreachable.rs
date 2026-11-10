@@ -40,11 +40,18 @@ pub(super) fn body(
   let tried = display::clock(unreached.at);
   let reason = ctx.t_args(
     "team_hub.cantReach.reason",
-    [("reason", message_text(ctx, &unreached.reason).as_ref()), ("time", tried.as_str())],
+    [
+      ("reason", message_text(ctx, &unreached.reason).as_ref()),
+      ("time", tried.as_str()),
+    ],
   );
-  let action = ActionButton::new("team-hub-unreachable-again", ButtonKind::Secondary, ctx.t("common.tryAgain"))
-    .icon(Icon::RotateCcw)
-    .on_click(again);
+  let action = ActionButton::new(
+    "team-hub-unreachable-again",
+    ButtonKind::Secondary,
+    ctx.t("common.tryAgain"),
+  )
+  .icon(Icon::RotateCcw)
+  .on_click(again);
   let state = Column::new()
     .id("team-hub-unreachable")
     .describe("state", "unreachable")

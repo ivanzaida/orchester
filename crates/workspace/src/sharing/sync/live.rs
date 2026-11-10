@@ -74,9 +74,19 @@ async fn latest(source: &impl Source, resource: &SharedResource) -> Result<Optio
   let Some(number) = resource.latest else {
     return Ok(None);
   };
-  let after = number.get().checked_sub(1).and_then(std::num::NonZeroU32::new).map(VersionNumber::new);
+  let after = number
+    .get()
+    .checked_sub(1)
+    .and_then(std::num::NonZeroU32::new)
+    .map(VersionNumber::new);
   let page = source.versions(resource.id, after).await?;
-  Ok(page.versions.into_iter().max_by_key(|version| version.number).map(version))
+  Ok(
+    page
+      .versions
+      .into_iter()
+      .max_by_key(|version| version.number)
+      .map(version),
+  )
 }
 
 fn version(shared: SharedVersion) -> TeamVersion {

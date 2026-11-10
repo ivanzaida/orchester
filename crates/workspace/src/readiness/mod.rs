@@ -21,7 +21,8 @@
 //!   [`Missing::McpOff`](orchester_core::sharing::Missing::McpOff).
 //! - A team project's resources are read from its latest versions as the team server was read this session
 //!   ([`crate::team_config`]); one whose latest version is not in its kind's team form is [`Undecided::NotTeamForm`].
-//!   While nothing was read, the read is refused ([`ReadinessError::TeamReading`], [`ReadinessError::TeamUnreachable`]).
+//!   While nothing was read, the read is refused ([`ReadinessError::TeamReading`],
+//!   [`ReadinessError::TeamUnreachable`]).
 //! - In a local project the connection a profile runs on is its pick. The program of each MCP server it chooses that a
 //!   run starts must have a program it would start, looked up as the runner does: the `PATH` is the project's
 //!   Environment, else Orchester's search path; a program is a file there or in the project (`repo_root` stands for the

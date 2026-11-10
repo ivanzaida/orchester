@@ -133,9 +133,7 @@ pub(super) fn switch_server(
     .workspace
     .switch_team_mcp_on_here(repo_root, server.id, false, Answerer::Automation)
     .map_err(refusal)?;
-  Ok(
-    json!({ "server": { "id": server.id.to_string(), "name": server.name.as_str(), "team": true, "enabled": false } }),
-  )
+  Ok(json!({ "server": { "id": server.id.to_string(), "name": server.name.as_str(), "team": true, "enabled": false } }))
 }
 
 /// The team's resource of `kind` that `named` names, by its id or its name, in the team's configuration of the project

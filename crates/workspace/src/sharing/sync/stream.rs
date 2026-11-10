@@ -192,9 +192,10 @@ async fn connect(source: &impl Source, root: &Path, clock: &impl Clock) -> (bool
 /// otherwise leave the team's configuration out of the cache until its next version. Resources that cannot be read
 /// now do not hold the tasks' deltas: the next connect reads them again.
 async fn resume(source: &impl Source, root: &Path, resumed: bool, stream: &mut EventStream) -> Ending {
+  // A read refused because the session or the membership just ended is said unreachable here; the stream itself then
+  // ends as the server says (`revoked`, `401`, `403`), which tells signed out from not a member.
   match live::fill(source, root).await {
     Ok(()) => source.changed(),
-    Err(SharingError::SignedOut) => return Ending::Stream(StreamEnd::Unauthorized),
     Err(error) => {
       tracing::warn!(%error, "the team's configuration could not be read; the next connect reads it");
       live::unreached(source, root, &error);

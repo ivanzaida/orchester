@@ -333,12 +333,7 @@ fn hub_body(
         team: Some(team.clone()),
       },
     ),
-    (None, Some(selected)) => resource_panel(
-      ctx,
-      (project, team, hub),
-      (listing, selected),
-      (reading, retry),
-    ),
+    (None, Some(selected)) => resource_panel(ctx, (project, team, hub), (listing, selected), (reading, retry)),
     (None, None) => return Element::from(Row::new()),
   };
   agents::master_detail("team-hub", reading, (list, panel))

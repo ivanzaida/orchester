@@ -10,7 +10,7 @@ use orchester_core::{
 use orchester_store::SharedEvent;
 
 use super::{
-  ALICE, BOB, LIVE, Member, TeamServer, Workspace,
+  ALICE, BOB, Member, SETTLED, TeamServer, Workspace,
   config::{agent, codex, latest, pipeline, step, team_builder, team_references},
   seen_within,
 };
@@ -38,7 +38,7 @@ async fn live_updates_a_stream_resumed_without_the_snapshot_keeps_the_configurat
     .expect("the cursor Join keeps");
 
   let stream = workspace.follow(Member::of(&server, BOB));
-  seen_within(LIVE, "the resources published before", || {
+  seen_within(SETTLED, "the resources published before", || {
     latest::<Pipeline>(&workspace, delivery).is_some()
   })
   .await;

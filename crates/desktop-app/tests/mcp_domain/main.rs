@@ -65,8 +65,11 @@ mod skills_window;
 mod slot_waits;
 mod story_points;
 mod task_organization;
+#[path = "../../../workspace/tests/support/team_cache.rs"]
+mod team_cache;
 mod team_fill_ins;
 mod team_mcp_servers;
+mod team_reviewer_picks;
 mod todo_lists;
 mod tools;
 mod tools_window;

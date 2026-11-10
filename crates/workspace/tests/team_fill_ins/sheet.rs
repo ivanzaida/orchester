@@ -93,7 +93,7 @@ fn team_fill_ins_an_mcp_server_sheet_says_how_it_runs_who_uses_it_and_what_this_
   );
   assert_eq!(
     program.used_by,
-    vec!["Builder".to_owned()],
+    vec!["team-builder".to_owned()],
     "the profile that chooses it"
   );
   assert_eq!(program.program, None, "no path until the person sets one");

@@ -11,8 +11,6 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use crate::team_config::TeamConfig;
-
 use super::{
   ReadinessError, facts, local,
   needs::{self, Entry, Profile, Reviewer, Server},
@@ -21,6 +19,7 @@ use super::{
   standing::{ReadinessStanding, Undecided},
   team,
 };
+use crate::team_config::TeamConfig;
 
 /// What the read needs besides the project's database.
 pub(super) struct Setting<'a> {

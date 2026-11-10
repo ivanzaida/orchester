@@ -198,7 +198,10 @@ impl Component for LocalHubScreen {
       ctx,
       "local-hub-new",
       view.filter,
-      leave.press(Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))))),
+      leave.press(Route::Project(
+        id,
+        ProjectPage::hub(HubView::adding(made_under(view.filter))),
+      )),
     );
     let leaving = listing.as_ref().and_then(|listing| {
       leave::question(
@@ -229,7 +232,12 @@ impl Component for LocalHubScreen {
 
 /// A tab per kind and *Archived* with its count (none while the hub is read), each keeping the chosen entry when it
 /// holds it.
-fn tabs(project: ProjectId, listing: Option<&Listing>, selected: Option<Archivable>, leave: &Leave) -> Vec<agents::Tab> {
+fn tabs(
+  project: ProjectId,
+  listing: Option<&Listing>,
+  selected: Option<Archivable>,
+  leave: &Leave,
+) -> Vec<agents::Tab> {
   HubFilter::LOCAL
     .into_iter()
     .map(|choice| {
@@ -393,7 +401,12 @@ fn empty(ctx: &Ctx, filter: HubFilter, project: ProjectId, leave: &Leave) -> Ele
       .press(leave.press(form))
       .into()
   });
-  agents::empty("local-hub", glyph, (&ctx.t(title), &ctx.t(detail)), action.into_iter().collect())
+  agents::empty(
+    "local-hub",
+    glyph,
+    (&ctx.t(title), &ctx.t(detail)),
+    action.into_iter().collect(),
+  )
 }
 
 /// The page that makes a new profile, MCP server, instruction, skill or tool, which in a local project is the form of
