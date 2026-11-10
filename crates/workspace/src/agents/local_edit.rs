@@ -7,8 +7,9 @@
 //! cannot hold is saved.
 //!
 //! The Agents hub's panel holds its changes instead, and stores nothing until Save ([`hold`], [`save`]): each choice is
-//! made by the same rules on what the panel holds, starting from the latest published version (the panel has no
-//! drafts, decided by the person 2026-11-09), and Save publishes it as the next version at once.
+//! made by the same rules on what the panel holds, its role as typed too ([`Edit::Role`]), starting from the latest
+//! published version (the panel has no drafts, decided by the person 2026-11-09), and Save publishes it as the next
+//! version at once.
 
 use std::path::Path;
 
@@ -31,6 +32,7 @@ use super::{
   local_connection::discard_saved,
   local_given::is_check,
   local_hub::{LocalProfile, profile_as},
+  role::RoleText,
 };
 use crate::{
   messages::{self, Message},
@@ -58,6 +60,8 @@ pub enum Edit {
   TakeBack(GivenKind, ResourceId),
   /// Runs on another connection of its CLI, with the same model and effort.
   Connection(ConnectionId),
+  /// Its role as typed: the name, what it answers for and the role instructions.
+  Role(RoleText),
 }
 
 /// Which of a profile's lists of the project's resources an edit changes.
@@ -128,8 +132,15 @@ pub fn hold(root: &Path, profile: ResourceId, held: Option<&AgentProfile>, edit:
 /// stored meanwhile too, which it replaces. `allowed` is what the person already allowed to widen: [`Outcome::Confirm`]
 /// lists what it widens beyond that, and nothing is stored. All or nothing: the draft the save makes is thrown away
 /// when the publication is refused. Refused, as the panel's *Publish* was, while the stored draft is one started from
-/// an older version, and for a body that changes what the role's prompts say, which the panel does not show.
-pub fn save(root: &Path, profile: ResourceId, held: &AgentProfile, allowed: &[Message]) -> Result<Outcome, Message> {
+/// an older version. What it changes in the role's prompts (its role, responsibilities or role instructions, which the
+/// panel shows) is a person's decision ([`crate::prompt_changes`]): `decided` says one pressed Save, or let automation
+/// decide; otherwise such a save is refused and nothing is stored.
+pub fn save(
+  root: &Path,
+  profile: ResourceId,
+  held: &AgentProfile,
+  (allowed, decided): (&[Message], bool),
+) -> Result<Outcome, Message> {
   let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
   let entry = listed
     .profile(profile)
@@ -144,19 +155,20 @@ pub fn save(root: &Path, profile: ResourceId, held: &AgentProfile, allowed: &[Me
     return Ok(Outcome::Saved(profile));
   }
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  if !prompt_changes::profile_in(&db, profile, &body)
-    .map_err(|error| messages::store_error(&error))?
-    .is_empty()
+  if !decided
+    && !prompt_changes::profile_in(&db, profile, &body)
+      .map_err(|error| messages::store_error(&error))?
+      .is_empty()
   {
-    return Err(Message::new("agents.localEdit.promptsInEditor"));
+    return Err(Message::new("appMcp.errors.promptPersonOnly"));
   }
   if body != entry.profile
-    && let Outcome::Confirm(reasons) = apply(root, entry, body.clone(), Action::Save, allowed)?
+    && let Outcome::Confirm(reasons) = apply(root, entry, body.clone(), Action::Save, (allowed, decided))?
   {
     return Ok(Outcome::Confirm(reasons));
   }
   let drafted = editor::entry_in(root, profile)?;
-  let published = apply(root, drafted, body.clone(), Action::Publish, allowed);
+  let published = apply(root, drafted, body.clone(), Action::Publish, (allowed, decided));
   if !had_draft && !matches!(published, Ok(Outcome::Saved(_))) {
     discard_saved(root, profile, &body);
   }
@@ -178,7 +190,7 @@ pub fn edit(root: &Path, profile: ResourceId, edit: &Edit, allowed: &[Message]) 
   if next == entry.profile {
     return Ok(Outcome::Saved(profile));
   }
-  apply(root, entry, next, Action::Save, allowed)
+  apply(root, entry, next, Action::Save, (allowed, false))
 }
 
 /// Publishes the draft of the local profile `profile` as its next version, with what the person allowed to widen, while
@@ -203,7 +215,7 @@ pub fn publish(root: &Path, profile: ResourceId, shown: Timestamp, allowed: &[Me
     return Err(Message::new("agents.localEdit.promptsInEditor"));
   }
   let body = entry.profile.clone();
-  editor::apply(root, &request(root, entry, body, Action::Publish, allowed)?)
+  editor::apply(root, &request(root, entry, body, Action::Publish, (allowed, false))?)
 }
 
 /// The stored profile and when its draft was saved, read together.
@@ -229,19 +241,19 @@ fn apply(
   entry: ProfileEntry,
   body: AgentProfile,
   action: Action,
-  allowed: &[Message],
+  consent: (&[Message], bool),
 ) -> Result<Outcome, Message> {
-  editor::apply(root, &request(root, entry, body, action, allowed)?)
+  editor::apply(root, &request(root, entry, body, action, consent)?)
 }
 
 /// The request for `action` with `body`, which takes as allowed what the stored draft already widens, as the editor's
-/// autosave does.
+/// autosave does, and `prompt_decided` as a person decided ([`Request::prompt_decided`]).
 fn request(
   root: &Path,
   entry: ProfileEntry,
   body: AgentProfile,
   action: Action,
-  allowed: &[Message],
+  (allowed, prompt_decided): (&[Message], bool),
 ) -> Result<Request, Message> {
   let mut allowed = allowed.to_vec();
   for reason in editor::approved_in(root, &entry)? {
@@ -254,7 +266,7 @@ fn request(
     profile: body,
     action,
     allowed,
-    prompt_decided: false,
+    prompt_decided,
   })
 }
 
@@ -293,6 +305,10 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
     skills: current.skills().clone(),
     tools: current.tools().clone(),
   };
+  let role = match edit {
+    Edit::Role(role) => role.clone(),
+    _ => RoleText::of(current),
+  };
   match edit {
     Edit::Cli(provider) => fields.use_cli(listed, *provider)?,
     Edit::Model(model) => fields.use_model(model)?,
@@ -311,11 +327,12 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
     Edit::Connection(connection) => fields.use_connection(listed, *connection)?,
     Edit::Give(kind, resource) => *fields.given(*kind) = kind.of(current).with(*resource),
     Edit::TakeBack(kind, resource) => *fields.given(*kind) = kind.of(current).without(*resource),
+    Edit::Role(_) => {}
   }
   ProfileForm {
-    role: current.role().as_str(),
-    responsibilities: current.responsibilities(),
-    instructions: current.instructions().as_str(),
+    role: &role.role,
+    responsibilities: &role.responsibilities,
+    instructions: &role.instructions,
     connection: fields.connection,
     model: &ModelSelection::Custom,
     custom_model: &fields.model,

@@ -19,6 +19,7 @@ mod local_hub_leaving;
 mod local_hub_profile;
 mod local_hub_refusals;
 mod local_hub_review;
+mod local_hub_role;
 mod local_hub_saved;
 mod models;
 mod project_sets;

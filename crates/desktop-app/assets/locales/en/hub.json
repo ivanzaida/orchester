@@ -13,6 +13,14 @@
     "allSaved": "All changes saved",
     "more": "More actions",
     "crumbSeparator": "/",
+    "role": {
+      "title": "Role",
+      "name": "Role",
+      "responsibilities": "Responsibilities",
+      "responsibilitiesSub": "What it answers for",
+      "instructions": "Role instructions",
+      "instructionsSub": "First in the agent's prompt, before the instructions it is given"
+    },
     "discard": {
       "action": "Discard draft",
       "title": "Discard draft v{{version}}?",

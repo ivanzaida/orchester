@@ -11,6 +11,7 @@ pub mod local_given;
 pub mod local_hub;
 pub mod permissions;
 pub mod prompts;
+pub mod role;
 pub mod servers;
 pub mod team_hub;
 pub mod team_mcp;
