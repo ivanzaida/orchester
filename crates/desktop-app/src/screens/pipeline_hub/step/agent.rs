@@ -24,7 +24,7 @@ use orchester_core::{
   id::ProjectId,
   resource::{Step, StepKey},
 };
-use orchester_workspace::pipelines::fields::{Executor, dropped_override, take_back_override};
+use orchester_workspace::pipelines::fields::{Executor, dropped_override};
 
 use super::choices::Flag;
 use crate::{
@@ -189,10 +189,7 @@ impl Agent {
             let (executor, to) = (executors[at], clis[at]);
             edit.change(|current| {
               current.update(&step, |step| {
-                executor.apply_on(step, (from, to));
-                if let Some((started, was_for)) = &started {
-                  take_back_override(step, started, (*was_for, to));
-                }
+                executor.apply_in_edit(step, started.as_ref(), (from, to));
               });
             });
           }

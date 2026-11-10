@@ -164,3 +164,29 @@ fn choosing_the_overrides_cli_again_takes_it_back() {
     "a CLI that is not known takes nothing back on a guess"
   );
 }
+
+#[test]
+fn a_profile_whose_cli_is_not_known_does_not_carry_the_override_to_another_cli() {
+  let started = (overriding(), Some(AgentProvider::ClaudeCodeCli));
+  let mut step = started.0.clone();
+  let (claude, codex) = (Some(AgentProvider::ClaudeCodeCli), Some(AgentProvider::CodexCli));
+
+  // A profile with no connection: its CLI is not known, so the override is kept on no guess.
+  let kept = Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (claude, None));
+  assert_eq!(kept, None);
+  assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
+
+  // Then one on Codex: the override was for Claude, the CLI the step started on.
+  let dropped = Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (None, codex));
+  assert_eq!(dropped.as_ref().map(ModelId::as_str), Some("custom-model"));
+  assert_eq!(model_of(&step), None);
+  assert_eq!(
+    dropped_override(&started.0, &step).as_ref().map(ModelId::as_str),
+    Some("custom-model"),
+    "the field says it was dropped"
+  );
+
+  // Back on Claude, it is taken back.
+  Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (codex, claude));
+  assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
+}
