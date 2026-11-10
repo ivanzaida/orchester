@@ -1,13 +1,12 @@
 //! What the form that creates a resource says when the team server answered otherwise than by taking it (`Create
-//! refused · name taken in the team` A15 `dLqHC`, and as the hub's edit says them, A14 `gTLx6`, A16 `x3ywL`, A17
-//! `rJbPm`): one notice in place, over the form, which keeps everything typed.
+//! refused · name taken in the team` A15 `dLqHC`, and as the hub's edit says them): one notice in place, over the form,
+//! which keeps everything typed. A team server that cannot be reached creates nothing, and the notice says why.
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_workspace::sharing::team_edit::Refusal;
 
 use super::work::Failed;
 use crate::ui::{
-  button::ActionButton,
   icon::Icon,
   message::message_text,
   notice::{Notice, NoticeTone},
@@ -55,15 +54,4 @@ pub(super) fn refused(ctx: &Ctx, failed: &Failed, admins: &str) -> Element {
       .body(message_text(ctx, reason))
       .into(),
   }
-}
-
-/// *Waiting to send · retries when the server is back* and *Cancel sending* (A16): the team server could not be
-/// reached, so the resource is kept here and sent once it answers.
-pub(super) fn waiting(ctx: &Ctx, cancel: ActionButton) -> Element {
-  Notice::new("team-new-waiting", NoticeTone::Info, ctx.t("team_new.waiting.title"))
-    .icon(Icon::CloudUpload)
-    .body(ctx.t("team_new.waiting.body"))
-    .stacked()
-    .action(cancel)
-    .into()
 }

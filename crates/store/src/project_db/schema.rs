@@ -114,6 +114,7 @@ mod team_delivery_waits;
 mod team_fill_ins;
 mod team_mcp_server;
 mod team_operations;
+mod team_outbox;
 mod team_pipeline_ids;
 mod team_references;
 mod team_reviewer;
@@ -141,5 +142,6 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::TeamReviewer => team_reviewer::MIGRATION,
     super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
     super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
+    super::ProjectMigration::TeamOutbox => team_outbox::MIGRATION,
   }
 }

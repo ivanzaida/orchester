@@ -30,14 +30,13 @@ use crate::{
   },
 };
 
-/// The header of `state`'s page; `busy` while a write runs, the page reloads or a version is read. A member of a shared
-/// project has neither *Save draft* nor *Publish* (03), and `shared`, the team's version and where it stands here,
-/// takes the version line's place (`Sub` `Du8OB` in 02).
+/// The header of `state`'s page; `busy` while a write runs, the page reloads or a version is read. A team project's
+/// pipeline has neither *Save draft* nor *Publish* here.
 pub fn header(
   ctx: &mut Ctx,
   state: &State,
   (save, publish): (Option<ActionButton>, Option<ActionButton>),
-  (busy, shared): (bool, Option<Row>),
+  busy: bool,
 ) -> Element {
   let editing = state.get();
   let nav = Navigation::of(ctx);
@@ -54,7 +53,7 @@ pub fn header(
   parts::header()
     .child(back)
     .child(title)
-    .child(shared.unwrap_or_else(|| version_line(ctx, &editing)))
+    .child(version_line(ctx, &editing))
     .child(tabs(ctx, &editing))
     .into()
 }

@@ -8,11 +8,7 @@ use orchester_core::{
   sharing::{Missing, ProgramProblem},
   time::Timestamp,
 };
-use orchester_workspace::{
-  agents::team_mcp::{Published, TeamMcpSheet},
-  display,
-  sharing::team::TeamConfiguration,
-};
+use orchester_workspace::agents::team_mcp::TeamMcpSheet;
 
 use crate::{
   screens::team_hub::{
@@ -22,34 +18,10 @@ use crate::{
   ui::chip::BadgeTone,
 };
 
-/// *v3 · published by dana-k · Oct 30*: what stands after *MCP server* in the head. An archived server says when the
-/// team archived it instead (A21): the stream says who archived it nowhere, so no one is named.
-pub(super) fn head_line(
-  ctx: &Ctx,
-  now: Timestamp,
-  entry: &Entry,
-  (sheet, team): (&TeamMcpSheet, &TeamConfiguration),
-) -> Option<String> {
+/// *v3 · published by dana-k · Oct 30*: what stands after *MCP server* in the head.
+pub(super) fn head_line(ctx: &Ctx, now: Timestamp, entry: &Entry, sheet: &TeamMcpSheet) -> Option<String> {
   let version = entry.number?.to_string();
-  if let Some(at) = entry.archived {
-    return Some(
-      ctx
-        .t_args(
-          "team_hub.mcp.headLineArchived",
-          [("version", version), ("time", display::clock(at))],
-        )
-        .to_string(),
-    );
-  }
-  // While a version published here waits, the version the head names is the team's, whose publisher the standing keeps.
-  let confirmed = || {
-    let confirmed = team.standing(entry.id)?.confirmed.as_ref()?;
-    Some(Published {
-      by: confirmed.publisher.clone()?,
-      at: confirmed.published_at,
-    })
-  };
-  Some(match sheet.published.clone().or_else(confirmed) {
+  Some(match &sheet.published {
     Some(published) => ctx
       .t_args(
         "team_hub.mcp.headLine",

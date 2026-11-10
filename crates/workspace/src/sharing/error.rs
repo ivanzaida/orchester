@@ -6,7 +6,7 @@ use orchester_api::{
   ErrorCode,
   client::{ClientError, ServerAddress},
 };
-use orchester_core::{id::ResourceId, resource::VersionNumber, secret::VaultError};
+use orchester_core::{id::ResourceId, secret::VaultError};
 use orchester_store::StoreError;
 use thiserror::Error;
 
@@ -82,14 +82,6 @@ pub enum SharingError {
   /// it, or the server answered `403 not_admin`. Nothing was sent.
   #[error("only an admin changes the team's configuration")]
   NotAdmin,
-  /// Someone published `latest` from the same version meanwhile: the admin decides whether to edit on top of it or to
-  /// publish theirs as the next version anyway.
-  #[error("version {latest} was published from the same version meanwhile")]
-  VersionConflict { latest: VersionNumber },
-  /// Only a person does this: *Use v<N> here* and binding a reference widen what agents may do here, so automation is
-  /// refused and nothing changed.
-  #[error("only a person does this; nothing was changed")]
-  PersonOnly,
   /// A body to send the team names MCP servers of this computer that are not team resources, or (of a kind whose body
   /// is not in the team's form yet) connections or secrets of this computer, which a team resource never holds
   /// (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
@@ -165,10 +157,6 @@ impl SharingError {
       Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
       Self::UnprovenServer => Message::new("sharing.errors.unprovenServer"),
       Self::NotAdmin => Message::new("sharing.errors.notAdmin"),
-      Self::VersionConflict { latest } => {
-        Message::new("sharing.errors.versionConflict").with("version", latest.get().to_string())
-      }
-      Self::PersonOnly => Message::new("sharing.errors.personOnly"),
       Self::LocalEntitiesNamed { names, .. } => {
         Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
       }

@@ -10,10 +10,6 @@ use super::ProjectServer;
 use crate::sharing::{SharingError, sync::ConfigServer};
 
 impl ConfigServer for ProjectServer {
-  fn writable(&self) -> Result<(), SharingError> {
-    Self::writable(self)
-  }
-
   async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
     self
       .call(|client, token, project| async move { client.versions(&token, project, resource, after).await })

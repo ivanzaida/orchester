@@ -79,7 +79,6 @@ fn remove_bindings_migration_drops_the_bindings_and_the_references_that_named_a_
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: instruction(),
-    waits_here: false,
   };
   let stored = db.cache_shared_version(id, &version).expect("cache");
   drop(db);

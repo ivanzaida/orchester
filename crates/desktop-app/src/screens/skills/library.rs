@@ -8,7 +8,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::InstructionScope;
-use orchester_workspace::{sharing::team::TeamConfiguration, skills::data::SkillEntry};
+use orchester_workspace::skills::data::SkillEntry;
 
 use super::{PageProps, state::Panel, words};
 use crate::{
@@ -16,7 +16,6 @@ use crate::{
   screens::hub::{
     self, bones,
     parts::{Entry, Tone, boxed, group, head, note, status, tile},
-    team,
   },
   theme::{HubSpacing, HubText},
   ui::{
@@ -35,15 +34,13 @@ impl Component for Library {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<PageProps>().clone();
-    let team = team::of(&p.project);
     let entries = &p.data.listed.entries;
     let mut pane = Column::new()
       .id("skills-library")
       .width(Dimension::Pct(100.0))
-      .spacing(HubSpacing::Groups.role())
-      .with_children(team.as_ref().map(|team| team::line(ctx, "skills-team-line", team)));
+      .spacing(HubSpacing::Groups.role());
     if entries.is_empty() {
-      pane = pane.child(empty(ctx, &p, team::may_change(team.as_ref())));
+      pane = pane.child(empty(ctx, &p));
     } else {
       let drafts = entries.iter().filter(|e| e.state.has_draft()).count();
       let skills = ctx.t_args(
@@ -67,13 +64,10 @@ impl Component for Library {
         if of_scope.is_empty() {
           continue;
         }
-        pane = pane.child(scope_group(ctx, (&p, team.as_ref()), filter, &of_scope));
+        pane = pane.child(scope_group(ctx, &p, filter, &of_scope));
       }
     }
-    let foot = match &team {
-      Some(team) => team::foot(ctx, "skills-versions-note", team),
-      None => note("skills-versions-note", Icon::History, &ctx.t("skills.versionsNote")),
-    };
+    let foot = note("skills-versions-note", Icon::History, &ctx.t("skills.versionsNote"));
     hub::list_body("skills-list", pane.child(foot))
   }
 }
@@ -138,19 +132,14 @@ fn accepts(filter: SkillsFilter, scope: &InstructionScope) -> bool {
   }
 }
 
-fn scope_group(
-  ctx: &Ctx,
-  (p, team): (&PageProps, Option<&TeamConfiguration>),
-  filter: SkillsFilter,
-  entries: &[&SkillEntry],
-) -> Element {
+fn scope_group(ctx: &Ctx, p: &PageProps, filter: SkillsFilter, entries: &[&SkillEntry]) -> Element {
   let key = match filter {
     SkillsFilter::Project | SkillsFilter::All => "skills.groups.project",
     SkillsFilter::Roles => "skills.groups.roles",
     SkillsFilter::Pipelines => "skills.groups.pipelines",
   };
   let id = format!("skills-group-{}", filter.name());
-  let rows = entries.iter().map(|entry| row(ctx, (p, team), entry));
+  let rows = entries.iter().map(|entry| row(ctx, p, entry));
   group(
     &id,
     head(&id, &ctx.t(key), Some(&entries.len().to_string()), None),
@@ -159,7 +148,7 @@ fn scope_group(
   .into()
 }
 
-fn row(ctx: &Ctx, (p, team): (&PageProps, Option<&TeamConfiguration>), entry: &SkillEntry) -> Element {
+fn row(ctx: &Ctx, p: &PageProps, entry: &SkillEntry) -> Element {
   let hint = ctx.t_args(
     "skills.rowLine",
     [
@@ -171,52 +160,30 @@ fn row(ctx: &Ctx, (p, team): (&PageProps, Option<&TeamConfiguration>), entry: &S
   let row = Entry::new(format!("skill-row-{}", entry.id), entry.name.clone())
     .tile(Icon::GraduationCap)
     .hint(hint);
-  let row = match team.and_then(|team| Some((team, team.standing(entry.id)?))) {
-    Some((team, standing)) => row
-      .one_line()
-      .end(team::publisher(
-        ctx,
-        &format!("skill-publisher-{}", entry.id),
-        team,
-        standing,
-      ))
-      .end(team::row_state(
-        ctx,
-        &format!("skill-version-{}", entry.id),
-        standing,
-        team::draft_on(entry.state),
-      )),
-    None => {
-      let tone = match entry.state {
-        orchester_workspace::agents::data::VersionState::Published(_) => Tone::Success,
-        orchester_workspace::agents::data::VersionState::Draft { published: None } => Tone::Muted,
-        _ => Tone::Warning,
-      };
-      row.end(status(
-        &format!("skill-version-{}", entry.id),
-        tone,
-        &words::version(ctx, entry.state),
-      ))
-    }
+  let tone = match entry.state {
+    orchester_workspace::agents::data::VersionState::Published(_) => Tone::Success,
+    orchester_workspace::agents::data::VersionState::Draft { published: None } => Tone::Muted,
+    _ => Tone::Warning,
   };
+  let row = row.end(status(
+    &format!("skill-version-{}", entry.id),
+    tone,
+    &words::version(ctx, entry.state),
+  ));
   row.press(Press::Open(p.view.panel.to(Panel::Edit(entry.id)))).into()
 }
 
-/// No skill yet (06b): what a skill is, with New skill. A member of a shared project adds none.
-fn empty(ctx: &Ctx, p: &PageProps, may_change: bool) -> Element {
+/// No skill yet (06b): what a skill is, with New skill.
+fn empty(ctx: &Ctx, p: &PageProps) -> Element {
   let name = p.project.open.project.name().as_str();
   let row = Entry::new("skills-empty", ctx.t_args("skills.emptyTitle", [("project", name)]))
     .tile(Icon::GraduationCap)
-    .hint(ctx.t_args("skills.emptyFirstDetail", [("project", name)]));
-  let row = if may_change {
-    row.end(
+    .hint(ctx.t_args("skills.emptyFirstDetail", [("project", name)]))
+    .end(
       ActionButton::new("skills-empty-new", ButtonKind::Secondary, ctx.t("skills.new"))
         .icon(Icon::Plus)
         .opens(p.view.panel.to(Panel::New)),
-    )
-  } else {
-    row
-  };
+    );
   group(
     "skills-group-empty",
     head("skills-group-empty", &ctx.t("hub.tabs.skills"), None, None),

@@ -572,38 +572,6 @@
       "checkUpdates": "Check for updates"
     },
     "config": {
-      "widens": {
-        "title": "v{{version}} widens what agents may do here",
-        "body": "{{publisher}} published v{{version}}. Runs on this computer keep the version before it until you use v{{version}} here.",
-        "bodyUsed": "{{publisher}} published v{{version}}. Runs on this computer keep v{{used}} until you use v{{version}} here.",
-        "compare": "Compare v{{used}} with v{{version}}",
-        "compareLater": "Comparing a profile's versions comes in a later update.",
-        "personOnly": "Only you can press this: not the Orchestrator, a tool or automation.",
-        "use": "Use v{{version}} here",
-        "adds": {
-          "repository": "Write access to the repository · was read-only",
-          "writableFolder": "A writable folder outside the worktree",
-          "commands": "Commands it did not let run",
-          "network": "Network on · was off",
-          "toolCallsUnasked": "Tool calls no longer asked about",
-          "autopilot": "Autopilot · was Manual",
-          "browser": "The browser on · was off",
-          "browserSite": "An allowed site of the browser it did not list",
-          "codexSandboxOff": "The Codex sandbox off · was on",
-          "mcpServer": "An MCP server it did not give its agents",
-          "secret": "A secret it did not use",
-          "tool": "A tool it did not give its agents",
-          "command": "A command it did not run",
-          "address": "Another address its requests go to",
-          "method": "Another request method",
-          "headers": "Inputs sent in other headers",
-          "database": "Another database",
-          "query": "Another query",
-          "access": "A changed access policy"
-        }
-      },
-      "shared": "Shared with {{team}}. What you publish here is the version everyone's runs use.",
-      "sharedNoServer": "Shared with your team. What you publish here is the version everyone's runs use.",
       "readOnly": "Only Admins change the team's configuration: {{admins}}.",
       "owner": "{{name}} (Admin)",
       "serverAdmin": "{{name}} (Server admin)",
@@ -611,65 +579,8 @@
       "ownersAndAdmins": "{{owners}} and the Server admins",
       "noOwners": "the project's Admins and the Server admins",
       "separator": ", ",
-      "dot": "·",
-      "publishNote": "Publishing sends a new version to {{host}}; teammates get it at once unless it widens what their agents may do.",
-      "publishNoteNoServer": "Publishing sends a new version to the team server; teammates get it at once unless it widens what their agents may do.",
-      "memberNote": "Runs here use the published versions. A version that widens what agents may do waits until you use it here.",
-      "publisher": "{{name}} · {{when}}",
-      "today": "today {{time}}",
-      "day": "{{month}} {{day}}",
-      "here": "Published here",
-      "state": {
-        "version": "v{{version}}",
-        "draft": "v{{version}} · your draft",
-        "firstDraft": "Your draft",
-        "notSent": "Published here, not sent",
-        "conflict": "v{{latest}} published meanwhile",
-        "refused": "Not taken by the server"
-      },
       "head": {
-        "published": "v{{version}} · published by {{name}} · {{when}}",
-        "publishedHere": "v{{version}} · published here · {{when}}",
-        "notPublished": "Not published yet",
-        "draft": "Your draft on v{{version}}",
-        "firstDraft": "Your first draft",
-        "notSent": "v? · published here, not sent",
-        "conflict": "Your draft wasn't published",
-        "refused": "Your version wasn't published",
         "used": "Used here"
-      },
-      "bar": {
-        "draft": "Draft on v{{version}} · {{saved}} · only on this computer",
-        "firstDraft": "First draft · {{saved}} · only on this computer",
-        "makes": "{{changes}} · publishing makes v{{next}} for the whole team",
-        "makesOnly": "Publishing makes v{{next}} for the whole team",
-        "publish": "Publish for the team",
-        "notSent": "v? · published here, not sent · {{time}}",
-        "notSentBody": "{{host}} can't be reached. Your new runs use this version now; it gets its number when the server answers.",
-        "theServer": "The team server",
-        "tryAgain": "Try again",
-        "conflict": "{{name}} published v{{latest}} while you edited v{{base}}",
-        "conflictFirst": "{{name}} published v{{latest}} while you wrote your first version",
-        "someone": "Someone",
-        "conflictBody": "Your draft is kept on this computer. Nothing is merged: open it on top of v{{latest}}, or publish yours as v{{next}} anyway.",
-        "latestChanged": "v{{latest}} changed: {{fields}}",
-        "compare": "Compare with v{{latest}}",
-        "openDraft": "Open my draft on v{{latest}}",
-        "publishMine": "Publish mine as v{{next}}",
-        "refused": "{{host}} didn't take this version · {{time}}",
-        "refusedHere": "Not sent · this computer found the team can't take this version · {{time}}",
-        "cancelSending": "Cancel sending",
-        "takeBack": "Take it back as a draft",
-        "discardNew": "Discard it",
-        "refusedWhy": "{{reason}} Your new runs use it here. It isn't sent again on its own: take it back as a draft, change it and publish again.",
-        "refusedNewWhy": "{{reason}} It was never created for the team and isn't sent again on its own: discard it, then create it again."
-      },
-      "compare": {
-        "title": "v{{latest}} and yours",
-        "latest": "v{{latest}}",
-        "mine": "Yours",
-        "none": "—",
-        "same": "Yours holds what v{{latest}} holds."
       },
       "versions": {
         "button": "Versions",
@@ -701,7 +612,11 @@
         "steps": "steps",
         "deliver": "deliver step",
         "delivers": "what it delivers"
-      }
+      },
+      "pipelinesOnServer": "The team's pipelines are read from the team server and changed there, not on this computer.",
+      "today": "today {{time}}",
+      "day": "{{month}} {{day}}",
+      "here": "Published here"
     },
     "runsHere": {
       "usesVersion": "Runs here use v{{version}}"

@@ -64,7 +64,8 @@ impl Component for Library {
       .get();
     let id = project.open.project.id();
     let team = team::of(&project);
-    let page = parts::page().child(header(ctx, id, team::may_change(team.as_ref())));
+    // A team's pipelines are made on the team server, not here.
+    let page = parts::page().child(header(ctx, id, team.is_none()));
     let pending = loaded.is_pending();
     let body = match (loaded.data, loaded.error) {
       (_, Some(error)) if !pending => {

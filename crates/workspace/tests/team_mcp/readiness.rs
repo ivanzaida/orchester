@@ -83,7 +83,6 @@ fn team_resource<B: ResourceBody + Clone>(db: &mut ProjectDb, slug: &str, server
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: local.clone(),
-    waits_here: false,
   };
   db.cache_shared_version(id, &cached).expect("cached");
   id

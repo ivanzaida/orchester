@@ -1,41 +1,97 @@
-//! A tool that makes a new profile, instruction, skill or tool creates it as v1 in one call, with no draft: it returns
-//! the published resource or a refusal. In a team project the version is the team's only once the team server accepts
-//! it ([`settle`]); offline it waits in the outbox and is reported as such.
+//! A tool that changes the team's configuration of a team project sends the change to the team server at once
+//! (`docs/design/team-configuration-live.md`, rule 6): a new resource is created there with its first version, and its
+//! answer is the tool's; nothing of it is kept on this computer before. While the server cannot be reached the change
+//! is refused with why: there is nothing to save to and no outbox. A team's resource has no draft on this computer, so
+//! a tool that saves or publishes a draft is refused in a team project ([`refuse_team_drafts`]).
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use orchester_core::id::ResourceId;
-use serde_json::{Value, json};
+use rmcp::model::JsonObject;
+use serde_json::Value;
 
 use crate::{
-  app_mcp::{error::ToolError, services::Services},
+  app_mcp::{error::ToolError, services::Services, tools::team},
   messages::Message,
-  sharing::{Created, NotCreated},
+  sharing::{
+    SharingError,
+    team::said,
+    team_edit::{EditRefused, Local, NewTeamResource, Refusal},
+  },
 };
 
-/// Settles resource `id`, just created as v1 in the project at `root`, with the team server (nothing to do in a local
-/// project): taken back, and refused as `team_server_refused`, `local_entities_named` (it chooses an MCP server of
-/// this computer, which the team cannot name, or its kind's body is not in the team's form yet),
-/// `pipeline_names_non_team` (a pipeline runs a profile or tool the team does not have) or `team_server_not_reached`,
-/// when it was not taken. Otherwise `Some` says it waits for the server, to be added to the answer.
-pub(super) async fn settle(services: &Services, root: PathBuf, id: ResourceId) -> Result<Option<Value>, ToolError> {
-  match services.servers.send_created(&root, id).await {
-    Ok(Created::Accepted) => Ok(None),
-    Ok(Created::Waiting) => Ok(Some(json!({ "code": "team_server_unreachable" }))),
-    Err(NotCreated::Refused { code }) => Err(ToolError::refused(
-      "team_server_refused",
-      vec![Message::new("appMcp.errors.teamServerRefused").with("code", code)],
-    )),
-    Err(NotCreated::NamesLocal(reason)) => Err(ToolError::refused("local_entities_named", vec![reason])),
-    Err(NotCreated::NamesNonTeam(reason)) => Err(ToolError::refused("pipeline_names_non_team", vec![reason])),
-    Err(NotCreated::Failed(reason)) => Err(ToolError::refused("team_server_not_reached", vec![reason])),
+/// Creates `new` on the team server of the project at `root`; its id.
+pub(super) async fn create_team(
+  services: &Services,
+  root: &Path,
+  new: NewTeamResource,
+) -> Result<ResourceId, ToolError> {
+  services
+    .servers
+    .create_team(root, new)
+    .await
+    .map_err(|error| refused(&error))
+}
+
+/// Why the team server did not take a change, as the tools refuse it.
+pub(super) fn refused(error: &EditRefused) -> ToolError {
+  let message = error.message();
+  let code = match error {
+    EditRefused::Refused(Refusal::NotAdmin | Refusal::NotAdminHere) => "not_admin",
+    EditRefused::Refused(Refusal::Local(Local::Entities)) => "local_entities_named",
+    EditRefused::Refused(Refusal::Local(Local::NamesNonTeam)) => "pipeline_names_non_team",
+    EditRefused::Refused(Refusal::Local(Local::WritableFolders)) => "writable_folders_stay",
+    EditRefused::Refused(Refusal::NameTaken) => "name_taken",
+    EditRefused::Refused(_) => "team_server_refused",
+    EditRefused::Changed { .. } => "version_conflict",
+    EditRefused::Unreachable(_) => "team_unreachable",
+    EditRefused::Failed(_) => "team_server_not_reached",
+  };
+  ToolError::refused(code, vec![message])
+}
+
+/// A body this computer found the team cannot take, refused before anything is sent, with what it names.
+pub(super) fn not_team_form(error: SharingError) -> ToolError {
+  let code = match &error {
+    SharingError::LocalEntitiesNamed { .. } => "local_entities_named",
+    SharingError::PipelineNamesNonTeam { .. } => "pipeline_names_non_team",
+    SharingError::WritableFoldersStay { .. } => "writable_folders_stay",
+    SharingError::Store(_) => "storage",
+    _ => "team_server_not_reached",
+  };
+  match error {
+    SharingError::Store(error) => ToolError::from(error),
+    error => ToolError::refused(code, vec![said(&error, None)]),
   }
 }
 
-/// `answer`'s `key` resource, with `waiting` (from [`settle`]) as `waiting_for_server` when it waits for the server.
-pub(super) fn with_waiting(mut answer: Value, key: &str, waiting: Option<Value>) -> Value {
-  if let Some(waiting) = waiting {
-    answer[key]["waiting_for_server"] = waiting;
+/// The tools that save or publish a draft of a profile, pipeline, instruction, skill or tool, or make one as a draft.
+pub(crate) const DRAFT_TOOLS: [&str; 12] = [
+  "save_profile_draft",
+  "publish_profile",
+  "create_pipeline",
+  "duplicate_pipeline",
+  "save_pipeline_draft",
+  "publish_pipeline",
+  "save_instruction_draft",
+  "publish_instruction",
+  "save_tool_draft",
+  "publish_tool",
+  "save_skill_draft",
+  "publish_skill",
+];
+
+/// A team's resource has no draft on this computer, and these tools make and publish drafts: in a team project they are
+/// refused as `team_no_drafts` before anything is read or written. `arguments` name the project.
+pub(crate) async fn refuse_team_drafts(services: &Services, arguments: &JsonObject) -> Result<(), ToolError> {
+  let Some(project) = arguments.get("project").and_then(Value::as_str) else {
+    return Ok(());
+  };
+  match team::of(services, project).await? {
+    Some(_) => Err(ToolError::refused(
+      "team_no_drafts",
+      vec![Message::new("appMcp.errors.teamNoDrafts")],
+    )),
+    None => Ok(()),
   }
-  answer
 }

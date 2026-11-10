@@ -206,7 +206,7 @@ fn readiness(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Option<Column> {
   let Some(ReadinessStanding::Missing(missing)) = &entry.standing else {
     return None;
   };
-  if entry.here == Group::OffHere {
+  if entry.group == Group::OffHere {
     return None;
   }
   let rows = missing.missing().iter().enumerate().map(|(index, part)| {

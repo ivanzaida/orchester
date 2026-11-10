@@ -1,7 +1,6 @@
 //! A new resource is created as its first version, with no draft (the decision of 2026-11-06): creating it publishes
-//! v1 at once, and a draft is only ever saved over a version that exists. In a team project the version waits for the
-//! server like every version published here ([`super::shared_publishes`]); one the server refuses is taken back whole
-//! ([`ProjectDb::discard_created`]), so nothing stays as created.
+//! v1 at once, and a draft is only ever saved over a version that exists. A team project's resources are created on
+//! the team server by the workspace (`docs/design/team-configuration-live.md`), not here.
 
 use orchester_core::{
   id::ResourceId,
@@ -91,7 +90,7 @@ pub(super) fn ensure_has_version<B: ResourceBody>(
 impl ProjectDb {
   /// Creates a resource of kind `B::KIND` as its first version, atomically, under `slug` (unique among its kind): the
   /// resource has no draft. A body that cannot be published is refused and nothing is created. In a team project the
-  /// person must be an admin, and the version waits for the server.
+  /// person must be an admin ([`super::shared_publishes::ensure_may_create`]).
   pub fn create_published<B: ResourceBody + Clone>(
     &mut self,
     slug: Slug,
@@ -108,48 +107,7 @@ impl ProjectDb {
       None,
       now,
     )?;
-    // A project that is not shared waits for no server, so no row says it.
-    transaction.execute(
-      "UPDATE shared_publishes SET created = 1 WHERE version_id = ?1",
-      [version.id().to_string()],
-    )?;
     transaction.commit()?;
     Ok((resource, version))
-  }
-
-  /// Takes back the resource `resource` that [`ProjectDb::create_published`] made, e.g. because the team server refused
-  /// its only version: the resource and its version are deleted, as if never created. Only a resource that holds just
-  /// that version is taken back: one with a version the server numbered is left ([`StoreError::AlreadyNumbered`]), it
-  /// is the team's now, and one with a later version or a draft, or not created here, is left too
-  /// ([`StoreError::HoldsMore`]), so nothing of the person's is lost.
-  pub fn discard_created(&mut self, resource: ResourceId) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
-    // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
-    transaction.pragma_update(None, "defer_foreign_keys", true)?;
-    let id = resource.to_string();
-    let confirmed: bool = transaction.query_row(
-      "SELECT EXISTS (SELECT 1 FROM resource_versions WHERE resource_id = ?1 \
-       AND id NOT IN (SELECT version_id FROM shared_publishes))",
-      [&id],
-      |row| row.get(0),
-    )?;
-    if confirmed {
-      return Err(StoreError::AlreadyNumbered(resource));
-    }
-    let lone: bool = transaction.query_row(
-      "SELECT (SELECT COUNT(*) FROM resource_versions WHERE resource_id = ?1) = 1 \
-       AND EXISTS (SELECT 1 FROM shared_publishes WHERE resource_id = ?1 AND created = 1) \
-       AND NOT EXISTS (SELECT 1 FROM resource_drafts WHERE resource_id = ?1)",
-      [&id],
-      |row| row.get(0),
-    )?;
-    if !lone {
-      return Err(StoreError::HoldsMore(resource));
-    }
-    transaction.execute("DELETE FROM resource_versions WHERE resource_id = ?1", [&id])?;
-    transaction.execute("DELETE FROM shared_publishes WHERE resource_id = ?1", [&id])?;
-    transaction.execute("DELETE FROM resources WHERE id = ?1", [&id])?;
-    transaction.commit()?;
-    Ok(())
   }
 }

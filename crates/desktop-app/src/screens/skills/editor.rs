@@ -124,11 +124,8 @@ impl Component for Editor {
     if self.asking.get() && (dirty || parsed.is_err() || p.page.reloading) {
       self.asking.set(false);
     }
-    // A member of a shared project reads the team's skill: nothing of it is saved here.
-    let may_change = hub::team::may_change(hub::team::of(&p.page.project).as_ref());
     if baseline.is_some()
       && dirty
-      && may_change
       && !state.is_pending()
       && state.error.is_none()
       && !self.submitted.get()
@@ -168,17 +165,7 @@ impl Component for Editor {
       .child(top)
       .with_children(self.failure(ctx, &p))
       .with_children(self.reload_question(ctx, &p, busy))
-      .with_children(form.into_iter().map(|section| -> Element {
-        if may_change {
-          section
-        } else {
-          Column::new()
-            .width(Dimension::Pct(100.0))
-            .pointer_events_none()
-            .child(section)
-            .into()
-        }
-      }));
+      .with_children(form);
     let side = inspector::panel(ctx, &p.page, baseline.as_ref());
     hub::page_body("skill-page", (pane.into(), MAIN_WIDTH), (side, SIDE_WIDTH))
   }

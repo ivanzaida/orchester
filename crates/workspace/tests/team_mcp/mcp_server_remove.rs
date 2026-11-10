@@ -80,7 +80,7 @@ fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_repo
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let id = held_servers(&checkout)[0];
 
   checkout
     .runtime
@@ -99,7 +99,7 @@ fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_repo
   });
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let id = held_servers(&checkout)[0];
   let refused = checkout
     .runtime
     .block_on(checkout.servers.archive_resource(checkout.root(), id, Answerer::Person))
@@ -109,34 +109,6 @@ fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_repo
     NotArchived::Refused {
       code: "not_admin".to_owned()
     }
-  );
-}
-
-#[test]
-fn team_mcp_a_remove_of_a_server_the_team_server_has_not_received_says_so() {
-  let (server, seen) = start(Answers::default());
-  let checkout = admin(&server);
-  server.set_down(true);
-  checkout.call("add_mcp_server", &docs()).expect("kept here, unsent");
-  server.set_down(false);
-
-  let refused = checkout
-    .call("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }))
-    .expect_err("refused");
-
-  assert_eq!(refused["error"]["code"], "team_mcp_server_not_sent", "{refused}");
-  let updated = json!({ "project": "Kontur", "server": "docs", "args": ["--other"] });
-  assert_eq!(
-    checkout.refused("update_mcp_server", &updated),
-    "team_mcp_server_not_sent"
-  );
-  assert!(
-    seen.lock().calls.is_empty(),
-    "the team server was not asked about a server it never saw"
-  );
-  assert_eq!(
-    checkout.db().resources(ResourceKind::McpServer).expect("servers").len(),
-    1
   );
 }
 
@@ -259,7 +231,6 @@ fn pin_run(db: &mut ProjectDb, server: ResourceId) -> (RunId, TaskId) {
       id: server,
     }],
     local_body: published.body().clone(),
-    waits_here: false,
   };
   db.cache_shared_version(builder, &confirmed)
     .expect("the team version is cached");
@@ -339,7 +310,7 @@ fn team_mcp_an_archive_asked_by_automation_is_refused_before_anything_is_sent() 
   });
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let id = held_servers(&checkout)[0];
 
   let refused = checkout
     .runtime
@@ -352,6 +323,21 @@ fn team_mcp_an_archive_asked_by_automation_is_refused_before_anything_is_sent() 
 
   assert_eq!(refused, NotArchived::PersonOnly);
   assert_eq!(seen.lock().calls, ["create"], "nothing was read or archived");
-  let still = checkout.db().resources(ResourceKind::McpServer).expect("servers");
-  assert_eq!(still.len(), 1, "the server is as it was");
+  assert_eq!(held_servers(&checkout).len(), 1, "the server is as it was");
+}
+
+/// The team's MCP servers as the checkout's memory holds them: the team server made them, not this computer.
+fn held_servers(checkout: &Checkout) -> Vec<ResourceId> {
+  checkout
+    .workspace
+    .team_read(checkout.root())
+    .config()
+    .map(|config| {
+      config
+        .resources(ResourceKind::McpServer)
+        .iter()
+        .map(|server| server.id)
+        .collect()
+    })
+    .unwrap_or_default()
 }

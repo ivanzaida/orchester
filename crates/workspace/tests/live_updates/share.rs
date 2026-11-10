@@ -29,10 +29,9 @@ use orchester_workspace::sharing::{
 
 use super::{
   ALICE, BOB, Member, TeamServer, Workspace, link,
-  publish::{Publisher, json, number, rule},
+  publish::{Publisher, json, number, one_step, rule},
   seen_within,
   support::{Fixture, at},
-  team_copy::one_step,
 };
 
 /// How long the second workspace may take to cache the uploaded resources from its stream.

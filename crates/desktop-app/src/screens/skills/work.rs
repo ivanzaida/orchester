@@ -83,14 +83,10 @@ pub fn action(ctx: &mut Ctx) -> Work {
           skill_operations::skill_publish(&open, entry.id, &entry.name, super::words::next(entry.state))
         }
       };
-      let publishing = matches!(change, Change::Publish(_));
-      let creating = matches!(change, Change::Save { before: None, .. });
-      let root = open.repo_root.clone();
-      let sent = services.clone();
-      let saved = services
+      services
         .activity
         .track(spec, async move {
-          let (created_in, written) = (open.repo_root.clone(), open.repo_root.clone());
+          let written = open.repo_root.clone();
           let saved = background::run(move || match change {
             Change::Save {
               before,
@@ -101,18 +97,9 @@ pub fn action(ctx: &mut Ctx) -> Work {
             Change::Publish(entry) => editor::publish_in(&written, &entry),
           })
           .await??;
-          // A new skill in a shared project is the team's only once its server takes it; one it refuses is taken back.
-          if creating {
-            crate::screens::hub::team::send_created(&sent, &created_in, saved.id).await?;
-          }
           Ok(Saved(saved))
         })
-        .await;
-      // A version published in a shared project goes to its team server at once (02).
-      if publishing && saved.is_ok() {
-        crate::screens::hub::team::send_published(&services, &root).await;
-      }
-      saved
+        .await
     }
   })
 }

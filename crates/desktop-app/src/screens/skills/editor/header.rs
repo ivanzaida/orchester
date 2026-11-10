@@ -7,7 +7,6 @@ use lurq::{app::ctx::Ctx, node::Element};
 use orchester_workspace::{
   agents::data::VersionState,
   skills::{data::SkillEntry, editor::publish_reason},
-  tasks::outside::Outside,
 };
 
 use super::{
@@ -21,7 +20,6 @@ use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
     page_head::{self, More},
-    team,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -59,9 +57,7 @@ impl Editor {
         }
       },
     );
-    let team = team::of(&p.page.project);
-    // A member of a shared project removes none of the team's skills.
-    let more = entry.filter(|_| team::may_change(team.as_ref())).map(|_| {
+    let more = entry.map(|_| {
       let (ask, open) = (self.ask.clone(), self.more.clone());
       More {
         open: self.more.clone(),
@@ -72,30 +68,10 @@ impl Editor {
         }),
       }
     });
-    let shared = team.as_ref().zip(entry).and_then(|(team, e)| {
-      let standing = team.standing(e.id)?;
-      Some(team::head_line(
-        ctx,
-        "skill-team-state",
-        team,
-        standing,
-        team::draft_on(e.state),
-      ))
-    });
-    let versions = entry.and_then(|e| team::member_versions(ctx, "skill", (&p.page.project, team.as_ref()), e.id));
-    match shared {
-      Some(shared) => page_head::head_with(
-        ctx,
-        "skill",
-        (Icon::GraduationCap, title, shared.into()),
-        (more, versions),
-      ),
-      None => page_head::head(ctx, "skill", (Icon::GraduationCap, title, &sub), more),
-    }
+    page_head::head(ctx, "skill", (Icon::GraduationCap, title, &sub), more)
   }
 
-  /// The draft bar. In a shared project a member reads who may change the skill instead (03), and an admin sees a
-  /// version published here that waits in its place (02b, 02c).
+  /// The draft bar.
   pub(super) fn bar(
     &self,
     ctx: &mut Ctx,
@@ -103,21 +79,6 @@ impl Editor {
     entry: Option<&SkillEntry>,
     (dirty, busy): (bool, bool),
   ) -> Element {
-    let team = team::of(&p.page.project);
-    if let Some(team) = team.as_ref().filter(|team| !team.may_change) {
-      return team::line(ctx, "skill-team-line", team).into();
-    }
-    let reset = p.page.view.reset.clone();
-    // The page reads the skill again and starts over from what is saved.
-    let reread: team::Reread = Arc::new(move || reset.update(|r| *r += 1));
-    let waiting = team
-      .as_ref()
-      .zip(entry)
-      .and_then(|(team, e)| Some((team, team.standing(e.id)?)))
-      .and_then(|shared| team::waiting_bar(ctx, &p.page.project, shared, ("skill", Outside::Skills), reread));
-    if let Some(waiting) = waiting {
-      return waiting;
-    }
     let invalid = dirty && self.form_state(p).0.is_err();
     let standing = match entry.map(|e| e.state) {
       _ if invalid => Standing::Attention,
@@ -125,10 +86,9 @@ impl Editor {
       Some(VersionState::StaleDraft { .. }) => Standing::Attention,
       _ => Standing::Draft,
     };
-    let effect = match (team.is_some(), entry.and_then(|e| e.state.published())) {
-      (true, published) => team::draft_sub(ctx, None, published.map_or(1, |v| v.get().saturating_add(1))),
-      (false, None) => ctx.t("skills.publishFirst"),
-      (false, Some(v)) => ctx.t_args("skills.publishEffect", [("version", v.get().to_string())]),
+    let effect = match entry.and_then(|e| e.state.published()) {
+      None => ctx.t("skills.publishFirst"),
+      Some(v) => ctx.t_args("skills.publishEffect", [("version", v.get().to_string())]),
     };
     // `skill-save`: its status and glyph keep the ids the skill page gave its save state (`skill-save-status`).
     let mut bar = DraftBar::new("skill-save", standing, self.status(ctx, p, entry, (dirty, busy))).sub(effect);
@@ -143,9 +103,7 @@ impl Editor {
         discard.on_click(move || ask.set(Ask::Discard))
       });
     }
-    bar
-      .action(self.primary_action(ctx, p, entry, (dirty, busy), team.is_some()))
-      .into()
+    bar.action(self.primary_action(ctx, p, entry, (dirty, busy))).into()
   }
 
   fn primary_action(
@@ -154,14 +112,10 @@ impl Editor {
     p: &Props,
     entry: Option<&SkillEntry>,
     (dirty, busy): (bool, bool),
-    shared: bool,
   ) -> ActionButton {
     if let Some(entry) = entry {
       let asking = self.asking.clone();
-      // *Publish for the team* in a shared project (02).
-      let label = if shared {
-        team::publish_label(ctx)
-      } else if entry.state.has_draft() {
+      let label = if entry.state.has_draft() {
         ctx.t_args("skills.publish", [("version", words::next(entry.state).to_string())])
       } else {
         ctx.t("skills.publishPlain")

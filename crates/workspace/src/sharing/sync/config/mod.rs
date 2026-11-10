@@ -1,20 +1,21 @@
-//! A shared project's configuration on this computer (`docs/architecture/server.md`, "Shared configuration"): the
-//! team's resources and their published versions, read from the server's resource routes for each resource the
-//! stream's snapshot names and each `resource.published` event, and kept in the cache twice — the server's body as it
-//! is, and the local body runs pin and read as they do any version. A team body names no id of a computer
+//! A shared project's configuration on this computer (`docs/architecture/server.md`, "Shared configuration"). The
+//! team's configuration is read from the server and held in memory ([`crate::team_config`]), which the Agents hub, the
+//! readiness and the fill-ins read. The readers not moved to memory yet (the pipelines, the task form's and the tools'
+//! pipelines, `sharing::compare`, `team_reads::listed`) still read a copy the stream keeps in the project's database:
+//! the team's resources and their published versions, read from the server's resource routes for each resource the
+//! stream's snapshot names and each `resource.published` event, kept twice — the server's body as it is, and the local
+//! body runs pin and read as they do any version. A team body names no id of a computer
 //! (`docs/design/team-configuration.md`), so the two are the same, except a team profile's, which runs on the
-//! connection this computer picked for it ([`profile`]). A teammate's version that widens what agents may do here waits
-//! for the person's *Use v<N> here* ([`waiting`]). Skills are not kept yet: their parts travel apart from their bodies,
-//! by hash. An admin publishes from this computer through [`RemoteResourceStore`]; Share uploads the project's own
-//! configuration ([`upload`]).
+//! connection this computer picked for it ([`profile`]). Nothing is published from this copy: an admin's change goes
+//! to the server at once (`crate::sharing::team_edit`). Skills are not kept: their parts travel apart from their
+//! bodies, by hash. Share uploads the project's own configuration ([`upload`]).
 
 mod profile;
-mod publish;
+mod server;
 mod share_fill_ins;
 mod share_mcp;
-mod team_body;
+pub(crate) mod team_body;
 mod upload;
-mod waiting;
 
 use std::path::Path;
 
@@ -25,43 +26,30 @@ use orchester_core::{
   sharing::SharedBody,
   time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb, PublishState, ReferenceTarget, StoreError};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, StoreError};
 use serde_json::Value;
 
 use self::profile::cache_profile;
-pub(crate) use self::{
-  profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles},
-  team_body::{non_team_name, team_executors},
-};
+pub(crate) use self::profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles};
 pub use self::{
-  publish::{ConfigServer, RemoteResourceStore},
+  server::ConfigServer,
   share_fill_ins::{FillInOutcome, ShareFillIns},
   upload::{keep_uploaded_configuration, upload_configuration},
-  waiting::{Waiting, use_here, waiting},
 };
 use super::stream::{Source, blocking};
 use crate::sharing::{SharingError, project::convert};
 
-/// Keeps `resource` as the server has it, with every version this computer does not have yet. While a version of it
-/// published here is being sent, its versions are read by the sending ([`RemoteResourceStore`]) instead: the server
-/// may have numbered that version already. One archived only now stops the runs that pin it ([`Source::archived`]).
+/// Keeps `resource` as the server has it, with every version this computer does not have yet. One archived only now
+/// stops the runs that pin it ([`Source::archived`]).
 pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedResource) -> Result<(), SharingError> {
   if resource.kind == SharedResourceKind::Skill {
     tracing::debug!(resource = %resource.id, "a shared skill is not kept on this computer yet");
     return Ok(());
   }
   let id = resource.id;
-  let (cached, sending) = blocking(root, move |root| {
-    let db = ProjectDb::open(root)?;
-    let sending = db
-      .waiting_publishes()?
-      .iter()
-      .any(|waiting| waiting.resource == id && waiting.state == PublishState::Waiting);
-    Ok((db.latest_version_number(id)?, sending))
-  })
-  .await?;
+  let cached = blocking(root, move |root| Ok(ProjectDb::open(root)?.latest_version_number(id)?)).await?;
   let mut versions = Vec::new();
-  if resource.latest > cached && !sending {
+  if resource.latest > cached {
     let mut after = cached;
     loop {
       let page = source.versions(id, after).await?;
@@ -78,7 +66,6 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
     kind = ?resource.kind,
     latest = ?resource.latest,
     ?cached,
-    sending,
     read = versions.len(),
     "a shared resource is kept"
   );
@@ -147,7 +134,6 @@ fn cache_body<B: ResourceBody + SharedBody>(
   version: &SharedVersion,
   local_body: B,
 ) -> Result<(), SharingError> {
-  let waits_here = waiting::waits(db, version.resource, version.number, &local_body)?;
   let cached = CachedVersion {
     number: version.number,
     published_at: Timestamp::from_unix_millis(version.published.at),
@@ -156,7 +142,6 @@ fn cache_body<B: ResourceBody + SharedBody>(
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
     local_body,
-    waits_here,
   };
   db.cache_shared_version(version.resource, &cached)?;
   Ok(())

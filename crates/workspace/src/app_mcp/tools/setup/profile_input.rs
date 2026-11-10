@@ -33,7 +33,6 @@ use serde_json::{Value, json};
 
 use super::{
   connections::agent_named,
-  created::{settle, with_waiting},
   profiles::{profile_named, profile_with_revision, publish_error},
   widening,
 };
@@ -205,7 +204,7 @@ impl From<Approvals> for ApprovalMode {
 
 pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> Result<Value, ToolError> {
   let blocked = services.clone();
-  let (open, id, created) = blocking(move || {
+  let (open, id) = blocking(move || {
     let open = blocked.project(&args.project)?;
     let root = open.repo_root.clone();
     let agents = ProjectAgents::load_in(&root)?;
@@ -234,33 +233,26 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       .map_err(|reason| refused("mcp_server_not_offered", reason))?;
     let id = existing.map(|entry| entry.id);
     widening::check_profile(&blocked, &db, (id, &profile), connection.provider())?;
-    let (id, created) = match existing {
+    let id = match existing {
       Some(entry) => {
         save_draft_expecting_in(&root, entry.id, profile, args.expected_revision.as_deref())?;
-        (entry.id, false)
+        entry.id
       }
       None if args.expected_revision.is_some() => {
         return Err(ToolError::InvalidArguments(
           "expected_revision names a profile's draft; a new profile has none".into(),
         ));
       }
-      None => (create_published(&blocked, &root, &profile, &connection)?, true),
+      None => create_published(&blocked, &root, &profile, &connection)?,
     };
-    Ok((open, id, created))
+    Ok((open, id))
   })
   .await?;
-  let waiting = if created {
-    settle(services, open.repo_root.clone(), id).await
-  } else {
-    Ok(None)
-  };
-  // After a refused creation took the profile back, so a screen that reads on this does not see it.
   services
     .changes
     .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
-  let waiting = waiting?;
   let profile = blocking(move || profile_with_revision(&open, id)).await?;
-  Ok(with_waiting(json!({ "profile": profile }), "profile", waiting))
+  Ok(json!({ "profile": profile }))
 }
 
 /// A new profile created as v1, with no draft: published as Publish does, so it is refused where publishing is, and its

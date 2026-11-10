@@ -21,8 +21,6 @@ use orchester_workspace::{
     preview::PreviewChoice,
     publication,
   },
-  sharing::team::TeamConfiguration,
-  tasks::outside::Outside,
 };
 
 use super::{
@@ -38,7 +36,6 @@ use super::{
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::ShownProject,
-  screens::hub::team,
   theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -159,12 +156,8 @@ impl Component for Editor {
     if props.selection.busy.get_untracked() != busy {
       props.selection.busy.set(busy);
     }
-    // A plain cell, not a signal: the autosave reads it when its rest ends, and nothing renders from it. A member of a
-    // shared project saves nothing of the team's rules.
-    self
-      .autosave
-      .reading
-      .set(props.reading || !team::may_change(team::of(&props.project).as_ref()));
+    // A plain cell, not a signal: the autosave reads it when its rest ends, and nothing renders from it.
+    self.autosave.reading.set(props.reading);
     let live = saved.as_ref().map(|entry| InstructionEntry {
       body: parsed.as_ref().map_or_else(|_| entry.body.clone(), Clone::clone),
       state: if dirty {
@@ -246,27 +239,12 @@ impl Editor {
     if saved.is_none() {
       pane = pane.child(scope_choice::render(ctx, &self.fields, &props.data, busy));
     }
-    // A member of a shared project reads the team's rule: its settings take no press and its prompt is locked.
-    let may_change = team::may_change(team::of(&props.project).as_ref());
     let settings = self.fields.settings(ctx, &props.data, saved.is_some(), errors);
-    let settings: Element = if may_change {
-      settings
-    } else {
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .pointer_events_none()
-        .child(settings)
-        .into()
-    };
     let prompt = self.fields.prompt(
       ctx,
       self.panel.clone(),
       errors,
-      (
-        (busy && !dirty) || !may_change,
-        &availability.unavailable,
-        saved.is_some(),
-      ),
+      (busy && !dirty, &availability.unavailable, saved.is_some()),
     );
     // A new rule's scope says what it reaches in the Scope section's note (02e).
     let scope_note = saved.and_then(|_| super::editor_notes::scope(ctx, &self.fields, &props.data));
@@ -319,12 +297,7 @@ impl Editor {
         .width(Dimension::Pct(100.0))
         .spacing(HubSpacing::Row.role())
         .child(page_head::crumb(ctx, &props.selection, true))
-        .child(page_head::head(
-          ctx,
-          (&title, &sub, "instruction-save-status"),
-          None,
-          (None, None),
-        ))
+        .child(page_head::head(ctx, (&title, &sub, "instruction-save-status"), None))
         .into();
     };
     let sub = ctx.t_args(
@@ -334,10 +307,7 @@ impl Editor {
         ("project", props.project.open.project.name().to_string()),
       ],
     );
-    let team = team::of(&props.project);
-    let standing = team.as_ref().and_then(|team| Some((team, team.standing(entry.id)?)));
-    // A member of a shared project removes none of the team's rules.
-    let more = team::may_change(team.as_ref()).then(|| page_head::More {
+    let more = Some(page_head::More {
       open: self.more.clone(),
       anchor: self.anchor.clone(),
       archive: {
@@ -345,63 +315,27 @@ impl Editor {
         std::sync::Arc::new(move || ask.set(Ask::Archive))
       },
     });
-    let shared = standing.map(|(team, standing)| {
-      team::head_line(
-        ctx,
-        "instruction-team-state",
-        team,
-        standing,
-        team::draft_on(entry.state),
-      )
-    });
-    let bar = self.bar(ctx, props, (entry, team.as_ref()), (dirty, busy, invalid));
-    let versions = team::member_versions(ctx, "instruction", (&props.project, team.as_ref()), entry.id);
+    let bar = self.bar(ctx, props, entry, (dirty, busy, invalid));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
       .child(page_head::crumb(ctx, &props.selection, false))
-      .child(page_head::head(
-        ctx,
-        (&title, &sub, "instruction-sub"),
-        more,
-        (shared, versions),
-      ))
+      .child(page_head::head(ctx, (&title, &sub, "instruction-sub"), more))
       .with_children(editor_actions::archive_question(self, ctx, props, saved))
       .child(bar)
       .into()
   }
 
-  /// The draft bar, or what is asked in its place. In a shared project a member reads who may change the rule
-  /// instead (03), and an admin sees a version published here that waits in its place (02b, 02c).
+  /// The draft bar, or what is asked in its place.
   fn bar(
     &self,
     ctx: &mut Ctx,
     props: &Props,
-    (entry, team): (&InstructionEntry, Option<&TeamConfiguration>),
+    entry: &InstructionEntry,
     (dirty, busy, invalid): (bool, bool, bool),
   ) -> Element {
-    if let Some(team) = team.filter(|team| !team.may_change) {
-      return team::line(ctx, "instruction-team-line", team).into();
-    }
     if let Some(question) = editor_actions::question(self, ctx, props, Some(entry)) {
       return question;
-    }
-    let (work, fields, id) = (self.work.clone(), self.fields.clone(), entry.id);
-    // The fields take the saved draft: the same reload a changed rule offers.
-    let reread: team::Reread = std::sync::Arc::new(move || work.run(super::work::Write::Reload(id, fields.snapshot())));
-    let waiting = team
-      .and_then(|team| Some((team, team.standing(entry.id)?)))
-      .and_then(|shared| {
-        team::waiting_bar(
-          ctx,
-          &props.project,
-          shared,
-          ("instruction", Outside::Instructions),
-          reread,
-        )
-      });
-    if let Some(waiting) = waiting {
-      return waiting;
     }
     let tab = Tab::of(entry.body.scope());
     page_head::bar(
@@ -414,7 +348,6 @@ impl Editor {
         invalid,
         automated: !busy && !dirty && props.data.by_automation(entry),
         saved_at: entry.draft_saved_at,
-        shared: team.is_some(),
       },
       self.bar_actions(ctx, Some(entry), dirty, busy),
     )
@@ -501,12 +434,7 @@ impl Editor {
       .on_click(move || panel.choose(Panel::Preview));
     }
     let (entry, gate) = (entry.clone(), self.gate.clone());
-    // *Publish for the team* in a shared project (02).
-    let label = if team::of(&ctx.props::<Props>().project).is_some() {
-      team::publish_label(ctx)
-    } else {
-      ctx.t_args("instructions.publish", [("version", number.to_string())])
-    };
+    let label = ctx.t_args("instructions.publish", [("version", number.to_string())]);
     let publish = ActionButton::new("instruction-publish", ButtonKind::Primary, label)
       .icon(Icon::Upload)
       .on_click(move || {

@@ -73,7 +73,9 @@ pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
 fn member_with(kontur: &mut Kontur, kinds: Kinds) -> Result<(), SeedError> {
   shared_config::member_over(kontur, |kontur| {
     resources_with(kontur, &Mcp::default(), kinds).map(|_| ())
-  })
+  })?;
+  // A QA copy reads the team's configuration from a stand-in team server that holds what was cached here.
+  super::team::served(kontur, true)
 }
 
 /// `team-hub-member-pick`: [`member`] with a second Claude Code connection, so the connection that runs Builder is a
@@ -163,7 +165,10 @@ pub(super) struct Mcp {
 /// [`seed`], which also names the id of each MCP server it made.
 pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
   shared_config::admin(kontur)?;
-  resources_with(kontur, mcp, Kinds::ALL)
+  let made = resources_with(kontur, mcp, Kinds::ALL)?;
+  // A QA copy reads the team's configuration from a stand-in team server that holds what was cached here.
+  super::team::served(kontur, false)?;
+  Ok(made)
 }
 
 /// Which kinds the team has published, of those a scenario may leave out.
@@ -409,7 +414,6 @@ fn cache<B: ResourceBody>(
     hash: ContentHash::new(HASH).map_err(invalid)?,
     references: Vec::new(),
     local_body,
-    waits_here: false,
   };
   kontur.db.cache_shared_version(resource.id(), &cached)?;
   Ok(())

@@ -27,11 +27,6 @@
       "fixName": "Fix the name to create it",
       "changeName": "Change the name, then Create again"
     },
-    "waiting": {
-      "title": "Waiting to send · retries when the server is back",
-      "body": "The team server has not answered. This computer keeps the new resource, which the list shows as waiting to send, and sends it when the server answers; until then nothing is published. Cancel closes this form and keeps it waiting.",
-      "cancel": "Cancel sending"
-    },
     "computer": {
       "profile": "Each computer then picks the connection that runs it, asked only when it has several of its CLI kind.",
       "mcpProgram": "Each computer then sets the program's path and the values of its variables. A remote URL needs only the values of its secret headers.",
@@ -157,6 +152,8 @@
       "failed": {
         "title": "Nothing was created"
       }
-    }
+    },
+    "teamOnly": "A team MCP server is made in a team's project.",
+    "localOnly": "A local MCP server is made in a local project."
   }
 }

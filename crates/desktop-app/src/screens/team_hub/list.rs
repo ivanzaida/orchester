@@ -51,25 +51,13 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
         .with_children(entries.into_iter().map(|entry| row(ctx, listing, entry, shown))),
     )
   });
-  let archived: Vec<&Entry> = listing.archived(shown.filter).collect();
-  let archived = (!archived.is_empty()).then(|| {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .child(section_named(
-        ctx,
-        ("archived", "team_hub.group.archived", PaletteColor::TextMuted),
-        archived.len(),
-      ))
-      .with_children(archived.into_iter().map(|entry| row(ctx, listing, entry, shown)))
-  });
   let groups = Column::new()
     .id("team-hub-list")
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
     .with_children(shown.adding.map(|kind| create::new_row(ctx, kind)))
-    .with_children(groups)
-    .with_children(archived);
+    .with_children(groups);
   ScrollVertical::new(groups)
     .id("team-hub-list-scroll")
     .width(Dimension::Px(LIST_WIDTH))

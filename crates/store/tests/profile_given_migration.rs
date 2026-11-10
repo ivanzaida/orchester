@@ -312,6 +312,10 @@ fn profile_given_migration_keeps_published_versions_immutable_and_can_run_again(
     [seeded.builder.to_string()],
   );
   assert!(changed.is_err(), "a published version is still immutable");
+  // The migration names the outbox a later migration dropped (`team_outbox`); applied again here, it finds it empty.
+  raw
+    .execute_batch("CREATE TABLE shared_publishes (version_id TEXT)")
+    .expect("the outbox as the migration knew it");
   ProjectDb::apply_migration_for_test(&raw, ProjectMigration::ProfileGiven).expect("the migration again");
   drop(raw);
 

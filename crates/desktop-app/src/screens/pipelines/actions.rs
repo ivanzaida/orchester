@@ -30,18 +30,12 @@ pub struct Writes {
   pub action: Action,
   pub root: std::path::PathBuf,
   pub asking: Signal<bool>,
-  /// The project is shared: Publish reads *Publish for the team* (02).
-  pub shared: bool,
 }
 
 impl Writes {
-  /// *Publish vN*, or *Publish for the team* in a shared project.
+  /// *Publish vN*.
   fn publish_label(&self, ctx: &Ctx, version: String) -> std::sync::Arc<str> {
-    if self.shared {
-      crate::screens::hub::team::publish_label(ctx)
-    } else {
-      ctx.t_args("pipelines.publish", [("version", version)])
-    }
+    ctx.t_args("pipelines.publish", [("version", version)])
   }
 }
 

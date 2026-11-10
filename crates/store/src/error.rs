@@ -3,7 +3,7 @@ use std::{io, path::PathBuf, time::Duration};
 use orchester_core::{
   id::{
     AgentAccountId, ConnectionId, InvocationId, MemoryId, OperationId, ProjectId, ResourceId, RunId, SecretId,
-    ServerId, TaskId, VersionId,
+    ServerId, TaskId,
   },
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError, RunnerFailure},
@@ -60,14 +60,6 @@ pub enum StoreError {
   /// A stored value no longer satisfies the domain rules; the database was edited or damaged.
   #[error("stored {what} is invalid: {detail}")]
   Corrupt { what: &'static str, detail: String },
-  /// The resource has a version the team server numbered, so it is the team's and is not taken back. Nothing was
-  /// changed.
-  #[error("resource {0} has a version the team server numbered; it is the team's now")]
-  AlreadyNumbered(ResourceId),
-  /// The resource holds more than the version created here (a later version or a draft), or was not created here, so
-  /// taking it back would lose someone's work. Nothing was changed.
-  #[error("resource {0} holds more than the version created here; it is not taken back")]
-  HoldsMore(ResourceId),
   /// A value cannot be represented in the database, e.g. a number beyond its 64-bit integers.
   #[error("{0} cannot be stored")]
   Unrepresentable(&'static str),
@@ -174,9 +166,6 @@ pub enum StoreError {
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),
-  /// A run or a task here uses the version published here, so it is not taken back. Nothing was changed.
-  #[error("version {0} is used by a run or a task here")]
-  VersionInUse(VersionId),
   #[error(transparent)]
   Publish(#[from] PublishError),
   #[error(transparent)]

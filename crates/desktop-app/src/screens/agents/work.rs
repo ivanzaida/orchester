@@ -13,7 +13,7 @@ use lurq::{
 use orchester_workspace::{
   agents::{
     data::ProfileEntry,
-    editor::{self, Action, Outcome, Request},
+    editor::{self, Outcome, Request},
   },
   background,
   messages::Message,
@@ -21,7 +21,7 @@ use orchester_workspace::{
 };
 
 use super::editor::Props;
-use crate::{screens::hub::team, services::Services};
+use crate::services::Services;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Done {
@@ -59,9 +59,8 @@ pub type Work = FutureAction<Request, Done, Message>;
 
 pub fn work(ctx: &mut Ctx) -> Work {
   let root = ctx.props::<Props>().project.open.repo_root.clone();
-  let services = Services::of(ctx);
   ctx.future_action(move |request: Request| {
-    let (root, services) = (root.clone(), services.clone());
+    let root = root.clone();
     async move {
       let worked = root.clone();
       let (request, outcome) = background::run(move || {
@@ -77,11 +76,6 @@ pub fn work(ctx: &mut Ctx) -> Work {
         Ok::<_, Message>((request, outcome))
       })
       .await??;
-      // A new profile in a shared project is the team's only once its server takes it; one it refuses is taken back,
-      // and nothing of it is read or shown.
-      if let (Outcome::Saved(id), None) = (&outcome, &request.existing) {
-        team::send_created(&services, &root, *id).await?;
-      }
       let entry = match &outcome {
         Outcome::Saved(id) => {
           let (read, id) = (root.clone(), *id);
@@ -94,12 +88,6 @@ pub fn work(ctx: &mut Ctx) -> Work {
         outcome,
         entry,
       };
-      // A version published in a shared project goes to its team server at once (02).
-      if matches!(done.outcome, Outcome::Saved(_))
-        && matches!(done.request.action, Action::Publish | Action::PublishStale)
-      {
-        team::send_published(&services, &root).await;
-      }
       Ok(done)
     }
   })

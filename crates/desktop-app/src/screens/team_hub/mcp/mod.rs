@@ -8,21 +8,15 @@
 //! The path of the program is the person's choice from a file picker, kept for the whole computer (every project of the
 //! team server), and nothing is guessed or found by name. Turning the server on, setting the path and a secret's value
 //! widen what agents may do, so they are a person's alone: a press that automation made does nothing and says so.
-//! Turning it off is always taken.
+//! Turning it off is always taken. An admin edits the team's part in place, under the fixed Save/Cancel bar
+//! ([`modes`]): Save publishes it on the team server at once.
 
-mod archived;
-mod compare;
 mod computer;
-mod conflict;
-mod copy_changes;
 mod edit;
-mod edit_actions;
-mod edit_save;
 mod edit_view;
 mod fix;
 mod from_team;
 mod modes;
-mod refused;
 mod words;
 
 use std::{path::PathBuf, sync::Arc};
@@ -37,7 +31,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::{ProjectId, ResourceId};
-use orchester_workspace::{agents::team_mcp::TeamMcpSheet, sharing::team::TeamConfiguration};
+use orchester_workspace::{agents::team_mcp::TeamMcpSheet, messages::Message, sharing::team::TeamConfiguration};
 
 use self::{
   edit::Edit,
@@ -62,8 +56,13 @@ use crate::{
 pub(super) struct Props {
   pub repo_root: PathBuf,
   pub project: ProjectId,
-  /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
+  /// The team's configuration: an admin may change its resources, and a member reads who the admins are. While the
+  /// team server cannot be reached nothing is changed, so it reads as a member's.
   pub team: TeamConfiguration,
+  /// The person is an admin of the team, reachable or not: a form they opened stays open while the server is lost.
+  pub admin: bool,
+  /// Why the team server cannot be reached now; Save waits for it.
+  pub unreached: Option<Message>,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
   pub reading: bool,
   /// Reads the hub again, as *Check again* asks.
@@ -80,6 +79,8 @@ impl PartialEq for Props {
     self.repo_root == other.repo_root
       && self.project == other.project
       && self.team == other.team
+      && self.admin == other.admin
+      && self.unreached == other.unreached
       && self.reading == other.reading
       && self.listing == other.listing
       && self.entry == other.entry
@@ -145,13 +146,12 @@ impl Component for McpPanel {
       switch: self.switch(entry.id),
     };
     let mode = self.mode(&props);
-    let kept = self.autosave(ctx, &props, mode);
     let parts = self
-      .parts(ctx, &props, (mode, &kept))
+      .parts(ctx, &props, mode)
       .unwrap_or_else(|| self.plain_parts(ctx, &props, (busy, &press)));
     let chips = panel::chips_of(ctx, entry, parts.chips.badges, parts.chips.end);
-    let computer = parts.computer.then(|| computer::section(ctx, &view));
-    let (above, from_team, bar, dialogs) = (parts.above, parts.from_team, parts.bar, parts.dialogs);
+    let computer = computer::section(ctx, &view);
+    let (above, from_team, bar) = (parts.above, parts.from_team, parts.bar);
     let edit_button = (mode == Mode::Plain).then(|| self.edit_button(ctx, &props)).flatten();
     let more = (mode == Mode::Plain)
       .then(|| archive::menu(ctx, &props.repo_root, entry, props.team.may_change))
@@ -167,15 +167,14 @@ impl Component for McpPanel {
       .child(panel::head_saying(
         ctx,
         entry,
-        words::head_line(ctx, now, entry, (sheet, &props.team)),
+        words::head_line(ctx, now, entry, sheet),
         edit_button,
       ))
       .with_children(above)
       .child(chips)
-      .with_children(self.action_failure(ctx))
-      .with_children(member::lock_line(ctx, &props.team).filter(|_| mode != Mode::ReadOnly))
+      .with_children(member::lock_line(ctx, &props.team).filter(|_| mode == Mode::Plain))
       .child(from_team)
-      .with_children(computer)
+      .child(computer)
       .with_children(self.failure(ctx));
     let scroll = ScrollVertical::new(body)
       .id("team-hub-panel-scroll")
@@ -198,7 +197,6 @@ impl Component for McpPanel {
       .child(scroll)
       .with_children(bar)
       .with_children(dialog)
-      .with_children(dialogs)
   }
 }
 

@@ -1,8 +1,7 @@
 //! The team's MCP servers through the stream (`docs/design/team-configuration.md`, "Who owns what"): a team MCP server
 //! is a resource of its own kind, cached with its versions like the team's other resources and never written into this
-//! computer's `mcp_servers` table, where the person's own servers live. It follows `resource.published`; a version
-//! that runs another program waits for the person (a computer switches a server on itself); archived on the server it
-//! leaves the list and its runs stop, restored it is back.
+//! computer's `mcp_servers` table, where the person's own servers live. It follows `resource.published`, whose latest
+//! version is the one used here; archived on the server it leaves the list and its runs stop, restored it is back.
 
 use std::sync::Arc;
 
@@ -10,11 +9,9 @@ use orchester_api::SharedResourceKind;
 use orchester_core::{
   id::ResourceId,
   resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer, VersionNumber},
-  run::Answerer,
-  sharing::VersionWidening,
   store::{McpServerStore, ResourceStore},
 };
-use orchester_workspace::sharing::sync::{SystemClock, Waiting, follow, use_here, waiting};
+use orchester_workspace::sharing::sync::{SystemClock, follow};
 use serde_json::{Value, json};
 
 use super::{ALICE, Member, SETTLED, TeamServer, Workspace, seen_within};
@@ -74,9 +71,9 @@ async fn live_updates_a_team_mcp_server_is_cached_with_its_versions_and_not_writ
     panic!("a program");
   };
   assert_eq!(launch.program().as_str(), "npx");
-  assert!(!cached.waits_here, "a first version asks for nothing on a computer");
 
-  // The next version reaches the cache through `resource.published`; its other program widens, so it waits.
+  // The next version reaches the cache through `resource.published`, and is the one this computer uses at once: no
+  // version waits for a person here any more.
   server.publish(
     (knowledge, SharedResourceKind::McpServer, "Knowledge"),
     program("uvx", &[]),
@@ -91,18 +88,6 @@ async fn live_updates_a_team_mcp_server_is_cached_with_its_versions_and_not_writ
       .is_some()
   })
   .await;
-  assert_eq!(latest(&workspace, knowledge), Some(VersionNumber::FIRST));
-  assert_eq!(
-    waiting(&workspace.root, knowledge).expect("read"),
-    Some(Waiting {
-      number: version_two(),
-      used: Some(VersionNumber::FIRST),
-      adds: vec![VersionWidening::Command(
-        orchester_core::permission::widening::CommandWidening::Program
-      )],
-    })
-  );
-  assert!(use_here(&workspace.root, knowledge, version_two(), Answerer::Person).expect("used"));
   assert_eq!(latest(&workspace, knowledge), Some(version_two()));
 
   assert!(

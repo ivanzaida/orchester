@@ -59,7 +59,6 @@ fn team_references_migration_reads_a_shared_tool_as_a_team_tool() {
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: instruction(),
-    waits_here: false,
   };
   let stored = db.cache_shared_version(id, &version).expect("cache");
   drop(db);

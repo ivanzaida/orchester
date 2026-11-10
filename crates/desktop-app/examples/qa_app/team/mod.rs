@@ -8,6 +8,7 @@ mod archive;
 mod closed;
 pub mod drive;
 mod edit;
+mod hub;
 mod member;
 mod recorded_start;
 mod state;
@@ -131,14 +132,9 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamEditRejects
     | State::TeamEditPublished
     | State::TeamEditRefusedAdmin
-    | State::TeamEditWaiting
-    | State::TeamEditRejected
     | State::TeamEditVariables
-    | State::TeamCreateNameTaken
-    | State::TeamEditNewer
-    | State::TeamEditConflicting
-    | State::TeamEditConflictClean
-    | State::TeamEditArchived
+    | State::TeamHub
+    | State::TeamHubMember
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure
@@ -152,6 +148,12 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
 fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Handle) -> Result<(), Box<dyn Error>> {
   let ids = task_ids(services)?;
   let role = member::serve_as(server, state, (&ids, &team_pipelines(services, state)?));
+  // What the team holds is on the server before the join: the read once the project's stream opens holds it.
+  server.open_event_streams();
+  let repo = kontur(services)?;
+  edit::hold(state, server, &repo)?;
+  archive::hold(state, (server, &repo))?;
+  hub::hold_cached(server, &repo)?;
   let (kontur, id) = join_linked_as(server, (services, runtime), (TasksAnswer::Serve, role))?;
   match state {
     State::StartFailed => server.authority_newer_bundles(),
@@ -165,6 +167,9 @@ fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Hand
   work::after_join(state, (server, id), (services, runtime), (&kontur, &ids))?;
   edit::prepare(state, (services, runtime), (server, &kontur))?;
   archive::prepare(state, (server, &kontur))?;
+  if state.serves_hub() {
+    hub::read(services, &kontur)?;
+  }
   Ok(())
 }
 

@@ -151,7 +151,6 @@ fn share<B: ResourceBody + Clone>(db: &mut ProjectDb, id: ResourceId, server_bod
       hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
       references: Vec::new(),
       local_body: body.clone(),
-      waits_here: false,
     },
   )
   .expect("cached");
