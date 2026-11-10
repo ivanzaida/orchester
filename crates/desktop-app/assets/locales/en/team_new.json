@@ -85,9 +85,6 @@
       "nameSub": "Shown where profiles pick instructions",
       "namePlaceholder": "e.g. Project rules",
       "nameTaken": "The team already has an instruction named {{name}} · pick another name",
-      "addedTo": "Added to",
-      "addedToSub": "Every run is the only choice for now: a profile cannot pick instructions yet",
-      "everyRun": "Every run",
       "textPlaceholder": "Write the instruction in Markdown…"
     },
     "skill": {
