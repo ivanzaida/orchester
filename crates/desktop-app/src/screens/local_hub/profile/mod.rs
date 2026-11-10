@@ -18,6 +18,7 @@ pub(in crate::screens) mod add_menu;
 mod choices;
 mod edit;
 mod pick;
+mod pinned;
 mod ready;
 mod role;
 mod table;
@@ -237,14 +238,12 @@ impl Component for ProfilePanel {
       .with_children(
         refused.map(|error| -> Element { field_error("local-hub-profile-error", &message_text(ctx, &error)).into() }),
       );
-    let bar = save_bar::bar(
+    let fix = pinned::first(&parts).filter(|_| !changed);
+    let bar = self.bar(
       ctx,
-      PREFIX,
-      (
-        self.save_now(ctx, (changed, role_refused.as_ref())),
-        (changed && busy == Busy::Idle).then(|| self.cancel_now()),
-      ),
-      save_bar::makes(ctx, entry.number),
+      (&entry, shown),
+      fix.map(|fix| (press(&fix), fix)),
+      (changed, role_refused.as_ref()),
     );
     frame(entry.what, body, Some(bar))
   }
@@ -363,6 +362,40 @@ impl ProfilePanel {
       typed.set(None);
       clear(&pending);
     })
+  }
+
+  /// The pinned bar: while nothing is changed the fix of the first missing part (`fix`, with what pressing it does), as
+  /// a team profile's panel has it; else *Save* and *Cancel*.
+  fn bar(
+    &self,
+    ctx: &Ctx,
+    (entry, shown): (&Entry, &LocalProfile),
+    fix: Option<(Press, Fix)>,
+    (changed, role): (bool, Option<&RoleErrors>),
+  ) -> Element {
+    let idle = self.busy() == Busy::Idle;
+    if let Some((press, fix)) = fix {
+      let connection = self.connection_named(shown);
+      return pinned::bar(ctx, (&entry.name, shown, &connection), (&fix, press), !idle);
+    }
+    save_bar::bar(
+      ctx,
+      PREFIX,
+      (
+        self.save_now(ctx, (changed, role)),
+        (changed && idle).then(|| self.cancel_now()),
+      ),
+      save_bar::makes(ctx, entry.number),
+    )
+  }
+
+  /// The name of the connection *Use* keeps: the one the select holds, else the first of its CLI.
+  fn connection_named(&self, shown: &LocalProfile) -> String {
+    let chosen = self.chosen.get_untracked().parse::<ConnectionId>().ok();
+    chosen
+      .and_then(|id| shown.connections.iter().find(|choice| choice.id == id))
+      .or_else(|| shown.connections.first())
+      .map_or_else(String::new, |choice| choice.name.clone())
   }
 
   /// What a press on `fix` does: a connection to use is a change of what the panel holds; the others open where the
