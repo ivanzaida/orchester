@@ -91,7 +91,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
   top = top
     .child(name(&id, &step.name))
     .child(Row::new().flex(1.0))
-    .with_children(words::choose(ctx, &step.runs).map(|choose| choose_chip(&id, &choose)))
+    .with_children(words::choose(ctx, step).map(|choose| choose_chip(&id, &choose)))
     .with_children(fix.map(|(button, label)| {
       button
         .id(format!("{id}-fix"))
@@ -113,12 +113,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(top)
-    .child(indented(second_line(
-      &id,
-      "runs",
-      &words::runs(ctx, &step.runs),
-      not_ready,
-    )));
+    .child(indented(second_line(&id, "runs", &words::runs(ctx, step), not_ready)));
   if let Some(route) = &step.on_failure {
     body = body.child(failure_line(ctx, (&id, step, route)));
   }

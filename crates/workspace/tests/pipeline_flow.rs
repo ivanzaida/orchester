@@ -13,7 +13,7 @@ use orchester_core::{
   },
 };
 use orchester_workspace::pipelines::{
-  data::{Assignables, DraftProfileChoice, ProfileChoice, ToolChoice},
+  data::{Assignables, DraftProfileChoice, DraftToolChoice, ProfileChoice, ToolChoice},
   flow::{Conflicts, Ending, PipelineFlow, Runs},
 };
 
@@ -415,4 +415,37 @@ fn a_card_knows_whether_its_step_runs_a_tool() {
     .map(|card| (card.number, card.is_tool()))
     .collect();
   assert_eq!(tools, [(1, false), (2, false), (3, false), (4, true), (5, false)]);
+}
+
+#[test]
+fn a_card_knows_a_profile_or_tool_that_is_gone_from_one_only_not_published() {
+  let (archived, draft, draft_tool) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
+  let agent_on = |id| StepKind::Agent {
+    profile: Some(id),
+    repository: RepositoryAccess::ReadOnly,
+    model: None,
+    permissions: Default::default(),
+  };
+  let steps = vec![
+    step("a", agent_on(archived), &[]),
+    step("b", agent_on(draft), &["a"]),
+    step("c", StepKind::Tool { tool: Some(draft_tool) }, &["b"]),
+    step("d", StepKind::Tool { tool: Some(archived) }, &["c"]),
+  ];
+  let assignables = Assignables {
+    draft_profiles: vec![DraftProfileChoice {
+      id: draft,
+      name: "Drafted".into(),
+      model: ModelId::new("m").expect("valid model"),
+    }],
+    draft_tools: vec![DraftToolChoice {
+      id: draft_tool,
+      name: "Drafted tool".into(),
+    }],
+    ..Assignables::default()
+  };
+  let flow = PipelineFlow::of(&Pipeline::new(steps).expect("valid steps"), &assignables).expect("drawable");
+  let gone: Vec<bool> = flow.stages.iter().map(|stage| stage.cards[0].gone).collect();
+  assert_eq!(gone, [true, false, false, true]);
+  assert!(matches!(flow.stages[0].cards[0].runs, Runs::ProfileNotPublished { .. }));
 }

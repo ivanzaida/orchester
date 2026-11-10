@@ -26,6 +26,7 @@ fn profile(key: &str, name: &str, runs_on: &str, mark: AgentMark) -> Item {
     mark: Mark::Agent(mark),
     name: name.into(),
     runs_on: runs_on.into(),
+    model: None,
     suffix: None,
     warning: None,
   }
@@ -38,6 +39,7 @@ fn tool(key: &str, name: &str, runs_on: &str) -> Item {
     mark: Mark::Icon(Icon::Terminal),
     name: name.into(),
     runs_on: runs_on.into(),
+    model: None,
     suffix: Some("· its exit code decides the step".into()),
     warning: None,
   }
@@ -443,6 +445,50 @@ fn a_long_command_is_cut_before_what_stands_after_it_is() {
     "it ends inside the line, not past the row: {cut_end} in {cut_line}"
   );
   assert!(whole_end < cut_end, "a short command leaves room after the phrase");
+}
+
+#[test]
+fn a_long_model_override_is_cut_before_what_the_profile_runs_on() {
+  let runs = "Claude Code · Work · claude-opus-5-5";
+  let mut overriding = profile("builder", "Builder", runs, AgentMark::Claude);
+  overriding.model = Some("· model: a-very-long-model-override-name-that-takes-the-whole-row-and-more".into());
+  let mut cut = open_with(vec![overriding], Some("builder")).kit;
+  let mut plain = open_with(
+    vec![profile("builder", "Builder", runs, AgentMark::Claude)],
+    Some("builder"),
+  )
+  .kit;
+  let id = format!("{}-runs", item(0));
+  let (line, command, model) = (
+    cut.bounds(&id),
+    cut.bounds(&format!("{id}-command")),
+    cut.bounds(&format!("{id}-model")),
+  );
+  assert_close(
+    command.width,
+    plain.bounds(&format!("{id}-command")).width,
+    "the CLI, the connection and the model are whole",
+  );
+  assert!(
+    model.x + model.width <= line.x + line.width + 0.5,
+    "the override is cut to what is left of the row: it ends at {} in {}",
+    model.x + model.width,
+    line.x + line.width
+  );
+  assert!(model.width > 0.0, "and still shows its start");
+}
+
+#[test]
+fn an_item_that_is_not_ready_still_says_the_model_the_step_overrides() {
+  let mut explorer = profile("explorer", "Explorer", "claude-opus-5-5", AgentMark::Claude);
+  explorer.warning = Some("Choose a Claude Code connection".into());
+  explorer.model = Some("· model: gpt-override".into());
+  let mut kit = open_with(vec![explorer], Some("explorer")).kit;
+  assert_eq!(
+    kit.texts(&format!("{}-runs", item(0))),
+    ["Choose a Claude Code connection", "· model: gpt-override"],
+    "what to do, and the override the step keeps"
+  );
 }
 
 #[test]

@@ -174,22 +174,22 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
     };
     item.icon(glyph)
   };
-  let up = item(
-    ctx,
-    ("up", "pipeline_hub.flow.move.up"),
-    &moves.up,
-    Move::Up,
-    Icon::ArrowUp,
-  )
-  .shortcut(keys(ctx, "up"));
-  let down = item(
-    ctx,
-    ("down", "pipeline_hub.flow.move.down"),
-    &moves.down,
-    Move::Down,
-    Icon::ArrowDown,
-  )
-  .shortcut(keys(ctx, "down"));
+  // A step of a parallel group leaves it when it moves up or down (D-023): the row says so.
+  let leaves_group = menu
+    .flow
+    .stages
+    .iter()
+    .any(|stage| stage.cards.len() > 1 && stage.cards.iter().any(|other| other.key == card.key));
+  let (up_words, down_words) = if leaves_group {
+    (
+      "pipeline_hub.stepFlow.upOutOfGroup",
+      "pipeline_hub.stepFlow.downOutOfGroup",
+    )
+  } else {
+    ("pipeline_hub.flow.move.up", "pipeline_hub.flow.move.down")
+  };
+  let up = item(ctx, ("up", up_words), &moves.up, Move::Up, Icon::ArrowUp).shortcut(keys(ctx, "up"));
+  let down = item(ctx, ("down", down_words), &moves.down, Move::Down, Icon::ArrowDown).shortcut(keys(ctx, "down"));
   rows.push(up.render(ctx, open));
   rows.push(down.render(ctx, open));
   let joins: Vec<Element> = moves
