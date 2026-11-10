@@ -115,6 +115,7 @@ impl Component for FlowView {
       navigation: &navigation,
       project: &props.project,
       pipeline: props.pipeline,
+      read_only: false,
     };
     let action = props
       .read
@@ -224,7 +225,7 @@ fn release(reorder: &Reorder) {
   }
 }
 
-fn start_row(ctx: &Ctx) -> Element {
+pub(super) fn start_row(ctx: &Ctx) -> Element {
   rail::row(
     ctx,
     "pipeline-hub-flow-row-start",
@@ -269,12 +270,12 @@ fn keys(drive: &Drive) -> impl Fn(KeyboardEvent) + Send + Sync + use<> {
 }
 
 /// What stands on the line between the start and the end when there is nothing to draw there.
-fn note_row(ctx: &Ctx, note: Element) -> Element {
+pub(super) fn note_row(ctx: &Ctx, note: Element) -> Element {
   rail::row(ctx, "pipeline-hub-flow-row-note", &Node::Line, (note, SpacingSize::Lg))
 }
 
 /// A draft with no steps: a muted line, until *Add step* in the head adds the first one.
-fn no_steps(ctx: &Ctx) -> Element {
+pub(super) fn no_steps(ctx: &Ctx) -> Element {
   Row::new()
     .id("pipeline-hub-flow-empty")
     .width(Dimension::Pct(100.0))
@@ -488,26 +489,28 @@ impl Draw<'_> {
       reorder.focused.clone(),
       reorder.focused.clone(),
     );
-    let open = Focus::Keyboard
-      .apply(self.opens.button(PipelineView::Step(step.key.clone())))
-      .ref_element(element.clone())
-      .on_mouse_enter(move || hovered.set(Held(Some(enter.clone()))))
-      .on_mouse_leave(move || {
-        left.update(|held| {
-          if held.is(&leave) {
-            *held = Held::default();
-          }
-        });
-      })
-      .on_focus(move || focused.set(Held(Some(gained.clone()))))
-      .on_blur(move || {
-        blurred.update(|held| {
-          if held.is(&lost) {
-            *held = Held::default();
-          }
-        });
-      });
-    let fix = Fix::of(&step.runs).map(|fix| (self.opens.fix(fix), fix.words(ctx)));
+    let open = self.opens.button(PipelineView::Step(step.key.clone())).map(|button| {
+      Focus::Keyboard
+        .apply(button)
+        .ref_element(element.clone())
+        .on_mouse_enter(move || hovered.set(Held(Some(enter.clone()))))
+        .on_mouse_leave(move || {
+          left.update(|held| {
+            if held.is(&leave) {
+              *held = Held::default();
+            }
+          });
+        })
+        .on_focus(move || focused.set(Held(Some(gained.clone()))))
+        .on_blur(move || {
+          blurred.update(|held| {
+            if held.is(&lost) {
+              *held = Held::default();
+            }
+          });
+        })
+    });
+    let fix = Fix::of(&step.runs).and_then(|fix| self.opens.fix(fix).map(|button| (button, fix.words(ctx))));
     let handle = shown.then(|| drag::handle(ctx, self.drive, step, element));
     let more = (shown && self.drag.is_none()).then(|| menu::more_button(ctx, reorder, step, reorder.more_anchor(&key)));
     card::step(

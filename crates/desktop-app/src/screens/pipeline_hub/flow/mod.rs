@@ -17,6 +17,7 @@ mod landing;
 mod menu;
 mod parts;
 mod rail;
+mod read_only;
 mod reorder;
 mod state;
 mod view;
@@ -54,6 +55,8 @@ struct Opens<'a> {
   navigation: &'a Navigation,
   project: &'a ShownProject,
   pipeline: ResourceId,
+  /// The flow only shows the steps of a published version: nothing in it opens a step or the editor.
+  read_only: bool,
 }
 
 impl Opens<'_> {
@@ -64,13 +67,13 @@ impl Opens<'_> {
     ))
   }
 
-  fn button(&self, view: PipelineView) -> Button {
-    Press::Open(self.open(view)).button()
+  fn button(&self, view: PipelineView) -> Option<Button> {
+    (!self.read_only).then(|| Press::Open(self.open(view)).button())
   }
 
-  fn fix(&self, fix: Fix) -> Button {
+  fn fix(&self, fix: Fix) -> Option<Button> {
     let route = Route::Project(self.project.open.project.id(), fix.page());
-    Press::Open(self.navigation.to(route)).button()
+    (!self.read_only).then(|| Press::Open(self.navigation.to(route)).button())
   }
 }
 
@@ -105,6 +108,24 @@ pub(in crate::screens::pipeline_hub) fn section(
   )
 }
 
+/// [`section`]'s flow of a published version viewed read-only: the same line, cards and gates, but no card opens a
+/// step, shows the `›`, a handle or a ⋯, or takes the hover or the keys, there is no *Add step* or *Edit steps*, and
+/// nothing in it moves.
+pub(super) fn read_only(
+  ctx: &Ctx,
+  (project, navigation): (&ShownProject, &Navigation),
+  pipeline: ResourceId,
+  read: &FlowRead,
+) -> Element {
+  let opens = Opens {
+    navigation,
+    project,
+    pipeline,
+    read_only: true,
+  };
+  read_only::drawn(ctx, &opens, read)
+}
+
 /// Steps one line cannot show: a step that waits for only some of what runs before it, or steps that wait for each
 /// other. They are not guessed at; the page that edits steps, which the notice opens, shows their dependencies.
 fn undrawable(ctx: &Ctx, opens: &Opens<'_>, error: &FlowError) -> Element {
@@ -112,9 +133,13 @@ fn undrawable(ctx: &Ctx, opens: &Opens<'_>, error: &FlowError) -> Element {
     FlowError::Branches(_) => ("pipeline_hub.flow.branches.title", "pipeline_hub.flow.branches.detail"),
     FlowError::Broken(_) => ("pipeline_hub.flow.broken.title", "pipeline_hub.flow.broken.detail"),
   };
-  Notice::new("pipeline-hub-flow-undrawable", NoticeTone::Warning, ctx.t(title))
+  let notice = Notice::new("pipeline-hub-flow-undrawable", NoticeTone::Warning, ctx.t(title))
     .flat()
-    .body(ctx.t(body))
+    .body(ctx.t(body));
+  if opens.read_only {
+    return notice.into();
+  }
+  notice
     .action(edit_steps(
       ctx,
       "pipeline-hub-flow-undrawable-edit",

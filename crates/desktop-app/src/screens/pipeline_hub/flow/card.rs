@@ -42,10 +42,12 @@ const HANDLE_INDENT: f32 = 20.0;
 /// What a card with a handle has at its start, where one without has `md` (`Card · 03 Implement · hover` `GnnMB`).
 const HANDLE_START: f32 = 6.0;
 
-/// How a card is pressed and where it stands: `open` opens the step; `fix` is the pill of a step that cannot run, which
-/// opens what it names. A card the pointer or the keys are on has its `handle` and its ⋯ (`more`).
+/// How a card is pressed and where it stands: `open` opens the step, and is `None` for a card that only shows its step
+/// (a published version read-only, which has no step to open and no hover, `›`, handle or ⋯); `fix` is the pill of a
+/// step that cannot run, which opens what it names. A card the pointer or the keys are on has its `handle` and its ⋯
+/// (`more`).
 pub(super) struct Opening {
-  pub open: Button,
+  pub open: Option<Button>,
   pub fix: Option<(Button, std::sync::Arc<str>)>,
   pub place: Place,
   pub handle: Option<Element>,
@@ -97,7 +99,11 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
         .map(|access| tag_chip(&format!("{id}-access"), &words::access(ctx, access))),
     )
     .with_children(more)
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+    .with_children(
+      open
+        .is_some()
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+    );
   let indent = if handled { HANDLE_INDENT } else { 0.0 };
   let mut body = Column::new()
     .width(Dimension::Pct(100.0))
@@ -123,11 +129,13 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
         ),
     );
   }
-  let open = if place == Place::InGroup {
-    open.height(Dimension::Pct(100.0))
-  } else {
-    open
-  };
+  let open = open.map(|open| {
+    if place == Place::InGroup {
+      open.height(Dimension::Pct(100.0))
+    } else {
+      open
+    }
+  });
   surface(open, &id, (not_ready, handled, look), body)
     .describe("step", step.key.to_string())
     .describe("number", words::number(step.number))
@@ -148,7 +156,7 @@ fn indented(line: Element, handled: bool) -> Element {
 }
 
 /// The Deliver card, numbered after the steps.
-pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Button) -> Element {
+pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Option<Button>) -> Element {
   let id = "pipeline-hub-flow-deliver";
   let top = Row::new()
     .width(Dimension::Pct(100.0))
@@ -156,7 +164,11 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Bu
     .align_items(Alignment::Center)
     .child(name(id, &ctx.t("pipeline_hub.flow.deliver")))
     .child(Row::new().flex(1.0))
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+    .with_children(
+      open
+        .is_some()
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+    );
   let body = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -221,8 +233,9 @@ fn choose_chip(id: &str, words: &str) -> Row {
 }
 
 /// A card's frame (`Card · 01 Research`): `surface_panel` in a `border` outline, radius 6, 12 at its sides and 8
-/// above and under; a step that is not ready in a `warning` outline.
-fn surface(open: Button, id: &str, (not_ready, handled, look): (bool, bool, Look), body: Column) -> Button {
+/// above and under; a step that is not ready in a `warning` outline. Pressed through `open`, it takes the hover fill;
+/// without one it only shows its step.
+fn surface(open: Option<Button>, id: &str, (not_ready, handled, look): (bool, bool, Look), body: Column) -> Button {
   let outline = match (look, not_ready) {
     (Look::Target, _) => Border::inside(BorderSize::Lg, PaletteColor::Accent),
     (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
@@ -242,16 +255,23 @@ fn surface(open: Button, id: &str, (not_ready, handled, look): (bool, bool, Look
   } else {
     Padding::symmetric(SpacingSize::Md, SpacingSize::Sm)
   };
+  let pressable = open.is_some();
   let card = open
+    .unwrap_or_else(Button::empty)
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .padding(padding)
     .align_items(Alignment::Start)
     .background(PaletteColor::SurfacePanel)
     .border(outline)
-    .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()).border(hovered))
-    .child(body);
+    .rounded(RadiusSize::Md);
+  // A card that only shows its step does nothing, so the keyboard does not stop on it.
+  let card = if pressable {
+    card.hovered_style(Style::new().background(ExtraColor::Hover.role()).border(hovered))
+  } else {
+    card.focusable(false)
+  }
+  .child(body);
   if look == Look::Lifted {
     card.opacity(DRAGGED_OPACITY)
   } else {

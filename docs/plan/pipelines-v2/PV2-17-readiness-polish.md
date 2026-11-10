@@ -66,3 +66,12 @@ Make the chip, the list line, *Ready?* and the step cards agree, and give every 
 18. Tests the old retries test had: changing only the target keeps the retries; unfinished retries text is kept on a
     target change. A test that the *Agent* row says why a tool cannot run (`agentToolUnavailable`).
 19. *Duplicate* puts the copy beside the original (parallel); decide whether a person expects it after the original.
+
+## Added from PV2-11's review and design verification (2026-11-11)
+
+20. After *Restore v2* nothing but the bar's *Unsaved changes* says the editor holds v2: a short *Restored v2 · not
+    saved* in the head or the bar until Save or Cancel.
+21. *Allow these changes?* after a Restore names the restore as the cause (today it lists the step only).
+22. The read-only view says *Viewing v2* twice (head and notice): the notice keeps only *read-only*.
+23. Tests: read-only cards are not Tab stops; the held *Versions* button's fill and border; the list reads again
+    after a save or rename (if PV2-11's merge round did not add it).

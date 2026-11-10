@@ -142,6 +142,12 @@ impl Held {
     change(&mut self.edit);
   }
 
+  /// Puts `version` into the edit, replacing every change made so far: *Save* then stores it as the next version, and
+  /// the edit is no change at all when `version` is what it started from.
+  pub fn restore(&mut self, version: &Pipeline) {
+    self.edit = PipelineEdit::new(version.clone());
+  }
+
   /// Whether the edit differs from what it started from: changes that cancel each other are none.
   pub fn is_changed(&self) -> bool {
     self.edit != PipelineEdit::new(Pipeline::clone(&self.base))

@@ -6,8 +6,15 @@
 //! The panel edits the pipeline in place ([`super::edit`]): every change to it and its steps is held until *Save*,
 //! which stores it and publishes it as the next version ([`super::save`]); *Cancel* puts back what is stored. The panel
 //! is keyed by its pipeline, so an edit never carries over to another one; the hub asks before it goes
-//! ([`super::leave`]). The head with its ⋯ menu is [`super::panel_head`]; an archived pipeline's panel is
-//! [`super::archived`], which has no Save bar.
+//! ([`super::leave`]). The head with its ⋯ menu and *Versions* is [`super::panel_head`]; an archived pipeline's panel
+//! is [`super::archived`], which has no Save bar.
+//!
+//! The panel has three views of one pipeline: its own body, a step the route holds open ([`super::step`]) and a
+//! published version read-only ([`versions`], [`super::version_view`]). The route is the stronger: a route that names a
+//! step closes the version shown. Only the pipeline's own views have the head, and only the version view has no Save
+//! bar.
+
+mod versions;
 
 use std::sync::Arc;
 
@@ -39,6 +46,7 @@ use super::{
   save::{self, Ask, Asked, Followed, Notes, Pending, Save},
   settings::{self, Settings},
   step, steps,
+  version_view::{Viewed, ViewedSignal},
 };
 use crate::{
   navigation::Navigation,
@@ -115,6 +123,10 @@ struct PipelinePanel {
   unsaved: UnsavedSignal,
   /// Whether a save is under way, which the screen's question about leaving reads.
   saving: Signal<bool>,
+  /// The published version the panel shows read-only, set by the *Versions* list in the head.
+  viewing: ViewedSignal,
+  /// Whether the question before *Restore* replaces the edit's changes is open.
+  restoring: Signal<bool>,
   /// The fields of the open step that show an error: while one does, what is typed is not what the edit holds.
   faulty: step::Faulty,
   /// How many times the edit was put back, after which the open step's fields are mounted anew.
@@ -146,6 +158,8 @@ impl Component for PipelinePanel {
       stored: ctx.create_ref(props.entry.body.clone()),
       unsaved: props.hosted.unsaved,
       saving: props.hosted.saving,
+      viewing: ctx.signal(None),
+      restoring: ctx.signal(false),
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
       reveal_delivers: ctx.signal(false),
@@ -186,19 +200,12 @@ impl Component for PipelinePanel {
       .flow
       .clone()
       .expect("a pipeline that is not archived has its flow");
-    self.stored.set(Some(stored.clone()));
     self.settle(&stored);
     let edit = Edit::new(&self.holding, stored).following(&self.stored);
     let current = edit.current();
     step::forget_gone(&self.faulty, &current);
     let changed = edit.is_changed();
-    mark_unsaved(&self.unsaved, self.id, changed);
-    if changed {
-      self.notes.forget_stale(&current);
-    }
-    if !changed && self.description.get_untracked() != current.description() {
-      self.description.set(current.description().to_owned());
-    }
+    self.follow_edit(&current, changed);
     let read = if edit.holds() {
       Arc::new(FlowRead::of_edit(&current, &assignables))
     } else {
@@ -219,20 +226,24 @@ impl Component for PipelinePanel {
       locked,
       changed,
     };
-    let body = match self.open_step(ctx, &shown, step) {
-      Some(key) => self.step_body(ctx, &shown, &key),
-      None => self.pipeline_body(ctx, &shown, hosted),
+    let (body, viewed) = self.views(ctx, &shown, hosted, step);
+    let mut pinned = self.pinned(ctx, &entry, asked.as_ref());
+    let bar = match &viewed {
+      // A version is read, not edited: the bar belongs to the edit, which waits behind it.
+      Some(viewed) => {
+        pinned.extend(self.replace_question(ctx, &edit, viewed));
+        None
+      }
+      None => Some(bar::bar(
+        ctx,
+        (
+          self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
+          (changed && !saving).then(|| self.cancel_now(&edit)),
+        ),
+        (&entry, changed, step::fix_words(ctx, &self.faulty, &current)),
+      )),
     };
-    let pinned = self.pinned(ctx, &entry, asked.as_ref());
-    let bar = bar::bar(
-      ctx,
-      (
-        self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
-        (changed && !saving).then(|| self.cancel_now(&edit)),
-      ),
-      (&entry, changed, step::fix_words(ctx, &self.faulty, &current)),
-    );
-    frame(&entry, body, pinned, Some(bar))
+    frame(&entry, body, pinned, bar)
   }
 }
 
@@ -285,6 +296,35 @@ impl PipelinePanel {
     ))
   }
 
+  /// The body the panel shows, and the version in it when it is the version's: a step the route holds open wins over a
+  /// version that was shown, which it closes.
+  fn views(&self, ctx: &mut Ctx, shown: &Shown<'_>, hosted: Hosted, step: Option<StepKey>) -> (Column, Option<Viewed>) {
+    if let Some(key) = self.open_step(ctx, shown, step) {
+      self.close_version();
+      return (self.step_body(ctx, shown, &key), None);
+    }
+    match self.viewing.get() {
+      Some(viewed) => (self.version_body(ctx, shown, hosted, &viewed), Some(viewed)),
+      None => (self.pipeline_body(ctx, shown, hosted), None),
+    }
+  }
+
+  /// The panel's head: what the pipeline is and its version, *Versions* and ⋯.
+  fn head(&self, ctx: &mut Ctx, shown: &Shown<'_>, hosted: Hosted) -> Element {
+    panel_head::head(
+      ctx,
+      HeadProps {
+        project: shown.project.clone(),
+        entry: shown.entry.clone(),
+        default: shown.default,
+        now: Timestamp::now(),
+        hosted,
+        holds_changes: shown.changed,
+        viewing: self.viewing.clone(),
+      },
+    )
+  }
+
   /// The body of the pipeline: its head, chips, flow, settings and *Ready?*.
   fn pipeline_body(&self, ctx: &mut Ctx, shown: &Shown<'_>, hosted: Hosted) -> Column {
     let Shown {
@@ -295,20 +335,9 @@ impl PipelinePanel {
       current,
       read,
       locked,
-      changed,
       ..
     } = *shown;
-    let head = panel_head::head(
-      ctx,
-      HeadProps {
-        project: project.clone(),
-        entry: entry.clone(),
-        default,
-        now: Timestamp::now(),
-        hosted,
-        holds_changes: changed,
-      },
-    );
+    let head = self.head(ctx, shown, hosted);
     if self.reveal_delivers.get_untracked() {
       ctx.scroll_into_view(&self.delivers);
       self.reveal_delivers.set(false);
@@ -342,11 +371,27 @@ impl Drop for PipelinePanel {
 }
 
 impl PipelinePanel {
-  /// After a save the panel shows what it saved until the hub lists another pipeline; then what the hub lists.
+  /// Keeps `stored` current. After a save the panel shows what it saved until the hub lists another pipeline; then what
+  /// the hub lists.
   fn settle(&self, stored: &Arc<Pipeline>) {
+    self.stored.set(Some(stored.clone()));
     let holding = self.holding.get_untracked();
     if holding.saved_over.as_ref().is_some_and(|over| over != stored) {
       self.holding.set(Holding::default());
+    }
+  }
+
+  /// What the panel tells the list and the bar of the edit it shows: whether it has changes, which a save's note and
+  /// the description's box then follow. The question before *Restore* goes with the version it was asked about.
+  fn follow_edit(&self, current: &PipelineEdit, changed: bool) {
+    if self.restoring.get_untracked() && self.viewing.get_untracked().is_none() {
+      self.restoring.set(false);
+    }
+    mark_unsaved(&self.unsaved, self.id, changed);
+    if changed {
+      self.notes.forget_stale(current);
+    } else if self.description.get_untracked() != current.description() {
+      self.description.set(current.description().to_owned());
     }
   }
 
