@@ -16,16 +16,16 @@ use parking_lot::Mutex;
 
 use crate::harness::{Kit, assert_close, gap_after};
 
-const ID: &str = "picker";
+pub(super) const ID: &str = "picker";
 
-fn model(id: &str, efforts: &[&str]) -> Model {
+pub(super) fn model(id: &str, efforts: &[&str]) -> Model {
   Model {
     id: id.into(),
     efforts: efforts.iter().map(|effort| Arc::from(*effort)).collect(),
   }
 }
 
-fn connection(id: &str, mark: Mark, models: Vec<Model>) -> Connection {
+pub(super) fn connection(id: &str, mark: Mark, models: Vec<Model>) -> Connection {
   Connection {
     id: id.into(),
     mark,
@@ -39,7 +39,7 @@ fn connection(id: &str, mark: Mark, models: Vec<Model>) -> Connection {
   }
 }
 
-fn claude_models() -> Vec<Model> {
+pub(super) fn claude_models() -> Vec<Model> {
   let efforts = ["low", "medium", "high", "xhigh", "max"];
   vec![
     model("claude-opus-5-5", &efforts),
@@ -52,7 +52,7 @@ fn claude_models() -> Vec<Model> {
 }
 
 /// Claude Code's Work and Home (Home at its limit), Codex's Default (signed out) and Team, then an API provider.
-fn connections() -> Vec<Connection> {
+pub(super) fn connections() -> Vec<Connection> {
   let claude = Mark::Agent(AgentMark::Claude);
   let codex = Mark::Agent(AgentMark::OpenAi);
   vec![
@@ -73,7 +73,7 @@ fn connections() -> Vec<Connection> {
   ]
 }
 
-fn chosen() -> Chosen {
+pub(super) fn chosen() -> Chosen {
   Chosen {
     connection: "work".into(),
     model: Some("claude-opus-5-5".into()),
@@ -81,13 +81,18 @@ fn chosen() -> Chosen {
   }
 }
 
-struct Opened {
-  kit: Kit,
-  picks: Arc<Mutex<Vec<Pick>>>,
-  closed: Arc<Mutex<u32>>,
+pub(super) struct Opened {
+  pub(super) kit: Kit,
+  pub(super) picks: Arc<Mutex<Vec<Pick>>>,
+  pub(super) closed: Arc<Mutex<u32>>,
 }
 
-fn open_with(chosen: Chosen) -> Opened {
+pub(super) fn open_with(chosen: Chosen) -> Opened {
+  open_over(connections(), chosen)
+}
+
+/// The picker over `connections` with `chosen` chosen.
+pub(super) fn open_over(connections: Vec<Connection>, chosen: Chosen) -> Opened {
   let picks = Arc::new(Mutex::new(Vec::new()));
   let closed = Arc::new(Mutex::new(0));
   let (record, close) = (picks.clone(), closed.clone());
@@ -95,7 +100,7 @@ fn open_with(chosen: Chosen) -> Opened {
     let (record, close) = (record.clone(), close.clone());
     RunsOnPicker::new(
       ID,
-      (connections(), chosen.clone()),
+      (connections.clone(), chosen.clone()),
       move |pick| record.lock().push(pick),
       move || *close.lock() += 1,
     )
@@ -105,36 +110,36 @@ fn open_with(chosen: Chosen) -> Opened {
   Opened { kit, picks, closed }
 }
 
-fn open() -> Opened {
+pub(super) fn open() -> Opened {
   open_with(chosen())
 }
 
-fn key(kit: &mut Kit, key: &str) {
+pub(super) fn key(kit: &mut Kit, key: &str) {
   apply(&mut kit.tree, &SyntheticInput::key_down(key));
   kit.pass();
 }
 
-fn type_text(kit: &mut Kit, text: &str) {
+pub(super) fn type_text(kit: &mut Kit, text: &str) {
   for character in text.chars() {
     apply(&mut kit.tree, &SyntheticInput::char(character));
     kit.pass();
   }
 }
 
-fn row(index: usize) -> String {
+pub(super) fn row(index: usize) -> String {
   format!("{ID}-model-{index}")
 }
 
-fn item(connection: &str) -> String {
+pub(super) fn item(connection: &str) -> String {
   format!("{ID}-connection-{connection}")
 }
 
-fn effort(name: &str) -> String {
+pub(super) fn effort(name: &str) -> String {
   format!("{ID}-effort-{name}")
 }
 
 /// The ids of the model rows shown, in order.
-fn rows(kit: &mut Kit) -> Vec<String> {
+pub(super) fn rows(kit: &mut Kit) -> Vec<String> {
   let mut shown = Vec::new();
   for index in 0..8 {
     if !kit.exists(&row(index)) {
@@ -168,6 +173,8 @@ fn shape(rail: &[bool], list: usize) -> Shape<'_> {
     list,
     chosen: Some(1),
     searched: false,
+    efforts: 0,
+    effort: None,
   }
 }
 

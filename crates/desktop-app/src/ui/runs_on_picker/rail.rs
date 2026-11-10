@@ -2,23 +2,29 @@
 //! with a thin divider between groups (`kFLF6`: 9 wide, a 1 × 14 `border` line). Each is a 28 square of radius `md`
 //! with its 14 mark; the shown one on `pressed` under a 12 × 2 `accent` bar (`yTnqv`), where the keys are on `hover`, a
 //! plan at its limit with a 6 `warning` dot ringed in `surface_raised` at its top right (`V7gbO`), one that cannot be
-//! chosen at 40 % and inert. A tooltip names each, or says why it cannot be chosen.
+//! chosen at 40 % and inert, where the keys are also in the focus ring. A tooltip names each, or says why it
+//! cannot be chosen. Past the 288 it has, the rail scrolls sideways and keeps the shown item and the keys' in view.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
+    events::ScrollEvent,
     theme::{BorderSize, PaletteColor, RadiusSize},
   },
-  components::{Button, Column, Row, Stack},
-  layout::{Alignment, layout_kind::Justify},
+  components::{Button, Column, Row, ScrollHorizontal, Stack},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+    scrollbar::ScrollBarStyle,
+  },
   node::{Element, Style, border::Border, dimension::Dimension},
 };
 
 use super::model::{Connection, Mark};
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, RUNS_ON_UNAVAILABLE_OPACITY},
+  theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, IconSize, RUNS_ON_UNAVAILABLE_OPACITY},
   ui::{
     icon::{Icon, icon},
     pressable::{inert, pressable},
@@ -42,10 +48,43 @@ const DIVIDER_LINE: f32 = 14.0;
 /// What choosing the connection at a place on the rail does.
 pub(super) type Choose = Arc<dyn Fn(usize) + Send + Sync>;
 
-/// The rail of `connections`: the one at `viewing` shown, the keys at `cursor`.
+/// The room the rail has: the picker's width less the head's padding at each side.
+fn visible() -> f32 {
+  super::WIDTH - 2.0 * ExtraSpacing::Snug.value()
+}
+
+/// Where the connection at `index` starts along the rail: every item before it, and every divider between groups
+/// before it, with the gaps between them all.
+fn start_of(connections: &[Connection], index: usize) -> f32 {
+  let gap = ExtraSpacing::Tight.value();
+  let dividers = connections[..=index]
+    .windows(2)
+    .filter(|pair| pair[0].mark != pair[1].mark)
+    .count();
+  // A rail of a few dozen items: the casts are exact.
+  index as f32 * (ITEM + gap) + dividers as f32 * (DIVIDER_WIDTH + gap)
+}
+
+/// Scrolls the rail held by `scroll` so that the connection at `index` shows whole. A rail that fits does not scroll.
+pub(super) fn reveal(scroll: &ScrollState, connections: &[Connection], index: usize) {
+  if index >= connections.len() {
+    return;
+  }
+  let (start, room) = (start_of(connections, index), scroll.viewport_width());
+  let room = if room > 0.0 { room } else { visible() };
+  let shown = scroll.scroll_x();
+  if start < shown {
+    scroll.set_scroll_pending(start, 0.0);
+  } else if start + ITEM > shown + room {
+    scroll.set_scroll_pending(start + ITEM - room, 0.0);
+  }
+}
+
+/// The rail of `connections`: the one at `viewing` shown, the keys at `cursor`. Past what fits it scrolls sideways
+/// under a hidden scrollbar: by the wheel (either axis) or a swipe, and by the keys, which keep their item in view.
 pub(super) fn rail(
   ctx: &mut Ctx,
-  id: &str,
+  (id, scroll): (&str, &ScrollState),
   connections: &[Connection],
   (viewing, cursor): (Option<usize>, Option<usize>),
   choose: &Choose,
@@ -58,11 +97,33 @@ pub(super) fn rail(
     let state = (viewing == Some(index), cursor == Some(index));
     items.push(item(ctx, (id, index, connection), state, choose));
   }
-  Row::new()
+  let row = Row::new()
     .id(format!("{id}-rail"))
     .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::Center)
-    .with_children(items)
+    .with_children(items);
+  let state = scroll.clone();
+  ScrollHorizontal::new(row)
+    .with_scroll_state(scroll.clone())
+    .id(format!("{id}-rail-scroll"))
+    .scrollbar(ScrollBarStyle::hidden())
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ITEM))
+    .on_scroll(move |event: ScrollEvent| {
+      // lurq's sideways scroller leaves a vertical wheel to the containers around it: the rail takes the stronger
+      // delta.
+      let most = (state.content_width() - state.viewport_width()).max(0.0);
+      if most <= 0.0 {
+        return;
+      }
+      event.prevent_default();
+      let delta = if event.delta_y.abs() > event.delta_x.abs() {
+        event.delta_y
+      } else {
+        event.delta_x
+      };
+      state.set_scroll_pending((state.scroll_x() - delta).clamp(0.0, most), 0.0);
+    })
     .into()
 }
 
@@ -117,6 +178,12 @@ fn item(
     (true, _) => button.background(ExtraColor::Pressed.role()),
     (false, true) => button.background(ExtraColor::Hover.role()),
     (false, false) => button,
+  };
+  // Only the keys put the cursor here, so it is the focus ring's place.
+  let button = if current {
+    button.box_shadow(ExtraShadow::FocusRing.role()).class("ringed")
+  } else {
+    button
   };
   // A stack, as only a stack lays out what is placed at a point of it.
   let item = Stack::new()

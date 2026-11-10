@@ -22,7 +22,7 @@ use lurq::{
 
 use super::model::{LIST_ROWS, Model};
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, runs_on_picker_scrollbar},
+  theme::{ControlHeight, ExtraColor, ExtraShadow, ExtraSpacing, IconSize, runs_on_picker_scrollbar},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -125,13 +125,14 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox) -> Element {
     .into()
 }
 
-/// The list of `models` (as Search filtered them), the chosen one checked and the keys at `cursor`; `choose` takes the
-/// model at a place in `models`. With none, `empty` says why.
+/// The list of `models` (as Search filtered them), the chosen one checked and the keys at `cursor`, with the focus ring
+/// once a key moved them there (`ringed`; while Search merely holds text the first model has the fill alone). `choose`
+/// takes the model at a place in `models`. With none, `empty` says why.
 pub(super) fn list(
   ctx: &mut Ctx,
   (id, scroll): (&str, &ScrollState),
   (models, empty): (&[&Model], &str),
-  (chosen, cursor): (Option<&str>, Option<usize>),
+  (chosen, cursor, ringed): (Option<&str>, Option<usize>, bool),
   choose: &Arc<dyn Fn(usize) + Send + Sync>,
 ) -> Element {
   let rows: Vec<Element> = if models.is_empty() {
@@ -144,7 +145,7 @@ pub(super) fn list(
         let press = choose.clone();
         row(
           (id, index, &model.id),
-          (chosen == Some(&*model.id), cursor == Some(index)),
+          (chosen == Some(&*model.id), cursor == Some(index), ringed),
           move || press(index),
         )
       })
@@ -168,10 +169,10 @@ pub(super) fn list(
 }
 
 /// A model's row: its id in the app's font, a check at its end when `chosen`, the `hover` fill where the keys are
-/// (`current`).
+/// (`current`) and the focus ring inside its edge when the keys were moved there (`ringed`).
 fn row(
   (id, index, model): (&str, usize, &str),
-  (chosen, current): (bool, bool),
+  (chosen, current, ringed): (bool, bool, bool),
   press: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let row = pressable(press)
@@ -197,10 +198,14 @@ fn row(
         .text_overflow(TextOverflow::Elipsis),
     )
     .with_children(chosen.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::TextPrimary)));
-  if current {
-    row.background(ExtraColor::Hover.role()).into()
-  } else {
-    row.into()
+  match (current, ringed) {
+    (true, true) => row
+      .background(ExtraColor::Hover.role())
+      .box_shadow(ExtraShadow::FocusRing.role())
+      .class("ringed")
+      .into(),
+    (true, false) => row.background(ExtraColor::Hover.role()).into(),
+    (false, _) => row.into(),
   }
 }
 

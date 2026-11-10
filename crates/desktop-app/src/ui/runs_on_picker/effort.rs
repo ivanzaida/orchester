@@ -17,12 +17,12 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, RunsOnPickerText},
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraShadow, ExtraSpacing, RunsOnPickerText},
   ui::pressable::{inert, pressable},
 };
 
 /// The words of an effort as the CLI names it; one with no word of its own shows as the CLI names it.
-pub fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
+fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
   match effort {
     "minimal" => ctx.t("ui.runsOnPicker.effort.minimal"),
     "low" => ctx.t("ui.runsOnPicker.effort.low"),
@@ -35,17 +35,20 @@ pub fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
 }
 
 /// The row for `efforts` (what the chosen model offers, `None` while there is no model chosen), `chosen` marked (`None`
-/// is *Default*); `choose` takes an effort.
+/// is *Default*) and the focus ring on the segment the keys are at (`current`, counting *Default* as the first);
+/// `choose` takes an effort.
 pub(super) fn row(
   ctx: &Ctx,
   id: &str,
   (efforts, chosen): (Option<&[Arc<str>]>, Option<&str>),
+  current: Option<usize>,
   choose: &Arc<dyn Fn(Option<Arc<str>>) + Send + Sync>,
 ) -> Element {
   let offered = efforts.unwrap_or_default();
   let places = std::iter::once(None).chain(offered.iter().map(Some));
   let segments: Vec<Element> = places
-    .map(|effort| {
+    .enumerate()
+    .map(|(place, effort)| {
       let words = effort.map_or_else(
         || ctx.t("ui.runsOnPicker.effort.default"),
         |effort| effort_word(ctx, effort),
@@ -53,10 +56,14 @@ pub(super) fn row(
       let name = effort.map_or("default", |effort| &**effort);
       let value = effort.cloned();
       let picked = efforts.is_some() && value.as_deref() == chosen;
-      segment((id, name, &words), (efforts.is_some(), picked), {
-        let choose = choose.clone();
-        move || choose(value.clone())
-      })
+      segment(
+        (id, name, &words),
+        (efforts.is_some(), picked, current == Some(place)),
+        {
+          let choose = choose.clone();
+          move || choose(value.clone())
+        },
+      )
     })
     .collect();
   let segmented = Row::new()
@@ -83,10 +90,11 @@ pub(super) fn row(
     .into()
 }
 
-/// A segment named `name` saying `words`, `picked` or not; `active` when it can be pressed.
+/// A segment named `name` saying `words`, `picked` or not; `active` when it can be pressed; `ringed` while the keys are
+/// on it, with the app's focus ring (inside its edge).
 fn segment(
   (id, name, words): (&str, &str, &str),
-  (active, picked): (bool, bool),
+  (active, picked, ringed): (bool, bool, bool),
   press: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let button = if active {
@@ -109,6 +117,11 @@ fn segment(
     .justify(Justify::Center)
     .rounded(RadiusSize::Sm)
     .child(Text::new(words).variant(typography.role()).nowrap());
+  let button = if ringed {
+    button.box_shadow(ExtraShadow::FocusRing.role()).class("ringed")
+  } else {
+    button
+  };
   match fill {
     Some(fill) => button.background(fill).into(),
     None if active => button
