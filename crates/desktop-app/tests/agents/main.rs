@@ -9,6 +9,7 @@ mod failure;
 mod harness;
 mod hub;
 mod local_hub;
+mod local_hub_archived;
 mod local_hub_create;
 mod local_hub_create_press;
 mod local_hub_create_profile;

@@ -17,6 +17,7 @@
 
 pub(in crate::screens) mod archive;
 mod archived;
+mod archived_profile;
 mod editing;
 mod head;
 mod instruction;
@@ -328,6 +329,7 @@ impl LocalHubScreen {
           entry: entry.clone(),
           stopped,
           details: found.and_then(|found| found.details.clone()),
+          profile: found.and_then(|found| found.profile.clone()),
           now: Timestamp::now(),
         },
       );
