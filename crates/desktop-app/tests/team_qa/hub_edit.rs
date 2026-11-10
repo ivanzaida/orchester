@@ -36,10 +36,27 @@ fn on_pencil(of: (&str, State)) -> (Window, TeamServer, (ProjectId, ResourceId))
 }
 
 /// [`on_pencil`], once the panel's element `shown` has its text.
-pub(super) fn on_pencil_until(
+pub(super) fn on_pencil_until(of: (&str, State), shown: &str) -> (Window, TeamServer, (ProjectId, ResourceId)) {
+  let (window, server, (project, pencil)) = opened(of, shown, |window| {
+    let pencil = db(window)
+      .resources(ResourceKind::McpServer)
+      .expect("resources")
+      .into_iter()
+      .find(|resource| resource.name().as_str() == "pencil-design")
+      .expect("the seed's pencil-design")
+      .id();
+    (HubView::new(HubFilter::McpServers, Some(pencil)), Some(pencil))
+  });
+  (window, server, (project, pencil.expect("pencil-design")))
+}
+
+/// The window on the seed's `scenario` joined to the stand-in team server in `state`, on the hub's view `view`
+/// picks (with the resource it names), once the panel's element `shown` has its text.
+pub(super) fn opened(
   (scenario, state): (&str, State),
   shown: &str,
-) -> (Window, TeamServer, (ProjectId, ResourceId)) {
+  view: impl FnOnce(&Window) -> (HubView, Option<ResourceId>),
+) -> (Window, TeamServer, (ProjectId, Option<ResourceId>)) {
   let dir = TempDir::new().expect("a temporary folder");
   let request = crate::kontur::SeedRequest {
     data_dir: dir.path().to_path_buf(),
@@ -54,22 +71,15 @@ pub(super) fn on_pencil_until(
   let services = launch.services().expect("the session started");
   let server = team::prepare(state, services, data.runtime.handle()).expect("the state is set up");
   let mut window = Window::of(data, launch);
-  let pencil = db(&window)
-    .resources(ResourceKind::McpServer)
-    .expect("resources")
-    .into_iter()
-    .find(|resource| resource.name().as_str() == "pencil-design")
-    .expect("the seed's pencil-design")
-    .id();
-  window.navigation().go(Route::Project(
-    seeded.project,
-    ProjectPage::hub(HubView::new(HubFilter::McpServers, Some(pencil))),
-  ));
+  let (view, picked) = view(&window);
+  window
+    .navigation()
+    .go(Route::Project(seeded.project, ProjectPage::hub(view)));
   window.until("the panel", |window| window.texts(shown).is_some());
-  (window, server, (seeded.project, pencil))
+  (window, server, (seeded.project, picked))
 }
 
-fn db(window: &Window) -> ProjectDb {
+pub(super) fn db(window: &Window) -> ProjectDb {
   ProjectDb::open(&window.data.repo("repo-kontur")).expect("database")
 }
 
@@ -143,7 +153,7 @@ fn team_qa_hub_edit_no_longer_an_admin_is_said_in_place_and_keeps_what_was_typed
 }
 
 /// Whether the hub's head says the team server cannot be reached.
-fn says_unreachable(window: &mut Window) -> bool {
+pub(super) fn says_unreachable(window: &mut Window) -> bool {
   window
     .texts("team-hub-team")
     .is_some_and(|said| said.join(" ").contains("Can't reach the team"))

@@ -12,6 +12,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use super::{team_body_edit::Latest, team_sheets};
 use crate::team_config::TeamConfig;
 
 /// A resource a profile uses.
@@ -57,6 +58,8 @@ pub struct TeamProfileSheet {
   pub connections: Vec<ConnectionChoice>,
   /// The connection picked for it, while it is still one of [`Self::connections`].
   pub picked: Option<ConnectionId>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<TeamAgentProfile>>,
 }
 
 impl TeamProfileSheet {
@@ -143,6 +146,9 @@ fn sheet(
     secrets,
     connections: of_kind,
     picked,
+    edit: config
+      .resource(profile)
+      .and_then(|resource| team_sheets::latest_of(resource, team)),
   })
 }
 

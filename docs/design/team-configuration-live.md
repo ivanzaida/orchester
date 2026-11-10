@@ -90,7 +90,11 @@ configuration in its database as today.
   Until they read memory the copy stays and the migration keeps `resources`/`resource_versions`/
   `shared_version_bodies`/`shared_version_references` of shared projects. A team pipeline is read-only on this
   computer (no Save there), and the tools that draft or publish a profile, pipeline, instruction, skill or tool refuse
-  a team project (`team_no_drafts`); editing those kinds in the hub's panel needs its forms (design).
+  a team project (`team_no_drafts`). An admin edits a team profile, instruction, skill and command tool in place in the
+  hub's panel (`A26`–`A31` in `acFkz`, `screens/team_hub/edit/`, `agents::team_body_edit`): Save publishes the next
+  version at once, a newer version refuses it and reloads the panel, and while the server cannot be reached what was
+  typed stays with Save unavailable. Not edited there yet: a profile's Agent CLI and model, a skill's files, an HTTP or
+  database tool, and the leave guard of an unsaved team edit.
 
 ## Open questions
 

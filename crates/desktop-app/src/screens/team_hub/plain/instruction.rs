@@ -27,7 +27,7 @@ pub(super) fn sections(ctx: &Ctx, sheet: &TeamInstructionSheet) -> Vec<Element> 
     None,
     rows::words("team-hub-from-team-when-value", &when(ctx, &sheet.events)),
   ));
-  rows.push(used_by_row(ctx, &sheet.used_by));
+  rows.push(used_by_row(ctx, &sheet.used_by, None));
   rows.push(rows::row(
     "team-hub-from-team-format",
     &ctx.t("team_hub.plain.format"),

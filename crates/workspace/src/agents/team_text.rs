@@ -9,9 +9,10 @@ use orchester_core::{
 };
 
 use super::{
+  team_body_edit::Latest,
   team_mcp::Published,
   team_profile::{Listed, TeamProfileSheet, listed},
-  team_sheets,
+  team_sheets::{self, latest_of},
 };
 use crate::team_config::TeamConfig;
 
@@ -48,6 +49,8 @@ pub struct TeamInstructionSheet {
   pub used_by: Vec<String>,
   /// Who published its latest version.
   pub published: Option<Published>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<Instruction>>,
 }
 
 /// One team skill as the panel shows it.
@@ -59,6 +62,8 @@ pub struct TeamSkillSheet {
   pub added: Added,
   pub used_by: Vec<String>,
   pub published: Option<Published>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<Skill>>,
 }
 
 /// The skill's own document, which every skill has.
@@ -105,6 +110,7 @@ pub(super) fn instructions(
           sheet.instructions.iter().any(|used| used.id == resource.id)
         }),
         published: team_sheets::published(resource),
+        edit: latest_of(resource, &body),
       },
     ));
   }
@@ -134,6 +140,7 @@ pub(super) fn skills(
           sheet.skills.iter().any(|used| used.id == resource.id)
         }),
         published: team_sheets::published(resource),
+        edit: latest_of(resource, &body),
       },
     ));
   }

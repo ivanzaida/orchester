@@ -36,8 +36,8 @@ fn team_hub_gives_a_member_neither_new_nor_edit() {
   assert!(!agents.exists("team-hub-new"));
 }
 
-/// An admin's panels of a profile and a tool have the … menu and no Edit that leaves for the editor's page; a tool's
-/// panel pins nothing.
+/// An admin's panels of a profile and a tool have the … menu and no Edit that leaves for the editor's page: a command
+/// tool is edited in place under Save and Cancel (A29).
 #[test]
 fn team_hub_an_admins_profile_and_tool_panels_link_to_no_editor_page() {
   let mut agents = Agents::new(true);
@@ -50,7 +50,7 @@ fn team_hub_an_admins_profile_and_tool_panels_link_to_no_editor_page() {
   assert_eq!(agents.text("team-hub-panel-title"), "Checks");
   assert!(agents.exists("team-hub-more"));
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
-  assert!(!agents.exists("team-hub-actions"));
+  assert!(agents.exists("team-hub-edit-save"));
 }
 
 #[test]

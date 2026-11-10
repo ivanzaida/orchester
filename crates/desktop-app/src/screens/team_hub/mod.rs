@@ -25,6 +25,7 @@ pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
 pub(in crate::screens) mod bar;
 pub(in crate::screens) mod create;
+mod edit;
 mod fill;
 mod head;
 pub(in crate::screens) mod list;
@@ -392,8 +393,12 @@ fn detail(
 ) -> Element {
   let id = project.open.project.id();
   let repo_root = project.open.repo_root.clone();
+  let unreached = unreached.map(|unreached| unreached.reason.clone());
   let plain = |sheet| plain::Props {
     repo_root: repo_root.clone(),
+    project: id,
+    admin,
+    unreached: unreached.clone(),
     team: team.clone(),
     listing: listing.clone(),
     entry: selected.clone(),
@@ -405,6 +410,9 @@ fn detail(
         ctx,
         profile::Props {
           repo_root,
+          project: id,
+          admin,
+          unreached: unreached.clone(),
           team: team.clone(),
           reading,
           listing: listing.clone(),
@@ -421,7 +429,7 @@ fn detail(
           project: id,
           team: team.clone(),
           admin,
-          unreached: unreached.map(|unreached| unreached.reason.clone()),
+          unreached: unreached.clone(),
           reading,
           reread: retry.clone(),
           listing: listing.clone(),
@@ -435,6 +443,9 @@ fn detail(
         ctx,
         tool::Props {
           repo_root,
+          project: id,
+          admin,
+          unreached: unreached.clone(),
           team: team.clone(),
           listing: listing.clone(),
           entry: selected.clone(),

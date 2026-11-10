@@ -26,10 +26,6 @@ pub(super) fn kind(ctx: &Ctx, sheet: &TeamToolSheet) -> Arc<str> {
 }
 
 pub(super) fn section(ctx: &Ctx, sheet: &TeamToolSheet) -> Column {
-  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-    .id("team-hub-from-team-note")
-    .variant(HubText::PanelHint.role())
-    .nowrap();
   let mut rows = vec![rows::row(
     "team-hub-from-team-kind",
     &ctx.t("team_hub.tool.kindLabel"),
@@ -61,6 +57,15 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamToolSheet) -> Column {
       rows::mono("team-hub-from-team-secret-value", &secret.to_string()),
     ));
   }
+  section_of(ctx, rows)
+}
+
+/// *From the team* over `rows`.
+pub(super) fn section_of(ctx: &Ctx, rows: Vec<Row>) -> Column {
+  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
+    .id("team-hub-from-team-note")
+    .variant(HubText::PanelHint.role())
+    .nowrap();
   rows::section(
     "team-hub-from-team",
     &ctx.t("team_hub.profile.fromTeam"),

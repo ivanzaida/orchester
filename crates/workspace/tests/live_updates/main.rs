@@ -30,6 +30,7 @@ mod share_fill_ins;
 mod share_team_form;
 #[path = "../support/mod.rs"]
 mod support;
+mod team_body_edit;
 mod team_edit;
 
 use std::{
