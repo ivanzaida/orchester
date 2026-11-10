@@ -8,7 +8,10 @@ use std::collections::BTreeSet;
 mod flow;
 mod moves;
 
-pub use self::moves::{MoveError, MoveOffer, ParallelChoice, StepMoves};
+pub use self::{
+  flow::{FlowError, units as flow_units},
+  moves::{MoveError, MoveOffer, ParallelChoice, StepMoves},
+};
 use super::{
   DeliverStep, Deliverable, Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind,
   unassigned,
