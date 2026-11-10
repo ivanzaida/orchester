@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Column, node::Element};
 
-use super::{Hosted, PipelinePanel, Shown, body};
+use super::{Hosted, PipelinePanel, Restored, Shown, body};
 use crate::{
   screens::pipeline_hub::{
     edit::Edit,
@@ -84,7 +84,7 @@ impl PipelinePanel {
     let (viewing, restoring, restored) = (self.viewing.clone(), self.restoring.clone(), self.restored.clone());
     Arc::new(move || {
       edit.restore(&viewed.body);
-      restored.set(Some(viewed.number));
+      restored.set(Restored(Some(viewed.number)));
       description.set(viewed.body.description().to_owned());
       restoring.set(false);
       viewing.set(None);

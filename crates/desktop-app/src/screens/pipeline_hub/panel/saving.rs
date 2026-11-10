@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::resource::{Pipeline, PipelineEdit};
 
-use super::PipelinePanel;
+use super::{PipelinePanel, Restored};
 use crate::{
   screens::{
     local_hub::save_bar::Save as SaveState,
@@ -41,8 +41,8 @@ impl PipelinePanel {
     if self.restoring.get_untracked() && self.viewing.get_untracked().is_none() {
       self.restoring.set(false);
     }
-    if !changed && self.restored.get_untracked().is_some() {
-      self.restored.set(None);
+    if !changed && self.restored.get_untracked().0.is_some() {
+      self.restored.set(Restored(None));
     }
     mark_unsaved(&self.unsaved, self.id, unsaved);
     if changed {
@@ -57,7 +57,7 @@ impl PipelinePanel {
   pub(super) fn pinned(&self, ctx: &mut Ctx, entry: &Entry, asked: Option<&Asked>, runs: bool) -> Vec<Element> {
     let mut pinned: Vec<Element> = Vec::new();
     if let Some(asked) = asked {
-      let restored = self.restored.get_untracked();
+      let restored = self.restored.get_untracked().0;
       pinned.push(save::question(ctx, asked, (&self.save, &self.pending), restored));
     }
     let told = self.notes.told();
@@ -130,7 +130,7 @@ impl PipelinePanel {
       notes.forget();
       reset.update(|resets| *resets += 1);
       faulty.set(Vec::new());
-      restored.set(None);
+      restored.set(Restored(None));
     }
   }
 

@@ -56,6 +56,11 @@ use crate::{
   ui::pressable::Press,
 };
 
+/// The version *Restore* put in the edit, until it is saved or dropped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Restored(Option<VersionNumber>);
+impl DevtoolsInspectable for Restored {}
+
 #[derive(Clone)]
 pub(super) struct Props {
   pub project: ShownProject,
@@ -131,7 +136,7 @@ struct PipelinePanel {
   /// How many times the edit was put back, after which the open step's fields are mounted anew.
   reset: Signal<u64>,
   /// The version *Restore* put in the edit, until it is saved or dropped.
-  restored: Signal<Option<VersionNumber>>,
+  restored: Signal<Restored>,
   /// The Deliver chip of an open step asked for the *A run delivers* row to be shown once the pipeline's body is.
   reveal_delivers: Signal<bool>,
   /// That row.
@@ -163,7 +168,7 @@ impl Component for PipelinePanel {
       restoring: ctx.signal(false),
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
-      restored: ctx.signal(None),
+      restored: ctx.signal(Restored::default()),
       reveal_delivers: ctx.signal(false),
       delivers: ctx.element_ref(),
       id,
@@ -224,7 +229,7 @@ impl Component for PipelinePanel {
       unsaved,
       fix: step::fix_words(ctx, &self.faulty, &current),
       unpublishable: unpublishable(&current, &read),
-      restored: self.restored.get(),
+      restored: self.restored.get().0,
     };
     let off = line.fix.clone().or_else(|| bar::publish_blocked(ctx, &line));
     let save = self.save_now(&edit, (changed, entry.unpublished), (locked, off));

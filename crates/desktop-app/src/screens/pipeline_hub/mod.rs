@@ -65,7 +65,7 @@ use orchester_core::{
 use orchester_workspace::messages::Message;
 
 use self::{
-  leave::{Hosted, Unsaved, UnsavedSignal},
+  leave::{Hosted, Published, Unsaved, UnsavedSignal},
   model::{Entry, Listing},
   states::Retry,
 };
@@ -132,7 +132,7 @@ struct PipelineHubScreen {
   /// Whether the open panel's save is under way.
   saving: Signal<bool>,
   /// The pipeline a save in its panel just published, which the page follows out of *Drafts*.
-  published: Signal<Option<ResourceId>>,
+  published: Signal<Published>,
 }
 
 impl Component for PipelineHubScreen {
@@ -159,7 +159,7 @@ impl Component for PipelineHubScreen {
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
-      published: ctx.signal(None),
+      published: ctx.signal(Published::default()),
     };
     this.follow_question(ctx);
     this
@@ -475,16 +475,16 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
 fn follow_published(
   listing: &Listing,
   view: PipelinesView,
-  published: &Signal<Option<ResourceId>>,
+  published: &Signal<Published>,
   (project, navigation): (ProjectId, &Navigation),
 ) -> PipelinesView {
-  let Some(item) = view.item.filter(|item| published.get_untracked() == Some(*item)) else {
+  let Some(item) = view.item.filter(|item| published.get_untracked().0 == Some(*item)) else {
     return view;
   };
   if view.filter != PipelinesFilter::Drafts || listing.holds(PipelinesFilter::Drafts, item) {
     return view;
   }
-  published.set(None);
+  published.set(Published(None));
   if !listing.holds(PipelinesFilter::All, item) {
     return view;
   }
