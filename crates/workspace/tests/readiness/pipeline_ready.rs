@@ -237,7 +237,11 @@ fn readiness_pipeline_ready_a_step_that_names_a_missing_profile_is_listed_once()
   );
   assert_eq!(
     step_problems(&read.flow)[0].blocked,
-    Blocked::ProfileNotPublished { id: unknown }
+    Blocked::Gone {
+      id: unknown,
+      tool: false
+    },
+    "a profile neither published nor drafted here is gone, not waiting to be published"
   );
 }
 

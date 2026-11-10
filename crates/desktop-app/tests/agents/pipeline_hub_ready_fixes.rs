@@ -5,8 +5,9 @@
 //! published version runs and the draft does not is left out, and a row about that version names it.
 //! `cargo test -p orchester-app --test agents pipeline_hub_ready_fixes`.
 
-use orchester_app::routes::{HubFilter, HubView, PipelinesFilter, ProjectPage, Route};
+use orchester_app::routes::{HubFilter, HubView, PipelineView, PipelinesFilter, ProjectPage, Route};
 use orchester_core::{
+  id::ResourceId,
   name::Name,
   resource::{Pipeline, StepKey},
   store::ResourceStore,
@@ -22,6 +23,7 @@ use super::{
 };
 
 const CONFIRM: &str = "pipeline-hub-confirm-confirm";
+const PICKER: &str = "pipeline-hub-step-agent-picker";
 
 #[test]
 fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_list_line_names() {
@@ -131,4 +133,62 @@ fn pipeline_hub_ready_fixes_this_draft_leaves_out_what_only_the_version_runs_and
     "Profiles and tools · v1",
     "a row about the version names it"
   );
+}
+
+/// A draft whose *Build* runs a profile that was archived since: gone here.
+fn with_a_gone_profile(agents: &Agents) -> (ResourceId, StepKey) {
+  let builder = agents.profile(true);
+  let retired = agents.profile(true);
+  let draft = pipeline_of(agents, "Dependency update", [Some(builder), Some(retired)], false);
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(retired, Timestamp::now())
+    .expect("archived");
+  (draft, step_at(agents, draft, 1))
+}
+
+#[test]
+fn pipeline_hub_ready_fixes_a_gone_profile_reads_as_the_card_does_and_chooses_another_in_the_picker() {
+  let mut agents = Agents::new(true);
+  let (draft, build) = with_a_gone_profile(&agents);
+  open(&mut agents, PipelinesFilter::All, Some(draft));
+
+  assert_eq!(
+    agents.text(&format!("pipeline-hub-row-{draft}-line")),
+    "02 Build runs a profile that is no longer available"
+  );
+  let row = format!("team-hub-ready-step-{build}");
+  assert_eq!(
+    agents.text(&format!("{row}-words")),
+    agents.text(&format!("pipeline-hub-flow-step-{build}-runs")),
+    "Ready? says it as the card does"
+  );
+  assert_eq!(agents.text(&format!("{row}-words")), "Profile no longer available");
+  assert!(!agents.exists(&format!("{row}-open")), "no profile to open");
+  assert_eq!(agents.text(&format!("{row}-choose-another")), "Choose another →");
+
+  agents.click(&format!("{row}-choose-another"));
+  agents.until("the step, its picker open", |s| s.exists(PICKER));
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(project_id(), ProjectPage::Pipeline(draft, PipelineView::Step(build)))
+  );
+}
+
+#[test]
+fn pipeline_hub_ready_fixes_a_card_whose_profile_is_gone_opens_its_step_with_the_picker_open() {
+  let mut agents = Agents::new(true);
+  let (draft, build) = with_a_gone_profile(&agents);
+  let plan = step_at(&agents, draft, 0);
+  open(&mut agents, PipelinesFilter::All, Some(draft));
+
+  agents.click(&format!("pipeline-hub-flow-step-{build}"));
+  agents.until("the step, its picker open", |s| s.exists(PICKER));
+
+  // Another card opens its step as it always did: the picker stays closed.
+  open(&mut agents, PipelinesFilter::All, Some(draft));
+  agents.click(&format!("pipeline-hub-flow-step-{plan}"));
+  agents.until("the plan", |s| s.exists("pipeline-hub-step-agent-name"));
+  agents.window.pass();
+  assert!(!agents.exists(PICKER), "only Choose another opens the picker");
 }

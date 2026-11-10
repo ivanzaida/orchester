@@ -36,9 +36,14 @@ pub struct StepProblem {
 pub enum Blocked {
   NoProfile,
   NoTool,
-  /// The step names a profile that has no published version (or none any more).
+  /// The step names a profile that has no published version yet.
   ProfileNotPublished {
     id: ResourceId,
+  },
+  /// The step names a profile or tool that is gone here (archived or removed): it has to run another.
+  Gone {
+    id: ResourceId,
+    tool: bool,
   },
   /// The step's profile runs on a connection the project no longer has.
   ProfileConnectionGone {
@@ -56,6 +61,15 @@ pub enum Blocked {
 }
 
 impl Blocked {
+  /// What keeps the step of `card` from running; `None` when it can run.
+  pub fn of_card(card: &StepCard) -> Option<Self> {
+    match card.runs {
+      Runs::ProfileNotPublished { id } if card.gone => Some(Self::Gone { id, tool: false }),
+      Runs::ToolNotPublished { id } if card.gone => Some(Self::Gone { id, tool: true }),
+      _ => Self::of(&card.runs),
+    }
+  }
+
   /// What keeps a step that runs `runs` from running; `None` when it can run.
   pub fn of(runs: &Runs) -> Option<Self> {
     Some(match runs {
@@ -85,6 +99,7 @@ impl Blocked {
     match self {
       Self::NoProfile | Self::NoTool => None,
       Self::ProfileNotPublished { id }
+      | Self::Gone { id, .. }
       | Self::ProfileConnectionGone { id, .. }
       | Self::ToolNotPublished { id }
       | Self::ToolNotRunnable { id, .. } => Some(*id),
@@ -215,7 +230,7 @@ fn of_card(card: &StepCard) -> Option<StepProblem> {
     key: card.key.clone(),
     number: card.number,
     name: card.name.clone(),
-    blocked: Blocked::of(&card.runs)?,
+    blocked: Blocked::of_card(card)?,
   })
 }
 

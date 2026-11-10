@@ -141,6 +141,9 @@ struct PipelinePanel {
   reveal_delivers: Signal<bool>,
   /// That row.
   delivers: ElementRef,
+  /// A card's or *Ready?*'s *Choose another* asked for the step it opens to open its Agent picker: read once by that
+  /// step's Agent field.
+  pick_agent: Signal<bool>,
   id: ResourceId,
 }
 
@@ -171,6 +174,7 @@ impl Component for PipelinePanel {
       restored: ctx.signal(Restored::default()),
       reveal_delivers: ctx.signal(false),
       delivers: ctx.element_ref(),
+      pick_agent: ctx.signal(false),
       id,
     };
     save::follow(
@@ -316,6 +320,7 @@ impl PipelinePanel {
         epoch: self.notes.stored.get() + self.reset.get(),
         faulty: &self.faulty,
         reveal_delivers: &self.reveal_delivers,
+        pick_agent: &self.pick_agent,
       },
     ))
   }
@@ -371,7 +376,13 @@ impl PipelinePanel {
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
       .child(chips::chips(ctx, entry, default))
-      .with_children(steps::parts(ctx, project, entry, (read, edit, current), locked))
+      .with_children(steps::parts(
+        ctx,
+        project,
+        entry,
+        (read, edit, current),
+        (locked, &self.pick_agent),
+      ))
       .child(settings::section(
         ctx,
         &Settings {
@@ -394,6 +405,7 @@ impl PipelinePanel {
           edit,
           locked,
           save,
+          pick_agent: &self.pick_agent,
         },
       ))
   }

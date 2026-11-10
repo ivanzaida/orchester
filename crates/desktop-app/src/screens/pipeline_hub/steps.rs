@@ -12,6 +12,7 @@ use std::sync::Arc;
 use lurq::{
   app::ctx::Ctx,
   components::{Row, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -31,7 +32,7 @@ pub(super) fn parts(
   project: &ShownProject,
   entry: &Entry,
   (read, edit, current): (&Arc<FlowRead>, &Edit, &PipelineEdit),
-  locked: bool,
+  (locked, pick_agent): (bool, &Signal<bool>),
 ) -> Vec<Element> {
   if entry.archived.is_some() {
     return Vec::new();
@@ -41,7 +42,7 @@ pub(super) fn parts(
     (project, entry.id, entry.step_count),
     read,
     (edit, current),
-    locked,
+    (locked, pick_agent),
   )]
 }
 

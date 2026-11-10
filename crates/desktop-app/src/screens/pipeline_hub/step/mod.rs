@@ -131,6 +131,8 @@ pub(super) struct Open<'a> {
   pub faulty: &'a Faulty,
   /// Set by the Deliver chip, which opens the pipeline and has its *A run delivers* row shown.
   pub reveal_delivers: &'a Signal<bool>,
+  /// Set by a *Choose another* that opened this step: its Agent field opens its picker once.
+  pub pick_agent: &'a Signal<bool>,
 }
 
 /// What the panel's body shows for the open step: the head, the strip and the groups of fields; nothing when the

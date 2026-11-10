@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -55,6 +55,8 @@ use crate::{
 enum Fix {
   /// Open the step that has nothing to run, where its profile or tool is chosen.
   Choose(StepKey),
+  /// Open the step whose profile or tool is gone, with the Agent picker open to choose another.
+  ChooseAnother(StepKey),
   /// Open the profile or tool, where it is published or its connection is chosen.
   Resource(flow::Fix),
   /// Add a step at the end of the line, as the head's *Add step* does.
@@ -71,6 +73,7 @@ impl Offer for Fix {
   fn link_key(&self) -> &'static str {
     match self {
       Self::Choose(_) => "pipeline_hub.ready.choose",
+      Self::ChooseAnother(_) => "pipeline_hub.ready.chooseAnother",
       Self::Resource(_) | Self::Agents => "pipeline_hub.ready.open",
       Self::AddStep => "pipeline_hub.ready.addStep",
       Self::EditSteps => "pipeline_hub.ready.editSteps",
@@ -81,6 +84,7 @@ impl Offer for Fix {
   fn name(&self) -> &'static str {
     match self {
       Self::Choose(_) => "choose",
+      Self::ChooseAnother(_) => "choose-another",
       Self::Resource(_) => "open",
       Self::AddStep => "add-step",
       Self::EditSteps => "edit-steps",
@@ -105,6 +109,8 @@ pub(super) struct Shown<'a> {
   pub locked: bool,
   /// What the bar's *Save* does now, which *Save →* does too; `None` while it cannot save.
   pub save: Option<&'a Press>,
+  /// Set by *Choose another →*: the step it opens opens its Agent picker.
+  pub pick_agent: &'a Signal<bool>,
 }
 
 /// The group for `shown.entry`, which is none for an archived pipeline, which has no steps.
@@ -191,6 +197,17 @@ fn press(shown: &Shown<'_>, (navigation, new_step): (&Navigation, &Name), fix: &
         .save
         .cloned()
         .expect("*Save →* is offered only while Save can save");
+    }
+    Fix::ChooseAnother(key) => {
+      let (navigation, pick) = (navigation.clone(), shown.pick_agent.clone());
+      let route = Route::Project(
+        shown.project.open.project.id(),
+        ProjectPage::Pipeline(id, PipelineView::Step(key.clone())),
+      );
+      return Press::run(move || {
+        pick.set(true);
+        navigation.go(route.clone());
+      });
     }
     Fix::Choose(key) => ProjectPage::Pipeline(id, PipelineView::Step(key.clone())),
     Fix::Resource(resource) => resource.page(),
@@ -320,6 +337,8 @@ fn step_words(ctx: &Ctx, blocked: &Blocked) -> Arc<str> {
       Blocked::NoProfile => "pipeline_hub.ready.noProfile",
       Blocked::NoTool => "pipeline_hub.ready.noTool",
       Blocked::ProfileNotPublished { .. } => "pipeline_hub.flow.profileNotPublished",
+      Blocked::Gone { tool: false, .. } => "pipeline_hub.stepFlow.profileGone",
+      Blocked::Gone { tool: true, .. } => "pipeline_hub.stepFlow.toolGone",
       Blocked::ProfileConnectionGone { .. } => "pipeline_hub.ready.profileConnectionGone",
       Blocked::ToolNotPublished { .. } => "pipeline_hub.flow.toolNotPublished",
       Blocked::ToolNotRunnable { .. } => "pipeline_hub.ready.toolNotRunnable",
@@ -328,10 +347,12 @@ fn step_words(ctx: &Ctx, blocked: &Blocked) -> Arc<str> {
   )
 }
 
-/// *Choose →* for a step with nothing to run, *Open →* for one that names a profile or tool that cannot run.
+/// *Choose →* for a step with nothing to run, *Choose another →* for one whose profile or tool is gone (it has no page
+/// to open), *Open →* for one that names a profile or tool that cannot run.
 fn step_fix(step: &StepProblem) -> Fix {
   match &step.blocked {
     Blocked::NoProfile | Blocked::NoTool => Fix::Choose(step.key.clone()),
+    Blocked::Gone { .. } => Fix::ChooseAnother(step.key.clone()),
     Blocked::ProfileNotPublished { id } | Blocked::ProfileConnectionGone { id, .. } => {
       Fix::Resource(flow::Fix::Profile(*id))
     }

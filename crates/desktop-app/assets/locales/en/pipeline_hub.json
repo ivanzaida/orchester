@@ -34,7 +34,9 @@
       "stepsNotReady": "{{count}} steps not ready",
       "connectionGone": "{{name}} has no connection",
       "connectionGoneMany": "{{name}} and {{count}} more have no connection",
-      "profileConnectionGone": "{{number}} {{step}} runs {{profile}}, which has no connection"
+      "profileConnectionGone": "{{number}} {{step}} runs {{profile}}, which has no connection",
+      "profileGone": "{{number}} {{step}} runs a profile that is no longer available",
+      "toolGone": "{{number}} {{step}} runs a tool that is no longer available"
     },
     "chip": {
       "ready": "Ready",
@@ -312,7 +314,8 @@
       "editSteps": "Edit steps →",
       "profileConnectionGone": "{{profile}} has no connection",
       "save": "Save →",
-      "profilesAndToolsOf": "Profiles and tools · {{version}}"
+      "profilesAndToolsOf": "Profiles and tools · {{version}}",
+      "chooseAnother": "Choose another →"
     },
     "versions": {
       "button": "Versions",

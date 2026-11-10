@@ -37,6 +37,8 @@ const fn line_key(blocked: &Blocked) -> &'static str {
     Blocked::NoProfile => "pipeline_hub.line.noProfile",
     Blocked::NoTool => "pipeline_hub.line.noTool",
     Blocked::ProfileNotPublished { .. } => "pipeline_hub.line.profileNotPublished",
+    Blocked::Gone { tool: false, .. } => "pipeline_hub.line.profileGone",
+    Blocked::Gone { tool: true, .. } => "pipeline_hub.line.toolGone",
     Blocked::ProfileConnectionGone { .. } => "pipeline_hub.line.profileConnectionGone",
     Blocked::ToolNotPublished { .. } => "pipeline_hub.line.toolNotPublished",
     Blocked::ToolNotRunnable { .. } => "pipeline_hub.line.toolNotRunnable",
@@ -47,7 +49,11 @@ const fn line_key(blocked: &Blocked) -> &'static str {
 pub(super) fn named(blocked: &Blocked) -> &str {
   match blocked {
     Blocked::ToolNotRunnable { name, .. } | Blocked::ProfileConnectionGone { name, .. } => name,
-    Blocked::NoProfile | Blocked::NoTool | Blocked::ProfileNotPublished { .. } | Blocked::ToolNotPublished { .. } => "",
+    Blocked::NoProfile
+    | Blocked::NoTool
+    | Blocked::ProfileNotPublished { .. }
+    | Blocked::Gone { .. }
+    | Blocked::ToolNotPublished { .. } => "",
   }
 }
 
