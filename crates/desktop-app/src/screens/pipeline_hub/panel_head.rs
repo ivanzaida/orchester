@@ -157,7 +157,7 @@ impl Component for Head {
     let entry = &props.entry;
     let title = self.title(ctx, entry);
     let end = Row::new()
-      .spacing(SpacingSize::Sm)
+      .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(self.versions(ctx, &props))
       .child(self.more(ctx, &props));
