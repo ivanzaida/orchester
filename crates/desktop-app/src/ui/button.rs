@@ -385,8 +385,8 @@ impl ActionButton {
 }
 
 /// `button` as wide as the widest of `sizes`, each laid out as a button with its own words: a slot whose label changes
-/// with what is open keeps one width, so nothing beside it moves (the Agents hub's New of each kind). The sizers take no
-/// height and show nothing.
+/// with what is open keeps one width, so nothing beside it moves (the Agents hub's New of each kind). The sizers take
+/// no height and show nothing.
 pub fn as_wide_as_widest(id: &str, button: ActionButton, sizes: impl IntoIterator<Item = ActionButton>) -> Column {
   let sizers = sizes.into_iter().map(|size| {
     Row::new()

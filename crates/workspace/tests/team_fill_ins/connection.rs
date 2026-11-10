@@ -4,13 +4,12 @@ use orchester_core::{
   account::AccountCli,
   connection::AgentProvider,
   id::ConnectionId,
-  name::Name,
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile, VersionNumber},
+  resource::{AgentProfile, VersionNumber},
 };
 use orchester_store::ConnectionPick;
 use orchester_workspace::team_fill_ins::FillInError;
 
-use crate::support::{Team, cached, pick, team_resource};
+use crate::support::{Team, pick, team_profile};
 
 #[test]
 fn team_fill_ins_pick_a_connection_of_the_profiles_cli_kind() {
@@ -125,30 +124,9 @@ fn team_fill_ins_a_pick_points_a_team_profile_at_the_connection_it_runs_on() {
     let mut db = team.db();
     crate::support::connection(&mut db, &team.root, AgentProvider::CodexCli, "codex work")
   };
-  let body = TeamAgentProfile::new(
-    Name::new("Builder").expect("role"),
-    String::new(),
-    PromptText::new("Build.").expect("prompt"),
-    (
-      AgentProvider::CodexCli,
-      ModelId::new("gpt-5.5").expect("model"),
-      ProviderSettings::default(),
-    ),
-  );
+  let body = team_profile(AgentProvider::CodexCli);
   let server_body = serde_json::to_value(&body).expect("a team profile serializes");
-  let profile = {
-    let mut db = team.db();
-    let id = team_resource(
-      &mut db,
-      "team-builder",
-      AgentProfile::from_team(&body, ConnectionId::generate()),
-      Vec::new(),
-    );
-    let mut version = cached(AgentProfile::from_team(&body, ConnectionId::generate()), Vec::new());
-    version.server_body = server_body.clone();
-    db.cache_shared_version(id, &version).expect("the team form cached");
-    id
-  };
+  let profile = team.cached_profile("team-builder", &body);
   let runs_on = |team: &Team| {
     let cached = team
       .db()

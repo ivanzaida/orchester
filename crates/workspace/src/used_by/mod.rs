@@ -18,7 +18,7 @@ pub use orchester_api::{UsedBy, UsedByResource, UsedByRun};
 use orchester_core::id::{ConnectionId, ResourceId};
 use orchester_store::{ProjectDb, SharingLink};
 
-pub use self::{cli::profile_cli, error::UsedByError};
+pub use self::error::UsedByError;
 use crate::{background, team_reads::TeamSession};
 
 /// What uses `resource` in the project at `root`: asked of the server through `team`, the session the person is signed

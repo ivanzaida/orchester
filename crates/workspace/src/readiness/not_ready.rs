@@ -129,7 +129,6 @@ impl UndecidedPart {
 fn undecided_message(why: &Undecided, resource: &str) -> Message {
   let (key, extra) = match why {
     Undecided::NotTeamForm => ("notReadyHere.undecidedNotTeamForm", None),
-    Undecided::CannotBePublished(_) => ("notReadyHere.undecidedCannotBePublished", None),
     Undecided::ChoosesMcpServer(server) => ("notReadyHere.undecidedChoosesMcpServer", Some(server.to_string())),
     Undecided::ChoosesArchivedMcpServer(_, name) => {
       ("notReadyHere.undecidedChoosesArchivedMcpServer", Some(name.clone()))
@@ -161,7 +160,6 @@ fn undecided_message(why: &Undecided, resource: &str) -> Message {
 fn undecided_code(why: &Undecided) -> &'static str {
   match why {
     Undecided::NotTeamForm => "not_team_form",
-    Undecided::CannotBePublished(_) => "cannot_be_published",
     Undecided::ChoosesMcpServer(_) => "chooses_mcp_server",
     Undecided::ChoosesArchivedMcpServer(..) => "chooses_archived_mcp_server",
     Undecided::UsesArchivedTool(..) => "uses_archived_tool",

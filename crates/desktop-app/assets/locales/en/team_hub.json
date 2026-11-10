@@ -5,6 +5,13 @@
     "unreached": "Team server not reachable · retrying",
     "reading": "Reading the team's configuration…",
     "loadFailed": "The team's configuration couldn't be read",
+    "cantReach": {
+      "head": "Can't reach the team",
+      "title": "Can't reach the team server",
+      "line": "{{host}} didn't answer. The team's agents are read from the server; this computer keeps only what it fills in, so nothing older is shown.",
+      "lineNoHost": "The team server didn't answer. The team's agents are read from the server; this computer keeps only what it fills in, so nothing older is shown.",
+      "reason": "{{reason}} · tried {{time}}"
+    },
     "group": {
       "needs": "Needs you here",
       "ready": "Ready here",

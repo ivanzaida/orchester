@@ -386,7 +386,6 @@
       "dot": "·",
       "undecided": {
         "notTeamForm": "its version here is not in the team's form",
-        "cannotBePublished": "its version cannot be published",
         "choosesMcpServer": "it chooses an MCP server the team does not offer",
         "choosesArchivedMcpServer": "a profile chooses an MCP server that was archived",
         "usesArchivedTool": "a profile names a team tool that was archived",

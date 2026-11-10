@@ -349,7 +349,7 @@ fn other_profile(agents: &Agents) -> ResourceId {
     resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile},
   };
 
-  use super::team_hub::cached;
+  use super::team_hub::{cached, keep_team};
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let team = TeamAgentProfile::new(
     Name::new("Other").expect("name"),
@@ -362,12 +362,14 @@ fn other_profile(agents: &Agents) -> ResourceId {
     ),
   );
   let local = AgentProfile::from_team(&team, ConnectionId::generate());
-  cached(
+  let other = cached(
     &mut db,
     ("team-other", "Other"),
     serde_json::to_value(&team).expect("json"),
     &local,
-  )
+  );
+  keep_team(agents);
+  other
 }
 
 #[test]

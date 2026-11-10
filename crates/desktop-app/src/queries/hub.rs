@@ -10,7 +10,7 @@ use orchester_core::{
   resource::{Instruction, ResourceBody, Skill},
 };
 use orchester_workspace::{
-  agents::{data::ProjectAgents, local_hub::LocalHub, team_hub::TeamHub},
+  agents::{data::ProjectAgents, local_hub::LocalHub, team_hub::TeamHubRead},
   background,
   instructions::data::ProjectInstructions,
   messages::{self, Message},
@@ -30,12 +30,13 @@ async fn read<T: Send + 'static>(
   background::run(move || read(&services)).await?
 }
 
-/// A team project's hub: the team's resources and how each stands on this computer. Live: what this computer filled in
+/// A team project's hub: the team's resources as its team server was read this session and how each stands on this
+/// computer, or that the server is being read or cannot be reached. Live: what this computer filled in
 /// is looked up as it is read, so each visit shows the last answer and reads it again behind it. The team's
 /// configuration is not in the key, since the hub's read does not take it: a change of it invalidates this query
 /// (`follow::ProjectReads`), and the screen lists the answer with the configuration it has then.
 #[lurq::query(stale_time = "0s", gc_time = "24h")]
-pub async fn team_hub(session: Session, root: PathBuf) -> Result<TeamHub, Message> {
+pub async fn team_hub(session: Session, root: PathBuf) -> Result<TeamHubRead, Message> {
   tracing::trace!(target: crate::app_log::READ_LOG, read = "team_hub");
   read(session, move |services| {
     services

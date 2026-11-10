@@ -14,7 +14,6 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::TeamProfileError,
   sharing::{ConnectionProblem, LocalProgramProblem, Missing, ProgramProblem},
 };
 use orchester_store::ProjectDb;
@@ -39,7 +38,7 @@ pub(in crate::app_mcp) fn read(
     .readiness_in(db, repo_root, services.vault.get())
     .map_err(|error| match error {
       ReadinessError::Store(error) => ToolError::from(error),
-      other @ ReadinessError::NotATeamProject => ToolError::from(other),
+      other => ToolError::from(other),
     })
 }
 
@@ -167,10 +166,6 @@ fn undecided_json(why: &Undecided) -> Value {
   let mut part = json!({ "kind": "undecided", "fix": fix(None, None) });
   match why {
     Undecided::NotTeamForm => part["why"] = json!("not_team_form"),
-    Undecided::CannotBePublished(error) => {
-      part["why"] = json!("cannot_be_published");
-      part["reason"] = json!(publish_reason(error));
-    }
     Undecided::ChoosesMcpServer(server) => {
       part["why"] = json!("chooses_mcp_server");
       part["server"] = json!(server.to_string());
@@ -229,14 +224,4 @@ fn undecided_json(why: &Undecided) -> Value {
     }
   }
   part
-}
-
-fn publish_reason(error: &TeamProfileError) -> &'static str {
-  match error {
-    TeamProfileError::Duplicate { .. } => "duplicate",
-    TeamProfileError::TooMany { .. } => "too_many",
-    TeamProfileError::Connection(_) => "connection",
-    TeamProfileError::LocalMcpServer(_) => "local_mcp_server",
-    TeamProfileError::WritableFolders { .. } => "writable_folders",
-  }
 }

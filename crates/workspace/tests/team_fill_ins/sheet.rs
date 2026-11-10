@@ -3,17 +3,13 @@
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, Slug, TeamAgentProfile},
+  id::ResourceId,
+  resource::{ModelId, PromptText, ProviderSettings, ResourceKind, TeamAgentProfile},
   run::Answerer,
-  sharing::TaskRevision,
-  store::ResourceStore,
-  time::Timestamp,
 };
-use orchester_store::ResourceSharing;
 use orchester_workspace::agents::team_mcp::McpRuns;
 
-use crate::support::{MemoryVault, Team, cached, connection, name, pick};
+use crate::support::{MemoryVault, Team, connection, hub, name, pick};
 
 /// A team profile in the team's form, running on Claude Code and using no MCP server.
 fn builder(team: &Team) -> ResourceId {
@@ -34,36 +30,18 @@ fn builder_using(team: &Team, servers: Vec<ResourceId>) -> ResourceId {
   )
   .with_mcp_servers(servers)
   .expect("servers");
-  let local = AgentProfile::from_team(&body, ConnectionId::generate());
-  let mut db = team.db();
-  let id = db
-    .create_resource(
-      Slug::new("team-builder").expect("slug"),
-      name("Builder"),
-      &local,
-      Timestamp::from_unix_millis(10),
-    )
-    .expect("resource")
-    .id();
-  db.set_resource_sharing(
-    id,
-    Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
+  team.keep(
+    "team-builder",
+    ResourceKind::AgentProfile,
+    serde_json::to_value(&body).expect("json"),
   )
-  .expect("shared");
-  let mut version = cached(local, Vec::new());
-  version.server_body = serde_json::to_value(&body).expect("json");
-  db.cache_shared_version(id, &version).expect("cached");
-  id
 }
 
 #[test]
 fn team_fill_ins_a_profile_sheet_lists_the_connections_of_its_cli_kind_and_runs_on_the_only_one() {
   let team = Team::new();
   let profile = builder(&team);
-  let hub = team
-    .workspace
-    .team_hub(&team.root, &MemoryVault::default())
-    .expect("hub");
+  let hub = hub(&team, &MemoryVault::default());
   let sheet = hub.profile(profile).expect("a team profile in the team's form");
   assert_eq!(sheet.cli, AgentProvider::ClaudeCodeCli);
   assert_eq!(sheet.model, "claude-opus-5-5");
@@ -83,15 +61,7 @@ fn team_fill_ins_a_profile_sheet_runs_on_nothing_until_the_person_picks_among_se
   let profile = builder(&team);
   let second = connection(&mut team.db(), &team.root, AgentProvider::ClaudeCodeCli, "Home");
   let vault = MemoryVault::default();
-  let sheet = |team: &Team| {
-    team
-      .workspace
-      .team_hub(&team.root, &vault)
-      .expect("hub")
-      .profile(profile)
-      .cloned()
-      .expect("a sheet")
-  };
+  let sheet = |team: &Team| hub(team, &vault).profile(profile).cloned().expect("a sheet");
   let before = sheet(&team);
   assert_eq!(before.connections.len(), 2);
   assert_eq!(before.runs_on(), None, "several, and none picked");
@@ -110,15 +80,7 @@ fn team_fill_ins_an_mcp_server_sheet_says_how_it_runs_who_uses_it_and_what_this_
   let team = Team::new();
   builder_using(&team, vec![team.program_server]);
   let vault = MemoryVault::default();
-  let sheet = |team: &Team, server| {
-    team
-      .workspace
-      .team_hub(&team.root, &vault)
-      .expect("hub")
-      .mcp_server(server)
-      .cloned()
-      .expect("a sheet")
-  };
+  let sheet = |team: &Team, server| hub(team, &vault).mcp_server(server).cloned().expect("a sheet");
   let program = sheet(&team, team.program_server);
   assert_eq!(
     program.runs,
@@ -131,7 +93,7 @@ fn team_fill_ins_an_mcp_server_sheet_says_how_it_runs_who_uses_it_and_what_this_
   );
   assert_eq!(
     program.used_by,
-    vec!["Builder".to_owned()],
+    vec!["team-builder".to_owned()],
     "the profile that chooses it"
   );
   assert_eq!(program.program, None, "no path until the person sets one");

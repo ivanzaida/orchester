@@ -30,7 +30,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  ALICE, LIVE, Member, TeamServer, Workspace,
+  ALICE, Member, SETTLED, TeamServer, Workspace,
   config::{
     agent, codex, key, latest, pipeline, problems, profile, step, team_builder, team_profile, team_references,
     use_first,
@@ -83,7 +83,7 @@ impl Team {
     codex(&mut db, &workspace.root, "Laptop");
     drop(db);
     let stream = workspace.follow(Member::of(&self.server, ALICE));
-    seen_within(LIVE, "the snapshot's resources", || {
+    seen_within(SETTLED, "the snapshot's resources", || {
       let builder_waits = workspace.db().waiting_version(self.builder).ok().flatten().is_some();
       latest::<Pipeline>(&workspace, self.delivery).is_some() && builder_waits
     })
@@ -131,7 +131,7 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
     serde_json::to_value(&v2).expect("a profile serializes"),
     ReferenceTarget::of_profile(&v2),
   );
-  seen_within(LIVE, "v2 from its event", || {
+  seen_within(SETTLED, "v2 from its event", || {
     workspace.db().waiting_version(builder_id).ok().flatten().is_some()
   })
   .await;
@@ -290,7 +290,7 @@ async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply
     "the server numbered it"
   );
   let stream = workspace.follow(Member::of(&server, ALICE));
-  seen_within(LIVE, "the resource the server's", || {
+  seen_within(SETTLED, "the resource the server's", || {
     matches!(
       workspace.db().resource_sharing(docs_id),
       Ok(Some(ResourceSharing::Shared(_)))
@@ -307,7 +307,7 @@ async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply
     serde_json::to_value(docs_server(&[])).expect("a team MCP server serializes"),
     Vec::new(),
   );
-  seen_within(LIVE, "v2 applied at once", || used(workspace) == Some(2)).await;
+  seen_within(SETTLED, "v2 applied at once", || used(workspace) == Some(2)).await;
   assert_eq!(waiting(&workspace.root, docs_id).expect("read"), None);
   stream.abort();
 }
@@ -328,7 +328,7 @@ async fn live_updates_a_profile_is_published_in_the_teams_form_and_one_choosing_
   let workspace = &alice.workspace;
   let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
   let stream = workspace.follow(Member::of(&server, ALICE));
-  seen_within(LIVE, "the team MCP server", || {
+  seen_within(SETTLED, "the team MCP server", || {
     latest::<TeamMcpServer>(workspace, docs).is_some()
   })
   .await;

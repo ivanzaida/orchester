@@ -77,6 +77,9 @@ pub enum HubText {
   EmptyTitle,
   /// 12.5 `text_muted`, 1.45: what a member's empty state says under it (`Text` `dxKHH` in M5 `ITxzr`).
   EmptyDetail,
+  /// Geist Mono 12 `text_muted`, 1.4: why the team server could not be reached, and when (`Reason` `ELTm3` in A25
+  /// `Zhcif`).
+  Reason,
   /// 12 `text_secondary`, 1.4: a field's name in the comparison of a conflict (`Text` `CgI3H` in A19 `DV8OI`).
   CompareField,
   /// Geist Mono 11.5 `text_muted`, 1.35: the base's value under the field's name (`Text` `dwkJy` in A19).
@@ -87,7 +90,7 @@ pub enum HubText {
 }
 
 impl HubText {
-  pub const ALL: [Self; 30] = [
+  pub const ALL: [Self; 31] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -115,6 +118,7 @@ impl HubText {
     Self::NoticeTitle,
     Self::EmptyTitle,
     Self::EmptyDetail,
+    Self::Reason,
     Self::CompareField,
     Self::CompareBase,
     Self::CompareCell,
@@ -153,6 +157,7 @@ impl HubText {
       Self::NoticeTitle => "hub_notice_title",
       Self::EmptyTitle => "hub_empty_title",
       Self::EmptyDetail => "hub_empty_detail",
+      Self::Reason => "hub_reason",
       Self::CompareField => "hub_compare_field",
       Self::CompareBase => "hub_compare_base",
       Self::CompareCell => "hub_compare_cell",
@@ -188,6 +193,7 @@ impl HubText {
       Self::NoticeTitle => style(12.5, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary),
       Self::EmptyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::EmptyDetail => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::Reason => mono(style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted)),
       Self::CompareField => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::CompareBase => mono(style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
       Self::CompareCell => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary)),
