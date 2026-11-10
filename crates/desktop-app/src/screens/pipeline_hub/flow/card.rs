@@ -7,7 +7,7 @@
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   components::{Button, Column, Row, Text, TextOverflow},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, ReturnsTo, StepCard};
@@ -36,10 +36,14 @@ pub(super) enum Look {
   Target,
 }
 
-/// A hovered card's handle (`Drag handle` `yylYY`) takes 14 and 6 of gap before its name, and its second line is
-/// indented to stand under the name (`Line row` `aB9FX`).
+/// The room a card keeps for its drag handle (`Drag handle` `yylYY`) at its start, in every state: the handle only
+/// appears in it, so the card's text never moves when the pointer or the keys come and go (D-022, which overrides the
+/// design's 12 at rest and 6 with the handle). Its second line is indented to stand under the name (`Line row`
+/// `aB9FX`).
+const HANDLE_WIDTH: f32 = 14.0;
+/// The handle's room and the 6 of gap after it.
 const HANDLE_INDENT: f32 = 20.0;
-/// What a card with a handle has at its start, where one without has `md` (`Card · 03 Implement · hover` `GnnMB`).
+/// What a card has at its start before the handle's room (`Card · 03 Implement · hover` `GnnMB`).
 const HANDLE_START: f32 = 6.0;
 
 /// How a card is pressed and where it stands: `open` opens the step, and is `None` for a card that only shows its step
@@ -65,7 +69,6 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     more,
     look,
   } = opening;
-  let handled = handle.is_some();
   let id = format!("pipeline-hub-flow-step-{}", step.key);
   let not_ready = step.runs.needs_you();
   let mut top = Row::new()
@@ -73,10 +76,12 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center);
-  top = top.with_children(handle);
+  // The row is as high as the ⋯ is, so nothing under it moves when the ⋯ shows, and a card without a pill keeps the
+  // pill row's height, so the titles of a group's cards share one baseline.
+  top = top
+    .min_height(Dimension::Px(ControlHeight::Helper.value()))
+    .child(slot(HANDLE_WIDTH, handle));
   if place == Place::InGroup {
-    // A card without a pill keeps the pill row's height, so the titles of a group's cards share one baseline.
-    top = top.min_height(Dimension::Px(ControlHeight::Helper.value()));
     top = top.child(
       Text::new(&words::number(step.number))
         .id(format!("{id}-number"))
@@ -98,23 +103,24 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
         .filter(|_| !not_ready)
         .map(|access| tag_chip(&format!("{id}-access"), &words::access(ctx, access))),
     )
-    .with_children(more)
+    .child(slot(ControlHeight::Helper.value(), more))
     .with_children(
       open
         .is_some()
         .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
     );
-  let indent = if handled { HANDLE_INDENT } else { 0.0 };
   let mut body = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(top)
-    .child(indented(
-      second_line(&id, "runs", &words::runs(ctx, &step.runs), not_ready),
-      handled,
-    ));
+    .child(indented(second_line(
+      &id,
+      "runs",
+      &words::runs(ctx, &step.runs),
+      not_ready,
+    )));
   if let Some(route) = &step.on_failure {
-    body = body.child(failure_line(ctx, (&id, step, route), indent));
+    body = body.child(failure_line(ctx, (&id, step, route)));
   }
   let open = open.map(|open| {
     if place == Place::InGroup {
@@ -123,7 +129,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
       open
     }
   });
-  surface(open, &id, (not_ready, handled, look), body)
+  surface(open, &id, (not_ready, look), body)
     .describe("step", step.key.to_string())
     .describe("number", words::number(step.number))
     .describe("state", if not_ready { "not_ready" } else { "ready" })
@@ -131,10 +137,10 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
 }
 
 /// Where a failure sends the run, under what the card runs: *↵ changes requested → 03*.
-fn failure_line(ctx: &lurq::app::ctx::Ctx, (id, step, route): (&str, &StepCard, &ReturnsTo), indent: f32) -> Row {
+fn failure_line(ctx: &lurq::app::ctx::Ctx, (id, step, route): (&str, &StepCard, &ReturnsTo)) -> Row {
   Row::new()
     .id(format!("{id}-failure"))
-    .padding(Padding::new().left(Dimension::Px(indent)))
+    .padding(Padding::new().left(Dimension::Px(HANDLE_INDENT)))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
@@ -146,16 +152,23 @@ fn failure_line(ctx: &lurq::app::ctx::Ctx, (id, step, route): (&str, &StepCard, 
     )
 }
 
-/// `line`, standing under the name of a card that has its handle.
-fn indented(line: Element, handled: bool) -> Element {
-  if !handled {
-    return line;
-  }
+/// `line`, standing under the name of a card, past the room of its handle.
+fn indented(line: Element) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().left(Dimension::Px(HANDLE_INDENT)))
     .child(line)
     .into()
+}
+
+/// A control's room in a card's top row, `width` wide whether the control shows or not.
+fn slot(width: f32, control: Option<Element>) -> Row {
+  Row::new()
+    .width(Dimension::Px(width))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .with_children(control)
 }
 
 /// The Deliver card, numbered after the steps.
@@ -165,6 +178,7 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Op
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
+    .child(slot(HANDLE_WIDTH, None))
     .child(name(id, &ctx.t("pipeline_hub.flow.deliver")))
     .child(Row::new().flex(1.0))
     .with_children(
@@ -176,13 +190,13 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Op
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(top)
-    .child(second_line(
+    .child(indented(second_line(
       id,
       "line",
       &words::deliver(ctx, deliver),
       matches!(deliver.conflicts, Conflicts::ProfileNotPublished(_)),
-    ));
-  surface(open, id, (false, false, Look::Plain), body)
+    )));
+  surface(open, id, (false, Look::Plain), body)
     .describe("number", words::number(deliver.number))
     .into()
 }
@@ -238,7 +252,7 @@ fn choose_chip(id: &str, words: &str) -> Row {
 /// A card's frame (`Card · 01 Research`): `surface_panel` in a `border` outline, radius 6, 12 at its sides and 8
 /// above and under; a step that is not ready in a `warning` outline. Pressed through `open`, it takes the hover fill;
 /// without one it only shows its step.
-fn surface(open: Option<Button>, id: &str, (not_ready, handled, look): (bool, bool, Look), body: Column) -> Button {
+fn surface(open: Option<Button>, id: &str, (not_ready, look): (bool, Look), body: Column) -> Button {
   let outline = match (look, not_ready) {
     (Look::Target, _) => Border::inside(BorderSize::Lg, PaletteColor::Accent),
     (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
@@ -249,15 +263,11 @@ fn surface(open: Option<Button>, id: &str, (not_ready, handled, look): (bool, bo
     (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
     (_, false) => Border::inside(BorderSize::Sm, PaletteColor::BorderStrong),
   };
-  let padding = if handled {
-    Padding::new()
-      .top(SpacingSize::Sm)
-      .bottom(SpacingSize::Sm)
-      .right(SpacingSize::Md)
-      .left(Dimension::Px(HANDLE_START))
-  } else {
-    Padding::symmetric(SpacingSize::Md, SpacingSize::Sm)
-  };
+  let padding = Padding::new()
+    .top(SpacingSize::Sm)
+    .bottom(SpacingSize::Sm)
+    .right(SpacingSize::Md)
+    .left(Dimension::Px(HANDLE_START));
   let pressable = open.is_some();
   let card = open
     .unwrap_or_else(Button::empty)
