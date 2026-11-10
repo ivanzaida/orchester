@@ -83,9 +83,9 @@ impl Component for Head {
     let editing = Editing::new(ctx);
     let saved = ctx.signal(None);
     let (stop, record, task_root) = (editing.clone(), changes.clone(), root.clone());
-    let (shown, remember) = (saved.clone(), saved.clone());
+    let shown = saved.clone();
     let rename = ctx.future_action(move |name: String| {
-      let (root, stop, changes, remember) = (task_root.clone(), stop.clone(), record.clone(), remember.clone());
+      let (root, stop, changes, remember) = (task_root.clone(), stop.clone(), record.clone(), saved.clone());
       async move {
         let saved = background::run(move || rename_in(&root, id, &name).map_err(|error| error.message())).await??;
         let saved: Arc<str> = Arc::from(saved.as_str());

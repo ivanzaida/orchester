@@ -6,7 +6,6 @@
 use std::time::{Duration, Instant};
 
 use lurq::app::events::MouseButton;
-
 use orchester_app::{routes::PipelinesFilter, ui::tooltip::TOOLTIP_DELAY};
 use orchester_core::{id::ResourceId, name::Name, resource::ResourceKind, store::ResourceStore, time::Timestamp};
 use orchester_store::{ArchiveStop, Archived, ProjectDb};
@@ -256,7 +255,10 @@ fn pipeline_hub_rename_leaving_the_field_keeps_the_name() {
   // Moving the focus to another control blurs the field.
   let away = rect(&mut agents, "pipeline-hub-title");
   let scale = agents.window.tree.scale_factor();
-  let (x, y) = ((away.x + away.width / 2.0) * scale, (away.y + away.height / 2.0) * scale);
+  let (x, y) = (
+    (away.x + away.width / 2.0) * scale,
+    (away.y + away.height / 2.0) * scale,
+  );
   agents.window.tree.mouse_move(x, y);
   agents.window.tree.mouse_down(x, y, MouseButton::Left);
   agents.window.tree.mouse_up(x, y, MouseButton::Left);

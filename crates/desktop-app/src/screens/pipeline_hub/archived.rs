@@ -151,6 +151,11 @@ impl Component for Restore {
   }
 }
 
+/// The runs an archive stopped, as the future keeps them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Stopped(Vec<StoppedRun>);
+impl DevtoolsInspectable for Stopped {}
+
 impl Restore {
   /// The tasks of the runs that archiving `entry` stopped, as the project's database has them; none while it is read,
   /// or if it could not be, so the panel then says only what *Restore* does.
@@ -158,12 +163,12 @@ impl Restore {
     let root = ctx.props::<Props>().project.open.repo_root.clone();
     ctx
       .future((root, entry.id), move |(root, id)| async move {
-        stopped_by_archive(&root, id).await
+        stopped_by_archive(&root, id).await.map(Stopped)
       })
       .state()
       .get()
       .data
-      .unwrap_or_default()
+      .map_or_else(Vec::new, |stopped| stopped.0)
   }
 }
 
