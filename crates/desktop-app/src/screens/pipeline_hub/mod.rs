@@ -4,6 +4,10 @@
 //! tab and the chosen pipeline are the route's ([`PipelinesView`]). A team project keeps the page it has
 //! ([`super::pipelines`]).
 //!
+//! The panel's head holds the ⋯ menu ([`panel_head`], [`menu`]): *Rename* in place ([`rename`]), *Duplicate*, *Make
+//! default for New task* and *Archive*, whose confirmation the hub hosts so that it outlives the panel; an archived
+//! pipeline's panel has *Restore* ([`archived`]). The default pipeline is tagged in its row and in the panel's chips.
+//!
 //! What the panel's body holds is [`steps`]: today the way into the editor the pipeline has; the flow, the settings and
 //! the Save bar are built on it.
 //!

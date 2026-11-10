@@ -54,7 +54,7 @@
     },
     "archived": {
       "title": "Archived: hidden from the lists and New task",
-      "notice": "Archiving stopped the runs that used {{name}}. Restore puts it back in the lists and New task as it was; those runs stay stopped, so run them again to use it.",
+      "notice": "Restore puts {{name}} back in the lists and New task as it was. The runs that archiving stopped stay stopped, so run them again to use it.",
       "restore": "Restore {{name}}",
       "restoreHint": "Back in the lists and New task at once · stopped runs stay stopped",
       "failed": "Not restored. {{reason}}"
