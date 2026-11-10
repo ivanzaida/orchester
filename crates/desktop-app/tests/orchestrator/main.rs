@@ -9,6 +9,7 @@
 mod attachments;
 mod autoscroll;
 mod changes;
+mod changes_waiting;
 mod chat;
 mod code_block;
 mod connections;
