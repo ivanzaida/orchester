@@ -65,6 +65,33 @@ Two copies of the truth cost more than they save.
 Tasks and runs of a team project, the claim authority and the execution bundle; a local project, which keeps its
 configuration in its database as today.
 
+## Where it stands (2026-11-10)
+
+- **Done**: the team's configuration is read into memory when the stream opens and kept current by its events
+  (`crates/workspace/src/team_config/`, `sharing/sync/live.rs`); the hub, readiness, fill-ins and team MCP tools read
+  it. An admin's change goes to the server at once (`sharing/team_edit/`: `Servers::publish_team`, made on the version
+  the edit was opened on, and `Servers::create_team`); a publish on an older version is refused (`Changed`) and memory
+  takes the server's latest. The team MCP server panel edits under the Save/Cancel bar with no draft; the hub's Create,
+  `add_mcp_server`, `update_mcp_server` and `share_pipeline` create or publish on the server. The outbox is gone:
+  waiting versions, *Use v<N> here*, conflict/rebase/merge, taken-back resources, drafts of team resources, A16–A21. The store migration
+  `team_outbox` drops `shared_publishes`, `waiting_versions`, the unsent versions no run or task uses and the drafts of
+  team resources, and keeps the overrides. A team project's profile, instruction, skill and tool pages are the hub's.
+  While the team server cannot be reached the hub shows what it read, offers no *Edit* or *New*, and an open form
+  keeps what was typed with *Save* unavailable and saying why.
+- **QA copies**: a QA copy joined to the stand-in team server (`orchester-api`'s `test_support::team_server`) reads
+  the team's configuration from it as from a real server: the stand-in answers a project's event stream once asked to
+  (`open_event_streams`; open, no events), so the read at the stream's open fills memory. Every joined state holds on
+  the stand-in, before the join, each team resource the seed cached; `team-hub` and `team-hub-member` wait for that
+  read; the `team-edit*` states set their switch (down, demoted, rejecting) after it, and `team-archived` archives
+  `pencil-design` on the stand-in.
+- **Not done yet**: the stream still keeps the copy of the team's resources and versions in the project database
+  (`sharing/sync/config`), because these readers still read it: the Pipelines page and editor, the task form's and the
+  tools' pipelines (`tasks::data::published_pipelines`, `TeamPipelines`), `sharing::compare`, `team_reads::listed`.
+  Until they read memory the copy stays and the migration keeps `resources`/`resource_versions`/
+  `shared_version_bodies`/`shared_version_references` of shared projects. A team pipeline is read-only on this
+  computer (no Save there), and the tools that draft or publish a profile, pipeline, instruction, skill or tool refuse
+  a team project (`team_no_drafts`); editing those kinds in the hub's panel needs its forms (design).
+
 ## Open questions
 
 - Members and the project's owners/admins: read with the configuration (in memory) or kept as today.
