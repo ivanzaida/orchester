@@ -20,6 +20,7 @@ use orchester_app::{
     clipboard::Clipboard,
     markdown::LinkHandler,
     pressable::Focus,
+    runs_on_picker::Chosen,
     tabs::{PageTab, Segment, SegmentFace, page_tabs, segmented},
   },
 };
@@ -83,6 +84,7 @@ pub struct State {
   pub menu_anchor: ElementRef,
   pub popover_open: Signal<bool>,
   pub popover_anchor: ElementRef,
+  pub runs_on: Signal<Chosen>,
   /// What a press on a Markdown link does: says so in the header. Kept here so it stays the same handler.
   pub link: LinkHandler,
 }
@@ -117,6 +119,7 @@ impl Component for Gallery {
       menu_anchor: ctx.element_ref(),
       popover_open: ctx.signal(false),
       popover_anchor: ctx.element_ref(),
+      runs_on: ctx.signal(sections::runs_on_start()),
       link: Arc::new(move |link: &str, _: &lurq::app::events::MouseEvent| link_pressed.set(format!("link {link}"))),
     };
     Self {

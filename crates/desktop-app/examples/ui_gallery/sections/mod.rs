@@ -7,6 +7,7 @@ mod decisions;
 mod inputs;
 mod labels;
 mod overlays;
+mod runs_on_picker;
 
 use lurq::{
   app::{
@@ -18,6 +19,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
+pub use self::runs_on_picker::start as runs_on_start;
 use crate::gallery::{Section, State};
 
 pub fn section(ctx: &mut Ctx, section: Section, state: &State) -> Element {
@@ -30,6 +32,7 @@ pub fn section(ctx: &mut Ctx, section: Section, state: &State) -> Element {
       .spacing(SpacingSize::Xl)
       .child(blocks::section(ctx, state))
       .child(overlays::section(ctx, state))
+      .child(runs_on_picker::section(ctx, state))
       .into(),
     Section::Decisions => decisions::section(ctx, state),
   }
