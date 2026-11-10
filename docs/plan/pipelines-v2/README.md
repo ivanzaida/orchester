@@ -43,7 +43,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | in progress | `claude/pv2-08-agent-field` | — |
 | [PV2-09](PV2-09-settings-and-ready.md) | Pipeline settings, Ready? and Needs you | UI | PV2-04 | done | `claude/pv2-09-ready` → `75aa67e32` | 61.7M (out 231k) |
 | [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | done | `claude/pv2-10-save-and-cancel` → `cca2e89e9` | 113.0M (out 342k) |
-| [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | in progress | `claude/pv2-11-versions` | — |
+| [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | done | `claude/pv2-11-versions` → `a3f14fb18` | 97.4M (out 261k) |
 | [PV2-12](PV2-12-menu-archive.md) | The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab | UI | PV2-04 | done | `claude/pv2-12-menu-archive` → `824561513` | 74.8M (out 239k) |
 | [PV2-13](PV2-13-page-states.md) | Loading, none yet, empty tabs, read failure | UI | PV2-04 | done | `claude/pv2-13-page-states` → `ba2db9eea` | 42.0M (out 136k) |
 | [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | blocked | — | — |
