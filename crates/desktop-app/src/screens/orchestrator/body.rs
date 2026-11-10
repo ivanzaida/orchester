@@ -197,7 +197,7 @@ impl Foot<'_> {
         setup: self.reads.setup.ready().cloned(),
         failed: matches!(self.reads.setup, Read::Failed(_)),
         session: match &self.reads.shown {
-          Shown::Chat(shown) => shown.chat.session().map(|session| session.account),
+          Shown::Chat(shown) => shown.chat.session().cloned(),
           _ => None,
         },
         open: view.runs_on.clone(),

@@ -6,12 +6,18 @@
 //! 5-hour use; at its limit the caption says until when, in `warning`, with *limit reached* under it. An API provider
 //! says its CLI and host, the tokens its agents spent today and *no plan limit* (its key's secret is that line's
 //! tooltip), takes a model and an effort of the person's own, and says where its data goes. A sign-in to another
-//! account than the conversation's session says in its tooltip that choosing it starts a new session.
+//! connection or account than the conversation's session lives on says in its tooltip that choosing it starts a new
+//! session.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{id::AgentAccountId, orchestrator::OrchestratorSettings, time::Timestamp, tokens::compact_tokens};
+use orchester_core::{
+  id::ConnectionId,
+  orchestrator::{ChatSession, OrchestratorSettings},
+  time::Timestamp,
+  tokens::compact_tokens,
+};
 use orchester_workspace::{display, orchestrator::runs_on::RunsOn};
 
 use super::{
@@ -39,11 +45,13 @@ pub(super) fn chosen(settings: Option<&OrchestratorSettings>) -> Chosen {
   }
 }
 
-/// The account the connection `entry` runs as, when it is a sign-in.
-pub(super) fn account_of(sources: &Sources<'_>, entry: &Entry) -> Option<AgentAccountId> {
+/// Choosing `connection` starts a new session where the conversation has `session`: the session lives under another
+/// connection, or another account.
+pub(super) fn starts_new_session(sources: &Sources<'_>, connection: ConnectionId, session: &ChatSession) -> bool {
   sources
-    .account(&entry.runs_on, entry.provider)
-    .map(|account| account.id())
+    .setup
+    .account(connection)
+    .is_some_and(|account| session.change(connection, account).is_some())
 }
 
 /// The connections of `entries` for the picker, `chosen` what the Orchestrator runs on now and `session` the account
@@ -52,7 +60,7 @@ pub(super) fn connections(
   ctx: &mut Ctx,
   sources: &Sources<'_>,
   entries: &[Entry],
-  (chosen, session): (Option<&OrchestratorSettings>, Option<AgentAccountId>),
+  (chosen, session): (Option<&OrchestratorSettings>, Option<&ChatSession>),
 ) -> Vec<Connection> {
   entries
     .iter()
@@ -67,7 +75,7 @@ fn connection(
   ctx: &mut Ctx,
   sources: &Sources<'_>,
   entry: &Entry,
-  (on, session): (Option<&OrchestratorSettings>, Option<AgentAccountId>),
+  (on, session): (Option<&OrchestratorSettings>, Option<&ChatSession>),
 ) -> Connection {
   let tip_words = tip(ctx, entry);
   let models = models(sources, entry, on);
@@ -78,10 +86,13 @@ fn connection(
     caption: Arc::from(""),
     tip: tip_words.clone(),
     five_hour: None,
+    use_unread: false,
     limit: entry.limit,
     unavailable: (!entry.choosable).then_some(tip_words),
     detail: None,
-    tip_note: None,
+    tip_note: session
+      .filter(|session| starts_new_session(sources, entry.id, session))
+      .map(|_| ctx.t("orchestrator.runsOn.newSession")),
     typed_model: false,
     typed_effort: false,
     notice: None,
@@ -89,29 +100,17 @@ fn connection(
   };
   match &entry.runs_on {
     RunsOn::ApiProvider { base_url, .. } => provider(ctx, sources, (entry, base_url.host()), base),
-    RunsOn::SignIn(_) | RunsOn::Native => sign_in(ctx, sources, entry, base, session),
+    RunsOn::SignIn(_) | RunsOn::Native => sign_in(ctx, sources, entry, base),
   }
 }
 
 /// A sign-in's caption, plan use and limit.
-fn sign_in(
-  ctx: &mut Ctx,
-  sources: &Sources<'_>,
-  entry: &Entry,
-  base: Connection,
-  session: Option<AgentAccountId>,
-) -> Connection {
+fn sign_in(ctx: &mut Ctx, sources: &Sources<'_>, entry: &Entry, base: Connection) -> Connection {
   let cli = cli_name(ctx, entry.provider);
   let who = sources.signed_in(&entry.runs_on, entry.provider);
-  let elsewhere = session.is_some_and(|session| account_of(sources, entry).is_some_and(|account| account != session));
-  let tip_note = elsewhere.then(|| ctx.t("orchestrator.runsOn.newSession"));
   if !who.signed_in {
     let caption = ctx.t_args("orchestrator.runsOn.signedOut", [("cli", &*cli)]);
-    return Connection {
-      caption,
-      tip_note,
-      ..base
-    };
+    return Connection { caption, ..base };
   }
   let now = Timestamp::now();
   let reached = who.reached(now);
@@ -140,12 +139,12 @@ fn sign_in(
   Connection {
     caption,
     five_hour: if reached { Some(100) } else { used.map(percent) },
+    use_unread: !reached && used.is_none(),
     detail: reached.then(|| Detail {
       text: ctx.t("orchestrator.runsOn.limitReached"),
       tip: None,
       warns: true,
     }),
-    tip_note,
     ..base
   }
 }

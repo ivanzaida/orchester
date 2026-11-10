@@ -99,11 +99,11 @@
       "providerUse": "{{tokens}} today · no plan limit",
       "key": "Its key: secret {{secret}}",
       "keyGone": "Its key's secret is missing",
-      "badModel": "Not saved: a model name has no spaces and at most 200 characters.",
       "sentTo": "Prompts, repository content and command output go to {{host}} under its terms.",
       "overDraft": "Choosing here publishes a new version and replaces the draft saved in Orchestrator settings.",
       "newSession": "Another account starts a new session: earlier messages aren't remembered.",
-      "settings": "Settings ↗"
+      "noConnection": "No connection to run the Orchestrator yet. Add one in Connections.",
+      "connections": "Connections ↗"
     },
     "suggestions": {
       "plan": "Plan tasks from a scope file",

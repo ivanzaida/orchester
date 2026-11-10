@@ -29,10 +29,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  id::{AgentAccountId, ProjectId},
-  time::Timestamp,
-};
+use orchester_core::{id::ProjectId, orchestrator::ChatSession, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::Message,
@@ -66,15 +63,15 @@ use crate::{
 const CHIP_HEIGHT: f32 = 24.0;
 
 /// What the chip and its picker are about: the project at `root`, what the Orchestrator runs on as read (`None` while
-/// it is read or could not be), and whether reading it failed; `open` shows the picker. `session` is the account the
-/// open conversation's session runs on, when it has one.
+/// it is read or could not be), and whether reading it failed; `open` shows the picker. `session` is the open
+/// conversation's session, when it has one.
 #[derive(Clone)]
 pub(super) struct RunsOnProps {
   pub(super) root: PathBuf,
   pub(super) project: ProjectId,
   pub(super) setup: Option<OrchestratorSetup>,
   pub(super) failed: bool,
-  pub(super) session: Option<AgentAccountId>,
+  pub(super) session: Option<ChatSession>,
   pub(super) open: Signal<bool>,
 }
 
@@ -86,14 +83,14 @@ impl PartialEq for RunsOnProps {
       self.project,
       &self.setup,
       self.failed,
-      self.session,
+      &self.session,
       self.open.id(),
     ) == (
       &other.root,
       other.project,
       &other.setup,
       other.failed,
-      other.session,
+      &other.session,
       other.open.id(),
     )
   }
@@ -151,7 +148,7 @@ impl Component for RunsOnPicker {
     };
     let entries = sources.entries(ctx);
     let label = label(ctx, &sources);
-    let switched = switched(&sources, &entries, &props);
+    let switched = switched(&sources, &props);
     if !open {
       self.picking.forget();
       return self.chip(ctx, &props, (Some(&label), switched));
@@ -201,7 +198,7 @@ impl RunsOnPicker {
       Pick::Effort(effort) => chooser.effort(effort.as_deref()),
     };
     let open = props.open.clone();
-    let connections = connections::connections(ctx, sources, entries, (settings.as_ref(), props.session));
+    let connections = connections::connections(ctx, sources, entries, (settings.as_ref(), props.session.as_ref()));
     let mut notes = Vec::new();
     if let Some(error) = state.error.as_ref().filter(|_| self.picking.chose()) {
       notes.push(Notice {
@@ -211,13 +208,6 @@ impl RunsOnPicker {
           "orchestrator.settings.saveFailed",
           [("reason", &*message_text(ctx, error))],
         ),
-      });
-    }
-    if self.picking.rejected() {
-      notes.push(Notice {
-        icon: Icon::CircleAlert,
-        tone: NoticeTone::Danger,
-        text: ctx.t("orchestrator.runsOn.badModel"),
       });
     }
     if sources.setup.draft.is_some() {
@@ -292,18 +282,15 @@ impl RunsOnPicker {
   }
 }
 
-/// The Orchestrator runs as another account than the open conversation's session: its next answer starts a new session,
-/// which the chip's tooltip says until that first answer was sent.
-fn switched(sources: &Sources<'_>, entries: &[Entry], props: &RunsOnProps) -> bool {
+/// The Orchestrator runs on a connection or account the open conversation's session does not live on: its next answer
+/// starts a new session, which the chip's tooltip says until that first answer was sent.
+fn switched(sources: &Sources<'_>, props: &RunsOnProps) -> bool {
   let chosen = sources.setup.settings.as_ref().map(|settings| settings.connection());
-  let account = entries
-    .iter()
-    .find(|entry| Some(entry.id) == chosen)
-    .and_then(|entry| connections::account_of(sources, entry));
   props
     .session
-    .zip(account)
-    .is_some_and(|(session, account)| session != account)
+    .as_ref()
+    .zip(chosen)
+    .is_some_and(|(session, chosen)| connections::starts_new_session(sources, chosen, session))
 }
 
 /// What the chip says.

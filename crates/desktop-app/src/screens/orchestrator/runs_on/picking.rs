@@ -27,15 +27,12 @@ impl DevtoolsInspectable for Applied {}
 pub(super) struct Picking {
   /// What was chosen since the picker opened.
   applied: Signal<Applied>,
-  /// A model was typed that no connection takes (a name has no whitespace and at most 200 characters).
-  rejected: Signal<bool>,
 }
 
 impl Picking {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     Self {
       applied: ctx.signal(Applied::default()),
-      rejected: ctx.signal(false),
     }
   }
 
@@ -43,9 +40,6 @@ impl Picking {
   pub(super) fn forget(&self) {
     if self.applied.get_untracked().0.is_some() {
       self.applied.set(Applied::default());
-    }
-    if self.rejected.get_untracked() {
-      self.rejected.set(false);
     }
   }
 
@@ -63,11 +57,6 @@ impl Picking {
   /// Something was chosen since the picker opened: why publishing it failed is the picker's to say.
   pub(super) fn chose(&self) -> bool {
     self.applied.get().0.is_some()
-  }
-
-  /// A model typed was not a model name.
-  pub(super) fn rejected(&self) -> bool {
-    self.rejected.get()
   }
 }
 
@@ -102,8 +91,8 @@ impl Chooser {
   /// Runs on `model` of `connection`, with the effort chosen when `model` lists it, or the one typed on an API
   /// provider.
   pub(super) fn model(&self, connection: ConnectionId, model: &str) {
+    // The picker offers only names a model can have (`ModelId::new`), so this holds; a name it does not is not applied.
     let Ok(model) = ModelId::new(model) else {
-      self.picking.rejected.set(true);
       return;
     };
     let typed = self.typed_only(connection);
@@ -143,7 +132,6 @@ impl Chooser {
 
   /// Publishes `settings` unless they are what is chosen.
   fn apply(&self, settings: OrchestratorSettings) {
-    self.picking.rejected.set(false);
     if self.chosen.as_ref() == Some(&settings) {
       return;
     }

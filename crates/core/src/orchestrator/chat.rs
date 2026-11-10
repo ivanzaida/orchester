@@ -35,6 +35,19 @@ pub struct ChatSession {
   pub account: AgentAccountId,
 }
 
+impl ChatSession {
+  /// Why a turn on `connection` and its `account` cannot resume this session; `None` when it can.
+  pub fn change(&self, connection: ConnectionId, account: AgentAccountId) -> Option<SessionChange> {
+    if self.connection != connection {
+      Some(SessionChange::Connection)
+    } else if self.account != account {
+      Some(SessionChange::Account)
+    } else {
+      None
+    }
+  }
+}
+
 /// Why a turn starts a new session where the conversation had one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -190,14 +203,7 @@ impl Chat {
   /// Why a turn on `connection` and its `account` cannot resume the conversation's session; `None` when it has none
   /// yet or resumes it.
   pub fn session_change(&self, connection: ConnectionId, account: AgentAccountId) -> Option<SessionChange> {
-    let session = self.session.as_ref()?;
-    if session.connection != connection {
-      Some(SessionChange::Connection)
-    } else if session.account != account {
-      Some(SessionChange::Account)
-    } else {
-      None
-    }
+    self.session.as_ref()?.change(connection, account)
   }
 }
 

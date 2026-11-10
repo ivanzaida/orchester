@@ -8,7 +8,11 @@
 
 use std::time::{Duration, Instant};
 
-use orchester_app::{chrome::TITLE_BAR_HEIGHT, routes::OrchestratorChat, ui::tooltip::TOOLTIP_DELAY};
+use orchester_app::{
+  chrome::TITLE_BAR_HEIGHT,
+  routes::{ConnectionsView, OrchestratorChat, ProjectPage, Route},
+  ui::tooltip::TOOLTIP_DELAY,
+};
 use orchester_core::{
   account::{
     AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AccountIdentity, AgentAccount, CheckedProgram,
@@ -34,7 +38,7 @@ use super::{
 
 /// A Claude Code account named `name` whose CLI said `signed_in` (as `ana@example.com` on the `pro` plan) or signed
 /// out, with a Claude Code connection on it; the account and the connection.
-fn on_account(screen: &Orchestrator, name: &str, signed_in: bool) -> (AgentAccount, ConnectionId) {
+pub(super) fn on_account(screen: &Orchestrator, name: &str, signed_in: bool) -> (AgentAccount, ConnectionId) {
   let folder = screen.window.data.dir.path().join(format!("claude-{name}"));
   std::fs::create_dir_all(&folder).expect("the account's folder");
   let now = Timestamp::now();
@@ -116,31 +120,31 @@ fn read_plan(screen: &Orchestrator, account: &AgentAccount, (used, reached): (f6
 }
 
 /// What is published now: its version and settings.
-fn published(screen: &Orchestrator) -> Option<(u32, OrchestratorSettings)> {
+pub(super) fn published(screen: &Orchestrator) -> Option<(u32, OrchestratorSettings)> {
   screen.db().orchestrator_published().expect("read")
 }
 
 /// The picker's element ids start with this.
-const MENU: &str = "orchestrator-runs-on-menu";
+pub(super) const MENU: &str = "orchestrator-runs-on-menu";
 
-fn part(name: &str) -> String {
+pub(super) fn part(name: &str) -> String {
   format!("{MENU}-{name}")
 }
 
 /// The rail's item of `connection`.
-fn on_rail(connection: ConnectionId) -> String {
+pub(super) fn on_rail(connection: ConnectionId) -> String {
   part(&format!("connection-{connection}"))
 }
 
 /// Opens the picker from the chip of a new conversation.
-fn open(screen: &mut Orchestrator) {
+pub(super) fn open(screen: &mut Orchestrator) {
   screen.go(OrchestratorChat::New);
   screen.click("orchestrator-runs-on-chip");
   screen.until("the picker", |screen| screen.exists(MENU));
 }
 
 /// The pointer rests on `id` until its tooltip shows.
-fn rest_on(screen: &mut Orchestrator, id: &str) {
+pub(super) fn rest_on(screen: &mut Orchestrator, id: &str) {
   let frame = screen.bounds(id);
   let tree = &mut screen.window.tree;
   tree.mouse_move(frame.x + frame.width / 2.0, frame.y + frame.height / 2.0);
@@ -284,7 +288,7 @@ fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
 }
 
 /// A DeepSeek connection of `screen`'s project, chosen in the open picker.
-fn on_deepseek(screen: &mut Orchestrator) -> ConnectionId {
+pub(super) fn on_deepseek(screen: &mut Orchestrator) -> ConnectionId {
   let program = std::env::current_exe().expect("a program");
   let deepseek = connections::api_provider("DeepSeek", &program);
   screen
@@ -487,12 +491,18 @@ fn orchestrator_picker_without_connections_is_its_foot_with_no_line_over_it() {
   }
   assert_eq!(
     screen.text(MENU),
-    "Another account starts a new session: earlier messages aren't remembered. Settings ↗"
+    "No connection to run the Orchestrator yet. Add one in Connections. Connections ↗"
   );
   let (menu, foot) = (screen.bounds(MENU), screen.bounds("orchestrator-runs-on-foot"));
   assert!((foot.y - menu.y).abs() < 1.5, "the foot at the top: {menu:?} {foot:?}");
   assert!(
     (menu.width - 360.0).abs() < 0.5,
     "only as wide as its foot (`cjnbn`): {menu:?}"
+  );
+  screen.click("orchestrator-connections");
+  assert_eq!(
+    screen.route(),
+    Route::Project(screen.project, ProjectPage::Connections(ConnectionsView::default())),
+    "its link opens Project settings › Connections"
   );
 }
