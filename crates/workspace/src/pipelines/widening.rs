@@ -20,6 +20,12 @@ pub fn publish_reasons(latest: Option<&Pipeline>, new: &Pipeline) -> Vec<Message
         Weaker::Steps => Message::new("appMcp.widens.pipelineSteps"),
         Weaker::Sources => Message::new("appMcp.widens.pipelineSources"),
         Weaker::Step(key) => Message::new("appMcp.widens.pipelineStep").with("step", step_name(&key)),
+        Weaker::StopsWaiting { step, waited_for } => Message::new("appMcp.widens.pipelineStopsWaiting")
+          .with("step", step_name(&step))
+          .with(
+            "waited",
+            waited_for.iter().map(&step_name).collect::<Vec<_>>().join(", "),
+          ),
       })
       .collect(),
   }

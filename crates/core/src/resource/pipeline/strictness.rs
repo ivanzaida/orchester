@@ -16,9 +16,10 @@ pub enum Weaker {
   Steps,
   /// The sources the pipeline or its steps list changed: what its agents read is a person's to choose.
   Sources,
-  /// The step no longer waits for an approval-gated or tool step it waited for, or is run or narrowed differently, or
-  /// no longer asks where it did.
+  /// The step is run or narrowed differently, or no longer asks where it did.
   Step(StepKey),
+  /// The step no longer waits, directly or through other steps, for these approval-gated or tool steps it waited for.
+  StopsWaiting { step: StepKey, waited_for: Vec<StepKey> },
 }
 
 /// How `new` may be weaker than `old`; empty when it is provably as strict or stricter.
@@ -27,16 +28,24 @@ pub fn weaker_than(old: &Pipeline, new: &Pipeline) -> Vec<Weaker> {
     return vec![Weaker::Steps];
   }
   let sources = (old.sources() != new.sources()).then_some(Weaker::Sources);
-  let steps = old
-    .steps()
-    .iter()
-    .filter(|before| {
-      new
-        .step(&before.key)
-        .is_none_or(|after| !(step_no_weaker(before, after) && waits_no_less(old, new, &before.key)))
-    })
-    .map(|before| Weaker::Step(before.key.clone()));
-  sources.into_iter().chain(steps).collect()
+  let mut weaker: Vec<Weaker> = sources.into_iter().collect();
+  for before in old.steps() {
+    let Some(after) = new.step(&before.key) else {
+      weaker.push(Weaker::Step(before.key.clone()));
+      continue;
+    };
+    let waited_for = stops_waiting_for(old, new, &before.key);
+    if !waited_for.is_empty() {
+      weaker.push(Weaker::StopsWaiting {
+        step: before.key.clone(),
+        waited_for,
+      });
+    }
+    if !step_no_weaker(before, after) {
+      weaker.push(Weaker::Step(before.key.clone()));
+    }
+  }
+  weaker
 }
 
 fn step_keys(pipeline: &Pipeline) -> Vec<&StepKey> {
@@ -67,15 +76,17 @@ fn step_no_weaker(old: &Step, new: &Step) -> bool {
     && kind_no_weaker(&old.kind, &new.kind)
 }
 
-/// Whether step `key` still waits, directly or through other steps, for every approval-gated step and tool step it
-/// waited for in `old`. Waiting for other steps differently is a reorder: it changes when the step runs, not what
-/// stands between it and the run's end.
-fn waits_no_less(old: &Pipeline, new: &Pipeline, key: &StepKey) -> bool {
-  let after = ancestors(new, key);
-  ancestors(old, key)
-    .into_iter()
-    .filter(|ancestor| old.step(ancestor).is_some_and(checks))
-    .all(|ancestor| after.contains(ancestor))
+/// The approval-gated steps and tool steps step `key` waited for in `old`, directly or through other steps, that it no
+/// longer waits for in `new`, in the order of `old`'s steps. Waiting for other steps differently is a reorder: it
+/// changes when the step runs, not what stands between it and the run's end.
+fn stops_waiting_for(old: &Pipeline, new: &Pipeline, key: &StepKey) -> Vec<StepKey> {
+  let (before, after) = (ancestors(old, key), ancestors(new, key));
+  old
+    .steps()
+    .iter()
+    .filter(|step| checks(step) && before.contains(&step.key) && !after.contains(&step.key))
+    .map(|step| step.key.clone())
+    .collect()
 }
 
 /// A step the run waits at: it waits for a person's approval, or it runs a tool.

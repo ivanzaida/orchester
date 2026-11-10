@@ -1802,6 +1802,7 @@
       "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
       "firstPipelineVersion": "A pipeline's first version has nothing to be compared with, so a person publishes it.",
       "pipelineSteps": "The steps differ from the latest published version: some were added or removed.",
+      "pipelineStopsWaiting": "Step {{step}} would no longer wait for {{waited}}, which it waited for in the latest published version: a step that asks for approval or runs a tool.",
       "pipelineStep": "Step {{step}} is not provably as strict as in the latest published version: same wiring, profile or tool, approvals and narrowing, or stricter.",
       "taskPipeline": "A person changes a task's pipeline: another pipeline runs it with other steps, profiles and approvals.",
       "teamPipeline": "Sharing {{pipeline}} for the team lets every member's agents run it, so a person decides it.",

@@ -151,8 +151,8 @@ fn strictness_names_every_weaker_step() {
   );
   assert_eq!(
     weaker_than(&old, &changed(&steps, "build", |step| step.depends_on.clear())),
-    build,
-    "rewired"
+    stops_waiting("build", &["plan"]),
+    "rewired: it no longer waits for the gated plan"
   );
   let mut fewer = steps;
   fewer.remove(0);
@@ -240,6 +240,14 @@ fn strictness_counts_other_sources() {
   assert!(weaker_than(&reads_more, &reads_more.clone()).is_empty());
 }
 
+/// What a step that no longer waits for the steps `waited_for` is weaker by.
+fn stops_waiting(step: &str, waited_for: &[&str]) -> Vec<Weaker> {
+  vec![Weaker::StopsWaiting {
+    step: key(step),
+    waited_for: waited_for.iter().map(|waited| key(waited)).collect(),
+  }]
+}
+
 fn tool(value: &str, depends_on: &[&str]) -> Step {
   let mut step = agent(value, ResourceId::generate(), depends_on);
   step.kind = StepKind::Tool {
@@ -272,7 +280,7 @@ fn strictness_a_step_that_stops_waiting_for_an_approval_gated_step_is_weaker() {
   let mut after = gated;
   after.depends_on = [key("build")].into_iter().collect();
   let new = pipeline(vec![agent("build", profile, &[]), after]);
-  assert_eq!(weaker_than(&old, &new), [Weaker::Step(key("build"))]);
+  assert_eq!(weaker_than(&old, &new), stops_waiting("build", &["plan"]));
 }
 
 #[test]
@@ -283,7 +291,7 @@ fn strictness_a_step_that_stops_waiting_for_a_tool_step_is_weaker() {
   let mut after = checks;
   after.depends_on = [key("build")].into_iter().collect();
   let new = pipeline(vec![agent("build", profile, &[]), after]);
-  assert_eq!(weaker_than(&old, &new), [Weaker::Step(key("build"))]);
+  assert_eq!(weaker_than(&old, &new), stops_waiting("build", &["checks"]));
 }
 
 #[test]
@@ -324,5 +332,20 @@ fn strictness_waiting_for_the_gate_through_another_step_or_directly_is_no_weaker
     agent("mid", profile, &["plan"]),
     agent("build", profile, &[]),
   ]);
-  assert_eq!(weaker_than(&through, &unwired), [Weaker::Step(key("build"))]);
+  assert_eq!(weaker_than(&through, &unwired), stops_waiting("build", &["plan"]));
+}
+
+#[test]
+fn strictness_names_both_a_step_that_stops_waiting_and_the_other_way_it_got_weaker() {
+  let profile = ResourceId::generate();
+  let mut gated = agent("plan", profile, &[]);
+  gated.approval_gate = true;
+  let old = pipeline(vec![gated.clone(), agent("build", profile, &["plan"])]);
+  let mut build = agent("build", profile, &[]);
+  build.instructions = PromptText::new("Other words.").expect("valid prompt");
+  let new = pipeline(vec![gated, build]);
+  assert_eq!(
+    weaker_than(&old, &new),
+    [stops_waiting("build", &["plan"])[0].clone(), Weaker::Step(key("build"))]
+  );
 }
