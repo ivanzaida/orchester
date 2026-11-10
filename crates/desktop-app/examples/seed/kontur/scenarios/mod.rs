@@ -117,7 +117,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 201] = [
+pub const ALL: [Scenario; 205] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -162,6 +162,12 @@ pub const ALL: [Scenario; 201] = [
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
   Scenario::of("orchestrator-on-codex", orchestrator::on_codex),
   Scenario::of("orchestrator-codex-limit", orchestrator::codex_limit),
+  Scenario::of("orchestrator-another-account", orchestrator::another_account::seed),
+  Scenario::of("orchestrator-over-draft", orchestrator::picker_notes::over_draft),
+  Scenario::of(
+    "orchestrator-publish-refused",
+    orchestrator::picker_notes::publish_refused,
+  ),
   Scenario::of("orchestrator-events", orchestrator::events::seed),
   Scenario::of("orchestrator-waits-on", orchestrator::waits_on::seed),
   Scenario::of("orchestrator-watch", orchestrator::watch::seed),
@@ -234,6 +240,7 @@ pub const ALL: [Scenario; 201] = [
   Scenario::of("picker-readiness-team", picker_readiness::team),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
+  Scenario::of("pipelines-flow", pipelines::flow),
   Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),

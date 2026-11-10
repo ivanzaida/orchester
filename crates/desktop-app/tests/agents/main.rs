@@ -20,6 +20,7 @@ mod local_hub_refusals;
 mod local_hub_review;
 mod local_hub_saved;
 mod models;
+mod pipeline_flow;
 mod pipeline_hub;
 mod pipeline_hub_archive;
 mod pipeline_hub_menu;

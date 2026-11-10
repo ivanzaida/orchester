@@ -18,6 +18,7 @@
 
 mod archived;
 mod bones;
+mod flow;
 mod list;
 mod menu;
 mod model;

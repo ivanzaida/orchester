@@ -1,10 +1,10 @@
 # PV2-15 · The orchestrator chat adopts the compact picker
 
-- **Status:** in progress
+- **Status:** done (2026-11-10; review round 2 PASS, design verification round 2 PASS incl. K1/K2; merged `e0c34aa8a`)
 - **Kind:** UI
 - **Depends on:** PV2-03, PV2-16
-- **Branch:** `claude/pv2-15-orchestrator-picker`
-- **Tokens:** —
+- **Branch:** `claude/pv2-15-orchestrator-picker` (`0e1f5024f` … `21d187321`)
+- **Tokens:** 108.2M — implementation 59.4M + 18.0M + 0.6M, review 4.9M + 2.9M, design verification 13.5M + 9.0M (output 318k)
 
 ## Goal
 

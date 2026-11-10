@@ -1,8 +1,9 @@
 //! The compact *Runs on* picker (`Runs on picker` `ZcGGy` on `Pipelines · v2` `pCzIS`; K1 `lCApz`, K2 `rjPcV`): 300
 //! wide, on `surface_raised` in a `border_strong` stroke, radius `lg`, lifted by the large shadow. From the top: the
 //! connections in a row ([`rail`], which scrolls sideways past what fits), one line naming the shown one with its
-//! plan's 5-hour use ([`who`]), Search and the models in a list of a fixed four rows ([`models`]), and the efforts the
-//! chosen model offers as one segmented row ([`effort`]). It has no foot, so it never changes height.
+//! plan's 5-hour use (on two lines where it has more to say, [`who`]), Search and the models in a list of a fixed four
+//! rows ([`models`]), and the efforts the chosen model offers as one segmented row ([`effort`]), or for a connection
+//! that lists none a field to type one in ([`foot`]). Its height changes only by the notes under the efforts.
 //!
 //! It knows nothing of what opens it: its caller gives the connections with their models and what is chosen, and gets
 //! each choice back as a [`Pick`] through `on_pick`; it applies nothing itself, so what it shows chosen is what its
@@ -14,10 +15,12 @@
 
 mod actions;
 mod effort;
+mod foot;
 mod keys;
 mod model;
 mod models;
 mod rail;
+mod view;
 mod who;
 
 use std::sync::Arc;
@@ -35,12 +38,14 @@ use lurq::{
 };
 
 use self::{
-  actions::{Actions, Handles, OwnedShape, Targets},
+  actions::{Actions, Focus, Handles},
+  foot::TypedEffort,
   models::SearchBox,
+  view::View,
 };
 pub use self::{
   keys::{Cursor, Key, Outcome, Place, Shape},
-  model::{Chosen, Connection, LIST_ROWS, Mark, Model, Pick, filter_models},
+  model::{Chosen, Connection, Detail, LIST_ROWS, Mark, Model, Notice, NoticeTone, Pick, filter_models},
   models::list_height,
 };
 use crate::theme::ExtraSpacing;
@@ -57,6 +62,7 @@ pub struct RunsOnPicker {
   id: Arc<str>,
   connections: Arc<[Connection]>,
   chosen: Chosen,
+  notes: Arc<[Notice]>,
   on_pick: OnPick,
   on_close: OnClose,
 }
@@ -67,6 +73,7 @@ impl PartialEq for RunsOnPicker {
     self.id == other.id
       && self.connections == other.connections
       && self.chosen == other.chosen
+      && self.notes == other.notes
       && Arc::ptr_eq(&self.on_pick, &other.on_pick)
       && Arc::ptr_eq(&self.on_close, &other.on_close)
   }
@@ -85,9 +92,16 @@ impl RunsOnPicker {
       id: id.into(),
       connections: connections.into(),
       chosen,
+      notes: Arc::from([]),
       on_pick: Arc::new(on_pick),
       on_close: Arc::new(on_close),
     }
+  }
+
+  /// Notes under the efforts whichever connection is shown (a refusal, a warning about what choosing replaces).
+  pub fn notes(mut self, notes: Vec<Notice>) -> Self {
+    self.notes = notes.into();
+    self
   }
 
   /// The picker, mounted in `ctx` under its id so it keeps its state across passes.
@@ -109,24 +123,18 @@ struct Panel {
   cursor: Signal<Cursor>,
   /// The connection the keys tried to choose that cannot be chosen: the line under the rail says why.
   refused: Signal<Option<usize>>,
-  /// Search takes the focus on the next pass: on open, and when a key was typed elsewhere in the picker.
-  focus: Signal<bool>,
+  /// The field that takes the focus on the next pass: Search on open, and when a key was typed elsewhere in the
+  /// picker; the typed effort when the keys move onto it.
+  focus: Signal<Focus>,
+  /// The effort typed for a connection that lists none, and the chosen effort last seen (when it changes the field
+  /// shows it).
+  own_effort: TypedEffort,
+  seen_effort: Signal<String>,
+  /// The list was scrolled to the chosen model, once, when the picker opened.
+  scrolled: Signal<bool>,
   search: ElementRef,
   scroll: ScrollState,
   rail_scroll: ScrollState,
-}
-
-/// What a pass shows, worked out from the props and what Search holds.
-struct View<'a> {
-  /// The place on the rail of the connection shown.
-  shown: Option<usize>,
-  /// The models of the connection shown that Search finds.
-  found: Vec<&'a Model>,
-  /// The chosen model, when it is on the connection shown, and the efforts it offers.
-  model: Option<&'a str>,
-  efforts: Option<&'a [Arc<str>]>,
-  searched: bool,
-  targets: Targets,
 }
 
 impl Component for Panel {
@@ -140,7 +148,13 @@ impl Component for Panel {
       query: ctx.signal(String::new()),
       cursor: ctx.signal(Cursor::START),
       refused: ctx.signal(None),
-      focus: ctx.signal(true),
+      focus: ctx.signal(Focus::Search),
+      own_effort: TypedEffort {
+        value: ctx.signal(String::new()),
+        field: ElementRef::new(),
+      },
+      seen_effort: ctx.signal(String::new()),
+      scrolled: ctx.signal(false),
       search: ElementRef::new(),
       scroll: ScrollState::new(),
       rail_scroll: ScrollState::new(),
@@ -149,12 +163,11 @@ impl Component for Panel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RunsOnPicker>().clone();
-    if self.focus.get() {
-      ctx.focus(&self.search);
-      self.focus.set(false);
-    }
+    self.settle(ctx);
+    self.show_chosen_effort(&props);
     let view = self.view(&props);
     self.reveal_shown(&props.connections, view.shown);
+    self.reveal_chosen(&view);
     let id: &str = &props.id;
     let actions = Actions {
       panel: self.handles(),
@@ -164,11 +177,12 @@ impl Component for Panel {
     let cursor = self.cursor.get();
     let looking = view.targets.shape.borrowed();
     let keys_at = |place| cursor.shown(place, &looking);
-    let empty = ctx.t(if view.searched {
-      "ui.runsOnPicker.noMatch"
-    } else {
-      "ui.runsOnPicker.noModels"
-    });
+    let empty = match (view.bad_name, view.searched) {
+      (true, _) => (ctx.t("ui.runsOnPicker.badModelName"), Some(PaletteColor::TextMuted)),
+      (false, true) => (ctx.t("ui.runsOnPicker.noMatch"), None),
+      (false, false) => (ctx.t("ui.runsOnPicker.noModels"), None),
+    };
+    let own_model = view.shown.is_some_and(|at| props.connections[at].typed_model);
     let head = self.head(ctx, &props, (view.shown, keys_at(Place::Rail)), &actions);
     let search = SearchBox {
       query: self.query.clone(),
@@ -178,6 +192,8 @@ impl Component for Panel {
         Arc::new(move || handles.typed())
       },
     };
+    let efforts = self.efforts(ctx, &props, &view, (&actions, keys_at(Place::Effort)));
+    let notes = self.notes(&props, view.shown);
     Column::new()
       .id(id.to_owned())
       .width(Dimension::Px(WIDTH))
@@ -187,75 +203,87 @@ impl Component for Panel {
       .box_shadow(ShadowStyle::Lg)
       .on_key_down(actions.keys(view.targets.clone()))
       .child(head)
-      .child(models::search(ctx, id, &search))
+      .child(models::search(ctx, id, &search, own_model))
       .child(models::list(
         ctx,
         (id, &self.scroll),
-        (&view.found, &empty),
+        (&view.found, view.own.as_deref(), (&empty.0, empty.1)),
         (view.model, keys_at(Place::List), cursor.at.is_some()),
         &actions.model_chooser(view.targets.models.clone()),
       ))
-      .child(effort::row(
-        ctx,
-        id,
-        (view.efforts, props.chosen.effort.as_deref()),
-        keys_at(Place::Effort),
-        &actions.effort_chooser(),
-      ))
+      .child(efforts)
+      .with_children(notes)
   }
 }
 
 impl Panel {
-  /// The connection shown, the models Search finds on it and the efforts the chosen model offers, with what the keys
-  /// move over and hand back.
-  fn view<'a>(&self, props: &'a RunsOnPicker) -> View<'a> {
-    let shown = self.shown_connection(props);
-    let connections = &props.connections;
-    let query = self.query.get();
-    let found = shown.map_or_else(Vec::new, |at| filter_models(&connections[at].models, &query));
-    let on_chosen = shown.is_some_and(|at| connections[at].id == props.chosen.connection);
-    let model = props.chosen.model.as_deref().filter(|_| on_chosen);
-    let efforts = shown
-      .filter(|_| on_chosen)
-      .and_then(|at| {
-        connections[at]
-          .models
-          .iter()
-          .find(|candidate| Some(&*candidate.id) == model)
-      })
-      .map(|offered| offered.efforts.as_slice());
-    // *Default* first, then what the model offers; none at all while there is no model chosen.
-    let levels: Vec<Option<Arc<str>>> = efforts.map_or_else(Vec::new, |offered| {
-      std::iter::once(None).chain(offered.iter().cloned().map(Some)).collect()
-    });
-    let searched = !query.trim().is_empty();
-    let shape = OwnedShape {
-      rail: connections
-        .iter()
-        .map(|connection| connection.unavailable.is_none())
-        .collect(),
-      viewing: shown,
-      list: found.len(),
-      chosen: found.iter().position(|found| Some(&*found.id) == model),
-      searched,
-      efforts: levels.len(),
-      effort: levels
-        .iter()
-        .position(|level| level.as_deref() == props.chosen.effort.as_deref()),
-    };
-    let targets = Targets {
-      shape,
-      models: found.iter().map(|found| found.id.clone()).collect(),
-      efforts: levels,
-    };
-    View {
-      shown,
-      found,
-      model,
-      efforts,
-      searched,
-      targets,
+  /// The field asked for takes the focus.
+  fn settle(&self, ctx: &mut Ctx) {
+    match self.focus.get() {
+      Focus::Stay => return,
+      Focus::Search => ctx.focus(&self.search),
+      Focus::Effort => ctx.focus(&self.own_effort.field),
     }
+    self.focus.set(Focus::Stay);
+  }
+
+  /// Scrolls the list to the chosen model once, as the picker opens, so that it is never hidden (`Many models`
+  /// `pGj8M`).
+  fn reveal_chosen(&self, view: &View<'_>) {
+    if self.scrolled.get_untracked() {
+      return;
+    }
+    self.scrolled.set(true);
+    if let Some(at) = view
+      .model
+      .and_then(|model| view.found.iter().position(|found| &*found.id == model))
+    {
+      models::reveal(&self.scroll, at);
+    }
+  }
+
+  /// The typed effort field shows the effort chosen whenever that changes.
+  fn show_chosen_effort(&self, props: &RunsOnPicker) {
+    let chosen = props.chosen.effort.as_deref().unwrap_or_default();
+    if self.seen_effort.get_untracked() != chosen {
+      self.seen_effort.set(chosen.to_owned());
+      self.own_effort.value.set(chosen.to_owned());
+    }
+  }
+
+  /// The efforts: the segmented row, or for a connection that lists none the field that takes one.
+  fn efforts(
+    &self,
+    ctx: &mut Ctx,
+    props: &RunsOnPicker,
+    view: &View<'_>,
+    (actions, keys_at): (&Actions, Option<usize>),
+  ) -> Element {
+    let id: &str = &props.id;
+    if view.typed_effort {
+      let typed = actions.clone();
+      let submit: Arc<dyn Fn() + Send + Sync> = Arc::new(move || typed.typed_effort());
+      return foot::typed_effort(
+        ctx,
+        id,
+        (&self.own_effort, view.model.is_some(), keys_at.is_some()),
+        &submit,
+      );
+    }
+    effort::row(
+      ctx,
+      id,
+      (view.efforts, props.chosen.effort.as_deref()),
+      keys_at,
+      &actions.effort_chooser(),
+    )
+  }
+
+  /// The notes under the efforts: the shown connection's, then the picker's own.
+  fn notes(&self, props: &RunsOnPicker, shown: Option<usize>) -> Option<Element> {
+    let own = shown.and_then(|at| props.connections[at].notice.as_ref());
+    let notes: Vec<&Notice> = own.into_iter().chain(props.notes.iter()).collect();
+    (!notes.is_empty()).then(|| foot::notes(&props.id, &notes))
   }
 
   /// The rail and the line under it: of the connection shown, or of one the keys tried to choose that cannot be.
@@ -333,6 +361,7 @@ impl Panel {
       cursor: self.cursor.clone(),
       refused: self.refused.clone(),
       focus: self.focus.clone(),
+      own_effort: self.own_effort.clone(),
       scroll: self.scroll.clone(),
       rail_scroll: self.rail_scroll.clone(),
     }

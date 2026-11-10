@@ -191,7 +191,12 @@ fn item(
     .child(button)
     .with_children(connection.limit.then(|| limit_dot(id, &connection.id)))
     .with_children(shown.then(|| shown_bar(id, &connection.id)));
-  Tooltip::new(format!("{id}-connection-{}-tip", connection.id), tip).wrap(ctx, item)
+  let tooltip = Tooltip::new(format!("{id}-connection-{}-tip", connection.id), tip);
+  let tooltip = match &connection.tip_note {
+    Some(note) => tooltip.note(note.clone()),
+    None => tooltip,
+  };
+  tooltip.wrap(ctx, item)
 }
 
 /// The `warning` dot of a plan at its limit, at the item's top right.

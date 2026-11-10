@@ -5,13 +5,14 @@
 use orchester_core::{
   account::AccountState,
   id::ChatId,
-  orchestrator::{Chat, Subscription, WatchTarget},
+  orchestrator::{Chat, OrchestratorSettings, Subscription, WatchTarget},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::AppDb;
 use orchester_workspace::orchestrator::{
   chat::{ChatView, EndMoved},
+  settings::{Keep, save_in},
   waits::{MergeChecks, Switches, follow_in},
 };
 
@@ -130,4 +131,61 @@ fn seed_orchestrator_leads_has_led_modules_a_task_the_project_and_an_already_led
     leading.chat.id(),
     "the Orchestrator opens on the leading conversation"
   );
+}
+
+#[test]
+fn seed_orchestrator_another_account_keeps_a_session_on_works_account_and_runs_on_work() {
+  let seed = Seed::of("orchestrator-another-account");
+  let asked = conversation(&seed, "What runs?");
+  let session = asked.chat.session().expect("the conversation has a session");
+  let (published, settings) = seed
+    .db()
+    .orchestrator_published()
+    .expect("read")
+    .expect("the Orchestrator is set up");
+  assert_eq!(published, 1);
+  assert_eq!(
+    session.connection,
+    settings.connection(),
+    "on the connection it runs on"
+  );
+  let app = AppDb::open(&seed.seeded.app_database).expect("app database");
+  let work = app
+    .agent_accounts()
+    .expect("accounts")
+    .into_iter()
+    .find(|account| account.name().is_some_and(|name| name.as_str() == "Work"))
+    .expect("an account Work");
+  assert_eq!(session.account, work.id(), "on Work's account");
+}
+
+#[test]
+fn seed_orchestrator_over_draft_holds_a_draft_over_the_published_version() {
+  let seed = Seed::of("orchestrator-over-draft");
+  let (_, published) = seed
+    .db()
+    .orchestrator_published()
+    .expect("read")
+    .expect("the Orchestrator is set up");
+  let draft = seed
+    .db()
+    .orchestrator_draft()
+    .expect("read")
+    .expect("a draft is saved over it");
+  assert_eq!(draft.connection(), published.connection());
+  assert_ne!(draft, published, "the draft differs from what is published");
+}
+
+#[test]
+fn seed_orchestrator_publish_refused_refuses_a_new_version_and_keeps_the_published_one() {
+  let seed = Seed::of("orchestrator-publish-refused");
+  let (published, settings) = seed
+    .db()
+    .orchestrator_published()
+    .expect("read")
+    .expect("the Orchestrator is set up");
+  let other = OrchestratorSettings::new(settings.connection(), settings.model().clone(), Some("low".to_owned()));
+  save_in(seed.repo(), &other, Keep::Publish).expect_err("the database refuses the version");
+  let (after, kept) = seed.db().orchestrator_published().expect("read").expect("still set up");
+  assert_eq!((after, kept), (published, settings), "nothing was published");
 }

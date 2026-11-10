@@ -1298,7 +1298,8 @@
   },
   "pipelines": {
     "flow": {
-      "then": "→"
+      "then": "→",
+      "unreadable": "A pipeline in this list could not be read any more. Try again."
     },
     "count": {
       "step": {

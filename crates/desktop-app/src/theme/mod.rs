@@ -28,6 +28,7 @@ mod delivery;
 mod dialog;
 mod failure;
 mod files;
+mod flow;
 mod fonts;
 mod form;
 mod groups;
@@ -96,6 +97,7 @@ pub use self::{
   dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, NARROW_DIALOG_WIDTH},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
+  flow::FlowText,
   fonts::mono_space,
   groups::GroupText,
   hub::{HubSpacing, HubText},
@@ -110,7 +112,7 @@ pub use self::{
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{
     LEADS_HINT_OPACITY, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar,
-    picker_scrollbar, watch_list_scrollbar,
+    watch_list_scrollbar,
   },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
