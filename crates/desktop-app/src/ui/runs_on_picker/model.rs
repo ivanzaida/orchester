@@ -76,7 +76,7 @@ pub struct Connection {
   pub unavailable: Option<Arc<str>>,
   /// A second line under its name, and whether it warns.
   pub detail: Option<Detail>,
-  /// What its tooltip says under its name (*Another account starts a new session…*).
+  /// What its tooltip says under its name (*Choosing it starts a new session…*).
   pub tip_note: Option<Arc<str>>,
   /// Search takes a model of the person's own (*Search or type a model…*): what the connection lists is not all it
   /// takes.

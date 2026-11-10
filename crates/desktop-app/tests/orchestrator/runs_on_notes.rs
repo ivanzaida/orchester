@@ -64,7 +64,7 @@ fn orchestrator_picker_says_a_connection_that_is_no_sign_in_starts_a_new_session
   rest_on(&mut screen, &on_rail(deepseek.id()));
   assert_eq!(
     screen.text(&format!("{}-tip-tooltip", on_rail(deepseek.id()))),
-    "DeepSeek · api.deepseek.com Another account starts a new session: earlier messages aren't remembered.",
+    "DeepSeek · api.deepseek.com Choosing it starts a new session: earlier messages aren't remembered.",
     "a switch to an API provider starts one"
   );
   rest_on(&mut screen, &on_rail(at_work));

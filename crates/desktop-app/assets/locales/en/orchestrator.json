@@ -101,7 +101,8 @@
       "keyGone": "Its key's secret is missing",
       "sentTo": "Prompts, repository content and command output go to {{host}} under its terms.",
       "overDraft": "Choosing here publishes a new version and replaces the draft saved in Orchestrator settings.",
-      "newSession": "Another account starts a new session: earlier messages aren't remembered.",
+      "newSession": "Choosing it starts a new session: earlier messages aren't remembered.",
+      "newSessionStarted": "A new session started: earlier messages aren't remembered.",
       "noConnection": "No connection to run the Orchestrator yet. Add one in Connections.",
       "connections": "Connections ↗"
     },

@@ -451,7 +451,7 @@ fn orchestrator_picker_says_in_tooltips_that_another_account_starts_a_new_sessio
   rest_on(&mut screen, &on_rail(at_home));
   assert_eq!(
     screen.text(&format!("{}-tip-tooltip", on_rail(at_home))),
-    "Claude Code · Home Another account starts a new session: earlier messages aren't remembered."
+    "Claude Code · Home Choosing it starts a new session: earlier messages aren't remembered."
   );
   rest_on(&mut screen, &on_rail(at_work));
   assert_eq!(
@@ -476,7 +476,7 @@ fn orchestrator_picker_says_in_tooltips_that_another_account_starts_a_new_sessio
   assert!(
     screen
       .text("orchestrator-runs-on-chip-tooltip")
-      .ends_with("Another account starts a new session: earlier messages aren't remembered."),
+      .ends_with("A new session started: earlier messages aren't remembered."),
     "{}",
     screen.text("orchestrator-runs-on-chip-tooltip")
   );

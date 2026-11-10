@@ -274,7 +274,7 @@ impl RunsOnPicker {
     };
     let tooltip = Tooltip::new("orchestrator-runs-on-chip", ctx.t("orchestrator.runsOn.tip")).silent(open);
     let tooltip = if switched {
-      tooltip.note(ctx.t("orchestrator.runsOn.newSession"))
+      tooltip.note(ctx.t("orchestrator.runsOn.newSessionStarted"))
     } else {
       tooltip
     };

@@ -220,7 +220,7 @@ fn the_picker_shows_its_own_notes_under_the_efforts_whichever_connection_is_show
 fn a_tooltip_can_carry_a_note_under_its_title() {
   let others = with("home", |connection| {
     connection.tip = "Claude Code · Home".into();
-    connection.tip_note = Some("Another account starts a new session: earlier messages aren't remembered.".into());
+    connection.tip_note = Some("Choosing it starts a new session: earlier messages aren't remembered.".into());
   });
   let mut open = open_over(others, chosen());
   let kit = &mut open.kit;
@@ -229,7 +229,7 @@ fn a_tooltip_can_carry_a_note_under_its_title() {
     kit.texts(&format!("{}-tip-tooltip", item("home"))),
     [
       "Claude Code · Home",
-      "Another account starts a new session: earlier messages aren't remembered."
+      "Choosing it starts a new session: earlier messages aren't remembered."
     ]
   );
   kit.rest_on(&item("team"));
@@ -259,7 +259,7 @@ fn the_list_opens_scrolled_to_the_chosen_model() {
 fn a_tooltip_note_wraps_at_220_in_a_panel_236_wide() {
   let others = with("home", |connection| {
     connection.tip = "Claude Code · Home".into();
-    connection.tip_note = Some("Another account starts a new session: earlier messages aren't remembered.".into());
+    connection.tip_note = Some("Choosing it starts a new session: earlier messages aren't remembered.".into());
   });
   let mut open = open_over(others, chosen());
   let kit = &mut open.kit;
