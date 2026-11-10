@@ -34,6 +34,8 @@ pub(super) struct Shown<'a> {
   pub selected: Option<ResourceId>,
   pub navigation: &'a Navigation,
   pub now: Timestamp,
+  /// The pipeline New task offers first, which its row tags.
+  pub default: Option<ResourceId>,
 }
 
 pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {

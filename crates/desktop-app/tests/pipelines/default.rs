@@ -1,33 +1,65 @@
-//! The project's default pipeline (ORC-106): made from a published row's `…` menu, shown with a *Default* chip,
-//! stored with the project and chosen at first in New task; and *Duplicate*, which opens New pipeline copying it.
+//! The project's default pipeline (ORC-106): made from the Pipelines hub's panel `…` menu (PV2-12), shown with a *Default*
+//! tag on its row and chip in its panel, stored with the project and chosen at first in New task; and *Duplicate*, which
+//! opens New pipeline copying it.
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::{resource::Pipeline, store::ResourceStore};
+use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore};
 
 use crate::{pipelines_support::Editor, support::project_id};
 
+/// Opens the hub on `id` and its panel's ⋯ menu.
+fn open_menu(editor: &mut Editor, id: ResourceId) {
+  editor.go(ProjectPage::Pipelines);
+  editor.until("the list", |e| e.exists(&format!("pipeline-hub-row-{id}")));
+  editor.click(&format!("pipeline-hub-row-{id}"));
+  editor.until("the panel", |e| {
+    e.exists("pipeline-hub-more") && e.text("team-hub-panel-title") == "Delivery"
+  });
+  editor.click("pipeline-hub-more");
+  editor.until("the menu", |e| e.exists("pipeline-hub-menu-default"));
+}
+
 #[test]
-#[ignore = "the library rows and their … menu belong to the page a local project no longer has (Pipelines v2 PV2-04); the hub's … menu (PV2-12) brings Duplicate back and the person decides where Make default goes"]
-fn pipelines_default_is_made_from_the_row_menu_and_new_task_chooses_it() {
+fn pipelines_default_is_made_from_the_hub_menu_and_new_task_chooses_it() {
   let mut editor = Editor::new();
   let id = editor.published();
   let draft = editor.empty("Draft only");
-  editor.go(ProjectPage::Pipelines);
-  editor.until("the list", |e| e.exists(&format!("pipeline-row-{id}")));
-  assert!(
-    !editor.exists(&format!("pipeline-row-menu-{draft}")),
-    "a draft-only row has no menu"
+  open_menu(&mut editor, id);
+  assert_eq!(
+    editor.text("pipeline-hub-menu-default-label"),
+    "Make default for New task"
   );
-  assert!(editor.text("pipelines-count").contains("2 pipelines · 1 published"));
-  editor.click(&format!("pipeline-row-menu-{id}"));
-  assert!(editor.exists(&format!("pipeline-row-open-{id}")));
-  assert!(editor.exists(&format!("pipeline-row-duplicate-{id}")));
-  editor.click(&format!("pipeline-row-default-{id}"));
-  editor.until("the Default chip", |e| e.exists(&format!("pipeline-row-{id}-default")));
+  assert!(editor.exists("pipeline-hub-menu-duplicate"));
+  assert!(!editor.exists(&format!("pipeline-hub-row-{id}-tag")), "no default yet");
+  editor.click("pipeline-hub-menu-default");
+  editor.until("the Default tag on the row", |e| {
+    e.exists(&format!("pipeline-hub-row-{id}-tag"))
+  });
+  assert_eq!(editor.text(&format!("pipeline-hub-row-{id}-tag")), "Default");
   assert_eq!(editor.db().default_pipeline().expect("the setting reads"), Some(id));
-  editor.click(&format!("pipeline-row-menu-{id}"));
   assert!(
-    !editor.exists(&format!("pipeline-row-default-{id}")),
-    "the default is not offered again"
+    !editor.exists(&format!("pipeline-hub-row-{draft}-tag")),
+    "only the default is tagged"
+  );
+  let mut chips = Vec::new();
+  for index in 0..4 {
+    let label = format!("pipeline-hub-chip-{index}-label");
+    if editor.exists(&label) {
+      chips.push(editor.text(&label));
+    }
+  }
+  assert_eq!(
+    chips.last().map(String::as_str),
+    Some("Default"),
+    "the panel's chips: {chips:?}"
+  );
+  editor.click("pipeline-hub-more");
+  editor.until("the menu", |e| e.exists("pipeline-hub-menu-default"));
+  assert_eq!(editor.text("pipeline-hub-menu-default-label"), "Default for New task");
+  editor.click("pipeline-hub-menu-default");
+  assert_eq!(
+    editor.db().default_pipeline().expect("the setting reads"),
+    Some(id),
+    "the default row of the menu is inert"
   );
   editor
     .window
@@ -43,20 +75,48 @@ fn pipelines_default_is_made_from_the_row_menu_and_new_task_chooses_it() {
 }
 
 #[test]
-#[ignore = "the library rows and their … menu belong to the page a local project no longer has (Pipelines v2 PV2-04); the hub's … menu (PV2-12) brings Duplicate back and the person decides where Make default goes"]
-fn pipelines_duplicate_opens_new_pipeline_copying_the_row() {
+fn pipelines_a_draft_only_pipeline_can_be_neither_made_the_default_nor_duplicated() {
+  let mut editor = Editor::new();
+  let draft = editor.empty("Draft only");
+  editor.go(ProjectPage::Pipelines);
+  editor.until("the list", |e| e.exists(&format!("pipeline-hub-row-{draft}")));
+  editor.until("the panel", |e| e.exists("pipeline-hub-more"));
+  editor.click("pipeline-hub-more");
+  editor.until("the menu", |e| e.exists("pipeline-hub-menu-default"));
+  assert!(
+    editor
+      .text("pipeline-hub-menu-default-detail")
+      .starts_with("Publish it first")
+  );
+  assert!(
+    editor
+      .text("pipeline-hub-menu-duplicate-detail")
+      .starts_with("Publish it first")
+  );
+  editor.click("pipeline-hub-menu-default");
+  editor.click("pipeline-hub-menu-duplicate");
+  assert_eq!(editor.db().default_pipeline().expect("the setting reads"), None);
+  assert!(
+    !matches!(
+      editor.window.navigation().route_now(),
+      Route::Project(_, ProjectPage::CopyPipeline(_))
+    ),
+    "a pipeline with no published version is not copied"
+  );
+}
+
+#[test]
+fn pipelines_duplicate_opens_new_pipeline_copying_the_pipeline() {
   let mut editor = Editor::new();
   let id = editor.published();
-  editor.go(ProjectPage::Pipelines);
-  editor.until("the list", |e| e.exists(&format!("pipeline-row-{id}")));
-  editor.click(&format!("pipeline-row-menu-{id}"));
-  editor.click(&format!("pipeline-row-duplicate-{id}"));
+  open_menu(&mut editor, id);
+  editor.click("pipeline-hub-menu-duplicate");
   editor.until("New pipeline", |e| e.exists("pipeline-name"));
   assert_eq!(
     editor.window.navigation().route_now(),
     Route::Project(project_id(), ProjectPage::CopyPipeline(id))
   );
-  editor.until("the row's pipeline chosen to copy", |e| {
+  editor.until("the pipeline chosen to copy", |e| {
     e.text("pipeline-copy").contains("Delivery")
   });
   // With Copy chosen, its row and the page's note say what it copies (`04b` `I49xek`).

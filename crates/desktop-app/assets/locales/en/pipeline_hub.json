@@ -14,7 +14,8 @@
       "archived": "Archived"
     },
     "row": {
-      "draft": "draft"
+      "draft": "draft",
+      "default": "Default"
     },
     "line": {
       "notPublished": "Not published yet",
@@ -28,7 +29,35 @@
     "chip": {
       "ready": "Ready",
       "draft": "draft",
-      "archived": "Archived"
+      "archived": "Archived",
+      "default": "Default"
+    },
+    "menu": {
+      "more": "More actions for {{name}}",
+      "rename": "Rename",
+      "duplicate": "Duplicate",
+      "duplicateDraft": "Publish it first: a copy starts from a published version.",
+      "makeDefault": "Make default for New task",
+      "isDefault": "Default for New task",
+      "makeDefaultDraft": "Publish it first: New task lists only published pipelines.",
+      "archive": "Archive",
+      "usedOne": "1 task",
+      "used": "{{count}} tasks"
+    },
+    "rename": {
+      "label": "Pipeline name",
+      "failed": "Not renamed. {{reason}}",
+      "hint": "Enter to save · Esc to cancel"
+    },
+    "default": {
+      "failed": "Not made the default. {{reason}}"
+    },
+    "archived": {
+      "title": "Archived: hidden from the lists and New task",
+      "notice": "Archiving stopped the runs that used {{name}}. Restore puts it back in the lists and New task as it was; those runs stay stopped, so run them again to use it.",
+      "restore": "Restore {{name}}",
+      "restoreHint": "Back in the lists and New task at once · stopped runs stay stopped",
+      "failed": "Not restored. {{reason}}"
     },
     "panel": {
       "where": "Pipeline",

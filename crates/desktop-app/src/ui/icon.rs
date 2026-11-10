@@ -281,6 +281,7 @@ icons! {
   SquarePen => '\u{e172}',
   SquarePlus => '\u{e173}',
   SquareTerminal => '\u{e20a}',
+  Star => '\u{e176}',
   Sun => '\u{e178}',
   Table => '\u{e17d}',
   Tag => '\u{e17f}',

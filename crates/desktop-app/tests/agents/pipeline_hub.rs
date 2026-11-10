@@ -20,12 +20,12 @@ use orchester_store::ProjectDb;
 
 use super::{harness::Agents, support::project_id, team_hub::team};
 
-fn view(filter: PipelinesFilter, item: Option<ResourceId>) -> Route {
+pub(super) fn view(filter: PipelinesFilter, item: Option<ResourceId>) -> Route {
   Route::Project(project_id(), ProjectPage::pipelines(PipelinesView::new(filter, item)))
 }
 
 /// Opens the hub on `filter` with `item` named and waits until the list is read.
-fn open(agents: &mut Agents, filter: PipelinesFilter, item: Option<ResourceId>) {
+pub(super) fn open(agents: &mut Agents, filter: PipelinesFilter, item: Option<ResourceId>) {
   agents.window.navigation().go(view(filter, item));
   agents.until("the hub", |s| {
     (s.exists("pipeline-hub-filter") && s.exists("pipeline-hub-master-detail")) || s.exists("pipeline-hub-empty")
@@ -34,7 +34,7 @@ fn open(agents: &mut Agents, filter: PipelinesFilter, item: Option<ResourceId>) 
 
 /// A pipeline called `name` whose steps run `profile` (`None`: a step with no agent profile), published or left a
 /// draft.
-fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>, published: bool) -> ResourceId {
+pub(super) fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>, published: bool) -> ResourceId {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   for step in ["Plan", "Build"] {
     let key = edit.add_step(Name::new(step).expect("name"), None);
@@ -64,7 +64,7 @@ fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>, published:
   id
 }
 
-fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) {
+pub(super) fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) {
   let details = (0..tasks)
     .map(|number| TaskDetails {
       title: Name::new(&format!("Task {number}")).expect("name"),
@@ -82,7 +82,7 @@ fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) {
 
 /// A project with a ready pipeline that three tasks use, a draft and one whose profile does not exist (so it cannot
 /// run), with the hub not opened yet.
-fn setup() -> (Agents, [ResourceId; 3]) {
+pub(super) fn setup() -> (Agents, [ResourceId; 3]) {
   let agents = Agents::new(true);
   let builder = agents.profile(true);
   let ready = pipeline(&agents, "Feature delivery", Some(builder), true);
@@ -93,7 +93,7 @@ fn setup() -> (Agents, [ResourceId; 3]) {
 }
 
 /// [`setup`] with the hub open on All.
-fn project() -> (Agents, [ResourceId; 3]) {
+pub(super) fn project() -> (Agents, [ResourceId; 3]) {
   let (mut agents, ids) = setup();
   open(&mut agents, PipelinesFilter::All, None);
   (agents, ids)
