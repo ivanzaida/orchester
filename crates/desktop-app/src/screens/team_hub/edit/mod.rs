@@ -33,7 +33,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-pub(super) use self::view::{Parts, View};
+pub(super) use self::view::{Parts, View, hint};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   services::Services,

@@ -367,7 +367,6 @@
       "failed": {
         "title": "Couldn't save {{version}}"
       },
-      "fromTeamEditing": "· editing · Save publishes it to every computer",
       "unreachable": {
         "title": "Can't reach the team · nothing was saved"
       },

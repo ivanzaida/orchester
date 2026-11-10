@@ -135,21 +135,6 @@ pub(in crate::screens) fn head_named(
     .with_children(end)
 }
 
-/// What a head puts at its end: `edit`, then the … menu `more` an admin has, 8 apart.
-pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<Element> {
-  match (edit, more) {
-    (Some(edit), Some(more)) => Some(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(edit)
-        .child(more)
-        .into(),
-    ),
-    (edit, more) => edit.or(more),
-  }
-}
-
 pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
   chips_saying(ctx, entry, words::chip(ctx, listing, entry), None)
 }
