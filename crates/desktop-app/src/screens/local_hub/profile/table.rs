@@ -72,7 +72,11 @@ pub(super) fn section(ctx: &mut Ctx, rows: &Rows<'_>) -> Column {
   list.push(connection(ctx, rows));
   list.push(model(ctx, rows));
   list.push(effort(ctx, rows));
+  // The lists in the order every profile form has them (A26, L17): instructions, MCP servers, tools, skills, secrets.
+  list.push(given(ctx, rows, GivenKind::Instruction));
   list.push(mcp_servers(ctx, rows));
+  list.push(given(ctx, rows, GivenKind::Tool));
+  list.push(given(ctx, rows, GivenKind::Skill));
   if !profile.secrets.is_empty() {
     list.push(rows::row(
       "local-hub-profile-secrets",
@@ -84,7 +88,6 @@ pub(super) fn section(ctx: &mut Ctx, rows: &Rows<'_>) -> Column {
       ),
     ));
   }
-  list.extend(GivenKind::ALL.map(|kind| given(ctx, rows, kind)));
   rows::section("local-hub-profile", &ctx.t("local_hub.profile.title"), Vec::new(), list)
 }
 

@@ -99,6 +99,8 @@ where
     .element_ref(self.anchor.clone());
     let button = if locked {
       button.disabled()
+    } else if items.is_empty() {
+      button.unavailable_with_icon(ctx.t("local_hub.profile.nothingToAdd"))
     } else {
       button.on_click(move || toggle.update(|open| *open = !*open))
     };

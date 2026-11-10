@@ -109,6 +109,7 @@
       "none": "None",
       "version": "{{version}} · published {{date}}",
       "add": "Add",
+      "nothingToAdd": "There is nothing else of this kind to give",
       "addConnection": "Add",
       "instructions": "Instructions",
       "skills": "Skills",

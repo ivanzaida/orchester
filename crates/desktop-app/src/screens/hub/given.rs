@@ -86,18 +86,17 @@ where
       })
       .collect()
   };
-  let add = (!items.is_empty()).then(|| {
-    add_menu::add(
-      ctx,
-      add_menu::Props {
-        what: list.what,
-        items,
-        label: ctx.t("local_hub.profile.add"),
-        locked: list.locked,
-        on_toggle: list.on_toggle,
-      },
-    )
-  });
+  // *Add* is always there, in the same place in every list; with nothing to offer it says so.
+  let add = add_menu::add(
+    ctx,
+    add_menu::Props {
+      what: list.what,
+      items,
+      label: ctx.t("local_hub.profile.add"),
+      locked: list.locked,
+      on_toggle: list.on_toggle,
+    },
+  );
   let value = Row::new()
     .id(value_id)
     .width(Dimension::Pct(100.0))
@@ -105,6 +104,6 @@ where
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .with_children(tags)
-    .with_children(add);
+    .child(add);
   rows::row(&list.id, &list.label, list.sub, value)
 }
