@@ -10,7 +10,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, StepCard};
+use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, ReturnsTo, StepCard};
 
 use super::words;
 use crate::{
@@ -114,20 +114,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
       handled,
     ));
   if let Some(route) = &step.on_failure {
-    body = body.child(
-      Row::new()
-        .id(format!("{id}-failure"))
-        .padding(Padding::new().left(Dimension::Px(indent)))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
-        .child(
-          Text::new(&words::failure(ctx, step, route))
-            .id(format!("{id}-failure-words"))
-            .variant(FlowText::Line.role())
-            .color(PaletteColor::TextMuted),
-        ),
-    );
+    body = body.child(failure_line(ctx, (&id, step, route), indent));
   }
   let open = open.map(|open| {
     if place == Place::InGroup {
@@ -141,6 +128,22 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .describe("number", words::number(step.number))
     .describe("state", if not_ready { "not_ready" } else { "ready" })
     .into()
+}
+
+/// Where a failure sends the run, under what the card runs: *↵ changes requested → 03*.
+fn failure_line(ctx: &lurq::app::ctx::Ctx, (id, step, route): (&str, &StepCard, &ReturnsTo), indent: f32) -> Row {
+  Row::new()
+    .id(format!("{id}-failure"))
+    .padding(Padding::new().left(Dimension::Px(indent)))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(&words::failure(ctx, step, route))
+        .id(format!("{id}-failure-words"))
+        .variant(FlowText::Line.role())
+        .color(PaletteColor::TextMuted),
+    )
 }
 
 /// `line`, standing under the name of a card that has its handle.
