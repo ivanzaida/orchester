@@ -10,7 +10,12 @@ use orchester_core::{
   resource::{Instruction, ResourceBody, Skill},
 };
 use orchester_workspace::{
-  agents::{data::ProjectAgents, local_hub::LocalHub, team_hub::TeamHubRead},
+  agents::{
+    data::ProjectAgents,
+    local_given::{GivenLists, offered_in},
+    local_hub::LocalHub,
+    team_hub::TeamHubRead,
+  },
   background,
   instructions::data::ProjectInstructions,
   messages::{self, Message},
@@ -114,9 +119,22 @@ fn published_of<T: ResourceBody + Clone>(
   Ok(published)
 }
 
-/// The project's agent connections, which the form that makes a profile takes its CLI and model choices from. Not held
-/// with the hub's reads: the form shows its fields before they are read.
+/// What the form that makes a profile chooses from: the project's agent connections (its CLI and model choices) and
+/// MCP servers, and the project's instructions, skills and tools it can give its agents.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileOffer {
+  pub agents: ProjectAgents,
+  pub given: GivenLists,
+}
+
+/// [`ProfileOffer`] of the project at `root`. Not held with the hub's reads: the form shows its fields before they are
+/// read.
 #[lurq::query(stale_time = "24h", gc_time = "24h")]
-pub async fn profile_form(_session: Session, root: PathBuf) -> Result<ProjectAgents, Message> {
-  background::run(move || ProjectAgents::load_in(&root).map_err(|error| messages::store_error(&error))).await?
+pub async fn profile_form(_session: Session, root: PathBuf) -> Result<ProfileOffer, Message> {
+  background::run(move || {
+    let agents = ProjectAgents::load_in(&root).map_err(|error| messages::store_error(&error))?;
+    let given = offered_in(&root).map_err(|error| messages::store_error(&error))?;
+    Ok(ProfileOffer { agents, given })
+  })
+  .await?
 }

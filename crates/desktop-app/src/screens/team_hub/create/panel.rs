@@ -22,7 +22,6 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
-  agents::data::ProjectAgents,
   connections::data::ProjectConnections,
   sharing::{team::TeamConfiguration, team_edit::Refusal},
 };
@@ -42,10 +41,11 @@ use crate::{
   routes::{HubView, ProjectPage, Route},
   screens::{
     connections::data,
-    hub::team::admins,
+    hub::{profile_form::Offer, team::admins},
     local_hub::view_of,
     team_hub::{bar, model::Kind, panel as shared, rows},
   },
+  services::Services,
   theme::{HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -174,14 +174,14 @@ impl Component for NewPanel {
     let pending = state.is_pending();
     let refused = state.error.filter(|_| !pending);
     let refused_name = taken_by_server(refused.as_ref());
-    let agents = self.agents(ctx, kind, &repo_root);
+    let offer = self.offer(ctx, (kind, mode), &repo_root);
     let connections = self.connections(ctx, (kind, mode), &repo_root);
     let shown = Shown {
       mode,
       taken: &taken,
       tried: self.tried.get(),
       locked: pending,
-      agents: agents.as_ref(),
+      offer: &offer,
       connections: connections.as_ref(),
       first: &self.first,
       refused_name: refused_name.as_deref(),
@@ -200,6 +200,7 @@ impl Component for NewPanel {
       .spacing(HubSpacing::BodyTop.role())
       .child(head(ctx, kind, mode))
       .with_children(refusal(ctx, refused.as_ref(), team.as_ref()))
+      .with_children(body.lead)
       .with_children(sections(ctx, (kind, mode), body.rows, body.computer))
       .with_children(body.overlay);
     let scroll = ScrollVertical::new(content)
@@ -221,13 +222,16 @@ impl Component for NewPanel {
 }
 
 impl NewPanel {
-  /// This computer's connections, which the profile form's CLI and model choices come from, from the session's cache.
-  fn agents(&self, ctx: &mut Ctx, kind: Kind, root: &Path) -> Option<ProjectAgents> {
+  /// What the profile form's fields offer: this computer's connections, which its CLI and model choices come from,
+  /// and the resources its lists give, the team's live ones or the project's.
+  fn offer(&self, ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Offer {
     if kind != Kind::Profile {
-      return None;
+      return Offer::default();
     }
     let session = Session::of(ctx);
-    queries::state(&ctx.query(hub::profile_form(session, root.to_path_buf()))).data
+    let read = queries::state(&ctx.query(hub::profile_form(session, root.to_path_buf()))).data;
+    let config = (mode == Mode::Team).then(|| Services::of(ctx).workspace.team_read(root).config().cloned());
+    Offer::read(read.as_ref(), config.as_ref().map(|config| config.as_deref()))
   }
 
   /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from.

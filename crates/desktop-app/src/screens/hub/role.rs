@@ -13,7 +13,7 @@ use lurq::{
     theme::PaletteColor,
   },
   components::Row,
-  core::{Ref, Signal},
+  core::{ElementRef, Ref, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -49,12 +49,18 @@ pub(crate) struct Props {
   pub on_role: Change,
   pub on_responsibilities: Change,
   pub on_instructions: Change,
+  /// What the role's field says instead of its own error, in `danger`: a new profile's name is taken.
+  pub name_said: Option<Arc<str>>,
+  /// The role's field, which a form that makes a profile focuses when it opens.
+  pub first: Option<ElementRef>,
 }
 
-/// The props are equal when they show the same: the handlers are made anew on every render.
+/// The props are equal when they show the same: the handlers are made anew on every render, and the focused field is
+/// the same element.
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    (&self.id, &self.role, &self.errors, self.locked) == (&other.id, &other.role, &other.errors, other.locked)
+    (&self.id, &self.role, &self.errors, self.locked, &self.name_said)
+      == (&other.id, &other.role, &other.errors, other.locked, &other.name_said)
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -85,17 +91,17 @@ impl Component for RoleSection {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    self.role.follow(&props.role.role, props.on_role);
+    self.role.follow(&props.role.role, props.on_role.clone());
     self
       .responsibilities
-      .follow(&props.role.responsibilities, props.on_responsibilities);
+      .follow(&props.role.responsibilities, props.on_responsibilities.clone());
     self
       .instructions
-      .follow(&props.role.instructions, props.on_instructions);
-    let errors = props.errors.unwrap_or_default();
+      .follow(&props.role.instructions, props.on_instructions.clone());
+    let errors = props.errors.clone().unwrap_or_default();
     let id = &props.id;
     let rows = vec![
-      self.name_row(ctx, id, (errors.role.as_ref(), props.locked)),
+      self.name_row(ctx, &props, errors.role.as_ref()),
       self.responsibilities_row(ctx, id, props.locked),
       self.instructions_row(ctx, id, (errors.instructions.as_ref(), props.locked)),
     ];
@@ -104,16 +110,25 @@ impl Component for RoleSection {
 }
 
 impl RoleSection {
-  /// *Role*: the role's name, in a single line.
-  fn name_row(&self, ctx: &mut Ctx, id: &str, (error, locked): (Option<&Message>, bool)) -> Row {
+  /// *Role*: the role's name, in a single line; what `props` says of it instead of `error`, when it says something.
+  fn name_row(&self, ctx: &mut Ctx, props: &Props, error: Option<&Message>) -> Row {
+    let id = &props.id;
     let label = ctx.t("hub.role.name");
-    let input = field(
-      FieldInput::new(format!("{id}-name-input"), label.clone(), self.role.text.clone())
-        .text_style(HubText::Value.role()),
-      error.is_some(),
-      locked,
-    );
-    rows::row(&format!("{id}-name"), &label, refusal(ctx, error), input.render(ctx))
+    let said = props
+      .name_said
+      .clone()
+      .or_else(|| error.map(|error| message_text(ctx, error)));
+    let mut input = FieldInput::new(format!("{id}-name-input"), label.clone(), self.role.text.clone())
+      .text_style(HubText::Value.role());
+    if let Some(first) = &props.first {
+      input = input.element(first.clone());
+    }
+    let input = field(input, said.is_some(), props.locked);
+    let sub = said.map(|words| Sub {
+      words,
+      color: PaletteColor::Danger,
+    });
+    rows::row(&format!("{id}-name"), &label, sub, input.render(ctx))
   }
 
   /// *Responsibilities*: what it answers for, in a text area two lines high.

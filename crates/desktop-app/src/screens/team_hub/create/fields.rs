@@ -11,21 +11,21 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{
-  agents::data::ProjectAgents, app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections,
-  messages::Message,
-};
+use orchester_workspace::{app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections, messages::Message};
 
 use super::{
   super::rows::{self, Key, Sub},
   mode::Mode,
   work::Make,
 };
-use crate::ui::{
-  field::{FieldInput, SelectField},
-  message::message_text,
-  pressable::Focus,
-  tabs::{Segment, SegmentFace, segmented},
+use crate::{
+  screens::hub::profile_form::Offer,
+  ui::{
+    field::{FieldInput, SelectField},
+    message::message_text,
+    pressable::Focus,
+    tabs::{Segment, SegmentFace, segmented},
+  },
 };
 
 /// What every form reads when it is drawn.
@@ -38,8 +38,9 @@ pub(super) struct Shown<'a> {
   pub tried: bool,
   /// Create is being taken, or has been: the fields are not changed meanwhile.
   pub locked: bool,
-  /// What this computer has to offer a profile (its connections); `None` while it is read.
-  pub agents: Option<&'a ProjectAgents>,
+  /// What a profile's fields offer: this computer's connections and the resources its lists give (empty while they
+  /// are read).
+  pub offer: &'a Offer,
   /// What this computer's MCP servers and secrets are, which a local MCP server's form reads; `None` while it is read.
   pub connections: Option<&'a ProjectConnections>,
   /// The name field, which has the focus when the form opens (`Name` is focused in A7–A12).
@@ -53,6 +54,8 @@ pub(super) struct Shown<'a> {
 
 /// What a kind's form gives the panel.
 pub(super) struct Body {
+  /// A section of its own over the rows' (a profile's *Role*).
+  pub lead: Option<Element>,
   pub rows: Vec<Row>,
   /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
   pub computer: Option<&'static str>,
@@ -110,7 +113,7 @@ pub(in crate::screens::team_hub) enum Error {
 }
 
 impl Error {
-  fn words(&self, ctx: &Ctx) -> Arc<str> {
+  pub(super) fn words(&self, ctx: &Ctx) -> Arc<str> {
     match self {
       Self::Required => ctx.t("team_new.errors.required"),
       Self::Said(message) => message_text(ctx, message),

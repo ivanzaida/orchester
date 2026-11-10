@@ -93,8 +93,9 @@ configuration in its database as today.
   a team project (`team_no_drafts`). An admin edits a team profile, instruction, skill and command tool in place in the
   hub's panel (`A26`–`A31` in `acFkz`, `screens/team_hub/edit/`, `agents::team_body_edit`): Save publishes the next
   version at once, a newer version refuses it and reloads the panel, and while the server cannot be reached what was
-  typed stays with Save unavailable. Not edited there yet: a profile's Agent CLI and model, a skill's files, an HTTP or
-  database tool, and the leave guard of an unsaved team edit.
+  typed stays with Save unavailable. A profile is made and edited with one form (`screens/hub/profile_form/`):
+  the create form and the admin's edit have the same *Role*, Agent CLI, model and effort selects and lists with *Add*.
+  Not edited there yet: a skill's files, an HTTP or database tool, and the leave guard of an unsaved team edit.
 
 ## Open questions
 

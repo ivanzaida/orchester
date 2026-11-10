@@ -111,7 +111,7 @@ pub(super) fn builder_using(agents: &Agents, with_program: bool) -> ((ResourceId
 
 pub(super) fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the profile panel", |s| s.exists("team-hub-from-team-cli-value"));
+  agents.until("the profile panel", |s| s.exists("team-hub-from-team-cli"));
 }
 
 #[test]

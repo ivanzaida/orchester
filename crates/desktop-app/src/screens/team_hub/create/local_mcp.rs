@@ -37,6 +37,7 @@ impl Fields {
     let Some(listed) = shown.connections else {
       // The project's secrets and server names are read: the name can be typed meanwhile.
       return Body {
+        lead: None,
         rows: vec![self.name_row(ctx, shown, None)],
         computer: None,
         make: None,
@@ -91,6 +92,7 @@ impl Fields {
       on.set(now)
     }));
     Body {
+      lead: None,
       rows,
       computer: None,
       make: checked.ok().map(|draft| {

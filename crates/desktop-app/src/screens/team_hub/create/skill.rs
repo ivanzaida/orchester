@@ -69,6 +69,7 @@ impl Fields {
       ),
     ];
     Body {
+      lead: None,
       rows,
       computer: Some("team_new.computer.skill"),
       make: made(&name, &description),

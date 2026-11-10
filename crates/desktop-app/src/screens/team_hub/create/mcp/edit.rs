@@ -7,9 +7,12 @@ use orchester_core::connection::mcp::McpServerName;
 use orchester_workspace::app_mcp::setup::{Header, NewTeamMcpServer, Runs, team_mcp_server};
 
 use super::{Fields, INSIDE, Marks, PROGRAM_RUN, RUNS, RUNS_AS, WORKTREE, fields, lines_text};
-use crate::screens::team_hub::{
-  create::{fields::Shown, mode::Mode},
-  model::{Kind, Listing},
+use crate::screens::{
+  hub::profile_form::Offer,
+  team_hub::{
+    create::{fields::Shown, mode::Mode},
+    model::{Kind, Listing},
+  },
 };
 
 /// What an edit's rows need besides the fields.
@@ -93,7 +96,7 @@ impl Fields {
       taken: &taken,
       tried: true,
       locked: view.locked,
-      agents: None,
+      offer: &Offer::default(),
       connections: None,
       first: &first,
       refused_name: None,

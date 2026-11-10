@@ -16,7 +16,7 @@ use super::{
 };
 
 /// What the servers row says under its label while the choice is refused.
-const SERVERS_SAID: &str = "team-new-profile-servers-row-sub";
+const SERVERS_SAID: &str = "team-new-profile-mcp-sub";
 
 /// A profile chooses at most `McpServerSelection::MAX` servers: the form says so under the row and makes nothing, and
 /// the choice that fits is accepted again once one is taken off. (Choosing a server twice cannot be done in the form:
@@ -27,23 +27,25 @@ fn local_hub_create_a_profile_that_chooses_too_many_servers_says_so_under_the_ro
   let ids: Vec<_> = (0..=McpServerSelection::MAX)
     .map(|number| server(&agents, &format!("docs-{number:02}")))
     .collect();
+  // Tall enough that the servers' row under the role instructions is in the window, where a pointer presses it.
+  agents.window.tree.resize(1440, 2400);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Reviewer");
+  agents.set("team-new-profile-role-name-input", "Reviewer");
   choose(&mut agents, "team-new-profile-cli", "Codex");
   choose(&mut agents, "team-new-profile-model", "test-model");
 
   for id in &ids[..McpServerSelection::MAX] {
-    agents.click("local-hub-profile-add-server-button");
-    let item = format!("local-hub-profile-server-{id}");
+    agents.window.press("local-hub-profile-add-mcp-button");
+    let item = format!("local-hub-profile-mcp-{id}");
     agents.until("the menu", |s| s.exists(&item));
-    agents.click(&item);
+    agents.window.press(&item);
   }
   assert!(!agents.exists(SERVERS_SAID), "the most it takes is not refused");
 
-  agents.click("local-hub-profile-add-server-button");
-  let last = format!("local-hub-profile-server-{}", ids[McpServerSelection::MAX]);
+  agents.window.press("local-hub-profile-add-mcp-button");
+  let last = format!("local-hub-profile-mcp-{}", ids[McpServerSelection::MAX]);
   agents.until("the menu", |s| s.exists(&last));
-  agents.click(&last);
+  agents.window.press(&last);
   agents.until("the refusal", |s| {
     s.exists(SERVERS_SAID) && s.text(SERVERS_SAID) == "A profile chooses at most 20 MCP servers"
   });
@@ -55,10 +57,10 @@ fn local_hub_create_a_profile_that_chooses_too_many_servers_says_so_under_the_ro
     "a profile that chooses too many servers is not made"
   );
 
-  agents.click("local-hub-profile-add-server-button");
-  let first = format!("local-hub-profile-server-{}", ids[0]);
+  agents.window.press("local-hub-profile-add-mcp-button");
+  let first = format!("local-hub-profile-mcp-{}", ids[0]);
   agents.until("the menu", |s| s.exists(&first));
-  agents.click(&first);
+  agents.window.press(&first);
   agents.until("the refusal is gone", |s| !s.exists(SERVERS_SAID));
 }
 
