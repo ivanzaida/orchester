@@ -103,9 +103,7 @@
     },
     "profile": {
       "title": "Profile",
-      "connection": "Connection",
       "ofItsKind": "{{count}} of its kind on this computer",
-      "effortDefault": "CLI default",
       "none": "None",
       "version": "{{version}} · published {{date}}",
       "add": "Add",
@@ -113,8 +111,7 @@
       "addConnection": "Add",
       "instructions": "Instructions",
       "skills": "Skills",
-      "tools": "Tools",
-      "chooseCli": "Choose a CLI"
+      "tools": "Tools"
     },
     "edit": {
       "widenTitle": "Allow these changes to the agent profile?",

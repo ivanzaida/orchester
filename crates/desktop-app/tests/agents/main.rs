@@ -22,6 +22,7 @@ mod local_hub_profile;
 mod local_hub_refusals;
 mod local_hub_review;
 mod local_hub_role;
+mod local_hub_runs_on;
 mod local_hub_saved;
 mod local_hub_tool;
 mod models;

@@ -29,8 +29,6 @@
       "connection": "Connection",
       "connectionSub": "Asked when you have several",
       "connectionAuto": "Chosen for you when there is one of its kind",
-      "connectionAsk": "Choose one of its kind",
-      "connectionOnly": "The only one of its kind · chosen for you",
       "serversTooMany": "A profile chooses at most {{max}} MCP servers",
       "serversDuplicate": "An MCP server is chosen twice"
     },

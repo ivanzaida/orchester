@@ -8,6 +8,7 @@
 //! Where it is decides only what is local by nature: a team's profile runs on a CLI kind and gives the team's
 //! resources; a local one names its connection and gives the project's.
 
+mod held;
 mod made;
 mod offer;
 mod runs;
@@ -25,10 +26,16 @@ use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, TeamAgentProfile},
 };
-use orchester_workspace::agents::role::{RoleErrors, RoleText};
+use orchester_workspace::agents::{
+  local_hub::LocalProfile,
+  role::{RoleErrors, RoleText},
+};
 
-pub(in crate::screens) use self::offer::Offer;
 use self::runs::Runs;
+pub(in crate::screens) use self::{
+  held::{HeldFields, OnEdit},
+  offer::Offer,
+};
 use crate::screens::{
   hub::{
     given,
@@ -109,6 +116,9 @@ pub(in crate::screens) struct Form<'a> {
   pub name_said: Option<Arc<str>>,
   /// The role's field, which a form that makes a profile focuses when it opens.
   pub first: Option<&'a ElementRef>,
+  /// What a local profile's panel holds ([`HeldFields`]): what it runs with and what its selects offer are the hub's
+  /// word on it, not `offer`'s.
+  pub held: Option<&'a LocalProfile>,
 }
 
 /// The profile the fields make.
@@ -186,12 +196,31 @@ impl ProfileFields {
   pub(in crate::screens) fn draw(&self, ctx: &mut Ctx, form: &Form<'_>) -> Drawn {
     let text = self.role.get();
     let given = self.given.get();
-    let runs = Runs::of(self, form);
+    let runs = self.runs(form);
     let role = self.role_section(ctx, form, &text);
     let mut rows = runs.rows(ctx, self, form);
     rows.extend(ListKind::ALL.map(|kind| self.list_row(ctx, form, (kind, &given))));
     let made = made::made(ctx, form, (&text, &given), &runs);
     Drawn { role, rows, made }
+  }
+
+  /// The rows of what the profile runs with, as [`Self::draw`] has them.
+  fn runs_rows(&self, ctx: &mut Ctx, form: &Form<'_>) -> Vec<Row> {
+    self.runs(form).rows(ctx, self, form)
+  }
+
+  /// What the fields run with. A new local profile runs on the only connection of its CLI without asking, which its
+  /// select then shows.
+  fn runs(&self, form: &Form<'_>) -> Runs {
+    let runs = Runs::of(self, form);
+    if form.scope == Scope::Local
+      && form.held.is_none()
+      && let Some(only) = runs.chosen_for_it().map(|id| id.to_string())
+      && self.connection.get_untracked() != only
+    {
+      self.connection.set(only);
+    }
+    runs
   }
 
   /// *Role*: the hub's section over the role as typed. A new profile's empty name says it is required only once Create
