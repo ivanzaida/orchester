@@ -209,33 +209,17 @@ pub(super) fn add_after(
 }
 
 /// The copy of step `key`, named `name` when it has one, so that it can be told from the step; `None` when the edit has
-/// no such step. The copy runs right after the step, in series (D-023: a copy reads as "do this again after"): it waits
-/// for the step, and what waited for the step waits for the copy. A step of a parallel group is copied after the whole
-/// group, the only place after it one line shows. The card's menu and the open step's head both copy through this.
+/// no such step. The copy runs right after the step, in series (D-023: a copy reads as "do this again after"; the
+/// core's `PipelineEdit::duplicate_after`). The card's menu and the open step's head both copy through this.
 pub(in crate::screens::pipeline_hub) fn copy_of(
   edit: &mut PipelineEdit,
   key: &StepKey,
   name: Option<Name>,
 ) -> Option<StepKey> {
-  let copy = edit.duplicate_step(key)?;
+  let copy = edit.duplicate_after(key)?;
   if let Some(name) = name {
     edit.update(&copy, |step| step.name = name);
   }
-  // The core's copy waits for what the step waits for and nothing waits for it, a branch no single line shows: it
-  // first joins the step's group, then leaves it to run right after.
-  let dependents: Vec<StepKey> = edit
-    .steps()
-    .iter()
-    .filter(|step| step.key != copy && step.depends_on.contains(key))
-    .map(|step| step.key.clone())
-    .collect();
-  for dependent in &dependents {
-    edit.set_dependency(dependent, &copy, true);
-  }
-  // The only refusal is `MoveError::Broken`: steps that break a rule have no flow to place the copy in. The copy then
-  // stays beside the step and the flow says what has to be fixed first, so the error is not lost. No failure route
-  // can refuse it: the copy returns where the step does, which runs before both, and nothing returns to the copy.
-  let _ = edit.run_on_its_own(&copy);
   Some(copy)
 }
 

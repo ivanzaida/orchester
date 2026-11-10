@@ -103,6 +103,34 @@ impl PipelineEdit {
     self.rearrange(key, |flow| Ok(flow.run_on_its_own(key)))
   }
 
+  /// Copies step `key` to run right after it, in series: the copy waits for the step, and what waited for the step
+  /// waits for the copy. A step of a parallel group is copied after the whole group, the only place after it one line
+  /// shows. Steps with no flow to place it in (a cycle) are rewired by the same rule on their dependencies alone.
+  /// Returns the copy's key; `None` when there is no such step.
+  pub fn duplicate_after(&mut self, key: &StepKey) -> Option<StepKey> {
+    let copy = self.duplicate_step(key)?;
+    let dependents: Vec<StepKey> = self
+      .steps
+      .iter()
+      .filter(|step| step.key != copy && step.depends_on.contains(key))
+      .map(|step| step.key.clone())
+      .collect();
+    // The copy joins the step's group (it waits for what the step waits for, and the steps after the step wait for it
+    // too), then leaves it to run right after.
+    for dependent in &dependents {
+      self.set_dependency(dependent, &copy, true);
+    }
+    // Refused only when there is no flow (`MoveError::Broken`): no failure route can refuse it, since the copy returns
+    // where the step does, which runs before both, and nothing returns to the copy. The dependencies say it then.
+    if self.run_on_its_own(&copy).is_err() {
+      self.update(&copy, |step| step.depends_on = std::iter::once(key.clone()).collect());
+      for dependent in &dependents {
+        self.set_dependency(dependent, key, false);
+      }
+    }
+    Some(copy)
+  }
+
   /// Which moves step `key` has, for its menu. Only the neighbours it can join are listed; a move that would break
   /// a failure route is listed as refused with the reason.
   pub fn possible_moves(&self, key: &StepKey) -> Result<StepMoves, MoveError> {
