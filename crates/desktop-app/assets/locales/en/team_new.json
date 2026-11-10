@@ -88,8 +88,6 @@
       "addedTo": "Added to",
       "addedToSub": "Every run is the only choice for now: a profile cannot pick instructions yet",
       "everyRun": "Every run",
-      "text": "Text",
-      "textSub": "Added to the agent's prompt as written",
       "textPlaceholder": "Write the instruction in Markdown…"
     },
     "skill": {
@@ -97,27 +95,14 @@
       "nameSub": "Lowercase with dashes; agents load it by this name",
       "namePlaceholder": "e.g. review-diff",
       "nameTaken": "The team already has a skill named {{name}} · pick another name",
-      "description": "Description",
-      "descriptionPlaceholder": "When agents should use it, in one or two sentences",
-      "files": "Files",
-      "filesSub": "SKILL.md is made from the description. Adding files, importing a folder and choosing the CLIs that load it are not in this form yet"
+      "descriptionPlaceholder": "When agents should use it, in one or two sentences"
     },
     "tool": {
       "name": "Name",
       "nameSub": "Agents call it by this name",
       "namePlaceholder": "e.g. cargo-check",
       "nameTaken": "The team already has a tool named {{name}} · pick another name",
-      "kind": "Kind",
-      "command": "Command",
-      "http": "HTTP request",
-      "database": "Database query",
-      "program": "Program",
-      "programSub": "Found on this computer when you create it",
       "programPlaceholder": "e.g. cargo",
-      "arguments": "Arguments",
-      "argumentsSub": "One per line",
-      "argumentsPlaceholder": "e.g. check",
-      "description": "Description",
       "descriptionPlaceholder": "What the tool does",
       "unavailable": "Not available yet",
       "unavailableValue": "An HTTP request and a database query name secrets by name, which a new tool cannot yet. Create a command.",

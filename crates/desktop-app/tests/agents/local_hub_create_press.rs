@@ -18,9 +18,9 @@ use super::{
 fn local_hub_create_a_tool_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Tools);
-  agents.set("team-new-tool-name", "cargo-check");
+  agents.set("team-new-tool-name-input", "cargo-check");
   agents.set(
-    "team-new-tool-program",
+    "team-new-tool-program-input",
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
@@ -36,9 +36,9 @@ fn local_hub_create_a_tool_is_a_persons_press() {
 fn local_hub_create_an_instruction_is_not_refused_to_synthetic_input() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Instructions);
-  agents.set("team-new-instruction-name", "Handoff notes");
+  agents.set("team-new-instruction-name-input", "Handoff notes");
   agents.set(
-    "team-new-instruction-text",
+    "team-new-instruction-text-input",
     "Write a handoff note at the end of every run.",
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
@@ -50,8 +50,15 @@ fn local_hub_create_an_instruction_is_not_refused_to_synthetic_input() {
 fn local_hub_create_a_skill_is_not_refused_to_synthetic_input() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Skills);
-  agents.set("team-new-skill-name", "review-diff");
-  agents.set("team-new-skill-description", "Review a diff for the project's rules.");
+  agents.set("team-new-skill-name-input", "review-diff");
+  agents.set(
+    "team-new-skill-description-input",
+    "Review a diff for the project's rules.",
+  );
+  agents.set(
+    "team-new-skill-skill-md-input",
+    "# review-diff\n\nRead the diff file by file.",
+  );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   agents.until("the skill is made", |s| held(s, ResourceKind::Skill) == 1);
   assert!(!agents.exists("team-new-person-only"));

@@ -38,6 +38,7 @@ impl Fields {
       // The project's secrets and server names are read: the name can be typed meanwhile.
       return Body {
         lead: None,
+        after: Vec::new(),
         rows: vec![self.name_row(ctx, shown, None)],
         computer: None,
         make: None,
@@ -93,6 +94,7 @@ impl Fields {
     }));
     Body {
       lead: None,
+      after: Vec::new(),
       rows,
       computer: None,
       make: checked.ok().map(|draft| {

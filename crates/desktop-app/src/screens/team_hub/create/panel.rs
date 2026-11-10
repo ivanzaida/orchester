@@ -201,7 +201,7 @@ impl Component for NewPanel {
       .child(head(ctx, kind, mode))
       .with_children(refusal(ctx, refused.as_ref(), team.as_ref()))
       .with_children(body.lead)
-      .with_children(sections(ctx, (kind, mode), body.rows, body.computer))
+      .with_children(sections(ctx, (kind, mode), (body.rows, body.after), body.computer))
       .with_children(body.overlay);
     let scroll = ScrollVertical::new(content)
       .id(format!("{prefix}-hub-panel-scroll"))
@@ -313,15 +313,23 @@ fn taken_by_server(refused: Option<&Failed>) -> Option<String> {
   }
 }
 
-/// What the form holds: *For the team* and the note on what each computer fills in afterwards in a team's project, one
-/// section of the resource's own fields in a local one (`Profile`, `Server`, `Instruction`, `Skill`, `Tool` in L3–L7).
-fn sections(ctx: &Ctx, (kind, mode): (Kind, Mode), rows: Vec<Row>, computer_note: Option<&str>) -> Vec<Element> {
-  match mode {
-    Mode::Team => std::iter::once(for_team(ctx, rows).into())
-      .chain(computer_note.map(|note| computer(ctx, note).into()))
-      .collect(),
-    Mode::Local => vec![rows::section("local-new-section", &ctx.t(kinds::section_key(kind)), Vec::new(), rows).into()],
-  }
+/// What the form holds: *For the team*, the kind's own sections and the note on what each computer fills in afterwards
+/// in a team's project; one section of the resource's own fields and its own sections in a local one (`Profile`,
+/// `Server`, `Instruction`, `Skill`, `Tool` in L3–L7).
+fn sections(
+  ctx: &Ctx,
+  (kind, mode): (Kind, Mode),
+  (rows, after): (Vec<Row>, Vec<Element>),
+  computer_note: Option<&str>,
+) -> Vec<Element> {
+  let first: Element = match mode {
+    Mode::Team => for_team(ctx, rows).into(),
+    Mode::Local => rows::section("local-new-section", &ctx.t(kinds::section_key(kind)), Vec::new(), rows).into(),
+  };
+  let note = computer_note
+    .filter(|_| mode == Mode::Team)
+    .map(|note| computer(ctx, note).into());
+  std::iter::once(first).chain(after).chain(note).collect()
 }
 
 /// *For the team*: what the team holds, the same on every computer, as the rows of the kind's form.

@@ -56,6 +56,7 @@ impl Fields {
     });
     Body {
       lead: Some(drawn.role),
+      after: Vec::new(),
       rows: drawn.rows,
       computer: Some("team_new.computer.profile"),
       make,

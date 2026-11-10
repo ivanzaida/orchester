@@ -46,21 +46,22 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
   (HubFilter::Tools, "New tool", "New tool", "Tool", "tool"),
 ];
 
-/// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's.
+/// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's, an MCP server's
+/// is its create form's own, and the others' are the form an edit has too.
 fn name_field(name: &str) -> String {
-  if name == "profile" {
-    "team-new-profile-role-name-input".to_owned()
-  } else {
-    format!("team-new-{name}-name")
+  match name {
+    "profile" => "team-new-profile-role-name-input".to_owned(),
+    "mcp" => "team-new-mcp-name".to_owned(),
+    _ => format!("team-new-{name}-name-input"),
   }
 }
 
 /// What the name's row says under its label, of the kind whose rows are named after `name`.
 fn name_sub(name: &str) -> String {
-  if name == "profile" {
-    "team-new-profile-role-name-sub".to_owned()
-  } else {
-    format!("team-new-{name}-name-row-sub")
+  match name {
+    "profile" => "team-new-profile-role-name-sub".to_owned(),
+    "mcp" => "team-new-mcp-name-row-sub".to_owned(),
+    _ => format!("team-new-{name}-name-sub"),
   }
 }
 
@@ -234,9 +235,9 @@ fn local_hub_create_under_all_and_archived_new_opens_the_profile_form() {
 fn local_hub_create_an_instruction_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Instructions);
-  agents.set("team-new-instruction-name", "Handoff notes");
+  agents.set("team-new-instruction-name-input", "Handoff notes");
   agents.set(
-    "team-new-instruction-text",
+    "team-new-instruction-text-input",
     "Write a handoff note at the end of every run.",
   );
   agents.click("local-hub-new-create");
@@ -253,8 +254,15 @@ fn local_hub_create_an_instruction_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_skill_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Skills);
-  agents.set("team-new-skill-name", "review-diff");
-  agents.set("team-new-skill-description", "Review a diff for the project's rules.");
+  agents.set("team-new-skill-name-input", "review-diff");
+  agents.set(
+    "team-new-skill-description-input",
+    "Review a diff for the project's rules.",
+  );
+  agents.set(
+    "team-new-skill-skill-md-input",
+    "# review-diff\n\nRead the diff file by file.",
+  );
   agents.click("local-hub-new-create");
   agents.until("the new skill's panel", |s| {
     matches!(
@@ -269,9 +277,9 @@ fn local_hub_create_a_skill_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_command_tool_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Tools);
-  agents.set("team-new-tool-name", "cargo-check");
+  agents.set("team-new-tool-name-input", "cargo-check");
   agents.set(
-    "team-new-tool-program",
+    "team-new-tool-program-input",
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   agents.click("local-hub-new-create");

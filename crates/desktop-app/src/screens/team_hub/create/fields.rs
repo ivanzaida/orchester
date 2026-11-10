@@ -8,7 +8,6 @@ use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::{Row, SelectOption},
   core::{ElementRef, Signal},
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections, messages::Message};
@@ -57,6 +56,8 @@ pub(super) struct Body {
   /// A section of its own over the rows' (a profile's *Role*).
   pub lead: Option<Element>,
   pub rows: Vec<Row>,
+  /// Sections of their own under the rows' (an instruction's *Text*, a skill's *SKILL.md*).
+  pub after: Vec<Element>,
   /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
   pub computer: Option<&'static str>,
   /// What Create makes, when every field is valid.
@@ -162,9 +163,6 @@ pub(super) enum Look {
   Mono,
   /// Several lines in Geist Mono.
   Lines,
-  /// A paragraph of prose, at least this high (`Input` `sTxOp` is 180 in A10, 64 in A11): the row's key stays at the
-  /// top.
-  Area(f32),
 }
 
 /// A text field of `spec` typing into `value`, with `placeholder` (a key) while it is empty; `first` is the form's
@@ -183,7 +181,6 @@ pub(super) fn text(
     Look::Plain => input,
     Look::Mono => input.mono(),
     Look::Lines => input.compact_text_area().mono(),
-    Look::Area(height) => input.text_area().area_height(height),
   };
   if let Some(first) = first {
     input = input.element(first.clone());
@@ -240,13 +237,7 @@ fn text_row_with(
     (look, error.is_some_and(Error::is_error), locked),
     first,
   );
-  let row = row(ctx, spec, error, control);
-  // A tall field has its key at the top, as the design draws it; the rest are centered.
-  if matches!(look, Look::Area(_)) {
-    row.align_items(Alignment::Start)
-  } else {
-    row
-  }
+  row(ctx, spec, error, control)
 }
 
 /// A segmented choice: `options` are (value, label key); choosing one sets `value` to it.
