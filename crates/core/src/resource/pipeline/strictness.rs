@@ -1,7 +1,10 @@
 //! Whether a new version of a pipeline is provably no weaker than the one it replaces: the same steps,
-//! wired the same way, run by the same profiles and tools, each as strict or stricter. Anything this cannot
+//! wired so that every step still waits for the approval-gated and tool steps it waited for, run by the same
+//! profiles and tools, each as strict or stricter. Anything this cannot
 //! prove is treated as weaker, so automation publishes only what a person could not object to; everything
 //! else is a person's decision.
+
+use std::collections::HashSet;
 
 use super::{Pipeline, RepositoryAccess, Step, StepKey, StepKind};
 use crate::permission::{StepCommands, StepNetwork, StepPermissions};
@@ -13,7 +16,8 @@ pub enum Weaker {
   Steps,
   /// The sources the pipeline or its steps list changed: what its agents read is a person's to choose.
   Sources,
-  /// The step is wired, run or narrowed differently, or no longer waits or asks where it did.
+  /// The step no longer waits for an approval-gated or tool step it waited for, or is run or narrowed differently, or
+  /// no longer asks where it did.
   Step(StepKey),
 }
 
@@ -26,7 +30,11 @@ pub fn weaker_than(old: &Pipeline, new: &Pipeline) -> Vec<Weaker> {
   let steps = old
     .steps()
     .iter()
-    .filter(|before| new.step(&before.key).is_none_or(|after| !step_no_weaker(before, after)))
+    .filter(|before| {
+      new
+        .step(&before.key)
+        .is_none_or(|after| !(step_no_weaker(before, after) && waits_no_less(old, new, &before.key)))
+    })
     .map(|before| Weaker::Step(before.key.clone()));
   sources.into_iter().chain(steps).collect()
 }
@@ -37,7 +45,7 @@ fn step_keys(pipeline: &Pipeline) -> Vec<&StepKey> {
   keys
 }
 
-/// A step is no weaker when it keeps its wiring, failure route (with no more retries before a person is
+/// A step is no weaker when it keeps its failure route (with no more retries before a person is
 /// asked), budget (no larger, and kept), instructions, approval and executor, and narrows no less. The
 /// retries, the budget and the instructions are where a person checks in, so they count as well.
 fn step_no_weaker(old: &Step, new: &Step) -> bool {
@@ -51,13 +59,44 @@ fn step_no_weaker(old: &Step, new: &Step) -> bool {
     (Some(_), None) => false,
     (Some(before), Some(after)) => after.get() <= before.get(),
   };
-  old.depends_on == new.depends_on
-    && route(old) == route(new)
+  route(old) == route(new)
     && retries
     && budget
     && old.instructions == new.instructions
     && (!old.approval_gate || new.approval_gate)
     && kind_no_weaker(&old.kind, &new.kind)
+}
+
+/// Whether step `key` still waits, directly or through other steps, for every approval-gated step and tool step it
+/// waited for in `old`. Waiting for other steps differently is a reorder: it changes when the step runs, not what
+/// stands between it and the run's end.
+fn waits_no_less(old: &Pipeline, new: &Pipeline, key: &StepKey) -> bool {
+  let after = ancestors(new, key);
+  ancestors(old, key)
+    .into_iter()
+    .filter(|ancestor| old.step(ancestor).is_some_and(checks))
+    .all(|ancestor| after.contains(ancestor))
+}
+
+/// A step the run waits at: it waits for a person's approval, or it runs a tool.
+fn checks(step: &Step) -> bool {
+  step.approval_gate || matches!(step.kind, StepKind::Tool { .. })
+}
+
+/// The steps `key` waits for, directly or through others.
+fn ancestors<'a>(pipeline: &'a Pipeline, key: &StepKey) -> HashSet<&'a StepKey> {
+  let mut found = HashSet::new();
+  let mut pending: Vec<&StepKey> = pipeline
+    .step(key)
+    .into_iter()
+    .flat_map(|step| step.depends_on.iter())
+    .collect();
+  while let Some(next) = pending.pop() {
+    if found.insert(next) {
+      pending.extend(pipeline.step(next).into_iter().flat_map(|step| step.depends_on.iter()));
+    }
+  }
+  found
 }
 
 fn kind_no_weaker(old: &StepKind, new: &StepKind) -> bool {

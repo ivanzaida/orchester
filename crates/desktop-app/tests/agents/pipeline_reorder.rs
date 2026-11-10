@@ -197,6 +197,11 @@ fn pipeline_reorder_the_menu_lists_the_moves_a_step_has_where_it_stands() {
   open_menu(&mut agents, &build);
   assert!(!agents.exists("pipeline-hub-flow-menu-up-detail"));
   assert!(!agents.exists("pipeline-hub-flow-menu-down-detail"));
+  assert!(
+    agents.text("pipeline-hub-flow-menu-up").contains("Alt ↑"),
+    "the keys, written for Windows"
+  );
+  assert!(agents.text("pipeline-hub-flow-menu-down").contains("Alt ↓"));
   assert_eq!(
     agents.text("pipeline-hub-flow-menu-parallel-0-label"),
     "Run in parallel with 02 Plan"
@@ -234,12 +239,12 @@ fn pipeline_reorder_move_up_from_the_menu_redraws_at_once_and_stores_nothing_unt
   });
   assert_eq!(stored(&agents, id), before, "nothing is stored until Save");
 
-  // A step that is wired differently counts as a change the person allows, as every change of what a step waits for
-  // does.
-  agents.press_until("pipeline-hub-save", "the question", |s| {
-    s.exists("pipeline-hub-confirm-confirm")
-  });
-  agents.press_until("pipeline-hub-confirm-confirm", "saved", |s| stored(s, id) != before);
+  // Two plain steps trading places cross no approval or tool step, so the save does not ask.
+  agents.press_until("pipeline-hub-save", "saved", |s| stored(s, id) != before);
+  assert!(
+    !agents.exists("pipeline-hub-confirm-confirm"),
+    "a pure reorder asks nothing"
+  );
   let after = stored(&agents, id);
   assert!(
     depends(&after, &research).contains(&plan.to_string()),
