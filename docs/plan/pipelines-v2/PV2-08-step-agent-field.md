@@ -1,10 +1,10 @@
 # PV2-08 · The step's *Agent* field and Agent picker
 
-- **Status:** in progress
+- **Status:** done (2026-11-11; check 2 (review + design, one child) PASS and no blocking/major; merged `a1f38d70e`; follow-ups in PV2-17 items 24, 26–28)
 - **Kind:** UI
 - **Depends on:** PV2-07
-- **Branch:** `claude/pv2-08-agent-field`
-- **Tokens:** —
+- **Branch:** `claude/pv2-08-agent-field` (`09bebf67f` … `446b31f05`)
+- **Tokens:** 96.7M (out 239k) across 2 implementation rounds, review 1, design verification 1, check 2
 
 ## Goal
 
