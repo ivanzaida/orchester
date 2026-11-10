@@ -114,7 +114,8 @@ fn team_pipelines(kontur: &mut Kontur) -> Result<(), SeedError> {
       .db
       .resources(ResourceKind::AgentProfile)?
       .into_iter()
-      .find(|resource| resource.name().as_str() == role)
+      // The team's own profile (`team_hub::profile` keeps it as `team-<role>`), not the old catalogue's of the same name.
+      .find(|resource| resource.slug().as_str() == format!("team-{}", role.to_lowercase()))
       .map(|resource| resource.id())
       .ok_or_else(|| SeedError::Invalid(format!("the team has no profile {role}")))
   };

@@ -49,15 +49,16 @@ impl Component for LoadEditor {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<LoadProps>().clone();
     let revision = self.retry.get();
-    let hold = Services::of(ctx).hold;
+    let (hold, workspace) = (Services::of(ctx).hold, Services::of(ctx).workspace);
     let loaded = ctx
       .future(
         (props.project.open.repo_root.clone(), props.id, revision),
         move |(root, id, _)| {
-          let hold = hold.clone();
+          let (hold, workspace) = (hold.clone(), workspace.clone());
           async move {
             hold.released().await;
-            background::run(move || OpenedPipeline::load_in(&root, id).map_err(super::work_error)).await?
+            // A team project's pipeline is the team's latest version as this session read it.
+            background::run(move || workspace.open_pipeline(&root, id).map_err(super::work_error)).await?
           }
         },
       )

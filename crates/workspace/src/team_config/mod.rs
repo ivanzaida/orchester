@@ -49,6 +49,37 @@ impl TeamRead {
       Self::Reading => None,
     }
   }
+
+  /// The configuration read this session, or why there is none to read from: a reader never falls back to an older
+  /// copy.
+  pub fn loaded(self) -> Result<Arc<TeamConfig>, TeamNotRead> {
+    match self {
+      Self::Read { config, .. } => Ok(config),
+      Self::Reading => Err(TeamNotRead::Reading),
+      Self::Unreachable(unreached) => Err(TeamNotRead::Unreachable(unreached)),
+    }
+  }
+}
+
+/// Why a team project's configuration cannot be read from memory now.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum TeamNotRead {
+  /// The stream is connecting and has read nothing yet.
+  #[error("the team's configuration is being read")]
+  Reading,
+  /// Nothing was read this session, and the team server could not be reached for it.
+  #[error("the team server cannot be reached")]
+  Unreachable(Unreached),
+}
+
+impl TeamNotRead {
+  /// What a person is told: the reading, or why the server cannot be reached.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Reading => Message::new("teamConfig.reading"),
+      Self::Unreachable(unreached) => unreached.reason.clone(),
+    }
+  }
 }
 
 /// Why the team server could not be reached, and when it was last tried.

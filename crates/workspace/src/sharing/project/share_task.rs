@@ -14,7 +14,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{ProjectServer, organization::tag, share, store::RemoteTaskStore};
-use crate::{background, sharing::SharingError};
+use crate::{background, sharing::SharingError, team_reads::listed::TeamPipelines};
 
 impl ProjectServer {
   /// The key *Share task* would give a *Not shared* task now: the server project's next number, which the server may
@@ -34,7 +34,9 @@ impl ProjectServer {
   pub async fn share_kept(&self, task: TaskId, key: IdempotencyKey) -> Result<TaskKey, SharingError> {
     self.writable()?;
     let root = self.repo_root.clone();
-    let import = background::run(move || kept_upload(&root, task, key)).await??;
+    let config = self.servers.team_read(&root).loaded()?;
+    let pipelines = TeamPipelines::of(&config);
+    let import = background::run(move || kept_upload(&root, task, (key, &pipelines))).await??;
     let created = match self
       .call(|client, token, project| async move { client.import_tasks(&token, project, &import).await })
       .await
@@ -119,14 +121,23 @@ pub fn kept_preview(root: &Path, task: TaskId) -> Result<KeptPreview, StoreError
 }
 
 /// The import of the kept `task`, with the tag names it kept and its module.
-fn kept_upload(root: &Path, task: TaskId, key: IdempotencyKey) -> Result<TasksImport, StoreError> {
+fn kept_upload(
+  root: &Path,
+  task: TaskId,
+  (key, pipelines): (IdempotencyKey, &TeamPipelines),
+) -> Result<TasksImport, StoreError> {
   let db = ProjectDb::open(root)?;
   let kept = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
   let names = db
     .shared_task_info(task)?
     .and_then(|info| info.kept_tags)
     .ok_or(StoreError::TaskNotFound(task))?;
-  let mut upload = share::upload_task(&db, &kept, &std::collections::HashMap::new(), share::UploadAs::Import)?;
+  let mut upload = share::upload_task(
+    &db,
+    &kept,
+    &std::collections::HashMap::new(),
+    share::UploadAs::Import(pipelines),
+  )?;
   upload.tag_names = names;
   let module = kept.module().map(|id| db.module(id)).transpose()?.flatten();
   Ok(TasksImport {

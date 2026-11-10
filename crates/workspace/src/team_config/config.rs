@@ -48,6 +48,11 @@ impl TeamConfig {
       .filter(move |resource| resource.kind == kind && resource.archived)
   }
 
+  /// Every resource the team archived, of any kind.
+  pub(crate) fn all_archived(&self) -> impl Iterator<Item = &TeamResource> {
+    self.resources.values().filter(|resource| resource.archived)
+  }
+
   /// The resource `id`, archived or not.
   pub fn resource(&self, id: ResourceId) -> Option<&TeamResource> {
     self.resources.get(&id)
@@ -114,6 +119,8 @@ pub struct TeamResource {
   pub id: ResourceId,
   pub kind: ResourceKind,
   pub name: Name,
+  /// The slug the team keeps it by, as the server says it.
+  pub slug: String,
   pub archived: bool,
   /// The resource's revision on the server, which a rename or an archive is made on.
   pub revision: TaskRevision,
@@ -132,6 +139,7 @@ impl TeamResource {
       id: shared.id,
       kind: shared.kind.core(),
       name,
+      slug: shared.slug.clone(),
       archived: shared.archived,
       revision: shared.revision,
       latest,

@@ -201,20 +201,16 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
   let address = db.sharing().expect("link").and_then(|link| link.address);
   assert_eq!(address.as_deref(), Some("https://orchester.kontur.lan/kontur-2"));
   assert_eq!(db.project_tags().expect("tags"), vec![review.clone()]);
-  // This computer has the team pipeline `delivery`, not `gone`.
+  // A shared task names the team pipeline by its id, whether or not the team's configuration read this session has it:
+  // the workspace tells which is missing, from memory.
   let shared = db.task(task.id()).expect("read").expect("task");
   assert_eq!(shared.details().pipeline.map(|id| id.to_string()), Some(delivery));
   let other = db.task(draft.id()).expect("read").expect("task");
-  assert_eq!(other.details().pipeline, None);
+  assert_eq!(other.details().pipeline.map(|id| id.to_string()), Some(gone.clone()));
   assert_eq!(other.revision(), revision(4));
   assert_eq!(other.organization().tags(), [review.id()]);
   let info = db.shared_task_info(draft.id()).expect("info").expect("shared");
   assert_eq!(info.pipeline_slug.as_deref(), Some(gone.as_str()));
-  assert_eq!(
-    db.missing_pipelines().expect("missing pipelines"),
-    std::collections::HashMap::from([(draft.id(), gone)]),
-    "only the team pipeline this computer lacks is missing"
-  );
   assert_eq!(info.claim.map(|claim| claim.holder), Some(alice.clone()));
   assert_eq!(db.claims_held_by(alice.id).expect("claims"), vec![draft.id()]);
 
@@ -536,7 +532,6 @@ fn shared_tasks_a_slug_names_no_team_pipeline_and_the_upgrade_turns_it_into_the_
     db.task(task.id()).expect("read").expect("task").details().pipeline,
     None
   );
-  assert!(db.missing_pipelines().expect("missing").is_empty());
   let info = db.shared_task_info(task.id()).expect("info").expect("shared");
   assert_eq!(info.pipeline_slug.as_deref(), Some("delivery"));
 

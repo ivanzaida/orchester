@@ -1,7 +1,6 @@
-//! What versions of one of the team's resources hold differently, field by field (`Shared configuration · redesign`
-//! `UC5xk`): what a newer version changed from the one a version published here was edited from, and that version
-//! against the newer one, *Compare with vN* (02c `JZFlA`); and each version a member reads in *Versions*, with what it
-//! changed from the one before it (03 `pjEjf`). Bodies are compared as their JSON, field by field; nothing is merged.
+//! Each version of a local project's resource as *Versions* lists it (03 `pjEjf`), with what it changed from the one
+//! before it, field by field: bodies are compared as their JSON. A team project's resources have no versions on this
+//! computer: the team server keeps them (`docs/design/team-configuration-live.md`).
 
 use std::{path::Path, sync::Arc};
 
@@ -14,30 +13,11 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use serde_json::{Map, Value};
 
-/// One field of a resource's body that two versions hold differently: its name in the body (`instructions`) and each
-/// version's value as text, empty where that version has none.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FieldChange {
-  pub field: Arc<str>,
-  pub from: Arc<str>,
-  pub to: Arc<str>,
-}
-
-/// What a version published here that met a newer one shows: what the newer one changed from the version both were
-/// edited from, and the fields the one published here holds differently from the newer one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ConflictComparison {
-  pub latest_changed: Vec<Arc<str>>,
-  pub against_latest: Vec<FieldChange>,
-}
-
-/// One version of a resource in *Versions*, as the server numbered it.
+/// One version of a resource in *Versions*.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistoryEntry {
   pub number: VersionNumber,
   pub published_at: Timestamp,
-  /// Who published it, by their name on the server; `None` for a version published here before the project was shared.
-  pub publisher: Option<String>,
   /// The fields it changed from the version before it; every field of a first version.
   pub changed: Vec<Arc<str>>,
   /// The version runs here use.
@@ -52,8 +32,30 @@ struct Kept {
   body: Value,
 }
 
+/// The versions of `resource` (of `kind`) in a local project, newest first. Blocking.
+pub fn local_history(
+  repo_root: &Path,
+  kind: ResourceKind,
+  resource: ResourceId,
+) -> Result<Vec<HistoryEntry>, StoreError> {
+  let (kept, used) = kept(&ProjectDb::open(repo_root)?, kind, resource)?;
+  let mut before = Value::Null;
+  let mut entries = Vec::new();
+  for version in kept {
+    entries.push(HistoryEntry {
+      number: version.number,
+      published_at: version.published_at,
+      changed: changed(&before, &version.body),
+      used_here: used == Some(version.id),
+    });
+    before = version.body;
+  }
+  entries.reverse();
+  Ok(entries)
+}
+
 /// The fields `to` holds differently from `from`, by their names in the body, in name order.
-pub fn changes(from: &Value, to: &Value) -> Vec<FieldChange> {
+fn changed(from: &Value, to: &Value) -> Vec<Arc<str>> {
   let empty = Map::new();
   let (from, to) = (from.as_object().unwrap_or(&empty), to.as_object().unwrap_or(&empty));
   let mut names: Vec<&String> = from.keys().chain(to.keys()).collect();
@@ -61,94 +63,9 @@ pub fn changes(from: &Value, to: &Value) -> Vec<FieldChange> {
   names.dedup();
   names
     .into_iter()
-    .filter_map(|name| {
-      let (before, after) = (from.get(name), to.get(name));
-      (before != after).then(|| FieldChange {
-        field: Arc::from(name.as_str()),
-        from: text(before),
-        to: text(after),
-      })
-    })
+    .filter(|name| from.get(*name) != to.get(*name))
+    .map(|name| Arc::from(name.as_str()))
     .collect()
-}
-
-/// *Compare with vN* and what vN changed, for `mine`, a version of `resource` (of `kind`) published here and edited
-/// from `base`, which met `latest`; `None` while `latest` is not kept here (a teammate's skill is not). Blocking.
-pub fn conflict(
-  repo_root: &Path,
-  (kind, resource): (ResourceKind, ResourceId),
-  mine: VersionId,
-  (base, latest): (Option<VersionNumber>, VersionNumber),
-) -> Result<Option<ConflictComparison>, StoreError> {
-  let (kept, _) = kept(&ProjectDb::open(repo_root)?, kind, resource)?;
-  let by_number = |number| kept.iter().find(|version| version.number == number);
-  let (Some(newer), Some(mine)) = (by_number(latest), kept.iter().find(|version| version.id == mine)) else {
-    return Ok(None);
-  };
-  let base = base
-    .and_then(by_number)
-    .map_or(Value::Null, |version| version.body.clone());
-  Ok(Some(ConflictComparison {
-    latest_changed: changes(&base, &newer.body)
-      .into_iter()
-      .map(|change| change.field)
-      .collect(),
-    against_latest: changes(&newer.body, &mine.body),
-  }))
-}
-
-/// The versions of `resource` (of `kind`) the server numbered, newest first, each with who published it and what it
-/// changed. Blocking.
-pub fn history(repo_root: &Path, kind: ResourceKind, resource: ResourceId) -> Result<Vec<HistoryEntry>, StoreError> {
-  let db = ProjectDb::open(repo_root)?;
-  let publishers = db.version_publishers(resource)?;
-  // A version published here that waits for the server has no number there yet.
-  entries(&db, kind, resource, |id| {
-    publishers
-      .iter()
-      .find(|(found, _)| *found == id)
-      .map(|(_, publisher)| publisher.clone())
-  })
-}
-
-/// The versions of `resource` (of `kind`) in a local project, newest first: every one was published here, so none has
-/// a publisher. Blocking.
-pub fn local_history(
-  repo_root: &Path,
-  kind: ResourceKind,
-  resource: ResourceId,
-) -> Result<Vec<HistoryEntry>, StoreError> {
-  entries(&ProjectDb::open(repo_root)?, kind, resource, |_| Some(None))
-}
-
-/// The versions kept for `resource`, newest first, each with `publisher_of` its id: `None` skips a version.
-fn entries(
-  db: &ProjectDb,
-  kind: ResourceKind,
-  resource: ResourceId,
-  publisher_of: impl Fn(VersionId) -> Option<Option<String>>,
-) -> Result<Vec<HistoryEntry>, StoreError> {
-  let (kept, used) = kept(db, kind, resource)?;
-  let mut before = Value::Null;
-  let mut entries = Vec::new();
-  for version in kept {
-    let Some(publisher) = publisher_of(version.id) else {
-      continue;
-    };
-    entries.push(HistoryEntry {
-      number: version.number,
-      published_at: version.published_at,
-      publisher,
-      changed: changes(&before, &version.body)
-        .into_iter()
-        .map(|change| change.field)
-        .collect(),
-      used_here: used == Some(version.id),
-    });
-    before = version.body;
-  }
-  entries.reverse();
-  Ok(entries)
 }
 
 /// Every version of `resource` kept here, oldest first, and the one runs here use.
@@ -163,10 +80,12 @@ fn kept(
     ResourceKind::Instruction => kept_of::<Instruction>(db, resource),
     ResourceKind::Skill => kept_of::<Skill>(db, resource),
     ResourceKind::Tool => kept_of::<Tool>(db, resource),
-    ResourceKind::TeamReviewer => kept_of::<orchester_core::resource::TeamReviewer>(db, resource),
-    ResourceKind::McpServer => kept_of::<orchester_core::resource::TeamMcpServer>(db, resource),
-    // Agent testing's kinds are never the team's.
-    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok((Vec::new(), None)),
+    // A local project has no team reviewers or team MCP servers, and agent testing's kinds have no versions here.
+    ResourceKind::TeamReviewer
+    | ResourceKind::McpServer
+    | ResourceKind::TestSuite
+    | ResourceKind::Service
+    | ResourceKind::Stack => Ok((Vec::new(), None)),
   }
 }
 
@@ -192,14 +111,4 @@ fn kept_of<B: ResourceBody>(
     })
     .collect::<Result<_, StoreError>>()?;
   Ok((kept, used))
-}
-
-/// A field's value as text: a string as it is, anything else as indented JSON; empty for none.
-fn text(value: Option<&Value>) -> Arc<str> {
-  match value {
-    None | Some(Value::Null) => Arc::from(""),
-    Some(Value::String(text)) => Arc::from(text.as_str()),
-    // A JSON value always serializes; its one-line form is the same value should indenting it ever fail.
-    Some(value) => Arc::from(serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())),
-  }
 }

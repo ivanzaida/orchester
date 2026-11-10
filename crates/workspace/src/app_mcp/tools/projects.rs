@@ -23,10 +23,7 @@ use crate::{
   },
   code_index,
   links::Link,
-  tasks::{
-    data::{PipelineChoice, published_pipelines},
-    outside::Outside,
-  },
+  tasks::{data::PipelineChoice, outside::Outside},
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -123,7 +120,14 @@ pub async fn set_code_index(services: &Services, args: SetCodeIndex) -> Result<V
 
 pub async fn list_pipelines(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(published_pipelines(db)?))).await?;
+  // A team project's are the team's as this session read them: one being read or not reached says so, with nothing
+  // older in their place.
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |open, db| {
+      Ok(services.workspace.project_pipelines(db, &open.repo_root)?)
+    })
+  })
+  .await?;
   Ok(read.json("pipelines", translate, |open, choices| {
     choices
       .iter()

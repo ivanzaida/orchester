@@ -5,7 +5,7 @@ use orchester_core::{
 };
 use orchester_store::StoreError;
 
-use crate::tasks::writer::WriteError;
+use crate::{tasks::writer::WriteError, team_config::TeamNotRead};
 
 /// Why an action was not carried out. Each is decided before anything is sent to a team server, except
 /// [`Self::ReceiptMismatch`], which is the server's answer to another operation.
@@ -13,6 +13,10 @@ use crate::tasks::writer::WriteError;
 pub enum ActionError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  /// A team task names a pipeline while the team's configuration is being read, or could not be read this session:
+  /// which pipelines are the team's cannot be told, so nothing is sent.
+  #[error(transparent)]
+  TeamNotRead(#[from] TeamNotRead),
   /// The local project's change was refused, as it is from its screens.
   #[error(transparent)]
   Write(#[from] WriteError),

@@ -1,15 +1,11 @@
-//! A team resource archived on the server leaves this computer's lists and stops the runs that pin it
-//! (`Source::archived`); restored, it is back. The snapshot of a project whose resource is archived already keeps
-//! it out without stopping anything twice.
+//! A team resource archived on the server leaves the team's configuration this computer reads (in memory) and stops
+//! the runs that pin it (`Source::archived`); restored, it is back. A project whose resource is archived already reads
+//! it archived when its stream opens, and its runs are checked then.
 
 use std::sync::Arc;
 
 use orchester_api::SharedResourceKind;
-use orchester_core::{
-  id::ResourceId,
-  resource::{AgentProfile, ResourceKind, VersionNumber},
-  store::ResourceStore,
-};
+use orchester_core::{id::ResourceId, resource::ResourceKind, store::ResourceStore};
 use orchester_workspace::sharing::sync::{SystemClock, follow};
 
 use super::{
@@ -18,9 +14,22 @@ use super::{
   seen_within,
 };
 
-fn listed(workspace: &Workspace, resource: ResourceId) -> bool {
-  let profiles = workspace.db().resources(ResourceKind::AgentProfile).expect("listed");
-  profiles.iter().any(|kept| kept.id() == resource)
+/// Whether the team's configuration `member`'s stream read has `resource`, not archived.
+fn listed((member, workspace): (&Member, &Workspace), resource: ResourceId) -> bool {
+  member
+    .configs
+    .read(&workspace.root)
+    .config()
+    .is_some_and(|config| config.live(resource).is_some())
+}
+
+/// Nothing of the team's is written to the project's database.
+fn nothing_kept(workspace: &Workspace) {
+  let profiles = workspace.db().resources(ResourceKind::AgentProfile).expect("read");
+  assert!(
+    profiles.is_empty(),
+    "no team profile in the project's database: {profiles:?}"
+  );
 }
 
 fn archived(member: &Member) -> Vec<(ResourceId, Option<String>)> {
@@ -42,30 +51,28 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
     let (member, root) = (member.clone(), workspace.root.clone());
     tokio::spawn(async move { follow(&*member, &root, &SystemClock).await })
   };
-  seen_within(SETTLED, "the snapshot's profile", || listed(&workspace, profile)).await;
+  seen_within(SETTLED, "the snapshot's profile", || {
+    listed((&member, &workspace), profile)
+  })
+  .await;
 
   server.archive(profile, true);
-  seen_within(SETTLED, "the profile leaves the list", || !listed(&workspace, profile)).await;
+  seen_within(SETTLED, "the profile leaves the list", || {
+    !listed((&member, &workspace), profile)
+  })
+  .await;
   assert_eq!(
     archived(&member),
     [(profile, Some("Alice Moreau".to_owned()))],
     "its runs are stopped once, and the stream says who archived it"
   );
-  assert!(
-    workspace.db().resource_removed_at(profile).expect("read").is_some(),
-    "removed here, so no new run pins it"
-  );
-  assert!(
-    workspace
-      .db()
-      .cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
-      .expect("read")
-      .is_some(),
-    "its versions stay for the runs that pinned them"
-  );
+  nothing_kept(&workspace);
 
   server.archive(profile, false);
-  seen_within(SETTLED, "the profile is back", || listed(&workspace, profile)).await;
+  seen_within(SETTLED, "the profile is back", || {
+    listed((&member, &workspace), profile)
+  })
+  .await;
   assert_eq!(
     archived(&member),
     [(profile, Some("Alice Moreau".to_owned()))],
@@ -92,12 +99,19 @@ async fn live_updates_a_snapshot_keeps_an_archived_profile_out_of_the_list() {
     let (member, root) = (member.clone(), workspace.root.clone());
     tokio::spawn(async move { follow(&*member, &root, &SystemClock).await })
   };
-  seen_within(SETTLED, "the snapshot's other profile", || listed(&workspace, other)).await;
-  assert!(!listed(&workspace, profile), "archived before this computer joined");
+  seen_within(SETTLED, "the snapshot's other profile", || {
+    listed((&member, &workspace), other)
+  })
+  .await;
+  assert!(
+    !listed((&member, &workspace), profile),
+    "archived before this computer joined"
+  );
   assert_eq!(
     archived(&member),
     [(profile, None)],
-    "kept as archived, its runs are checked, and a snapshot does not say who archived it"
+    "read archived, its runs are checked, and the read does not say who archived it"
   );
+  nothing_kept(&workspace);
   following.abort();
 }

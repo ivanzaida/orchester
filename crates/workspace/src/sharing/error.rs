@@ -19,6 +19,10 @@ pub enum SharingError {
   Client(#[from] ClientError),
   #[error("the database failed: {0}")]
   Store(#[from] StoreError),
+  /// A team task names a pipeline while the team's configuration is being read, or could not be read this session:
+  /// which pipelines are the team's cannot be told, so nothing was sent.
+  #[error(transparent)]
+  TeamNotRead(#[from] crate::team_config::TeamNotRead),
   #[error("the keychain failed: {0}")]
   Vault(#[from] VaultError),
   /// This computer has no token the server accepts: the person signs in again.
@@ -134,6 +138,7 @@ impl SharingError {
     match self {
       Self::Client(error) => client_message(error, address),
       Self::Store(error) => messages::store_error(error),
+      Self::TeamNotRead(error) => error.message(),
       Self::Vault(error) => messages::vault_error(error),
       Self::SignedOut => Message::new("servers.errors.signedOut"),
       Self::Interrupted => messages::interrupted(),

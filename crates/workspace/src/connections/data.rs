@@ -33,7 +33,6 @@ use super::{
 use crate::{
   agents::data::profiles,
   messages::{self, Message},
-  sharing::sync::refresh_team_profiles,
 };
 
 /// A profile that runs on a connection, or gives its agents an MCP server, for the read-only "Used by"
@@ -276,8 +275,7 @@ pub fn save_on_account_in(
 }
 
 /// Adds or updates the connection in `draft` with its check. `account` and `provider`, when given, replace what it
-/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account). The team profiles of
-/// the project run on the connections as they are now ([`refresh_team_profiles`]).
+/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account).
 pub(super) fn save_with(
   store: &mut ProjectDb,
   draft: ConnectionDraft,
@@ -298,7 +296,6 @@ pub(super) fn save_with(
     runs_on(&mut connection, account, provider)?;
     connection.record_check(draft.check)?;
     store.create_connection(&connection)?;
-    refresh_team_profiles(store)?;
     return Ok(connection.id());
   };
   let stored = store.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
@@ -308,7 +305,6 @@ pub(super) fn save_with(
   runs_on(&mut connection, account, provider)?;
   connection.record_check(draft.check)?;
   store.save_connection(&connection)?;
-  refresh_team_profiles(store)?;
   Ok(id)
 }
 

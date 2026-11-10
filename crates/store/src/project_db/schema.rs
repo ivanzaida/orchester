@@ -110,6 +110,7 @@ mod task_edits;
 mod task_groups;
 mod task_identities;
 mod task_pipeline_pin;
+mod team_cache;
 mod team_delivery;
 mod team_delivery_waits;
 mod team_fill_ins;
@@ -145,5 +146,6 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
     super::ProjectMigration::TeamOutbox => team_outbox::MIGRATION,
     super::ProjectMigration::LocalDrafts => local_drafts::MIGRATION,
+    super::ProjectMigration::TeamCache => team_cache::MIGRATION,
   }
 }

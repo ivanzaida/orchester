@@ -8,7 +8,7 @@ use std::num::NonZeroU32;
 
 pub use orchester_core::sharing::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson};
 use orchester_core::{
-  id::{ResourceId, TaskId, UserId},
+  id::{TaskId, UserId},
   resource::VersionNumber,
   run::TaskPhase,
   sharing::{ClaimKind, TaskRevision},
@@ -140,23 +140,6 @@ impl ProjectDb {
     rows
       .into_iter()
       .map(|(task, names)| Ok((parse("task id", &task)?, decode_json("kept tag names", 1, &names)?)))
-      .collect()
-  }
-
-  /// The shared tasks that name a team pipeline by an id this computer has no team pipeline of, with that id: they
-  /// show it as missing, and an edit sends no pipeline change for them. A value that is no resource id (a slug from
-  /// before row 80) names no team pipeline, so it is not missing either.
-  pub fn missing_pipelines(&self) -> Result<std::collections::HashMap<TaskId, String>, StoreError> {
-    let mut statement = self.connection.prepare(
-      "SELECT id, pipeline_slug FROM tasks WHERE sharing IS NOT NULL AND pipeline_slug IS NOT NULL        AND NOT EXISTS (SELECT 1 FROM resources WHERE resources.kind = 'pipeline'        AND resources.sharing = 'shared' AND resources.id = tasks.pipeline_slug)",
-    )?;
-    let rows = statement
-      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows
-      .into_iter()
-      .filter(|(_, named)| named.parse::<ResourceId>().is_ok())
-      .map(|(id, named)| Ok((parse("task id", &id)?, named)))
       .collect()
   }
 

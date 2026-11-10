@@ -35,8 +35,9 @@ use crate::{
   background,
   sharing::{
     Behalf, NotSet, ProjectAddress, ServerEntry, Servers, ShareNote, SharingError,
-    sync::{FillInOutcome, ShareFillIns, keep_uploaded_configuration, upload_configuration},
+    sync::{FillInOutcome, ShareFillIns, upload_configuration},
   },
+  team_reads::listed::TeamPipelines,
 };
 
 /// What sharing the project would do, as the confirmation says it (10.12).
@@ -272,10 +273,8 @@ impl Servers {
     })
     .await
     .map_err(SharingError::from)??;
-    if let Err(error) = keep_uploaded_configuration(&server, repo_root, configuration).await {
-      // The stream's snapshot names the uploaded resources too, and keeps them when it reads them.
-      tracing::warn!(%error, "the uploaded configuration was not kept as the server's at once");
-    }
+    // The uploaded configuration is the team's on the server from now on, read into memory when the project's stream
+    // opens; the project's own resources stay in its database as they were, hidden while it is shared.
     let outcome = match fill_ins {
       Some(fill_ins) if uploaded_any => self.apply_fill_ins(repo_root, entry.stored.id, fill_ins).await,
       _ => FillInOutcome::default(),
@@ -465,18 +464,18 @@ fn upload(
 }
 
 /// How a task goes to the server: with its number when the project is shared, or for a new number
-/// with its key as its former key when it is imported (*Join*, *Share task*).
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum UploadAs {
+/// with its key as its former key when it is imported (*Join*, *Share task*), naming only the team's pipelines.
+#[derive(Clone, Copy)]
+pub(super) enum UploadAs<'a> {
   Share,
-  Import,
+  Import(&'a TeamPipelines),
 }
 
 pub(super) fn upload_task(
   db: &ProjectDb,
   task: &Task,
   names: &HashMap<orchester_core::id::TagId, String>,
-  this: UploadAs,
+  this: UploadAs<'_>,
 ) -> Result<UploadTask, StoreError> {
   let details = task.details();
   let organization = Organization::from_core(task.organization());
@@ -486,15 +485,15 @@ pub(super) fn upload_task(
     .is_empty();
   Ok(UploadTask {
     id: task.id(),
-    number: (this == UploadAs::Share).then(|| task.key().number().get()),
-    former_key: (this == UploadAs::Import).then(|| task.key().to_string()),
+    number: matches!(this, UploadAs::Share).then(|| task.key().number().get()),
+    former_key: matches!(this, UploadAs::Import(_)).then(|| task.key().to_string()),
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
     // Share uploads the configuration with its ids first; *Join* and *Share task* name only the team's pipelines.
     pipeline: match this {
       UploadAs::Share => convert::shared_pipeline_id(db, details.pipeline)?,
-      UploadAs::Import => convert::team_pipeline_id(db, details.pipeline)?,
+      UploadAs::Import(pipelines) => convert::team_pipeline_id(pipelines, details.pipeline),
     },
     limits: convert::shared_limits(details.limits),
     workflow: organization.workflow,

@@ -65,7 +65,7 @@ Two copies of the truth cost more than they save.
 Tasks and runs of a team project, the claim authority and the execution bundle; a local project, which keeps its
 configuration in its database as today.
 
-## Where it stands (2026-11-10)
+## Where it stands (2026-11-11)
 
 - **Done**: the team's configuration is read into memory when the stream opens and kept current by its events
   (`crates/workspace/src/team_config/`, `sharing/sync/live.rs`); the hub, readiness, fill-ins and team MCP tools read
@@ -84,13 +84,25 @@ configuration in its database as today.
   the stand-in, before the join, each team resource the seed cached; `team-hub` and `team-hub-member` wait for that
   read; the `team-edit*` states set their switch (down, demoted, rejecting) after it, and `team-archived` archives
   `pencil-design` on the stand-in.
-- **Not done yet**: the stream still keeps the copy of the team's resources and versions in the project database
-  (`sharing/sync/config`), because these readers still read it: the Pipelines page and editor, the task form's and the
-  tools' pipelines (`tasks::data::published_pipelines`, `TeamPipelines`), `sharing::compare`, `team_reads::listed`.
-  Until they read memory the copy stays and the migration keeps `resources`/`resource_versions`/
-  `shared_version_bodies`/`shared_version_references` of shared projects. A team pipeline is read-only on this
-  computer (no Save there), and the tools that draft or publish a profile, pipeline, instruction, skill or tool refuse
-  a team project (`team_no_drafts`); editing those kinds in the hub's panel needs its forms (design).
+- **Part 3, the copy goes**: every reader of a team project's configuration reads memory, never the project
+  database. The task form's and the tools' pipelines (`Workspace::project_pipelines`, `ProjectTasks::with_team_pipelines`,
+  `team_published_pipelines`, with `Assignables::of_team` for what their steps run), the team pipelines a team task may
+  name (`TeamPipelines::of(&TeamConfig)`, for actions, the team tools, Join and *Share task*), the Pipelines page and
+  editor of a team project (`Workspace::pipeline_library`, `Workspace::open_pipeline`), and its *Versions* tab, read
+  from the server (`Servers::team_pipeline_history`, `GET …/resources/{id}/versions`). A shared task names its pipeline
+  by id whether or not memory has it; which are missing is told from memory. The runs an archive stops are found
+  through memory and the runs' own inputs (`sync::archive::pins`); when the stream opens, the runs that pin a resource
+  archived while this computer was not following are stopped. The stream writes no configuration to the database
+  (no `config::sync`, no cached versions or profiles, `apply` only moves the cursor for a resource's events); Share
+  keeps nothing of what it uploaded, so the project's own resources stay as they were, hidden while it is shared and
+  its own again when it is made local. The store migration `team_cache` drops the team's resources, versions, bodies
+  and references of a shared project except a version a run or a task here pins, and keeps the overrides.
+  `sharing::compare` keeps only a local project's history; its conflict types are gone. While the configuration is
+  being read or cannot be read, these readers say so (`TeamNotRead`) instead of reading an older copy.
+- **Not done yet**: a team pipeline is read-only on this computer (no Save there), and the tools that draft or publish a
+  profile, pipeline, instruction, skill or tool refuse a team project (`team_no_drafts`); editing those kinds needs its
+  forms (design). The seeds and the QA app still write the team's resources into a project's database, only to hold
+  them on the stand-in team server before the join; nothing in the app reads them there.
 
 ## Open questions
 

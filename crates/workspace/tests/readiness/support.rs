@@ -189,6 +189,7 @@ impl Fixture {
         id,
         kind,
         name: name(slug),
+        slug: slug.to_owned(),
         archived: false,
         revision: TaskRevision::try_from(1).expect("revision"),
         latest: Some(latest),

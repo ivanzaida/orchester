@@ -2,18 +2,16 @@
 //! agent profile, instruction, skill and tool goes to the server through `POST …/resources/import` with its id, slug
 //! and name and every published version, numbers and times kept, after the skill parts its versions list, by hash. A
 //! resource with no published version stays here as its draft, and drafts stay local, based on the same versions.
-//! Then each uploaded resource is kept as the server's with its versions as the server numbered them; their local
-//! bodies stay the bodies this computer published. An agent profile is uploaded in the team's form, with the references
-//! its body names ([`team_body::profile`]), and the local MCP servers the profiles choose as team MCP servers
-//! ([`McpPlan`]); any other body that names a connection, MCP server or secret of this computer is not uploaded
+//! The uploaded resources are the team's on the server from then on, read into memory (`crate::team_config`); the
+//! project's own stay in its database as they were. An agent profile is uploaded in the team's form, with the
+//! references its body names ([`team_body::profile`]), and the local MCP servers the profiles choose as team MCP
+//! servers ([`McpPlan`]); any other body that names a connection, MCP server or secret of this computer is not uploaded
 //! ([`team_body::unchanged`]). Every resource that cannot go is collected, and the upload fails with
 //! [`SharingError::ShareRefused`] listing them all, with nothing sent.
 
 use std::{collections::BTreeSet, path::Path};
 
-use orchester_api::{
-  ResourcesImport, SharedResource, SharedResourceKind, SharedVersion, UploadResource, UploadVersion,
-};
+use orchester_api::{ResourcesImport, SharedResource, SharedResourceKind, UploadResource, UploadVersion};
 use orchester_core::{
   blob::ContentHash,
   id::{IdempotencyKey, ResourceId},
@@ -23,12 +21,11 @@ use orchester_core::{
   },
   sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
-  time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 
-use super::{ConfigServer, blocking, body, reference, resource, share_mcp::McpPlan, team_body};
-use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, project::convert, team_edit::Publication};
+use super::{ConfigServer, blocking, share_mcp::McpPlan, team_body};
+use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, team_edit::Publication};
 
 /// The kinds Share uploads from the project's resources, those other resources name first: a tool before the profiles
 /// that use it, profiles before the pipelines whose steps run them. The team MCP servers go before all of them
@@ -69,28 +66,6 @@ pub async fn upload_configuration(
     uploaded.extend(server.import_resources(import).await?);
   }
   Ok(uploaded)
-}
-
-/// Keeps each of `uploaded` in the project at `root` as the server's, with its versions as `server` numbered them.
-pub async fn keep_uploaded_configuration(
-  server: &impl ConfigServer,
-  root: &Path,
-  uploaded: Vec<SharedResource>,
-) -> Result<(), SharingError> {
-  for shared in uploaded {
-    let mut versions = Vec::new();
-    let mut after = None;
-    loop {
-      let page = server.versions(shared.id, after).await?;
-      versions.extend(page.versions);
-      let Some(next) = page.next else {
-        break;
-      };
-      after = Some(next);
-    }
-    blocking(root, move |root| keep(&mut ProjectDb::open(root)?, &shared, &versions)).await?;
-  }
-  Ok(())
 }
 
 /// What Share has gathered of the project so far.
@@ -287,49 +262,4 @@ fn batches(resources: Vec<UploadResource>) -> Vec<Vec<UploadResource>> {
     }
   }
   batches
-}
-
-fn keep(db: &mut ProjectDb, shared: &SharedResource, versions: &[SharedVersion]) -> Result<(), SharingError> {
-  db.keep_shared_resource(&resource(shared)?, shared.revision)?;
-  for version in versions {
-    match shared.kind {
-      SharedResourceKind::Pipeline => keep_version::<Pipeline>(db, version)?,
-      SharedResourceKind::AgentProfile => keep_version::<AgentProfile>(db, version)?,
-      SharedResourceKind::Instruction => keep_version::<Instruction>(db, version)?,
-      SharedResourceKind::Skill => keep_version::<Skill>(db, version)?,
-      SharedResourceKind::Tool => keep_version::<Tool>(db, version)?,
-      SharedResourceKind::TeamReviewer => keep_version::<TeamReviewer>(db, version)?,
-      SharedResourceKind::McpServer => keep_team_mcp_version(db, version)?,
-    }
-  }
-  Ok(())
-}
-
-/// Keeps `version` as the server confirmed it, with the body this computer published as its local body.
-fn keep_version<B: ResourceBody + Clone>(db: &mut ProjectDb, version: &SharedVersion) -> Result<(), SharingError> {
-  let local = db
-    .version::<B>(version.resource, version.number)?
-    .ok_or(StoreError::ResourceNotFound(version.resource))?;
-  db.cache_shared_version(version.resource, &confirmed(version, local.body().clone()))?;
-  Ok(())
-}
-
-/// Keeps the team MCP server `version` as the server confirmed it. The project has no local copy of it (it was made
-/// from a local MCP server, which stays as it is), so the server's body is the local one too.
-fn keep_team_mcp_version(db: &mut ProjectDb, version: &SharedVersion) -> Result<(), SharingError> {
-  let local = body::<TeamMcpServer>(version.body.clone())?;
-  db.cache_shared_version(version.resource, &confirmed(version, local))?;
-  Ok(())
-}
-
-fn confirmed<B>(version: &SharedVersion, local_body: B) -> CachedVersion<B> {
-  CachedVersion {
-    number: version.number,
-    published_at: Timestamp::from_unix_millis(version.published.at),
-    publisher: convert::person(&version.published.by),
-    server_body: version.body.clone(),
-    hash: version.hash.clone(),
-    references: version.references.iter().map(reference).collect(),
-    local_body,
-  }
 }

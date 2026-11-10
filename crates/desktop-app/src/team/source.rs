@@ -72,7 +72,7 @@ impl TeamSource {
     &self.root
   }
 
-  pub(super) const fn servers(&self) -> &Servers {
+  pub(crate) const fn servers(&self) -> &Servers {
     &self.servers
   }
 

@@ -25,7 +25,7 @@ pub(super) use self::send::carry_out;
 use super::{
   ActionError,
   action::{PolicyAction, TagAction},
-  command::team_pipeline,
+  command::TeamPipelineCheck,
   ownership::{TeamLink, team_task},
 };
 
@@ -86,7 +86,7 @@ pub(super) fn moved(module: Option<ModuleId>) -> TaskChanges {
 
 /// The details that changed; the limits' owner is open (D6), and a pipeline is a team pipeline, by its id.
 pub(super) fn detail_changes(
-  db: &ProjectDb,
+  pipelines: &TeamPipelineCheck<'_>,
   base: &TaskDetails,
   edited: &TaskDetails,
 ) -> Result<TaskChanges, ActionError> {
@@ -94,7 +94,7 @@ pub(super) fn detail_changes(
     return Err(ActionError::DecisionRequired(DecisionId::D6));
   }
   let pipeline = changed(&base.pipeline, &edited.pipeline)
-    .map(|pipeline| pipeline.map(|pipeline| team_pipeline(db, pipeline)).transpose())
+    .map(|pipeline| pipeline.map(|pipeline| pipelines.named(pipeline)).transpose())
     .transpose()?;
   some(TaskChanges {
     title: changed(&base.title, &edited.title).map(|title| title.as_str().to_owned()),

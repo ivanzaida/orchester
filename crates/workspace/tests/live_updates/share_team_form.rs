@@ -26,7 +26,7 @@ use orchester_core::{
   store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
-use orchester_store::{AppDb, ProjectDb, ResourceSharing, StoredServer};
+use orchester_store::{AppDb, ProjectDb, StoredServer};
 use orchester_workspace::{
   sharing::{ShareRefusalReason, SharingError, TeamMcpProblem, sync::upload_configuration},
   workspace::Workspace,
@@ -226,16 +226,12 @@ async fn live_updates_share_turns_the_local_mcp_servers_a_profile_chooses_into_t
   assert_profile_leaks_nothing(&alice, reviewer, &sent, &token);
 
   let db = alice.db();
-  assert!(matches!(
-    db.resource_sharing(team_notes).expect("read"),
-    Some(ResourceSharing::Shared(_))
-  ));
-  assert_eq!(
-    db.latest_version::<TeamMcpServer>(team_notes)
-      .expect("read")
-      .expect("kept")
-      .body(),
-    &body
+  assert!(
+    matches!(
+      db.resource_sharing(team_notes),
+      Err(orchester_store::StoreError::ResourceNotFound(_))
+    ),
+    "the team MCP server is the team's on the server; nothing of it is kept here"
   );
   assert_eq!(db.mcp_servers().expect("read").len(), 3, "the local servers stay");
   let local_profile = db.latest_version::<AgentProfile>(reviewer).expect("read").expect("v1");

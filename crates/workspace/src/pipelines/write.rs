@@ -37,6 +37,7 @@ impl WriteError {
     match self {
       Self::Store(error) | Self::Open(OpenError::Store(error)) => publish_error(error),
       Self::Open(OpenError::Missing) => Message::new("pipelines.problems.missing"),
+      Self::Open(OpenError::TeamNotRead(unread)) => unread.message(),
       Self::InvalidStep(reason) => reason.clone(),
       Self::PersonOnly => Message::new("appMcp.errors.personOnly"),
     }

@@ -47,7 +47,7 @@ use crate::{
     },
   },
   messages::Message,
-  tasks::{data::published_pipelines, form::title_error},
+  tasks::{form::title_error, team_pipelines::team_published_pipelines},
   team_reads::listed::TeamPipelines,
 };
 
@@ -117,7 +117,7 @@ pub(in crate::app_mcp::tools) async fn create_task(
   if status != WorkflowStatus::default() {
     return Err(action_refused(ActionError::StatusOnCreate(status)));
   }
-  let (pipeline, _) = pipelines(team, args.pipeline.clone(), None).await?;
+  let (pipeline, _) = pipelines((services, team), args.pipeline.clone(), None).await?;
   let details = TaskDetails {
     title: title(&args.title)?,
     brief: args.brief.clone().unwrap_or_default(),
@@ -173,7 +173,7 @@ pub(in crate::app_mcp::tools) async fn update_task(
     None => None,
   };
   let task = find(&team.reads(services).await?, &args.key).await?.task;
-  let (chosen, current) = pipelines(team, args.pipeline.clone(), task.content.pipeline.clone()).await?;
+  let (chosen, current) = pipelines((services, team), args.pipeline.clone(), task.content.pipeline.clone()).await?;
   // Another pipeline runs the task with other steps, profiles and approvals: a person decides that, as on a local
   // project. A task without one may get any team pipeline.
   if let Some(chosen) = chosen
@@ -268,7 +268,7 @@ fn edited_details(
 /// task's `current` pipeline is here, read together. A `named` pipeline that is not the team's, a person's own local
 /// one included, is refused: only the team's pipelines run a team task, and its Admins make them.
 async fn pipelines(
-  team: &Team,
+  (services, team): (&Services, &Team),
   named: Option<String>,
   current: Option<String>,
 ) -> Result<(Option<ResourceId>, Option<ResourceId>), ToolError> {
@@ -276,13 +276,15 @@ async fn pipelines(
     return Ok((None, None));
   }
   let root = team.open.repo_root.clone();
+  // The team's pipelines as this session read them from the team server; refused while it cannot be read.
+  let config = services.workspace().team_read(&root).loaded()?;
   blocking(move || {
     let db = ProjectDb::open(&root)?;
-    let pipelines = TeamPipelines::of(&db)?;
+    let pipelines = TeamPipelines::of(&config);
     let chosen = match named {
       Some(named) => {
         // A team project offers only the team's pipelines: a person's own local one is none of these.
-        let published = published_pipelines(&db)?;
+        let published = team_published_pipelines(&db, &config)?;
         let chosen = pipeline_named(&published, &named).map_err(|_| team_pipeline_required(&named))?;
         Some(chosen.id)
       }

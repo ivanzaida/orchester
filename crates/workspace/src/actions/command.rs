@@ -25,7 +25,26 @@ use super::{
   action::{AssignmentAction, ClaimAction, DeliveryAction, DeliveryStep, WorkAction},
   ownership::{TeamLink, team_authority, team_subject},
 };
-use crate::team_reads::listed::TeamPipelines;
+use crate::{sharing::Servers, team_reads::listed::TeamPipelines};
+
+/// Which pipelines a team task may name: the team's, as this session read its configuration from the team server.
+/// Read only when a task names one, so an action that names none is not held up while the configuration is read.
+pub(super) struct TeamPipelineCheck<'a> {
+  pub(super) servers: &'a Servers,
+  pub(super) root: &'a std::path::Path,
+}
+
+impl TeamPipelineCheck<'_> {
+  /// `pipeline` as a team task names it, its resource id, when it is one of the team's pipelines; any other is refused
+  /// before anything is sent, and so is any while the team's configuration cannot be read.
+  pub(super) fn named(&self, pipeline: ResourceId) -> Result<String, ActionError> {
+    let config = self.servers.team_read(self.root).loaded()?;
+    if !TeamPipelines::of(&config).contains(pipeline) {
+      return Err(ActionError::NotTeamPipeline(pipeline));
+    }
+    Ok(pipeline.to_string())
+  }
+}
 
 pub(super) struct TeamRequest {
   pub(super) command: TeamCommand,
@@ -59,7 +78,7 @@ impl TeamRequest {
 /// `task.create`: one task, in the default workflow status (a later one is the lifecycle's), without limits, naming a
 /// team pipeline by its id.
 pub(super) fn create_task(
-  db: &ProjectDb,
+  pipelines: &TeamPipelineCheck<'_>,
   details: &TaskDetails,
   organization: &TaskOrganization,
 ) -> Result<TeamRequest, ActionError> {
@@ -73,10 +92,7 @@ pub(super) fn create_task(
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
-    pipeline: details
-      .pipeline
-      .map(|pipeline| team_pipeline(db, pipeline))
-      .transpose()?,
+    pipeline: details.pipeline.map(|pipeline| pipelines.named(pipeline)).transpose()?,
     limits: None,
     workflow: WorkflowStatus::default(),
     priority: organization.priority(),
@@ -88,15 +104,6 @@ pub(super) fn create_task(
   };
   content.set_organization(organization);
   Ok(TeamRequest::unrevised(TeamCommand::TaskCreate { content }))
-}
-
-/// `pipeline` as a team task names it, its resource id, when it is one of the team's pipelines here; any other is
-/// refused before anything is sent.
-pub(super) fn team_pipeline(db: &ProjectDb, pipeline: ResourceId) -> Result<String, ActionError> {
-  if !TeamPipelines::of(db)?.contains(pipeline) {
-    return Err(ActionError::NotTeamPipeline(pipeline));
-  }
-  Ok(pipeline.to_string())
 }
 
 /// `module.branch.set`, on the module's revision.

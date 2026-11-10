@@ -15,7 +15,6 @@ use orchester_core::{
   id::{ClaimId, OperationId},
   run::CommitId,
 };
-use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
 use super::{
@@ -72,10 +71,11 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (workspace, vault) = (services.workspace().clone(), services.vault.clone());
   let start_vault = vault.clone();
   let branch = module_read.branch.clone();
+  // Only the team's pipelines, as this session read them, run a team task: a person's own local pipeline never does,
+  // even with the same id.
+  let config = workspace.team_read(&root).loaded()?;
   let (base_commit, programs) = blocking(move || {
-    let db = ProjectDb::open(&root)?;
-    // Only the team's pipelines run a team task: a person's own local pipeline never does, even with the same id.
-    let pipeline = TeamPipelines::of(&db)?
+    let pipeline = TeamPipelines::of(&config)
       .id(&named)
       .ok_or_else(|| pipeline_missing(&named))?;
     let commit = branch_tip(programs.runner(), &root, &branch)?;

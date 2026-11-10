@@ -1,28 +1,17 @@
 //! When a version *names* a resource, by typed data and never by a text scan: the ids in a prompt, a description or an
-//! instruction's text name nothing. These are the rules `docs/cloud-api.md` lists for the used-by route, read here as
-//! the team server reads them: the `TeamResource` references of a cached team version ([`referenced`], of any kind),
-//! and the fields of the body, read with core's bodies. A local resource's version has no `references` list, so only
-//! its body counts, and a local project's own rule decides which: a profile names what it gives its agents
+//! instruction's text name nothing. A local resource's version is read by the fields of its body, with core's bodies,
+//! and a local project's own rule decides which: a profile names what it gives its agents
 //! ([`profile`]), where the team server reads an instruction's or skill's scope and targets and a tool's callers.
 
 use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, Pipeline},
 };
-use orchester_store::ReferenceTarget;
 
 /// A kind whose body names no resource here: a team MCP server or reviewer names what it uses in its references, and a
 /// local instruction, skill or tool names nothing ([`profile`]).
 pub(super) fn never<B>(_: &B, _: ResourceId) -> bool {
   false
-}
-
-/// Whether one of `references` is a team resource with `target`'s server id. The reference's kind is not compared with
-/// the target's: a reference of the wrong kind is refused when published, not read here.
-pub(super) fn referenced(references: &[ReferenceTarget], target: ResourceId) -> bool {
-  references
-    .iter()
-    .any(|reference| matches!(reference, ReferenceTarget::TeamResource { id, .. } if *id == target))
 }
 
 /// A pipeline names its steps' executors, an agent profile or a tool, and the profile its Deliver step integrates

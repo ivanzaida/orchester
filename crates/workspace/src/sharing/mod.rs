@@ -192,6 +192,11 @@ impl Servers {
     }
   }
 
+  /// How the configuration of the team project at `root` stands this session ([`Workspace::team_read`]).
+  pub fn team_read(&self, root: &std::path::Path) -> crate::team_config::TeamRead {
+    self.inner.workspace.team_read(root)
+  }
+
   /// Wakes whenever the list or a connection changed.
   pub fn subscribe(&self) -> watch::Receiver<u64> {
     self.inner.changes.subscribe()

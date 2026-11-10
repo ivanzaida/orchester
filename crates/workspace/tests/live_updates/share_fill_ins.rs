@@ -83,19 +83,16 @@ fn store_value(vault: &MemoryVault, alice: &Sharer, secret: &Secret, value: &str
     .expect("the local value");
 }
 
-/// The shared project's readiness for `resource` on this computer, from what its project holds.
+/// The shared project's readiness for `resource` on this computer, from its latest version on `team` and what this
+/// computer filled in.
 fn readiness_of(
-  db: &ProjectDb,
+  (db, team): (&ProjectDb, &TeamServer),
   vault: &MemoryVault,
   (app, server): (&AppDb, ServerId),
   resource: ResourceId,
 ) -> Readiness {
-  let body = db
-    .latest_version::<TeamMcpServer>(resource)
-    .expect("read")
-    .expect("the team server is kept")
-    .body()
-    .clone();
+  let latest = team.versions_of(resource).pop().expect("the team server is uploaded");
+  let body: TeamMcpServer = serde_json::from_value(latest.body).expect("a team MCP server");
   let mut here = Here::nothing();
   if db.team_mcp_switch(resource).expect("read") == Some(true) {
     here = here.with_mcp_on(resource);
@@ -158,7 +155,7 @@ async fn live_updates_share_fill_ins_leave_the_sharer_ready_with_a_path_and_with
   assert!(outcome.not_set.is_empty(), "{:?}", outcome.not_set);
   let (db, app) = (alice.db(), AppDb::open(&app_db).expect("application database"));
   for server_here in [&with_path, &with_name] {
-    let ready = readiness_of(&db, &vault, (&app, server), resource_of(server_here));
+    let ready = readiness_of((&db, &team), &vault, (&app, server), resource_of(server_here));
     assert!(ready.is_ready(), "{:?}", ready.missing());
   }
   let path = app.mcp_server_program(server, resource_of(&with_name)).expect("read");
@@ -327,7 +324,7 @@ async fn live_updates_share_fill_ins_say_the_search_path_name_they_could_not_fin
     }]
   );
   let (db, app) = (alice.db(), AppDb::open(&app_db).expect("application database"));
-  let ready = readiness_of(&db, &vault, (&app, server), resource_of(&with_name));
+  let ready = readiness_of((&db, &team), &vault, (&app, server), resource_of(&with_name));
   assert_eq!(
     ready.missing(),
     [Missing::McpProgram {

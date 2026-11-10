@@ -16,10 +16,9 @@ use lurq::{
 };
 use orchester_core::resource::VersionNumber;
 use orchester_workspace::{
-  background, messages,
+  messages,
   pipelines::{
     data::OpenedPipeline,
-    history::VersionHistory,
     problems::problem_view,
     widening::draft_reasons,
     write::{Allowed, needs_reload},
@@ -269,19 +268,22 @@ impl Editor {
   fn follow_version(&self, ctx: &mut Ctx, props: &EditorProps) -> bool {
     let shown = self.state.get_untracked().viewing_version;
     let wanted = props.version.filter(|version| shown != Some(*version));
+    let source = (
+      crate::services::Services::of(ctx).servers,
+      hub::team::of(&props.project).is_some(),
+    );
     let read = ctx
       .future(
         (props.project.open.repo_root.clone(), props.opened.id, wanted),
-        |(root, id, wanted)| async move {
-          let Some(number) = wanted else {
-            return Ok(None);
-          };
-          background::run(move || {
-            VersionHistory::load_in(&root, id)
-              .map(|history| history.version(number).map(|version| (number, (*version.body).clone())))
-              .map_err(|e| messages::store_error(&e))
-          })
-          .await?
+        move |(root, id, wanted)| {
+          let source = source.clone();
+          async move {
+            let Some(number) = wanted else {
+              return Ok(None);
+            };
+            let history = super::versions::history(source, root, id).await?;
+            Ok::<_, messages::Message>(history.version(number).map(|version| (number, (*version.body).clone())))
+          }
         },
       )
       .state()

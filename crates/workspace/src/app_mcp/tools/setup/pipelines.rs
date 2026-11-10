@@ -194,6 +194,7 @@ pub(super) fn opened(db: &ProjectDb, id: ResourceId, named: &str) -> Result<Open
   OpenedPipeline::load(db, id).map_err(|error| match error {
     OpenError::Store(error) => ToolError::from(error),
     OpenError::Missing => ToolError::not_found(Missing::Pipeline, named),
+    OpenError::TeamNotRead(unread) => ToolError::from(unread),
   })
 }
 

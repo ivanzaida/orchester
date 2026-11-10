@@ -14,5 +14,7 @@ pub mod library;
 pub mod narrowing;
 pub mod problems;
 pub mod sources;
+mod team_assignables;
+pub mod team_page;
 pub mod widening;
 pub mod write;

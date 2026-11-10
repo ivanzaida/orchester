@@ -134,7 +134,6 @@ pub(super) fn head_end(
       id: prefix.into(),
       root: project.open.repo_root.clone(),
       resource: (entry.kind, id),
-      local: true,
     },
   );
   let more = archive::menu(

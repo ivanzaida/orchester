@@ -103,7 +103,7 @@ fn mark(root: &Path, what: Archivable) -> Result<(Pinning, Option<ArchivedResour
   db.with_write_transaction(
     |db| {
       let found = match what {
-        Archivable::Resource(id) => sync::pinning_in(db, root, id),
+        Archivable::Resource(id) => sync::pinning_in(db, root, (id, None)),
         Archivable::McpServer(id) => sync::pinning_mcp_server_in(db, root, id),
       };
       let pinning = found

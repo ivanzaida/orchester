@@ -150,6 +150,7 @@ fn status_name(status: WorkflowStatus) -> String {
 pub(super) fn action_refused(error: ActionError) -> ToolError {
   match error {
     ActionError::Store(error) => error.into(),
+    ActionError::TeamNotRead(error) => error.into(),
     ActionError::Write(error) => write_error(error),
     ActionError::DecisionRequired(decision) => ToolError::refused(
       "decision_required",

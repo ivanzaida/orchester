@@ -1,11 +1,6 @@
 //! The connection (and account) a team profile runs on.
 
-use orchester_core::{
-  account::AccountCli,
-  connection::AgentProvider,
-  id::ConnectionId,
-  resource::{AgentProfile, VersionNumber},
-};
+use orchester_core::{account::AccountCli, connection::AgentProvider, id::ConnectionId};
 use orchester_store::ConnectionPick;
 use orchester_workspace::team_fill_ins::FillInError;
 
@@ -125,26 +120,19 @@ fn team_fill_ins_a_pick_points_a_team_profile_at_the_connection_it_runs_on() {
     crate::support::connection(&mut db, &team.root, AgentProvider::CodexCli, "codex work")
   };
   let body = team_profile(AgentProvider::CodexCli);
-  let server_body = serde_json::to_value(&body).expect("a team profile serializes");
   let profile = team.cached_profile("team-builder", &body);
-  let runs_on = |team: &Team| {
-    let cached = team
-      .db()
-      .cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
-      .expect("read")
-      .expect("cached");
-    (cached.local_body.connection(), cached.server_body)
-  };
+  let runs_on = |team: &Team| crate::unresolved::runs_on(team, profile);
+  let named = |id| crate::unresolved::named(&team, id);
 
   team
     .workspace
     .pick_team_connection(&team.root, profile, pick(second))
     .expect("a Codex connection for a Codex profile");
 
-  assert_eq!(runs_on(&team), (second, server_body.clone()));
+  assert_eq!(runs_on(&team), named(second));
   team
     .workspace
     .pick_team_connection(&team.root, profile, pick(team.codex))
     .expect("another pick replaces it");
-  assert_eq!(runs_on(&team), (team.codex, server_body));
+  assert_eq!(runs_on(&team), named(team.codex));
 }

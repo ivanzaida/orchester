@@ -24,10 +24,7 @@ use orchester_core::{
 };
 use orchester_store::{AppDb, ConnectionPick, ProjectDb};
 
-use super::{
-  refresh_profile,
-  share_mcp::{FillSource, LocalProgram, McpPlan, PlannedServer},
-};
+use super::share_mcp::{FillSource, LocalProgram, McpPlan, PlannedServer};
 use crate::{
   sharing::{NotSet, ShareNote, SharingError},
   tasks::outside::Outside,
@@ -199,8 +196,6 @@ fn set(
   match fill_in {
     FillIn::Pick { profile, pick, .. } => {
       db.set_connection_pick(*profile, *pick)?;
-      // The version the sharer kept still holds the local body it was published with; the pick makes it the team's.
-      refresh_profile(db, *profile)?;
     }
     FillIn::On { server, .. } => db.set_team_mcp_on_here(*server, true)?,
     FillIn::Secret { name, value } => db.set_team_secret_value(vault, name, value)?,

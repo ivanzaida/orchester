@@ -12,6 +12,7 @@ use lurq::{
 use orchester_workspace::{
   background, messages,
   pipelines::history::{PublishedVersion, VersionHistory},
+  sharing::Servers,
 };
 
 use super::{
@@ -20,6 +21,8 @@ use super::{
 };
 use crate::{
   project::ShownProject,
+  screens::hub::team,
+  services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -101,6 +104,7 @@ pub fn read(
   editing: &Editing,
   retry: u64,
 ) -> lurq::app::ctx::FutureState<VersionHistory, messages::Message> {
+  let (servers, team) = (Services::of(ctx).servers, team::of(project).is_some());
   ctx
     .future(
       (
@@ -110,12 +114,23 @@ pub fn read(
         editing.opened.latest.as_ref().map(|v| v.number),
         retry,
       ),
-      |(root, id, ..)| async move {
-        background::run(move || VersionHistory::load_in(&root, id).map_err(|e| messages::store_error(&e))).await?
-      },
+      move |(root, id, ..)| history((servers.clone(), team), root, id),
     )
     .state()
     .get()
+}
+
+/// The versions of pipeline `id` of the project at `root`: a team pipeline's (`team`) as the team server has them, a
+/// local one's as this computer keeps them.
+pub(super) async fn history(
+  (servers, team): (Servers, bool),
+  root: std::path::PathBuf,
+  id: orchester_core::id::ResourceId,
+) -> Result<VersionHistory, messages::Message> {
+  if team {
+    return servers.team_pipeline_history(&root, id).await;
+  }
+  background::run(move || VersionHistory::load_in(&root, id).map_err(|e| messages::store_error(&e))).await?
 }
 
 fn published(ctx: &Ctx, state: &State, history: &VersionHistory) -> RowGroup {

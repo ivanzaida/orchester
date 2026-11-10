@@ -7,7 +7,7 @@ use orchester_store::ProjectDb;
 use super::{
   ActionError,
   action::{Action, ModuleAction, TaskAction},
-  command::{self, TeamRequest},
+  command::{self, TeamPipelineCheck, TeamRequest},
   definition::{self, DefinitionEdit},
   ownership::TeamLink,
 };
@@ -19,7 +19,7 @@ pub(super) enum TeamRoute {
 
 /// The route of `action`, the intent `operation`'s, on the team project `link`, with the server's ids of its targets.
 pub(super) fn team_route(
-  db: &ProjectDb,
+  (db, pipelines): (&ProjectDb, &TeamPipelineCheck<'_>),
   link: TeamLink,
   operation: OperationId,
   action: &Action,
@@ -27,7 +27,7 @@ pub(super) fn team_route(
   use TeamRoute::{Command, Definition};
   Ok(match action {
     Action::Task(TaskAction::Create { details, organization }) => {
-      Command(command::create_task(db, details, organization)?)
+      Command(command::create_task(pipelines, details, organization)?)
     }
     Action::Task(TaskAction::Edit {
       task,
@@ -38,7 +38,7 @@ pub(super) fn team_route(
       db,
       link,
       (*task, *read),
-      definition::detail_changes(db, base, edited)?,
+      definition::detail_changes(pipelines, base, edited)?,
     )?),
     Action::Task(TaskAction::Organize {
       task,

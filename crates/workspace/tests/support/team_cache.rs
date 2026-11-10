@@ -65,7 +65,7 @@ fn cached_resources(root: &Path) -> Option<Vec<TeamResource>> {
   }
   let mut resources = connection
     .prepare(
-      "SELECT id, kind, name, server_revision, \
+      "SELECT id, kind, name, slug, server_revision, \
        EXISTS (SELECT 1 FROM removed_resources WHERE resource_id = resources.id) \
        FROM resources WHERE sharing = 'shared'",
     )
@@ -73,22 +73,22 @@ fn cached_resources(root: &Path) -> Option<Vec<TeamResource>> {
   let rows = resources
     .query_map([], |row| {
       Ok((
-        row.get::<_, String>(0)?,
-        row.get::<_, String>(1)?,
-        row.get::<_, String>(2)?,
-        row.get::<_, i64>(3)?,
-        row.get::<_, bool>(4)?,
+        (row.get::<_, String>(0)?, row.get::<_, String>(1)?),
+        (row.get::<_, String>(2)?, row.get::<_, String>(3)?),
+        row.get::<_, i64>(4)?,
+        row.get::<_, bool>(5)?,
       ))
     })
     .expect("read")
     .map(|row| row.expect("a resource"));
   let kept: Vec<TeamResource> = rows
-    .map(|(id, kind, name, revision, archived)| {
+    .map(|((id, kind), (name, slug), revision, archived)| {
       let id: ResourceId = id.parse().expect("a resource id");
       TeamResource {
         id,
         kind: kind_of(&kind),
         name: Name::new(&name).expect("a name"),
+        slug,
         archived,
         revision: TaskRevision::try_from(u64::try_from(revision).expect("a positive revision")).expect("a revision"),
         latest: latest(&connection, id),

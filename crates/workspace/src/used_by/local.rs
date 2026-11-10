@@ -13,7 +13,6 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, RunId},
   resource::{
     AgentProfile, Instruction, Resource, ResourceBody, ResourceKind, Skill, TeamMcpServer, TeamReviewer, Tool,
-    VersionNumber,
   },
   run::{RunSnapshot, RunStatus},
   store::{McpServerStore, ResourceStore, RunStore, TaskStore},
@@ -123,8 +122,7 @@ fn resources(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByResource>, 
   Ok(found)
 }
 
-/// Adds the resources of `kind`, other than `target`, whose latest version `names` `target` in its body or, when it is
-/// a cached team version, in its references.
+/// Adds the resources of `kind`, other than `target`, whose latest version `names` `target` in its body.
 fn naming<B: ResourceBody>(
   db: &ProjectDb,
   target: ResourceId,
@@ -138,7 +136,7 @@ fn naming<B: ResourceBody>(
     let Some(latest) = db.latest_version::<B>(resource.id())? else {
       continue;
     };
-    if names(latest.body(), target) || referenced::<B>(db, resource.id(), latest.number(), target)? {
+    if names(latest.body(), target) {
       found.push(UsedByResource {
         kind,
         id: resource.id(),
@@ -150,23 +148,12 @@ fn naming<B: ResourceBody>(
   Ok(())
 }
 
-/// Whether the cached team version `number` of `resource` has a reference to `target`; a version made here has none.
-fn referenced<B: ResourceBody>(
-  db: &ProjectDb,
-  resource: ResourceId,
-  number: VersionNumber,
-  target: ResourceId,
-) -> Result<bool, UsedByError> {
-  Ok(
-    db.cached_version::<B>(resource, number)?
-      .is_some_and(|cached| names::referenced(&cached.references, target)),
-  )
-}
-
 /// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot
 /// be read is logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
 fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError> {
-  runs_where(db, |_, snapshot| pins(db, snapshot, target))
+  runs_where(db, |run, snapshot| {
+    Ok(pins(db, (run, snapshot), (target.id(), target.kind())))
+  })
 }
 
 /// The runs that have not ended and that `pinned` says use the target, given the run's id and snapshot, by the task

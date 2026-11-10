@@ -21,7 +21,7 @@ use super::{
   SyncState,
   apply::{self, Applied, Pages},
   catalog::{self, CATALOG_CHECK},
-  config, live,
+  live,
 };
 use crate::{
   background,
@@ -178,7 +178,7 @@ async fn connect(source: &impl Source, root: &Path, clock: &impl Clock) -> (bool
     Ok(mut stream) => {
       source.state(SyncState::Live);
       let ending = tokio::select! {
-        ending = resume(source, root, cursor.is_some(), &mut stream) => ending,
+        ending = resume(source, root, &mut stream) => ending,
         never = catalog::keep_reported(source, root, clock.catalog_check()) => match never {},
       };
       (true, ending)
@@ -187,42 +187,35 @@ async fn connect(source: &impl Source, root: &Path, clock: &impl Clock) -> (bool
   }
 }
 
-/// Applies the events of `stream` until it ends. A stream `resumed` from a cursor gets no snapshot, so the project's
-/// resources are read first: a cursor that came without the snapshot (Join's) or a `resource.published` missed would
-/// otherwise leave the team's configuration out of the cache until its next version. Resources that cannot be read
-/// now do not hold the tasks' deltas: the next connect reads them again.
-async fn resume(source: &impl Source, root: &Path, resumed: bool, stream: &mut EventStream) -> Ending {
+/// Reads the team's configuration into memory, then applies the events of `stream` until it ends. A configuration that
+/// cannot be read now does not hold the tasks' deltas: the next connect reads it again.
+async fn resume(source: &impl Source, root: &Path, stream: &mut EventStream) -> Ending {
   // A read refused because the session or the membership just ended is said unreachable here; the stream itself then
   // ends as the server says (`revoked`, `401`, `403`), which tells signed out from not a member.
   match live::fill(source, root).await {
-    Ok(()) => source.changed(),
+    Ok(()) => {
+      source.changed();
+      stop_archived(source, root).await;
+    }
     Err(error) => {
       tracing::warn!(%error, "the team's configuration could not be read; the next connect reads it");
       live::unreached(source, root, &error);
     }
   }
-  if resumed {
-    match resources(source, root).await {
-      Ok(()) => {}
-      Err(SharingError::SignedOut) => return Ending::Stream(StreamEnd::Unauthorized),
-      Err(error) => tracing::warn!(%error, "the project's resources could not be read; the next connect reads them"),
-    }
-  }
   read(source, root, stream).await
 }
 
-/// Keeps every resource the server has with the versions this computer does not have yet.
-async fn resources(source: &impl Source, root: &Path) -> Result<(), SharingError> {
-  let resources = source.resources().await?;
-  tracing::info!(
-    count = resources.len(),
-    "a resumed stream reads the project's resources"
-  );
-  for resource in resources {
-    config::sync(source, root, resource).await?;
+/// Stops the runs here that pin a resource the team archived, as the configuration read when the stream opened says:
+/// one archived while this computer was not following the project stops its runs now. A run stopped already is not
+/// running, so nothing is stopped twice; the server's read does not say who archived it.
+async fn stop_archived(source: &impl Source, root: &Path) {
+  let archived: Vec<_> = match source.configs().read(root).config() {
+    Some(config) => config.all_archived().map(|resource| resource.id).collect(),
+    None => return,
+  };
+  for resource in archived {
+    source.archived(resource, None).await;
   }
-  source.changed();
-  Ok(())
 }
 
 /// Applies the events of `stream` until it ends.
@@ -249,12 +242,20 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
         let Some(pages) = pages.take() else {
           return Ending::Stream(StreamEnd::Unreadable);
         };
-        snapshot(source, root, pages, end.cursor).await
+        snapshot(root, pages, end.cursor).await
       }
       event => match live::follow(source, root, &event).await {
         Ok(changed) => {
           if changed {
             source.changed();
+          }
+          // A resource archived only now stops the runs here that pin it.
+          if let (true, Event::ResourceArchived(delta)) = (changed, &event)
+            && delta.change.archived
+          {
+            source
+              .archived(delta.change.resource, Some(&delta.by.display_name))
+              .await;
           }
           blocking(root, move |root| apply::delta(root, &event)).await
         }
@@ -265,11 +266,6 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
       Ok(Applied::Unchanged) => continue,
       Ok(Applied::Changed) => Ok(()),
       Ok(Applied::Read { task, cursor }) => read_again(source, root, task, cursor).await,
-      Ok(Applied::Published { resource, cursor }) => published(source, root, *resource, cursor).await,
-      Ok(Applied::Archived { resource, by }) => {
-        source.archived(resource, Some(&by)).await;
-        Ok(())
-      }
       Err(error) => Err(error),
     };
     match result {
@@ -288,17 +284,13 @@ fn ended(error: SharingError) -> Ending {
   }
 }
 
-/// Keeps the snapshot's resources with their versions, then takes the snapshot at `cursor`: a stream that breaks
-/// before takes the snapshot again on its next connect.
-async fn snapshot(source: &impl Source, root: &Path, pages: Pages, cursor: u64) -> Result<Applied, SharingError> {
+/// Takes the snapshot at `cursor`; the team's configuration it names was read into memory when the stream opened.
+async fn snapshot(root: &Path, pages: Pages, cursor: u64) -> Result<Applied, SharingError> {
   tracing::info!(
     resources = pages.resources().len(),
     cursor,
     "a project's snapshot ended"
   );
-  for resource in pages.resources() {
-    config::sync(source, root, resource.clone()).await?;
-  }
   blocking(root, move |root| {
     apply::snapshot(root, &pages, cursor).map(|()| Applied::Changed)
   })
@@ -314,17 +306,6 @@ async fn read_again(source: &impl Source, root: &Path, task: TaskId, cursor: u64
     }
     Err(error) => Err(error),
   }
-}
-
-/// Keeps the published `resource` with its new versions, then moves the cursor to `cursor`.
-async fn published(
-  source: &impl Source,
-  root: &Path,
-  resource: SharedResource,
-  cursor: u64,
-) -> Result<(), SharingError> {
-  config::sync(source, root, resource).await?;
-  blocking(root, move |root| apply::skip(root, cursor)).await
 }
 
 pub(super) async fn blocking<T: Send + 'static>(

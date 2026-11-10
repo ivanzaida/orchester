@@ -64,12 +64,14 @@ fn form_readiness_a_local_menu_says_ready_or_how_many_things_are_missing() {
 fn form_readiness_a_team_menu_says_here() {
   let mut form = menu("picker-readiness-team");
   let rows = statuses(&mut form);
-  assert_eq!(status_of(&rows, "Team delivery"), "2 things missing here");
-  assert_eq!(status_of(&rows, "Team quick fix"), "Ready here");
+  // What `team-hub` leaves missing here for Builder and Reviewer (its module's doc), as the team's configuration read
+  // into memory says: Team delivery runs both, Team quick fix Reviewer alone.
+  assert_eq!(status_of(&rows, "Team delivery"), "4 things missing here");
+  assert_eq!(status_of(&rows, "Team quick fix"), "1 thing missing here");
   form.fill("Add a team delivery", "Team delivery");
   assert_eq!(
     form.reasons(),
-    vec!["Team delivery v1 is not ready on this computer · 2 things missing".to_owned()]
+    vec!["Team delivery v1 is not ready on this computer · 4 things missing".to_owned()]
   );
 }
 

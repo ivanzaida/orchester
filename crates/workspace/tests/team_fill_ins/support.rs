@@ -127,6 +127,7 @@ fn team_resource_of(id: ResourceId, slug: &str, kind: ResourceKind, body: Value)
     id,
     kind,
     name: name(slug),
+    slug: slug.to_owned(),
     archived: false,
     revision: TaskRevision::try_from(1).expect("revision"),
     latest: Some(TeamVersion {

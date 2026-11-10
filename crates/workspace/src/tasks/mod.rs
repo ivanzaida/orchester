@@ -77,6 +77,7 @@ pub mod standing;
 mod step_executors;
 mod step_views;
 mod team_detail;
+pub mod team_pipelines;
 pub mod timeline;
 pub mod transcript;
 pub mod unreadable;

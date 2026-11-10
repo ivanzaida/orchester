@@ -103,8 +103,6 @@ pub(crate) struct VersionsProps {
   pub id: Arc<str>,
   pub root: PathBuf,
   pub resource: (ResourceKind, ResourceId),
-  /// The resource is a local project's: each version was published here, with no publisher to name.
-  pub local: bool,
 }
 
 impl DevtoolsInspectable for VersionsProps {}
@@ -150,23 +148,14 @@ impl Component for VersionsButton {
 impl VersionsButton {
   fn panel(&self, ctx: &mut Ctx, props: &VersionsProps, id: &str) -> Column {
     let (root, (kind, resource)) = (props.root.clone(), props.resource);
-    let read = ctx.future(
-      (root, kind, resource, props.local),
-      |(root, kind, resource, local)| async move {
-        background::run(move || {
-          if local {
-            compare::local_history(&root, kind, resource)
-          } else {
-            compare::history(&root, kind, resource)
-          }
-        })
+    let read = ctx.future((root, kind, resource), |(root, kind, resource)| async move {
+      background::run(move || compare::local_history(&root, kind, resource))
         .await?
         .map_err(|error| {
-          tracing::error!(%error, "cannot read the versions of a resource of the team");
+          tracing::error!(%error, "cannot read the versions of a resource");
           messages::store_error(&error)
         })
-      },
-    );
+    });
     let state = read.state().get();
     let panel = popover_panel(&format!("{id}-panel"), VERSIONS_WIDTH).child(
       Text::new(&ctx.t("sharing.config.versions.title"))
@@ -201,13 +190,8 @@ fn version_row(ctx: &Ctx, id: &str, entry: &HistoryEntry) -> Column {
     "sharing.config.versions.line",
     [
       ("version", number.to_string()),
-      (
-        "name",
-        entry
-          .publisher
-          .clone()
-          .unwrap_or_else(|| ctx.t("sharing.config.here").to_string()),
-      ),
+      // Every version a local project has was published here.
+      ("name", ctx.t("sharing.config.here").to_string()),
       ("when", when(ctx, entry.published_at)),
     ],
   );

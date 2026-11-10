@@ -50,6 +50,7 @@ fn desktop(server: &TeamServer, (style, held): (ResourceId, u32), admin: bool) -
     id: style,
     kind: ResourceKind::Instruction,
     name: Name::new("Style").expect("name"),
+    slug: "style".to_owned(),
     archived: false,
     revision: TaskRevision::try_from(1).expect("a revision"),
     latest: Some(TeamVersion {

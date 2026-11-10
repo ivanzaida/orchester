@@ -111,7 +111,7 @@ impl TeamTasks {
 
 #[lurq::query(stale_time = "30s", gc_time = "2m")]
 pub async fn team_tasks(source: TeamSource, list: TaskListKey) -> Result<TeamTasks, TeamFailure> {
-  let pipelines = team_pipelines(&source).await?;
+  let pipelines = team_pipelines(&source)?;
   let filters = list.filters();
   let mut reads = Vec::new();
   let mut after = None;
@@ -201,17 +201,13 @@ pub async fn team_admins(source: TeamSource) -> Result<TeamAdmins, TeamFailure> 
   }
 }
 
-/// The team's pipelines this computer has.
-pub(super) async fn team_pipelines(source: &TeamSource) -> Result<TeamPipelines, TeamFailure> {
-  let root = source.root().to_owned();
-  match background::run(move || TeamPipelines::read(&root)).await {
-    Ok(Ok(pipelines)) => Ok(pipelines),
-    Ok(Err(error)) => {
-      tracing::warn!(%error, "the project's pipelines cannot be read for its team tasks");
-      Err(TeamFailure::Refused)
-    }
-    Err(_) => Err(TeamFailure::Refused),
-  }
+/// The team's pipelines as this session read the team's configuration. While it is being read, or could not be read,
+/// the tasks are listed with the pipelines they name and none said missing: the list never waits on the configuration.
+pub(super) fn team_pipelines(source: &TeamSource) -> Result<TeamPipelines, TeamFailure> {
+  Ok(match source.servers().team_read(source.root()).loaded() {
+    Ok(config) => TeamPipelines::of(&config),
+    Err(_) => TeamPipelines::unread(),
+  })
 }
 
 fn listed(

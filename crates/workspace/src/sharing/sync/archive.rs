@@ -1,23 +1,26 @@
 //! A team resource archived on the server stops the runs here that pin it: each run that has not ended and pins any
 //! version of it — its pipeline, a step's profile or tool, an instruction, tool or skill — or, for a team MCP server,
-//! pins a profile version that chooses it, is cancelled through its project's runner, and recorded ([`ArchiveStop`]) so
-//! the person is told which run stopped and why (`crate::notifications::sources::of_archive_stops`). A run that cannot
-//! be cancelled is logged and not recorded: no notification says it stopped.
+//! binds it in its inputs (as a profile version it pins chooses it), is cancelled through its project's runner, and
+//! recorded ([`ArchiveStop`]) so the person is told which run stopped and why
+//! (`crate::notifications::sources::of_archive_stops`). A run that cannot be cancelled is logged and not recorded: no
+//! notification says it stopped.
 
 use std::path::Path;
 
 use orchester_core::{
   id::{ConnectionId, ResourceId, RunId, TaskId},
   name::Name,
-  resource::{AgentProfile, Resource, ResourceKind},
-  run::{RunSnapshot, StepExecutor},
+  resource::{AgentProfile, ResourceKind},
+  run::{RunSnapshot, StepExecutor, inputs::team_mcp_id},
   store::{McpServerStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_ipc::Command;
-use orchester_store::{ArchiveStop, Archived, ProjectDb, ReferenceTarget, RunStoreError, StoreError};
+use orchester_store::{ArchiveStop, Archived, ProjectDb, RunStoreError, StoreError};
 
-use crate::{background, runner::Runners, tasks::run::control_message, workspace::OpenProject};
+use crate::{
+  background, runner::Runners, tasks::run::control_message, team_config::TeamConfig, workspace::OpenProject,
+};
 
 /// Why the runs an archived resource stops could not be read or recorded.
 #[derive(Debug, thiserror::Error)]
@@ -55,9 +58,13 @@ impl Pinning {
 
 /// Cancels every run of the project at `root` that pins `resource`, archived on the server by `by` (when the server
 /// said), and records each one cancelled.
-pub(super) async fn stop_runs(runners: &Runners, root: &Path, (resource, by): (ResourceId, Option<&str>)) {
+pub(super) async fn stop_runs(
+  runners: &Runners,
+  (root, team): (&Path, std::sync::Arc<TeamConfig>),
+  (resource, by): (ResourceId, Option<&str>),
+) {
   let owned = root.to_owned();
-  let pinning = match background::run(move || pinning(&owned, resource)).await {
+  let pinning = match background::run(move || pinning(&owned, resource, Some(&team))).await {
     Ok(Ok(Some(pinning))) => pinning,
     Ok(Ok(None)) => return,
     Ok(Err(error)) => {
@@ -128,21 +135,30 @@ fn record(root: &Path, stop: &ArchiveStop, server: Option<ConnectionId>) -> Resu
   server.map_or(Ok(()), |server| db.record_mcp_server_stop(stop.run, server))
 }
 
-/// The runs that have not ended and pin `resource`; `None` when the project does not keep it.
-pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, ArchiveError> {
-  pinning_in(&ProjectDb::open(root)?, root, resource)
+/// The runs that have not ended and pin `resource`: a team project's, named by `team`, the team's configuration read
+/// this session; a local project's (`team` `None`) kept in its database. `None` when neither has it.
+pub fn pinning(root: &Path, resource: ResourceId, team: Option<&TeamConfig>) -> Result<Option<Pinning>, ArchiveError> {
+  pinning_in(&ProjectDb::open(root)?, root, (resource, team))
 }
 
 /// [`pinning`] read through `db`, which an archive holds in the transaction that writes it.
-pub(crate) fn pinning_in(db: &ProjectDb, root: &Path, resource: ResourceId) -> Result<Option<Pinning>, ArchiveError> {
-  let Some(kept) = db.resource(resource)? else {
+pub(crate) fn pinning_in(
+  db: &ProjectDb,
+  root: &Path,
+  (resource, team): (ResourceId, Option<&TeamConfig>),
+) -> Result<Option<Pinning>, ArchiveError> {
+  let named = match team {
+    Some(config) => config.resource(resource).map(|found| (found.kind, found.name.clone())),
+    None => db.resource(resource)?.map(|kept| (kept.kind(), kept.name().clone())),
+  };
+  let Some((kind, name)) = named else {
     return Ok(None);
   };
   let mut runs = Vec::new();
   for listed in db.unfinished_runs()? {
     match listed {
       Ok(run) => {
-        if pins(db, run.snapshot(), &kept)? {
+        if pins(db, (run.id(), run.snapshot()), (resource, kind)) {
           runs.push((run.id(), run.task()));
         }
       }
@@ -157,8 +173,8 @@ pub(crate) fn pinning_in(db: &ProjectDb, root: &Path, resource: ResourceId) -> R
       project: db.project().clone(),
       repo_root: root.to_owned(),
     },
-    resource: kept.name().clone(),
-    kind: kept.kind(),
+    resource: name,
+    kind,
     runs,
   }))
 }
@@ -227,34 +243,28 @@ pub(crate) fn pins_mcp_server(
   Ok(false)
 }
 
-/// Whether a run with `snapshot` pins `resource`: the one rule for the runs an archive stops, also read by the used-by
-/// list before the archive (`crate::used_by`), so for a local project the list is what the archive stops. A run pins no
-/// MCP server of its own: it uses the servers its pinned profile versions choose, and a team profile version chooses a
-/// team MCP server by a `TeamResource { kind: McpServer, id }` reference, read from the cached version.
-pub(crate) fn pins(db: &ProjectDb, snapshot: &RunSnapshot, resource: &Resource) -> Result<bool, StoreError> {
-  if snapshot.pins(resource.id()) {
-    return Ok(true);
+/// Whether `run`, with `snapshot`, pins `resource` of `kind`: the one rule for the runs an archive stops, also read by
+/// the used-by list before the archive (`crate::used_by`), so for a local project the list is what the archive stops.
+/// A run pins no MCP server of its own: a team run binds in its inputs the team MCP servers its pinned profile versions
+/// choose, as the team server accepted them.
+pub(crate) fn pins(
+  db: &ProjectDb,
+  (run, snapshot): (RunId, &RunSnapshot),
+  (resource, kind): (ResourceId, ResourceKind),
+) -> bool {
+  if snapshot.pins(resource) {
+    return true;
   }
-  if resource.kind() != ResourceKind::McpServer {
-    return Ok(false);
+  if kind != ResourceKind::McpServer {
+    return false;
   }
-  for step in snapshot.steps() {
-    let StepExecutor::Agent { profile, .. } = step.executor() else {
-      continue;
-    };
-    // A profile made here has no cached version and so chooses no team server.
-    let Some(cached) = db.cached_version::<AgentProfile>(profile.resource, profile.number)? else {
-      continue;
-    };
-    let chooses = cached.references.iter().any(|reference| {
-      matches!(
-        reference,
-        ReferenceTarget::TeamResource { kind: ResourceKind::McpServer, id } if *id == resource.id()
-      )
-    });
-    if chooses {
-      return Ok(true);
+  match db.run_inputs(run) {
+    Ok(Some(inputs)) => inputs.team_mcp_ids().contains(&team_mcp_id(resource)),
+    // A run started before inputs were kept binds no team MCP server.
+    Ok(None) => false,
+    Err(error) => {
+      tracing::warn!(%error, %run, "unreadable run inputs are not checked against an archived team MCP server");
+      false
     }
   }
-  Ok(false)
 }

@@ -74,7 +74,7 @@ impl TeamProfileSheet {
 
 /// A sheet for each team profile whose latest version is in the team's form; one that is not has none, and its
 /// readiness says why. What this computer filled in (the pick) is read from `db`.
-pub(super) fn sheets(db: &ProjectDb, config: &TeamConfig) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
+pub(crate) fn sheets(db: &ProjectDb, config: &TeamConfig) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
   let connections = db.connections()?;
   let mut sheets = Vec::new();
   for resource in config.resources(ResourceKind::AgentProfile) {

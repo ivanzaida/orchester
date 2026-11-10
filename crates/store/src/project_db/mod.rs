@@ -132,7 +132,6 @@ mod todo_lists;
 mod tool_approvals;
 mod usage;
 mod used_versions;
-mod version_publishers;
 mod workspace_records;
 mod workspaces;
 mod worktree_removals;
@@ -352,4 +351,6 @@ pub enum ProjectMigration {
   TeamOutbox,
   /// A local project's drafts of its published profiles, instructions, skills and tools dropped.
   LocalDrafts,
+  /// A shared project's copy of the team's configuration dropped.
+  TeamCache,
 }

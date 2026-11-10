@@ -5,7 +5,7 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, ConnectionKind,
+    AgentConnection, AgentProvider, Connection, ConnectionKind,
     mcp::{McpServer, McpServerSelection},
   },
   id::ResourceId,
@@ -59,6 +59,53 @@ pub struct ToolChoice {
   pub runnable: bool,
 }
 
+impl ProfileChoice {
+  /// Profile `id` named `name`, as its version `number` with `body` runs on one of `connections`.
+  pub(crate) fn of(
+    (id, name): (ResourceId, &str),
+    number: VersionNumber,
+    body: &AgentProfile,
+    connections: &[Connection],
+  ) -> Self {
+    let connection = connections
+      .iter()
+      .find(|connection| connection.id() == body.connection());
+    let provider = connection.and_then(|connection| match connection.kind() {
+      ConnectionKind::Agent(provider) => Some(*provider),
+      ConnectionKind::GitHub { .. } => None,
+    });
+    Self {
+      connection: connection.map(|connection| connection.name().as_str().into()),
+      provider,
+      permissions: body.permissions().clone(),
+      // A connection that is no agent CLI (GitHub) narrows no models: it has none to run.
+      agent: connection.and_then(|connection| AgentConnection::try_from(connection.clone()).ok()),
+      id,
+      name: name.into(),
+      version: number,
+      model: body.model().clone(),
+      mcp: body.mcp_servers().clone(),
+    }
+  }
+}
+
+impl ToolChoice {
+  /// Tool `id` named `name`, as its version `number` with `tool` reads.
+  pub(crate) fn of((id, name): (ResourceId, &str), number: VersionNumber, tool: &Tool) -> Self {
+    Self {
+      id,
+      name: name.into(),
+      version: number,
+      kind: tool.kind(),
+      command: match tool.action() {
+        ToolAction::Command(command) => Some(command.command_line().into()),
+        ToolAction::Http(_) | ToolAction::DatabaseQuery(_) => None,
+      },
+      runnable: tool.kind().runnable() && tool.access().is_none(),
+    }
+  }
+}
+
 /// What steps of the project's pipelines can be assigned to.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Assignables {
@@ -76,24 +123,8 @@ impl Assignables {
     let mut draft_profiles = Vec::new();
     for resource in store.resources(ResourceKind::AgentProfile)? {
       if let Some(version) = store.latest_version::<AgentProfile>(resource.id())? {
-        let connection = connections
-          .iter()
-          .find(|connection| connection.id() == version.body().connection());
-        let provider = connection.and_then(|connection| match connection.kind() {
-          ConnectionKind::Agent(provider) => Some(*provider),
-          ConnectionKind::GitHub { .. } => None,
-        });
-        profiles.push(ProfileChoice {
-          connection: connection.map(|connection| connection.name().as_str().into()),
-          provider,
-          permissions: version.body().permissions().clone(),
-          agent: connection.and_then(|connection| AgentConnection::try_from(connection.clone()).ok()),
-          id: resource.id(),
-          name: resource.name().as_str().into(),
-          version: version.number(),
-          model: version.body().model().clone(),
-          mcp: version.body().mcp_servers().clone(),
-        });
+        let named = (resource.id(), resource.name().as_str());
+        profiles.push(ProfileChoice::of(named, version.number(), version.body(), &connections));
       } else if let Some(draft) = store.draft::<AgentProfile>(resource.id())? {
         draft_profiles.push(DraftProfileChoice {
           id: resource.id(),
@@ -105,18 +136,11 @@ impl Assignables {
     let mut tools = Vec::new();
     for resource in store.resources(ResourceKind::Tool)? {
       if let Some(version) = store.latest_version::<Tool>(resource.id())? {
-        let tool = version.body();
-        tools.push(ToolChoice {
-          id: resource.id(),
-          name: resource.name().as_str().into(),
-          version: version.number(),
-          kind: tool.kind(),
-          command: match tool.action() {
-            ToolAction::Command(command) => Some(command.command_line().into()),
-            ToolAction::Http(_) | ToolAction::DatabaseQuery(_) => None,
-          },
-          runnable: tool.kind().runnable() && tool.access().is_none(),
-        });
+        tools.push(ToolChoice::of(
+          (resource.id(), resource.name().as_str()),
+          version.number(),
+          version.body(),
+        ));
       }
     }
     Ok(Self {
@@ -199,6 +223,9 @@ pub enum OpenError {
   /// The pipeline was removed, or has neither a draft nor a version.
   #[error("the pipeline does not exist")]
   Missing,
+  /// A team project's configuration is being read, or could not be read this session; nothing older is opened.
+  #[error(transparent)]
+  TeamNotRead(#[from] crate::team_config::TeamNotRead),
 }
 
 impl OpenedPipeline {

@@ -369,7 +369,8 @@ impl TaskDetail {
     let task = super::recorded::page_task_of(&db, task)?.ok_or(StoreError::TaskNotFound(task))?;
     let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let blocked_by = blocking_keys(&db, &task)?;
-    let missing_pipeline = db.missing_pipelines()?.remove(&task.id());
+    // A team task's pipeline that the team's configuration lacks is told by its team read (`team_detail`), from memory.
+    let missing_pipeline = None;
     let unsent_status = db.unsent_status(task.id())?;
     let shared = db.shared_task_info(task.id())?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;

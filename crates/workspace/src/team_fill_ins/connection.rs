@@ -8,12 +8,12 @@ use orchester_core::{
   id::{AgentAccountId, ResourceId},
   resource::{ResourceKind, TeamAgentProfile},
   sharing::ConnectionRole,
-  store::{ConnectionStore, ResourceStore},
+  store::ConnectionStore,
 };
 use orchester_store::{ConnectionPick, ProjectDb};
 
 use super::{FillInError, team};
-use crate::{sharing::sync::refresh_profile, tasks::outside::Outside, team_config::TeamResource, workspace::Workspace};
+use crate::{tasks::outside::Outside, team_config::TeamResource, workspace::Workspace};
 
 impl Workspace {
   /// Keeps `pick` as the connection, and the account when the connection needs one, the team profile `profile` of
@@ -38,10 +38,6 @@ impl Workspace {
       self.check_account(&connection, account)?;
     }
     db.set_connection_pick(profile, pick)?;
-    // The local body the database still keeps of the profile follows the pick; one it does not keep has none.
-    if db.resource(profile)?.is_some() {
-      refresh_profile(&mut db, profile)?;
-    }
     self.changes.record(db.project().id(), Outside::Connections);
     Ok(())
   }

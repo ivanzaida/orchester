@@ -7,7 +7,6 @@
 
 mod local;
 mod local_mcp;
-mod mcp_servers;
 #[path = "../support/mod.rs"]
 mod support;
 mod team;

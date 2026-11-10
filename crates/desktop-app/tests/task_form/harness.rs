@@ -40,6 +40,10 @@ impl Form {
     })
     .expect("the scenario seeds");
     let launch = data.launch();
+    // A team scenario's resources are the team's configuration a stream would read into memory; these tests run none.
+    if let Some(workspace) = launch.workspace() {
+      crate::support::team_cache::keep_cached_team(workspace, &seeded.repo);
+    }
     Self {
       window: Window::of(data, launch),
       project: seeded.project,

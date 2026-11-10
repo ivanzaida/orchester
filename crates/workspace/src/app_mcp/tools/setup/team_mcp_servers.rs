@@ -38,7 +38,7 @@ use crate::{
     team_edit::{NewTeamResource, Publication},
   },
   tasks::{detail::run_store_error, outside::Outside},
-  team_config::TeamResource,
+  team_config::{TeamConfig, TeamResource},
   used_by::{UsedByError, used_by},
 };
 
@@ -122,9 +122,10 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
   let Found { team, resource } = found;
   let (root, id) = (team.open.repo_root.clone(), resource.id);
   let checked = root.clone();
+  let config = services.workspace().team_read(&root).loaded()?;
   let stopping = blocking(move || {
     require_admin(&ProjectDb::open(&checked)?)?;
-    stopping_here(&checked, id)
+    stopping_here(&checked, id, &config)
   })
   .await?;
   let session = team.session(services).await?;
@@ -182,8 +183,8 @@ fn server_json(id: ResourceId, server: &TeamMcpServer, version: u32) -> Value {
 }
 
 /// The runs of this computer that pin team MCP server `id` and will be cancelled when the archive reaches it.
-fn stopping_here(root: &std::path::Path, id: ResourceId) -> Result<Vec<Value>, ToolError> {
-  let pinning = crate::sharing::sync::pinning(root, id).map_err(|error| match error {
+fn stopping_here(root: &std::path::Path, id: ResourceId, team: &TeamConfig) -> Result<Vec<Value>, ToolError> {
+  let pinning = crate::sharing::sync::pinning(root, id, Some(team)).map_err(|error| match error {
     ArchiveError::Store(error) => ToolError::from(error),
     ArchiveError::Runs(error) => ToolError::from(run_store_error(error)),
   })?;

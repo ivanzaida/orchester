@@ -37,13 +37,13 @@ pub(super) use self::state::SyncStates;
 pub use self::{
   archive::{ArchiveError, Pinning, pinning, pinning_mcp_server},
   catalog::CATALOG_CHECK,
-  config::{ConfigServer, FillInOutcome, ShareFillIns, keep_uploaded_configuration, upload_configuration},
+  config::{ConfigServer, FillInOutcome, ShareFillIns, upload_configuration},
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
 pub(crate) use self::{
   archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
-  config::{refresh_profile, refresh_team_profiles, team_body},
+  config::team_body,
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
 use crate::{
@@ -244,7 +244,14 @@ impl Source for Live {
   }
 
   async fn archived(&self, resource: ResourceId, by: Option<&str>) {
-    archive::stop_runs(&self.runners, self.project.repo_root(), (resource, by)).await;
+    let root = self.project.repo_root();
+    // An archive arrives on the stream after its configuration was read, which names what was archived.
+    match self.servers.team_read(root).config().cloned() {
+      Some(config) => archive::stop_runs(&self.runners, (root, config), (resource, by)).await,
+      None => {
+        tracing::warn!(%resource, "an archive arrived before the team's configuration was read; no run is stopped")
+      }
+    }
     self.servers.shared_changed();
   }
 

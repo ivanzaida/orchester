@@ -9,6 +9,8 @@ use crate::{
   messages::{self, Message},
   readiness::{NotReadyHere, ReadinessError},
   runner::{RequestError, RunRequestError},
+  tasks::team_pipelines::PipelinesUnread,
+  team_config::TeamNotRead,
 };
 
 /// What a tool names and Orchester does not know.
@@ -192,6 +194,27 @@ impl From<ReadinessError> for ToolError {
       }
     };
     Self::refused(code, vec![error.message()])
+  }
+}
+
+impl From<TeamNotRead> for ToolError {
+  /// A team project's configuration that is being read, or could not be read from its team server this session:
+  /// `team_reading` or `team_unreachable`, with the reason. Nothing older is read in its place.
+  fn from(error: TeamNotRead) -> Self {
+    let code = match &error {
+      TeamNotRead::Reading => "team_reading",
+      TeamNotRead::Unreachable(_) => "team_unreachable",
+    };
+    Self::refused(code, vec![error.message()])
+  }
+}
+
+impl From<PipelinesUnread> for ToolError {
+  fn from(error: PipelinesUnread) -> Self {
+    match error {
+      PipelinesUnread::Store(error) => error.into(),
+      PipelinesUnread::Team(error) => error.into(),
+    }
   }
 }
 

@@ -192,7 +192,7 @@ pub async fn team_task(source: TeamSource, key: TaskKey) -> Result<Option<TeamTa
   let Some(read) = page.items.into_iter().find(|read| read.task.key == shown) else {
     return Ok(None);
   };
-  let (pipelines, who) = (team_pipelines(&source).await?, Who::of(&source).await);
+  let (pipelines, who) = (team_pipelines(&source)?, Who::of(&source).await);
   team_task_of(&read, &pipelines, &who).map(Some)
 }
 

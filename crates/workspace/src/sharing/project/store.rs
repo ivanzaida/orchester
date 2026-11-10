@@ -20,7 +20,7 @@ use orchester_store::{ProjectDb, StoreError};
 use tokio::runtime::Handle;
 
 use super::{ProjectServer, convert};
-use crate::sharing::SharingError;
+use crate::{sharing::SharingError, team_reads::listed::TeamPipelines};
 
 pub struct RemoteTaskStore {
   pub(super) db: ProjectDb,
@@ -34,6 +34,13 @@ impl RemoteTaskStore {
   pub fn new(db: ProjectDb, server: ProjectServer) -> Result<Self, SharingError> {
     let runtime = Handle::try_current().map_err(|_| SharingError::Interrupted)?;
     Ok(Self { db, server, runtime })
+  }
+
+  /// The team's pipelines a task may name, as this session read the team's configuration; refused while it cannot be
+  /// read, never answered from an older copy.
+  pub(super) fn team_pipelines(&self) -> Result<TeamPipelines, SharingError> {
+    let config = self.server.servers.team_read(&self.server.repo_root).loaded()?;
+    Ok(TeamPipelines::of(&config))
   }
 
   /// The cache, for reads.
@@ -136,7 +143,7 @@ impl RemoteTaskStore {
     actor: ChangeActor,
   ) -> Result<TaskUpdate, SharingError> {
     let cached = self.cached(task)?;
-    let changes = convert::content_changes(&self.db, &cached, details, cached.status())?;
+    let changes = convert::content_changes(&self.team_pipelines()?, &cached, details, cached.status());
     let value = edited.rebase(base, cached.organization());
     let mut changes = convert::with_organization(changes, cached.organization(), &value);
     changes.actor = Some(actor);
@@ -157,7 +164,7 @@ impl RemoteTaskStore {
       ChangeActor::Person => organization.clone(),
       ChangeActor::Orchester => TaskOrganization::default(),
     };
-    let content = convert::content(&self.db, details, &first)?;
+    let content = convert::content(&self.team_pipelines()?, details, &first);
     let task = self
       .create(batch, vec![content])?
       .pop()
@@ -182,10 +189,11 @@ impl TaskStore for RemoteTaskStore {
     if details.is_empty() {
       return Err(StoreError::EmptyBatch.into());
     }
+    let pipelines = self.team_pipelines()?;
     let contents = details
       .iter()
-      .map(|details| convert::content(&self.db, details, &TaskOrganization::default()))
-      .collect::<Result<Vec<_>, _>>()?;
+      .map(|details| convert::content(&pipelines, details, &TaskOrganization::default()))
+      .collect();
     self.create(batch, contents)
   }
 
@@ -201,7 +209,7 @@ impl TaskStore for RemoteTaskStore {
   /// on this computer: a version number means nothing on a colleague's.
   fn save_task(&mut self, task: &Task) -> Result<TaskUpdate, SharingError> {
     let cached = self.cached(task.id())?;
-    let changes = convert::content_changes(&self.db, &cached, task.details(), task.status())?;
+    let changes = convert::content_changes(&self.team_pipelines()?, &cached, task.details(), task.status());
     let update = self.patch(task.id(), task.revision(), changes)?;
     let TaskUpdate::Saved(saved) = update else {
       return Ok(update);
@@ -217,7 +225,7 @@ impl TaskStore for RemoteTaskStore {
 
   fn update_task(&mut self, id: TaskId, read: TaskRevision, details: TaskDetails) -> Result<TaskUpdate, SharingError> {
     let cached = self.cached(id)?;
-    let changes = convert::content_changes(&self.db, &cached, &details, cached.status())?;
+    let changes = convert::content_changes(&self.team_pipelines()?, &cached, &details, cached.status());
     self.patch(id, read, changes)
   }
 }

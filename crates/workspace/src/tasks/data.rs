@@ -221,6 +221,7 @@ impl ProjectTasks {
   ) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
     let not_shared = db.not_shared_tasks()?;
+    let shared = db.sharing()?.is_some();
     let kept_tags = not_shared
       .iter()
       .filter_map(|task| Some((task.id(), runs.kept_tags(task.id())?.clone())))
@@ -270,14 +271,18 @@ impl ProjectTasks {
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
-      shared: db.sharing()?.is_some(),
+      shared,
       group_holds: Arc::new(group_holds),
       queue: Arc::new(super::hold::held_in(db)?),
       grouped: Arc::new(grouped),
-      pipelines: Arc::new(published_pipelines(db)?),
+      // A team project's pipelines are the team's, read from memory, never from this database
+      // ([`Self::with_team_pipelines`]).
+      pipelines: Arc::new(if shared { Vec::new() } else { published_pipelines(db)? }),
       default_pipeline: db.default_pipeline()?,
       limits: Arc::new(db.project_limits()?),
-      missing_pipelines: Arc::new(db.missing_pipelines()?),
+      // Which pipelines a team task names that the team's configuration lacks is told from memory
+      // ([`Self::with_team_pipelines`]); a local task's pipeline is never missing.
+      missing_pipelines: Arc::default(),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
       asked: Arc::new(asked),
@@ -354,9 +359,9 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
   Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
 }
 
-/// Pipelines with a published version the project offers (in a team project only the team's,
-/// `ProjectDb::resources`), ordered by slug. Drafts that were never published cannot be run, so
-/// they are not offered.
+/// Pipelines with a published version a local project offers, ordered by slug. Drafts that were never published
+/// cannot be run, so they are not offered. A team project's are the team's, read from memory
+/// ([`crate::workspace::Workspace::project_pipelines`]).
 pub fn published_pipelines(store: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut choices = Vec::new();
   let assignables = Assignables::load(store)?;
@@ -388,12 +393,27 @@ fn pipeline_choice(
   version: &orchester_core::resource::Version<Pipeline>,
   assignables: &Assignables,
 ) -> PipelineChoice {
+  choice(
+    (resource.id(), resource.name().as_str()),
+    version.number(),
+    version.body(),
+    assignables,
+  )
+}
+
+/// The choice of pipeline `id` named `name`, as its version `number` with `body` reads.
+pub(super) fn choice(
+  (id, name): (ResourceId, &str),
+  number: VersionNumber,
+  body: &Pipeline,
+  assignables: &Assignables,
+) -> PipelineChoice {
   PipelineChoice {
-    id: resource.id(),
-    name: resource.name().as_str().into(),
-    version: version.number(),
-    steps: step_choices(version.body().steps(), assignables),
-    delivers: version.body().delivers(),
+    id,
+    name: name.into(),
+    version: number,
+    steps: step_choices(body.steps(), assignables),
+    delivers: body.delivers(),
   }
 }
 

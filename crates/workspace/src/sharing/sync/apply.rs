@@ -1,19 +1,17 @@
 //! Applying a shared project's events to its cache (`docs/architecture/server.md`, "Cursor and applying events"): the
 //! snapshot's pages replace the confirmed cache at `snapshot.end`; each delta is applied with core's rules
 //! ([`CachedTask::apply`], [`remap_tags`]) and the cursor advances in the same transaction. A task delta the cache
-//! cannot take asks for that one task to be read again, and a published resource for its new versions
-//! ([`super::config`]). A resource archived on the server is removed here and one restored is back
-//! ([`ProjectDb::mark_shared_archived`]). Members are read when Sharing shows them, and a resource's rename is not kept
-//! apart from a version yet: its delta only moves the cursor. Blocking: the stream runs these on the blocking pool.
+//! cannot take asks for that one task to be read again. The team's configuration is followed in memory
+//! ([`super::live`]): a resource's publish, archive and rename only move the cursor here, as members do (they are read
+//! when Sharing shows them). Blocking: the stream runs these on the blocking pool.
 
 use std::{num::NonZeroU32, path::Path};
 
 use orchester_api::{
-  Delta, Event, ResourceArchived, SharedResource, SharedTask, SnapshotBegin, TaskChanged, TaskClaim, TaskRun,
-  client::StreamEnd,
+  Delta, Event, SharedResource, SharedTask, SnapshotBegin, TaskChanged, TaskClaim, TaskRun, client::StreamEnd,
 };
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  id::TaskId,
   name::Name,
   sharing::{CachedTask, DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
   task::{TaskLimits, organization::BlockingTask},
@@ -60,17 +58,6 @@ pub(super) enum Applied {
   Read {
     task: TaskId,
     cursor: u64,
-  },
-  /// `resource` was published: its new versions are read, then the cursor moves to `cursor`.
-  Published {
-    resource: Box<SharedResource>,
-    cursor: u64,
-  },
-  /// The team's `resource` was archived by `by` (the server's name for them): it is removed here, and the runs that use
-  /// it are stopped.
-  Archived {
-    resource: ResourceId,
-    by: String,
   },
 }
 
@@ -130,18 +117,14 @@ pub(super) fn delta(root: &Path, event: &Event) -> Result<Applied, SharingError>
     }
     Event::ModuleCreated(delta) => (delta.id, Some(module(&delta.change.module)?)),
     Event::ModuleChanged(delta) => (delta.id, Some(module(&delta.change.module)?)),
-    Event::ResourcePublished(delta) => {
-      return Ok(Applied::Published {
-        resource: Box::new(delta.change.resource.clone()),
-        cursor: delta.id,
-      });
-    }
-    Event::MemberAdded(Delta { id, .. })
+    // The team's configuration is followed in memory (`super::live`), not here: only the cursor moves.
+    Event::ResourcePublished(Delta { id, .. })
+    | Event::ResourceArchived(Delta { id, .. })
+    | Event::MemberAdded(Delta { id, .. })
     | Event::MemberRemoved(Delta { id, .. })
     | Event::MemberRoleChanged(Delta { id, .. })
     | Event::ProjectChanged(Delta { id, .. })
     | Event::ResourceRenamed(Delta { id, .. }) => (*id, None),
-    Event::ResourceArchived(delta) => return archived(&mut db, delta),
     Event::SnapshotBegin(_) | Event::SnapshotTasks(_) | Event::SnapshotEnd(_) | Event::Revoked(_) => {
       return Err(SharingError::InvalidAnswer("event"));
     }
@@ -160,22 +143,6 @@ pub(super) fn delta(root: &Path, event: &Event) -> Result<Applied, SharingError>
   };
   db.take_shared_event(&change, cursor, Timestamp::now())?;
   Ok(applied)
-}
-
-/// Follows the server's archived mark of a resource, then moves the cursor. Marking again is no change, so a delta
-/// applied again after the cursor could not move changes nothing twice.
-fn archived(db: &mut ProjectDb, delta: &Delta<ResourceArchived>) -> Result<Applied, SharingError> {
-  let ResourceArchived { resource, archived } = delta.change;
-  let changed = db.mark_shared_archived(resource, archived, Timestamp::now())?;
-  db.take_shared_event(&SharedEvent::default(), delta.id, Timestamp::now())?;
-  Ok(match (changed, archived) {
-    (true, true) => Applied::Archived {
-      resource,
-      by: delta.by.display_name.clone(),
-    },
-    (true, false) => Applied::Changed,
-    (false, _) => Applied::Unchanged,
-  })
 }
 
 /// Writes `task`, read again after a delta the cache could not take, with the cursor that delta moves to.

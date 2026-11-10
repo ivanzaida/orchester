@@ -139,6 +139,8 @@ fn team_mcp_a_remove_answers_nothing_while_what_uses_it_cannot_be_read() {
   assert_eq!(seen.lock().calls, ["create"]);
 }
 
+/// A run binds a team MCP server only through its inputs, as the team server accepted them: a run whose profile here
+/// once chose it by a cached reference, with no inputs, is not named.
 #[test]
 fn team_mcp_a_remove_names_the_runs_of_this_computer_that_would_stop_and_stops_none() {
   let (server, seen) = start(Answers {
@@ -169,8 +171,8 @@ fn team_mcp_a_remove_names_the_runs_of_this_computer_that_would_stop_and_stops_n
   assert_eq!(refused["error"]["code"], "person_only", "{refused}");
   assert_eq!(
     refused["error"]["preview"]["runs_stopping_here"],
-    json!([{ "run": run.to_string(), "task": task.to_string() }]),
-    "{refused}"
+    json!([]),
+    "run {run} of {task} binds no team MCP server in its inputs: {refused}"
   );
   assert_eq!(seen.lock().calls, ["used-by"]);
   let state = checkout

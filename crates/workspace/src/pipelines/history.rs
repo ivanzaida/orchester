@@ -2,7 +2,7 @@
 //! what changed from the version before it and the runs that pinned it. Reading blocks on
 //! SQLite; the UI reads it off the UI thread.
 
-use std::{path::Path, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
@@ -42,25 +42,37 @@ pub struct VersionHistory {
 
 impl VersionHistory {
   pub fn load(db: &ProjectDb, pipeline: ResourceId) -> Result<Self, StoreError> {
-    let mut runs = db.runs_by_pipeline_version(pipeline).map_err(run_store_error)?;
+    let runs = db.runs_by_pipeline_version(pipeline).map_err(run_store_error)?;
+    let versions = db
+      .versions::<Pipeline>(pipeline)?
+      .into_iter()
+      .map(|version| (version.number(), version.published_at(), version.body().clone()));
+    Ok(Self::of(versions, runs))
+  }
+
+  /// The history of `versions`, oldest first, each with the runs of `runs` that pinned it.
+  pub(crate) fn of(
+    versions: impl IntoIterator<Item = (VersionNumber, Timestamp, Pipeline)>,
+    mut runs: BTreeMap<VersionNumber, Vec<RunNumber>>,
+  ) -> Self {
     let mut previous: Option<(VersionNumber, Arc<Pipeline>)> = None;
-    let mut versions = Vec::new();
-    for version in db.versions::<Pipeline>(pipeline)? {
-      let body = Arc::new(version.body().clone());
-      versions.push(PublishedVersion {
-        number: version.number(),
-        published_at: version.published_at(),
-        changes: previous.as_ref().map(|(number, before)| ChangesFrom {
-          version: *number,
+    let mut list = Vec::new();
+    for (number, published_at, body) in versions {
+      let body = Arc::new(body);
+      list.push(PublishedVersion {
+        number,
+        published_at,
+        changes: previous.as_ref().map(|(before_number, before)| ChangesFrom {
+          version: *before_number,
           changes: changes(before, &body),
         }),
-        runs: runs.remove(&version.number()).unwrap_or_default(),
+        runs: runs.remove(&number).unwrap_or_default(),
         body: body.clone(),
       });
-      previous = Some((version.number(), body));
+      previous = Some((number, body));
     }
-    versions.reverse();
-    Ok(Self { versions })
+    list.reverse();
+    Self { versions: list }
   }
 
   /// [`Self::load`] from the project database of `repo_root`.

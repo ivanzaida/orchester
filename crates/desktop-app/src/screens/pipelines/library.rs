@@ -13,8 +13,8 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
-  background, messages,
-  pipelines::library::{LibraryEntry, VersionState, library_in},
+  background,
+  pipelines::library::{LibraryEntry, VersionState},
   sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
@@ -50,14 +50,21 @@ impl Component for Library {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<ShownProject>().clone();
-    let revision = self.retry.get() + project.feed.outside.get().of(Outside::Pipelines);
-    let hold = Services::of(ctx).hold;
+    // A team project's pipelines are read from its configuration as the team server last told it, which a change on
+    // the server moves along with the project's other shared changes.
+    let team_changes = if team::of(&project).is_some() {
+      project.feed.saves.get()
+    } else {
+      0
+    };
+    let revision = self.retry.get() + project.feed.outside.get().of(Outside::Pipelines) + team_changes;
+    let (hold, workspace) = (Services::of(ctx).hold, Services::of(ctx).workspace);
     let loaded = ctx
       .future((project.open.repo_root.clone(), revision), move |(root, _)| {
-        let hold = hold.clone();
+        let (hold, workspace) = (hold.clone(), workspace.clone());
         async move {
           hold.released().await;
-          background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+          background::run(move || workspace.pipeline_library(&root).map_err(|e| e.message())).await?
         }
       })
       .state()
