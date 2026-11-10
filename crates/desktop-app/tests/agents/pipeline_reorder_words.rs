@@ -35,18 +35,36 @@ fn long(agents: &Agents) -> (ResourceId, [StepKey; 2], String) {
   (store(agents, "Long names", &body, true), [research, plan], said)
 }
 
-fn bounds(agents: &mut Agents, id: &str) -> (f32, f32, f32, f32) {
+/// Where an element stands: its left edge, top, width and height.
+#[derive(Clone, Copy, Debug)]
+struct Rect {
+  x: f32,
+  width: f32,
+  height: f32,
+}
+
+impl Rect {
+  fn right(self) -> f32 {
+    self.x + self.width
+  }
+}
+
+fn bounds(agents: &mut Agents, id: &str) -> Rect {
   let found = agents
     .window
     .tree
     .get_element_by_id_mut(id)
     .and_then(|found| found.bounds())
     .unwrap_or_else(|| panic!("{id} laid out"));
-  (found.x, found.y, found.width, found.height)
+  Rect {
+    x: found.x,
+    width: found.width,
+    height: found.height,
+  }
 }
 
 /// The refusal of Alt ↑ on the plan, with the window `width` wide: its text and where it stands.
-fn refusal_at(agents: &mut Agents, plan: &StepKey, width: u32) -> ((f32, f32, f32, f32), (f32, f32, f32, f32)) {
+fn refusal_at(agents: &mut Agents, plan: &StepKey, width: u32) -> (Rect, Rect) {
   agents.window.tree.resize(width, 900);
   agents.window.pass();
   focus(agents, plan);
@@ -65,21 +83,21 @@ fn pipeline_reorder_a_long_refusal_wraps_to_the_panels_width_and_is_whole() {
   let (wide, wide_frame) = refusal_at(&mut agents, &plan, 1440);
   assert_eq!(agents.text(WORDS), said, "the whole reason, the moved step named once");
   assert!(
-    wide.0 + wide.2 <= wide_frame.0 + wide_frame.2 + 0.5,
+    wide.right() <= wide_frame.right() + 0.5,
     "inside the flow at 1440: {wide:?} in {wide_frame:?}"
   );
 
   let (narrow, narrow_frame) = refusal_at(&mut agents, &plan, 900);
   assert_eq!(agents.text(WORDS), said);
   assert!(
-    narrow.0 + narrow.2 <= narrow_frame.0 + narrow_frame.2 + 0.5,
+    narrow.right() <= narrow_frame.right() + 0.5,
     "nothing runs past the panel's edge at 900: {narrow:?} in {narrow_frame:?}"
   );
   assert!(
-    narrow.3 > wide.3 + 1.0,
+    narrow.height > wide.height + 1.0,
     "it takes more lines as the panel narrows (not cut): {} then {}",
-    wide.3,
-    narrow.3
+    wide.height,
+    narrow.height
   );
 }
 
