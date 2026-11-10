@@ -54,7 +54,12 @@ fn name_of(db: &ProjectDb, id: ResourceId) -> String {
 fn rename_changes_the_name_and_keeps_the_slug_and_the_draft() {
   let (folder, mut db) = project();
   let id = pipeline(&mut db, "Feature delivery");
-  rename_in(folder.path(), id, "  Feature flow  ").expect("a valid fixture");
+  let saved = rename_in(folder.path(), id, "  Feature flow  ").expect("a valid fixture");
+  assert_eq!(
+    saved.as_str(),
+    "Feature flow",
+    "it answers the name as it was saved, trimmed"
+  );
   let db = ProjectDb::open(folder.path()).expect("a valid fixture");
   let resource = db.resource(id).expect("a valid fixture").expect("the pipeline");
   assert_eq!(resource.name().as_str(), "Feature flow");

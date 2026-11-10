@@ -42,8 +42,8 @@ impl RenameError {
 }
 
 /// Renames the pipeline `id` of the project at `repo_root` to `name`, as the person typed it: trimmed, not blank,
-/// not another pipeline's. Blocks: run it on the background pool.
-pub fn rename_in(repo_root: &Path, id: ResourceId, name: &str) -> Result<(), RenameError> {
+/// not another pipeline's, and returns the name as it was saved. Blocks: run it on the background pool.
+pub fn rename_in(repo_root: &Path, id: ResourceId, name: &str) -> Result<Name, RenameError> {
   let name = Name::new(name)?;
   let mut db = ProjectDb::open(repo_root)?;
   let slug = Slug::from_name(name.as_str());
@@ -65,5 +65,6 @@ pub fn rename_in(repo_root: &Path, id: ResourceId, name: &str) -> Result<(), Ren
       pipeline: other.name().as_str().to_owned(),
     });
   }
-  Ok(db.rename_local_resource(id, &name)?)
+  db.rename_local_resource(id, &name)?;
+  Ok(name)
 }
