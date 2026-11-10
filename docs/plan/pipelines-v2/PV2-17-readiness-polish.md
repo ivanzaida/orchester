@@ -47,3 +47,31 @@ Make the chip, the list line, *Ready?* and the step cards agree, and give every 
     must be fixed before the module goes to master); import `lurq::core::Ref` in `save.rs`; a refusal for an
     unchanged edit stays until the next Save (offer Cancel or clear it); after a Save in the *Drafts* tab the pipeline
     leaves the tab and the notice disappears with the panel — keep the panel on it (switch tab) or say where it went.
+
+## Added from PV2-07's review and design verification (2026-11-11)
+
+13. **Invalid text alone** (an Instructions or Budget the check refuses, with nothing else changed) does not count as
+    unsaved: leaving the pipeline drops it silently and Cancel is not offered (`pipeline_hub/panel.rs` `mark_unsaved`).
+    It counts as unsaved, or leaving says it is not kept.
+14. **Stale invalid text** of a step that no longer exists stays in `Faulty` (`step/mod.rs` `live`, `fix_words`): once
+    PV2-06's Remove step is in, a removed copy's bad text comes back on the next Duplicate (same `{key}-copy`). Drop
+    entries for steps the edit no longer has.
+15. **One Duplicate**: PV2-07's `step/head.rs` `copy_of` and PV2-06's `flow/reorder.rs` do the same rewiring with two
+    copy keys (`pipeline_hub.step.copyName`, `pipeline_hub.copyName`): one helper, one key (whichever merges second, or
+    here).
+16. **Deliver's number**: the head says *step 06 of 6* and the strip's Deliver chip reads *07* (the design counts
+    Deliver as 06): one numbering.
+17. A disabled Save says why at the button (today only the bar's line on the invalid step does); the list row's
+    *Unsaved changes* while Save is blocked by invalid text.
+18. Tests the old retries test had: changing only the target keeps the retries; unfinished retries text is kept on a
+    target change. A test that the *Agent* row says why a tool cannot run (`agentToolUnavailable`).
+19. *Duplicate* puts the copy beside the original (parallel); decide whether a person expects it after the original.
+
+## Added from PV2-11's review and design verification (2026-11-11)
+
+20. After *Restore v2* nothing but the bar's *Unsaved changes* says the editor holds v2: a short *Restored v2 · not
+    saved* in the head or the bar until Save or Cancel.
+21. *Allow these changes?* after a Restore names the restore as the cause (today it lists the step only).
+22. The read-only view says *Viewing v2* twice (head and notice): the notice keeps only *read-only*.
+23. Tests: read-only cards are not Tab stops; the held *Versions* button's fill and border; the list reads again
+    after a save or rename (if PV2-11's merge round did not add it).

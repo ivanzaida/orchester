@@ -1,9 +1,9 @@
 # PV2-08 · The step's *Agent* field and Agent picker
 
-- **Status:** blocked (PV2-07)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-07
-- **Branch:** —
+- **Branch:** `claude/pv2-08-agent-field`
 - **Tokens:** —
 
 ## Goal

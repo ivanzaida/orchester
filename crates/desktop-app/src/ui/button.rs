@@ -78,6 +78,8 @@ pub struct ActionButton {
   bounded: bool,
   /// Drawn pressed while what it opened shows.
   held: bool,
+  /// The menu it opened shows: the `surface_raised` fill in a `border_strong` stroke.
+  menu_open: bool,
   /// What it sets applies something now, e.g. a filter.
   applied: bool,
   /// What it holds is refused: its outline in `danger`.
@@ -113,6 +115,7 @@ impl ActionButton {
       roomy: false,
       bounded: false,
       held: false,
+      menu_open: false,
       applied: false,
       invalid: false,
       stacked: false,
@@ -286,6 +289,13 @@ impl ActionButton {
   /// `p2VeL`).
   pub fn held(mut self, held: bool) -> Self {
     self.held = held;
+    self
+  }
+
+  /// The menu it opened shows: `surface_raised` inside a `border_strong` stroke, its content as it was, 28 high all the
+  /// same (`Versions` open in `Pipelines · v2` P12 `nSr5q`; closed, a ghost button).
+  pub fn menu_open(mut self, open: bool) -> Self {
+    self.menu_open = open;
     self
   }
 
@@ -511,6 +521,12 @@ impl From<ActionButton> for Element {
     }
     if button.held {
       frame = frame.background(ExtraColor::Pressed.role()).describe("held", "true");
+    }
+    if button.menu_open {
+      frame = frame
+        .background(PaletteColor::SurfaceRaised)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .describe("menu_open", "true");
     }
     if button.applied {
       frame = frame

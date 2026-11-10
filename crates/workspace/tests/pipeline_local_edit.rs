@@ -304,3 +304,68 @@ fn an_edit_back_to_the_latest_version_drops_the_stored_draft_and_does_not_wedge_
   );
   assert_eq!(pipeline.versions().len(), 1);
 }
+
+/// A pipeline with two published versions: the first, and a second that has a description.
+fn two_versions(pipeline: &Fixture) -> (Pipeline, Pipeline) {
+  pipeline
+    .save(|_| {}, &[first_version()])
+    .expect("the first version is published");
+  pipeline
+    .save(|edit| edit.set_description("Second version"), &[])
+    .expect("the second version is published");
+  let versions = pipeline.versions();
+  assert_eq!(versions.len(), 2);
+  (versions[0].clone(), versions[1].clone())
+}
+
+#[test]
+fn restore_puts_an_older_version_into_the_edit_and_save_makes_it_the_next_version() {
+  let pipeline = fixture();
+  let (first, second) = two_versions(&pipeline);
+  assert_ne!(first, second);
+
+  let mut held = Held::start(Arc::new(pipeline.opened().body));
+  assert!(!held.is_changed());
+  held.restore(&first);
+  assert!(held.is_changed(), "the first version differs from the latest");
+  assert_eq!(held.edit().validate().unwrap(), first);
+
+  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
+  assert_eq!(saved, Saved::Published(VersionNumber::new(3.try_into().unwrap())));
+  let versions = pipeline.versions();
+  assert_eq!(
+    versions.len(),
+    3,
+    "the restored version is a new one; no version was changed"
+  );
+  assert_eq!(versions[2], first);
+  assert_eq!(versions[1], second);
+}
+
+#[test]
+fn restore_replaces_the_changes_the_edit_held() {
+  let pipeline = fixture();
+  let (first, _) = two_versions(&pipeline);
+
+  let mut held = Held::start(Arc::new(pipeline.opened().body));
+  held.change(|edit| edit.set_description("Unsaved words"));
+  held.restore(&first);
+  assert_eq!(held.edit().description(), first.description());
+  assert_eq!(held.edit().validate().unwrap(), first);
+}
+
+#[test]
+fn restoring_the_current_version_is_no_change_and_save_writes_nothing() {
+  let pipeline = fixture();
+  let (_, second) = two_versions(&pipeline);
+
+  let mut held = Held::start(Arc::new(pipeline.opened().body));
+  held.change(|edit| edit.set_description("Unsaved words"));
+  assert!(held.is_changed());
+  held.restore(&second);
+  assert!(!held.is_changed(), "the current version is what the edit started from");
+
+  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
+  assert_eq!(saved, Saved::Unchanged);
+  assert_eq!(pipeline.versions().len(), 2);
+}
