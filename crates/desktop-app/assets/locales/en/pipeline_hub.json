@@ -2,7 +2,7 @@
   "pipeline_hub": {
     "title": "Pipelines",
     "new": "New pipeline",
-    "reading": "Reading…",
+    "reading": "Reading the pipelines…",
     "loadFailed": "The pipelines of this project couldn't be read",
     "filter": {
       "all": "All",
@@ -35,8 +35,8 @@
       "where": "Pipeline",
       "published": "{{version}} · published {{date}}",
       "archivedAt": "{{version}} · archived {{date}}",
-      "draft": "draft · never saved as a version",
-      "usedNone": "used by no tasks yet",
+      "draft": "draft · not published yet",
+      "usedNone": "not used yet",
       "usedOne": "used by 1 task",
       "used": "used by {{count}} tasks",
       "steps": "Steps",

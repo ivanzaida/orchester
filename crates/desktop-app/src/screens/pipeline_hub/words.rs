@@ -22,7 +22,8 @@ pub(super) struct Said {
   pub color: PaletteColor,
 }
 
-/// The line under a pipeline's name: when it was archived, what keeps it from running, or its steps and tasks.
+/// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), that a draft is
+/// not published yet, or the steps and tasks.
 pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
   if let Some(at) = entry.archived {
     return Said {
@@ -30,26 +31,28 @@ pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
       color: PaletteColor::TextMuted,
     };
   }
-  match needs(ctx, entry) {
-    Some(text) => Said {
+  if let Some(text) = needs(ctx, entry) {
+    return Said {
       text,
       color: PaletteColor::Warning,
-    },
-    None => Said {
-      text: summary(ctx, entry),
-      color: PaletteColor::TextSecondary,
-    },
+    };
+  }
+  let text = if entry.is_draft() {
+    ctx.t("pipeline_hub.line.notPublished")
+  } else {
+    summary(ctx, entry)
+  };
+  Said {
+    text,
+    color: PaletteColor::TextSecondary,
   }
 }
 
-/// What the person has to do before the pipeline can run: its draft's first problem or that it is not published, or
-/// what its profiles and tools lack; `None` for a pipeline that is ready.
+/// What the person has to do before the pipeline can run: its draft's first problem, or what its profiles and tools
+/// lack; `None` for a pipeline that is ready and for a draft with nothing wrong (it only is not published yet).
 pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
   if entry.is_draft() {
-    return Some(entry.problem.as_ref().map_or_else(
-      || ctx.t("pipeline_hub.line.notPublished"),
-      |problem| message_text(ctx, problem),
-    ));
+    return entry.problem.as_ref().map(|problem| message_text(ctx, problem));
   }
   match entry.standing.as_ref()? {
     ReadinessStanding::Ready => None,
