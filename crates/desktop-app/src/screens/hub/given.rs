@@ -17,7 +17,7 @@ use lurq::{
 
 use crate::{
   screens::{
-    hub::agent_row::tag_chip,
+    hub::agent_row::{added_tag_chip, tag_chip},
     local_hub::profile::add_menu,
     team_hub::rows::{self, Sub},
   },
@@ -35,6 +35,9 @@ pub(in crate::screens) struct List<I> {
   pub sub: Option<Sub>,
   /// The ones it chooses, in order, by id and name.
   pub chosen: Vec<(I, String)>,
+  /// The ones the version an edit starts from chooses: a tag of one not among them was added in the edit and has the
+  /// `accent` outline until Save. `None` while the profile is made.
+  pub before: Option<Vec<I>>,
   /// The others it could choose, which the menu offers unchecked.
   pub offered: Vec<(I, String)>,
   pub on_toggle: add_menu::Toggle<I>,
@@ -72,7 +75,15 @@ where
       .chosen
       .iter()
       .enumerate()
-      .map(|(index, (_, name))| tag_chip(&format!("{value_id}-{index}"), name).into())
+      .map(|(index, (id, name))| {
+        let tag_id = format!("{value_id}-{index}");
+        let added = list.before.as_ref().is_some_and(|before| !before.contains(id));
+        if added {
+          added_tag_chip(&tag_id, name).into()
+        } else {
+          tag_chip(&tag_id, name).into()
+        }
+      })
       .collect()
   };
   let add = (!items.is_empty()).then(|| {

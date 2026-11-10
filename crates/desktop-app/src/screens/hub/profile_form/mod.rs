@@ -246,6 +246,7 @@ impl ProfileFields {
         label: ctx.t(kind.label()),
         sub: too_many(ctx, form.scope, kind, chosen.len()),
         chosen: chosen.iter().map(|id| (*id, form.offer.name_of(*id))).collect(),
+        before: form.base.map(|base| base_list(base, kind)),
         offered: form.offer.lists[kind.at()]
           .iter()
           .filter(|(id, _)| !chosen.contains(id))
@@ -256,6 +257,17 @@ impl ProfileFields {
       },
     )
   }
+}
+
+/// The list `kind` of the version an edit starts from.
+fn base_list(base: &TeamAgentProfile, kind: ListKind) -> Vec<ResourceId> {
+  match kind {
+    ListKind::Instructions => base.instruction_resources(),
+    ListKind::McpServers => base.mcp_servers(),
+    ListKind::Tools => base.tools(),
+    ListKind::Skills => base.skills(),
+  }
+  .to_vec()
 }
 
 /// What the row of the list `kind` says while it holds `count`, more than a profile may give: a local profile chooses

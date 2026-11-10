@@ -205,6 +205,7 @@ impl Component for ProfilePanel {
       .map(|asked| edit::question(ctx, &asked, (&self.save, &self.pending)));
     let rows = table::Rows {
       profile: shown,
+      published: &listed,
       chosen: &self.chosen,
       on_edit: self.on_edit(),
       choosing,

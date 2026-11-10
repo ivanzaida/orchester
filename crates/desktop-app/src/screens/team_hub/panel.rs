@@ -196,6 +196,16 @@ pub(super) fn chips_of(ctx: &Ctx, entry: &Entry, badges: Vec<(Arc<str>, BadgeTon
     }))
 }
 
+/// *given by 5 profiles*: how many profiles give their agents an instruction (A4 `IaFyu`, A27 `N00xd`); nothing when no
+/// profile does. `one` and `other` are the keys of its words for one profile and for more.
+pub(in crate::screens) fn given_by(ctx: &Ctx, (one, other): (&str, &str), count: usize) -> Option<Arc<str>> {
+  match count {
+    0 => None,
+    1 => Some(ctx.t(one)),
+    _ => Some(ctx.t_args(other, [("count", count.to_string())])),
+  }
+}
+
 /// *used by Builder, Reviewer*: who uses the resource; nothing when no profile does.
 pub(super) fn used_by(ctx: &Ctx, names: &[String]) -> Option<Arc<str>> {
   (!names.is_empty()).then(|| ctx.t_args("team_hub.panel.usedBy", [("names", names.join(", "))]))

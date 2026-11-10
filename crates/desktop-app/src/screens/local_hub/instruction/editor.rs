@@ -37,7 +37,7 @@ use crate::{
       words::kind_where_key,
     },
     team_hub::{
-      panel::{body, head_named},
+      panel::{body, given_by, head_named},
       rows,
     },
   },
@@ -162,7 +162,14 @@ impl Component for Editor {
     let rows = std::iter::once(used_by(ctx, PREFIX, entry)).chain(drawn.rows).collect();
     let body = body()
       .child(head)
-      .child(chips_of(standing_chips(ctx, entry), None))
+      .child(chips_of(
+        standing_chips(ctx, entry),
+        given_by(
+          ctx,
+          ("local_hub.panel.givenBy.one", "local_hub.panel.givenBy.other"),
+          entry.used_by.len(),
+        ),
+      ))
       .child(rows::section(
         PREFIX,
         &ctx.t("local_hub.instruction.title"),

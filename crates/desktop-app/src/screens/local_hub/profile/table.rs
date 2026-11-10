@@ -50,6 +50,8 @@ pub(super) type OnEdit = Arc<dyn Fn(Edit) + Send + Sync>;
 /// What the section needs of the panel.
 pub(super) struct Rows<'a> {
   pub profile: &'a LocalProfile,
+  /// The profile as it is published, which a tag added since is marked against.
+  pub published: &'a LocalProfile,
   /// The connection the person chose in the select, by id; empty while none is.
   pub chosen: &'a Signal<String>,
   pub on_edit: OnEdit,
@@ -202,6 +204,7 @@ fn mcp_servers(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
     label: ctx.t("team_hub.profile.mcpServers"),
     sub: None,
     chosen: profile.mcp_servers.clone(),
+    before: Some(rows.published.mcp_servers.iter().map(|(id, _)| *id).collect()),
     offered: profile.options.servers.clone(),
     on_toggle,
     locked: rows.busy,
@@ -236,6 +239,7 @@ fn given(ctx: &mut Ctx, rows: &Rows<'_>, kind: GivenKind) -> Row {
     label: ctx.t(label),
     sub: None,
     chosen: profile.given.of(kind).to_vec(),
+    before: Some(rows.published.given.of(kind).iter().map(|(id, _)| *id).collect()),
     offered: profile.options.given.of(kind).to_vec(),
     on_toggle,
     locked: rows.busy,
