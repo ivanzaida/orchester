@@ -13,7 +13,7 @@ use lurq::{
   app::component::DevtoolsInspectable,
   core::{Ref, Signal},
 };
-use orchester_core::resource::{Pipeline, PipelineEdit};
+use orchester_core::resource::{Pipeline, PipelineEdit, Step, StepKey};
 use orchester_workspace::pipelines::local_edit::Held;
 
 /// What the panel holds of the pipeline.
@@ -93,6 +93,18 @@ impl Edit {
   /// Whether the edit differs from what it started from. Reading it in a render subscribes the panel to the edit.
   pub(super) fn is_changed(&self) -> bool {
     self.holding.get().held.is_some_and(|held| held.is_changed())
+  }
+
+  /// Step `key` as the edit began from it (what was stored then, or what the last save stored); `None` while the panel
+  /// holds no edit or the pipeline then had no such step. What the edit changed since, such as a model override a
+  /// choice dropped, is read against it until *Save* or *Cancel*. Reading it in a render subscribes the panel to the
+  /// edit.
+  pub(super) fn started_step(&self, key: &StepKey) -> Option<Step> {
+    self
+      .holding
+      .get()
+      .held
+      .and_then(|held| held.base().steps().iter().find(|step| &step.key == key).cloned())
   }
 
   /// Whether the panel holds an edit, changed or not: after a save, the edit is what was saved.

@@ -87,6 +87,35 @@ impl Executor {
   }
 }
 
+/// The model override the step had when the edit began (`started`) and `step` no longer has, now that it runs something
+/// else (a profile on another CLI or a tool, [`Executor::apply_on`]); `None` when it kept it, never had one, or still
+/// runs what it started with.
+pub fn dropped_override(started: &Step, step: &Step) -> Option<ModelId> {
+  if Executor::of(step) == Executor::of(started) || ModelChoice::of(step).0.is_some() {
+    return None;
+  }
+  ModelChoice::of(started).0
+}
+
+/// Puts the override the step started with (`started`) back on `step` when `step` runs on the CLI it was set for again
+/// (`runs_on` is `was_for`, both known) and has none of its own: choosing another CLI dropped it, choosing its CLI
+/// again takes it back, so a stored override is not lost by a choice taken back. Returns whether it did.
+pub fn take_back_override(
+  step: &mut Step,
+  started: &Step,
+  (was_for, runs_on): (Option<AgentProvider>, Option<AgentProvider>),
+) -> bool {
+  let own_cli = was_for.is_some() && was_for == runs_on;
+  let Some(model) = ModelChoice::of(started).0.filter(|_| own_cli) else {
+    return false;
+  };
+  if !matches!(step.kind, StepKind::Agent { model: None, .. }) {
+    return false;
+  }
+  ModelChoice(Some(model)).apply(step);
+  true
+}
+
 /// The step's model override, or none to use the profile's model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelChoice(pub Option<ModelId>);

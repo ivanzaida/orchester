@@ -176,8 +176,33 @@ fn claude(agents: &Agents) -> ConnectionId {
   id
 }
 
-#[test]
-fn pipeline_step_polish_a_profile_on_another_cli_drops_the_model_override_and_says_so_until_save() {
+/// Opens the Agent field's picker and chooses the item named `name`.
+fn choose(agents: &mut Agents, name: &str) {
+  agents.click(FIELD);
+  agents.until("the picker", |s| s.exists(&item(0)));
+  let place = (0..6)
+    .find(|place| agents.exists(&item(*place)) && agents.text(&format!("{}-name", item(*place))) == name)
+    .unwrap_or_else(|| panic!("{name} is listed"));
+  agents.click(&item(place));
+  agents.until("chosen", |s| {
+    s.text("pipeline-hub-step-agent-name") == name && !s.exists(PICKER)
+  });
+}
+
+/// Where the *Agent* label stands, from the window's top.
+fn label_y(agents: &mut Agents) -> f32 {
+  agents
+    .window
+    .tree
+    .get_element_by_id_mut("pipeline-hub-step-agent-row-label")
+    .and_then(|element| element.bounds())
+    .expect("the label")
+    .y
+}
+
+/// A pipeline whose only step runs Builder (Codex) with the model overridden by `gpt-override`, its step open, and
+/// Writer, a profile on Claude Code.
+fn overridden_on_codex() -> (Agents, ResourceId, orchester_core::resource::StepKey, ResourceId) {
   let (mut agents, _) = setup();
   let builder = agents.profile(true);
   let connection = claude(&agents);
@@ -185,25 +210,33 @@ fn pipeline_step_polish_a_profile_on_another_cli_drops_the_model_override_and_sa
   let pipeline = overriding(&agents, builder, "gpt-override");
   let plan = keys(&agents, pipeline)[0].clone();
   open_step(&mut agents, pipeline, &plan);
-  assert!(!agents.exists("pipeline-hub-step-agent-dropped"));
+  (agents, pipeline, plan, writer)
+}
 
-  agents.click(FIELD);
-  agents.until("the picker", |s| s.exists(&item(2)));
-  let place = (0..4)
-    .find(|place| agents.exists(&item(*place)) && agents.text(&format!("{}-name", item(*place))) == "Writer")
-    .expect("Writer is listed");
-  agents.click(&item(place));
-  agents.until("chosen", |s| {
-    s.text("pipeline-hub-step-agent-name") == "Writer" && !s.exists(PICKER) && s.exists(CANCEL)
-  });
-  assert_eq!(
-    agents.text("pipeline-hub-step-agent-dropped"),
-    "Model override dropped: it was for Codex"
-  );
+const DROPPED: &str = "pipeline-hub-step-agent-dropped";
+
+#[test]
+fn pipeline_step_polish_a_profile_on_another_cli_drops_the_model_override_and_says_so_until_save() {
+  let (mut agents, pipeline, plan, writer) = overridden_on_codex();
+  assert!(!agents.exists(DROPPED));
+  let label = label_y(&mut agents);
+
+  choose(&mut agents, "Writer");
+  agents.until("held", |s| s.exists(CANCEL));
+  assert_eq!(agents.text(DROPPED), "Model override dropped: it was for Codex");
   assert!(
     !agents.text("pipeline-hub-step-agent-runs").contains("gpt-override"),
     "the step runs on the new profile's own model"
   );
+  let moved = label_y(&mut agents) - label;
+  assert!(moved.abs() < 0.5, "the Agent label keeps its place: it moved {moved}");
+
+  // Away to the pipeline and back: the edit still has the override dropped, and the field still says so.
+  open(&mut agents, pipeline);
+  agents.until("the flow", |s| !s.exists(FIELD));
+  open_step(&mut agents, pipeline, &plan);
+  agents.until("said again", |s| s.exists(DROPPED));
+  assert_eq!(agents.text(DROPPED), "Model override dropped: it was for Codex");
 
   save_until(&mut agents, "saved", |s| {
     matches!(
@@ -211,7 +244,43 @@ fn pipeline_step_polish_a_profile_on_another_cli_drops_the_model_override_and_sa
       StepKind::Agent { profile: Some(id), model: None, .. } if id == writer
     )
   });
-  agents.until("said until Save", |s| !s.exists("pipeline-hub-step-agent-dropped"));
+  agents.until("said until Save", |s| !s.exists(DROPPED));
+}
+
+#[test]
+fn pipeline_step_polish_choosing_the_overrides_cli_again_takes_the_override_back() {
+  // Builder is a name two Codex profiles have here; either takes the override back, being on its CLI.
+  let (mut agents, ..) = overridden_on_codex();
+  choose(&mut agents, "Writer");
+  agents.until("dropped", |s| s.exists(DROPPED));
+
+  choose(&mut agents, "Builder");
+  agents.until("taken back", |s| !s.exists(DROPPED));
+  assert!(
+    agents
+      .text("pipeline-hub-step-agent-runs")
+      .ends_with("· model: gpt-override"),
+    "{}",
+    agents.text("pipeline-hub-step-agent-runs")
+  );
+}
+
+#[test]
+fn pipeline_step_polish_an_override_kept_on_a_profile_whose_cli_is_not_known_stays_in_view() {
+  let (mut agents, _) = setup();
+  let builder = agents.profile(true);
+  profile_on(&agents, "Explorer", None);
+  let pipeline = overriding(&agents, builder, "gpt-override");
+  let plan = keys(&agents, pipeline)[0].clone();
+  open_step(&mut agents, pipeline, &plan);
+  choose(&mut agents, "Explorer");
+  agents.until("held", |s| s.exists(CANCEL));
+  assert!(!agents.exists(DROPPED), "kept, not dropped");
+  assert_eq!(
+    agents.text("pipeline-hub-step-agent-runs"),
+    "Choose a connection · model: gpt-override",
+    "what to do, and the override kept"
+  );
 }
 
 #[test]

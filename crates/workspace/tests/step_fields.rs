@@ -9,7 +9,7 @@ use orchester_core::{
   permission::StepPermissions,
   resource::{ModelId, Pipeline, PipelineEdit, RepositoryAccess, Step, StepKind},
 };
-use orchester_workspace::pipelines::fields::{Executor, ModelChoice};
+use orchester_workspace::pipelines::fields::{Executor, ModelChoice, dropped_override, take_back_override};
 
 /// A step that runs a profile and overrides its model with `custom-model`.
 fn overriding() -> Step {
@@ -103,4 +103,64 @@ fn a_step_without_an_override_drops_nothing() {
     (Some(AgentProvider::CodexCli), Some(AgentProvider::ClaudeCodeCli)),
   );
   assert_eq!(dropped, None);
+}
+
+#[test]
+fn what_was_dropped_is_read_from_the_step_as_it_started() {
+  let started = overriding();
+  let mut step = started.clone();
+  assert_eq!(
+    dropped_override(&started, &step),
+    None,
+    "nothing chosen, nothing dropped"
+  );
+
+  Executor::Profile(ResourceId::generate()).apply_on(
+    &mut step,
+    (Some(AgentProvider::CodexCli), Some(AgentProvider::ClaudeCodeCli)),
+  );
+  assert_eq!(
+    dropped_override(&started, &step)
+      .map(|model| model.as_str().to_owned())
+      .as_deref(),
+    Some("custom-model")
+  );
+
+  let mut tool = started.clone();
+  Executor::Tool(ResourceId::generate()).apply_on(&mut tool, (None, None));
+  assert!(dropped_override(&started, &tool).is_some(), "a tool drops it too");
+
+  let mut kept = started.clone();
+  Executor::Profile(ResourceId::generate()).apply_on(&mut kept, (None, Some(AgentProvider::CodexCli)));
+  assert_eq!(
+    dropped_override(&started, &kept),
+    None,
+    "an override kept is not dropped"
+  );
+}
+
+#[test]
+fn choosing_the_overrides_cli_again_takes_it_back() {
+  let started = overriding();
+  let mut step = started.clone();
+  let (codex, claude) = (Some(AgentProvider::CodexCli), Some(AgentProvider::ClaudeCodeCli));
+  Executor::Profile(ResourceId::generate()).apply_on(&mut step, (codex, claude));
+  assert!(
+    !take_back_override(&mut step, &started, (codex, claude)),
+    "not on another CLI"
+  );
+  assert_eq!(model_of(&step), None);
+
+  Executor::Profile(ResourceId::generate()).apply_on(&mut step, (claude, codex));
+  assert!(take_back_override(&mut step, &started, (codex, codex)));
+  assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
+  assert_eq!(dropped_override(&started, &step), None);
+
+  let mut unknown = started.clone();
+  Executor::Tool(ResourceId::generate()).apply_on(&mut unknown, (None, None));
+  Executor::Profile(ResourceId::generate()).apply(&mut unknown);
+  assert!(
+    !take_back_override(&mut unknown, &started, (None, None)),
+    "a CLI that is not known takes nothing back on a guess"
+  );
 }

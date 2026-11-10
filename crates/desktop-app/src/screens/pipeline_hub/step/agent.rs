@@ -3,7 +3,8 @@
 //! from its start. A step is run by an agent profile or a tool, never by a model: the profile says what it runs on. A
 //! step that overrides the model as it was stored keeps it, and the field and the picker's chosen row say so (*model:
 //! <id>*). Choosing a profile on another CLI, or a tool, drops the override, and the field says so under its box until
-//! the next save or *Cancel*. Choosing changes the edit the panel holds and nothing else.
+//! the next save or *Cancel*, read from the edit, so leaving the step and coming back keeps it; choosing its CLI again
+//! takes the override back. Choosing changes the edit the panel holds and nothing else.
 
 use std::sync::Arc;
 
@@ -18,8 +19,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{connection::AgentProvider, id::ProjectId, resource::StepKey};
-use orchester_workspace::pipelines::fields::Executor;
+use orchester_core::{
+  connection::AgentProvider,
+  id::ProjectId,
+  resource::{Step, StepKey},
+};
+use orchester_workspace::pipelines::fields::{Executor, dropped_override, take_back_override};
 
 use super::choices::Flag;
 use crate::{
@@ -47,6 +52,11 @@ pub(super) struct Props {
   /// The CLI each choice runs on, when it is known, and the one the step's agent runs on now.
   pub clis: Arc<[Option<AgentProvider>]>,
   pub cli: Option<AgentProvider>,
+  /// The step as the edit began, with the CLI it then ran on: a dropped model override is read against it and taken
+  /// back when the step returns to that CLI.
+  pub started: Option<(Step, Option<AgentProvider>)>,
+  /// What the field says under its box while the edit has dropped the step's model override.
+  pub dropped: Option<Arc<str>>,
   pub flag: Option<Flag>,
   pub name: Arc<str>,
   pub unset: Arc<str>,
@@ -65,6 +75,7 @@ impl PartialEq for Props {
       &self.executors,
       &self.clis,
       self.cli,
+      (&self.started, &self.dropped),
       self.flag,
       &self.name,
       &self.unset,
@@ -77,6 +88,7 @@ impl PartialEq for Props {
       &other.executors,
       &other.clis,
       other.cli,
+      (&other.started, &other.dropped),
       other.flag,
       &other.name,
       &other.unset,
@@ -95,9 +107,6 @@ pub(super) fn field(ctx: &mut Ctx, props: Props) -> Element {
 struct Agent {
   anchor: ElementRef,
   open: Signal<bool>,
-  /// What the field says under its box after a choice dropped the step's model override; it lasts until the field is
-  /// mounted anew, after a save or *Cancel*.
-  dropped: Signal<Option<Arc<str>>>,
 }
 
 impl Component for Agent {
@@ -107,7 +116,6 @@ impl Component for Agent {
     Self {
       anchor: ElementRef::new(),
       open: ctx.signal(false),
-      dropped: ctx.signal(None),
     }
   }
 
@@ -127,7 +135,7 @@ impl Component for Agent {
         self.picker(ctx, &props),
       ));
     }
-    let Some(dropped) = self.dropped.get() else {
+    let Some(dropped) = props.dropped.clone() else {
       return Element::from(row);
     };
     Column::new()
@@ -157,12 +165,7 @@ impl Agent {
       props.executors.clone(),
       props.choices.clone(),
     );
-    let (clis, from, note, words) = (
-      props.clis.clone(),
-      props.cli,
-      self.dropped.clone(),
-      dropped_words(ctx, props.cli),
-    );
+    let (clis, from, started) = (props.clis.clone(), props.cli, props.started.clone());
     let open = self.open.clone();
     let picked = open.clone();
     let (navigation, project) = (Navigation::of(ctx), props.project);
@@ -176,13 +179,14 @@ impl Agent {
           picked.set(false);
           if let Some(at) = items.iter().position(|item| item.key == key) {
             let (executor, to) = (executors[at], clis[at]);
-            let mut dropped = None;
             edit.change(|current| {
-              current.update(&step, |step| dropped = executor.apply_on(step, (from, to)));
+              current.update(&step, |step| {
+                executor.apply_on(step, (from, to));
+                if let Some((started, was_for)) = &started {
+                  take_back_override(step, started, (*was_for, to));
+                }
+              });
             });
-            if dropped.is_some() {
-              note.set(Some(words.clone()));
-            }
           }
         }),
         on_close: Box::new(move || open.set(false)),
@@ -287,14 +291,22 @@ impl Agent {
   }
 }
 
-/// What the field says once a choice dropped the step's model override (*Model override dropped: it was for Codex*),
-/// naming the CLI the step ran on, `from`; one that is not known leaves a choice that drops it only a tool's.
-fn dropped_words(ctx: &Ctx, from: Option<AgentProvider>) -> Arc<str> {
-  match from {
-    Some(cli) => ctx.t_args(
+/// What the field says while the edit has dropped the model override the step began with (`started`, with the CLI it
+/// ran on then): *Model override dropped: it was for Codex*; one whose CLI is not known says only that a tool runs no
+/// model, or that it was dropped. `None` while the step keeps it.
+pub(super) fn dropped_note(
+  ctx: &Ctx,
+  started: Option<&(Step, Option<AgentProvider>)>,
+  step: &Step,
+) -> Option<Arc<str>> {
+  let (started, was_for) = started?;
+  dropped_override(started, step)?;
+  Some(match (was_for, Executor::of(step)) {
+    (Some(cli), _) => ctx.t_args(
       "pipeline_hub.stepFlow.overrideDropped",
-      [("cli", ctx.t(cli_key(cli)).to_string())],
+      [("cli", ctx.t(cli_key(*cli)).to_string())],
     ),
-    None => ctx.t("pipeline_hub.stepFlow.overrideDroppedTool"),
-  }
+    (None, Executor::Tool(_)) => ctx.t("pipeline_hub.stepFlow.overrideDroppedTool"),
+    (None, Executor::Profile(_) | Executor::Unset) => ctx.t("pipeline_hub.stepFlow.overrideDroppedPlain"),
+  })
 }
