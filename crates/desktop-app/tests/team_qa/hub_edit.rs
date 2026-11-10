@@ -122,7 +122,7 @@ fn team_qa_hub_edit_save_publishes_the_next_version_on_the_team_server_at_once()
       .iter()
       .any(|(resource, versions)| resource["name"] == "pencil-design" && versions.len() == 2)
   });
-  window.until("the panel to read as published", |window| unchanged(window));
+  window.until("the panel to read as published", unchanged);
   window.until("the team's version", |window| {
     window.text("team-hub-chip-team") == "Team · v2"
   });
