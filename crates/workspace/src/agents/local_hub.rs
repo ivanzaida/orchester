@@ -20,6 +20,8 @@ use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 
 use super::{
   form::{effort_options, model_options},
+  local_edit::GivenKind,
+  local_given::{GivenLists, GivenNames},
   team_hub::Form,
   team_profile::ConnectionChoice,
 };
@@ -70,6 +72,9 @@ pub struct LocalProfile {
   pub options: ProfileOptions,
   /// The project secrets the MCP servers it chooses take their values from, by name.
   pub secrets: Vec<SecretName>,
+  /// The project's instructions, skills and tools it gives its agents, by name, an archived one too; nothing else
+  /// gives them one (`docs/design/team-configuration.md`, "Decided 2026-11-09").
+  pub given: GivenLists,
 }
 
 /// What the selects of a local profile's panel offer besides the choices it has made.
@@ -84,6 +89,8 @@ pub struct ProfileOptions {
   pub efforts: Vec<String>,
   /// The project's MCP servers, by name, that it does not choose and that are not archived.
   pub servers: Vec<(ConnectionId, String)>,
+  /// The project's instructions, skills and tools, by name, that it does not give and that are not archived.
+  pub given: GivenLists,
 }
 
 /// A local resource or MCP server that was archived.
@@ -157,6 +164,26 @@ impl LocalHub {
   /// What was archived, newest first.
   pub fn archived(&self) -> &[LocalArchived] {
     &self.archived
+  }
+
+  /// The names of the profiles that give their agents the instruction, skill or tool `id`, by name.
+  pub fn profiles_giving(&self, id: ResourceId) -> Vec<&str> {
+    let mut names: Vec<&str> = self
+      .readiness
+      .resources()
+      .iter()
+      .filter(|found| found.kind() == ResourceKind::AgentProfile)
+      .filter(|found| {
+        self.profile(found.resource()).is_some_and(|profile| {
+          GivenKind::ALL
+            .into_iter()
+            .any(|kind| profile.given.of(kind).iter().any(|(given, _)| *given == id))
+        })
+      })
+      .map(|found| found.name())
+      .collect();
+    names.sort_by_key(|name| name.to_lowercase());
+    names
   }
 
   /// The names of the profiles that choose the MCP server `id`, by name.
@@ -267,6 +294,7 @@ struct Around {
   available: Vec<McpServer>,
   connections: Vec<Connection>,
   pipelines: Vec<(String, Pipeline)>,
+  given: GivenNames,
 }
 
 impl Around {
@@ -276,6 +304,7 @@ impl Around {
       available: db.mcp_servers()?,
       connections: db.connections()?,
       pipelines: latest_pipelines(db)?,
+      given: GivenNames::read(db)?,
     })
   }
 
@@ -337,8 +366,12 @@ impl Around {
       published_at,
       draft: draft.is_some(),
       draft_saved_at: draft.map(Draft::updated_at),
-      options: options(&self.connections, &self.available, (cli, body)),
+      options: ProfileOptions {
+        given: self.given.offered(body),
+        ..options(&self.connections, &self.available, (cli, body))
+      },
       secrets: secret_names(db, &chosen)?,
+      given: self.given.chosen(body),
     })
   }
 }
@@ -387,6 +420,7 @@ fn options(
       .filter(|server| !body.mcp_servers().contains(server.id()))
       .map(|server| (server.id(), server.name().to_string()))
       .collect(),
+    given: GivenLists::default(),
   }
 }
 

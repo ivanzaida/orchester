@@ -21,8 +21,11 @@ impl InjectionEvent {
   pub const ALL: [Self; 2] = [Self::Start, Self::Resume];
 }
 
-/// Which agents receive an instruction: every agent, the profiles with one of the roles (e.g.
-/// `Builder`, whichever connection or model they use), or the named profiles only.
+/// Which agents an instruction was for: every agent, the profiles with one of the roles (e.g. `Builder`, whichever
+/// connection or model they use), or the named profiles only. It decides only for a run made from execution inputs,
+/// a team run (`crate::run::GivenBy::Scope`): a local run's agents get the instructions their profile chooses
+/// (`docs/design/team-configuration.md`, "Decided 2026-11-09"). The body keeps it, as the team server reads it
+/// (`docs/cloud-api.md`, used-by).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentTargets {
@@ -32,7 +35,8 @@ pub enum AgentTargets {
 }
 
 /// Where an instruction sits in prompt assembly: agent role → project rules → pipeline
-/// instructions → step instructions → task context.
+/// instructions → step instructions → task context. Which agents get it is their profile's choice in a local run; the
+/// scope still decides that for a run made from execution inputs, as [`AgentTargets`] does.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InstructionScope {
@@ -86,6 +90,8 @@ pub struct InstructionTarget<'a> {
 /// Why an instruction does not reach an agent at an event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Exclusion {
+  /// The step's profile does not choose it: what decides for a local run.
+  NotChosen,
   /// An agent role instruction for another role.
   OtherRole,
   /// It selects other roles or profiles.
@@ -170,7 +176,8 @@ impl Instruction {
     &self.scope
   }
 
-  /// Whether the instruction is for `target`'s agent, whatever the event.
+  /// Whether the scope and targets admit `target`'s agent, whatever the event: what decides for a run made from
+  /// execution inputs ([`crate::run::GivenBy::Scope`]).
   pub fn reaches(&self, target: InstructionTarget<'_>) -> Result<(), Exclusion> {
     self.scope.admits(target)?;
     let selected = match &self.targets {
@@ -181,9 +188,8 @@ impl Instruction {
     if selected { Ok(()) } else { Err(Exclusion::OtherAgents) }
   }
 
-  /// Whether the instruction is injected into `target`'s agent at `event`.
-  pub fn applies(&self, target: InstructionTarget<'_>, event: InjectionEvent) -> Result<(), Exclusion> {
-    self.reaches(target)?;
+  /// Whether the instruction is injected at `event`, into an agent that gets it.
+  pub fn injected_at(&self, event: InjectionEvent) -> Result<(), Exclusion> {
     if self.events.contains(&event) {
       Ok(())
     } else {

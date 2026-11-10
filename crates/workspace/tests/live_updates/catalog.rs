@@ -23,7 +23,7 @@ use orchester_store::ProjectDb;
 use orchester_workspace::sharing::sync::{Clock, follow};
 use serde_json::json;
 
-use super::{ALICE, LIVE, Member, TeamServer, Workspace, seen_within};
+use super::{ALICE, Member, SETTLED, TeamServer, Workspace, seen_within};
 
 /// How often the tests' streams read the catalog again.
 const CHECK: Duration = Duration::from_millis(50);
@@ -132,7 +132,7 @@ async fn catalog_is_reported_on_connect_with_only_cli_kinds_and_model_ids() {
   drop(db);
 
   let stream = followed(&workspace, &server);
-  seen_within(LIVE, "the report on connect", || !server.catalogs().is_empty()).await;
+  seen_within(SETTLED, "the report on connect", || !server.catalogs().is_empty()).await;
   let report = &server.catalogs()[0];
   assert_eq!(
     *report,
@@ -175,7 +175,7 @@ async fn catalog_a_new_role_or_model_list_change_is_reported_again_and_an_mcp_se
     &["gpt-5.5"],
   );
   let stream = followed(&workspace, &server);
-  seen_within(LIVE, "the report on connect", || server.catalogs().len() == 1).await;
+  seen_within(SETTLED, "the report on connect", || server.catalogs().len() == 1).await;
   tokio::time::sleep(CHECK * 6).await;
   assert_eq!(server.catalogs().len(), 1, "nothing changed, nothing is sent again");
 
@@ -198,7 +198,10 @@ async fn catalog_a_new_role_or_model_list_change_is_reported_again_and_an_mcp_se
     .db()
     .record_connection_check(codex, LastCheck::Agent(check(&["gpt-5.5", "gpt-6"])))
     .expect("checked again");
-  seen_within(LIVE, "the report after a model list", || server.catalogs().len() == 2).await;
+  seen_within(SETTLED, "the report after a model list", || {
+    server.catalogs().len() == 2
+  })
+  .await;
   assert_eq!(
     server.catalogs()[1]["models"],
     json!({ "codex_cli": ["gpt-5.5", "gpt-6"] })
@@ -211,7 +214,7 @@ async fn catalog_a_new_role_or_model_list_change_is_reported_again_and_an_mcp_se
     "Claude",
     &[],
   );
-  seen_within(LIVE, "the report after a connection of a new role", || {
+  seen_within(SETTLED, "the report after a connection of a new role", || {
     server.catalogs().len() == 3
   })
   .await;

@@ -23,7 +23,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
-  agents::team_mcp_edit,
+  agents::{team_hub::TeamHubRead, team_mcp_edit},
   app_mcp::setup::{NewTeamMcpServer, Runs, create_team_mcp_server, team_mcp_names, team_mcp_server},
   sharing::team_edit::{EditRefused, Edited, Refusal},
 };
@@ -204,15 +204,28 @@ pub(super) fn pencil(root: &Path) -> Result<ResourceId, Box<dyn Error>> {
   )
 }
 
+/// The fields `pencil-design` has as published, as its form in the hub starts from.
+pub(super) fn published(
+  services: &Services,
+  root: &Path,
+  pencil: ResourceId,
+) -> Result<NewTeamMcpServer, Box<dyn Error>> {
+  let TeamHubRead::Read(hub) = services.workspace.team_hub(root, services.vault.get())? else {
+    return Err("the team's configuration has not been read from the team server".into());
+  };
+  Ok(
+    hub
+      .mcp_server(pencil)
+      .and_then(|sheet| sheet.edit.as_ref())
+      .ok_or("pencil-design has an edit")?
+      .published
+      .clone(),
+  )
+}
+
 /// Types `pencil-design`'s arguments and keeps them as its draft, as the form does.
 fn draft(services: &Services, root: &Path, pencil: ResourceId) -> Result<(), Box<dyn Error>> {
-  let hub = services.workspace.team_hub(root, services.vault.get())?;
-  let mut fields = hub
-    .mcp_server(pencil)
-    .and_then(|sheet| sheet.edit.as_ref())
-    .ok_or("pencil-design has an edit")?
-    .published
-    .clone();
+  let mut fields = published(services, root, pencil)?;
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = ARGUMENTS.map(str::to_owned).to_vec();
   }

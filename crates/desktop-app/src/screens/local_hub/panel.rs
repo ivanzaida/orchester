@@ -1,7 +1,7 @@
 //! The parts a local project's panels share (`Detail` in L1, L2): the frame (the body scrolling over the action pinned
 //! at its bottom), the chips under a head (how the entry stands, who uses it) and *Ready?*, what the entry's readiness
-//! lacks, the head's end of a resource with versions, and a panel in bones while what it edits is read for the first
-//! time. An MCP server's panel is [`super::mcp`], an archived entry's
+//! lacks, the head's end of a resource with versions, *Used by* of an instruction, a skill or a tool, and a panel in
+//! bones while what it edits is read for the first time. An MCP server's panel is [`super::mcp`], an archived entry's
 //! [`super::archived`], a profile's [`super::profile`], an instruction's [`super::instruction`], a skill's
 //! [`super::skill`] and a tool's [`super::editing`].
 
@@ -274,5 +274,27 @@ pub(super) fn readiness(ctx: &Ctx, entry: &Entry) -> Option<Column> {
           .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
           .with_children(rows),
       ),
+  )
+}
+
+/// *Used by*: the profiles that give their agents the instruction, skill or tool `entry`, read-only. Nothing else gives
+/// an agent one (`docs/design/team-configuration.md`, "Decided 2026-11-09"), so with none no agent gets it, which the
+/// row says.
+pub(super) fn used_by(ctx: &Ctx, prefix: &str, entry: &Entry) -> Row {
+  let id = format!("{prefix}-used-by");
+  let value: Element = if entry.used_by.is_empty() {
+    Text::new(&ctx.t("local_hub.given.none"))
+      .id(format!("{id}-value"))
+      .variant(HubText::Value.role())
+      .color(PaletteColor::TextMuted)
+      .into()
+  } else {
+    rows::tags(&format!("{id}-value"), entry.used_by.iter().cloned()).into()
+  };
+  rows::row(
+    &id,
+    &ctx.t("local_hub.given.usedBy"),
+    Some(Sub::quiet(ctx.t("local_hub.given.usedBySub"))),
+    value,
   )
 }

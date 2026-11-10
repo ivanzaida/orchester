@@ -19,9 +19,10 @@
 //! - A team MCP server is on only when the person switched it on. One they switched off is [`Group::OffHere`]; one
 //!   nobody decided on is [`Group::NeedsYouHere`]. Either way it and a profile that chooses it are missing
 //!   [`Missing::McpOff`](orchester_core::sharing::Missing::McpOff).
-//! - A version of a team profile published here that waits for the server is read from its local body turned into the
-//!   team's form as publishing does, so an Admin's own new profile or edit is as ready as it will be when the server
-//!   numbers it; one that cannot be turned that way is [`Undecided::CannotBePublished`], with the reason.
+//! - A team project's resources are read from its latest versions as the team server was read this session
+//!   ([`crate::team_config`]); one whose latest version is not in its kind's team form is [`Undecided::NotTeamForm`].
+//!   While nothing was read, the read is refused ([`ReadinessError::TeamReading`],
+//!   [`ReadinessError::TeamUnreachable`]).
 //! - In a local project the connection a profile runs on is its pick. The program of each MCP server it chooses that a
 //!   run starts must have a program it would start, looked up as the runner does: the `PATH` is the project's
 //!   Environment, else Orchester's search path; a program is a file there or in the project (`repo_root` stands for the
@@ -41,8 +42,9 @@
 //! The read keeps nothing: it is computed from the stores and the filesystem at the call, so a screen or tool that
 //! reads it again after a change sees the change. It changes with a fill-in (counted as
 //! [`Outside::Connections`](crate::tasks::outside::Outside::Connections) by every write of
-//! [`crate::team_fill_ins`]), with a team version the stream cached (`Servers::subscribe_shared`), and with a program
-//! file that appears or goes, which nothing announces, so whoever shows the answer reads it again when it is refreshed.
+//! [`crate::team_fill_ins`]), with a team version the stream read into memory (`Servers::subscribe_shared`), and with
+//! a program file that appears or goes, which nothing announces, so whoever shows the answer reads it again when it is
+//! refreshed.
 //!
 //! A team reviewer needs a connection like a profile: one of its CLI kind for a language reviewer, a decision
 //! connection for a decision reviewer
@@ -67,7 +69,7 @@ mod read;
 mod standing;
 mod team;
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::{ResourceId, TaskId},
@@ -76,7 +78,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-pub(crate) use self::{bundle::missing as bundle_missing, team::body as team_profile_body};
+pub(crate) use self::bundle::missing as bundle_missing;
 pub use self::{
   error::ReadinessError,
   guard::NotStarted,
@@ -86,7 +88,10 @@ pub use self::{
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
   standing::{Group, ReadinessStanding, Undecided, archive_blocks_profiles},
 };
-use crate::workspace::Workspace;
+use crate::{
+  team_config::{TeamConfig, TeamRead},
+  workspace::Workspace,
+};
 
 /// What a team start needs of this computer before it asks the team server for work.
 #[derive(Debug)]
@@ -123,20 +128,33 @@ impl Workspace {
     repo_root: &Path,
     vault: &dyn SecretVault,
   ) -> Result<ProjectReadiness, ReadinessError> {
-    let team_programs = self.team_programs(db)?;
+    let team = match self.team_programs(db)? {
+      Some(programs) => Some((programs, self.team_config(repo_root)?)),
+      None => None,
+    };
     read::read(
       db,
       read::Setting {
         repo_root,
         vault,
-        team_programs,
+        team: team.as_ref().map(|(programs, config)| (programs.clone(), &**config)),
       },
     )
   }
 
+  /// The configuration of the team project at `repo_root` as its team server was read this session; refused while it
+  /// is being read, or could not be read ([`ReadinessError::TeamReading`], [`ReadinessError::TeamUnreachable`]).
+  pub(crate) fn team_config(&self, repo_root: &Path) -> Result<Arc<TeamConfig>, ReadinessError> {
+    match self.team.read(repo_root) {
+      TeamRead::Read { config, .. } => Ok(config),
+      TeamRead::Reading => Err(ReadinessError::TeamReading),
+      TeamRead::Unreachable(unreached) => Err(ReadinessError::TeamUnreachable(unreached)),
+    }
+  }
+
   /// Whether `pipeline` of the team project at `repo_root` is ready to start on this computer, read before the team
-  /// server is asked for anything. It is read from the team versions this computer has cached; the start checks the
-  /// versions the team server pins again. Blocks, as [`Self::project_readiness`] does.
+  /// server is asked for anything. It is read from the team's configuration as it was read this session; the start
+  /// checks the versions the team server pins again. Blocks, as [`Self::project_readiness`] does.
   pub fn team_start_readiness(
     &self,
     repo_root: &Path,
@@ -145,12 +163,13 @@ impl Workspace {
   ) -> Result<StartReadiness, ReadinessError> {
     let db = ProjectDb::open(repo_root)?;
     let programs = self.team_programs(&db)?.ok_or(ReadinessError::NotATeamProject)?;
+    let config = self.team_config(repo_root)?;
     let readiness = read::read(
       &db,
       read::Setting {
         repo_root,
         vault,
-        team_programs: Some(programs.clone()),
+        team: Some((programs.clone(), &config)),
       },
     )?;
     Ok(match readiness.pipeline(pipeline) {

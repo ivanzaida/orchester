@@ -12,7 +12,6 @@ mod local_archive;
 mod local_connection;
 mod local_edit;
 mod local_hub;
-mod pending;
 mod pipeline_hub;
 mod pipeline_ready;
 mod pipelines;

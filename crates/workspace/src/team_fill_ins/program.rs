@@ -6,13 +6,12 @@ use orchester_core::{
   id::{ProjectId, ResourceId, ServerId},
   resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer},
   run::Answerer,
-  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
 use super::{FillInError, team};
-use crate::{tasks::outside::Outside, workspace::Workspace};
+use crate::{tasks::outside::Outside, team_config::TeamResource, workspace::Workspace};
 
 impl Workspace {
   /// Sets `program`, the person's choice from *Choose…*, as the program of the team MCP server `server` of the
@@ -27,9 +26,10 @@ impl Workspace {
   ) -> Result<(), FillInError> {
     team::require_person(by)?;
     let db = ProjectDb::open(repo_root)?;
-    team::require_resource(&db, server, ResourceKind::McpServer)?;
     let team_server = team::server_of(&db)?;
-    if runs_remotely(&db, server)? {
+    let config = team::config(self, repo_root)?;
+    let found = team::require_resource(&config, server, ResourceKind::McpServer)?;
+    if runs_remotely(found) {
       return Err(FillInError::RemoteServer(server));
     }
     check_program(program)?;
@@ -78,13 +78,10 @@ impl Workspace {
   }
 }
 
-/// Whether the newest version of `server` the team published is a remote server; one with no version cached yet is
-/// not known to be.
-fn runs_remotely(db: &ProjectDb, server: ResourceId) -> Result<bool, FillInError> {
-  Ok(
-    db.latest_version::<TeamMcpServer>(server)?
-      .is_some_and(|version| matches!(version.body().launch(), TeamMcpLaunch::Remote(_))),
-  )
+/// Whether the latest version of `server` the team published is a remote server; one whose latest version cannot be
+/// read is not known to be.
+fn runs_remotely(server: &TeamResource) -> bool {
+  matches!(server.body::<TeamMcpServer>(), Some(Ok(body)) if matches!(body.launch(), TeamMcpLaunch::Remote(_)))
 }
 
 fn check_program(program: &Path) -> Result<(), FillInError> {

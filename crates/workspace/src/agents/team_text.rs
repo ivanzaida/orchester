@@ -6,15 +6,14 @@
 use orchester_core::{
   id::ResourceId,
   resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, ResourceKind, Skill},
-  store::ResourceStore,
 };
-use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   team_mcp::Published,
-  team_profile::{Listed, TeamProfileSheet},
+  team_profile::{Listed, TeamProfileSheet, listed},
   team_sheets,
 };
+use crate::team_config::TeamConfig;
 
 /// Where an instruction or a skill is added.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,7 +46,7 @@ pub struct TeamInstructionSheet {
   pub events: Vec<InjectionEvent>,
   /// The names of the team's profiles that use it.
   pub used_by: Vec<String>,
-  /// `None` while the server has not confirmed the version this computer uses.
+  /// Who published its latest version.
   pub published: Option<Published>,
 }
 
@@ -65,90 +64,78 @@ pub struct TeamSkillSheet {
 /// The skill's own document, which every skill has.
 pub const SKILL_DOCUMENT: &str = "SKILL.md";
 
-fn listed(db: &ProjectDb, id: ResourceId) -> Result<Listed, StoreError> {
-  let name = match db.resource(id)? {
-    Some(found) => found.name().to_string(),
-    None => id.to_string(),
-  };
-  Ok(Listed { id, name })
-}
-
-fn added(db: &ProjectDb, scope: &InstructionScope) -> Result<Added, StoreError> {
-  Ok(match scope {
+fn added(config: &TeamConfig, scope: &InstructionScope) -> Added {
+  match scope {
     InstructionScope::Project => Added::Project,
     InstructionScope::AgentRole { role } => Added::Role(role.to_string()),
-    InstructionScope::Pipeline { pipeline } => Added::Pipeline(listed(db, *pipeline)?),
+    InstructionScope::Pipeline { pipeline } => Added::Pipeline(listed(config, *pipeline)),
     InstructionScope::Step { pipeline, step } => Added::Step {
-      pipeline: listed(db, *pipeline)?,
+      pipeline: listed(config, *pipeline),
       step: step.to_string(),
     },
-  })
+  }
 }
 
-fn reaches(db: &ProjectDb, targets: &AgentTargets) -> Result<Reaches, StoreError> {
-  Ok(match targets {
+fn reaches(config: &TeamConfig, targets: &AgentTargets) -> Reaches {
+  match targets {
     AgentTargets::All => Reaches::Everyone,
     AgentTargets::Roles(roles) => Reaches::Roles(roles.iter().map(ToString::to_string).collect()),
-    AgentTargets::Profiles(profiles) => {
-      Reaches::Profiles(profiles.iter().map(|id| listed(db, *id)).collect::<Result<_, _>>()?)
-    }
-  })
+    AgentTargets::Profiles(profiles) => Reaches::Profiles(profiles.iter().map(|id| listed(config, *id)).collect()),
+  }
 }
 
-/// A sheet for each team instruction that has a version cached here.
+/// A sheet for each team instruction whose latest version is an instruction this computer reads.
 pub(super) fn instructions(
-  db: &ProjectDb,
+  config: &TeamConfig,
   profiles: &[(ResourceId, TeamProfileSheet)],
-) -> Result<Vec<(ResourceId, TeamInstructionSheet)>, StoreError> {
+) -> Vec<(ResourceId, TeamInstructionSheet)> {
   let mut sheets = Vec::new();
-  for resource in db.resources(ResourceKind::Instruction)? {
-    let Some(version) = db.latest_version::<Instruction>(resource.id())? else {
+  for resource in config.resources(ResourceKind::Instruction) {
+    let Some(Ok(body)) = resource.body::<Instruction>() else {
       continue;
     };
-    let body = version.body();
     sheets.push((
-      resource.id(),
+      resource.id,
       TeamInstructionSheet {
         text: body.text().as_str().to_owned(),
-        added: added(db, body.scope())?,
-        reaches: reaches(db, body.targets())?,
+        added: added(config, body.scope()),
+        reaches: reaches(config, body.targets()),
         events: body.events().iter().copied().collect(),
-        used_by: team_sheets::used_by(db, profiles, |sheet| {
-          sheet.instructions.iter().any(|used| used.id == resource.id())
-        })?,
-        published: team_sheets::published::<Instruction>(db, resource.id(), version.number())?,
+        used_by: team_sheets::used_by(config, profiles, |sheet| {
+          sheet.instructions.iter().any(|used| used.id == resource.id)
+        }),
+        published: team_sheets::published(resource),
       },
     ));
   }
-  Ok(sheets)
+  sheets
 }
 
-/// A sheet for each team skill that has a version cached here.
+/// A sheet for each team skill whose latest version is a skill this computer reads.
 pub(super) fn skills(
-  db: &ProjectDb,
+  config: &TeamConfig,
   profiles: &[(ResourceId, TeamProfileSheet)],
-) -> Result<Vec<(ResourceId, TeamSkillSheet)>, StoreError> {
+) -> Vec<(ResourceId, TeamSkillSheet)> {
   let mut sheets = Vec::new();
-  for resource in db.resources(ResourceKind::Skill)? {
-    let Some(version) = db.latest_version::<Skill>(resource.id())? else {
+  for resource in config.resources(ResourceKind::Skill) {
+    let Some(Ok(body)) = resource.body::<Skill>() else {
       continue;
     };
-    let body = version.body();
     let files = std::iter::once(SKILL_DOCUMENT.to_owned())
       .chain(body.files().iter().map(|file| file.path.as_str().to_owned()))
       .collect();
     sheets.push((
-      resource.id(),
+      resource.id,
       TeamSkillSheet {
         description: body.description().to_owned(),
         files,
-        added: added(db, body.scope())?,
-        used_by: team_sheets::used_by(db, profiles, |sheet| {
-          sheet.skills.iter().any(|used| used.id == resource.id())
-        })?,
-        published: team_sheets::published::<Skill>(db, resource.id(), version.number())?,
+        added: added(config, body.scope()),
+        used_by: team_sheets::used_by(config, profiles, |sheet| {
+          sheet.skills.iter().any(|used| used.id == resource.id)
+        }),
+        published: team_sheets::published(resource),
       },
     ));
   }
-  Ok(sheets)
+  sheets
 }

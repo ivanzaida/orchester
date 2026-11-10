@@ -211,19 +211,7 @@ impl Fields {
   }
 
   /// All agents, or the roles and profiles it names, in one select `width` wide (300 in `ofaBF` in `EsJ8r`): what it
-  /// names on one line, then the chevron; its menu names more or fewer. The Agents hub's panel of a local instruction
-  /// draws it too.
-  /// Whom the instruction is given to, as words: the choices `targets_select` shows, for a place that only shows them.
-  pub(in crate::screens) fn targets_words(&self, ctx: &Ctx, data: &ProjectInstructions) -> String {
-    let chosen = self.targets.get();
-    target_choices(ctx, data)
-      .into_iter()
-      .filter(|(target, _)| chosen.contains(target))
-      .map(|(_, label)| label.to_string())
-      .collect::<Vec<_>>()
-      .join(", ")
-  }
-
+  /// names on one line, then the chevron; its menu names more or fewer.
   pub(in crate::screens) fn targets_select(
     &self,
     ctx: &Ctx,

@@ -28,7 +28,7 @@ use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget};
 use orchester_workspace::{sharing::sync::use_here, tasks::run::check};
 use serde_json::Value;
 
-use super::{ALICE, LIVE, Member, TeamServer, Workspace, seen_within};
+use super::{ALICE, Member, SETTLED, TeamServer, Workspace, seen_within};
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
@@ -123,7 +123,7 @@ pub(super) fn team_references(servers: &[ResourceId]) -> Vec<ReferenceTarget> {
 
 /// The person's *Use v1 here* of `resource`, once the stream cached it.
 pub(super) async fn use_first(workspace: &Workspace, resource: ResourceId) {
-  seen_within(LIVE, "v1 waiting for the person", || {
+  seen_within(SETTLED, "v1 waiting for the person", || {
     workspace.db().waiting_version(resource).ok().flatten() == Some(VersionNumber::FIRST)
   })
   .await;
@@ -196,7 +196,7 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
   let workspace = Workspace::linked(&server);
   let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
   let stream = workspace.follow(Member::of(&server, ALICE));
-  seen_within(LIVE, "the snapshot's resources", || {
+  seen_within(SETTLED, "the snapshot's resources", || {
     latest::<Pipeline>(&workspace, delivery).is_some()
   })
   .await;
@@ -228,11 +228,11 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
   );
 
   server.publish((profile, SharedResourceKind::AgentProfile, "Builder"), body, references);
-  seen_within(LIVE, "v2 from its event", || {
+  seen_within(SETTLED, "v2 from its event", || {
     latest::<AgentProfile>(&workspace, profile).is_some_and(|version| version.number().get() == 2)
   })
   .await;
-  seen_within(LIVE, "the cursor at the last event", || {
+  seen_within(SETTLED, "the cursor at the last event", || {
     workspace.link().cursor == server.cursor()
   })
   .await;

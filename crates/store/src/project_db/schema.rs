@@ -72,6 +72,7 @@ mod permitted_decisions;
 mod plan_decided_by;
 mod plan_limits;
 mod plan_only;
+mod profile_given;
 mod project_approval_rules;
 mod pull_request_syncs;
 mod qa_slots;
@@ -139,5 +140,6 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::EditorDrafts => editor_drafts::MIGRATION,
     super::ProjectMigration::TeamReviewer => team_reviewer::MIGRATION,
     super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
+    super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
   }
 }

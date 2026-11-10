@@ -4,25 +4,14 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    DeniedBehavior, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText, Step, StepKind, Tool,
-    ToolAction,
+    AccessPolicy, AccessWindow, AllowedSteps, ApprovalMode, ChosenResources, CommandAction, CommandArg, CommandProgram,
+    DeniedBehavior, Pipeline, Step, StepKind, Tool, ToolAction,
   },
   revision::Revision,
   run::{BranchName, PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor},
 };
 
 use crate::fixture::{Config, agent_step, key, model, version};
-
-fn instruction(scope: InstructionScope) -> Instruction {
-  Instruction::new(
-    PromptText::new("Rule.").expect("valid prompt"),
-    AgentTargets::All,
-    BTreeSet::from([InjectionEvent::Start]),
-    scope,
-  )
-  .expect("valid instruction")
-}
 
 fn tool(callers: BTreeMap<ResourceId, AllowedSteps>) -> Tool {
   let access = AccessPolicy::new(
@@ -146,152 +135,25 @@ fn run_snapshot_rejects_steps_without_a_profile_or_tool() {
 }
 
 #[test]
-fn run_snapshot_pins_applicable_instructions_only() {
-  let config = Config::feature_delivery();
-  let other_pipeline = ResourceId::generate();
-  let scoped = [
-    (InstructionScope::Project, true),
-    (
-      InstructionScope::AgentRole {
-        role: Name::new("Builder").expect("valid"),
-      },
-      true,
-    ),
-    (
-      InstructionScope::AgentRole {
-        role: Name::new("Designer").expect("valid"),
-      },
-      false,
-    ),
-    (
-      InstructionScope::Pipeline {
-        pipeline: config.pipeline,
-      },
-      true,
-    ),
-    (
-      InstructionScope::Pipeline {
-        pipeline: other_pipeline,
-      },
-      false,
-    ),
-    (
-      InstructionScope::Step {
-        pipeline: config.pipeline,
-        step: key("review"),
-      },
-      true,
-    ),
-    (
-      InstructionScope::Step {
-        pipeline: config.pipeline,
-        step: key("deploy"),
-      },
-      false,
-    ),
-  ];
-  let ids: Vec<(ResourceId, bool)> = scoped
-    .iter()
-    .map(|(_, applies)| (ResourceId::generate(), *applies))
-    .collect();
-  let instructions: BTreeMap<_, _> = ids
-    .iter()
-    .zip(scoped)
-    .map(|((id, _), (scope, _))| (*id, version(1, instruction(scope))))
-    .collect();
-  let tools = BTreeMap::new();
-  let published = PublishedVersions {
-    profiles: &config.profiles,
-    tools: &tools,
-    instructions: &instructions,
-    skills: &BTreeMap::new(),
-  };
-  let snapshot = RunSnapshot::build(config.pipeline, &config.pipeline_version, published).expect("published");
-  let pinned: BTreeSet<ResourceId> = snapshot.instructions().iter().map(|pin| pin.resource).collect();
-  let expected: BTreeSet<ResourceId> = ids.iter().filter(|(_, applies)| *applies).map(|(id, _)| *id).collect();
-  assert_eq!(pinned, expected);
-}
-
-#[test]
-fn run_snapshot_pins_instructions_for_agents_of_the_pipeline_at_any_event() {
-  let config = Config::feature_delivery();
-  let rule = |targets, events: &[InjectionEvent]| {
-    Instruction::new(
-      PromptText::new("Rule.").expect("valid prompt"),
-      targets,
-      events.iter().copied().collect(),
-      InstructionScope::Project,
-    )
-    .expect("valid instruction")
-  };
-  let roles = |role: &str| AgentTargets::Roles(BTreeSet::from([Name::new(role).expect("valid")]));
-  let cases = [
-    (rule(roles("Reviewer"), &[InjectionEvent::Start]), true),
-    (rule(roles("Designer"), &[InjectionEvent::Start]), false),
-    (
-      rule(
-        AgentTargets::Profiles(BTreeSet::from([config.builder])),
-        &[InjectionEvent::Start],
-      ),
-      true,
-    ),
-    (
-      rule(
-        AgentTargets::Profiles(BTreeSet::from([ResourceId::generate()])),
-        &[InjectionEvent::Start],
-      ),
-      false,
-    ),
-    // Injected only when a session resumes, which an invocation of this run may do.
-    (rule(AgentTargets::All, &[InjectionEvent::Resume]), true),
-  ];
-  let ids: Vec<ResourceId> = cases.iter().map(|_| ResourceId::generate()).collect();
-  let instructions: BTreeMap<_, _> = ids
-    .iter()
-    .zip(&cases)
-    .map(|(id, (body, _))| (*id, version(1, body.clone())))
-    .collect();
-  let tools = BTreeMap::new();
-  let published = PublishedVersions {
-    profiles: &config.profiles,
-    tools: &tools,
-    instructions: &instructions,
-    skills: &BTreeMap::new(),
-  };
-  let snapshot = RunSnapshot::build(config.pipeline, &config.pipeline_version, published).expect("published");
-  let pinned: BTreeSet<ResourceId> = snapshot.instructions().iter().map(|pin| pin.resource).collect();
-  let expected: BTreeSet<ResourceId> = ids
-    .iter()
-    .zip(&cases)
-    .filter(|(_, (_, pinned))| *pinned)
-    .map(|(id, _)| *id)
-    .collect();
-  assert_eq!(pinned, expected);
-}
-
-#[test]
-fn run_snapshot_pins_step_tools_and_tools_allowed_for_the_pipeline() {
-  let config = Config::feature_delivery();
+fn run_snapshot_pins_step_tools_and_the_tools_its_profiles_choose_whatever_their_callers() {
+  let mut config = Config::feature_delivery();
   let step_tool = ResourceId::generate();
-  let allowed_tool = ResourceId::generate();
+  let chosen_tool = ResourceId::generate();
   let foreign_tool = ResourceId::generate();
   let tools = BTreeMap::from([
     (step_tool, version(1, tool(BTreeMap::new()))),
-    (
-      allowed_tool,
-      version(
-        2,
-        tool(BTreeMap::from([(
-          config.pipeline,
-          AllowedSteps::Only(BTreeSet::from([key("checks")])),
-        )])),
-      ),
-    ),
+    (chosen_tool, version(2, tool(BTreeMap::new()))),
     (
       foreign_tool,
-      version(1, tool(BTreeMap::from([(ResourceId::generate(), AllowedSteps::All)]))),
+      version(1, tool(BTreeMap::from([(config.pipeline, AllowedSteps::All)]))),
     ),
   ]);
+  let builder = config.profiles[&config.builder].body().clone().with_given(
+    ChosenResources::EMPTY,
+    ChosenResources::EMPTY,
+    ChosenResources::new(vec![chosen_tool]).expect("distinct"),
+  );
+  config.profiles.insert(config.builder, version(2, builder));
   let mut steps = config.pipeline_version.body().steps().to_vec();
   steps.push(Step {
     kind: StepKind::Tool { tool: Some(step_tool) },
@@ -305,7 +167,7 @@ fn run_snapshot_pins_step_tools_and_tools_allowed_for_the_pipeline() {
     .copied()
     .map(|pin| (pin.resource, pin.number.get()))
     .collect();
-  assert_eq!(pinned, BTreeSet::from([(step_tool, 1), (allowed_tool, 2)]));
+  assert_eq!(pinned, BTreeSet::from([(step_tool, 1), (chosen_tool, 2)]));
 }
 
 #[test]

@@ -12,6 +12,7 @@ mod delivers_prompt;
 mod failed_recovery;
 mod fixture;
 mod follow_up_routing;
+mod given;
 mod lifecycle;
 mod limits;
 mod memory_prompt;

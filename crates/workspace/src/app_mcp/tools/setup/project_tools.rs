@@ -3,7 +3,8 @@
 //! ([`super::tool_input`]), and published as Publish does, so pipeline steps can call it. Only command
 //! tools are made and changed here; an HTTP or database tool is listed by its kind and description alone,
 //! nothing of the secrets it uses. Tools are not removed or archived in this version: the project data
-//! keeps every resource.
+//! keeps every resource. A tool's agents are the profiles that list it (`used_by`; `docs/design/team-configuration.md`,
+//! "Decided 2026-11-09"): in a local project nothing else lets an agent call it.
 
 use std::path::Path;
 
@@ -24,6 +25,7 @@ use super::{
     across::{InProjects, across},
     parse,
   },
+  given_by::Givers,
   profiles::{no_draft, state_json},
   project::environment_json,
   tool_input::{self, not_a_command_tool, widenings},
@@ -46,7 +48,8 @@ pub(super) const SPECS: &[Spec] = &[
     name: "list_tools",
     description: "A project's tools, which pipeline steps call: id, name, kind (command, http or database), \
                   description, where each stands (draft, stale_draft or published, with its published version), \
-                  whether a step can run it, a command tool's command line, and its link in the app (its \
+                  whether a step can run it, a command tool's command line, used_by (the profiles that list it: in \
+                  a local project only their agents may call it, as a check), and its link in the app (its \
                   editor). Nothing of the secrets an HTTP or database tool uses is listed. Without `project`, \
                   every project's, each naming its project (unreadable_projects lists the projects that could \
                   not be read, with why).",
@@ -57,7 +60,8 @@ pub(super) const SPECS: &[Spec] = &[
     name: "get_tool",
     description: "One tool as its editor shows it (its draft if it has one, otherwise its latest version): a \
                   command tool's program, arguments, timeout, exit codes that pass, environment variables and \
-                  output limit; where it stands; which published pipeline steps call it; its revision, which \
+                  output limit; where it stands; which published pipeline steps call it; used_by, the profiles \
+                  whose agents may call it (save_profile_draft tools); its revision, which \
                   save_tool_draft's expected_revision takes; and its link in the app. A command tool runs \
                   in the worktree of the step that calls it, without a shell, with the person's rights, network \
                   access and no sandbox.",
@@ -133,13 +137,19 @@ pub(super) async fn call(
 
 async fn list_tools(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectTools::load(db)?))).await?;
-  Ok(read.json("tools", translate, |open, tools| {
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok((ProjectTools::load(db)?, Givers::read(db)?))
+    })
+  })
+  .await?;
+  Ok(read.json("tools", translate, |open, (tools, givers)| {
     tools
       .tools
       .iter()
       .map(|entry| {
         let mut value = summary_json(entry, open.project.id());
+        value["used_by"] = givers.of(entry.id);
         value["command_line"] = json!(command_of(&entry.tool).map(|command| command.command_line()));
         value
       })
@@ -157,6 +167,7 @@ async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError>
       .tool(id)
       .ok_or_else(|| ToolError::not_found(Missing::Tool, id.to_string()))?;
     let mut value = tool_json(&tools, entry, open.project.id());
+    value["used_by"] = Givers::read(&ProjectDb::open(&open.repo_root)?)?.of(id);
     value["revision"] = json!(revision);
     Ok(json!({ "tool": value }))
   })

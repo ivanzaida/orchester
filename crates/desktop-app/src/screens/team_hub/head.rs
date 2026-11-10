@@ -16,14 +16,25 @@ use crate::{
   ui::icon::{Icon, icon},
 };
 
-/// *Team*, before it *✓ Draft saved* when `saved`. `unreached`: the team server did not
-/// answer the last read, which the line says in place of *Team* (`Publish while offline` A16 `x3ywL`).
-pub(super) fn status(ctx: &Ctx, team: &TeamConfiguration, (unreached, saved): (bool, bool)) -> Vec<Element> {
-  let (glyph, color, words) = if unreached {
-    (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached")
-  } else {
-    (Icon::Users, PaletteColor::TextMuted, "team_hub.team")
+/// How the team server stands, which the head says.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Reach {
+  Answered,
+  /// It did not answer the last read of the hub's other reads (`Publish while offline` A16 `x3ywL`).
+  Unanswered,
+  /// The team's configuration cannot be read from it now (`Team` `ExtGT` in A25 `Zhcif`).
+  Unreachable,
+}
+
+/// *Team*, before it *✓ Draft saved* when `saved`; while the team server cannot be reached, the line says so in place
+/// of *Team*.
+pub(super) fn status(ctx: &Ctx, team: &TeamConfiguration, (reach, saved): (Reach, bool)) -> Vec<Element> {
+  let (glyph, color, words) = match reach {
+    Reach::Answered => (Icon::Users, PaletteColor::TextMuted, "team_hub.team"),
+    Reach::Unanswered => (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached"),
+    Reach::Unreachable => (Icon::CloudOff, PaletteColor::Warning, "team_hub.cantReach.head"),
   };
+  let unreached = reach != Reach::Answered;
   let line = Row::new()
     .id("team-hub-team")
     .describe("reached", (!unreached).to_string())

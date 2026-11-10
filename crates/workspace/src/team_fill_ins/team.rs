@@ -1,30 +1,46 @@
-//! What every fill-in checks first: that the project is a team's and that what it names is the team's.
+//! What every fill-in checks first: that the project is a team's and that what it names is the team's, in the team's
+//! configuration as its team server was read this session.
+
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::{ResourceId, ServerId},
   resource::ResourceKind,
   run::Answerer,
-  store::ResourceStore,
 };
-use orchester_store::{ProjectDb, ResourceSharing};
+use orchester_store::ProjectDb;
 
 use super::FillInError;
+use crate::{
+  team_config::{TeamConfig, TeamRead, TeamResource},
+  workspace::Workspace,
+};
 
 /// The team server the project is shared on.
 pub(super) fn server_of(db: &ProjectDb) -> Result<ServerId, FillInError> {
   db.sharing()?.map(|link| link.server).ok_or(FillInError::NotTeamProject)
 }
 
-/// Fails unless `resource` is a team resource of `kind` in the project.
-pub(super) fn require_resource(db: &ProjectDb, resource: ResourceId, kind: ResourceKind) -> Result<(), FillInError> {
-  let is_kind = db.resource(resource)?.is_some_and(|found| found.kind() == kind);
-  // A resource that does not exist has no mark to read, so only a found one is asked.
-  let is_team = is_kind && matches!(db.resource_sharing(resource)?, Some(ResourceSharing::Shared(_)));
-  if is_team {
-    Ok(())
-  } else {
-    Err(FillInError::NotTeamResource { resource, kind })
+/// The configuration of the team project at `repo_root` read this session; refused while it is being read or could not
+/// be read.
+pub(super) fn config(workspace: &Workspace, repo_root: &Path) -> Result<Arc<TeamConfig>, FillInError> {
+  match workspace.team_read(repo_root) {
+    TeamRead::Read { config, .. } => Ok(config),
+    TeamRead::Reading => Err(FillInError::TeamReading),
+    TeamRead::Unreachable(unreached) => Err(FillInError::TeamUnreachable(unreached)),
   }
+}
+
+/// `resource`, which must be a team resource of `kind` the team has not archived.
+pub(super) fn require_resource(
+  config: &TeamConfig,
+  resource: ResourceId,
+  kind: ResourceKind,
+) -> Result<&TeamResource, FillInError> {
+  config
+    .live(resource)
+    .filter(|found| found.kind == kind)
+    .ok_or(FillInError::NotTeamResource { resource, kind })
 }
 
 /// Fails unless `by` is the person.

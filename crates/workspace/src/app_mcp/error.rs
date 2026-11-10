@@ -180,9 +180,18 @@ impl ToolError {
 }
 
 impl From<ReadinessError> for ToolError {
+  /// A team project's configuration that is being read, or could not be read from its team server this session, is
+  /// `team_reading` or `team_unreachable` with the reason; any other failure `readiness_unreadable`.
   fn from(error: ReadinessError) -> Self {
-    tracing::warn!(%error, "the readiness of a pipeline could not be read for a start");
-    Self::refused("readiness_unreadable", vec![error.message()])
+    let code = match &error {
+      ReadinessError::TeamReading => "team_reading",
+      ReadinessError::TeamUnreachable(_) => "team_unreachable",
+      ReadinessError::Store(_) | ReadinessError::NotATeamProject => {
+        tracing::warn!(%error, "the readiness of a project could not be read for a tool");
+        "readiness_unreadable"
+      }
+    };
+    Self::refused(code, vec![error.message()])
   }
 }
 

@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::mcp::{McpSelectionError, McpServerSelection},
-  id::ConnectionId,
+  id::{ConnectionId, ResourceId},
   name::Name,
   permission::{AgentPermissions, ApprovalMode, CommandPermission, NetworkAccess, RepositoryAccess},
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ProviderSettingsError, ResourceBody},
+  resource::{
+    AgentProfile, ChosenResources, ModelId, PromptText, ProviderSettings, ProviderSettingsError, ResourceBody,
+  },
 };
 
 fn builder() -> AgentProfile {
@@ -94,8 +96,38 @@ fn agent_profile_schema_1_bodies_get_the_permissions_before_permissions() {
   let upgraded = AgentProfile::upgrade(1, body.clone()).expect("schema 1 upgrades");
   let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
   assert_eq!(profile, original);
-  assert_eq!(AgentProfile::SCHEMA, 5);
+  assert_eq!(AgentProfile::SCHEMA, 6);
   assert!(AgentProfile::upgrade(0, body).is_none());
+}
+
+/// A body of schema 5, before profiles gave instructions, skills and tools, has the shape of schema 6 and gives
+/// nothing; a profile that gives nothing keeps that shape.
+#[test]
+fn agent_profile_schema_5_bodies_give_nothing() {
+  let original = builder();
+  let body = serde_json::to_value(&original).unwrap();
+  for list in ["instruction_resources", "skills", "tools"] {
+    assert!(body.get(list).is_none(), "{list} is left out while empty: {body}");
+  }
+  let upgraded = AgentProfile::upgrade(5, body.clone()).expect("schema 5 reads as it is");
+  assert_eq!(upgraded, body);
+  let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
+  assert!(profile.instruction_resources().is_empty() && profile.skills().is_empty() && profile.tools().is_empty());
+}
+
+/// What a profile gives is each resource once, in the order chosen, and round-trips through its body.
+#[test]
+fn agent_profile_gives_each_instruction_skill_and_tool_once() {
+  let (rule, skill, tool) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
+  assert!(ChosenResources::new(vec![rule, rule]).is_err());
+  let chosen = |ids: &[ResourceId]| ChosenResources::new(ids.to_vec()).expect("distinct");
+  let profile = builder().with_given(chosen(&[rule]), chosen(&[skill]), chosen(&[tool]));
+  assert!(profile.gives(rule) && profile.gives(skill) && profile.gives(tool));
+  let body = serde_json::to_value(&profile).unwrap();
+  assert_eq!(serde_json::from_value::<AgentProfile>(body.clone()).unwrap(), profile);
+  let mut twice = body;
+  twice["skills"] = serde_json::json!([skill, skill]);
+  assert!(serde_json::from_value::<AgentProfile>(twice).is_err());
 }
 
 #[test]

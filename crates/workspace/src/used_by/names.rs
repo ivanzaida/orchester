@@ -2,15 +2,17 @@
 //! instruction's text name nothing. These are the rules `docs/cloud-api.md` lists for the used-by route, read here as
 //! the team server reads them: the `TeamResource` references of a cached team version ([`referenced`], of any kind),
 //! and the fields of the body, read with core's bodies. A local resource's version has no `references` list, so only
-//! its body counts.
+//! its body counts, and a local project's own rule decides which: a profile names what it gives its agents
+//! ([`profile`]), where the team server reads an instruction's or skill's scope and targets and a tool's callers.
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentTargets, Instruction, InstructionScope, Pipeline, Skill, Tool},
+  resource::{AgentProfile, Pipeline},
 };
 use orchester_store::ReferenceTarget;
 
-/// A kind whose body names no resource: a team profile, MCP server or reviewer names what it uses in its references.
+/// A kind whose body names no resource here: a team MCP server or reviewer names what it uses in its references, and a
+/// local instruction, skill or tool names nothing ([`profile`]).
 pub(super) fn never<B>(_: &B, _: ResourceId) -> bool {
   false
 }
@@ -30,27 +32,9 @@ pub(super) fn pipeline(pipeline: &Pipeline, target: ResourceId) -> bool {
     || pipeline.deliver().and_then(|deliver| deliver.integrator()) == Some(target)
 }
 
-/// An instruction names the profiles it targets and the pipeline it is scoped to.
-pub(super) fn instruction(instruction: &Instruction, target: ResourceId) -> bool {
-  matches!(instruction.targets(), AgentTargets::Profiles(profiles) if profiles.contains(&target))
-    || scope(instruction.scope(), target)
-}
-
-/// A skill names the pipeline it is scoped to.
-pub(super) fn skill(skill: &Skill, target: ResourceId) -> bool {
-  scope(skill.scope(), target)
-}
-
-/// A tool names the pipelines its access policy lists.
-pub(super) fn tool(tool: &Tool, target: ResourceId) -> bool {
-  tool
-    .access()
-    .is_some_and(|access| access.callers().contains_key(&target))
-}
-
-fn scope(scope: &InstructionScope, target: ResourceId) -> bool {
-  match scope {
-    InstructionScope::Pipeline { pipeline } | InstructionScope::Step { pipeline, .. } => *pipeline == target,
-    InstructionScope::Project | InstructionScope::AgentRole { .. } => false,
-  }
+/// A local profile names the instructions, skills and tools it gives its agents (`docs/design/team-configuration.md`,
+/// "Decided 2026-11-09"). An instruction's scope and targets, a skill's scope and a tool's callers name nothing in a
+/// local project: they decide nothing for its runs.
+pub(super) fn profile(profile: &AgentProfile, target: ResourceId) -> bool {
+  profile.gives(target)
 }

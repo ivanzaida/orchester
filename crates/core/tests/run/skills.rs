@@ -1,92 +1,21 @@
-//! Skills in a run: the snapshot pins the published skills whose scope reaches an agent of the
-//! pipeline, and a new session's prompt lists the skills its agent gets before the task part. A skill a person chose
-//! for a message (ORC-634) reaches the agent in its block with the message.
+//! Skills in a run: the snapshot pins the published skills its profiles choose (`given`), and a new session's prompt
+//! lists the skills its agent gets before the task part. A skill a person chose for a message (ORC-634) reaches the
+//! agent in its block with the message.
 
-use std::{
-  collections::{BTreeMap, BTreeSet},
-  num::NonZeroU32,
-};
+use std::num::NonZeroU32;
 
 use orchester_core::{
   connection::invocation::Platform,
   conversation::{Message, MessageBody, Recipient, skill::ChosenSkill},
   id::{ResourceId, TaskId},
-  name::Name,
   resource::{InjectionEvent, InstructionScope, Skill, Slug, VersionNumber},
-  run::{DeliveredMessages, MessageOccasion, NativeSetting, PromptInput, PublishedVersions, RunSnapshot, SkillListing},
+  run::{DeliveredMessages, MessageOccasion, NativeSetting, PromptInput, RunSnapshot, SkillListing},
 };
 
 use crate::{
-  fixture::{Config, at, key, task, version},
+  fixture::{Config, at, task},
   prompt::{Prompt, builder, step_with},
 };
-
-fn skill(scope: InstructionScope) -> Skill {
-  Skill::new("Runs the checks.".into(), "Run `cargo test`.".into(), Vec::new(), scope).expect("valid skill")
-}
-
-#[test]
-fn run_snapshot_pins_the_skills_whose_scope_reaches_an_agent_of_the_pipeline() {
-  let config = Config::feature_delivery();
-  let role = |name: &str| InstructionScope::AgentRole {
-    role: Name::new(name).expect("valid"),
-  };
-  let scoped = [
-    (InstructionScope::Project, true),
-    (role("Reviewer"), true),
-    (role("Designer"), false),
-    (
-      InstructionScope::Pipeline {
-        pipeline: config.pipeline,
-      },
-      true,
-    ),
-    (
-      InstructionScope::Pipeline {
-        pipeline: ResourceId::generate(),
-      },
-      false,
-    ),
-    (
-      InstructionScope::Step {
-        pipeline: config.pipeline,
-        step: key("checks"),
-      },
-      true,
-    ),
-    (
-      InstructionScope::Step {
-        pipeline: config.pipeline,
-        step: key("deploy"),
-      },
-      false,
-    ),
-  ];
-  let skills: BTreeMap<_, _> = scoped
-    .iter()
-    .map(|(scope, _)| (ResourceId::generate(), version(1, skill(scope.clone()))))
-    .collect();
-  let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
-  let published = PublishedVersions {
-    profiles: &config.profiles,
-    tools: &tools,
-    instructions: &instructions,
-    skills: &skills,
-  };
-  let snapshot = RunSnapshot::build(config.pipeline, &config.pipeline_version, published).expect("published");
-  let pinned: BTreeSet<ResourceId> = snapshot.skills().iter().map(|pin| pin.resource).collect();
-  let expected: BTreeSet<ResourceId> = skills
-    .iter()
-    .filter(|(_, version)| {
-      scoped
-        .iter()
-        .any(|(scope, reaches)| *reaches && version.body().scope() == scope)
-    })
-    .map(|(id, _)| *id)
-    .collect();
-  assert_eq!(pinned, expected);
-  assert_eq!(pinned.len(), 4);
-}
 
 #[test]
 fn run_snapshot_of_a_run_created_before_skills_reads_with_none() {

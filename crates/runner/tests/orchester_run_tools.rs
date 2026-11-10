@@ -28,10 +28,12 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for};
+use self::support::{
+  PATIENCE, Setup, TestProject, given::give_builder, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for,
+};
 
-/// Publishes the check `checks`: the test command printing three lines, offered to every step of the task's
-/// pipeline, asking as `approval` says.
+/// Publishes the check `checks`: the test command printing three lines, which the Builder gives its agents, asking as
+/// `approval` says.
 fn offer_check(project: &TestProject, approval: ApprovalMode) {
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   let pipeline = db
@@ -65,6 +67,8 @@ fn offer_check(project: &TestProject, approval: ApprovalMode) {
     .expect("create the check")
     .id();
   db.publish_draft::<Tool>(id, now).expect("publish the check");
+  drop(db);
+  give_builder(project.repo.path(), &[id]);
 }
 
 async fn finished(project: &TestProject) -> (Run, ProjectDb) {

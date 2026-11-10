@@ -29,7 +29,7 @@ use orchester_workspace::{
   team_reads::listed::TeamPipelines,
 };
 
-use super::{ALICE, LIVE, Member, TeamServer, config::builder, publish::Computer, seen_within};
+use super::{ALICE, Member, SETTLED, TeamServer, config::builder, publish::Computer, seen_within};
 
 /// One step, Implement, run by `profile`.
 pub(super) fn one_step(profile: ResourceId) -> Pipeline {
@@ -63,7 +63,7 @@ pub(super) async fn team_profile(server: &TeamServer, alice: &Computer) -> Resou
     vec![cli],
   );
   let stream = alice.workspace.follow(Member::of(server, ALICE));
-  seen_within(LIVE, "the profile cached here", || {
+  seen_within(SETTLED, "the profile cached here", || {
     let profiles = alice.workspace.db().resources(ResourceKind::AgentProfile);
     profiles.is_ok_and(|found| found.iter().any(|kept| kept.id() == profile))
   })

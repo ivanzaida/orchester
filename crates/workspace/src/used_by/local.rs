@@ -11,7 +11,10 @@ use std::{num::NonZeroU32, path::Path};
 use orchester_api::SharedResourceKind;
 use orchester_core::{
   id::{ConnectionId, ResourceId, RunId},
-  resource::{AgentProfile, Resource, ResourceBody, ResourceKind, TeamMcpServer, TeamReviewer, VersionNumber},
+  resource::{
+    AgentProfile, Instruction, Resource, ResourceBody, ResourceKind, Skill, TeamMcpServer, TeamReviewer, Tool,
+    VersionNumber,
+  },
   run::{RunSnapshot, RunStatus},
   store::{McpServerStore, ResourceStore, RunStore, TaskStore},
 };
@@ -88,15 +91,20 @@ fn resources(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByResource>, 
   naming(
     db,
     target,
-    (SharedResourceKind::Instruction, names::instruction),
+    (SharedResourceKind::Instruction, names::never::<Instruction>),
     &mut found,
   )?;
-  naming(db, target, (SharedResourceKind::Skill, names::skill), &mut found)?;
-  naming(db, target, (SharedResourceKind::Tool, names::tool), &mut found)?;
   naming(
     db,
     target,
-    (SharedResourceKind::AgentProfile, names::never::<AgentProfile>),
+    (SharedResourceKind::Skill, names::never::<Skill>),
+    &mut found,
+  )?;
+  naming(db, target, (SharedResourceKind::Tool, names::never::<Tool>), &mut found)?;
+  naming(
+    db,
+    target,
+    (SharedResourceKind::AgentProfile, names::profile),
     &mut found,
   )?;
   naming(

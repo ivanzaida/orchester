@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use lurq::app::events::with_synthetic_input;
+use orchester_app::routes::{AgentTab, ProjectPage, Route};
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
@@ -16,7 +17,7 @@ use orchester_core::{
 };
 use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink};
 
-use super::harness::Agents;
+use super::{harness::Agents, support::project_id, team_hub::keep_team};
 
 /// Links the project as a member and caches the team's v1 of profile `id`, and their v2, which adds a team MCP server;
 /// v2 waits for the person, so runs use v1.
@@ -75,6 +76,17 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
     ),
   )
   .expect("v2 cached");
+  keep_team(agents);
+}
+
+/// Opens the page of the team's profile `id` by its route: a team project's Agents hub is the team's, which the
+/// harness's way in through the local hub ([`Agents::open`]) never reaches.
+fn open_profile(agents: &mut Agents, id: ResourceId) {
+  agents.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Agent(id, AgentTab::default()),
+  ));
+  agents.until("the profile's page", |s| s.exists("agent-role-row"));
 }
 
 /// Version `number` of a profile as the server confirmed it, published by the teammate olha.
@@ -104,7 +116,7 @@ fn shared_profile_only_a_person_uses_the_waiting_version_here() {
   let mut agents = Agents::new(true);
   let id = agents.profile(true);
   shared_v2(&agents, id);
-  agents.open(id);
+  open_profile(&mut agents, id);
   agents.until("the widens bar", |s| s.exists("agent-widens-bar"));
   assert_eq!(
     agents.text("agent-widens-bar-status"),
@@ -156,6 +168,7 @@ fn shared_v3(agents: &Agents, id: ResourceId) {
     },
   )
   .expect("cached");
+  keep_team(agents);
 }
 
 #[test]
@@ -163,7 +176,7 @@ fn shared_profile_use_here_uses_the_version_the_bar_shows() {
   let mut agents = Agents::new(true);
   let id = agents.profile(true);
   shared_v2(&agents, id);
-  agents.open(id);
+  open_profile(&mut agents, id);
   agents.until("v2 waits", |s| s.exists("agent-widens-bar"));
   assert_eq!(agents.text("agent-use-here"), "Use v2 here");
 

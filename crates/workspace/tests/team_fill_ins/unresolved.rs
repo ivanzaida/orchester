@@ -6,7 +6,7 @@ use orchester_core::{
   connection::{AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
   id::{ConnectionId, ResourceId},
   name::Name,
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, PublishError, TeamAgentProfile, VersionNumber},
+  resource::{AgentProfile, PublishError, VersionNumber},
   time::Timestamp,
 };
 use orchester_store::StoreError;
@@ -15,30 +15,10 @@ use orchester_workspace::{
   connections::data::{ConnectionDraft, save},
 };
 
-use crate::support::{Team, cached, pick, team_resource};
+use crate::support::{Team, pick};
 
 fn team_profile(team: &Team, cli: AgentProvider) -> ResourceId {
-  let body = TeamAgentProfile::new(
-    Name::new("Builder").expect("role"),
-    String::new(),
-    PromptText::new("Build.").expect("prompt"),
-    (
-      cli,
-      ModelId::new("gpt-5.5").expect("model"),
-      ProviderSettings::default(),
-    ),
-  );
-  let mut db = team.db();
-  let id = team_resource(
-    &mut db,
-    "team-builder",
-    AgentProfile::from_team(&body, ConnectionId::generate()),
-    Vec::new(),
-  );
-  let mut version = cached(AgentProfile::from_team(&body, ConnectionId::generate()), Vec::new());
-  version.server_body = serde_json::to_value(&body).expect("a team profile serializes");
-  db.cache_shared_version(id, &version).expect("the team form cached");
-  id
+  team.cached_profile("team-builder", &crate::support::team_profile(cli))
 }
 
 fn runs_on(team: &Team, profile: ResourceId) -> ConnectionId {

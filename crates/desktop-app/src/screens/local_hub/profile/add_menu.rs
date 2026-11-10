@@ -1,8 +1,8 @@
-//! The *Add* chip of the MCP servers row (`Add` `z4SVTX` in `Profile` `Gk3js` of L1): a menu of the project's MCP
-//! servers, each with a check while the profile chooses it. Choosing one adds it to the profile's draft, or takes it
-//! out when it is checked.
+//! The *Add* chip of a list row of a local profile (`Add` `z4SVTX` in `Profile` `Gk3js` of L1): a menu of what the
+//! project offers for the list — its MCP servers, instructions, skills or tools — each with a check while the profile
+//! chooses it. Choosing one adds it to what the panel holds, or takes it out when it is checked.
 
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 use lurq::{
   app::{
@@ -13,7 +13,6 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::ConnectionId;
 
 use crate::{
   screens::hub::page_head::MORE_MENU_WIDTH,
@@ -24,63 +23,74 @@ use crate::{
   },
 };
 
-/// What a press on a server does: the server, and whether the profile chooses it from now on.
-pub(in crate::screens) type Toggle = Arc<dyn Fn(ConnectionId, bool) + Send + Sync>;
+/// What a press on an entry does: the entry, and whether the profile chooses it from now on.
+pub(in crate::screens) type Toggle<I> = Arc<dyn Fn(I, bool) + Send + Sync>;
 
-/// A server the menu lists and whether the profile chooses it.
+/// An entry the menu lists and whether the profile chooses it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::screens) struct Item {
-  pub id: ConnectionId,
+pub(in crate::screens) struct Item<I> {
+  pub id: I,
   pub name: String,
   pub chosen: bool,
 }
 
 #[derive(Clone)]
-pub(in crate::screens) struct Props {
-  pub items: Vec<Item>,
+pub(in crate::screens) struct Props<I> {
+  /// What the list holds, singular, in the menu's element ids: `server` makes `local-hub-profile-add-server`.
+  pub what: &'static str,
+  pub items: Vec<Item<I>>,
   pub label: Arc<str>,
   /// An edit is under way: nothing is chosen until it ends.
   pub locked: bool,
-  pub on_toggle: Toggle,
+  pub on_toggle: Toggle<I>,
 }
 
 /// The props are equal when they say the same: the handler is made anew on every render.
-impl PartialEq for Props {
+impl<I: PartialEq> PartialEq for Props<I> {
   fn eq(&self, other: &Self) -> bool {
-    (&self.items, &self.label, self.locked) == (&other.items, &other.label, other.locked)
+    (self.what, &self.items, &self.label, self.locked) == (other.what, &other.items, &other.label, other.locked)
   }
 }
-impl DevtoolsInspectable for Props {}
+impl<I> DevtoolsInspectable for Props<I> {}
 
-pub(in crate::screens) fn add(ctx: &mut Ctx, props: Props) -> Element {
-  ctx.mount_keyed::<AddServer>("local-hub-profile-add-server", props)
+pub(in crate::screens) fn add<I>(ctx: &mut Ctx, props: Props<I>) -> Element
+where
+  I: Copy + PartialEq + Display + Send + Sync + 'static,
+{
+  ctx.mount_keyed::<AddMenu<I>>(&format!("local-hub-profile-add-{}", props.what), props)
 }
 
-struct AddServer {
+struct AddMenu<I> {
   open: Signal<bool>,
   anchor: ElementRef,
+  of: std::marker::PhantomData<I>,
 }
 
-impl Component for AddServer {
-  type Props = Props;
+impl<I> Component for AddMenu<I>
+where
+  I: Copy + PartialEq + Display + Send + Sync + 'static,
+{
+  type Props = Props<I>;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
       anchor: ctx.element_ref(),
+      of: std::marker::PhantomData,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
+      what,
       items,
       label,
       locked,
       on_toggle,
-    } = ctx.props::<Props>().clone();
+    } = ctx.props::<Props<I>>().clone();
     let toggle = self.open.clone();
     let button = ActionButton::new(
-      "local-hub-profile-add-server-button",
+      format!("local-hub-profile-add-{what}-button"),
       ButtonKind::Ghost,
       label.to_string(),
     )
@@ -97,7 +107,7 @@ impl Component for AddServer {
       .map(|item| {
         let on_toggle = on_toggle.clone();
         MenuItem::new(
-          format!("local-hub-profile-server-{}", item.id),
+          format!("local-hub-profile-{what}-{}", item.id),
           item.name.clone(),
           move || on_toggle(item.id, !item.chosen),
         )
@@ -105,7 +115,7 @@ impl Component for AddServer {
         .render(ctx, &self.open)
       })
       .collect();
-    let panel = menu_panel("local-hub-profile-servers-menu")
+    let panel = menu_panel(&format!("local-hub-profile-{what}s-menu"))
       .width(Dimension::Px(MORE_MENU_WIDTH))
       .with_children(rows);
     Column::new()
