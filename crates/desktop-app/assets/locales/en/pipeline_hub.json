@@ -93,6 +93,7 @@
       "parallelAll": "all must pass",
       "gate": "Waits for your approval",
       "gateBefore": "you approve {{step}} before {{next}} starts",
+      "gateBeforeDeliver": "you approve {{step}} before Deliver starts",
       "gateEnd": "you approve {{step}} before the run ends",
       "readOnly": "read-only",
       "canWrite": "can write",

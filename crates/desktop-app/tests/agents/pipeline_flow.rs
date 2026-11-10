@@ -483,3 +483,49 @@ fn pipeline_flow_a_published_pipeline_with_a_draft_draws_the_drafts_steps() {
   assert!(agents.exists(&format!("pipeline-hub-flow-step-{first}")));
   assert_eq!(agents.text("pipeline-hub-steps-count"), "2");
 }
+
+#[test]
+fn pipeline_flow_the_deliver_card_has_a_node_of_its_own_and_no_number() {
+  let mut agents = Agents::new(true);
+  let (id, _) = feature(&agents);
+  open(&mut agents, id);
+
+  let node = rect(&mut agents, "pipeline-hub-flow-row-deliver-node");
+  assert_eq!((node.width, node.height), (22.0, 22.0), "a node like the others");
+  assert!(
+    !agents.exists("pipeline-hub-flow-row-deliver-number"),
+    "Deliver is not a step, so its node shows a glyph, not 06"
+  );
+  assert!(
+    agents.exists("pipeline-hub-flow-row-1-node") && agents.exists("pipeline-hub-flow-row-1-number"),
+    "the steps keep their numbers"
+  );
+}
+
+#[test]
+fn pipeline_flow_a_gate_names_deliver_by_word_and_a_step_by_its_number() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
+  let plan = add(&mut edit, "Plan", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
+  edit.update(&plan, |step| step.approval_gate = true);
+  let build = add(&mut edit, "Build", &[&plan], agent(Some(builder), RepositoryAccess::Write));
+  edit.update(&build, |step| step.approval_gate = true);
+  let body = edit.validate().expect("a pipeline").with_deliver(Some(DeliverStep::new(
+    DeliverMode::AutoMerge,
+    MergeMethod::Squash,
+    None,
+    true,
+  )));
+  let id = store(&agents, "Gated", &body, true);
+  open(&mut agents, id);
+
+  assert_eq!(
+    agents.text("pipeline-hub-flow-gate-0-hint"),
+    "you approve Plan before 02 starts"
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-flow-gate-100-hint"),
+    "you approve Build before Deliver starts"
+  );
+}
