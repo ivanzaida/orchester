@@ -139,8 +139,8 @@ fn team_qa_create_a_skill_a_tool_and_an_mcp_server_are_the_servers_at_v1() {
   let (_, server) = made(
     HubFilter::Tools,
     &[
-      ("team-new-tool-name", "cargo-check"),
-      ("team-new-tool-program", &program),
+      ("team-new-tool-name-input", "cargo-check"),
+      ("team-new-tool-program-input", &program),
     ],
     "cargo-check",
   );

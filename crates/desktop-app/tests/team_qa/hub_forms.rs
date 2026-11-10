@@ -1,5 +1,5 @@
-//! A team instruction and skill are made and edited with one form each (`Agents · v2` A10, A11 for a new one, A27,
-//! A28 for an admin's edit): the form that makes one draws the same fields, in the same order, as the admin's edit
+//! A team instruction, skill and tool are made and edited with one form each (`Agents · v2` A10–A12 for a new one,
+//! A27–A29 for an admin's edit): the form that makes one draws the same fields, in the same order, as the admin's edit
 //! of one the team holds. On the QA state `team-edit`, against the stand-in team server.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_hub_forms`
@@ -26,7 +26,7 @@ struct Kind {
   sections: &'static [&'static str],
 }
 
-const KINDS: [Kind; 2] = [
+const KINDS: [Kind; 3] = [
   Kind {
     filter: HubFilter::Instructions,
     kind: ResourceKind::Instruction,
@@ -42,6 +42,14 @@ const KINDS: [Kind; 2] = [
     name: "skill",
     rows: &["description", "files"],
     sections: &["skill-md"],
+  },
+  Kind {
+    filter: HubFilter::Tools,
+    kind: ResourceKind::Tool,
+    seeded: "cargo-check",
+    name: "tool",
+    rows: &["kind", "description", "program", "arguments", "timeout"],
+    sections: &[],
   },
 ];
 

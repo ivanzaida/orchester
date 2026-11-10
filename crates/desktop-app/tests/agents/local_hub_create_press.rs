@@ -18,9 +18,9 @@ use super::{
 fn local_hub_create_a_tool_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Tools);
-  agents.set("team-new-tool-name", "cargo-check");
+  agents.set("team-new-tool-name-input", "cargo-check");
   agents.set(
-    "team-new-tool-program",
+    "team-new-tool-program-input",
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));

@@ -1,7 +1,7 @@
 //! The forms of an instruction, a skill and a tool, each one form for making the resource and for editing it (`Agents ·
 //! v2` `acFkz`: A10 `hGdGu`, A11 `p4aSf`, A12 `T4rWil`, L5–L7 for a new one; A27 `uVUZ4`, A28 `qfrbn`, A29 `FrraS` for
 //! an edit). A kind's fields, their checks and the body they make are the same whether it is made or edited
-//! ([`InstructionFields`], [`SkillFields`]); the panel around them decides the head, the bar, what the
+//! ([`InstructionFields`], [`SkillFields`], [`ToolFields`]); the panel around them decides the head, the bar, what the
 //! fields start from and where the body goes, and adds the rows that exist only around a resource that is made (*Used
 //! by*) or only before (*Added to*). As the agent profile's form ([`super::profile_form`]) does, the rows are the
 //! edit's look: a key 170 wide, a field that cannot be saved says why under its label, and a text an agent reads is a
@@ -9,6 +9,7 @@
 
 mod instruction;
 mod skill;
+mod tool;
 
 use std::sync::Arc;
 
@@ -23,7 +24,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-pub(in crate::screens) use self::{instruction::InstructionFields, skill::SkillFields};
+pub(in crate::screens) use self::{instruction::InstructionFields, skill::SkillFields, tool::ToolFields};
 use crate::{
   screens::team_hub::rows::{self, Sub},
   theme::HubText,

@@ -95,6 +95,11 @@ configuration in its database as today.
   version at once, a newer version refuses it and reloads the panel, and while the server cannot be reached what was
   typed stays with Save unavailable. A profile is made and edited with one form (`screens/hub/profile_form/`):
   the create form and the admin's edit have the same *Role*, Agent CLI, model and effort selects and lists with *Add*.
+  An instruction, a skill and a command tool are made and edited with one form each too (`screens/hub/forms/`): the
+  new one's form, the admin's edit of a team one and a local one's panel draw the same fields (an instruction's format
+  and *Text*, a skill's description, files and *SKILL.md*, a tool's kind, description, program, arguments and time
+  limit) with the same checks; a local instruction's panel no longer chooses *When* (it keeps its version's), and a new
+  skill's SKILL.md is typed rather than made from its name.
   Not edited there yet: a skill's files, an HTTP or database tool, and the leave guard of an unsaved team edit.
 
 ## Open questions

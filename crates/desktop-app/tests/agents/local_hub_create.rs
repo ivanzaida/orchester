@@ -46,13 +46,13 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
   (HubFilter::Tools, "New tool", "New tool", "Tool", "tool"),
 ];
 
-/// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's, an
-/// instruction's and a skill's are the form an edit has too.
+/// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's, an MCP server's
+/// is its create form's own, and the others' are the form an edit has too.
 fn name_field(name: &str) -> String {
   match name {
     "profile" => "team-new-profile-role-name-input".to_owned(),
-    "instruction" | "skill" => format!("team-new-{name}-name-input"),
-    _ => format!("team-new-{name}-name"),
+    "mcp" => "team-new-mcp-name".to_owned(),
+    _ => format!("team-new-{name}-name-input"),
   }
 }
 
@@ -60,8 +60,8 @@ fn name_field(name: &str) -> String {
 fn name_sub(name: &str) -> String {
   match name {
     "profile" => "team-new-profile-role-name-sub".to_owned(),
-    "instruction" | "skill" => format!("team-new-{name}-name-sub"),
-    _ => format!("team-new-{name}-name-row-sub"),
+    "mcp" => "team-new-mcp-name-row-sub".to_owned(),
+    _ => format!("team-new-{name}-name-sub"),
   }
 }
 
@@ -277,9 +277,9 @@ fn local_hub_create_a_skill_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_command_tool_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Tools);
-  agents.set("team-new-tool-name", "cargo-check");
+  agents.set("team-new-tool-name-input", "cargo-check");
   agents.set(
-    "team-new-tool-program",
+    "team-new-tool-program-input",
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   agents.click("local-hub-new-create");
