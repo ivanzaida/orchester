@@ -1330,6 +1330,11 @@
       "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
       "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
     },
+    "rename": {
+      "blank": "A pipeline needs a name.",
+      "tooLong": "A name is at most {{count}} characters.",
+      "taken": "{{name}} is too close to the pipeline {{pipeline}}. Choose another name."
+    },
     "default": {
       "notPublished": "Publish this pipeline before making it the default: New task lists only published pipelines."
     },
