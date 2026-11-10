@@ -77,9 +77,9 @@ impl Offer for Fix {
   }
 }
 
-/// The group for `entry`, which is none for an archived pipeline, which has no steps. `read` is the flow the panel draws:
-/// the edit's while the panel holds one, so what is missing is what the person sees and saves; only what this computer
-/// lacks (`entry.standing`) is about the version tasks use, which an edit does not change until it is saved.
+/// The group for `entry`, which is none for an archived pipeline, which has no steps. `read` is the flow the panel
+/// draws: the edit's while the panel holds one, so what is missing is what the person sees and saves; only what this
+/// computer lacks (`entry.standing`) is about the version tasks use, which an edit does not change until it is saved.
 pub(super) fn group(
   ctx: &mut Ctx,
   project: &ShownProject,

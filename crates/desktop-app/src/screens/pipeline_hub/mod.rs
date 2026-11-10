@@ -21,8 +21,8 @@
 mod archived;
 mod bar;
 mod bones;
-mod edit;
 mod chips;
+mod edit;
 mod flow;
 mod leave;
 mod list;
