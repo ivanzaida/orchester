@@ -22,7 +22,8 @@ The ⋯ in the pipeline's head (P11 `nrTt0`) and the *Archived* tab (P7 `mFNXi`)
 
 ## Done when
 
-- What the old library's row menu offered a local project is back: Duplicate and Make default; the two tests PV2-04
+- What the old library offered a local project is back: Duplicate, Make default, and a visible *default* chip on the
+  default pipeline (in its list row's meta and the panel's chips), so a person sees which one New task offers first; the two tests PV2-04
   set `#[ignore]` in `crates/desktop-app/tests/pipelines/default.rs` run again (on the new page) and pass.
 
 - Rename, Duplicate, Archive and Restore work, and the lists and counts follow.
