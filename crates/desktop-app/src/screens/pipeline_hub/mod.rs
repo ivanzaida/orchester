@@ -51,10 +51,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureState},
+    theme::{BorderSize, Breakpoint, PaletteColor, RadiusSize},
   },
-  components::Row,
+  components::{Column, Row},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
@@ -80,8 +81,9 @@ use crate::{
       head,
       leave::Leave,
     },
+    team_hub::list::LIST_WIDTH,
   },
-  theme::HubSpacing,
+  theme::{HubSpacing, PIPELINE_HUB_LIST_NARROW},
   ui::{
     button::{ActionButton, ButtonKind},
     failure::LastFailure,
@@ -335,7 +337,36 @@ fn hub_body(
       step,
     },
   );
-  agents::master_detail("pipeline-hub", reading, (list, panel))
+  master_detail(ctx, reading, (list, panel))
+}
+
+/// The list beside the panel, as the Agents hub's ([`agents::master_detail`]), except that in a window under the `xl`
+/// breakpoint the list gives way first, to [`PIPELINE_HUB_LIST_NARROW`], so the panel keeps a width its rows, cards and
+/// bar are read at.
+fn master_detail(ctx: &Ctx, reading: bool, (list, panel): (Element, Element)) -> Element {
+  let list_width = if ctx.breakpoint() >= Some(Breakpoint::Xl) {
+    LIST_WIDTH
+  } else {
+    PIPELINE_HUB_LIST_NARROW
+  };
+  Row::new()
+    .id("pipeline-hub-master-detail")
+    .describe("state", if reading { "reading" } else { "read" })
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .child(
+      Column::new()
+        .id("pipeline-hub-list-column")
+        .width(Dimension::Px(list_width))
+        .height(Dimension::Pct(100.0))
+        .flex_shrink(0.0)
+        .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .child(list),
+    )
+    .child(panel)
+    .into()
 }
 
 /// *New pipeline*, which opens the page that makes one: the head's is the primary button, the empty body's the

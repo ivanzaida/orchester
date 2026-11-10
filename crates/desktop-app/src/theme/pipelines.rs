@@ -63,6 +63,11 @@ impl PipelinesText {
   }
 }
 
+/// The Pipelines hub's list in a window under the `xl` breakpoint (1280 logical), where the board's 440 would leave
+/// the panel too narrow for its rows, cards and bar: the list gives way first (PV2-17; no design frame below the 1440
+/// board; the list's rows cut their lines with an ellipsis).
+pub const PIPELINE_HUB_LIST_NARROW: f32 = 260.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipelinesSpacing {
   /// 20: above the header and the body (`Jf1Gu`, `mifhW`).
