@@ -159,7 +159,9 @@
       "none": "No agent profile gives it, so no agent gets it"
     },
     "tool": {
-      "title": "Tool"
+      "title": "Tool",
+      "widenTitle": "Allow these changes to the tool?",
+      "execution": "A command tool runs its program with your rights, network access and no sandbox, on files agents wrote. Allow it only for a command you would let agents run that way."
     },
     "instruction": {
       "title": "Instruction"

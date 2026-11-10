@@ -29,6 +29,7 @@ pub(in crate::screens) mod profile;
 mod row;
 pub(in crate::screens) mod save_bar;
 mod skill;
+mod tool;
 mod words;
 
 use std::sync::Arc;
@@ -360,7 +361,7 @@ impl LocalHubScreen {
 }
 
 impl LocalHubScreen {
-  /// The panel of a resource other than a profile: an instruction and a skill are edited in it, a tool is shown.
+  /// The panel of a resource other than a profile: an instruction, a skill and a command tool are edited in it.
   fn resource_panel(&self, ctx: &mut Ctx, project: &ShownProject, entry: &Entry, id: ResourceId) -> Element {
     match entry.kind {
       ResourceKind::Instruction => instruction::panel(
@@ -375,6 +376,15 @@ impl LocalHubScreen {
       ResourceKind::Skill => skill::panel(
         ctx,
         skill::Props {
+          project: project.clone(),
+          entry: entry.clone(),
+          id,
+          unsaved: self.unsaved.clone(),
+        },
+      ),
+      ResourceKind::Tool => tool::panel(
+        ctx,
+        tool::Props {
           project: project.clone(),
           entry: entry.clone(),
           id,
