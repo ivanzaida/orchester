@@ -105,7 +105,7 @@ fn ended(drive: &Drive, key: &StepKey) {
     Drop::Before(before) => Move::Before(before),
     Drop::OnCard(target) => Move::Beside(target),
   };
-  drive.apply(key, &change, false);
+  drive.land(key, &change);
 }
 
 /// Esc: sets a lifted card down, which ends its drag without a drop. Whether there was one.

@@ -331,6 +331,10 @@
       "noSources": "None",
       "replaceTitle": "Replace your changes with {{version}}?",
       "replaceWhat": "What you changed and have not saved is dropped, and {{version}} takes its place. Save then makes it the next version."
+    },
+    "stepFlow": {
+      "upOutOfGroup": "Move up, out of the group",
+      "downOutOfGroup": "Move down, out of the group"
     }
   }
 }
