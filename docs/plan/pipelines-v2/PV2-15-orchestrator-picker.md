@@ -1,9 +1,9 @@
 # PV2-15 · The orchestrator chat adopts the compact picker
 
-- **Status:** blocked (PV2-03, PV2-16)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-03, PV2-16
-- **Branch:** —
+- **Branch:** `claude/pv2-15-orchestrator-picker`
 - **Tokens:** —
 
 ## Goal

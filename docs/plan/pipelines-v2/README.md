@@ -35,7 +35,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-00](PV2-00-design-saved.md) | Save and commit the `Pipelines · v2` design | person | — | needs the person | — | — |
 | [PV2-01](PV2-01-core-step-order.md) | Core: move steps and run them in parallel | core | — | done | `claude/pv2-01-step-order` → `310ce4f39` | 4.84M (out 72k) |
 | [PV2-02](PV2-02-step-runs-on.md) | Core: a step's connection and effort | core | — | canceled | — | — |
-| [PV2-03](PV2-03-runs-on-picker.md) | The compact *Runs on* picker as a shared component | UI | — | todo | — | — |
+| [PV2-03](PV2-03-runs-on-picker.md) | The compact *Runs on* picker as a shared component | UI | — | done | `claude/pv2-03-runs-on-picker` → `c37c1caad` | 51.4M (out 209k) |
 | [PV2-04](PV2-04-page-shell.md) | The page: filter, grouped list, panel, Save bar | UI | — | todo | — | — |
 | [PV2-05](PV2-05-steps-flow.md) | Steps drawn as the flow they run in | UI | PV2-04 | blocked | — | — |
 | [PV2-06](PV2-06-reorder-in-flow.md) | Reorder steps in the flow: drag, ⋯ menu, keys | UI | PV2-01, PV2-05 | blocked | — | — |
@@ -47,7 +47,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-12](PV2-12-menu-archive.md) | The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab | UI | PV2-04 | blocked | — | — |
 | [PV2-13](PV2-13-page-states.md) | Loading, none yet, empty tabs, read failure | UI | PV2-04 | blocked | — | — |
 | [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | blocked | — | — |
-| [PV2-15](PV2-15-orchestrator-picker.md) | The orchestrator chat adopts the compact picker | UI | PV2-03, PV2-16 | blocked | — | — |
+| [PV2-15](PV2-15-orchestrator-picker.md) | The orchestrator chat adopts the compact picker | UI | PV2-03, PV2-16 | in progress | `claude/pv2-15-orchestrator-picker` | — |
 | [PV2-16](PV2-16-design-orchestrator-picker.md) | Design: the orchestrator's picker states with the compact picker | design | — | done | Pencil (unsaved) | 2.51M (out 27k) |
 
 ## Order

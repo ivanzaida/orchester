@@ -1,10 +1,10 @@
 # PV2-03 · The compact *Runs on* picker as a shared component
 
-- **Status:** todo
+- **Status:** done (2026-11-10; review round 2 PASS; merged `c37c1caad`; design verification of K1/K2 in PV2-15, D-008)
 - **Kind:** UI
 - **Depends on:** — (the design is read from Pencil's open document until PV2-00)
-- **Branch:** —
-- **Tokens:** —
+- **Branch:** `claude/pv2-03-runs-on-picker` (`cfd06b483` … `79dfc3c98`)
+- **Tokens:** 51.4M — implementation 29.0M + 16.4M (output 107k + 77k), review 3.7M + 2.2M (output 11k + 14k)
 
 ## Goal
 
