@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
   routes::{HubFilter, HubView, ProjectPage, Route},
-  screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
+  screens::hub::agent_row::{AgentRow, agent_row, line, tag_chip},
   theme::IconSize,
   ui::{
     agent_mark::AgentMark,
@@ -42,7 +42,7 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
     kind: entry.kind.name().to_owned(),
     mark: mark(ctx, entry),
     name: &entry.name,
-    line: (&said.text, said.color),
+    line: line(&id, &said.text, said.color).into(),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),
   })

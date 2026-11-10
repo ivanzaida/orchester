@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{
   routes::{HubFilter, ProjectPage, Route},
-  screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
+  screens::hub::agent_row::{AgentRow, agent_row, line, tag_chip},
   theme::IconSize,
   ui::{agent_mark::AgentMark, icon::icon},
 };
@@ -46,7 +46,7 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     kind: format!("{:?}", entry.kind),
     mark: mark(ctx, entry, unsaved),
     name: &entry.name,
-    line: (&said.text, said.color),
+    line: line(&id, &said.text, said.color).into(),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),
   })

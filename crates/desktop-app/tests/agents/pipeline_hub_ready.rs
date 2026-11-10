@@ -2,7 +2,12 @@
 //! line, the chips under the head and *Ready?* under the flow, with *Choose →* or *Open →* on each thing missing.
 //! `cargo test -p orchester-app --test agents pipeline_hub_ready`.
 
-use orchester_app::routes::{HubFilter, HubView, PipelineView, PipelinesFilter, ProjectPage, Route};
+use std::time::{Duration, Instant};
+
+use orchester_app::{
+  routes::{HubFilter, HubView, PipelineView, PipelinesFilter, ProjectPage, Route},
+  ui::tooltip::TOOLTIP_DELAY,
+};
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -346,4 +351,47 @@ fn pipeline_hub_ready_an_archived_pipeline_has_no_ready_group() {
     .expect("archived");
   open(&mut agents, PipelinesFilter::Archived, Some(old));
   assert!(!agents.exists("team-hub-readiness-count"));
+}
+
+#[test]
+fn pipeline_hub_ready_a_row_line_that_is_cut_shows_its_full_text_in_a_tooltip() {
+  let mut agents = Agents::new(true);
+  let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
+  edit.add_step(
+    Name::new("Reconcile the dependency lockfile with the vendored manifests").expect("name"),
+    None,
+  );
+  let long = store(&agents, "Long", &edit.validate().expect("a pipeline"));
+  let short = store(&agents, "Short", &body([None, None]));
+  open(&mut agents, PipelinesFilter::All, Some(long));
+
+  let line = format!("pipeline-hub-row-{long}-line");
+  let bounds = agents
+    .window
+    .tree
+    .get_element_by_id_mut(&line)
+    .and_then(|found| found.bounds())
+    .expect("the line is laid out");
+  let scale = agents.window.tree.scale_factor();
+  agents.window.tree.mouse_move(
+    (bounds.x + bounds.width / 2.0) * scale,
+    (bounds.y + bounds.height / 2.0) * scale,
+  );
+  agents.window.pass();
+  agents
+    .window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  agents.window.pass();
+
+  let said = agents.text(&line);
+  assert_eq!(
+    agents.text(&format!("{line}-tooltip")),
+    "01 Reconcile the dependency lockfile with the vendored manifests has no agent profile",
+    "the tooltip holds the whole line, which the row cut to {said:?}"
+  );
+  assert!(
+    !agents.exists(&format!("pipeline-hub-row-{short}-line-tooltip")),
+    "a line that fits has no tooltip"
+  );
 }
