@@ -42,6 +42,51 @@
       "steps": "Steps",
       "openSteps": "Edit steps"
     },
+    "flow": {
+      "onStart": "ON TASK START",
+      "onStartHint": "a task with this pipeline starts its run",
+      "parallel": "RUN IN PARALLEL",
+      "parallelBoth": "both must pass",
+      "parallelAll": "all must pass",
+      "gate": "Waits for your approval",
+      "gateBefore": "you approve {{step}} before {{next}} starts",
+      "gateEnd": "you approve {{step}} before the run ends",
+      "readOnly": "read-only",
+      "canWrite": "can write",
+      "profileModel": "{{profile}} · {{model}}",
+      "tool": "Tool · {{tool}}",
+      "failure": "changes requested → {{number}}",
+      "chooseProfile": "Choose profile",
+      "chooseTool": "Choose tool",
+      "noProfile": "No agent profile · choose one",
+      "noTool": "No tool · choose one",
+      "profileNotPublished": "Profile not published yet",
+      "toolNotPublished": "Tool not published yet",
+      "toolNotRunnable": "{{tool}} can't run as a step yet",
+      "deliver": "Deliver",
+      "deliverApprove": "Approve to merge · {{method}} · conflicts: {{who}}",
+      "deliverAuto": "Auto-merge · {{method}} · conflicts: {{who}}",
+      "mergeCommit": "Merge commit",
+      "squash": "Squash",
+      "conflictsYou": "you",
+      "endMerged": "MERGED INTO THE BASE BRANCH",
+      "endMergedHint": "the task is done",
+      "endReview": "READY FOR REVIEW",
+      "endReviewHint": "you merge the run from its task",
+      "endChangesOrReportHint": "you merge its changes, or take its report as the result",
+      "endReport": "ITS REPORT",
+      "endReportHint": "the last step's report is the result",
+      "endOutside": "DONE OUTSIDE THE REPOSITORY",
+      "endOutsideHint": "the last step's report and what its tools changed are the result",
+      "branches": {
+        "title": "These steps can't be drawn as one line",
+        "detail": "A step waits for only part of what runs before it, so no single line shows their order. Edit the steps to see and change what each one waits for."
+      },
+      "broken": {
+        "title": "These steps have no order to draw",
+        "detail": "The steps wait for each other in a circle, or for a step that is not there. Edit the steps to fix what they wait for."
+      }
+    },
     "empty": {
       "all": {
         "title": "No pipelines yet",

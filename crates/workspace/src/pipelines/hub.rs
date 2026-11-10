@@ -15,6 +15,8 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
+  data::Assignables,
+  flow::FlowRead,
   library::{LibraryEntry, VersionState, library},
   problems::problem_view,
 };
@@ -42,6 +44,8 @@ pub struct HubPipeline {
   pub standing: Option<ReadinessStanding>,
   /// What keeps a pipeline without a version from being published, the first problem of its draft.
   pub problem: Option<Message>,
+  /// Its steps as the panel draws them: the draft's, or the latest version's.
+  pub flow: Arc<FlowRead>,
 }
 
 impl HubPipeline {
@@ -104,6 +108,7 @@ impl Workspace {
   pub fn pipeline_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<PipelineHub, ReadinessError> {
     let db = ProjectDb::open(repo_root)?;
     let readiness = self.readiness_in(&db, repo_root, vault)?;
+    let assignables = Assignables::load(&db)?;
     let mut pipelines = Vec::new();
     for entry in library(&db)? {
       let standing = readiness.pipeline(entry.id).map(|found| found.standing().clone());
@@ -111,7 +116,11 @@ impl Workspace {
         VersionState::DraftOnly => draft_problem(&db, entry.id)?,
         _ => None,
       };
-      pipelines.push(of_entry(entry, standing, problem));
+      // The library lists only pipelines that have a draft or a version, so there is one to draw.
+      let Some(flow) = FlowRead::of(&db, entry.id, &assignables)? else {
+        continue;
+      };
+      pipelines.push(of_entry(entry, (standing, problem), Arc::new(flow)));
     }
     Ok(PipelineHub {
       pipelines,
@@ -120,7 +129,11 @@ impl Workspace {
   }
 }
 
-fn of_entry(entry: LibraryEntry, standing: Option<ReadinessStanding>, problem: Option<Message>) -> HubPipeline {
+fn of_entry(
+  entry: LibraryEntry,
+  (standing, problem): (Option<ReadinessStanding>, Option<Message>),
+  flow: Arc<FlowRead>,
+) -> HubPipeline {
   HubPipeline {
     id: entry.id,
     name: entry.name,
@@ -130,6 +143,7 @@ fn of_entry(entry: LibraryEntry, standing: Option<ReadinessStanding>, problem: O
     published_at: entry.last_published,
     standing,
     problem,
+    flow,
   }
 }
 

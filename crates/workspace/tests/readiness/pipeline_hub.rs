@@ -118,3 +118,35 @@ fn readiness_pipeline_hub_leaves_an_archived_pipeline_out_of_the_list_and_lists_
   assert_eq!(archived[0].at, at(30));
   assert!(archived[0].latest.is_some(), "it keeps the version it had");
 }
+
+#[test]
+fn readiness_pipeline_hub_carries_each_pipelines_steps_as_the_flow_they_run_in() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let published = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
+  let unfinished = draft(&fixture, "unfinished", &pipeline(&[Some(builder), None], None));
+
+  let read = hub(&fixture);
+  let flow = |id| {
+    let found = read.pipelines().iter().find(|found| found.id == id).expect("listed");
+    found.flow.clone()
+  };
+  let published = flow(published);
+  assert!(
+    !published.draft,
+    "a published pipeline without a draft shows its version"
+  );
+  let drawn = published.flow.as_ref().expect("two steps that wait for nothing are drawn");
+  assert_eq!(drawn.stages.len(), 1, "steps that wait for nothing run side by side");
+  assert_eq!(drawn.stages[0].cards.len(), 2);
+  assert!(drawn.stages[0].cards.iter().all(|card| !card.runs.needs_you()));
+
+  let unfinished = flow(unfinished);
+  assert!(unfinished.draft, "a pipeline never published shows its draft");
+  let drawn = unfinished.flow.as_ref().expect("drawn");
+  assert!(
+    drawn.stages[0].cards[1].runs.is_unassigned(),
+    "its second step has no profile yet"
+  );
+}

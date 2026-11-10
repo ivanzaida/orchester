@@ -3,7 +3,7 @@
 //! the failure routes by the numbers the cards carry, and the Deliver step numbered last. The layout is derived from
 //! the steps' `depends_on` ([`orchester_core::resource::flow_units`]); nothing of it is stored.
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
@@ -13,14 +13,9 @@ use orchester_core::{
   },
   store::ResourceStore,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
-use super::{
-  data::{Assignables, OpenError},
-  deliver::integrating_step,
-  write::WriteError,
-};
-use crate::messages::Message;
+use super::{data::Assignables, deliver::integrating_step};
 
 /// What a step runs, as its card's second line says it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -238,32 +233,18 @@ pub struct FlowRead {
 }
 
 impl FlowRead {
-  /// The flow of pipeline `id` of the project at `repo_root`: its draft when it has one, otherwise its latest
-  /// version. Blocks on SQLite: run it on the background pool.
-  pub fn load_in(repo_root: &Path, id: ResourceId) -> Result<Self, Message> {
-    let db = ProjectDb::open(repo_root)
-      .map_err(OpenError::from)
-      .map_err(work_error)?;
-    Self::load(&db, id).map_err(work_error)
-  }
-
-  fn load(db: &ProjectDb, id: ResourceId) -> Result<Self, OpenError> {
-    let draft = db.draft::<Pipeline>(id)?;
-    let (body, drafted) = match draft {
+  /// The flow of pipeline `id`: its draft when it has one, otherwise its latest version; `None` when it has neither.
+  pub fn of(db: &ProjectDb, id: ResourceId, assignables: &Assignables) -> Result<Option<Self>, StoreError> {
+    let (body, draft) = match db.draft::<Pipeline>(id)? {
       Some(draft) => (draft.body().clone(), true),
-      None => {
-        let version = db.latest_version::<Pipeline>(id)?.ok_or(OpenError::Missing)?;
-        (version.body().clone(), false)
-      }
+      None => match db.latest_version::<Pipeline>(id)? {
+        Some(version) => (version.body().clone(), false),
+        None => return Ok(None),
+      },
     };
-    let assignables = Assignables::load(db)?;
-    Ok(Self {
-      draft: drafted,
-      flow: PipelineFlow::of(&body, &assignables),
-    })
+    Ok(Some(Self {
+      draft,
+      flow: PipelineFlow::of(&body, assignables),
+    }))
   }
-}
-
-fn work_error(error: OpenError) -> Message {
-  WriteError::from(error).message()
 }

@@ -117,7 +117,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 201] = [
+pub const ALL: [Scenario; 202] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -234,6 +234,7 @@ pub const ALL: [Scenario; 201] = [
   Scenario::of("picker-readiness-team", picker_readiness::team),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
+  Scenario::of("pipelines-flow", pipelines::flow),
   Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),

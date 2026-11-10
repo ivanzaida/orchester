@@ -1,13 +1,14 @@
 //! Supported pipeline fixture contracts for independent native verification.
 use orchester_core::{
   permission::{StepCommands, StepNetwork},
-  resource::{AgentProfile, Pipeline, ResourceKind, StepKind, ToolKind},
+  resource::{AgentProfile, FlowError, Pipeline, ResourceKind, StepKind, ToolKind},
   store::ResourceStore,
 };
 use orchester_store::StoreError;
 use orchester_workspace::pipelines::{
   data::{Assignables, OpenedPipeline},
   deliver::integrator_profiles,
+  flow::{PipelineFlow, Runs},
   narrowing,
 };
 
@@ -185,4 +186,47 @@ fn seed_pipelines_reaches_saved_draft_empty_problems_and_narrowing() {
   assert!(permissions.interactive_tool_approvals);
   let assignables = orchester_workspace::pipelines::data::Assignables::load(&db).unwrap();
   orchester_workspace::pipelines::narrowing::check_step(step, &assignables).unwrap();
+}
+
+#[test]
+fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
+  let seed = Seed::of("pipelines-flow");
+  let db = seed.db();
+  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let flow = |name: &str| {
+    let id = rows.iter().find(|r| r.name().as_str() == name).unwrap().id();
+    let opened = OpenedPipeline::load_in(seed.repo(), id).unwrap();
+    PipelineFlow::of(&opened.body, &opened.assignables)
+  };
+  let feature = flow("Feature delivery").expect("Feature delivery is drawn");
+  let sizes: Vec<usize> = feature.stages.iter().map(|stage| stage.cards.len()).collect();
+  assert_eq!(sizes, [1, 1, 1, 2, 1], "the checks and the review run side by side");
+  assert_eq!(feature.stages[1].gates.len(), 1, "the plan waits for the person");
+  assert!(feature.stages[3].cards.iter().all(|card| card.on_failure.is_some()));
+  assert!(feature.deliver.is_some(), "it ends in a Deliver step");
+  assert!(
+    feature
+      .stages
+      .iter()
+      .flat_map(|stage| &stage.cards)
+      .all(|card| !card.runs.needs_you())
+  );
+
+  let problems = flow("Publication problems").expect("incomplete executors are drawn");
+  let runs: Vec<&Runs> = problems.stages.iter().map(|stage| &stage.cards[0].runs).collect();
+  assert_eq!(
+    runs,
+    [
+      &Runs::NoProfile,
+      &Runs::ProfileNotPublished,
+      &Runs::ToolNotRunnable {
+        name: "Unsupported database".into()
+      }
+    ]
+  );
+
+  let gated = flow("Gated group").expect("a gated group is drawn");
+  assert_eq!((gated.stages[1].cards.len(), gated.stages[1].gates.len()), (2, 2));
+  assert!(matches!(flow("Independent chains"), Err(FlowError::Branches(_))));
+  assert!(flow("Empty draft").expect("no steps are drawn").is_empty());
 }

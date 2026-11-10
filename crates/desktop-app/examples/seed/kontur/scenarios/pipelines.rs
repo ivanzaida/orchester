@@ -320,3 +320,55 @@ fn policy() -> AccessPolicy {
   )
   .expect("empty caller list denies everyone")
 }
+
+/// The steps drawn as the flow they run in (`Steps` `uSoll` in `Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): Feature delivery
+/// with its gate, its checks and review side by side, their failure routes and its Deliver step; *Publication problems*,
+/// whose cards stand in amber (a step without a profile, one whose profile is not published, one whose tool cannot
+/// run); *Gated group*, whose two steps in a group both wait for the person; *Independent chains*, whose steps wait for
+/// only part of what runs before them, so no one line shows them; and an empty draft.
+pub fn flow(kontur: &mut Kontur) -> Result<(), SeedError> {
+  kontur.delivering_catalogue()?;
+  problems(kontur)?;
+  gated_group(kontur)?;
+  chains(kontur)?;
+  create(
+    kontur,
+    "Empty draft",
+    &Pipeline::new(vec![]).expect("empty drafts are valid"),
+  )?;
+  Ok(())
+}
+
+/// *Prepare*, then *Check* and *Review* side by side, each ending in a gate.
+fn gated_group(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let prepare = edit.add_step(name("Prepare"), None);
+  let check = edit.add_step(name("Check"), Some(&prepare));
+  let review = edit.add_step(name("Review"), Some(&prepare));
+  for key in [&check, &review] {
+    edit.update(key, |step| step.approval_gate = true);
+  }
+  create(
+    kontur,
+    "Gated group",
+    &edit.validate().expect("steps without executors are valid in a draft"),
+  )?;
+  Ok(())
+}
+
+/// *Fetch* then *Parse*, and apart from them *Lint* then *Report*: no step waits for what a single line would say.
+fn chains(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let fetch = edit.add_step(name("Fetch"), None);
+  let lint = edit.add_step(name("Lint"), None);
+  let parse = edit.add_step(name("Parse"), None);
+  let report = edit.add_step(name("Report"), None);
+  edit.set_dependency(&parse, &fetch, true);
+  edit.set_dependency(&report, &lint, true);
+  create(
+    kontur,
+    "Independent chains",
+    &edit.validate().expect("two chains are valid steps"),
+  )?;
+  Ok(())
+}
