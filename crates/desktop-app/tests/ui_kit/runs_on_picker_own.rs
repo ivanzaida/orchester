@@ -223,3 +223,22 @@ fn a_tooltip_can_carry_a_note_under_its_title() {
   kit.rest_on(&item("team"));
   assert_eq!(kit.texts(&format!("{}-tip-tooltip", item("team"))), ["team tip"]);
 }
+
+#[test]
+fn the_list_opens_scrolled_to_the_chosen_model() {
+  let mut open = open_over(
+    connections(),
+    Chosen {
+      connection: "work".into(),
+      model: Some("sonnet".into()),
+      effort: None,
+    },
+  );
+  let kit = &mut open.kit;
+  let list = kit.bounds(&format!("{ID}-model-scroll"));
+  let chosen = kit.bounds(&row(5));
+  assert!(
+    chosen.y >= list.y - 0.5 && chosen.y + chosen.height <= list.y + list.height + 0.5,
+    "the chosen model, the last of six, shows whole in a list of four rows: {chosen:?} {list:?}"
+  );
+}

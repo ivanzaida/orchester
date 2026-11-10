@@ -3,22 +3,18 @@
 //! `Orchestrator · redesign` `hujxu`). The chip (24 high, radius 6, 8 at its sides, 6 apart: a 12 `waypoints`,
 //! *CLI · account · model* or *provider · model* in 11.5 `text_secondary`, and a chevron; on the `pressed` fill while
 //! its picker is open; *Not set up* in `warning` on `warning_muted` until the Orchester can answer) says what the next
-//! answer runs on; its tooltip, how the Orchestrator's actions are checked. It opens the picker over it, never under
-//! it, and no taller than the room over it (the models scroll inside their column, the foot stays): one panel
-//! ([`panel`]) with the connections on a rail ([`rail`]), the chosen one's models with Search ([`models`]) and the
-//! chosen model's efforts ([`effort`]), and no list ever opens inside it. Choosing applies at once ([`picking`]): the
-//! choice is published as the Orchestrator's next version, through the checks of its settings page
-//! (`orchester_workspace::orchestrator::settings::save_in`), and the next answer runs on it.
+//! answer runs on; its tooltip, how the Orchestrator's actions are checked, and after a switch to another account that
+//! the conversation's session starts anew. It opens the shared compact picker (`ui::runs_on_picker`) over it, never
+//! under it, 6 above it and aligned to its start: the connections on a rail ([`connections`] says what each shows), the
+//! chosen one's models with Search and the chosen model's efforts. Choosing applies at once ([`picking`]): the choice
+//! is published as the Orchestrator's next version, through the checks of its settings page
+//! (`orchester_workspace::orchestrator::settings::save_in`), and the next answer runs on it. With no connection to
+//! choose the picker is its foot alone ([`foot`]).
 
-mod effort;
+mod connections;
 mod foot;
-mod header;
-mod item;
-mod keys;
-mod models;
-mod panel;
 mod picking;
-mod rail;
+mod sources;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -33,7 +29,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{id::AgentAccountId, id::ProjectId, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::Message,
@@ -44,11 +40,10 @@ use orchester_workspace::{
 };
 
 use self::{
-  picking::Picking,
-  rail::{Sources, cli_name},
+  picking::{Chooser, Picking},
+  sources::{Entry, Sources, cli_name},
 };
 use crate::{
-  chrome::TITLE_BAR_HEIGHT,
   services::{
     Services,
     accounts::{self, account_name},
@@ -57,7 +52,9 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
+    message::message_text,
     pressable::pressable,
+    runs_on_picker::{Notice, NoticeTone, Pick, RunsOnPicker as Picker},
     tooltip::Tooltip,
   },
 };
@@ -66,21 +63,23 @@ use crate::{
 const CHIP_HEIGHT: f32 = 24.0;
 
 /// What the chip and its picker are about: the project at `root`, what the Orchestrator runs on as read (`None` while
-/// it is read or could not be), and whether reading it failed; `open` shows the picker.
+/// it is read or could not be), and whether reading it failed; `open` shows the picker. `session` is the account the
+/// open conversation's session runs on, when it has one.
 #[derive(Clone)]
 pub(super) struct RunsOnProps {
   pub(super) root: PathBuf,
   pub(super) project: ProjectId,
   pub(super) setup: Option<OrchestratorSetup>,
   pub(super) failed: bool,
+  pub(super) session: Option<AgentAccountId>,
   pub(super) open: Signal<bool>,
 }
 
 /// Compared by what it shows; the signal by which one it is.
 impl PartialEq for RunsOnProps {
   fn eq(&self, other: &Self) -> bool {
-    (&self.root, self.project, &self.setup, self.failed, self.open.id())
-      == (&other.root, other.project, &other.setup, other.failed, other.open.id())
+    (&self.root, self.project, &self.setup, self.failed, self.session, self.open.id())
+      == (&other.root, other.project, &other.setup, other.failed, other.session, other.open.id())
   }
 }
 
@@ -126,7 +125,7 @@ impl Component for RunsOnPicker {
     let uses = provider_uses(ctx, &props);
     let open = props.open.get();
     let Some(setup) = props.setup.as_ref() else {
-      return self.chip(ctx, &props, None);
+      return self.chip(ctx, &props, (None, false));
     };
     let sources = Sources {
       setup,
@@ -134,38 +133,97 @@ impl Component for RunsOnPicker {
       readings: &readings,
       uses: &uses,
     };
+    let entries = sources.entries(ctx);
     let label = label(ctx, &sources);
+    let switched = switched(&sources, &entries, &props);
     if !open {
       self.picking.forget();
-      return self.chip(ctx, &props, Some(&label));
+      return self.chip(ctx, &props, (Some(&label), switched));
     }
-    let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-    // 16 over the chip (`Runs on menu` `r2owi1` over `KohZb` in `v6mWp8`).
-    let gap = ctx.theme().spacing_value(SpacingSize::Lg).to_px();
-    let room = room_over(&self.anchor, (gap, margin));
-    let panel = panel::panel(ctx, (&props, &sources), (&self.picking, &self.publish), room);
-    let chip = self.chip(ctx, &props, Some(&label));
-    // Over the chip, 16 away from it, and never flipped under it, where it would cover the status bar: it is as tall
-    // as the room over the chip lets it be, and its models scroll inside their column.
+    let panel = if entries.is_empty() {
+      foot::empty_menu(ctx, &props)
+    } else {
+      self.picker(ctx, &props, (&sources, &entries))
+    };
+    let chip = self.chip(ctx, &props, (Some(&label), switched));
+    // Over the chip, 6 away from it (`Runs on menu` `p3gAA1` over `v8BAOZ` in `v6mWp8`), and never flipped under it,
+    // where it would cover the status bar.
     let picker = Popup::new(self.anchor.clone(), panel)
       .open(props.open.clone())
       .placement(Placement::TopStart)
       // Over its anchor, lurq counts the offset away from it.
-      .offset(0.0, gap)
+      .offset(0.0, ExtraSpacing::Snug.value())
       .collision(CollisionStrategy::Clamp);
     Row::new().child(chip).child(picker).into()
   }
 }
 
-/// How tall the picker over the chip `anchor` may be: the room between the content's top under the title bar, kept
-/// `margin` clear, and the chip, `gap` under the picker; `None` before the chip was laid out.
-fn room_over(anchor: &ElementRef, (gap, margin): (f32, f32)) -> Option<f32> {
-  (anchor.height() > 0.0).then(|| (anchor.y() - TITLE_BAR_HEIGHT - gap - margin).max(0.0))
-}
-
 impl RunsOnPicker {
-  /// The chip, saying what the next answer runs on (`label`: `None` while it is read).
-  fn chip(&self, ctx: &mut Ctx, props: &RunsOnProps, label: Option<&Label>) -> Element {
+  /// The shared picker over `entries`, what it hands back applied through the chooser.
+  fn picker(&self, ctx: &mut Ctx, props: &RunsOnProps, (sources, entries): (&Sources<'_>, &[Entry])) -> Element {
+    let state = self.publish.state().get();
+    let settings = self.picking.chosen(sources.setup, state.error.is_some());
+    let chooser = Chooser {
+      picking: self.picking.clone(),
+      setup: sources.setup.clone(),
+      chosen: settings.clone(),
+      publish: self.publish.clone(),
+      root: props.root.clone(),
+    };
+    let ids: Vec<_> = entries.iter().map(|entry| entry.id).collect();
+    let on_pick = move |pick: Pick| match pick {
+      Pick::Connection(id) => {
+        if let Some(connection) = ids.iter().find(|connection| connection.to_string() == *id) {
+          chooser.connection(*connection);
+        }
+      }
+      Pick::Model { connection, model } => {
+        if let Some(connection) = ids.iter().find(|candidate| candidate.to_string() == *connection) {
+          chooser.model(*connection, &model);
+        }
+      }
+      Pick::Effort(effort) => chooser.effort(effort.as_deref()),
+    };
+    let open = props.open.clone();
+    let connections = connections::connections(ctx, sources, entries, (settings.as_ref(), props.session));
+    let mut notes = Vec::new();
+    if let Some(error) = state.error.as_ref().filter(|_| self.picking.chose()) {
+      notes.push(Notice {
+        icon: Icon::CircleAlert,
+        tone: NoticeTone::Danger,
+        text: ctx.t_args(
+          "orchestrator.settings.saveFailed",
+          [("reason", &*message_text(ctx, error))],
+        ),
+      });
+    }
+    if self.picking.rejected() {
+      notes.push(Notice {
+        icon: Icon::CircleAlert,
+        tone: NoticeTone::Danger,
+        text: ctx.t("orchestrator.runsOn.badModel"),
+      });
+    }
+    if sources.setup.draft.is_some() {
+      notes.push(Notice {
+        icon: Icon::Info,
+        tone: NoticeTone::Neutral,
+        text: ctx.t("orchestrator.runsOn.overDraft"),
+      });
+    }
+    Picker::new(
+      "orchestrator-runs-on-menu",
+      (connections, connections::chosen(settings.as_ref())),
+      on_pick,
+      move || open.set(false),
+    )
+    .notes(notes)
+    .element(ctx)
+  }
+
+  /// The chip, saying what the next answer runs on (`label`: `None` while it is read); `switched` once the Orchestrator
+  /// runs as another account than the conversation's session.
+  fn chip(&self, ctx: &mut Ctx, props: &RunsOnProps, (label, switched): (Option<&Label>, bool)) -> Element {
     let open = props.open.get();
     let (glyph, words, warns) = match (label, props.failed) {
       (Some(Label::Ready(words)), _) => (Icon::Waypoints, words.clone(), false),
@@ -208,10 +266,25 @@ impl RunsOnPicker {
       (false, true) => chip.background(PaletteColor::WarningMuted),
       (false, false) => chip,
     };
-    Tooltip::new("orchestrator-runs-on-chip", ctx.t("orchestrator.runsOn.tip"))
-      .silent(open)
-      .wrap(ctx, chip)
+    let tooltip = Tooltip::new("orchestrator-runs-on-chip", ctx.t("orchestrator.runsOn.tip")).silent(open);
+    let tooltip = if switched {
+      tooltip.note(ctx.t("orchestrator.runsOn.newSession"))
+    } else {
+      tooltip
+    };
+    tooltip.wrap(ctx, chip)
   }
+}
+
+/// The Orchestrator runs as another account than the open conversation's session: its next answer starts a new session,
+/// which the chip's tooltip says until that first answer was sent.
+fn switched(sources: &Sources<'_>, entries: &[Entry], props: &RunsOnProps) -> bool {
+  let chosen = sources.setup.settings.as_ref().map(|settings| settings.connection());
+  let account = entries
+    .iter()
+    .find(|entry| Some(entry.id) == chosen)
+    .and_then(|entry| connections::account_of(sources, entry));
+  props.session.zip(account).is_some_and(|(session, account)| session != account)
 }
 
 /// What the chip says.

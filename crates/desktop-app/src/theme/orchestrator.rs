@@ -34,9 +34,6 @@ pub enum OrchestratorText {
   Line,
   /// 13/600 `text_primary`, 1.3: what a decision card asks (`Question` in `3 · Decisions` `bxJZp`).
   Question,
-  /// Geist Mono 10.5 `text_muted`, 1.3: a plan's use in the runs-on picker (`sP8cS` in `v6mWp8`), an API provider's
-  /// tokens and *no plan limit* (`AJwSk`, `xzvGo` in `AZp3I`), the model over its efforts (`NPHfB`).
-  PlanUse,
   /// 12 `text_muted`, 1.3: what a fact of a decision card is (`Key` in `bxJZp`).
   FactKey,
   /// 12 `text_secondary`, 1.3: a fact's value (`Value` in `bxJZp`).
@@ -104,7 +101,7 @@ pub enum OrchestratorText {
 pub const LEADS_HINT_OPACITY: f32 = 0.7;
 
 impl OrchestratorText {
-  pub const ALL: [Self; 35] = [
+  pub const ALL: [Self; 34] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -112,7 +109,6 @@ impl OrchestratorText {
     Self::Suggestion,
     Self::Line,
     Self::Question,
-    Self::PlanUse,
     Self::FactKey,
     Self::FactValue,
     Self::FactLink,
@@ -155,7 +151,6 @@ impl OrchestratorText {
       Self::Suggestion => "orchestrator_suggestion",
       Self::Line => "orchestrator_line",
       Self::Question => "orchestrator_question",
-      Self::PlanUse => "orchestrator_plan_use",
       Self::FactKey => "orchestrator_fact_key",
       Self::FactValue => "orchestrator_fact_value",
       Self::FactLink => "orchestrator_fact_link",
@@ -195,7 +190,6 @@ impl OrchestratorText {
       Self::Suggestion => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Line => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Question => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::PlanUse => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::FactKey => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::FactValue => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::FactLink => style(
@@ -312,24 +306,6 @@ pub fn chat_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
 /// the chat, as the composer's is, wherever the lane takes room.
 pub fn beside_chat_lane(scrollbar: &ScrollBarStyle) -> f32 {
   OrchestratorSpacing::PageSide.value() - (scrollbar.width + scrollbar.resolved_edge_inset() * 2.0)
-}
-
-/// The runs-on picker's models' scrollbar (`Scrollbar` `Px0Pz` in `GaA7N`): 3 wide, radius 2, at the list's end, 2
-/// from its top and bottom.
-const PICKER_SCROLLBAR_WIDTH: f32 = 3.0;
-const PICKER_SCROLLBAR_RADIUS: f32 = 2.0;
-const PICKER_SCROLLBAR_END: f32 = 2.0;
-
-/// `base`, the theme's scrollbar (its `border_strong` thumb), as the runs-on picker's models' list draws it.
-pub fn picker_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
-  ScrollBarStyle {
-    width: PICKER_SCROLLBAR_WIDTH,
-    thumb_radius: PICKER_SCROLLBAR_RADIUS,
-    track_radius: PICKER_SCROLLBAR_RADIUS,
-    edge_inset: Some(0.0),
-    end_inset: Some(PICKER_SCROLLBAR_END),
-    ..base.clone()
-  }
 }
 
 /// `base`, the theme's thin scrollbar (its 4 wide `border_strong` thumb, round), as a /watch picker's list draws it

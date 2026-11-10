@@ -130,6 +130,8 @@ struct Panel {
   /// shows it).
   own_effort: TypedEffort,
   seen_effort: Signal<String>,
+  /// The list was scrolled to the chosen model, once, when the picker opened.
+  scrolled: Signal<bool>,
   search: ElementRef,
   scroll: ScrollState,
   rail_scroll: ScrollState,
@@ -152,6 +154,7 @@ impl Component for Panel {
         field: ElementRef::new(),
       },
       seen_effort: ctx.signal(String::new()),
+      scrolled: ctx.signal(false),
       search: ElementRef::new(),
       scroll: ScrollState::new(),
       rail_scroll: ScrollState::new(),
@@ -164,6 +167,7 @@ impl Component for Panel {
     self.show_chosen_effort(&props);
     let view = self.view(&props);
     self.reveal_shown(&props.connections, view.shown);
+    self.reveal_chosen(&view);
     let id: &str = &props.id;
     let actions = Actions {
       panel: self.handles(),
@@ -221,6 +225,17 @@ impl Panel {
       Focus::Effort => ctx.focus(&self.own_effort.field),
     }
     self.focus.set(Focus::Stay);
+  }
+
+  /// Scrolls the list to the chosen model once, as the picker opens, so that it is never hidden (`Many models` `pGj8M`).
+  fn reveal_chosen(&self, view: &View<'_>) {
+    if self.scrolled.get_untracked() {
+      return;
+    }
+    self.scrolled.set(true);
+    if let Some(at) = view.model.and_then(|model| view.found.iter().position(|found| &*found.id == model)) {
+      models::reveal(&self.scroll, at);
+    }
   }
 
   /// The typed effort field shows the effort chosen whenever that changes.

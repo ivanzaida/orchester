@@ -110,7 +110,7 @@ pub use self::{
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{
     LEADS_HINT_OPACITY, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar,
-    picker_scrollbar, watch_list_scrollbar,
+    watch_list_scrollbar,
   },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
