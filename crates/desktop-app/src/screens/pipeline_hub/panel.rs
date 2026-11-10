@@ -215,6 +215,11 @@ impl Component for PipelinePanel {
     let saving = self.save.state().get().is_pending();
     mark_saving(&hosted.saving, saving);
     let locked = saving || asked.is_some();
+    let save = self.save_now(&edit, (changed, entry.unpublished), locked);
+    let press = match &save {
+      SaveState::Ready(press) => Some(press.clone()),
+      _ => None,
+    };
     let shown = Shown {
       project: &project,
       entry: &entry,
@@ -225,6 +230,7 @@ impl Component for PipelinePanel {
       read: &read,
       locked,
       changed,
+      save: press.as_ref(),
     };
     let (body, viewed) = self.views(ctx, &shown, hosted, step);
     let mut pinned = self.pinned(ctx, &entry, asked.as_ref());
@@ -236,10 +242,7 @@ impl Component for PipelinePanel {
       }
       None => Some(bar::bar(
         ctx,
-        (
-          self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
-          (changed && !saving).then(|| self.cancel_now(&edit)),
-        ),
+        (save, (changed && !saving).then(|| self.cancel_now(&edit))),
         (&entry, changed, step::fix_words(ctx, &self.faulty, &current)),
       )),
     };
@@ -261,6 +264,8 @@ struct Shown<'a> {
   /// A save is under way, or a question about it waits: nothing is changed now.
   locked: bool,
   changed: bool,
+  /// What *Save* does now, when it can save.
+  save: Option<&'a Press>,
 }
 
 impl PipelinePanel {
@@ -335,6 +340,7 @@ impl PipelinePanel {
       current,
       read,
       locked,
+      save,
       ..
     } = *shown;
     let head = self.head(ctx, shown, hosted);
@@ -359,7 +365,18 @@ impl PipelinePanel {
           delivers: &self.delivers,
         },
       ))
-      .with_children(ready::group(ctx, project, entry, read))
+      .with_children(ready::group(
+        ctx,
+        &ready::Shown {
+          project,
+          entry,
+          read,
+          current,
+          edit,
+          locked,
+          save,
+        },
+      ))
   }
 }
 

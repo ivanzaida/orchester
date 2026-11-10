@@ -20,7 +20,7 @@ impl Fix {
   /// The resource `runs` names that is not ready, if it names one.
   pub(in crate::screens::pipeline_hub) const fn of(runs: &Runs) -> Option<Self> {
     match runs {
-      Runs::ProfileNotPublished { id } => Some(Self::Profile(*id)),
+      Runs::ProfileNotPublished { id } | Runs::ProfileConnectionGone { id, .. } => Some(Self::Profile(*id)),
       Runs::ToolNotPublished { id } | Runs::ToolNotRunnable { id, .. } => Some(Self::Tool(*id)),
       Runs::Profile { .. } | Runs::Tool { .. } | Runs::NoProfile | Runs::NoTool => None,
     }

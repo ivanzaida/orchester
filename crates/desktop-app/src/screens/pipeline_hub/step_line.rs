@@ -3,7 +3,7 @@
 //! speaks of the version tasks use instead ([`super::words`]).
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_workspace::pipelines::{flow::Runs, ready::step_problems};
+use orchester_workspace::pipelines::ready::{Blocked, step_problems};
 
 use super::{flow::number, model::Entry, undecided::Said};
 
@@ -16,11 +16,12 @@ pub(super) fn line(ctx: &Ctx, entry: &Entry) -> Option<Said> {
   let text = match steps.as_slice() {
     [] => return None,
     [only] => ctx.t_args(
-      line_key(&only.runs),
+      line_key(&only.blocked),
       [
         ("number", number(only.number)),
         ("step", only.name.to_string()),
-        ("tool", tool_name(&only.runs).to_owned()),
+        ("tool", named(&only.blocked).to_owned()),
+        ("profile", named(&only.blocked).to_owned()),
       ],
     ),
     many => ctx.t_args("pipeline_hub.line.stepsNotReady", [("count", many.len().to_string())]),
@@ -31,22 +32,22 @@ pub(super) fn line(ctx: &Ctx, entry: &Entry) -> Option<Said> {
   })
 }
 
-fn line_key(runs: &Runs) -> &'static str {
-  match runs {
-    Runs::NoProfile => "pipeline_hub.line.noProfile",
-    Runs::NoTool => "pipeline_hub.line.noTool",
-    Runs::ProfileNotPublished { .. } => "pipeline_hub.line.profileNotPublished",
-    Runs::ToolNotPublished { .. } => "pipeline_hub.line.toolNotPublished",
-    Runs::ToolNotRunnable { .. } => "pipeline_hub.line.toolNotRunnable",
-    Runs::Profile { .. } | Runs::Tool { .. } => "pipeline_hub.line.stepsNotReady",
+const fn line_key(blocked: &Blocked) -> &'static str {
+  match blocked {
+    Blocked::NoProfile => "pipeline_hub.line.noProfile",
+    Blocked::NoTool => "pipeline_hub.line.noTool",
+    Blocked::ProfileNotPublished { .. } => "pipeline_hub.line.profileNotPublished",
+    Blocked::ProfileConnectionGone { .. } => "pipeline_hub.line.profileConnectionGone",
+    Blocked::ToolNotPublished { .. } => "pipeline_hub.line.toolNotPublished",
+    Blocked::ToolNotRunnable { .. } => "pipeline_hub.line.toolNotRunnable",
   }
 }
 
-/// The name of the tool a step cannot run, for the words that say so; empty for any other.
-pub(super) fn tool_name(runs: &Runs) -> &str {
-  match runs {
-    Runs::ToolNotRunnable { name, .. } => name,
-    _ => "",
+/// The name of the profile or tool a step names that cannot run, for the words that say so; empty for any other.
+pub(super) fn named(blocked: &Blocked) -> &str {
+  match blocked {
+    Blocked::ToolNotRunnable { name, .. } | Blocked::ProfileConnectionGone { name, .. } => name,
+    Blocked::NoProfile | Blocked::NoTool | Blocked::ProfileNotPublished { .. } | Blocked::ToolNotPublished { .. } => "",
   }
 }
 

@@ -4,15 +4,14 @@
 use orchester_core::{
   connection::AgentProvider,
   id::{ConnectionId, ResourceId},
-  resource::{Draft as StoredDraft, FlowError, Pipeline, PipelineError, ResourceKind, Slug, StepKey},
+  resource::{Draft as StoredDraft, FlowError, Pipeline, PipelineError, Slug, StepKey},
   sharing::Missing,
   store::ResourceStore,
 };
 use orchester_workspace::{
   pipelines::{
-    flow::Runs,
     hub::HubPipeline,
-    ready::{Basis, Draft, Problem, problems, step_problems},
+    ready::{Basis, Blocked, Draft, Problem, problems, step_problems},
   },
   readiness::{Group, Undecided},
 };
@@ -47,6 +46,7 @@ fn found(pipeline: &HubPipeline) -> Vec<Problem> {
     standing: pipeline.standing.as_ref(),
     undecided: &pipeline.undecided,
     published: pipeline.number().is_some(),
+    runs: None,
   })
 }
 
@@ -82,7 +82,7 @@ fn readiness_pipeline_ready_a_draft_names_each_step_that_has_nothing_to_run() {
     "in the order of the flow, by the number the card carries"
   );
   assert_eq!(&*steps[0].name, "Step 1");
-  assert!(steps.iter().all(|step| step.runs == Runs::NoProfile));
+  assert!(steps.iter().all(|step| step.blocked == Blocked::NoProfile));
   assert_eq!(
     found(&read),
     steps.into_iter().map(Problem::Step).collect::<Vec<_>>(),
@@ -95,7 +95,7 @@ fn lost_profile(fixture: &Fixture, slug: &str) -> ResourceId {
 }
 
 #[test]
-fn readiness_pipeline_ready_a_profile_that_lost_its_connection_is_undecided_and_named() {
+fn readiness_pipeline_ready_a_step_whose_profile_lost_its_connection_says_so_once() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
@@ -104,47 +104,113 @@ fn readiness_pipeline_ready_a_profile_that_lost_its_connection_is_undecided_and_
 
   let read = listed(&fixture, id);
   assert!(
-    step_problems(&read.flow).is_empty(),
-    "every step names a published profile"
+    matches!(&read.undecided[..], [member] if member.id == lost && matches!(member.why, Undecided::ConnectionGone(_))),
+    "the readiness cannot tell the profile: {:?}",
+    read.undecided
   );
   match found(&read).as_slice() {
-    [Problem::Member(member)] => {
-      assert_eq!(member.id, lost, "the profile that cannot be told");
-      assert_eq!(&*member.name, "lost");
-      assert_eq!(member.kind, ResourceKind::AgentProfile);
-      assert!(matches!(member.why, Undecided::ConnectionGone(_)));
+    [Problem::Step(step)] => {
+      assert_eq!(step.number, 2, "the step that runs it, as its card stands in amber");
+      assert_eq!(
+        step.blocked,
+        Blocked::ProfileConnectionGone {
+          id: lost,
+          name: "lost".into()
+        }
+      );
     }
-    other => panic!("one undecided profile expected, got {other:?}"),
+    other => panic!("the step alone, not the profile again: {other:?}"),
   }
 }
 
 #[test]
-fn readiness_pipeline_ready_every_profile_that_lost_its_connection_is_named_not_only_the_first() {
+fn readiness_pipeline_ready_every_step_whose_profile_lost_its_connection_is_named_and_the_integrator_once() {
   let fixture = Fixture::local();
   let first = lost_profile(&fixture, "explorer");
   let second = lost_profile(&fixture, "builder");
+  let integrator = lost_profile(&fixture, "integrator");
   let id = fixture.own(
     "stuck",
-    &pipeline(&[Some(first), Some(second), Some(first)], Some(second)),
+    &pipeline(&[Some(first), Some(second), Some(first)], Some(integrator)),
   );
 
   let read = listed(&fixture, id);
-  let members: Vec<_> = found(&read)
+  let named: Vec<(usize, Option<ResourceId>)> = found(&read)
     .into_iter()
     .map(|problem| match problem {
-      Problem::Member(member) => member.id,
-      other => panic!("only profiles expected, got {other:?}"),
+      Problem::Step(step) => (step.number, step.blocked.names()),
+      Problem::Member(member) => (0, Some(member.id)),
+      other => panic!("steps and profiles only, got {other:?}"),
     })
     .collect();
-  assert_eq!(members, [first, second], "in the order of the steps, each once");
+  assert_eq!(
+    named,
+    [
+      (1, Some(first)),
+      (2, Some(second)),
+      (3, Some(first)),
+      (0, Some(integrator))
+    ],
+    "each step that runs a lost profile, then the integrator no step runs, as itself"
+  );
 }
 
 #[test]
-fn readiness_pipeline_ready_a_step_problem_does_not_hide_a_profile_that_lost_its_connection() {
+fn readiness_pipeline_ready_a_draft_step_problem_stands_beside_a_step_whose_profile_lost_its_connection() {
   let fixture = Fixture::local();
   let lost = lost_profile(&fixture, "lost");
   let id = fixture.own("stuck", &pipeline(&[Some(lost)], None));
+  save_draft(&fixture, id, &pipeline(&[Some(lost), None], None));
 
+  let read = listed(&fixture, id);
+  let all = found(&read);
+  assert!(
+    matches!(
+      all.as_slice(),
+      [Problem::Step(gone), Problem::Step(empty)]
+        if gone.number == 1 && gone.blocked.names() == Some(lost) && empty.blocked == Blocked::NoProfile
+    ),
+    "the draft's steps, each with what it lacks, and the profile not again: {all:?}"
+  );
+}
+
+#[test]
+fn readiness_pipeline_ready_a_profile_of_the_version_the_draft_no_longer_runs_is_left_out() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let lost = lost_profile(&fixture, "lost");
+  let id = fixture.own("stuck", &pipeline(&[Some(builder)], Some(lost)));
+  save_draft(&fixture, id, &pipeline(&[Some(builder)], None));
+
+  let read = listed(&fixture, id);
+  let basis = |runs: Option<&[ResourceId]>| {
+    problems(Basis {
+      flow: &read.flow,
+      standing: read.standing.as_ref(),
+      undecided: &read.undecided,
+      published: true,
+      runs,
+    })
+  };
+  assert!(
+    matches!(basis(None).as_slice(), [Problem::Member(member)] if member.id == lost),
+    "the version's integrator cannot be told: {:?}",
+    basis(None)
+  );
+  assert_eq!(
+    basis(Some(&[builder])),
+    [],
+    "the draft no longer merges with it, so it is not the draft's problem"
+  );
+  assert!(
+    matches!(basis(Some(&[builder, lost])).as_slice(), [Problem::Member(member)] if member.id == lost),
+    "a draft that still runs it keeps it"
+  );
+}
+
+/// Saves `body` as the draft of the published pipeline `id`.
+fn save_draft(fixture: &Fixture, id: ResourceId, body: &Pipeline) {
   let version = fixture
     .db()
     .latest_version::<Pipeline>(id)
@@ -153,18 +219,8 @@ fn readiness_pipeline_ready_a_step_problem_does_not_hide_a_profile_that_lost_its
     .number();
   fixture
     .db()
-    .save_draft(
-      id,
-      &StoredDraft::new(pipeline(&[Some(lost), None], None), Some(version), at(30)),
-    )
+    .save_draft(id, &StoredDraft::new(body.clone(), Some(version), at(30)))
     .expect("a draft");
-
-  let read = listed(&fixture, id);
-  let all = found(&read);
-  assert!(
-    matches!(all.as_slice(), [Problem::Step(step), Problem::Member(member)] if step.number == 2 && member.id == lost),
-    "the draft's step, then the published version's profile: {all:?}"
-  );
 }
 
 #[test]
@@ -180,8 +236,8 @@ fn readiness_pipeline_ready_a_step_that_names_a_missing_profile_is_listed_once()
     "the readiness's own *cannot tell* is the same step, named another way"
   );
   assert_eq!(
-    step_problems(&read.flow)[0].runs,
-    Runs::ProfileNotPublished { id: unknown }
+    step_problems(&read.flow)[0].blocked,
+    Blocked::ProfileNotPublished { id: unknown }
   );
 }
 
@@ -218,6 +274,28 @@ fn readiness_pipeline_ready_a_draft_a_line_cannot_draw_says_so() {
 
   let read = listed(&fixture, id);
   assert_eq!(found(&read), [Problem::Draft(Draft::Branches)]);
+}
+
+#[test]
+fn readiness_pipeline_ready_a_draft_a_line_cannot_draw_still_names_each_step_that_cannot_run() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let mut steps = pipeline(&[Some(builder), None, Some(builder)], None).into_steps();
+  let first = steps[0].key.clone();
+  steps[1].depends_on.insert(first);
+  let id = draft(&fixture, "branching", &Pipeline::new(steps).expect("a valid pipeline"));
+
+  let read = listed(&fixture, id);
+  let all = found(&read);
+  assert!(
+    matches!(
+      all.as_slice(),
+      [Problem::Draft(Draft::Branches), Problem::Step(step)]
+        if step.number == 2 && step.blocked == Blocked::NoProfile && &*step.name == "Step 1"
+    ),
+    "the layout, then the step the list line names, numbered in the order of the steps: {all:?}"
+  );
 }
 
 #[test]
@@ -307,6 +385,7 @@ fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it(
       standing: read.standing.as_ref(),
       undecided: &read.undecided,
       published: true,
+      runs: None,
     })
   };
 
@@ -314,7 +393,7 @@ fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it(
   let mut edit = PipelineEdit::new(read.body.as_ref().clone());
   edit.add_step(name("Review"), None);
   assert!(
-    matches!(basis(&read_of(&edit)).as_slice(), [Problem::Step(step)] if step.runs.is_unassigned()),
+    matches!(basis(&read_of(&edit)).as_slice(), [Problem::Step(step)] if step.blocked.is_unassigned()),
     "{:?}",
     basis(&read_of(&edit))
   );

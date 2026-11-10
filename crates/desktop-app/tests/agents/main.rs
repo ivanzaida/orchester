@@ -25,6 +25,7 @@ mod pipeline_hub;
 mod pipeline_hub_archive;
 mod pipeline_hub_menu;
 mod pipeline_hub_ready;
+mod pipeline_hub_ready_fixes;
 mod pipeline_leaving;
 mod pipeline_menu_edit;
 mod pipeline_reorder;

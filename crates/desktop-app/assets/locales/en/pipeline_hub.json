@@ -33,7 +33,8 @@
       "toolNotRunnable": "{{number}} {{step}} runs {{tool}}, which can't run as a step yet",
       "stepsNotReady": "{{count}} steps not ready",
       "connectionGone": "{{name}} has no connection",
-      "connectionGoneMany": "{{name}} and {{count}} more have no connection"
+      "connectionGoneMany": "{{name}} and {{count}} more have no connection",
+      "profileConnectionGone": "{{number}} {{step}} runs {{profile}}, which has no connection"
     },
     "chip": {
       "ready": "Ready",
@@ -260,7 +261,8 @@
       "broken": {
         "title": "These steps have no order to draw",
         "detail": "The steps wait for each other in a circle, or for a step that is not there. Edit the steps to fix what they wait for."
-      }
+      },
+      "profileConnectionGone": "{{profile}} has no connection"
     },
     "states": {
       "failed": {
@@ -301,7 +303,10 @@
       "noSteps": "No steps yet",
       "notPublished": "Not published yet",
       "addStep": "Add step →",
-      "editSteps": "Edit steps →"
+      "editSteps": "Edit steps →",
+      "profileConnectionGone": "{{profile}} has no connection",
+      "save": "Save →",
+      "profilesAndToolsOf": "Profiles and tools · {{version}}"
     },
     "versions": {
       "button": "Versions",

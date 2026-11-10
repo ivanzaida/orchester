@@ -34,6 +34,11 @@ pub enum Runs {
   ProfileNotPublished {
     id: ResourceId,
   },
+  /// A published profile whose connection the project no longer has, so it cannot run.
+  ProfileConnectionGone {
+    id: ResourceId,
+    name: Arc<str>,
+  },
   ToolNotPublished {
     id: ResourceId,
   },
@@ -230,12 +235,17 @@ fn runs(step: &Step, assignables: &Assignables) -> Runs {
       profile: Some(id),
       model,
       ..
-    } => assignables
-      .profile(*id)
-      .map_or(Runs::ProfileNotPublished { id: *id }, |profile| Runs::Profile {
+    } => match assignables.profile(*id) {
+      None => Runs::ProfileNotPublished { id: *id },
+      Some(profile) if profile.connection.is_none() => Runs::ProfileConnectionGone {
+        id: *id,
+        name: profile.name.clone(),
+      },
+      Some(profile) => Runs::Profile {
         name: profile.name.clone(),
         model: model.as_ref().unwrap_or(&profile.model).as_str().into(),
-      }),
+      },
+    },
     StepKind::Tool { tool: Some(id) } => match assignables.tool(*id) {
       None => Runs::ToolNotPublished { id: *id },
       Some(tool) if !tool.runnable => Runs::ToolNotRunnable {
@@ -279,6 +289,9 @@ pub struct FlowRead {
   pub ending: Ending,
   /// The flow, or why the steps cannot be drawn as one line.
   pub flow: Result<PipelineFlow, FlowError>,
+  /// The cards of steps the flow cannot draw, numbered in the order of the steps, so what each step lacks is still
+  /// known; empty when the flow draws them.
+  pub unplaced: Vec<StepCard>,
 }
 
 /// A pipeline as it is stored, read for the page: what it draws, and what an edit of the page starts from.
@@ -304,11 +317,13 @@ impl FlowRead {
       },
     };
     let unpublished = latest.as_ref().is_none_or(|version| version.body() != &body);
+    let flow = PipelineFlow::of(&body, assignables);
     Ok(Some(Stored {
       read: Self {
         draft,
         ending: Ending::of(&body),
-        flow: PipelineFlow::of(&body, assignables),
+        unplaced: unplaced(&flow, body.steps(), assignables),
+        flow,
       },
       body,
       unpublished,
@@ -330,7 +345,26 @@ impl FlowRead {
     Self {
       draft: true,
       ending,
+      unplaced: unplaced(&flow, edit.steps(), assignables),
       flow,
     }
   }
+}
+
+/// The cards of `steps` when `flow` cannot draw them, numbered in the order of the steps; none when it can.
+fn unplaced(flow: &Result<PipelineFlow, FlowError>, steps: &[Step], assignables: &Assignables) -> Vec<StepCard> {
+  if flow.is_ok() {
+    return Vec::new();
+  }
+  let by_key: HashMap<&StepKey, &Step> = steps.iter().map(|step| (&step.key, step)).collect();
+  let numbers: HashMap<&StepKey, usize> = steps
+    .iter()
+    .enumerate()
+    .map(|(index, step)| (&step.key, index + 1))
+    .collect();
+  steps
+    .iter()
+    .enumerate()
+    .map(|(index, step)| card(step, index + 1, (&by_key, &numbers), assignables))
+    .collect()
 }

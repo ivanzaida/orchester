@@ -1,26 +1,35 @@
 //! *Ready?* under the pipeline's flow (`Ready?` `j0OZhl` in `Pipelines · v2` P1 `s7LMyQ`, `eA5ed` in P8 `vujkk`): *all
 //! set* in `success` with one summary row, or *N missing* in `warning` with one row per problem and what to do about it
-//! at its end (*Choose →* opens the step, *Open →* the profile or tool in the Agents hub, *Edit steps →* the editor).
-//! What is missing is the workspace's ([`orchester_workspace::pipelines::ready`]): what is wrong with the draft, the
-//! steps whose card stands in amber, and what the readiness read says this computer lacks. The rows are the Agents
-//! hub's ([`crate::screens::team_hub::profile::ready`]).
+//! at its end (*Choose →* opens the step, *Open →* the profile or tool in the Agents hub, *Add step →* adds a step as
+//! the head's *Add step* does, *Edit steps →* opens the editor as the flow's notice does, *Save →* saves as the bar's
+//! *Save* does). What is missing is the workspace's ([`orchester_workspace::pipelines::ready`]): what is wrong with the
+//! draft, the steps whose card stands in amber (also when the steps cannot be drawn as one line), and what the
+//! readiness read says this computer lacks. The rows are the Agents hub's
+//! ([`crate::screens::team_hub::profile::ready`]).
 //!
 //! The panel draws a pipeline's draft when it has one, so *Ready?* describes the draft; over a published version it
-//! says so in its title, as the list and the chips speak of the version tasks use.
+//! says so in its title, as the list and the chips speak of the version tasks use. What the readiness read says is
+//! about that version: a profile or tool the draft no longer runs is left out, and a row about the version's profiles
+//! and tools as a whole names the version.
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use lurq::app::ctx::Ctx;
-use orchester_core::resource::{ResourceKind, StepKey};
+use lurq::{app::ctx::Ctx, node::Element};
+use orchester_core::{
+  id::ResourceId,
+  name::Name,
+  resource::{PipelineEdit, ResourceKind, StepKey, VersionNumber},
+};
 use orchester_workspace::pipelines::{
   flow::{FlowRead, PipelineFlow, Runs},
-  ready::{Basis, Draft, Problem, StepProblem, UndecidedMember, problems},
+  ready::{Basis, Blocked, Draft, Problem, StepProblem, UndecidedMember, problems},
 };
 
 use super::{
+  edit::Edit,
   flow::{self, number},
   model::Entry,
-  step_line::tool_name,
+  step_line::named,
   undecided::{member_words, undecided_words},
 };
 use crate::{
@@ -48,12 +57,14 @@ enum Fix {
   Choose(StepKey),
   /// Open the profile or tool, where it is published or its connection is chosen.
   Resource(flow::Fix),
-  /// Open the editor, where the first step is added.
+  /// Add a step at the end of the line, as the head's *Add step* does.
   AddStep,
   /// Open the editor, where the steps are put right.
   EditSteps,
   /// Open the Agents hub, where connections, programs and values are set.
   Agents,
+  /// Save, as the bar's *Save* does: it publishes a draft that is only not published yet.
+  Save,
 }
 
 impl Offer for Fix {
@@ -63,6 +74,7 @@ impl Offer for Fix {
       Self::Resource(_) | Self::Agents => "pipeline_hub.ready.open",
       Self::AddStep => "pipeline_hub.ready.addStep",
       Self::EditSteps => "pipeline_hub.ready.editSteps",
+      Self::Save => "pipeline_hub.ready.save",
     }
   }
 
@@ -73,27 +85,42 @@ impl Offer for Fix {
       Self::AddStep => "add-step",
       Self::EditSteps => "edit-steps",
       Self::Agents => "agents",
+      Self::Save => "save",
     }
   }
 }
 
-/// The group for `entry`, which is none for an archived pipeline, which has no steps. `read` is the flow the panel
-/// draws: the edit's while the panel holds one, so what is missing is what the person sees and saves; only what this
-/// computer lacks (`entry.standing`) is about the version tasks use, which an edit does not change until it is saved.
-pub(super) fn group(
-  ctx: &mut Ctx,
-  project: &ShownProject,
-  entry: &Entry,
-  read: &FlowRead,
-) -> Option<lurq::node::Element> {
+/// What *Ready?* is drawn from.
+pub(super) struct Shown<'a> {
+  pub project: &'a ShownProject,
+  pub entry: &'a Entry,
+  /// The flow the panel draws: the edit's while the panel holds one, so what is missing is what the person sees and
+  /// saves; only what this computer lacks (`entry.standing`) is about the version tasks use, which an edit does not
+  /// change until it is saved.
+  pub read: &'a FlowRead,
+  /// What the panel shows, which *Add step →* adds to.
+  pub current: &'a PipelineEdit,
+  pub edit: &'a Edit,
+  /// A save is under way or asks: nothing is changed now.
+  pub locked: bool,
+  /// What the bar's *Save* does now, which *Save →* does too; `None` while it cannot save.
+  pub save: Option<&'a Press>,
+}
+
+/// The group for `shown.entry`, which is none for an archived pipeline, which has no steps.
+pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
+  let Shown { entry, read, .. } = shown;
   if entry.archived.is_some() {
     return None;
   }
+  let over = over_version(entry, read);
+  let runs = over.map(|_| runs_of(shown.current));
   let found = problems(Basis {
     flow: read,
     standing: entry.standing.as_ref(),
     undecided: &entry.undecided,
     published: entry.number.is_some(),
+    runs: runs.as_deref(),
   });
   let parts = if found.is_empty() {
     vec![summary(ctx, read.flow.as_ref().ok())]
@@ -101,25 +128,67 @@ pub(super) fn group(
     found
       .iter()
       .enumerate()
-      .map(|(index, problem)| part(ctx, problem, index))
+      .map(|(index, problem)| part(ctx, problem, (index, over), shown.save.is_some()))
       .collect()
   };
   let navigation = Navigation::of(ctx);
-  let press = |fix: &Fix| {
-    let page = match fix {
-      Fix::Choose(key) => ProjectPage::Pipeline(entry.id, PipelineView::Step(key.clone())),
-      Fix::Resource(resource) => resource.page(),
-      Fix::AddStep | Fix::EditSteps => ProjectPage::Pipeline(entry.id, PipelineView::default()),
-      Fix::Agents => ProjectPage::AgentsHub(HubView::default()),
-    };
-    Press::Open(navigation.to(Route::Project(project.open.project.id(), page)))
-  };
-  let title = if read.draft && entry.number.is_some() {
+  let new_step = new_step_name(ctx);
+  let press = |fix: &Fix| press(shown, (&navigation, &new_step), fix);
+  let title = if over.is_some() {
     ctx.t("pipeline_hub.ready.titleDraft")
   } else {
     ctx.t("pipeline_hub.ready.title")
   };
-  Some(section(ctx, (&title, &parts), found.len(), (&press, Busy::Idle)).into())
+  let busy = if shown.locked { Busy::Taking } else { Busy::Idle };
+  Some(section(ctx, (&title, &parts), found.len(), (&press, busy)).into())
+}
+
+/// The published version a draft the panel draws stands over, whose readiness the rows read; `None` when the panel
+/// draws the version itself or the pipeline was never published.
+fn over_version(entry: &Entry, read: &FlowRead) -> Option<VersionNumber> {
+  entry.number.filter(|_| read.draft)
+}
+
+/// The profiles and tools `current`'s steps run, and its integrator.
+fn runs_of(current: &PipelineEdit) -> Vec<ResourceId> {
+  let integrator = current.deliver().and_then(|deliver| deliver.integrator());
+  current
+    .steps()
+    .iter()
+    .filter_map(|step| step.kind.executor())
+    .chain(integrator)
+    .collect()
+}
+
+/// What pressing `fix` does.
+fn press(shown: &Shown<'_>, (navigation, new_step): (&Navigation, &Name), fix: &Fix) -> Press {
+  let id = shown.entry.id;
+  let page = match fix {
+    Fix::AddStep => {
+      let (edit, name) = (shown.edit.clone(), new_step.clone());
+      return Press::run(move || {
+        edit.change(|held| {
+          held.add_step(name.clone(), None);
+        });
+      });
+    }
+    Fix::Save => {
+      return shown
+        .save
+        .cloned()
+        .expect("*Save →* is offered only while Save can save");
+    }
+    Fix::Choose(key) => ProjectPage::Pipeline(id, PipelineView::Step(key.clone())),
+    Fix::Resource(resource) => resource.page(),
+    Fix::EditSteps => ProjectPage::Pipeline(id, PipelineView::default()),
+    Fix::Agents => ProjectPage::AgentsHub(HubView::default()),
+  };
+  Press::Open(navigation.to(Route::Project(shown.project.open.project.id(), page)))
+}
+
+/// The name a step added by *Add step →* starts with: the head's *Add step*'s.
+fn new_step_name(ctx: &Ctx) -> Name {
+  Name::new(&ctx.t("pipeline_hub.flow.move.newStep")).expect("the translated name of a new step is a valid name")
 }
 
 /// The one row of a pipeline with nothing missing: the profiles and tools its steps run, which are ready.
@@ -147,54 +216,60 @@ fn summary(ctx: &Ctx, flow: Option<&PipelineFlow>) -> Part<Fix> {
   }
 }
 
-fn part(ctx: &Ctx, problem: &Problem, index: usize) -> Part<Fix> {
+/// The row of `problem`. Over a published version (`over`), a row about that version's profiles and tools as a whole
+/// names it, as the draft may run others.
+/// `can_save`: *Save* can save now, so a draft that is only not published offers it.
+fn part(ctx: &Ctx, problem: &Problem, (index, over): (usize, Option<VersionNumber>), can_save: bool) -> Part<Fix> {
   match problem {
-    Problem::Draft(draft) => about(
-      ctx,
-      ("draft", "pipeline_hub.ready.draft"),
+    Problem::Draft(draft) => labelled(
+      "draft",
+      ctx.t("pipeline_hub.ready.draft"),
       draft_words(ctx, *draft),
-      draft_fix(*draft),
+      draft_fix(*draft, can_save),
     ),
-    Problem::Step(step) => Part {
-      id: format!("step-{}", step.key),
-      label: ctx.t_args(
+    Problem::Step(step) => labelled(
+      &format!("step-{}", step.key),
+      ctx.t_args(
         "pipeline_hub.ready.step",
         [("number", number(step.number)), ("name", step.name.to_string())],
       ),
-      state: State::Missing {
-        words: step_words(ctx, step),
-        fix: step_fix(step),
-        blocking: false,
-      },
-    },
-    Problem::Member(member) => Part {
-      id: format!("member-{}", member.id),
-      label: member.name.clone(),
-      state: State::Missing {
-        words: member_words(ctx, &member.why),
-        fix: Some(Fix::Resource(resource_fix(member))),
-        blocking: false,
-      },
-    },
-    Problem::Missing(part) => about_runs(
-      ctx,
+      step_words(ctx, &step.blocked),
+      Some(step_fix(step)),
+    ),
+    Problem::Member(member) => labelled(
+      &format!("member-{}", member.id),
+      member.name.clone(),
+      member_words(ctx, &member.why),
+      Some(Fix::Resource(resource_fix(member))),
+    ),
+    Problem::Missing(part) => labelled(
       &format!("missing-{index}"),
+      runs_label(ctx, over),
       missing(ctx, ResourceKind::Pipeline, part),
       Some(Fix::Agents),
     ),
-    Problem::Undecided(why) => about_runs(ctx, "undecided", undecided_words(ctx, why, &[]), None),
+    Problem::Undecided(why) => labelled("undecided", runs_label(ctx, over), undecided_words(ctx, why, &[]), None),
   }
 }
 
-/// A row about what the steps run as a whole, not about one step.
-fn about_runs(ctx: &Ctx, id: &str, words: Arc<str>, fix: Option<Fix>) -> Part<Fix> {
-  about(ctx, (id, "pipeline_hub.ready.profilesAndTools"), words, fix)
+/// The label of a row about what the steps run as a whole: *Profiles and tools*, or *Profiles and tools · v3* when it
+/// is about the published version `over` a draft.
+fn runs_label(ctx: &Ctx, over: Option<VersionNumber>) -> Arc<str> {
+  over.map_or_else(
+    || ctx.t("pipeline_hub.ready.profilesAndTools"),
+    |version| {
+      ctx.t_args(
+        "pipeline_hub.ready.profilesAndToolsOf",
+        [("version", version.to_string())],
+      )
+    },
+  )
 }
 
-fn about(ctx: &Ctx, (id, label): (&str, &str), words: Arc<str>, fix: Option<Fix>) -> Part<Fix> {
+fn labelled(id: &str, label: Arc<str>, words: Arc<str>, fix: Option<Fix>) -> Part<Fix> {
   Part {
     id: id.to_owned(),
-    label: ctx.t(label),
+    label,
     state: State::Missing {
       words,
       fix,
@@ -213,37 +288,40 @@ fn draft_words(ctx: &Ctx, draft: Draft) -> Arc<str> {
   })
 }
 
-/// *Add step →* for a draft with none, *Edit steps →* for steps the editor puts right; a draft that is only not
-/// published yet has nothing to fix here.
-const fn draft_fix(draft: Draft) -> Option<Fix> {
+/// *Add step →* for a draft with none, *Edit steps →* for steps the editor puts right, *Save →* for a draft that is
+/// only not published yet, while *Save* can save.
+const fn draft_fix(draft: Draft, can_save: bool) -> Option<Fix> {
   match draft {
     Draft::NoSteps => Some(Fix::AddStep),
     Draft::Broken | Draft::Branches => Some(Fix::EditSteps),
+    Draft::NotPublished if can_save => Some(Fix::Save),
     Draft::NotPublished => None,
   }
 }
 
 /// What is wrong with a step, short enough for a row's value: *No agent profile*.
-fn step_words(ctx: &Ctx, step: &StepProblem) -> Arc<str> {
+fn step_words(ctx: &Ctx, blocked: &Blocked) -> Arc<str> {
   ctx.t_args(
-    match &step.runs {
-      Runs::NoProfile => "pipeline_hub.ready.noProfile",
-      Runs::NoTool => "pipeline_hub.ready.noTool",
-      Runs::ProfileNotPublished { .. } => "pipeline_hub.flow.profileNotPublished",
-      Runs::ToolNotPublished { .. } => "pipeline_hub.flow.toolNotPublished",
-      Runs::ToolNotRunnable { .. } => "pipeline_hub.ready.toolNotRunnable",
-      Runs::Profile { .. } | Runs::Tool { .. } => "pipeline_hub.ready.ready",
+    match blocked {
+      Blocked::NoProfile => "pipeline_hub.ready.noProfile",
+      Blocked::NoTool => "pipeline_hub.ready.noTool",
+      Blocked::ProfileNotPublished { .. } => "pipeline_hub.flow.profileNotPublished",
+      Blocked::ProfileConnectionGone { .. } => "pipeline_hub.ready.profileConnectionGone",
+      Blocked::ToolNotPublished { .. } => "pipeline_hub.flow.toolNotPublished",
+      Blocked::ToolNotRunnable { .. } => "pipeline_hub.ready.toolNotRunnable",
     },
-    [("tool", tool_name(&step.runs))],
+    [("tool", named(blocked)), ("profile", named(blocked))],
   )
 }
 
 /// *Choose →* for a step with nothing to run, *Open →* for one that names a profile or tool that cannot run.
-fn step_fix(step: &StepProblem) -> Option<Fix> {
-  if step.runs.is_unassigned() {
-    Some(Fix::Choose(step.key.clone()))
-  } else {
-    flow::Fix::of(&step.runs).map(Fix::Resource)
+fn step_fix(step: &StepProblem) -> Fix {
+  match &step.blocked {
+    Blocked::NoProfile | Blocked::NoTool => Fix::Choose(step.key.clone()),
+    Blocked::ProfileNotPublished { id } | Blocked::ProfileConnectionGone { id, .. } => {
+      Fix::Resource(flow::Fix::Profile(*id))
+    }
+    Blocked::ToolNotPublished { id } | Blocked::ToolNotRunnable { id, .. } => Fix::Resource(flow::Fix::Tool(*id)),
   }
 }
 
