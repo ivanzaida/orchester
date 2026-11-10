@@ -44,7 +44,7 @@
     "states": {
       "failed": {
         "title": "Couldn't read the pipelines",
-        "detail": "Nothing was changed. Try again; if it keeps failing, Orchester's log has the details."
+        "detail": "Nothing was changed. Try again."
       },
       "newUnavailable": "The pipelines can't be read yet, so there is nothing to add to."
     },
@@ -55,7 +55,7 @@
       },
       "drafts": {
         "title": "No drafts",
-        "detail": "Every pipeline of this project has a version that tasks can use."
+        "detail": "A new pipeline is a draft until it is first saved."
       },
       "archived": {
         "title": "Nothing archived",

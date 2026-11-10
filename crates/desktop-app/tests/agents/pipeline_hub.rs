@@ -425,7 +425,7 @@ fn pipeline_hub_a_read_that_fails_says_so_with_its_reason_keeps_the_head_and_tri
   );
   assert_eq!(
     agents.text("pipeline-hub-load-error-detail"),
-    "Nothing was changed. Try again; if it keeps failing, Orchester's log has the details."
+    "Nothing was changed. Try again."
   );
   assert_eq!(
     agents.text("pipeline-hub-load-error-reason"),
@@ -487,7 +487,7 @@ fn pipeline_hub_a_tab_with_nothing_in_it_says_so_while_the_others_keep_their_pip
   assert_eq!(agents.text("pipeline-hub-empty-title"), "No drafts");
   assert_eq!(
     agents.text("pipeline-hub-empty-detail"),
-    "Every pipeline of this project has a version that tasks can use."
+    "A new pipeline is a draft until it is first saved."
   );
   assert_eq!(agents.text("pipeline-hub-filter-all-count"), "1");
   assert_eq!(agents.text("pipeline-hub-filter-drafts-count"), "0");

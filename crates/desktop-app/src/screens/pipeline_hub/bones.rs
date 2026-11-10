@@ -3,8 +3,8 @@
 //! and the tab names stay real around them ([`super`]'s frame), the counts are bones ([`agents::Tab`]'s `None`).
 //!
 //! The list is a group's head over four rows of the real rows' height, the lower ones fading; the panel ([`detail`]) is
-//! a head, its chips and the steps as the flow they run in, each a card on its rail, the lower ones fading. Choosing
-//! another pipeline later shows bones in the panel only: the panel's part wraps [`detail`] in its own skeleton.
+//! a head, its chips and the steps as the flow they run in, each a card on its rail, the lower ones fading.
+//! This page has no read of a single pipeline, so bones appear only for the whole body.
 
 use std::sync::Arc;
 
@@ -100,9 +100,8 @@ fn row((name, line): (f32, f32)) -> Row {
     .child(bone(VERSION.0, VERSION.1))
 }
 
-/// The panel of a pipeline not read yet: its head, its chips and its steps. Under the panel's own skeleton it is the
-/// bones of a chosen pipeline that is read again.
-pub(super) fn detail(ctx: &Ctx) -> Element {
+/// The panel of a pipeline not read yet: its head, its chips and its steps.
+fn detail(ctx: &Ctx) -> Element {
   let [(kind, kind_height), (name, name_height)] = HEAD;
   let head = Column::new()
     .spacing(ExtraSpacing::Inline.role())

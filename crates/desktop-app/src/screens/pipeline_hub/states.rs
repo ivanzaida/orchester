@@ -17,7 +17,7 @@ use lurq::{
 use orchester_workspace::messages::Message;
 
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, FailureText, HubSpacing, HubText, IconSize},
+  theme::{ExtraRadius, ExtraSpacing, HubSpacing, HubText, IconSize, PipelinesText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -89,7 +89,7 @@ pub(super) fn failure(ctx: &Ctx, error: &Message, retry: Retry) -> Element {
         .child(
           Text::new(&message_text(ctx, error))
             .id(format!("{PREFIX}-reason"))
-            .variant(FailureText::Detail.role())
+            .variant(PipelinesText::ReadReason.role())
             .text_align(TextAlign::Center),
         )
         .child(

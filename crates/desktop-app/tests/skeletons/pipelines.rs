@@ -4,8 +4,9 @@
 //! these tests let that read finish on another page and hold the reads again before the page opens.
 
 use orchester_app::routes::{OverviewTab, ProjectPage};
+use serde_json::json;
 
-use crate::harness::Held;
+use crate::{harness::Held, mcp_client::Client};
 
 /// The page's bones: the project's own read done, the pipelines' read held.
 fn held_pipelines() -> Held {
@@ -74,5 +75,17 @@ fn skeletons_pipelines_real_hub_takes_the_bones_place_in_the_same_room() {
       && (read.height - bones.height).abs() < 0.5
       && (read.width - bones.width).abs() < 0.5,
     "the body stands where its bones stood: {read:?} vs {bones:?}"
+  );
+}
+
+#[test]
+fn skeletons_pipelines_bones_are_named_for_automation_by_the_reading_words() {
+  let mut held = held_pipelines();
+  held.skeleton("pipeline-hub-loading");
+  let client = Client::new(&mut held.window);
+  let tree = client.call(&mut held.window, "lurq_read_tree", &json!({}));
+  assert!(
+    tree.contains("Reading the pipelines…"),
+    "the skeleton's accessible name is the reading words: {tree}"
   );
 }
