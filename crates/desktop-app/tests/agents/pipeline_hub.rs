@@ -402,12 +402,103 @@ fn pipeline_hub_the_empty_body_keeps_the_designs_rhythm_to_its_button() {
   );
 }
 
+/// Breaks the connections' settings so the hub can't read what its pipelines run on; the settings to put back.
+fn break_connections(agents: &Agents) -> (rusqlite::Connection, String) {
+  let db = rusqlite::Connection::open(agents.root.join(".orchester/orchester.db")).expect("fixture db");
+  let settings: String = db
+    .query_row("SELECT settings FROM connections", [], |row| row.get(0))
+    .expect("settings");
+  db.execute("UPDATE connections SET settings = 'broken'", [])
+    .expect("corrupt disposable fixture");
+  (db, settings)
+}
+
 #[test]
-fn pipeline_hub_says_what_it_reads_while_it_reads() {
+fn pipeline_hub_a_read_that_fails_says_so_with_its_reason_keeps_the_head_and_tries_again() {
   let (mut agents, _) = setup();
+  let (db, settings) = break_connections(&agents);
   agents.window.navigation().go(view(PipelinesFilter::All, None));
-  agents.until("the page reads", |s| s.exists("pipeline-hub-loading"));
-  assert_eq!(agents.text("pipeline-hub-loading-label"), "Reading the pipelines…");
+  agents.until("the failure", |s| s.exists("pipeline-hub-load-error"));
+  assert_eq!(
+    agents.text("pipeline-hub-load-error-title"),
+    "Couldn't read the pipelines"
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-load-error-detail"),
+    "Nothing was changed. Try again."
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-load-error-reason"),
+    "The data could not be read or written. The log has the details.",
+    "the reason as the store gave it"
+  );
+  assert_eq!(
+    glyph_of(&mut agents, "pipeline-hub-load-error-glyph"),
+    Icon::CircleAlert.glyph().to_string()
+  );
+  assert!(
+    !agents.exists("pipeline-hub-empty") && !agents.exists("pipeline-hub-list"),
+    "nothing pretends to be empty"
+  );
+  for tab in ["all", "drafts", "archived"] {
+    assert!(
+      agents.exists(&format!("pipeline-hub-filter-{tab}")),
+      "the {tab} tab keeps its name"
+    );
+    // A count that is not read is a bone holding only the digit's clipped 0; the project has three pipelines.
+    assert_eq!(
+      agents
+        .window
+        .texts(&format!("pipeline-hub-filter-{tab}-count"))
+        .map(|words| words.concat())
+        .as_deref(),
+      Some("0"),
+      "the {tab} tab shows a bone, not a count"
+    );
+  }
+  assert!(agents.exists("pipeline-hub-title"), "the title stays");
+  let route = agents.window.navigation().route_now();
+  agents.click("pipeline-hub-new");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    route,
+    "New pipeline waits for a read that succeeds"
+  );
+
+  db.execute("UPDATE connections SET settings = ?1", [&settings])
+    .expect("restore fixture");
+  agents.click("pipeline-hub-load-error-retry");
+  agents.until("the pipelines in its place", |s| {
+    s.exists("pipeline-hub-master-detail") && !s.exists("pipeline-hub-load-error")
+  });
+  assert_eq!(agents.text("pipeline-hub-filter-all-count"), "3");
+  agents.click("pipeline-hub-new");
+  agents.until("New pipeline once the pipelines are read", |s| {
+    s.window.navigation().route_now() == Route::Project(project_id(), ProjectPage::NewPipeline)
+  });
+}
+
+#[test]
+fn pipeline_hub_a_tab_with_nothing_in_it_says_so_while_the_others_keep_their_pipelines() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  pipeline(&agents, "Feature delivery", Some(builder), true);
+  open(&mut agents, PipelinesFilter::Drafts, None);
+  assert_eq!(agents.text("pipeline-hub-empty-title"), "No drafts");
+  assert_eq!(
+    agents.text("pipeline-hub-empty-detail"),
+    "A new pipeline is a draft until it is first saved."
+  );
+  assert_eq!(agents.text("pipeline-hub-filter-all-count"), "1");
+  assert_eq!(agents.text("pipeline-hub-filter-drafts-count"), "0");
+  assert!(
+    !agents.exists("pipeline-hub-empty-new") && !agents.exists("pipeline-hub-list"),
+    "only a project with no pipelines at all offers New pipeline in its body"
+  );
+  open(&mut agents, PipelinesFilter::Archived, None);
+  assert_eq!(agents.text("pipeline-hub-empty-title"), "Nothing archived");
+  open(&mut agents, PipelinesFilter::All, None);
+  assert!(!agents.exists("pipeline-hub-empty"), "the pipeline is still under All");
 }
 
 #[test]

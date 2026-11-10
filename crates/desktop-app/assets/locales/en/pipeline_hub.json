@@ -3,7 +3,6 @@
     "title": "Pipelines",
     "new": "New pipeline",
     "reading": "Reading the pipelines…",
-    "loadFailed": "The pipelines of this project couldn't be read",
     "filter": {
       "all": "All",
       "drafts": "Drafts",
@@ -87,6 +86,13 @@
         "detail": "The steps wait for each other in a circle, or for a step that is not there. Edit the steps to fix what they wait for."
       }
     },
+    "states": {
+      "failed": {
+        "title": "Couldn't read the pipelines",
+        "detail": "Nothing was changed. Try again."
+      },
+      "newUnavailable": "The pipelines can't be read yet, so there is nothing to add to."
+    },
     "empty": {
       "all": {
         "title": "No pipelines yet",
@@ -94,7 +100,7 @@
       },
       "drafts": {
         "title": "No drafts",
-        "detail": "Every pipeline of this project has a version that tasks can use."
+        "detail": "A new pipeline is a draft until it is first saved."
       },
       "archived": {
         "title": "Nothing archived",

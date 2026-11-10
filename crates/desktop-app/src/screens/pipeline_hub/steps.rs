@@ -12,7 +12,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-use super::model::Entry;
+use super::{flow, model::Entry};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -23,10 +23,6 @@ use crate::{
     icon::Icon,
   },
 };
-
-/// Declared here and not in the hub's own module, which another task is changing; the folder is the hub's.
-#[path = "flow/mod.rs"]
-mod flow;
 
 /// What the body shows of `entry`: the head and the flow; nothing for an archived pipeline, which has no steps to open.
 pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry) -> Vec<Element> {

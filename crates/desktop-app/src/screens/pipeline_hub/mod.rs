@@ -9,13 +9,16 @@
 //!
 //! The pipelines are read off the UI thread through their query (`queries::hub::pipeline_hub`), kept for the session: a
 //! visit shows the last answer at once and reads it again behind it, as do a change of the project's pipelines,
-//! profiles, tools or connections and a run's start or end; never on a timer. A read that failed shows its failure and
-//! no counts.
+//! profiles, tools or connections and a run's start or end; never on a timer. A read that failed shows its failure
+//! ([`states`]), no counts and *New pipeline* unavailable; the first read shows bones ([`bones`]).
 
+mod bones;
+mod flow;
 mod list;
 mod model;
 mod panel;
 mod row;
+mod states;
 mod steps;
 mod words;
 
@@ -36,7 +39,10 @@ use orchester_core::{
 };
 use orchester_workspace::{messages::Message, pipelines::hub::PipelineHub};
 
-use self::model::{Entry, Listing};
+use self::{
+  model::{Entry, Listing},
+  states::Retry,
+};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -46,9 +52,8 @@ use crate::{
   theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
-    failure::{Failure, LastFailure},
+    failure::LastFailure,
     icon::Icon,
-    state::loading,
   },
 };
 
@@ -92,6 +97,7 @@ impl Component for PipelineHubScreen {
     let Props { project, view } = ctx.props::<Props>().clone();
     let loaded = self.read(ctx, &project);
     let failed = self.failure.follow(&loaded);
+    let unreadable = failed.is_some();
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
     let listing = hub.map(Listing::of);
@@ -99,7 +105,7 @@ impl Component for PipelineHubScreen {
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
     let body = match (failed, listing.as_ref()) {
-      (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
+      (Some((error, retrying)), _) => self.failure_page(ctx, &error, retrying),
       (None, Some(listing)) => {
         if !reading {
           keep_route_on_shown(id, view, selected.as_ref(), &navigation);
@@ -111,9 +117,13 @@ impl Component for PipelineHubScreen {
           (selected.as_ref(), &navigation, reading),
         )
       }
-      (None, None) => loading("pipeline-hub-loading", &ctx.t("pipeline_hub.reading")).into(),
+      (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
     };
-    let new = new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &navigation, id);
+    let new = if unreadable {
+      states::new_unavailable(ctx)
+    } else {
+      new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &navigation, id)
+    };
     agents::frame(
       ctx,
       agents::Frame {
@@ -147,13 +157,13 @@ impl PipelineHubScreen {
     queries::reading(&query)
   }
 
-  fn failure_page(&self, ctx: &mut Ctx, project: &ShownProject, error: Message, retrying: bool) -> Element {
-    let retry = self.retry.clone();
-    Failure::new("pipeline-hub-load-error", ctx.t("pipeline_hub.loadFailed"), error)
-      .retry(retrying, move || retry.update(|n| *n += 1))
-      .log(project.open.repo_root.clone())
-      .still_works(ctx.t("hub.failure.stillWorks"))
-      .page(ctx)
+  fn failure_page(&self, ctx: &Ctx, error: &Message, retrying: bool) -> Element {
+    let count = self.retry.clone();
+    let retry = Retry {
+      retrying,
+      press: Arc::new(move || count.update(|n| *n += 1)),
+    };
+    states::failure(ctx, error, retry)
   }
 }
 
