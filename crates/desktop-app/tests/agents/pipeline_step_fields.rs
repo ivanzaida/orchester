@@ -35,9 +35,9 @@ fn the_agent_field_says_when_no_profile_is_chosen_and_choosing_one_changes_the_s
     agents.text("pipeline-hub-step-agent-name"),
     "Choose an agent profile or tool"
   );
-  assert_eq!(
-    agents.text("pipeline-hub-step-agent-row-sub"),
-    "No agent profile or tool chosen yet"
+  assert!(
+    !agents.exists("pipeline-hub-step-agent-row-sub"),
+    "the empty field says it itself, so choosing moves no row under it"
   );
 
   agents.click("pipeline-hub-step-agent");

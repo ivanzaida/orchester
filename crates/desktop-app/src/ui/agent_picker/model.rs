@@ -32,8 +32,10 @@ pub struct Item {
   pub group: Group,
   pub mark: Mark,
   pub name: Arc<str>,
-  /// What it runs on: a profile's CLI, connection and model; a tool's command and that its exit code decides.
+  /// What it runs on: a profile's CLI, connection and model; a tool's command. Cut to the room it has.
   pub runs_on: Arc<str>,
+  /// What stands after `runs_on` and is never cut: that a tool's exit code decides the step.
+  pub suffix: Option<Arc<str>>,
   /// Why it is not ready, said in place of `runs_on`; it can still be chosen.
   pub warning: Option<Arc<str>>,
 }
@@ -51,7 +53,12 @@ pub fn filter(items: &[Item], query: &str) -> Vec<usize> {
         .enumerate()
         .filter(move |(_, item)| {
           item.group == group
-            && (item.name.to_lowercase().contains(&wanted) || item.runs_on.to_lowercase().contains(&wanted))
+            && (item.name.to_lowercase().contains(&wanted)
+              || item.runs_on.to_lowercase().contains(&wanted)
+              || item
+                .suffix
+                .as_ref()
+                .is_some_and(|suffix| suffix.to_lowercase().contains(&wanted)))
         })
         .map(|(at, _)| at)
     })

@@ -13,7 +13,7 @@ use orchester_workspace::pipelines::{
 };
 
 use super::{
-  Open, agent, keep,
+  Open, agent, choices, keep,
   pieces::Chip,
   text_field::{self, Kind},
 };
@@ -43,8 +43,7 @@ pub(super) fn step(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Element {
 
 fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::Row {
   let label = ctx.t("pipeline_hub.step.agent");
-  let choices = agent::choices(ctx, open.assignables, step);
-  let sub = agent::sub(ctx, &choices, Executor::of(step));
+  let choices = choices::choices(ctx, open.assignables, step);
   let value = agent::field(
     ctx,
     agent::Props {
@@ -61,7 +60,7 @@ fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::R
       epoch: open.epoch,
     },
   );
-  rows::row("pipeline-hub-step-agent-row", &label, sub, value)
+  rows::row("pipeline-hub-step-agent-row", &label, None, value)
 }
 
 /// *Instructions*: a multi-line box edited in place, with what `{{ }}` does under its label.

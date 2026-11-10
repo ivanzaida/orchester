@@ -26,6 +26,7 @@ fn profile(key: &str, name: &str, runs_on: &str, mark: AgentMark) -> Item {
     mark: Mark::Agent(mark),
     name: name.into(),
     runs_on: runs_on.into(),
+    suffix: None,
     warning: None,
   }
 }
@@ -37,6 +38,7 @@ fn tool(key: &str, name: &str, runs_on: &str) -> Item {
     mark: Mark::Icon(Icon::Terminal),
     name: name.into(),
     runs_on: runs_on.into(),
+    suffix: Some("· its exit code decides the step".into()),
     warning: None,
   }
 }
@@ -57,7 +59,7 @@ fn items() -> Vec<Item> {
       "Codex · Codex main · gpt-6.1-sol",
       AgentMark::OpenAi,
     ),
-    tool("checks", "Checks", "npm test · its exit code decides the step"),
+    tool("checks", "Checks", "npm test"),
   ]
 }
 
@@ -213,11 +215,12 @@ fn type_text(kit: &mut Kit, text: &str) {
   }
 }
 
-fn ringed(kit: &mut Kit, id: &str) -> bool {
+/// Whether the keys are on the row `id`, which the `hover` fill shows.
+fn current(kit: &mut Kit, id: &str) -> bool {
   kit
     .tree
     .get_element_by_id(id)
-    .is_some_and(|element| element.has_class("ringed"))
+    .is_some_and(|element| element.has_class("current"))
 }
 
 /// The names of the items shown, in order.
@@ -274,7 +277,7 @@ fn the_list_is_grouped_and_each_row_says_what_it_runs_on() {
   );
   assert_eq!(
     kit.texts(&format!("{}-runs", item(4))),
-    ["npm test · its exit code decides the step"],
+    ["npm test", "· its exit code decides the step"],
     "a tool says its command and that its exit code decides the step"
   );
   assert_eq!(
@@ -355,13 +358,10 @@ fn the_arrows_move_the_keys_from_the_chosen_item_and_enter_chooses_where_they_ar
     "Enter chooses nothing before the keys are anywhere"
   );
   key(kit, "ArrowDown");
-  assert!(
-    ringed(kit, &item(1)),
-    "the first press shows the chosen item, with the focus ring"
-  );
+  assert!(current(kit, &item(1)), "the first press shows the chosen item");
   key(kit, "ArrowDown");
   assert!(
-    ringed(kit, &item(2)) && !ringed(kit, &item(1)),
+    current(kit, &item(2)) && !current(kit, &item(1)),
     "and the next press moves them"
   );
   key(kit, "Enter");
@@ -415,5 +415,71 @@ fn a_long_list_scrolls_inside_its_fixed_height_and_opens_on_the_chosen_item() {
   assert!(
     last.y >= list.y && last.y + last.height <= list.y + list.height + 0.5,
     "the chosen item is inside the list, not hidden under its end: {last:?} in {list:?}"
+  );
+}
+
+/// The right edge of the item's second line, and the right edge and width of what stands after the command in it.
+fn second_line(kit: &mut Kit) -> (f32, f32, f32) {
+  let line = kit.bounds(&format!("{}-runs", item(0)));
+  let after = kit.bounds(&format!("{}-runs-after", item(0)));
+  (line.x + line.width, after.x + after.width, after.width)
+}
+
+#[test]
+fn a_long_command_is_cut_before_what_stands_after_it_is() {
+  let long = "cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::pedantic";
+  let mut cut = open_with(vec![tool("lint", "Lint", long)], None).kit;
+  let mut whole = open_with(vec![tool("lint", "Lint", "ls")], None).kit;
+  assert_eq!(
+    cut.texts(&format!("{}-runs", item(0))),
+    [long, "· its exit code decides the step"],
+    "the command is cut only where it is drawn, and what stands after it is there whole"
+  );
+  let (cut_line, cut_end, cut_width) = second_line(&mut cut);
+  let (_, whole_end, whole_width) = second_line(&mut whole);
+  assert_close(cut_width, whole_width, "what stands after the command keeps its width");
+  assert!(
+    cut_end <= cut_line + 0.5,
+    "it ends inside the line, not past the row: {cut_end} in {cut_line}"
+  );
+  assert!(whole_end < cut_end, "a short command leaves room after the phrase");
+}
+
+#[test]
+fn a_tool_with_no_command_still_says_that_its_exit_code_decides_the_step() {
+  let mut bare = tool("webhook", "Webhook", "");
+  bare.suffix = Some("Its exit code decides the step".into());
+  let mut kit = open_with(vec![bare], None).kit;
+  assert_eq!(
+    kit.texts(&format!("{}-runs", item(0))),
+    ["Its exit code decides the step"]
+  );
+}
+
+#[test]
+fn an_item_with_nothing_to_say_has_no_second_line() {
+  let mut gone = profile("gone", "This profile is no longer available", "", AgentMark::Claude);
+  gone.mark = Mark::Icon(Icon::Bot);
+  let mut kit = open_with(vec![gone], Some("gone")).kit;
+  assert!(!kit.exists(&format!("{}-runs", item(0))));
+  assert_eq!(
+    kit.texts(&format!("{}-name", item(0))),
+    ["This profile is no longer available"]
+  );
+}
+
+#[test]
+fn the_keys_show_as_a_filled_row_with_no_ring() {
+  let mut opened = open();
+  key(&mut opened.kit, "ArrowDown");
+  assert!(current(&mut opened.kit, &item(0)), "the chosen row has the keys");
+  assert!(
+    !opened
+      .kit
+      .tree
+      .get_element_by_id(&item(0))
+      .expect("the row")
+      .has_class("ringed"),
+    "no focus ring is drawn on the row"
   );
 }

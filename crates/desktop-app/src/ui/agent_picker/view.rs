@@ -7,7 +7,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::{TextInputEvent, mouse_event::MouseEvent},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row as Line, ScrollVertical, Text, TextInput, TextOverflow},
   core::{ElementRef, Signal},
@@ -20,7 +20,7 @@ use super::{
   model::{Group, Item, Mark, Row},
 };
 use crate::{
-  theme::{AgentPickerText, ControlHeight, ExtraColor, ExtraShadow, ExtraSpacing, IconSize, agent_picker_scrollbar},
+  theme::{AgentPickerText, ControlHeight, ExtraColor, ExtraSpacing, IconSize, agent_picker_scrollbar},
   ui::{
     icon::{Icon, icon},
     pressable::{Focus, pressable},
@@ -91,9 +91,8 @@ pub(super) struct Listing<'a> {
   pub(super) rows: &'a [Row],
   pub(super) items: &'a [Item],
   pub(super) chosen: Option<&'a str>,
-  /// Where the keys are among the items shown, and whether an arrow put them there (the focus ring shows only then;
-  /// while Search merely holds text the first item has the fill alone).
-  pub(super) keys: (Option<usize>, bool),
+  /// Where the keys are among the items shown: that row takes the `hover` fill (`Agent · Planner` `TDbJ7`).
+  pub(super) keys: Option<usize>,
   pub(super) empty: &'a str,
 }
 
@@ -169,19 +168,15 @@ fn heading(ctx: &Ctx, id: &str, group: Group) -> Element {
 
 /// The item shown at `place` (`Agent · Builder` `k4ZDcS`): 40 high, radius `sm`, 8 at its sides and its parts 10
 /// apart: its mark, the name over what it runs on (or the warning that it is not ready), and a 13 check at its end when
-/// `chosen`. The `hover` fill is where the keys are, with the focus ring once an arrow moved them there.
+/// `chosen`. The `hover` fill is where the keys are.
 fn item(
   ctx: &Ctx,
   (id, place): (&str, usize),
   item: &Item,
-  (chosen, (keys, ringed)): (bool, (Option<usize>, bool)),
+  (chosen, keys): (bool, Option<usize>),
   press: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let current = keys == Some(place);
-  let (second, color) = match &item.warning {
-    Some(why) => (why, PaletteColor::Warning),
-    None => (&item.runs_on, PaletteColor::TextMuted),
-  };
   let words = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -193,14 +188,11 @@ fn item(
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )
-    .child(
-      Text::new(second)
-        .id(format!("{id}-item-{place}-runs"))
-        .variant(AgentPickerText::Runs.role())
-        .color(color)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
-    );
+    .with_children(second_line(
+      format!("{id}-item-{place}-runs"),
+      item,
+      AgentPickerText::Runs.role(),
+    ));
   let row = pressable(press)
     .id(format!("{id}-item-{place}"))
     .describe("a11y_name", item.name.clone())
@@ -219,15 +211,56 @@ fn item(
     .child(mark(ctx, item.mark))
     .child(words)
     .with_children(chosen.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::TextPrimary)));
-  match (current, ringed) {
-    (true, true) => row
-      .background(ExtraColor::Hover.role())
-      .box_shadow(ExtraShadow::FocusRing.role())
-      .class("ringed")
-      .into(),
-    (true, false) => row.background(ExtraColor::Hover.role()).into(),
-    (false, _) => row.into(),
+  if current {
+    row.background(ExtraColor::Hover.role()).class("current").into()
+  } else {
+    row.into()
   }
+}
+
+/// What an item says under its name, named `id`: why it is not ready in `warning`, else what it runs on, with what
+/// stands after it (a tool's *· its exit code decides the step*) kept whole while the command before it is cut to the
+/// room; `None` when it has nothing to say. `role` is the text's style.
+pub fn second_line(id: String, item: &Item, role: TypographyStyle) -> Option<Element> {
+  if let Some(why) = &item.warning {
+    return Some(
+      Text::new(why)
+        .id(id)
+        .variant(role)
+        .color(PaletteColor::Warning)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .into(),
+    );
+  }
+  if item.runs_on.is_empty() && item.suffix.is_none() {
+    return None;
+  }
+  let runs = (!item.runs_on.is_empty()).then(|| {
+    Text::new(&item.runs_on)
+      .id(format!("{id}-command"))
+      .variant(role)
+      .flex_shrink(1.0)
+      .min_width(Dimension::Px(0.0))
+      .nowrap()
+      .text_overflow(TextOverflow::Elipsis)
+  });
+  let suffix = item.suffix.as_ref().map(|suffix| {
+    Text::new(suffix)
+      .id(format!("{id}-after"))
+      .variant(role)
+      .flex_shrink(0.0)
+      .nowrap()
+  });
+  Some(
+    Line::new()
+      .id(id)
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Fine.role())
+      .with_children(runs)
+      .with_children(suffix)
+      .into(),
+  )
 }
 
 /// An item's mark, 14: its CLI's maker, or a glyph in `text_secondary`.

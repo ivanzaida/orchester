@@ -19,6 +19,7 @@ fn profile(key: &str, name: &str, runs_on: &str, mark: AgentMark) -> Item {
     mark: Mark::Agent(mark),
     name: name.into(),
     runs_on: runs_on.into(),
+    suffix: None,
     warning: None,
   }
 }
@@ -44,7 +45,8 @@ fn items() -> Vec<Item> {
       group: Group::Tools,
       mark: Mark::Icon(Icon::Terminal),
       name: "Checks".into(),
-      runs_on: "npm test · its exit code decides the step".into(),
+      runs_on: "npm test".into(),
+      suffix: Some("· its exit code decides the step".into()),
       warning: None,
     },
   ]

@@ -89,14 +89,16 @@
     },
     "agent": {
       "choose": "Choose an agent profile or tool",
-      "missing": "No agent profile or tool chosen yet",
       "unpublished": "This profile has no published version yet",
       "connectionGone": "Choose a connection",
       "toolUnavailable": "This tool can't run as a step yet",
-      "toolRuns": "{{command}} · its exit code decides the step",
+      "toolDecides": "Its exit code decides the step",
+      "toolDecidesAfter": "· its exit code decides the step",
+      "profileGone": "This profile is no longer available",
+      "toolGone": "This tool is no longer available",
       "runsOn": "{{cli}} · {{connection}} · {{model}}",
       "runsOnConnection": "{{connection}} · {{model}}",
-      "withModel": "{{line}} · model: {{model}}"
+      "modelOverride": "· model: {{model}}"
     },
     "step": {
       "back": "Back to {{name}}",

@@ -31,7 +31,7 @@ use lurq::{
 use self::view::{Listing, SearchBox};
 pub use self::{
   model::{Group, Item, Mark, Row, extent, filter, keys_at, moved, rows},
-  view::mark,
+  view::{mark, second_line},
 };
 
 /// The picker's width (`Zn8BM`).
@@ -183,7 +183,7 @@ impl Component for Panel {
       rows: &rows,
       items: &props.items,
       chosen: props.chosen.as_deref(),
-      keys: (keys, pressed.is_some()),
+      keys,
       empty: &empty,
     };
     let list = view::list(ctx, (id, &self.scroll), &listing, &choose);
