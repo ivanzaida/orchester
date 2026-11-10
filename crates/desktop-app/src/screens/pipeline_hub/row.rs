@@ -13,26 +13,33 @@ use super::{list::Shown, model::Entry, words};
 use crate::{
   routes::{PipelinesView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
-  theme::IconSize,
-  ui::icon::{Icon, icon},
+  theme::{HubText, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    tooltip::Truncated,
+  },
 };
 
-pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
+pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
   let id = format!("pipeline-hub-row-{}", entry.id);
   let route = Route::Project(
     shown.project,
     ProjectPage::pipelines(PipelinesView::new(shown.filter, Some(entry.id))),
   );
   let said = words::line(ctx, shown.now, entry, shown.unsaved.0 == Some(entry.id));
+  let mark = icon(Icon::Workflow, IconSize::Lg, mark_color(entry));
+  let line = Truncated::new(format!("{id}-line"), said.text.clone(), HubText::RowLine.role())
+    .color(said.color)
+    .render(ctx);
   agent_row(AgentRow {
     id: &id,
     chosen: shown.selected == Some(entry.id),
     open: shown.leave.press(route).button(),
     group: entry.group,
     kind: "pipeline".to_owned(),
-    mark: icon(Icon::Workflow, IconSize::Lg, mark_color(entry)).into(),
+    mark: mark.into(),
     name: &entry.name,
-    line: (&said.text, said.color),
+    line,
     tag: (shown.default == Some(entry.id) && entry.archived.is_none())
       .then(|| tag_chip(&format!("{id}-tag"), &ctx.t("pipeline_hub.row.default"))),
     version: Some(words::version(ctx, entry).to_string()),

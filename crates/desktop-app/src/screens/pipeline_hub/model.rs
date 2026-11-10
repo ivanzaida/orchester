@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   messages::Message,
-  pipelines::{data::Assignables, flow::FlowRead, hub::PipelineHub},
+  pipelines::{data::Assignables, flow::FlowRead, hub::PipelineHub, ready::UndecidedMember},
   readiness::{Group, ReadinessStanding},
 };
 
@@ -30,6 +30,8 @@ pub(super) struct Entry {
   pub standing: Option<ReadinessStanding>,
   /// What keeps a pipeline that was never published from being published.
   pub problem: Option<Message>,
+  /// Every profile or tool its latest version runs that cannot be told to be ready; empty when it can be told.
+  pub undecided: Vec<UndecidedMember>,
   /// When it was archived; `None` while it is not.
   pub archived: Option<Timestamp>,
   /// Its steps as the panel draws them; none for an archived pipeline, which has no steps to open.
@@ -84,6 +86,7 @@ impl Listing {
         group: found.group(),
         standing: found.standing.clone(),
         problem: found.problem.clone(),
+        undecided: found.undecided.clone(),
         archived: None,
         flow: Some(found.flow.clone()),
         body: Some(found.body.clone()),
@@ -101,6 +104,7 @@ impl Listing {
       group: Group::Ready,
       standing: None,
       problem: None,
+      undecided: Vec::new(),
       archived: Some(found.at),
       flow: None,
       body: None,

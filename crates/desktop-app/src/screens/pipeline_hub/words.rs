@@ -7,26 +7,24 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{resource::ResourceKind, time::Timestamp};
 use orchester_workspace::readiness::ReadinessStanding;
 
-use super::model::Entry;
+use super::{
+  model::Entry,
+  step_line,
+  undecided::{Said, undecided_words},
+};
 use crate::{
   screens::{
-    local_hub::words::{archived_at, missing, undecided},
+    local_hub::words::{archived_at, missing},
     team_hub::words::date,
   },
   ui::message::message_text,
 };
 
-/// What a row says and the color it says it in.
-pub(super) struct Said {
-  pub text: Arc<str>,
-  pub color: PaletteColor,
-}
-
 /// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), that a draft is
 /// not published yet, or the steps and tasks; with `unsaved` (its panel holds changes) that they are not saved, in
 /// front of the rest.
 pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: bool) -> Said {
-  let said = state(ctx, now, entry);
+  let said = step_line::line(ctx, entry).unwrap_or_else(|| state(ctx, now, entry));
   if !unsaved {
     return said;
   }
@@ -72,7 +70,7 @@ pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
       [only] => missing(ctx, ResourceKind::Pipeline, only),
       many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
     }),
-    ReadinessStanding::Undecided(why) => Some(undecided(ctx, why)),
+    ReadinessStanding::Undecided(why) => Some(undecided_words(ctx, why, &entry.undecided)),
   }
 }
 

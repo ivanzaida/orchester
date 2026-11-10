@@ -11,14 +11,14 @@ use crate::routes::{HubFilter, HubView, ProjectPage};
 
 /// The resource a not-ready card sends the person to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Fix {
+pub(in crate::screens::pipeline_hub) enum Fix {
   Profile(ResourceId),
   Tool(ResourceId),
 }
 
 impl Fix {
   /// The resource `runs` names that is not ready, if it names one.
-  pub(super) const fn of(runs: &Runs) -> Option<Self> {
+  pub(in crate::screens::pipeline_hub) const fn of(runs: &Runs) -> Option<Self> {
     match runs {
       Runs::ProfileNotPublished { id } => Some(Self::Profile(*id)),
       Runs::ToolNotPublished { id } | Runs::ToolNotRunnable { id, .. } => Some(Self::Tool(*id)),
@@ -27,7 +27,7 @@ impl Fix {
   }
 
   /// The Agents hub on the resource.
-  pub(super) fn page(self) -> ProjectPage {
+  pub(in crate::screens::pipeline_hub) fn page(self) -> ProjectPage {
     ProjectPage::AgentsHub(match self {
       Self::Profile(id) => HubView::new(HubFilter::Profiles, Some(id)),
       Self::Tool(id) => HubView::new(HubFilter::Tools, Some(id)),

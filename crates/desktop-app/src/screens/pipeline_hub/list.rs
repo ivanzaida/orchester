@@ -41,7 +41,7 @@ pub(super) struct Shown<'a> {
   pub default: Option<ResourceId>,
 }
 
-pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
+pub(super) fn list(ctx: &mut Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
   let sections: Vec<Column> = if shown.filter == PipelinesFilter::Archived {
     let archived: Vec<&Entry> = listing.shown(shown.filter).collect();
     vec![section_of(
@@ -71,7 +71,7 @@ pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
     .into()
 }
 
-fn section_of(ctx: &Ctx, name: (&str, &str, PaletteColor), entries: Vec<&Entry>, shown: &Shown<'_>) -> Column {
+fn section_of(ctx: &mut Ctx, name: (&str, &str, PaletteColor), entries: Vec<&Entry>, shown: &Shown<'_>) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
     .child(section(ctx, "pipeline-hub", name, entries.len()))

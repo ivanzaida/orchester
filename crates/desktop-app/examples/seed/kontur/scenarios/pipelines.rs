@@ -134,7 +134,7 @@ pub fn ready_draft(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
-fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceId, SeedError> {
+pub(super) fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceId, SeedError> {
   Ok(
     kontur
       .db
@@ -185,7 +185,12 @@ fn problems(kontur: &mut Kontur) -> Result<(), SeedError> {
   )?;
   Ok(())
 }
-fn profile(kontur: &mut Kontur, title: &str, commands: &[&str], publish: bool) -> Result<ResourceId, SeedError> {
+pub(super) fn profile(
+  kontur: &mut Kontur,
+  title: &str,
+  commands: &[&str],
+  publish: bool,
+) -> Result<ResourceId, SeedError> {
   let allowed = AllowedCommands::new(
     commands
       .iter()

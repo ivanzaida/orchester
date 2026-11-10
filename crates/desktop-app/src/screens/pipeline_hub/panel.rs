@@ -15,11 +15,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::SpacingSize,
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Column, ScrollVertical},
   core::{Ref, Signal},
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ResourceId, resource::Pipeline, time::Timestamp};
@@ -28,22 +26,21 @@ use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 use super::{
   archived,
   bar::{self, Said},
+  chips,
   edit::{Edit, Holding},
   leave::{Hosted, Unsaved, UnsavedSignal, clear_unsaved, mark_unsaved},
   model::Entry,
   panel_head::{self, Props as HeadProps},
   save::{self, Ask, Asked, Followed, Notes, Pending, Save},
+  ready,
   settings::{self, Settings},
-  steps, words,
+  steps,
 };
 use crate::{
   project::ShownProject,
   screens::{local_hub::save_bar::Save as SaveState, team_hub::panel::body},
-  theme::{ExtraSpacing, HubText},
-  ui::{
-    chip::{BadgeTone, badge},
-    pressable::Press,
-  },
+  theme::ExtraSpacing,
+  ui::pressable::Press,
 };
 
 #[derive(Clone)]
@@ -201,7 +198,7 @@ impl Component for PipelinePanel {
     let body = body()
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
-      .child(chips(ctx, &entry, default))
+      .child(chips::chips(ctx, &entry, default))
       .with_children(steps::parts(ctx, &project, &entry, &read))
       .child(settings::section(
         ctx,
@@ -213,7 +210,8 @@ impl Component for PipelinePanel {
           locked,
           saved: self.notes.stored.get(),
         },
-      ));
+      ))
+      .with_children(ready::group(ctx, &project, &entry, &read));
     let pinned = self.pinned(ctx, &entry, asked.as_ref());
     let bar = bar::bar(
       ctx,
@@ -362,52 +360,4 @@ fn frame(entry: &Entry, body: Column, pinned: Vec<Element>, bar: Option<Element>
     .with_children(pinned)
     .with_children(bar)
     .into()
-}
-
-/// The chips under the head, then *used by 13 tasks* at their end; it ends in an ellipsis when it runs out of room.
-pub(super) fn chips(ctx: &Ctx, entry: &Entry, default: bool) -> Row {
-  let used = entry.archived.is_none().then(|| words::used_by(ctx, entry));
-  Row::new()
-    .id("pipeline-hub-chips")
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .with_children(
-      standing(ctx, entry, default)
-        .into_iter()
-        .enumerate()
-        .map(|(index, (words, tone))| badge(&format!("pipeline-hub-chip-{index}"), tone, &words)),
-    )
-    .child(Row::new().flex(1.0))
-    .with_children(used.map(|used| {
-      Text::new(&used)
-        .id("pipeline-hub-chips-end")
-        .variant(HubText::PanelHint.role())
-        .nowrap()
-        .min_width(Dimension::Px(0.0))
-        .text_overflow(TextOverflow::Elipsis)
-    }))
-}
-
-/// How the pipeline stands, as the chips: its version, then that it is ready or what it lacks; for a draft that it is
-/// one, then its first problem when it has one; for an archived one that it is; last, that New task offers it first.
-fn standing(ctx: &Ctx, entry: &Entry, default: bool) -> Vec<(Arc<str>, BadgeTone)> {
-  let version = entry
-    .number
-    .map(|number| (Arc::from(number.to_string()), BadgeTone::Neutral));
-  let rest = if entry.archived.is_some() {
-    vec![(ctx.t("pipeline_hub.chip.archived"), BadgeTone::Neutral)]
-  } else if entry.is_draft() {
-    let problem = words::needs(ctx, entry).map(|words| (words, BadgeTone::Warning));
-    std::iter::once((ctx.t("pipeline_hub.chip.draft"), BadgeTone::Info))
-      .chain(problem)
-      .collect()
-  } else {
-    vec![match words::needs(ctx, entry) {
-      Some(needs) => (needs, BadgeTone::Warning),
-      None => (ctx.t("pipeline_hub.chip.ready"), BadgeTone::Success),
-    }]
-  };
-  let default = default.then(|| (ctx.t("pipeline_hub.chip.default"), BadgeTone::Info));
-  version.into_iter().chain(rest).chain(default).collect()
 }

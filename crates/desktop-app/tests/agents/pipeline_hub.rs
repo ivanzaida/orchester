@@ -35,8 +35,18 @@ pub(super) fn open(agents: &mut Agents, filter: PipelinesFilter, item: Option<Re
 /// A pipeline called `name` whose steps run `profile` (`None`: a step with no agent profile), published or left a
 /// draft.
 pub(super) fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>, published: bool) -> ResourceId {
+  pipeline_of(agents, name, [profile, profile], published)
+}
+
+/// A pipeline called `name` with a step *Plan* and a step *Build* that run `profiles` in turn.
+pub(super) fn pipeline_of(
+  agents: &Agents,
+  name: &str,
+  profiles: [Option<ResourceId>; 2],
+  published: bool,
+) -> ResourceId {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
-  for step in ["Plan", "Build"] {
+  for (step, profile) in ["Plan", "Build"].into_iter().zip(profiles) {
     let key = edit.add_step(Name::new(step).expect("name"), None);
     edit.update(&key, |step| {
       step.kind = StepKind::Agent {
@@ -117,8 +127,8 @@ fn pipeline_hub_groups_the_pipelines_and_counts_each_tab() {
   assert_eq!(row(&mut agents, ready, "version"), "v1");
   assert_eq!(row(&mut agents, draft, "version"), "draft");
   assert!(
-    row(&mut agents, draft, "line").contains("has no agent profile"),
-    "a draft says what keeps it from being published"
+    row(&mut agents, draft, "line") == "2 steps not ready",
+    "a draft says how many steps keep it from running"
   );
   assert_eq!(row(&mut agents, stuck, "version"), "v1");
   assert_ne!(
@@ -148,11 +158,7 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
   agents.until("the draft", |s| s.text("team-hub-panel-title") == "Dependency update");
   assert_eq!(agents.text("team-hub-panel-version"), "draft · not published yet");
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
-  assert!(
-    agents
-      .text("pipeline-hub-chip-1-label")
-      .contains("has no agent profile")
-  );
+  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "2 steps not ready");
   assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
 }
 
@@ -324,10 +330,7 @@ fn pipeline_hub_a_draft_with_a_problem_says_it_in_its_row_and_chips_and_stays_un
   let draft = pipeline(&agents, "Dependency update", None, false);
   open(&mut agents, PipelinesFilter::All, Some(draft));
   let line = agents.text(&format!("pipeline-hub-row-{draft}-line"));
-  assert!(
-    line.contains("has no agent profile"),
-    "the row says the problem: {line}"
-  );
+  assert_eq!(line, "2 steps not ready", "the row says how many steps cannot run");
   assert_ne!(line, "Not published yet", "the problem replaces the plain line");
   assert_eq!(agents.text(&format!("pipeline-hub-row-{draft}-version")), "draft");
   assert_eq!(agents.text("pipeline-hub-section-needs-count"), "1");
@@ -339,7 +342,7 @@ fn pipeline_hub_a_draft_with_a_problem_says_it_in_its_row_and_chips_and_stays_un
   assert_eq!(
     agents.text("pipeline-hub-chip-1-label"),
     line,
-    "the problem is the second chip"
+    "the second chip says the same as the row"
   );
   assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
 }

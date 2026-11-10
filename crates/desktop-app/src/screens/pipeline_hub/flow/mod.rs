@@ -23,9 +23,9 @@ use orchester_workspace::pipelines::flow::{FlowRead, PipelineFlow, Stage, StepCa
 
 use self::{
   card::{Opening, Place},
-  fix::Fix,
   rail::Node,
 };
+pub(super) use self::{fix::Fix, words::number};
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
@@ -128,7 +128,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Vec<Element> {
       let line = parts::gate(
         index * 100 + gate_index,
         &ctx.t("pipeline_hub.flow.gate"),
-        &words::gate(ctx, gate),
+        &words::gate(ctx, gate, flow.deliver.as_ref().map(|deliver| deliver.number)),
         gate,
       );
       rows.push(rail::row(ctx, &id, &Node::Gate, (line.into(), SpacingSize::Lg)));
@@ -138,7 +138,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Vec<Element> {
     rows.push(rail::row(
       ctx,
       "pipeline-hub-flow-row-deliver",
-      &Node::Step(deliver.number),
+      &Node::Deliver,
       (
         card::deliver(ctx, deliver, opens.button(PipelineView::Deliver)),
         SpacingSize::Sm,

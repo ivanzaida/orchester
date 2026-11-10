@@ -40,6 +40,7 @@ mod overview_states;
 mod ownership;
 mod picker_readiness;
 mod pipelines;
+mod pipelines_not_ready;
 mod project_settings;
 pub mod qa_app_asks;
 mod review_approved;
@@ -117,7 +118,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 207] = [
+pub const ALL: [Scenario; 208] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -244,6 +245,7 @@ pub const ALL: [Scenario; 207] = [
   Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("pipelines-save-refused", pipelines::save_refused),
   Scenario::of("pipelines-ready-draft", pipelines::ready_draft),
+  Scenario::of("pipelines-not-ready", pipelines_not_ready::seed),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),
   Scenario::of("browser", browser::seed),

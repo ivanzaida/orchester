@@ -8,7 +8,7 @@ use orchester_core::resource::{DeliverMode, Deliverable, MergeMethod, Repository
 use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, Ending, Gate, ReturnsTo, Runs, StepCard};
 
 /// A card's number as the design writes it: `03`.
-pub(super) fn number(number: usize) -> String {
+pub(in crate::screens::pipeline_hub) fn number(number: usize) -> String {
   format!("{number:02}")
 }
 
@@ -56,9 +56,13 @@ pub(super) fn failure(ctx: &Ctx, step: &StepCard, route: &ReturnsTo) -> Arc<str>
   )
 }
 
-/// What a gate waits for: *you approve Plan before 03 starts*.
-pub(super) fn gate(ctx: &Ctx, gate: &Gate) -> Arc<str> {
+/// What a gate waits for: *you approve Plan before 03 starts*, or *before Deliver starts* when the Deliver step,
+/// numbered `deliver`, is what runs next: it has no node number, so it is named by word.
+pub(super) fn gate(ctx: &Ctx, gate: &Gate, deliver: Option<usize>) -> Arc<str> {
   match gate.before {
+    Some(next) if deliver == Some(next) => {
+      ctx.t_args("pipeline_hub.flow.gateBeforeDeliver", [("step", gate.step.to_string())])
+    }
     Some(next) => ctx.t_args(
       "pipeline_hub.flow.gateBefore",
       [("step", gate.step.to_string()), ("next", number(next))],

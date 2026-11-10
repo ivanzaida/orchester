@@ -41,7 +41,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-06](PV2-06-reorder-in-flow.md) | Reorder steps in the flow: drag, ⋯ menu, keys | UI | PV2-01, PV2-05 | blocked | — | — |
 | [PV2-07](PV2-07-step-panel.md) | A step in the panel: strip, groups, Instructions | UI | PV2-04, PV2-05 | blocked | — | — |
 | [PV2-08](PV2-08-step-agent-field.md) | The step's *Agent* field and Agent picker | UI | PV2-07 | blocked | — | — |
-| [PV2-09](PV2-09-settings-and-ready.md) | Pipeline settings, Ready? and Needs you | UI | PV2-04 | in progress | `claude/pv2-09-ready` | — |
+| [PV2-09](PV2-09-settings-and-ready.md) | Pipeline settings, Ready? and Needs you | UI | PV2-04 | done | `claude/pv2-09-ready` → `75aa67e32` | 61.7M (out 231k) |
 | [PV2-10](PV2-10-save-and-cancel.md) | Edit in place: Save makes vN, Cancel puts it back | UI + workspace | PV2-04 | in progress | `claude/pv2-10-save-and-cancel` | — |
 | [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | blocked | — | — |
 | [PV2-12](PV2-12-menu-archive.md) | The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab | UI | PV2-04 | done | `claude/pv2-12-menu-archive` → `824561513` | 74.8M (out 239k) |
@@ -49,6 +49,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | blocked | — | — |
 | [PV2-15](PV2-15-orchestrator-picker.md) | The orchestrator chat adopts the compact picker | UI | PV2-03, PV2-16 | done | `claude/pv2-15-orchestrator-picker` → `e0c34aa8a` | 108.2M (out 318k) |
 | [PV2-16](PV2-16-design-orchestrator-picker.md) | Design: the orchestrator's picker states with the compact picker | design | — | done | Pencil (unsaved) | 2.51M (out 27k) |
+| [PV2-17](PV2-17-readiness-polish.md) | Readiness polish: one story in the chip, Ready? and the cards | UI | PV2-09, PV2-10 | blocked | — | — |
 
 ## Order
 

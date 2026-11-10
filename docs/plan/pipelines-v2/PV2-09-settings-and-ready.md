@@ -1,10 +1,10 @@
 # PV2-09 · Pipeline settings, Ready? and Needs you
 
-- **Status:** in progress — scope: *Ready?*, *Needs you*, the head chips, a seed scenario with a draft (settings rows are PV2-10's)
+- **Status:** done (2026-11-10; review round 2 PASS, design verification round 2 PASS incl. the draft row (D-009); merged `75aa67e32`; UX follow-ups in PV2-17)
 - **Kind:** UI
 - **Depends on:** PV2-04
-- **Branch:** `claude/pv2-09-ready`
-- **Tokens:** —
+- **Branch:** `claude/pv2-09-ready` (`b66e43c6e` … `81ba616a4`)
+- **Tokens:** 61.7M across 2 implementation rounds, 2 reviews, 2 design verifications (output 231k)
 
 ## Goal
 
