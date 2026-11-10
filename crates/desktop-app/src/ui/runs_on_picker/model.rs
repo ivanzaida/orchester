@@ -68,6 +68,8 @@ pub struct Connection {
   pub tip: Arc<str>,
   /// How much of the plan's 5-hour window is used, when the plan is read.
   pub five_hour: Option<u8>,
+  /// A signed-in plan whose 5-hour use has not been read: the line says so, with no meter.
+  pub use_unread: bool,
   /// The plan is at its limit: its item takes the warning dot.
   pub limit: bool,
   /// Why it cannot be chosen, when it cannot: its item is at 40 % and its tooltip says this.

@@ -33,6 +33,7 @@ pub(super) fn connection(id: &str, mark: Mark, models: Vec<Model>) -> Connection
     caption: format!("{id} caption").into(),
     tip: format!("{id} tip").into(),
     five_hour: Some(41),
+    use_unread: false,
     limit: false,
     unavailable: None,
     detail: None,

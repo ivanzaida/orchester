@@ -136,11 +136,11 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox, own_model: boo
 /// The list of `models` (as Search filtered them), then `own`, the model Search holds that the connection does not
 /// list and takes anyway (*Use deepseek-v4-flash*); the chosen one checked and the keys at `cursor`, with the focus
 /// ring once a key moved them there (`ringed`; while Search merely holds text the first model has the fill alone).
-/// `choose` takes the place in the list. With none, `empty` says why.
+/// `choose` takes the place in the list. With none, `empty` says why, in the color given (the text's own by default).
 pub(super) fn list(
   ctx: &mut Ctx,
   (id, scroll): (&str, &ScrollState),
-  (models, own, empty): (&[&Model], Option<&str>, &str),
+  (models, own, (empty, empty_color)): (&[&Model], Option<&str>, (&str, Option<PaletteColor>)),
   (chosen, cursor, ringed): (Option<&str>, Option<usize>, bool),
   choose: &Arc<dyn Fn(usize) + Send + Sync>,
 ) -> Element {
@@ -168,7 +168,7 @@ pub(super) fn list(
     .collect();
   rows.extend(own_row);
   if rows.is_empty() {
-    rows.push(nothing(id, empty));
+    rows.push(nothing(id, empty, empty_color));
   }
   Column::new()
     .id(format!("{id}-models"))
@@ -230,13 +230,21 @@ fn row(
 }
 
 /// Why the list has no row.
-fn nothing(id: &str, words: &str) -> Element {
+fn nothing(id: &str, words: &str, color: Option<PaletteColor>) -> Element {
+  let text = Text::new(words)
+    .variant(TypographyStyle::Description)
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis);
+  let text = match color {
+    Some(color) => text.color(color),
+    None => text,
+  };
   Row::new()
     .id(format!("{id}-no-models"))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(row_height()))
     .padding(Padding::horizontal(SpacingSize::Sm))
     .align_items(Alignment::Center)
-    .child(Text::new(words).variant(TypographyStyle::Description).nowrap())
+    .child(text)
     .into()
 }

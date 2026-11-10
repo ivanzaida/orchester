@@ -70,7 +70,10 @@ pub(super) fn who(ctx: &mut Ctx, id: &str, connection: &Connection, refused: Opt
       .into(),
     None => first
       .child(Spacer::new().flex(1.0))
-      .with_children(percent.map(|percent| use_and_bar(ctx, id, percent, tone)))
+      .with_children(match percent {
+        Some(percent) => Some(use_and_bar(ctx, id, percent, tone)),
+        None => (connection.use_unread && refused.is_none()).then(|| unread(ctx, id)),
+      })
       .into(),
   };
   Row::new()
@@ -78,6 +81,16 @@ pub(super) fn who(ctx: &mut Ctx, id: &str, connection: &Connection, refused: Opt
     .width(Dimension::Pct(100.0))
     .padding(Padding::horizontal(SpacingSize::Xs))
     .child(body)
+    .into()
+}
+
+/// That the plan's 5-hour use was not read, in the same Geist Mono as the use, with no meter.
+fn unread(ctx: &Ctx, id: &str) -> Element {
+  Text::new(&ctx.t("ui.runsOnPicker.useUnread"))
+    .id(format!("{id}-who-use"))
+    .variant(RunsOnPickerText::Use.role())
+    .nowrap()
+    .flex_shrink(0.0)
     .into()
 }
 

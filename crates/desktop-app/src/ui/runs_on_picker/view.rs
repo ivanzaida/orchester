@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use orchester_core::resource::ModelId;
+
 use super::{
   Panel, RunsOnPicker,
   actions::{OwnedShape, Targets},
@@ -22,6 +24,8 @@ pub(super) struct View<'a> {
   /// The connection shown lists no efforts: its effort is typed.
   pub(super) typed_effort: bool,
   pub(super) searched: bool,
+  /// Search holds a name that no model can have: the list says so in place of offering it.
+  pub(super) bad_name: bool,
   pub(super) targets: Targets,
 }
 
@@ -35,9 +39,12 @@ impl Panel {
     let query = self.query.get();
     let found = shown_connection.map_or_else(Vec::new, |shown| filter_models(&shown.models, &query));
     let named = query.trim();
-    let own = shown_connection
-      .filter(|shown| shown.typed_model && !named.is_empty() && !shown.models.iter().any(|model| &*model.id == named))
-      .map(|_| Arc::<str>::from(named));
+    // A name Search holds that the connection takes anyway, unless no model can have such a name.
+    let unlisted = shown_connection.is_some_and(|shown| {
+      shown.typed_model && !named.is_empty() && !shown.models.iter().any(|model| &*model.id == named)
+    });
+    let usable = unlisted && ModelId::new(named).is_ok();
+    let own = usable.then(|| Arc::<str>::from(named));
     let on_chosen = shown_connection.is_some_and(|shown| shown.id == props.chosen.connection);
     let model = props.chosen.model.as_deref().filter(|_| on_chosen);
     let typed_effort = shown_connection.is_some_and(|shown| shown.typed_effort);
@@ -83,6 +90,7 @@ impl Panel {
       efforts,
       typed_effort,
       searched,
+      bad_name: unlisted && !usable,
       targets,
     }
   }

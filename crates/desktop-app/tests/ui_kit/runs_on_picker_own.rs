@@ -267,3 +267,64 @@ fn a_tooltip_note_wraps_at_220_in_a_panel_236_wide() {
   let panel = kit.bounds(&format!("{}-tip-tooltip", item("home")));
   assert_close(panel.width, 236.0, "the panel's width: 220 of words and 8 at each side");
 }
+
+const RULE: &str = "A name has no spaces, max 200 characters.";
+
+#[test]
+fn a_typed_name_no_model_can_have_is_not_offered_and_the_list_says_the_rule_until_the_query_changes() {
+  let mut open = open_over(provider(), on_deepseek(None));
+  let kit = &mut open.kit;
+  type_text(kit, "deepseek v4");
+  assert!(
+    !kit.exists(&format!("{ID}-typed")),
+    "a space is no model name: nothing to use"
+  );
+  assert_eq!(kit.texts(&format!("{ID}-no-models")), [RULE], "the rule under Search");
+  key(kit, "Enter");
+  assert!(open.kit.exists(&format!("{ID}-no-models")));
+  assert!(open.picks.lock().is_empty(), "Enter hands nothing back");
+  let kit = &mut open.kit;
+  kit.click(&format!("{ID}-search-clear"));
+  assert!(!kit.exists(&format!("{ID}-no-models")), "the rule goes with the query");
+  type_text(kit, "deepseek-v4-ultra");
+  assert_eq!(
+    kit.texts(&format!("{ID}-typed")),
+    ["Use deepseek-v4-ultra"],
+    "a usable name is offered again"
+  );
+  assert!(!kit.exists(&format!("{ID}-no-models")));
+}
+
+#[test]
+fn a_typed_name_over_two_hundred_characters_is_not_offered_either() {
+  let mut open = open_over(provider(), on_deepseek(None));
+  let kit = &mut open.kit;
+  type_text(kit, &"m".repeat(201));
+  assert!(!kit.exists(&format!("{ID}-typed")));
+  assert_eq!(kit.texts(&format!("{ID}-no-models")), [RULE]);
+  key(kit, "Backspace");
+  assert_eq!(
+    kit.texts(&format!("{ID}-typed")),
+    [format!("Use {}", "m".repeat(200))],
+    "two hundred is the limit"
+  );
+}
+
+#[test]
+fn a_signed_in_plan_whose_use_was_not_read_says_so_in_place_of_the_use_with_no_meter() {
+  let unread = with("work", |connection| {
+    connection.five_hour = None;
+    connection.use_unread = true;
+  });
+  let mut open = open_over(unread, chosen());
+  let kit = &mut open.kit;
+  assert_eq!(kit.texts(&format!("{ID}-who-use")), ["5h not read"]);
+  assert!(!kit.exists(&format!("{ID}-who-meter")), "no meter without a reading");
+  let mut read = open_over(connections(), chosen());
+  assert_eq!(read.kit.texts(&format!("{ID}-who-use")), ["5h 41%"]);
+  let mut none = open_over(with("work", |connection| connection.five_hour = None), chosen());
+  assert!(
+    !none.kit.exists(&format!("{ID}-who-use")),
+    "a connection with no plan says nothing"
+  );
+}

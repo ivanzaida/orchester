@@ -177,11 +177,11 @@ impl Component for Panel {
     let cursor = self.cursor.get();
     let looking = view.targets.shape.borrowed();
     let keys_at = |place| cursor.shown(place, &looking);
-    let empty = ctx.t(if view.searched {
-      "ui.runsOnPicker.noMatch"
-    } else {
-      "ui.runsOnPicker.noModels"
-    });
+    let empty = match (view.bad_name, view.searched) {
+      (true, _) => (ctx.t("ui.runsOnPicker.badModelName"), Some(PaletteColor::TextMuted)),
+      (false, true) => (ctx.t("ui.runsOnPicker.noMatch"), None),
+      (false, false) => (ctx.t("ui.runsOnPicker.noModels"), None),
+    };
     let own_model = view.shown.is_some_and(|at| props.connections[at].typed_model);
     let head = self.head(ctx, &props, (view.shown, keys_at(Place::Rail)), &actions);
     let search = SearchBox {
@@ -207,7 +207,7 @@ impl Component for Panel {
       .child(models::list(
         ctx,
         (id, &self.scroll),
-        (&view.found, view.own.as_deref(), &empty),
+        (&view.found, view.own.as_deref(), (&empty.0, empty.1)),
         (view.model, keys_at(Place::List), cursor.at.is_some()),
         &actions.model_chooser(view.targets.models.clone()),
       ))
