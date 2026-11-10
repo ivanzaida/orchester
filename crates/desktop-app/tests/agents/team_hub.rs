@@ -269,10 +269,11 @@ fn team_hub_links_to_no_editor_page_and_edits_an_mcp_server_in_its_panel() {
   assert!(agents.exists("team-hub-more"));
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
   assert!(agents.exists("team-hub-edit-save"));
-  // An MCP server is edited in its panel (Edit in its head, ORC-836); its bar stays the fix of what this computer
-  // lacks (nobody has decided on `github` here: switching it on).
+  // An MCP server is edited in its panel in place too, with no Edit; while nothing is changed its bar stays the fix
+  // of what this computer lacks (nobody has decided on `github` here: switching it on).
   open(&mut agents, HubView::new(HubFilter::All, Some(github)));
-  assert!(agents.exists("team-hub-fix-switch-on") && agents.exists("team-hub-edit"));
+  assert!(agents.exists("team-hub-fix-switch-on") && !agents.exists("team-hub-edit"));
+  assert!(agents.exists("team-new-mcp-runs-as"), "the form is in place");
 }
 
 #[test]

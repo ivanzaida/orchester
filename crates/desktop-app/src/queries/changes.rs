@@ -38,6 +38,8 @@ pub enum ProjectRead {
   HubInstructions,
   /// What a local skill's panel edits over: the skills, the profiles and pipelines their scopes name.
   HubSkills,
+  /// What a local tool's panel edits over: the tools and their published versions.
+  HubTools,
   /// What the form that makes a profile chooses from: the agent connections, the profiles, the pipelines' steps, the
   /// repository's agent files and the project's instructions, skills and tools.
   ProfileForm,
@@ -114,7 +116,12 @@ pub const fn touched(kind: Outside) -> &'static [ProjectRead] {
       ProjectRead::ProfileForm,
     ],
     // A new profile's form offers the project's instructions, skills and tools.
-    Outside::Tools => &[ProjectRead::TeamHub, ProjectRead::LocalHub, ProjectRead::ProfileForm],
+    Outside::Tools => &[
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::HubTools,
+      ProjectRead::ProfileForm,
+    ],
     Outside::Instructions => &[
       ProjectRead::TeamHub,
       ProjectRead::LocalHub,
@@ -192,6 +199,7 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::LocalHub => client.invalidate(hub::local_hub(session, root)),
     ProjectRead::HubInstructions => client.invalidate(hub::instructions(session, root)),
     ProjectRead::HubSkills => client.invalidate(hub::skills(session, root)),
+    ProjectRead::HubTools => client.invalidate(hub::tools(session, root)),
     ProjectRead::ProfileForm => client.invalidate(hub::profile_form(session, root)),
   }
 }

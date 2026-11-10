@@ -1,13 +1,13 @@
 //! What the Agents hub shows, one query per read, keyed by the project's folder and read through the workspace off the
 //! UI thread once reads are released (`ReadHold`): the hub of a team project and of a local one, which are live (a
 //! tool's or a server's secret is looked up in the keychain, a program on this computer), and what a local
-//! instruction's, a local skill's and a new profile's panel edit over, which are stored.
+//! instruction's, a local skill's, a local tool's and a new profile's panel edit over, which are stored.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::ResourceId,
-  resource::{Instruction, ResourceBody, Skill},
+  resource::{Instruction, ResourceBody, Skill, Tool},
 };
 use orchester_workspace::{
   agents::{
@@ -21,6 +21,7 @@ use orchester_workspace::{
   messages::{self, Message},
   removal,
   skills::editor::EditorData,
+  tools::data::ProjectTools,
 };
 
 use super::Session;
@@ -101,6 +102,26 @@ pub async fn skills(session: Session, root: PathBuf) -> Result<SkillsRead, Messa
     let drafted = data.listed.entries.iter().filter(|entry| entry.state.has_draft());
     let published = published_of(&root, drafted.map(|entry| entry.id))?;
     Ok(SkillsRead { data, published })
+  })
+  .await
+}
+
+/// The project's tools, and the published version of each that has a draft, which a local tool's panel starts from and
+/// compares with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolsRead {
+  pub listed: ProjectTools,
+  pub published: Vec<(ResourceId, Tool)>,
+}
+
+/// What a local tool's panel edits over: one read for every tool of the project.
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn tools(session: Session, root: PathBuf) -> Result<ToolsRead, Message> {
+  read(session, move |_| {
+    let listed = ProjectTools::load_in(&root).map_err(|error| messages::store_error(&error))?;
+    let drafted = listed.tools.iter().filter(|entry| entry.state.has_draft());
+    let published = published_of(&root, drafted.map(|entry| entry.id))?;
+    Ok(ToolsRead { listed, published })
   })
   .await
 }

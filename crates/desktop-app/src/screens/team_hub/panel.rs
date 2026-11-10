@@ -135,21 +135,6 @@ pub(in crate::screens) fn head_named(
     .with_children(end)
 }
 
-/// What a head puts at its end: `edit`, then the … menu `more` an admin has, 8 apart.
-pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<Element> {
-  match (edit, more) {
-    (Some(edit), Some(more)) => Some(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(edit)
-        .child(more)
-        .into(),
-    ),
-    (edit, more) => edit.or(more),
-  }
-}
-
 pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
   chips_saying(ctx, entry, words::chip(ctx, listing, entry), None)
 }
@@ -194,6 +179,16 @@ pub(super) fn chips_of(ctx: &Ctx, entry: &Entry, badges: Vec<(Arc<str>, BadgeTon
         .min_width(Dimension::Px(0.0))
         .text_overflow(TextOverflow::Elipsis)
     }))
+}
+
+/// *given by 5 profiles*: how many profiles give their agents an instruction (A4 `IaFyu`, A27 `N00xd`); nothing when no
+/// profile does. `one` and `other` are the keys of its words for one profile and for more.
+pub(in crate::screens) fn given_by(ctx: &Ctx, (one, other): (&str, &str), count: usize) -> Option<Arc<str>> {
+  match count {
+    0 => None,
+    1 => Some(ctx.t(one)),
+    _ => Some(ctx.t_args(other, [("count", count.to_string())])),
+  }
 }
 
 /// *used by Builder, Reviewer*: who uses the resource; nothing when no profile does.

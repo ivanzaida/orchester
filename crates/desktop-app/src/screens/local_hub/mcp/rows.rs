@@ -1,6 +1,7 @@
-//! *Server* of a local MCP server's panel (`Server` in L2, L8): what it runs as, its program with *Choose…*, its
-//! arguments, folder, the tools that run without asking, its variables and the secret values they take, and the switch
-//! that turns it on. A row says under its name when the field was changed and not saved yet.
+//! *Server* of a local MCP server's panel (`Server` in L2, L8): its name (the same row whether it is made or edited),
+//! what it runs as, its program with *Choose…*, its arguments, folder, the tools that run without asking, its variables
+//! and the secret values they take, and the switch that turns it on. A row says under its name when the field was
+//! changed and not saved yet.
 
 use lurq::{
   app::{
@@ -8,6 +9,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, SelectOption, Text},
+  core::ElementRef,
   layout::Alignment,
   node::dimension::Dimension,
 };
@@ -62,6 +64,43 @@ impl Look<'_> {
 }
 
 impl Form {
+  /// *Name*: the same row whether the server is made or edited; required while it is made, where it has the focus
+  /// when the form opens (`first`).
+  pub(in crate::screens) fn name_row(&self, ctx: &mut Ctx, look: &Look<'_>, first: Option<&ElementRef>) -> Row {
+    let label = if look.creating {
+      ctx.t_args("team_new.required", [("label", &*ctx.t("team_new.mcp.name"))])
+    } else {
+      ctx.t("team_new.mcp.name")
+    };
+    let mut input = FieldInput::new(
+      "local-hub-mcp-name",
+      ctx.t("team_new.mcp.name"),
+      self.fields.name.clone(),
+    )
+    .placeholder(ctx.t("team_new.mcp.namePlaceholder"))
+    .width(Dimension::Pct(100.0));
+    if let Some(first) = first {
+      input = input.element(first.clone());
+    }
+    let error = if look.typed.name.trim().is_empty() {
+      look.tried.then(|| ctx.t("team_new.errors.required"))
+    } else {
+      look.errors.name.as_ref().map(|error| message_text(ctx, error))
+    };
+    let sub = match error {
+      Some(words) => {
+        input = input.invalid();
+        Some(Sub {
+          words,
+          color: PaletteColor::Danger,
+        })
+      }
+      None if look.creating => Some(Sub::quiet(ctx.t("local_new.mcp.nameSub"))),
+      None => look.changed(ctx, &look.typed.name, &look.saved.name),
+    };
+    rows::row("local-hub-mcp-row-name", &label, sub, input.render(ctx))
+  }
+
   /// The rows of *Server*, the secret rows and the switch, in one outline.
   pub(in crate::screens) fn server_rows(&self, ctx: &mut Ctx, look: &Look<'_>) -> Vec<Row> {
     let mut rows = vec![self.runs_as(ctx)];

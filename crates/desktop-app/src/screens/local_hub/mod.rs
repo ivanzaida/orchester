@@ -29,6 +29,7 @@ pub(in crate::screens) mod profile;
 mod row;
 pub(in crate::screens) mod save_bar;
 mod skill;
+mod tool;
 mod words;
 
 use std::sync::Arc;
@@ -173,7 +174,7 @@ impl Component for LocalHubScreen {
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
         if !reading && !view.adding {
-          keep_route_on_shown(&project, &view, selected.as_ref(), &navigation);
+          keep_route_on_shown(&project, (&view, listing), selected.as_ref(), &navigation);
         }
         let shown = list::Shown {
           project: id,
@@ -360,7 +361,7 @@ impl LocalHubScreen {
 }
 
 impl LocalHubScreen {
-  /// The panel of a resource other than a profile: an instruction and a skill are edited in it, a tool is shown.
+  /// The panel of a resource other than a profile: an instruction, a skill and a command tool are edited in it.
   fn resource_panel(&self, ctx: &mut Ctx, project: &ShownProject, entry: &Entry, id: ResourceId) -> Element {
     match entry.kind {
       ResourceKind::Instruction => instruction::panel(
@@ -375,6 +376,15 @@ impl LocalHubScreen {
       ResourceKind::Skill => skill::panel(
         ctx,
         skill::Props {
+          project: project.clone(),
+          entry: entry.clone(),
+          id,
+          unsaved: self.unsaved.clone(),
+        },
+      ),
+      ResourceKind::Tool => tool::panel(
+        ctx,
+        tool::Props {
           project: project.clone(),
           entry: entry.clone(),
           id,
@@ -431,10 +441,18 @@ pub(in crate::screens) fn form_or(
 }
 
 /// A route that names an entry the filter does not hold (one archived, or of another kind) shows the one the page
-/// shows; the route is corrected to it, in place, so a link, Back and a reload land on what the page says.
-fn keep_route_on_shown(project: &ShownProject, view: &HubView, shown: Option<&Entry>, navigation: &Navigation) {
+/// shows; the route is corrected to it, in place, so a link, Back and a reload land on what the page says. An entry
+/// the hub has not read yet is waited for, not corrected away: one just made (the form goes to it as soon as it is
+/// made, before the hub reads it) is shown once the hub reads it again.
+fn keep_route_on_shown(
+  project: &ShownProject,
+  (view, listing): (&HubView, &Listing),
+  shown: Option<&Entry>,
+  navigation: &Navigation,
+) {
   let named = chosen(view);
-  if named.is_some() && named != shown.map(|entry| entry.what) {
+  let known = named.is_some_and(|what| listing.name_of(what).is_some());
+  if known && named != shown.map(|entry| entry.what) {
     let corrected = Route::Project(
       project.open.project.id(),
       ProjectPage::hub(view_of(view.filter, shown.map(|entry| entry.what))),

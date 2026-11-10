@@ -78,6 +78,10 @@
     "panel": {
       "edit": "Edit",
       "usedBy": "used by {{names}}",
+      "givenBy": {
+        "one": "given by 1 profile",
+        "other": "given by {{count}} profiles"
+      },
       "usedByNone": "No profile uses it yet"
     },
     "member": {
@@ -363,7 +367,6 @@
       "failed": {
         "title": "Couldn't save {{version}}"
       },
-      "fromTeamEditing": "· editing · Save publishes it to every computer",
       "unreachable": {
         "title": "Can't reach the team · nothing was saved"
       },

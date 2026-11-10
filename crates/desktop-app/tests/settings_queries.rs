@@ -9,11 +9,12 @@ use orchester_app::queries::changes::{
 use orchester_workspace::tasks::outside::{AppOutside, Outside, OutsideChanges};
 
 /// The Agents hub's reads, which a change no settings tab shows may touch.
-const HUB: [ProjectRead; 5] = [
+const HUB: [ProjectRead; 6] = [
   ProjectRead::TeamHub,
   ProjectRead::LocalHub,
   ProjectRead::HubInstructions,
   ProjectRead::HubSkills,
+  ProjectRead::HubTools,
   ProjectRead::ProfileForm,
 ];
 
@@ -84,7 +85,7 @@ fn settings_queries_changes_no_settings_tab_shows_read_no_setting() {
 #[test]
 fn settings_queries_the_hub_reads_again_what_it_followed() {
   // The kinds each of the Agents hub's reads followed as a future's dependencies.
-  let expected: [(ProjectRead, &[Outside]); 5] = [
+  let expected: [(ProjectRead, &[Outside]); 6] = [
     (
       ProjectRead::TeamHub,
       &[
@@ -114,6 +115,7 @@ fn settings_queries_the_hub_reads_again_what_it_followed() {
       ProjectRead::HubSkills,
       &[Outside::Skills, Outside::Profiles, Outside::Pipelines],
     ),
+    (ProjectRead::HubTools, &[Outside::Tools]),
     (
       ProjectRead::ProfileForm,
       &[
@@ -121,6 +123,9 @@ fn settings_queries_the_hub_reads_again_what_it_followed() {
         Outside::Profiles,
         Outside::Pipelines,
         Outside::ProjectSettings,
+        Outside::Tools,
+        Outside::Instructions,
+        Outside::Skills,
       ],
     ),
   ];

@@ -44,6 +44,10 @@
       "connection": "Runs on",
       "mcpServers": "MCP servers",
       "usedBy": "used by {{names}}",
+      "givenBy": {
+        "one": "given by 1 profile",
+        "other": "given by {{count}} profiles"
+      },
       "wasUsedBy": "was used by {{names}}"
     },
     "readiness": {
@@ -105,6 +109,7 @@
       "none": "None",
       "version": "{{version}} · published {{date}}",
       "add": "Add",
+      "nothingToAdd": "There is nothing else of this kind to give",
       "addConnection": "Add",
       "instructions": "Instructions",
       "skills": "Skills",
@@ -159,7 +164,9 @@
       "none": "No agent profile gives it, so no agent gets it"
     },
     "tool": {
-      "title": "Tool"
+      "title": "Tool",
+      "widenTitle": "Allow these changes to the tool?",
+      "execution": "A command tool runs its program with your rights, network access and no sandbox, on files agents wrote. Allow it only for a command you would let agents run that way."
     },
     "instruction": {
       "title": "Instruction"

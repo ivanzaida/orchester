@@ -44,13 +44,13 @@ const PROGRAM: Line = Line {
   look: Look::Mono,
   required: true,
 };
-/// The arguments' area is at least 64 high, a few lines.
+/// The arguments' area is at least 64 high, a few lines, in Geist Mono as the program is.
 const ARGUMENTS: Line = Line {
   part: "arguments",
   label: "team_hub.tool.arguments",
   sub: Some("team_hub.tool.argumentsSub"),
   placeholder: Some("team_hub.tool.argumentsPlaceholder"),
-  look: Look::Area(64.0),
+  look: Look::MonoArea(64.0),
   required: false,
 };
 const TIMEOUT: Line = Line {

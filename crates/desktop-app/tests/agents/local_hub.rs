@@ -18,7 +18,6 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::agents::data;
 
 use super::{harness::Agents, support::project_id};
 
@@ -314,17 +313,19 @@ pub(super) fn builder_without_connection(agents: &Agents) -> (ResourceId, [Conne
   (id, claude)
 }
 
+/// *Use* at the end of the connection's row of *Ready?*.
+const USE: &str = "team-hub-ready-connection-use";
+
 #[test]
 fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it() {
   let mut agents = Agents::new(true);
   let (id, [claude_2, _]) = builder_without_connection(&agents);
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
-  agents.until("the panel", |s| s.exists("local-hub-fix-use"));
+  agents.until("the panel", |s| s.exists(USE));
   assert_eq!(
     agents.text(&format!("local-hub-row-{id}-line")),
     "Choose a Claude Code connection"
   );
-  assert_eq!(agents.text("local-hub-fix-use"), "Use Claude 2 for Builder");
   for part in [
     "local-hub-profile-pick",
     "local-hub-profile-model-pick",
@@ -335,30 +336,18 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
   for page in ["agent-role", "agent-crumb", "agents-hub-title"] {
     assert!(!agents.exists(page), "{page} belongs to the editor's page");
   }
-  agents.press_until("local-hub-fix-use", "published on Claude 2", |s| {
+  // The fix is a change the panel holds, as a choice in the select is; Save publishes it.
+  agents.press_until(USE, "the panel holds Claude 2", |s| !s.exists(USE));
+  agents.press_until("local-hub-profile-save", "published on Claude 2", |s| {
     s.listed()
       .profile(id)
       .is_some_and(|entry| entry.profile.connection() == claude_2)
   });
-  agents.until("the fix is gone", |s| !s.exists("local-hub-fix-use"));
-  let line = agents.text(&format!("local-hub-row-{id}-line"));
-  assert!(line.contains("Claude 2"), "{line}");
-}
-
-#[test]
-fn local_hub_a_choice_that_is_refused_says_why_in_place() {
-  let mut agents = Agents::new(true);
-  let (id, _) = builder_without_connection(&agents);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
-  agents.until("the panel", |s| s.exists("local-hub-fix-use"));
-  // Unpublished edits would go out with the choice, so it is refused until they are published or discarded.
-  let listed = agents.listed();
-  let body = super::harness::changed(&listed.profile(id).expect("profile").profile);
-  let mut db = ProjectDb::open(&agents.root).expect("database");
-  data::save_draft(&mut db, id, body, Timestamp::now()).expect("a draft");
-  agents.click("local-hub-fix-use");
-  agents.until("refused", |s| s.exists("local-hub-profile-error"));
-  assert!(agents.text("local-hub-profile-error").contains("not published"));
+  let row = format!("local-hub-row-{id}-line");
+  agents.until("the row says it runs on Claude 2, saved", |s| {
+    let line = s.text(&row);
+    line.contains("Claude 2") && !line.contains("Unsaved")
+  });
 }
 
 #[test]

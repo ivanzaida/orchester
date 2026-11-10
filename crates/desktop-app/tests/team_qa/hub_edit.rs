@@ -30,9 +30,9 @@ const SAVE: &str = "team-hub-edit-save";
 const CANCEL: &str = "team-hub-edit-cancel";
 
 /// The window on the seed's `scenario` joined to the stand-in team server in `state`, on the hub's MCP servers with
-/// `pencil-design` open, once its *Edit* shows.
+/// `pencil-design` open, once its form shows: an admin edits it in place.
 fn on_pencil(of: (&str, State)) -> (Window, TeamServer, (ProjectId, ResourceId)) {
-  on_pencil_until(of, "team-hub-edit")
+  on_pencil_until(of, ARGUMENTS)
 }
 
 /// [`on_pencil`], once the panel's element `shown` has its text.
@@ -83,16 +83,22 @@ pub(super) fn db(window: &Window) -> ProjectDb {
   ProjectDb::open(&window.data.repo("repo-kontur")).expect("database")
 }
 
-/// Edit pressed and the arguments typed.
+/// The arguments typed in the form.
 fn typed(window: &mut Window) {
-  window.press("team-hub-edit");
-  window.until("the form", |window| window.texts(SAVE).is_some());
   window.set(ARGUMENTS, "--stdio\n--app\ndesktop\n--no-telemetry");
   window.until("Save to say what it makes", |window| {
     window
       .texts("team-hub-actions-hint")
       .is_some_and(|said| said.join(" ").contains("v2"))
   });
+}
+
+/// Whether the form holds nothing to save: the bar is the fix of what this computer lacks, or says nothing changed.
+fn unchanged(window: &mut Window) -> bool {
+  window.texts(SAVE).is_none()
+    || window
+      .texts("team-hub-actions-hint")
+      .is_some_and(|said| said.join(" ").starts_with("No changes"))
 }
 
 /// Whether the stand-in server holds one version of every MCP server: nothing was published.
@@ -116,9 +122,7 @@ fn team_qa_hub_edit_save_publishes_the_next_version_on_the_team_server_at_once()
       .iter()
       .any(|(resource, versions)| resource["name"] == "pencil-design" && versions.len() == 2)
   });
-  window.until("the panel to read as published", |window| {
-    window.texts(SAVE).is_none() && window.texts("team-hub-edit").is_some()
-  });
+  window.until("the panel to read as published", unchanged);
   window.until("the team's version", |window| {
     window.text("team-hub-chip-team") == "Team · v2"
   });
@@ -129,9 +133,7 @@ fn team_qa_hub_edit_cancel_puts_back_the_version() {
   let (mut window, server, _) = on_pencil(("team-edit", State::TeamEdit));
   typed(&mut window);
   window.press(CANCEL);
-  window.until("the plain panel", |window| window.texts(SAVE).is_none());
-  window.press("team-hub-edit");
-  window.until("the form", |window| window.texts(SAVE).is_some());
+  window.until("the version back in the form", unchanged);
   let arguments = window.texts(ARGUMENTS).expect("the arguments").join(" ");
   assert!(!arguments.contains("--no-telemetry"), "{arguments}");
   assert!(nothing_published(&server));
@@ -178,13 +180,13 @@ fn team_qa_hub_edit_offline_saves_nothing_and_keeps_what_was_typed() {
 }
 
 #[test]
-fn team_qa_hub_edit_offline_state_shows_what_was_read_and_offers_no_edit() {
+fn team_qa_hub_edit_offline_state_shows_what_was_read_and_saves_nothing() {
   let (mut window, server, _) = on_pencil_until(("team-edit-offline", State::TeamEditOffline), "team-hub-panel-title");
   window.until("the hub to say it cannot reach the team", says_unreachable);
   assert_eq!(window.text("team-hub-panel-title"), "pencil-design");
   assert!(
-    window.texts("team-hub-edit").is_none(),
-    "nothing is edited while the team cannot be reached"
+    unchanged(&mut window),
+    "nothing is changed while the team cannot be reached"
   );
   assert!(nothing_published(&server));
 }

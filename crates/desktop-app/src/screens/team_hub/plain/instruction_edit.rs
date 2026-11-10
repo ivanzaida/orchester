@@ -112,7 +112,12 @@ impl Component for InstructionEditor {
     let used_by = used_by_row(ctx, &sheet.used_by, Some(ctx.t("team_hub.edit.usedBySub")));
     let body = panel::body()
       .child(head)
-      .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
+      .child(panel::chips_of(
+        ctx,
+        entry,
+        badges,
+        panel::given_by(ctx, super::GIVEN_BY, sheet.used_by.len()),
+      ))
       .with_children(parts.notice)
       .child(from_team(ctx, std::iter::once(used_by).chain(drawn.rows).collect()))
       .with_children(drawn.sections)

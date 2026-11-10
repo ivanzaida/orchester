@@ -30,7 +30,10 @@ use lurq::{
 };
 use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
 use orchester_workspace::{
-  agents::team_profile::{ConnectionChoice, TeamProfileSheet},
+  agents::{
+    role::RoleText,
+    team_profile::{ConnectionChoice, TeamProfileSheet},
+  },
   messages::Message,
   sharing::team::TeamConfiguration,
 };
@@ -45,7 +48,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{AccountsView, Route},
-  screens::settings::orchester::PersonOnly,
+  screens::{hub::role, settings::orchester::PersonOnly},
   services::Services,
   theme::HubSpacing,
   ui::{field::field_error, message::message_text, pressable::Press},
@@ -221,7 +224,10 @@ impl ProfilePanel {
       return TeamPart {
         chips: panel::chips(ctx, &props.listing, &props.entry),
         notice: None,
-        sections: vec![from_team::section(ctx, &props.sheet).into()],
+        sections: role_read(ctx, &props.sheet)
+          .into_iter()
+          .chain([from_team::section(ctx, &props.sheet).into()])
+          .collect(),
         bar: None,
       };
     };
@@ -345,4 +351,26 @@ struct TeamPart {
   sections: Vec<Element>,
   /// An edit's Save/Cancel bar, pinned in the place of the fix.
   bar: Option<Element>,
+}
+
+/// *Role* of a profile the person does not edit, read-only as the rest of *From the team* (its role, what it answers
+/// for and the role instructions, A26 `WSw0W` as a member reads it); none before its version is read.
+fn role_read(ctx: &mut Ctx, sheet: &TeamProfileSheet) -> Option<Element> {
+  let latest = sheet.edit.as_ref()?;
+  // The fields are locked: nothing is typed in them, so no change ever comes.
+  let unchanged: role::Change = Arc::new(|_| {});
+  Some(role::section(
+    ctx,
+    role::Props {
+      id: "team-hub-role".to_owned(),
+      role: RoleText::of_team(&latest.body),
+      errors: None,
+      locked: true,
+      on_role: unchanged.clone(),
+      on_responsibilities: unchanged.clone(),
+      on_instructions: unchanged,
+      name_said: None,
+      first: None,
+    },
+  ))
 }

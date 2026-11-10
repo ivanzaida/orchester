@@ -146,17 +146,11 @@ impl Component for McpPanel {
       switch: self.switch(entry.id),
     };
     let mode = self.mode(&props);
-    let parts = self
-      .parts(ctx, &props, mode)
-      .unwrap_or_else(|| self.plain_parts(ctx, &props, (busy, &press)));
+    let parts = self.parts(ctx, &props, (busy, &press));
     let chips = panel::chips_of(ctx, entry, parts.chips.badges, parts.chips.end);
     let computer = computer::section(ctx, &view);
     let (above, from_team, bar) = (parts.above, parts.from_team, parts.bar);
-    let edit_button = (mode == Mode::Plain).then(|| self.edit_button(ctx, &props)).flatten();
-    let more = (mode == Mode::Plain)
-      .then(|| archive::menu(ctx, &props.repo_root, entry, props.team.may_change))
-      .flatten();
-    let edit_button = panel::with_more(edit_button, more);
+    let more = archive::menu(ctx, &props.repo_root, entry, props.team.may_change);
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -168,7 +162,7 @@ impl Component for McpPanel {
         ctx,
         entry,
         words::head_line(ctx, now, entry, sheet),
-        edit_button,
+        more,
       ))
       .with_children(above)
       .child(chips)

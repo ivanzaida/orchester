@@ -3,7 +3,7 @@
 //! lacks, the head's end of a resource with versions, *Used by* of an instruction, a skill or a tool, and a panel in
 //! bones while what it edits is read for the first time. An MCP server's panel is [`super::mcp`], an archived entry's
 //! [`super::archived`], a profile's [`super::profile`], an instruction's [`super::instruction`], a skill's
-//! [`super::skill`] and a tool's [`super::editing`].
+//! [`super::skill`] and a tool's [`super::tool`] ([`super::editing`] for one that is no command).
 
 use std::sync::Arc;
 
