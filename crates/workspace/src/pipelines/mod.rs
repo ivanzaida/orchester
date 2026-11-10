@@ -12,6 +12,7 @@ pub mod flow;
 pub mod history;
 pub mod hub;
 pub mod levels;
+pub mod local_edit;
 pub mod library;
 pub mod narrowing;
 pub mod problems;
