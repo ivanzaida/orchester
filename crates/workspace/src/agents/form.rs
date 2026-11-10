@@ -244,7 +244,7 @@ pub fn prompt_error(error: &PromptError) -> Message {
   }
 }
 
-fn role_error(error: &NameError) -> Message {
+pub(super) fn role_error(error: &NameError) -> Message {
   match error {
     NameError::Blank => Message::new("errors.roleRequired"),
     NameError::TooLong { .. } => messages::name_error(error),

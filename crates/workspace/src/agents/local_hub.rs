@@ -22,6 +22,7 @@ use super::{
   form::{effort_options, model_options},
   local_edit::GivenKind,
   local_given::{GivenLists, GivenNames},
+  role::RoleText,
   team_hub::Form,
   team_profile::ConnectionChoice,
 };
@@ -47,6 +48,8 @@ pub struct LocalPlain {
 /// the MCP servers it chooses and the pipelines whose steps run it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalProfile {
+  /// Its role: the name, what it answers for and the role instructions.
+  pub role: RoleText,
   /// The CLI it runs with: its connection's, and while that is gone the one its model belongs to
   /// ([`AgentProvider::cli_of_model`]); `None` when the connection is no agent connection or the model names no CLI.
   pub cli: Option<AgentProvider>,
@@ -346,6 +349,7 @@ impl Around {
       })
       .collect();
     Ok(LocalProfile {
+      role: RoleText::of(body),
       cli,
       connection: connection.map(|connection| connection.name().to_string()),
       mcp_servers: chosen

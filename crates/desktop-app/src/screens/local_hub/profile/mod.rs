@@ -1,5 +1,6 @@
 //! The panel of a local profile (`Agents · Profile` L1 `fFxoM`, `docs/design/team-configuration.md` rule 11): the head
-//! with the version and its *Versions*, the chips (how it stands, who uses it), *Profile* (CLI, connection, model,
+//! with the version and its *Versions*, the chips (how it stands, who uses it), *Role* (its name, what it answers for
+//! and the role instructions, L17 `b7Tbxb`: [`role`]), *Profile* (CLI, connection, model,
 //! effort, MCP servers, secrets, and the instructions, skills and tools it gives its agents, which nothing else gives
 //! them: `docs/design/team-configuration.md`, "Decided 2026-11-09"), *Ready?* with the fix of what is missing, and
 //! the pinned *Save* and *Cancel* ([`super::save_bar`]). The parts are the team profile's
@@ -17,6 +18,7 @@ mod choices;
 mod edit;
 mod pick;
 mod ready;
+mod role;
 mod table;
 mod words;
 
@@ -38,6 +40,7 @@ use orchester_workspace::{
   agents::{
     local_edit::{self, Edit},
     local_hub::{LocalHub, LocalProfile},
+    role::RoleErrors,
   },
   background,
   local_archive::Archivable,
@@ -59,6 +62,7 @@ use super::{
   words::kind_where_key,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   project::ShownProject,
   routes::{AccountsView, HubFilter, ProjectPage, Route},
@@ -119,6 +123,11 @@ struct ProfilePanel {
   listed: (Ref<Option<LocalProfile>>, Ref<Option<LocalProfile>>),
   unsaved: UnsavedSignal,
   what: Archivable,
+  /// The role as typed ([`role`]).
+  typed: role::Typed,
+  /// Whether the input that pressed *Save* may decide what the save changes in the role's prompts.
+  decided: Ref<bool>,
+  gate: Option<InputGate>,
 }
 
 impl Component for ProfilePanel {
@@ -139,9 +148,10 @@ impl Component for ProfilePanel {
       when: listed.1.clone(),
     };
     edit::follow(ctx, &save, &followed, project);
-    let saving = (save.clone(), pending.clone(), held.clone());
+    let decided = ctx.create_ref(false);
+    let saving = (save.clone(), pending.clone(), held.clone(), decided.clone());
     let choices = Choices::new(ctx, (root.clone(), props.id), &held, move || {
-      publish(&saving.0, &saving.1, saving.2.get_untracked().body());
+      publish(&saving.0, &saving.1, saving.2.get_untracked().body(), saving.3.get());
     });
     let cancel = cancel(ctx, (root, project, props.id));
     let current = props.profile.current;
@@ -156,6 +166,9 @@ impl Component for ProfilePanel {
       listed,
       unsaved: props.unsaved,
       what: props.entry.what,
+      typed: ctx.signal(None),
+      decided,
+      gate: ctx.use_context::<InputGate>(),
     };
     this.follow_select(ctx);
     this
@@ -175,12 +188,19 @@ impl Component for ProfilePanel {
     let choosing = self.choices.checking();
     self.keep_select(shown, choosing);
     // A choice under way is a change already: *Save* and *Cancel* take it at once, *Save* once it is held.
-    let changed = choosing || listed.draft || holding.0.as_ref().is_some_and(|held| held.changed);
+    let role_refused = role::refused(&self.typed);
+    let changed =
+      choosing || listed.draft || role_refused.is_some() || holding.0.as_ref().is_some_and(|held| held.changed);
     let refused = self.refusal();
-    mark_unsaved(&self.unsaved, self.what, (changed, refused.is_some()));
+    mark_unsaved(
+      &self.unsaved,
+      self.what,
+      (changed, refused.is_some() || role_refused.is_some()),
+    );
     let parts = ready::parts(ctx, &hub, shown);
     let missing = ready::missing(&parts);
     let busy = self.busy();
+    let locked = busy != Busy::Idle;
     let navigation = Navigation::of(ctx);
     let press = |fix: &Fix| self.press(fix, (&project, shown), &navigation);
     let head_end = head_end(ctx, &project, &entry, (id, PREFIX));
@@ -193,7 +213,7 @@ impl Component for ProfilePanel {
       chosen: &self.chosen,
       on_edit: self.on_edit(),
       choosing,
-      busy: busy != Busy::Idle,
+      busy: locked,
       add_connection: navigation.to(Route::Accounts(AccountsView::default())),
     };
     let body = body()
@@ -210,6 +230,7 @@ impl Component for ProfilePanel {
         words::used_by(ctx, shown),
       ))
       .with_children(widening)
+      .child(role::section(ctx, &self.typed, shown, (self.on_edit(), locked)))
       .child(table::section(ctx, &rows))
       .child(section(
         ctx,
@@ -224,7 +245,7 @@ impl Component for ProfilePanel {
       ctx,
       PREFIX,
       (
-        self.save_now(changed),
+        self.save_now(ctx, (changed, role_refused.as_ref())),
         (changed && busy == Busy::Idle).then(|| self.cancel_now(&listed)),
       ),
       save_bar::makes(ctx, entry.number),
@@ -250,6 +271,9 @@ impl ProfilePanel {
     if saved && when.get().is_some_and(|then| then != *listed) {
       when.set(None);
       self.held.set(Holding::default());
+      if self.typed.get_untracked().is_some() {
+        self.typed.set(None);
+      }
       return Holding::default();
     }
     holding
@@ -302,14 +326,18 @@ impl ProfilePanel {
     })
   }
 
-  /// What *Save* does now: nothing while nothing differs, else it publishes what the panel holds, once the choices
-  /// being checked are held.
-  fn save_now(&self, changed: bool) -> Save {
+  /// What *Save* does now: nothing while nothing differs, why it waits while the role as typed cannot be saved, else
+  /// it publishes what the panel holds, once the choices being checked are held. What the save changes in the role's
+  /// prompts is decided by the input that pressed it.
+  fn save_now(&self, ctx: &Ctx, (changed, role): (bool, Option<&RoleErrors>)) -> Save {
     if self.save.state().get().is_pending() {
       return Save::Saving;
     }
     if !changed {
       return Save::Unchanged;
+    }
+    if let Some(why) = role.and_then(RoleErrors::first) {
+      return Save::Waits(message_text(ctx, why));
     }
     let (choices, save, pending, held) = (
       self.choices.clone(),
@@ -317,11 +345,13 @@ impl ProfilePanel {
       self.pending.clone(),
       self.held.clone(),
     );
+    let (decided, gate) = (self.decided.clone(), self.gate.clone());
     Save::Ready(Press::run(move || {
+      decided.set(input_may_decide(gate.as_ref(), Guarded::PermissionWidening));
       if choices.waits() {
         choices.save_after();
       } else {
-        publish(&save, &pending, held.get_untracked().body());
+        publish(&save, &pending, held.get_untracked().body(), decided.get());
       }
     }))
   }
@@ -335,10 +365,11 @@ impl ProfilePanel {
       self.choices.clone(),
       self.cancel.clone(),
     );
-    let draft = listed.draft_saved_at;
+    let (draft, typed) = (listed.draft_saved_at, self.typed.clone());
     Press::run(move || {
       choices.drop_all();
       held.set(Holding::default());
+      typed.set(None);
       clear(&pending);
       if let Some(saved) = draft {
         cancel.run(saved);
@@ -383,12 +414,19 @@ impl ProfilePanel {
   }
 }
 
-/// Publishes `held` (`None` for what is stored), dropping a question a save asked before.
-fn publish(save: &edit::Save, pending: &edit::Pending, held: Option<orchester_core::resource::AgentProfile>) {
+/// Publishes `held` (`None` for what is stored), dropping a question a save asked before; `decided` as
+/// [`Ask::decided`].
+fn publish(
+  save: &edit::Save,
+  pending: &edit::Pending,
+  held: Option<orchester_core::resource::AgentProfile>,
+  decided: bool,
+) {
   clear(pending);
   save.run(Ask {
     held,
     allowed: Vec::new(),
+    decided,
   });
 }
 

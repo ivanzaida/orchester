@@ -26,6 +26,9 @@ pub enum HubText {
   Value,
   /// Geist Mono 12.5 `text_primary`, 1.5: an inline text area's lines, e.g. role instructions (`MC25H` in `CdDMo`).
   Area,
+  /// 12.5 `text_primary`, 1.45: a panel text area's lines that are words, e.g. a role's responsibilities and role
+  /// instructions (`ZhO90`, `alHbk` in L17 `b7Tbxb`).
+  Prose,
   /// 12 `text_muted`, 1.4: a row's hint, a group's count, a note (`zZmp4`, `B4SPLh`, `q3R6l`).
   Hint,
   /// 12 `text_secondary`: a row's status beside its dot (`PChrl` in `B6JYf`).
@@ -90,13 +93,14 @@ pub enum HubText {
 }
 
 impl HubText {
-  pub const ALL: [Self; 31] = [
+  pub const ALL: [Self; 32] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
     Self::BarStatus,
     Self::Value,
     Self::Area,
+    Self::Prose,
     Self::Hint,
     Self::Status,
     Self::Kind,
@@ -136,6 +140,7 @@ impl HubText {
       Self::BarStatus => "hub_bar_status",
       Self::Value => "hub_value",
       Self::Area => "hub_area",
+      Self::Prose => "hub_prose",
       Self::Hint => "hub_hint",
       Self::Status => "hub_status",
       Self::Kind => "hub_kind",
@@ -172,6 +177,7 @@ impl HubText {
       Self::BarStatus => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Area => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
+      Self::Prose => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_primary),
       Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
       Self::Status => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),

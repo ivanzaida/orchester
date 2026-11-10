@@ -16,6 +16,7 @@ pub(crate) mod page_head;
 pub(crate) mod parts;
 pub(crate) mod pills;
 pub(crate) mod question;
+pub(crate) mod role;
 mod tabs;
 pub(crate) mod team;
 pub(crate) mod versions;
