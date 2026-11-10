@@ -148,7 +148,8 @@
       "discard": "Discard changes",
       "savingTitle": "{{name}} is being saved",
       "savingWhat": "Wait for the save to finish, then press again. Nothing is discarded while it saves.",
-      "wait": "Wait"
+      "wait": "Wait",
+      "whatClose": "Closing the tab now puts {{name}} back as it was saved. Keep editing and press Save to keep the changes."
     },
     "settings": {
       "title": "Pipeline",
