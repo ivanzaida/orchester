@@ -34,6 +34,9 @@ pub struct Item {
   pub name: Arc<str>,
   /// What it runs on: a profile's CLI, connection and model; a tool's command. Cut to the room it has.
   pub runs_on: Arc<str>,
+  /// The model the step overrides the profile's with (*· model: gpt-5*), said after `runs_on` and cut before it, so a
+  /// long one never hides the CLI and the connection.
+  pub model: Option<Arc<str>>,
   /// What stands after `runs_on` and is never cut: that a tool's exit code decides the step.
   pub suffix: Option<Arc<str>>,
   /// Why it is not ready, said in place of `runs_on`; it can still be chosen.
@@ -55,6 +58,10 @@ pub fn filter(items: &[Item], query: &str) -> Vec<usize> {
           item.group == group
             && (item.name.to_lowercase().contains(&wanted)
               || item.runs_on.to_lowercase().contains(&wanted)
+              || item
+                .model
+                .as_ref()
+                .is_some_and(|model| model.to_lowercase().contains(&wanted))
               || item
                 .suffix
                 .as_ref()

@@ -220,7 +220,8 @@ fn item(
 
 /// What an item says under its name, named `id`: why it is not ready in `warning`, else what it runs on, with what
 /// stands after it (a tool's *· its exit code decides the step*) kept whole while the command before it is cut to the
-/// room; `None` when it has nothing to say. `role` is the text's style.
+/// room; a model the step overrides stands between them and is cut first, so the CLI and the connection stay whole;
+/// `None` when it has nothing to say. `role` is the text's style.
 pub fn second_line(id: String, item: &Item, role: TypographyStyle) -> Option<Element> {
   if let Some(why) = &item.warning {
     return Some(
@@ -233,14 +234,26 @@ pub fn second_line(id: String, item: &Item, role: TypographyStyle) -> Option<Ele
         .into(),
     );
   }
-  if item.runs_on.is_empty() && item.suffix.is_none() {
+  if item.runs_on.is_empty() && item.model.is_none() && item.suffix.is_none() {
     return None;
   }
+  // The lowest order gives way first: the model, then what it runs on.
   let runs = (!item.runs_on.is_empty()).then(|| {
     Text::new(&item.runs_on)
       .id(format!("{id}-command"))
       .variant(role)
       .flex_shrink(1.0)
+      .shrink_order(1)
+      .min_width(Dimension::Px(0.0))
+      .nowrap()
+      .text_overflow(TextOverflow::Elipsis)
+  });
+  let model = item.model.as_ref().map(|model| {
+    Text::new(model)
+      .id(format!("{id}-model"))
+      .variant(role)
+      .flex_shrink(1.0)
+      .shrink_order(0)
       .min_width(Dimension::Px(0.0))
       .nowrap()
       .text_overflow(TextOverflow::Elipsis)
@@ -258,6 +271,7 @@ pub fn second_line(id: String, item: &Item, role: TypographyStyle) -> Option<Ele
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Fine.role())
       .with_children(runs)
+      .with_children(model)
       .with_children(suffix)
       .into(),
   )

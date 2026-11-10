@@ -2,7 +2,7 @@
 //! then its tools, each with what it runs on and, when it is not ready, why in the words readiness uses. The agent the
 //! step has now is always listed, so that nothing stored is hidden: a profile with only a draft, and one that was
 //! archived or removed (the picker names it *no longer available*). A step that overrides the model as it was stored
-//! says so after the profile's line (*· model: <id>*), which is never cut.
+//! says so after the profile's line (*· model: <id>*), which a long line cuts before the CLI and the connection.
 
 use std::sync::Arc;
 
@@ -91,7 +91,8 @@ pub(super) fn choices(ctx: &Ctx, assignables: &Assignables, step: &Step) -> Choi
           mark: Mark::Icon(Icon::Bot),
           name: draft.name.clone(),
           runs_on: draft.model.as_str().into(),
-          suffix: override_words(ctx, model),
+          model: override_words(ctx, model),
+          suffix: None,
           warning: Some(ctx.t("pipeline_hub.agent.unpublished")),
         },
         None => {
@@ -147,6 +148,7 @@ fn gone(ctx: &Ctx, key: String, group: Group, words: &str) -> Item {
     }),
     name: ctx.t(words),
     runs_on: Arc::from(""),
+    model: None,
     suffix: None,
     warning: None,
   }
@@ -189,7 +191,8 @@ fn profile_item(ctx: &Ctx, assignables: &Assignables, profile: &ProfileChoice, o
     mark,
     name: profile.name.clone(),
     runs_on,
-    suffix: override_words(ctx, overridden),
+    model: override_words(ctx, overridden),
+    suffix: None,
     warning,
   }
 }
@@ -213,6 +216,7 @@ fn tool_item(ctx: &Ctx, assignables: &Assignables, tool: &ToolChoice) -> Item {
     mark: Mark::Icon(Icon::Terminal),
     name: tool.name.clone(),
     runs_on,
+    model: None,
     suffix: Some(suffix),
     warning,
   }
@@ -232,8 +236,8 @@ fn standing_words(ctx: &Ctx, kind: ResourceKind, standing: &ReadinessStanding) -
   }
 }
 
-/// *· model: <id>*, what stands after a profile's line when the step overrides the model; it is never cut, so a stored
-/// override is not hidden by a long line before it.
+/// *· model: <id>*, what stands after a profile's line when the step overrides the model; it is cut before that line,
+/// so a long override never hides the CLI and the connection the step runs on.
 fn override_words(ctx: &Ctx, overridden: Option<&str>) -> Option<Arc<str>> {
   overridden.map(|model| ctx.t_args("pipeline_hub.agent.modelOverride", [("model", model)]))
 }
