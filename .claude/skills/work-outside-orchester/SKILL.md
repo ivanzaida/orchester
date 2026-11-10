@@ -319,7 +319,8 @@ with its suites green; your checks after the merge are its gate.
 implementer's report), and: save the Pencil and app screenshots of every compared state as
 `<main checkout>/.tmp/orchestrator/<module>/shots/orc-<n>-<frame id>-{design,app}.png` (an absolute path, not the
 slot's `.tmp`); report every state it could not reach, with
-why; flag UX problems even where the app matches the design.
+why; flag UX problems even where the app matches the design. It hovers and focuses every interactive element it verifies and compares
+the bounds of what is beside it before and after: anything that moves is a major finding, design or not.
 
 ## Small tasks: batches of four
 
@@ -394,7 +395,9 @@ Send work back — or the design to a design agent — when any of these is true
 - jargon, internal ids, raw error codes or developer words in the UI;
 - a dead end (no way forward or back), a silent no-op, a control that looks active and does nothing;
 - a destructive or irreversible action without confirmation or undo; work lost on navigation;
-- layout that jumps or flickers on load, lost focus, a scroll reset, content hidden without a sign;
+- layout that jumps or flickers on load, on hover or on focus — a control that appears on hover takes space reserved
+  for it, it never pushes text aside, even when the design draws the shift; lost focus, a scroll reset, content hidden
+  without a sign;
 - the same thing done differently than elsewhere in the app (tabs, menus, dialogs, chips, empty states);
 - an error with no way out; loading without bones; an empty state that does not explain itself;
 - behaviour that differs from what its label promises.
