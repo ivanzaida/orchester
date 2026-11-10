@@ -20,7 +20,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route},
+  routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
   theme::{IconSize, PipelinesText},
   ui::{
     button::ActionButton,
@@ -44,7 +44,10 @@ pub fn header(
   let back = parts::back_link(
     "pipeline-parent",
     &ctx.t("pipelines.title"),
-    Press::Open(nav.to(Route::Project(editing.views.project(), ProjectPage::Pipelines))),
+    Press::Open(nav.to(Route::Project(
+      editing.views.project(),
+      ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(editing.opened.id))),
+    ))),
   );
   let title = parts::title_row("pipeline-title", &editing.opened.name)
     .child(save_state(ctx, &editing, busy))

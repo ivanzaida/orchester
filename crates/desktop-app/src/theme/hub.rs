@@ -247,10 +247,12 @@ pub enum HubSpacing {
   CompareY,
   /// 12: a row of the comparison from its sides and its cells apart (`Compare · head` `fEqfS` in A19).
   CompareSide,
+  /// 4: the gap over the action of an empty state, on top of the 10 either side of it (`Action gap` `BAEia` in P6).
+  ActionGap,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 25] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -275,6 +277,7 @@ impl HubSpacing {
     Self::CompareResult,
     Self::CompareY,
     Self::CompareSide,
+    Self::ActionGap,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -307,6 +310,7 @@ impl HubSpacing {
       Self::CompareResult => "hub_compare_result",
       Self::CompareY => "hub_compare_y",
       Self::CompareSide => "hub_compare_side",
+      Self::ActionGap => "hub_action_gap",
     }
   }
 
@@ -331,6 +335,7 @@ impl HubSpacing {
       Self::CompareResult => 150.0,
       Self::CompareY => 9.0,
       Self::CompareSide => 12.0,
+      Self::ActionGap => 4.0,
     }
   }
 }

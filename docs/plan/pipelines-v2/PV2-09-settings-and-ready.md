@@ -1,6 +1,6 @@
 # PV2-09 · Pipeline settings, Ready? and Needs you
 
-- **Status:** blocked (PV2-04)
+- **Status:** todo (PV2-04 merged; waits for a slot and its hot files)
 - **Kind:** UI
 - **Depends on:** PV2-04
 - **Branch:** —

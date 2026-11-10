@@ -22,6 +22,7 @@ pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
 mod overview;
+mod pipeline_hub;
 mod pipelines;
 mod placeholder;
 mod project_settings;
@@ -48,7 +49,7 @@ use orchester_core::id::ProjectId;
 
 use crate::{
   project::{ProjectState, Projects, ShownProject, TeamRead},
-  routes::{AgentTab, HubFilter, HubView, NewConnection, ProjectPage, Route},
+  routes::{AgentTab, HubFilter, HubView, NewConnection, PipelinesView, ProjectPage, Route},
 };
 
 /// The screen at the router's path.
@@ -125,7 +126,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::TaskMerge(key, number) => task::merge::attempt::screen(ctx, project, key, *number),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
-    ProjectPage::Pipelines => pipelines::screen(ctx, project),
+    ProjectPage::Pipelines => pipelines_or_hub(ctx, project, PipelinesView::default()),
+    ProjectPage::PipelinesHub(view) => pipelines_or_hub(ctx, project, *view),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_) => {
       pipelines::new_pipeline(ctx, project)
     }
@@ -196,6 +198,18 @@ fn agents_or_hub(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Elemen
       team_hub::screen(ctx, project, team, view)
     }
     TeamRead::Read(None) => local_hub::screen(ctx, project, view),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
+  }
+}
+
+/// The Pipelines page: the hub (`Pipelines · v2`) in a local project ([`pipeline_hub`]), the page it has in a team one.
+/// Whether the project is shared is read with the feed, as for the Agents hub ([`agents_or_hub`]), so the page waits
+/// for that read and says so when it failed.
+fn pipelines_or_hub(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView) -> Element {
+  match project.feed.team.get() {
+    TeamRead::Read(None) => pipeline_hub::screen(ctx, project, view),
+    TeamRead::Read(Some(_)) => pipelines::screen(ctx, project),
     TeamRead::Unread => team_hub::unread::reading(ctx),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }

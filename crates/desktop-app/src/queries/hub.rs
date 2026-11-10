@@ -14,6 +14,7 @@ use orchester_workspace::{
   background,
   instructions::data::ProjectInstructions,
   messages::{self, Message},
+  pipelines::hub::PipelineHub,
   removal,
   skills::editor::EditorData,
 };
@@ -54,6 +55,20 @@ pub async fn local_hub(session: Session, root: PathBuf) -> Result<LocalHub, Mess
     services
       .workspace
       .local_hub(&root, services.vault.get())
+      .map_err(|error| error.message())
+  })
+  .await
+}
+
+/// A local project's Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer. Live,
+/// as [`team_hub`]: what a pipeline runs is ready on this computer or not as the keychain and the disk say.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+pub async fn pipeline_hub(session: Session, root: PathBuf) -> Result<PipelineHub, Message> {
+  tracing::trace!(target: crate::app_log::READ_LOG, read = "pipeline_hub");
+  read(session, move |services| {
+    services
+      .workspace
+      .pipeline_hub(&root, services.vault.get())
       .map_err(|error| error.message())
   })
   .await

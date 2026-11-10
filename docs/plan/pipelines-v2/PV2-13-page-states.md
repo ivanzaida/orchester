@@ -1,9 +1,9 @@
 # PV2-13 · Loading, none yet, empty tabs, read failure
 
-- **Status:** blocked (PV2-04)
+- **Status:** in progress
 - **Kind:** UI
 - **Depends on:** PV2-04
-- **Branch:** —
+- **Branch:** `claude/pv2-13-page-states`
 - **Tokens:** —
 
 ## Design

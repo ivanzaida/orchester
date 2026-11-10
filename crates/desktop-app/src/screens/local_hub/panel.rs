@@ -243,7 +243,7 @@ pub(super) fn readiness(ctx: &Ctx, entry: &Entry) -> Option<Column> {
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(icon(Icon::TriangleAlert, IconSize::Base, PaletteColor::Warning))
       .child(
-        Text::new(&words::missing(ctx, entry, part))
+        Text::new(&words::missing(ctx, entry.kind, part))
           .variant(HubText::Value.role())
           .flex(1.0),
       )

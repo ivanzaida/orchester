@@ -1,6 +1,6 @@
 # PV2-10 · Edit in place: Save makes vN, Cancel puts it back
 
-- **Status:** blocked (PV2-04)
+- **Status:** todo (PV2-04 merged; waits for a slot and its hot files)
 - **Kind:** UI + workspace
 - **Depends on:** PV2-04
 - **Branch:** —

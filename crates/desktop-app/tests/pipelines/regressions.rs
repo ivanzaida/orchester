@@ -130,7 +130,7 @@ fn pipelines_leaving_before_autosave_requires_a_decision_and_keep_preserves_edit
     e.db().draft::<Pipeline>(id).unwrap().unwrap().body().description() == "Pending description"
   });
   editor.click("pipeline-parent");
-  editor.until("library", |e| e.exists(&format!("pipeline-row-{id}")));
+  editor.until("hub", |e| e.exists(&format!("pipeline-hub-row-{id}")));
   editor.open(id);
   assert_eq!(editor.value("pipeline-description"), "Pending description");
 }
@@ -190,7 +190,7 @@ fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
   editor.click("pipeline-step-step");
   assert_eq!(editor.value("step-budget"), "No limit");
   editor.click("pipeline-parent");
-  editor.until("clean departure", |e| e.exists(&format!("pipeline-row-{id}")));
+  editor.until("clean departure", |e| e.exists(&format!("pipeline-hub-row-{id}")));
 }
 
 #[test]

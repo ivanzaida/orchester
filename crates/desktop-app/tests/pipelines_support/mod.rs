@@ -39,6 +39,7 @@ impl Editor {
     self.window.navigation().go(Route::Project(project_id(), page));
     self.window.until("project page", |w| {
       w.tree.get_element_by_id("screen-pipelines").is_some()
+        || w.tree.get_element_by_id("screen-pipeline-hub").is_some()
     });
   }
   pub fn open(&mut self, id: ResourceId) {

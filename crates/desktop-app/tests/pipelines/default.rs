@@ -6,6 +6,7 @@ use orchester_core::{resource::Pipeline, store::ResourceStore};
 use crate::{pipelines_support::Editor, support::project_id};
 
 #[test]
+#[ignore = "the library rows and their … menu belong to the page a local project no longer has (Pipelines v2 PV2-04); the hub's … menu (PV2-12) brings Duplicate back and the person decides where Make default goes"]
 fn pipelines_default_is_made_from_the_row_menu_and_new_task_chooses_it() {
   let mut editor = Editor::new();
   let id = editor.published();
@@ -42,6 +43,7 @@ fn pipelines_default_is_made_from_the_row_menu_and_new_task_chooses_it() {
 }
 
 #[test]
+#[ignore = "the library rows and their … menu belong to the page a local project no longer has (Pipelines v2 PV2-04); the hub's … menu (PV2-12) brings Duplicate back and the person decides where Make default goes"]
 fn pipelines_duplicate_opens_new_pipeline_copying_the_row() {
   let mut editor = Editor::new();
   let id = editor.published();
@@ -75,4 +77,26 @@ fn pipelines_duplicate_opens_new_pipeline_copying_the_row() {
     "Check",
     "draft v1 is the published version's copy"
   );
+}
+
+/// What the project stores as its default is what New task chooses at first, whichever page made it the default.
+#[test]
+fn pipelines_default_stored_with_the_project_is_chosen_first_by_new_task() {
+  let mut editor = Editor::new();
+  let id = editor.published();
+  editor
+    .db()
+    .save_default_pipeline(Some(id))
+    .expect("the setting is stored");
+  editor
+    .window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::NewTask));
+  editor
+    .window
+    .until("New task", |w| w.tree.get_element_by_id("task-form-pipeline").is_some());
+  editor.window.until("the default chosen", |w| {
+    w.texts("task-form-pipeline")
+      .is_some_and(|texts| texts.join(" ").contains("Delivery"))
+  });
 }

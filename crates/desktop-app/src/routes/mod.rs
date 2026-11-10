@@ -60,6 +60,7 @@ mod orchestrator;
 mod overview;
 mod page;
 mod pipeline;
+mod pipelines_hub;
 mod project_settings;
 mod query;
 mod screen;
@@ -95,6 +96,7 @@ pub use self::{
   overview::OverviewTab,
   page::ProjectPage,
   pipeline::{PipelineTab, PipelineView, StepPage},
+  pipelines_hub::{PipelinesFilter, PipelinesView},
   project_settings::ProjectSettingsTab,
   screen::Screen,
   secrets::{SecretsPanel, SecretsView},
