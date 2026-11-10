@@ -1,0 +1,60 @@
+{
+  "pipeline_hub": {
+    "title": "Pipelines",
+    "new": "New pipeline",
+    "reading": "Reading the pipelines…",
+    "loadFailed": "The pipelines of this project couldn't be read",
+    "filter": {
+      "all": "All",
+      "drafts": "Drafts",
+      "archived": "Archived"
+    },
+    "group": {
+      "needs": "Needs you",
+      "ready": "Ready",
+      "archived": "Archived"
+    },
+    "row": {
+      "draft": "draft"
+    },
+    "line": {
+      "notPublished": "Not published yet",
+      "oneStepNoTask": "1 step · not used yet",
+      "oneStepOneTask": "1 step · used by 1 task",
+      "oneStepTasks": "1 step · used by {{tasks}} tasks",
+      "stepsNoTask": "{{steps}} steps · not used yet",
+      "stepsOneTask": "{{steps}} steps · used by 1 task",
+      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks"
+    },
+    "chip": {
+      "ready": "Ready",
+      "draft": "draft",
+      "archived": "Archived"
+    },
+    "panel": {
+      "where": "Pipeline",
+      "published": "{{version}} · published {{date}}",
+      "archivedAt": "{{version}} · archived {{date}}",
+      "draft": "draft · not published yet",
+      "usedNone": "not used yet",
+      "usedOne": "used by 1 task",
+      "used": "used by {{count}} tasks",
+      "steps": "Steps",
+      "openSteps": "Edit steps"
+    },
+    "empty": {
+      "all": {
+        "title": "No pipelines yet",
+        "detail": "A pipeline is the steps a task's run goes through: who plans, who builds, who checks, and how it merges."
+      },
+      "drafts": {
+        "title": "No drafts",
+        "detail": "Every pipeline of this project has a version that tasks can use."
+      },
+      "archived": {
+        "title": "Nothing archived",
+        "detail": "An archived pipeline leaves the lists and New task's picker, and the runs that use it stop."
+      }
+    }
+  }
+}

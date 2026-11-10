@@ -90,7 +90,7 @@ pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: Option<Uns
 }
 
 /// *Archived Nov 6, 14:20*.
-pub(super) fn archived_at(ctx: &Ctx, now: Timestamp, at: Timestamp) -> Arc<str> {
+pub(in crate::screens) fn archived_at(ctx: &Ctx, now: Timestamp, at: Timestamp) -> Arc<str> {
   ctx.t_args(
     "local_hub.line.archived",
     [("date", date(ctx, now, at).to_string()), ("time", display::clock(at))],
@@ -154,7 +154,7 @@ fn profile_line(ctx: &Ctx, entry: &Entry) -> Arc<str> {
 pub(super) fn needs(ctx: &Ctx, entry: &Entry, standing: &ReadinessStanding) -> Arc<str> {
   match standing {
     ReadinessStanding::Missing(readiness) => match readiness.missing() {
-      [only] => missing(ctx, entry, only),
+      [only] => missing(ctx, entry.kind, only),
       many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
     },
     ReadinessStanding::Undecided(Undecided::ConnectionGone(_)) if entry.cli.is_some() => connection_gone(ctx, entry),
@@ -183,7 +183,7 @@ fn connection_gone(ctx: &Ctx, entry: &Entry) -> Arc<str> {
 }
 
 /// Why it cannot be said to be ready: the archived resource it names, else that nobody can tell yet.
-fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
+pub(in crate::screens) fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
   match why {
     Undecided::RunsArchived(_, name) | Undecided::ChoosesArchivedLocalMcpServer(_, name) => {
       ctx.t_args("team_hub.line.namesArchivedLocal", [("name", name.clone())])
@@ -193,8 +193,8 @@ fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
   }
 }
 
-/// One missing part, in the words of the entry that has it.
-pub(super) fn missing(ctx: &Ctx, entry: &Entry, part: &Missing) -> Arc<str> {
+/// One missing part, in the words of an entry of `kind`.
+pub(in crate::screens) fn missing(ctx: &Ctx, kind: ResourceKind, part: &Missing) -> Arc<str> {
   match part {
     Missing::Connection { cli, problem, .. } => {
       let cli = ctx.t(cli_key(*cli));
@@ -206,7 +206,7 @@ pub(super) fn missing(ctx: &Ctx, entry: &Entry, part: &Missing) -> Arc<str> {
     Missing::ConnectionSignIn { cli, .. } => {
       ctx.t_args("local_hub.line.connectionSignIn", [("cli", &*ctx.t(cli_key(*cli)))])
     }
-    Missing::LocalMcpProgram { .. } if entry.kind == ResourceKind::McpServer => ctx.t("local_hub.line.programHere"),
+    Missing::LocalMcpProgram { .. } if kind == ResourceKind::McpServer => ctx.t("local_hub.line.programHere"),
     Missing::LocalMcpProgram { name, .. } => ctx.t_args("local_hub.line.programOf", [("server", name.to_string())]),
     Missing::LocalSecret { name, .. } | Missing::Secret { name } | Missing::SecretUnreadable { name } => {
       ctx.t_args("local_hub.line.secret", [("name", name.to_string())])

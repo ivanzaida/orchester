@@ -18,7 +18,7 @@
 pub(in crate::screens) mod archive;
 mod archived;
 mod editing;
-mod head;
+pub(in crate::screens) mod head;
 mod instruction;
 mod leave;
 mod list;
@@ -29,7 +29,7 @@ pub(in crate::screens) mod profile;
 mod row;
 mod save_bar;
 mod skill;
-mod words;
+pub(in crate::screens) mod words;
 
 use std::sync::Arc;
 
@@ -218,7 +218,8 @@ impl Component for LocalHubScreen {
       ctx,
       agents::Frame {
         prefix: "local-hub",
-        filter: view.filter,
+        title: "hub.title",
+        current: view.filter.name(),
         status,
         new: Some(new),
         tabs,
@@ -244,11 +245,11 @@ fn tabs(
       let item = selected.filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
       let route = Route::Project(project, ProjectPage::hub(view_of(choice, item)));
       let leave = leave.clone();
-      agents::Tab {
-        filter: choice,
-        count: listing.map(|listing| listing.count(choice)),
-        open: Arc::new(move || leave.go(route.clone())),
-      }
+      agents::Tab::of(
+        choice,
+        listing.map(|listing| listing.count(choice)),
+        Arc::new(move || leave.go(route.clone())),
+      )
     })
     .collect()
 }

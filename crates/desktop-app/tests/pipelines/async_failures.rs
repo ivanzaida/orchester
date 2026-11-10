@@ -66,11 +66,11 @@ fn pipelines_rejected_save_after_success_keeps_local_values_and_error() {
 }
 
 #[test]
-fn pipelines_library_refetch_failure_shows_retry_instead_of_old_success() {
+fn pipelines_hub_refetch_failure_shows_retry_instead_of_old_success() {
   let mut editor = Editor::new();
   let id = editor.empty("Refetch");
   editor.go(orchester_app::routes::ProjectPage::Pipelines);
-  editor.until("loaded library", |e| e.exists(&format!("pipeline-row-{id}")));
+  editor.until("loaded hub", |e| e.exists(&format!("pipeline-hub-row-{id}")));
   let path = editor
     .window
     .data
@@ -84,15 +84,14 @@ fn pipelines_library_refetch_failure_shows_retry_instead_of_old_success() {
   connection.pragma_update(None, "user_version", 99999).unwrap();
   let feed = editor.window.projects().feed(crate::support::project_id());
   feed.outside.update(|counts| counts.pipelines += 1);
-  editor.until("failed refetch", |e| e.exists("pipelines-error"));
-  // A row is a keyed component of its own: it unmounts on the pass after the error replaced the list.
+  editor.until("failed refetch", |e| e.exists("pipeline-hub-load-error"));
   editor.arm();
-  assert!(editor.exists("pipelines-error"));
-  assert!(!editor.exists(&format!("pipeline-row-{id}")));
+  assert!(editor.exists("pipeline-hub-load-error"));
+  assert!(!editor.exists(&format!("pipeline-hub-row-{id}")));
   connection.pragma_update(None, "user_version", schema).unwrap();
   feed.outside.update(|counts| counts.pipelines += 1);
-  editor.until("recovered library", |e| e.exists(&format!("pipeline-row-{id}")));
-  assert!(!editor.exists("pipelines-error"));
+  editor.until("recovered hub", |e| e.exists(&format!("pipeline-hub-row-{id}")));
+  assert!(!editor.exists("pipeline-hub-load-error"));
 }
 
 #[test]

@@ -15,8 +15,8 @@ use orchester_workspace::{
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, InstructionsView, JoinTarget, MERGE, MERGE_QUEUE,
   MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat,
-  OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen, SecretsView,
-  SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  OverviewTab, PULL_REQUESTS, PipelineView, PipelinesView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
+  SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
   query::{Params, with_query},
@@ -63,7 +63,10 @@ pub enum ProjectPage {
   Usage(Box<UsageQuery>),
   /// The Delivery view beside Usage, over its period.
   Delivery(DeliveryPeriod),
+  /// The Pipelines page on its first tab, with its first pipeline open.
   Pipelines,
+  /// The Pipelines hub of a local project on a tab or with a pipeline open, never the one [`Self::Pipelines`] is.
+  PipelinesHub(PipelinesView),
   /// New pipeline, starting from the starter.
   NewPipeline,
   NewEmptyPipeline,
@@ -165,6 +168,15 @@ impl ProjectPage {
     })
   }
 
+  /// The Pipelines hub on `view`: [`Self::Pipelines`] for the view it opens on.
+  pub fn pipelines(view: PipelinesView) -> Self {
+    if view == PipelinesView::default() {
+      Self::Pipelines
+    } else {
+      Self::PipelinesHub(view)
+    }
+  }
+
   /// The Agents hub on `view`: [`Self::Agents`] for the view it opens on.
   pub fn hub(view: HubView) -> Self {
     if view == HubView::default() {
@@ -187,6 +199,7 @@ impl ProjectPage {
       Self::Review | Self::TaskReview(_) => Screen::Review,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines
+      | Self::PipelinesHub(_)
       | Self::NewPipeline
       | Self::NewEmptyPipeline
       | Self::CopyPipeline(_)
@@ -243,6 +256,7 @@ impl ProjectPage {
       ),
       Self::Pipeline(id, view) => view.path(format!("{project_root}/pipelines/{id}"), None),
       Self::PipelineVersion(id, version, view) => view.path(format!("{project_root}/pipelines/{id}"), Some(*version)),
+      Self::PipelinesHub(view) => view.path(segment(Screen::Pipelines)),
       Self::AgentsHub(view) => view.path(segment(Screen::Agents)),
       Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
@@ -307,6 +321,7 @@ impl ProjectPage {
         Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
       },
       ["tools"] => tools(params),
+      ["pipelines"] => PipelinesView::take(params).map(Self::pipelines),
       ["pipelines", NEW] => new_pipeline(params),
       ["pipelines", id] => {
         let id = id.parse().map_err(|_| RouteError::NoScreen)?;

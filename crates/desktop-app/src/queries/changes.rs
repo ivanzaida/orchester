@@ -34,6 +34,8 @@ pub enum ProjectRead {
   TeamHub,
   /// A local project's Agents hub: its resources, what uses them and how they stand.
   LocalHub,
+  /// A local project's Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer.
+  PipelineHub,
   /// What a local instruction's panel edits over: the instructions, the profiles and pipelines they name.
   HubInstructions,
   /// What a local skill's panel edits over: the skills, the profiles and pipelines their scopes name.
@@ -60,7 +62,12 @@ pub enum AppRead {
 /// every run* adds as a run's request is answered, and the code index's builds, which the runner makes as a run starts.
 /// The project's loader follows the runs' state as it is published, so a move no tab rendered still reads them again.
 /// A local project's hub shows what the runs decide too: which profiles and servers they use, and so readiness.
-pub const RUNS: &[ProjectRead] = &[ProjectRead::Settings, ProjectRead::IndexBuilds, ProjectRead::LocalHub];
+pub const RUNS: &[ProjectRead] = &[
+  ProjectRead::Settings,
+  ProjectRead::IndexBuilds,
+  ProjectRead::LocalHub,
+  ProjectRead::PipelineHub,
+];
 /// What a change of a team project's configuration touches: its hub. The configuration is read again whenever the
 /// project's cache took one of the team server's events, so this is how a resource published, archived or restored on
 /// the server, a member's role and the standings of what was sent from here reach the hub.
@@ -81,6 +88,7 @@ pub const fn touched(kind: Outside) -> &'static [ProjectRead] {
       ProjectRead::Settings,
       ProjectRead::TeamHub,
       ProjectRead::LocalHub,
+      ProjectRead::PipelineHub,
       ProjectRead::HubInstructions,
       ProjectRead::HubSkills,
       ProjectRead::ProfileForm,
@@ -102,6 +110,7 @@ pub const fn touched(kind: Outside) -> &'static [ProjectRead] {
       ProjectRead::Secrets,
       ProjectRead::TeamHub,
       ProjectRead::LocalHub,
+      ProjectRead::PipelineHub,
       ProjectRead::ProfileForm,
     ],
     Outside::Orchestrator => &[ProjectRead::Orchestrator],
@@ -109,11 +118,12 @@ pub const fn touched(kind: Outside) -> &'static [ProjectRead] {
     // A pipeline's steps use profiles and name an instruction's and a skill's scope.
     Outside::Pipelines => &[
       ProjectRead::LocalHub,
+      ProjectRead::PipelineHub,
       ProjectRead::HubInstructions,
       ProjectRead::HubSkills,
       ProjectRead::ProfileForm,
     ],
-    Outside::Tools => &[ProjectRead::TeamHub, ProjectRead::LocalHub],
+    Outside::Tools => &[ProjectRead::TeamHub, ProjectRead::LocalHub, ProjectRead::PipelineHub],
     Outside::Instructions => &[
       ProjectRead::TeamHub,
       ProjectRead::LocalHub,
@@ -183,6 +193,7 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::IndexBuilds => client.invalidate(project::index_builds(session, root)),
     ProjectRead::TeamHub => client.invalidate(hub::team_hub(session, root)),
     ProjectRead::LocalHub => client.invalidate(hub::local_hub(session, root)),
+    ProjectRead::PipelineHub => client.invalidate(hub::pipeline_hub(session, root)),
     ProjectRead::HubInstructions => client.invalidate(hub::instructions(session, root)),
     ProjectRead::HubSkills => client.invalidate(hub::skills(session, root)),
     ProjectRead::ProfileForm => client.invalidate(hub::profile_form(session, root)),

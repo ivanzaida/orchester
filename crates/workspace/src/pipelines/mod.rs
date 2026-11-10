@@ -9,6 +9,7 @@ pub mod deliver;
 pub mod describe;
 pub mod fields;
 pub mod history;
+pub mod hub;
 pub mod levels;
 pub mod library;
 pub mod narrowing;
