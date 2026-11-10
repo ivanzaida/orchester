@@ -176,6 +176,8 @@ pub(super) struct Followed {
   pub notes: Notes,
   /// The pipeline as stored now, which the panel keeps current.
   pub stored: Ref<Option<Arc<Pipeline>>>,
+  /// Where the screen hears that the pipeline was published, and which pipeline it is.
+  pub published: (Signal<Option<ResourceId>>, ResourceId),
 }
 
 /// What follows a save that ended. One that stored the edit leaves the panel showing it as nothing changed, until the
@@ -188,8 +190,10 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
     holding,
     notes,
     stored,
+    published,
   } = followed;
   let (pending, holding, notes, stored) = (pending.clone(), holding.clone(), notes.clone(), stored.clone());
+  let published = published.clone();
   ctx.watch(&save.state(), move |state| {
     if state.is_pending() {
       return;
@@ -234,6 +238,7 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
         changes.record(project, Outside::Pipelines);
         if matches!(saved, Saved::Published(_)) {
           changes.record(project, Outside::Tasks);
+          published.0.set(Some(published.1));
         }
       }
     }

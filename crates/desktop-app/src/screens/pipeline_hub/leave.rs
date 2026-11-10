@@ -43,6 +43,8 @@ pub(super) struct Hosted {
   pub archive_waits: Signal<Option<Target>>,
   /// Whether the panel's save is under way: its changes are being stored, so they cannot be discarded.
   pub saving: Signal<bool>,
+  /// The pipeline a save in the panel just published, which the page follows out of the *Drafts* tab.
+  pub published: Signal<Option<ResourceId>>,
 }
 
 impl PartialEq for Hosted {

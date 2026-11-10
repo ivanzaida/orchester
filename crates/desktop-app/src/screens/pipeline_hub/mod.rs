@@ -131,6 +131,8 @@ struct PipelineHubScreen {
   archive_waits: Signal<Option<Target>>,
   /// Whether the open panel's save is under way.
   saving: Signal<bool>,
+  /// The pipeline a save in its panel just published, which the page follows out of *Drafts*.
+  published: Signal<Option<ResourceId>>,
 }
 
 impl Component for PipelineHubScreen {
@@ -157,6 +159,7 @@ impl Component for PipelineHubScreen {
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
+      published: ctx.signal(None),
     };
     this.follow_question(ctx);
     this
@@ -174,7 +177,7 @@ impl Component for PipelineHubScreen {
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
     let view = listing.as_ref().map_or(view, |listing| {
-      follow_published(listing, view, (project.open.project.id(), &navigation))
+      follow_published(listing, view, &self.published, (project.open.project.id(), &navigation))
     });
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
@@ -279,6 +282,7 @@ impl PipelineHubScreen {
       archiving: self.archiving.clone(),
       archive_waits: self.archive_waits.clone(),
       saving: self.saving.clone(),
+      published: self.published.clone(),
     }
   }
 
@@ -465,20 +469,23 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
   }
 }
 
-/// The pipeline the *Drafts* tab shows was published (a save in its panel publishes it): the page follows it to *All*,
-/// so its panel, with what the save said, stays; the route is corrected to say so.
+/// A save in the panel of the pipeline the *Drafts* tab shows published it (`published`): the page follows it to
+/// *All*, so its panel, with what the save said, stays; the route is corrected to say so. A route that names a pipeline
+/// published elsewhere is left to [`keep_route_on_shown`].
 fn follow_published(
   listing: &Listing,
   view: PipelinesView,
+  published: &Signal<Option<ResourceId>>,
   (project, navigation): (ProjectId, &Navigation),
 ) -> PipelinesView {
-  let Some(item) = view.item else {
+  let Some(item) = view.item.filter(|item| published.get_untracked() == Some(*item)) else {
     return view;
   };
-  if view.filter != PipelinesFilter::Drafts
-    || listing.holds(PipelinesFilter::Drafts, item)
-    || !listing.holds(PipelinesFilter::All, item)
-  {
+  if view.filter != PipelinesFilter::Drafts || listing.holds(PipelinesFilter::Drafts, item) {
+    return view;
+  }
+  published.set(None);
+  if !listing.holds(PipelinesFilter::All, item) {
     return view;
   }
   let followed = PipelinesView::new(PipelinesFilter::All, Some(item));

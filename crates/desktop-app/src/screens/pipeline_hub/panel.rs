@@ -176,6 +176,7 @@ impl Component for PipelinePanel {
         holding: this.holding.clone(),
         notes: this.notes.clone(),
         stored: this.stored.clone(),
+        published: (props.hosted.published, id),
       },
       project,
     );
