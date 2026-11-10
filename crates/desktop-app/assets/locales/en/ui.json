@@ -3,6 +3,16 @@
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "tabCount": "{{label}} {{count}}",
+    "agentPicker": {
+      "search": "Search agents and tools…",
+      "clear": "Clear search",
+      "profiles": "Agent profiles",
+      "tools": "Tools",
+      "noMatch": "No agent or tool matches",
+      "noAgents": "This project has no agent profiles or tools yet",
+      "newProfile": "New agent profile",
+      "agents": "Agents ↗"
+    },
     "runsOnPicker": {
       "search": "Search models…",
       "clear": "Clear search",

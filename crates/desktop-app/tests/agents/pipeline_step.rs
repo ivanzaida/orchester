@@ -177,7 +177,7 @@ fn a_step_opens_in_the_panel_with_its_head_strip_and_groups() {
   ] {
     assert_eq!(agents.text(id), words, "{id}");
   }
-  assert_eq!(agents.text("pipeline-hub-step-agent-label"), "Builder");
+  assert_eq!(agents.text("pipeline-hub-step-agent-name"), "Builder");
   assert!(
     agents.exists(SAVE),
     "Save and Cancel stand under the step as under the pipeline"

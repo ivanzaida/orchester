@@ -75,3 +75,20 @@ Make the chip, the list line, *Ready?* and the step cards agree, and give every 
 22. The read-only view says *Viewing v2* twice (head and notice): the notice keeps only *read-only*.
 23. Tests: read-only cards are not Tab stops; the held *Versions* button's fill and border; the list reads again
     after a save or rename (if PV2-11's merge round did not add it).
+
+## Added from PV2-08's review (2026-11-11)
+
+24. **A stale model override**: a step that overrides the model and switches to a profile on another CLI keeps the
+    override, and the panel no longer has a field to clear it (`workspace/src/pipelines/fields.rs` `Executor::apply`
+    keeps it). Offer a way to drop it (e.g. on the picker's chosen row) or drop it when the CLI changes, and say which.
+25. *Move up* / *Move down* on a step in a parallel group takes it out of the group: the menu's words say so (e.g.
+    *Move up, out of the group*) or the move keeps the group, as decided.
+
+## Added from PV2-08's check (2026-11-11)
+
+26. A gone profile or tool: the field and the flow card say it the same way (today *This profile is no longer
+    available* vs *Profile not published*), and the field says what to do (choose another, with the picker open).
+27. A long model override cuts what the profile runs on (`Claude Code · Wo…`): keep the CLI and the connection whole,
+    shorten the override, or show the override on a line of its own.
+28. The step strip: pressing a chip that is partly hidden only scrolls it into view, so it takes two presses to open
+    it. One press opens it (and scrolls it into view).

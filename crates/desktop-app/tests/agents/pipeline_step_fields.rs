@@ -21,7 +21,7 @@ use super::{
 };
 
 #[test]
-fn the_agent_menu_says_when_no_profile_is_chosen_and_choosing_one_changes_the_step() {
+fn the_agent_field_says_when_no_profile_is_chosen_and_choosing_one_changes_the_step() {
   // *Dependency update* is a draft whose steps run no profile yet.
   let (mut agents, [_, draft, _]) = setup();
   let plan = keys_of_draft(&agents, draft)[0].clone();
@@ -31,18 +31,21 @@ fn the_agent_menu_says_when_no_profile_is_chosen_and_choosing_one_changes_the_st
   ));
   agents.window.navigation().go(step_route(draft, &plan));
   agents.until("the step", |s| s.exists("pipeline-hub-step-head"));
-  assert_eq!(agents.text("pipeline-hub-step-agent-label"), "Choose a profile");
   assert_eq!(
-    agents.text("pipeline-hub-step-agent-row-sub"),
-    "No agent profile chosen yet"
+    agents.text("pipeline-hub-step-agent-name"),
+    "Choose an agent profile or tool"
+  );
+  assert!(
+    !agents.exists("pipeline-hub-step-agent-row-sub"),
+    "the empty field says it itself, so choosing moves no row under it"
   );
 
   agents.click("pipeline-hub-step-agent");
-  agents.until("the menu", |s| s.exists("pipeline-hub-step-agent-option-1"));
-  assert_eq!(agents.text("pipeline-hub-step-agent-option-1-label"), "Builder");
-  agents.click("pipeline-hub-step-agent-option-1");
+  agents.until("the picker", |s| s.exists("pipeline-hub-step-agent-picker-item-0"));
+  assert_eq!(agents.text("pipeline-hub-step-agent-picker-item-0-name"), "Builder");
+  agents.click("pipeline-hub-step-agent-picker-item-0");
   agents.until("the profile is chosen", |s| {
-    s.text("pipeline-hub-step-agent-label") == "Builder" && !s.exists("pipeline-hub-step-agent-row-sub")
+    s.text("pipeline-hub-step-agent-name") == "Builder" && !s.exists("pipeline-hub-step-agent-row-sub")
   });
   agents.until("the edit holds it", |s| s.exists(CANCEL));
 }

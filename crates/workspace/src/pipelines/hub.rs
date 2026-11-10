@@ -146,7 +146,12 @@ impl Workspace {
   pub fn pipeline_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<PipelineHub, HubError> {
     let db = ProjectDb::open(repo_root)?;
     let readiness = self.readiness_in(&db, repo_root, vault)?;
-    let assignables = Assignables::load(&db)?;
+    let mut assignables = Assignables::load(&db)?;
+    assignables.standings = readiness
+      .resources()
+      .iter()
+      .map(|found| (found.resource(), found.standing().clone()))
+      .collect();
     let mut pipelines = Vec::new();
     for entry in library(&db)? {
       let standing = readiness.pipeline(entry.id).map(|found| found.standing().clone());

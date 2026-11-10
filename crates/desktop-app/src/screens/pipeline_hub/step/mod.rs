@@ -9,6 +9,7 @@
 //! anew when another step opens and after each save or *Cancel*, so a box never keeps what the edit no longer has.
 
 mod agent;
+mod choices;
 mod groups;
 mod head;
 mod pieces;

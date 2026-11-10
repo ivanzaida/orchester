@@ -16,7 +16,10 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::import::imported::{Imported, imported};
+use crate::{
+  import::imported::{Imported, imported},
+  readiness::ReadinessStanding,
+};
 
 /// A published agent profile a step can run.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +70,9 @@ pub struct Assignables {
   pub tools: Vec<ToolChoice>,
   /// The project's MCP servers, which say what the profiles' servers run without asking.
   pub mcp_servers: Vec<McpServer>,
+  /// How each published profile and tool stands on this computer, when the caller read the project's readiness
+  /// ([`crate::pipelines::hub`]); empty otherwise.
+  pub standings: Vec<(ResourceId, ReadinessStanding)>,
 }
 
 impl Assignables {
@@ -124,6 +130,7 @@ impl Assignables {
       draft_profiles,
       tools,
       mcp_servers: store.mcp_servers()?,
+      standings: Vec::new(),
     })
   }
 
@@ -135,6 +142,15 @@ impl Assignables {
       .into_iter()
       .map(|(server, tools)| (server.as_str().into(), tools.len()))
       .collect()
+  }
+
+  /// How the profile or tool `id` stands on this computer; `None` when the readiness was not read, or it is unknown.
+  pub fn standing(&self, id: ResourceId) -> Option<&ReadinessStanding> {
+    self
+      .standings
+      .iter()
+      .find(|(known, _)| *known == id)
+      .map(|(_, standing)| standing)
   }
 
   pub fn profile(&self, id: ResourceId) -> Option<&ProfileChoice> {

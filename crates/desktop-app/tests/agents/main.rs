@@ -36,6 +36,7 @@ mod pipeline_reorder_words;
 mod pipeline_save;
 mod pipeline_save_notes;
 mod pipeline_step;
+mod pipeline_step_agent;
 mod pipeline_step_fields;
 mod pipeline_step_leaving;
 mod pipeline_step_scroll;
