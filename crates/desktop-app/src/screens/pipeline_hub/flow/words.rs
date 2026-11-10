@@ -56,8 +56,8 @@ pub(super) fn failure(ctx: &Ctx, step: &StepCard, route: &ReturnsTo) -> Arc<str>
   )
 }
 
-/// What a gate waits for: *you approve Plan before 03 starts*, or *before Deliver starts* when the Deliver step, numbered
-/// `deliver`, is what runs next: it has no node number, so it is named by word.
+/// What a gate waits for: *you approve Plan before 03 starts*, or *before Deliver starts* when the Deliver step,
+/// numbered `deliver`, is what runs next: it has no node number, so it is named by word.
 pub(super) fn gate(ctx: &Ctx, gate: &Gate, deliver: Option<usize>) -> Arc<str> {
   match gate.before {
     Some(next) if deliver == Some(next) => {

@@ -509,7 +509,12 @@ fn pipeline_flow_a_gate_names_deliver_by_word_and_a_step_by_its_number() {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let plan = add(&mut edit, "Plan", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
   edit.update(&plan, |step| step.approval_gate = true);
-  let build = add(&mut edit, "Build", &[&plan], agent(Some(builder), RepositoryAccess::Write));
+  let build = add(
+    &mut edit,
+    "Build",
+    &[&plan],
+    agent(Some(builder), RepositoryAccess::Write),
+  );
   edit.update(&build, |step| step.approval_gate = true);
   let body = edit.validate().expect("a pipeline").with_deliver(Some(DeliverStep::new(
     DeliverMode::AutoMerge,

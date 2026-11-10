@@ -90,7 +90,6 @@ fn readiness_pipeline_ready_a_draft_names_each_step_that_has_nothing_to_run() {
   );
 }
 
-
 fn lost_profile(fixture: &Fixture, slug: &str) -> ResourceId {
   fixture.own(slug, &profile_on(ConnectionId::generate(), &[]))
 }
@@ -124,7 +123,10 @@ fn readiness_pipeline_ready_every_profile_that_lost_its_connection_is_named_not_
   let fixture = Fixture::local();
   let first = lost_profile(&fixture, "explorer");
   let second = lost_profile(&fixture, "builder");
-  let id = fixture.own("stuck", &pipeline(&[Some(first), Some(second), Some(first)], Some(second)));
+  let id = fixture.own(
+    "stuck",
+    &pipeline(&[Some(first), Some(second), Some(first)], Some(second)),
+  );
 
   let read = listed(&fixture, id);
   let members: Vec<_> = found(&read)
