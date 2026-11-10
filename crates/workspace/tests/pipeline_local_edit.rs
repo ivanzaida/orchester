@@ -369,3 +369,50 @@ fn restoring_the_current_version_is_no_change_and_save_writes_nothing() {
   assert_eq!(saved, Saved::Unchanged);
   assert_eq!(pipeline.versions().len(), 2);
 }
+
+#[test]
+fn save_that_cannot_publish_names_every_step_not_ready() {
+  let pipeline = fixture();
+  pipeline.save(|_| {}, &[first_version()]).unwrap();
+
+  let saved = pipeline
+    .save(
+      |edit| {
+        edit.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
+        edit.add_step(Name::new("Merge").unwrap(), Some(&pipeline.step));
+      },
+      &[],
+    )
+    .unwrap();
+  let Saved::Drafted(why) = saved else {
+    panic!("expected a draft kept, got {saved:?}");
+  };
+  // In the order of the flow: each step added after Check comes right after it.
+  assert_eq!(why.key, "pipelines.problems.stepsNotReady");
+  assert_eq!(
+    why.args,
+    [("count", "2".to_owned()), ("steps", "Merge, Review".to_owned())]
+  );
+}
+
+#[test]
+fn unpublishable_says_what_keeps_an_edit_from_being_published() {
+  use orchester_workspace::pipelines::{
+    flow::FlowRead,
+    local_edit::{Unpublishable, unpublishable},
+  };
+
+  let pipeline = fixture();
+  let opened = pipeline.opened();
+  let of = |edit: &PipelineEdit| unpublishable(edit, &FlowRead::of_edit(edit, &opened.assignables));
+  let ready = PipelineEdit::new(opened.body.clone());
+  assert_eq!(of(&ready), None, "its one step runs a published tool");
+
+  let mut missing = ready.clone();
+  missing.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
+  assert_eq!(of(&missing), Some(Unpublishable::Steps(1)));
+
+  let mut empty = ready;
+  empty.remove_step(&pipeline.step);
+  assert_eq!(of(&empty), Some(Unpublishable::NoSteps));
+}

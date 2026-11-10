@@ -1357,7 +1357,8 @@
       "noDraft": "There is no saved draft to publish.",
       "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
       "unknownVariable": "{{name}} is not a variable in the catalog.",
-      "invalidRetries": "Enter a whole number of retries, at least 1."
+      "invalidRetries": "Enter a whole number of retries, at least 1.",
+      "stepsNotReady": "{{count}} steps aren't ready: {{steps}}"
     },
     "step": {
       "noProfile": "No agent profile",

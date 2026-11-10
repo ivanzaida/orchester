@@ -30,10 +30,10 @@ use lurq::{
 };
 use orchester_core::{
   id::ResourceId,
-  resource::{Pipeline, PipelineEdit, StepKey},
+  resource::{Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
-use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
+use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead, local_edit::unpublishable};
 
 use super::{
   archived, bar, chips,
@@ -130,6 +130,8 @@ struct PipelinePanel {
   faulty: step::Faulty,
   /// How many times the edit was put back, after which the open step's fields are mounted anew.
   reset: Signal<u64>,
+  /// The version *Restore* put in the edit, until it is saved or dropped.
+  restored: Signal<Option<VersionNumber>>,
   /// The Deliver chip of an open step asked for the *A run delivers* row to be shown once the pipeline's body is.
   reveal_delivers: Signal<bool>,
   /// That row.
@@ -161,6 +163,7 @@ impl Component for PipelinePanel {
       restoring: ctx.signal(false),
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
+      restored: ctx.signal(None),
       reveal_delivers: ctx.signal(false),
       delivers: ctx.element_ref(),
       id,
@@ -204,7 +207,8 @@ impl Component for PipelinePanel {
     let current = edit.current();
     step::forget_gone(&self.faulty, &current);
     let changed = edit.is_changed();
-    self.follow_edit(&current, changed);
+    let unsaved = changed || step::holds_invalid(&self.faulty, &current);
+    self.follow_edit(&current, (changed, unsaved));
     let read = if edit.holds() {
       Arc::new(FlowRead::of_edit(&current, &assignables))
     } else {
@@ -214,7 +218,15 @@ impl Component for PipelinePanel {
     let saving = self.save.state().get().is_pending();
     mark_saving(&hosted.saving, saving);
     let locked = saving || asked.is_some();
-    let save = self.save_now(&edit, (changed, entry.unpublished), locked);
+    let line = bar::Line {
+      entry: &entry,
+      unsaved,
+      fix: step::fix_words(ctx, &self.faulty, &current),
+      unpublishable: unpublishable(&current, &read),
+      restored: self.restored.get(),
+    };
+    let off = line.fix.clone().or_else(|| bar::publish_blocked(ctx, &line));
+    let save = self.save_now(&edit, (changed, entry.unpublished), (locked, off));
     let press = match &save {
       SaveState::Ready(press) => Some(press.clone()),
       _ => None,
@@ -232,17 +244,19 @@ impl Component for PipelinePanel {
       save: press.as_ref(),
     };
     let (body, viewed) = self.views(ctx, &shown, hosted, step);
-    let mut pinned = self.pinned(ctx, &entry, asked.as_ref());
+    let refused = self.notes.told().refused.is_some();
+    let mut pinned = self.pinned(ctx, &entry, asked.as_ref(), ready::can_run(&entry, &read));
     let bar = match &viewed {
       // A version is read, not edited: the bar belongs to the edit, which waits behind it.
       Some(viewed) => {
         pinned.extend(self.replace_question(ctx, &edit, viewed));
         None
       }
+      // Cancel drops unsaved changes, and a refusal of a save that changed nothing, which stays until then.
       None => Some(bar::bar(
         ctx,
-        (save, (changed && !saving).then(|| self.cancel_now(&edit))),
-        (&entry, changed, step::fix_words(ctx, &self.faulty, &current)),
+        (save, ((unsaved || refused) && !saving).then(|| self.cancel_now(&edit))),
+        &line,
       )),
     };
     frame(&entry, body, pinned, bar)

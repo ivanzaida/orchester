@@ -143,6 +143,20 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
   Some(section(ctx, (&title, &parts), found.len(), (&press, busy)).into())
 }
 
+/// Whether the pipeline as the panel draws it can run once saved: nothing is missing but, for a pipeline never
+/// published, that it is not published yet, which a save does.
+pub(super) fn can_run(entry: &Entry, read: &FlowRead) -> bool {
+  problems(Basis {
+    flow: read,
+    standing: entry.standing.as_ref(),
+    undecided: &entry.undecided,
+    published: entry.number.is_some(),
+    runs: None,
+  })
+  .iter()
+  .all(|problem| *problem == Problem::Draft(Draft::NotPublished))
+}
+
 /// The published version a draft the panel draws stands over, whose readiness the rows read; `None` when the panel
 /// draws the version itself or the pipeline was never published.
 fn over_version(entry: &Entry, read: &FlowRead) -> Option<VersionNumber> {

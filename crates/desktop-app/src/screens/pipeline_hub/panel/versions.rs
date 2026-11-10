@@ -78,12 +78,13 @@ impl PipelinePanel {
   }
 
   /// Puts `viewed` into the edit and shows the edit: the description's box follows it, as every change to the edit
-  /// does.
+  /// does, and the bar says which version it is until it is saved or dropped.
   fn put_in(&self, edit: &Edit, viewed: &Viewed) -> Arc<dyn Fn() + Send + Sync> {
     let (edit, viewed, description) = (edit.clone(), viewed.clone(), self.description.clone());
-    let (viewing, restoring) = (self.viewing.clone(), self.restoring.clone());
+    let (viewing, restoring, restored) = (self.viewing.clone(), self.restoring.clone(), self.restored.clone());
     Arc::new(move || {
       edit.restore(&viewed.body);
+      restored.set(Some(viewed.number));
       description.set(viewed.body.description().to_owned());
       restoring.set(false);
       viewing.set(None);

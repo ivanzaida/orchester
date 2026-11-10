@@ -17,7 +17,6 @@ use crate::{
       leave::{Unsaved, mark_unsaved},
       model::Entry,
       save::{self, Ask, Asked},
-      step,
     },
   },
   ui::pressable::Press,
@@ -35,12 +34,17 @@ impl PipelinePanel {
   }
 
   /// What the panel tells the list and the bar of the edit it shows: whether it has changes, which a save's note and
-  /// the description's box then follow. The question before *Restore* goes with the version it was asked about.
-  pub(super) fn follow_edit(&self, current: &PipelineEdit, changed: bool) {
+  /// the description's box then follow. Text the check refuses is unsaved too (`unsaved`), though the edit does not
+  /// hold it: leaving would drop it. The question before *Restore* goes with the version it was asked about, and what
+  /// *Restore* put in is forgotten once the edit holds no change.
+  pub(super) fn follow_edit(&self, current: &PipelineEdit, (changed, unsaved): (bool, bool)) {
     if self.restoring.get_untracked() && self.viewing.get_untracked().is_none() {
       self.restoring.set(false);
     }
-    mark_unsaved(&self.unsaved, self.id, changed);
+    if !changed && self.restored.get_untracked().is_some() {
+      self.restored.set(None);
+    }
+    mark_unsaved(&self.unsaved, self.id, unsaved);
     if changed {
       self.notes.forget_stale(current);
     } else if self.description.get_untracked() != current.description() {
@@ -48,33 +52,44 @@ impl PipelinePanel {
     }
   }
 
-  /// What is pinned over the bar: the question a save asks, and what the last save said.
-  pub(super) fn pinned(&self, ctx: &mut Ctx, entry: &Entry, asked: Option<&Asked>) -> Vec<Element> {
+  /// What is pinned over the bar: the question a save asks, and what the last save said. `runs`: what was saved can
+  /// run, which the saved version's notice says.
+  pub(super) fn pinned(&self, ctx: &mut Ctx, entry: &Entry, asked: Option<&Asked>, runs: bool) -> Vec<Element> {
     let mut pinned: Vec<Element> = Vec::new();
     if let Some(asked) = asked {
-      pinned.push(save::question(ctx, asked, (&self.save, &self.pending)));
+      let restored = self.restored.get_untracked();
+      pinned.push(save::question(ctx, asked, (&self.save, &self.pending), restored));
     }
     let told = self.notes.told();
     match (told.refused, told.kept, told.made) {
       (Some((reason, _)), ..) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
       (None, Some(why), _) => pinned.push(bar::notice(ctx, entry, &Said::Kept(&why))),
-      (None, None, Some(version)) => pinned.push(bar::notice(ctx, entry, &Said::Made(version))),
+      (None, None, Some(version)) => pinned.push(bar::notice(ctx, entry, &Said::Made(version, runs))),
       (None, None, None) => {}
     }
     pinned
   }
 
-  /// What *Save* does now: nothing while nothing differs and no draft waits to be published, else it stores and
-  /// publishes what the panel holds.
-  pub(super) fn save_now(&self, edit: &Edit, (changed, unpublished): (bool, bool), waiting: bool) -> SaveState {
+  /// What *Save* does now: nothing while a save waits, off with `off`'s reason (text the check refuses, which the edit
+  /// does not hold, so saving would store what the box no longer says; or a draft publishing would only keep again),
+  /// nothing while nothing differs and no draft waits to be published, else it stores and publishes what the panel
+  /// holds.
+  pub(super) fn save_now(
+    &self,
+    edit: &Edit,
+    (changed, unpublished): (bool, bool),
+    (waiting, off): (bool, Option<String>),
+  ) -> SaveState {
     if self.save.state().get().is_pending() {
       return SaveState::Saving;
     }
-    if !changed && !unpublished {
+    if waiting {
       return SaveState::Unchanged;
     }
-    // Text that is not valid is not in the edit, so saving now would store what the box no longer says.
-    if waiting || step::holds_invalid(&self.faulty, &edit.current()) {
+    if let Some(why) = off {
+      return SaveState::Waits(why.into());
+    }
+    if !changed && !unpublished {
       return SaveState::Unchanged;
     }
     let (edit, save, notes) = (edit.clone(), self.save.clone(), self.notes.clone());
@@ -97,14 +112,15 @@ impl PipelinePanel {
     })
   }
 
-  /// What dropping the edit puts back besides the edit: the description's box, and what the last save said.
+  /// What dropping the edit puts back besides the edit: the description's box, what the last save said, text the
+  /// check refused and what *Restore* put in.
   fn put_back(&self) -> impl Fn() + Send + Sync + use<> {
-    let (description, stored, pending, notes, (reset, faulty)) = (
+    let (description, stored, pending, notes, (reset, faulty, restored)) = (
       self.description.clone(),
       self.stored.clone(),
       self.pending.clone(),
       self.notes.clone(),
-      (self.reset.clone(), self.faulty.clone()),
+      (self.reset.clone(), self.faulty.clone(), self.restored.clone()),
     );
     move || {
       if let Some(stored) = stored.get() {
@@ -114,6 +130,7 @@ impl PipelinePanel {
       notes.forget();
       reset.update(|resets| *resets += 1);
       faulty.set(Vec::new());
+      restored.set(None);
     }
   }
 
@@ -132,12 +149,13 @@ impl PipelinePanel {
     });
   }
 
-  /// The hub's question was answered *Discard changes*: the edit goes with them, whether the panel stays (another tab
-  /// that holds this pipeline) or goes.
+  /// The hub's question was answered *Discard changes*: the edit goes with them, and text the check refused, whether
+  /// the panel stays (another tab that holds this pipeline) or goes.
   pub(super) fn follow_discard(&self, ctx: &mut Ctx) {
-    let (holding, put_back, id) = (self.holding.clone(), self.put_back(), self.id);
+    let (holding, faulty, put_back, id) = (self.holding.clone(), self.faulty.clone(), self.put_back(), self.id);
     ctx.watch(&self.unsaved, move |unsaved: &Unsaved| {
-      let holds = holding.get_untracked().held.is_some_and(|held| held.is_changed());
+      let holds =
+        holding.get_untracked().held.is_some_and(|held| held.is_changed()) || !faulty.get_untracked().is_empty();
       if unsaved.0 != Some(id) && holds {
         holding.set(Holding::default());
         put_back();

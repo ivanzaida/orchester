@@ -168,7 +168,8 @@ fn pipeline_save_a_pipeline_never_published_says_its_first_version_and_asks_a_pe
   agents.until("the panel", |s| s.exists(SAVE));
   assert_eq!(
     agents.text(HINT),
-    "Save makes v1 · New task offers it once every step is ready"
+    "Save publishes it as v1",
+    "every step is ready, so Save publishes"
   );
 
   // A stored draft nobody changed is where the edit starts, and Save publishes it, once a person allows its first
@@ -193,15 +194,26 @@ fn pipeline_save_keeps_the_draft_and_says_why_when_a_step_has_no_profile() {
   let (mut agents, [_, draft, _]) = project();
   open(&mut agents, PipelinesFilter::All, Some(draft));
   agents.until("the panel", |s| s.exists(SAVE));
-  assert!(agents.text(HINT).starts_with("Save makes v1"));
+  assert_eq!(
+    agents.text(HINT),
+    "Fix the missing steps to publish",
+    "nothing changed and publishing would fail again"
+  );
 
   describe(&mut agents, "Waiting for profiles");
+  assert_eq!(
+    agents.text(HINT),
+    "Unsaved changes · Save keeps it as a draft · v1 comes once every step is ready"
+  );
   agents.click(SAVE);
   agents.until("the draft kept", |s| s.exists("pipeline-hub-bar-notice"));
 
   let said = agents.text("pipeline-hub-bar-notice");
   assert!(said.contains("Saved as a draft of Dependency update"), "{said}");
-  assert!(said.contains("no agent profile"), "it says why: {said}");
+  assert!(
+    said.contains("2 steps aren't ready: Plan, Build"),
+    "it says why, naming every step: {said}"
+  );
   let (versions, stored_draft) = stored(&agents, draft);
   assert!(versions.is_empty(), "it was not published");
   assert_eq!(

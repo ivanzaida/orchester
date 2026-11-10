@@ -132,14 +132,21 @@
     },
     "bar": {
       "fix": "Fix {{field}} in {{step}} to save",
-      "makesFirst": "Save makes {{version}} · New task offers it once every step is ready",
       "widenTitle": "Allow these changes to the pipeline?",
       "allow": "Allow and save",
       "keep": "Keep editing",
       "refusedTitle": "Couldn't save {{name}}: {{reason}}",
       "refusedBody": "Nothing was saved and what you changed stays here. Save tries again.",
       "keptTitle": "Saved as a draft of {{name}}, not published",
-      "savedTitle": "Saved as {{version}} · the next run uses it"
+      "savedTitle": "Saved as {{version}} · the next run uses it",
+      "publishesFirst": "Save publishes it as {{version}}",
+      "keepsDraft": "Save keeps it as a draft · {{version}} comes once every step is ready",
+      "publishNoSteps": "Add a step to publish",
+      "publishMissing": "Fix the missing steps to publish",
+      "publishBroken": "Fix what the steps wait for to publish",
+      "restored": "Restored {{version}} · not saved · {{rest}}",
+      "savedTitleWaits": "Saved as {{version}} · runs can start once every step is ready",
+      "widenTitleRestored": "Restoring {{version}} changes the pipeline: allow these changes?"
     },
     "leave": {
       "title": "Discard the unsaved changes to {{name}}?",
