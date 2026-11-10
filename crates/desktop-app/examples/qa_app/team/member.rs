@@ -35,6 +35,8 @@ pub fn serve_as(
 ) -> Option<MemberRole> {
   let standing = match state {
     State::Admin | State::AdminWork | State::EditConflict | State::ClosedAdmin | State::TeamHub => Standing::Admin,
+    // A22 is drawn as a member reads the stopped card: restoring is the admins'.
+    State::TeamArchived => Standing::Member,
     state if state.edits() || state.archives() => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
     _ => Standing::Member,
