@@ -1,10 +1,10 @@
 # PV2-17 · Readiness polish: one story in the chip, *Ready?* and the cards
 
-- **Status:** todo
+- **Status:** in progress (2026-11-11; half b — items 14–16, 18, 19, 24–29, 31's pointer test, 33 — checked twice (review + design) and merged `238b0c2e6`; half a — items 1–13, 17, 20–23, 30–32 — built, round 2 (26's leftovers and a path-dependent override drop) running, then one check)
 - **Kind:** UI
 - **Depends on:** PV2-09, PV2-10 (merged)
-- **Branch:** —
-- **Tokens:** —
+- **Branch:** `claude/pv2-17b-step-flow` → `238b0c2e6`; `claude/pv2-17a-ready-save` (running)
+- **Tokens:** half b 116.1M (out 239k) across 2 implementation rounds and 2 checks; half a: pending
 
 ## Goal
 
