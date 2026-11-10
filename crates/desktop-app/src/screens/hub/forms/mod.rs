@@ -76,6 +76,8 @@ enum Look {
   Mono,
   /// A paragraph, at least this high; the row's key stays at the top.
   Area(f32),
+  /// Lines of identifiers or arguments in Geist Mono, at least this high, as [`Look::Area`].
+  MonoArea(f32),
 }
 
 /// One field's row: its part of the ids, the keys of its words, how it looks and whether a new resource needs it.
@@ -132,6 +134,7 @@ impl<B> Form<'_, B> {
       Look::Plain => input,
       Look::Mono => input.mono(),
       Look::Area(height) => input.text_area().area_height(height),
+      Look::MonoArea(height) => input.mono().text_area().area_height(height),
     };
     if let Some(first) = first {
       input = input.element(first.clone());
@@ -150,7 +153,7 @@ impl<B> Form<'_, B> {
       None => line.sub.map(|sub| Sub::quiet(ctx.t(sub))),
     };
     let row = rows::row(&id, &label, sub, input.render(ctx));
-    if matches!(line.look, Look::Area(_)) {
+    if matches!(line.look, Look::Area(_) | Look::MonoArea(_)) {
       row.align_items(Alignment::Start)
     } else {
       row
