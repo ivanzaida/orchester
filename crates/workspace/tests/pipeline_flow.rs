@@ -134,7 +134,11 @@ fn the_cards_are_numbered_stage_by_stage_with_parallel_steps_in_one_stage() {
     ]
   );
   assert_eq!(flow.deliver.as_ref().map(|deliver| deliver.number), Some(6));
-  assert_eq!(flow.len(), 5, "the steps: Deliver is numbered after them but is not one");
+  assert_eq!(
+    flow.len(),
+    5,
+    "the steps: Deliver is numbered after them but is not one"
+  );
   assert_eq!(flow.len(), pipeline.steps().len());
 }
 
@@ -391,7 +395,7 @@ fn conflicts_name_a_profile_that_is_not_published_rather_than_the_person() {
   assignables.draft_profiles.push(DraftProfileChoice {
     id: builder.id,
     name: builder.name.clone(),
-    model: builder.model.clone(),
+    model: builder.model,
   });
   let flow = PipelineFlow::of(&pipeline, &assignables).expect("drawable");
   assert_eq!(

@@ -96,10 +96,10 @@ fn tool(agents: &Agents, published: bool) -> ResourceId {
 
 /// Opens the hub on `pipeline` and waits for its flow.
 fn open(agents: &mut Agents, pipeline: ResourceId) {
-  agents
-    .window
-    .navigation()
-    .go(Route::Project(project_id(), ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline)))));
+  agents.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline))),
+  ));
   agents.until("the flow", |s| s.exists("pipeline-hub-flow"));
 }
 
@@ -129,11 +129,31 @@ fn feature(agents: &Agents) -> (ResourceId, [StepKey; 5]) {
   let builder = agents.profile(true);
   let checks = tool(agents, true);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
-  let research = add(&mut edit, "Research", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
-  let plan = add(&mut edit, "Plan", &[&research], agent(Some(builder), RepositoryAccess::ReadOnly));
+  let research = add(
+    &mut edit,
+    "Research",
+    &[],
+    agent(Some(builder), RepositoryAccess::ReadOnly),
+  );
+  let plan = add(
+    &mut edit,
+    "Plan",
+    &[&research],
+    agent(Some(builder), RepositoryAccess::ReadOnly),
+  );
   edit.update(&plan, |step| step.approval_gate = true);
-  let build = add(&mut edit, "Build", &[&plan], agent(Some(builder), RepositoryAccess::Write));
-  let review = add(&mut edit, "Review", &[&plan], agent(Some(builder), RepositoryAccess::ReadOnly));
+  let build = add(
+    &mut edit,
+    "Build",
+    &[&plan],
+    agent(Some(builder), RepositoryAccess::Write),
+  );
+  let review = add(
+    &mut edit,
+    "Review",
+    &[&plan],
+    agent(Some(builder), RepositoryAccess::ReadOnly),
+  );
   let run = add(&mut edit, "Run checks", &[&plan], StepKind::Tool { tool: Some(checks) });
   fails_back_to(&mut edit, &review, &plan);
   fails_back_to(&mut edit, &run, &plan);
@@ -143,7 +163,10 @@ fn feature(agents: &Agents) -> (ResourceId, [StepKey; 5]) {
     None,
     true,
   )));
-  (store(agents, "Feature delivery", &body, true), [research, plan, build, review, run])
+  (
+    store(agents, "Feature delivery", &body, true),
+    [research, plan, build, review, run],
+  )
 }
 
 #[test]
@@ -153,14 +176,26 @@ fn pipeline_flow_draws_the_start_a_node_per_step_the_gate_the_group_and_the_end_
   open(&mut agents, id);
 
   for card in [&research, &plan, &build, &review, &run] {
-    assert!(agents.exists(&format!("pipeline-hub-flow-step-{card}")), "a card for {card}");
+    assert!(
+      agents.exists(&format!("pipeline-hub-flow-step-{card}")),
+      "a card for {card}"
+    );
   }
   assert!(agents.exists("pipeline-hub-flow-row-start-node"), "the start's node");
-  assert!(agents.exists("pipeline-hub-flow-row-1-node"), "research's node, numbered 1");
+  assert!(
+    agents.exists("pipeline-hub-flow-row-1-node"),
+    "research's node, numbered 1"
+  );
   assert!(agents.exists("pipeline-hub-flow-row-2-node"), "plan's node, numbered 2");
-  assert!(agents.exists("pipeline-hub-flow-gate-100"), "the approval gate after the plan");
+  assert!(
+    agents.exists("pipeline-hub-flow-gate-100"),
+    "the approval gate after the plan"
+  );
   assert!(agents.exists("pipeline-hub-flow-row-gate-1-0-node"), "the gate's node");
-  assert!(agents.exists("pipeline-hub-flow-parallel-3"), "the three steps that wait for the plan stand in one group");
+  assert!(
+    agents.exists("pipeline-hub-flow-parallel-3"),
+    "the three steps that wait for the plan stand in one group"
+  );
   assert!(agents.exists("pipeline-hub-flow-row-3-node"), "the group's node");
   assert!(agents.exists("pipeline-hub-flow-deliver"), "the Deliver card");
   assert_eq!(agents.text(&format!("pipeline-hub-flow-step-{run}-number")), "05");
@@ -175,7 +210,10 @@ fn pipeline_flow_draws_the_start_a_node_per_step_the_gate_the_group_and_the_end_
     "pipeline-hub-flow-row-end",
   ];
   let ys: Vec<f32> = order.iter().map(|id| rect(&mut agents, id).y).collect();
-  assert!(ys.windows(2).all(|pair| pair[0] < pair[1]), "start, steps, gate, group, deliver, end run down the line: {ys:?}");
+  assert!(
+    ys.windows(2).all(|pair| pair[0] < pair[1]),
+    "start, steps, gate, group, deliver, end run down the line: {ys:?}"
+  );
 }
 
 #[test]
@@ -202,7 +240,10 @@ fn pipeline_flow_pressing_a_card_opens_that_step_and_the_deliver_card_opens_deli
   agents.click(&format!("pipeline-hub-flow-step-{plan}"));
   agents.until("the step", |s| {
     s.window.navigation().route_now()
-      == Route::Project(project_id(), ProjectPage::Pipeline(id, PipelineView::Step(plan.clone())))
+      == Route::Project(
+        project_id(),
+        ProjectPage::Pipeline(id, PipelineView::Step(plan.clone())),
+      )
   });
 
   open(&mut agents, id);
@@ -234,7 +275,11 @@ fn pipeline_flow_steps_count_the_steps_and_never_deliver_in_the_panel_and_the_li
   let mut agents = Agents::new(true);
   let (id, _) = feature(&agents);
   open(&mut agents, id);
-  assert_eq!(agents.text("pipeline-hub-steps-count"), "5", "five steps and a Deliver card");
+  assert_eq!(
+    agents.text("pipeline-hub-steps-count"),
+    "5",
+    "five steps and a Deliver card"
+  );
   assert_eq!(agents.text("pipeline-hub-flow-deliver-name"), "Deliver");
   assert!(
     agents
@@ -251,12 +296,28 @@ fn pipeline_flow_the_cards_of_a_group_share_one_baseline_with_or_without_a_pill(
   let checks = tool(&agents, true);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let first = add(&mut edit, "Build", &[], agent(Some(builder), RepositoryAccess::Write));
-  let review = add(&mut edit, "Review", &[&first], agent(Some(builder), RepositoryAccess::ReadOnly));
-  let run = add(&mut edit, "Run checks", &[&first], StepKind::Tool { tool: Some(checks) });
+  let review = add(
+    &mut edit,
+    "Review",
+    &[&first],
+    agent(Some(builder), RepositoryAccess::ReadOnly),
+  );
+  let run = add(
+    &mut edit,
+    "Run checks",
+    &[&first],
+    StepKind::Tool { tool: Some(checks) },
+  );
   let id = store(&agents, "Group", &edit.validate().expect("a pipeline"), true);
   open(&mut agents, id);
-  assert!(agents.exists(&format!("pipeline-hub-flow-step-{review}-access")), "the review has a pill");
-  assert!(!agents.exists(&format!("pipeline-hub-flow-step-{run}-access")), "the checks have none");
+  assert!(
+    agents.exists(&format!("pipeline-hub-flow-step-{review}-access")),
+    "the review has a pill"
+  );
+  assert!(
+    !agents.exists(&format!("pipeline-hub-flow-step-{run}-access")),
+    "the checks have none"
+  );
   let with = rect(&mut agents, &format!("pipeline-hub-flow-step-{review}-name"));
   let without = rect(&mut agents, &format!("pipeline-hub-flow-step-{run}-name"));
   assert_eq!(with.y, without.y, "both titles stand on one baseline");
@@ -268,13 +329,29 @@ fn pipeline_flow_a_card_that_cannot_run_offers_the_profile_or_the_tool_it_names(
   let draft_profile = agents.profile(false);
   let draft_tool = tool(&agents, false);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
-  let plan = add(&mut edit, "Plan", &[], agent(Some(draft_profile), RepositoryAccess::ReadOnly));
-  let run = add(&mut edit, "Run checks", &[&plan], StepKind::Tool { tool: Some(draft_tool) });
+  let plan = add(
+    &mut edit,
+    "Plan",
+    &[],
+    agent(Some(draft_profile), RepositoryAccess::ReadOnly),
+  );
+  let run = add(
+    &mut edit,
+    "Run checks",
+    &[&plan],
+    StepKind::Tool { tool: Some(draft_tool) },
+  );
   let id = store(&agents, "Unready", &edit.validate().expect("a pipeline"), false);
   open(&mut agents, id);
 
-  assert_eq!(agents.text(&format!("pipeline-hub-flow-step-{plan}-fix-choose-words")), "Open profile");
-  assert_eq!(agents.text(&format!("pipeline-hub-flow-step-{run}-fix-choose-words")), "Open tool");
+  assert_eq!(
+    agents.text(&format!("pipeline-hub-flow-step-{plan}-fix-choose-words")),
+    "Open profile"
+  );
+  assert_eq!(
+    agents.text(&format!("pipeline-hub-flow-step-{run}-fix-choose-words")),
+    "Open tool"
+  );
   agents.click(&format!("pipeline-hub-flow-step-{plan}-fix"));
   agents.until("the profile", |s| {
     s.window.navigation().route_now()
@@ -300,7 +377,12 @@ fn pipeline_flow_deliver_names_a_profile_that_is_not_published_and_warns_instead
   let mut agents = Agents::new(true);
   let draft_profile = agents.profile(false);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
-  add(&mut edit, "Build", &[], agent(Some(draft_profile), RepositoryAccess::Write));
+  add(
+    &mut edit,
+    "Build",
+    &[],
+    agent(Some(draft_profile), RepositoryAccess::Write),
+  );
   let body = edit.validate().expect("a pipeline").with_deliver(Some(DeliverStep::new(
     DeliverMode::AutoMerge,
     MergeMethod::Squash,
@@ -330,7 +412,10 @@ fn pipeline_flow_steps_that_cannot_be_drawn_as_one_line_keep_the_start_and_end_a
   let start = rect(&mut agents, "pipeline-hub-flow-row-start").y;
   let notice = rect(&mut agents, "pipeline-hub-flow-undrawable").y;
   let end = rect(&mut agents, "pipeline-hub-flow-row-end").y;
-  assert!(start < notice && notice < end, "the notice stands between the markers: {start} {notice} {end}");
+  assert!(
+    start < notice && notice < end,
+    "the notice stands between the markers: {start} {notice} {end}"
+  );
   agents.click("pipeline-hub-flow-undrawable-edit");
   agents.until("the editor", |s| {
     s.window.navigation().route_now()
@@ -354,7 +439,10 @@ fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_offers_ed
   let start = rect(&mut agents, "pipeline-hub-flow-row-start").y;
   let line = rect(&mut agents, "pipeline-hub-flow-empty").y;
   let end = rect(&mut agents, "pipeline-hub-flow-row-end").y;
-  assert!(start < line && line < end, "between start and end: {start} {line} {end}");
+  assert!(
+    start < line && line < end,
+    "between start and end: {start} {line} {end}"
+  );
   assert_eq!(agents.text("pipeline-hub-steps-count"), "0");
   agents.click("pipeline-hub-flow-empty-edit");
   agents.until("the editor", |s| {
@@ -370,7 +458,12 @@ fn pipeline_flow_a_published_pipeline_with_a_draft_draws_the_drafts_steps() {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let first = add(&mut edit, "Plan", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
   let id = store(&agents, "Evolving", &edit.validate().expect("a pipeline"), true);
-  let second = add(&mut edit, "Build", &[&first], agent(Some(builder), RepositoryAccess::Write));
+  let second = add(
+    &mut edit,
+    "Build",
+    &[&first],
+    agent(Some(builder), RepositoryAccess::Write),
+  );
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let latest = db
     .latest_version::<Pipeline>(id)
@@ -384,7 +477,9 @@ fn pipeline_flow_a_published_pipeline_with_a_draft_draws_the_drafts_steps() {
   .expect("a draft");
 
   open(&mut agents, id);
-  agents.until("the draft's steps", |s| s.exists(&format!("pipeline-hub-flow-step-{second}")));
+  agents.until("the draft's steps", |s| {
+    s.exists(&format!("pipeline-hub-flow-step-{second}"))
+  });
   assert!(agents.exists(&format!("pipeline-hub-flow-step-{first}")));
   assert_eq!(agents.text("pipeline-hub-steps-count"), "2");
 }

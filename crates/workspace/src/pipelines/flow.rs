@@ -258,7 +258,9 @@ fn deliver_card(pipeline: &Pipeline, deliver: &DeliverStep, number: usize, assig
         .draft_profiles
         .iter()
         .find(|draft| draft.id == id)
-        .map_or(Conflicts::Person, |draft| Conflicts::ProfileNotPublished(draft.name.clone())),
+        .map_or(Conflicts::Person, |draft| {
+          Conflicts::ProfileNotPublished(draft.name.clone())
+        }),
     });
   DeliverCard {
     number,

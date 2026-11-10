@@ -58,7 +58,11 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .child(name(&id, &step.name))
     .child(Row::new().flex(1.0))
     .with_children(words::choose(ctx, &step.runs).map(|choose| choose_chip(&id, &choose)))
-    .with_children(fix.map(|(button, label)| button.id(format!("{id}-fix")).child(choose_chip(&format!("{id}-fix"), &label))))
+    .with_children(fix.map(|(button, label)| {
+      button
+        .id(format!("{id}-fix"))
+        .child(choose_chip(&format!("{id}-fix"), &label))
+    }))
     .with_children(
       step
         .access

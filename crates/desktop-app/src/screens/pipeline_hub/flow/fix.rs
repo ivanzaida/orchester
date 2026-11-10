@@ -1,10 +1,11 @@
 //! What a card that cannot run offers besides opening its step: the profile or tool it names, opened in the Agents hub
 //! where it is published.
 
+use std::sync::Arc;
+
 use lurq::app::ctx::Ctx;
 use orchester_core::id::ResourceId;
 use orchester_workspace::pipelines::flow::Runs;
-use std::sync::Arc;
 
 use crate::routes::{HubFilter, HubView, ProjectPage};
 
