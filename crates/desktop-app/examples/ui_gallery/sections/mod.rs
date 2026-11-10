@@ -2,6 +2,7 @@
 //! and its Pencil node, so a verifier finds the node to compare with.
 
 mod actions;
+mod agent_picker;
 mod blocks;
 mod decisions;
 mod inputs;
@@ -19,7 +20,10 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-pub use self::runs_on_picker::{start as runs_on_start, start_many as runs_on_many_start};
+pub use self::{
+  agent_picker::start as agent_start,
+  runs_on_picker::{start as runs_on_start, start_many as runs_on_many_start},
+};
 use crate::gallery::{Section, State};
 
 pub fn section(ctx: &mut Ctx, section: Section, state: &State) -> Element {
@@ -33,6 +37,7 @@ pub fn section(ctx: &mut Ctx, section: Section, state: &State) -> Element {
       .child(blocks::section(ctx, state))
       .child(overlays::section(ctx, state))
       .child(runs_on_picker::section(ctx, state))
+      .child(agent_picker::section(ctx, state))
       .into(),
     Section::Decisions => decisions::section(ctx, state),
   }

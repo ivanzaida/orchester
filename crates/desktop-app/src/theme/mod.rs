@@ -10,6 +10,7 @@
 //! that need them come next and must find them here rather than add near-duplicates.
 
 mod accounts;
+mod agent_picker;
 pub mod agents;
 mod archive;
 pub mod badge;
@@ -82,6 +83,7 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
+  agent_picker::{AgentPickerText, agent_picker_scrollbar},
   archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText, LOCAL_ARCHIVE_DIALOG_WIDTH},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},

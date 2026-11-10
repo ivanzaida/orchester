@@ -87,6 +87,8 @@ pub struct State {
   pub runs_on: Signal<Chosen>,
   /// The same picker over twelve connections, whose rail scrolls sideways.
   pub runs_on_many: Signal<Chosen>,
+  /// The key of the agent the Agent picker has chosen.
+  pub agent: Signal<String>,
   /// What a press on a Markdown link does: says so in the header. Kept here so it stays the same handler.
   pub link: LinkHandler,
 }
@@ -123,6 +125,7 @@ impl Component for Gallery {
       popover_anchor: ctx.element_ref(),
       runs_on: ctx.signal(sections::runs_on_start()),
       runs_on_many: ctx.signal(sections::runs_on_many_start()),
+      agent: ctx.signal(sections::agent_start()),
       link: Arc::new(move |link: &str, _: &lurq::app::events::MouseEvent| link_pressed.set(format!("link {link}"))),
     };
     Self {
