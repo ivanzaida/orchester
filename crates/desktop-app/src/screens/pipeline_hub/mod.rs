@@ -26,8 +26,9 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureState},
   },
+  components::Row,
   core::Signal,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
@@ -42,6 +43,7 @@ use crate::{
   queries::{self, Again, Session, hub as hub_query},
   routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
   screens::{hub::agents, local_hub::head},
+  theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     failure::{Failure, LastFailure},
@@ -111,7 +113,7 @@ impl Component for PipelineHubScreen {
       }
       (None, None) => loading("pipeline-hub-loading", &ctx.t("pipeline_hub.reading")).into(),
     };
-    let new = new_button(ctx, "pipeline-hub-new", &navigation, id);
+    let new = new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &navigation, id);
     agents::frame(
       ctx,
       agents::Frame {
@@ -180,9 +182,10 @@ fn hub_body(
   agents::master_detail("pipeline-hub", reading, (list, panel))
 }
 
-/// *New pipeline*, which opens the page that makes one.
-fn new_button(ctx: &Ctx, id: &str, navigation: &Navigation, project: ProjectId) -> Element {
-  ActionButton::new(id.to_owned(), ButtonKind::Primary, ctx.t("pipeline_hub.new"))
+/// *New pipeline*, which opens the page that makes one: the head's is the primary button, the empty body's the
+/// secondary.
+fn new_button(ctx: &Ctx, (id, kind): (&str, ButtonKind), navigation: &Navigation, project: ProjectId) -> Element {
+  ActionButton::new(id.to_owned(), kind, ctx.t("pipeline_hub.new"))
     .icon(Icon::Plus)
     .opens(navigation.to(Route::Project(project, ProjectPage::NewPipeline)))
     .into()
@@ -190,20 +193,44 @@ fn new_button(ctx: &Ctx, id: &str, navigation: &Navigation, project: ProjectId) 
 
 /// The open tab holds nothing: what a pipeline is, with *New pipeline* when the project has none.
 fn empty(ctx: &Ctx, filter: PipelinesFilter, navigation: &Navigation, project: ProjectId) -> Element {
-  let (title, detail) = match filter {
-    PipelinesFilter::All => ("pipeline_hub.empty.all.title", "pipeline_hub.empty.all.detail"),
-    PipelinesFilter::Drafts => ("pipeline_hub.empty.drafts.title", "pipeline_hub.empty.drafts.detail"),
+  let (glyph, title, detail) = match filter {
+    PipelinesFilter::All => (
+      Icon::Workflow,
+      "pipeline_hub.empty.all.title",
+      "pipeline_hub.empty.all.detail",
+    ),
+    PipelinesFilter::Drafts => (
+      Icon::FilePen,
+      "pipeline_hub.empty.drafts.title",
+      "pipeline_hub.empty.drafts.detail",
+    ),
     PipelinesFilter::Archived => (
+      Icon::Archive,
       "pipeline_hub.empty.archived.title",
       "pipeline_hub.empty.archived.detail",
     ),
   };
-  let action = (filter == PipelinesFilter::All).then(|| new_button(ctx, "pipeline-hub-empty-new", navigation, project));
+  let action = (filter == PipelinesFilter::All).then(|| {
+    [
+      // The design puts a gap between the line and the button (`Action gap` `BAEia` in P6), on top of the 10
+      // either side of it.
+      Row::new()
+        .id("pipeline-hub-empty-action-gap")
+        .height(Dimension::Px(HubSpacing::ActionGap.value()))
+        .into(),
+      new_button(
+        ctx,
+        ("pipeline-hub-empty-new", ButtonKind::Secondary),
+        navigation,
+        project,
+      ),
+    ]
+  });
   agents::empty(
     "pipeline-hub",
-    Icon::Workflow,
+    glyph,
     (&ctx.t(title), &ctx.t(detail)),
-    action.into_iter().collect(),
+    action.into_iter().flatten().collect(),
   )
 }
 

@@ -16,7 +16,7 @@ use super::{model::Entry, steps, words};
 use crate::{
   project::ShownProject,
   screens::team_hub::panel::{body, head_named},
-  theme::HubText,
+  theme::{ExtraSpacing, HubText},
   ui::chip::{BadgeTone, badge},
 };
 
@@ -31,6 +31,7 @@ pub(super) fn panel(ctx: &mut Ctx, project: &ShownProject, entry: &Entry, now: T
     None,
   );
   let body = body()
+    .spacing(ExtraSpacing::Inset.role())
     .child(head)
     .child(chips(ctx, entry))
     .with_children(steps::parts(ctx, project, entry));
@@ -75,7 +76,7 @@ fn chips(ctx: &Ctx, entry: &Entry) -> Row {
 }
 
 /// How the pipeline stands, as the chips: its version, then that it is ready or what it lacks; for a draft that it is
-/// one, then what keeps it from being published; for an archived one that it is.
+/// one, then its first problem when it has one; for an archived one that it is.
 fn standing(ctx: &Ctx, entry: &Entry) -> Vec<(Arc<str>, BadgeTone)> {
   let version = entry
     .number

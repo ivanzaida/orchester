@@ -3,7 +3,10 @@
 //! panel of the chosen one, and the route that keeps the tab and the pipeline. A team project keeps its page.
 //! `cargo test -p orchester-app --test agents pipeline_hub`.
 
-use orchester_app::routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route};
+use orchester_app::{
+  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
+  ui::icon::Icon,
+};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   name::Name,
@@ -143,17 +146,14 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
 
   agents.click(&format!("pipeline-hub-row-{draft}"));
   agents.until("the draft", |s| s.text("team-hub-panel-title") == "Dependency update");
-  assert_eq!(
-    agents.text("team-hub-panel-version"),
-    "draft · never saved as a version"
-  );
+  assert_eq!(agents.text("team-hub-panel-version"), "draft · not published yet");
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
   assert!(
     agents
       .text("pipeline-hub-chip-1-label")
       .contains("has no agent profile")
   );
-  assert_eq!(agents.text("pipeline-hub-chips-end"), "used by no tasks yet");
+  assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
 }
 
 #[test]
@@ -229,8 +229,10 @@ fn pipeline_hub_the_panel_opens_the_editor_the_pipeline_has_and_back_returns_to_
   });
   assert_eq!(
     agents.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipelines)
+    view(PipelinesFilter::All, Some(ready)),
+    "back returns to the hub with the pipeline that was open chosen"
   );
+  assert_eq!(agents.text("team-hub-panel-title"), "Feature delivery");
 }
 
 #[test]
@@ -266,4 +268,151 @@ fn pipeline_hub_a_team_project_keeps_the_page_it_has() {
     .go(Route::Project(project_id(), ProjectPage::Pipelines));
   agents.until("the team's pipelines page", |s| s.exists("screen-pipelines"));
   assert!(!agents.exists("screen-pipeline-hub"));
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Box {
+  y: f32,
+  height: f32,
+}
+
+fn bounds(agents: &mut Agents, id: &str) -> Box {
+  let rect = agents
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|e| e.bounds())
+    .unwrap_or_else(|| panic!("{id} laid out"));
+  Box {
+    y: rect.y,
+    height: rect.height,
+  }
+}
+
+#[test]
+fn pipeline_hub_a_draft_with_nothing_wrong_is_only_not_published_yet() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  let draft = pipeline(&agents, "Release notes", Some(builder), false);
+  open(&mut agents, PipelinesFilter::All, Some(draft));
+  assert_eq!(agents.text(&format!("pipeline-hub-row-{draft}-version")), "draft");
+  assert_eq!(
+    agents.text(&format!("pipeline-hub-row-{draft}-line")),
+    "Not published yet"
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-section-needs-count"),
+    "1",
+    "a draft stays under Needs you"
+  );
+  assert_eq!(agents.text("team-hub-panel-version"), "draft · not published yet");
+  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
+  assert!(
+    !agents.exists("pipeline-hub-chip-1"),
+    "no second chip says it is not published yet"
+  );
+}
+
+#[test]
+fn pipeline_hub_the_chips_stand_14_under_the_head() {
+  let (mut agents, _) = project();
+  let scroll = bounds(&mut agents, "pipeline-hub-panel-scroll");
+  let chips = bounds(&mut agents, "pipeline-hub-chips");
+  // P1 `KGBgh`: 20 above the head, the head 39 high, 14 to the chips (`oYa3m` at 73).
+  assert!(
+    (chips.y - scroll.y - 73.0).abs() <= 1.0,
+    "chips at {} of the panel",
+    chips.y - scroll.y
+  );
+}
+
+#[test]
+fn pipeline_hub_each_empty_tab_has_the_icon_that_says_what_it_is() {
+  let mut agents = Agents::new(true);
+  open(&mut agents, PipelinesFilter::All, None);
+  assert_eq!(
+    glyph_of(&mut agents, "pipeline-hub-empty-glyph"),
+    Icon::Workflow.glyph().to_string()
+  );
+  open(&mut agents, PipelinesFilter::Drafts, None);
+  assert_eq!(
+    glyph_of(&mut agents, "pipeline-hub-empty-glyph"),
+    Icon::FilePen.glyph().to_string()
+  );
+  open(&mut agents, PipelinesFilter::Archived, None);
+  assert_eq!(
+    glyph_of(&mut agents, "pipeline-hub-empty-glyph"),
+    Icon::Archive.glyph().to_string()
+  );
+}
+
+#[test]
+fn pipeline_hub_the_empty_body_keeps_the_designs_rhythm_to_its_button() {
+  let mut agents = Agents::new(true);
+  open(&mut agents, PipelinesFilter::All, None);
+  let (detail, button) = (
+    bounds(&mut agents, "pipeline-hub-empty-detail"),
+    bounds(&mut agents, "pipeline-hub-empty-new"),
+  );
+  // P6 `goPlX`: the line, 10, a 4 high gap, 10, the 28 high button.
+  assert!(
+    (button.y - (detail.y + detail.height) - 24.0).abs() <= 1.0,
+    "line {detail:?} to button {button:?}"
+  );
+  assert!((button.height - 28.0).abs() <= 1.0, "the button is {button:?}");
+  let (body, tile) = (
+    bounds(&mut agents, "pipeline-hub-empty-body"),
+    bounds(&mut agents, "pipeline-hub-empty-glyph"),
+  );
+  let block = button.y + button.height - tile.y;
+  assert!(
+    (tile.y - body.y - (body.height - block) / 2.0).abs() <= 1.0,
+    "the block of {block} is centered in {body:?}"
+  );
+}
+
+#[test]
+fn pipeline_hub_says_what_it_reads_while_it_reads() {
+  let (mut agents, _) = setup();
+  agents.window.navigation().go(view(PipelinesFilter::All, None));
+  agents.until("the page reads", |s| s.exists("pipeline-hub-loading"));
+  assert_eq!(agents.text("pipeline-hub-loading-label"), "Reading the pipelines…");
+}
+
+#[test]
+fn pipeline_hub_back_from_the_page_that_reads_a_pipeline_keeps_it_chosen() {
+  let (mut agents, [ready, ..]) = project();
+  agents.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Pipeline(ready, PipelineView::default()),
+  ));
+  agents.window.pass();
+  assert!(
+    agents.exists("pipeline-parent") && !agents.exists("pipeline-add-step"),
+    "the page is still reading"
+  );
+  agents.click("pipeline-parent");
+  agents.until("the hub", |s| s.exists("pipeline-hub-master-detail"));
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    view(PipelinesFilter::All, Some(ready))
+  );
+}
+
+/// The icon glyph inside the element `id`, which `Agents::text` leaves out.
+fn glyph_of(agents: &mut Agents, id: &str) -> String {
+  fn collect(element: lurq::node::element::ElementRef<'_>, into: &mut String) {
+    into.extend(element.text_content().into_iter().flat_map(str::chars));
+    for child in element.children() {
+      collect(child, into);
+    }
+  }
+  let element = agents
+    .window
+    .tree
+    .get_element_by_id(id)
+    .unwrap_or_else(|| panic!("{id} exists"));
+  let mut glyph = String::new();
+  collect(element, &mut glyph);
+  glyph
 }
