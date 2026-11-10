@@ -131,3 +131,25 @@ fn seed_orchestrator_leads_has_led_modules_a_task_the_project_and_an_already_led
     "the Orchestrator opens on the leading conversation"
   );
 }
+
+#[test]
+fn seed_orchestrator_another_account_keeps_a_session_on_works_account_and_runs_on_work() {
+  let seed = Seed::of("orchestrator-another-account");
+  let asked = conversation(&seed, "What runs?");
+  let session = asked.chat.session().expect("the conversation has a session");
+  let (published, settings) = seed
+    .db()
+    .orchestrator_published()
+    .expect("read")
+    .expect("the Orchestrator is set up");
+  assert_eq!(published, 1);
+  assert_eq!(session.connection, settings.connection(), "on the connection it runs on");
+  let app = AppDb::open(&seed.seeded.app_database).expect("app database");
+  let work = app
+    .agent_accounts()
+    .expect("accounts")
+    .into_iter()
+    .find(|account| account.name().is_some_and(|name| name.as_str() == "Work"))
+    .expect("an account Work");
+  assert_eq!(session.account, work.id(), "on Work's account");
+}

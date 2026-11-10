@@ -12,11 +12,13 @@
 //! of new starts, a daily report, a stopped turn and a failed one.
 //! `orchestrator-not-set-up` is the same project with nothing chosen for the Orchestrator (`02 Not set up`): its
 //! conversations stay readable. `orchestrator-on-codex` runs it on Codex · Default with its twelve models, and
-//! `orchestrator-codex-limit` the same with that plan at its limit (`Runs-on picker · states` `t7cdi`). The context
+//! `orchestrator-codex-limit` the same with that plan at its limit (`Runs-on picker · states` `t7cdi`);
+//! `orchestrator-another-account` adds a conversation whose session lives on Work ([`another_account`]). The context
 //! meter's and *Compact*'s scenarios are [`context`]'s; the events of tasks' runs are [`events`]'; the watch entries
 //! the app writes are [`watch`]'s; conversations that lead modules, a task and the whole project are [`leads`]'.
 
 mod accounts;
+pub mod another_account;
 pub mod context;
 pub mod events;
 pub mod leads;
