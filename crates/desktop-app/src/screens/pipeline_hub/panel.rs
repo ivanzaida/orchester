@@ -17,10 +17,14 @@ use lurq::{
     ctx::Ctx,
   },
   components::{Column, ScrollVertical},
-  core::{Ref, Signal},
+  core::{ElementRef, Ref, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::ResourceId, resource::Pipeline, time::Timestamp};
+use orchester_core::{
+  id::ResourceId,
+  resource::{Pipeline, PipelineEdit, StepKey},
+  time::Timestamp,
+};
 use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 
 use super::{
@@ -34,10 +38,12 @@ use super::{
   ready,
   save::{self, Ask, Asked, Followed, Notes, Pending, Save},
   settings::{self, Settings},
-  steps,
+  step, steps,
 };
 use crate::{
+  navigation::Navigation,
   project::ShownProject,
+  routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
   screens::{local_hub::save_bar::Save as SaveState, team_hub::panel::body},
   theme::ExtraSpacing,
   ui::pressable::Press,
@@ -53,6 +59,8 @@ pub(super) struct Props {
   pub default: bool,
   /// What the screen hosts for the panel: the list's word of unsaved changes, and the archive confirmation.
   pub hosted: Hosted,
+  /// The step the route holds open: the panel shows it in place of the pipeline's own body.
+  pub step: Option<StepKey>,
 }
 
 impl PartialEq for Props {
@@ -63,12 +71,14 @@ impl PartialEq for Props {
       &self.assignables,
       self.default,
       &self.hosted,
+      &self.step,
     ) == (
       &other.project,
       &other.entry,
       &other.assignables,
       other.default,
       &other.hosted,
+      &other.step,
     )
   }
 }
@@ -105,6 +115,14 @@ struct PipelinePanel {
   unsaved: UnsavedSignal,
   /// Whether a save is under way, which the screen's question about leaving reads.
   saving: Signal<bool>,
+  /// The fields of the open step that show an error: while one does, what is typed is not what the edit holds.
+  faulty: step::Faulty,
+  /// How many times the edit was put back, after which the open step's fields are mounted anew.
+  reset: Signal<u64>,
+  /// The Deliver chip of an open step asked for the *A run delivers* row to be shown once the pipeline's body is.
+  reveal_delivers: Signal<bool>,
+  /// That row.
+  delivers: ElementRef,
   id: ResourceId,
 }
 
@@ -128,6 +146,10 @@ impl Component for PipelinePanel {
       stored: ctx.create_ref(props.entry.body.clone()),
       unsaved: props.hosted.unsaved,
       saving: props.hosted.saving,
+      faulty: ctx.signal(Vec::new()),
+      reset: ctx.signal(0),
+      reveal_delivers: ctx.signal(false),
+      delivers: ctx.element_ref(),
       id,
     };
     save::follow(
@@ -153,6 +175,7 @@ impl Component for PipelinePanel {
       assignables,
       default,
       hosted,
+      step,
     } = ctx.props::<Props>().clone();
     // `panel` leaves the pipelines that have no steps to hold, the archived ones, to their own panel.
     let stored = entry
@@ -165,7 +188,7 @@ impl Component for PipelinePanel {
       .expect("a pipeline that is not archived has its flow");
     self.stored.set(Some(stored.clone()));
     self.settle(&stored);
-    let edit = Edit::new(&self.holding, stored);
+    let edit = Edit::new(&self.holding, stored).following(&self.stored);
     let current = edit.current();
     let changed = edit.is_changed();
     mark_unsaved(&self.unsaved, self.id, changed);
@@ -184,6 +207,96 @@ impl Component for PipelinePanel {
     let saving = self.save.state().get().is_pending();
     mark_saving(&hosted.saving, saving);
     let locked = saving || asked.is_some();
+    let shown = Shown {
+      project: &project,
+      entry: &entry,
+      assignables: &assignables,
+      default,
+      edit: &edit,
+      current: &current,
+      read: &read,
+      locked,
+      changed,
+    };
+    let body = match self.open_step(ctx, &shown, step) {
+      Some(key) => self.step_body(ctx, &shown, &key),
+      None => self.pipeline_body(ctx, &shown, hosted),
+    };
+    let pinned = self.pinned(ctx, &entry, asked.as_ref());
+    let bar = bar::bar(
+      ctx,
+      (
+        self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
+        (changed && !saving).then(|| self.cancel_now(&edit)),
+      ),
+      (&entry, changed, step::fix_words(ctx, &self.faulty, &current)),
+    );
+    frame(&entry, body, pinned, Some(bar))
+  }
+}
+
+/// What the panel shows of the pipeline in this draw, for the body of either view.
+#[derive(Clone, Copy)]
+struct Shown<'a> {
+  project: &'a ShownProject,
+  entry: &'a Entry,
+  assignables: &'a Assignables,
+  default: bool,
+  edit: &'a Edit,
+  /// What the panel shows: the edit, or the stored pipeline.
+  current: &'a PipelineEdit,
+  read: &'a FlowRead,
+  /// A save is under way, or a question about it waits: nothing is changed now.
+  locked: bool,
+  changed: bool,
+}
+
+impl PipelinePanel {
+  /// The step the route holds open, when the pipeline has it. A route that names a step the pipeline has not (any
+  /// more, as after *Cancel* dropped a copy) shows the pipeline and is corrected to say so.
+  fn open_step(&self, ctx: &mut Ctx, shown: &Shown<'_>, named: Option<StepKey>) -> Option<StepKey> {
+    let named = named?;
+    if shown.current.step(&named).is_some() {
+      return Some(named);
+    }
+    let route = ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(shown.entry.id)));
+    Navigation::of(ctx).replace(Route::Project(shown.project.open.project.id(), route));
+    None
+  }
+
+  /// The body of an open step ([`step`]).
+  fn step_body(&self, ctx: &mut Ctx, shown: &Shown<'_>, key: &StepKey) -> Column {
+    body().spacing(ExtraSpacing::Inset.role()).with_children(step::parts(
+      ctx,
+      &step::Open {
+        project: shown.project,
+        entry: shown.entry,
+        key,
+        edit: shown.edit,
+        current: shown.current,
+        read: shown.read,
+        assignables: shown.assignables,
+        locked: shown.locked,
+        epoch: self.notes.stored.get() + self.reset.get(),
+        faulty: &self.faulty,
+        reveal_delivers: &self.reveal_delivers,
+      },
+    ))
+  }
+
+  /// The body of the pipeline: its head, chips, flow, settings and *Ready?*.
+  fn pipeline_body(&self, ctx: &mut Ctx, shown: &Shown<'_>, hosted: Hosted) -> Column {
+    let Shown {
+      project,
+      entry,
+      default,
+      edit,
+      current,
+      read,
+      locked,
+      changed,
+      ..
+    } = *shown;
     let head = panel_head::head(
       ctx,
       HeadProps {
@@ -195,33 +308,28 @@ impl Component for PipelinePanel {
         holds_changes: changed,
       },
     );
-    let body = body()
+    if self.reveal_delivers.get_untracked() {
+      ctx.scroll_into_view(&self.delivers);
+      self.reveal_delivers.set(false);
+    }
+    body()
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
-      .child(chips::chips(ctx, &entry, default))
-      .with_children(steps::parts(ctx, &project, &entry, &read))
+      .child(chips::chips(ctx, entry, default))
+      .with_children(steps::parts(ctx, project, entry, read))
       .child(settings::section(
         ctx,
         &Settings {
-          project: &project,
-          edit: &edit,
-          current: &current,
+          project,
+          edit,
+          current,
           description: &self.description,
           locked,
           saved: self.notes.stored.get(),
+          delivers: &self.delivers,
         },
       ))
-      .with_children(ready::group(ctx, &project, &entry, &read));
-    let pinned = self.pinned(ctx, &entry, asked.as_ref());
-    let bar = bar::bar(
-      ctx,
-      (
-        self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
-        (changed && !saving).then(|| self.cancel_now(&edit)),
-      ),
-      (&entry, changed),
-    );
-    frame(&entry, body, pinned, Some(bar))
+      .with_children(ready::group(ctx, project, entry, read))
   }
 }
 
@@ -266,7 +374,8 @@ impl PipelinePanel {
     if !changed && !unpublished {
       return SaveState::Unchanged;
     }
-    if waiting {
+    // Text that is not valid is not in the edit, so saving now would store what the box no longer says.
+    if waiting || step::holds_invalid(&self.faulty, &edit.current()) {
       return SaveState::Unchanged;
     }
     let (edit, save, notes) = (edit.clone(), self.save.clone(), self.notes.clone());
@@ -291,11 +400,12 @@ impl PipelinePanel {
 
   /// What dropping the edit puts back besides the edit: the description's box, and what the last save said.
   fn put_back(&self) -> impl Fn() + Send + Sync + use<> {
-    let (description, stored, pending, notes) = (
+    let (description, stored, pending, notes, (reset, faulty)) = (
       self.description.clone(),
       self.stored.clone(),
       self.pending.clone(),
       self.notes.clone(),
+      (self.reset.clone(), self.faulty.clone()),
     );
     move || {
       if let Some(stored) = stored.get() {
@@ -303,6 +413,8 @@ impl PipelinePanel {
       }
       pending.set(None);
       notes.forget();
+      reset.update(|resets| *resets += 1);
+      faulty.set(Vec::new());
     }
   }
 

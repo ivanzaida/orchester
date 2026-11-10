@@ -4,7 +4,7 @@ use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore};
 use crate::pipelines_support::Editor;
 
 fn published_notice() -> (Editor, ResourceId) {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   save_description(&mut editor, "Published second version");

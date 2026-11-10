@@ -151,7 +151,7 @@ fn pipelines_first_version_without_draft_has_no_phantom_entry_or_self_comparison
 
 #[test]
 fn pipelines_step_fields_fit_the_column_and_dependency_picker_stays_compact() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   editor.profile();
   let id = editor.empty("Layout");
   editor.open(id);
@@ -291,7 +291,7 @@ fn pipelines_settings_preserves_invalid_name_across_navigation() {
 fn pipelines_failure_routes_are_visible_and_do_not_intercept_card_centers() {
   use lurq::app::events::MouseButton;
 
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Routes");
   editor.open(id);
   editor.click("pipeline-use-starter");

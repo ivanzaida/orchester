@@ -41,6 +41,8 @@ mod side_question;
 mod skills;
 #[path = "theme/startup.rs"]
 mod startup;
+#[path = "theme/step_strip.rs"]
+mod step_strip;
 #[path = "theme/task_form.rs"]
 mod task_form;
 #[path = "theme/team_state.rs"]

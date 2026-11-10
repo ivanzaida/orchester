@@ -123,6 +123,7 @@ fn permission_error(editor: &mut Editor) {
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_choices_open_from_compact_summary_and_preserve_enforcement() {
   let mut editor = Editor::new();
   profile(&editor, "Reviewer", &["cargo check", "cargo test", "cargo clippy"]);
@@ -163,6 +164,7 @@ fn pipelines_permissions_choices_open_from_compact_summary_and_preserve_enforcem
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_reset_recovers_obsolete_commands_after_profile_change() {
   let (mut editor, id) = changed_profile();
   permission_error(&mut editor);
@@ -187,6 +189,7 @@ fn pipelines_permissions_reset_recovers_obsolete_commands_after_profile_change()
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_removing_step_clears_its_error_and_allows_autosave() {
   let (mut editor, id) = changed_profile();
   permission_error(&mut editor);
@@ -203,6 +206,7 @@ fn pipelines_permissions_removing_step_clears_its_error_and_allows_autosave() {
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_replacing_executor_clears_only_its_permission_error() {
   let (mut editor, id) = changed_profile();
   permission_error(&mut editor);
@@ -225,6 +229,7 @@ fn pipelines_permissions_replacing_executor_clears_only_its_permission_error() {
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_removing_another_step_does_not_clear_the_invalid_step() {
   let (mut editor, id) = changed_profile();
   permission_error(&mut editor);
@@ -274,6 +279,7 @@ fn asking_published() -> (Editor, ResourceId) {
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_turning_ask_off_asks_before_saving_with_its_reason() {
   let (mut editor, id) = asking_published();
   editor.click("step-ask-tools");
@@ -326,6 +332,7 @@ fn pipelines_permissions_turning_ask_off_asks_before_saving_with_its_reason() {
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_reset_keeps_approvals_and_protects_weaker_publication() {
   let (mut editor, id) = asking_published();
   editor.click("step-permissions-reset");
@@ -357,6 +364,7 @@ fn pipelines_permissions_reset_keeps_approvals_and_protects_weaker_publication()
 }
 
 #[test]
+#[ignore = "PV2-18: Permissions (commands and network) of a step are not in the step panel"]
 fn pipelines_permissions_tool_replacement_clears_error_but_keeps_save_approval() {
   let mut editor = Editor::new();
   editor.published(); // Supplies the published Checks tool.

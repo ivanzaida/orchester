@@ -1,7 +1,8 @@
-//! *Sources for every step* in the panel's *Pipeline* (`Sources for every step` `WFH1F` in `Pipelines · v2` P1): the
-//! pipeline's own sources as path pills, each with a cross that takes it off, and *Add*, which asks for a folder and
-//! checks it against what the project and the pipeline already list. Both change only the edit the panel holds
-//! ([`super::edit`]); the steps' own sources stay on their steps.
+//! *Sources for every step* in the panel's *Pipeline* (`Sources for every step` `WFH1F` in `Pipelines · v2` P1), and
+//! *Sources* of an open step (P2 `u2rYEH`): the sources one list holds as path pills, each with a cross that takes it
+//! off, and *Add*, which asks for a folder and checks it against what the project and the pipeline already list. Both
+//! change only the edit the panel holds ([`super::edit`]); the pipeline's list and each step's are told apart by
+//! [`Listing`].
 
 use std::sync::Arc;
 
@@ -40,6 +41,8 @@ pub(super) struct Props {
   pub root: std::path::PathBuf,
   /// The project's name, which a path is checked against.
   pub project: Arc<str>,
+  /// The list whose sources show.
+  pub listing: Listing,
   /// The edit whose sources show.
   pub current: PipelineEdit,
   pub edit: Edit,
@@ -50,8 +53,14 @@ pub(super) struct Props {
 /// The props are equal when they show the same: the edit's handle is the panel's own.
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    (&self.root, &self.project, &self.current, self.locked)
-      == (&other.root, &other.project, &other.current, other.locked)
+    (&self.root, &self.project, &self.listing, &self.current, self.locked)
+      == (
+        &other.root,
+        &other.project,
+        &other.listing,
+        &other.current,
+        other.locked,
+      )
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -63,7 +72,11 @@ impl DevtoolsInspectable for ProjectSources {}
 
 /// The row's value: the pills and *Add*.
 pub(super) fn view(ctx: &mut Ctx, props: Props) -> Element {
-  ctx.mount_keyed::<Sources>("pipeline-hub-sources", props)
+  let key = match &props.listing {
+    Listing::Pipeline => "pipeline-hub-sources".to_owned(),
+    Listing::Step(step) => format!("pipeline-hub-sources-{step}"),
+  };
+  ctx.mount_keyed::<Sources>(&key, props)
 }
 
 struct Sources;
@@ -92,12 +105,9 @@ impl Component for Sources {
     let project = read.data.filter(|_| failure.is_none()).map(|read| read.0);
     let place = project.as_ref().map(|listed| {
       let paths: Vec<SourcePath> = listed.iter().map(|listed| listed.path.clone()).collect();
-      drafted::place(&props.root, &props.project, &paths, &props.current, &Listing::Pipeline)
+      drafted::place(&props.root, &props.project, &paths, &props.current, &props.listing)
     });
-    let pills: Vec<Element> = props
-      .current
-      .sources()
-      .pipeline()
+    let pills: Vec<Element> = listed(&props.current, &props.listing)
       .iter()
       .enumerate()
       .map(|(index, path)| pill(ctx, &props, (index, path)))
@@ -114,6 +124,14 @@ impl Component for Sources {
   }
 }
 
+/// The sources the list `listing` holds in `edit`.
+pub(super) fn listed<'a>(edit: &'a PipelineEdit, listing: &Listing) -> &'a [SourcePath] {
+  match listing {
+    Listing::Pipeline => edit.sources().pipeline(),
+    Listing::Step(key) => edit.sources().step(key),
+  }
+}
+
 /// A source: its path as a tag, and the cross that takes it off the edit.
 fn pill(ctx: &mut Ctx, props: &Props, (index, path): (usize, &SourcePath)) -> Element {
   let id = format!("pipeline-hub-source-{index}");
@@ -124,12 +142,12 @@ fn pill(ctx: &mut Ctx, props: &Props, (index, path): (usize, &SourcePath)) -> El
     .align_items(Alignment::Center)
     .child(tag);
   if !props.locked {
-    let (edit, path) = (props.edit.clone(), path.clone());
+    let (edit, path, listing) = (props.edit.clone(), path.clone(), props.listing.clone());
     let label = ctx.t_args("ui.source.remove", [("path", path.as_str())]);
     pill = pill.child(
       IconButton::new(format!("{id}-remove"), Icon::X, label)
         .small()
-        .on_click(move || edit.change(|current| drafted::remove(current, &Listing::Pipeline, &path)))
+        .on_click(move || edit.change(|current| drafted::remove(current, &listing, &path)))
         .render(ctx),
     );
   }
@@ -145,16 +163,16 @@ fn adding(
   if let Some(error) = failure {
     return field_error("pipeline-hub-sources-error", &message_text(ctx, error)).into();
   }
-  let edit = props.edit.clone();
+  let (edit, listing) = (props.edit.clone(), props.listing.clone());
   ctx.mount_keyed::<AddSource>(
     "pipeline-hub-sources-add",
     AddSourceProps {
       id: "pipeline-hub-sources-add".into(),
       place,
-      layout: Layout::Picker,
+      layout: Layout::Ghost,
       add: ctx.t("pipeline_hub.settings.addSource"),
       locked: props.locked,
-      on_add: Arc::new(move |path| edit.change(|current| drafted::add(current, &Listing::Pipeline, path))),
+      on_add: Arc::new(move |path| edit.change(|current| drafted::add(current, &listing, path))),
     },
   )
 }

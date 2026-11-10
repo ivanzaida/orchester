@@ -25,8 +25,13 @@ use crate::{
 };
 
 /// The bar for `entry`: *Save*, *Cancel* (`None` while nothing differs, or a save is under way) and what *Save* makes,
-/// after *Unsaved changes ·* while the edit has changes, so it shows where *Save* is pressed.
-pub(super) fn bar(ctx: &Ctx, (save, cancel): (Save, Option<Press>), (entry, changed): (&Entry, bool)) -> Element {
+/// after *Unsaved changes ·* while the edit has changes, so it shows where *Save* is pressed. While `fix` says what to
+/// correct before saving it stands in the place of what *Save* makes, in `warning`.
+pub(super) fn bar(
+  ctx: &Ctx,
+  (save, cancel): (Save, Option<Press>),
+  (entry, changed, fix): (&Entry, bool, Option<String>),
+) -> Element {
   let hint = match entry.number {
     Some(_) => save_bar::makes(ctx, entry.number),
     None => (
@@ -47,6 +52,7 @@ pub(super) fn bar(ctx: &Ctx, (save, cancel): (Save, Option<Press>), (entry, chan
   } else {
     hint
   };
+  let hint = fix.map_or(hint, |fix| (fix, lurq::app::theme::PaletteColor::Warning));
   save_bar::bar(ctx, "pipeline-hub", (save, cancel), hint)
 }
 

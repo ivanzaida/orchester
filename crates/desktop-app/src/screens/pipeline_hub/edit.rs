@@ -9,7 +9,10 @@
 
 use std::sync::Arc;
 
-use lurq::{app::component::DevtoolsInspectable, core::Signal};
+use lurq::{
+  app::component::DevtoolsInspectable,
+  core::{Ref, Signal},
+};
 use orchester_core::resource::{Pipeline, PipelineEdit};
 use orchester_workspace::pipelines::local_edit::Held;
 
@@ -28,6 +31,9 @@ impl DevtoolsInspectable for Holding {}
 pub(super) struct Edit {
   holding: Signal<Holding>,
   stored: Arc<Pipeline>,
+  /// The pipeline as stored now, which the panel keeps current. A handle kept by a field that is not drawn again when
+  /// the pipeline is stored anew (a select, a box) still starts an edit from what is stored, not from what was.
+  latest: Option<Ref<Option<Arc<Pipeline>>>>,
 }
 
 impl Edit {
@@ -35,7 +41,24 @@ impl Edit {
     Self {
       holding: holding.clone(),
       stored,
+      latest: None,
     }
+  }
+
+  /// This edit starting from what `latest` holds when a change starts it, rather than from what was stored when the
+  /// edit was made.
+  pub(super) fn following(mut self, latest: &Ref<Option<Arc<Pipeline>>>) -> Self {
+    self.latest = Some(latest.clone());
+    self
+  }
+
+  /// What a change starts from: the pipeline as stored now.
+  fn base(&self) -> Arc<Pipeline> {
+    self
+      .latest
+      .as_ref()
+      .and_then(Ref::get)
+      .unwrap_or_else(|| self.stored.clone())
   }
 
   /// What the panel shows: the edit, or the stored pipeline while there is none. Reading it in a render subscribes the
@@ -50,7 +73,7 @@ impl Edit {
   /// Makes `change` to the edit, which it starts from the stored pipeline (the stored draft, else the latest version)
   /// when there is none yet.
   pub(super) fn change(&self, change: impl FnOnce(&mut PipelineEdit)) {
-    let stored = self.stored.clone();
+    let stored = self.base();
     self.holding.update(|holding| {
       holding.held.get_or_insert_with(|| Held::start(stored)).change(change);
       holding.saved_over = None;
@@ -74,7 +97,7 @@ impl Edit {
       .holding
       .get_untracked()
       .held
-      .unwrap_or_else(|| Held::start(self.stored.clone()))
+      .unwrap_or_else(|| Held::start(self.base()))
   }
 
   /// The description the panel shows, for a handler.
