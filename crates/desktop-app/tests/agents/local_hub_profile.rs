@@ -33,7 +33,7 @@ use super::{
 /// Opens the hub on Profiles with `profile` in the panel.
 fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-effort-pick"));
+  agents.until("the panel", |s| s.exists("local-hub-profile-effort"));
 }
 
 /// Chooses the option `label` of the select `id`, as a person's press on it would.
@@ -63,9 +63,9 @@ fn local_hub_profile_a_changed_field_is_a_draft_that_publishes_as_the_next_versi
   let profile = agents.profile(true);
   show(&mut agents, profile);
   for part in [
-    "local-hub-profile-cli-pick",
-    "local-hub-profile-model-pick",
-    "local-hub-profile-effort-pick",
+    "local-hub-profile-cli",
+    "local-hub-profile-model",
+    "local-hub-profile-effort",
   ] {
     assert!(agents.exists(part), "{part} is in the panel");
   }
@@ -77,7 +77,7 @@ fn local_hub_profile_a_changed_field_is_a_draft_that_publishes_as_the_next_versi
   }
   assert!(!agents.exists("local-hub-profile-draft"), "no draft before a change");
 
-  choose(&mut agents, "local-hub-profile-effort-pick", "High");
+  choose(&mut agents, "local-hub-profile-effort", "High");
 
   agents.until("the draft", |s| s.exists("local-hub-profile-draft"));
   assert_eq!(effort(&agents, profile).as_deref(), Some("high"));
@@ -100,7 +100,7 @@ fn local_hub_profile_discarding_the_draft_asks_first_and_puts_the_version_back()
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
+  choose(&mut agents, "local-hub-profile-effort", "Low");
   agents.until("the draft", |s| s.exists("local-hub-profile-discard"));
 
   agents.click("local-hub-profile-discard");
@@ -160,7 +160,7 @@ fn local_hub_profile_a_draft_replaces_the_pinned_fix_with_publish_and_discard() 
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "High");
+  choose(&mut agents, "local-hub-profile-effort", "High");
   agents.until("the draft", |s| s.exists("local-hub-profile-draft"));
 
   assert!(
@@ -198,7 +198,7 @@ fn local_hub_profile_discard_keep_editing_leaves_the_draft() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
+  choose(&mut agents, "local-hub-profile-effort", "Low");
   agents.until("the draft", |s| s.exists("local-hub-profile-discard"));
   agents.click("local-hub-profile-discard");
   agents.until("the question", |s| s.exists("hub-discard-keep"));
@@ -218,7 +218,7 @@ fn local_hub_profile_discard_refuses_a_draft_that_is_not_the_one_it_showed() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
+  choose(&mut agents, "local-hub-profile-effort", "Low");
   agents.until("the draft", |s| s.exists("local-hub-profile-discard"));
   agents.click("local-hub-profile-discard");
   agents.until("the question", |s| s.exists("hub-discard-confirm"));
@@ -241,7 +241,7 @@ fn local_hub_profile_publish_refuses_a_draft_that_is_not_the_one_it_showed() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
+  choose(&mut agents, "local-hub-profile-effort", "Low");
   agents.until("the draft", |s| s.exists("local-hub-profile-publish"));
 
   change_elsewhere(&agents, profile, "high");
@@ -356,10 +356,10 @@ fn local_hub_profile_the_model_select_changes_the_draft_and_starts_at_the_defaul
   let mut agents = Agents::new(true);
   let profile = builder_on_claude(&agents, claude(&agents));
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "High");
+  choose(&mut agents, "local-hub-profile-effort", "High");
   agents.until("the draft", |s| s.exists("local-hub-profile-draft"));
 
-  choose(&mut agents, "local-hub-profile-model-pick", "claude-b");
+  choose(&mut agents, "local-hub-profile-model", "claude-b");
 
   agents.until("the model is the draft's", |s| {
     s.listed().profile(profile).expect("profile").profile.model().as_str() == "claude-b"
@@ -378,9 +378,9 @@ fn local_hub_profile_the_cli_select_runs_it_on_the_other_clis_connection() {
   let connection = claude(&agents);
   let profile = builder_on_claude(&agents, connection);
   show(&mut agents, profile);
-  agents.until("two CLIs to choose", |s| s.exists("local-hub-profile-cli-pick"));
+  agents.until("two CLIs to choose", |s| s.exists("local-hub-profile-cli"));
 
-  choose(&mut agents, "local-hub-profile-cli-pick", "Codex");
+  choose(&mut agents, "local-hub-profile-cli", "Codex");
   // What Codex can enforce differs from Claude Code's, so the change may ask before it is saved: only a press answers.
   agents.until("the draft or its question", |s| {
     s.exists("local-hub-profile-draft") || s.exists("local-hub-profile-confirm-confirm")
@@ -408,14 +408,14 @@ fn local_hub_profile_the_connection_select_says_to_publish_or_discard_first_whil
   let mut db = ProjectDb::open(&agents.root).expect("database");
   data::save_draft(&mut db, profile, body, Timestamp::now()).expect("a draft");
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-pick"));
+  agents.until("the panel", |s| s.exists("local-hub-profile-connection"));
 
   assert!(
     agents
-      .text("local-hub-profile-connection")
+      .text("local-hub-profile-connection-row")
       .contains("Publish or discard"),
     "{}",
-    agents.text("local-hub-profile-connection")
+    agents.text("local-hub-profile-connection-row")
   );
   assert!(
     !agents.exists("local-hub-fix-use"),
@@ -508,7 +508,7 @@ fn local_hub_profile_a_persons_pointer_press_takes_the_account_and_choosing_in_t
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   agents.until("the fix", |s| s.exists("local-hub-fix-use"));
 
-  choose(&mut agents, "local-hub-profile-pick", "Claude Code · Home");
+  choose(&mut agents, "local-hub-profile-connection", "Claude Code · Home");
   agents.until("the bar names the choice", |s| {
     s.text("local-hub-fix-use").contains("Home")
   });

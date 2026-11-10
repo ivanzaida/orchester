@@ -327,8 +327,8 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
     "Choose a Claude Code connection"
   );
   for part in [
-    "local-hub-profile-pick",
-    "local-hub-profile-model-pick",
+    "local-hub-profile-connection",
+    "local-hub-profile-model",
     "local-hub-profile-versions",
   ] {
     assert!(agents.exists(part), "{part} is the panel's own");

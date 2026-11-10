@@ -12,8 +12,10 @@ use orchester_workspace::agents::{
   role::{RoleErrors, RoleText},
 };
 
-use super::table::OnEdit;
-use crate::screens::hub::role::{self, Change};
+use crate::screens::hub::{
+  profile_form::OnEdit,
+  role::{self, Change},
+};
 
 /// The role as typed in the panel: `None` until something is typed, and again once *Cancel* puts back what is stored
 /// or the hub lists what a save published.

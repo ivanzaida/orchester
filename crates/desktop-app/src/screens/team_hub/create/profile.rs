@@ -48,6 +48,7 @@ impl Fields {
         locked: shown.locked,
         name_said,
         first: Some(shown.first),
+        held: None,
       },
     );
     let make = drawn.made.ok().map(|made| match made {

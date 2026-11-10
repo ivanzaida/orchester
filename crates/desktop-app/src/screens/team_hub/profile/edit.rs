@@ -83,6 +83,7 @@ impl ProfileEdit {
         locked: false,
         name_said: None,
         first: None,
+        held: None,
       },
     );
     // Fields of a team's scope make a team profile; the other arm never runs.

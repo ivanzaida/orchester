@@ -35,7 +35,7 @@ pub(super) fn made(
     return Err(message_text(ctx, why));
   }
   match form.scope {
-    Scope::Local => local(ctx, (text, given), runs),
+    Scope::Local => local(ctx, form, (text, given), runs),
     Scope::Team => team(ctx, form.base, (text, given), runs),
   }
 }
@@ -50,8 +50,13 @@ fn list(given: &Given, kind: ListKind) -> ChosenResources {
     .expect("a list holds each resource once: choosing one takes it out before it adds it")
 }
 
-fn local(ctx: &Ctx, (text, given): (&RoleText, &Given), runs: &Runs) -> Result<Made, Arc<str>> {
-  let connection = runs.connection.as_ref().ok_or_else(|| required(ctx))?;
+fn local(ctx: &Ctx, form: &Form<'_>, (text, given): (&RoleText, &Given), runs: &Runs) -> Result<Made, Arc<str>> {
+  let connection = form
+    .offer
+    .connections
+    .iter()
+    .find(|connection| Some(connection.id()) == runs.connection)
+    .ok_or_else(|| required(ctx))?;
   let model = runs.model.clone().ok_or_else(|| required(ctx))?;
   let servers = McpServerSelection::new(
     given.0[ListKind::McpServers.at()]

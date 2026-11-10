@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT,
+    AgentConnection, AgentProvider, Connection, ConnectionKind, REASONING_EFFORT,
     mcp::{McpServer, McpTransport},
   },
   id::{ConnectionId, ResourceId},
@@ -336,12 +336,7 @@ impl Around {
       .connections
       .iter()
       .filter(|found| matches!(found.kind(), ConnectionKind::Agent(provider) if Some(*provider) == cli))
-      .map(|found| ConnectionChoice {
-        id: found.id(),
-        name: found.name().to_string(),
-        version: found.version().map(str::to_owned),
-        signed_out: found.status() == ConnectionStatus::SignInRequired,
-      })
+      .map(ConnectionChoice::of)
       .collect();
     Ok(LocalProfile {
       role: RoleText::of(body),

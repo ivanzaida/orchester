@@ -42,6 +42,18 @@ pub struct ConnectionChoice {
   pub signed_out: bool,
 }
 
+impl ConnectionChoice {
+  /// `connection` as its last check found it.
+  pub fn of(connection: &Connection) -> Self {
+    Self {
+      id: connection.id(),
+      name: connection.name().to_string(),
+      version: connection.version().map(str::to_owned),
+      signed_out: connection.status() == ConnectionStatus::SignInRequired,
+    }
+  }
+}
+
 /// One team profile as the panel shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamProfileSheet {
@@ -121,12 +133,7 @@ fn sheet(
   let of_kind: Vec<ConnectionChoice> = connections
     .iter()
     .filter(|connection| matches!(connection.kind(), ConnectionKind::Agent(provider) if *provider == team.cli()))
-    .map(|connection| ConnectionChoice {
-      id: connection.id(),
-      name: connection.name().to_string(),
-      version: connection.version().map(str::to_owned),
-      signed_out: connection.status() == ConnectionStatus::SignInRequired,
-    })
+    .map(ConnectionChoice::of)
     .collect();
   let picked = db
     .connection_pick(profile)?
