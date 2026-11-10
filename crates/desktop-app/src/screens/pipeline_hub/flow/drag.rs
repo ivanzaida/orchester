@@ -63,7 +63,7 @@ pub(super) fn handle(ctx: &Ctx, drive: &Drive, card: &StepCard, card_ref: Elemen
 /// The pointer moved with the handle held: once it went [`LIFT`], the card lifts; then the flow follows where it is
 /// over.
 fn moved(reorder: &Reorder, (card, card_ref): (&StepCard, &ElementRef), event: &DragEvent) {
-  if *reorder.set_down.lock() {
+  if *reorder.set_down.lock() || *reorder.locked.lock() {
     return;
   }
   let lifted = reorder.drag.get_untracked();

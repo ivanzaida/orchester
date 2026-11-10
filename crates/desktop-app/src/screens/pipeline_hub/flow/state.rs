@@ -78,6 +78,9 @@ pub(super) struct Reorder {
   pub set_down: Arc<Mutex<bool>>,
   /// The card the keys move, which gets the focus back once the flow is drawn again.
   pub refocus: Arc<Mutex<Option<StepKey>>>,
+  /// A save is under way or a question about it is open: the flow changes nothing, whatever a handler made before the
+  /// lock says. Set by every draw.
+  pub locked: Arc<Mutex<bool>>,
   /// The flow's own element, for where the floating card is drawn.
   pub frame: ElementRef,
   stages: Arc<Mutex<Vec<Stage>>>,
@@ -96,6 +99,7 @@ impl Reorder {
       refused: ctx.signal(None),
       set_down: Arc::default(),
       refocus: Arc::default(),
+      locked: Arc::default(),
       frame: ElementRef::default(),
       stages: Arc::default(),
       anchors: Arc::default(),
@@ -141,7 +145,8 @@ impl Reorder {
   /// band between two places, on its middle band onto the card, and outside the flow nowhere.
   pub(super) fn drop_at(&self, (x, y): (f32, f32)) -> Option<Drop> {
     let frame = self.frame.bounds();
-    if !self.frame.is_attached() || x < frame.x || x > frame.x + frame.width {
+    let outside = x < frame.x || x > frame.x + frame.width || y < frame.y || y > frame.y + frame.height;
+    if !self.frame.is_attached() || outside {
       return None;
     }
     let stages = self.stages.lock();

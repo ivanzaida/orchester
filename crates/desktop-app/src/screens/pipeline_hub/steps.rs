@@ -3,9 +3,9 @@
 //! PV2-09's.
 //!
 //! The head's *Add step* adds a step at the end of the line, and a card changes its place, is duplicated or removed
-//! through the same edit (PV2-06); where the steps cannot be drawn as one line the head offers *Edit steps* instead,
-//! which opens the editor the pipeline has today, through its own route (the leave guard asks first while the edit has
-//! changes).
+//! through the same edit (PV2-06), unless the panel is locked while a save runs or its question is open; where the
+//! steps cannot be drawn as one line the flow's notice offers *Edit steps*, which opens the editor the pipeline has
+//! today, through its own route (the leave guard asks first while the edit has changes).
 
 use std::sync::Arc;
 
@@ -31,6 +31,7 @@ pub(super) fn parts(
   project: &ShownProject,
   entry: &Entry,
   (read, edit, current): (&Arc<FlowRead>, &Edit, &PipelineEdit),
+  locked: bool,
 ) -> Vec<Element> {
   if entry.archived.is_some() {
     return Vec::new();
@@ -40,11 +41,12 @@ pub(super) fn parts(
     (project, entry.id, entry.step_count),
     read,
     (edit, current),
+    locked,
   )]
 }
 
-/// *Steps 6* and, at the end, `action`: *Add step*, or *Edit steps*.
-pub(super) fn head(ctx: &Ctx, count: usize, action: Element) -> Element {
+/// *Steps 6* and, at the end, `action`: *Add step*, none where the steps cannot be drawn.
+pub(super) fn head(ctx: &Ctx, count: usize, action: Option<Element>) -> Element {
   Row::new()
     .id("pipeline-hub-steps")
     .width(Dimension::Pct(100.0))
@@ -65,6 +67,6 @@ pub(super) fn head(ctx: &Ctx, count: usize, action: Element) -> Element {
             .variant(HubText::PanelHint.role()),
         ),
     )
-    .child(action)
+    .with_children(action)
     .into()
 }

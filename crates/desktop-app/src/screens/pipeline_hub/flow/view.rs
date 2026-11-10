@@ -26,7 +26,6 @@ use super::{
   Opens,
   card::{self, Look, Opening, Place},
   drag::{self, Lifted, LiftedProps},
-  edit_steps,
   fix::Fix,
   landing::{self, Landing, Words},
   menu::{self, Menu},
@@ -59,12 +58,28 @@ pub(super) struct Props {
   /// The edit as the panel shows it, which the moves are tried on.
   pub current: PipelineEdit,
   pub edit: Edit,
+  /// A save is under way or *Allow these changes?* is open: the flow offers no change, so none is lost when the save
+  /// ends and what *Allow* publishes is what is on screen.
+  pub locked: bool,
 }
 
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    (&self.project, self.pipeline, self.count, &self.read, &self.current)
-      == (&other.project, other.pipeline, other.count, &other.read, &other.current)
+    (
+      &self.project,
+      self.pipeline,
+      self.count,
+      &self.read,
+      &self.current,
+      self.locked,
+    ) == (
+      &other.project,
+      other.pipeline,
+      other.count,
+      &other.read,
+      &other.current,
+      other.locked,
+    )
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -87,6 +102,10 @@ impl Component for FlowView {
     let navigation = Navigation::of(ctx);
     let reorder = &self.reorder;
     reorder.clear_layout();
+    *reorder.locked.lock() = props.locked;
+    if props.locked {
+      release(reorder);
+    }
     let drive = Drive {
       reorder: reorder.clone(),
       edit: props.edit.clone(),
@@ -97,40 +116,19 @@ impl Component for FlowView {
       project: &props.project,
       pipeline: props.pipeline,
     };
-    let action = head_action(ctx, &opens, &drive, props.read.flow.as_ref().ok());
-    let cards = props.read.flow.as_ref().map(Cards::of).unwrap_or_default();
-    let mut rows: Vec<Element> = vec![start_row(ctx)];
-    match &props.read.flow {
-      Ok(flow) => {
-        let drag = reorder.drag.get();
-        let landing = drag
-          .as_ref()
-          .and_then(|drag| landing::of(ctx, (flow, &props.current, &cards), drag));
-        let draw = Draw {
-          opens: &opens,
-          drive: &drive,
-          cards: &cards,
-          flow,
-          drag: drag.as_ref(),
-          landing: landing.as_ref(),
-        };
-        rows.extend(draw.rows(ctx));
-      }
-      Err(error) => rows.push(note_row(ctx, super::undrawable(ctx, &opens, error))),
-    }
-    let (label, hint) = words::end(ctx, props.read.ending);
-    rows.push(rail::row(
-      ctx,
-      "pipeline-hub-flow-row-end",
-      &Node::End,
-      (parts::end(&label, &hint).into(), SpacingSize::Sm),
-    ));
+    let action = props
+      .read
+      .flow
+      .as_ref()
+      .ok()
+      .map(|flow| head_action(ctx, &drive, flow, props.locked));
+    let rows = self.rows(ctx, (&props, &drive, &opens));
     let list = Column::new()
       .id("pipeline-hub-flow")
       .width(Dimension::Pct(100.0))
       .on_key_down(keys(&drive))
       .with_children(rows);
-    let floating = reorder.drag.get().map(|drag| {
+    let floating = reorder.drag.get().filter(|_| !props.locked).map(|drag| {
       ctx.mount_keyed::<Lifted>(
         "pipeline-hub-flow-lifted",
         LiftedProps {
@@ -166,21 +164,64 @@ impl Component for FlowView {
   }
 }
 
-/// *Add step* while the steps can be drawn as one line, which they can be added to; *Edit steps* otherwise, which opens
-/// the editor that shows what each step waits for.
-fn head_action(ctx: &Ctx, opens: &Opens<'_>, drive: &Drive, flow: Option<&PipelineFlow>) -> Element {
-  let Some(flow) = flow else {
-    return edit_steps(ctx, "pipeline-hub-edit-steps", opens.open(PipelineView::default())).into();
-  };
+impl FlowView {
+  /// The rail from the start to the end: the stages, or the note that says why there are none to draw.
+  fn rows(&self, ctx: &mut Ctx, (props, drive, opens): (&Props, &Drive, &Opens<'_>)) -> Vec<Element> {
+    let reorder = &self.reorder;
+    let cards = props.read.flow.as_ref().map(Cards::of).unwrap_or_default();
+    let mut rows: Vec<Element> = vec![start_row(ctx)];
+    match &props.read.flow {
+      Ok(flow) => {
+        let drag = reorder.drag.get().filter(|_| !props.locked);
+        let landing = drag
+          .as_ref()
+          .and_then(|drag| landing::of(ctx, (flow, &props.current, &cards), drag));
+        let draw = Draw {
+          opens,
+          drive,
+          cards: &cards,
+          flow,
+          locked: props.locked,
+          drag: drag.as_ref(),
+          landing: landing.as_ref(),
+        };
+        rows.extend(draw.rows(ctx));
+      }
+      Err(error) => rows.push(note_row(ctx, super::undrawable(ctx, opens, error))),
+    }
+    let (label, hint) = words::end(ctx, props.read.ending);
+    rows.push(rail::row(
+      ctx,
+      "pipeline-hub-flow-row-end",
+      &Node::End,
+      (parts::end(&label, &hint).into(), SpacingSize::Sm),
+    ));
+    rows
+  }
+}
+
+/// *Add step*, which steps that draw as one line can be added to; faded while the flow is locked. Steps that cannot be
+/// drawn have no head action: their notice offers *Edit steps*.
+fn head_action(ctx: &Ctx, drive: &Drive, flow: &PipelineFlow, locked: bool) -> Element {
   let (drive, flow, name) = (drive.clone(), flow.clone(), menu::new_step_name(ctx));
-  ActionButton::new(
+  let button = ActionButton::new(
     "pipeline-hub-add-step".to_owned(),
     ButtonKind::Ghost,
     ctx.t("pipeline_hub.flow.move.addStep"),
   )
   .icon(Icon::Plus)
-  .on_click(move || drive.add(name.clone(), None, &flow))
-  .into()
+  .on_click(move || drive.add(name.clone(), None, &flow));
+  if locked { button.disabled() } else { button }.into()
+}
+
+/// A save began while a card was lifted or its menu was open: they are put down and closed.
+fn release(reorder: &Reorder) {
+  if reorder.drag.get_untracked().is_some() {
+    drag::set_down(reorder);
+  }
+  if reorder.menu_open.get_untracked() {
+    reorder.menu_open.set(false);
+  }
 }
 
 fn start_row(ctx: &Ctx) -> Element {
@@ -250,6 +291,7 @@ fn no_steps(ctx: &Ctx) -> Element {
 
 /// What the stages are drawn from.
 struct Draw<'a> {
+  locked: bool,
   opens: &'a Opens<'a>,
   drive: &'a Drive,
   cards: &'a Cards,
@@ -396,7 +438,7 @@ impl Draw<'_> {
       flow: self.flow,
       cards: self.cards,
     };
-    if let Some(open) = self.drive.reorder.menu_for.get().0
+    if let Some(open) = self.drive.reorder.menu_for.get().0.filter(|_| !self.locked)
       && let Some(step) = stage.cards.iter().find(|card| card.key == open)
     {
       notes.push(menu::popup(ctx, &menu, step, self.drive.reorder.more_anchor(&step.key)).into());
@@ -420,6 +462,7 @@ impl Draw<'_> {
     let reorder = &self.drive.reorder;
     let key = step.key.clone();
     let shown = match self.drag {
+      _ if self.locked => false,
       Some(drag) => drag.key == key,
       None => {
         reorder.hovered.get().is(&key)

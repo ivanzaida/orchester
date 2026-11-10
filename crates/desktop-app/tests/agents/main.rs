@@ -29,6 +29,7 @@ mod pipeline_leaving;
 mod pipeline_menu_edit;
 mod pipeline_reorder;
 mod pipeline_reorder_changes;
+mod pipeline_reorder_guards;
 mod pipeline_save;
 mod pipeline_save_notes;
 mod project_sets;

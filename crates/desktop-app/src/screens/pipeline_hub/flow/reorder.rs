@@ -10,7 +10,7 @@ use orchester_core::{
   name::Name,
   resource::{MoveError, PipelineEdit, StepKey},
 };
-use orchester_workspace::pipelines::flow::PipelineFlow;
+use orchester_workspace::pipelines::flow::{PipelineFlow, Stage};
 
 use super::{
   state::{Refused, Reorder},
@@ -28,8 +28,17 @@ pub(super) struct Drive {
 }
 
 impl Drive {
+  /// Whether the flow takes no changes now. The cards offer none while it is locked; this stops what a handler made
+  /// before the lock (a drag lifted before the save began) from changing the edit under the save.
+  pub(super) fn locked(&self) -> bool {
+    *self.reorder.locked.lock()
+  }
+
   /// Moves step `key` by `change`, which a refusal says why in the flow; `keys` hands the focus back to the card.
   pub(super) fn apply(&self, key: &StepKey, change: &Move, keys: bool) {
+    if self.locked() {
+      return;
+    }
     match make(&self.edit, &self.current, key, change) {
       Ok(_) => self.reorder.refused.set(None),
       Err(error) => self.reorder.refused.set(Some(Refused {
@@ -44,15 +53,37 @@ impl Drive {
 
   /// Adds a step after `after`'s stage, or at the end, which `flow` says what follows.
   pub(super) fn add(&self, name: Name, after: Option<&StepKey>, flow: &PipelineFlow) {
+    if self.locked() {
+      return;
+    }
+    let stage = after.and_then(|after| stage_of(flow, after));
+    let together: Vec<StepKey> = stage
+      .map(|stage| stage.cards.iter().map(|card| card.key.clone()).collect())
+      .unwrap_or_default();
     let next = after.and_then(|after| next_after(flow, after));
     self.settle(
-      add_after(&self.edit, &self.current, (after, next.as_ref()), name),
+      add_after(&self.edit, &self.current, (&together, next.as_ref()), name),
       after,
     );
   }
 
-  pub(super) fn duplicate(&self, key: &StepKey) {
-    self.settle(duplicate(&self.edit, &self.current, key), Some(key));
+  /// Copies step `key`; the copy is called `name` when the step's own name leaves room for it.
+  pub(super) fn duplicate(&self, key: &StepKey, name: Option<Name>) {
+    if self.locked() {
+      return;
+    }
+    self.settle(duplicate(&self.edit, &self.current, key, name), Some(key));
+  }
+
+  /// Removes step `key`, which no other step returns to on failure ([`returned_to_by`]).
+  pub(super) fn remove(&self, key: &StepKey) {
+    if self.locked() || returned_to_by(&self.current, key).is_some() {
+      return;
+    }
+    self.reorder.refused.set(None);
+    self.edit.change(|held| {
+      held.remove_step(key);
+    });
   }
 
   fn settle(&self, outcome: Result<(), MoveError>, key: Option<&StepKey>) {
@@ -66,6 +97,13 @@ impl Drive {
   }
 }
 
+fn stage_of<'a>(flow: &'a PipelineFlow, key: &StepKey) -> Option<&'a Stage> {
+  flow
+    .stages
+    .iter()
+    .find(|stage| stage.cards.iter().any(|card| &card.key == key))
+}
+
 /// The first step of the stage after the one `key` is in.
 fn next_after(flow: &PipelineFlow, key: &StepKey) -> Option<StepKey> {
   let index = flow
@@ -77,6 +115,17 @@ fn next_after(flow: &PipelineFlow, key: &StepKey) -> Option<StepKey> {
     .get(index + 1)
     .and_then(|stage| stage.cards.first())
     .map(|card| card.key.clone())
+}
+
+/// A step that returns to step `key` on failure, which keeps `key` from being removed: the route would point at a step
+/// that is gone and the steps could not be drawn as one line. Removing it is refused, not guessed at by dropping the
+/// route.
+pub(super) fn returned_to_by(current: &PipelineEdit, key: &StepKey) -> Option<StepKey> {
+  current
+    .steps()
+    .iter()
+    .find(|step| step.key != *key && step.on_failure.as_ref().is_some_and(|route| &route.return_to == key))
+    .map(|step| step.key.clone())
 }
 
 /// A change of a step's place.
@@ -119,17 +168,20 @@ pub(super) fn make(edit: &Edit, current: &PipelineEdit, key: &StepKey, change: &
   Ok(true)
 }
 
-/// Adds a step after `after`'s place in the flow (its stage, when it runs in parallel with others) or at the end, in
-/// series with what follows: the core adds it waiting for `after` only, which would run it beside the next step. The
-/// flow's first step after `after`'s stage is `next`.
+/// Adds a step after the steps of one stage, `together` (none for the end of the flow), in series with what follows:
+/// the core adds it waiting for one step only, which inside a parallel group is a branch no single line shows, so it
+/// waits for the whole stage before it is moved. The flow's first step after the stage is `next`.
 pub(super) fn add_after(
   edit: &Edit,
   current: &PipelineEdit,
-  (after, next): (Option<&StepKey>, Option<&StepKey>),
+  (together, next): (&[StepKey], Option<&StepKey>),
   name: Name,
 ) -> Result<(), MoveError> {
   let mut added = current.clone();
-  let key = added.add_step(name, after);
+  let key = added.add_step(name, together.last());
+  for member in together {
+    added.set_dependency(&key, member, true);
+  }
   added.move_to(&key, next)?;
   edit.change(|held| *held = added);
   Ok(())
@@ -138,11 +190,19 @@ pub(super) fn add_after(
 /// Copies step `key` to run beside it. The core's copy waits for what the step waits for and nothing waits for it,
 /// which would leave a step that waits for only part of what runs before it, a branch no single line shows: the steps
 /// that wait for the step wait for the copy too.
-pub(super) fn duplicate(edit: &Edit, current: &PipelineEdit, key: &StepKey) -> Result<(), MoveError> {
+pub(super) fn duplicate(
+  edit: &Edit,
+  current: &PipelineEdit,
+  key: &StepKey,
+  name: Option<Name>,
+) -> Result<(), MoveError> {
   let mut copied = current.clone();
   let Some(copy) = copied.duplicate_step(key) else {
     return Err(MoveError::UnknownStep(key.clone()));
   };
+  if let Some(name) = name {
+    copied.update(&copy, |step| step.name = name);
+  }
   let dependents: Vec<StepKey> = copied
     .steps()
     .iter()
@@ -154,12 +214,6 @@ pub(super) fn duplicate(edit: &Edit, current: &PipelineEdit, key: &StepKey) -> R
   }
   edit.change(|held| *held = copied);
   Ok(())
-}
-
-pub(super) fn remove(edit: &Edit, key: &StepKey) {
-  edit.change(|held| {
-    held.remove_step(key);
-  });
 }
 
 /// The number and name of each step as the flow shows them, for the words that name steps.

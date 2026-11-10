@@ -85,6 +85,7 @@ pub(in crate::screens::pipeline_hub) fn section(
   (project, pipeline, count): (&ShownProject, ResourceId, usize),
   read: &Arc<FlowRead>,
   (edit, current): (&Edit, &PipelineEdit),
+  locked: bool,
 ) -> Element {
   ctx.mount_keyed::<view::FlowView>(
     &format!("pipeline-hub-flow-{pipeline}"),
@@ -95,6 +96,7 @@ pub(in crate::screens::pipeline_hub) fn section(
       read: read.clone(),
       current: current.clone(),
       edit: edit.clone(),
+      locked,
     },
   )
 }

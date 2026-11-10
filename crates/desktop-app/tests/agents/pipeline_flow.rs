@@ -416,6 +416,10 @@ fn pipeline_flow_steps_that_cannot_be_drawn_as_one_line_keep_the_start_and_end_a
     start < notice && notice < end,
     "the notice stands between the markers: {start} {notice} {end}"
   );
+  assert!(
+    !agents.exists("pipeline-hub-edit-steps") && !agents.exists("pipeline-hub-add-step"),
+    "the notice has the one Edit steps; the head has no action"
+  );
   agents.click("pipeline-hub-flow-undrawable-edit");
   agents.until("the editor", |s| {
     s.window.navigation().route_now()

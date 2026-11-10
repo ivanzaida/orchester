@@ -24,7 +24,7 @@ use orchester_core::{
 use orchester_workspace::pipelines::flow::{PipelineFlow, StepCard};
 
 use super::{
-  reorder::{Cards, Drive, Move},
+  reorder::{Cards, Drive, Move, returned_to_by},
   state::{Held, Reorder},
 };
 use crate::{
@@ -123,25 +123,47 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
   rows.push(separator(ctx));
   rows.push(add_after(ctx, menu, card).render(ctx, open));
   let (drive, key) = (menu.drive.clone(), card.key.clone());
+  let copy = copy_name(ctx, &card.name);
   rows.push(
     MenuItem::new(id("duplicate"), ctx.t("pipeline_hub.flow.move.duplicate"), move || {
-      drive.duplicate(&key);
+      drive.duplicate(&key, copy.clone());
     })
     .icon(Icon::Copy)
     .render(ctx, open),
   );
-  let (drive, key) = (menu.drive.clone(), card.key.clone());
-  rows.push(
-    MenuItem::new(id("remove"), ctx.t("pipeline_hub.flow.move.remove"), move || {
-      super::reorder::remove(&drive.edit, &key);
-    })
-    .icon(Icon::Trash2)
-    .danger()
-    .render(ctx, open),
-  );
+  rows.push(remove_row(ctx, menu, card).render(ctx, open));
   menu_panel("pipeline-hub-flow-menu")
     .width(Dimension::Px(MENU_WIDTH))
     .with_children(rows)
+}
+
+/// *Remove step*, faded with why when another step returns to this one on failure.
+fn remove_row(ctx: &Ctx, menu: &Menu<'_>, card: &StepCard) -> MenuItem {
+  let (id, label) = ("pipeline-hub-flow-menu-remove", ctx.t("pipeline_hub.flow.move.remove"));
+  let item = match returned_to_by(&menu.drive.current, &card.key) {
+    Some(step) => MenuItem::unavailable(
+      id,
+      label,
+      ctx.t_args(
+        "pipeline_hub.flow.move.reason.removeTarget",
+        [
+          ("step", menu.cards.label(ctx, &step).to_string()),
+          ("target", menu.cards.label(ctx, &card.key).to_string()),
+        ],
+      ),
+    ),
+    None => {
+      let (drive, key) = (menu.drive.clone(), card.key.clone());
+      MenuItem::new(id, label, move || drive.remove(&key))
+    }
+  };
+  item.icon(Icon::Trash2).danger()
+}
+
+/// What a copy of the step called `name` is called, which `name` itself when it leaves no room for the word.
+fn copy_name(ctx: &Ctx, name: &str) -> Option<Name> {
+  // A name at the limit cannot be extended; its copy keeps the name and is told apart by its number.
+  Name::new(&ctx.t_args("pipeline_hub.copyName", [("name", name)])).ok()
 }
 
 /// *Move up*, *Move down*, the neighbours to run in parallel with and *Run on its own*, then the line before the rest.
@@ -168,7 +190,7 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
     Move::Up,
     Icon::ArrowUp,
   )
-  .shortcut("Alt ↑");
+  .shortcut(keys(ctx, "up"));
   let down = item(
     ctx,
     ("down", "pipeline_hub.flow.move.down"),
@@ -176,7 +198,7 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
     Move::Down,
     Icon::ArrowDown,
   )
-  .shortcut("Alt ↓");
+  .shortcut(keys(ctx, "down"));
   rows.push(up.render(ctx, open));
   rows.push(down.render(ctx, open));
   let joins: Vec<Element> = moves
@@ -221,6 +243,16 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
     rows.extend(group);
   }
   rows
+}
+
+/// The keys of the move `part` (`up` or `down`), as the platform writes them: Alt on Windows, ⌥ on macOS.
+fn keys(ctx: &Ctx, part: &str) -> Arc<str> {
+  ctx.t(match (part, cfg!(target_os = "macos")) {
+    ("up", false) => "pipeline_hub.flow.move.upKeys",
+    ("up", true) => "pipeline_hub.flow.move.upKeysMac",
+    (_, false) => "pipeline_hub.flow.move.downKeys",
+    (_, true) => "pipeline_hub.flow.move.downKeysMac",
+  })
 }
 
 /// Why *Move up* or *Move down* does nothing: nothing runs before or after the step.

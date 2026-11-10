@@ -75,6 +75,7 @@
       "restoreHintStopped": "Back in the lists and New task at once · stopped runs stay stopped",
       "failed": "Not restored. {{reason}}"
     },
+    "copyName": "{{name}} copy",
     "panel": {
       "where": "Pipeline",
       "published": "{{version}} · published {{date}}",
@@ -176,7 +177,11 @@
         "handle": "Drag {{name}} to move it",
         "more": "More actions for {{name}}",
         "up": "Move up",
+        "upKeys": "Alt ↑",
+        "upKeysMac": "⌥ ↑",
         "down": "Move down",
+        "downKeys": "Alt ↓",
+        "downKeysMac": "⌥ ↓",
         "parallelWith": "Run in parallel with {{with}}",
         "onItsOwn": "Run on its own",
         "addAfter": "Add a step after",
@@ -199,6 +204,7 @@
           "unknownStep": "it is not a step of this pipeline.",
           "withItself": "a step can't run in parallel with itself.",
           "broken": "the steps have no order to change until their dependencies are fixed.",
+          "removeTarget": "{{step}} returns to {{target}} on failure, so {{target}} can't be removed.",
           "retryTarget": "{{step}} returns to {{target}} on failure, so {{target}} has to run before it."
         }
       },
