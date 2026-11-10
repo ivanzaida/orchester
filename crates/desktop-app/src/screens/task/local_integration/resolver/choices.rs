@@ -13,9 +13,12 @@ use orchester_core::integration::local::{DraftChoice, LocalPath, LocalPhase, Res
 use orchester_workspace::tasks::local_integration::{ConflictView, Preview};
 
 use super::{Props, Resolver};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  field::{FieldInput, SelectField},
+use crate::{
+  mcp::input_gate::Guarded,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::{FieldInput, SelectField},
+  },
 };
 impl Resolver {
   pub(super) fn choice_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView, needs_save: bool) -> Element {
@@ -137,14 +140,6 @@ impl Resolver {
     }
     let editor = self.editor.clone();
     let gate = self.gate.clone();
-    let work = props.work.clone();
-    let refusal = super::super::work::Request {
-      task: props.task.clone(),
-      action: super::super::work::Action::AuthorityRefused,
-      stop: props.stop.clone(),
-      input: None,
-      generation: props.view.operation.as_ref().map(|operation| operation.version()),
-    };
     let preview = match choice {
       DraftChoice::Current => Some(file.current.clone()),
       DraftChoice::Incoming => Some(file.incoming.clone()),
@@ -157,7 +152,10 @@ impl Resolver {
         }
         editor.select(choice);
       } else {
-        work.run_if_idle(refusal.clone());
+        gate.refuse_press(
+          "choose a version of a conflicting file",
+          Guarded::LocalIntegrationQuestion,
+        );
       }
     })
   }

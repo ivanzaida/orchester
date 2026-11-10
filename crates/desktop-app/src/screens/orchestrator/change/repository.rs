@@ -56,7 +56,6 @@ pub(super) fn words(ctx: &Ctx, view: &View, (branch, exists): (&str, bool)) -> W
       glyph: Icon::GitBranchPlus,
       kind: ButtonKind::Primary,
     }),
-    person_only: "orchestrator.change.personOnly.repository",
   }
 }
 

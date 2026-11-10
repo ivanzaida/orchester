@@ -35,13 +35,11 @@ pub(super) struct NotSaved {
 }
 impl lurq::app::component::DevtoolsInspectable for NotSaved {}
 
-/// A press of Save: the fields as typed, the version they are made on, and whether a person (or automation they let
-/// decide) pressed.
+/// A press of Save: the fields as typed and the version they are made on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct SaveAsked {
   pub input: NewTeamMcpServer,
   pub base: VersionNumber,
-  pub decided: bool,
 }
 impl lurq::app::component::DevtoolsInspectable for SaveAsked {}
 
@@ -123,13 +121,10 @@ impl Edit {
 /// Save's action: the fields go to the team server as the next version of server `id`, made on the version given.
 fn save(ctx: &mut Ctx, (root, project, id): (PathBuf, ProjectId, ResourceId)) -> Save {
   let services = Services::of(ctx);
-  ctx.future_action(move |SaveAsked { input, base, decided }: SaveAsked| {
+  ctx.future_action(move |SaveAsked { input, base }: SaveAsked| {
     let (services, root) = (services.clone(), root.clone());
     async move {
       let not_saved = |error| NotSaved { error, reload: None };
-      if !decided {
-        return Err(not_saved(EditError::Refused(EditRefused::person_only())));
-      }
       let Some(config) = services.workspace.team_read(&root).config().cloned() else {
         let reading = EditRefused::Failed(Message::new("teamConfig.reading"));
         return Err(not_saved(EditError::Refused(reading)));

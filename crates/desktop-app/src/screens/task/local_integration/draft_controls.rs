@@ -11,9 +11,10 @@ use lurq::{
 
 use super::{
   resolver::EditorState,
-  work::{Action, Request, Work},
+  work::{Request, Work},
 };
 use crate::{
+  mcp::input_gate::Guarded,
   navigation::Navigation,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -27,26 +28,14 @@ pub(super) fn inline(
   state: &EditorState,
   request: Option<Request>,
   (busy, safe_discard): (bool, bool),
-  task: &super::TaskContext,
 ) -> Element {
   let save = save_pause(ctx, work, request, busy);
   let keep = state.leave.clone();
   let discarded = state.leave.clone();
   let navigation = Navigation::of(ctx);
   let editor = state.editor.clone();
-  let work = work.clone();
-  let refusal = Request {
-    task: task.clone(),
-    action: Action::Refused,
-    stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-    input: None,
-    generation: None,
-  };
   let gate: crate::mcp::input_gate::InputGate = ctx.use_context().unwrap_or_default();
   let keep_gate = gate.clone();
-  let keep_work = work.clone();
-  let mut keep_refusal = refusal.clone();
-  keep_refusal.action = Action::AuthorityRefused;
   Notice::new("local-unsaved", NoticeTone::Warning, ctx.t("local_integration.unsaved"))
     .body(ctx.t("local_integration.unsavedBody"))
     .action(save)
@@ -61,7 +50,10 @@ pub(super) fn inline(
           if keep_gate.local_input(input_source()).allowed() {
             keep.keep_editing();
           } else {
-            keep_work.run_if_idle(keep_refusal.clone());
+            keep_gate.refuse_press(
+              "keep editing a local integration's file",
+              Guarded::LocalIntegrationQuestion,
+            );
           }
         }
       }),
@@ -76,10 +68,16 @@ pub(super) fn inline(
         if busy {
           return;
         }
-        if !gate.local_input(input_source()).allowed() || (input_source() == InputSource::Synthetic && !safe_discard) {
-          let mut refusal = refusal.clone();
-          refusal.initiate(&gate);
-          work.run_if_idle(refusal);
+        // Discarding what was typed is a person's unless nothing is lost; refused, the editor stays as it was.
+        if input_source() == InputSource::Synthetic && !safe_discard {
+          gate.refuse_press("discard a local integration's edited file", Guarded::Person);
+          return;
+        }
+        if !gate.local_input(input_source()).allowed() {
+          gate.refuse_press(
+            "discard a local integration's edited file",
+            Guarded::LocalIntegrationQuestion,
+          );
           return;
         }
         editor.discard();

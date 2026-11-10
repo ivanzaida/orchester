@@ -58,8 +58,6 @@ pub(in crate::screens) struct State {
   /// A local archive happened, and these runs of it could not be stopped: the confirmation says so, in place of the
   /// question.
   pub stopped: Option<Message>,
-  /// Why a press by automation did nothing.
-  pub person_refused: Option<Element>,
 }
 
 /// The confirmation over the window while `open` holds. `retry` reads what uses the resource again; `confirm` asks for
@@ -67,7 +65,7 @@ pub(in crate::screens) struct State {
 pub(in crate::screens) fn dialog(
   ctx: &mut Ctx,
   props: &DialogProps,
-  state: State,
+  state: &State,
   (open, retry, confirm): (&Signal<bool>, &Signal<u64>, Confirm),
 ) -> Element {
   let name = props.name.as_ref();
@@ -118,7 +116,6 @@ pub(in crate::screens) fn dialog(
   let failure = state.failed.as_ref().map(|failed| failure(ctx, failed, name));
   let dialog = dialog
     .with_children(failure)
-    .with_children(state.person_refused)
     .child(buttons(ctx, stops, state.archiving, (open, confirm)));
   over_window("team-hub-archive-dialog", dialog, open, None)
 }

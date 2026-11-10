@@ -126,7 +126,7 @@ fn team_hub_profile_fix_automation_cannot_set_a_path_or_save_a_value() {
   agents.stand_ins.choose(Some(program));
   let set_path = format!("team-hub-ready-mcp-{lint}-set-path");
   with_synthetic_input(|| agents.click(&set_path));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   for _ in 0..20 {
     agents.window.tree.tick_futures();
     agents.window.pass();
@@ -144,11 +144,10 @@ fn team_hub_profile_fix_automation_cannot_set_a_path_or_save_a_value() {
   });
   agents.set("team-hub-secret-value", VALUE);
   with_synthetic_input(|| agents.click("team-hub-secret-save"));
-  agents.until("the notice", |s| s.exists("team-hub-secret-save-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert!(agents.exists("team-hub-secret-dialog"), "the dialog stays");
+  assert_eq!(agents.value("team-hub-secret-value"), VALUE, "with what was typed");
   assert!(!kept(&agents), "automation kept no value");
-  let notice = agents.text("team-hub-secret-save-person-only");
-  assert!(!notice.contains(VALUE), "{notice}");
 }
 
 #[test]
@@ -164,7 +163,7 @@ fn team_hub_profile_fix_automation_cannot_switch_a_server_on() {
     .expect("off here");
   show(&mut agents, profile);
   with_synthetic_input(|| agents.click(&format!("team-hub-ready-mcp-{lint}-switch-on")));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   for _ in 0..20 {
     agents.window.tree.tick_futures();
     agents.window.pass();

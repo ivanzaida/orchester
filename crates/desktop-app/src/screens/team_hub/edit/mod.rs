@@ -35,7 +35,7 @@ use parking_lot::Mutex;
 
 pub(super) use self::view::{Parts, View};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   services::Services,
 };
 
@@ -43,6 +43,8 @@ use crate::{
 pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
   /// The screens that show what Save changes.
   const OUTSIDE: Outside;
+  /// What Save does, as an MCP client refused it reads it after "Only a person can".
+  const SAVE: &'static str;
 
   /// What an edit of team resource `id` starts from as `config` holds it now.
   fn latest(config: &TeamConfig, id: ResourceId) -> Option<Latest<Self>>;
@@ -57,9 +59,10 @@ pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
 }
 
 macro_rules! team_body {
-  ($body:ty, $outside:expr) => {
+  ($body:ty, $outside:expr, $save:literal) => {
     impl Body for $body {
       const OUTSIDE: Outside = $outside;
+      const SAVE: &'static str = $save;
 
       fn latest(config: &TeamConfig, id: ResourceId) -> Option<Latest<Self>> {
         team_body_edit::latest(config, id)
@@ -77,21 +80,27 @@ macro_rules! team_body {
   };
 }
 
-team_body!(Instruction, Outside::Instructions);
-team_body!(Skill, Outside::Skills);
-team_body!(Tool, Outside::Tools);
-team_body!(TeamAgentProfile, Outside::Profiles);
+team_body!(
+  Instruction,
+  Outside::Instructions,
+  "publish a new version of a team instruction"
+);
+team_body!(Skill, Outside::Skills, "publish a new version of a team skill");
+team_body!(Tool, Outside::Tools, "publish a new version of a team tool");
+team_body!(
+  TeamAgentProfile,
+  Outside::Profiles,
+  "publish a new version of a team profile"
+);
 
 /// What the fields take when they are put back or reloaded: every field takes the body's value.
 pub(super) type Load<B> = Arc<dyn Fn(&B) + Send + Sync>;
 
-/// A press of Save: the body the fields make, the version it is made on, and whether a person (or automation they let
-/// change what agents may do) pressed.
+/// A press of Save: the body the fields make and the version it is made on.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Asked<B> {
   body: B,
   base: VersionNumber,
-  decided: bool,
 }
 impl<B> DevtoolsInspectable for Asked<B> {}
 
@@ -200,10 +209,11 @@ impl<B: Body> Edit<B> {
   }
 
   /// Save: a person's press (or automation's where they let it change what agents may do) sends `body`, made on
-  /// `base`.
+  /// `base`; automation's press otherwise is refused to it, and the panel stays as it was.
   fn press_save(&self, body: B, base: VersionNumber) {
-    let decided = input_may_decide(self.gate.as_ref(), Guarded::PermissionWidening);
-    self.save.run(Asked { body, base, decided });
+    if may_press(self.gate.as_ref(), Guarded::PermissionWidening, B::SAVE) {
+      self.save.run(Asked { body, base });
+    }
   }
 }
 
@@ -211,13 +221,10 @@ impl<B: Body> Edit<B> {
 /// someone published first comes back to reload the fields from.
 fn save<B: Body>(ctx: &mut Ctx, (root, project, id): Target) -> Save<B> {
   let services = Services::of(ctx);
-  ctx.future_action(move |Asked { body, base, decided }: Asked<B>| {
+  ctx.future_action(move |Asked { body, base }: Asked<B>| {
     let (services, root) = (services.clone(), root.clone());
     async move {
       let refused = |refused| NotSaved { refused, reload: None };
-      if !decided {
-        return Err(refused(EditRefused::person_only()));
-      }
       if services.workspace.team_read(&root).config().is_none() {
         return Err(refused(EditRefused::Failed(Message::new("teamConfig.reading"))));
       }

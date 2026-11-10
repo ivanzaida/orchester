@@ -35,9 +35,10 @@ use orchester_workspace::{
 
 use super::{
   super::TaskContext,
-  unpushed::{self, Choices, Refused, Unpushed},
+  unpushed::{self, Choices, Unpushed},
 };
 use crate::{
+  mcp::input_gate::InputGate,
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -63,15 +64,12 @@ impl DevtoolsInspectable for Read {}
 pub struct PullRequestState {
   /// *Open as draft*: on until the person turns it off (rule 7).
   pub draft: Signal<bool>,
-  /// The run whose question about the base's unpushed commits window automation tried to answer.
-  pub person_only: Signal<Option<Refused>>,
 }
 
 impl PullRequestState {
   pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       draft: ctx.signal(true),
-      person_only: ctx.signal(None),
     }
   }
 
@@ -80,7 +78,6 @@ impl PullRequestState {
     PullRequestRead {
       readiness,
       draft: self.draft.clone(),
-      person_only: self.person_only.clone(),
     }
   }
 }
@@ -91,7 +88,6 @@ impl PullRequestState {
 pub struct PullRequestRead {
   pub readiness: Option<Result<Readiness, Message>>,
   pub draft: Signal<bool>,
-  pub person_only: Signal<Option<Refused>>,
 }
 
 /// Whether the task's latest run can have a pull request, read off the UI thread for each run and each time the
@@ -156,8 +152,7 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
       let choices = Choices {
         anyway: (state == State::Ready).then(|| start_anyway(ctx, task, run, read)),
         dismiss: Arc::new(move || dismiss.dismiss_unpushed_base()),
-        person_only: read.person_only.clone(),
-        run: run.id(),
+        gate: ctx.use_context::<InputGate>(),
       };
       Some(unpushed::question(ctx, &unpushed, choices))
     }
@@ -289,7 +284,7 @@ fn start(
   let services = Services::of(ctx);
   let job = task.project.feed.jobs.of(run.id());
   let feed = task.project.feed.clone();
-  let (draft, person_only) = (read.draft.clone(), read.person_only.clone());
+  let draft = read.draft.clone();
   let args = PullRequestArgs {
     open: task.project.open.clone(),
     task: task.detail.task.id(),
@@ -303,8 +298,6 @@ fn start(
     changed: Arc::new(move || feed.saved()),
   };
   Arc::new(move || {
-    // Each press asks anew: a refusal of window automation belongs to the question it answered.
-    person_only.set(None);
     let args = PullRequestArgs {
       draft: draft.get_untracked(),
       ..args.clone()

@@ -94,9 +94,7 @@ fn team_qa_hub_archive_automation_can_open_the_confirmation_but_not_confirm_it()
   let (mut window, server, _) = on_archive();
   opened(&mut window);
   with_synthetic_input(|| window.press(CONFIRM));
-  window.until("why nothing was archived", |window| {
-    window.texts("team-hub-archive-confirm-person-only").is_some()
-  });
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(!archived_on(&server), "a press by automation archives nothing");
   assert!(
     window.texts("team-hub-archive-title").is_some(),

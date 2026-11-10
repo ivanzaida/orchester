@@ -6,7 +6,7 @@
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{component::DevtoolsInspectable, ctx::Ctx, events::is_synthetic_input},
+  app::{component::DevtoolsInspectable, ctx::Ctx},
   components::Row,
   core::Signal,
 };
@@ -18,9 +18,10 @@ use orchester_workspace::{memory::listing::Filters, secrets::Vault};
 
 use super::work::{self, Start, Write};
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   project::ProjectFeed,
   routes::MemoryTab,
-  ui::{field::field_error, message::message_text, tinted_note::person_only},
+  ui::{field::field_error, message::message_text},
 };
 
 /// What is open in place of a record or above the list.
@@ -110,8 +111,8 @@ pub struct MemoryState {
   pub selected: Signal<Chosen>,
   pub action: work::Action,
   pub asked: Signal<Asked>,
-  /// Synthetic input asked for the last change, which was not taken.
-  pub refused: Signal<bool>,
+  /// Refuses a change asked for by synthetic input to the automation that sent it.
+  pub gate: Option<InputGate>,
   pub vault: Vault,
 }
 
@@ -126,7 +127,6 @@ pub struct Made {
   pub selected: Signal<Chosen>,
   pub action: work::Action,
   pub asked: Signal<Asked>,
-  pub refused: Signal<bool>,
 }
 
 impl Made {
@@ -144,7 +144,6 @@ impl Made {
       selected: ctx.signal(Chosen::default()),
       action: work::action(ctx),
       asked: ctx.signal(Asked::default()),
-      refused: ctx.signal(false),
     };
     let (opened, selected, feed) = (made.opened.clone(), made.selected.clone(), feed.clone());
     ctx.watch(&made.action.state(), move |done| {
@@ -182,7 +181,7 @@ impl Made {
       selected: self.selected.clone(),
       action: self.action.clone(),
       asked: self.asked.clone(),
-      refused: self.refused.clone(),
+      gate: ctx.use_context::<InputGate>(),
       vault: crate::services::Services::of(ctx).vault,
     }
   }
@@ -197,18 +196,18 @@ impl MemoryState {
 
   /// Starts `write`, unless a change is under way. Called in a press's handler: only a person changes memory, as
   /// what records say reaches every later agent's prompt and a change is kept as the person's. lurq's synthetic input
-  /// (an MCP client driving the window) is refused, and the screen says so where the change was asked for.
+  /// (an MCP client driving the window) is refused to the client, and the screen stays as it was.
   pub fn write(&self, write: Write) {
     if self.action.state().get_untracked().is_pending() {
       return;
     }
-    self.asked.set(Asked(Some(write.record())));
-    let synthetic = is_synthetic_input();
-    self.refused.set(synthetic);
-    if synthetic {
-      tracing::warn!("synthetic input asked for a change of memory records; not taken");
+    if !persons_press(
+      self.gate.as_ref(),
+      "change memory records, which reach later agents' prompts",
+    ) {
       return;
     }
+    self.asked.set(Asked(Some(write.record())));
     self.action.run(Start {
       repo: self.repo.clone(),
       vault: self.vault.clone(),
@@ -216,10 +215,9 @@ impl MemoryState {
     });
   }
 
-  /// Opens `opened` in place, closing whatever was open, and forgets a change that failed or was refused.
+  /// Opens `opened` in place, closing whatever was open, and forgets a change that failed.
   pub fn open(&self, opened: Opened) {
     self.asked.set(Asked(None));
-    self.refused.set(false);
     self.opened.set(opened);
   }
 
@@ -274,13 +272,10 @@ impl MemoryState {
   }
 
   /// Why the last change of `record` did nothing (`None`: a new record), under the controls whose ids begin with
-  /// `id`: `{id}-person-only` once synthetic input asked for it, `{id}-error` once it failed; `None` while neither.
+  /// `id`: `{id}-error` once it failed; `None` while it did not.
   pub fn failure_note(&self, ctx: &Ctx, id: &str, record: Option<MemoryId>) -> Option<Row> {
     if self.asked() != Some(record) {
       return None;
-    }
-    if self.refused.get() {
-      return Some(person_only(format!("{id}-person-only"), &ctx.t("memory.personOnly")));
     }
     let state = self.action.state().get();
     let rejected = state.is_rejected();

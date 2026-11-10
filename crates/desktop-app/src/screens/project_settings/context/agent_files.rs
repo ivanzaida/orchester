@@ -3,7 +3,8 @@
 //! popover (what Codex and Claude Code load from the repository, that the files are not versioned with the run, and
 //! Import from repository, not built yet). Turning them on puts what the repository says in every agent's prompt
 //! (ORC-30): an MCP client's input turns them on only under *Let automation change agent permissions*, as
-//! `set_repository_agent_files` does; turning them off stays open. A refused press says so under the row.
+//! `set_repository_agent_files` does; turning them off stays open. A refused press is refused to the client, and the
+//! row stays as it was.
 
 use lurq::{
   app::{
@@ -18,7 +19,7 @@ use lurq::{
 use orchester_workspace::{project_settings::Settings, prompt_changes};
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   queries::Kept,
   screens::project_settings::{
     TabProps,
@@ -32,7 +33,6 @@ use crate::{
     message::message_text,
     popover::{PopoverSide, popover, popover_panel},
     skeleton,
-    tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -47,8 +47,6 @@ pub(super) struct AgentFiles {
   /// What the page's last save read back, until the settings' query has it.
   kept: Kept<Read>,
   gate: Option<InputGate>,
-  /// An MCP client's input asked to turn the repository's agent files on and was refused.
-  refused: Signal<bool>,
   /// *What each CLI loads*' popover, and its link.
   open: Signal<bool>,
   anchor: ElementRef,
@@ -62,7 +60,6 @@ impl Component for AgentFiles {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       kept: ctx.props::<TabProps>().kept.clone(),
       gate: ctx.use_context::<InputGate>(),
-      refused: ctx.signal(false),
       open: ctx.signal(false),
       anchor: ctx.element_ref(),
     };
@@ -84,7 +81,7 @@ impl Component for AgentFiles {
     let row = row(
       ctx,
       (&props, &read.0, &self.save),
-      (self.gate.clone(), &self.refused),
+      self.gate.clone(),
       (&self.open, &self.anchor),
     );
     let mut group = Group::new("settings-repository-files", ctx.t("project_settings.agentFiles")).row(row);
@@ -126,7 +123,7 @@ fn bones(ctx: &mut Ctx) -> Column {
 fn row(
   ctx: &mut Ctx,
   (props, settings, save): (&TabProps, &Settings, &work::Save),
-  (gate, refused): (Option<InputGate>, &Signal<bool>),
+  gate: Option<InputGate>,
   (open, anchor): (&Signal<bool>, &ElementRef),
 ) -> Element {
   let on = settings.agent_files.is_on();
@@ -145,15 +142,15 @@ fn row(
   let toggle = if save.state().get().is_pending() {
     toggle
   } else {
-    let refusal = refused.clone();
     toggle.on_change(move |_| {
       let may = !prompt_changes::agent_files_change_prompts(on, !on)
-        || input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
-      refusal.set(!may);
+        || may_press(
+          gate.as_ref(),
+          Guarded::PermissionWidening,
+          "turn on the repository's agent files, which reach every agent's prompt",
+        );
       if may {
         start();
-      } else {
-        tracing::warn!("synthetic input turned on the repository's agent files; not taken");
       }
     })
   };
@@ -167,18 +164,11 @@ fn row(
   .element_ref(anchor.clone())
   .on_click(move || shown.update(|open| *open = !*open));
   let panel = popover(anchor.clone(), open.clone(), PopoverSide::BelowEnd, panel(ctx, on));
-  let refusal = refused.get().then(|| {
-    person_only(
-      "settings-agent-files-person-only",
-      &message_text(ctx, &prompt_changes::agent_files_person_only()),
-    )
-  });
   SettingRow::new("settings-files", ctx.t("project_settings.readAgentFiles"))
     .info(ctx.t("project_settings.agentFilesDetail"))
     .hint(ctx.t("project_settings.agentFilesHint"))
     .control(Row::new().child(link).child(panel))
     .control(toggle)
-    .under_all(refusal.map(Element::from))
     .render(ctx)
 }
 

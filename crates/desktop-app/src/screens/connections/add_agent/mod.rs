@@ -300,12 +300,11 @@ impl AddAgent {
       }
       (false, None) => button.disabled(),
     };
-    let refusal = self.provider.refusal(ctx);
     let next = match self.provider.on() {
       true => ctx.t("connections.apiProvider.nextStep"),
       false => ctx.t("connections.dialog.nextStep"),
     };
-    let note = match refusal.as_deref().or(reason) {
+    let note = match reason {
       Some(reason) => (reason.to_owned(), Tone::Muted),
       None => (next.to_string(), Tone::Success),
     };

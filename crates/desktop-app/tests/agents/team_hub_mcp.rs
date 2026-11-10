@@ -319,7 +319,7 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   let program = program_file(&agents);
   agents.stand_ins.choose(Some(program));
   with_synthetic_input(|| agents.click("team-hub-choose-path"));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert!(
     AppDb::open(&agents.window.data.database())
@@ -332,9 +332,11 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   // The pinned fix of the first missing part is switching it on.
   assert_eq!(agents.text("team-hub-fix-switch-on"), "Turn on here");
   with_synthetic_input(|| agents.click("team-hub-fix-switch-on"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert_eq!(switch_of(&agents, pencil), None, "automation switched nothing on");
   with_synthetic_input(|| agents.click("team-hub-here-switch"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert_eq!(switch_of(&agents, pencil), None, "nor by the switch");
   // The person's own flip does.
@@ -349,14 +351,18 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   agents.until("said on", |s| {
     s.text("team-hub-here-switch") == "On: runs here may use it"
   });
-  // A secret without a value is the same: pressing Add value under automation opens no dialog, and says why.
+  // A secret without a value is the same: pressing Add value under automation opens no dialog, and is refused to it.
   show(&mut agents, github);
   agents.until("its panel", |s| s.text("team-hub-panel-title") == "copilot");
   assert_eq!(agents.text("team-hub-fix-add-value"), "Add value");
   with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert!(!agents.exists("team-hub-secret-dialog"), "automation opened no dialog");
-  assert!(agents.exists("team-hub-fix-person-only"), "and the panel says why");
+  assert!(
+    !agents.exists("team-hub-fix-person-only"),
+    "and the panel says nothing of it"
+  );
   // The person's own press does.
   agents.click("team-hub-fix-add-value");
   agents.until("the dialog", |s| s.exists("team-hub-secret-dialog"));
@@ -417,7 +423,7 @@ fn team_hub_mcp_switching_off_is_allowed_to_automation_and_leaves_the_server_off
   agents.until("said off", |s| {
     s.text("team-hub-here-switch") == "Off: runs here don't use it"
   });
-  assert!(!agents.exists("team-hub-fix-person-only"));
+  assert_eq!(agents.refused(), None, "switching off is automation's too");
   assert_eq!(
     agents.text("team-hub-mcp-note-text"),
     "Off here: runs on this computer don't use copilot."

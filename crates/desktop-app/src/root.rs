@@ -189,7 +189,7 @@ impl Component for SessionWindow {
     Self {
       router,
       account_tabs: AccountTabs::new(services.cloud.sign_in_state().account()),
-      links: ChatLinks::new(navigation.clone()),
+      links: ChatLinks::new(navigation.clone(), Some(link.input_gate())),
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),

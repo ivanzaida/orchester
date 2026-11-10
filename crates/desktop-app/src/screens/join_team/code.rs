@@ -44,7 +44,6 @@ pub(super) fn column(ctx: &mut Ctx, join: &CodeJoin, focus: bool) -> Element {
   );
   let mut parts = vec![address(ctx, join, refusal.as_ref()), code(ctx, join, refusal.as_ref())];
   parts.push(submit(ctx, join));
-  parts.extend(join.person.reason(ctx, SUBMIT));
   parts.extend(refused(ctx, join, refusal.as_ref()));
   if let Some(outcome) = join.outcome() {
     parts.push(outcome::callout(ctx, ID, &outcome, None));

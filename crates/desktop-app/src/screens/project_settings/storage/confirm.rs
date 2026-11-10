@@ -1,12 +1,13 @@
 //! Clean up's one modal (X9BwMn): the exact snapshot to discard, its estimated space, and what stays.
 use lurq::{
-  app::{ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, ScrollVertical, Text},
   node::{Element, dimension::Dimension},
 };
 
 use super::{StoragePage, bytes, work};
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   services::storage::Disk,
   theme::{DialogText, ExtraTypography},
   ui::{
@@ -28,8 +29,9 @@ pub fn dialog(ctx: &mut Ctx, page: &StoragePage, disk: Option<&Disk>) -> Option<
   let open = page.modal.clone();
   let remove = page.remove.clone();
   let person_only = plan.0.iter().any(|candidate| candidate.person_only);
+  let gate = ctx.use_context::<InputGate>();
   let run = move || {
-    if person_only && is_synthetic_input() {
+    if person_only && !persons_press(gate.as_ref(), "clean up run worktrees that hold uncommitted changes") {
       return;
     }
     if open.get_untracked() && !remove.state().get_untracked().is_pending() {

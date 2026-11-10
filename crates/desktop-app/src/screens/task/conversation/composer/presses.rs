@@ -28,7 +28,7 @@ use super::{
   controls::Sending,
   state::{ComposerState, Request},
 };
-use crate::mcp::input_gate::{Guarded, answerer};
+use crate::mcp::input_gate::{Guarded, press_answerer};
 
 /// Whose message a press sends, as the person reads the run: for `task`'s latest run `written_for`, `lost`
 /// its runner, the mode's context `left`.
@@ -84,6 +84,23 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
     if (text.trim().is_empty() && attachments.is_empty()) || still_reading || state.sending() {
       return;
     }
+    // An answer of what the run waits for is automation's only under the person's consent: refused to it otherwise,
+    // and the draft stays as it is.
+    let by = match expected.decision_kind() {
+      None => Some(if lurq::app::events::is_synthetic_input() {
+        Answerer::Automation
+      } else {
+        Answerer::Person
+      }),
+      Some(kind) => press_answerer(
+        state.gate.as_ref(),
+        Guarded::Decision(kind),
+        "answer what an agent's run waits for",
+      ),
+    };
+    if by.is_none() {
+      return;
+    }
     state.send.run(Request {
       project: project.clone(),
       task,
@@ -96,16 +113,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       text,
       attachments,
       skill: state.skill.get_untracked().and_then(|skill| skill.chosen()),
-      by: expected.decision_kind().map_or_else(
-        || {
-          Some(if lurq::app::events::is_synthetic_input() {
-            Answerer::Automation
-          } else {
-            Answerer::Person
-          })
-        },
-        |kind| answerer(state.gate.as_ref(), Guarded::Decision(kind)),
-      ),
+      by,
     });
   })
 }

@@ -357,8 +357,7 @@ impl EditConnection {
       .filter(|_| rejected)
       .map(|error| crate::ui::message::message_text(ctx, &error))
       .or_else(|| self.provider.reason(ctx, known));
-    let refusal = self.provider.refusal(ctx);
-    action_bar(vec![cancel.into(), save.into()], refusal.or(reason).as_deref())
+    action_bar(vec![cancel.into(), save.into()], reason.as_deref())
   }
 }
 

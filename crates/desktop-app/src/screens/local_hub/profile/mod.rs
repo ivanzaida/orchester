@@ -41,7 +41,7 @@ use orchester_workspace::{
   agents::{
     local_edit::Edit,
     local_hub::{LocalHub, LocalProfile},
-    role::RoleErrors,
+    role::{RoleErrors, RoleText},
   },
   local_archive::Archivable,
   messages::Message,
@@ -61,7 +61,7 @@ use super::{
   words::kind_where_key,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, input_may_decide, may_press},
   navigation::Navigation,
   project::ShownProject,
   routes::{AccountsView, HubFilter, ProjectPage, Route},
@@ -340,8 +340,23 @@ impl ProfilePanel {
       self.pending.clone(),
       self.held.clone(),
     );
-    let (decided, gate) = (self.decided.clone(), self.gate.clone());
+    let (decided, gate, listed) = (self.decided.clone(), self.gate.clone(), self.listed.0.clone());
     Save::Ready(Press::run(move || {
+      // What reaches agents' prompts is a person's to save, or automation's where they let it change agent
+      // permissions; refused, the panel stays as it was. The workspace checks it again against what is stored.
+      let reaches_prompts = held
+        .get_untracked()
+        .body()
+        .is_some_and(|body| listed.get().is_none_or(|now| RoleText::of(&body) != now.role));
+      if reaches_prompts
+        && !may_press(
+          gate.as_ref(),
+          Guarded::PermissionWidening,
+          "save a profile change that reaches agents' prompts",
+        )
+      {
+        return;
+      }
       decided.set(input_may_decide(gate.as_ref(), Guarded::PermissionWidening));
       if choices.waits() {
         choices.save_after();

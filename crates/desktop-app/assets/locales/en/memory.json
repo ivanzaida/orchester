@@ -6,7 +6,6 @@
     "settingsLink": "Change in Project settings › Context ↗",
     "reading": "Reading memory…",
     "retry": "Try again",
-    "personOnly": "Only a person changes memory here: input from an MCP client is refused, as what records say reaches every later agent. Clients can still read this page.",
     "loadFailed": "Memory couldn't be read",
     "loadStillWorks": "Agents keep working with what their prompts already hold.",
     "tabs": {
@@ -48,8 +47,7 @@
       "records": "Records per invocation",
       "recordsUnit": "records",
       "tokens": "Tokens per invocation",
-      "tokensUnit": "tokens",
-      "personOnly": "Only a person changes these settings: input from an MCP client is refused, as they decide what reaches every later agent. Clients can still read this page."
+      "tokensUnit": "tokens"
     },
     "latestHandoff": "Latest · given to every agent",
     "separator": " · ",

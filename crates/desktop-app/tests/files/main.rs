@@ -5,6 +5,7 @@ mod design;
 mod harness;
 mod mcp_client;
 mod page;
+mod person_only;
 mod privacy;
 #[path = "../support/mod.rs"]
 mod support;

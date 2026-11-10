@@ -24,7 +24,7 @@ fn local_hub_create_a_tool_is_a_persons_press() {
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(
     held(&agents, ResourceKind::Tool),
     0,
@@ -43,7 +43,7 @@ fn local_hub_create_an_instruction_is_not_refused_to_synthetic_input() {
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   agents.until("the instruction is made", |s| held(s, ResourceKind::Instruction) == 1);
-  assert!(!agents.exists("team-new-person-only"));
+  assert_eq!(agents.refused(), None);
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn local_hub_create_a_skill_is_not_refused_to_synthetic_input() {
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   agents.until("the skill is made", |s| held(s, ResourceKind::Skill) == 1);
-  assert!(!agents.exists("team-new-person-only"));
+  assert_eq!(agents.refused(), None);
 }
 
 /// A team project keeps the New profile page it has: it is not the hub's form, and an MCP client's press on its Create
@@ -80,7 +80,8 @@ fn agents_new_profile_page_of_a_team_project_is_its_own_page_and_refuses_synthet
   agents.set("agent-instructions", "Review the implementation.");
   agents.set("agent-custom-model", "test-model");
   with_synthetic_input(|| agents.click("agent-create"));
-  agents.until("the refusal shown", |s| s.exists("agent-save-error"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
+  assert!(!agents.exists("agent-save-error"), "the page says nothing of it");
   assert!(agents.exists("agent-create"), "the profile is still unsaved");
   assert_eq!(
     ProjectDb::open(&agents.root)

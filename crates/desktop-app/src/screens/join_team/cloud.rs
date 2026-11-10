@@ -102,7 +102,6 @@ pub(super) fn signed_out(ctx: &mut Ctx, sign_in: &CloudSignIn) -> Element {
       .map(|refusal| refusal_part(ctx, form, (refusal, &sign_in.host))),
   );
   parts.push(submit_button(ctx, form).icon(Icon::LogIn).large().into());
-  parts.extend(form.person.reason(ctx, form.submit));
   parts.extend(unopened(ctx, form));
   parts.push(faded(create(ctx, form)));
   let submit = form.submitter();

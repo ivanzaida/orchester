@@ -53,7 +53,6 @@ impl Link {
         ))
       }
     };
-    column = column.with_children(self.person.reason(ctx, LINK));
     let problem = resolving.error.clone().filter(|_| !resolving.is_pending());
     if let Some(problem) = problem {
       column = column.with_children(problem_part(ctx, &problem));
@@ -82,7 +81,7 @@ impl Link {
       Some(choice) => {
         let (resolve, person) = (self.resolve.clone(), self.person.clone());
         button.on_click(move || {
-          if person.allows(LINK) {
+          if person.allows("link a project to a team server") {
             resolve.run(choice.clone());
           }
         })

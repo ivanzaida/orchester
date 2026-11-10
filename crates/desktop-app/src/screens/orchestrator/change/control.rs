@@ -65,15 +65,5 @@ pub(super) fn control(ctx: &Ctx, view: &View, (control, number, group): (Control
       glyph,
       kind: ButtonKind::Primary,
     }),
-    person_only: person_only(control),
-  }
-}
-
-/// What a refused click by automation says.
-const fn person_only(control: Control) -> &'static str {
-  match control {
-    Control::Pause => "orchestrator.change.personOnly.pause",
-    Control::Resume => "orchestrator.change.personOnly.resume",
-    Control::Release => "orchestrator.change.personOnly.release",
   }
 }

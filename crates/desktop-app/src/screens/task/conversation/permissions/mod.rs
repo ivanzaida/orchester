@@ -42,6 +42,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   project::{ProjectFeed, ShownProject},
   theme::{ExtraColor, ExtraSpacing, IconSize, PermissionsText},
   ui::{
@@ -78,6 +79,7 @@ impl DevtoolsInspectable for Changed {}
 pub(super) struct Permissions {
   pub(super) open: Signal<bool>,
   change: FutureAction<Asked, Changed, Message>,
+  gate: Option<InputGate>,
 }
 
 impl Permissions {
@@ -103,6 +105,7 @@ impl Permissions {
     let permissions = Self {
       open: ctx.signal(false),
       change,
+      gate: ctx.use_context::<InputGate>(),
     };
     ctx.provide(permissions);
   }
@@ -114,9 +117,13 @@ impl Permissions {
   }
 
   /// Asks `change` of `run` of the project at `root`, as whoever gives the input now: a person, or an MCP client's
-  /// synthetic input; nothing while a change is under way.
+  /// synthetic input; nothing while a change is under way. A widening is a person's alone
+  /// ([`RunPermissionChange::asked_by`]): automation's is refused to it here, and nothing is asked or recorded.
   pub(super) fn ask(&self, root: &std::path::Path, run: RunId, change: RunPermissionChange) {
     if self.change.state().get_untracked().is_pending() {
+      return;
+    }
+    if change.widens() && !self.may_widen() {
       return;
     }
     let by = if is_synthetic_input() {
@@ -130,6 +137,11 @@ impl Permissions {
       change,
       by,
     });
+  }
+
+  /// Whether the press being delivered may widen the run: a person's; automation's is refused to it.
+  pub(super) fn may_widen(&self) -> bool {
+    persons_press(self.gate.as_ref(), "approve everything in a run")
   }
 
   /// Why the last change was not saved, while it shows.

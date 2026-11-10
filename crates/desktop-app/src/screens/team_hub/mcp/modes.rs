@@ -21,7 +21,7 @@ use super::{
   from_team, words,
 };
 use crate::{
-  mcp::input_gate::{Guarded, input_may_decide},
+  mcp::input_gate::{Guarded, may_press},
   screens::{
     local_hub::save_bar::{self, Save},
     team_hub::{actions::Busy, create::EditView, panel, rows},
@@ -131,16 +131,21 @@ impl McpPanel {
   }
 
   /// Save: a person's press (or automation's where they let it change what agents may do) sends the fields as typed,
-  /// made on the version the form was opened on.
+  /// made on the version the form was opened on; automation's press otherwise is refused to it, and the panel stays as
+  /// it was.
   fn save_press(&self, input: NewTeamMcpServer, base: &McpEdit) -> Press {
     let (save, gate, number) = (self.edit.save.clone(), self.gate.clone(), base.number);
     Press::run(move || {
-      let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
-      save.run(SaveAsked {
-        input: input.clone(),
-        base: number,
-        decided,
-      });
+      if may_press(
+        gate.as_ref(),
+        Guarded::PermissionWidening,
+        "publish a new version of a team MCP server",
+      ) {
+        save.run(SaveAsked {
+          input: input.clone(),
+          base: number,
+        });
+      }
     })
   }
 

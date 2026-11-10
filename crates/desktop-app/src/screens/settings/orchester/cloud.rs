@@ -117,7 +117,6 @@ impl Component for CloudPanel {
       "orchester-cloud-recovery",
       (props.two_factor.as_ref(), &self.invites),
     );
-    let turn_on = self.invites.person.reason(ctx, super::two_factor::TURN_ON_HEADER);
     let computer = account::this_computer(ctx, account);
     let invites = invites::waiting(
       ctx,
@@ -139,8 +138,7 @@ impl Component for CloudPanel {
       .child(card)
       .with_children(question)
       .with_children(failed)
-      .with_children(recovery)
-      .with_children(turn_on);
+      .with_children(recovery);
     pane
       .child(top)
       .child(computer)

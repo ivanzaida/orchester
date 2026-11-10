@@ -27,7 +27,7 @@ use orchester_workspace::{
 
 use super::{PREFIX, Props, UnsavedSignal};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   screens::{
     hub::forms::{Form, Ids, InstructionFields},
     local_hub::{
@@ -210,7 +210,11 @@ impl Editor {
     };
     let (save, gate, entry) = (self.save.clone(), self.gate.clone(), stored.entry.clone());
     Save::Ready(Press::run(move || {
-      if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+      if may_press(
+        gate.as_ref(),
+        Guarded::PermissionWidening,
+        "publish an instruction, which reaches agents' prompts",
+      ) {
         save.run((entry.clone(), body.clone()));
       }
     }))

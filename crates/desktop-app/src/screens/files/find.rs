@@ -3,13 +3,11 @@
 //! a cross that closes it; Enter goes to the next place, Shift+Enter to the previous one, Esc closes it.
 //! The places are found by the workspace ([`orchester_workspace::files::FileText::find`], off the UI thread:
 //! [`super::search`]); the lines show them, the current one apart. Only a person's typing is searched: what automation
-//! types finds nothing, since counting places would let it read the file a character at a time.
+//! types finds nothing and is refused to it, since counting places would let it read the file a character at a
+//! time.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    events::{KeyboardEvent, is_synthetic_input},
-  },
+  app::{ctx::Ctx, events::KeyboardEvent},
   components::Row,
   core::{ElementRef, Signal},
   layout::Alignment,
@@ -18,6 +16,7 @@ use lurq::{
 use orchester_workspace::files::MAX_MATCHES;
 
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   theme::ExtraSpacing,
   ui::{field::FieldInput, icon::Icon, icon_button::IconButton},
 };
@@ -97,6 +96,7 @@ impl FindState {
       ctx.focus(&self.input);
       self.focus.set(false);
     }
+    let gate = ctx.use_context::<InputGate>();
     let field = FieldInput::new("files-find-field", ctx.t("files.find.placeholder"), self.query.clone())
       .search()
       .placeholder(ctx.t("files.find.placeholder"))
@@ -105,7 +105,7 @@ impl FindState {
       .on_typed({
         let typed = self.typed.clone();
         move |event| {
-          if !is_synthetic_input() {
+          if persons_press(gate.as_ref(), "search within a file") {
             typed.set(event.new_value().to_owned());
           }
         }

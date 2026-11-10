@@ -63,16 +63,11 @@ pub(super) fn table(
   for row in rows {
     table = table.child(line(ctx, row, (key, unticked, person)));
   }
-  // What goes up is a person's choice, as the join is: an MCP client's tick changes nothing and says why.
-  let refused = rows
-    .iter()
-    .filter_map(|row| person.reason(ctx, &tick_id(row.task)))
-    .collect::<Vec<_>>();
+  // What goes up is a person's choice, as the join is: an MCP client's tick changes nothing.
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(table)
-    .with_children(refused)
     .into()
 }
 
@@ -93,9 +88,9 @@ fn line(ctx: &mut Ctx, planned: &Planned<'_>, (key, unticked, person): (&str, &S
   )
   .hide_label();
   if !task.locked() {
-    let (unticked, person, button, task) = (unticked.clone(), person.clone(), tick_id(task), task.task.id());
+    let (unticked, person, task) = (unticked.clone(), person.clone(), task.task.id());
     tick = tick.on_change(move |on| {
-      if !person.allows(&button) {
+      if !person.allows("choose which tasks a joined project shares") {
         return;
       }
       let mut set = unticked.get_untracked();

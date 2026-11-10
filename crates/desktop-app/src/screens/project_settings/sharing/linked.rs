@@ -277,10 +277,7 @@ impl Linked {
       .clone()
       .filter(|_| !state.is_pending())
       .map(|reason| field_error("sharing-leave-error", &reason.text(ctx)).into());
-    row
-      .under_all(self.person.reason(ctx, LEAVE))
-      .under_all(error)
-      .render(ctx)
+    row.under_all(error).render(ctx)
   }
 
   /// *Leave Kontur?* in place.
@@ -291,7 +288,7 @@ impl Linked {
       confirm.loading()
     } else {
       confirm.on_click(move || {
-        if person.allows(LEAVE) {
+        if person.allows("leave a shared project") {
           asking.set(false);
           leave.run(());
         }

@@ -389,7 +389,7 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let confirm = ActionButton::new(TAKE_OVER, ButtonKind::Primary, ctx.t("summary.team.claim.takeOver"))
     .icon(Icon::HandHelping)
     .on_click(move || {
-      if ask.person.allows(TAKE_OVER) {
+      if ask.person.allows("take over a stale claim") {
         open.set(false);
         ask.run(TeamAsk::TakeOver);
       }
@@ -405,7 +405,6 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     ctx.t("summary.team.takeOver.cancel"),
   )
   .part(dialog::lines("task-take-over-lines", lines))
-  .under(controls.person.reason(ctx, TAKE_OVER))
   .action(confirm)
   .render(ctx, &controls.taking_over);
   Some(dialog)

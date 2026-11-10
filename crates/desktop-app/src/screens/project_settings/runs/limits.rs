@@ -27,7 +27,7 @@ use super::super::{
   work::{self, Change, Read, Save},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, input_may_decide, refuse_press},
   queries::Kept,
   theme::ExtraTypography,
   ui::{
@@ -62,8 +62,6 @@ pub(super) struct Limits {
   /// A save asked for while another ran, with whether every input that asked for it may raise the daily budget.
   queued: Signal<Option<bool>>,
   gate: Option<InputGate>,
-  /// Window input raised or removed the daily budget while the person does not let automation decide for them.
-  person_only: Signal<bool>,
 }
 #[derive(Clone, PartialEq)]
 struct Submitted(Option<LimitsText>);
@@ -178,7 +176,6 @@ impl Component for Limits {
       submitted: ctx.signal(Submitted(None)),
       queued: ctx.signal(None),
       gate: ctx.use_context::<InputGate>(),
-      person_only: ctx.signal(false),
     };
     let save = tab.save.clone();
     work::follow(ctx, &save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
@@ -272,9 +269,6 @@ impl Component for Limits {
     if let Some(error) = loaded.state.error {
       group = group.after(field_error("settings-limits-read-error", &message_text(ctx, &error)));
     }
-    if let Some(refused) = self.person_only_line(ctx, changed) {
-      group = group.after(refused);
-    }
     if outside && changed {
       group = group.after(self.outside(ctx, data));
     }
@@ -282,19 +276,6 @@ impl Component for Limits {
   }
 }
 impl Limits {
-  /// Why a client's raise of the daily budget was not saved, while the fields still hold it.
-  fn person_only_line(&self, ctx: &Ctx, changed: bool) -> Option<Element> {
-    if !changed && self.person_only.get_untracked() {
-      self.person_only.set(false);
-    }
-    self.person_only.get().then(|| {
-      field_error(
-        "settings-limits-person-only",
-        &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
-      )
-      .into()
-    })
-  }
   fn text(&self) -> LimitsText {
     LimitsText {
       default: self.default.get(),
@@ -362,11 +343,16 @@ impl Limits {
       return;
     };
     if base.0.limits.raises_daily_budget(asked) && !may_raise {
-      tracing::warn!("synthetic input raised the daily budget without consent; not saved");
-      self.person_only.set(true);
+      // Refused to the automation that typed it, while its input is delivered; the field goes back to the stored
+      // budget.
+      refuse_press(
+        self.gate.as_ref(),
+        Guarded::Decision(DecisionKind::Limit),
+        "raise or remove a project's daily budget",
+      );
+      self.daily.set(LimitsText::of(base.0.limits, &self.separator).daily);
       return;
     }
-    self.person_only.set(false);
     if asked != base.0.limits {
       self.submitted.set(Submitted(Some(text)));
       save.run((

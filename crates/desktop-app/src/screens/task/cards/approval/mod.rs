@@ -266,8 +266,7 @@ fn decided(card: &ApprovalCard, outcome: Option<&Outcome>, sent: &str) -> Option
       note: None,
     }),
     Stage::Refused(Refused::Answered) => Some(Decided::AnsweredAlready),
-    Stage::Sending
-    | Stage::Refused(Refused::Superseded | Refused::PersonOnly | Refused::WiderPersonOnly | Refused::Failed(_)) => None,
+    Stage::Sending | Stage::Refused(Refused::Superseded | Refused::Failed(_)) => None,
   }
 }
 

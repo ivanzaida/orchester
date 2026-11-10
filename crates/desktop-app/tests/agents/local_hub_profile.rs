@@ -436,7 +436,7 @@ fn local_hub_profile_automation_cannot_answer_allow_or_take_an_account_for_a_pro
   // The confirm takes no press before the question lived through a pass: press it as a client would, until it answers.
   agents.until("the refusal", |s| {
     with_synthetic_input(|| s.click("local-hub-profile-confirm-confirm"));
-    s.exists("local-hub-profile-confirm-person-only")
+    s.refused().is_some()
   });
   for _ in 0..20 {
     agents.until("a pass", |_| true);
@@ -455,10 +455,8 @@ fn local_hub_profile_automation_cannot_answer_allow_or_take_an_account_for_a_pro
   );
   assert!(agents.exists("local-hub-profile-confirm-confirm"), "it still asks");
   assert!(
-    agents
-      .text("local-hub-profile-confirm-person-only")
-      .starts_with("Only a person does this here"),
-    "the refusal is said under the question"
+    !agents.exists("local-hub-profile-confirm-person-only"),
+    "nothing in the window says it"
   );
   agents.press_until("local-hub-profile-confirm-confirm", "a person allows it", |s| {
     s.listed()
@@ -489,10 +487,8 @@ fn local_hub_profile_automation_cannot_take_an_account_for_a_profile_that_lost_i
     "automation chose no account for it"
   );
   assert!(
-    agents
-      .text("local-hub-fix-use-person-only")
-      .starts_with("Only a person does this here"),
-    "the refused press says why in the panel"
+    !agents.exists("local-hub-fix-use-person-only"),
+    "the panel says nothing of the refused press"
   );
   agents.press_until("local-hub-fix-use", "a person's press takes it", |s| {
     s.listed()

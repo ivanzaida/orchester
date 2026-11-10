@@ -28,9 +28,10 @@ use orchester_workspace::{
 
 use super::line::{Line, LineLink, Tone};
 use crate::{
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  screens::task::waits_on::pressed_by,
+  screens::task::waits_on::may_drop,
   services::Services,
   ui::{icon::Icon, message::message_text, pressable::Press},
 };
@@ -52,9 +53,10 @@ pub(super) struct WaitsOnProps {
 
 impl DevtoolsInspectable for WaitsOnProps {}
 
-/// The row, with the person's *Drop the wait*: a press made by automation is refused, and says so.
+/// The row, with the person's *Drop the wait*: a press made by automation is refused to it.
 pub(super) struct WaitsOnLine {
   dropping: FutureAction<Answerer, (), Message>,
+  gate: Option<InputGate>,
   /// The pointer is over the row, which shows *Drop the wait* of a wait that waits. The row reads it here, not in the
   /// line it draws: the row sits in the body of the answer's message, which is drawn again only with this component.
   hovered: Signal<bool>,
@@ -83,6 +85,7 @@ impl Component for WaitsOnLine {
     });
     Self {
       dropping,
+      gate: ctx.use_context::<InputGate>(),
       hovered: ctx.signal(false),
     }
   }
@@ -94,15 +97,15 @@ impl Component for WaitsOnLine {
     let line = match state {
       Some(state) if state.holds() => {
         let pending = self.dropping.state().get().is_pending();
-        let dropping = self.dropping.clone();
+        let (dropping, gate) = (self.dropping.clone(), self.gate.clone());
         let label = ctx.t(if pending {
           "orchestrator.waitsOn.dropping"
         } else {
           "orchestrator.waitsOn.drop"
         });
         let press = Press::run(move || {
-          if !dropping.state().get_untracked().is_pending() {
-            dropping.run(pressed_by());
+          if !dropping.state().get_untracked().is_pending() && may_drop(gate.as_ref()) {
+            dropping.run(Answerer::Person);
           }
         });
         // A wait nothing else will end offers it always; one that waits, under the pointer (`lguJb`).

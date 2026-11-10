@@ -40,9 +40,6 @@ use crate::{
   services::Services,
 };
 
-/// The id the person-only check of the confirmation's *Archive* is made under.
-const CONFIRM: &str = "local-hub-archive-confirm";
-
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
 /// What the confirmation is about, and what follows it.
@@ -213,7 +210,7 @@ impl Confirmation {
       .map(|used| used.runs.clone())
       .unwrap_or_default();
     let confirm: Confirm = Arc::new(move || {
-      if person.allows(CONFIRM) {
+      if person.allows("archive a resource and stop the runs that use it") {
         action.run(shown.clone());
       }
     });
@@ -224,13 +221,12 @@ impl Confirmation {
         blocks_profiles: archive_blocks_profiles(props.kind),
         local: true,
       },
-      State {
+      &State {
         read,
         lines,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
         stopped: archiving.data.clone().flatten().filter(|_| !archiving.is_pending()),
-        person_refused: self.person.reason(ctx, CONFIRM),
       },
       (&self.open, &self.retry, confirm),
     )

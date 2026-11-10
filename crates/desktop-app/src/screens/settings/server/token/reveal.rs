@@ -150,14 +150,9 @@ impl TokenRow {
         left.set(0);
       })
     } else if let Some(server) = server {
-      let (reveal, left, blocked, gate) = (
-        self.reveal.clone(),
-        self.left.clone(),
-        self.blocked.clone(),
-        gate.clone(),
-      );
+      let (reveal, left, gate) = (self.reveal.clone(), self.left.clone(), gate.clone());
       active.on_click(move || {
-        if refused(&blocked) {
+        if refused() {
           return;
         }
         let Some(token) = server.token() else { return };
@@ -199,9 +194,9 @@ impl TokenRow {
     again = if read.pending {
       again.disabled()
     } else {
-      let (blocked, count) = (self.blocked.clone(), self.read_again.clone());
+      let count = self.read_again.clone();
       again.on_click(move || {
-        if !refused(&blocked) {
+        if !refused() {
           count.update(|count| *count += 1);
         }
       })
