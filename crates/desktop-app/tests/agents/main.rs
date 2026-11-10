@@ -27,6 +27,8 @@ mod pipeline_hub_menu;
 mod pipeline_hub_ready;
 mod pipeline_leaving;
 mod pipeline_menu_edit;
+mod pipeline_reorder;
+mod pipeline_reorder_changes;
 mod pipeline_save;
 mod pipeline_save_notes;
 mod project_sets;
