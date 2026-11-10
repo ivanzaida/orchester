@@ -5,8 +5,8 @@
 use std::num::NonZeroU32;
 
 use orchester_app::routes::{
-  AgentTab, HubFilter, HubView, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, ProjectPage,
-  ProjectSettingsTab, Route, SecretsPanel, SecretsView, SkillsFilter, StepPage,
+  AgentTab, HubFilter, HubView, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, PipelinesFilter,
+  PipelinesView, ProjectPage, ProjectSettingsTab, Route, SecretsPanel, SecretsView, SkillsFilter, StepPage,
 };
 use orchester_core::{
   id::ConnectionId,
@@ -51,6 +51,11 @@ pub(super) fn view_routes() -> Vec<Route> {
   all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::Archived, server))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::All, Some(id)))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::Tools, Some(id)))));
+  all.extend(PipelinesFilter::ALL.map(|filter| at(ProjectPage::pipelines(PipelinesView::new(filter, None)))));
+  all.push(at(ProjectPage::pipelines(PipelinesView::new(
+    PipelinesFilter::Drafts,
+    Some(id),
+  ))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::Agent(id, tab))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::NewAgent(tab))));
   for tab in InstructionsTab::ALL {
@@ -294,6 +299,39 @@ fn views_agents_hub_names_its_filter_and_resource() {
     format!("{root}?filter=tools&item={CONNECTION}")
   );
   assert!(Route::parse(&format!("{root}?filter=pipelines")).is_err());
+}
+
+/// The Pipelines hub of a local project keeps its tab and the pipeline its panel shows; opened on its first tab with
+/// nothing chosen it is the Pipelines route itself, and a tab it does not have names no view.
+#[test]
+fn views_pipelines_hub_names_its_tab_and_pipeline() {
+  let root = format!("/project/{PROJECT}/pipelines");
+  assert_eq!(ProjectPage::pipelines(PipelinesView::default()), ProjectPage::Pipelines);
+  assert_eq!(at(ProjectPage::Pipelines).path(), root);
+  let id = CONNECTION.parse().expect("a resource id");
+  assert_eq!(
+    at(ProjectPage::pipelines(PipelinesView::new(
+      PipelinesFilter::Archived,
+      None
+    )))
+    .path(),
+    format!("{root}?filter=archived")
+  );
+  let chosen = at(ProjectPage::pipelines(PipelinesView::new(
+    PipelinesFilter::Drafts,
+    Some(id),
+  )));
+  assert_eq!(chosen.path(), format!("{root}?filter=drafts&item={CONNECTION}"));
+  assert_eq!(Route::parse(&chosen.path()), Ok(chosen));
+  assert_eq!(
+    Route::parse(&format!("{root}?item={CONNECTION}")),
+    Ok(at(ProjectPage::pipelines(PipelinesView::new(
+      PipelinesFilter::All,
+      Some(id)
+    ))))
+  );
+  assert!(Route::parse(&format!("{root}?filter=profiles")).is_err());
+  assert!(Route::parse(&format!("{root}?item=not-an-id")).is_err());
 }
 
 /// A local project's hub also has *Archived*, and names a local MCP server by its connection id, which is not a

@@ -8,10 +8,11 @@ use orchester_app::queries::changes::{
 };
 use orchester_workspace::tasks::outside::{AppOutside, Outside, OutsideChanges};
 
-/// The Agents hub's reads, which a change no settings tab shows may touch.
-const HUB: [ProjectRead; 5] = [
+/// The Agents and Pipelines hubs' reads, which a change no settings tab shows may touch.
+const HUB: [ProjectRead; 6] = [
   ProjectRead::TeamHub,
   ProjectRead::LocalHub,
+  ProjectRead::PipelineHub,
   ProjectRead::HubInstructions,
   ProjectRead::HubSkills,
   ProjectRead::ProfileForm,
@@ -84,7 +85,7 @@ fn settings_queries_changes_no_settings_tab_shows_read_no_setting() {
 #[test]
 fn settings_queries_the_hub_reads_again_what_it_followed() {
   // The kinds each of the Agents hub's reads followed as a future's dependencies.
-  let expected: [(ProjectRead, &[Outside]); 5] = [
+  let expected: [(ProjectRead, &[Outside]); 6] = [
     (
       ProjectRead::TeamHub,
       &[
@@ -103,6 +104,15 @@ fn settings_queries_the_hub_reads_again_what_it_followed() {
         Outside::Profiles,
         Outside::Instructions,
         Outside::Skills,
+        Outside::Pipelines,
+      ],
+    ),
+    (
+      ProjectRead::PipelineHub,
+      &[
+        Outside::Connections,
+        Outside::Tools,
+        Outside::Profiles,
         Outside::Pipelines,
       ],
     ),
@@ -135,6 +145,10 @@ fn settings_queries_the_hub_reads_again_what_it_followed() {
   }
   // A local hub shows what the runs decide; a team's hub follows its configuration, which the server's events change.
   assert!(RUNS.contains(&ProjectRead::LocalHub) && !RUNS.contains(&ProjectRead::TeamHub));
+  assert!(
+    RUNS.contains(&ProjectRead::PipelineHub),
+    "a pipeline's readiness follows the runs too"
+  );
   assert_eq!(TEAM, &[ProjectRead::TeamHub]);
 }
 
@@ -182,7 +196,12 @@ fn settings_queries_accounts_updates_and_runs_read_what_they_change() {
   // A run's request answered *for every run* adds a rule to the project's settings; a run's start builds its index.
   assert_eq!(
     RUNS,
-    &[ProjectRead::Settings, ProjectRead::IndexBuilds, ProjectRead::LocalHub]
+    &[
+      ProjectRead::Settings,
+      ProjectRead::IndexBuilds,
+      ProjectRead::LocalHub,
+      ProjectRead::PipelineHub
+    ]
   );
 }
 
