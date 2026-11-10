@@ -53,7 +53,7 @@
       },
       "archived": {
         "title": "Nothing archived",
-        "detail": "An archived pipeline leaves New task's picker; tasks that use it keep their version and can still run."
+        "detail": "An archived pipeline leaves the lists and New task's picker, and the runs that use it stop."
       }
     }
   }

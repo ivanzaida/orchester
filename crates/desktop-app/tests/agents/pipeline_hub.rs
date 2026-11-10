@@ -248,6 +248,10 @@ fn pipeline_hub_a_project_without_pipelines_says_so_and_offers_a_new_one() {
 
   open(&mut agents, PipelinesFilter::Archived, None);
   assert_eq!(agents.text("pipeline-hub-empty-title"), "Nothing archived");
+  assert_eq!(
+    agents.text("pipeline-hub-empty-detail"),
+    "An archived pipeline leaves the lists and New task's picker, and the runs that use it stop."
+  );
   assert!(
     !agents.exists("pipeline-hub-empty-new"),
     "only a project with none offers one in its body"
@@ -311,6 +315,33 @@ fn pipeline_hub_a_draft_with_nothing_wrong_is_only_not_published_yet() {
     !agents.exists("pipeline-hub-chip-1"),
     "no second chip says it is not published yet"
   );
+}
+
+#[test]
+fn pipeline_hub_a_draft_with_a_problem_says_it_in_its_row_and_chips_and_stays_under_needs_you() {
+  let mut agents = Agents::new(true);
+  // A step with no agent profile keeps the draft from being published.
+  let draft = pipeline(&agents, "Dependency update", None, false);
+  open(&mut agents, PipelinesFilter::All, Some(draft));
+  let line = agents.text(&format!("pipeline-hub-row-{draft}-line"));
+  assert!(
+    line.contains("has no agent profile"),
+    "the row says the problem: {line}"
+  );
+  assert_ne!(line, "Not published yet", "the problem replaces the plain line");
+  assert_eq!(agents.text(&format!("pipeline-hub-row-{draft}-version")), "draft");
+  assert_eq!(agents.text("pipeline-hub-section-needs-count"), "1");
+  assert!(
+    !agents.exists("pipeline-hub-section-ready"),
+    "a draft is never under Ready"
+  );
+  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
+  assert_eq!(
+    agents.text("pipeline-hub-chip-1-label"),
+    line,
+    "the problem is the second chip"
+  );
+  assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
 }
 
 #[test]
