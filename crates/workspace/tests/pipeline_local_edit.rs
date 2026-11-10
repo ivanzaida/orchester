@@ -307,10 +307,12 @@ fn an_edit_back_to_the_latest_version_drops_the_stored_draft_and_does_not_wedge_
 
 /// A pipeline with two published versions: the first, and a second that has a description.
 fn two_versions(pipeline: &Fixture) -> (Pipeline, Pipeline) {
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
+  pipeline
+    .save(|_| {}, &[first_version()])
+    .expect("the first version is published");
   pipeline
     .save(|edit| edit.set_description("Second version"), &[])
-    .unwrap();
+    .expect("the second version is published");
   let versions = pipeline.versions();
   assert_eq!(versions.len(), 2);
   (versions[0].clone(), versions[1].clone())
@@ -331,7 +333,11 @@ fn restore_puts_an_older_version_into_the_edit_and_save_makes_it_the_next_versio
   let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
   assert_eq!(saved, Saved::Published(VersionNumber::new(3.try_into().unwrap())));
   let versions = pipeline.versions();
-  assert_eq!(versions.len(), 3, "the restored version is a new one; no version was changed");
+  assert_eq!(
+    versions.len(),
+    3,
+    "the restored version is a new one; no version was changed"
+  );
   assert_eq!(versions[2], first);
   assert_eq!(versions[1], second);
 }

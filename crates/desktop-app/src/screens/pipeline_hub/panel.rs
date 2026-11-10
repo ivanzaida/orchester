@@ -20,7 +20,11 @@ use lurq::{
   core::{Ref, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::ResourceId, resource::Pipeline, time::Timestamp};
+use orchester_core::{
+  id::ResourceId,
+  resource::{Pipeline, PipelineEdit},
+  time::Timestamp,
+};
 use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 
 use super::{
@@ -35,12 +39,18 @@ use super::{
   save::{self, Ask, Asked, Followed, Notes, Pending, Save},
   settings::{self, Settings},
   steps,
+  version_view::{self, Parts, Restore, Viewed, ViewedSignal},
 };
 use crate::{
   project::ShownProject,
   screens::{local_hub::save_bar::Save as SaveState, team_hub::panel::body},
   theme::ExtraSpacing,
-  ui::pressable::Press,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    dialog::{Dialog, Tone},
+    icon::Icon,
+    pressable::Press,
+  },
 };
 
 #[derive(Clone)]
@@ -105,6 +115,10 @@ struct PipelinePanel {
   unsaved: UnsavedSignal,
   /// Whether a save is under way, which the screen's question about leaving reads.
   saving: Signal<bool>,
+  /// The published version the panel shows read-only, set by the *Versions* list in the head.
+  viewing: ViewedSignal,
+  /// Whether the question before *Restore* replaces the edit's changes is open.
+  restoring: Signal<bool>,
   id: ResourceId,
 }
 
@@ -128,6 +142,8 @@ impl Component for PipelinePanel {
       stored: ctx.create_ref(props.entry.body.clone()),
       unsaved: props.hosted.unsaved,
       saving: props.hosted.saving,
+      viewing: ctx.signal(None),
+      restoring: ctx.signal(false),
       id,
     };
     save::follow(
@@ -163,18 +179,11 @@ impl Component for PipelinePanel {
       .flow
       .clone()
       .expect("a pipeline that is not archived has its flow");
-    self.stored.set(Some(stored.clone()));
     self.settle(&stored);
     let edit = Edit::new(&self.holding, stored);
     let current = edit.current();
     let changed = edit.is_changed();
-    mark_unsaved(&self.unsaved, self.id, changed);
-    if changed {
-      self.notes.forget_stale(&current);
-    }
-    if !changed && self.description.get_untracked() != current.description() {
-      self.description.set(current.description().to_owned());
-    }
+    self.follow_edit(&current, changed);
     let read = if edit.holds() {
       Arc::new(FlowRead::of_edit(&current, &assignables))
     } else {
@@ -193,8 +202,21 @@ impl Component for PipelinePanel {
         now: Timestamp::now(),
         hosted,
         holds_changes: changed,
+        viewing: self.viewing.clone(),
       },
     );
+    if let Some(viewed) = self.viewing.get() {
+      let showing = Showing {
+        project: &project,
+        entry: &entry,
+        assignables: &assignables,
+        edit: &edit,
+        current: &current,
+        viewed: &viewed,
+        asked: asked.as_ref(),
+      };
+      return self.version_panel(ctx, head, &showing, (changed, locked));
+    }
     let body = body()
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
@@ -225,6 +247,17 @@ impl Component for PipelinePanel {
   }
 }
 
+/// What the panel shows of a version it views read-only.
+struct Showing<'a> {
+  project: &'a ShownProject,
+  entry: &'a Entry,
+  assignables: &'a Assignables,
+  edit: &'a Edit,
+  current: &'a PipelineEdit,
+  viewed: &'a Viewed,
+  asked: Option<&'a Asked>,
+}
+
 impl Drop for PipelinePanel {
   fn drop(&mut self) {
     clear_unsaved(&self.unsaved, self.id);
@@ -233,12 +266,129 @@ impl Drop for PipelinePanel {
 }
 
 impl PipelinePanel {
-  /// After a save the panel shows what it saved until the hub lists another pipeline; then what the hub lists.
+  /// Keeps `stored` current. After a save the panel shows what it saved until the hub lists another pipeline; then what
+  /// the hub lists.
   fn settle(&self, stored: &Arc<Pipeline>) {
+    self.stored.set(Some(stored.clone()));
     let holding = self.holding.get_untracked();
     if holding.saved_over.as_ref().is_some_and(|over| over != stored) {
       self.holding.set(Holding::default());
     }
+  }
+
+  /// What the panel tells the list and the bar of the edit it shows: whether it has changes, which a save's note and
+  /// the description's box then follow.
+  fn follow_edit(&self, current: &PipelineEdit, changed: bool) {
+    mark_unsaved(&self.unsaved, self.id, changed);
+    if changed {
+      self.notes.forget_stale(current);
+    } else if self.description.get_untracked() != current.description() {
+      self.description.set(current.description().to_owned());
+    }
+  }
+
+  /// The panel while it shows the published version `showing.viewed` read-only ([`version_view`]): in the place of the
+  /// pipeline's body, with no Save bar, which belongs to the edit.
+  fn version_panel(
+    &self,
+    ctx: &mut Ctx,
+    head: Element,
+    showing: &Showing<'_>,
+    (changed, locked): (bool, bool),
+  ) -> Element {
+    let Showing {
+      project,
+      entry,
+      assignables,
+      edit,
+      current,
+      viewed,
+      asked,
+    } = showing;
+    let held = version_view::is_held(current, viewed);
+    let restore = self.restore_now(edit, viewed, (changed, held, locked));
+    let shown = body()
+      .spacing(ExtraSpacing::Inset.role())
+      .child(head)
+      .with_children(version_view::parts(
+        ctx,
+        &Parts {
+          project,
+          entry,
+          assignables,
+          now: Timestamp::now(),
+          viewed,
+          restore,
+          back: self.back_to_editing(),
+        },
+      ));
+    let mut pinned = self.pinned(ctx, entry, *asked);
+    pinned.extend(self.replace_question(ctx, edit, viewed));
+    frame(entry, shown, pinned, None)
+  }
+
+  /// *Back to editing*: the panel shows the edit, or what is stored, again.
+  fn back_to_editing(&self) -> Arc<dyn Fn() + Send + Sync> {
+    let viewing = self.viewing.clone();
+    Arc::new(move || viewing.set(None))
+  }
+
+  /// What *Restore* does for `viewed`: nothing while a save is under way or asks, or while the panel already holds the
+  /// version; else it asks first when the edit has changes it would replace, and otherwise puts the version in.
+  fn restore_now(&self, edit: &Edit, viewed: &Viewed, (changed, held, locked): (bool, bool, bool)) -> Restore {
+    if locked {
+      return Restore::Busy;
+    }
+    if held {
+      return Restore::Same;
+    }
+    if changed {
+      let restoring = self.restoring.clone();
+      return Restore::Ready(Arc::new(move || restoring.set(true)));
+    }
+    Restore::Ready(self.put_in(edit, viewed))
+  }
+
+  /// Puts `viewed` into the edit and shows the edit: the description's box follows it, as every change to the edit
+  /// does.
+  fn put_in(&self, edit: &Edit, viewed: &Viewed) -> Arc<dyn Fn() + Send + Sync> {
+    let (edit, viewed, description) = (edit.clone(), viewed.clone(), self.description.clone());
+    let (viewing, restoring) = (self.viewing.clone(), self.restoring.clone());
+    Arc::new(move || {
+      edit.restore(&viewed.body);
+      description.set(viewed.body.description().to_owned());
+      restoring.set(false);
+      viewing.set(None);
+    })
+  }
+
+  /// The question before *Restore* drops the changes the edit holds, in a dialog over the page.
+  fn replace_question(&self, ctx: &Ctx, edit: &Edit, viewed: &Viewed) -> Option<Element> {
+    if !self.restoring.get() {
+      return None;
+    }
+    let version = viewed.number.to_string();
+    let restore = self.put_in(edit, viewed);
+    Some(
+      Dialog::new(
+        "pipeline-hub-version-replace",
+        Icon::Undo2,
+        ctx.t_args("pipeline_hub.versions.replaceTitle", [("version", version.clone())]),
+        ctx.t("pipeline_hub.leave.keep"),
+      )
+      .tone(Tone::Neutral)
+      .what(ctx.t_args("pipeline_hub.versions.replaceWhat", [("version", version.clone())]))
+      .action(
+        ActionButton::new(
+          "pipeline-hub-version-replace-confirm",
+          ButtonKind::Primary,
+          ctx.t_args("pipeline_hub.versions.restore", [("version", version)]),
+        )
+        .icon(Icon::Undo2)
+        .on_click(move || restore()),
+      )
+      .render(ctx, &self.restoring),
+    )
   }
 
   /// What is pinned over the bar: the question a save asks, and what the last save said.

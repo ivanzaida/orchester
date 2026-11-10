@@ -11,8 +11,9 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::SpacingSize,
   },
-  components::{Column, Placement, Popup, Text},
+  components::{Column, Placement, Popup, Row, Text},
   core::{ElementRef, Signal},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ProjectId, resource::ResourceKind, time::Timestamp};
@@ -29,6 +30,8 @@ use super::{
   menu::{self, Actions},
   model::Entry,
   rename::{self, Editing},
+  version_view::ViewedSignal,
+  versions::{self, Props as VersionsProps},
   words,
 };
 use crate::{
@@ -36,10 +39,16 @@ use crate::{
   screens::{local_hub::archive::Target, team_hub::panel::head_titled},
   services::Services,
   theme::HubText,
-  ui::{field::field_error, icon::Icon, icon_button::IconButton, message::message_text},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::field_error,
+    icon::Icon,
+    icon_button::IconButton,
+    message::message_text,
+  },
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub(super) struct Props {
   pub project: ShownProject,
   pub entry: Entry,
@@ -50,6 +59,29 @@ pub(super) struct Props {
   pub hosted: Hosted,
   /// The panel holds changes that are not saved.
   pub holds_changes: bool,
+  /// The version the panel shows read-only, which a row of the *Versions* list sets.
+  pub viewing: ViewedSignal,
+}
+
+/// The props are equal when the head shows the same: `viewing` is the panel's own signal, which only its press sets.
+impl PartialEq for Props {
+  fn eq(&self, other: &Self) -> bool {
+    (
+      &self.project,
+      &self.entry,
+      self.default,
+      self.now,
+      &self.hosted,
+      self.holds_changes,
+    ) == (
+      &other.project,
+      &other.entry,
+      other.default,
+      other.now,
+      &other.hosted,
+      other.holds_changes,
+    )
+  }
 }
 impl DevtoolsInspectable for Props {}
 
@@ -63,6 +95,8 @@ pub(super) fn head(ctx: &mut Ctx, props: Props) -> Element {
 struct Head {
   menu: Signal<bool>,
   anchor: ElementRef,
+  versions: Signal<bool>,
+  versions_anchor: ElementRef,
   editing: Editing,
   rename: FutureAction<String, Arc<str>, Message>,
   /// A name just saved with the name it replaced, shown until the hub reads the pipeline again.
@@ -109,6 +143,8 @@ impl Component for Head {
     Self {
       menu: ctx.signal(false),
       anchor: ctx.element_ref(),
+      versions: ctx.signal(false),
+      versions_anchor: ctx.element_ref(),
       editing,
       rename,
       saved: shown,
@@ -120,14 +156,18 @@ impl Component for Head {
     let props = ctx.props::<Props>().clone();
     let entry = &props.entry;
     let title = self.title(ctx, entry);
-    let more = self.more(ctx, &props);
+    let end = Row::new()
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(self.versions(ctx, &props))
+      .child(self.more(ctx, &props));
     let head = head_titled(
       title,
       (
         ctx.t("pipeline_hub.panel.where").to_string(),
         Some(words::head_version(ctx, props.now, entry)),
       ),
-      Some(more),
+      Some(end.into()),
     );
     let failed = self.make_default.state().get();
     let failed = failed.error.as_ref().filter(|_| !failed.is_pending());
@@ -159,6 +199,47 @@ impl Head {
     Text::new(name)
       .id("team-hub-panel-title")
       .variant(HubText::PanelTitle.role())
+      .into()
+  }
+
+  /// *Versions* and, while it is open, the list of the published versions under it.
+  fn versions(&self, ctx: &mut Ctx, props: &Props) -> Element {
+    let toggle = self.versions.clone();
+    let button = ActionButton::new(
+      "pipeline-hub-versions-button",
+      ButtonKind::Secondary,
+      ctx.t("pipeline_hub.versions.button"),
+    )
+    .icon(Icon::History)
+    .small()
+    .held(self.versions.get())
+    .element_ref(self.versions_anchor.clone())
+    .on_click(move || toggle.update(|open| *open = !*open));
+    let list = if self.versions.get() {
+      versions::list(
+        ctx,
+        VersionsProps {
+          project: props.project.clone(),
+          pipeline: props.entry.id,
+          name: props.entry.name.clone(),
+          tasks: props.entry.used_by,
+          latest: props.entry.number,
+          now: props.now,
+          open: self.versions.clone(),
+          viewing: props.viewing.clone(),
+        },
+      )
+    } else {
+      Column::new().into()
+    };
+    Column::new()
+      .child(button)
+      .child(
+        Popup::new(self.versions_anchor.clone(), list)
+          .open(self.versions.clone())
+          .placement(Placement::BottomEnd)
+          .offset(0.0, ctx.theme().spacing_value(SpacingSize::Xs).to_px()),
+      )
       .into()
   }
 

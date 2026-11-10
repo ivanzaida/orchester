@@ -103,7 +103,7 @@ fn delivers(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components::Row {
   let shown = settings.current.delivers();
   let options = Deliverable::ALL
     .into_iter()
-    .map(|choice| (choice.as_str().to_owned(), ctx.t(words(choice).0).to_string()))
+    .map(|choice| (choice.as_str().to_owned(), ctx.t(delivers_words(choice).0).to_string()))
     .collect();
   let edit = settings.edit.clone();
   let on_pick: Pick = Arc::new(move |picked| {
@@ -129,13 +129,13 @@ fn delivers(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components::Row {
   rows::row(
     "pipeline-hub-delivers",
     &label,
-    Some(Sub::quiet(ctx.t(words(shown).1))),
+    Some(Sub::quiet(ctx.t(delivers_words(shown).1))),
     select,
   )
 }
 
 /// The words of what `delivers` means: its name and what it leaves.
-const fn words(delivers: Deliverable) -> (&'static str, &'static str) {
+pub(super) const fn delivers_words(delivers: Deliverable) -> (&'static str, &'static str) {
   match delivers {
     Deliverable::Changes => (
       "pipeline_hub.settings.deliverOption.changes",

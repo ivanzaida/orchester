@@ -57,6 +57,16 @@ impl Edit {
     });
   }
 
+  /// *Restore*: puts `version` into the edit, replacing its changes; the edit starts from the stored pipeline when
+  /// there is none yet.
+  pub(super) fn restore(&self, version: &Pipeline) {
+    let stored = self.stored.clone();
+    self.holding.update(|holding| {
+      holding.held.get_or_insert_with(|| Held::start(stored)).restore(version);
+      holding.saved_over = None;
+    });
+  }
+
   /// Whether the edit differs from what it started from. Reading it in a render subscribes the panel to the edit.
   pub(super) fn is_changed(&self) -> bool {
     self.holding.get().held.is_some_and(|held| held.is_changed())

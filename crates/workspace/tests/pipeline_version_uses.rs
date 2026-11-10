@@ -33,10 +33,7 @@ fn publish_next(fixture: &mut Fixture, pipeline: orchester_core::id::ResourceId,
 #[test]
 fn the_current_version_counts_tasks_and_an_older_one_the_runs_that_started_on_it() {
   let mut fixture = Fixture::new();
-  let (first, second) = (
-    fixture.task("First", at(10)),
-    fixture.task("Second", at(11)),
-  );
+  let (first, second) = (fixture.task("First", at(10)), fixture.task("Second", at(11)));
   let pipeline = fixture.new_run_for(first).snapshot.pipeline().resource;
   fixture.pending_run(first, at(12));
   fixture.pending_run(second, at(13));
@@ -45,11 +42,27 @@ fn the_current_version_counts_tasks_and_an_older_one_the_runs_that_started_on_it
 
   let history = VersionHistory::load(&fixture.db, pipeline).expect("history");
   let number = |n: u32| VersionNumber::new(n.try_into().expect("above zero"));
-  assert_eq!(history.use_of(number(3), 13), Some(Use::Tasks(13)), "the current version");
+  assert_eq!(
+    history.use_of(number(3), 13),
+    Some(Use::Tasks(13)),
+    "the current version"
+  );
   assert_eq!(history.use_of(number(3), 0), Some(Use::Tasks(0)), "no task uses it");
-  assert_eq!(history.use_of(number(2), 13), Some(Use::Runs(0)), "no run started on it");
-  assert_eq!(history.use_of(number(1), 13), Some(Use::Runs(2)), "both runs started on the first");
-  assert_eq!(history.use_of(number(4), 13), None, "a version that was never published");
+  assert_eq!(
+    history.use_of(number(2), 13),
+    Some(Use::Runs(0)),
+    "no run started on it"
+  );
+  assert_eq!(
+    history.use_of(number(1), 13),
+    Some(Use::Runs(2)),
+    "both runs started on the first"
+  );
+  assert_eq!(
+    history.use_of(number(4), 13),
+    None,
+    "a version that was never published"
+  );
 }
 
 #[test]

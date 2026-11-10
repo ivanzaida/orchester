@@ -40,6 +40,8 @@ mod states;
 mod step_line;
 mod steps;
 mod undecided;
+mod version_view;
+mod versions;
 mod words;
 
 use std::sync::Arc;

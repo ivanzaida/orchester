@@ -27,10 +27,11 @@ pub(super) enum Place {
   InGroup,
 }
 
-/// How a card is pressed and where it stands: `open` opens the step; `fix` is the pill of a step that cannot run, which
-/// opens what it names.
+/// How a card is pressed and where it stands: `open` opens the step, and is `None` for a card that only shows its step
+/// (a published version read-only, which has no step to open and no hover or `›`); `fix` is the pill of a step that
+/// cannot run, which opens what it names.
 pub(super) struct Opening {
-  pub open: Button,
+  pub open: Option<Button>,
   pub fix: Option<(Button, std::sync::Arc<str>)>,
   pub place: Place,
 }
@@ -69,7 +70,11 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
         .filter(|_| !not_ready)
         .map(|access| tag_chip(&format!("{id}-access"), &words::access(ctx, access))),
     )
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+    .with_children(
+      open
+        .is_some()
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+    );
   let mut body = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -90,11 +95,13 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
         ),
     );
   }
-  let open = if place == Place::InGroup {
-    open.height(Dimension::Pct(100.0))
-  } else {
-    open
-  };
+  let open = open.map(|open| {
+    if place == Place::InGroup {
+      open.height(Dimension::Pct(100.0))
+    } else {
+      open
+    }
+  });
   surface(open, &id, not_ready, body)
     .describe("step", step.key.to_string())
     .describe("number", words::number(step.number))
@@ -103,7 +110,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
 }
 
 /// The Deliver card, numbered after the steps.
-pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Button) -> Element {
+pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Option<Button>) -> Element {
   let id = "pipeline-hub-flow-deliver";
   let top = Row::new()
     .width(Dimension::Pct(100.0))
@@ -111,7 +118,11 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Bu
     .align_items(Alignment::Center)
     .child(name(id, &ctx.t("pipeline_hub.flow.deliver")))
     .child(Row::new().flex(1.0))
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+    .with_children(
+      open
+        .is_some()
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+    );
   let body = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -176,28 +187,31 @@ fn choose_chip(id: &str, words: &str) -> Row {
 }
 
 /// A card's frame (`Card · 01 Research`): `surface_panel` in a `border` outline, radius 6, 12 at its sides and 8
-/// above and under; a step that is not ready in a `warning` outline.
-fn surface(open: Button, id: &str, not_ready: bool, body: Column) -> Button {
+/// above and under; a step that is not ready in a `warning` outline. Pressed through `open`, it takes the hover fill;
+/// without one it only shows its step.
+fn surface(open: Option<Button>, id: &str, not_ready: bool, body: Column) -> Button {
   let outline = if not_ready {
     PaletteColor::Warning
   } else {
     PaletteColor::Border
   };
-  open
+  let hovered = Style::new().background(ExtraColor::Hover.role()).border(Border::inside(
+    BorderSize::Sm,
+    if not_ready {
+      PaletteColor::Warning
+    } else {
+      PaletteColor::BorderStrong
+    },
+  ));
+  let pressable = open.is_some();
+  let card = open.unwrap_or_else(Button::empty);
+  let card = card
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
     .align_items(Alignment::Start)
     .background(PaletteColor::SurfacePanel)
     .border_inside(BorderSize::Sm, outline)
-    .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()).border(Border::inside(
-      BorderSize::Sm,
-      if not_ready {
-        PaletteColor::Warning
-      } else {
-        PaletteColor::BorderStrong
-      },
-    )))
-    .child(body)
+    .rounded(RadiusSize::Md);
+  if pressable { card.hovered_style(hovered) } else { card }.child(body)
 }
