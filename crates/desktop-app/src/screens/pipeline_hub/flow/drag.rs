@@ -35,6 +35,8 @@ use crate::{
 const LIFT: f32 = 4.0;
 /// How far the floating card is tilted (`Dragged card · 05 Review`).
 const TILT: f32 = -1.5;
+/// The floating card's width, whatever the card's own (`Dragged card · 05 Review` `c7u7qB`).
+const LIFTED_WIDTH: f32 = 240.0;
 /// A card's line under its name is indented past the handle and its gap.
 const INDENT: f32 = 20.0;
 
@@ -81,7 +83,6 @@ fn moved(reorder: &Reorder, (card, card_ref): (&StepCard, &ElementRef), event: &
         card: card.clone(),
         over,
         grab: (event.start_x - bounds.x, event.start_y - bounds.y),
-        size: (bounds.width, bounds.height),
       }));
     }
     Some(drag) if drag.over != over => reorder.drag.set(Some(Drag { over, ..drag })),
@@ -146,12 +147,11 @@ impl Component for Lifted {
     let props = ctx.props::<LiftedProps>().clone();
     let (x, y) = props.pointer.get();
     let frame = props.frame.bounds();
-    let (width, height) = props.drag.size;
-    lifted_card(ctx, &props.drag.card, width).absolute(
-      x - frame.x - props.drag.grab.0,
+    lifted_card(ctx, &props.drag.card, LIFTED_WIDTH).absolute(
+      x - frame.x - props.drag.grab.0.min(LIFTED_WIDTH),
       y - frame.y - props.drag.grab.1,
-      Dimension::Px(width),
-      Dimension::Px(height),
+      Dimension::Px(LIFTED_WIDTH),
+      Dimension::Auto,
     )
   }
 }

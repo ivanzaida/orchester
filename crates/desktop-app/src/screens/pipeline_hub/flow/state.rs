@@ -31,9 +31,8 @@ pub(super) struct Drag {
   pub card: StepCard,
   /// Where the pointer is over the flow, or none outside it.
   pub over: Option<Drop>,
-  /// Where in the card the handle was held, and the card's size.
+  /// Where in the card the handle was held.
   pub grab: (f32, f32),
-  pub size: (f32, f32),
 }
 
 impl DevtoolsInspectable for Drag {}
