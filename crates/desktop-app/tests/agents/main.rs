@@ -21,6 +21,7 @@ mod local_hub_review;
 mod local_hub_saved;
 mod models;
 mod pipeline_hub;
+mod pipeline_hub_archive;
 mod pipeline_hub_menu;
 mod project_sets;
 mod reads;

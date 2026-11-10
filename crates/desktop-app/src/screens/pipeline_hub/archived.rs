@@ -1,7 +1,7 @@
 //! An archived pipeline in the hub's Archived tab (as `Agents · Archived resource · Restore` L14 `KnPGN`): its head and
 //! chips, what archiving did and what *Restore* does, and *Restore* pinned under the panel, a plain action with no
 //! modal: restoring loses nothing and puts the pipeline back in the lists and New task as it was. The runs the archive
-//! stopped stay stopped.
+//! stopped stay stopped, which the panel says only when the archive stopped some.
 
 use lurq::{
   app::{
@@ -13,8 +13,10 @@ use lurq::{
 };
 use orchester_core::{id::ProjectId, resource::ResourceKind, time::Timestamp};
 use orchester_workspace::{
+  agents::local_hub::StoppedRun,
   local_archive::{self, Archivable},
   messages::Message,
+  pipelines::task_use::stopped_by_archive,
 };
 
 use super::{model::Entry, panel::chips, words};
@@ -86,6 +88,7 @@ impl Component for Restore {
       ),
       None,
     );
+    let stopped = self.stopped(ctx, &entry);
     let notice = Notice::new(
       "pipeline-hub-archived-notice",
       NoticeTone::Neutral,
@@ -93,7 +96,7 @@ impl Component for Restore {
     )
     .icon(Icon::Archive)
     .title_style(HubText::NoticeTitle.role())
-    .body(ctx.t_args("pipeline_hub.archived.notice", [("name", &*entry.name)]))
+    .body(notice_words(ctx, &entry.name, &stopped))
     .flat();
     let failed = state.error.as_ref().filter(|_| !state.is_pending()).map(|error| {
       let reason = message_text(ctx, error);
@@ -122,7 +125,15 @@ impl Component for Restore {
     };
     let bar = bar(
       vec![restore.into()],
-      Some(ctx.t("pipeline_hub.archived.restoreHint").to_string()),
+      Some(
+        ctx
+          .t(if stopped.is_empty() {
+            "pipeline_hub.archived.restoreHint"
+          } else {
+            "pipeline_hub.archived.restoreHintStopped"
+          })
+          .to_string(),
+      ),
     );
     let scroll = ScrollVertical::new(body)
       .id("pipeline-hub-panel-scroll")
@@ -138,4 +149,53 @@ impl Component for Restore {
       .child(scroll)
       .child(bar)
   }
+}
+
+impl Restore {
+  /// The tasks of the runs that archiving `entry` stopped, as the project's database has them; none while it is read,
+  /// or if it could not be, so the panel then says only what *Restore* does.
+  fn stopped(&self, ctx: &mut Ctx, entry: &Entry) -> Vec<StoppedRun> {
+    let root = ctx.props::<Props>().project.open.repo_root.clone();
+    ctx
+      .future((root, entry.id), move |(root, id)| async move {
+        stopped_by_archive(&root, id).await
+      })
+      .state()
+      .get()
+      .data
+      .unwrap_or_default()
+  }
+}
+
+/// What archiving did and what *Restore* does (`Notice` in L14 `KnPGN`); the stopped runs are said only when archiving
+/// stopped some.
+fn notice_words(ctx: &Ctx, name: &str, stopped: &[StoppedRun]) -> std::sync::Arc<str> {
+  let runs: Vec<String> = stopped
+    .iter()
+    .map(|run| {
+      ctx
+        .t_args(
+          "pipeline_hub.archived.run",
+          [("key", run.key.as_str()), ("title", run.title.as_str())],
+        )
+        .to_string()
+    })
+    .collect();
+  let named: Vec<&str> = runs.iter().map(String::as_str).collect();
+  let key = match stopped.len() {
+    0 => return ctx.t_args("pipeline_hub.archived.notice", [("name", name)]),
+    1 => "pipeline_hub.archived.noticeOne",
+    _ => "pipeline_hub.archived.noticeMany",
+  };
+  ctx.t_args(
+    key,
+    [
+      ("count", stopped.len().to_string()),
+      (
+        "runs",
+        crate::screens::team_hub::archive::words::listed(ctx, &named).to_string(),
+      ),
+      ("name", name.to_owned()),
+    ],
+  )
 }

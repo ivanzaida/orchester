@@ -17,10 +17,11 @@ use lurq::{
 use orchester_api::{SharedResourceKind, UsedBy, UsedByResource, UsedByRun};
 use orchester_workspace::{
   messages::Message,
+  pipelines::task_use::TaskUse,
   used_by::{RunLine, RunState},
 };
 
-use super::{Failed, ReadFailed, words};
+use super::{Failed, ReadFailed, tasks, words};
 use crate::{
   theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing, LOCAL_ARCHIVE_DIALOG_WIDTH},
   ui::{
@@ -51,6 +52,8 @@ pub(in crate::screens) struct State {
   pub read: Option<Result<UsedBy, ReadFailed>>,
   /// How each run that will stop stands: only a local project's confirmation says it.
   pub lines: Vec<RunLine>,
+  /// The tasks that name the resource: only a local pipeline's confirmation lists them, in place of the resources.
+  pub tasks: Option<Vec<TaskUse>>,
   /// The archive was asked for and has not answered.
   pub archiving: bool,
   /// Why the archive did nothing.
@@ -95,8 +98,13 @@ pub(in crate::screens) fn dialog(
     );
   let stops = match &state.read {
     Some(Ok(used)) => {
+      let named = match &state.tasks {
+        Some(using) => tasks::used_by(ctx, using),
+        None => used_by(ctx, &used.resources),
+      };
       dialog = dialog
-        .child(used_by(ctx, &used.resources))
+        .child(named)
+        .with_children(state.tasks.as_deref().and_then(|using| tasks::effect(ctx, name, using)))
         .child(runs(ctx, props.local, (&used.runs, &state.lines)))
         .with_children(
           props
@@ -174,7 +182,7 @@ fn left_running(ctx: &Ctx, props: &DialogProps, message: &Message, open: &Signal
 }
 
 /// A list's heading over its rows in one outline (`Used by` `pC90U`, `Runs that stop` `SWl1b`).
-fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) -> Column {
+pub(super) fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) -> Column {
   let list = Column::new()
     .id(format!("{id}-list"))
     .width(Dimension::Pct(100.0))
@@ -204,7 +212,7 @@ fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) 
 }
 
 /// One row: what it names at its start and `detail` at its end (`Row` `y7PyW`).
-fn row(id: String, name: Text, detail: Option<Text>) -> Row {
+pub(super) fn row(id: String, name: Text, detail: Option<Text>) -> Row {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))

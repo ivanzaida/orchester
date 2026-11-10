@@ -15,13 +15,13 @@ use super::{
   pipeline_hub::{open, project, setup},
 };
 
-fn names(agents: &Agents, id: ResourceId) -> (String, String) {
+pub(super) fn names(agents: &Agents, id: ResourceId) -> (String, String) {
   let db = ProjectDb::open(&agents.root).expect("database");
   let resource = db.resource(id).expect("reads").expect("the pipeline");
   (resource.name().as_str().to_owned(), resource.slug().as_str().to_owned())
 }
 
-fn key(agents: &mut Agents, key: &str) {
+pub(super) fn key(agents: &mut Agents, key: &str) {
   agents
     .window
     .tree
@@ -29,7 +29,7 @@ fn key(agents: &mut Agents, key: &str) {
   agents.window.pass();
 }
 
-fn archived(agents: &Agents) -> Vec<ResourceId> {
+pub(super) fn archived(agents: &Agents) -> Vec<ResourceId> {
   ProjectDb::open(&agents.root)
     .expect("database")
     .archived_local_resources(ResourceKind::Pipeline)
@@ -40,7 +40,7 @@ fn archived(agents: &Agents) -> Vec<ResourceId> {
 }
 
 /// Opens the panel of `id` and its ⋯ menu.
-fn open_menu(agents: &mut Agents, id: ResourceId) {
+pub(super) fn open_menu(agents: &mut Agents, id: ResourceId) {
   agents.click(&format!("pipeline-hub-row-{id}"));
   agents.until("the panel", |s| {
     s.exists("pipeline-hub-more") && s.exists(&format!("pipeline-hub-row-{id}-name"))
@@ -50,7 +50,7 @@ fn open_menu(agents: &mut Agents, id: ResourceId) {
 }
 
 /// Opens the panel of `id` and starts renaming it from the ⋯ menu.
-fn start_rename(agents: &mut Agents, id: ResourceId) {
+pub(super) fn start_rename(agents: &mut Agents, id: ResourceId) {
   open_menu(agents, id);
   agents.click("pipeline-hub-menu-rename");
   agents.until("the field", |s| s.exists("pipeline-hub-rename"));

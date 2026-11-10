@@ -11,7 +11,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::SpacingSize,
   },
-  components::{Column, Text},
+  components::{Column, Placement, Popup, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
@@ -38,7 +38,7 @@ use crate::{
   },
   services::Services,
   theme::HubText,
-  ui::{field::field_error, icon::Icon, icon_button::IconButton, menu::menu_at_end, message::message_text},
+  ui::{field::field_error, icon::Icon, icon_button::IconButton, message::message_text},
 };
 
 #[derive(Clone, PartialEq)]
@@ -63,7 +63,9 @@ struct Head {
   menu: Signal<bool>,
   anchor: ElementRef,
   editing: Editing,
-  rename: FutureAction<String, (), Message>,
+  rename: FutureAction<String, Arc<str>, Message>,
+  /// A name just saved with the name it replaced, shown until the hub reads the pipeline again.
+  saved: Signal<Option<(String, Arc<str>)>>,
   make_default: FutureAction<(), (), Message>,
 }
 
@@ -79,15 +81,19 @@ impl Component for Head {
       props.entry.id,
     );
     let editing = Editing::new(ctx);
-    let (stop, record, task_root) = (editing.open.clone(), changes.clone(), root.clone());
+    let saved = ctx.signal(None);
+    let (stop, record, task_root) = (editing.clone(), changes.clone(), root.clone());
+    let (shown, remember) = (saved.clone(), saved.clone());
     let rename = ctx.future_action(move |name: String| {
-      let (root, stop, changes) = (task_root.clone(), stop.clone(), record.clone());
+      let (root, stop, changes, remember) = (task_root.clone(), stop.clone(), record.clone(), remember.clone());
       async move {
-        background::run(move || rename_in(&root, id, &name).map_err(|error| error.message())).await??;
+        let saved = background::run(move || rename_in(&root, id, &name).map_err(|error| error.message())).await??;
+        let saved: Arc<str> = Arc::from(saved.as_str());
+        remember.set(Some((stop.began(), saved.clone())));
         changes.record(project, Outside::Pipelines);
         changes.record(project, Outside::Tasks);
-        stop.set(false);
-        Ok(())
+        stop.open.set(false);
+        Ok(saved)
       }
     });
     let make_default = ctx.future_action(move |(): ()| {
@@ -104,6 +110,7 @@ impl Component for Head {
       anchor: ctx.element_ref(),
       editing,
       rename,
+      saved: shown,
       make_default,
     }
   }
@@ -143,7 +150,12 @@ impl Head {
     if self.editing.open.get() {
       return rename::field(ctx, &self.editing, &self.rename);
     }
-    Text::new(&entry.name)
+    let saved = self.saved.get();
+    let name = saved
+      .as_ref()
+      .filter(|(from, _)| **from == *entry.name)
+      .map_or(&*entry.name, |(_, name)| &**name);
+    Text::new(name)
       .id("team-hub-panel-title")
       .variant(HubText::PanelTitle.role())
       .into()
@@ -160,8 +172,9 @@ impl Head {
     )
     .small()
     .element(self.anchor.clone())
-    .on_click(move || toggle.update(|open| *open = !*open))
-    .render(ctx);
+    .on_click(move || toggle.update(|open| *open = !*open));
+    // While the menu is open its button has no tooltip, which would stand beside the menu and be clipped at the window.
+    let button = if self.menu.get() { button.active() } else { button }.render(ctx);
     let (editing, name) = (self.editing.clone(), entry.name.clone());
     let target = Target {
       root: props.project.open.repo_root.clone(),
@@ -180,7 +193,12 @@ impl Head {
     let panel = menu::panel(ctx, (project, entry, props.default), &self.menu, &actions);
     Column::new()
       .child(button)
-      .child(menu_at_end(self.anchor.clone(), self.menu.clone(), panel))
+      .child(
+        Popup::new(self.anchor.clone(), panel)
+          .open(self.menu.clone())
+          .placement(Placement::BottomEnd)
+          .offset(0.0, ctx.theme().spacing_value(SpacingSize::Xs).to_px()),
+      )
       .into()
   }
 }

@@ -3,6 +3,8 @@
 //! Enter saves, Esc and leaving the field keep the name the pipeline had. A name another pipeline has is refused with
 //! the reason and the field stays open.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
@@ -30,6 +32,8 @@ pub(super) struct Editing {
   focus: Signal<bool>,
   /// Enter was pressed since the field opened, so what the save says is about the name typed.
   asked: Signal<bool>,
+  /// The name the pipeline had when the field opened.
+  began: Signal<String>,
 }
 
 impl Editing {
@@ -40,15 +44,22 @@ impl Editing {
       input: ElementRef::new(),
       focus: ctx.signal(false),
       asked: ctx.signal(false),
+      began: ctx.signal(String::new()),
     }
   }
 
   /// Opens the field on `name`, the name the pipeline has.
   pub(super) fn begin(&self, name: &str) {
+    self.began.set(name.to_owned());
     self.name.set(name.to_owned());
     self.asked.set(false);
     self.open.set(true);
     self.focus.set(true);
+  }
+
+  /// The name the pipeline had when the field opened.
+  pub(super) fn began(&self) -> String {
+    self.began.get_untracked()
   }
 
   fn end(&self) {
@@ -58,7 +69,7 @@ impl Editing {
 }
 
 /// The field, with what the last Enter was refused for under it; Enter asks `rename` to save the name typed.
-pub(super) fn field(ctx: &mut Ctx, editing: &Editing, rename: &FutureAction<String, (), Message>) -> Element {
+pub(super) fn field(ctx: &mut Ctx, editing: &Editing, rename: &FutureAction<String, Arc<str>, Message>) -> Element {
   if editing.focus.get() {
     ctx.focus(&editing.input);
     editing.focus.set(false);
