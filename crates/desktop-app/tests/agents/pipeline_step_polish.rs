@@ -1,10 +1,11 @@
 //! The open step's polish of PV2-17: retries that survive a change of where changes requested go, the Agent field
 //! saying why a tool cannot run, a model override dropped, and said, when the step moves to another CLI, and a gone
-//! profile or tool said the same way on its flow card and in the field.
-//! `cargo test -p orchester-app --test agents pipeline_step_polish`.
+//! profile or tool said the same way on its flow card and in the field. One press on a strip chip that shows only in
+//! part opens it. `cargo test -p orchester-app --test agents pipeline_step_polish`.
 
 use std::collections::BTreeMap;
 
+use lurq::app::events::MouseButton;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
   id::{ConnectionId, ResourceId, SecretId},
@@ -22,7 +23,7 @@ use super::{
   harness::Agents,
   pipeline_flow::open,
   pipeline_hub::setup,
-  pipeline_step::{CANCEL, chain, keys, open_step, save_until, stored},
+  pipeline_step::{CANCEL, chain, keys, open_step, rect, route, save_until, step_route, stored},
   pipeline_step_agent::{FIELD, PICKER, agent, executor, field_has, item, overriding, profile_on, single},
 };
 
@@ -281,4 +282,49 @@ fn pipeline_step_polish_a_tool_with_only_a_draft_is_named_and_said_to_be_unpubli
     agents.text("pipeline-hub-step-agent-runs"),
     "This tool has no published version yet"
   );
+}
+
+#[test]
+fn pipeline_step_polish_one_press_on_a_chip_partly_under_the_strips_arrow_opens_it_and_brings_it_into_view() {
+  let mut agents = Agents::new(true);
+  let long = chain(&agents, 16);
+  let all = keys(&agents, long);
+  open_step(&mut agents, long, &all[15]);
+  agents.until("scrolled to the end", |s| {
+    s.exists("pipeline-hub-step-strip-before-panel")
+      && !s.exists("pipeline-hub-step-strip-after")
+      && rect(s, "pipeline-hub-step-strip-before-panel").width > 0.0
+  });
+  agents.window.pass();
+  let panel = rect(&mut agents, "pipeline-hub-step-strip-before-panel");
+  let edge = panel.x + panel.width;
+  let target = all
+    .iter()
+    .map(|key| (key.clone(), rect(&mut agents, &format!("pipeline-hub-step-chip-{key}"))))
+    .find(|(_, chip)| chip.x < edge && chip.x + chip.width > edge + 4.0)
+    .map(|(key, _)| key)
+    .expect("a chip partly under ‹");
+
+  // One press on what shows of it, as a person presses it.
+  let scale = agents.window.tree.scale_factor();
+  let middle = agents
+    .window
+    .tree
+    .get_element_by_id_mut(&format!("pipeline-hub-step-chip-{target}"))
+    .and_then(|element| element.bounds())
+    .map(|bounds| bounds.y + bounds.height / 2.0)
+    .expect("the chip");
+  let (x, y) = ((edge + 2.0) * scale, middle * scale);
+  agents.window.tree.mouse_move(x, y);
+  agents.window.tree.mouse_down(x, y, MouseButton::Left);
+  agents.window.tree.mouse_up(x, y, MouseButton::Left);
+  agents.until("its step", |s| route(s) == step_route(long, &target));
+  let id = format!("pipeline-hub-step-chip-{target}");
+  agents.until("in view, clear of ‹", |s| {
+    let chip = rect(s, &id);
+    !s.exists("pipeline-hub-step-strip-before-panel") || {
+      let panel = rect(s, "pipeline-hub-step-strip-before-panel");
+      chip.x >= panel.x + panel.width
+    }
+  });
 }
