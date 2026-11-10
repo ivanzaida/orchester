@@ -13,6 +13,7 @@
 //! ([`states`]), no counts and *New pipeline* unavailable; the first read shows bones ([`bones`]).
 
 mod bones;
+mod flow;
 mod list;
 mod model;
 mod panel;

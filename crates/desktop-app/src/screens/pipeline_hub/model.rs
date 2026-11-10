@@ -6,7 +6,7 @@ use std::sync::Arc;
 use orchester_core::{id::ResourceId, resource::VersionNumber, time::Timestamp};
 use orchester_workspace::{
   messages::Message,
-  pipelines::hub::PipelineHub,
+  pipelines::{flow::FlowRead, hub::PipelineHub},
   readiness::{Group, ReadinessStanding},
 };
 
@@ -28,6 +28,8 @@ pub(super) struct Entry {
   pub problem: Option<Message>,
   /// When it was archived; `None` while it is not.
   pub archived: Option<Timestamp>,
+  /// Its steps as the panel draws them; none for an archived pipeline, which has no steps to open.
+  pub flow: Option<Arc<FlowRead>>,
 }
 
 impl Entry {
@@ -73,6 +75,7 @@ impl Listing {
         standing: found.standing.clone(),
         problem: found.problem.clone(),
         archived: None,
+        flow: Some(found.flow.clone()),
       })
       .collect();
     entries.sort_by_cached_key(|entry| (group_rank(entry.group), entry.name.to_lowercase()));
@@ -87,6 +90,7 @@ impl Listing {
       standing: None,
       problem: None,
       archived: Some(found.at),
+      flow: None,
     }));
     Self { entries }
   }

@@ -15,6 +15,8 @@ mod ci;
 mod decision_test;
 #[path = "theme/dialog.rs"]
 mod dialog;
+#[path = "theme/flow.rs"]
+mod flow;
 #[path = "theme/hub.rs"]
 mod hub;
 #[path = "theme/instructions.rs"]

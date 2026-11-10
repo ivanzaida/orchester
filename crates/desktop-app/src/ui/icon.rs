@@ -275,6 +275,7 @@ icons! {
   Smartphone => '\u{e163}',
   Sparkle => '\u{e47e}',
   Sparkles => '\u{e412}',
+  Split => '\u{e440}',
   Square => '\u{e167}',
   SquareCheck => '\u{e559}',
   // The font's `edit`, which lucide renamed `square-pen`.
