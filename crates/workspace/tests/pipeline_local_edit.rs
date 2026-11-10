@@ -257,3 +257,40 @@ fn cancel_drops_the_edit_and_the_stored_pipeline_is_what_the_page_shows_again() 
   let again = Held::start(Arc::new(pipeline.opened().body));
   assert_eq!(again.edit().description(), "");
 }
+
+#[test]
+fn an_edit_back_to_the_latest_version_drops_the_stored_draft_and_does_not_wedge_save() {
+  let pipeline = fixture();
+  pipeline.save(|_| {}, &[first_version()]).unwrap();
+  let latest = pipeline.opened().latest.unwrap().body;
+  pipeline
+    .save(
+      |edit| {
+        edit.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
+      },
+      &[],
+    )
+    .unwrap();
+  let drafted = pipeline.opened();
+  assert!(drafted.draft_saved_at.is_some());
+  assert_ne!(drafted.body, latest);
+
+  // The page opens on the stored draft; the person changes it back to the latest version and presses Save.
+  let mut held = Held::start(Arc::new(drafted.body.clone()));
+  held.change(|edit| *edit = PipelineEdit::new(latest.clone()));
+  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
+  assert_eq!(saved, Saved::Published(VersionNumber::FIRST));
+
+  let opened = pipeline.opened();
+  assert!(opened.draft_saved_at.is_none(), "the draft the person chose against is gone");
+  assert_eq!(opened.body, latest);
+  assert_eq!(pipeline.versions().len(), 1, "no version was made");
+
+  // What the page does next: it shows the latest version, and a Save on it neither fails nor writes.
+  let again = Held::start(Arc::new(opened.body));
+  assert_eq!(
+    save(pipeline.folder.path(), pipeline.pipeline, again.base(), again.edit(), &[]).unwrap(),
+    Saved::Unchanged
+  );
+  assert_eq!(pipeline.versions().len(), 1);
+}

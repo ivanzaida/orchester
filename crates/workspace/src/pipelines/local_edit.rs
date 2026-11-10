@@ -21,12 +21,13 @@ use super::{
   widening::{draft_reasons, publish_reasons},
   write::{self, Allowed, WriteError},
 };
-use crate::messages::Message;
+use crate::{messages::Message, removal::discard_in};
 
 /// What a save did.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Saved {
-  /// The edit is the pipeline's draft and was published as this version.
+  /// The edit is the pipeline's draft and was published as this version, or it is this latest version and the stored
+  /// draft that differed from it was dropped.
   Published(VersionNumber),
   /// The edit is the pipeline's draft; it was not published, for this reason.
   Drafted(Message),
@@ -53,8 +54,8 @@ pub fn save(
   }
   let body = edit.validate().map_err(|error| rule_message(edit, &error))?;
   let problems = edit.problems();
-  if current.latest.as_ref().map(|latest| &latest.body) == Some(&body) {
-    return Ok(Saved::Unchanged);
+  if let Some(latest) = current.latest.as_ref().filter(|latest| latest.body == body) {
+    return back_to_latest(root, &current, latest.number);
   }
   let reasons = reasons(&current, &body, problems.is_empty());
   if !reasons.iter().all(|reason| allowed.contains(reason)) {
@@ -78,6 +79,16 @@ pub fn save(
     )),
     Err(error) => Ok(Saved::Drafted(error.message())),
   }
+}
+
+/// The edit is the latest version. When a different draft is stored the person chose the version over it: the draft goes
+/// and the pipeline is that version, reported as saved. Otherwise the stored pipeline already is that version.
+fn back_to_latest(root: &Path, current: &OpenedPipeline, latest: VersionNumber) -> Result<Saved, Message> {
+  if current.draft_saved_at.is_none() || current.latest.as_ref().is_some_and(|version| version.body == current.body) {
+    return Ok(Saved::Unchanged);
+  }
+  discard_in(root, current.id, &current.body)?;
+  Ok(Saved::Published(latest))
 }
 
 /// What saving `body` needs a person to allow: what saving the draft does, and what publishing it does when it can be.
