@@ -58,6 +58,7 @@
       "noticeOne": "Archiving stopped the run that used it, {{runs}}. Restore puts {{name}} back in the lists and New task as it was; that run stays stopped, so run it again to use it.",
       "noticeMany": "Archiving stopped {{count}} runs that used it, {{runs}}. Restore puts {{name}} back in the lists and New task as it was; those runs stay stopped, so run them again to use it.",
       "run": "{{key}} · {{title}}",
+      "unread": "Which runs archiving stopped could not be read. {{reason}}",
       "restore": "Restore {{name}}",
       "restoreHint": "Back in the lists and New task at once",
       "restoreHintStopped": "Back in the lists and New task at once · stopped runs stay stopped",

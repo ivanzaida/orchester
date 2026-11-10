@@ -267,3 +267,32 @@ fn pipeline_hub_rename_leaving_the_field_keeps_the_name() {
   assert_eq!(agents.text("team-hub-panel-title"), "Feature delivery");
   assert_eq!(names(&agents, ready).0, "Feature delivery");
 }
+
+#[test]
+fn pipeline_hub_archived_panel_says_when_it_could_not_read_the_runs_archiving_stopped() {
+  let mut agents = Agents::new(true);
+  let id = archive_directly(&agents, "Delivery", true);
+  // A stop the store cannot read back: the archive is still there, only the runs it stopped are unknown.
+  rusqlite::Connection::open(agents.root.join(".orchester/orchester.db"))
+    .expect("fixture db")
+    .execute("UPDATE archive_stops SET resource_name = ''", [])
+    .expect("corrupt disposable fixture");
+  open(&mut agents, PipelinesFilter::Archived, Some(id));
+  agents.until("the unread line", |s| s.exists("pipeline-hub-archived-unread"));
+  assert_eq!(
+    agents.text("pipeline-hub-archived-unread"),
+    "Which runs archiving stopped could not be read. The data could not be read or written. The log has the details.",
+    "the store's message, in a muted line"
+  );
+  let notice = agents.text("pipeline-hub-archived-notice");
+  assert!(
+    !notice.contains("stopped") && !notice.contains("stay"),
+    "the notice does not claim anything about the runs: {notice}"
+  );
+  assert_eq!(
+    agents.text("team-hub-actions-hint"),
+    "Back in the lists and New task at once",
+    "no 'stopped runs stay stopped' either"
+  );
+  agents.press_until("pipeline-hub-restore", "restored", |s| archived(s).is_empty());
+}

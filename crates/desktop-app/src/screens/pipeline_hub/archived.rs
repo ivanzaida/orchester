@@ -88,7 +88,11 @@ impl Component for Restore {
       ),
       None,
     );
-    let stopped = self.stopped(ctx, &entry);
+    let (stopped, unread) = match self.stopped(ctx, &entry) {
+      Known::Read(stopped) => (stopped, None),
+      Known::Reading => (Vec::new(), None),
+      Known::Failed(error) => (Vec::new(), Some(message_text(ctx, &error))),
+    };
     let notice = Notice::new(
       "pipeline-hub-archived-notice",
       NoticeTone::Neutral,
@@ -98,6 +102,11 @@ impl Component for Restore {
     .title_style(HubText::NoticeTitle.role())
     .body(notice_words(ctx, &entry.name, &stopped))
     .flat();
+    let unread = unread.map(|reason| {
+      Text::new(&ctx.t_args("pipeline_hub.archived.unread", [("reason", &*reason)]))
+        .id("pipeline-hub-archived-unread")
+        .variant(HubText::PanelHint.role())
+    });
     let failed = state.error.as_ref().filter(|_| !state.is_pending()).map(|error| {
       let reason = message_text(ctx, error);
       Text::new(&ctx.t_args("pipeline_hub.archived.failed", [("reason", &*reason)]))
@@ -109,6 +118,7 @@ impl Component for Restore {
       .child(head)
       .child(chips(ctx, &entry, false))
       .child(notice)
+      .with_children(unread)
       .with_children(failed);
     let action = self.restore.clone();
     let restore = ActionButton::new(
@@ -156,19 +166,32 @@ impl Component for Restore {
 struct Stopped(Vec<StoppedRun>);
 impl DevtoolsInspectable for Stopped {}
 
+/// What the panel knows of the runs archiving stopped.
+enum Known {
+  Reading,
+  Read(Vec<StoppedRun>),
+  /// The read failed: the panel says so, and does not say nothing was stopped.
+  Failed(Message),
+}
+
 impl Restore {
-  /// The tasks of the runs that archiving `entry` stopped, as the project's database has them; none while it is read,
-  /// or if it could not be, so the panel then says only what *Restore* does.
-  fn stopped(&self, ctx: &mut Ctx, entry: &Entry) -> Vec<StoppedRun> {
+  /// The tasks of the runs that archiving `entry` stopped, as the project's database has them.
+  fn stopped(&self, ctx: &mut Ctx, entry: &Entry) -> Known {
     let root = ctx.props::<Props>().project.open.repo_root.clone();
-    ctx
+    let state = ctx
       .future((root, entry.id), move |(root, id)| async move {
         stopped_by_archive(&root, id).await.map(Stopped)
       })
       .state()
-      .get()
-      .data
-      .map_or_else(Vec::new, |stopped| stopped.0)
+      .get();
+    if state.is_pending() {
+      return Known::Reading;
+    }
+    match (state.data, state.error) {
+      (Some(stopped), _) => Known::Read(stopped.0),
+      (None, Some(error)) => Known::Failed(error),
+      (None, None) => Known::Reading,
+    }
   }
 }
 
