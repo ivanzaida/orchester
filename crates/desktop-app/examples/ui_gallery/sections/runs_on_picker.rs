@@ -31,6 +31,11 @@ fn connection(id: &str, name: &str, mark: Mark, models: Vec<Model>) -> Connectio
     five_hour: Some(41),
     limit: false,
     unavailable: None,
+    detail: None,
+    tip_note: None,
+    typed_model: false,
+    typed_effort: false,
+    notice: None,
     models,
   }
 }

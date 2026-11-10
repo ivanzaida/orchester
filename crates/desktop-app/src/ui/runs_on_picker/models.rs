@@ -16,7 +16,7 @@ use lurq::{
   },
   components::{Button, Column, Row, ScrollVertical, Text, TextInput, TextOverflow},
   core::{ElementRef, Signal},
-  layout::{Alignment, layout_kind::ScrollState},
+  layout::{Alignment, layout_kind::ScrollState, text_style::TextStyle},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 
@@ -67,20 +67,28 @@ pub(super) struct SearchBox {
   pub(super) typed: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// Search, named `id`.
-pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox) -> Element {
+/// What a one-line field of the picker (Search, the typed effort) is typed in and says while empty: 12 in `text_primary`
+/// and in `text_muted`.
+pub(super) fn input_styles(ctx: &Ctx) -> (TextStyle, TextStyle) {
   let theme = ctx.theme();
-  let typed_style = FormTextRole {
-    typography: TypographyStyle::Description,
-    color: PaletteColor::TextPrimary,
-  }
-  .resolve(&theme.typography(), &theme.palette());
-  let placeholder_style = FormTextRole {
-    typography: TypographyStyle::Description,
-    color: PaletteColor::TextMuted,
-  }
-  .resolve(&theme.typography(), &theme.palette());
-  let words = ctx.t("ui.runsOnPicker.search");
+  let resolve = |color| {
+    FormTextRole {
+      typography: TypographyStyle::Description,
+      color,
+    }
+    .resolve(&theme.typography(), &theme.palette())
+  };
+  (resolve(PaletteColor::TextPrimary), resolve(PaletteColor::TextMuted))
+}
+
+/// Search, named `id`; with `own_model` it says a model of the person's own can be typed too.
+pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox, own_model: bool) -> Element {
+  let (typed_style, placeholder_style) = input_styles(ctx);
+  let words = ctx.t(if own_model {
+    "ui.runsOnPicker.searchOrType"
+  } else {
+    "ui.runsOnPicker.search"
+  });
   let typed = search.typed.clone();
   let input = TextInput::styled(search.query.clone(), typed_style)
     .placeholder_style(placeholder_style)
@@ -125,32 +133,43 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox) -> Element {
     .into()
 }
 
-/// The list of `models` (as Search filtered them), the chosen one checked and the keys at `cursor`, with the focus ring
-/// once a key moved them there (`ringed`; while Search merely holds text the first model has the fill alone). `choose`
-/// takes the model at a place in `models`. With none, `empty` says why.
+/// The list of `models` (as Search filtered them), then `own`, the model Search holds that the connection does not
+/// list and takes anyway (*Use deepseek-v4-flash*); the chosen one checked and the keys at `cursor`, with the focus
+/// ring once a key moved them there (`ringed`; while Search merely holds text the first model has the fill alone).
+/// `choose` takes the place in the list. With none, `empty` says why.
 pub(super) fn list(
   ctx: &mut Ctx,
   (id, scroll): (&str, &ScrollState),
-  (models, empty): (&[&Model], &str),
+  (models, own, empty): (&[&Model], Option<&str>, &str),
   (chosen, cursor, ringed): (Option<&str>, Option<usize>, bool),
   choose: &Arc<dyn Fn(usize) + Send + Sync>,
 ) -> Element {
-  let rows: Vec<Element> = if models.is_empty() {
-    vec![nothing(id, empty)]
-  } else {
-    models
-      .iter()
-      .enumerate()
-      .map(|(index, model)| {
-        let press = choose.clone();
-        row(
-          (id, index, &model.id),
-          (chosen == Some(&*model.id), cursor == Some(index), ringed),
-          move || press(index),
-        )
-      })
-      .collect()
-  };
+  let own_row = own.map(|model| {
+    let index = models.len();
+    let press = choose.clone();
+    let words = ctx.t_args("ui.runsOnPicker.useTyped", [("model", model)]);
+    row(
+      (format!("{id}-typed"), &words, model),
+      (false, cursor == Some(index), ringed),
+      move || press(index),
+    )
+  });
+  let mut rows: Vec<Element> = models
+    .iter()
+    .enumerate()
+    .map(|(index, model)| {
+      let press = choose.clone();
+      row(
+        (format!("{id}-model-{index}"), &model.id, &model.id),
+        (chosen == Some(&*model.id), cursor == Some(index), ringed),
+        move || press(index),
+      )
+    })
+    .collect();
+  rows.extend(own_row);
+  if rows.is_empty() {
+    rows.push(nothing(id, empty));
+  }
   Column::new()
     .id(format!("{id}-models"))
     .width(Dimension::Pct(100.0))
@@ -168,15 +187,16 @@ pub(super) fn list(
     .into()
 }
 
-/// A model's row: its id in the app's font, a check at its end when `chosen`, the `hover` fill where the keys are
-/// (`current`) and the focus ring inside its edge when the keys were moved there (`ringed`).
+/// A model's row named `id`, saying `words` for `model`: in the app's font, a check at its end when `chosen`, the
+/// `hover` fill where the keys are (`current`) and the focus ring inside its edge when the keys were moved there
+/// (`ringed`).
 fn row(
-  (id, index, model): (&str, usize, &str),
+  (id, words, model): (String, &str, &str),
   (chosen, current, ringed): (bool, bool, bool),
   press: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let row = pressable(press)
-    .id(format!("{id}-model-{index}"))
+    .id(id)
     .describe("model", model.to_owned())
     .describe("chosen", chosen.to_string())
     .describe("current", current.to_string())
@@ -189,7 +209,7 @@ fn row(
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(
-      Text::new(model)
+      Text::new(words)
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextPrimary)
         .flex(1.0)

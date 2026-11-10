@@ -8,6 +8,10 @@
       "clear": "Clear search",
       "noModels": "This connection lists no models",
       "noMatch": "No model matches",
+      "searchOrType": "Search or type a model…",
+      "useTyped": "Use {{model}}",
+      "typeEffort": "Type an effort…",
+      "typeEffortHint": "The provider lists no efforts. Empty is Default.",
       "use": "5h {{used}}%",
       "effort": {
         "label": "Reasoning effort",

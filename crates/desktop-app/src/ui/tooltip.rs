@@ -13,7 +13,7 @@ use lurq::{
     ctx::{Ctx, Timeout},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{CollisionStrategy, Placement, Popup, Row, Text, TextOverflow},
+  components::{CollisionStrategy, Column, Placement, Popup, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
@@ -46,6 +46,8 @@ pub struct Tooltip {
   over: Option<Over>,
   /// The widest its words run before they wrap.
   wrap_at: f32,
+  /// What it says under its first line, in regular weight (`Tooltip · account switch` `oL5mO`).
+  note: Option<Arc<str>>,
 }
 
 /// The box a tooltip that opens over its anchor keeps clear of: its bottom 6 over the box's top edge.
@@ -123,7 +125,14 @@ impl Tooltip {
       end: false,
       over: None,
       wrap_at: TEXT_MAX_WIDTH,
+      note: None,
     }
+  }
+
+  /// A second line under its words: they become its title, 2 over the note, and the panel is 6 over and under them.
+  pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
+    self.note = Some(note.into());
+    self
   }
 
   /// It lines up with its anchor's right edge.
@@ -213,19 +222,35 @@ impl Tooltip {
     } else {
       TypographyStyle::FieldLabel
     };
+    let words = Text::new(words)
+      .variant(typography)
+      .color(PaletteColor::TextInverse)
+      .max_width(Dimension::Px(self.wrap_at));
+    let padding = match self.note {
+      Some(_) => Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()),
+      None => Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs),
+    };
     let mut panel = Row::new()
       .id(format!("{}-tooltip", self.id))
-      .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
+      .padding(padding)
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .background(PaletteColor::TextPrimary)
-      .rounded(RadiusSize::Sm)
-      .child(
-        Text::new(words)
-          .variant(typography)
-          .color(PaletteColor::TextInverse)
-          .max_width(Dimension::Px(self.wrap_at)),
-      );
+      .rounded(RadiusSize::Sm);
+    panel = match &self.note {
+      Some(note) => panel.child(
+        Column::new()
+          .spacing(ExtraSpacing::Tight.role())
+          .child(words)
+          .child(
+            Text::new(note)
+              .variant(TypographyStyle::Caption)
+              .color(PaletteColor::TextInverse)
+              .max_width(Dimension::Px(self.wrap_at)),
+          ),
+      ),
+      None => panel.child(words),
+    };
     if let Some(keys) = &self.shortcut {
       panel = panel.child(
         Text::new(keys)

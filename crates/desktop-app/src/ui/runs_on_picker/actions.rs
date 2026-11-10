@@ -7,6 +7,7 @@ use lurq::{app::events::KeyboardEvent, core::Signal, layout::layout_kind::Scroll
 
 use super::{
   RunsOnPicker,
+  foot::TypedEffort,
   keys::{Cursor, Key, Outcome, Place, Shape},
   model::Pick,
   models, rail,
@@ -40,13 +41,25 @@ impl OwnedShape {
 }
 
 /// What the keys move over and hand back: the shape, the model at each place in the list and the effort at each
-/// segment of the effort row (`None` is *Default*).
+/// segment of the effort row (`None` is *Default*), or, where the effort is typed, that the one place of the row is the
+/// field.
 #[derive(Clone)]
 pub(super) struct Targets {
   pub(super) shape: OwnedShape,
   pub(super) models: Vec<Arc<str>>,
   pub(super) efforts: Vec<Option<Arc<str>>>,
+  pub(super) typed_effort: bool,
 }
+
+/// The field that takes the focus on the next pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Focus {
+  Stay,
+  Search,
+  Effort,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Focus {}
 
 /// The picker's signals, which choosing and the keys change.
 #[derive(Clone)]
@@ -55,7 +68,8 @@ pub(super) struct Handles {
   pub(super) query: Signal<String>,
   pub(super) cursor: Signal<Cursor>,
   pub(super) refused: Signal<Option<usize>>,
-  pub(super) focus: Signal<bool>,
+  pub(super) focus: Signal<Focus>,
+  pub(super) own_effort: TypedEffort,
   pub(super) scroll: ScrollState,
   pub(super) rail_scroll: ScrollState,
 }
@@ -133,6 +147,13 @@ impl Actions {
     });
   }
 
+  /// Hands back what the typed effort field holds, trimmed; nothing typed is *Default*.
+  pub(super) fn typed_effort(&self) {
+    let typed = self.panel.own_effort.value.get_untracked();
+    let typed = typed.trim();
+    self.effort((!typed.is_empty()).then(|| Arc::from(typed)));
+  }
+
   /// Hands back `effort` unless it is what is chosen already; like a model, it takes a refusal's reason away.
   fn effort(&self, effort: Option<Arc<str>>) {
     self.panel.refused.set(None);
@@ -160,6 +181,10 @@ impl Actions {
         _ => None,
       };
       let panel = &actions.panel;
+      // In the typed effort, Enter is its own and a space is typed.
+      if matches!(event.key.as_str(), "Enter" | " ") && panel.own_effort.field.focused() {
+        return;
+      }
       let took = match (key, event.key.as_str()) {
         (Some(key), _) => actions.press(key, &targets),
         (None, "Escape") => {
@@ -171,7 +196,7 @@ impl Actions {
         {
           panel.query.update(|query| query.push_str(typed));
           panel.typed();
-          panel.focus.set(true);
+          panel.focus.set(Focus::Search);
           true
         }
         (None, _) => false,
@@ -193,6 +218,11 @@ impl Actions {
       Outcome::Moved => {
         panel.refused.set(None);
         panel.cursor.set(cursor);
+        panel.focus.set(if cursor.place == Place::Effort && targets.typed_effort {
+          Focus::Effort
+        } else {
+          Focus::Search
+        });
         self.reveal(cursor);
       }
       Outcome::Refused(at) => {
@@ -205,6 +235,7 @@ impl Actions {
           self.model(model);
         }
       }
+      Outcome::Effort(_) if targets.typed_effort => self.typed_effort(),
       Outcome::Effort(at) => {
         if let Some(effort) = targets.efforts.get(at) {
           self.effort(effort.clone());

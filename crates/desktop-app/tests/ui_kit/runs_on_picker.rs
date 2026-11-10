@@ -35,6 +35,11 @@ pub(super) fn connection(id: &str, mark: Mark, models: Vec<Model>) -> Connection
     five_hour: Some(41),
     limit: false,
     unavailable: None,
+    detail: None,
+    tip_note: None,
+    typed_model: false,
+    typed_effort: false,
+    notice: None,
     models,
   }
 }
