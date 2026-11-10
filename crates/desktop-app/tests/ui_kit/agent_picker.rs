@@ -479,6 +479,19 @@ fn a_long_model_override_is_cut_before_what_the_profile_runs_on() {
 }
 
 #[test]
+fn an_item_that_is_not_ready_still_says_the_model_the_step_overrides() {
+  let mut explorer = profile("explorer", "Explorer", "claude-opus-5-5", AgentMark::Claude);
+  explorer.warning = Some("Choose a Claude Code connection".into());
+  explorer.model = Some("· model: gpt-override".into());
+  let mut kit = open_with(vec![explorer], Some("explorer")).kit;
+  assert_eq!(
+    kit.texts(&format!("{}-runs", item(0))),
+    ["Choose a Claude Code connection", "· model: gpt-override"],
+    "what to do, and the override the step keeps"
+  );
+}
+
+#[test]
 fn a_tool_with_no_command_still_says_that_its_exit_code_decides_the_step() {
   let mut bare = tool("webhook", "Webhook", "");
   bare.suffix = Some("Its exit code decides the step".into());
