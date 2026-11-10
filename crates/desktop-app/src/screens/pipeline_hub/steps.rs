@@ -13,8 +13,8 @@ use super::model::Entry;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route},
-  theme::HubText,
+  routes::{PipelineView, ProjectPage, Route},
+  theme::{ExtraSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -29,7 +29,7 @@ pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry) -> Vec
   }
   let route = Route::Project(
     project.open.project.id(),
-    ProjectPage::Pipeline(entry.id, crate::routes::PipelineView::default()),
+    ProjectPage::Pipeline(entry.id, PipelineView::default()),
   );
   let open = ActionButton::new(
     "pipeline-hub-edit-steps",
@@ -46,7 +46,7 @@ pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry) -> Vec
       .child(
         Row::new()
           .flex(1.0)
-          .spacing(crate::theme::ExtraSpacing::Snug.role())
+          .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
           .child(
             Text::new(&ctx.t("pipeline_hub.panel.steps"))

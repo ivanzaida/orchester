@@ -10,7 +10,10 @@ use lurq::{
   components::{Column, ScrollVertical},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  time::Timestamp,
+};
 use orchester_workspace::readiness::Group;
 
 use super::{
@@ -28,7 +31,7 @@ use crate::{
 pub(super) struct Shown<'a> {
   pub project: ProjectId,
   pub filter: PipelinesFilter,
-  pub selected: Option<orchester_core::id::ResourceId>,
+  pub selected: Option<ResourceId>,
   pub navigation: &'a Navigation,
   pub now: Timestamp,
 }
