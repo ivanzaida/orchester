@@ -21,7 +21,7 @@ use lurq::{
     Alignment,
     layout_kind::{Justify, ScrollState},
   },
-  node::{Element, Gradient, GradientStop, Style, dimension::Dimension, padding::Padding},
+  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
@@ -31,14 +31,13 @@ use orchester_core::{
 use super::pieces::{self, Chip, Piece};
 use crate::{
   navigation::Navigation,
-  routes::{PipelineView, ProjectPage, Route},
+  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
   screens::pipeline_hub::flow::number,
   theme::{
-    ExtraColor, ExtraRadius, ExtraSpacing, FlowText, IconSize, StripColor, StripSpacing, StripText, chip_radius,
-    strip_scrollbar,
+    ExtraColor, ExtraRadius, ExtraSpacing, FlowText, IconSize, StripSpacing, StripText, chip_radius, strip_scrollbar,
   },
   ui::{
-    icon::{Icon, icon},
+    icon::{Icon, glyph, icon},
     pressable::{Focus, Press, pressable},
   },
 };
@@ -50,18 +49,30 @@ const CHIP_HEIGHT: f32 = 24.0;
 const GROUP_HEIGHT: f32 = 28.0;
 /// The gate's round hand (`Gate`).
 const GATE: f32 = 16.0;
-/// What a cut edge fades over, which is also the room ‹ and › take (P13).
-const EDGE: f32 = 28.0;
+/// The panel ‹ or › stands in (`More left` `ZS10A`, `More right` `iZauO` in P13 `KRQ5J`): 36 wide and 2 less high than
+/// the strip, with the 24 square button in it; the chips stop 4 short of it.
+const PANEL: f32 = 36.0;
+const BUTTON: f32 = 24.0;
+const ARROW_ZONE: f32 = PANEL + 4.0;
 /// A scroll of less than this is not one.
 const EPSILON: f32 = 0.5;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub(super) struct Props {
   pub project: ProjectId,
   pub pipeline: ResourceId,
   pub pieces: Vec<Piece>,
   /// The open step.
   pub current: StepKey,
+  /// What the Deliver chip sets before it opens the pipeline: its *A run delivers* row is shown.
+  pub reveal_delivers: Signal<bool>,
+}
+/// The props are equal when they show the same: the signal is the panel's own.
+impl PartialEq for Props {
+  fn eq(&self, other: &Self) -> bool {
+    (self.project, self.pipeline, &self.pieces, &self.current)
+      == (other.project, other.pipeline, &other.pieces, &other.current)
+  }
 }
 impl DevtoolsInspectable for Props {}
 
@@ -76,6 +87,8 @@ pub(super) fn strip(ctx: &mut Ctx, props: Props) -> Element {
 struct More {
   before: bool,
   after: bool,
+  /// The strip's room in whole pixels, which places the panel at its end: a strip that is resized draws it again.
+  room: i32,
 }
 impl DevtoolsInspectable for More {}
 
@@ -106,6 +119,7 @@ impl Measured {
     let more = More {
       before: at > EPSILON,
       after: at + room < content - EPSILON,
+      room: room.round() as i32,
     };
     if self.more.get_untracked() != more {
       self.more.set(more);
@@ -120,7 +134,7 @@ impl Measured {
     }
     let (offset, width) = (self.current.x() - self.content.x(), self.current.width());
     let at = self.scroll.scroll_x();
-    if offset >= at + EDGE && offset + width <= at + room - EDGE {
+    if offset >= at + ARROW_ZONE && offset + width <= at + room - ARROW_ZONE {
       return;
     }
     self
@@ -128,11 +142,12 @@ impl Measured {
       .set_scroll_pending((offset - (room - width) / 2.0).clamp(0.0, most), 0.0);
   }
 
-  /// ‹ or ›: one screen towards `direction` (-1 or 1).
+  /// ‹ or ›: one screen towards `direction` (-1 or 1), the chips that show between the two panels.
   fn page(&self, direction: f32) {
     let (room, content) = (self.viewport.width(), self.content.width());
     let most = (content - room).max(0.0);
-    let to = (self.scroll.scroll_x() + direction * room).clamp(0.0, most);
+    let screen = (room - 2.0 * ARROW_ZONE).max(0.0);
+    let to = (self.scroll.scroll_x() + direction * screen).clamp(0.0, most);
     self.scroll.set_scroll_pending(to, 0.0);
   }
 }
@@ -178,10 +193,10 @@ impl Component for Strip {
       .height(Dimension::Px(STRIP_HEIGHT))
       .child(self.scroller(ctx, chips));
     if more.before {
-      frame = frame.child(self.edge(ctx, Edge::Before));
+      frame = frame.child(self.edge(ctx, Edge::Before, more.room as f32));
     }
     if more.after {
-      frame = frame.child(self.edge(ctx, Edge::After));
+      frame = frame.child(self.edge(ctx, Edge::After, more.room as f32));
     }
     Row::new()
       .id("pipeline-hub-step-strip")
@@ -258,21 +273,20 @@ impl Strip {
       .into()
   }
 
-  /// ‹ or ›, on the fade that hides the chips cut at that edge.
-  fn edge(&self, ctx: &Ctx, edge: Edge) -> Element {
+  /// ‹ or ›: a panel in the strip's own fill and a hairline on its inner side, at the strip's end, over the chips cut
+  /// there, with a 24 square button in it. It takes only its own place, so the chips beside it stay pressable.
+  fn edge(&self, ctx: &Ctx, edge: Edge, room: f32) -> Element {
     let measured = self.measured.clone();
-    let (direction, glyph, angle, id, label) = match edge {
+    let (direction, glyph, id, label) = match edge {
       Edge::Before => (
         -1.0,
         Icon::ChevronLeft,
-        90.0,
         "pipeline-hub-step-strip-before",
         "pipeline_hub.step.strip.before",
       ),
       Edge::After => (
         1.0,
         Icon::ChevronRight,
-        270.0,
         "pipeline-hub-step-strip-after",
         "pipeline_hub.step.strip.after",
       ),
@@ -284,36 +298,50 @@ impl Strip {
       }))
       .id(id.to_owned())
       .describe("a11y_name", ctx.t(label))
-      .width(Dimension::Px(EDGE))
-      .height(Dimension::Px(STRIP_HEIGHT))
+      .width(Dimension::Px(BUTTON))
+      .height(Dimension::Px(BUTTON))
       .justify(Justify::Center)
       .align_items(Alignment::Center)
-      .background_gradient(Gradient::linear(
-        angle,
-        [
-          GradientStop::new(PaletteColor::SurfaceRaised),
-          GradientStop::new(StripColor::FadeClear.role()),
-        ],
-      ))
+      .rounded(chip_radius())
+      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary));
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(STRIP_HEIGHT))
+    let hairline = Border::inside(BorderSize::Sm, PaletteColor::Border);
+    let (left, panel) = match edge {
+      Edge::Before => (1.0, Row::new().border_right(hairline)),
+      Edge::After => ((room - PANEL - 1.0).max(0.0), Row::new().border_left(hairline)),
+    };
+    panel
+      .id(format!("{id}-panel"))
+      .absolute(left, 1.0, Dimension::Px(PANEL), Dimension::Px(STRIP_HEIGHT - 2.0))
+      .background(PaletteColor::SurfaceRaised)
+      .justify(Justify::Center)
       .align_items(Alignment::Center)
-      .justify(match edge {
-        Edge::Before => Justify::Start,
-        Edge::After => Justify::End,
-      })
       .child(button)
       .into()
   }
 
   fn chip(&self, props: &Props, navigation: &Navigation, chip: &Chip) -> Element {
-    let open = chip
-      .key
-      .as_ref()
-      .map_or(PipelineView::Deliver, |key| PipelineView::Step(key.clone()));
-    let route = Route::Project(props.project, ProjectPage::Pipeline(props.pipeline, open));
+    let press = match &chip.key {
+      Some(key) => {
+        let route = Route::Project(
+          props.project,
+          ProjectPage::Pipeline(props.pipeline, PipelineView::Step(key.clone())),
+        );
+        Press::Open(navigation.to(route))
+      }
+      // The Deliver step is the pipeline's own: it opens the pipeline, with its *A run delivers* row shown.
+      None => {
+        let route = Route::Project(
+          props.project,
+          ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(props.pipeline))),
+        );
+        let (navigation, reveal) = (navigation.clone(), props.reveal_delivers.clone());
+        Press::run(move || {
+          reveal.set(true);
+          navigation.go(route.clone());
+        })
+      }
+    };
     let current = chip.key.as_ref() == Some(&props.current);
     let id = chip.key.as_ref().map_or_else(
       || "pipeline-hub-step-chip-deliver".to_owned(),
@@ -321,7 +349,7 @@ impl Strip {
     );
     let number = number(chip.number);
     let button = Focus::Keyboard
-      .apply(Press::Open(navigation.to(route)).button())
+      .apply(press.button())
       .id(id)
       .describe("number", number.clone())
       .describe("state", if current { "current" } else { "other" })
@@ -388,7 +416,7 @@ fn gate(index: usize) -> Element {
     .align_items(Alignment::Center)
     .rounded(ExtraRadius::Full.role())
     .background(PaletteColor::WarningMuted)
-    .child(icon(Icon::Hand, IconSize::Xs, PaletteColor::Warning))
+    .child(Text::new(&glyph(Icon::Hand)).variant(StripText::GateHand.role()))
     .into()
 }
 

@@ -20,11 +20,11 @@ use super::{
   support::project_id,
 };
 
-const SAVE: &str = "pipeline-hub-save";
-const CANCEL: &str = "pipeline-hub-cancel";
-const INSTRUCTIONS: &str = "pipeline-hub-step-instructions";
+pub(super) const SAVE: &str = "pipeline-hub-save";
+pub(super) const CANCEL: &str = "pipeline-hub-cancel";
+pub(super) const INSTRUCTIONS: &str = "pipeline-hub-step-instructions";
 
-fn step_route(pipeline: ResourceId, key: &StepKey) -> Route {
+pub(super) fn step_route(pipeline: ResourceId, key: &StepKey) -> Route {
   Route::Project(
     project_id(),
     ProjectPage::Pipeline(pipeline, PipelineView::Step(key.clone())),
@@ -32,7 +32,7 @@ fn step_route(pipeline: ResourceId, key: &StepKey) -> Route {
 }
 
 /// The steps of `pipeline` as stored now: its latest version.
-fn stored(agents: &Agents, pipeline: ResourceId) -> Pipeline {
+pub(super) fn stored(agents: &Agents, pipeline: ResourceId) -> Pipeline {
   ProjectDb::open(&agents.root)
     .expect("database")
     .latest_version::<Pipeline>(pipeline)
@@ -42,7 +42,7 @@ fn stored(agents: &Agents, pipeline: ResourceId) -> Pipeline {
     .clone()
 }
 
-fn keys(agents: &Agents, pipeline: ResourceId) -> Vec<StepKey> {
+pub(super) fn keys(agents: &Agents, pipeline: ResourceId) -> Vec<StepKey> {
   stored(agents, pipeline)
     .steps()
     .iter()
@@ -51,7 +51,7 @@ fn keys(agents: &Agents, pipeline: ResourceId) -> Vec<StepKey> {
 }
 
 /// Opens step `key` of `pipeline` from the hub, as a card's press does, and waits for the step's head.
-fn open_step(agents: &mut Agents, pipeline: ResourceId, key: &StepKey) {
+pub(super) fn open_step(agents: &mut Agents, pipeline: ResourceId, key: &StepKey) {
   open(agents, PipelinesFilter::All, Some(pipeline));
   agents.window.navigation().go(step_route(pipeline, key));
   agents.until("the step", |s| {
@@ -61,7 +61,7 @@ fn open_step(agents: &mut Agents, pipeline: ResourceId, key: &StepKey) {
 
 /// Presses *Save* and, when it asks a person to allow what the save changes (instructions, a budget, the steps),
 /// *Allow*, until `done`.
-fn save_until(agents: &mut Agents, what: &str, done: impl Fn(&mut Agents) -> bool) {
+pub(super) fn save_until(agents: &mut Agents, what: &str, done: impl Fn(&mut Agents) -> bool) {
   agents.until(what, |s| {
     if done(s) {
       return true;
@@ -77,12 +77,12 @@ fn save_until(agents: &mut Agents, what: &str, done: impl Fn(&mut Agents) -> boo
   });
 }
 
-fn route(agents: &Agents) -> Route {
+pub(super) fn route(agents: &Agents) -> Route {
   agents.window.navigation().route_now()
 }
 
 /// A published pipeline of `count` steps run one after the other, named `Step 01 …`, which the profile builds.
-fn chain(agents: &Agents, count: usize) -> ResourceId {
+pub(super) fn chain(agents: &Agents, count: usize) -> ResourceId {
   let builder = agents.profile(true);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let mut before: Option<StepKey> = None;
@@ -115,12 +115,12 @@ fn chain(agents: &Agents, count: usize) -> ResourceId {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Rect {
-  x: f32,
-  width: f32,
+pub(super) struct Rect {
+  pub x: f32,
+  pub width: f32,
 }
 
-fn rect(agents: &mut Agents, id: &str) -> Rect {
+pub(super) fn rect(agents: &mut Agents, id: &str) -> Rect {
   let found = agents
     .window
     .tree
@@ -134,7 +134,7 @@ fn rect(agents: &mut Agents, id: &str) -> Rect {
 }
 
 /// Whether chip `id` shows whole in the strip's scrolling part.
-fn in_view(agents: &mut Agents, id: &str) -> bool {
+pub(super) fn in_view(agents: &mut Agents, id: &str) -> bool {
   let (chip, strip) = (rect(agents, id), rect(agents, "pipeline-hub-step-scroll"));
   chip.x >= strip.x - 0.5 && chip.x + chip.width <= strip.x + strip.width + 0.5
 }

@@ -169,7 +169,7 @@ fn adding(
     AddSourceProps {
       id: "pipeline-hub-sources-add".into(),
       place,
-      layout: Layout::Picker,
+      layout: Layout::Ghost,
       add: ctx.t("pipeline_hub.settings.addSource"),
       locked: props.locked,
       on_add: Arc::new(move |path| edit.change(|current| drafted::add(current, &listing, path))),

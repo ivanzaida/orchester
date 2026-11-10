@@ -8,7 +8,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::Step;
+use orchester_core::{
+  name::Name,
+  resource::{PipelineEdit, Step, StepKey},
+};
 
 use super::Open;
 use crate::{
@@ -87,6 +90,7 @@ pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, u
 
 /// *Duplicate*: a copy of the step right after it, opened at once; the edit holds it until *Save*.
 fn duplicate(ctx: &Ctx, open: &Open<'_>, step: &Step, navigation: &Navigation) -> Element {
+  let name = ctx.t_args("pipeline_hub.step.copyName", [("name", step.name.as_str())]);
   let (edit, key, navigation) = (open.edit.clone(), step.key.clone(), navigation.clone());
   let (project, pipeline) = (open.project.open.project.id(), open.entry.id);
   let button = ActionButton::new(
@@ -101,7 +105,7 @@ fn duplicate(ctx: &Ctx, open: &Open<'_>, step: &Step, navigation: &Navigation) -
   button
     .on_click(move || {
       let mut copy = None;
-      edit.change(|current| copy = current.duplicate_step(&key));
+      edit.change(|current| copy = copy_of(current, &key, &name));
       if let Some(copy) = copy {
         navigation.go(Route::Project(
           project,
@@ -110,4 +114,25 @@ fn duplicate(ctx: &Ctx, open: &Open<'_>, step: &Step, navigation: &Navigation) -
       }
     })
     .into()
+}
+
+/// The copy of step `key` named `name`, so that it can be told from the step. The core's copy waits for what the step
+/// waits for and nothing waits for it, which would leave a step that waits for only part of what runs before it, a
+/// branch no single line shows: the steps that wait for the step wait for the copy too, so the copy runs beside it.
+fn copy_of(edit: &mut PipelineEdit, key: &StepKey, name: &str) -> Option<StepKey> {
+  let copy = edit.duplicate_step(key)?;
+  // A name the copy cannot take (too long once ` copy` is added) leaves it the step's own name.
+  if let Ok(name) = Name::new(name) {
+    edit.update(&copy, |step| step.name = name);
+  }
+  let dependents: Vec<StepKey> = edit
+    .steps()
+    .iter()
+    .filter(|step| step.key != copy && step.depends_on.contains(key))
+    .map(|step| step.key.clone())
+    .collect();
+  for dependent in &dependents {
+    edit.set_dependency(dependent, &copy, true);
+  }
+  Some(copy)
 }

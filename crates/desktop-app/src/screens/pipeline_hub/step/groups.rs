@@ -17,7 +17,7 @@ use orchester_workspace::pipelines::{
 };
 
 use super::{
-  Open, agent,
+  Open, agent, keep,
   pieces::Chip,
   text_field::{self, Kind},
 };
@@ -117,6 +117,9 @@ pub(super) fn run(ctx: &mut Ctx, open: &Open<'_>, step: &Step, upstream: &[Chip]
   let mut rows = vec![changes_row(ctx, open, step, upstream)];
   if step.on_failure.is_some() {
     rows.push(text_row(ctx, open, step, Kind::Retries));
+  } else {
+    // Retries that were typed wrong belonged to a route the step no longer has: they are not kept for the next one.
+    keep(open.faulty, (&step.key, Kind::Retries), None);
   }
   rows.push(text_row(ctx, open, step, Kind::Budget));
   rows::section(
@@ -149,6 +152,8 @@ fn changes_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step, upstream: &[Chip]) -
   }
   let (edit, key) = (open.edit.clone(), step.key.clone());
   let on_pick: Pick = Arc::new(move |picked| {
+    // The select's values are ours: empty is *Fail the run* and any other is the key of a step it listed, so a value
+    // that is not a key can only be the empty one, and losing the parse error is right.
     let choice = RouteChoice(StepKey::new(&picked).ok());
     edit.change(|current| {
       current.update(&key, |step| choice.apply(step));

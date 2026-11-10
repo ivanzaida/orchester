@@ -133,7 +133,7 @@ pub use self::{
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
-  step_strip::{StripColor, StripSpacing, StripText, chip_radius, strip_scrollbar},
+  step_strip::{StripSpacing, StripText, chip_radius, strip_scrollbar},
   task::{NOT_READY_ROW_HEIGHT, TaskRadius, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{

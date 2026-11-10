@@ -3,16 +3,15 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, SpacingSize, Theme, ThemePalette, TypographyStyle},
+  app::theme::{RadiusSize, SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::{
     scrollbar::ScrollBarStyle,
     text_style::{FontWeight, TextStyle},
   },
-  node::color::Color,
 };
 
 use super::{
-  Mode,
+  fonts::ICONS,
   typography::{mono, style},
 };
 
@@ -24,10 +23,12 @@ pub enum StripText {
   Name,
   /// 12 `text_primary`, 1.2: the open step's name.
   Current,
+  /// The lucide hand at 9 in `warning`: the gate's mark, where the run waits for the person (`Gate` in `Step strip`).
+  GateHand,
 }
 
 impl StripText {
-  pub const ALL: [Self; 3] = [Self::Number, Self::Name, Self::Current];
+  pub const ALL: [Self; 4] = [Self::Number, Self::Name, Self::Current, Self::GateHand];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -38,6 +39,7 @@ impl StripText {
       Self::Number => "step_strip_number",
       Self::Name => "step_strip_name",
       Self::Current => "step_strip_current",
+      Self::GateHand => "step_strip_gate_hand",
     }
   }
 
@@ -46,6 +48,10 @@ impl StripText {
       Self::Number => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted)),
       Self::Name => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
       Self::Current => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_primary),
+      Self::GateHand => TextStyle {
+        font_family: Arc::from(ICONS),
+        ..style(9.0, FontWeight::Normal, 1.0, 0.0, palette.warning)
+      },
     }
   }
 }
@@ -87,36 +93,16 @@ pub fn chip_radius() -> RadiusSize {
   RadiusSize::extra("step_strip_chip")
 }
 
-/// `base`, the theme's scrollbar, as the strip's thin thumb under its chips draws it when the strip scrolls
-/// (`Thumb` in P13 `KRQ5J`): 2 thick, 1 from the strip's bottom and 8 clear of its ends.
+/// `base`, the theme's scrollbar (its `border_strong` thumb), as the strip's thin thumb under its chips draws it when
+/// the strip scrolls (`Scrollbar` in P13 `KRQ5J`): 2 thick, 2 from the strip's bottom, and from each end of the strip
+/// the 40 of ‹ and › with 4 more.
 pub fn strip_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
   ScrollBarStyle {
     width: 2.0,
     thumb_radius: 1.0,
     track_radius: 1.0,
-    edge_inset: Some(1.0),
-    end_inset: Some(8.0),
+    edge_inset: Some(2.0),
+    end_inset: Some(40.0),
     ..base.clone()
   }
-}
-
-/// Colors of the step strip.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StripColor {
-  /// `surface_raised` fully transparent: where the fade under ‹ and › ends (`Fade` in P13 `KRQ5J`).
-  FadeClear,
-}
-
-impl StripColor {
-  pub fn role(self) -> PaletteColor {
-    PaletteColor::extra("step_strip_fade_clear")
-  }
-}
-
-pub(super) fn colors(mode: Mode) -> impl Iterator<Item = (Arc<str>, Color)> {
-  let clear = match mode {
-    Mode::Dark => "#20202300",
-    Mode::Light => "#FFFFFF00",
-  };
-  [(Arc::<str>::from("step_strip_fade_clear"), Color::from_hex(clear))].into_iter()
 }

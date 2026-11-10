@@ -15,7 +15,7 @@ use lurq::{
 use orchester_core::resource::{Step, StepKey};
 use orchester_workspace::{messages::Message, pipelines::fields};
 
-use super::{Faulty, mark};
+use super::{Faulty, keep, kept};
 use crate::{
   screens::pipeline_hub::edit::Edit,
   ui::{field::FieldInput, message::message_text},
@@ -33,7 +33,16 @@ pub(super) enum Kind {
 }
 
 impl Kind {
-  /// The field's name in [`Faulty`] and the box's element id.
+  /// The words that name the box, in the bar's *Fix … to save*.
+  pub(super) const fn label(self) -> &'static str {
+    match self {
+      Self::Instructions => "pipeline_hub.step.instructions",
+      Self::Budget => "pipeline_hub.step.budget",
+      Self::Retries => "pipeline_hub.step.retries",
+    }
+  }
+
+  /// The box's element id.
   const fn name(self) -> &'static str {
     match self {
       Self::Instructions => "pipeline-hub-step-instructions",
@@ -128,28 +137,28 @@ struct TextField {
   error: Signal<Option<Message>>,
   /// The panel's edit as of the last draw, which a change goes to.
   edit: Ref<Option<Edit>>,
-  kind: Kind,
-  faulty: Faulty,
 }
 
 impl Component for TextField {
   type Props = Props;
 
+  /// The box starts with what the edit holds, or, when text that was not valid was typed here and the person came
+  /// back to it, with that text and what is wrong with it.
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
+    let typed = kept(&props.faulty, &props.key, props.kind);
+    let error = typed.as_deref().and_then(|text| props.kind.apply(text).err());
     let this = Self {
-      text: ctx.signal(props.shown.clone()),
-      error: ctx.signal(None),
+      text: ctx.signal(typed.unwrap_or_else(|| props.shown.clone())),
+      error: ctx.signal(error),
       edit: ctx.create_ref(Some(props.edit.clone())),
-      kind: props.kind,
-      faulty: props.faulty.clone(),
     };
     let (error, edit) = (this.error.clone(), this.edit.clone());
-    let (kind, key, faulty) = (props.kind, props.key.clone(), props.faulty.clone());
+    let (kind, key, faulty) = (props.kind, props.key.clone(), props.faulty);
     ctx.watch(&this.text, move |text: &String| match kind.apply(text) {
       Ok(change) => {
         error.set(None);
-        mark(&faulty, kind.name(), false);
+        keep(&faulty, (&key, kind), None);
         if let Some(edit) = edit.get() {
           edit.change(|current| {
             current.update(&key, change);
@@ -158,7 +167,7 @@ impl Component for TextField {
       }
       Err(message) => {
         error.set(Some(message));
-        mark(&faulty, kind.name(), true);
+        keep(&faulty, (&key, kind), Some(text));
       }
     });
     this
@@ -186,12 +195,5 @@ impl Component for TextField {
       input = input.error(message_text(ctx, &message));
     }
     input.render(ctx)
-  }
-}
-
-impl Drop for TextField {
-  fn drop(&mut self) {
-    // The box is gone with its error, which must not keep the panel from saving.
-    mark(&self.faulty, self.kind.name(), false);
   }
 }

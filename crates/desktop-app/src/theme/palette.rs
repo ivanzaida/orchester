@@ -214,7 +214,6 @@ pub fn palette(mode: Mode) -> ThemePalette {
       .map(|extra| (Arc::from(extra.name()), extra.color(mode)))
       .chain(super::composer::colors(mode))
       .chain(super::browser::colors(mode))
-      .chain(super::step_strip::colors(mode))
       .collect(),
   }
 }

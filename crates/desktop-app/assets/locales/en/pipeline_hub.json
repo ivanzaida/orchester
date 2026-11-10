@@ -90,6 +90,7 @@
       "back": "Back to {{name}}",
       "position": "step {{number}} of {{total}}",
       "duplicate": "Duplicate",
+      "copyName": "{{name}} copy",
       "group": "Step",
       "agent": "Agent",
       "agentChoose": "Choose a profile",
@@ -120,6 +121,7 @@
       }
     },
     "bar": {
+      "fix": "Fix {{field}} in {{step}} to save",
       "makesFirst": "Save makes {{version}} · New task offers it once every step is ready",
       "widenTitle": "Allow these changes to the pipeline?",
       "allow": "Allow and save",

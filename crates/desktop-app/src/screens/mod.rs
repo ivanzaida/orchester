@@ -223,14 +223,17 @@ fn pipelines_or_hub(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView) 
 
 /// A step of pipeline `id` (a card of the flow, a fix): in a local project it opens in the Pipelines hub's panel
 /// (`Pipelines · v2` P2), which keeps the edit the pipeline's panel holds; a team project keeps the step's own page.
+/// While it is not yet read whether the project is shared the page the route had before stays, as the pipeline's own
+/// route does, so a team project's editor is not replaced by a placeholder for as long as that takes.
 fn pipeline_step(ctx: &mut Ctx, project: &ShownProject, id: ResourceId, key: &StepKey) -> Element {
   match project.feed.team.get() {
     TeamRead::Read(None) => {
       let view = PipelinesView::new(PipelinesFilter::All, Some(id));
       pipeline_hub::screen(ctx, project, view, Some(key.clone()))
     }
-    TeamRead::Read(Some(_)) => pipelines::editor(ctx, project, id, (PipelineView::Step(key.clone()), None)),
-    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Read(Some(_)) | TeamRead::Unread => {
+      pipelines::editor(ctx, project, id, (PipelineView::Step(key.clone()), None))
+    }
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
 }

@@ -17,7 +17,7 @@ use lurq::{
     ctx::Ctx,
   },
   components::{Column, ScrollVertical},
-  core::{Ref, Signal},
+  core::{ElementRef, Ref, Signal},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -119,6 +119,10 @@ struct PipelinePanel {
   faulty: step::Faulty,
   /// How many times the edit was put back, after which the open step's fields are mounted anew.
   reset: Signal<u64>,
+  /// The Deliver chip of an open step asked for the *A run delivers* row to be shown once the pipeline's body is.
+  reveal_delivers: Signal<bool>,
+  /// That row.
+  delivers: ElementRef,
   id: ResourceId,
 }
 
@@ -144,6 +148,8 @@ impl Component for PipelinePanel {
       saving: props.hosted.saving,
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
+      reveal_delivers: ctx.signal(false),
+      delivers: ctx.element_ref(),
       id,
     };
     save::follow(
@@ -182,7 +188,7 @@ impl Component for PipelinePanel {
       .expect("a pipeline that is not archived has its flow");
     self.stored.set(Some(stored.clone()));
     self.settle(&stored);
-    let edit = Edit::new(&self.holding, stored);
+    let edit = Edit::new(&self.holding, stored).following(&self.stored);
     let current = edit.current();
     let changed = edit.is_changed();
     mark_unsaved(&self.unsaved, self.id, changed);
@@ -223,7 +229,7 @@ impl Component for PipelinePanel {
         self.save_now(&edit, (changed, entry.unpublished), saving || asked.is_some()),
         (changed && !saving).then(|| self.cancel_now(&edit)),
       ),
-      (&entry, changed),
+      (&entry, changed, step::fix_words(ctx, &self.faulty, &current)),
     );
     frame(&entry, body, pinned, Some(bar))
   }
@@ -273,6 +279,7 @@ impl PipelinePanel {
         locked: shown.locked,
         epoch: self.notes.stored.get() + self.reset.get(),
         faulty: &self.faulty,
+        reveal_delivers: &self.reveal_delivers,
       },
     ))
   }
@@ -301,6 +308,10 @@ impl PipelinePanel {
         holds_changes: changed,
       },
     );
+    if self.reveal_delivers.get_untracked() {
+      ctx.scroll_into_view(&self.delivers);
+      self.reveal_delivers.set(false);
+    }
     body()
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
@@ -315,6 +326,7 @@ impl PipelinePanel {
           description: &self.description,
           locked,
           saved: self.notes.stored.get(),
+          delivers: &self.delivers,
         },
       ))
       .with_children(ready::group(ctx, project, entry, read))
@@ -363,7 +375,7 @@ impl PipelinePanel {
       return SaveState::Unchanged;
     }
     // Text that is not valid is not in the edit, so saving now would store what the box no longer says.
-    if waiting || !self.faulty.get().is_empty() {
+    if waiting || step::holds_invalid(&self.faulty, &edit.current()) {
       return SaveState::Unchanged;
     }
     let (edit, save, notes) = (edit.clone(), self.save.clone(), self.notes.clone());
@@ -388,12 +400,12 @@ impl PipelinePanel {
 
   /// What dropping the edit puts back besides the edit: the description's box, and what the last save said.
   fn put_back(&self) -> impl Fn() + Send + Sync + use<> {
-    let (description, stored, pending, notes, reset) = (
+    let (description, stored, pending, notes, (reset, faulty)) = (
       self.description.clone(),
       self.stored.clone(),
       self.pending.clone(),
       self.notes.clone(),
-      self.reset.clone(),
+      (self.reset.clone(), self.faulty.clone()),
     );
     move || {
       if let Some(stored) = stored.get() {
@@ -402,6 +414,7 @@ impl PipelinePanel {
       pending.set(None);
       notes.forget();
       reset.update(|resets| *resets += 1);
+      faulty.set(Vec::new());
     }
   }
 
