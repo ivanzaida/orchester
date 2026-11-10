@@ -57,6 +57,8 @@ pub(super) struct Body {
   /// A section of its own over the rows' (a profile's *Role*).
   pub lead: Option<Element>,
   pub rows: Vec<Row>,
+  /// Sections of their own under the rows' (an instruction's *Text*, a skill's *SKILL.md*).
+  pub after: Vec<Element>,
   /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
   pub computer: Option<&'static str>,
   /// What Create makes, when every field is valid.

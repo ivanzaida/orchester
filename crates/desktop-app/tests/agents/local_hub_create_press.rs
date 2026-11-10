@@ -36,9 +36,9 @@ fn local_hub_create_a_tool_is_a_persons_press() {
 fn local_hub_create_an_instruction_is_not_refused_to_synthetic_input() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Instructions);
-  agents.set("team-new-instruction-name", "Handoff notes");
+  agents.set("team-new-instruction-name-input", "Handoff notes");
   agents.set(
-    "team-new-instruction-text",
+    "team-new-instruction-text-input",
     "Write a handoff note at the end of every run.",
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));

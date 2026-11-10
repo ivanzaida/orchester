@@ -1,8 +1,8 @@
 //! An admin's panel of a team instruction, edited in place (`A27 · Agents · Instruction · admin · editing` `uVUZ4`):
 //! the head, the chips with *Unsaved changes* while the text differs from the version it is made on, *From the team*
 //! with *Used by* (read-only: a profile gives it, and is changed there) and its format, *Text* as a text area, *On this
-//! computer* (nothing) and the fixed Save/Cancel bar ([`super::super::edit`]). Who gets it, when and where it is added
-//! stay as the version has them.
+//! computer* (nothing) and the fixed Save/Cancel bar ([`super::super::edit`]). The fields are the form that makes one
+//! ([`InstructionFields`]); who gets it, when and where it is added stay as the version has them.
 
 use std::sync::Arc;
 
@@ -11,25 +11,30 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  core::Signal,
   node::Element,
 };
-use orchester_core::resource::{Instruction, PromptText};
-use orchester_workspace::agents::{form::prompt_error, team_text::TeamInstructionSheet};
+use orchester_core::resource::Instruction;
+use orchester_workspace::agents::team_text::TeamInstructionSheet;
 
 use super::{Props, Sheet, from_team, on_this_computer, used_by_row};
 use crate::{
-  screens::team_hub::{
-    archive,
-    edit::{Edit, TextSection, View},
-    panel, rows, words,
+  screens::{
+    hub::forms::{Form, Ids, InstructionFields},
+    team_hub::{
+      archive,
+      edit::{Edit, View},
+      panel, words,
+    },
   },
   services::Services,
-  ui::message::message_text,
 };
 
-/// The text area is at least 180 high, as the form that makes one draws it (`Input` `sTxOp` in A10 `hGdGu`).
-const TEXT_AREA: f32 = 180.0;
+/// The ids of the edit's parts, which tests and automation address: `team-hub-from-team-format`,
+/// `team-hub-text-input`, …
+const IDS: Ids = Ids {
+  rows: "team-hub-from-team",
+  sections: "team-hub",
+};
 
 #[derive(Clone, PartialEq)]
 pub(super) struct EditorProps {
@@ -39,7 +44,7 @@ pub(super) struct EditorProps {
 impl DevtoolsInspectable for EditorProps {}
 
 pub(super) struct InstructionEditor {
-  text: Signal<String>,
+  fields: InstructionFields,
   edit: Edit<Instruction>,
 }
 
@@ -48,10 +53,10 @@ impl Component for InstructionEditor {
 
   fn create(ctx: &mut Ctx) -> Self {
     let EditorProps { props, sheet } = ctx.props::<EditorProps>().clone();
-    let text = ctx.signal(String::new());
+    let fields = InstructionFields::new(ctx);
     let load = {
-      let text = text.clone();
-      Arc::new(move |body: &Instruction| text.set(body.text().as_str().to_owned()))
+      let fields = fields.clone();
+      Arc::new(move |body: &Instruction| fields.load(body))
     };
     let edit = Edit::new(
       ctx,
@@ -59,7 +64,7 @@ impl Component for InstructionEditor {
       sheet.edit.as_ref(),
       load,
     );
-    Self { text, edit }
+    Self { fields, edit }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -67,15 +72,22 @@ impl Component for InstructionEditor {
     let Some(base) = self.edit.base() else {
       return Element::from(lurq::components::Row::new());
     };
-    let text = self.text.get();
-    let made = made(ctx, &text, &base.body);
+    let drawn = self.fields.draw(
+      ctx,
+      &Form {
+        ids: IDS,
+        base: Some(&base.body),
+        name: None,
+        tried: true,
+        locked: false,
+      },
+    );
     self.edit.keep_up(
       sheet.edit.as_ref(),
-      made.as_ref().map_or(true, |body| *body != base.body),
+      drawn.made.as_ref().map_or(true, |body| *body != base.body),
     );
-    let error = made.as_ref().err().cloned();
     let view = View {
-      made,
+      made: drawn.made,
       unreached: props.unreached.as_ref(),
       published_by: sheet.published.as_ref().map(|published| published.by.as_str()),
     };
@@ -97,50 +109,14 @@ impl Component for InstructionEditor {
       .into_iter()
       .chain([words::chip(ctx, &props.listing, entry)])
       .collect();
-    let format = rows::row(
-      "team-hub-from-team-format",
-      &ctx.t("team_hub.plain.format"),
-      None,
-      rows::words("team-hub-from-team-format-value", &ctx.t("team_hub.plain.markdown")),
-    );
-    let section = TextSection {
-      id: "team-hub-text",
-      label: ctx.t("team_hub.plain.text"),
-      placeholder: ctx.t("team_hub.edit.textPlaceholder"),
-      height: TEXT_AREA,
-    }
-    .render(ctx, &self.text, (text != base.body.text().as_str(), error));
+    let used_by = used_by_row(ctx, &sheet.used_by, Some(ctx.t("team_hub.edit.usedBySub")));
     let body = panel::body()
       .child(head)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
       .with_children(parts.notice)
-      .child(from_team(
-        ctx,
-        vec![
-          used_by_row(ctx, &sheet.used_by, Some(ctx.t("team_hub.edit.usedBySub"))),
-          format,
-        ],
-      ))
-      .child(section)
+      .child(from_team(ctx, std::iter::once(used_by).chain(drawn.rows).collect()))
+      .with_children(drawn.sections)
       .child(on_this_computer(ctx, &Sheet::Instruction(sheet.clone())));
     panel::frame(entry, body, Some(parts.bar)).into()
   }
-}
-
-/// The instruction the fields make: `text` in the place of `base`'s, which keeps who gets it, when and where it is
-/// added. A blank text, or one that names a variable the catalog does not have, makes none, and says why.
-fn made(ctx: &Ctx, text: &str, base: &Instruction) -> Result<Instruction, Arc<str>> {
-  if text.trim().is_empty() {
-    return Err(ctx.t("team_hub.edit.textRequired"));
-  }
-  let text = PromptText::new(text).map_err(|error| message_text(ctx, &prompt_error(&error)))?;
-  Ok(
-    Instruction::new(
-      text,
-      base.targets().clone(),
-      base.events().clone(),
-      base.scope().clone(),
-    )
-    .expect("who gets it, when and where it is added are the published version's own, which it took"),
-  )
 }

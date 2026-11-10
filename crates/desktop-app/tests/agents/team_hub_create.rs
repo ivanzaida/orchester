@@ -133,7 +133,7 @@ fn team_hub_create_cancel_leaves_nothing_and_goes_back_to_the_kind() {
     show_form(&mut agents, filter);
     // Whatever was typed is not kept.
     if filter == HubFilter::Instructions {
-      agents.set("team-new-instruction-name", "Release notes");
+      agents.set("team-new-instruction-name-input", "Release notes");
     }
     agents.click("team-hub-new-cancel");
     agents.until("the kind's list", |s| {
@@ -156,7 +156,7 @@ fn team_hub_create_a_required_field_says_so_and_nothing_is_made() {
   let required = [
     (HubFilter::Profiles, "team-new-profile-role-name-sub"),
     (HubFilter::McpServers, "team-new-mcp-name-row-sub"),
-    (HubFilter::Instructions, "team-new-instruction-name-row-sub"),
+    (HubFilter::Instructions, "team-new-instruction-name-sub"),
     (HubFilter::Skills, "team-new-skill-name-row-sub"),
     (HubFilter::Tools, "team-new-tool-name-row-sub"),
   ];
@@ -173,8 +173,8 @@ fn team_hub_create_a_required_field_says_so_and_nothing_is_made() {
   }
   // The labels say it too.
   show_form(&mut agents, HubFilter::Instructions);
-  assert_eq!(agents.text("team-new-instruction-name-row-label"), "Name · required");
-  assert_eq!(agents.text("team-new-instruction-text-row-label"), "Text · required");
+  assert_eq!(agents.text("team-new-instruction-name-label"), "Name · required");
+  assert_eq!(agents.text("team-new-instruction-text-label"), "Text · required");
   let after: Vec<_> = KINDS.iter().map(|(.., kind)| held(&agents, *kind)).collect();
   assert_eq!(before, after, "nothing was made");
 }
@@ -206,8 +206,8 @@ fn team_hub_create_a_resource_the_team_server_cannot_take_is_refused_in_place_an
   let mut agents = Agents::new(true);
   team(&agents);
   show_form(&mut agents, HubFilter::Instructions);
-  agents.set("team-new-instruction-name", "Release notes");
-  agents.set("team-new-instruction-text", "Write them for customers.");
+  agents.set("team-new-instruction-name-input", "Release notes");
+  agents.set("team-new-instruction-text-input", "Write them for customers.");
   let before = held(&agents, ResourceKind::Instruction);
   agents.click("team-hub-new-create");
   agents.until("the answer", |s| s.exists("team-new-refused"));

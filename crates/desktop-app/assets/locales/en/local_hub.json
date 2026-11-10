@@ -162,12 +162,7 @@
       "title": "Tool"
     },
     "instruction": {
-      "title": "Instruction",
-      "when": "When",
-      "text": "Text",
-      "textSub": "Markdown, added to the agent's prompt as written",
-      "textPlaceholder": "Write the instruction in Markdown…",
-      "variablesMissing": "A variable it uses has no value when it is added"
+      "title": "Instruction"
     },
     "skill": {
       "title": "Skill",

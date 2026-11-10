@@ -12,6 +12,7 @@ pub(crate) mod area;
 pub(crate) mod bones;
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
+pub(crate) mod forms;
 pub(crate) mod given;
 pub(crate) mod new_button;
 pub(crate) mod page_head;

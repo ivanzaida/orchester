@@ -1,153 +1,104 @@
-//! The form of a new instruction (`Agents · New instruction` A10 `hGdGu`): its name, where it is added and its text. An
-//! instruction is the team's whole: nothing is filled in on a computer afterwards. In a local project nothing chooses
-//! where it is added or who gets it: a profile chooses the instructions its agents are given
+//! The form of a new instruction (`Agents · New instruction` A10 `hGdGu`, L5 `f8QbK3`): the instruction's fields as
+//! its edit has them ([`InstructionFields`]: its name, format and text), empty, with where it is added after its name.
+//! An instruction is the team's whole: nothing is filled in on a computer afterwards. In a local project nothing
+//! chooses where it is added or who gets it: a profile chooses the instructions its agents are given
 //! (`docs/design/team-configuration.md`, "Decided 2026-11-09"), so the form says that instead.
 
-use lurq::{app::ctx::Ctx, core::Signal};
+use lurq::app::ctx::Ctx;
 use orchester_core::name::Name;
-use orchester_workspace::{
-  instructions::form::{Events, InstructionForm, ScopeChoice, Target},
-  messages::{self, Message},
-};
+use orchester_workspace::messages;
 
 use super::{
-  fields::{self, Body, Error, Look, Shown, Spec, name_error},
+  fields::{self, Body, Error, Shown, name_error},
   work::Make,
 };
-use crate::screens::team_hub::rows;
+use crate::{
+  screens::{
+    hub::forms::{Form, Ids, InstructionFields, Naming},
+    team_hub::rows,
+  },
+  ui::message::message_text,
+};
 
-const NAME: Spec = Spec::new("instruction-name", "team_new.instruction.name")
-  .sub("team_new.instruction.nameSub")
-  .required();
-const ADDED_TO: Spec =
-  Spec::new("instruction-added-to", "team_new.instruction.addedTo").sub("team_new.instruction.addedToSub");
-const GIVEN_TO: Spec =
-  Spec::new("instruction-given-to", "local_new.instruction.givenTo").sub("local_new.instruction.givenToSub");
-const TEXT: Spec = Spec::new("instruction-text", "team_new.instruction.text")
-  .sub("team_new.instruction.textSub")
-  .required();
-
-/// The text field is at least 180 high (`Input` `sTxOp` in A10 `hGdGu`).
-const TEXT_AREA: f32 = 180.0;
+/// The ids of the form's parts, which tests and automation address: `team-new-instruction-name-input`,
+/// `team-new-instruction-text-input`, …
+const IDS: Ids = Ids {
+  rows: "team-new-instruction",
+  sections: "team-new-instruction",
+};
 
 pub(super) struct Fields {
-  name: Signal<String>,
-  text: Signal<String>,
+  fields: InstructionFields,
 }
 
 impl Fields {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     Self {
-      name: ctx.signal(String::new()),
-      text: ctx.signal(String::new()),
+      fields: InstructionFields::new(ctx),
     }
   }
 
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
-    let (name, text) = (self.name.get(), self.text.get());
-    let checked = check(&name, &text);
-    let name_says = name_error(
-      ctx,
-      shown,
-      &name,
-      shown
-        .mode
-        .words("team_new.instruction.nameTaken", "local_new.nameTaken.instruction"),
-    )
-    .or_else(|| {
-      checked
-        .name
-        .clone()
-        .filter(|_| shown.tried && !name.trim().is_empty())
-        .map(Error::Said)
-    });
-    let text_says = shown
-      .tried
-      .then(|| match (&checked.text, text.trim().is_empty()) {
-        (_, true) => Some(Error::Required),
-        (Some(message), false) => Some(Error::Said(message.clone())),
-        (None, false) => None,
+    let name = self.fields.name();
+    let named = Name::new(&name).map_err(|error| messages::name_error(&error));
+    let taken_key = shown
+      .mode
+      .words("team_new.instruction.nameTaken", "local_new.nameTaken.instruction");
+    let said = name_error(ctx, shown, &name, taken_key)
+      .or_else(|| {
+        named
+          .as_ref()
+          .err()
+          .filter(|_| shown.tried && !name.trim().is_empty())
+          .map(|message| Error::Words(message_text(ctx, message)))
       })
-      .flatten();
-    let rows = vec![
-      fields::name_row(
-        ctx,
-        shown,
-        &NAME,
-        name_says.as_ref(),
-        (&self.name, "team_new.instruction.namePlaceholder"),
-        Look::Plain,
-      ),
-      if shown.mode.is_local() {
-        fields::row(
-          ctx,
-          &GIVEN_TO,
-          None,
-          rows::words(
-            "local-new-instruction-given-to",
-            &ctx.t("local_new.instruction.givenToValue"),
-          ),
-        )
-      } else {
-        fields::row(
-          ctx,
-          &ADDED_TO,
-          None,
-          rows::words("team-new-instruction-added-to", &ctx.t("team_new.instruction.everyRun")),
-        )
+      .map(|error| error.words(ctx));
+    let drawn = self.fields.draw(
+      ctx,
+      &Form {
+        ids: IDS,
+        base: None,
+        name: Some(Naming {
+          said,
+          first: Some(shown.first),
+        }),
+        tried: shown.tried,
+        locked: shown.locked,
       },
-      fields::text_row(
-        ctx,
-        &TEXT,
-        text_says.as_ref(),
-        (&self.text, "team_new.instruction.textPlaceholder"),
-        (Look::Area(TEXT_AREA), shown.locked),
-      ),
-    ];
+    );
+    let added = if shown.mode.is_local() {
+      rows::row(
+        "team-new-instruction-given-to",
+        &ctx.t("local_new.instruction.givenTo"),
+        Some(rows::Sub::quiet(ctx.t("local_new.instruction.givenToSub"))),
+        rows::words(
+          "team-new-instruction-given-to-value",
+          &ctx.t("local_new.instruction.givenToValue"),
+        ),
+      )
+    } else {
+      rows::row(
+        "team-new-instruction-added-to",
+        &ctx.t("team_new.instruction.addedTo"),
+        Some(rows::Sub::quiet(ctx.t("team_new.instruction.addedToSub"))),
+        rows::words(
+          "team-new-instruction-added-to-value",
+          &ctx.t("team_new.instruction.everyRun"),
+        ),
+      )
+    };
+    let make = match (named, drawn.made) {
+      (Ok(named), Ok(body)) => Some(Make::Instruction(named, Box::new(body))),
+      _ => None,
+    };
     Body {
       lead: None,
-      rows,
+      rows: drawn.name.into_iter().chain([added]).chain(drawn.rows).collect(),
+      after: drawn.sections,
       computer: Some("team_new.computer.instruction"),
-      make: checked.make,
+      make,
       off: fields::off(shown, &name),
       overlay: None,
     }
-  }
-}
-
-struct Checked {
-  name: Option<Message>,
-  text: Option<Message>,
-  make: Option<Make>,
-}
-
-/// The instruction the fields make: added to every run, at the start of each.
-fn check(name: &str, text: &str) -> Checked {
-  let named = Name::new(name).map_err(|error| messages::name_error(&error));
-  let body = if text.trim().is_empty() {
-    None
-  } else {
-    Some(
-      InstructionForm {
-        text,
-        targets: &[Target::All],
-        events: Events::Start,
-        scope: &ScopeChoice::Project,
-      }
-      .instruction(),
-    )
-  };
-  let text_error = match &body {
-    Some(Err(errors)) => errors.text.clone(),
-    _ => None,
-  };
-  let make = match (named.as_ref(), body) {
-    (Ok(named), Some(Ok(body))) => Some(Make::Instruction(named.clone(), Box::new(body))),
-    _ => None,
-  };
-  Checked {
-    name: named.err(),
-    text: text_error,
-    make,
   }
 }

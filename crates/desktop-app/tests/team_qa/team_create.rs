@@ -23,8 +23,8 @@ fn filled(state: State) -> (Window, TeamServer) {
   let (mut window, server) = prepared(state);
   window.navigation().go(form());
   window.until("the form", |window| window.texts("team-hub-new-create").is_some());
-  window.set("team-new-instruction-name", "Release notes");
-  window.set("team-new-instruction-text", "Write them for customers.");
+  window.set("team-new-instruction-name-input", "Release notes");
+  window.set("team-new-instruction-text-input", "Write them for customers.");
   (window, server)
 }
 

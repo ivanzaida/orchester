@@ -70,6 +70,7 @@ impl Fields {
     ];
     Body {
       lead: None,
+      after: Vec::new(),
       rows,
       computer: Some("team_new.computer.skill"),
       make: made(&name, &description),

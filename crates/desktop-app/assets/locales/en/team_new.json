@@ -88,8 +88,6 @@
       "addedTo": "Added to",
       "addedToSub": "Every run is the only choice for now: a profile cannot pick instructions yet",
       "everyRun": "Every run",
-      "text": "Text",
-      "textSub": "Added to the agent's prompt as written",
       "textPlaceholder": "Write the instruction in Markdown…"
     },
     "skill": {

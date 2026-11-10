@@ -96,6 +96,7 @@ impl Fields {
     };
     Body {
       lead: None,
+      after: Vec::new(),
       rows,
       computer: Some("team_new.computer.tool"),
       make,

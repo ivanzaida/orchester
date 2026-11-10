@@ -176,6 +176,7 @@ impl Fields {
     }
     Body {
       lead: None,
+      after: Vec::new(),
       rows,
       computer: Some(if program {
         "team_new.computer.mcpProgram"
