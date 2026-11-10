@@ -98,7 +98,7 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
 
 #[test]
 fn pipelines_publish_waits_while_changes_are_unsaved() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   assert!(
@@ -163,7 +163,7 @@ fn pipelines_viewed_version_reads_each_step_and_restores_at_once_without_a_draft
 
 #[test]
 fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-step-step");
@@ -199,7 +199,7 @@ fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
 
 #[test]
 fn pipelines_flow_add_step_names_by_the_number_it_adds_and_counts_on_from_a_taken_one() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Names");
   editor.open(id);
   editor.click("pipeline-add-step");
@@ -217,7 +217,7 @@ fn pipelines_flow_add_step_names_by_the_number_it_adds_and_counts_on_from_a_take
 
 #[test]
 fn pipelines_flow_a_step_on_a_cycle_says_so_on_its_runs_after_row() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Cycle");
   editor.open(id);
   editor.click("pipeline-add-step");
@@ -238,7 +238,7 @@ fn pipelines_flow_a_step_on_a_cycle_says_so_on_its_runs_after_row() {
 #[test]
 fn pipelines_flow_leave_page_leaves_a_cycle_that_cannot_be_saved() {
   use orchester_app::routes::{ProjectPage, Route};
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   // As the app's `navigate` tool goes: straight through the navigation, from outside the page; to another of the
   // project's pages, then out of the project.
   let tasks = Route::Project(crate::support::project_id(), ProjectPage::Tasks(Default::default()));

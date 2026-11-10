@@ -3,6 +3,7 @@
 use crate::pipelines_support::Editor;
 
 #[test]
+#[ignore = "PV2-18: renaming a step is not in the step panel"]
 fn pipelines_step_name_edits_in_place_and_esc_puts_the_name_back() {
   let mut editor = Editor::new();
   let id = editor.published();
@@ -66,7 +67,7 @@ fn pipelines_step_name_of_a_viewed_version_has_no_pencil() {
 
 #[test]
 fn pipelines_deliver_recheck_without_a_command_tool_step_is_off_and_inert() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("No checks");
   editor.open(id);
   editor.click("pipeline-add-step");

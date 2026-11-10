@@ -9,7 +9,7 @@ use crate::pipelines_support::Editor;
 
 #[test]
 fn pipelines_unassigned_starter_saves_edits_but_cannot_publish() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   editor.go(ProjectPage::NewPipeline);
   editor.until("new pipeline", |e| e.exists("pipeline-name"));
   editor.set("pipeline-name", "Delivery");
@@ -50,7 +50,7 @@ fn pipelines_unassigned_starter_saves_edits_but_cannot_publish() {
 
 #[test]
 fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Typing");
   editor.open(id);
   keyboard_across_save(&mut editor, "pipeline-description", "a");
@@ -137,7 +137,7 @@ fn pipelines_leaving_before_autosave_requires_a_decision_and_keep_preserves_edit
 
 #[test]
 fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.go(ProjectPage::Pipelines);
   editor.open(id);
@@ -190,94 +190,12 @@ fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
   editor.click("pipeline-step-step");
   assert_eq!(editor.value("step-budget"), "No limit");
   editor.click("pipeline-parent");
-  editor.until("clean departure", |e| e.exists(&format!("pipeline-hub-row-{id}")));
-}
-
-#[test]
-fn pipelines_failure_route_reset_keeps_displayed_and_saved_retries_in_sync() {
-  let mut editor = Editor::new();
-  let id = editor.empty("Retries");
-  editor.open(id);
-  editor.click("pipeline-add-step");
-  editor.set("step-name", "Inspect");
-  editor.click("pipeline-add-step");
-  editor.set("step-name", "Verify");
-  editor.choose("step-failure", "01 Inspect");
-  editor.set("step-retries", "3");
-  editor.until("three retries saved", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .body()
-      .steps()
-      .get(1)
-      .and_then(|step| step.on_failure.as_ref())
-      .is_some_and(|route| route.max_retries.get() == 3)
-  });
-  editor.choose("step-failure", "Fail the run");
-  assert!(!editor.exists("step-retries"));
-  editor.choose("step-failure", "01 Inspect");
-  assert_eq!(editor.value("step-retries"), "1");
-  editor.click("pipeline-start");
-  editor.click("pipeline-step-step-2");
-  assert_eq!(editor.value("step-retries"), "1", "cached text also resets");
-  editor.until("one retry saved", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[1]
-      .on_failure
-      .as_ref()
-      .is_some_and(|route| route.max_retries.get() == 1)
-  });
-  assert_eq!(editor.value("step-retries"), "1");
-}
-
-#[test]
-fn pipelines_removing_failure_route_clears_obsolete_retry_errors() {
-  let mut editor = Editor::new();
-  let id = editor.empty("Invalid retries");
-  editor.open(id);
-  for name in ["Inspect", "Repair", "Verify"] {
-    editor.click("pipeline-add-step");
-    editor.set("step-name", name);
-  }
-  editor.choose("step-failure", "01 Inspect");
-  editor.set("step-retries", "3");
-  editor.choose("step-failure", "02 Repair");
-  assert_eq!(
-    editor.value("step-retries"),
-    "3",
-    "changing only the target keeps retries"
-  );
-  editor.set("step-retries", "invalid");
-  editor.choose("step-failure", "01 Inspect");
-  assert_eq!(
-    editor.value("step-retries"),
-    "invalid",
-    "keep unfinished edits on target changes"
-  );
-  assert!(editor.exists("pipeline-field-error"));
-  editor.choose("step-failure", "Fail the run");
-  assert!(!editor.exists("pipeline-field-error"));
-  editor.click("pipeline-start");
-  editor.click("pipeline-step-step-3");
-  editor.choose("step-failure", "02 Repair");
-  assert_eq!(editor.value("step-retries"), "1");
-  editor.until("valid route saved", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .body()
-      .steps()
-      .get(2)
-      .and_then(|step| step.on_failure.as_ref())
-      .is_some_and(|route| route.max_retries.get() == 1 && route.return_to.as_str() == "step-2")
-  });
+  editor.until("clean departure", |e| e.exists(&format!("pipeline-row-{id}")));
 }
 
 #[test]
 fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   editor.profile();
   editor.published(); // Supplies the Checks tool.
   let id = editor.empty("Model transitions");

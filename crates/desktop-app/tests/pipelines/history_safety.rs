@@ -49,7 +49,7 @@ fn pipelines_restore_saved_draft_requires_explicit_replacement() {
 
 #[test]
 fn pipelines_restore_keep_preserves_unsaved_body_raw_inputs_and_errors() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-step-step");

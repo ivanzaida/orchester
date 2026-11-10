@@ -7,7 +7,7 @@ mod deliver;
 mod delivers;
 mod dependencies;
 mod editor;
-mod executor_menu;
+pub(in crate::screens) mod executor_menu;
 mod flow;
 mod flow_card;
 mod header;
