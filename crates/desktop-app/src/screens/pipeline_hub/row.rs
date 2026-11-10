@@ -9,7 +9,7 @@ use lurq::{
 };
 use orchester_workspace::readiness::Group;
 
-use super::{list::Shown, model::Entry, words};
+use super::{list::Shown, model::Entry, ready, words};
 use crate::{
   routes::{PipelinesView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
@@ -26,7 +26,7 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     shown.project,
     ProjectPage::pipelines(PipelinesView::new(shown.filter, Some(entry.id))),
   );
-  let said = words::line(ctx, shown.now, entry);
+  let said = ready::line(ctx, entry).unwrap_or_else(|| words::line(ctx, shown.now, entry));
   agent_row(AgentRow {
     id: &id,
     chosen: shown.selected == Some(entry.id),

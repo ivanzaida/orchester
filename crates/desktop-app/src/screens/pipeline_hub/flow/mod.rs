@@ -23,9 +23,9 @@ use orchester_workspace::pipelines::flow::{FlowRead, PipelineFlow, Stage, StepCa
 
 use self::{
   card::{Opening, Place},
-  fix::Fix,
   rail::Node,
 };
+pub(super) use self::{fix::Fix, words::number};
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,

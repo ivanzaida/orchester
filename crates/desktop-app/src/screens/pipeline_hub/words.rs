@@ -7,10 +7,10 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{resource::ResourceKind, time::Timestamp};
 use orchester_workspace::readiness::ReadinessStanding;
 
-use super::model::Entry;
+use super::{model::Entry, ready::undecided_words};
 use crate::{
   screens::{
-    local_hub::words::{archived_at, missing, undecided},
+    local_hub::words::{archived_at, missing},
     team_hub::words::date,
   },
   ui::message::message_text,
@@ -60,7 +60,7 @@ pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
       [only] => missing(ctx, ResourceKind::Pipeline, only),
       many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
     }),
-    ReadinessStanding::Undecided(why) => Some(undecided(ctx, why)),
+    ReadinessStanding::Undecided(why) => Some(undecided_words(ctx, why)),
   }
 }
 

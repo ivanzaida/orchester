@@ -24,13 +24,21 @@
       "oneStepTasks": "1 step · used by {{tasks}} tasks",
       "stepsNoTask": "{{steps}} steps · not used yet",
       "stepsOneTask": "{{steps}} steps · used by 1 task",
-      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks"
+      "stepsTasks": "{{steps}} steps · used by {{tasks}} tasks",
+      "noProfile": "{{number}} {{step}} has no agent profile",
+      "noTool": "{{number}} {{step}} has no tool",
+      "profileNotPublished": "{{number}} {{step}} runs a profile that is not published yet",
+      "toolNotPublished": "{{number}} {{step}} runs a tool that is not published yet",
+      "toolNotRunnable": "{{number}} {{step}} runs {{tool}}, which can't run as a step yet",
+      "stepsNotReady": "{{count}} steps not ready"
     },
     "chip": {
       "ready": "Ready",
       "draft": "draft",
       "archived": "Archived",
-      "default": "Default"
+      "default": "Default",
+      "stepNotReady": "1 step not ready",
+      "stepsNotReady": "{{count}} steps not ready"
     },
     "menu": {
       "more": "More actions for {{name}}",
@@ -145,6 +153,20 @@
         "title": "Nothing archived",
         "detail": "An archived pipeline leaves the lists and New task's picker, and the runs that use it stop."
       }
+    },
+    "ready": {
+      "title": "Ready?",
+      "choose": "Choose →",
+      "open": "Open →",
+      "step": "Step {{number}} {{name}}",
+      "noProfile": "No agent profile",
+      "noTool": "No tool",
+      "toolNotRunnable": "{{tool}} can't run as a step yet",
+      "ready": "Ready",
+      "profilesAndTools": "Profiles and tools",
+      "allReady": "{{names}} · ready",
+      "none": "No step runs a profile or tool yet",
+      "connectionGone": "A profile its steps run has no connection"
     }
   }
 }

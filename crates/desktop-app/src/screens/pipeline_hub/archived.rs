@@ -19,7 +19,7 @@ use orchester_workspace::{
   pipelines::task_use::stopped_by_archive,
 };
 
-use super::{model::Entry, panel::chips, words};
+use super::{chips::chips, model::Entry, words};
 use crate::{
   project::ShownProject,
   screens::team_hub::{

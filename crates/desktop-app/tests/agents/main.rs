@@ -24,6 +24,7 @@ mod pipeline_flow;
 mod pipeline_hub;
 mod pipeline_hub_archive;
 mod pipeline_hub_menu;
+mod pipeline_hub_ready;
 mod project_sets;
 mod reads;
 mod regressions;

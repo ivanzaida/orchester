@@ -8,7 +8,7 @@ use orchester_core::resource::{DeliverMode, Deliverable, MergeMethod, Repository
 use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, Ending, Gate, ReturnsTo, Runs, StepCard};
 
 /// A card's number as the design writes it: `03`.
-pub(super) fn number(number: usize) -> String {
+pub(in crate::screens::pipeline_hub) fn number(number: usize) -> String {
   format!("{number:02}")
 }
 
