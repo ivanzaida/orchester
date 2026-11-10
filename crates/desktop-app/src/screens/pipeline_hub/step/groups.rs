@@ -4,11 +4,7 @@
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  layout::Alignment,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, layout::Alignment, node::Element};
 use orchester_core::resource::{PipelineEdit, RepositoryAccess, Step, StepKey, StepKind};
 use orchester_workspace::pipelines::{
   fields::{AccessChoice, Executor, RouteChoice},
@@ -47,36 +43,20 @@ pub(super) fn step(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Element {
 
 fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::Row {
   let label = ctx.t("pipeline_hub.step.agent");
-  let words = |key: &str, name: &str| -> Arc<str> { ctx.t_args(key, [("name", name)]) };
-  let choices = agent::choices(
-    open.assignables,
-    step,
-    (
-      |name: &str| words("pipeline_hub.step.agentDraft", name),
-      ctx.t("pipeline_hub.step.agentUnpublished"),
-      ctx.t("pipeline_hub.step.agentToolUnavailable"),
-    ),
-  );
-  let sub = match (Executor::of(step), &choices.draft) {
-    (Executor::Unset, _) => Some(ctx.t("pipeline_hub.step.agentMissing")),
-    (_, Some(_)) => Some(ctx.t("pipeline_hub.step.agentUnpublished")),
-    _ => None,
-  }
-  .map(|words| Sub {
-    words,
-    color: PaletteColor::Warning,
-  });
+  let choices = agent::choices(ctx, open.assignables, step);
+  let sub = agent::sub(ctx, &choices, Executor::of(step));
   let value = agent::field(
     ctx,
     agent::Props {
       edit: open.edit.clone(),
+      project: open.project.open.project.id(),
       key: step.key.clone(),
       value: Executor::of(step),
-      profiles: choices.profiles,
-      tools: choices.tools,
-      tone: choices.tone,
+      flag: choices.flag,
+      choices: choices.items.into(),
+      executors: choices.executors.into(),
       name: label.clone(),
-      unset: ctx.t("pipeline_hub.step.agentChoose"),
+      unset: ctx.t("pipeline_hub.agent.choose"),
       locked: open.locked,
       epoch: open.epoch,
     },

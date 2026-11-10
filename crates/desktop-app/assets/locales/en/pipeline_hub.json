@@ -86,6 +86,17 @@
       "steps": "Steps",
       "openSteps": "Edit steps"
     },
+    "agent": {
+      "choose": "Choose an agent profile or tool",
+      "missing": "No agent profile or tool chosen yet",
+      "unpublished": "This profile has no published version yet",
+      "connectionGone": "Choose a connection",
+      "toolUnavailable": "This tool can't run as a step yet",
+      "toolRuns": "{{command}} · its exit code decides the step",
+      "runsOn": "{{cli}} · {{connection}} · {{model}}",
+      "runsOnConnection": "{{connection}} · {{model}}",
+      "withModel": "{{line}} · model: {{model}}"
+    },
     "step": {
       "back": "Back to {{name}}",
       "position": "step {{number}} of {{total}}",
@@ -93,11 +104,6 @@
       "copyName": "{{name}} copy",
       "group": "Step",
       "agent": "Agent",
-      "agentChoose": "Choose a profile",
-      "agentMissing": "No agent profile chosen yet",
-      "agentUnpublished": "This profile has no published version yet",
-      "agentDraft": "{{name}} · draft",
-      "agentToolUnavailable": "This tool can't run as a step yet",
       "instructions": "Instructions",
       "instructionsHint": "{{ }} inserts task and run values",
       "run": "Run",
