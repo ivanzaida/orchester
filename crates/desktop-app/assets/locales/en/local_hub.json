@@ -60,6 +60,12 @@
       "on": "On",
       "onHint": "Runs may use it",
       "onlyHere": "Only on this computer",
+      "fix": {
+        "setPath": "Set program path",
+        "setPathHint": "Asked once",
+        "addValue": "Add a value for {{name}}",
+        "addValueHint": "Kept in the OS secret store"
+      },
       "save": "Save",
       "added": "added {{date}}",
       "runsAs": "Runs as",

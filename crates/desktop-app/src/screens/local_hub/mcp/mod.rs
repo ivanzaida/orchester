@@ -8,6 +8,7 @@
 
 mod actions;
 mod editor;
+mod fix;
 mod form;
 mod notes;
 mod rows;
