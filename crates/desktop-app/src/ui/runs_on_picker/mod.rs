@@ -37,6 +37,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
+pub(crate) use self::models::input_styles as search_input_styles;
 use self::{
   actions::{Actions, Focus, Handles},
   foot::TypedEffort,

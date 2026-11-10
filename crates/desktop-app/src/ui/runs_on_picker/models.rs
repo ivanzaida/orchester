@@ -69,7 +69,7 @@ pub(super) struct SearchBox {
 
 /// What a one-line field of the picker (Search, the typed effort) is typed in and says while empty: 12 in
 /// `text_primary` and in `text_muted`.
-pub(super) fn input_styles(ctx: &Ctx) -> (TextStyle, TextStyle) {
+pub(crate) fn input_styles(ctx: &Ctx) -> (TextStyle, TextStyle) {
   let theme = ctx.theme();
   let resolve = |color| {
     FormTextRole {

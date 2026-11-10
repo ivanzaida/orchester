@@ -1,5 +1,6 @@
 //! Supported pipeline fixture contracts for independent native verification.
 use orchester_core::{
+  connection::AgentProvider,
   permission::{StepCommands, StepNetwork},
   resource::{AgentProfile, FlowError, Pipeline, ResourceKind, StepKind, ToolKind},
   store::ResourceStore,
@@ -303,4 +304,64 @@ fn seed_pipelines_not_ready_has_a_draft_whose_review_step_has_no_profile_and_thr
       "{name} runs a profile in every step"
     );
   }
+}
+
+#[test]
+fn seed_pipelines_agents_has_every_kind_of_agent_the_picker_lists() {
+  let seed = Seed::of("pipelines-agents");
+  let db = seed.db();
+  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let id = rows.iter().find(|r| r.name().as_str() == "Agents tour").unwrap().id();
+  let opened = OpenedPipeline::load_in(seed.repo(), id).unwrap();
+  let assignables = &opened.assignables;
+  let profile = |name: &str| {
+    assignables
+      .profiles
+      .iter()
+      .find(|profile| &*profile.name == name)
+      .unwrap_or_else(|| panic!("the seed lists {name}"))
+  };
+  let (builder, notes) = (profile("Builder"), profile("Release notes"));
+  assert_eq!(builder.connection.as_deref(), Some("Work"));
+  assert_eq!(builder.provider, Some(AgentProvider::ClaudeCodeCli));
+  assert_eq!(builder.model.as_str(), "claude-opus-5-5");
+  assert_eq!(notes.connection.as_deref(), Some("Codex main"));
+  assert_eq!(notes.provider, Some(AgentProvider::CodexCli));
+  assert_eq!(profile("Explorer").connection, None, "its connection is gone");
+  assert!(!profile("Writer").mcp.ids().is_empty(), "Writer chooses an MCP server");
+  assert!(
+    assignables
+      .profiles
+      .iter()
+      .all(|profile| &*profile.name != "Retired reviewer"),
+    "an archived profile is no longer listed"
+  );
+  let command = |name: &str| {
+    assignables
+      .tools
+      .iter()
+      .find(|tool| &*tool.name == name)
+      .and_then(|tool| tool.command.clone())
+      .unwrap_or_else(|| panic!("{name} is a command tool"))
+  };
+  assert_eq!(&*command("Checks"), "npm test");
+  assert!(command("Lint").len() > 60, "a command too long for the picker's row");
+  let steps = opened.body.steps();
+  assert_eq!(steps.len(), 8);
+  let overrides: Vec<&str> = steps
+    .iter()
+    .filter_map(|step| match &step.kind {
+      StepKind::Agent { model: Some(model), .. } => Some(model.as_str()),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(overrides, ["claude-sonnet-5-5"], "one step overrides the model");
+  let retired = match steps[7].kind {
+    StepKind::Agent { profile: Some(id), .. } => id,
+    _ => panic!("the last step runs a profile"),
+  };
+  assert!(
+    assignables.profile(retired).is_none(),
+    "the step names a profile the project no longer lists"
+  );
 }

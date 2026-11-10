@@ -314,4 +314,12 @@ fn pipelines_a_team_projects_pipeline_and_step_pages_are_the_editors_own() {
     !editor.exists("pipeline-hub-step-head"),
     "a team project's step is not opened in the hub's panel"
   );
+  assert!(
+    editor.exists("step-executor"),
+    "its Executor is still the menu of profiles and tools"
+  );
+  assert!(
+    !editor.exists("pipeline-hub-step-agent"),
+    "the Agent picker belongs to the hub's step panel"
+  );
 }
