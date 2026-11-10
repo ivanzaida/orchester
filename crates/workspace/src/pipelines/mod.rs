@@ -5,6 +5,7 @@
 
 pub mod create;
 pub mod data;
+pub mod default;
 pub mod deliver;
 pub mod describe;
 pub mod fields;
@@ -15,6 +16,8 @@ pub mod levels;
 pub mod library;
 pub mod narrowing;
 pub mod problems;
+pub mod rename;
 pub mod sources;
+pub mod task_use;
 pub mod widening;
 pub mod write;

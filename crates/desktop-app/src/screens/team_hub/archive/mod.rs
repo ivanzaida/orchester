@@ -12,6 +12,7 @@
 //! admin of the team has *Archive*.
 
 pub(in crate::screens) mod dialog;
+mod tasks;
 pub(in crate::screens) mod words;
 
 use std::{path::PathBuf, sync::Arc};
@@ -248,6 +249,7 @@ impl ArchiveMenu {
       dialog::State {
         read,
         lines: Vec::new(),
+        tasks: None,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
         stopped: None,

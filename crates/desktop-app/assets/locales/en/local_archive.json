@@ -6,6 +6,11 @@
       "one": "{{names}} stays not ready until you remove {{name}} from it or restore it.",
       "many": "{{names}} stay not ready until you remove {{name}} from them or restore it."
     },
+    "taskRow": "{{key}} · {{title}}",
+    "tasksMore": "and {{count}} more",
+    "noTasks": "No task uses it.",
+    "tasksEffectOne": "That task cannot start a run until it uses another pipeline or {{name}} is restored.",
+    "tasksEffect": "Those tasks cannot start a run until they use another pipeline or {{name}} is restored.",
     "doneTitle": "{{name}} is archived",
     "close": "Close",
     "runRow": "{{key}} · run {{number}}",

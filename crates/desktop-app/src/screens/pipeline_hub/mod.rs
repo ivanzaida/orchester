@@ -4,6 +4,10 @@
 //! tab and the chosen pipeline are the route's ([`PipelinesView`]). A team project keeps the page it has
 //! ([`super::pipelines`]).
 //!
+//! The panel's head holds the ⋯ menu ([`panel_head`], [`menu`]): *Rename* in place ([`rename`]), *Duplicate*, *Make
+//! default for New task* and *Archive*, whose confirmation the hub hosts so that it outlives the panel; an archived
+//! pipeline's panel has *Restore* ([`archived`]). The default pipeline is tagged in its row and in the panel's chips.
+//!
 //! What the panel's body holds is [`steps`]: today the way into the editor the pipeline has; the flow, the settings and
 //! the Save bar are built on it.
 //!
@@ -12,11 +16,15 @@
 //! profiles, tools or connections and a run's start or end; never on a timer. A read that failed shows its failure
 //! ([`states`]), no counts and *New pipeline* unavailable; the first read shows bones ([`bones`]).
 
+mod archived;
 mod bones;
 mod flow;
 mod list;
+mod menu;
 mod model;
 mod panel;
+mod panel_head;
+mod rename;
 mod row;
 mod states;
 mod steps;
@@ -37,7 +45,7 @@ use orchester_core::{
   id::{ProjectId, ResourceId},
   time::Timestamp,
 };
-use orchester_workspace::{messages::Message, pipelines::hub::PipelineHub};
+use orchester_workspace::messages::Message;
 
 use self::{
   model::{Entry, Listing},
@@ -46,9 +54,12 @@ use self::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  queries::{self, Again, Session, hub as hub_query},
+  queries::{self, Again, Session, hub as hub_query, hub::PipelineHubRead},
   routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
-  screens::{hub::agents, local_hub::head},
+  screens::{
+    hub::agents,
+    local_hub::{archive::Asking, head},
+  },
   theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -80,6 +91,8 @@ struct PipelineHubScreen {
   again: Again,
   /// Why the pipelines couldn't be read, kept while they are read again.
   failure: LastFailure,
+  /// The pipeline whose archive confirmation shows over the page, which outlives the pipeline's panel.
+  asking: Asking,
 }
 
 impl Component for PipelineHubScreen {
@@ -90,6 +103,7 @@ impl Component for PipelineHubScreen {
       retry: ctx.signal(0),
       again: Again::default(),
       failure: LastFailure::default(),
+      asking: Asking::new(ctx),
     }
   }
 
@@ -100,7 +114,8 @@ impl Component for PipelineHubScreen {
     let unreadable = failed.is_some();
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(Listing::of);
+    let listing = hub.map(|read| Listing::of(&read.hub));
+    let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
@@ -115,6 +130,7 @@ impl Component for PipelineHubScreen {
           &project,
           (listing, view),
           (selected.as_ref(), &navigation, reading),
+          (default, &self.asking),
         )
       }
       (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
@@ -124,6 +140,7 @@ impl Component for PipelineHubScreen {
     } else {
       new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &navigation, id)
     };
+    let over: Vec<Element> = self.asking.question(ctx).into_iter().collect();
     agents::frame(
       ctx,
       agents::Frame {
@@ -140,7 +157,7 @@ impl Component for PipelineHubScreen {
         ),
         notices: Vec::new(),
         body,
-        over: Vec::new(),
+        over,
       },
     )
   }
@@ -150,7 +167,7 @@ impl PipelineHubScreen {
   /// The pipelines as the project's database has them, from the session's cache: the last answer at once, read again
   /// behind it on each visit, when a pipeline, a profile, a tool or a connection changed and when a run changes state
   /// (`queries::changes`); and on *Try again*.
-  fn read(&self, ctx: &mut Ctx, project: &ShownProject) -> FutureState<PipelineHub, Message> {
+  fn read(&self, ctx: &mut Ctx, project: &ShownProject) -> FutureState<PipelineHubRead, Message> {
     let session = Session::of(ctx);
     let query = ctx.query(hub_query::pipeline_hub(session, project.open.repo_root.clone()));
     self.again.follow(self.retry.get(), &query);
@@ -174,6 +191,7 @@ fn hub_body(
   project: &ShownProject,
   (listing, view): (&Listing, PipelinesView),
   (selected, navigation, reading): (Option<&Entry>, &Navigation, bool),
+  (default, asking): (Option<ResourceId>, &Asking),
 ) -> Element {
   let id = project.open.project.id();
   let Some(entry) = selected else {
@@ -186,9 +204,16 @@ fn hub_body(
     selected: Some(entry.id),
     navigation,
     now,
+    default,
   };
   let list = list::list(ctx, listing, &shown);
-  let panel = panel::panel(ctx, project, entry, now);
+  let open = panel::Shown {
+    project,
+    now,
+    default: default == Some(entry.id),
+    asking,
+  };
+  let panel = panel::panel(ctx, &open, entry);
   agents::master_detail("pipeline-hub", reading, (list, panel))
 }
 

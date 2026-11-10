@@ -39,6 +39,7 @@ mod joining;
 mod limits;
 mod local_archive;
 mod local_integration;
+mod local_rename;
 mod mcp_servers;
 mod memory;
 mod merge_attempts;

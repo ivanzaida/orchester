@@ -14,7 +14,7 @@ use orchester_workspace::{
   background,
   instructions::data::ProjectInstructions,
   messages::{self, Message},
-  pipelines::hub::PipelineHub,
+  pipelines::{default::default_in, hub::PipelineHub},
   removal,
   skills::editor::EditorData,
 };
@@ -60,16 +60,27 @@ pub async fn local_hub(session: Session, root: PathBuf) -> Result<LocalHub, Mess
   .await
 }
 
-/// A local project's Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer. Live,
-/// as [`team_hub`]: what a pipeline runs is ready on this computer or not as the keychain and the disk say.
+/// What the Pipelines hub shows: the project's pipelines and the one New task offers first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PipelineHubRead {
+  pub hub: PipelineHub,
+  /// The project's default pipeline, if a person chose one; it may be archived.
+  pub default: Option<ResourceId>,
+}
+
+/// A local project's Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer, and
+/// its default pipeline. Live, as [`team_hub`]: what a pipeline runs is ready on this computer or not as the keychain
+/// and the disk say.
 #[lurq::query(stale_time = "0s", gc_time = "24h")]
-pub async fn pipeline_hub(session: Session, root: PathBuf) -> Result<PipelineHub, Message> {
+pub async fn pipeline_hub(session: Session, root: PathBuf) -> Result<PipelineHubRead, Message> {
   tracing::trace!(target: crate::app_log::READ_LOG, read = "pipeline_hub");
   read(session, move |services| {
-    services
+    let hub = services
       .workspace
       .pipeline_hub(&root, services.vault.get())
-      .map_err(|error| error.message())
+      .map_err(|error| error.message())?;
+    let default = default_in(&root).map_err(|error| messages::store_error(&error))?;
+    Ok(PipelineHubRead { hub, default })
   })
   .await
 }
