@@ -57,7 +57,7 @@ impl Node {
 }
 
 /// One row of the flow: `node` on the rail and `cell` beside it. `room` is what the cell keeps under its content.
-pub(super) fn row(ctx: &Ctx, id: &str, node: Node, (cell, room): (Element, SpacingSize)) -> Element {
+pub(super) fn row(ctx: &Ctx, id: &str, node: &Node, (cell, room): (Element, SpacingSize)) -> Element {
   let width = ctx.theme().border_size_value(BorderSize::Sm);
   let line = |id: String| {
     Row::new()
@@ -73,7 +73,7 @@ pub(super) fn row(ctx: &Ctx, id: &str, node: Node, (cell, room): (Element, Spaci
   if node.top() > 0.0 {
     rail = rail.child(line(format!("{id}-above")).height(Dimension::Px(node.top())));
   }
-  rail = rail.child(mark(id, &node));
+  rail = rail.child(mark(id, node));
   if node.continues() {
     rail = rail.child(line(format!("{id}-below")).flex(1.0));
   }

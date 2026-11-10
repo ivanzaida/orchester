@@ -1,8 +1,8 @@
 //! The panel's body (`Steps` `uSoll` in `Pipelines · v2` P1): the section's head over the steps drawn as the flow they
 //! run in ([`super::flow`]). The pipeline's settings and *Ready?* (PV2-09) and the Save bar (PV2-10) are built on this.
 //!
-//! The head's *Add step* needs the page to keep an unsaved edit (PV2-10), and a card's drag handle and ⋯ are PV2-06's, so
-//! none is drawn yet: *Edit steps* opens the editor the pipeline has today, through its own route, where steps are
+//! The head's *Add step* needs the page to keep an unsaved edit (PV2-10), and a card's drag handle and ⋯ are PV2-06's,
+//! so none is drawn yet: *Edit steps* opens the editor the pipeline has today, through its own route, where steps are
 //! added, moved and removed until then.
 
 use lurq::{

@@ -137,7 +137,10 @@ fn readiness_pipeline_hub_carries_each_pipelines_steps_as_the_flow_they_run_in()
     !published.draft,
     "a published pipeline without a draft shows its version"
   );
-  let drawn = published.flow.as_ref().expect("two steps that wait for nothing are drawn");
+  let drawn = published
+    .flow
+    .as_ref()
+    .expect("two steps that wait for nothing are drawn");
   assert_eq!(drawn.stages.len(), 1, "steps that wait for nothing run side by side");
   assert_eq!(drawn.stages[0].cards.len(), 2);
   assert!(drawn.stages[0].cards.iter().all(|card| !card.runs.needs_you()));

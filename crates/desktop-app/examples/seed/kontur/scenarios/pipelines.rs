@@ -321,11 +321,11 @@ fn policy() -> AccessPolicy {
   .expect("empty caller list denies everyone")
 }
 
-/// The steps drawn as the flow they run in (`Steps` `uSoll` in `Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): Feature delivery
-/// with its gate, its checks and review side by side, their failure routes and its Deliver step; *Publication problems*,
-/// whose cards stand in amber (a step without a profile, one whose profile is not published, one whose tool cannot
-/// run); *Gated group*, whose two steps in a group both wait for the person; *Independent chains*, whose steps wait for
-/// only part of what runs before them, so no one line shows them; and an empty draft.
+/// The steps drawn as the flow they run in (`Steps` `uSoll` in `Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): Feature
+/// delivery with its gate, its checks and review side by side, their failure routes and its Deliver step; *Publication
+/// problems*, whose cards stand in amber (a step without a profile, one whose profile is not published, one whose tool
+/// cannot run); *Gated group*, whose two steps in a group both wait for the person; *Independent chains*, whose steps
+/// wait for only part of what runs before them, so no one line shows them; and an empty draft.
 pub fn flow(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.delivering_catalogue()?;
   problems(kontur)?;

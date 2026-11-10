@@ -72,7 +72,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Element {
   let mut rows: Vec<Element> = vec![rail::row(
     ctx,
     "pipeline-hub-flow-row-start",
-    Node::Start,
+    &Node::Start,
     (
       parts::start(
         &ctx.t("pipeline_hub.flow.onStart"),
@@ -92,7 +92,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Element {
         &words::gate(ctx, gate),
         gate,
       );
-      rows.push(rail::row(ctx, &id, Node::Gate, (line.into(), SpacingSize::Lg)));
+      rows.push(rail::row(ctx, &id, &Node::Gate, (line.into(), SpacingSize::Lg)));
     }
   }
   if let Some(deliver) = &flow.deliver {
@@ -100,7 +100,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Element {
     rows.push(rail::row(
       ctx,
       "pipeline-hub-flow-row-deliver",
-      Node::Step(deliver.number),
+      &Node::Step(deliver.number),
       (card, sm),
     ));
   }
@@ -108,7 +108,7 @@ fn drawing(ctx: &Ctx, opens: &Opens<'_>, flow: &PipelineFlow) -> Element {
   rows.push(rail::row(
     ctx,
     "pipeline-hub-flow-row-end",
-    Node::End,
+    &Node::End,
     (parts::end(&label, &hint).into(), sm),
   ));
   Column::new()
@@ -142,7 +142,7 @@ fn stage_row(ctx: &Ctx, opens: &Opens<'_>, stage: &Stage) -> Element {
     return rail::row(
       ctx,
       &format!("pipeline-hub-flow-row-{first}"),
-      Node::Parallel,
+      &Node::Parallel,
       (group, sm),
     );
   };
@@ -154,7 +154,7 @@ fn stage_row(ctx: &Ctx, opens: &Opens<'_>, stage: &Stage) -> Element {
   rail::row(
     ctx,
     &format!("pipeline-hub-flow-row-{}", only.number),
-    node,
+    &node,
     (card(only, Place::OnTheLine), sm),
   )
 }

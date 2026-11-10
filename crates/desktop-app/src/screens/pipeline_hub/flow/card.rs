@@ -1,5 +1,5 @@
-//! A card of the flow (`Card · 01 Research` `uxj4K`, `Card · 04 Run checks` `Iv58p` in `Steps` `uSoll`; the amber `Card ·
-//! 02 Review` `zLMvF` in P8): the name, what the step runs, a pill for what it may do to the repository and `›`. A
+//! A card of the flow (`Card · 01 Research` `uxj4K`, `Card · 04 Run checks` `Iv58p` in `Steps` `uSoll`; the amber `Card
+//! · 02 Review` `zLMvF` in P8): the name, what the step runs, a pill for what it may do to the repository and `›`. A
 //! card that sends the run back says where. Under the pointer it takes the `hover` fill and a `border_strong` outline;
 //! a press opens the step. The step that cannot run as it is stands in `warning`, with *Choose profile* when nothing is
 //! chosen yet.
@@ -74,6 +74,11 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, (open, place): (B
         ),
     );
   }
+  let open = if place == Place::InGroup {
+    open.height(Dimension::Pct(100.0))
+  } else {
+    open
+  };
   surface(open, &id, not_ready, body)
     .describe("step", step.key.to_string())
     .describe("number", words::number(step.number))
