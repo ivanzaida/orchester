@@ -44,13 +44,17 @@ fn pipeline_save_note_an_edit_back_to_the_latest_version_is_saved_and_does_not_w
   let theirs = before.body.clone().with_description("Draft".into());
   save_in(&agents.root, &before, theirs, &Allowed::default()).expect("a draft");
   open(&mut agents, PipelinesFilter::All, Some(ready));
-  agents.until("the draft in the panel", |s| s.exists(SAVE) && s.value(DESCRIPTION) == "Draft");
+  agents.until("the draft in the panel", |s| {
+    s.exists(SAVE) && s.value(DESCRIPTION) == "Draft"
+  });
   assert_eq!(counts(&agents, ready), (1, true));
 
   // The person puts it back to the published version and saves.
   agents.set(DESCRIPTION, "");
   agents.press_until(SAVE, "the draft dropped", |s| counts(s, ready) == (1, false));
-  agents.until("it says so", |s| s.exists(NOTICE) && s.text(NOTICE).contains("Saved as v1"));
+  agents.until("it says so", |s| {
+    s.exists(NOTICE) && s.text(NOTICE).contains("Saved as v1")
+  });
   assert_eq!(agents.value(DESCRIPTION), "", "the panel shows the version");
   agents.until("nothing unpublished", |s| {
     s.text("pipeline-hub-chip-0") == "v1" && !s.text(&format!("pipeline-hub-row-{ready}-line")).starts_with("Unsaved")
@@ -113,7 +117,10 @@ fn pipeline_save_note_the_bar_says_unsaved_changes_while_the_edit_has_some() {
   let (mut agents, [ready, ..]) = project();
   open(&mut agents, PipelinesFilter::All, Some(ready));
   agents.until("the panel", |s| s.exists(SAVE));
-  assert_eq!(agents.text(HINT), "Save makes v2 · runs keep the version they started on");
+  assert_eq!(
+    agents.text(HINT),
+    "Save makes v2 · runs keep the version they started on"
+  );
 
   agents.set(DESCRIPTION, "Changed");
   agents.until("the hint", |s| {
@@ -155,9 +162,17 @@ fn pipeline_save_note_leaving_while_a_save_is_under_way_does_not_offer_to_discar
   agents.click(SAVE);
   agents.until("a pass", |_| true);
   agents.click(&format!("pipeline-hub-row-{draft}"));
-  agents.until("the question", |s| s.exists("pipeline-hub-leave-saving-cancel") || s.exists(DISCARD));
-  assert!(!agents.exists(DISCARD), "an edit that is being saved cannot be discarded");
-  assert!(agents.exists("pipeline-hub-leave-saving-cancel"), "it says it is saving");
+  agents.until("the question", |s| {
+    s.exists("pipeline-hub-leave-saving-cancel") || s.exists(DISCARD)
+  });
+  assert!(
+    !agents.exists(DISCARD),
+    "an edit that is being saved cannot be discarded"
+  );
+  assert!(
+    agents.exists("pipeline-hub-leave-saving-cancel"),
+    "it says it is saving"
+  );
   assert_eq!(
     agents.window.navigation().route_now(),
     view(PipelinesFilter::All, Some(ready)),
@@ -189,7 +204,11 @@ fn pipeline_save_note_switching_to_another_tab_asks_first() {
 
   agents.window.navigation().open_tab();
   agents.until("the question", |s| s.exists(DISCARD));
-  assert_eq!(agents.window.navigation().route_now(), here, "nothing moved while it asks");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    here,
+    "nothing moved while it asks"
+  );
   agents.click(KEEP);
   agents.until("kept", |s| !s.exists(DISCARD));
   assert_eq!(agents.value(DESCRIPTION), "Not saved yet");
@@ -232,7 +251,9 @@ fn pipeline_save_note_a_source_that_is_added_or_removed_asks_in_words_that_fit_b
 
   // Added.
   agents.stand_ins.choose(Some(folder.path().to_path_buf()));
-  agents.press_until("pipeline-hub-sources-add-add", "the pill", |s| s.exists("pipeline-hub-source-0"));
+  agents.press_until("pipeline-hub-sources-add-add", "the pill", |s| {
+    s.exists("pipeline-hub-source-0")
+  });
   agents.click(SAVE);
   agents.until("the question", |s| s.exists("pipeline-hub-confirm-confirm"));
   let added = agents.text("pipeline-hub-confirm");
@@ -258,5 +279,8 @@ fn pipeline_save_note_a_source_that_is_added_or_removed_asks_in_words_that_fit_b
     !removed.to_lowercase().contains("widen"),
     "it does not say it widens: {removed}"
   );
-  assert!(!removed.contains("added"), "it does not say something was added: {removed}");
+  assert!(
+    !removed.contains("added"),
+    "it does not say something was added: {removed}"
+  );
 }

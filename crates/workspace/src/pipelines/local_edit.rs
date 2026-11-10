@@ -81,10 +81,15 @@ pub fn save(
   }
 }
 
-/// The edit is the latest version. When a different draft is stored the person chose the version over it: the draft goes
-/// and the pipeline is that version, reported as saved. Otherwise the stored pipeline already is that version.
+/// The edit is the latest version. When a different draft is stored the person chose the version over it: the draft
+/// goes and the pipeline is that version, reported as saved. Otherwise the stored pipeline already is that version.
 fn back_to_latest(root: &Path, current: &OpenedPipeline, latest: VersionNumber) -> Result<Saved, Message> {
-  if current.draft_saved_at.is_none() || current.latest.as_ref().is_some_and(|version| version.body == current.body) {
+  if current.draft_saved_at.is_none()
+    || current
+      .latest
+      .as_ref()
+      .is_some_and(|version| version.body == current.body)
+  {
     return Ok(Saved::Unchanged);
   }
   discard_in(root, current.id, &current.body)?;

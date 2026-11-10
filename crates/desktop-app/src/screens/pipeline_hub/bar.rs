@@ -41,9 +41,7 @@ pub(super) fn bar(ctx: &Ctx, (save, cancel): (Save, Option<Press>), (entry, chan
   };
   let hint = if changed {
     (
-      ctx
-        .t_args("pipeline_hub.line.unsaved", [("rest", hint.0)])
-        .to_string(),
+      ctx.t_args("pipeline_hub.line.unsaved", [("rest", hint.0)]).to_string(),
       hint.1,
     )
   } else {

@@ -249,7 +249,8 @@ impl PipelinePanel {
     if let Some(asked) = asked {
       pinned.push(save::question(ctx, asked, (&self.save, &self.pending)));
     }
-    match (self.notes.refused.get(), self.notes.kept.get(), self.notes.made.get()) {
+    let told = self.notes.told();
+    match (told.refused, told.kept, told.made) {
       (Some((reason, _)), ..) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
       (None, Some(why), _) => pinned.push(bar::notice(ctx, entry, &Said::Kept(&why))),
       (None, None, Some(version)) => pinned.push(bar::notice(ctx, entry, &Said::Made(version))),

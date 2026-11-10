@@ -276,20 +276,30 @@ fn an_edit_back_to_the_latest_version_drops_the_stored_draft_and_does_not_wedge_
   assert_ne!(drafted.body, latest);
 
   // The page opens on the stored draft; the person changes it back to the latest version and presses Save.
-  let mut held = Held::start(Arc::new(drafted.body.clone()));
+  let mut held = Held::start(Arc::new(drafted.body));
   held.change(|edit| *edit = PipelineEdit::new(latest.clone()));
   let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
   assert_eq!(saved, Saved::Published(VersionNumber::FIRST));
 
   let opened = pipeline.opened();
-  assert!(opened.draft_saved_at.is_none(), "the draft the person chose against is gone");
+  assert!(
+    opened.draft_saved_at.is_none(),
+    "the draft the person chose against is gone"
+  );
   assert_eq!(opened.body, latest);
   assert_eq!(pipeline.versions().len(), 1, "no version was made");
 
   // What the page does next: it shows the latest version, and a Save on it neither fails nor writes.
   let again = Held::start(Arc::new(opened.body));
   assert_eq!(
-    save(pipeline.folder.path(), pipeline.pipeline, again.base(), again.edit(), &[]).unwrap(),
+    save(
+      pipeline.folder.path(),
+      pipeline.pipeline,
+      again.base(),
+      again.edit(),
+      &[]
+    )
+    .unwrap(),
     Saved::Unchanged
   );
   assert_eq!(pipeline.versions().len(), 1);

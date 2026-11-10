@@ -229,7 +229,7 @@ fn pipeline_named(seed: &Seed, title: &str) -> orchester_core::id::ResourceId {
   seed
     .db()
     .resources(ResourceKind::Pipeline)
-    .unwrap()
+    .expect("the pipelines")
     .iter()
     .find(|row| row.name().as_str() == title)
     .unwrap_or_else(|| panic!("a pipeline {title}"))
@@ -248,7 +248,11 @@ fn seed_pipelines_save_refused_refuses_to_store_a_draft_and_keeps_what_is_stored
 
   let refused = save(seed.repo(), id, held.base(), held.edit(), &[]).unwrap_err();
   assert_ne!(refused.key, "errors.draftChanged", "the store refused it: {refused:?}");
-  assert_eq!(OpenedPipeline::load_in(seed.repo(), id).unwrap(), before, "nothing was stored");
+  assert_eq!(
+    OpenedPipeline::load_in(seed.repo(), id).unwrap(),
+    before,
+    "nothing was stored"
+  );
 }
 
 #[test]
