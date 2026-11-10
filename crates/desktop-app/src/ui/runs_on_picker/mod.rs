@@ -123,8 +123,8 @@ struct Panel {
   cursor: Signal<Cursor>,
   /// The connection the keys tried to choose that cannot be chosen: the line under the rail says why.
   refused: Signal<Option<usize>>,
-  /// The field that takes the focus on the next pass: Search on open, and when a key was typed elsewhere in the picker;
-  /// the typed effort when the keys move onto it.
+  /// The field that takes the focus on the next pass: Search on open, and when a key was typed elsewhere in the
+  /// picker; the typed effort when the keys move onto it.
   focus: Signal<Focus>,
   /// The effort typed for a connection that lists none, and the chosen effort last seen (when it changes the field
   /// shows it).
@@ -227,13 +227,17 @@ impl Panel {
     self.focus.set(Focus::Stay);
   }
 
-  /// Scrolls the list to the chosen model once, as the picker opens, so that it is never hidden (`Many models` `pGj8M`).
+  /// Scrolls the list to the chosen model once, as the picker opens, so that it is never hidden (`Many models`
+  /// `pGj8M`).
   fn reveal_chosen(&self, view: &View<'_>) {
     if self.scrolled.get_untracked() {
       return;
     }
     self.scrolled.set(true);
-    if let Some(at) = view.model.and_then(|model| view.found.iter().position(|found| &*found.id == model)) {
+    if let Some(at) = view
+      .model
+      .and_then(|model| view.found.iter().position(|found| &*found.id == model))
+    {
       models::reveal(&self.scroll, at);
     }
   }

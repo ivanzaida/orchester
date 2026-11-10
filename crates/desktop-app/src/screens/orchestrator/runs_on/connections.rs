@@ -5,8 +5,8 @@
 //! A Claude Code or Codex sign-in is named by its account; the line under its name says *CLI · plan*, and its plan's
 //! 5-hour use; at its limit the caption says until when, in `warning`, with *limit reached* under it. An API provider
 //! says its CLI and host, the tokens its agents spent today and *no plan limit* (its key's secret is that line's
-//! tooltip), takes a model and an effort of the person's own, and says where its data goes. A sign-in to another account
-//! than the conversation's session says in its tooltip that choosing it starts a new session.
+//! tooltip), takes a model and an effort of the person's own, and says where its data goes. A sign-in to another
+//! account than the conversation's session says in its tooltip that choosing it starts a new session.
 
 use std::sync::Arc;
 
@@ -158,12 +158,7 @@ fn percent(used: f64) -> u8 {
 
 /// An API provider: its CLI and host, its tokens today and no plan limit, what it takes of the person's own, and where
 /// its data goes.
-fn provider(
-  ctx: &mut Ctx,
-  sources: &Sources<'_>,
-  (entry, host): (&Entry, &str),
-  base: Connection,
-) -> Connection {
+fn provider(ctx: &mut Ctx, sources: &Sources<'_>, (entry, host): (&Entry, &str), base: Connection) -> Connection {
   let used = sources.uses.iter().find(|used| used.connection == entry.id);
   let tokens = used.map_or(0, |used| used.tokens);
   let tip = match used.and_then(|used| used.key.as_deref()) {

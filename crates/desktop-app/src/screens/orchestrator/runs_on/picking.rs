@@ -99,7 +99,8 @@ impl Chooser {
     }
   }
 
-  /// Runs on `model` of `connection`, with the effort chosen when `model` lists it, or the one typed on an API provider.
+  /// Runs on `model` of `connection`, with the effort chosen when `model` lists it, or the one typed on an API
+  /// provider.
   pub(super) fn model(&self, connection: ConnectionId, model: &str) {
     let Ok(model) = ModelId::new(model) else {
       self.picking.rejected.set(true);
@@ -119,7 +120,10 @@ impl Chooser {
     let Some(chosen) = &self.chosen else {
       return;
     };
-    let effort = effort.map(str::trim).filter(|effort| !effort.is_empty()).map(str::to_owned);
+    let effort = effort
+      .map(str::trim)
+      .filter(|effort| !effort.is_empty())
+      .map(str::to_owned);
     self.apply(OrchestratorSettings::new(
       chosen.connection(),
       chosen.model().clone(),

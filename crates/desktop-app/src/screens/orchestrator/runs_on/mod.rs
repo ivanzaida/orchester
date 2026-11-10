@@ -29,7 +29,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::AgentAccountId, id::ProjectId, time::Timestamp};
+use orchester_core::{
+  id::{AgentAccountId, ProjectId},
+  time::Timestamp,
+};
 use orchester_workspace::{
   background,
   messages::Message,
@@ -78,8 +81,21 @@ pub(super) struct RunsOnProps {
 /// Compared by what it shows; the signal by which one it is.
 impl PartialEq for RunsOnProps {
   fn eq(&self, other: &Self) -> bool {
-    (&self.root, self.project, &self.setup, self.failed, self.session, self.open.id())
-      == (&other.root, other.project, &other.setup, other.failed, other.session, other.open.id())
+    (
+      &self.root,
+      self.project,
+      &self.setup,
+      self.failed,
+      self.session,
+      self.open.id(),
+    ) == (
+      &other.root,
+      other.project,
+      &other.setup,
+      other.failed,
+      other.session,
+      other.open.id(),
+    )
   }
 }
 
@@ -284,7 +300,10 @@ fn switched(sources: &Sources<'_>, entries: &[Entry], props: &RunsOnProps) -> bo
     .iter()
     .find(|entry| Some(entry.id) == chosen)
     .and_then(|entry| connections::account_of(sources, entry));
-  props.session.zip(account).is_some_and(|(session, account)| session != account)
+  props
+    .session
+    .zip(account)
+    .is_some_and(|(session, account)| session != account)
 }
 
 /// What the chip says.

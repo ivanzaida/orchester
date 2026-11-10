@@ -1,7 +1,7 @@
 //! The runs-on picker's Search and keys (`Many models` `pGj8M`, `Searching` `Ul1ay` and the notes `Hxq6v` in
 //! `Runs-on picker · states` `t7cdi`): Search filters the chosen connection's models and says when none matches; more
-//! than four scroll inside their list, the chosen one scrolled into view when the picker opens, and the picker keeps its
-//! height; Tab moves the keys between the rail, the models and the efforts, ← → along the rail and the efforts, ↑ ↓
+//! than four scroll inside their list, the chosen one scrolled into view when the picker opens, and the picker keeps
+//! its height; Tab moves the keys between the rail, the models and the efforts, ← → along the rail and the efforts, ↑ ↓
 //! within the models (keeping the place in view), Enter chooses and applies at once, a key typed elsewhere in the
 //! picker goes to Search, and Esc closes the picker.
 
@@ -143,9 +143,7 @@ fn orchestrator_picker_keys_move_between_areas_and_choose() {
   screen.key(("Enter", "Enter"), false);
   let opus = OrchestratorSettings::new(screen.claude, ModelId::new("opus").expect("model"), None);
   screen.until("opus published", |screen| published(screen) == Some((2, opus.clone())));
-  screen.until("opus's efforts", |screen| {
-    screen.exists(&format!("{MENU}-effort-low"))
-  });
+  screen.until("opus's efforts", |screen| screen.exists(&format!("{MENU}-effort-low")));
   // Tab to the efforts, on Default; → to Low; Enter.
   screen.key(("Tab", "Tab"), false);
   screen.key(("ArrowRight", "ArrowRight"), false);

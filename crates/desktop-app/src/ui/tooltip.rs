@@ -239,15 +239,12 @@ impl Tooltip {
       .rounded(RadiusSize::Sm);
     panel = match &self.note {
       Some(note) => panel.child(
-        Column::new()
-          .spacing(ExtraSpacing::Tight.role())
-          .child(words)
-          .child(
-            Text::new(note)
-              .variant(TypographyStyle::Caption)
-              .color(PaletteColor::TextInverse)
-              .max_width(Dimension::Px(self.wrap_at)),
-          ),
+        Column::new().spacing(ExtraSpacing::Tight.role()).child(words).child(
+          Text::new(note)
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextInverse)
+            .max_width(Dimension::Px(self.wrap_at)),
+        ),
       ),
       None => panel.child(words),
     };

@@ -143,7 +143,11 @@ fn seed_orchestrator_another_account_keeps_a_session_on_works_account_and_runs_o
     .expect("read")
     .expect("the Orchestrator is set up");
   assert_eq!(published, 1);
-  assert_eq!(session.connection, settings.connection(), "on the connection it runs on");
+  assert_eq!(
+    session.connection,
+    settings.connection(),
+    "on the connection it runs on"
+  );
   let app = AppDb::open(&seed.seeded.app_database).expect("app database");
   let work = app
     .agent_accounts()

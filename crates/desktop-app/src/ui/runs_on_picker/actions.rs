@@ -218,11 +218,13 @@ impl Actions {
       Outcome::Moved => {
         panel.refused.set(None);
         panel.cursor.set(cursor);
-        panel.focus.set(if cursor.place == Place::Effort && targets.typed_effort {
-          Focus::Effort
-        } else {
-          Focus::Search
-        });
+        panel
+          .focus
+          .set(if cursor.place == Place::Effort && targets.typed_effort {
+            Focus::Effort
+          } else {
+            Focus::Search
+          });
         self.reveal(cursor);
       }
       Outcome::Refused(at) => {

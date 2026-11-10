@@ -19,7 +19,12 @@ fn words(kit: &mut Kit, id: &str) -> String {
 /// The fixture connections with `edit` applied to the one named `id`.
 fn with(id: &str, edit: impl FnOnce(&mut Connection)) -> Vec<Connection> {
   let mut all = connections();
-  edit(all.iter_mut().find(|connection| &*connection.id == id).expect("a connection"));
+  edit(
+    all
+      .iter_mut()
+      .find(|connection| &*connection.id == id)
+      .expect("a connection"),
+  );
   all
 }
 
@@ -156,7 +161,11 @@ fn an_effort_is_typed_where_the_connection_lists_none_and_nothing_typed_is_defau
     kit.texts(&format!("{ID}-effort-hint")),
     ["The provider lists no efforts. Empty is Default."]
   );
-  assert_close(kit.bounds(&format!("{ID}-effort-field")).height, 28.0, "the field's height");
+  assert_close(
+    kit.bounds(&format!("{ID}-effort-field")).height,
+    28.0,
+    "the field's height",
+  );
   kit.click(&format!("{ID}-effort-typed"));
   type_text(kit, "think-hard");
   key(kit, "Enter");
@@ -199,7 +208,10 @@ fn the_picker_shows_its_own_notes_under_the_efforts_whichever_connection_is_show
       .element(ctx)
   });
   kit.pass();
-  assert_eq!(words(&mut kit, &format!("{ID}-note-0")), "Not saved: the settings are being edited");
+  assert_eq!(
+    words(&mut kit, &format!("{ID}-note-0")),
+    "Not saved: the settings are being edited"
+  );
   kit.click(&item("team"));
   assert!(kit.exists(&format!("{ID}-note-0")), "whichever connection is shown");
 }

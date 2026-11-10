@@ -1,8 +1,8 @@
 //! What the Orchestrator runs on, from the composer's chip (`05 · Account and model` `v6mWp8`, `05b · On DeepSeek`
-//! `AZp3I`, `Runs-on picker · states` `t7cdi`): the shared compact picker, 300 wide, with the project's connections on a
-//! rail, the one shown on a line under it with its plan's use and limit (an API provider's tokens and no plan limit on
-//! a second line), its models and the chosen model's efforts. One not signed in is faded and not to be chosen. An API
-//! provider takes a model and an effort of the person's own and says where its data goes. Choosing a connection, a
+//! `AZp3I`, `Runs-on picker · states` `t7cdi`): the shared compact picker, 300 wide, with the project's connections on
+//! a rail, the one shown on a line under it with its plan's use and limit (an API provider's tokens and no plan limit
+//! on a second line), its models and the chosen model's efforts. One not signed in is faded and not to be chosen. An
+//! API provider takes a model and an effort of the person's own and says where its data goes. Choosing a connection, a
 //! model or an effort publishes the Orchestrator's next version at once, with no *Publish* step, and a refused choice
 //! says why and changes nothing.
 
@@ -156,7 +156,10 @@ fn rest_on(screen: &mut Orchestrator, id: &str) {
 /// `ZcGGy`).
 fn assert_marks(screen: &mut Orchestrator, (busy, chosen): (ConnectionId, ConnectionId)) {
   // The dot is 6 at (19, 4) of its 28-square item; the chosen one's bar 12 × 2 at (8, 26).
-  let (busy_item, dot) = (screen.bounds(&on_rail(busy)), screen.bounds(&format!("{}-limit", on_rail(busy))));
+  let (busy_item, dot) = (
+    screen.bounds(&on_rail(busy)),
+    screen.bounds(&format!("{}-limit", on_rail(busy))),
+  );
   assert!(
     (dot.width - 6.0).abs() < 0.5 && (dot.height - 6.0).abs() < 0.5,
     "the dot is drawn: {dot:?}"
@@ -188,7 +191,10 @@ fn assert_frame(screen: &mut Orchestrator) {
     (chip.y - (menu.y + menu.height) - 6.0).abs() < 1.0,
     "6 over the chip: {menu:?} {chip:?}"
   );
-  assert!((menu.x - chip.x).abs() < 1.5, "aligned to the chip's start: {menu:?} {chip:?}");
+  assert!(
+    (menu.x - chip.x).abs() < 1.5,
+    "aligned to the chip's start: {menu:?} {chip:?}"
+  );
   assert!(!screen.exists("orchestrator-runs-on-foot"), "no foot");
 }
 
@@ -243,7 +249,9 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
   // Busy's line says until when its limit holds, and the limit fills its meter, both in warning.
   screen.press(&on_rail(at_busy));
   screen.until("Busy's line", |screen| {
-    screen.text(&part("who-caption")).starts_with("Claude Code · limit until ")
+    screen
+      .text(&part("who-caption"))
+      .starts_with("Claude Code · limit until ")
   });
   assert_eq!(screen.text(&part("who-detail")), "limit reached");
   let fill = screen.bounds(&part("who-meter-fill"));
@@ -309,12 +317,12 @@ fn orchestrator_picker_on_an_api_provider_takes_a_typed_model() {
   assert_eq!(screen.text(&part("who-name")), "DeepSeek");
   assert_eq!(screen.text(&part("who-detail")), "0 today · no plan limit");
   assert!(!screen.exists(&part("who-meter")), "no plan limit, no meter");
-  assert!(screen.text(&part("note-0")).contains("go to api.deepseek.com under its terms."));
   assert!(
     screen
-      .text(&part("search"))
-      .contains("Search or type a model…")
+      .text(&part("note-0"))
+      .contains("go to api.deepseek.com under its terms.")
   );
+  assert!(screen.text(&part("search")).contains("Search or type a model…"));
   // A model it does not list is typed, and taken with Enter.
   screen.set(&part("search"), "deepseek-v4-flash");
   screen.until("the typed model", |screen| {
@@ -334,7 +342,10 @@ fn orchestrator_picker_on_an_api_provider_takes_a_typed_effort() {
   // It lists no efforts: a field for the one it takes (`OR6Jq`), and what that means.
   screen.until("its efforts", |screen| screen.exists(&part("effort-typed")));
   assert!(!screen.exists(&part("effort-default")), "no segments");
-  assert_eq!(screen.text(&part("effort-hint")), "The provider lists no efforts. Empty is Default.");
+  assert_eq!(
+    screen.text(&part("effort-hint")),
+    "The provider lists no efforts. Empty is Default."
+  );
   enter(&mut screen, &part("effort-typed"), " think-hard ");
   let pro = ModelId::new("deepseek-v4-pro").expect("model");
   let typed = OrchestratorSettings::new(deepseek, pro, Some("think-hard".to_owned()));
@@ -370,7 +381,9 @@ fn orchestrator_picker_says_why_a_choice_was_refused_and_changes_nothing() {
   db.execute("DELETE FROM connections WHERE id = ?1", [deepseek.id().to_string()])
     .expect("removed");
   screen.press(&on_rail(deepseek.id()));
-  screen.until("the refusal", |screen| screen.text(&part("notes")).contains("Not saved: "));
+  screen.until("the refusal", |screen| {
+    screen.text(&part("notes")).contains("Not saved: ")
+  });
   let refusal = screen.text(&part("notes"));
   assert!(refusal.contains("connection was removed"), "it says why: {refusal}");
   assert_eq!(
@@ -417,7 +430,7 @@ fn orchestrator_picker_says_in_tooltips_that_another_account_starts_a_new_sessio
     .expect("session");
   screen
     .db()
-    .publish_orchestrator(&OrchestratorSettings::new(at_work, haiku.clone(), None), Timestamp::now())
+    .publish_orchestrator(&OrchestratorSettings::new(at_work, haiku, None), Timestamp::now())
     .expect("published");
   screen.go(OrchestratorChat::Chat(chat));
   screen.until("the conversation", |screen| {
@@ -449,7 +462,9 @@ fn orchestrator_picker_says_in_tooltips_that_another_account_starts_a_new_sessio
   });
   screen.press("orchestrator-runs-on-chip");
   screen.until("the picker closed", |screen| !screen.exists(MENU));
-  screen.until("the chip on Home", |screen| screen.text("orchestrator-runs-on").contains("Home"));
+  screen.until("the chip on Home", |screen| {
+    screen.text("orchestrator-runs-on").contains("Home")
+  });
   // The pointer leaves the chip and comes back, as a person would.
   screen.window.tree.mouse_move(0.0, 0.0);
   screen.window.pass();

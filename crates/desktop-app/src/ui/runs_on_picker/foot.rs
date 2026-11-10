@@ -1,9 +1,9 @@
 //! What the compact picker has at its foot besides the segmented efforts: for a connection that lists no efforts the
-//! typed one (`Effort` `qvWFc` in `Effort and data` `OR6Jq`, `05b` `AZp3I`): under a `border` line, 6 inside and 6 apart,
-//! a 28-high field on `surface_input` in a `border` stroke with *Type an effort…* and a 12 enter glyph, and under it a
-//! hint (11 `text_muted`, 4 in); and the notes (`Data note` `v1AfDF`, `KdDgO`): 6 at the sides and under, 6 apart, each
-//! a 12 glyph and its 11 `text_secondary` words 8 apart, 7 over and under and 10 at the sides, radius `sm`, on
-//! `warning_muted` where it says where data goes, else on `surface_input`.
+//! typed one (`Effort` `qvWFc` in `Effort and data` `OR6Jq`, `05b` `AZp3I`): under a `border` line, 6 inside and 6
+//! apart, a 28-high field on `surface_input` in a `border` stroke with *Type an effort…* and a 12 enter glyph, and
+//! under it a hint (11 `text_muted`, 4 in); and the notes (`Data note` `v1AfDF`, `KdDgO`): 6 at the sides and under, 6
+//! apart, each a 12 glyph and its 11 `text_secondary` words 8 apart, 7 over and under and 10 at the sides, radius `sm`,
+//! on `warning_muted` where it says where data goes, else on `surface_input`.
 
 use std::sync::Arc;
 
@@ -80,12 +80,15 @@ pub(super) fn typed_effort(
     .child(input)
     .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted));
   let field = if active { field } else { field.opacity(DISABLED_OPACITY) };
-  let hint = Row::new().width(Dimension::Pct(100.0)).padding(Padding::horizontal(SpacingSize::Xs)).child(
-    Text::new(&ctx.t("ui.runsOnPicker.typeEffortHint"))
-      .id(format!("{id}-effort-hint"))
-      .variant(TypographyStyle::Caption)
-      .flex(1.0),
-  );
+  let hint = Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::horizontal(SpacingSize::Xs))
+    .child(
+      Text::new(&ctx.t("ui.runsOnPicker.typeEffortHint"))
+        .id(format!("{id}-effort-hint"))
+        .variant(TypographyStyle::Caption)
+        .flex(1.0),
+    );
   Column::new()
     .id(format!("{id}-effort"))
     .width(Dimension::Pct(100.0))

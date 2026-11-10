@@ -1,8 +1,8 @@
-//! The line under the compact picker's rail (`Who` `n5OFk` in `ZcGGy`; on two lines `um5q9` in `05b` `AZp3I`, `yfqxy` in
-//! `t7cdi`): 4 at its sides, its parts 6 apart: the connection's name (12/500), *CLI · plan* (11.5 `text_muted`, or why
-//! it cannot be chosen in `warning`), and at its end the plan's 5-hour use in Geist Mono 10.5 before a 32 × 4 meter. A
-//! connection with a [`Detail`] says it on a second line 3 under the first, in Geist Mono 10.5 (`warning` when it
-//! warns, and the caption with it), the meter at that line's end.
+//! The line under the compact picker's rail (`Who` `n5OFk` in `ZcGGy`; on two lines `um5q9` in `05b` `AZp3I`, `yfqxy`
+//! in `t7cdi`): 4 at its sides, its parts 6 apart: the connection's name (12/500), *CLI · plan* (11.5 `text_muted`, or
+//! why it cannot be chosen in `warning`), and at its end the plan's 5-hour use in Geist Mono 10.5 before a 32 × 4
+//! meter. A connection with a [`Detail`] says it on a second line 3 under the first, in Geist Mono 10.5 (`warning` when
+//! it warns, and the caption with it), the meter at that line's end.
 
 use std::sync::Arc;
 
