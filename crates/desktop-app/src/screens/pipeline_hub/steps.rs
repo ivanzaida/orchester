@@ -2,9 +2,12 @@
 //! run in ([`super::flow`]), drawn from the edit the panel holds ([`super::edit`]) while there is one. *Ready?* is
 //! PV2-09's.
 //!
-//! The page keeps the edit now (PV2-10), but the head's *Add step* is PV2-07's and a card's drag handle and ⋯ are
-//! PV2-06's, so none is drawn yet: *Edit steps* opens the editor the pipeline has today, through its own route (the
-//! leave guard asks first while the edit has changes), where steps are added, moved and removed until then.
+//! The head's *Add step* adds a step at the end of the line, and a card changes its place, is duplicated or removed
+//! through the same edit (PV2-06); where the steps cannot be drawn as one line the head offers *Edit steps* instead,
+//! which opens the editor the pipeline has today, through its own route (the leave guard asks first while the edit has
+//! changes).
+
+use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
@@ -12,36 +15,36 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::resource::PipelineEdit;
 use orchester_workspace::pipelines::flow::FlowRead;
 
-use super::{flow, model::Entry};
+use super::{edit::Edit, flow, model::Entry};
 use crate::{
-  navigation::Navigation,
   project::ShownProject,
-  routes::{PipelineView, ProjectPage, Route},
   theme::{ExtraSpacing, HubText},
 };
 
-/// What the body shows of `entry`: the head and the flow `read`, which is the edit's while the panel holds one;
-/// nothing for an archived pipeline, which has no steps to open.
-pub(super) fn parts(ctx: &mut Ctx, project: &ShownProject, entry: &Entry, read: &FlowRead) -> Vec<Element> {
+/// What the body shows of `entry`: the steps section with the flow `read`, which is the edit's while the panel holds
+/// one, and the moves made on `current`; nothing for an archived pipeline, which has no steps to open.
+pub(super) fn parts(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  entry: &Entry,
+  (read, edit, current): (&Arc<FlowRead>, &Edit, &PipelineEdit),
+) -> Vec<Element> {
   if entry.archived.is_some() {
     return Vec::new();
   }
-  let navigation = Navigation::of(ctx);
-  vec![
-    head(ctx, project, &navigation, entry),
-    flow::flow(ctx, (project, &navigation), entry.id, read),
-  ]
+  vec![flow::section(
+    ctx,
+    (project, entry.id, entry.step_count),
+    read,
+    (edit, current),
+  )]
 }
 
-/// *Steps 6* and, at the end, *Edit steps*.
-fn head(ctx: &Ctx, project: &ShownProject, navigation: &Navigation, entry: &Entry) -> Element {
-  let route = Route::Project(
-    project.open.project.id(),
-    ProjectPage::Pipeline(entry.id, PipelineView::default()),
-  );
-  let edit = flow::edit_steps(ctx, "pipeline-hub-edit-steps", navigation.to(route));
+/// *Steps 6* and, at the end, `action`: *Add step*, or *Edit steps*.
+pub(super) fn head(ctx: &Ctx, count: usize, action: Element) -> Element {
   Row::new()
     .id("pipeline-hub-steps")
     .width(Dimension::Pct(100.0))
@@ -57,11 +60,11 @@ fn head(ctx: &Ctx, project: &ShownProject, navigation: &Navigation, entry: &Entr
             .variant(HubText::PanelLabel.role()),
         )
         .child(
-          Text::new(&entry.step_count.to_string())
+          Text::new(&count.to_string())
             .id("pipeline-hub-steps-count")
             .variant(HubText::PanelHint.role()),
         ),
     )
-    .child(edit)
+    .child(action)
     .into()
 }

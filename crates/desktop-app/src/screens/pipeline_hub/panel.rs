@@ -199,7 +199,7 @@ impl Component for PipelinePanel {
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
       .child(chips::chips(ctx, &entry, default))
-      .with_children(steps::parts(ctx, &project, &entry, &read))
+      .with_children(steps::parts(ctx, &project, &entry, (&read, &edit, &current)))
       .child(settings::section(
         ctx,
         &Settings {

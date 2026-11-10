@@ -15,7 +15,7 @@ use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, StepCard};
 use super::words;
 use crate::{
   screens::hub::agent_row::tag_chip,
-  theme::{ControlHeight, ExtraColor, ExtraSpacing, FlowText, IconSize},
+  theme::{ControlHeight, DRAGGED_OPACITY, ExtraColor, ExtraSpacing, FlowText, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -27,17 +27,43 @@ pub(super) enum Place {
   InGroup,
 }
 
+/// How a card looks while a card is dragged: faded where it was lifted from (`Card · 05 Review` `s1SIUj` in P3), or
+/// outlined in `accent` where dropping makes the two run in parallel.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Look {
+  Plain,
+  Lifted,
+  Target,
+}
+
+/// A hovered card's handle (`Drag handle` `yylYY`) takes 14 and 6 of gap before its name, and its second line is
+/// indented to stand under the name (`Line row` `aB9FX`).
+const HANDLE_INDENT: f32 = 20.0;
+/// What a card with a handle has at its start, where one without has `md` (`Card · 03 Implement · hover` `GnnMB`).
+const HANDLE_START: f32 = 6.0;
+
 /// How a card is pressed and where it stands: `open` opens the step; `fix` is the pill of a step that cannot run, which
-/// opens what it names.
+/// opens what it names. A card the pointer or the keys are on has its `handle` and its ⋯ (`more`).
 pub(super) struct Opening {
   pub open: Button,
   pub fix: Option<(Button, std::sync::Arc<str>)>,
   pub place: Place,
+  pub handle: Option<Element>,
+  pub more: Option<Element>,
+  pub look: Look,
 }
 
 /// The card of `step`.
 pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening) -> Element {
-  let Opening { open, fix, place } = opening;
+  let Opening {
+    open,
+    fix,
+    place,
+    handle,
+    more,
+    look,
+  } = opening;
+  let handled = handle.is_some();
   let id = format!("pipeline-hub-flow-step-{}", step.key);
   let not_ready = step.runs.needs_you();
   let mut top = Row::new()
@@ -45,6 +71,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center);
+  top = top.with_children(handle);
   if place == Place::InGroup {
     // A card without a pill keeps the pill row's height, so the titles of a group's cards share one baseline.
     top = top.min_height(Dimension::Px(ControlHeight::Helper.value()));
@@ -69,16 +96,22 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
         .filter(|_| !not_ready)
         .map(|access| tag_chip(&format!("{id}-access"), &words::access(ctx, access))),
     )
+    .with_children(more)
     .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+  let indent = if handled { HANDLE_INDENT } else { 0.0 };
   let mut body = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(top)
-    .child(second_line(&id, "runs", &words::runs(ctx, &step.runs), not_ready));
+    .child(indented(
+      second_line(&id, "runs", &words::runs(ctx, &step.runs), not_ready),
+      handled,
+    ));
   if let Some(route) = &step.on_failure {
     body = body.child(
       Row::new()
         .id(format!("{id}-failure"))
+        .padding(Padding::new().left(Dimension::Px(indent)))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
@@ -95,10 +128,22 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
   } else {
     open
   };
-  surface(open, &id, not_ready, body)
+  surface(open, &id, (not_ready, handled, look), body)
     .describe("step", step.key.to_string())
     .describe("number", words::number(step.number))
     .describe("state", if not_ready { "not_ready" } else { "ready" })
+    .into()
+}
+
+/// `line`, standing under the name of a card that has its handle.
+fn indented(line: Element, handled: bool) -> Element {
+  if !handled {
+    return line;
+  }
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().left(Dimension::Px(HANDLE_INDENT)))
+    .child(line)
     .into()
 }
 
@@ -122,7 +167,7 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Bu
       &words::deliver(ctx, deliver),
       matches!(deliver.conflicts, Conflicts::ProfileNotPublished(_)),
     ));
-  surface(open, id, false, body)
+  surface(open, id, (false, false, Look::Plain), body)
     .describe("number", words::number(deliver.number))
     .into()
 }
@@ -177,27 +222,39 @@ fn choose_chip(id: &str, words: &str) -> Row {
 
 /// A card's frame (`Card · 01 Research`): `surface_panel` in a `border` outline, radius 6, 12 at its sides and 8
 /// above and under; a step that is not ready in a `warning` outline.
-fn surface(open: Button, id: &str, not_ready: bool, body: Column) -> Button {
-  let outline = if not_ready {
-    PaletteColor::Warning
-  } else {
-    PaletteColor::Border
+fn surface(open: Button, id: &str, (not_ready, handled, look): (bool, bool, Look), body: Column) -> Button {
+  let outline = match (look, not_ready) {
+    (Look::Target, _) => Border::inside(BorderSize::Lg, PaletteColor::Accent),
+    (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
+    (_, false) => Border::inside(BorderSize::Sm, PaletteColor::Border),
   };
-  open
+  let hovered = match (look, not_ready) {
+    (Look::Target, _) => outline.clone(),
+    (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
+    (_, false) => Border::inside(BorderSize::Sm, PaletteColor::BorderStrong),
+  };
+  let padding = if handled {
+    Padding::new()
+      .top(SpacingSize::Sm)
+      .bottom(SpacingSize::Sm)
+      .right(SpacingSize::Md)
+      .left(Dimension::Px(HANDLE_START))
+  } else {
+    Padding::symmetric(SpacingSize::Md, SpacingSize::Sm)
+  };
+  let card = open
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .padding(padding)
     .align_items(Alignment::Start)
     .background(PaletteColor::SurfacePanel)
-    .border_inside(BorderSize::Sm, outline)
+    .border(outline)
     .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()).border(Border::inside(
-      BorderSize::Sm,
-      if not_ready {
-        PaletteColor::Warning
-      } else {
-        PaletteColor::BorderStrong
-      },
-    )))
-    .child(body)
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()).border(hovered))
+    .child(body);
+  if look == Look::Lifted {
+    card.opacity(DRAGGED_OPACITY)
+  } else {
+    card
+  }
 }

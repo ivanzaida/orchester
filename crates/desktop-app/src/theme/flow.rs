@@ -9,6 +9,9 @@ use lurq::{
 
 use super::typography::{mono, style};
 
+/// A card whose place is faded while its drag is under way (`Card · 05 Review` `s1SIUj` in P3 `K4B56`).
+pub const DRAGGED_OPACITY: f32 = 0.35;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FlowText {
   /// Geist Mono 10.5 `text_muted`, spaced 0.6, 1.2: *ON TASK START*, *RUN IN PARALLEL* and *MERGED INTO …* (`r7IIY5`,
@@ -28,10 +31,13 @@ pub enum FlowText {
   /// 12 `text_secondary`, 1.3: what a card runs, and a failure route in `text_muted` (`I9Z0s2`, `DDlSK`); an amber
   /// card's problem in `warning` (`jz6zu` in P8).
   Line,
+  /// 12/500 `text_primary`, 1.2: what a dragged card's drop line says first, *05 Review goes here* (`XHcfs` in `Drop
+  /// here` `y0SHa`, P3).
+  Landing,
 }
 
 impl FlowText {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::Label,
     Self::Hint,
     Self::Gate,
@@ -39,6 +45,7 @@ impl FlowText {
     Self::CardNumber,
     Self::Name,
     Self::Line,
+    Self::Landing,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -54,6 +61,7 @@ impl FlowText {
       Self::CardNumber => "flow_card_number",
       Self::Name => "flow_name",
       Self::Line => "flow_line",
+      Self::Landing => "flow_landing",
     }
   }
 
@@ -66,6 +74,7 @@ impl FlowText {
       Self::CardNumber => mono(style(11.5, FontWeight::Normal, 1.2, 0.0, palette.text_muted)),
       Self::Name => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Line => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Landing => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
     }
   }
 }

@@ -21,7 +21,7 @@ use orchester_store::ProjectDb;
 
 use super::{harness::Agents, support::project_id};
 
-fn agent(profile: Option<ResourceId>, repository: RepositoryAccess) -> StepKind {
+pub(super) fn agent(profile: Option<ResourceId>, repository: RepositoryAccess) -> StepKind {
   StepKind::Agent {
     profile,
     repository,
@@ -31,7 +31,7 @@ fn agent(profile: Option<ResourceId>, repository: RepositoryAccess) -> StepKind 
 }
 
 /// Adds the step `name` that waits for `after`, and returns its key.
-fn add(edit: &mut PipelineEdit, name: &str, after: &[&StepKey], kind: StepKind) -> StepKey {
+pub(super) fn add(edit: &mut PipelineEdit, name: &str, after: &[&StepKey], kind: StepKind) -> StepKey {
   let key = edit.add_step(Name::new(name).expect("name"), None);
   let after: Vec<StepKey> = after.iter().map(|key| (*key).clone()).collect();
   edit.update(&key, |step| {
@@ -41,7 +41,7 @@ fn add(edit: &mut PipelineEdit, name: &str, after: &[&StepKey], kind: StepKind) 
   key
 }
 
-fn fails_back_to(edit: &mut PipelineEdit, step: &StepKey, target: &StepKey) {
+pub(super) fn fails_back_to(edit: &mut PipelineEdit, step: &StepKey, target: &StepKey) {
   edit.update(step, |step| {
     step.on_failure = Some(FailureRoute {
       return_to: target.clone(),
@@ -50,7 +50,7 @@ fn fails_back_to(edit: &mut PipelineEdit, step: &StepKey, target: &StepKey) {
   });
 }
 
-fn store(agents: &Agents, name: &str, body: &Pipeline, published: bool) -> ResourceId {
+pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline, published: bool) -> ResourceId {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
     .create_resource(
@@ -95,7 +95,7 @@ fn tool(agents: &Agents, published: bool) -> ResourceId {
 }
 
 /// Opens the hub on `pipeline` and waits for its flow.
-fn open(agents: &mut Agents, pipeline: ResourceId) {
+pub(super) fn open(agents: &mut Agents, pipeline: ResourceId) {
   agents.window.navigation().go(Route::Project(
     project_id(),
     ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline))),
@@ -424,7 +424,7 @@ fn pipeline_flow_steps_that_cannot_be_drawn_as_one_line_keep_the_start_and_end_a
 }
 
 #[test]
-fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_offers_edit_steps() {
+fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_add_step_adds_the_first() {
   let mut agents = Agents::new(true);
   let body = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"))
     .validate()
@@ -434,7 +434,7 @@ fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_offers_ed
 
   assert_eq!(
     agents.text("pipeline-hub-flow-empty-words"),
-    "No steps yet. Edit steps to add the first one."
+    "No steps yet. Add the first one."
   );
   let start = rect(&mut agents, "pipeline-hub-flow-row-start").y;
   let line = rect(&mut agents, "pipeline-hub-flow-empty").y;
@@ -444,11 +444,14 @@ fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_offers_ed
     "between start and end: {start} {line} {end}"
   );
   assert_eq!(agents.text("pipeline-hub-steps-count"), "0");
-  agents.click("pipeline-hub-flow-empty-edit");
-  agents.until("the editor", |s| {
-    s.window.navigation().route_now()
-      == Route::Project(project_id(), ProjectPage::Pipeline(id, PipelineView::default()))
-  });
+  agents.click("pipeline-hub-add-step");
+  agents.until("the first step", |s| s.exists("pipeline-hub-flow-step-step"));
+  assert_eq!(
+    agents.text("pipeline-hub-steps-count"),
+    "1",
+    "the count follows the edit"
+  );
+  assert!(!agents.exists("pipeline-hub-flow-empty"));
 }
 
 #[test]

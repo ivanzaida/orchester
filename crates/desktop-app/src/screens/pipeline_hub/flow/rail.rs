@@ -25,6 +25,8 @@ const DOT: f32 = 7.0;
 /// group's (`Top` `Y8J3s1`).
 const STEP_TOP: f32 = 5.0;
 const GROUP_TOP: f32 = 6.0;
+/// What the node of a dragged card's drop line sits below (`Top` `kHXE6` in `Drop here` `y0SHa`).
+const LANDING_TOP: f32 = 4.0;
 
 /// What a node of the rail shows, and the line above it.
 pub(super) enum Node {
@@ -43,6 +45,8 @@ pub(super) enum Node {
   Parallel,
   /// The end of the line: a dot (`Node` `H2joy6`); nothing below it.
   End,
+  /// Where a dragged card would land: an `accent` node with an arrow (`Node` `VhWIc` in `Drop here` `y0SHa`, P3).
+  Landing,
   /// Only the line, for what stands between the start and the end without being a step: the note that there are none,
   /// or that they cannot be drawn.
   Line,
@@ -53,6 +57,7 @@ impl Node {
     match self {
       Self::Step(_) | Self::NotReady(_) | Self::Deliver => STEP_TOP,
       Self::Parallel => GROUP_TOP,
+      Self::Landing => LANDING_TOP,
       Self::Start | Self::Gate | Self::End | Self::Line => 0.0,
     }
   }
@@ -131,6 +136,11 @@ fn mark(id: &str, node: &Node) -> Option<Row> {
     }
     Node::Parallel => {
       outlined(PaletteColor::BorderStrong).child(icon(Icon::Split, IconSize::Xs, PaletteColor::TextSecondary))
+    }
+    Node::Landing => {
+      round()
+        .background(PaletteColor::Accent)
+        .child(icon(Icon::ArrowRight, IconSize::Xs, PaletteColor::TextInverse))
     }
     Node::Line => return None,
     Node::End => outlined(PaletteColor::BorderStrong).child(

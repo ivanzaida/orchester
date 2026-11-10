@@ -164,6 +164,7 @@ icons! {
   Globe => '\u{e0e8}',
   GraduationCap => '\u{e234}',
   Hammer => '\u{e0ec}',
+  GripVertical => '\u{e0eb}',
   Hand => '\u{e1d7}',
   HandHelping => '\u{e3b8}',
   HardDrive => '\u{e0ed}',

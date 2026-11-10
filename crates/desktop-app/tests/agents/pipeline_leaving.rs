@@ -110,11 +110,11 @@ fn pipeline_leaving_by_new_pipeline_with_unsaved_changes_asks_first() {
 }
 
 #[test]
-fn pipeline_leaving_by_edit_steps_with_unsaved_changes_asks_first() {
+fn pipeline_leaving_by_a_card_with_unsaved_changes_asks_first() {
   let (mut agents, [ready, ..], _) = editing(|ids| ids[0]);
   let here = view(PipelinesFilter::All, Some(ready));
 
-  agents.click("pipeline-hub-edit-steps");
+  agents.click("pipeline-hub-flow-step-step");
   agents.until("the question", |s| s.exists(DISCARD));
   assert_eq!(agents.window.navigation().route_now(), here);
   agents.click(KEEP);

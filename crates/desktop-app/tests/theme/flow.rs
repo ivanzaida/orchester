@@ -85,6 +85,22 @@ fn flow_roles_follow_the_design() {
   }
 }
 
+/// What a dragged card's drop line says first: 12/500 `text` (`XHcfs` in `Drop here` `y0SHa`, P3).
+#[test]
+fn the_landing_line_is_12_medium_text() {
+  let app = themed(Mode::Dark);
+  let style = app.theme().typography_style(FlowText::Landing.role());
+  assert_eq!(
+    (style.font_size, style.line_height, style.weight, style.color),
+    (
+      12.0,
+      1.2,
+      FontWeight::Medium,
+      app.theme().palette_color(PaletteColor::TextPrimary)
+    )
+  );
+}
+
 /// The label is spaced 0.6 (`r7IIY5`, `UVGsy`, `W5F8Hk`).
 #[test]
 fn the_flow_label_is_spaced() {

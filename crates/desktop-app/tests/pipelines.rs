@@ -34,8 +34,7 @@ fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
   editor.click("pipeline-parent");
   editor.until("hub row", |e| e.exists(&format!("pipeline-hub-row-{id}")));
   assert_eq!(editor.text(&format!("pipeline-hub-row-{id}-version")), "draft");
-  editor.click("pipeline-hub-edit-steps");
-  editor.until("reopened editor", |e| e.exists("pipeline-add-step"));
+  editor.open(id);
   assert_eq!(editor.selected(), id);
 }
 
