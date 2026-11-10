@@ -130,10 +130,14 @@ impl Versions {
   fn rows(&self, ctx: &Ctx, props: &Props, history: &VersionHistory) -> Vec<Element> {
     if history.versions().is_empty() {
       return vec![
-        Text::new(&ctx.t("pipeline_hub.versions.none"))
-          .id("pipeline-hub-versions-none")
-          .variant(TypographyStyle::Caption)
+        Row::new()
+          .width(Dimension::Pct(100.0))
           .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Sm))
+          .child(
+            Text::new(&ctx.t("pipeline_hub.versions.none"))
+              .id("pipeline-hub-versions-none")
+              .variant(TypographyStyle::Caption),
+          )
           .into(),
       ];
     }
