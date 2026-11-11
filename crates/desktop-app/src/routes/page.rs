@@ -69,6 +69,8 @@ pub enum ProjectPage {
   PipelinesHub(PipelinesView),
   /// New pipeline, starting from the starter.
   NewPipeline,
+  /// New pipeline as a link to it with the empty start reads: an empty pipeline can never be saved (D-040), so it opens
+  /// on the starter as [`Self::NewPipeline`] does.
   NewEmptyPipeline,
   /// New pipeline with *Copy a pipeline* chosen, copying this one (a library row's *Duplicate*).
   CopyPipeline(ResourceId),

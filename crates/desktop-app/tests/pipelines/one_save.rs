@@ -245,9 +245,9 @@ fn described(body: &Pipeline, text: &str) -> Pipeline {
   edit.validate().expect("a valid pipeline")
 }
 
-#[test]
-fn pipelines_one_save_a_team_pipelines_conflict_takes_it_back_instead_of_opening_a_draft() {
-  let mut editor = Editor::team();
+/// A team pipeline whose v2 *Mine.*, published here from v1, met olha's v2 *Theirs.*, open with its conflict bar: the
+/// pipeline and its v1 steps.
+fn pipeline_in_conflict(editor: &mut Editor) -> (ResourceId, Pipeline) {
   let id = editor.published();
   let mut db = editor.db();
   let ours = first_numbered::<Pipeline>(&mut db, id);
@@ -263,6 +263,13 @@ fn pipelines_one_save_a_team_pipelines_conflict_takes_it_back_instead_of_opening
   meets_a_teammate(&mut db, id, mine.id(), &described(&ours, "Theirs."));
   editor.open(id);
   editor.until("the conflict", |e| e.exists("pipeline-conflict"));
+  (id, ours)
+}
+
+#[test]
+fn pipelines_one_save_a_team_pipelines_conflict_takes_it_back_instead_of_opening_a_draft() {
+  let mut editor = Editor::team();
+  let (id, ours) = pipeline_in_conflict(&mut editor);
 
   assert!(!editor.exists("pipeline-open-draft"), "a pipeline has no draft to open");
   assert!(editor.exists("pipeline-publish-again"));
@@ -308,4 +315,92 @@ fn pipelines_one_save_a_team_profiles_conflict_still_opens_its_draft() {
 
   assert!(editor.exists("agent-open-draft"), "a profile keeps Open my draft on vN");
   assert!(!editor.exists("agent-take-back"));
+}
+
+/// *Take it back* replaces the page's edit with the steps taken back, so while the page holds an edit not saved it is
+/// unavailable and says why, and the edit stays (D-040).
+#[test]
+fn pipelines_one_save_take_it_back_waits_while_an_edit_is_not_saved() {
+  let mut editor = Editor::team();
+  let (id, ours) = pipeline_in_conflict(&mut editor);
+  editor.set("pipeline-description", "Not saved yet.");
+  editor.until("the edit", |e| e.exists("pipeline-save"));
+
+  let why = tooltip(&mut editor, "pipeline-take-back", "pipeline-take-back-why-tooltip");
+  assert!(why.starts_with("Save or undo your changes first"), "{why}");
+  editor.click("pipeline-take-back");
+  editor.arm();
+
+  assert!(editor.exists("pipeline-conflict"), "nothing was taken back");
+  assert_eq!(editor.value("pipeline-description"), "Not saved yet.", "the edit stays");
+  assert_eq!(editor.db().waiting_publishes().expect("outbox").len(), 1);
+  assert_eq!(latest(&editor, id), (two(), described(&ours, "Theirs.")));
+}
+
+/// Pipelines of the project, as stored.
+fn pipelines(editor: &Editor) -> Vec<orchester_core::resource::Resource> {
+  editor.db().resources(ResourceKind::Pipeline).expect("read")
+}
+
+/// A local project's New pipeline publishes v1 when every step is ready: a copy of a published pipeline.
+#[test]
+fn pipelines_one_save_create_v1_publishes_a_ready_pipeline_in_a_local_project() {
+  let mut editor = Editor::new();
+  let source = editor.published();
+  editor.go(ProjectPage::NewPipeline);
+  editor.until("New pipeline", |e| e.exists("pipeline-name"));
+  assert!(editor.text("pipeline-create").contains("Create v1"));
+  assert!(!editor.exists("pipeline-start-2"), "no empty pipeline is offered");
+
+  editor.set("pipeline-name", "Delivery copy");
+  editor.click("pipeline-start-1");
+  editor.choose("pipeline-copy", "Delivery · v1");
+  editor.click("pipeline-create");
+  editor.until("the new pipeline's page", |e| e.exists("pipeline-add-step"));
+
+  let id = editor.selected();
+  assert_ne!(id, source);
+  let (number, body) = latest(&editor, id);
+  assert_eq!(number, VersionNumber::FIRST, "created as v1");
+  assert_eq!(body.steps().len(), latest(&editor, source).1.steps().len());
+  assert!(editor.db().draft::<Pipeline>(id).expect("read").is_none());
+}
+
+/// A local project's New pipeline whose steps are not all ready is refused with why, and nothing is stored: the
+/// starter's first step has no profile in a project without one named for it.
+#[test]
+fn pipelines_one_save_create_v1_is_refused_with_why_while_a_step_is_not_ready() {
+  let mut editor = Editor::new();
+  editor.go(ProjectPage::NewPipeline);
+  editor.until("New pipeline", |e| e.exists("pipeline-name"));
+  editor.set("pipeline-name", "Feature delivery");
+  editor.click("pipeline-create");
+  editor.until("the refusal", |e| e.exists("pipeline-create-error"));
+
+  assert!(
+    editor.text("pipeline-create-error").ends_with("has no agent profile"),
+    "{}",
+    editor.text("pipeline-create-error")
+  );
+  assert!(pipelines(&editor).is_empty(), "nothing is stored");
+  assert!(editor.exists("pipeline-name"), "the page stays");
+}
+
+/// An old link to New pipeline with the empty start opens on the starter: an empty pipeline can never be saved
+/// (D-040).
+#[test]
+fn pipelines_one_save_the_empty_start_is_not_offered() {
+  // A team project: a local one's Pipelines is the hub, which has New of its own.
+  let mut editor = Editor::team();
+  editor
+    .window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::NewEmptyPipeline));
+  editor.until("New pipeline", |e| e.exists("pipeline-start-0"));
+  assert!(!editor.exists("pipeline-start-2"), "no empty pipeline is offered");
+
+  editor.go(ProjectPage::Pipelines);
+  editor.until("the empty list", |e| e.exists("pipelines-start"));
+  assert!(!editor.exists("pipeline-empty-blank"), "no Empty pipeline row");
+  assert!(!editor.exists("pipeline-empty-start"), "no Start empty");
 }

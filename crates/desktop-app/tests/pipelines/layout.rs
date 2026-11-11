@@ -61,7 +61,7 @@ fn pipelines_new_starter_row_keeps_its_steps_across_creation_states() {
       editor.until("name collision", |e| e.exists("pipeline-open-existing"));
     } else if state == "empty" {
       editor.set("pipeline-name", "");
-      editor.click("pipeline-start-2");
+      editor.click("pipeline-start-1");
     }
     let chain = editor.text("pipeline-start-0-hint");
     assert!(chain.contains("Run checks ∥ Review"), "{state}: {chain}");

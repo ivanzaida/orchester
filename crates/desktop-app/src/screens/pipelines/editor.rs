@@ -169,7 +169,9 @@ impl Editor {
     // The page reads the saved pipeline again, as *Reload saved pipeline* does, holding the steps taken back.
     let reread: hub::team::Reread = std::sync::Arc::new(move || reload.update(|n| *n += 1));
     let hand_back: hub::team::HandBack = std::sync::Arc::new(move |steps| taken.set(Some(steps)));
-    hub::team::pipeline_waiting_bar(ctx, &props.project, (team, standing), (reread, hand_back))
+    // Taking the version back would replace an edit not saved, so the bar does not while there is one (D-040).
+    let holds_edit = self.state.get().unsaved();
+    hub::team::pipeline_waiting_bar(ctx, &props.project, (team, standing), (reread, hand_back, holds_edit))
       .into_iter()
       .collect()
   }

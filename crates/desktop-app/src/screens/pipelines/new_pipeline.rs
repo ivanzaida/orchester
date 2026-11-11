@@ -1,5 +1,5 @@
-//! New pipeline (`04 · New pipeline` `uHPNu`): a sub-page under `← Pipelines` with *Cancel* and *Create draft v1*
-//! in its header; the pipeline's name, slug and description, and where draft v1 starts from (`super::new_start`). A
+//! New pipeline (`04 · New pipeline` `uHPNu`): a sub-page under `← Pipelines` with *Cancel* and *Create v1* in its
+//! header; the pipeline's name, slug and description, and where v1 starts from (`super::new_start`). A
 //! name whose slug another pipeline has says so on the Slug row with *Open <name>* (`04b` `I49xek`); a library row's
 //! *Duplicate* opens it with *Copy a pipeline* chosen.
 use lurq::{
@@ -53,12 +53,12 @@ const FIELD_WIDTH: f32 = 260.0;
 struct Created(ProjectId, ResourceId);
 impl DevtoolsInspectable for Created {}
 
-/// Where draft v1 starts from: the starter, a copy of a published pipeline, or no steps.
+/// Where v1 starts from: the starter or a copy of a published pipeline. No steps is not offered: it can never be
+/// saved (D-032, D-040).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Begin {
   Starter,
   Copy,
-  Empty,
 }
 impl DevtoolsInspectable for Begin {}
 
@@ -74,7 +74,6 @@ impl Component for NewPipeline {
   type Props = ShownProject;
   fn create(ctx: &mut Ctx) -> Self {
     let (start, copy) = match Navigation::of(ctx).route_now() {
-      Route::Project(_, ProjectPage::NewEmptyPipeline) => (Begin::Empty, String::new()),
       Route::Project(_, ProjectPage::CopyPipeline(id)) => (Begin::Copy, id.to_string()),
       _ => (Begin::Starter, String::new()),
     };
@@ -151,11 +150,10 @@ impl NewPipeline {
     match self.start.get() {
       Begin::Starter => Some(Start::Starter),
       Begin::Copy => self.copy.get().parse().ok().map(Start::Copy),
-      Begin::Empty => Some(Start::Empty),
     }
   }
 
-  /// `← Pipelines`, the title with why it cannot be created yet, *Cancel* and *Create draft v1* (`Header` `Bh02q`).
+  /// `← Pipelines`, the title with why it cannot be created yet, *Cancel* and *Create v1* (`Header` `Bh02q`).
   fn header(&self, ctx: &mut Ctx, project: ProjectId, save: &CreateAction, collision: bool) -> Element {
     let nav = Navigation::of(ctx);
     let (name, description) = (self.name.get(), self.description.get());
