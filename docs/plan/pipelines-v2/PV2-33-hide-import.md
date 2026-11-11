@@ -1,9 +1,9 @@
 # PV2-33 · Pipelines leave Import resources
 
-- **Status:** todo
+- **Status:** done (2026-11-11; the new app has no Import resources screen or MCP tool, so the logic layer leaves pipelines out: not offered, never followed as a dependency, kept in the source catalog for remapping; review PASS; merged)
 - **Kind:** UI + MCP
 - **Depends on:** —
-- **Branch:** —
+- **Branch:** `claude/pv2-33-hide-import` → module
 - **Tokens:** —
 
 ## Goal
