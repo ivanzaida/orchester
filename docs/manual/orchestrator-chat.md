@@ -255,10 +255,16 @@ the order that applies (see [Orders](#orders)).
   approves it once with `decide_approval` only when it plainly serves the task and is safe (inside the run's
   worktree, nothing irreversible, nothing that reaches another system or person, no secret), denies it with a
   `message` that tells the agent why only when it is plainly wrong, and otherwise decides nothing and tells the person
-  what is asked, why it hesitates and what it recommends; the request then waits for them on its card in the task's
-  Conversation (the entry's *Open ↗*). In that turn `decide_approval` decides only that request (`not_this_request`
-  for another); it never allows a tool for good, and it still needs *Let automation answer approvals*
-  (`automation_not_allowed` otherwise, and the request is the person's).
+  what is asked, why it hesitates (*Not sure: …*) and what it recommends (*Recommends …*). In that turn
+  `decide_approval` decides only that request (`not_this_request` for another), takes the chat's own `reason` (one
+  sentence, required) and never allows a tool for good; allowing similar, all of a run or the project's stays the
+  person's, on the card. While the chat drives, *Let the Orchestrator drive* is its consent to answer: *Let automation
+  answer approvals* is not needed for the chat (the person's decision of 2026-11-11), and other MCP clients still need
+  it. The request's line in the conversation says where it stands: *Orchestrator is reading*; *Allowed by the
+  Orchestrator* or *Denied by the Orchestrator*, with what was asked and its reason, or the words it told the agent,
+  nested under it; *Waits for you*, with the Orchestrator's words and, under them, the request's card from the task's
+  Conversation, answered here exactly as there; and, once the person answered, how (*Allowed once by you*, *Denied by
+  you*, …). Requests that arrive together get a turn each, one at a time per conversation.
 - **Run ends** — a task's latest run that succeeds, fails, stops for a decision, stops at a limit or is interrupted
   gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person), and
   once merged, where an order applies (see [Orders](#orders)), does what it asks of the work it leads that can start

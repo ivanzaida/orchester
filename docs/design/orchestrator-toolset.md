@@ -71,7 +71,14 @@ drive*, and says what changed.**
      it, a tool request too (decided by the person on 2026-11-11, replacing "none for a tool request, which stays the
      person's": its turn approves that one request once or denies it with a reason when it is sure, and otherwise
      leaves it to the person with its recommendation; `decide_approval` there decides only that request,
-     `not_this_request` for another, and keeps its own rules).
+     `not_this_request` for another, and keeps its own rules: Allow once or Deny with words only). While the chat
+     drives, the drive switch is its consent to answer, not *Let automation answer approvals* (the person's decision of
+     2026-11-11: that setting is to be removed later; other MCP clients still need it). The chat gives a one-sentence
+     `reason`, kept with what was asked as its answer (`ChatAction::tool_answer`). The conversation shows the request in
+     the states of `Orchestrator WIP` `mPw5l` (`ICzi3`): being read, allowed or denied by the Orchestrator with its
+     answer nested, waiting for the person with the Orchestrator's words and the Conversation tab's own card under
+     them, and answered by the person. Not built: several requests that arrive together are not read in one turn;
+     each gets its own, one at a time per conversation.
      In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.
