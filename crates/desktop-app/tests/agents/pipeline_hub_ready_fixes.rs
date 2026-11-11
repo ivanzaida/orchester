@@ -61,32 +61,11 @@ fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_lis
 }
 
 #[test]
-fn pipeline_hub_ready_fixes_a_draft_only_not_published_offers_save_which_saves_as_the_bars_save() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let fresh = store(&agents, "Fresh", &body([Some(builder), Some(builder)]));
-  open(&mut agents, PipelinesFilter::All, Some(fresh));
-
-  assert_eq!(agents.text("team-hub-ready-draft-words"), "Not published yet");
-  assert_eq!(agents.text("team-hub-ready-draft-save"), "Save →");
-  agents.click("team-hub-ready-draft-save");
-  // A first version widens what nobody allowed yet: the bar's question asks, as after the bar's own Save.
-  agents.until("the question", |s| s.exists(CONFIRM));
-  agents.press_until(CONFIRM, "v1", |s| {
-    ProjectDb::open(&s.root)
-      .expect("database")
-      .latest_version::<Pipeline>(fresh)
-      .expect("read")
-      .is_some()
-  });
-}
-
-#[test]
 fn pipeline_hub_ready_fixes_a_card_whose_profile_lost_its_connection_is_amber_and_opens_it() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let lost = lost(&agents, "Explorer");
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)]);
   let build = step_at(&agents, stuck, 1);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
@@ -103,60 +82,11 @@ fn pipeline_hub_ready_fixes_a_card_whose_profile_lost_its_connection_is_amber_an
   });
 }
 
-#[test]
-fn pipeline_hub_ready_fixes_this_draft_leaves_out_what_only_the_version_runs_and_names_the_version() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let old = agents.profile(true);
-  let dropped = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(old)], true);
-  // Quick fix merges with the archived profile: no step names it, so the version's row about it stays.
-  let merging = |body: Pipeline| {
-    body.with_deliver(Some(DeliverStep::new(
-      DeliverMode::AutoMerge,
-      MergeMethod::Squash,
-      Some(old),
-      true,
-    )))
-  };
-  let kept = store(&agents, "Quick fix", &merging(body([Some(builder), Some(builder)])));
-  ProjectDb::open(&agents.root)
-    .expect("database")
-    .publish_draft::<Pipeline>(kept, Timestamp::now())
-    .expect("published");
-  ProjectDb::open(&agents.root)
-    .expect("database")
-    .archive_local_resource(old, Timestamp::now())
-    .expect("archived");
-  // One draft no longer runs the archived profile, the other still merges with it.
-  draft_over(&agents, dropped, body([Some(builder), Some(builder)]));
-  draft_over(
-    &agents,
-    kept,
-    merging(body([Some(builder), Some(builder)]).with_description("Still merging".into())),
-  );
-
-  open(&mut agents, PipelinesFilter::All, Some(dropped));
-  assert_eq!(agents.text("team-hub-readiness-label"), "Ready? · this draft");
-  assert_eq!(
-    agents.text("team-hub-readiness-count"),
-    "all set",
-    "what keeps the version from running is not the draft's"
-  );
-
-  open(&mut agents, PipelinesFilter::All, Some(kept));
-  agents.until("the version's row", |s| s.exists("team-hub-ready-undecided"));
-  assert_eq!(
-    agents.text("team-hub-ready-undecided-label"),
-    "Profiles and tools · v1",
-    "a row about the version names it"
-  );
-}
-
 /// A draft whose *Build* runs a profile that was archived since: gone here.
 fn with_a_gone_profile(agents: &Agents) -> (ResourceId, StepKey) {
   let builder = agents.profile(true);
   let retired = agents.profile(true);
-  let draft = pipeline_of(agents, "Dependency update", [Some(builder), Some(retired)], false);
+  let draft = pipeline_of(agents, "Dependency update", [Some(builder), Some(retired)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(retired, Timestamp::now())
@@ -215,7 +145,7 @@ fn pipeline_hub_ready_fixes_an_archived_profile_of_a_published_pipeline_has_one_
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let retired = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(retired)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(retired)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(retired, Timestamp::now())
@@ -242,7 +172,7 @@ fn pipeline_hub_ready_fixes_the_chip_and_the_line_count_what_ready_lists_for_a_p
   let mut agents = Agents::new(true);
   let lost = lost(&agents, "Explorer");
   let retired = agents.profile(true);
-  let id = pipeline_of(&agents, "Agents tour", [Some(lost), Some(retired)], true);
+  let id = pipeline_of(&agents, "Agents tour", [Some(lost), Some(retired)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(retired, Timestamp::now())
@@ -266,38 +196,4 @@ fn pipeline_hub_ready_fixes_the_chip_and_the_line_count_what_ready_lists_for_a_p
     "the line counts both"
   );
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), said, "so does the chip");
-}
-
-#[test]
-fn pipeline_hub_ready_fixes_a_draft_over_the_version_leaves_the_chip_and_the_line_on_the_versions_whole_story() {
-  let mut agents = Agents::new(true);
-  let lost = lost(&agents, "Explorer");
-  let retired = agents.profile(true);
-  let id = pipeline_of(&agents, "Agents tour", [Some(lost), Some(retired)], true);
-  ProjectDb::open(&agents.root)
-    .expect("database")
-    .archive_local_resource(retired, Timestamp::now())
-    .expect("archived");
-  open(&mut agents, PipelinesFilter::All, Some(id));
-  agents.until("the panel", |s| s.exists("pipeline-hub-save"));
-  let line = format!("pipeline-hub-row-{id}-line");
-  assert_eq!(agents.text(&line), "2 steps not ready");
-
-  // A draft is stored over v1: v1 still has both problems, which the line and the chip go on telling.
-  agents.set("pipeline-hub-description", "Changed");
-  agents.until("unsaved", |s| s.text(&line).starts_with("Unsaved changes"));
-  agents.click("pipeline-hub-save");
-  agents.until("the draft kept", |s| {
-    if s.exists(CONFIRM) {
-      s.click(CONFIRM);
-    }
-    s.exists("pipeline-hub-kept")
-  });
-  agents.until("the draft listed", |s| s.text("pipeline-hub-chip-1-label") == "draft");
-  assert_eq!(agents.text(&line), "2 steps not ready", "the line speaks of v1");
-  assert_eq!(
-    agents.text("pipeline-hub-chip-2-label"),
-    "2 steps not ready",
-    "so does v1's chip"
-  );
 }

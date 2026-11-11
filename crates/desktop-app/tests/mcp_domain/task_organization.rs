@@ -292,14 +292,18 @@ fn task_organization_delivers_is_set_read_kept_and_cleared() {
   assert_eq!(cleared["task"]["delivers"], Value::Null, "{cleared}");
   assert_eq!(stored(&repo, &key).organization().delivers(), None);
 
+  // A pipeline's first version is a person's: they let automation make it (D-032).
+  served.let_automation_widen(true);
   let pipeline = served.ok(
     "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Investigation", "from": "empty", "delivers": "report" }),
+    &json!({ "project": "Kontur", "name": "Investigation", "from": "copy", "copy_of": "Quick fix", "delivers": "report" }),
   );
   assert_eq!(pipeline["pipeline"]["delivers"], "report", "{pipeline}");
   let saved = served.ok(
     "save_pipeline_draft",
-    &json!({ "project": "Kontur", "pipeline": "Investigation", "steps": [], "delivers": "changes_or_report" }),
+    &json!({ "project": "Kontur", "pipeline": "Investigation", "delivers": "changes_or_report", "steps": [
+      { "key": "fix", "name": "Fix", "profile": "Builder" },
+    ] }),
   );
   assert_eq!(saved["pipeline"]["delivers"], "changes_or_report", "{saved}");
 }

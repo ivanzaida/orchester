@@ -32,19 +32,14 @@ pub(super) fn open(agents: &mut Agents, filter: PipelinesFilter, item: Option<Re
   });
 }
 
-/// A pipeline called `name` whose steps run `profile` (`None`: a step with no agent profile), published or left a
-/// draft.
-pub(super) fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>, published: bool) -> ResourceId {
-  pipeline_of(agents, name, [profile, profile], published)
+/// A pipeline called `name` whose steps run `profile`, created as its first version (`None`, a step with no agent
+/// profile, is refused: D-032).
+pub(super) fn pipeline(agents: &Agents, name: &str, profile: Option<ResourceId>) -> ResourceId {
+  pipeline_of(agents, name, [profile, profile])
 }
 
 /// A pipeline called `name` with a step *Plan* and a step *Build* that run `profiles` in turn.
-pub(super) fn pipeline_of(
-  agents: &Agents,
-  name: &str,
-  profiles: [Option<ResourceId>; 2],
-  published: bool,
-) -> ResourceId {
+pub(super) fn pipeline_of(agents: &Agents, name: &str, profiles: [Option<ResourceId>; 2]) -> ResourceId {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   for (step, profile) in ["Plan", "Build"].into_iter().zip(profiles) {
     let key = edit.add_step(Name::new(step).expect("name"), None);
@@ -59,18 +54,15 @@ pub(super) fn pipeline_of(
   }
   let body = edit.validate().expect("a pipeline");
   let mut db = ProjectDb::open(&agents.root).expect("database");
-  let id = db
-    .create_published(
-      Slug::from_name(name).expect("slug"),
-      Name::new(name).expect("name"),
-      &body,
-      Timestamp::now(),
-    )
-    .expect("the pipeline")
-    .0
-    .id();
-  if published {}
-  id
+  db.create_published(
+    Slug::from_name(name).expect("slug"),
+    Name::new(name).expect("name"),
+    &body,
+    Timestamp::now(),
+  )
+  .expect("the pipeline")
+  .0
+  .id()
 }
 
 pub(super) fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) {
@@ -94,9 +86,9 @@ pub(super) fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) 
 pub(super) fn setup() -> (Agents, [ResourceId; 3]) {
   let agents = Agents::new(true);
   let builder = agents.profile(true);
-  let ready = pipeline(&agents, "Feature delivery", Some(builder), true);
-  let draft = pipeline(&agents, "Dependency update", None, false);
-  let stuck = pipeline(&agents, "Quick fix", Some(ResourceId::generate()), true);
+  let ready = pipeline(&agents, "Feature delivery", Some(builder));
+  let draft = pipeline(&agents, "Dependency update", None);
+  let stuck = pipeline(&agents, "Quick fix", Some(ResourceId::generate()));
   use_pipeline(&agents, ready, 3);
   (agents, [ready, draft, stuck])
 }
@@ -309,7 +301,7 @@ fn bounds(agents: &mut Agents, id: &str) -> Box {
 fn pipeline_hub_a_draft_with_nothing_wrong_is_only_not_published_yet() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let draft = pipeline(&agents, "Release notes", Some(builder), false);
+  let draft = pipeline(&agents, "Release notes", Some(builder));
   open(&mut agents, PipelinesFilter::All, Some(draft));
   assert_eq!(agents.text(&format!("pipeline-hub-row-{draft}-version")), "draft");
   assert_eq!(
@@ -333,7 +325,7 @@ fn pipeline_hub_a_draft_with_nothing_wrong_is_only_not_published_yet() {
 fn pipeline_hub_a_draft_with_a_problem_says_it_in_its_row_and_chips_and_stays_under_needs_you() {
   let mut agents = Agents::new(true);
   // A step with no agent profile keeps the draft from being published.
-  let draft = pipeline(&agents, "Dependency update", None, false);
+  let draft = pipeline(&agents, "Dependency update", None);
   open(&mut agents, PipelinesFilter::All, Some(draft));
   let line = agents.text(&format!("pipeline-hub-row-{draft}-line"));
   assert_eq!(line, "2 steps not ready", "the row says how many steps cannot run");
@@ -491,7 +483,7 @@ fn pipeline_hub_a_read_that_fails_says_so_with_its_reason_keeps_the_head_and_tri
 fn pipeline_hub_a_tab_with_nothing_in_it_says_so_while_the_others_keep_their_pipelines() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  pipeline(&agents, "Feature delivery", Some(builder), true);
+  pipeline(&agents, "Feature delivery", Some(builder));
   open(&mut agents, PipelinesFilter::Drafts, None);
   assert_eq!(agents.text("pipeline-hub-empty-title"), "No drafts");
   assert_eq!(

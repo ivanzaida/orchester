@@ -388,13 +388,13 @@ fn orchestrator_tools_judge_what_every_person_only_publication_widens() {
 }
 
 #[test]
-fn orchestrator_tools_say_a_duplicate_is_saved_as_a_draft() {
+fn orchestrator_tools_say_a_duplicate_is_published_as_its_first_version() {
   let told = listed(false)
     .into_iter()
     .find(|tool| tool.name == "duplicate_pipeline")
     .and_then(|tool| tool.description.map(|description| description.to_string()))
     .expect("duplicate_pipeline is listed");
-  assert!(told.contains("saves the copy as a draft"), "{told}");
+  assert!(told.contains("publishes the copy as its first version"), "{told}");
 }
 
 #[test]

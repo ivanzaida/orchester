@@ -31,6 +31,7 @@ use crate::{
     data::{Assignables, OpenError, OpenedPipeline},
     library::{self, StarterText, create_with},
     problems::{problem_view, publish_error},
+    write::save_refusals,
   },
   tasks::outside::Outside,
 };
@@ -113,7 +114,12 @@ pub async fn create_pipeline(
     if let Some(delivers) = args.delivers {
       body = body.with_delivers(delivers.into());
     }
-    // Creating publishes v1 (D-032), which widens what agents may do: there is nothing to compare it with.
+    // Creating publishes v1 (D-032): a body the save check refuses is refused first, whoever asks; then a first
+    // version widens what agents may do, as there is nothing to compare it with.
+    let refusals = save_refusals(&body, &Assignables::load(&db)?, None);
+    if !refusals.is_empty() {
+      return Err(ToolError::refused("not_publishable", refusals));
+    }
     widening::check_pipeline(&services, None, &body)?;
     let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
     // The library lists the version, and the task form offers it.

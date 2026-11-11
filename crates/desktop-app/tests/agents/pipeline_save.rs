@@ -163,7 +163,7 @@ fn pipeline_save_a_choice_of_what_a_run_delivers_is_published() {
 fn pipeline_save_a_pipeline_never_published_says_its_first_version_and_asks_a_person() {
   let (mut agents, _) = setup();
   let builder = agents.profile(true);
-  let fresh = pipeline(&agents, "Fresh pipeline", Some(builder), false);
+  let fresh = pipeline(&agents, "Fresh pipeline", Some(builder));
   open(&mut agents, PipelinesFilter::All, Some(fresh));
   agents.until("the panel", |s| s.exists(SAVE));
   assert_eq!(
@@ -259,7 +259,7 @@ fn pipeline_save_refused_because_the_pipeline_changed_says_so_and_keeps_what_was
 fn pipeline_save_takes_a_source_off_the_pipeline() {
   let (mut agents, _) = setup();
   let builder = agents.profile(true);
-  let sourced = pipeline(&agents, "Sourced pipeline", Some(builder), true);
+  let sourced = pipeline(&agents, "Sourced pipeline", Some(builder));
   let folder = std::env::temp_dir();
   let path = SourcePath::new(&folder.to_string_lossy()).expect("an absolute path");
   {

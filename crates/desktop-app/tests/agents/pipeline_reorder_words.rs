@@ -32,7 +32,7 @@ fn long(agents: &Agents) -> (ResourceId, [StepKey; 2], String) {
   fails_back_to(&mut edit, &plan, &research);
   let body = edit.validate().expect("a pipeline");
   let said = format!("Can't move {second}: it returns to 01 {first} on failure.");
-  (store(agents, "Long names", &body, true), [research, plan], said)
+  (store(agents, "Long names", &body), [research, plan], said)
 }
 
 /// Where an element stands: its left edge, top, width and height.

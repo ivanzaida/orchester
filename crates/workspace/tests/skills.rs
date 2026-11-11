@@ -119,15 +119,20 @@ fn skills_tool_step_scopes_are_visible_but_cannot_be_selected() {
   let (repo, mut db) = project();
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
   let key = edit.add_step(Name::new("Checks").expect("name"), None);
-  edit.update(&key, |step| step.kind = StepKind::Tool { tool: None });
+  edit.update(&key, |step| {
+    step.kind = StepKind::Tool {
+      tool: Some(orchester_core::id::ResourceId::generate()),
+    }
+  });
   let pipeline = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
-      &edit.validate().expect("draft"),
+      &edit.validate().expect("a step that runs a tool"),
       Timestamp::now(),
     )
-    .expect("pipeline");
+    .expect("pipeline")
+    .0;
   let data = EditorData::load_in(repo.path()).expect("data");
   let scope = InstructionScope::Step {
     pipeline: pipeline.id(),

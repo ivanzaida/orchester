@@ -339,10 +339,20 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("draft"));
   let agent = edit.add_step(Name::new("Implement").expect("name"), None);
   let tool = edit.add_step(Name::new("Checks").expect("name"), None);
-  edit.update(&tool, |step| step.kind = StepKind::Tool { tool: None });
+  // A pipeline is stored only as published versions, whose steps all run something (D-032).
+  edit.update(&agent, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(orchester_core::id::ResourceId::generate());
+    }
+  });
+  edit.update(&tool, |step| {
+    step.kind = StepKind::Tool {
+      tool: Some(orchester_core::id::ResourceId::generate()),
+    }
+  });
   let mut db = ProjectDb::open(&s.repo).expect("db");
-  let pipeline = db
-    .create_resource(
+  let (pipeline, _) = db
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &edit.validate().expect("pipeline"),
@@ -387,10 +397,10 @@ fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_
   };
   let mut s = Skills::new();
   let mut db = ProjectDb::open(&s.repo).expect("db");
-  db.create_resource(
+  db.create_published(
     Slug::new("delivery").expect("slug"),
     Name::new("Delivery").expect("name"),
-    &Pipeline::new(Vec::new()).expect("pipeline"),
+    &one_step(),
     Timestamp::now(),
   )
   .expect("pipeline");
@@ -495,4 +505,16 @@ fn skills_crumb_returns_to_the_library_filter_it_came_from() {
   s.click("skill-crumb");
   s.window.pass();
   assert_eq!(s.window.navigation().route_now(), library);
+}
+/// A pipeline of one step that runs a profile, as every stored pipeline's steps run something (D-032).
+pub(crate) fn one_step() -> orchester_core::resource::Pipeline {
+  use orchester_core::resource::{Pipeline, PipelineEdit, StepKind};
+  let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
+  let key = edit.add_step(orchester_core::name::Name::new("Build").expect("name"), None);
+  edit.update(&key, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(orchester_core::id::ResourceId::generate());
+    }
+  });
+  edit.validate().expect("one step that runs a profile")
 }

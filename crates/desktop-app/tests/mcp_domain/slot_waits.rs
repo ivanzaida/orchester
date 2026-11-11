@@ -40,10 +40,6 @@ fn parallel_steps_on_one_slot(served: &mut Served) {
     ] }),
   );
   served.ok(
-    "publish_pipeline",
-    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
-  );
-  served.ok(
     "update_project_limits",
     &json!({ "project": "Kontur", "agent_slots": 1 }),
   );

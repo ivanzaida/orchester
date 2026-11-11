@@ -163,17 +163,50 @@ impl Editor {
   pub fn gated(&self) -> bool {
     self.window.link.input_gate().protecting()
   }
+  /// Pipeline `name` with the fewest steps a stored pipeline holds: one, *Step*, that runs a published tool. A
+  /// pipeline is stored only as published versions, whose steps all run something (D-032), so none is empty.
   pub fn empty(&self, name: &str) -> ResourceId {
-    self
-      .db()
-      .create_resource(
-        Slug::from_name(name).expect("valid pipeline fixture"),
-        Name::new(name).expect("valid pipeline fixture"),
-        &Pipeline::new(Vec::new()).expect("valid pipeline fixture"),
-        Timestamp::now(),
-      )
+    let mut db = self.db();
+    let tool = match db
+      .resources(orchester_core::resource::ResourceKind::Tool)
       .expect("valid pipeline fixture")
-      .id()
+      .into_iter()
+      .find(|tool| tool.slug().as_str() == "fixture-step")
+    {
+      Some(tool) => tool.id(),
+      None => {
+        let body = Tool::new(
+          "",
+          ToolAction::Command(CommandAction::new(
+            CommandProgram::new("cargo").expect("valid pipeline fixture"),
+            vec![],
+          )),
+          None,
+        )
+        .expect("valid pipeline fixture");
+        db.create_published(
+          Slug::new("fixture-step").expect("valid pipeline fixture"),
+          Name::new("Fixture step").expect("valid pipeline fixture"),
+          &body,
+          Timestamp::now(),
+        )
+        .expect("valid pipeline fixture")
+        .0
+        .id()
+      }
+    };
+    let mut body = PipelineEdit::new(Pipeline::new(vec![]).expect("valid pipeline fixture"));
+    let key = body.add_step(Name::new("Step").expect("valid pipeline fixture"), None);
+    body.update(&key, |s| s.kind = StepKind::Tool { tool: Some(tool) });
+    db.create_published(
+      Slug::from_name(name).expect("valid pipeline fixture"),
+      Name::new(name).expect("valid pipeline fixture"),
+      &body.validate().expect("valid pipeline fixture"),
+      Timestamp::now(),
+    )
+    .expect("valid pipeline fixture")
+    .0
+    .id()
   }
   pub fn published(&self) -> ResourceId {
     let mut db = self.db();

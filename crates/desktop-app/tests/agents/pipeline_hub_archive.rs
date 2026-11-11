@@ -114,7 +114,7 @@ fn pipeline_id(db: &ProjectDb, name: &str) -> ResourceId {
 fn pipeline_hub_archived_panel_does_not_claim_runs_were_stopped_when_none_were() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let kept = pipeline(&agents, "Release notes", Some(builder), true);
+  let kept = pipeline(&agents, "Release notes", Some(builder));
   let id = archive_directly(&agents, "Release notes", false);
   assert_eq!(id, kept);
   open(&mut agents, PipelinesFilter::Archived, Some(id));

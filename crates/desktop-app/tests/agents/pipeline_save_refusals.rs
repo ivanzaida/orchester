@@ -50,7 +50,7 @@ fn pipeline_save_refusals_a_draft_with_a_gone_profile_is_saved_and_names_the_ste
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let retired = agents.profile(true);
-  let id = pipeline_of(&agents, "Agents tour", [Some(builder), Some(retired)], true);
+  let id = pipeline_of(&agents, "Agents tour", [Some(builder), Some(retired)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(retired, Timestamp::now())
@@ -82,7 +82,7 @@ fn pipeline_save_refusals_a_draft_with_a_gone_profile_is_saved_and_names_the_ste
 /// reads: publishing refuses it.
 fn writing_draft(agents: &Agents) -> ResourceId {
   let reader = agents.profile(true);
-  let id = pipeline_of(agents, "Feature delivery", [Some(reader), Some(reader)], true);
+  let id = pipeline_of(agents, "Feature delivery", [Some(reader), Some(reader)]);
   let mut steps = body([Some(reader), Some(reader)]).into_steps();
   if let StepKind::Agent { repository, .. } = &mut steps[1].kind {
     *repository = RepositoryAccess::Write;
@@ -120,7 +120,7 @@ fn pipeline_save_refusals_the_bar_says_what_publishing_refuses_before_the_press_
 fn pipeline_save_refusals_a_pipeline_at_its_last_version_number_says_so() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   // The last version number a pipeline can have: put in by hand, as no test publishes four billion versions.
   let db = rusqlite::Connection::open(agents.root.join(".orchester/orchester.db")).expect("fixture db");
   db.execute(

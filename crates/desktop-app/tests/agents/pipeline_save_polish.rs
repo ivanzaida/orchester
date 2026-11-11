@@ -71,7 +71,7 @@ fn tooltip(agents: &mut Agents, id: &str, tip: &str) -> String {
 fn pipeline_save_polish_text_the_check_refuses_is_unsaved_and_save_says_why() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let ready = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let ready = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   let [plan, _] = <[_; 2]>::try_from(keys(&agents, ready)).expect("two steps");
   open_step(&mut agents, ready, &plan);
   agents.until("the budget", |s| s.exists("pipeline-hub-step-budget"));
@@ -109,7 +109,7 @@ fn pipeline_save_polish_a_saved_version_that_cannot_run_says_runs_wait_over_the_
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let lost = lost(&agents, "Explorer");
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)]);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
   agents.until("the panel", |s| s.exists(SAVE));
 
@@ -141,7 +141,7 @@ fn pipeline_save_polish_a_saved_version_that_cannot_run_says_runs_wait_over_the_
 #[test]
 fn pipeline_save_polish_a_draft_kept_names_every_step_not_ready() {
   let mut agents = Agents::new(true);
-  let draft = pipeline_of(&agents, "Dependency update", [None, None], false);
+  let draft = pipeline_of(&agents, "Dependency update", [None, None]);
   open(&mut agents, PipelinesFilter::All, Some(draft));
   agents.until("the panel", |s| s.exists(SAVE));
 
@@ -193,7 +193,7 @@ fn pipeline_save_polish_a_draft_published_from_drafts_stays_in_view_under_all() 
 fn pipeline_save_polish_restore_names_the_version_until_saved_and_in_the_question() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   // v2 tells Plan other instructions: restoring v1 changes them back, which a person allows.
   {
     let mut db = ProjectDb::open(&agents.root).expect("database");
@@ -244,8 +244,8 @@ fn height(agents: &mut Agents, id: &str) -> f32 {
 fn pipeline_save_polish_save_and_cancel_stand_as_tall_whether_save_waits_or_not() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let waits = pipeline_of(&agents, "Waits", [Some(builder), None], false);
-  let ready = pipeline_of(&agents, "Ready", [Some(builder), Some(builder)], true);
+  let waits = pipeline_of(&agents, "Waits", [Some(builder), None]);
+  let ready = pipeline_of(&agents, "Ready", [Some(builder), Some(builder)]);
   for id in [waits, ready] {
     open(&mut agents, PipelinesFilter::All, Some(id));
     agents.until("the bar", |s| s.exists(SAVE));
@@ -261,7 +261,7 @@ fn pipeline_save_polish_an_unchanged_published_pipeline_that_cannot_run_says_not
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let retired = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(retired)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(retired)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(retired, Timestamp::now())

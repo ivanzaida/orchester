@@ -409,10 +409,10 @@ fn seed_refresh_marker(s: &Skills) {
     time::Timestamp,
   };
   let mut db = orchester_store::ProjectDb::open(&s.repo).expect("db");
-  db.create_resource(
+  db.create_published(
     Slug::new("passive-refresh").expect("slug"),
     Name::new("Passive refresh marker").expect("name"),
-    &Pipeline::new(Vec::new()).expect("draft"),
+    &super::one_step(),
     Timestamp::now(),
   )
   .expect("stored marker observable only after a successful read");

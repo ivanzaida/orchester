@@ -158,16 +158,21 @@ impl Desktop {
   fn tool_pipeline(&self) {
     let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
     let key = edit.add_step(Name::new("Checks").expect("name"), None);
-    edit.update(&key, |step| step.kind = StepKind::Tool { tool: None });
+    edit.update(&key, |step| {
+      step.kind = StepKind::Tool {
+        tool: Some(orchester_core::id::ResourceId::generate()),
+      }
+    });
     self
       .db()
-      .create_resource(
+      .create_published(
         Slug::new("delivery").expect("slug"),
         Name::new("Delivery").expect("name"),
-        &edit.validate().expect("draft"),
+        &edit.validate().expect("a step that runs a tool"),
         Timestamp::now(),
       )
-      .expect("pipeline");
+      .expect("pipeline")
+      .0;
   }
 }
 

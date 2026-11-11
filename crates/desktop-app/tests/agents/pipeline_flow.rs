@@ -50,20 +50,18 @@ pub(super) fn fails_back_to(edit: &mut PipelineEdit, step: &StepKey, target: &St
   });
 }
 
-pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline, published: bool) -> ResourceId {
+/// Pipeline `name` created as its first version `body` (a pipeline is stored only as published versions, D-032).
+pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId {
   let mut db = ProjectDb::open(&agents.root).expect("database");
-  let id = db
-    .create_published(
-      Slug::from_name(name).expect("slug"),
-      Name::new(name).expect("name"),
-      body,
-      Timestamp::now(),
-    )
-    .expect("the pipeline")
-    .0
-    .id();
-  if published {}
-  id
+  db.create_published(
+    Slug::from_name(name).expect("slug"),
+    Name::new(name).expect("name"),
+    body,
+    Timestamp::now(),
+  )
+  .expect("the pipeline")
+  .0
+  .id()
 }
 
 /// A command tool the steps can run, published or only a draft.
@@ -163,7 +161,7 @@ fn feature(agents: &Agents) -> (ResourceId, [StepKey; 5]) {
     true,
   )));
   (
-    store(agents, "Feature delivery", &body, true),
+    store(agents, "Feature delivery", &body),
     [research, plan, build, review, run],
   )
 }
@@ -307,7 +305,7 @@ fn pipeline_flow_the_cards_of_a_group_share_one_baseline_with_or_without_a_pill(
     &[&first],
     StepKind::Tool { tool: Some(checks) },
   );
-  let id = store(&agents, "Group", &edit.validate().expect("a pipeline"), true);
+  let id = store(&agents, "Group", &edit.validate().expect("a pipeline"));
   open(&mut agents, id);
   assert!(
     agents.exists(&format!("pipeline-hub-flow-step-{review}-access")),
@@ -340,7 +338,7 @@ fn pipeline_flow_a_card_that_cannot_run_offers_the_profile_or_the_tool_it_names(
     &[&plan],
     StepKind::Tool { tool: Some(draft_tool) },
   );
-  let id = store(&agents, "Unready", &edit.validate().expect("a pipeline"), false);
+  let id = store(&agents, "Unready", &edit.validate().expect("a pipeline"));
   open(&mut agents, id);
 
   assert_eq!(
@@ -388,7 +386,7 @@ fn pipeline_flow_deliver_names_a_profile_that_is_not_published_and_warns_instead
     None,
     true,
   )));
-  let id = store(&agents, "Merging", &body, false);
+  let id = store(&agents, "Merging", &body);
   open(&mut agents, id);
   assert_eq!(
     agents.text("pipeline-hub-flow-deliver-line"),
@@ -405,7 +403,7 @@ fn pipeline_flow_steps_that_cannot_be_drawn_as_one_line_keep_the_start_and_end_a
   add(&mut edit, "B", &[&a], agent(Some(builder), RepositoryAccess::ReadOnly));
   let c = add(&mut edit, "C", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
   add(&mut edit, "D", &[&c], agent(Some(builder), RepositoryAccess::ReadOnly));
-  let id = store(&agents, "Chains", &edit.validate().expect("a pipeline"), true);
+  let id = store(&agents, "Chains", &edit.validate().expect("a pipeline"));
   open(&mut agents, id);
 
   let start = rect(&mut agents, "pipeline-hub-flow-row-start").y;
@@ -432,7 +430,7 @@ fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_add_step_
   let body = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"))
     .validate()
     .expect("a pipeline");
-  let id = store(&agents, "Blank", &body, false);
+  let id = store(&agents, "Blank", &body);
   open(&mut agents, id);
 
   assert_eq!(
@@ -463,7 +461,7 @@ fn pipeline_flow_a_published_pipeline_with_a_draft_draws_the_drafts_steps() {
   let builder = agents.profile(true);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let first = add(&mut edit, "Plan", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
-  let id = store(&agents, "Evolving", &edit.validate().expect("a pipeline"), true);
+  let id = store(&agents, "Evolving", &edit.validate().expect("a pipeline"));
   let second = add(
     &mut edit,
     "Build",
@@ -528,7 +526,7 @@ fn pipeline_flow_a_gate_names_deliver_by_word_and_a_step_by_its_number() {
     None,
     true,
   )));
-  let id = store(&agents, "Gated", &body, true);
+  let id = store(&agents, "Gated", &body);
   open(&mut agents, id);
 
   assert_eq!(

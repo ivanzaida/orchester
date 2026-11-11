@@ -118,21 +118,52 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
     "created as v1: {profile}"
   );
   assert_eq!(profile["profile"]["state"]["published_version"], 1);
-  served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Delivery", "from": "empty" }),
-  );
-  served.ok(
-    "save_pipeline_draft",
-    &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [
-      { "key": "implement", "name": "Implement", "profile": "Builder", "repository": "write", "instructions": "Append one line." },
-    ] }),
-  );
-  let pipeline = served.ok(
-    "publish_pipeline",
-    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
-  );
+  delivery(repo);
+  let pipeline = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Delivery" }));
   assert_eq!(pipeline["pipeline"]["published_version"], 1, "{pipeline}");
+}
+
+/// Delivery as its first version: Implement, on Builder, writes. `create_pipeline` makes only the starter, a copy, or
+/// an empty pipeline, which is never stored (D-032), so the fixture creates it as the editor would.
+fn delivery(repo: &Path) {
+  use orchester_core::{
+    name::Name,
+    permission::StepPermissions,
+    resource::{Pipeline, PromptText, RepositoryAccess, ResourceKind, Step, StepKey, StepKind},
+    store::ResourceStore,
+    time::Timestamp,
+  };
+  let mut db = ProjectDb::open(repo).expect("the project's database");
+  let builder = db
+    .resources(ResourceKind::AgentProfile)
+    .expect("profiles")
+    .into_iter()
+    .find(|profile| profile.name().as_str() == "Builder")
+    .expect("Builder")
+    .id();
+  let step = Step {
+    key: StepKey::new("implement").expect("key"),
+    name: Name::new("Implement").expect("name"),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::Write,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new("Append one line.").expect("instructions"),
+    depends_on: Default::default(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  };
+  let body = Pipeline::new(vec![step]).expect("a pipeline");
+  orchester_workspace::pipelines::library::create_with(
+    &mut db,
+    Name::new("Delivery").expect("name"),
+    &body,
+    Timestamp::now(),
+  )
+  .expect("Delivery v1");
 }
 
 /// Creates and runs a task with `brief` on Delivery; its key.
@@ -252,11 +283,11 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
       },
     ] }),
   );
-  let pipeline = served.ok(
-    "publish_pipeline",
-    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
+  let pipeline = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Delivery" }));
+  assert_eq!(
+    pipeline["pipeline"]["published_version"], 2,
+    "saving published it: {pipeline}"
   );
-  assert_eq!(pipeline["pipeline"]["published_version"], 2, "{pipeline}");
   let key = run(&mut served, "Say hello.");
   served.until("the run to be ready for review", |served| {
     let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));

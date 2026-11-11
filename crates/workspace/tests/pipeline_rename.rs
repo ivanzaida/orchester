@@ -4,7 +4,7 @@ use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
   project::{Project, ProjectKey},
-  resource::{Pipeline, Slug},
+  resource::{Pipeline, PipelineEdit, Slug, StepKind},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -29,15 +29,24 @@ fn project() -> (tempfile::TempDir, ProjectDb) {
   (folder, db)
 }
 
+/// A pipeline of one step, created as its first version (D-032).
 fn pipeline(db: &mut ProjectDb, name: &str) -> ResourceId {
-  let body = Pipeline::new(vec![]).expect("a valid fixture");
-  db.create_resource(
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("a valid fixture"));
+  let key = edit.add_step(Name::new("Build").expect("a valid fixture"), None);
+  edit.update(&key, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(ResourceId::generate());
+    }
+  });
+  let body = edit.validate().expect("a valid fixture");
+  db.create_published(
     Slug::from_name(name).expect("a valid fixture"),
     Name::new(name).expect("a valid fixture"),
     &body,
     Timestamp::now(),
   )
   .expect("a valid fixture")
+  .0
   .id()
 }
 
@@ -51,7 +60,7 @@ fn name_of(db: &ProjectDb, id: ResourceId) -> String {
 }
 
 #[test]
-fn rename_changes_the_name_and_keeps_the_slug_and_the_draft() {
+fn rename_changes_the_name_and_keeps_the_slug_and_the_version() {
   let (folder, mut db) = project();
   let id = pipeline(&mut db, "Feature delivery");
   let saved = rename_in(folder.path(), id, "  Feature flow  ").expect("a valid fixture");
@@ -64,7 +73,11 @@ fn rename_changes_the_name_and_keeps_the_slug_and_the_draft() {
   let resource = db.resource(id).expect("a valid fixture").expect("the pipeline");
   assert_eq!(resource.name().as_str(), "Feature flow");
   assert_eq!(resource.slug().as_str(), "feature-delivery");
-  assert!(db.draft::<Pipeline>(id).expect("a valid fixture").is_some());
+  assert_eq!(
+    db.versions::<Pipeline>(id).expect("a valid fixture").len(),
+    1,
+    "no version is published"
+  );
 }
 
 #[test]

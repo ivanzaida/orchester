@@ -60,7 +60,7 @@ fn page(page: ProjectPage) -> Route {
 fn pipeline_hub_ready_a_draft_with_one_step_not_ready_says_so_in_its_row_chips_and_ready() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let draft = pipeline_of(&agents, "Dependency update", [Some(builder), None], false);
+  let draft = pipeline_of(&agents, "Dependency update", [Some(builder), None]);
   let key = build_step(&agents, draft);
   open(&mut agents, PipelinesFilter::All, Some(draft));
 
@@ -86,7 +86,7 @@ fn pipeline_hub_ready_a_draft_with_one_step_not_ready_says_so_in_its_row_chips_a
 fn pipeline_hub_ready_a_pipeline_that_can_run_is_all_set_with_one_summary_row() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let ready = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let ready = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   open(&mut agents, PipelinesFilter::All, Some(ready));
 
   assert_eq!(agents.text("team-hub-readiness-count"), "all set");
@@ -104,7 +104,7 @@ fn pipeline_hub_ready_a_step_whose_profile_is_not_published_opens_it_in_the_agen
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let draft = agents.profile(false);
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(draft)], false);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(draft)]);
   let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
@@ -161,16 +161,18 @@ pub(super) fn body(profiles: [Option<ResourceId>; 2]) -> Pipeline {
   edit.validate().expect("a pipeline")
 }
 
+/// Pipeline `name` created as its first version `body` (a pipeline is stored only as published versions, D-032).
 pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId {
   ProjectDb::open(&agents.root)
     .expect("database")
-    .create_resource(
+    .create_published(
       Slug::from_name(name).expect("slug"),
       Name::new(name).expect("name"),
       body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id()
 }
 
@@ -191,7 +193,7 @@ fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_open
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let lost = lost(&agents, "Explorer");
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)]);
   let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
@@ -220,7 +222,7 @@ fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_open
 fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and_the_line_counts_them() {
   let mut agents = Agents::new(true);
   let (first, second) = (lost(&agents, "Explorer"), lost(&agents, "Builder"));
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(first), Some(second)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(first), Some(second)]);
   let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
@@ -240,7 +242,7 @@ fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and
 fn pipeline_hub_ready_a_draft_step_problem_is_listed_beside_a_step_whose_profile_lost_its_connection() {
   let mut agents = Agents::new(true);
   let lost = lost(&agents, "Explorer");
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(lost), Some(lost)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(lost), Some(lost)]);
   draft_over(&agents, stuck, body([Some(lost), None]));
   let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
   open(&mut agents, PipelinesFilter::All, Some(stuck));
@@ -261,7 +263,7 @@ fn pipeline_hub_ready_a_draft_step_problem_is_listed_beside_a_step_whose_profile
 fn pipeline_hub_ready_a_draft_over_a_published_version_says_so_and_leaves_the_version_chips_alone() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   draft_over(&agents, id, body([Some(builder), None]));
   let key = build_step(&agents, id);
   open(&mut agents, PipelinesFilter::All, Some(id));
@@ -291,7 +293,7 @@ fn pipeline_hub_ready_a_draft_over_a_published_version_says_so_and_leaves_the_ve
 fn pipeline_hub_ready_a_published_pipeline_without_a_draft_keeps_the_plain_title() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   open(&mut agents, PipelinesFilter::All, Some(id));
 
   assert_eq!(agents.text("team-hub-readiness-label"), "Ready?");
@@ -380,7 +382,7 @@ fn pipeline_hub_ready_steps_a_line_cannot_draw_offer_the_editor() {
 fn pipeline_hub_ready_an_archived_pipeline_has_no_ready_group() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let old = pipeline_of(&agents, "Old", [Some(builder), Some(builder)], true);
+  let old = pipeline_of(&agents, "Old", [Some(builder), Some(builder)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(old, Timestamp::now())

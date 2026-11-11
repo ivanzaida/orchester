@@ -30,10 +30,7 @@ pub(super) fn flow(agents: &Agents, plan_returns: bool) -> (ResourceId, [StepKey
     fails_back_to(&mut edit, &plan, &research);
   }
   let body = edit.validate().expect("a pipeline");
-  (
-    store(agents, "Feature", &body, true),
-    [research, plan, build, checks, review],
-  )
+  (store(agents, "Feature", &body), [research, plan, build, checks, review])
 }
 
 pub(super) fn card(key: &StepKey) -> String {

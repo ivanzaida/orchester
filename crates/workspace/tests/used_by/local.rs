@@ -108,18 +108,16 @@ impl Local {
   }
 
   /// A resource of `body` with its v1 published.
-  fn publish<B: orchester_core::resource::ResourceBody>(
+  fn publish<B: orchester_core::resource::ResourceBody + Clone>(
     &mut self,
     (slug, label): (&str, &str),
     body: &B,
   ) -> ResourceId {
     let now = self.now();
-    let resource = self
+    let (resource, _) = self
       .db
-      .create_resource(Slug::new(slug).expect("slug"), name(label), body, now)
-      .expect("resource");
-    let now = self.now();
-    self.db.publish_draft::<B>(resource.id(), now).expect("v1");
+      .create_published(Slug::new(slug).expect("slug"), name(label), body, now)
+      .expect("v1");
     resource.id()
   }
 
