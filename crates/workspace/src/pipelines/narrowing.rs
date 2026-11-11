@@ -101,7 +101,7 @@ pub fn check_step(
     StepKind::Tool { tool: Some(id) } => {
       let choice = assignables
         .tool(*id)
-        .ok_or_else(|| Message::new("appMcp.errors.toolNotPublished").with("tool", id.to_string()))?;
+        .ok_or_else(|| Message::new("runs.preflight.toolNotPublished").with("step", step.name.to_string()))?;
       if !choice.runnable {
         return Err(Message::new("appMcp.errors.toolNotRunnable").with("tool", choice.name.to_string()));
       }
@@ -116,7 +116,7 @@ pub fn check_step(
         .map(|id| {
           assignables
             .profile(id)
-            .ok_or_else(|| Message::new("appMcp.errors.profileNotPublished").with("profile", id.to_string()))
+            .ok_or_else(|| Message::new("runs.preflight.profileNotPublished").with("step", step.name.to_string()))
         })
         .transpose()?;
       // An unassigned starter is an incomplete draft; publication rejects missing executors.

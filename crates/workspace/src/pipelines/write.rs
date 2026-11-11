@@ -54,7 +54,8 @@ pub fn save_in(
   save_named_in(root, before, body, &name, allowed)
 }
 
-/// Saves the editable display name with the draft; the stable slug and all published bodies stay intact.
+/// Saves the editable display name with the draft; the stable slug and all published bodies stay intact. A draft is
+/// stored whatever its steps can run: only publishing refuses a step ([`refused_step`]).
 pub fn save_named_in(
   root: &Path,
   before: &OpenedPipeline,
@@ -64,9 +65,6 @@ pub fn save_named_in(
 ) -> Result<OpenedPipeline, WriteError> {
   let mut db = ProjectDb::open(root)?;
   let current = OpenedPipeline::load(&db, before.id)?;
-  if let Some(refused) = refused_step(body.steps(), &current.assignables) {
-    return Err(WriteError::InvalidStep(refused));
-  }
   if !draft_reasons(&current, &body)
     .iter()
     .all(|reason| allowed.0.contains(reason))
@@ -90,8 +88,8 @@ pub fn publish_in(root: &Path, before: &OpenedPipeline, allowed: &Allowed) -> Re
   let id = before.id;
   let body = &before.body;
   let current = OpenedPipeline::load(&db, id)?;
-  for step in body.steps() {
-    super::narrowing::check_step(step, &current.assignables).map_err(WriteError::InvalidStep)?;
+  if let Some(refused) = refused_step(body.steps(), &current.assignables) {
+    return Err(WriteError::InvalidStep(refused));
   }
   let reasons = publish_reasons(current.latest.as_ref().map(|v| &v.body), body);
   if !reasons.iter().all(|reason| allowed.0.contains(reason)) {
@@ -102,8 +100,8 @@ pub fn publish_in(root: &Path, before: &OpenedPipeline, allowed: &Allowed) -> Re
 }
 
 /// What publishing `steps` refuses in one of them now, the first: an executor or a narrowing `assignables` cannot
-/// honour ([`super::narrowing::check_step`]). [`publish_in`] asks it, and the page asks it before *Save*
-/// ([`super::local_edit::unpublishable`]).
+/// honour ([`super::narrowing::check_step`]). The one check of a step: [`publish_in`] asks it, and the page asks it
+/// before *Save* ([`super::local_edit::unpublishable`]); saving a draft does not.
 pub fn refused_step(steps: &[Step], assignables: &Assignables) -> Option<Message> {
   steps
     .iter()
