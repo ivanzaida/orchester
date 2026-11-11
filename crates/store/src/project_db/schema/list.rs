@@ -462,4 +462,5 @@ CREATE TABLE run_merges (
   super::remove_bindings::MIGRATION,
   super::local_archive::MIGRATION,
   super::profile_given::MIGRATION,
+  super::pipeline_drafts::MIGRATION,
 ];

@@ -354,4 +354,6 @@ pub enum ProjectMigration {
   TeamPipelineIds,
   /// Local profiles choosing what reached their agents before.
   ProfileGiven,
+  /// Pipeline drafts deleted, and every pipeline with no version with what names it.
+  PipelineDrafts,
 }
