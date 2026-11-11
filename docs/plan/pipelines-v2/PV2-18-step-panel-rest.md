@@ -1,10 +1,10 @@
 # PV2-18 · The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool
 
-- **Status:** in progress (2026-11-11; design approved and saved by the person: P2b `EGEos`, P2d `D4MDQO`, P2e `FHktg`, P2f `Tv9hK`, P2g `hYIuX`; D-024; implementation running in slot 3)
+- **Status:** done (2026-11-11; design approved and saved by the person (P2b `EGEos`, P2d `D4MDQO`, P2e `FHktg`, P2f `Tv9hK`, P2g `hYIuX`, D-024); 3 implementation rounds, 2 checks (review + design) PASS; deviations D-028, D-029; the 19 ignored `pipelines` tests replaced by `agents/pipeline_step_{name,gate,builder}`; merged `0b8c6f23b`; the step head's ⋯ is PV2-20)
 - **Kind:** design + UI
 - **Depends on:** PV2-07
-- **Branch:** `claude/pv2-18-step-rest`
-- **Tokens:** —
+- **Branch:** `claude/pv2-18-step-rest` → `0b8c6f23b`
+- **Tokens:** 184.0M (out 376k): design 11.9M, implementation 3 rounds + 2 checks 172.1M
 
 ## Goal
 
