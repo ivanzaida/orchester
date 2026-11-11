@@ -32,7 +32,7 @@ use super::{
   menu::{self, Menu},
   parts,
   rail::{self, Node},
-  reorder::{Cards, Drive, Move},
+  reorder::{Cards, Drive, keyed_move},
   state::{Drag, Drop, Held, Refused, Reorder},
   words,
 };
@@ -216,7 +216,9 @@ fn head_action(ctx: &Ctx, drive: &Drive, flow: &PipelineFlow, locked: bool) -> E
     ctx.t("pipeline_hub.flow.move.addStep"),
   )
   .icon(Icon::Plus)
-  .on_click(move || drive.add(name.clone(), None, &flow));
+  .on_click(move || {
+    drive.add(name.clone(), None, &flow);
+  });
   if locked { button.disabled() } else { button }.into()
 }
 
@@ -259,13 +261,8 @@ fn keys(drive: &Drive) -> impl Fn(KeyboardEvent) + Send + Sync + use<> {
       }
       return;
     }
-    if !event.alt || event.ctrl || event.meta || event.shift {
+    let Some(change) = keyed_move(&event) else {
       return;
-    }
-    let change = match event.key.as_str() {
-      "ArrowUp" => Move::Up,
-      "ArrowDown" => Move::Down,
-      _ => return,
     };
     if let Some(key) = drive.reorder.focused.get_untracked().0 {
       event.prevent_default();
@@ -446,6 +443,7 @@ impl Draw<'_> {
       drive: self.drive,
       flow: self.flow,
       cards: self.cards,
+      opens: None,
     };
     if let Some(open) = self.drive.reorder.menu_for.get().0.filter(|_| !self.locked)
       && let Some(step) = stage.cards.iter().find(|card| card.key == open)

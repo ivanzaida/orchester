@@ -20,6 +20,7 @@ mod rail;
 mod read_only;
 mod reorder;
 mod state;
+mod step_menu;
 mod view;
 mod words;
 
@@ -34,7 +35,9 @@ use orchester_workspace::pipelines::flow::FlowRead;
 
 pub(super) use self::{
   fix::Fix,
+  menu::OpensMade,
   reorder::{copy_name, copy_of},
+  step_menu::{StepMenu, Target},
   words::number,
 };
 use super::edit::Edit;

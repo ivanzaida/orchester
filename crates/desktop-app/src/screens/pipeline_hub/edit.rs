@@ -70,6 +70,14 @@ impl Edit {
     )
   }
 
+  /// [`Self::current`] for a handler: reading it subscribes nothing.
+  pub(super) fn current_now(&self) -> PipelineEdit {
+    self.holding.get_untracked().held.map_or_else(
+      || PipelineEdit::new(Pipeline::clone(&self.stored)),
+      |held| held.edit().clone(),
+    )
+  }
+
   /// Makes `change` to the edit, which it starts from the stored pipeline (the stored draft, else the latest version)
   /// when there is none yet.
   pub(super) fn change(&self, change: impl FnOnce(&mut PipelineEdit)) {

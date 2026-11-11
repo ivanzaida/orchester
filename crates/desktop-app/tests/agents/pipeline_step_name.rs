@@ -15,6 +15,8 @@ const NAME: &str = "pipeline-hub-step-name";
 const PENCIL: &str = "pipeline-hub-step-name-edit";
 const HINT: &str = "pipeline-hub-step-name-hint";
 const ERROR: &str = "pipeline-hub-step-name-error";
+const SHOWN: &str = "pipeline-hub-step-name-shown";
+const BAR: &str = "team-hub-actions-hint";
 
 /// Where `id` is laid out: its start and top.
 fn at(agents: &mut Agents, id: &str) -> (f32, f32) {
@@ -148,4 +150,57 @@ fn a_refused_name_is_kept_while_another_step_is_open() {
   assert!(agents.text("team-hub-actions-hint").starts_with("Fix Name in Plan"));
   agents.click(&format!("pipeline-hub-step-chip-{plan}"));
   agents.until("back, still refused", |s| named(s, "") && s.exists(ERROR));
+}
+
+#[test]
+fn esc_with_nothing_focused_after_cancel_leaves_the_name_as_it_is() {
+  let (mut agents, ..) = plan();
+  agents.click("pipeline-hub-step-approval");
+  agents.until("a change", |s| s.text(BAR).starts_with("Unsaved"));
+  agents.click("pipeline-hub-cancel");
+  agents.until("put back", |s| !s.text(BAR).starts_with("Unsaved"));
+  press(&mut agents, "Escape");
+  agents.until("a pass", |_| true);
+  assert_eq!(
+    agents.value(NAME),
+    "Plan",
+    "an Esc that ends no editing puts nothing back"
+  );
+  assert!(!agents.exists(ERROR));
+  assert!(!agents.text(BAR).starts_with("Fix"));
+}
+
+#[test]
+fn a_long_name_ends_in_an_ellipsis_with_the_whole_name_in_its_tooltip() {
+  let (mut agents, ..) = plan();
+  let long = "Long ".repeat(34).trim_end().to_owned();
+  agents.set(NAME, &long);
+  agents.until("the name as words", |s| s.exists(SHOWN));
+  let (shown, room) = (
+    at_box(&mut agents, SHOWN),
+    at_box(&mut agents, "pipeline-hub-step-name-box"),
+  );
+  assert!(shown.2 <= room.2, "the words keep to the box: {shown:?} {room:?}");
+  assert!(!agents.exists(&format!("{SHOWN}-tooltip")));
+  let scale = agents.window.tree.scale_factor();
+  let (x, y) = ((shown.0 + shown.2 / 2.0) * scale, (shown.1 + shown.3 / 2.0) * scale);
+  agents.window.tree.mouse_move(x, y);
+  agents.window.pass();
+  agents
+    .window
+    .tree
+    .tick_timers_at(std::time::Instant::now() + std::time::Duration::from_secs(3));
+  agents.until("the whole name", |s| s.exists(&format!("{SHOWN}-tooltip")));
+  assert_eq!(agents.text(&format!("{SHOWN}-tooltip")), long);
+}
+
+/// Where `id` is laid out: its start, top, width and height.
+fn at_box(agents: &mut Agents, id: &str) -> (f32, f32, f32, f32) {
+  let bounds = agents
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.x, bounds.y, bounds.width, bounds.height)
 }
