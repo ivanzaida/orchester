@@ -32,6 +32,7 @@ mod share_team_form;
 mod support;
 mod team_copy;
 mod team_created;
+mod team_pipeline_echo;
 mod team_refused;
 mod widening;
 

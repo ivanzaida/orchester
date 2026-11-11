@@ -8,7 +8,7 @@ use std::{collections::HashMap, path::Path};
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TeamServer, USERNAME},
+  test_support::team_server::{CODE, Standing, TeamServer, USERNAME},
 };
 use orchester_core::{
   id::{ProjectId, ServerId},
@@ -60,6 +60,8 @@ pub fn share_as_owner(window: &Window, repo: &Path) {
 /// to hold while the window is open.
 pub fn share_on_stand_in(window: &Window, repo: &Path) -> TeamServer {
   let server = TeamServer::named("Team");
+  // The server takes an admin's writes only.
+  server.stand_as(Standing::Admin);
   server.share(&[("Kontur", STAND_IN_SLUG, None)]);
   let services = window.launch.services().expect("the session");
   let address = ServerAddress::parse(&server.url()).expect("the stand-in's address");

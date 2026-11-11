@@ -182,7 +182,7 @@ impl Editor {
       .window
       .data
       .runtime
-      .block_on(tokio::task::spawn_blocking(move || work(servers, repo)))
+      .block_on(async move { tokio::task::spawn_blocking(move || work(servers, repo)).await })
       .expect("the work finished")
   }
   /// Keeps pipeline `name` under `slug` with `body` as its first version: here in a local project, made by the team
