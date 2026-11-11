@@ -43,8 +43,8 @@ fn step(key: &str, profile: ResourceId) -> Step {
 fn used_profile() -> (Agents, ResourceId, ResourceId) {
   let screen = Agents::new(true);
   let profile = screen.profile(true);
-  let pipeline = Pipeline::new(vec![step("implement", profile), step("review", profile)])
-    .expect("two assigned pipeline steps");
+  let pipeline =
+    Pipeline::new(vec![step("implement", profile), step("review", profile)]).expect("two assigned pipeline steps");
   let mut db = ProjectDb::open(&screen.root).expect("the isolated project opens");
   let resource = db
     .create_published(

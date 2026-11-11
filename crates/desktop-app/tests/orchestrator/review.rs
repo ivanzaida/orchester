@@ -37,7 +37,6 @@ fn call(screen: &mut Orchestrator, call: &str, count: usize) {
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 }
 
-
 #[test]
 fn orchestrator_merge_proposal_needs_committed_work() {
   let mut screen = Orchestrator::new(Setup::Ready);

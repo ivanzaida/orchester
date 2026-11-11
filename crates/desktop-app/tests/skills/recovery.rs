@@ -402,11 +402,7 @@ fn skills_failed_initial_create_retry_waits_for_actual_reference_selection() {
 }
 
 fn seed_refresh_marker(s: &Skills) {
-  use orchester_core::{
-    name::Name,
-    resource::Slug,
-    time::Timestamp,
-  };
+  use orchester_core::{name::Name, resource::Slug, time::Timestamp};
   let mut db = orchester_store::ProjectDb::open(&s.repo).expect("db");
   db.create_published(
     Slug::new("passive-refresh").expect("slug"),

@@ -187,7 +187,10 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
     .filter(|card| card.runs.needs_you() && !matches!(card.runs, Runs::ProfileConnectionGone { .. }))
     .map(|card| (&card.name, &card.runs))
     .collect();
-  assert!(waiting.is_empty(), "every card of Feature delivery can run: {waiting:?}");
+  assert!(
+    waiting.is_empty(),
+    "every card of Feature delivery can run: {waiting:?}"
+  );
 
   let problems = flow("Publication problems").expect("executors that cannot run are drawn");
   let runs: Vec<&Runs> = problems.stages.iter().map(|stage| &stage.cards[0].runs).collect();

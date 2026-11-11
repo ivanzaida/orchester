@@ -88,7 +88,11 @@ pub(super) fn setup() -> (Agents, [ResourceId; 3]) {
   let agents = Agents::new(true);
   let builder = agents.profile(true);
   let ready = pipeline(&agents, "Feature delivery", Some(builder));
-  let draft = pipeline_of(&agents, "Dependency update", [Some(builder), Some(ResourceId::generate())]);
+  let draft = pipeline_of(
+    &agents,
+    "Dependency update",
+    [Some(builder), Some(ResourceId::generate())],
+  );
   let stuck = pipeline(&agents, "Quick fix", Some(ResourceId::generate()));
   use_pipeline(&agents, ready, 3);
   (agents, [ready, draft, stuck])
@@ -107,7 +111,11 @@ fn pipeline_hub_groups_the_pipelines_and_counts_each_tab() {
   assert_eq!(agents.text("pipeline-hub-title"), "Pipelines");
   assert_eq!(agents.text("local-hub-local-label"), "Local");
   assert_eq!(agents.text("pipeline-hub-filter-all-count"), "3");
-  assert_eq!(agents.text("pipeline-hub-filter-drafts-count"), "0", "a pipeline holds no draft");
+  assert_eq!(
+    agents.text("pipeline-hub-filter-drafts-count"),
+    "0",
+    "a pipeline holds no draft"
+  );
   assert_eq!(agents.text("pipeline-hub-filter-archived-count"), "0");
   assert_eq!(agents.text("pipeline-hub-section-needs-title"), "Needs you");
   assert_eq!(agents.text("pipeline-hub-section-needs-count"), "2");
@@ -119,7 +127,10 @@ fn pipeline_hub_groups_the_pipelines_and_counts_each_tab() {
   assert_eq!(row(&mut agents, ready, "version"), "v1");
   assert_eq!(row(&mut agents, draft, "version"), "v1");
   let line = row(&mut agents, draft, "line");
-  assert!(line.starts_with("02 Build"), "it names the step whose profile is gone: {line}");
+  assert!(
+    line.starts_with("02 Build"),
+    "it names the step whose profile is gone: {line}"
+  );
   assert_eq!(row(&mut agents, stuck, "version"), "v1");
   assert_ne!(
     row(&mut agents, stuck, "line"),
@@ -145,7 +156,9 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
   assert_eq!(agents.text("pipeline-hub-chips-end"), "used by 3 tasks");
 
   agents.click(&format!("pipeline-hub-row-{draft}"));
-  agents.until("the other pipeline", |s| s.text("team-hub-panel-title") == "Dependency update");
+  agents.until("the other pipeline", |s| {
+    s.text("team-hub-panel-title") == "Dependency update"
+  });
   assert!(agents.text("team-hub-panel-version").starts_with("v1 · published "));
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "v1");
   assert!(agents.text("pipeline-hub-chip-1-label").starts_with("02 Build"));

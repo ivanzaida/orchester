@@ -443,8 +443,14 @@ fn pipeline_flow_a_pipeline_draws_its_latest_versions_steps() {
     .expect("read")
     .expect("a version")
     .number();
-  db.publish_pipeline_edit(id, &edit.validate().expect("a pipeline"), latest, None, Timestamp::now())
-    .expect("v2");
+  db.publish_pipeline_edit(
+    id,
+    &edit.validate().expect("a pipeline"),
+    latest,
+    None,
+    Timestamp::now(),
+  )
+  .expect("v2");
 
   open(&mut agents, id);
   agents.until("the latest version's steps", |s| {

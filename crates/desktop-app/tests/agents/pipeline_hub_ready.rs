@@ -13,8 +13,8 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{
-    AgentProfile, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug,
-    StepKey, StepKind,
+    AgentProfile, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, StepKey,
+    StepKind,
   },
   store::ResourceStore,
   time::Timestamp,

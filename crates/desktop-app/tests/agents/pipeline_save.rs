@@ -175,7 +175,11 @@ fn pipeline_save_refuses_a_change_that_cannot_be_published_and_stores_nothing() 
   let (versions, draft) = stored(&agents, update);
   assert_eq!(versions.len(), 1, "nothing was published");
   assert_eq!(draft, None, "nothing was stored as a draft");
-  assert_eq!(agents.value(DESCRIPTION), "Waiting for profiles", "what was typed stays");
+  assert_eq!(
+    agents.value(DESCRIPTION),
+    "Waiting for profiles",
+    "what was typed stays"
+  );
 }
 
 #[test]

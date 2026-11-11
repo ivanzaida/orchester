@@ -70,8 +70,7 @@ fn pipeline_save_refusals_a_refused_save_names_every_step_not_ready() {
   let id = pipeline_of(&agents, "Dependency update", [Some(planner), Some(builder)]);
   let mut db = ProjectDb::open(&agents.root).expect("database");
   for retired in [planner, builder] {
-    db.archive_local_resource(retired, Timestamp::now())
-      .expect("archived");
+    db.archive_local_resource(retired, Timestamp::now()).expect("archived");
   }
   open(&mut agents, PipelinesFilter::All, Some(id));
   agents.until("the panel", |s| s.exists(SAVE));
