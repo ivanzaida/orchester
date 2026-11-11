@@ -427,7 +427,8 @@ const fn after_merge_todo(after: AfterMerge) -> &'static str {
       "Once merge_run has merged it, and only then, do what the order that applies to this turn (below) asks of work \
        that can start now: when it asks you to start tasks as they become ready, read the tasks of what this \
        conversation leads (list_tasks) and start with run_task each one the order asks for that has no run yet and \
-       can start now (not marked Blocked, no unfinished task blocking it: held_by_blocking_tasks is false). This merge \
+       can start now (not marked Blocked, no unfinished task blocking it: held_by_blocking_tasks is false); a task \
+       that has run already is the person's to run again (already_ran). This merge \
        may have unblocked some, and a task whose start an agent slot refused before may start now. Call run_task once \
        per task in this turn: when it refuses (such as no_agent_slot, task_blocked or not_led), tell the person what \
        was not started and why, in its words, and do not call it again for that task in this turn; the turn of the \

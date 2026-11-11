@@ -83,8 +83,8 @@ impl Leads {
     if self.is_empty() {
       return wait_prompt(wait);
     }
-    let lead = through.and_then(|target| self.leads.iter().find(|lead| lead.target == target));
-    let after = if lead.is_some_and(|lead| self.ordered(lead)) {
+    let lead = self.through(through);
+    let after = if self.ordered_through(through) {
       AfterMerge::StartsAsOrdered
     } else {
       AfterMerge::Stops
@@ -126,9 +126,17 @@ impl Leads {
     text
   }
 
-  /// Whether an order applies to `lead`: its own, or the project's default.
-  fn ordered(&self, lead: &Lead) -> bool {
-    !lead.order.is_empty() || !self.default_order.is_empty()
+  /// Whether an order applies to a turn whose event came through the subscription to `through`: that subscription's
+  /// own order, or the project's default; none when it came through none of this conversation's.
+  pub fn ordered_through(&self, through: Option<WatchTarget>) -> bool {
+    self
+      .through(through)
+      .is_some_and(|lead| !lead.order.is_empty() || !self.default_order.is_empty())
+  }
+
+  /// The subscription to `through`, when this conversation has it.
+  fn through(&self, through: Option<WatchTarget>) -> Option<&Lead> {
+    through.and_then(|target| self.leads.iter().find(|lead| lead.target == target))
   }
 
   /// The order that applies to `lead`: its own, else the project's default, else none.

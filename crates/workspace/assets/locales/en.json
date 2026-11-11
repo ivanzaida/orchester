@@ -2481,6 +2481,8 @@
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
+      "notMergeTurn": "In a turn Orchester started by itself, the chat starts tasks only in the turn of a run's success it merged, where the order of what this conversation leads asks for it. Nothing started; the person can start it in the app.",
+      "alreadyRan": "{{task}} has run already: running a task again is the person's, never a turn Orchester started by itself. Nothing started; the person can run it again in the app.",
       "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {

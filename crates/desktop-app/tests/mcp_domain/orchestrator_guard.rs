@@ -24,6 +24,7 @@ use serde_json::json;
 
 use super::{
   Served,
+  orchestrator_auto_merge::turn_of_success,
   orchestrator_chat::{actions, chat, chat_call, task_run},
 };
 
@@ -41,7 +42,7 @@ fn refusal(error: &ToolError) -> &str {
 fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
-  let (_, run) = task_run(&db, READY);
+  let (ready_task, run) = task_run(&db, READY);
   let scope = chat(&served, &mut db);
   served
     .services()
@@ -52,13 +53,10 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
     on_its_own: true,
     ..scope
   };
-  let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
-  let told = chat_call(&mut served, &scope, "merge_run", merge).expect("merged");
-  assert_eq!(told.get("waits_for_person"), None, "{told}");
-  assert!(db.run_merge(run.id()).expect("read").is_some(), "merged");
-  let kept = actions(&db, &scope).pop().expect("it");
-  assert_eq!(kept.outcome, ActionOutcome::Done);
-  assert!(kept.on_its_own, "kept as done on its own");
+  // The turn of the run's success, in a conversation that leads its task with an order to start what becomes ready.
+  turn_of_success(&mut db, &scope, (&seeded, &run));
+  let order = "Start tasks as they become ready";
+  watch(&mut db, &scope, ready_task.id(), order);
   let draft = db
     .tasks()
     .expect("tasks")
@@ -66,31 +64,47 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
     .find(|task| task.details().title.as_str() == "Drop the legacy sync worker")
     .expect("the ready draft");
   let start = json!({ "project": "Kontur", "key": draft.key().to_string() });
-  // A task this conversation does not lead is not started in a turn nobody asked for.
-  let refused = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not led here");
-  assert_eq!(refusal(&refused), "not_led");
-  assert!(
-    matches!(&actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Refused { code, .. } if code == "not_led"),
-    "the refusal is kept"
-  );
-  assert!(db.runs_of_task(draft.id()).expect("runs").is_empty(), "nothing started");
-  let led = Subscription::new(
-    scope.chat,
-    WatchTarget::Task(draft.id()),
-    "Start it when ready",
-    Timestamp::now(),
-  );
-  db.start_subscription(&led).expect("the person watches it here");
+  // A task this conversation does not lead is not started in a turn nobody asked for; nor anything before the merge.
+  watch(&mut db, &scope, draft.id(), order);
+  let early = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not merged yet");
+  assert_eq!(refusal(&early), "not_merge_turn");
+  let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
+  let told = chat_call(&mut served, &scope, "merge_run", merge).expect("merged");
+  assert_eq!(told.get("waits_for_person"), None, "{told}");
+  assert!(db.run_merge(run.id()).expect("read").is_some(), "merged");
+  let kept = actions(&db, &scope).pop().expect("it");
+  assert_eq!(kept.outcome, ActionOutcome::Done);
+  assert!(kept.on_its_own, "kept as done on its own");
   // Without Autopilot too: this session has no runner, so the tool answers as it does for any client, never a card.
   let started = chat_call(&mut served, &scope, "run_task", start);
   assert!(
     !matches!(&started, Ok(told) if told["waits_for_person"] == true),
     "not proposed: {started:?}"
   );
+  for code in ["not_led", "not_merge_turn", "already_ran"] {
+    assert!(
+      !matches!(&started, Err(ToolError::Refused { code: refused, .. }) if refused == code),
+      "a task it leads goes to the tool: {started:?}"
+    );
+  }
+  // A task with a run already is the person's to run again; one this conversation does not lead is not started.
+  let (ran, _) = task_run(&db, "Sync contacts with HubSpot");
+  let again = json!({ "project": "Kontur", "key": ran.key().to_string() });
+  let not_led = chat_call(&mut served, &scope, "run_task", again.clone()).expect_err("not led here");
+  assert_eq!(refusal(&not_led), "not_led");
+  watch(&mut db, &scope, ran.id(), order);
+  let refused = chat_call(&mut served, &scope, "run_task", again).expect_err("it ran already");
+  assert_eq!(refusal(&refused), "already_ran");
   assert!(
-    !matches!(&started, Err(ToolError::Refused { code, .. }) if code == "not_led"),
-    "a task it leads goes to the tool: {started:?}"
+    matches!(&actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Refused { code, .. } if code == "already_ran"),
+    "the refusal is kept"
   );
+}
+
+/// `scope`'s conversation watches task `task` with `order`.
+fn watch(db: &mut ProjectDb, scope: &ChatScope, task: orchester_core::id::TaskId, order: &str) {
+  let led = Subscription::new(scope.chat, WatchTarget::Task(task), order, Timestamp::now());
+  db.start_subscription(&led).expect("the person watches it here");
 }
 
 #[test]
