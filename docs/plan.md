@@ -419,6 +419,17 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
+### PV2-14 · Retire the old Pipelines page for local projects once the hub has New and Duplicate, the Deliver step and branched flows (waits for the person's decision)
+
+A local project's Pipelines page is the hub (`Pipelines · v2`, `docs/design/pipelines-v2.md`), and links to a pipeline
+from other pages open its panel. The old page (`crates/desktop-app/src/screens/pipelines/`) stays because a team
+project uses all of it, and because a local project still reaches it for what the hub lacks: New pipeline and
+*Duplicate* (`NewPipeline`, `CopyPipeline`), the Deliver step (the Deliver card), branched flows (*Edit steps*), and
+the slug and *who can use it* (its Settings tab). Each needs the person's decision and a design frame first. **Done
+when** the hub covers what is decided, a local project reaches none of the old page's routes (removed or opening the
+hub), the old page's code, routes and keys only a local project used are gone, team projects' pipelines are unchanged,
+and the tests that assert the old routes from the hub drive the hub; then move this entry to *Done*.
+
 ### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
 
 *Clone it here* on *Link a folder* (06 `go2aM`): *Clone into* with *Choose…*, what Git will do with that folder, and
@@ -1072,6 +1083,32 @@ manual Blocked is set and cleared by the claim's holder or an Admin. Work in `mo
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2` (tasks `docs/plan/pipelines-v2/`,
+decisions `docs/design/pipelines-v2.md`; PV2-02 canceled, PV2-14 open under *U · Screens*):
+
+- PV2-01 · Core: move steps and run them in parallel · `claude/pv2-01-step-order` → `310ce4f39`.
+- PV2-03 · The compact *Runs on* picker as a shared component · `claude/pv2-03-runs-on-picker` → `c37c1caad`.
+- PV2-04 · The page: filter, grouped list, panel, Save bar · `claude/pv2-04-page-shell` → `27cde7e2c`.
+- PV2-05 · Steps drawn as the flow they run in · `claude/pv2-05-steps-flow` → `1b2aa8df7`.
+- PV2-06 · Reorder steps in the flow: drag, ⋯ menu, keys · `claude/pv2-06-reorder` → `915de1fb7`.
+- PV2-07 · A step in the panel: strip, groups, Instructions · `claude/pv2-07-step-panel` → `c3419c6ec`.
+- PV2-08 · The step's *Agent* field and Agent picker · `claude/pv2-08-agent-field` → `a1f38d70e`.
+- PV2-09 · Pipeline settings, Ready? and Needs you · `claude/pv2-09-ready` → `75aa67e32`.
+- PV2-10 · Edit in place: Save makes vN, Cancel puts it back · `claude/pv2-10-save-and-cancel` → `cca2e89e9`.
+- PV2-11 · Versions list, a version read-only, Restore · `claude/pv2-11-versions` → `a3f14fb18`.
+- PV2-12 · The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab · `claude/pv2-12-menu-archive` →
+  `824561513`.
+- PV2-13 · Loading, none yet, empty tabs, read failure · `claude/pv2-13-page-states` → `ba2db9eea`.
+- PV2-15 · The orchestrator chat adopts the compact picker · `claude/pv2-15-orchestrator-picker` → `e0c34aa8a`.
+- PV2-16 · Design: the orchestrator's picker states with the compact picker · in Pencil (not saved yet, PV2-00).
+- PV2-17 · Readiness and save polish · `claude/pv2-17b-step-flow` → `238b0c2e6`, `claude/pv2-17a-ready-save` →
+  `1f2dc0057`.
+- PV2-18 · The rest of a step in the panel · `claude/pv2-18-step-rest` → `0b8c6f23b`.
+- PV2-19 · A draft is always saved; Save says what publishing would refuse · `claude/pv2-19-save-refusals` →
+  `531f3d1ae`.
+- PV2-21 · Tests that drove the old step editor of a local project run against the hub · `claude/pv2-21-tests-on-hub`
+  → `20dba64d2`.
 
 ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 
