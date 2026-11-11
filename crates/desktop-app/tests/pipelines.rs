@@ -167,6 +167,9 @@ mod sources;
 #[path = "pipelines/step_name.rs"]
 mod step_name;
 
+#[path = "pipelines/one_save.rs"]
+mod one_save;
+
 /// The Pipelines hub's panel shows a step of a local project; a team project's pipelines are edited on the pages they
 /// have, with the step's own column.
 #[test]

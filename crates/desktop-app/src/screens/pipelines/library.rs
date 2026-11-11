@@ -108,23 +108,14 @@ fn reading(ctx: &mut Ctx) -> Element {
     row(ctx, "pipelines-reading-1", (150.0, 250.0, 72.0)),
     row(ctx, "pipelines-reading-2", (50.0, 230.0, 84.0)),
   ];
-  let drafts = vec![row(ctx, "pipelines-reading-3", (98.0, 236.0, 120.0))];
-  let groups = fading(vec![
-    skeleton::group(
-      ctx,
-      "pipelines-reading-published",
-      (Words::Real(ctx.t("pipelines.groups.published")), true),
-      None,
-      published,
-    ),
-    skeleton::group(
-      ctx,
-      "pipelines-reading-drafts",
-      (Words::Real(ctx.t("pipelines.groups.draftOnly")), true),
-      None,
-      drafts,
-    ),
-  ]);
+  // A pipeline holds no draft (D-032): every pipeline is under Published.
+  let groups = fading(vec![skeleton::group(
+    ctx,
+    "pipelines-reading-published",
+    (Words::Real(ctx.t("pipelines.groups.published")), true),
+    None,
+    published,
+  )]);
   let foot = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)

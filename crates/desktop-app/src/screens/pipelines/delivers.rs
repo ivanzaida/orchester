@@ -21,7 +21,7 @@ pub fn section(ctx: &Ctx, state: &State, (locked, changed): (bool, bool)) -> Ele
   let mut group =
     RowGroup::new("pipeline-settings-delivery", ctx.t("pipelines.delivery")).lead(ctx.t("pipelines.delivers.help"));
   if changed {
-    group = group.end(super::settings::draft_tag(ctx, &editing).id("pipeline-delivers-changed"));
+    group = group.end(super::settings::change_tag(ctx, &editing).id("pipeline-delivers-changed"));
   }
   Deliverable::ALL
     .into_iter()

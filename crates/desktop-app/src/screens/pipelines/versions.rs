@@ -1,6 +1,6 @@
-//! The Versions tab (`02c · versions` `josCI`): the draft, when there is one, and the published versions, newest
-//! first with *Latest*; a press opens a version read-only over the flow (`super::viewing`). Reading them, a failure
-//! and none yet keep today's words (`05b` `eCrOM`). Published versions never change.
+//! The Versions tab (`02c · versions` `josCI`): the changes not saved yet, when there are some, and the published
+//! versions, newest first with *Latest*; a press opens a version read-only over the flow (`super::viewing`). Reading
+//! them, a failure and none yet keep today's words (`05b` `eCrOM`). Published versions never change.
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -51,10 +51,6 @@ pub struct Versions {
 impl Component for Versions {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    ctx.props::<Props>().state.update(|s| {
-      s.comparing = false;
-      s.restore_requested = false;
-    });
     Self { retry: ctx.signal(0) }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -64,9 +60,10 @@ impl Component for Versions {
     let mut pane = parts::pane("pipeline-versions");
     match loaded.data.filter(|_| loaded.error.is_none()) {
       Some(history) => {
-        if editing.has_draft() {
+        if editing.unsaved() {
           pane = pane.child(
-            RowGroup::new("pipeline-versions-draft", ctx.t("pipelines.draftLabel")).row(draft_row(ctx, &props.state)),
+            RowGroup::new("pipeline-versions-draft", ctx.t("pipelines.unsavedLabel"))
+              .row(unsaved_row(ctx, &props.state)),
           );
         }
         pane = pane.child(published(ctx, &props.state, &history));
@@ -156,8 +153,6 @@ fn version_row(ctx: &Ctx, state: &State, version: &PublishedVersion, latest: boo
     target.update(|s| {
       s.viewing = Some((*snapshot).clone());
       s.viewing_version = Some(number);
-      s.comparing = false;
-      s.restore_requested = false;
       s.epoch += 1;
     });
     target.get_untracked().views.view(number);
@@ -192,17 +187,17 @@ fn counted(ctx: &Ctx, count: usize, (one, many): (&str, &str)) -> String {
   }
 }
 
-/// The draft's row, which leads back to editing it; its title says the version, so its hint does not again.
-fn draft_row(ctx: &Ctx, state: &State) -> GroupRow {
+/// The row of the changes not saved yet, which leads back to editing them; its title says the version *Save*
+/// publishes, so its hint does not again. A pipeline holds no draft (D-032): they are only in this page.
+fn unsaved_row(ctx: &Ctx, state: &State) -> GroupRow {
   let editing = state.get();
   let version = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  // A pipeline holds no saved draft (D-032): the row speaks of the edit not saved yet.
-  let hint = super::summary::draft_detail(ctx, &editing).unwrap_or_else(|| super::summary::draft(ctx, &editing));
+  let hint = super::summary::unsaved_detail(ctx, &editing).unwrap_or_else(|| ctx.t("pipelines.unsaved"));
   let views = editing.views;
   GroupRow::new(
     "pipeline-history-draft",
-    ctx.t_args("pipelines.draftVersion", [("version", version)]),
+    ctx.t_args("pipelines.version", [("version", version)]),
   )
   .hint(hint)
   .press(Press::run(move || views.tab(View::Steps)))

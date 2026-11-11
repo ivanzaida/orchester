@@ -1356,6 +1356,7 @@
       "notPublishable": "This pipeline has problems that keep it from being saved.",
       "versionLimit": "This pipeline has reached the highest version number.",
       "unchanged": "Nothing changed since {{version}}, so there is nothing to save.",
+      "teamRename": "A team pipeline keeps the name the team server has: renaming it here is not sent to the team yet. Put its name back to save.",
       "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
       "unknownVariable": "{{name}} is not a variable in the catalog.",
       "invalidRetries": "Enter a whole number of retries, at least 1.",

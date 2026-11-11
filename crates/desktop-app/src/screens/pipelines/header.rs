@@ -1,7 +1,7 @@
 //! The pipeline page's header (`Header` `Jf1Gu` in `IsU5u`): `← Pipelines`; the name with the save state, *Run*,
-//! which stays unavailable, *Save draft* while edits are unsaved and *Publish vN* (or *Version history* with no
-//! draft); the version line (*Published v3 · Draft v4 · 2 changes since v3 · used by 13 tasks*); and the tabs Steps,
-//! Settings and Versions.
+//! which stays unavailable, and *Save* while edits are unsaved (it publishes the next version: a pipeline holds no
+//! draft, D-032), else *Version history*; the version line (*Published v3 · Not saved yet: v4 · 2 changes since v3 ·
+//! used by 13 tasks*); and the tabs Steps, Settings and Versions.
 use std::sync::Arc;
 
 use lurq::{
@@ -23,7 +23,6 @@ use crate::{
   routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
   theme::{IconSize, PipelinesText},
   ui::{
-    button::ActionButton,
     icon::{Icon, icon},
     pressable::Press,
     tabs::{PageTab, counted, page_tabs},
@@ -31,14 +30,9 @@ use crate::{
 };
 
 /// The header of `state`'s page; `busy` while a write runs, the page reloads or a version is read. A member of a shared
-/// project has neither *Save draft* nor *Publish* (03), and `shared`, the team's version and where it stands here,
-/// takes the version line's place (`Sub` `Du8OB` in 02).
-pub fn header(
-  ctx: &mut Ctx,
-  state: &State,
-  (save, publish): (Option<ActionButton>, Option<ActionButton>),
-  (busy, shared): (bool, Option<Row>),
-) -> Element {
+/// project has no `save` (03), and `shared`, the team's version and where it stands here, takes the version line's
+/// place (`Sub` `Du8OB` in 02).
+pub fn header(ctx: &mut Ctx, state: &State, save: Option<Element>, (busy, shared): (bool, Option<Row>)) -> Element {
   let editing = state.get();
   let nav = Navigation::of(ctx);
   let back = parts::back_link(
@@ -52,8 +46,7 @@ pub fn header(
   let title = parts::title_row("pipeline-title", &editing.opened.name)
     .child(save_state(ctx, &editing, busy))
     .child(super::publication::run_button(ctx, &editing))
-    .with_children(save)
-    .with_children(publish);
+    .with_children(save);
   parts::header()
     .child(back)
     .child(title)
@@ -97,13 +90,13 @@ pub fn save_status(ctx: &Ctx, editing: &Editing, busy: bool) -> Arc<str> {
   } else {
     // A pipeline holds no draft (D-032): what is saved is its latest version.
     ctx.t_args(
-      "pipelines.publishedHint",
+      "pipelines.savedAs",
       [("version", editing.opened.version.get().to_string())],
     )
   }
 }
 
-/// The version line (`Status line` `Tx2Zh`): the published version, and the unsaved changes' state.
+/// The version line (`Status line` `Tx2Zh`): the published version, and what is not saved yet.
 fn version_line(ctx: &Ctx, editing: &Editing) -> Row {
   let next = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
@@ -114,25 +107,25 @@ fn version_line(ctx: &Ctx, editing: &Editing) -> Row {
       "pipelines.published",
       [("version", editing.opened.version.get().to_string())],
     ),
-    if editing.has_draft() {
-      // The next version's number and what it changes, without the summary's own wording.
-      let draft = match super::summary::draft_detail(ctx, editing) {
+    if editing.unsaved() {
+      // The number *Save* publishes and what it changes, without the summary's own wording.
+      let unsaved = match super::summary::unsaved_detail(ctx, editing) {
         Some(detail) => ctx.t_args(
-          "pipelines.draftWith",
+          "pipelines.nextWith",
           [("version", next), ("detail", detail.to_string())],
         ),
         None => ctx.t_args("pipelines.version", [("version", next)]),
       };
       ctx.t_args(
-        "pipelines.versionLine",
+        "pipelines.versionLineUnsaved",
         [
-          ("draft", draft.to_string()),
+          ("next", unsaved.to_string()),
           ("tasks", editing.opened.used_by.to_string()),
         ],
       )
     } else {
       ctx.t_args(
-        "pipelines.versionLineNoDraft",
+        "pipelines.versionLineSaved",
         [("tasks", editing.opened.used_by.to_string())],
       )
     },
