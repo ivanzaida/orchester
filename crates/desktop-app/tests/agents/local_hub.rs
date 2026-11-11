@@ -237,6 +237,10 @@ fn local_hub_archive_an_mcp_server_then_restore_it_from_the_archived_view() {
   agents.click("local-hub-archive");
   agents.until("the confirmation", |s| s.exists("team-hub-archive-confirm"));
   assert!(agents.text("team-hub-archive-body").contains("leaves every list"));
+  assert!(
+    !agents.text("team-hub-archive-body").contains("versions"),
+    "a local MCP server has no versions"
+  );
   agents.press_until("team-hub-archive-confirm", "archived", |s| {
     !s.exists(&format!("local-hub-row-mcp-{docs}"))
   });
