@@ -20,7 +20,7 @@ use crate::{
   name::Name,
   permission::AgentPermissions,
   resource::{
-    Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, TeamMcpServer, Tool, ToolAction, Version,
+    Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, TeamMcpServer, TeamTool, Version,
     VersionNumber,
   },
   run::{PinnedVersion, RunSnapshot, StepExecutor, StepSnapshot},
@@ -99,7 +99,7 @@ impl<B> PinnedBody<B> {
 pub struct PinnedBodies<'a> {
   pub profiles: &'a [(VersionId, ExecutionProfile)],
   pub instructions: &'a [Version<Instruction>],
-  pub tools: &'a [Version<Tool>],
+  pub tools: &'a [Version<TeamTool>],
   pub skills: &'a [Version<Skill>],
   pub mcp_servers: &'a [(ResourceId, Version<TeamMcpServer>)],
   pub labels: &'a [(VersionId, ResourceLabel)],
@@ -123,7 +123,7 @@ pub struct CanonicalExecutionInputs {
   steps: Vec<StepSnapshot>,
   profiles: Vec<PinnedBody<ExecutionProfile>>,
   instructions: Vec<PinnedBody<Instruction>>,
-  tools: Vec<PinnedBody<Tool>>,
+  tools: Vec<PinnedBody<TeamTool>>,
   skills: Vec<PinnedBody<Skill>>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   mcp_servers: Vec<PinnedBody<TeamMcpServer>>,
@@ -136,7 +136,7 @@ struct InputsFields {
   steps: Vec<StepSnapshot>,
   profiles: Vec<PinnedBody<ExecutionProfile>>,
   instructions: Vec<PinnedBody<Instruction>>,
-  tools: Vec<PinnedBody<Tool>>,
+  tools: Vec<PinnedBody<TeamTool>>,
   skills: Vec<PinnedBody<Skill>>,
   #[serde(default)]
   mcp_servers: Vec<PinnedBody<TeamMcpServer>>,
@@ -267,7 +267,7 @@ impl CanonicalExecutionInputs {
     &self.instructions
   }
 
-  pub fn tools(&self) -> &[PinnedBody<Tool>] {
+  pub fn tools(&self) -> &[PinnedBody<TeamTool>] {
     &self.tools
   }
 
@@ -494,8 +494,8 @@ fn agent_profiles(steps: &[StepSnapshot]) -> Vec<PinnedVersion> {
 
 /// Whether a command tool starts its program by an absolute path (`/usr/bin/x`, `\tools\x`, `C:\x`), read the same on
 /// every platform so a bundle is refused or taken alike everywhere.
-fn starts_by_path(tool: &Tool) -> bool {
-  let ToolAction::Command(command) = tool.action() else {
+fn starts_by_path(tool: &TeamTool) -> bool {
+  let Some(command) = tool.command() else {
     return false;
   };
   let program = command.program().as_str();

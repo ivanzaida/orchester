@@ -204,9 +204,8 @@ fn undecided_json(why: &Undecided) -> Value {
       part["fix"] = fix(Some("save_profile_draft"), None);
       part["connection"] = json!(connection.to_string());
     }
-    Undecided::TeamToolSecretById(secret) => {
+    Undecided::TeamToolSecretById => {
       part["why"] = json!("team_tool_secret_by_id");
-      part["secret"] = json!(secret.to_string());
     }
     Undecided::SecretGone(secret) => {
       part["why"] = json!("secret_gone");

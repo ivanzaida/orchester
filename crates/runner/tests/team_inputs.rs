@@ -9,6 +9,8 @@ mod connection_kinds;
 #[path = "team_inputs/mcp.rs"]
 mod mcp;
 mod support;
+#[path = "team_inputs/tool_secret.rs"]
+mod tool_secret;
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -28,7 +30,7 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, ChosenResources, CommandAction, CommandArg,
     CommandProgram, Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
-    Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, Version, VersionNumber,
+    Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, TeamTool, Tool, ToolAction, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
@@ -158,6 +160,12 @@ fn check(pipeline: ResourceId) -> Version<Tool> {
   Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
 }
 
+/// The check as the team holds it: a command names no secret, so it is the same tool.
+fn team_check(check: &Version<Tool>) -> Version<TeamTool> {
+  let team = TeamTool::from_local(check.body(), |_| None).expect("a command names no secret");
+  Version::new(check.id(), check.number(), team, check.published_at())
+}
+
 /// The team's Builder profile, its two-step pipeline (Implement, then Review) and a check, published on the server
 /// only: no resource row of any is on this computer.
 fn team(setup: &Setup) -> Team {
@@ -221,7 +229,7 @@ fn team_pinning(setup: &Setup, servers: Vec<TeamMcpServer>) -> Team {
     labels: &labels,
     profiles: &[(profile_version.id(), execution_profile)],
     instructions: &[],
-    tools: &[tool_version],
+    tools: &[team_check(&tool_version)],
     skills: &[],
     mcp_servers: &pinned_servers,
   };

@@ -10,8 +10,8 @@ use thiserror::Error;
 use crate::{
   id::{ResourceId, VersionId},
   resource::{
-    AgentProfile, ChosenResources, Instruction, ModelId, Pipeline, Skill, Step, StepKey, StepKind, Tool, Version,
-    VersionNumber,
+    AgentProfile, ChosenResources, Instruction, ModelId, Pipeline, Skill, Step, StepKey, StepKind, TeamTool, Tool,
+    Version, VersionNumber,
   },
   source::{RunSources, SourceOrigin, SourcePath},
 };
@@ -81,14 +81,29 @@ pub enum SnapshotError {
 }
 
 /// The latest published version of each referenced resource, by resource id. A resource that
-/// was never published is absent.
-#[derive(Clone, Copy, Debug)]
-pub struct PublishedVersions<'a> {
+/// was never published is absent. A snapshot reads only which version of a tool is the latest, so its tools are a local
+/// project's ([`PublishedVersions`]) or a team's ([`TeamPublishedVersions`], as the team server holds them).
+#[derive(Debug)]
+pub struct Published<'a, T> {
   pub profiles: &'a BTreeMap<ResourceId, Version<AgentProfile>>,
-  pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
+  pub tools: &'a BTreeMap<ResourceId, Version<T>>,
   pub instructions: &'a BTreeMap<ResourceId, Version<Instruction>>,
   pub skills: &'a BTreeMap<ResourceId, Version<Skill>>,
 }
+
+/// The published versions of a local project, whose tools name their secrets by id.
+pub type PublishedVersions<'a> = Published<'a, Tool>;
+
+/// The published versions of a team project, whose tools name their secrets by name.
+pub type TeamPublishedVersions<'a> = Published<'a, TeamTool>;
+
+impl<T> Clone for Published<'_, T> {
+  fn clone(&self) -> Self {
+    *self
+  }
+}
+
+impl<T> Copy for Published<'_, T> {}
 
 /// Everything a run pins: pipeline, per-step executors, the instructions, tools and skills its agents get, and the
 /// sources its agents may read outside the worktree without asking.
@@ -194,10 +209,10 @@ impl RunSnapshot {
   /// profiles of its steps choose are pinned alongside, each once (`docs/design/team-configuration.md`, "Decided
   /// 2026-11-09"): nothing else reaches a local run's agents. Which step's agent gets which is decided per invocation,
   /// from its profile version ([`crate::run::GivenBy::Profile`]).
-  pub fn build(
+  pub fn build<T>(
     pipeline: ResourceId,
     version: &Version<Pipeline>,
-    published: PublishedVersions<'_>,
+    published: Published<'_, T>,
   ) -> Result<Self, SnapshotError> {
     let body = version.body();
     let steps = body
@@ -324,7 +339,7 @@ impl RunSnapshot {
   }
 }
 
-fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSnapshot, SnapshotError> {
+fn resolve_step<T>(step: &Step, published: Published<'_, T>) -> Result<StepSnapshot, SnapshotError> {
   let unassigned = || SnapshotError::UnassignedStep(step.key.clone());
   let executor = match &step.kind {
     StepKind::Agent { profile, model, .. } => {

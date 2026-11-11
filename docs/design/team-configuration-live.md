@@ -102,6 +102,19 @@ configuration in its database as today.
   limit) with the same checks; a local instruction's panel no longer chooses *When* (it keeps its version's), and a new
   skill's SKILL.md is typed rather than made from its name.
   Not edited there yet: a skill's files, an HTTP or database tool, and the leave guard of an unsaved team edit.
+- A team tool names the secret it sends or connects with by **name** (core's `TeamTool`, `docs/cloud-api.md` "Team
+  tool body"; 2026-11-11): publishing a local tool to the team (Share, an admin's Save or *Create*) turns the
+  publisher's secret id into that secret's name, archived or not, and a tool whose secret the project has no row for
+  is refused before anything is sent (`ToolSecretGone`). The id stays a row key of each computer: it never goes into a
+  team body and is never shown. The tool's panel (A6 `u9Hcc`, M6 `yTVeE`, `screens/team_hub/tool/`) reads *Headers*
+  `Authorization: Bearer ← secret NAME`, *Secrets it needs* by name and, *On this computer*, that name's value set or
+  not, with *Add value* pinned while it has none: the same fill-in and person-only rule as a team MCP server's secret
+  (`set_team_secret_value`). Readiness needs that value by name, and the runner that accepts a team run checks it
+  under the same name (`PreflightProblem::SecretMissing`). A version published before this form still holds the
+  publisher's id: the panel says so in words without the id (`team_tool_secret_by_id`, *undecided*), and an admin
+  whose project has that secret publishes it again by name (*Publish again by name*). The sync keeps a local copy of
+  a command tool and of an older version only; an HTTP or database tool in the team's form is read from the live
+  configuration.
 
 ## Open questions
 

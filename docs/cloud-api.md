@@ -203,10 +203,11 @@ order it was sent in; the server neither sorts nor merges it, and `GET …/versi
 A body holds none of these ids either: it has no connection, local MCP server or secret id, which the server refuses
 (`422 invalid { reason: "references" }` for a reference that does not hold, `{ reason: "body" }` for a body,
 `{ reason: "shape" }` for a request that does not parse, such as a reference with another field or a secret name that
-breaks the rule). The agent profile's body is the team's form since ORC-820 (below); the tool's body still names a
-secret by a computer's id and has no team form yet, so a desktop sends no such tool body (Share refuses it, below), and a
-server migration rewrites the versions that exist (OP-200, row 93 of `docs/architecture/server.md`). There is no compatibility window: a server
-and a desktop on different versions of this contract do not read each other's `references`.
+breaks the rule). The agent profile's body is the team's form since ORC-820 (below), and the tool's since 2026-11-11 (below): it
+names its secret by name. A profile version in the older form is republished in the team's form (OP-200, row 93 of
+`docs/architecture/server.md`); a tool version in the older form stays readable as it is (below). There is no
+compatibility window for `references`: a server and a desktop on different versions of this contract do not read each
+other's.
 
 ### Team agent profile body
 
@@ -248,6 +249,42 @@ connection of the computer, or an MCP server that is not a team resource, is ref
 desktop sends those lists empty; the web editor and other clients set them. A computer runs a team profile on the
 connection of its CLI kind it was filled in with (`AgentProfile::from_team`); the lists a local profile has no field
 for stay in the cached version's server body.
+
+### Team tool body
+
+The body of a `tool` version is core's `TeamTool`: the local `Tool`'s JSON with the **name** of a team secret where
+the local tool holds the id of one of its computer's secrets. The server reads it with that type, which refuses any
+other field (`deny_unknown_fields`) and refuses an id where a name belongs (an id is no secret name):
+
+```text
+{ description?, access?,                                   // as the local tool has them
+  action: { command: CommandAction }                       // the same as the local tool's: a command names no secret
+        | { http: { method, url, allowed_host, inputs, outputs,
+                    auth: "none" | { bearer: { secret: SecretName } } } }
+        | { database_query: { credentials: SecretName, query } } }
+```
+
+A bearer token still needs an `https` URL, and an HTTP request or a database query still needs `access`, as the local
+tool's checks say. A command tool, and an HTTP request with `auth: "none"`, read the same in both forms. **The body is
+the one source of truth; `references` repeat it exactly:** a `secret_name` for the bearer secret or the database
+credentials, none for a command (`orchester_api::ReferenceTarget::of_tool`). A server derives them from the body with
+that function, or refuses a version whose `references` differ (`422 invalid { reason: "references" }`). It computes
+`widens` with core's `SharedBody` rules for `TeamTool`: as a local tool's, and a version that needs another secret name
+than the previous one widens (`secret`).
+
+A desktop turns its own tool into this body with `TeamTool::from_local`: the secret it holds by id goes by that
+secret's name in the project (an archived secret by the name it had). A tool whose secret the project has no row for is
+refused on the desktop (`SharingError::ToolSecretGone`; nothing is sent). A local tool keeps its local form on its own
+computer; each computer fills in the value under the name (`set_team_secret_value`), as for a team MCP server's secret,
+and a run's tool step is not ready until it has one (`PreflightProblem::SecretMissing`).
+
+**Older versions.** A tool version published before this form holds the publisher's secret id. A server keeps it as it
+is and still returns it; nothing rewrites it. A **new** version of a tool (a publish, or any version of a Share import) must
+read as a `TeamTool`, else `422 invalid { reason: "body" }`. A desktop reads an older version honestly:
+the panel says the tool names its secret by id and shows no id, readiness is `team_tool_secret_by_id`, and an admin
+whose project has that secret publishes it again by name (*Publish again by name*). A bundle never pins an older
+version's body: one whose step runs such a tool is refused (the server's `ToolUnreadable`, reason `body_unreadable`,
+with the tool and its version); a tool no step runs does not stop it.
 
 A **pipeline** names the profiles and tools it runs by their server resource ids in its body, and its `references` stay
 empty: the body is the one source of truth, which is also how used-by reads it (`steps[].kind.agent.profile`,
@@ -319,9 +356,9 @@ accept `"mcp_server"` as `kind`.
 
 `POST …/resources/import` (Share) carries every resource with all its versions. Before it sends anything the desktop
 puts each resource in the team's form and the **latest** version of each is entirely in it (older versions are history
-and are not checked by the server): a profile is a `TeamAgentProfile` (above), a pipeline and the kinds without a team
-form keep their bodies and must name nothing of the computer. Each local MCP server an uploaded profile chooses (in any
-version) becomes a team MCP server with **the local server's id as its resource id**, so the sharer's own profiles keep
+and are not checked by the server): a profile is a `TeamAgentProfile` and every version of a tool a `TeamTool`
+(above), a pipeline and the kinds without a team form keep their bodies and must name nothing of the computer. Each
+local MCP server an uploaded profile chooses (in any version) becomes a team MCP server with **the local server's id as its resource id**, so the sharer's own profiles keep
 choosing it, one version 1 made when the local server was (names are unique in a project, so no two become one). Its
 body has the program's file name (`notes-mcp` for `/opt/tools/notes-mcp`; a name on the search path stays), the
 arguments, a relative folder, the **names** of its environment variables (plain and secret-valued alike; no value; each
@@ -334,8 +371,8 @@ version does not, and is refused.
 
 The desktop refuses the whole Share, before anything is sent, with `SharingError::ShareRefused` listing every resource
 at once (`ShareRefusal { resource, name, reason }`, one line per resource in the surfaced message): a profile with
-writable folders, a tool, instruction or skill whose body names a connection, MCP server or secret of this
-computer, a pipeline that runs a profile or tool it does not upload, and a local MCP server that cannot be a team one (a
+writable folders, a tool whose secret the project has no row for, an instruction or skill whose body names a
+connection, MCP server or secret of this computer, a pipeline that runs a profile or tool it does not upload, and a local MCP server that cannot be a team one (a
 program inside the worktree, a file name that is not a program name, an absolute folder, a URL with a query or
 fragment, Basic authentication with a user name, a variable that is not a valid secret name, two servers that fill one
 team secret from different values).
@@ -606,9 +643,9 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
   pipeline order. The pipeline body lists no sources, a profile body is
   `{role,responsibilities,instructions,model,settings,permissions,mcp_servers?}` without its connection or writable
-  folders, and a command tool never starts a program by an absolute path; such inputs are refused. A tool body
-  still names its secret by id and has no team form yet, so Share refuses it (above); the tool body is to name
-  secrets by name (`secret_name`, above) when it gets one.
+  folders, and a command tool never starts a program by an absolute path; such inputs are refused. A tool body is
+  core's `TeamTool` (above): its secret by name, whose value the accepting computer looks up under that name; a
+  tool version in the older form, which holds an id, is never pinned.
 - **MCP servers (schema 3).** `mcp_servers` are the team MCP servers the pinned profiles name, and exactly those: a
   team profile's body lists them as `mcp_servers: [ResourceId]` (distinct, in the order the profile lists them; left
   out while empty), and `inputs.mcp_servers` pins one version of each, `{resource,version,number,label,body}` with

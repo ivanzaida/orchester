@@ -218,6 +218,11 @@ impl HttpRequest {
     self.auth
   }
 
+  /// Whether its URL is https, which a bearer token needs.
+  pub fn is_https(&self) -> bool {
+    split_url(&self.url).is_ok_and(|(secure, _)| secure)
+  }
+
   pub fn inputs(&self) -> &BTreeMap<FieldName, RequestTarget> {
     &self.inputs
   }

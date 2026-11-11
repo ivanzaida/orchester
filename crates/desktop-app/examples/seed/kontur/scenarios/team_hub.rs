@@ -3,8 +3,9 @@
 //! (`Agents · v2` `acFkz`, A1–A6, ORC-831). MCP servers: `pencil-design` is on here without a program path, `github`
 //! on here with its secret header `GITHUB_TOKEN` without a value, `figma` on here and ready, `playwright` switched off
 //! here and `linear` nobody decided on. Profiles: Builder chooses `github` and `pencil-design`, Reviewer nothing.
-//! Tools: `cargo-check`, a command, is ready; `sentry-issues`, an HTTP request with a project secret by id, cannot be
-//! told ready (A6 `u9Hcc`); `orders-report`, a database query, names its secret by id the same way. Builder uses
+//! Tools: `cargo-check`, a command, is ready; `sentry-issues`, an HTTP request in the team's form, sends the team
+//! secret `SENTRY_TOKEN`, which has no value here (A6 `u9Hcc`); `orders-report`, a database query published before the
+//! team's form, names its secret by an id of its publisher's computer, so it cannot be told ready. Builder uses
 //! `Project rules`, `review-diff` (which has a reference file) and `cargo-check`. Instructions and skills are always
 //! ready. The old catalogue's own resources are local, so the team project does not show them.
 //!
@@ -34,9 +35,9 @@ use orchester_core::{
   name::Name,
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    DatabaseQuery, DeniedBehavior, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope,
-    ModelId, PromptText, ProviderSettings, ResourceBody, ResourceKind, Skill, SkillFile, SkillFilePath, Slug,
-    TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VersionNumber,
+    DatabaseQuery, DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction,
+    InstructionScope, ModelId, PromptText, ProviderSettings, RequestTarget, ResourceBody, ResourceKind, Skill,
+    SkillFile, SkillFilePath, Slug, TeamAgentProfile, TeamMcpServer, TeamTool, Tool, ToolAction, VersionNumber,
   },
   secret::SecretName,
   sharing::{SharedPerson, TaskRevision},
@@ -292,27 +293,7 @@ fn plain_resources(kontur: &mut Kontur, kinds: Kinds) -> Result<Plain, SeedError
     "cargo-check",
     &Tool::command("Runs cargo check on the worktree.", command),
   )?;
-  let request = HttpRequest::new(
-    HttpMethod::Post,
-    "https://sentry.example.test/api/issues".into(),
-    "sentry.example.test".into(),
-    HttpAuth::Bearer {
-      secret: SecretId::generate(),
-    },
-    BTreeMap::new(),
-    BTreeMap::new(),
-  )
-  .map_err(invalid)?;
-  let policy = AccessPolicy::new(
-    BTreeMap::new(),
-    Name::new("Production").map_err(invalid)?,
-    ApprovalMode::EveryCall,
-    AccessWindow::UntilStepEnds,
-    DeniedBehavior::AwaitChangedPlan,
-  )
-  .map_err(invalid)?;
-  let tool = Tool::new("", ToolAction::Http(request), Some(policy)).map_err(invalid)?;
-  team_resource(kontur, "sentry-issues", &tool)?;
+  sentry_issues(kontur)?;
   let database = DatabaseQuery::new(
     SecretId::generate(),
     "select status, count(*) from orders group by status".into(),
@@ -395,6 +376,21 @@ pub(super) fn team_resource<B: ResourceBody + Clone>(
   Ok(resource.id())
 }
 
+/// The team's tool `name` at v1 in the team's form, its secret named `secret`, as the server confirmed it; `local` is
+/// the tool its publisher had, which names that secret by an id of their computer.
+fn team_tool(kontur: &mut Kontur, name: &str, local: &Tool, secret: &str) -> Result<ResourceId, SeedError> {
+  let secret = SecretName::new(secret).map_err(invalid)?;
+  let team = TeamTool::from_local(local, |_| Some(secret)).map_err(invalid)?;
+  let resource = server_resource::<Tool>(kontur, name, name)?;
+  cache(
+    kontur,
+    &resource,
+    serde_json::to_value(&team).map_err(invalid)?,
+    local.clone(),
+  )?;
+  Ok(resource.id())
+}
+
 /// A resource of `B`'s kind as a computer that syncs the team's configuration first has it: with the server's id and no
 /// draft, which a resource made here has until it is published. `cache` then marks it the team's.
 fn server_resource<B: ResourceBody>(
@@ -458,4 +454,33 @@ fn team_server(kontur: &mut Kontur, name: &str, body: Value) -> Result<ResourceI
 
 fn invalid(error: impl std::fmt::Display) -> SeedError {
   SeedError::Invalid(error.to_string())
+}
+
+/// `sentry-issues`, an HTTP request that sends the team secret `SENTRY_TOKEN` as its bearer token and runs without
+/// asking (A6 `u9Hcc`, M6 `yTVeE`).
+fn sentry_issues(kontur: &mut Kontur) -> Result<ResourceId, SeedError> {
+  let request = HttpRequest::new(
+    HttpMethod::Get,
+    "https://sentry.example.test/api/0/projects/acme/kontur/issues/".into(),
+    "sentry.example.test".into(),
+    HttpAuth::Bearer {
+      secret: SecretId::generate(),
+    },
+    BTreeMap::from([(
+      FieldName::new("query").map_err(invalid)?,
+      RequestTarget::Query("query".into()),
+    )]),
+    BTreeMap::new(),
+  )
+  .map_err(invalid)?;
+  let policy = AccessPolicy::new(
+    BTreeMap::new(),
+    Name::new("Production").map_err(invalid)?,
+    ApprovalMode::Never,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::AwaitChangedPlan,
+  )
+  .map_err(invalid)?;
+  let tool = Tool::new("", ToolAction::Http(request), Some(policy)).map_err(invalid)?;
+  team_tool(kontur, "sentry-issues", &tool, "SENTRY_TOKEN")
 }
