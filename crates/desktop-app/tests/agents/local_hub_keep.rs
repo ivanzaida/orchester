@@ -1,20 +1,23 @@
 //! The Agents hub of a local project keeps what it shows while the read that follows a change is under way: a made
 //! resource's form stays as it was sent, Create pending, until the list holds it; a restored entry's *Restore* stays
-//! pending until it leaves *Archived*. Nothing flashes the empty tab, the bones of a first read or another entry's
-//! panel. `cargo test -p orchester-app --test agents local_hub_keep`.
+//! pending until it leaves *Archived*; a new memory record's editor stays, Save pending, until the memory is read
+//! again. Nothing flashes the empty tab, the bones of a first read or another entry's panel. `cargo test -p
+//! orchester-app --test agents local_hub_keep`.
 
 use orchester_app::{
   project::hold::ReadHold,
-  routes::{HubFilter, HubView, ProjectPage, Route},
+  routes::{HubFilter, HubView, MemoryTab, MemoryView, ProjectPage, Route},
   ui::icon::Icon,
 };
 use orchester_core::{resource::ResourceKind, time::Timestamp};
 use orchester_store::ProjectDb;
+use orchester_workspace::memory::read::ProjectMemory;
 
 use super::{
   harness::Agents,
   local_hub::open,
   local_hub_create::{held, show_form},
+  support::project_id,
 };
 
 /// The window's hold of the hub's reads: held, the hub's read that follows a change waits.
@@ -129,4 +132,42 @@ fn local_hub_keep_restore_stays_pending_until_the_entry_leaves_archived() {
   });
   hold.set(false);
   agents.until("it leaves Archived", |s| !s.exists(&format!("local-hub-row-{builder}")));
+}
+
+/// The project's memory as it is stored.
+fn memory(agents: &Agents) -> ProjectMemory {
+  ProjectMemory::load_in(&agents.root).expect("memory")
+}
+
+/// The first record of an empty *Active*: until the hub's memory is read again the editor stays as it was sent, Save
+/// pending, never the status's empty state; then the record is listed.
+#[test]
+fn local_hub_keep_a_new_memory_record_keeps_the_editor_until_the_list_holds_it() {
+  let mut agents = Agents::new(true);
+  agents.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Memory(MemoryView::on(MemoryTab::Active)),
+  ));
+  agents.until("the empty Active", |s| s.exists("memory-empty"));
+  agents.click("memory-new");
+  agents.until("the editor", |s| s.exists("memory-editor-new-text"));
+  agents.set("memory-editor-new-text", "Release notes live in CHANGELOG.md.");
+  let hold = reads(&agents);
+  hold.set(true);
+  agents.click("memory-editor-new-save");
+  agents.until("the record is stored", |s| !memory(s).records.is_empty());
+  let mut passes = 0;
+  agents.until("the memory's read held", |s| {
+    assert!(!s.exists("memory-empty"), "the empty state flashed");
+    assert!(!s.exists("memory-loading"), "the first read's bones flashed");
+    assert_eq!(s.value("memory-editor-new-text"), "Release notes live in CHANGELOG.md.");
+    assert!(loading(s, "memory-editor-new-save"), "Save shows it is pending");
+    passes += 1;
+    passes == 40
+  });
+  hold.set(false);
+  agents.until("the record listed", |s| {
+    assert!(!s.exists("memory-empty"), "the empty state flashed");
+    !s.exists("memory-editor-new") && s.exists("memory-list")
+  });
 }

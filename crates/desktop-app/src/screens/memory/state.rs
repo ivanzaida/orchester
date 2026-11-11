@@ -3,7 +3,7 @@
 //! hub each provide one to the parts they mount; the hub keeps it across its filters and the Memory filter's
 //! statuses, so a search stays when another status opens.
 
-use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
+use std::{any::Any, collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, events::is_synthetic_input},
@@ -15,6 +15,7 @@ use orchester_core::{
   project::TaskKey,
 };
 use orchester_workspace::{memory::listing::Filters, secrets::Vault};
+use parking_lot::Mutex;
 
 use super::work::{self, Start, Write};
 use crate::{
@@ -50,6 +51,11 @@ impl DevtoolsInspectable for Unfolded {}
 pub struct Asked(pub Option<Option<MemoryId>>);
 
 impl DevtoolsInspectable for Asked {}
+
+/// What a screen showed of the memory when a change finished: what the change had open closes once a read that
+/// follows it shows ([`MemoryState::follow_read`]). Cloning shares it.
+#[derive(Clone, Default)]
+pub struct Behind(Arc<Mutex<Option<Arc<dyn Any + Send + Sync>>>>);
 
 /// What a screen read, shared by its renders without copying it: one reading equals only itself.
 #[derive(Debug)]
@@ -98,6 +104,10 @@ pub struct MemoryState {
   /// The task's handoffs before the latest are listed too.
   pub earlier_handoffs: Signal<bool>,
   pub action: work::Action,
+  /// The last change finished and the memory has not been read again since: what it had open stays, the change
+  /// pending, until a read made after it shows.
+  pub settling: Signal<bool>,
+  pub behind: Behind,
   pub asked: Signal<Asked>,
   /// Synthetic input asked for the last change, which was not taken.
   pub refused: Signal<bool>,
@@ -112,14 +122,16 @@ pub struct Made {
   pub histories: Signal<Unfolded>,
   pub earlier_handoffs: Signal<bool>,
   pub action: work::Action,
+  pub settling: Signal<bool>,
+  pub behind: Behind,
   pub asked: Signal<Asked>,
   pub refused: Signal<bool>,
 }
 
 impl Made {
-  /// A screen's state at first, filtered by `filters`. A finished change closes what was open, and the project's
-  /// screens read again (`feed`); so does a change refused because the records shown were out of date, which stays
-  /// open with why.
+  /// A screen's state at first, filtered by `filters`. A finished change has the project's screens read again
+  /// (`feed`), and closes what was open once the screen shows that read ([`MemoryState::follow_read`]); a change
+  /// refused because the records shown were out of date has them read again too, and stays open with why.
   pub fn new(ctx: &mut Ctx, filters: Filters, feed: &ProjectFeed) -> Self {
     let made = Self {
       opened: ctx.signal(Opened::Nothing),
@@ -128,13 +140,15 @@ impl Made {
       histories: ctx.signal(Unfolded::default()),
       earlier_handoffs: ctx.signal(false),
       action: work::action(ctx),
+      settling: ctx.signal(false),
+      behind: Behind::default(),
       asked: ctx.signal(Asked::default()),
       refused: ctx.signal(false),
     };
-    let (opened, feed) = (made.opened.clone(), feed.clone());
+    let (settling, feed) = (made.settling.clone(), feed.clone());
     ctx.watch(&made.action.state(), move |done| {
       if done.fulfilled_data().is_some() {
-        opened.set(Opened::Nothing);
+        settling.set(true);
         feed.saved();
       } else if done.is_rejected() && done.error.as_ref().is_some_and(|failed| failed.stale) {
         feed.saved();
@@ -162,6 +176,8 @@ impl Made {
       histories: self.histories.clone(),
       earlier_handoffs: self.earlier_handoffs.clone(),
       action: self.action.clone(),
+      settling: self.settling.clone(),
+      behind: self.behind.clone(),
       asked: self.asked.clone(),
       refused: self.refused.clone(),
       vault: crate::services::Services::of(ctx).vault,
@@ -180,7 +196,7 @@ impl MemoryState {
   /// what records say reaches every later agent's prompt and a change is kept as the person's. lurq's synthetic input
   /// (an MCP client driving the window) is refused, and the screen says so where the change was asked for.
   pub fn write(&self, write: Write) {
-    if self.action.state().get_untracked().is_pending() {
+    if self.action.state().get_untracked().is_pending() || self.settling.get_untracked() {
       return;
     }
     self.asked.set(Asked(Some(write.record())));
@@ -197,15 +213,41 @@ impl MemoryState {
     });
   }
 
-  /// Opens `opened` in place, closing whatever was open, and forgets a change that failed or was refused.
+  /// Opens `opened` in place, closing whatever was open, and forgets a change that failed or was refused, or that
+  /// finished and waits for the memory to be read again: what the person opens is not closed for it.
   pub fn open(&self, opened: Opened) {
     self.asked.set(Asked(None));
     self.refused.set(false);
+    if self.settling.get_untracked() {
+      *self.behind.0.lock() = None;
+      self.settling.set(false);
+    }
     self.opened.set(opened);
   }
 
   pub fn close(&self) {
     self.open(Opened::Nothing);
+  }
+
+  /// Follows the screen's `read` of the memory (`None`: it failed) while a finished change settles: the first read
+  /// shown after the change is the one from before it, and what the change had open closes once another shows, or
+  /// once the read fails, whose failure then shows. Until then the list, the panel and what is open stay as they were.
+  pub fn follow_read<T: Any + Send + Sync>(&self, read: Option<&Arc<T>>) {
+    if !self.settling.get_untracked() {
+      return;
+    }
+    let mut behind = self.behind.0.lock();
+    let same = |before: &Arc<dyn Any + Send + Sync>, read: &Arc<T>| {
+      std::ptr::eq(Arc::as_ptr(before).cast::<()>(), Arc::as_ptr(read).cast::<()>())
+    };
+    match (read, behind.as_ref()) {
+      (Some(read), None) => *behind = Some(Arc::clone(read) as Arc<dyn Any + Send + Sync>),
+      (Some(read), Some(before)) if same(before, read) => {}
+      _ => {
+        drop(behind);
+        self.close();
+      }
+    }
   }
 
   /// Unfolds or folds `record`'s earlier versions.
@@ -244,11 +286,11 @@ impl MemoryState {
 
   /// Whether a change of `record` is under way.
   pub fn pending_for(&self, record: Option<MemoryId>) -> bool {
-    self.action.state().get().is_pending() && self.asked() == Some(record)
+    self.busy() && self.asked() == Some(record)
   }
 
-  /// Whether any change is under way.
+  /// Whether any change is under way, or one finished and the memory shown is not read again yet.
   pub fn busy(&self) -> bool {
-    self.action.state().get().is_pending()
+    self.action.state().get().is_pending() || self.settling.get()
   }
 }
