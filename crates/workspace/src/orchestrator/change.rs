@@ -325,6 +325,11 @@ fn unchanged_draft(
   (proposed, widens): ((Timestamp, u32), &[Message]),
   subject: String,
 ) -> Result<(), ToolError> {
+  // Kept before pipelines lost their drafts (D-032): there is no draft left to publish.
+  if kind == Publishing::Pipeline {
+    let reason = Message::new("orchestrator.proposal.pipelineNoDraft").with("name", subject);
+    return Err(ToolError::refused("changed_since_proposed", vec![reason]));
+  }
   let db = ProjectDb::open(root)?;
   let now = mark(&db, kind, resource)?;
   if now == Some(proposed) && widening::of_draft(&db, kind, resource)? == widens {

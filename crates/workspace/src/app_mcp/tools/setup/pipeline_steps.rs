@@ -1,16 +1,18 @@
-//! `save_pipeline_draft`: a pipeline's editor through Orchester's MCP server. The steps given replace the latest
-//! version's and are published as the next version (a pipeline holds no draft, D-032), each field checked as the step
-//! inspector checks it, and only what the inspector offers is taken: published profiles and runnable tools, write
+//! `save_pipeline`: a pipeline's editor through Orchester's MCP server. The steps given replace the latest version's
+//! and are published as the next version (a pipeline is always a published version, D-032), each field checked as the
+//! step inspector checks it, and only what the inspector offers is taken: published profiles and runnable tools, write
 //! access where the profile writes, and a narrowing of the profile's permissions only where its CLI enforces the
 //! narrower choice. Steps that break a pipeline rule (an unknown step, a cycle, a return to a step that does not run
-//! before) are not saved, nor are steps the save check refuses ([`save_refusals`]), as the editor saves no such edit.
+//! before) are refused, and so are steps the save check refuses ([`save_refusals`]): nothing is stored then.
+//! `create_pipeline` takes its steps the same way ([`body_of`]).
 
 use std::num::NonZeroU32;
 
 use orchester_core::{
   permission::StepPermissions,
   resource::{
-    EditProblem, FailureRoute, ModelId, PipelineEdit, PublishError, RepositoryAccess, Step, StepKey, StepKind,
+    DeliverStep, Deliverable, EditProblem, FailureRoute, ModelId, Pipeline, PipelineEdit, PipelineSources,
+    PublishError, RepositoryAccess, Step, StepKey, StepKind,
   },
   time::Timestamp,
   tokens::{BudgetInputError, TokenBudget},
@@ -46,7 +48,7 @@ use crate::{
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
-pub struct SavePipelineDraft {
+pub struct SavePipeline {
   /// The project's id, or its name.
   pub project: String,
   /// The pipeline's id, or its name.
@@ -120,11 +122,7 @@ pub struct NarrowInput {
   pub ask_before_tool_calls: bool,
 }
 
-pub async fn save_pipeline_draft(
-  services: &Services,
-  args: SavePipelineDraft,
-  translate: &Translate,
-) -> Result<Value, ToolError> {
+pub async fn save_pipeline(services: &Services, args: SavePipeline, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let then = translate.text(&Message::new("pipelines.flow.then"));
   let (project, opened) = blocking(move || {
@@ -132,38 +130,25 @@ pub async fn save_pipeline_draft(
     let mut db = ProjectDb::open(&open.repo_root)?;
     let id = pipeline_named(&db, &args.pipeline)?;
     let current = opened(&db, id, &args.pipeline)?;
-    let steps = args
-      .steps
-      .iter()
-      .map(|input| step(input, &current.assignables))
-      .collect::<Result<Vec<_>, _>>()?;
     let description = args
       .description
       .unwrap_or_else(|| current.body.description().to_owned());
     // The pipeline keeps the sources it lists, those of the steps it still has, and its Deliver step, which the
     // editor sets.
-    let mut edit = PipelineEdit::from_steps(&description, current.body.sources().clone(), steps);
-    edit.set_deliver(current.body.deliver().cloned());
-    edit.set_delivers(args.delivers.map_or_else(|| current.body.delivers(), Into::into));
-    // Steps that break a rule are refused first, as the editor refuses them.
-    let broken: Vec<Message> = edit
-      .problems()
-      .iter()
-      .filter(|problem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_)))
-      .map(|problem| problem_view(&edit, problem, &then).message)
-      .collect();
-    if !broken.is_empty() {
-      return Err(ToolError::refused("invalid_pipeline", broken));
-    }
-    let body = edit
-      .validate()
-      .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))?;
+    let kept = Kept {
+      description: &description,
+      sources: current.body.sources().clone(),
+      deliver: current.body.deliver().cloned(),
+      delivers: args.delivers.map_or_else(|| current.body.delivers(), Into::into),
+    };
+    let body = body_of(&args.steps, kept, (&current.assignables, &then))?;
     // A pipeline is stored only as published versions (D-032): the steps are published as the next version, or
     // refused with every reason and nothing stored.
     let refusals = save_refusals(&body, &current.assignables, Some(current.version));
     if !refusals.is_empty() {
       return Err(ToolError::refused("not_publishable", refusals));
     }
+    // What saving and what publishing asked a person to allow, together.
     widening::allowed(
       &services,
       save_reasons(Some(&current.body), &body, &current.assignables),
@@ -171,7 +156,7 @@ pub async fn save_pipeline_draft(
     db.publish_pipeline_edit(id, &body, current.version, None, Timestamp::now())
       .map_err(|error| match &error {
         StoreError::Publish(PublishError::StaleDraft { .. }) | StoreError::DraftChanged(_) => {
-          ToolError::refused("draft_changed", vec![publish_error(&error)])
+          ToolError::refused("version_changed", vec![publish_error(&error)])
         }
         StoreError::Unchanged(_) => ToolError::refused("unchanged", vec![crate::messages::store_error(&error)]),
         _ => error.into(),
@@ -186,6 +171,44 @@ pub async fn save_pipeline_draft(
   })
   .await?;
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
+}
+
+/// What a pipeline keeps beside the steps a tool gives it: its description, its sources, its Deliver step and what its
+/// runs deliver.
+pub(super) struct Kept<'a> {
+  pub description: &'a str,
+  pub sources: PipelineSources,
+  pub deliver: Option<DeliverStep>,
+  pub delivers: Deliverable,
+}
+
+/// The pipeline of the steps `inputs` with what it keeps (`kept`), each step checked as the inspector checks it against
+/// `assignables`; refused (`invalid_pipeline`) when the steps break a pipeline rule, as the editor refuses them, in
+/// the flow's words (`then` joins steps).
+pub(super) fn body_of(
+  inputs: &[StepInput],
+  kept: Kept<'_>,
+  (assignables, then): (&Assignables, &str),
+) -> Result<Pipeline, ToolError> {
+  let steps = inputs
+    .iter()
+    .map(|input| step(input, assignables))
+    .collect::<Result<Vec<_>, _>>()?;
+  let mut edit = PipelineEdit::from_steps(kept.description, kept.sources, steps);
+  edit.set_deliver(kept.deliver);
+  edit.set_delivers(kept.delivers);
+  let broken: Vec<Message> = edit
+    .problems()
+    .iter()
+    .filter(|problem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_)))
+    .map(|problem| problem_view(&edit, problem, then).message)
+    .collect();
+  if !broken.is_empty() {
+    return Err(ToolError::refused("invalid_pipeline", broken));
+  }
+  edit
+    .validate()
+    .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))
 }
 
 /// The step `input` describes, or why the inspector would not take it, naming the step.

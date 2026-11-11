@@ -36,10 +36,13 @@ drive*, and says what changed.**
    (names and use only), connections, accounts, models, usage and pull requests. Cross-project reads are allowed
    ("what is running everywhere"); changes stay in the chat's own project. A step that waits for a message always
    shows what its agent wrote last (`get_run`, `list_questions`), so a wait is never unreadable.
-2. **Drafts are free.** It saves drafts of tasks, pipelines, agent profiles, instructions, skills and tools without
-   asking. A draft reaches no agent's prompt.
-3. **Publishing needs the person, or the person's switch.** Publishing a pipeline, profile, instruction, skill or
-   tool is proposed in the chat as a card the person applies with a click. A person-only switch in Project settings ›
+2. **Drafts are free.** It saves drafts of tasks, agent profiles, instructions, skills and tools without asking. A
+   draft reaches no agent's prompt. A pipeline has no drafts (D-032): saving one publishes its next version, so the
+   chat creates, saves and duplicates pipelines only while *Let the Orchestrator drive* is on; while it is off those
+   tools are refused as `drive_only`, the chat says what to change and the person saves it in Pipelines (D-033,
+   PV2-30). There is no pipeline proposal card; one kept from before opens the pipeline and is refused on *Apply*.
+3. **Publishing needs the person, or the person's switch.** Publishing a profile, instruction, skill or tool is
+   proposed in the chat as a card the person applies with a click. A person-only switch in Project settings ›
    Orchestrator, *Let the Orchestrator publish drafts*, lets the chat publish directly. Synthetic input
    cannot flip it (the same rule as *Let automation change agent permissions*). Widening what agents may do stays
    behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat. For every
@@ -282,7 +285,7 @@ project.
 | Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links); both report why the runner stopped a run (`status.runner_failure`, ORC-75) | `pause_run`, `resume_run` (existing; a run a pause stopped, and with *Let the Orchestrator continue interrupted runs* a run a crash, the runner going away, *Quit now* or the database staying busy (`runner_failure` `storage_contention`) interrupted, from its last checkpoint; never a run at a limit, canceled, failed by the runner for any other or an unknown reason, or without its worktree; both, and `release_queue`, only proposed in a turn Orchester started, but for the interrupted run whose end started the turn, continued once under both that switch and *answer agents*, not while the database is under contention) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started but for the run whose success started it: merged once with *Let the Orchestrator merge finished runs on its own* when the chat's rule lets it, else refused `left_to_person`, ORC-69; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*; a message that moves a run is always proposed) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
-| Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |
+| Pipelines | `list_pipelines`, `get_pipeline` (existing) | `create_pipeline`, `save_pipeline`, `duplicate_pipeline` (PV2-29: a pipeline is always a published version, D-032; each publishes a version or is refused with nothing stored; PV2-30: only while the chat drives, refused as `drive_only` otherwise) | — (no pipeline drafts to publish; `publish_pipeline` is gone) |
 | Agents | `list_profiles`, `get_profile` (existing) | `save_profile_draft` (existing) | `publish_profile` |
 | Instructions | `list_instructions` (existing); `get_instruction` (new: text, versions, where it applies) | `save_instruction_draft` (existing) | `publish_instruction` |
 | Skills | `list_skills`, `get_skill` (existing; ORC-79: `draft_by_automation`, and `get_skill`'s `revision`) | `save_skill_draft` (ORC-79: a new skill under `name`, its slug made unique as the Skills editor makes it, or a skill's draft replaced by id, name or slug; description, body, where it applies (project, `agent_role` with `role`, `pipeline`, `step` with `pipeline` and `step`) and reference files (`path` inside the skill's folder, never absolute or with `.`/`..`, not `SKILL.md`; text `content`, or none to keep the skill's file; at most 100 of at most 1024 KiB), checked by the editor's own rules (`skills::editor`): `invalid_name`, `name_taken`, `scope_unavailable`, `invalid_files`, `unknown_role`; with `expected_revision` refused as `draft_changed` over another save. Always open; the draft is marked as automation's (`draft_by_automation`, the Skills editor's *Draft written by automation*) until a person saves it or it is published) | `publish_skill` (ORC-79: the next version, as Publish; refused for `blank_description`, `blank_body`, `stale_draft`, `no_draft`, `scope_unavailable`, `draft_changed`; for any MCP client `person_only` unless *Let automation change agent permissions* is on, the person applies the chat's proposal, or *Let the Orchestrator publish drafts* is on — the skill's description reaches every prompt and its body and files every agent it applies to; the card names the skill and its version) |
@@ -608,7 +611,7 @@ What may be approved in the chat, by kind (`Change::click_only`, and the publica
 | Answer, message (`answer_question`, `send_message`, also one that moves a run) | yes | checked again as sent (`sent_as`) |
 | How a stopped run goes on (`continue_run`: `allow_retry`, `return_to`, `resolve_conflicts`) | yes | the case that started it; still refused once the run went on |
 | Pause, resume, release (`pause_run`, `resume_run`, `release_queue`) | yes | checked again; an interrupted run stays under its own rule |
-| Publication of an instruction or a skill, or of a pipeline, profile or tool that widens nothing | yes | the person reads the card's diff before they say so |
+| Publication of an instruction or a skill, or of a profile or tool that widens nothing | yes | the person reads the card's diff before they say so |
 | Publication that widens what agents may do | **click only** | widening agent permissions stays a click |
 | MCP server narrowing (off, removal, dropped exemptions) | yes | it narrows what agents may do |
 | MCP server added, widened or turned on | **click only** | it widens what agents may do |

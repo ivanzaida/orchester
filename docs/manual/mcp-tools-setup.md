@@ -543,33 +543,44 @@ Pipelines that have a published version (which tasks run with): name, version, s
 
 ### `get_pipeline` — read-only
 
-One pipeline as its editor shows it (draft if any, else latest version): description and steps (key, name, agent
-profile or tool, runs after, approval gate, failure route with retries, step budget, repository access, model
-override and narrowed permissions, instructions), `delivers`, where it stands, the **problems that keep it from
-being published**, the published profiles and tools its steps can use, and its link.
+One pipeline as its editor shows it, its latest version (a pipeline is always a published version; saving publishes
+the next one, there are no pipeline drafts): description and steps (key, name, agent profile or tool, runs after,
+approval gate, failure route with retries, step budget, repository access, model override and narrowed permissions,
+instructions), `delivers`, its version (`published_version`), the problems its steps have here, the published
+profiles and tools its steps can use, and its link.
 
 Parameters: `project` (req.), `pipeline` (req.: id or name).
 
-### `create_pipeline` — changes data
+### `create_pipeline` — changes data · gate AP (a first version)
 
-Makes a new pipeline as draft v1 (*New pipeline*). The name must give a slug no other pipeline has.
+Makes a new pipeline and publishes it as **v1** (*New pipeline* and *Save*), or refuses it with every reason and
+stores nothing. The name must give a slug no other pipeline has.
 
-| Parameter  | Type                              | Req. | Description                                                         |
-|------------|-----------------------------------|------|---------------------------------------------------------------------|
-| `project`  | string                            | yes  | The project's id, or its name.                                      |
-| `name`     | string                            | yes  | The new pipeline's name.                                            |
-| `from`     | `starter` \| `empty` \| `copy`    | yes  | What it starts with.                                                |
-| `copy_of`  | string \| null                    | with `copy` | Pipeline to copy (its draft or latest version), by id or name. |
-| `delivers` | Delivers \| null                  | no   | Left out: `changes` (a copy: as its source).                        |
+| Parameter     | Type                              | Req. | Description                                                         |
+|---------------|-----------------------------------|------|---------------------------------------------------------------------|
+| `project`     | string                            | yes  | The project's id, or its name.                                      |
+| `name`        | string                            | yes  | The new pipeline's name.                                            |
+| `from`        | `starter` \| `empty` \| `copy`    | yes  | What it starts with.                                                |
+| `copy_of`     | string \| null                    | with `copy` | Pipeline to copy (its latest version), by id or name.        |
+| `steps`       | array<Step> \| null               | with `empty` | Every step, as `save_pipeline` takes them.                  |
+| `description` | string \| null                    | no (`empty` only) | What the pipeline is for.                              |
+| `delivers`    | Delivers \| null                  | no   | Left out: `changes` (a copy: as its source).                        |
 
 The **starter** is *Feature delivery*: Research → Plan (approval gate) → Implement → Run checks → Review (returns to
 Implement) → Create pull request. Steps get the published profiles and tools named *Explorer*, *Planner*, *Builder*,
 *Reviewer*, *Run test suite* and *Create pull request* where exactly one has that name.
 
-### `save_pipeline_draft` — changes data · gate AP for weakening changes
+Refusals: `not_publishable` (no steps — `empty` without `steps` always —, a step without a profile or tool or one
+that cannot run here, steps the flow cannot draw as one line), `invalid_pipeline` (steps that break a pipeline rule),
+`steps_not_taken` (`steps` or `description` with `starter` or `copy`), `copy_of_required`, `copy_of_not_taken`,
+`invalid_name`, `name_taken`. A first version has nothing to be compared with, so it is `person_only` unless AP is
+on, as is a step that calls a tool (it runs a program on this computer).
 
-Replaces the draft's steps, as the editor saves. Refused with the editor's reasons when the steps do not form a
-pipeline (nothing is saved then).
+### `save_pipeline` — changes data · gate AP unless provably no weaker
+
+Publishes the steps given as the pipeline's **next version**, as the editor's *Save* does, or refuses with every
+reason and stores nothing: a pipeline is always a published version (D-032), so there is no draft to keep and no
+separate publish. (`save_pipeline_draft` and `publish_pipeline` are gone; calling them is an unknown tool.)
 
 | Parameter     | Type              | Req. | Description                                              |
 |---------------|-------------------|------|----------------------------------------------------------|
@@ -585,7 +596,7 @@ pipeline (nothing is saved then).
 |--------------------|--------------------------|------|-----------------------------------------------------------------------------------------------------|
 | `key`              | string                   | yes  | Small letters, digits and `-`; other steps and instructions name it.                               |
 | `name`             | string                   | yes  | Display name.                                                                                       |
-| `profile`          | string \| null           | no   | Published agent profile that runs the step (id or name). Leave both `profile` and `tool` out = unassigned (blocks publishing only). |
+| `profile`          | string \| null           | no   | Published agent profile that runs the step (id or name). A step needs `profile` or `tool`: without either it is `not_publishable`. |
 | `tool`             | string \| null           | no   | Published command tool the step calls instead (id or name).                                         |
 | `runs_after`       | array<string>            | no   | Keys of the steps it runs after (no cycles).                                                        |
 | `approval_gate`    | boolean                  | no   | The step's result waits for a person's approval (e.g. a plan).                                      |
@@ -600,19 +611,17 @@ pipeline (nothing is saved then).
 Example command step: `{"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
 "on_failure": {"return_to": "implement", "retries": 2}}`.
 
-`person_only` unless AP is on: dropping an approval gate or *ask about tool calls* that the latest published version
-(before the first: the draft) has — removing the step that has it included — and adding a step that calls a tool
-neither the draft nor the latest version calls under that key (it runs a program on this computer).
+Refusals: `invalid_pipeline` (the steps do not form a pipeline), `not_publishable` with every reason (no steps, a
+step without a profile or tool or one that cannot run here, steps the flow cannot draw as one line, the version
+limit), `unchanged` (equal to the latest version), `version_changed` (a version was published since it was read).
 
-### `publish_pipeline` — changes data · gate AP unless provably no weaker
-
-Publishes the draft as the next version, so tasks can run it. Refused while it has no steps or a step has no profile
-or tool, or for a stale draft. Without AP only a draft **provably no weaker** than the latest published version is
-published (same steps, wiring, failure routes, profiles and tools; each step's approval, asking about tool calls,
-write access, commands and network the same or stricter). A pipeline's **first version** is always `person_only`
-without AP. So every version a task can run is one a person published, allowed, or could not object to.
-
-Parameters: `project` (req.), `pipeline` (req.).
+`person_only` unless AP is on, naming **every** reason at once — what saving and what publishing a draft asked a
+person for before, together: dropping an approval gate or *ask about tool calls* that the latest version has
+(removing the step that has it included); adding a step that calls a tool the latest version does not call under
+that key (it runs a program on this computer); and anything not **provably no weaker** than the latest version (same
+steps, wiring, failure routes, profiles and tools; each step's approval, asking about tool calls, write access,
+commands and network the same or stricter). So every version a task can run is one a person saved, allowed, or could
+not object to.
 
 ### `share_pipeline` — changes data · team project · Admin · gate AP
 

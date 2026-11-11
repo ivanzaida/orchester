@@ -97,7 +97,7 @@ pub(super) const SPECS: &[Spec] = &[
   Spec {
     name: "publish_tool",
     description: "Publishes a command tool's draft as its next version, as Publish does, so pipeline steps can call \
-                  it (save_pipeline_draft, a step with `tool`). Refused for a draft started from an older version \
+                  it (save_pipeline, a step with `tool`). Refused for a draft started from an older version \
                   than the latest, and as draft_changed for a draft that changed while it was checked. Unless a \
                   person turned on Let automation change agent permissions, a tool's first version is refused as \
                   person_only, and so is a draft that runs another program or other arguments than the latest \

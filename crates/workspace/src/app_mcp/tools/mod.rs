@@ -410,7 +410,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_pipelines",
-    description: "A project's pipelines that have a published version, which tasks run with: name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
+    description: "A project's pipelines, which tasks run with; each is always a published version (saving one publishes the next): name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
     schema: schema_for_type::<across::InProjects>,
     read_only: true,
   },

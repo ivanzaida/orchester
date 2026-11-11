@@ -633,9 +633,9 @@ runs here recorded nothing of it is refused as `team_task_unrecorded`.
 
 ### `duplicate_pipeline` — changes data · gate AP unless identical
 
-Copies a pipeline's latest published version into a new pipeline and publishes it as v1, optionally giving agent
-steps other published profiles. A copy that is not identical to its source (other profiles included) is
-`person_only` unless AP is on.
+Copies a pipeline's latest version into a new pipeline and publishes it as v1, or stores nothing when it is refused,
+optionally giving agent steps other published profiles. A copy that is not identical to its source (other profiles
+included) is `person_only` unless AP is on.
 
 | Parameter       | Type                 | Req. | Description                                                                         |
 |-----------------|----------------------|------|-------------------------------------------------------------------------------------|

@@ -1,23 +1,22 @@
-//! `get_pipeline`, `create_pipeline` and `publish_pipeline`: a pipeline as its editor opens it, its latest version; a
-//! new one made from the starter, empty, or a copy of another pipeline, and published as v1 or refused; and
-//! `publish_pipeline`, which a pipeline without drafts (D-032) always refuses.
+//! `get_pipeline` and `create_pipeline`: a pipeline as its editor opens it, its latest version (a pipeline is always a
+//! published version, D-032); and a new one made from the starter, a copy of another pipeline, or the steps given,
+//! published as v1 or refused with nothing stored.
 
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
   permission::{StepCommands, StepNetwork},
-  resource::{
-    Pipeline, PipelineEdit, PromptText, PublishError, ResourceKind, StarterStep, StarterStepText, Step, StepKind,
-  },
+  resource::{Pipeline, PipelineEdit, PromptText, StarterStep, StarterStepText, Step, StepKind},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
   super::{Translate, pipeline_copy::create_error, wire::Delivers},
+  pipeline_steps::{Kept, StepInput, body_of},
   widening,
 };
 use crate::{
@@ -30,7 +29,8 @@ use crate::{
   pipelines::{
     data::{Assignables, OpenError, OpenedPipeline},
     library::{self, StarterText, create_with},
-    problems::{problem_view, publish_error},
+    problems::problem_view,
+    widening::save_reasons,
     write::save_refusals,
   },
   tasks::outside::Outside,
@@ -46,7 +46,7 @@ pub struct InPipeline {
   pub pipeline: String,
 }
 
-/// What a new pipeline starts with.
+/// What a new pipeline starts with: the starter, a copy, or nothing but the steps given.
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[schemars(crate = "rmcp::schemars")]
@@ -67,6 +67,10 @@ pub struct CreatePipeline {
   pub from: Start,
   /// With `copy`: the pipeline to copy, by its id or name.
   pub copy_of: Option<String>,
+  /// With `empty`: every step, in the order the editor shows them, each as `save_pipeline` takes it.
+  pub steps: Option<Vec<StepInput>>,
+  /// With `empty`: what the pipeline is for.
+  pub description: Option<String>,
   /// What its runs deliver: changes (repository changes, merged), report (the last step's report), outside (work done
   /// through MCP tools outside the repository) or changes_or_report; left out, changes (a copy: as its source).
   pub delivers: Option<Delivers>,
@@ -90,37 +94,23 @@ pub async fn create_pipeline(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let starter = starter_text(translate);
+  let then = translate.text(&Message::new("pipelines.flow.then"));
   let (project, opened) = blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-    let mut body = match (args.from, &args.copy_of) {
-      (Start::Copy, Some(named)) => opened(&db, pipeline_named(&db, named)?, named)?.body,
-      (Start::Copy, None) => {
-        return Err(refused(
-          "copy_of_required",
-          Message::new("appMcp.errors.copyOfRequired"),
-        ));
-      }
-      (_, Some(_)) => {
-        return Err(refused(
-          "copy_of_not_taken",
-          Message::new("appMcp.errors.copyOfNotTaken"),
-        ));
-      }
-      (Start::Starter, None) => starter.pipeline(&Assignables::load(&db)?),
-      (Start::Empty, None) => Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid body"),
-    };
+    let assignables = Assignables::load(&db)?;
+    let mut body = new_body(&db, &args, (&starter, &assignables, &then))?;
     if let Some(delivers) = args.delivers {
       body = body.with_delivers(delivers.into());
     }
-    // Creating publishes v1 (D-032): a body the save check refuses is refused first, whoever asks; then a first
-    // version widens what agents may do, as there is nothing to compare it with.
-    let refusals = save_refusals(&body, &Assignables::load(&db)?, None);
+    // Creating publishes v1 (D-032): a body the save check refuses is refused first, whoever asks; then what a first
+    // version widens, as there is nothing to compare it with, and the tool steps it adds, need a person.
+    let refusals = save_refusals(&body, &assignables, None);
     if !refusals.is_empty() {
       return Err(ToolError::refused("not_publishable", refusals));
     }
-    widening::check_pipeline(&services, None, &body)?;
+    widening::allowed(&services, save_reasons(None, &body, &assignables))?;
     let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
@@ -131,21 +121,38 @@ pub async fn create_pipeline(
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
-/// A pipeline holds no draft (D-032): saving one publishes it, so there is never a draft to publish here.
-pub async fn publish_pipeline(
-  services: &Services,
-  args: InPipeline,
-  _translate: &Translate,
-) -> Result<Value, ToolError> {
-  let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
-    pipeline_named(&db, &args.pipeline)?;
-    let error = StoreError::NoDrafts(ResourceKind::Pipeline);
-    Err(ToolError::refused(publish_code(&error), vec![publish_error(&error)]))
-  })
-  .await
+/// The body `args` ask the new pipeline to start with: the starter's steps with what `assignables` offer, a copy of
+/// another pipeline's latest version, or the steps given (`empty`, no steps at all when left out).
+fn new_body(
+  db: &ProjectDb,
+  args: &CreatePipeline,
+  (starter, assignables, then): (&StarterText, &Assignables, &str),
+) -> Result<Pipeline, ToolError> {
+  if args.from != Start::Empty && (args.steps.is_some() || args.description.is_some()) {
+    return Err(refused("steps_not_taken", Message::new("appMcp.errors.stepsNotTaken")));
+  }
+  match (args.from, &args.copy_of) {
+    (Start::Copy, Some(named)) => Ok(opened(db, pipeline_named(db, named)?, named)?.body),
+    (Start::Copy, None) => Err(refused(
+      "copy_of_required",
+      Message::new("appMcp.errors.copyOfRequired"),
+    )),
+    (_, Some(_)) => Err(refused(
+      "copy_of_not_taken",
+      Message::new("appMcp.errors.copyOfNotTaken"),
+    )),
+    (Start::Starter, None) => Ok(starter.pipeline(assignables)),
+    (Start::Empty, None) => {
+      let empty = Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid body");
+      let kept = Kept {
+        description: args.description.as_deref().unwrap_or_default(),
+        sources: empty.sources().clone(),
+        deliver: None,
+        delivers: empty.delivers(),
+      };
+      body_of(args.steps.as_deref().unwrap_or_default(), kept, (assignables, then))
+    }
+  }
 }
 
 /// The project's pipeline named by its id or, ignoring case, its name, whether published or not.
@@ -322,18 +329,6 @@ fn assignable_json(assignables: &Assignables) -> Value {
     .map(|tool| json!({ "id": tool.id.to_string(), "name": &*tool.name, "runnable": tool.runnable }))
     .collect();
   json!({ "profiles": profiles, "tools": tools })
-}
-
-fn publish_code(error: &StoreError) -> &'static str {
-  match error {
-    StoreError::NoDraft(_) | StoreError::NoDrafts(_) => "no_draft",
-    StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
-    StoreError::DraftChanged(_) => "draft_changed",
-    StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => "not_publishable",
-    StoreError::Publish(PublishError::VersionLimit) => "version_limit",
-    StoreError::NotAdmin => "not_admin",
-    _ => "project_data",
-  }
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {

@@ -7,7 +7,9 @@ use rmcp::model::Tool;
 
 use super::{
   change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
-  tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, DUPLICATE_PIPELINE, MERGE_RUN, RUN_TASK, SEND_MESSAGE},
+  tools::{
+    ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, DUPLICATE_PIPELINE, MERGE_RUN, PIPELINE_CHANGES, RUN_TASK, SEND_MESSAGE,
+  },
 };
 
 /// What the agent reads of a tool that works otherwise in the chat, while it `drives` or not; `None` for one that
@@ -20,7 +22,7 @@ pub(super) fn in_chat(tool: &Tool, drives: bool) -> Option<String> {
   }
   let first = match name {
     RUN_TASK => return Some(PROPOSE_RUN.to_owned()),
-    DUPLICATE_PIPELINE => DRIVE_DUPLICATE,
+    _ if PIPELINE_CHANGES.contains(&name) => PIPELINE_DRIVE_ONLY,
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
     RESUME_RUN => RESUME_PAUSED,
@@ -51,10 +53,16 @@ const DRIVE_RUN: &str = "Starts the run at once, through the same checks as for 
   (its blocked_reason) is refused as task_blocked, naming the reason: you never start it; the person may start it in \
   the app.";
 
-/// What the agent reads first of `duplicate_pipeline`, whether the chat drives or not.
+/// What the agent reads first of `duplicate_pipeline` while the chat drives.
 const DRIVE_DUPLICATE: &str = "In this chat it publishes the copy as its first version at once, as for any client: \
   a copy that widens what agents may do is refused (person_only) unless a person turned on Let automation change \
   agent permissions.";
+
+/// What the agent reads first of a tool that changes a pipeline while the chat does not drive (D-033).
+const PIPELINE_DRIVE_ONLY: &str = "In this chat it changes no pipeline while Let the Orchestrator drive is off: the \
+  call is refused (drive_only) and nothing is proposed, since a pipeline is always a published version and has no \
+  draft. Tell the person what to change and that they save it in Pipelines, or that they can turn on Let the \
+  Orchestrator drive for you to do it. What the tool does once the chat drives:";
 
 /// What the agent reads first of `merge_run` while the chat drives.
 const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself it merges only a run the chat's rule \

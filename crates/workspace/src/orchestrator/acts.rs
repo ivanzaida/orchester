@@ -121,6 +121,9 @@ async fn act(
     Ok(drives) => drives,
     Err(error) => return Acted::done(Err(error)),
   };
+  if let Some(refused) = guard::pipeline_refused(name, drives) {
+    return Acted::done(Err(refused));
+  }
   // While driving, the tools are called as the chat's own: what only a person's switch allowed a client (accepting a
   // step, raising limits, what a publication changes in agents' prompts) the chat's switch allows.
   let driving;
