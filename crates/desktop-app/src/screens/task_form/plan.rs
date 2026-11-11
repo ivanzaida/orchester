@@ -17,7 +17,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::{ProjectId, ResourceId};
+use orchester_core::id::ResourceId;
 use orchester_workspace::tasks::{
   data::{PipelineChoice, PipelineStepChoice},
   list::PipelineLabel,
@@ -31,7 +31,9 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{PipelineView, ProjectPage, Route},
+  project::ShownProject,
+  routes::Route,
+  screens::pipeline_link::PipelineLinks,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     filter::filter_menu_panel,
@@ -189,7 +191,7 @@ fn gates(ctx: &Ctx, steps: &[PipelineStepChoice]) -> Option<String> {
 
 /// The plan line under the chips once a pipeline is chosen (`Plan line` `o27CHI`): a 13 `route`, the steps in 12
 /// `text_secondary`, where approval is needed in `warning`, and *View pipeline ↗* at the end, 8 apart.
-pub fn plan_line(ctx: &mut Ctx, view: &View, project: ProjectId) -> Option<Element> {
+pub fn plan_line(ctx: &mut Ctx, view: &View, project: &ShownProject) -> Option<Element> {
   let choice = view.pipeline()?;
   let steps = choice
     .steps
@@ -205,7 +207,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: ProjectId) -> Option<Eleme
     ),
     None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::TextMuted),
   };
-  let route = Route::Project(project, ProjectPage::Pipeline(choice.id, PipelineView::Steps));
+  let route = Route::Project(project.open.project.id(), PipelineLinks::of(project).page(choice.id));
   let view_pipeline = Focus::Link
     .apply(opening(Navigation::of(ctx).to(route)))
     .id("task-form-view-pipeline")

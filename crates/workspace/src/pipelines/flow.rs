@@ -310,6 +310,9 @@ pub struct Stored {
   /// Whether `body` differs from the latest published version, or none was published: a save has something to
   /// publish. A stored draft that equals the latest version has nothing.
   pub unpublished: bool,
+  /// The latest published version's flow while a draft stands over it; `None` when `read` is that version's, or the
+  /// pipeline has none.
+  pub published: Option<FlowRead>,
 }
 
 impl FlowRead {
@@ -324,18 +327,28 @@ impl FlowRead {
       },
     };
     let unpublished = latest.as_ref().is_none_or(|version| version.body() != &body);
-    let flow = PipelineFlow::of(&body, assignables);
+    let read = Self::of_body(&body, draft, assignables);
+    let published = latest
+      .filter(|_| draft)
+      .map(|version| Self::of_body(version.body(), false, assignables));
     Ok(Some(Stored {
-      read: Self {
-        draft,
-        ending: Ending::of(&body),
-        unplaced: unplaced(&flow, body.steps(), assignables),
-        refused: refused_step(body.steps(), assignables),
-        flow,
-      },
+      read,
       body,
       unpublished,
+      published,
     }))
+  }
+
+  /// The flow of the stored `body`, a draft's (`draft`) or a published version's.
+  fn of_body(body: &Pipeline, draft: bool, assignables: &Assignables) -> Self {
+    let flow = PipelineFlow::of(body, assignables);
+    Self {
+      draft,
+      ending: Ending::of(body),
+      unplaced: unplaced(&flow, body.steps(), assignables),
+      refused: refused_step(body.steps(), assignables),
+      flow,
+    }
   }
 
   /// The flow of `edit`, which the page draws while it holds the edit. Steps that break a rule leave no flow

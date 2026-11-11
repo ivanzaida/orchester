@@ -361,15 +361,25 @@ fn a_command_the_profile_no_longer_allows_is_said_refused_and_taken_back() {
     agents.text("pipeline-hub-step-permissions-error")
   );
 
+  // A draft is always saved; only publishing refuses the narrowing the profile no longer allows (PV2-19).
   agents.click("pipeline-hub-step-approval");
-  // One press: a press starts the save again, which takes the last refusal away.
   agents.click(SAVE);
-  agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
+  agents.until("the draft kept", |s| s.exists("pipeline-hub-kept"));
+  let kept = agents.text("pipeline-hub-kept");
+  assert!(kept.contains("cargo build"), "the notice names the command: {kept}");
+  let draft = ProjectDb::open(&agents.root)
+    .expect("database")
+    .draft::<Pipeline>(id)
+    .expect("read")
+    .expect("the draft is stored");
+  let step = draft.body().step(&key).expect("the step");
+  assert!(step.approval_gate, "the change is kept in the draft");
   assert_eq!(
     narrowing(&agents, id, &key).commands,
     only(&["cargo build"]),
-    "nothing saved"
+    "nothing published"
   );
+  agents.until("the bar says why", |s| s.text(HINT).contains("cargo build"));
 
   agents.click("pipeline-hub-step-permissions-reset");
   agents.until("the error is gone", |s| {

@@ -78,6 +78,9 @@ pub struct HubPipeline {
   pub body: Arc<Pipeline>,
   /// Whether they differ from the latest published version, or none was published: a save has something to publish.
   pub unpublished: bool,
+  /// The latest published version's steps as the page reads them, which the list and the chips speak of: the same as
+  /// `flow` while no draft stands over it; `None` while it has no version.
+  pub published: Option<Arc<FlowRead>>,
 }
 
 impl HubPipeline {
@@ -179,6 +182,13 @@ fn of_entry(
   (standing, problem, undecided): (Option<ReadinessStanding>, Option<Message>, Vec<UndecidedMember>),
   stored: Stored,
 ) -> HubPipeline {
+  let read = Arc::new(stored.read);
+  // Without a draft over it the published version is what `read` holds: one `Arc` for both.
+  let published = match (entry.state, stored.published) {
+    (_, Some(version)) => Some(Arc::new(version)),
+    (VersionState::Published(_), None) => Some(read.clone()),
+    (VersionState::DraftOnly | VersionState::PublishedWithDraft(_), None) => None,
+  };
   HubPipeline {
     id: entry.id,
     name: entry.name,
@@ -189,9 +199,10 @@ fn of_entry(
     standing,
     problem,
     undecided,
-    flow: Arc::new(stored.read),
+    flow: read,
     body: Arc::new(stored.body),
     unpublished: stored.unpublished,
+    published,
   }
 }
 

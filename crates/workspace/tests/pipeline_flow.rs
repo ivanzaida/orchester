@@ -27,7 +27,8 @@ fn profile(name: &str, model: &str) -> ProfileChoice {
     name: name.into(),
     version: VersionNumber::new(NonZeroU32::MIN),
     model: ModelId::new(model).expect("valid model"),
-    connection: None,
+    // A profile runs on a connection the project has; `None` would say it was removed.
+    connection: Some("Claude".into()),
     provider: None,
     permissions: AgentPermissions::new(
       RepositoryAccess::Write,
@@ -448,4 +449,26 @@ fn a_card_knows_a_profile_or_tool_that_is_gone_from_one_only_not_published() {
   let gone: Vec<bool> = flow.stages.iter().map(|stage| stage.cards[0].gone).collect();
   assert_eq!(gone, [true, false, false, true]);
   assert!(matches!(flow.stages[0].cards[0].runs, Runs::ProfileNotPublished { .. }));
+}
+
+#[test]
+fn a_profile_whose_connection_was_removed_cannot_run_and_says_so() {
+  let mut lost = profile("Explorer", "claude-sonnet-5-5");
+  lost.connection = None;
+  let pipeline = Pipeline::new(vec![step("research", agent(&lost, RepositoryAccess::ReadOnly), &[])]).expect("valid");
+  let assignables = Assignables {
+    profiles: vec![lost.clone()],
+    ..Assignables::default()
+  };
+
+  let flow = PipelineFlow::of(&pipeline, &assignables).expect("a flow");
+  let runs = &flow.stages[0].cards[0].runs;
+  assert_eq!(
+    runs,
+    &Runs::ProfileConnectionGone {
+      id: lost.id,
+      name: "Explorer".into()
+    }
+  );
+  assert!(runs.needs_you(), "its card stands in amber");
 }
