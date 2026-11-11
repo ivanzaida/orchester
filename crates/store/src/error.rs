@@ -171,6 +171,14 @@ pub enum StoreError {
   /// A new resource has no draft: it is created as its first version, and a draft is only ever saved over a version.
   #[error("resource {0} has no published version, so it can hold no draft")]
   NoFirstVersion(ResourceId),
+  /// Resources of this kind are stored only as published versions (pipelines, D-032): none is created as a draft and
+  /// none holds one. Nothing was changed.
+  #[error("a {0:?} holds no draft")]
+  NoDrafts(ResourceKind),
+  /// A pipeline edit that equals the version it was made from changes nothing: no version is published for it, and
+  /// nothing was changed.
+  #[error("the edit of resource {0} equals its latest version")]
+  Unchanged(ResourceId),
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),

@@ -1,6 +1,8 @@
 //! The migration by which pipelines have no drafts (D-032, D-033): a database before it opens with every pipeline draft
 //! deleted, a local one's, one over a version and an admin's of a team pipeline, and every pipeline with no version
-//! deleted with what names it; the other kinds keep their drafts, and the references the database checks still hold.
+//! deleted with what names it; the other kinds keep their drafts, a version a run pinned or that waits for the team
+//! server stays, a shared task naming a deleted pipeline reads it as missing, and the references the database checks
+//! still hold. A project without pipelines is left as it is.
 //! `cargo test -p orchester-store --test pipeline_drafts_migration pipeline_drafts_migration`.
 
 mod support;
@@ -15,12 +17,12 @@ use orchester_core::{
     AgentProfile, Draft, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceKind, Slug, Step, StepKey,
     StepKind, VersionNumber,
   },
-  store::{ResourceStore, TaskStore},
+  store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
 };
 use orchester_store::{ProjectDb, ProjectMigration};
 use rusqlite::{Connection, params};
-use support::{at, copied_at_version, model, name};
+use support::{at, copied_at_version, model, name, started_run};
 use tempfile::TempDir;
 
 fn project() -> (TempDir, ProjectDb) {
@@ -88,91 +90,97 @@ fn task(db: &mut ProjectDb, title: &str) -> TaskId {
 /// What the database held before the migration.
 struct Seeded {
   builder: ResourceId,
-  /// A pipeline that is only a draft: the default, imported, archived and chosen by `sketch_task`.
+  /// A pipeline that is only a draft: the default, imported (from a project and from a repository), archived, chosen
+  /// by `sketch_task` and named by `team_task`, a shared task, by its resource id.
   sketch: ResourceId,
   sketch_task: TaskId,
+  team_task: TaskId,
   /// v2 with a draft over it, saved by automation, and chosen by `delivery_task`.
   delivery: ResourceId,
   delivery_task: TaskId,
-  /// The team's, v1 with an admin's local draft over it.
+  /// The team's, v1 waiting for the server, with an admin's local draft over it.
   team_flow: ResourceId,
 }
 
-/// Seeds through the store what it can still make and the draft-only pipeline in raw rows, as an older build left them.
+/// Seeds through the store what it can still make, and the drafts and the draft-only pipeline in raw rows, as an older
+/// build left them. The project has a run started on a pipeline of its own.
 fn seeded(repo: &TempDir, db: &mut ProjectDb) -> Seeded {
   let (builder, _) = db
-    .create_published(
-      Slug::new("builder").expect("slug"),
-      name("Builder"),
-      &profile(""),
-      at(1),
-    )
+    .create_published(Slug::new("maker").expect("slug"), name("Builder"), &profile(""), at(1))
     .expect("profile");
   let builder = builder.id();
   db.save_draft(builder, &Draft::new(profile("Kept"), Some(VersionNumber::FIRST), at(2)))
     .expect("a profile's draft");
   let (delivery, _) = db
-    .published_pipeline_for_test("delivery", "Delivery", &pipeline(&["implement"], builder), at(2))
+    .published_pipeline_for_test("shipping", "Shipping", &pipeline(&["implement"], builder), at(2))
     .expect("delivery");
-  let v2 = db
-    .publish_pipeline_edit(
-      delivery,
-      &pipeline(&["plan"], builder),
-      VersionNumber::FIRST,
-      None,
-      at(3),
-    )
-    .expect("v2");
-  db.save_draft(
+  db.publish_pipeline_edit(
     delivery,
-    &Draft::new(pipeline(&["review"], builder), Some(v2.number()), at(4)),
+    &pipeline(&["plan"], builder),
+    VersionNumber::FIRST,
+    None,
+    at(3),
   )
-  .expect("a draft over v2");
+  .expect("v2");
   let (team_flow, _) = db
     .published_pipeline_for_test("team-flow", "Team flow", &pipeline(&["implement"], builder), at(5))
     .expect("team flow");
-  db.save_draft(
-    team_flow,
-    &Draft::new(pipeline(&["check"], builder), Some(VersionNumber::FIRST), at(6)),
-  )
-  .expect("an admin's draft");
   let sketch_task = task(db, "Sketch it");
   let delivery_task = task(db, "Deliver it");
+  let team_task = task(db, "Share it");
   let sketch = ResourceId::generate();
   let raw = Connection::open(database(repo)).expect("the database");
-  raw_rows(&raw, [sketch, delivery, team_flow], [sketch_task, delivery_task]);
+  raw_rows(
+    &raw,
+    [sketch, delivery, team_flow],
+    [sketch_task, delivery_task, team_task],
+  );
   Seeded {
     builder,
     sketch,
     sketch_task,
+    team_task,
     delivery,
     delivery_task,
     team_flow,
   }
 }
 
-/// The draft-only Sketch, with what names it, and the marks the migration reads on Delivery and Team flow.
+/// The draft-only Sketch, with what names it, the drafts over Delivery's v2 and Team flow's v1, and the marks the
+/// migration reads or keeps on them.
 fn raw_rows(
   raw: &Connection,
   [sketch, delivery, team_flow]: [ResourceId; 3],
-  [sketch_task, delivery_task]: [TaskId; 2],
+  [sketch_task, delivery_task, team_task]: [TaskId; 3],
 ) {
-  let body: String = raw
+  let (body, team_version): (String, String) = raw
     .query_row(
-      "SELECT body FROM resource_versions WHERE resource_id = ?1",
+      "SELECT body, id FROM resource_versions WHERE resource_id = ?1",
       [team_flow.to_string()],
-      |row| row.get(0),
+      |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .expect("a pipeline body");
   let sketch = sketch.to_string();
-  let statements: [(&str, Vec<String>); 10] = [
+  let statements: [(&str, Vec<String>); 15] = [
     (
       "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'sketch', 'Sketch', 7)",
       vec![sketch.clone()],
     ),
     (
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, NULL, 7)",
-      vec![sketch.clone(), body],
+      vec![sketch.clone(), body.clone()],
+    ),
+    (
+      "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 2, 4)",
+      vec![delivery.to_string(), body.clone()],
+    ),
+    (
+      "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 1, 6)",
+      vec![team_flow.to_string(), body],
+    ),
+    (
+      "INSERT INTO shared_publishes (version_id, resource_id, idempotency_key) VALUES (?1, ?2, 'publish-1')",
+      vec![team_version, team_flow.to_string()],
     ),
     (
       "INSERT INTO project_default_pipeline (id, pipeline_id) VALUES (1, ?1)",
@@ -181,6 +189,10 @@ fn raw_rows(
     (
       "INSERT INTO resource_imports (resource_id, import_key, source_project_id, source_project_name, \
        source_resource_id, source_version, imported_at) VALUES (?1, 'import-1', 'p', 'Atlas', 's', NULL, 7)",
+      vec![sketch.clone()],
+    ),
+    (
+      "INSERT INTO repository_imports (resource_id, import_key, source, imported_at) VALUES (?1, 'files-1', 'AGENTS.md', 7)",
       vec![sketch.clone()],
     ),
     (
@@ -202,7 +214,11 @@ fn raw_rows(
     ),
     (
       "UPDATE tasks SET pipeline_id = ?1 WHERE id = ?2",
-      vec![sketch, sketch_task.to_string()],
+      vec![sketch.clone(), sketch_task.to_string()],
+    ),
+    (
+      "UPDATE tasks SET sharing = 'shared', pipeline_slug = ?1 WHERE id = ?2",
+      vec![sketch, team_task.to_string()],
     ),
     (
       "UPDATE tasks SET pipeline_id = ?1 WHERE id = ?2",
@@ -240,11 +256,24 @@ fn count(raw: &Connection, sql: &str, id: ResourceId) -> i64 {
 
 #[test]
 fn pipeline_drafts_migration_deletes_every_pipeline_draft_and_the_pipelines_with_no_version() {
-  let (repo, mut db) = project();
+  let (repo, mut db, run, _) = started_run();
   let seeded = seeded(&repo, &mut db);
   drop(db);
 
   let (old, db) = migrated(&repo);
+
+  let pinned = run.snapshot().pipeline();
+  let ran = db
+    .version::<Pipeline>(pinned.resource, pinned.number)
+    .expect("read")
+    .expect("the version a run pinned stays");
+  assert_eq!(ran.id(), pinned.version);
+  assert!(db.run(run.id()).expect("read").is_some(), "the run stays");
+  assert_eq!(
+    db.missing_pipelines().expect("read").get(&seeded.team_task),
+    Some(&seeded.sketch.to_string()),
+    "a shared task naming the deleted pipeline reads it as missing, so an edit sends no pipeline change"
+  );
 
   assert_eq!(
     db.resource(seeded.sketch).expect("read"),
@@ -307,11 +336,50 @@ fn pipeline_drafts_migration_deletes_every_pipeline_draft_and_the_pipelines_with
       "SELECT COUNT(*) FROM money_step_budgets_before_tokens WHERE owner_id = ?1",
       seeded.sketch,
     ),
+    (
+      "SELECT COUNT(*) FROM repository_imports WHERE resource_id = ?1",
+      seeded.sketch,
+    ),
   ] {
     assert_eq!(count(&raw, sql, id), 0, "{sql}");
   }
+  assert_eq!(
+    count(
+      &raw,
+      "SELECT COUNT(*) FROM shared_publishes WHERE resource_id = ?1",
+      seeded.team_flow
+    ),
+    1,
+    "a kept team pipeline's version still waits for the server"
+  );
   let references: i64 = raw
     .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))
     .expect("check");
   assert_eq!(references, 0);
+}
+
+#[test]
+fn pipeline_drafts_migration_changes_nothing_in_a_project_without_pipelines() {
+  let (repo, mut db) = project();
+  let (builder, _) = db
+    .create_published(Slug::new("maker").expect("slug"), name("Builder"), &profile(""), at(1))
+    .expect("profile");
+  db.save_draft(
+    builder.id(),
+    &Draft::new(profile("Kept"), Some(VersionNumber::FIRST), at(2)),
+  )
+  .expect("a profile's draft");
+  let task = task(&mut db, "Plain");
+  drop(db);
+
+  let (_old, db) = migrated(&repo);
+
+  assert!(db.resources(ResourceKind::Pipeline).expect("read").is_empty());
+  assert_eq!(db.resources(ResourceKind::AgentProfile).expect("read").len(), 1);
+  let kept = db
+    .draft::<AgentProfile>(builder.id())
+    .expect("read")
+    .expect("the profile keeps its draft");
+  assert_eq!(kept.body().responsibilities(), "Kept");
+  assert!(db.task(task).expect("read").is_some(), "the task stays");
 }

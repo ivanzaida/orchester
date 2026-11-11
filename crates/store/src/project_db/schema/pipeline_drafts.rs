@@ -4,7 +4,9 @@
 //! version at all is deleted too, with what names it: its default mark, its archive mark, where it was imported from,
 //! and the pipeline of a task that chose it, which then has none.
 //!
-//! Left as they are: a task's creation snapshot (immutable history), an instruction or skill scoped to a deleted
+//! Left as they are: a shared task's `pipeline_slug` naming a deleted pipeline by its resource id (it reads as missing
+//! then, `ProjectDb::missing_pipelines`, and an edit of the task sends no pipeline change, so the team's task keeps its
+//! pipeline), a task's creation snapshot (immutable history), an instruction or skill scoped to a deleted
 //! pipeline inside a published version (immutable; the scope then applies nowhere), and an Orchestrator proposal to
 //! publish one (refused as changed when applied). A pipeline with no version never ran, so no run names it.
 

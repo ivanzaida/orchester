@@ -23,8 +23,8 @@ impl ProjectDb {
   /// renames the pipeline from `names.0` to `names.1` when asked, atomically. A body that cannot be published is
   /// refused, as is an edit made from a version that is no longer the one used here
   /// ([`orchester_core::resource::PublishError::StaleDraft`]) and a rename whose name changed meanwhile
-  /// ([`StoreError::DraftChanged`]); nothing is changed then. In a team project the person must be an admin, and the
-  /// version waits for the server.
+  /// ([`StoreError::DraftChanged`]) and a body equal to the latest version ([`StoreError::Unchanged`]); nothing is
+  /// changed then. In a team project the person must be an admin, and the version waits for the server.
   pub fn publish_pipeline_edit(
     &mut self,
     resource: ResourceId,
@@ -47,7 +47,11 @@ impl ProjectDb {
         return Err(StoreError::DraftChanged(resource));
       }
     }
-    let latest = used_here::<Pipeline>(&transaction, resource)?.map(|version| version.number());
+    let latest = used_here::<Pipeline>(&transaction, resource)?;
+    if latest.as_ref().is_some_and(|version| version.body() == body) {
+      return Err(StoreError::Unchanged(resource));
+    }
+    let latest = latest.map(|version| version.number());
     let edit = Draft::new(body.clone(), Some(based_on), now);
     let version = publish_prepared(&transaction, resource, edit, latest, now)?;
     transaction.commit()?;

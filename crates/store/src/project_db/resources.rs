@@ -219,6 +219,7 @@ impl ResourceStore for ProjectDb {
     body: &B,
     now: Timestamp,
   ) -> Result<Resource, StoreError> {
+    super::new_resources::ensure_holds_drafts(B::KIND)?;
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
     let resource = super::new_resources::insert::<B>(&transaction, slug, name, now)?;
@@ -373,6 +374,7 @@ pub(super) fn save_draft<B: ResourceBody>(
   resource: ResourceId,
   draft: &Draft<B>,
 ) -> Result<DraftSaved, StoreError> {
+  super::new_resources::ensure_holds_drafts(B::KIND)?;
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
   shared_publishes::ensure_may_change(connection, resource)?;

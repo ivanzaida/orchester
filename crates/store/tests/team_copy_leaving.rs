@@ -81,11 +81,10 @@ fn pipeline() -> Pipeline {
 
 /// A resource of this computer's own with a version published, and its copy for the team waiting for the server.
 fn own_and_copy<B: ResourceBody + Clone>(db: &mut ProjectDb, body: &B) -> (ResourceId, ResourceId) {
-  let own = db
-    .create_resource(Slug::new("review").expect("slug"), name("Review"), body, at(10))
-    .expect("an own resource")
-    .id();
-  db.publish_draft::<B>(own, at(11)).expect("v1 here");
+  let (own, _) = db
+    .create_published(Slug::new("review").expect("slug"), name("Review"), body, at(10))
+    .expect("an own resource, v1 here");
+  let own = own.id();
   let copy = db.copy_for_the_team::<B>(own, at(20)).expect("the copy").id();
   (own, copy)
 }

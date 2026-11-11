@@ -66,6 +66,17 @@ const fn created_published(kind: ResourceKind) -> bool {
   )
 }
 
+/// Fails for a kind that holds no draft at all: a pipeline is stored only as published versions (D-032), so none is
+/// created as a draft ([`ProjectDb::create_published`] makes it) and none is saved over a version
+/// ([`ProjectDb::publish_pipeline_edit`] publishes an edit).
+pub(super) const fn ensure_holds_drafts(kind: ResourceKind) -> Result<(), StoreError> {
+  if matches!(kind, ResourceKind::Pipeline) {
+    Err(StoreError::NoDrafts(kind))
+  } else {
+    Ok(())
+  }
+}
+
 /// Fails when a draft of `resource` would be the first thing it holds: a resource of a kind created as its first
 /// version has a draft only over a version. One that already has a draft (a copy imported as a draft) keeps being
 /// edited.

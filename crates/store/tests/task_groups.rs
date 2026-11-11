@@ -136,7 +136,7 @@ fn edit(db: &mut ProjectDb, task: &orchester_core::task::Task, details: orcheste
 
 #[test]
 fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs_and_queue() {
-  let (_, mut db, run, _) = started_run();
+  let (repo, mut db, run, _) = started_run();
   let (pipeline, drafts) = drafts(&mut db);
   let mut incomplete = drafts[1].details().clone();
   incomplete.brief.clear();
@@ -193,21 +193,15 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
     db.set_tasks_pipeline(&[drafts[1].id()], ResourceId::generate()),
     Err(StoreError::ResourceNotFound(_))
   ));
-  let body = db
-    .latest_version::<Pipeline>(pipeline)
-    .expect("version")
-    .expect("published")
-    .body()
-    .clone();
-  let unpublished = db
-    .create_resource(
-      orchester_core::resource::Slug::new("unpublished").expect("slug"),
-      name("Unpublished"),
-      &body,
-      at(10),
+  // A pipeline with no version, as an older build left one (a pipeline is created as v1 now, D-032).
+  let unpublished = ResourceId::generate();
+  rusqlite::Connection::open(repo.path().join(".orchester/orchester.db"))
+    .expect("the database")
+    .execute(
+      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'unpublished', 'Unpublished', 10)",
+      [unpublished.to_string()],
     )
-    .expect("draft pipeline")
-    .id();
+    .expect("a pipeline without a version");
   assert!(matches!(
     db.set_tasks_pipeline(&[drafts[1].id()], unpublished),
     Err(StoreError::PipelineNotPublished(_))

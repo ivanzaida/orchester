@@ -1,11 +1,14 @@
-//! A checked ungated snapshot waits for an actual SQLite writer, then refuses its newer gates.
-use std::{cell::RefCell, sync::mpsc, thread, time::Duration};
+//! A checked snapshot waits for an actual SQLite writer, then refuses the draft it saved meanwhile. The mechanics are
+//! shared by every kind that holds drafts; an instruction stands for them (a pipeline holds none, D-032).
+use std::{cell::RefCell, collections::BTreeSet, sync::mpsc, thread, time::Duration};
 
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
   project::{Project, ProjectKey},
-  resource::{Draft, DraftSaved, Pipeline, PipelineEdit, RepositoryAccess, ResourceBody, Slug, StepKind},
+  resource::{
+    AgentTargets, Draft, DraftSaved, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceBody, Slug,
+  },
   store::ResourceStore,
   time::Timestamp,
 };
@@ -36,18 +39,14 @@ enum Start {
   PublishedOnly,
   PublishedDraft,
 }
-fn original() -> Pipeline {
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty fixture pipeline is valid"));
-  let key = edit.add_step(Name::new("Build").expect("fixture step name is valid"), None);
-  edit.update(&key, |step| {
-    if let StepKind::Agent { profile, .. } = &mut step.kind {
-      *profile = Some(ResourceId::generate());
-    }
-  });
-  edit
-    .validate()
-    .expect("single fixture step is valid")
-    .with_description("published snapshot".into())
+fn instruction(text: &str) -> Instruction {
+  Instruction::new(
+    PromptText::new(text).expect("fixture text is valid"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Project,
+  )
+  .expect("fixture instruction is valid")
 }
 fn project(root: &std::path::Path) -> ProjectDb {
   std::fs::create_dir(root.join(".git")).expect("private fixture repository is writable");
@@ -61,70 +60,35 @@ fn project(root: &std::path::Path) -> ProjectDb {
   )
   .expect("private fixture database is created")
 }
-fn gated(body: &Pipeline, tool_calls: bool) -> Pipeline {
-  let mut edit = PipelineEdit::new(body.clone());
-  let key = edit.steps()[0].key.clone();
-  edit.update(&key, |step| {
-    if tool_calls {
-      let StepKind::Agent {
-        permissions,
-        repository,
-        ..
-      } = &mut step.kind
-      else {
-        panic!("agent fixture");
-      };
-      *repository = RepositoryAccess::ReadOnly;
-      permissions.interactive_tool_approvals = true;
-    } else {
-      step.approval_gate = true;
-    }
-  });
-  edit
-    .validate()
-    .expect("adding a gate preserves fixture pipeline validity")
-    .with_description("concurrent protected draft".into())
-}
-fn setup(start: Start) -> (tempfile::TempDir, ProjectDb, ResourceId, Pipeline) {
+fn setup(start: Start) -> (tempfile::TempDir, ProjectDb, ResourceId) {
   let folder = tempfile::tempdir().expect("private fixture directory is created");
   let mut db = project(folder.path());
-  let original = original();
+  let original = instruction("Published snapshot.");
   let id = db
     .create_resource(
-      Slug::new("pipeline").expect("fixture pipeline slug is valid"),
+      Slug::new("rules").expect("fixture slug is valid"),
       Name::new("Before").expect("fixture resource name is valid"),
       &original,
       Timestamp::now(),
     )
-    .expect("fixture pipeline is stored")
+    .expect("fixture instruction is stored")
     .id();
   if !matches!(start, Start::UnpublishedDraft) {
-    db.publish_draft::<Pipeline>(id, Timestamp::now())
+    db.publish_draft::<Instruction>(id, Timestamp::now())
       .expect("fixture version is published");
   }
   if matches!(start, Start::PublishedDraft) {
     db.save_draft(
       id,
       &Draft::new(
-        original.with_description("draft snapshot".into()),
+        instruction("Draft snapshot."),
         Some(orchester_core::resource::VersionNumber::FIRST),
         Timestamp::now(),
       ),
     )
     .expect("fixture versioned draft is stored");
   }
-  let expected = db
-    .draft::<Pipeline>(id)
-    .expect("fixture draft can be read")
-    .map(|d| d.body().clone())
-    .unwrap_or_else(|| {
-      db.latest_version::<Pipeline>(id)
-        .expect("fixture latest version can be read")
-        .expect("published fixture has a latest version")
-        .body()
-        .clone()
-    });
-  (folder, db, id, expected)
+  (folder, db, id)
 }
 struct Worker {
   outcome: thread::JoinHandle<Result<DraftSaved, StoreError>>,
@@ -142,9 +106,11 @@ fn worker(root: &std::path::Path, id: ResourceId) -> Worker {
   let worker = thread::spawn(move || {
     let mut checked = ProjectDb::open(&root).expect("worker opens the fixture database");
     let latest = checked
-      .latest_version::<Pipeline>(id)
+      .latest_version::<Instruction>(id)
       .expect("worker reads latest version");
-    let draft = checked.draft::<Pipeline>(id).expect("worker reads the checked draft");
+    let draft = checked
+      .draft::<Instruction>(id)
+      .expect("worker reads the checked draft");
     let snapshot = draft
       .as_ref()
       .map(Draft::body)
@@ -170,11 +136,7 @@ fn worker(root: &std::path::Path, id: ResourceId) -> Worker {
       id,
       &snapshot,
       latest.as_ref().map(|v| v.number()),
-      &Draft::new(
-        snapshot.clone().with_description("stale ungated save".into()),
-        based_on,
-        Timestamp::now(),
-      ),
+      &Draft::new(instruction("Stale save."), based_on, Timestamp::now()),
     )
   });
   Worker {
@@ -185,9 +147,9 @@ fn worker(root: &std::path::Path, id: ResourceId) -> Worker {
     committed: commit_tx,
   }
 }
-fn concurrent_gate(start: Start, tool_calls: bool) {
-  let (folder, db, id, expected) = setup(start);
-  let protected = gated(&expected, tool_calls);
+fn concurrent_draft(start: Start) {
+  let (folder, db, id) = setup(start);
+  let protected = instruction("Concurrent draft.");
   let worker = worker(folder.path(), id);
   worker
     .ready
@@ -210,7 +172,7 @@ fn concurrent_gate(start: Start, tool_calls: bool) {
   };
   writer.execute("INSERT INTO resource_drafts(resource_id,body,based_on,updated_at) VALUES(?1,?2,?3,?4) \
     ON CONFLICT(resource_id) DO UPDATE SET body=excluded.body,based_on=excluded.based_on,updated_at=excluded.updated_at",
-    rusqlite::params![id.to_string(), serde_json::json!({"schema": Pipeline::SCHEMA, "body": &protected}).to_string(),
+    rusqlite::params![id.to_string(), serde_json::json!({"schema": Instruction::SCHEMA, "body": &protected}).to_string(),
       based_on, Timestamp::now().unix_millis()]).expect("writer saves its protected draft");
   writer
     .execute(
@@ -229,7 +191,7 @@ fn concurrent_gate(start: Start, tool_calls: bool) {
     matches!(worker.outcome.join().expect("CAS worker completes without panic"), Err(StoreError::DraftChanged(changed)) if changed == id)
   );
   let retained = db
-    .draft::<Pipeline>(id)
+    .draft::<Instruction>(id)
     .expect("retained draft can be read")
     .expect("protected draft still exists");
   assert_eq!(retained.body(), &protected);
@@ -245,20 +207,14 @@ fn concurrent_gate(start: Start, tool_calls: bool) {
 }
 
 #[test]
-fn pipeline_draft_matching_refuses_concurrent_gates_on_unpublished_snapshot() {
-  for tool_calls in [false, true] {
-    concurrent_gate(Start::UnpublishedDraft, tool_calls);
-  }
+fn draft_matching_refuses_a_concurrent_draft_over_an_unpublished_snapshot() {
+  concurrent_draft(Start::UnpublishedDraft);
 }
 #[test]
-fn pipeline_draft_matching_refuses_new_gated_draft_after_no_draft_snapshot() {
-  for tool_calls in [false, true] {
-    concurrent_gate(Start::PublishedOnly, tool_calls);
-  }
+fn draft_matching_refuses_a_new_draft_after_a_no_draft_snapshot() {
+  concurrent_draft(Start::PublishedOnly);
 }
 #[test]
-fn pipeline_draft_matching_refuses_concurrent_gates_on_existing_versioned_draft() {
-  for tool_calls in [false, true] {
-    concurrent_gate(Start::PublishedDraft, tool_calls);
-  }
+fn draft_matching_refuses_a_concurrent_draft_over_an_existing_versioned_draft() {
+  concurrent_draft(Start::PublishedDraft);
 }

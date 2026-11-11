@@ -50,15 +50,17 @@ fn import_record_keeps_every_copy_and_what_was_left_unresolved() {
       target: None,
     }]
   );
-  let made_here = target
-    .create_resource(
-      Slug::new("local").expect("slug"),
-      name("Local"),
-      &Pipeline::new(Vec::new()).expect("pipeline"),
-      at(11),
-    )
-    .expect("created")
-    .id();
+  let steps = orchester_store::ProjectDb::open(source_repo.path())
+    .expect("the source")
+    .latest_version::<Pipeline>(preview)
+    .expect("read")
+    .expect("published")
+    .body()
+    .clone();
+  // A pipeline is created as its first version (D-032).
+  let (made_here, _) = target
+    .published_pipeline_for_test("local", "Local", &steps, at(11))
+    .expect("created");
   assert_eq!(target.import_record(made_here).expect("read"), None);
 }
 

@@ -118,24 +118,37 @@ fn resources_pipeline_is_created_as_its_first_version_with_no_draft() {
 }
 
 #[test]
-fn resources_pipeline_that_holds_nothing_takes_no_draft() {
+fn resources_pipeline_is_neither_created_as_a_draft_nor_given_one() {
   let (repo, mut db) = project_repo();
-  let id = ResourceId::generate();
+  let created = db.create_resource(
+    orchester_core::resource::Slug::new("sketch").expect("slug"),
+    name("Sketch"),
+    &pipeline(&["implement"]),
+    at(1),
+  );
+  assert!(
+    matches!(created, Err(StoreError::NoDrafts(ResourceKind::Pipeline))),
+    "{created:?}"
+  );
+  assert!(db.resources(ResourceKind::Pipeline).expect("listed").is_empty());
+
+  let bare = ResourceId::generate();
   rusqlite::Connection::open(repo.path().join(".orchester/orchester.db"))
     .expect("open raw database")
     .execute(
       "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'bare', 'Bare', 1)",
-      [id.to_string()],
+      [bare.to_string()],
     )
     .expect("a pipeline without version or draft");
-
-  let refused = db.save_draft(id, &Draft::new(pipeline(&["implement"]), None, at(2)));
-
-  assert!(
-    matches!(refused, Err(StoreError::NoFirstVersion(refused)) if refused == id),
-    "{refused:?}"
-  );
-  assert!(db.draft::<Pipeline>(id).expect("draft").is_none());
+  let published = delivery(&mut db);
+  for (id, based_on) in [(bare, None), (published, Some(VersionNumber::FIRST))] {
+    let refused = db.save_draft(id, &Draft::new(pipeline(&["plan"]), based_on, at(2)));
+    assert!(
+      matches!(refused, Err(StoreError::NoDrafts(ResourceKind::Pipeline))),
+      "{refused:?}"
+    );
+    assert!(db.draft::<Pipeline>(id).expect("draft").is_none());
+  }
 }
 
 #[test]
@@ -249,10 +262,25 @@ fn resources_pipeline_edit_that_cannot_be_published_changes_nothing() {
 
 #[test]
 fn resources_pipeline_edit_drops_a_draft_saved_before_pipelines_had_none() {
-  let (_repo, mut db) = project_repo();
+  let (repo, mut db) = project_repo();
   let id = delivery(&mut db);
-  db.save_draft(id, &Draft::new(pipeline(&["plan"]), Some(VersionNumber::FIRST), at(2)))
+  let body: String = rusqlite::Connection::open(repo.path().join(".orchester/orchester.db"))
+    .expect("open raw database")
+    .query_row(
+      "SELECT body FROM resource_versions WHERE resource_id = ?1",
+      [id.to_string()],
+      |row| row.get(0),
+    )
+    .expect("v1's body");
+  // A draft an older build saved over v1.
+  rusqlite::Connection::open(repo.path().join(".orchester/orchester.db"))
+    .expect("open raw database")
+    .execute(
+      "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 1, 2)",
+      [id.to_string(), body],
+    )
     .expect("a draft over v1");
+  assert!(db.draft::<Pipeline>(id).expect("draft").is_some());
 
   db.publish_pipeline_edit(id, &pipeline(&["review"]), VersionNumber::FIRST, None, at(3))
     .expect("published");

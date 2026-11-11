@@ -1288,6 +1288,8 @@
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
     "neverPublished": "It was never published, so its draft is all it has. Remove it instead.",
     "noFirstVersion": "A new resource has no draft: create it, which publishes v1, and edit it after that.",
+    "noDrafts": "A pipeline is saved only as a published version, never as a draft. Save the change when it can be published.",
+    "unchanged": "Nothing changed since the latest version, so there is nothing to save.",
     "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
     "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
     "effortOneWord": "A reasoning effort is one word, such as high.",

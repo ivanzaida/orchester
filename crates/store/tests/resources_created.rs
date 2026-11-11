@@ -10,11 +10,10 @@ use std::{
 use orchester_core::{
   id::{ProjectId, ResourceId, ServerId},
   name::Name,
-  permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText, PublishError,
-    RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind, TeamMcpServer, VersionNumber,
+    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, PublishError, ResourceKind, Slug,
+    TeamMcpServer, VersionNumber,
   },
   sharing::MemberRole,
   store::ResourceStore,
@@ -173,26 +172,6 @@ fn a_draft_is_refused_for_a_team_mcp_server_that_holds_nothing() {
   assert!(db.draft::<TeamMcpServer>(id).unwrap().is_none());
 }
 
-/// A pipeline of one step, which has a draft before it has a version.
-fn pipeline() -> Pipeline {
-  let step = Step {
-    key: StepKey::new("implement").expect("key"),
-    name: name("Implement"),
-    kind: StepKind::Agent {
-      profile: Some(ResourceId::generate()),
-      repository: RepositoryAccess::Write,
-      model: None,
-      permissions: StepPermissions::default(),
-    },
-    instructions: PromptText::new("Say hello.").expect("prompt"),
-    depends_on: BTreeSet::new(),
-    approval_gate: false,
-    on_failure: None,
-    budget: None,
-  };
-  Pipeline::new(vec![step]).expect("a pipeline")
-}
-
 /// A team project in which the person is an owner: what they publish waits for the server.
 fn team_repo() -> (TempDir, ProjectDb) {
   let (repo, mut db) = project_repo();
@@ -218,10 +197,10 @@ fn a_team_resource_is_marked_created_here_and_a_draft_published_for_the_first_ti
     .create_published(slug("rule"), name("Rule"), &instruction("One."), at(2))
     .expect("created");
   let draft = db
-    .create_resource(slug("flow"), name("Flow"), &pipeline(), at(3))
+    .create_resource(slug("flow"), name("Flow"), &instruction("Flow."), at(3))
     .expect("a draft")
     .id();
-  db.publish_draft::<Pipeline>(draft, at(4))
+  db.publish_draft::<Instruction>(draft, at(4))
     .expect("published from a draft");
 
   let outbox = db.waiting_publishes().expect("the outbox");
@@ -291,10 +270,10 @@ fn a_created_version_with_a_draft_or_a_later_version_is_left_for_the_admin() {
 fn a_first_version_published_from_a_draft_is_never_taken_back() {
   let (_repo, mut db) = team_repo();
   let flow = db
-    .create_resource(slug("flow"), name("Flow"), &pipeline(), at(2))
+    .create_resource(slug("flow"), name("Flow"), &instruction("Flow."), at(2))
     .expect("a draft")
     .id();
-  db.publish_draft::<Pipeline>(flow, at(3))
+  db.publish_draft::<Instruction>(flow, at(3))
     .expect("published from a draft");
 
   let refused = db.discard_created(flow);
@@ -303,7 +282,7 @@ fn a_first_version_published_from_a_draft_is_never_taken_back() {
     matches!(refused, Err(StoreError::HoldsMore(held)) if held == flow),
     "{refused:?}"
   );
-  assert_eq!(db.resources(ResourceKind::Pipeline).unwrap().len(), 1);
+  assert_eq!(db.resources(ResourceKind::Instruction).unwrap().len(), 1);
 }
 
 #[test]
@@ -319,10 +298,10 @@ fn a_created_version_the_server_refused_keeps_its_resource_listed_with_the_work_
   .expect("a draft over v1");
   // A resource published from a draft that the server refused is not created here: it stays hidden.
   let flow = db
-    .create_resource(slug("flow"), name("Flow"), &pipeline(), at(4))
+    .create_resource(slug("flow"), name("Flow"), &instruction("Flow."), at(4))
     .expect("a draft")
     .id();
-  let flow_version = db.publish_draft::<Pipeline>(flow, at(5)).expect("published").id();
+  let flow_version = db.publish_draft::<Instruction>(flow, at(5)).expect("published").id();
 
   db.record_publish_refused(v1.id(), "name_taken").expect("refused");
   db.record_publish_refused(flow_version, "name_taken").expect("refused");
@@ -331,5 +310,4 @@ fn a_created_version_the_server_refused_keeps_its_resource_listed_with_the_work_
   assert_eq!(listed.len(), 1, "the person's refused work stays visible: {listed:?}");
   assert_eq!(listed[0].id(), kept.id());
   assert!(db.draft::<Instruction>(kept.id()).unwrap().is_some());
-  assert!(db.resources(ResourceKind::Pipeline).unwrap().is_empty());
 }
