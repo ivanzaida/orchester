@@ -100,17 +100,17 @@ pub(super) fn own_profile(db: &mut ProjectDb) -> ResourceId {
 pub(super) fn own_pipeline(db: &mut ProjectDb, profile: ResourceId) -> ResourceId {
   let body = one_step(profile);
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &body,
       Timestamp::now(),
     )
     .expect("a pipeline")
+    .0
     .id();
   db.set_resource_sharing(id, Some(ResourceSharing::NotShared))
     .expect("kept on this computer");
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("v1 here");
   id
 }
 
@@ -269,16 +269,15 @@ async fn live_updates_a_team_project_offers_only_what_its_server_has_live() {
 
   // An Admin's pipeline the server refused (its slug taken there, say) never became the team's.
   let refused = db
-    .create_resource(
+    .create_published(
       Slug::new("hotfix").expect("slug"),
       Name::new("Hotfix").expect("name"),
       &one_step(ResourceId::generate()),
       Timestamp::now(),
     )
     .expect("a pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(refused, Timestamp::now())
-    .expect("published here");
   assert_eq!(offered(&db).len(), 2, "waiting for the server, it is the team's");
   let waiting = db.waiting_publishes().expect("read");
   let version = waiting
@@ -307,19 +306,15 @@ async fn live_updates_a_team_pipeline_running_a_profile_the_team_does_not_have_i
   let pipeline = alice
     .workspace
     .db()
-    .create_resource(
+    .create_published(
       Slug::new("hotfix").expect("slug"),
       Name::new("Hotfix").expect("name"),
       &one_step(own),
       Timestamp::now(),
     )
     .expect("a pipeline")
+    .0
     .id();
-  alice
-    .workspace
-    .db()
-    .publish_draft::<Pipeline>(pipeline, Timestamp::now())
-    .expect("published here");
 
   let refused = alice.store(&server, move |store| store.send_created(pipeline)).await;
 

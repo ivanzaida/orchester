@@ -203,18 +203,13 @@ fn published_pipeline(
     budget: None,
   }])
   .expect("a valid fixture");
-  let docs = db
-    .create_resource(
+  let (docs, version) = db
+    .create_published(
       Slug::new("docs").expect("a valid fixture"),
       Name::new("Docs").expect("a valid fixture"),
       &body,
       now,
     )
-    .expect("a valid fixture")
-    .id();
-  (
-    docs,
-    db.publish_draft::<Pipeline>(docs, now).expect("published"),
-    profiles,
-  )
+    .expect("a valid fixture");
+  (docs.id(), version, profiles)
 }

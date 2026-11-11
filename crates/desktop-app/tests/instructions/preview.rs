@@ -41,16 +41,15 @@ pub(super) fn seed_preview(screen: &Instructions) -> orchester_core::id::Resourc
   });
   let body = pipeline.validate().expect("valid instruction fixture");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("valid instruction fixture"),
       Name::new("Feature delivery").expect("valid instruction fixture"),
       &body,
       Timestamp::now(),
     )
     .expect("valid instruction fixture")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now())
-    .expect("valid instruction fixture");
   db.create_tasks(
     IdempotencyKey::generate(),
     vec![TaskDetails {
@@ -144,15 +143,15 @@ fn seed_unavailable_tasks(screen: &Instructions) {
     };
   });
   let tools = db
-    .create_resource(
+    .create_published(
       Slug::new("tool-delivery").expect("slug"),
       Name::new("Tool delivery").expect("name"),
       &pipeline.validate().expect("pipeline"),
       Timestamp::now(),
     )
     .expect("resource")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(tools, Timestamp::now()).expect("publish");
   db.create_tasks(
     IdempotencyKey::generate(),
     [

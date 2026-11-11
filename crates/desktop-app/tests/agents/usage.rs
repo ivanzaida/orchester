@@ -33,16 +33,18 @@ fn agents_usage_includes_published_and_draft_steps_with_model_overrides() {
   let pipeline = Pipeline::new(vec![step.clone()]).expect("pipeline");
   let mut db = ProjectDb::open(&screen.root).expect("database");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &pipeline,
       Timestamp::now(),
     )
-    .expect("pipeline resource");
+    .expect("pipeline resource")
+    .0;
   let version = db
-    .publish_draft::<Pipeline>(resource.id(), Timestamp::now())
-    .expect("publish pipeline");
+    .latest_version::<Pipeline>(resource.id())
+    .expect("publish pipeline")
+    .expect("published");
   let mut second = step;
   second.key = StepKey::new("review").expect("key");
   second.name = Name::new("Review").expect("name");

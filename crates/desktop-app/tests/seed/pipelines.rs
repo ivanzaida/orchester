@@ -81,29 +81,6 @@ fn seed_pipelines_empty_has_no_library_entries() {
 }
 
 #[test]
-fn seed_pipelines_publish_saves_a_draft_whose_publishing_asks() {
-  let seed = Seed::of("pipelines-publish");
-  let db = seed.db();
-  let rows = db.resources(ResourceKind::Pipeline).unwrap();
-  let id = rows
-    .iter()
-    .find(|r| r.name().as_str() == "Feature delivery")
-    .unwrap()
-    .id();
-  let opened = OpenedPipeline::load_in(seed.repo(), id).unwrap();
-  assert!(opened.draft_saved_at.is_some(), "a saved draft");
-  let latest = opened.latest.as_ref().expect("published");
-  assert_eq!(latest.number.get(), 3);
-  let reasons = orchester_workspace::pipelines::widening::publish_reasons(Some(&latest.body), &opened.body);
-  assert_eq!(reasons.len(), 1, "Implement runs on another model: {reasons:?}");
-  assert_eq!(
-    orchester_core::resource::changes(&latest.body, &opened.body).len(),
-    2,
-    "Implement and Deliver changed"
-  );
-}
-
-#[test]
 fn seed_import_done_has_an_imported_pipeline_with_a_secret_missing() {
   let db = Seed::of("import-done").db();
   let rows = db.resources(ResourceKind::Pipeline).unwrap();
@@ -134,7 +111,7 @@ fn seed_import_done_has_an_imported_pipeline_with_a_secret_missing() {
   assert_eq!(missing, [(true, "PREVIEW_HOST_API_KEY")]);
 }
 #[test]
-fn seed_pipelines_reaches_saved_draft_empty_problems_and_narrowing() {
+fn seed_pipelines_reaches_problems_and_narrowing_with_no_pipeline_draft() {
   let seed = Seed::of("pipelines");
   let db = seed.db();
   let rows = db.resources(ResourceKind::Pipeline).unwrap();
@@ -144,18 +121,14 @@ fn seed_pipelines_reaches_saved_draft_empty_problems_and_narrowing() {
     db.latest_version::<Pipeline>(feature).unwrap().unwrap().number().get(),
     3
   );
-  assert_eq!(
-    db.draft::<Pipeline>(feature).unwrap().unwrap().body().description(),
-    "Important saved unpublished work"
-  );
-  assert!(
-    db.draft::<Pipeline>(id("Empty draft"))
-      .unwrap()
-      .unwrap()
-      .body()
-      .steps()
-      .is_empty()
-  );
+  for row in &rows {
+    assert!(
+      db.draft::<Pipeline>(row.id()).unwrap().is_none(),
+      "a pipeline holds no draft (D-032): {}",
+      row.name().as_str()
+    );
+    assert!(db.latest_version::<Pipeline>(row.id()).unwrap().is_some());
+  }
   let problems =
     orchester_workspace::pipelines::data::OpenedPipeline::load_in(seed.repo(), id("Publication problems")).unwrap();
   let edit = orchester_core::resource::PipelineEdit::new(problems.body.clone());
@@ -213,9 +186,12 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
       .all(|card| !card.runs.needs_you())
   );
 
-  let problems = flow("Publication problems").expect("incomplete executors are drawn");
+  let problems = flow("Publication problems").expect("executors that cannot run are drawn");
   let runs: Vec<&Runs> = problems.stages.iter().map(|stage| &stage.cards[0].runs).collect();
-  assert!(matches!(runs[0], Runs::NoProfile));
+  assert!(
+    matches!(runs[0], Runs::ProfileNotPublished { .. }),
+    "a profile that is no longer available"
+  );
   assert!(matches!(runs[1], Runs::ProfileNotPublished { .. }));
   assert!(matches!(runs[2], Runs::ToolNotRunnable { name, .. } if &**name == "Unsupported database"));
   assert_eq!(runs.len(), 3);
@@ -223,58 +199,10 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
   let gated = flow("Gated group").expect("a gated group is drawn");
   assert_eq!((gated.stages[1].cards.len(), gated.stages[1].gates.len()), (2, 2));
   assert!(matches!(flow("Independent chains"), Err(FlowError::Branches(_))));
-  assert!(flow("Empty draft").expect("no steps are drawn").is_empty());
-}
-
-fn pipeline_named(seed: &Seed, title: &str) -> orchester_core::id::ResourceId {
-  seed
-    .db()
-    .resources(ResourceKind::Pipeline)
-    .expect("the pipelines")
-    .iter()
-    .find(|row| row.name().as_str() == title)
-    .unwrap_or_else(|| panic!("a pipeline {title}"))
-    .id()
 }
 
 #[test]
-fn seed_pipelines_save_refused_refuses_to_store_a_draft_and_keeps_what_is_stored() {
-  use orchester_workspace::pipelines::local_edit::{Held, save};
-
-  let seed = Seed::of("pipelines-save-refused");
-  let id = pipeline_named(&seed, "Feature delivery");
-  let before = OpenedPipeline::load_in(seed.repo(), id).unwrap();
-  let mut held = Held::start(std::sync::Arc::new(before.body.clone()));
-  held.change(|edit| edit.set_description("Refused"));
-
-  let refused = save(seed.repo(), id, held.base(), held.edit(), &[]).unwrap_err();
-  assert_ne!(refused.key, "errors.draftChanged", "the store refused it: {refused:?}");
-  assert_eq!(
-    OpenedPipeline::load_in(seed.repo(), id).unwrap(),
-    before,
-    "nothing was stored"
-  );
-}
-
-#[test]
-fn seed_pipelines_ready_draft_has_every_step_ready_and_was_never_published() {
-  let seed = Seed::of("pipelines-ready-draft");
-  let id = pipeline_named(&seed, "Ready draft");
-  let opened = OpenedPipeline::load_in(seed.repo(), id).unwrap();
-  assert!(opened.latest.is_none(), "never published");
-  assert!(opened.draft_saved_at.is_some(), "a draft");
-  assert_eq!(opened.body.steps().len(), 1);
-  assert!(
-    opened
-      .body
-      .steps()
-      .iter()
-      .all(|step| narrowing::check_step(step, &opened.assignables).is_ok())
-  );
-}
-
-#[test]
-fn seed_pipelines_not_ready_has_a_draft_whose_review_step_has_no_profile_and_three_ready_pipelines() {
+fn seed_pipelines_not_ready_has_a_review_step_whose_profile_is_gone_and_three_ready_pipelines() {
   let seed = Seed::of("pipelines-not-ready");
   let db = seed.db();
   let rows = db.resources(ResourceKind::Pipeline).unwrap();
@@ -283,18 +211,27 @@ fn seed_pipelines_not_ready_has_a_draft_whose_review_step_has_no_profile_and_thr
     OpenedPipeline::load_in(seed.repo(), id).unwrap()
   };
   assert_eq!(rows.len(), 4);
-  let draft = opened("Dependency update");
-  assert!(draft.latest.is_none(), "a draft never published");
-  let [update, review] = draft.body.steps() else {
+  let update = opened("Dependency update");
+  assert_eq!(
+    update.version.get(),
+    1,
+    "published, as every stored pipeline is (D-032)"
+  );
+  let [first, review] = update.body.steps() else {
     panic!("two steps")
   };
-  assert!(matches!(update.kind, StepKind::Agent { profile: Some(_), .. }));
+  assert!(matches!(first.kind, StepKind::Agent { profile: Some(_), .. }));
   assert_eq!(review.name.as_str(), "Review");
-  assert!(matches!(review.kind, StepKind::Agent { profile: None, .. }));
-  assert!(draft.body.deliver().is_some(), "Deliver is the last card");
+  let StepKind::Agent {
+    profile: Some(gone), ..
+  } = review.kind
+  else {
+    panic!("Review runs a profile")
+  };
+  assert!(update.assignables.gone(gone), "a profile that is no longer available");
+  assert!(update.body.deliver().is_some(), "Deliver is the last card");
   for name in ["Feature delivery", "Quick fix", "Release notes"] {
     let ready = opened(name);
-    assert!(ready.latest.is_some(), "{name} is published");
     assert!(
       ready
         .body

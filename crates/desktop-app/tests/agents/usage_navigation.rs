@@ -40,16 +40,18 @@ fn used_profile() -> (Agents, ResourceId, ResourceId) {
   .expect("one assigned pipeline step");
   let mut db = ProjectDb::open(&screen.root).expect("the isolated project opens");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new("linked-delivery").expect("valid slug"),
       Name::new("Linked delivery").expect("valid name"),
       &pipeline,
       Timestamp::now(),
     )
-    .expect("the fixture pipeline saves");
+    .expect("the fixture pipeline saves")
+    .0;
   let version = db
-    .publish_draft::<Pipeline>(resource.id(), Timestamp::now())
-    .expect("pipeline v1 publishes");
+    .latest_version::<Pipeline>(resource.id())
+    .expect("pipeline v1 publishes")
+    .expect("published");
   db.save_draft(
     resource.id(),
     &Draft::new(

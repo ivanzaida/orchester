@@ -64,16 +64,15 @@ fn own_pipeline(db: &mut ProjectDb, slug: &str, id: Option<ResourceId>) -> Resou
   let Some(id) = id else {
     let body = crate::fixture::one_step(ResourceId::generate(), "Say hello.");
     let created = db
-      .create_resource(
+      .create_published(
         Slug::new(slug).expect("slug"),
         name(slug),
         body.body(),
         Timestamp::now(),
       )
       .expect("a pipeline")
+      .0
       .id();
-    db.publish_draft::<Pipeline>(created, Timestamp::now())
-      .expect("published");
     return created;
   };
   team_pipeline(db, id, slug);

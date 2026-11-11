@@ -9,7 +9,6 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  messages::Message,
   pipelines::{data::Assignables, flow::FlowRead, hub::PipelineHub, ready::UndecidedMember},
   readiness::{Group, ReadinessStanding},
 };
@@ -23,13 +22,11 @@ pub(super) struct Entry {
   pub name: Arc<str>,
   pub step_count: usize,
   pub used_by: usize,
-  /// The latest published version; `None` while it has only a draft.
+  /// The latest published version; `None` only for an archived pipeline that never had one.
   pub number: Option<VersionNumber>,
   pub published_at: Option<Timestamp>,
   pub group: Group,
   pub standing: Option<ReadinessStanding>,
-  /// What keeps a pipeline that was never published from being published.
-  pub problem: Option<Message>,
   /// Every profile or tool its latest version runs that cannot be told to be ready; empty when it can be told.
   pub undecided: Vec<UndecidedMember>,
   /// When it was archived; `None` while it is not.
@@ -38,8 +35,6 @@ pub(super) struct Entry {
   pub flow: Option<Arc<FlowRead>>,
   /// The steps the flow was read from, which an edit of the panel starts from; none for an archived pipeline.
   pub body: Option<Arc<Pipeline>>,
-  /// Whether `body` differs from the latest published version, or none was published: *Save* has something to publish.
-  pub unpublished: bool,
   /// The latest published version's steps, which the list line and the chips speak of; `None` while it has none.
   pub published: Option<Arc<FlowRead>>,
 }
@@ -83,17 +78,15 @@ impl Listing {
         name: found.name.clone(),
         step_count: found.step_count,
         used_by: found.used_by,
-        number: found.number(),
-        published_at: found.published_at,
+        number: Some(found.version),
+        published_at: Some(found.published_at),
         group: found.group(),
         standing: found.standing.clone(),
-        problem: found.problem.clone(),
         undecided: found.undecided.clone(),
         archived: None,
         flow: Some(found.flow.clone()),
         body: Some(found.body.clone()),
-        unpublished: found.unpublished,
-        published: found.published.clone(),
+        published: Some(found.flow.clone()),
       })
       .collect();
     entries.sort_by_cached_key(|entry| (group_rank(entry.group), entry.name.to_lowercase()));
@@ -106,12 +99,10 @@ impl Listing {
       published_at: found.latest.map(|(_, at)| at),
       group: Group::Ready,
       standing: None,
-      problem: None,
       undecided: Vec::new(),
       archived: Some(found.at),
       flow: None,
       body: None,
-      unpublished: false,
       published: None,
     }));
     Self {

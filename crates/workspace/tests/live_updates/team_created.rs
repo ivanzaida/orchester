@@ -181,16 +181,15 @@ async fn live_updates_a_first_version_published_from_a_draft_is_not_taken_back_w
   let flow = {
     let mut db = alice.workspace.db();
     let flow = db
-      .create_resource(
+      .create_published(
         Slug::new("hotfix").expect("slug"),
         Name::new("Hotfix").expect("name"),
         &one_step(own),
         Timestamp::now(),
       )
       .expect("a pipeline")
+      .0
       .id();
-    db.publish_draft::<orchester_core::resource::Pipeline>(flow, Timestamp::now())
-      .expect("published from a draft");
     flow
   };
 

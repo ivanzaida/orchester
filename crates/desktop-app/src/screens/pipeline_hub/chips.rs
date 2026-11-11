@@ -44,9 +44,8 @@ pub(super) fn chips(ctx: &Ctx, entry: &Entry, default: bool) -> Row {
     }))
 }
 
-/// How the pipeline stands, as the chips: its version; *draft* while a draft is stored (a pipeline's panel shows its
-/// draft, though its list row and these chips speak of the version tasks use); then that it is ready or what it lacks;
-/// for an archived one that it is; last, that New task offers it first.
+/// How the pipeline stands, as the chips: its version; then that it is ready or what it lacks; for an archived one that
+/// it is; last, that New task offers it first.
 fn standing(ctx: &Ctx, entry: &Entry, default: bool) -> Vec<(Arc<str>, BadgeTone)> {
   let version = entry
     .number
@@ -54,18 +53,13 @@ fn standing(ctx: &Ctx, entry: &Entry, default: bool) -> Vec<(Arc<str>, BadgeTone
   let rest = if entry.archived.is_some() {
     vec![(ctx.t("pipeline_hub.chip.archived"), BadgeTone::Neutral)]
   } else {
-    let draft = has_draft(entry).then(|| (ctx.t("pipeline_hub.chip.draft"), BadgeTone::Neutral));
-    let status = not_ready(ctx, entry)
-      .or_else(|| (!entry.is_draft()).then(|| (ctx.t("pipeline_hub.chip.ready"), BadgeTone::Success)));
-    draft.into_iter().chain(status).collect()
+    not_ready(ctx, entry)
+      .or_else(|| (!entry.is_draft()).then(|| (ctx.t("pipeline_hub.chip.ready"), BadgeTone::Success)))
+      .into_iter()
+      .collect()
   };
   let default = default.then(|| (ctx.t("pipeline_hub.chip.default"), BadgeTone::Info));
   version.into_iter().chain(rest).chain(default).collect()
-}
-
-/// Whether a draft is stored, which a published pipeline can have beside its version.
-fn has_draft(entry: &Entry) -> bool {
-  entry.flow.as_ref().is_some_and(|read| read.draft)
 }
 
 /// The warning chip. A draft never published says how many of its steps are not ready (*1 step not ready*), else its

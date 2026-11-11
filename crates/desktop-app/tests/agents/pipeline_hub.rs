@@ -60,17 +60,16 @@ pub(super) fn pipeline_of(
   let body = edit.validate().expect("a pipeline");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::from_name(name).expect("slug"),
       Name::new(name).expect("name"),
       &body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  if published {
-    db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
-  }
+  if published {}
   id
 }
 

@@ -238,10 +238,10 @@ fn pipeline_save_refused_because_the_pipeline_changed_says_so_and_keeps_what_was
   agents.until("the panel", |s| s.exists(SAVE));
   describe(&mut agents, "Mine");
 
-  // Another editor stores a draft of the pipeline behind the page.
+  // Another editor saves the next version behind the page.
   let before = OpenedPipeline::load_in(&agents.root, ready).expect("pipeline");
   let theirs = before.body.clone().with_description("Theirs".into());
-  save_in(&agents.root, &before, theirs, &Allowed::default()).expect("their draft");
+  save_in(&agents.root, &before, &theirs, &Allowed::default()).expect("their version");
 
   agents.click(SAVE);
   agents.until("the refusal", |s| s.exists("pipeline-hub-bar-notice"));
@@ -249,8 +249,9 @@ fn pipeline_save_refused_because_the_pipeline_changed_says_so_and_keeps_what_was
   let said = agents.text("pipeline-hub-bar-notice");
   assert!(said.contains("Couldn't save Feature delivery"), "{said}");
   let (versions, draft) = stored(&agents, ready);
-  assert_eq!(versions.len(), 1, "nothing was published");
-  assert_eq!(draft.expect("their draft stays").description(), "Theirs");
+  assert_eq!(versions.len(), 2, "only their version was published");
+  assert_eq!(versions[1].description(), "Theirs");
+  assert_eq!(draft, None, "a pipeline holds no draft");
   assert_eq!(agents.value(DESCRIPTION), "Mine", "what was typed stays");
 }
 
@@ -269,15 +270,8 @@ fn pipeline_save_takes_a_source_off_the_pipeline() {
       .clone()
       .with_sources(PipelineSources::new(vec![path.clone()], BTreeMap::new()))
       .expect("sources");
-    db.save_draft_and_name_matching(
-      sourced,
-      &opened.body,
-      opened.latest.as_ref().map(|latest| latest.number),
-      &orchester_core::resource::Draft::new(body, opened.based_on, Timestamp::now()),
-      None,
-    )
-    .expect("a draft with a source");
-    db.publish_draft::<Pipeline>(sourced, Timestamp::now()).expect("v2");
+    db.publish_pipeline_edit(sourced, &body, opened.version, None, Timestamp::now())
+      .expect("v2 with a source");
   }
   open(&mut agents, PipelinesFilter::All, Some(sourced));
   agents.until("the source's pill", |s| s.exists("pipeline-hub-source-0"));

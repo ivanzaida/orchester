@@ -210,17 +210,15 @@ fn instructions_delayed_step_create_keeps_selected_pipeline_and_step_locked() {
     .expect("version")
     .expect("pipeline");
   let other = store
-    .create_resource(
+    .create_published(
       Slug::new("other").expect("slug"),
       Name::new("Other pipeline").expect("name"),
       version.body(),
       Timestamp::now(),
     )
     .expect("second private pipeline")
+    .0
     .id();
-  store
-    .publish_draft::<Pipeline>(other, Timestamp::now())
-    .expect("published fixture");
   screen.list();
   screen.click("instructions-new");
   screen.until("scope choice", |s| s.exists("instruction-scope-step"));

@@ -144,9 +144,9 @@ impl Editing {
   pub fn unsaved(&self) -> bool {
     self.dirty() || !self.errors.is_empty()
   }
-  /// Whether a draft exists beside the published version: saved, or edits not saved yet.
+  /// Whether edits not saved yet stand beside the published version (a pipeline holds no saved draft, D-032).
   pub fn has_draft(&self) -> bool {
-    self.opened.draft_saved_at.is_some() || self.unsaved()
+    self.unsaved()
   }
   pub fn dirty(&self) -> bool {
     self.name.as_str() != self.opened.name.as_ref() || self.edit.validate().as_ref() != Ok(&self.opened.body)
@@ -185,9 +185,8 @@ impl Editing {
     }
   }
   pub fn saved(&mut self, opened: OpenedPipeline) {
-    let latest = opened.latest.as_ref().map(|v| v.number);
-    if latest != self.opened.latest.as_ref().map(|v| v.number) {
-      self.published_notice = latest;
+    if opened.version != self.opened.version {
+      self.published_notice = Some(opened.version);
     }
     self.opened = opened;
   }

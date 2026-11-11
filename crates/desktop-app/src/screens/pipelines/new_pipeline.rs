@@ -24,7 +24,7 @@ use orchester_workspace::{
   messages,
   pipelines::{
     create::{self, Start},
-    library::{LibraryEntry, StarterText, VersionState, library_in},
+    library::{LibraryEntry, StarterText, library_in},
   },
 };
 use parking_lot::Mutex;
@@ -99,11 +99,8 @@ impl Component for NewPipeline {
       .state()
       .get();
     let entries = listed.data.clone().unwrap_or_default();
-    let copies: Vec<_> = entries
-      .iter()
-      .filter(|p| !matches!(p.state, VersionState::DraftOnly))
-      .cloned()
-      .collect();
+    // Every pipeline is published (D-032), so each can be copied.
+    let copies: Vec<_> = entries.clone();
     let collision = orchester_workspace::pipelines::library::matching_name(&entries, &self.name.get()).cloned();
     let head = self.header(ctx, id, &save, collision.is_some());
     let pipeline = self.pipeline_group(ctx, id, collision.as_ref());

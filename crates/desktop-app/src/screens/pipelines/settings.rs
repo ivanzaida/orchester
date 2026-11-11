@@ -113,10 +113,10 @@ impl Changed {
   }
 }
 fn changed(editing: &Editing) -> Changed {
-  let latest = editing.opened.latest.as_ref().filter(|_| editing.viewing.is_none());
+  let latest = Some(&editing.opened.body).filter(|_| editing.viewing.is_none());
   Changed {
-    description: latest.is_some_and(|v| v.body.description() != editing.edit.description()),
-    delivers: latest.is_some_and(|v| v.body.delivers() != editing.edit.delivers()),
+    description: latest.is_some_and(|body| body.description() != editing.edit.description()),
+    delivers: latest.is_some_and(|body| body.delivers() != editing.edit.delivers()),
   }
 }
 
@@ -153,11 +153,8 @@ impl Settings {
     if changed {
       description_row = description_row.tag(draft_tag(ctx, editing));
     }
-    let slug_hint = ctx.t(if editing.opened.latest.is_some() {
-      "pipelines.slugPublished"
-    } else {
-      "pipelines.slugFixed"
-    });
+    // A pipeline is stored only as published versions (D-032).
+    let slug_hint = ctx.t("pipelines.slugPublished");
     RowGroup::new("pipeline-settings-general", ctx.t("pipelines.general"))
       .row(GroupRow::new("pipeline-settings-name-row", ctx.t("pipelines.name")).end(name))
       .row(
@@ -221,11 +218,10 @@ fn strip(ctx: &Ctx, state: &State, (count, locked): (usize, bool)) -> Element {
   .icon(Icon::Undo2)
   .on_click(move || {
     undo.update(|s| {
-      if let Some(latest) = s.opened.latest.clone() {
-        s.edit.set_description(latest.body.description());
-        s.edit.set_delivers(latest.body.delivers());
-        s.epoch += 1;
-      }
+      let latest = s.opened.body.clone();
+      s.edit.set_description(latest.description());
+      s.edit.set_delivers(latest.delivers());
+      s.epoch += 1;
     })
   });
   let title = if count == 1 {

@@ -113,15 +113,15 @@ pub(super) fn single(agents: &Agents, kind: StepKind) -> ResourceId {
   let body = edit.validate().expect("a pipeline");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("single").expect("slug"),
       Name::new("Single").expect("name"),
       &body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   id
 }
 

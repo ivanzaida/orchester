@@ -51,9 +51,8 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
-  screens::{local_hub::save_bar::Save as SaveState, team_hub::panel::body},
+  screens::team_hub::panel::body,
   theme::ExtraSpacing,
-  ui::pressable::Press,
 };
 
 /// The version *Restore* put in the edit, until it is saved or dropped.
@@ -244,12 +243,8 @@ impl Component for PipelinePanel {
       unpublishable: unpublishable(&current, &read),
       restored: self.restored.get().0,
     };
-    let off = line.fix.clone().or_else(|| bar::publish_blocked(ctx, &line));
-    let save = self.save_now(&edit, (changed, entry.unpublished), (locked, off));
-    let press = match &save {
-      SaveState::Ready(press) => Some(press.clone()),
-      _ => None,
-    };
+    let off = line.fix.clone();
+    let save = self.save_now(&edit, changed, (locked, off));
     let shown = Shown {
       project: &project,
       entry: &entry,
@@ -260,7 +255,6 @@ impl Component for PipelinePanel {
       read: &read,
       locked,
       changed,
-      save: press.as_ref(),
     };
     let (body, viewed) = self.views(ctx, &shown, hosted, step);
     let refused = self.notes.told().refused.is_some();
@@ -296,8 +290,6 @@ struct Shown<'a> {
   /// A save is under way, or a question about it waits: nothing is changed now.
   locked: bool,
   changed: bool,
-  /// What *Save* does now, when it can save.
-  save: Option<&'a Press>,
 }
 
 impl PipelinePanel {
@@ -381,7 +373,6 @@ impl PipelinePanel {
       current,
       read,
       locked,
-      save,
       ..
     } = *shown;
     let head = self.head(ctx, shown, hosted);
@@ -421,7 +412,6 @@ impl PipelinePanel {
           current,
           edit,
           locked,
-          save,
           pick_agent: &self.pick_agent,
         },
       ))

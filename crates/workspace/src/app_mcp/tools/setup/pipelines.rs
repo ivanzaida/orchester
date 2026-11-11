@@ -1,16 +1,14 @@
-//! `get_pipeline`, `create_pipeline` and `publish_pipeline`: a pipeline as its editor opens it, a new
-//! one made as New pipeline makes it (from the starter, empty, or a copy of another pipeline), and its
-//! draft published as Publish does. The task form offers a pipeline once it is published.
+//! `get_pipeline`, `create_pipeline` and `publish_pipeline`: a pipeline as its editor opens it, its latest version; a
+//! new one made from the starter, empty, or a copy of another pipeline, and published as v1 or refused; and
+//! `publish_pipeline`, which a pipeline without drafts (D-032) always refuses.
 
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
   permission::{StepCommands, StepNetwork},
   resource::{
-    Deliverable, Draft, Pipeline, PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind,
-    Version,
+    Pipeline, PipelineEdit, PromptText, PublishError, ResourceKind, StarterStep, StarterStepText, Step, StepKind,
   },
-  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -31,7 +29,7 @@ use crate::{
   messages::{self, Message},
   pipelines::{
     data::{Assignables, OpenError, OpenedPipeline},
-    library::{self, NewPipeline, StartFrom, StarterText, create_with},
+    library::{self, StarterText, create_with},
     problems::{problem_view, publish_error},
   },
   tasks::outside::Outside,
@@ -95,12 +93,8 @@ pub async fn create_pipeline(
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-    let id = match (args.from, &args.copy_of) {
-      (Start::Copy, Some(named)) => {
-        let source = pipeline_named(&db, named)?;
-        let body = opened(&db, source, named)?.body;
-        create_with(&mut db, name, &body, Timestamp::now())
-      }
+    let mut body = match (args.from, &args.copy_of) {
+      (Start::Copy, Some(named)) => opened(&db, pipeline_named(&db, named)?, named)?.body,
       (Start::Copy, None) => {
         return Err(refused(
           "copy_of_required",
@@ -113,69 +107,39 @@ pub async fn create_pipeline(
           Message::new("appMcp.errors.copyOfNotTaken"),
         ));
       }
-      (start, None) => {
-        let start = if start == Start::Starter {
-          StartFrom::Starter
-        } else {
-          StartFrom::Empty
-        };
-        library::create(&mut db, NewPipeline { name, start, starter }, Timestamp::now())
-      }
-    }
-    .map_err(|error| create_error(&error))?;
+      (Start::Starter, None) => starter.pipeline(&Assignables::load(&db)?),
+      (Start::Empty, None) => Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid body"),
+    };
     if let Some(delivers) = args.delivers {
-      set_delivers(&mut db, (id, &args.name), delivers.into())?;
+      body = body.with_delivers(delivers.into());
     }
+    // Creating publishes v1 (D-032), which widens what agents may do: there is nothing to compare it with.
+    widening::check_pipeline(&services, None, &body)?;
+    let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
+    // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
+    services.changes.record(open.project.id(), Outside::Tasks);
     Ok((open.project.id(), opened(&db, id, &args.name)?))
   })
   .await?;
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
-/// The draft of the new pipeline `id` (`named`), its runs delivering `delivers`.
-fn set_delivers(db: &mut ProjectDb, (id, named): (ResourceId, &str), delivers: Deliverable) -> Result<(), ToolError> {
-  let current = opened(db, id, named)?;
-  if current.body.delivers() == delivers {
-    return Ok(());
-  }
-  let draft = Draft::new(
-    current.body.clone().with_delivers(delivers),
-    current.based_on,
-    Timestamp::now(),
-  );
-  db.save_draft_matching(id, &current.body, current.latest.as_ref().map(|v| v.number), &draft)?;
-  Ok(())
-}
-
+/// A pipeline holds no draft (D-032): saving one publishes it, so there is never a draft to publish here.
 pub async fn publish_pipeline(
   services: &Services,
   args: InPipeline,
-  translate: &Translate,
+  _translate: &Translate,
 ) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (project, opened) = blocking(move || {
+  blocking(move || {
     let open = services.project(&args.project)?;
-    let mut db = ProjectDb::open(&open.repo_root)?;
-    let id = pipeline_named(&db, &args.pipeline)?;
-    let draft = db.draft::<Pipeline>(id)?.ok_or(StoreError::NoDraft(id));
-    let draft = draft.map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
-    let latest = db.latest_version::<Pipeline>(id)?;
-    services.draft_decided::<Pipeline>(&db, id)?;
-    widening::check_pipeline(&services, latest.as_ref().map(Version::body), draft.body())?;
-    // Published only while the draft is the one just checked.
-    db.publish_draft_matching_version(id, draft.body(), latest.as_ref().map(Version::number), Timestamp::now())
-      .map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
-    // The library lists the version, and the task form offers it.
-    services.changes.record(open.project.id(), Outside::Pipelines);
-    services.changes.record(open.project.id(), Outside::Tasks);
-    Ok((
-      open.project.id(),
-      opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?,
-    ))
+    let db = ProjectDb::open(&open.repo_root)?;
+    pipeline_named(&db, &args.pipeline)?;
+    let error = StoreError::NoDrafts(ResourceKind::Pipeline);
+    Err(ToolError::refused(publish_code(&error), vec![publish_error(&error)]))
   })
-  .await?;
-  Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
+  .await
 }
 
 /// The project's pipeline named by its id or, ignoring case, its name, whether published or not.
@@ -255,11 +219,6 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     .iter()
     .map(|problem| translate.text(&problem_view(&edit, problem, &then).message))
     .collect();
-  let state = match (opened.draft_saved_at, &opened.latest) {
-    (Some(_), None) => "draft_only",
-    (Some(_), Some(_)) => "published_with_draft",
-    (None, _) => "published",
-  };
   let steps: Vec<Value> = opened
     .body
     .steps()
@@ -279,8 +238,9 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     "id": opened.id.to_string(),
     "name": &*opened.name,
     "description": opened.body.description(),
-    "state": state,
-    "published_version": opened.latest.as_ref().map(|latest| latest.number.get()),
+    // A pipeline is stored only as published versions (D-032).
+    "state": "published",
+    "published_version": opened.version.get(),
     "steps": steps,
     "deliver": deliver,
     "delivers": Delivers::from(opened.body.delivers()),
@@ -360,7 +320,7 @@ fn assignable_json(assignables: &Assignables) -> Value {
 
 fn publish_code(error: &StoreError) -> &'static str {
   match error {
-    StoreError::NoDraft(_) => "no_draft",
+    StoreError::NoDraft(_) | StoreError::NoDrafts(_) => "no_draft",
     StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
     StoreError::DraftChanged(_) => "draft_changed",
     StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => "not_publishable",

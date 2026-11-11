@@ -84,12 +84,11 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     edit.update(&key, |step| step.kind = kind);
     before = Some(key);
   }
-  let tour = create(
+  create(
     kontur,
     "Agents tour",
     &edit.validate().expect("steps with executors are valid"),
   )?;
-  kontur.db.publish_draft::<Pipeline>(tour, kontur.now)?;
   // After the step names it: the project no longer lists the profile, and the step keeps naming it.
   kontur.db.archive_local_resource(retired, kontur.now)?;
   Ok(())

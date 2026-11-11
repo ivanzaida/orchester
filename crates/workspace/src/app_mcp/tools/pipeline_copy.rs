@@ -1,15 +1,14 @@
 //! `duplicate_pipeline`: what a person does in Pipelines with *New pipeline*, the editor and
 //! *Publish*: a new pipeline under a new name with the steps of another pipeline's latest published
-//! version, some agent steps given another published profile, checked as the editor checks its
-//! draft and published as v1. A step keeps its repository access, model and permission narrowing when
+//! version, some agent steps given another published profile, checked as the editor checks an
+//! edit and created as v1. A step keeps its repository access, model and permission narrowing when
 //! its profile changes, as the editor's profile choice does.
 
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  id::ResourceId,
   name::Name,
-  resource::{Pipeline, PipelineEdit, StepKey, StepKind},
+  resource::{Pipeline, PipelineEdit, StepKey, StepKind, VersionNumber},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -26,10 +25,10 @@ use crate::{
   },
   messages::{self, Message},
   pipelines::{
-    data::{Assignables, publish_in},
+    data::Assignables,
     fields::Executor,
     library::{CreateError, create_with},
-    problems::{problem_view, publish_error, rule_message},
+    problems::{problem_view, rule_message},
   },
   tasks::{
     data::{pinned_pipeline, published_pipelines},
@@ -68,15 +67,12 @@ pub async fn duplicate_pipeline(
     super::setup::widening::check_pipeline(&services, Some(&source), &body)?;
     let name =
       Name::new(&args.name).map_err(|error| ToolError::refused("invalid_name", vec![messages::name_error(&error)]))?;
+    // The copy is created as its first version, or not at all (a pipeline holds no draft, D-032).
     let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
-    drop(db);
-    let published = publish_in(&root, id);
-    // The pipeline was made either way: the library lists it, published or as a draft.
+    // The library lists it, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
-    let (version, _) = published.map_err(|error| ToolError::refused("not_published", vec![publish_error(&error)]))?;
-    // The task form offers the published version.
     services.changes.record(open.project.id(), Outside::Tasks);
-    let copy = pinned_pipeline(&ProjectDb::open(&root)?, id, version)?
+    let copy = pinned_pipeline(&db, id, VersionNumber::FIRST)?
       .ok_or_else(|| ToolError::not_found(Missing::Pipeline, id.to_string()))?;
     Ok((open.project.id(), copy))
   })
@@ -84,28 +80,14 @@ pub async fn duplicate_pipeline(
   Ok(json!({ "pipeline": pipeline_json(&copy, project, translate) }))
 }
 
-/// `duplicate_pipeline` with `arguments` as the Orchestrator chat takes it: the copy is saved as a draft, nothing is
-/// published, and a draft reaches no agent; its first version is published by the chat's own rule. The copy's id and
-/// name.
-pub(crate) async fn duplicate_pipeline_draft(
+/// `duplicate_pipeline` with `arguments` as the Orchestrator chat takes it: as for any client.
+pub(crate) async fn duplicate_pipeline_in_chat(
   services: &Services,
   arguments: JsonObject,
   translate: &Translate,
-) -> Result<(ResourceId, String), ToolError> {
+) -> Result<Value, ToolError> {
   let args: DuplicatePipeline = super::parse(Value::Object(arguments))?;
-  let services = services.clone();
-  let then = translate.text(&Message::new("pipelines.flow.then"));
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let mut db = ProjectDb::open(&open.repo_root)?;
-    let (_, body) = copied(&db, &args, &then)?;
-    let name =
-      Name::new(&args.name).map_err(|error| ToolError::refused("invalid_name", vec![messages::name_error(&error)]))?;
-    let id = create_with(&mut db, name.clone(), &body, Timestamp::now()).map_err(|error| create_error(&error))?;
-    services.changes.record(open.project.id(), Outside::Pipelines);
-    Ok((id, name.as_str().to_owned()))
-  })
-  .await
+  duplicate_pipeline(services, args, translate).await
 }
 
 /// The steps of the copy: the source's latest published version with the profiles given, refused
@@ -169,6 +151,11 @@ pub(super) fn create_error(error: &CreateError) -> ToolError {
     CreateError::Store(_) => "project_data",
     CreateError::NoSlug => "invalid_name",
     CreateError::SlugTaken { .. } => "name_taken",
+    CreateError::NotSaved(_) => "not_publishable",
   };
-  ToolError::refused(code, vec![error.message()])
+  let reasons = match error {
+    CreateError::NotSaved(reasons) => reasons.clone(),
+    _ => vec![error.message()],
+  };
+  ToolError::refused(code, reasons)
 }

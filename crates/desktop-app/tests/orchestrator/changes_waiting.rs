@@ -55,15 +55,15 @@ fn orchestrator_changes_waiting_a_step_that_stops_waiting_for_an_approval_is_nam
   ])
   .expect("a pipeline");
   let delivery = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &gated,
       now,
     )
     .expect("pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(delivery, now).expect("v1");
   // The draft lets Build start beside Plan: it no longer waits for the approval.
   let loose = Pipeline::new(vec![
     step(builder, ("plan", "Plan"), &[], true),

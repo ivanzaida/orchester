@@ -285,11 +285,9 @@ fn deliver_card(pipeline: &Pipeline, deliver: &DeliverStep, number: usize, assig
   }
 }
 
-/// A pipeline's flow as the page reads it.
+/// A pipeline's flow as the page reads it: its latest version's, or the edit's the page holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FlowRead {
-  /// Whether the steps are the draft's; otherwise the latest published version's.
-  pub draft: bool,
   /// How the line ends, which is known even when the steps cannot be drawn.
   pub ending: Ending,
   /// The flow, or why the steps cannot be drawn as one line.
@@ -297,53 +295,35 @@ pub struct FlowRead {
   /// The cards of steps the flow cannot draw, numbered in the order of the steps, so what each step lacks is still
   /// known; empty when the flow draws them.
   pub unplaced: Vec<StepCard>,
-  /// What publishing these steps would refuse now ([`super::write::refused_step`]), which the page says before *Save*.
+  /// What saving these steps would refuse now ([`super::write::refused_step`]), which the page says before *Save*.
   pub refused: Option<Message>,
 }
 
-/// A pipeline as it is stored, read for the page: what it draws, and what an edit of the page starts from.
+/// A pipeline as it is stored, its latest version, read for the page: what it draws, and what an edit of the page
+/// starts from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stored {
   pub read: FlowRead,
-  /// The steps the flow was read from: the draft's, or the latest version's.
+  /// The latest version's steps, which the flow was read from.
   pub body: Pipeline,
-  /// Whether `body` differs from the latest published version, or none was published: a save has something to
-  /// publish. A stored draft that equals the latest version has nothing.
-  pub unpublished: bool,
-  /// The latest published version's flow while a draft stands over it; `None` when `read` is that version's, or the
-  /// pipeline has none.
-  pub published: Option<FlowRead>,
 }
 
 impl FlowRead {
-  /// Pipeline `id` as stored: its draft when it has one, otherwise its latest version; `None` when it has neither.
+  /// Pipeline `id` as stored: its latest version; `None` when it has none used here.
   pub fn of(db: &ProjectDb, id: ResourceId, assignables: &Assignables) -> Result<Option<Stored>, StoreError> {
-    let latest = db.latest_version::<Pipeline>(id)?;
-    let (body, draft) = match db.draft::<Pipeline>(id)? {
-      Some(draft) => (draft.body().clone(), true),
-      None => match &latest {
-        Some(version) => (version.body().clone(), false),
-        None => return Ok(None),
-      },
-    };
-    let unpublished = latest.as_ref().is_none_or(|version| version.body() != &body);
-    let read = Self::of_body(&body, draft, assignables);
-    let published = latest
-      .filter(|_| draft)
-      .map(|version| Self::of_body(version.body(), false, assignables));
-    Ok(Some(Stored {
-      read,
-      body,
-      unpublished,
-      published,
+    Ok(db.latest_version::<Pipeline>(id)?.map(|version| {
+      let body = version.body().clone();
+      Stored {
+        read: Self::of_body(&body, assignables),
+        body,
+      }
     }))
   }
 
-  /// The flow of the stored `body`, a draft's (`draft`) or a published version's.
-  fn of_body(body: &Pipeline, draft: bool, assignables: &Assignables) -> Self {
+  /// The flow of a published version's `body`.
+  fn of_body(body: &Pipeline, assignables: &Assignables) -> Self {
     let flow = PipelineFlow::of(body, assignables);
     Self {
-      draft,
       ending: Ending::of(body),
       unplaced: unplaced(&flow, body.steps(), assignables),
       refused: refused_step(body.steps(), assignables),
@@ -364,7 +344,6 @@ impl FlowRead {
       ),
     };
     Self {
-      draft: true,
       ending,
       unplaced: unplaced(&flow, edit.steps(), assignables),
       refused: refused_step(edit.steps(), assignables),

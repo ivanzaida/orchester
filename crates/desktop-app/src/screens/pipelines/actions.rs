@@ -1,11 +1,11 @@
-//! The page's saves and publishes: *Save draft*, which asks first when the draft would be weaker (*Saving needs your
-//! approval*, as `widening` decides), *Publish vN* and the publish review's own question (*Publishing needs your
-//! approval*), both in place (`02b` `fXnX2`, `02e` `T46Jq`). Every write carries the exact body reviewed.
+//! The page's saves: *Save draft* and *Publish vN*, both the one save that publishes the next version (a pipeline
+//! holds no draft, D-032), which asks first when it would be weaker (*Saving needs your approval*, as `widening`
+//! decides), in place (`02e` `T46Jq`). Every write carries the exact body reviewed.
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_workspace::pipelines::{
-  widening::{draft_reasons, publish_reasons},
+  widening::save_reasons,
   write::{Allowed, next_version},
 };
 
@@ -67,7 +67,8 @@ pub fn column_question(ctx: &mut Ctx) -> Option<Element> {
 
 impl Writes {
   /// *Save draft* while edits are unsaved, a field's error among them (`02g` `PexNQ`), disabled until they are
-  /// valid; it asks first when the draft would be weaker.
+  /// valid; it asks first when the save would be weaker. A pipeline holds no draft (D-032): the save publishes the
+  /// next version, or is refused and stores nothing.
   pub fn save_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> Option<ActionButton> {
     if editing.viewing.is_some() || !editing.unsaved() {
       return None;
@@ -75,24 +76,25 @@ impl Writes {
     let writes = self.clone();
     let save = ActionButton::new("pipeline-save", ButtonKind::Secondary, ctx.t("pipelines.save"))
       .icon(Icon::Save)
-      .on_click(move || {
-        let current = writes.state.get();
-        let Ok(body) = current.edit.validate() else {
-          return;
-        };
-        if !draft_reasons(&current.opened, &body).is_empty() {
-          writes.asking.set(true);
-          return;
-        }
-        writes.save(current, body, Allowed::default());
-      });
-    Some(
-      if busy || !editing.errors.is_empty() || editing.edit.validate().is_err() {
-        save.disabled()
-      } else {
-        save
-      },
-    )
+      .on_click(move || writes.save_edit());
+    Some(if busy || !saveable(editing) {
+      save.disabled()
+    } else {
+      save
+    })
+  }
+
+  /// Saves the edit as it stands, asking first when the save would be weaker.
+  fn save_edit(&self) {
+    let current = self.state.get();
+    let Ok(body) = current.edit.validate() else {
+      return;
+    };
+    if !reasons(&current, &body).is_empty() {
+      self.asking.set(true);
+      return;
+    }
+    self.save(current, body, Allowed::default());
   }
 
   fn save(&self, current: Editing, body: orchester_core::resource::Pipeline, allowed: Allowed) {
@@ -105,11 +107,11 @@ impl Writes {
     });
   }
 
-  /// *Publish vN*, or *Version history* when the published version has no draft. It stays enabled while its review
-  /// is open, as `02b` draws it.
+  /// *Publish vN* while edits are unsaved, which saves them as *Save draft* does (one save publishes, D-032), else
+  /// *Version history*.
   pub fn publish_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> ActionButton {
     let views = editing.views.clone();
-    if editing.opened.latest.is_some() && editing.opened.draft_saved_at.is_none() && !editing.dirty() {
+    if !editing.dirty() {
       return ActionButton::new(
         "pipeline-header-history",
         ButtonKind::Secondary,
@@ -121,28 +123,24 @@ impl Writes {
     let next = next_version(&editing.opened)
       .map(|v| v.get().to_string())
       .unwrap_or_default();
+    let writes = self.clone();
     let publish = ActionButton::new("pipeline-publish", ButtonKind::Primary, self.publish_label(ctx, next))
       .icon(Icon::ArrowUp)
-      .on_click(move || views.choose(View::Publish));
-    if busy
-      || editing.viewing.is_some()
-      || editing.unsaved()
-      || editing.opened.draft_saved_at.is_none()
-      || !super::publication::valid(editing)
-    {
+      .on_click(move || writes.save_edit());
+    if busy || editing.viewing.is_some() || !saveable(editing) {
       publish.disabled()
     } else {
       publish
     }
   }
 
-  /// *Saving needs your approval*, with what makes the draft weaker.
+  /// *Saving needs your approval*, with what makes the save weaker.
   pub fn save_question(&self, ctx: &mut Ctx) -> Element {
     let editing = self.state.get();
     let Ok(body) = editing.edit.validate() else {
       return field_error("pipeline-invalid", &ctx.t("pipelines.error")).into();
     };
-    let reasons = draft_reasons(&editing.opened, &body);
+    let reasons = reasons(&editing, &body);
     let words = reasons.iter().map(|m| message_text(ctx, m)).collect();
     let (writes, keep) = (self.clone(), self.asking.clone());
     ctx.mount_keyed::<WidenNotice>(
@@ -172,64 +170,23 @@ impl Writes {
     )
   }
 
-  /// The publish review in the column, with *Publish vN* and *Cancel*, or the question a weaker version asks.
-  pub fn publish_column(&self, ctx: &mut Ctx, busy: bool) -> Element {
+  /// The publish review in the column. A pipeline holds no draft (D-032), so it has nothing of its own to publish:
+  /// *Publish vN* in the header saves the edit.
+  pub fn publish_column(&self, ctx: &mut Ctx, _busy: bool) -> Element {
     let editing = self.state.get();
-    let review = super::publication::review(ctx, &editing);
-    let valid = super::publication::valid(&editing);
-    if !valid || busy {
-      return review.into();
-    }
-    let version = next_version(&editing.opened).map_or_else(String::new, |v| v.get().to_string());
-    let reasons = publish_reasons(editing.opened.latest.as_ref().map(|v| &v.body), &editing.opened.body);
-    let before = editing.opened.clone();
-    if reasons.is_empty() {
-      let writes = self.clone();
-      let publish = ActionButton::new(
-        "pipeline-publish-confirm",
-        ButtonKind::Primary,
-        self.publish_label(ctx, version),
-      )
-      .icon(Icon::ArrowUp)
-      .on_click(move || writes.publish(before.clone(), Allowed::default()));
-      return review
-        .child(super::publication::footer(ctx, &self.state, publish))
-        .into();
-    }
-    let words = reasons.iter().map(|m| message_text(ctx, m)).collect();
-    let (writes, keep) = (self.clone(), editing.views);
-    let question = ctx.mount_keyed::<WidenNotice>(
-      "pipeline-publish-question",
-      NoticeProps {
-        question: WidenProps {
-          id: "pipeline-publish-question".into(),
-          look: WidenLook::Band,
-          affirming: false,
-          automation: crate::mcp::input_gate::Guarded::PermissionWidening,
-          title: ctx.t("pipelines.publishWeaker"),
-          reasons: words,
-          confirm: ctx.t("pipelines.publishNow"),
-          keep: ctx.t("pipelines.keep"),
-          on_confirm: Arc::new(move || {
-            let current = writes.state.get();
-            if current.opened != before || current.unsaved() {
-              return;
-            }
-            writes.publish(before.clone(), Allowed(reasons.clone()));
-          }),
-          on_keep: Arc::new(move || keep.close()),
-        },
-        confirm_icon: Icon::ArrowUp,
-      },
-    );
-    review.child(question).into()
+    super::publication::review(ctx, &editing).into()
   }
+}
 
-  fn publish(&self, before: orchester_workspace::pipelines::data::OpenedPipeline, allowed: Allowed) {
-    self.action.run(Work::Publish {
-      root: self.root.clone(),
-      before,
-      allowed,
-    });
-  }
+/// Whether the edit can be saved as it stands: every field valid, and the steps keep the pipeline's rules.
+fn saveable(editing: &Editing) -> bool {
+  editing.errors.is_empty() && editing.edit.validate().is_ok()
+}
+
+/// What saving `body` over the latest version needs a person to allow.
+fn reasons(
+  editing: &Editing,
+  body: &orchester_core::resource::Pipeline,
+) -> Vec<orchester_workspace::messages::Message> {
+  save_reasons(Some(&editing.opened.body), body, &editing.opened.assignables)
 }

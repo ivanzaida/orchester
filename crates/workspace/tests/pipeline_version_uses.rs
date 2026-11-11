@@ -22,11 +22,7 @@ fn publish_next(fixture: &mut Fixture, pipeline: orchester_core::id::ResourceId,
   let body = latest.body().clone().with_description(description.into());
   fixture
     .db
-    .save_draft(pipeline, &Draft::new(body, Some(latest.number()), at(millis)))
-    .expect("save draft");
-  fixture
-    .db
-    .publish_draft::<Pipeline>(pipeline, at(millis + 1))
+    .publish_pipeline_edit(pipeline, &body, latest.number(), None, at(millis + 1))
     .expect("publish");
 }
 

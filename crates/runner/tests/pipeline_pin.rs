@@ -29,10 +29,15 @@ async fn queued_task_runs_its_pinned_pipeline_after_a_new_version_is_published()
   let mut changed = v1.body().steps().to_vec();
   changed[0].name = Name::new("Implement updated").expect("step name");
   let now = Timestamp::now();
-  let mut draft = v1.to_draft(now);
-  draft.edit(Pipeline::new(changed).expect("pipeline"), now);
-  db.save_draft(pipeline_id, &draft).expect("save draft");
-  let v2 = db.publish_draft::<Pipeline>(pipeline_id, now).expect("publish v2");
+  let v2 = db
+    .publish_pipeline_edit(
+      pipeline_id,
+      &Pipeline::new(changed).expect("pipeline"),
+      v1.number(),
+      None,
+      now,
+    )
+    .expect("publish v2");
   assert_eq!(v2.number().get(), 2);
   drop(db);
 

@@ -475,9 +475,8 @@ fn pipeline_step_polish_an_override_another_cli_set_goes_and_the_one_the_step_st
     let mut edit = PipelineEdit::new(latest.body().clone());
     edit.update(&plan, |step| step.kind = agent(builder, Some("gpt-override")));
     let body = edit.validate().expect("a pipeline");
-    db.save_draft(pipeline, &Draft::new(body, Some(latest.number()), Timestamp::now()))
-      .expect("draft");
-    db.publish_draft::<Pipeline>(pipeline, Timestamp::now()).expect("v2");
+    db.publish_pipeline_edit(pipeline, &body, latest.number(), None, Timestamp::now())
+      .expect("v2");
   }
   open(&mut agents, pipeline);
   open_list(&mut agents);

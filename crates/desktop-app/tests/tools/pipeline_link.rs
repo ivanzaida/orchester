@@ -29,16 +29,15 @@ fn called_tool(t: &Tools) -> (ResourceId, ResourceId) {
   };
   let mut db = t.db();
   let pipeline = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &Pipeline::new(vec![step]).expect("pipeline"),
       Timestamp::now(),
     )
     .expect("pipeline created")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(pipeline, Timestamp::now())
-    .expect("published");
   (tool, pipeline)
 }
 

@@ -51,9 +51,7 @@ fn publish(db: &mut ProjectDb, id: ResourceId, body: Pipeline) {
     .latest_version::<Pipeline>(id)
     .expect("read version")
     .expect("published fixture");
-  db.save_draft(id, &Draft::new(body, Some(latest.number()), Timestamp::now()))
-    .expect("draft");
-  db.publish_draft::<Pipeline>(id, Timestamp::now())
+  db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
     .expect("next version");
 }
 

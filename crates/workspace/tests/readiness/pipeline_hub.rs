@@ -1,20 +1,17 @@
-//! The Pipelines hub of a local project (`Workspace::pipeline_hub`, Pipelines v2 P1): each pipeline with its steps, the
-//! tasks that use it and its version; the ones that cannot run as they are, which need the person; the drafts; what was
-//! archived.
+//! The Pipelines hub of a local project (`Workspace::pipeline_hub`, Pipelines v2 P1): each pipeline with its latest
+//! version's steps, the tasks that use it and its version; the ones that cannot run as they are, which need the person;
+//! what was archived. A pipeline is stored only as published versions (D-032), so every one listed has a version.
 
 use orchester_core::{
   connection::AgentProvider,
   id::{ConnectionId, IdempotencyKey, ResourceId},
-  resource::{Pipeline, Slug},
+  resource::Pipeline,
   store::{ResourceStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
 use orchester_workspace::{
-  pipelines::{
-    hub::{HubError, PipelineHub},
-    library::VersionState,
-  },
+  pipelines::hub::{HubError, PipelineHub},
   readiness::Group,
 };
 
@@ -27,15 +24,6 @@ fn hub(fixture: &Fixture) -> PipelineHub {
     .workspace
     .pipeline_hub(&fixture.root, &fixture.vault)
     .expect("the hub")
-}
-
-/// A pipeline that was never published, as New pipeline leaves it.
-fn draft(fixture: &Fixture, slug: &str, body: &Pipeline) -> ResourceId {
-  fixture
-    .db()
-    .create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
-    .expect("a draft")
-    .id()
 }
 
 fn use_pipeline(fixture: &Fixture, pipeline: ResourceId, tasks: usize) {
@@ -62,43 +50,20 @@ fn readiness_pipeline_hub_groups_by_whether_a_pipeline_can_run_as_it_is() {
   let lost = fixture.own("lost", &profile_on(ConnectionId::generate(), &[]));
   let ready = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
   let stuck = fixture.own("stuck", &pipeline(&[Some(builder), Some(lost)], None));
-  let unfinished = draft(&fixture, "unfinished", &pipeline(&[Some(builder), None], None));
   use_pipeline(&fixture, ready, 3);
 
   let read = hub(&fixture);
-  assert_eq!(read.pipelines().len(), 3);
+  assert_eq!(read.pipelines().len(), 2);
   let group = |id| read.pipelines().iter().find(|found| found.id == id).expect("listed");
 
   let delivery = group(ready);
   assert_eq!(delivery.group(), Group::Ready);
   assert_eq!((delivery.step_count, delivery.used_by), (2, 3));
-  assert_eq!(
-    delivery.state,
-    VersionState::Published(delivery.number().expect("a version"))
-  );
-  assert!(delivery.published_at.is_some());
+  assert_eq!(delivery.version.get(), 1);
+  assert_eq!(delivery.published_at, at(11));
 
   let stuck = group(stuck);
   assert_eq!(stuck.group(), Group::NeedsYouHere, "what its steps run is not ready");
-  assert!(!stuck.is_draft());
-  assert!(
-    stuck.problem.is_none(),
-    "only a draft says what keeps it from publishing"
-  );
-
-  let unfinished = group(unfinished);
-  assert_eq!(
-    unfinished.group(),
-    Group::NeedsYouHere,
-    "a pipeline never published cannot run"
-  );
-  assert!(unfinished.is_draft());
-  assert_eq!(unfinished.number(), None);
-  assert_eq!(
-    unfinished.problem.as_ref().map(|problem| problem.key),
-    Some("pipelines.problems.noProfile"),
-    "the step with no agent profile"
-  );
 }
 
 #[test]
@@ -128,65 +93,45 @@ fn readiness_pipeline_hub_carries_each_pipelines_steps_as_the_flow_they_run_in()
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
   let published = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
-  let unfinished = draft(&fixture, "unfinished", &pipeline(&[Some(builder), None], None));
 
   let read = hub(&fixture);
-  let flow = |id| {
-    let found = read.pipelines().iter().find(|found| found.id == id).expect("listed");
-    found.flow.clone()
-  };
-  let published = flow(published);
-  assert!(
-    !published.draft,
-    "a published pipeline without a draft shows its version"
-  );
-  let drawn = published
+  let found = read
+    .pipelines()
+    .iter()
+    .find(|found| found.id == published)
+    .expect("listed");
+  let drawn = found
+    .flow
     .flow
     .as_ref()
     .expect("two steps that wait for nothing are drawn");
   assert_eq!(drawn.stages.len(), 1, "steps that wait for nothing run side by side");
   assert_eq!(drawn.stages[0].cards.len(), 2);
   assert!(drawn.stages[0].cards.iter().all(|card| !card.runs.needs_you()));
-
-  let unfinished = flow(unfinished);
-  assert!(unfinished.draft, "a pipeline never published shows its draft");
-  let drawn = unfinished.flow.as_ref().expect("drawn");
-  assert!(
-    drawn.stages[0].cards[1].runs.is_unassigned(),
-    "its second step has no profile yet"
+  let latest = fixture
+    .db()
+    .latest_version::<Pipeline>(published)
+    .expect("read")
+    .expect("published");
+  assert_eq!(
+    *found.body,
+    *latest.body(),
+    "an edit of the panel starts from the latest version"
   );
 }
 
 #[test]
-fn readiness_pipeline_hub_a_published_pipeline_with_a_draft_shows_the_drafts_steps_and_counts_them() {
-  use orchester_core::resource::Draft;
-
+fn readiness_pipeline_hub_counts_the_latest_versions_steps_deliver_not_among_them() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
-  let id = fixture.own("delivery", &pipeline(&[Some(builder)], Some(builder)));
-  let version = fixture
-    .db()
-    .latest_version::<Pipeline>(id)
-    .expect("read")
-    .expect("published")
-    .number();
-  fixture
-    .db()
-    .save_draft(
-      id,
-      &Draft::new(
-        pipeline(&[Some(builder), Some(builder), Some(builder)], Some(builder)),
-        Some(version),
-        at(30),
-      ),
-    )
-    .expect("a draft");
+  let id = fixture.own(
+    "delivery",
+    &pipeline(&[Some(builder), Some(builder), Some(builder)], Some(builder)),
+  );
 
   let read = hub(&fixture);
   let found = read.pipelines().iter().find(|found| found.id == id).expect("listed");
-  assert_eq!(found.state, VersionState::PublishedWithDraft(version));
-  assert!(found.flow.draft, "the panel draws the draft, not the published version");
   let drawn = found.flow.flow.as_ref().expect("drawn");
   assert_eq!(drawn.stages.iter().map(|stage| stage.cards.len()).sum::<usize>(), 3);
   assert_eq!(
@@ -201,5 +146,5 @@ fn readiness_pipeline_hub_a_published_pipeline_with_a_draft_shows_the_drafts_ste
 fn readiness_pipeline_hub_a_pipeline_that_vanishes_while_it_is_read_fails_the_read_in_words() {
   let error = HubError::Unreadable(ResourceId::generate());
   assert_eq!(error.message().key, "pipelines.flow.unreadable");
-  assert!(error.to_string().contains("no draft or version"));
+  assert!(error.to_string().contains("no version"));
 }

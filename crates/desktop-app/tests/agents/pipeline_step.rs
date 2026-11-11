@@ -112,15 +112,15 @@ pub(super) fn chain(agents: &Agents, count: usize) -> ResourceId {
   let body = edit.validate().expect("a pipeline");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::from_name("Long release").expect("slug"),
       Name::new("Long release").expect("name"),
       &body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   id
 }
 

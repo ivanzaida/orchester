@@ -53,17 +53,16 @@ pub(super) fn fails_back_to(edit: &mut PipelineEdit, step: &StepKey, target: &St
 pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline, published: bool) -> ResourceId {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::from_name(name).expect("slug"),
       Name::new(name).expect("name"),
       body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  if published {
-    db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
-  }
+  if published {}
   id
 }
 

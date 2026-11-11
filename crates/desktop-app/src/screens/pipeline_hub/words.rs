@@ -15,17 +15,14 @@ use orchester_workspace::{
 
 use super::{
   model::Entry,
-  ready::draft_words,
+  ready::whole_words,
   step_line,
   undecided::{Said, undecided_words},
   version_view::Viewed,
 };
-use crate::{
-  screens::{
-    local_hub::words::{archived_at, missing, undecided},
-    team_hub::words::date,
-  },
-  ui::message::message_text,
+use crate::screens::{
+  local_hub::words::{archived_at, missing, undecided},
+  team_hub::words::date,
 };
 
 /// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), that a draft is
@@ -66,13 +63,9 @@ fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
   }
 }
 
-/// What the person has to do before the pipeline can run: its draft's first problem, or what its profiles and tools
-/// lack; `None` for a pipeline that is ready and for a draft with nothing wrong (it only is not published yet). A
-/// published pipeline says what *Ready?* lists of its published version ([`told`]), with or without a draft over it.
+/// What the person has to do before the pipeline can run: what its profiles and tools lack; `None` for a pipeline that
+/// is ready. A published pipeline says what *Ready?* lists of its published version ([`told`]).
 pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
-  if entry.is_draft() {
-    return entry.problem.as_ref().map(|problem| message_text(ctx, problem));
-  }
   if let Some(read) = &entry.published {
     return told(ctx, entry, read);
   }
@@ -93,7 +86,6 @@ fn told(ctx: &Ctx, entry: &Entry, read: &FlowRead) -> Option<Arc<str>> {
     flow: read,
     standing: entry.standing.as_ref(),
     undecided: &entry.undecided,
-    published: true,
     runs: None,
   });
   Some(match found.as_slice() {
@@ -118,7 +110,7 @@ fn one(ctx: &Ctx, entry: &Entry, problem: &Problem) -> Arc<str> {
     },
     Problem::Missing(part) => missing(ctx, ResourceKind::Pipeline, part),
     Problem::Undecided(why) => undecided_words(ctx, why, &entry.undecided),
-    Problem::Draft(draft) => draft_words(ctx, *draft),
+    Problem::Whole(whole) => whole_words(ctx, *whole),
   }
 }
 

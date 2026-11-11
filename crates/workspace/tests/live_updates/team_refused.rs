@@ -25,16 +25,15 @@ use super::{
 /// A pipeline made here running `profile`, published as a version that waits for the server.
 fn waiting_pipeline(db: &mut ProjectDb, slug: &str, profile: ResourceId) -> ResourceId {
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new(slug).expect("slug"),
       Name::new(slug).expect("name"),
       &one_step(profile),
       Timestamp::now(),
     )
     .expect("a pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now())
-    .expect("published here");
   id
 }
 

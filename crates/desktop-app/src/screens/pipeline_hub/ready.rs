@@ -1,15 +1,14 @@
 //! *Ready?* under the pipeline's flow (`Ready?` `j0OZhl` in `Pipelines · v2` P1 `s7LMyQ`, `eA5ed` in P8 `vujkk`): *all
 //! set* in `success` with one summary row, or *N missing* in `warning` with one row per problem and what to do about it
 //! at its end (*Choose →* opens the step, *Open →* the profile or tool in the Agents hub, *Add step →* adds a step as
-//! the head's *Add step* does, *Edit steps →* opens the editor as the flow's notice does, *Save →* saves as the bar's
-//! *Save* does). What is missing is the workspace's ([`orchester_workspace::pipelines::ready`]): what is wrong with the
-//! draft, the steps whose card stands in amber (also when the steps cannot be drawn as one line), and what the
-//! readiness read says this computer lacks. The rows are the Agents hub's
-//! ([`crate::screens::team_hub::profile::ready`]).
+//! the head's *Add step* does, *Edit steps →* opens the editor as the flow's notice does). What is missing is the
+//! workspace's ([`orchester_workspace::pipelines::ready`]): what is wrong with the steps as a whole, the steps whose
+//! card stands in amber (also when the steps cannot be drawn as one line), and what the readiness read says this
+//! computer lacks. The rows are the Agents hub's ([`crate::screens::team_hub::profile::ready`]).
 //!
-//! The panel draws a pipeline's draft when it has one, so *Ready?* describes the draft; over a published version it
+//! The panel draws the edit it holds when it holds one, so *Ready?* describes the edit; over the published version it
 //! says so in its title, as the list and the chips speak of the version tasks use. What the readiness read says is
-//! about that version: a profile or tool the draft no longer runs is left out, and a row about the version's profiles
+//! about that version: a profile or tool the edit no longer runs is left out, and a row about the version's profiles
 //! and tools as a whole names the version.
 
 use std::{collections::BTreeSet, sync::Arc};
@@ -22,7 +21,7 @@ use orchester_core::{
 };
 use orchester_workspace::pipelines::{
   flow::{FlowRead, PipelineFlow, Runs},
-  ready::{Basis, Blocked, Draft, Problem, StepProblem, UndecidedMember, problems},
+  ready::{Basis, Blocked, Problem, StepProblem, UndecidedMember, Whole, problems},
 };
 
 use super::{
@@ -65,8 +64,6 @@ enum Fix {
   EditSteps,
   /// Open the Agents hub, where connections, programs and values are set.
   Agents,
-  /// Save, as the bar's *Save* does: it publishes a draft that is only not published yet.
-  Save,
 }
 
 impl Offer for Fix {
@@ -77,7 +74,6 @@ impl Offer for Fix {
       Self::Resource(_) | Self::Agents => "pipeline_hub.ready.open",
       Self::AddStep => "pipeline_hub.ready.addStep",
       Self::EditSteps => "pipeline_hub.ready.editSteps",
-      Self::Save => "pipeline_hub.ready.save",
     }
   }
 
@@ -89,7 +85,6 @@ impl Offer for Fix {
       Self::AddStep => "add-step",
       Self::EditSteps => "edit-steps",
       Self::Agents => "agents",
-      Self::Save => "save",
     }
   }
 }
@@ -107,8 +102,6 @@ pub(super) struct Shown<'a> {
   pub edit: &'a Edit,
   /// A save is under way or asks: nothing is changed now.
   pub locked: bool,
-  /// What the bar's *Save* does now, which *Save →* does too; `None` while it cannot save.
-  pub save: Option<&'a Press>,
   /// Set by *Choose another →*: the step it opens opens its Agent picker.
   pub pick_agent: &'a Signal<bool>,
 }
@@ -119,13 +112,12 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
   if entry.archived.is_some() {
     return None;
   }
-  let over = over_version(entry, read);
+  let over = entry.number.filter(|_| shown.edit.holds());
   let runs = over.map(|_| runs_of(shown.current));
   let found = problems(Basis {
     flow: read,
     standing: entry.standing.as_ref(),
     undecided: &entry.undecided,
-    published: entry.number.is_some(),
     runs: runs.as_deref(),
   });
   let parts = if found.is_empty() {
@@ -134,7 +126,7 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
     found
       .iter()
       .enumerate()
-      .map(|(index, problem)| part(ctx, problem, (index, over), shown.save.is_some()))
+      .map(|(index, problem)| part(ctx, problem, (index, over)))
       .collect()
   };
   let navigation = Navigation::of(ctx);
@@ -149,24 +141,15 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
   Some(section(ctx, (&title, &parts), found.len(), (&press, busy)).into())
 }
 
-/// Whether the pipeline as the panel draws it can run once saved: nothing is missing but, for a pipeline never
-/// published, that it is not published yet, which a save does.
+/// Whether the pipeline as the panel draws it can run once saved: nothing is missing.
 pub(super) fn can_run(entry: &Entry, read: &FlowRead) -> bool {
   problems(Basis {
     flow: read,
     standing: entry.standing.as_ref(),
     undecided: &entry.undecided,
-    published: entry.number.is_some(),
     runs: None,
   })
-  .iter()
-  .all(|problem| *problem == Problem::Draft(Draft::NotPublished))
-}
-
-/// The published version a draft the panel draws stands over, whose readiness the rows read; `None` when the panel
-/// draws the version itself or the pipeline was never published.
-fn over_version(entry: &Entry, read: &FlowRead) -> Option<VersionNumber> {
-  entry.number.filter(|_| read.draft)
+  .is_empty()
 }
 
 /// The profiles and tools `current`'s steps run, and its integrator.
@@ -191,12 +174,6 @@ fn press(shown: &Shown<'_>, (navigation, new_step): (&Navigation, &Name), fix: &
           held.add_step(name.clone(), None);
         });
       });
-    }
-    Fix::Save => {
-      return shown
-        .save
-        .cloned()
-        .expect("*Save →* is offered only while Save can save");
     }
     Fix::ChooseAnother(key) => {
       let (navigation, pick) = (navigation.clone(), shown.pick_agent.clone());
@@ -248,15 +225,14 @@ fn summary(ctx: &Ctx, flow: Option<&PipelineFlow>) -> Part<Fix> {
 }
 
 /// The row of `problem`. Over a published version (`over`), a row about that version's profiles and tools as a whole
-/// names it, as the draft may run others.
-/// `can_save`: *Save* can save now, so a draft that is only not published offers it.
-fn part(ctx: &Ctx, problem: &Problem, (index, over): (usize, Option<VersionNumber>), can_save: bool) -> Part<Fix> {
+/// names it, as the edit may run others.
+fn part(ctx: &Ctx, problem: &Problem, (index, over): (usize, Option<VersionNumber>)) -> Part<Fix> {
   match problem {
-    Problem::Draft(draft) => labelled(
+    Problem::Whole(whole) => labelled(
       "draft",
       ctx.t("pipeline_hub.ready.draft"),
-      draft_words(ctx, *draft),
-      draft_fix(*draft, can_save),
+      whole_words(ctx, *whole),
+      Some(whole_fix(*whole)),
     ),
     Problem::Step(step) => labelled(
       &format!("step-{}", step.key),
@@ -309,24 +285,20 @@ fn labelled(id: &str, label: Arc<str>, words: Arc<str>, fix: Option<Fix>) -> Par
   }
 }
 
-/// What is wrong with the draft as a whole.
-pub(super) fn draft_words(ctx: &Ctx, draft: Draft) -> Arc<str> {
-  ctx.t(match draft {
-    Draft::NoSteps => "pipeline_hub.ready.noSteps",
-    Draft::Broken => "pipeline_hub.flow.broken.title",
-    Draft::Branches => "pipeline_hub.flow.branches.title",
-    Draft::NotPublished => "pipeline_hub.ready.notPublished",
+/// What is wrong with the steps as a whole.
+pub(super) fn whole_words(ctx: &Ctx, whole: Whole) -> Arc<str> {
+  ctx.t(match whole {
+    Whole::NoSteps => "pipeline_hub.ready.noSteps",
+    Whole::Broken => "pipeline_hub.flow.broken.title",
+    Whole::Branches => "pipeline_hub.flow.branches.title",
   })
 }
 
-/// *Add step →* for a draft with none, *Edit steps →* for steps the editor puts right, *Save →* for a draft that is
-/// only not published yet, while *Save* can save.
-const fn draft_fix(draft: Draft, can_save: bool) -> Option<Fix> {
-  match draft {
-    Draft::NoSteps => Some(Fix::AddStep),
-    Draft::Broken | Draft::Branches => Some(Fix::EditSteps),
-    Draft::NotPublished if can_save => Some(Fix::Save),
-    Draft::NotPublished => None,
+/// *Add step →* for steps with none, *Edit steps →* for steps the editor puts right.
+const fn whole_fix(whole: Whole) -> Fix {
+  match whole {
+    Whole::NoSteps => Fix::AddStep,
+    Whole::Broken | Whole::Branches => Fix::EditSteps,
   }
 }
 

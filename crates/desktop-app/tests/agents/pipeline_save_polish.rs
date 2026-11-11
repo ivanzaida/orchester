@@ -161,7 +161,7 @@ fn pipeline_save_polish_a_refusal_of_an_unchanged_draft_is_cancelled() {
   // Another editor stores the draft again behind the page.
   let before = OpenedPipeline::load_in(&agents.root, fresh).expect("pipeline");
   let theirs = before.body.clone().with_description("Theirs".into());
-  save_in(&agents.root, &before, theirs, &Allowed::default()).expect("a draft");
+  save_in(&agents.root, &before, &theirs, &Allowed::default()).expect("their version");
 
   agents.click(SAVE);
   agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
@@ -201,9 +201,8 @@ fn pipeline_save_polish_restore_names_the_version_until_saved_and_in_the_questio
     let mut steps = latest.body().clone().into_steps();
     steps[0].instructions = PromptText::new("Plan twice.").expect("instructions");
     let body = Pipeline::new(steps).expect("a pipeline");
-    db.save_draft(id, &Draft::new(body, Some(latest.number()), Timestamp::now()))
-      .expect("draft");
-    db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("v2");
+    db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
+      .expect("v2");
   }
   open(&mut agents, PipelinesFilter::All, Some(id));
   agents.until("the panel", |s| s.exists(SAVE));

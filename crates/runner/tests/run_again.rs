@@ -76,10 +76,15 @@ async fn run_again_after_a_failed_run_starts_the_next_run_from_the_first_step() 
   let mut steps = v1.body().steps().to_vec();
   steps[0].name = Name::new("Implement revised").expect("step name");
   let now = Timestamp::now();
-  let mut draft = v1.to_draft(now);
-  draft.edit(Pipeline::new(steps).expect("pipeline"), now);
-  db.save_draft(pipeline, &draft).expect("save draft");
-  let v2 = db.publish_draft::<Pipeline>(pipeline, now).expect("publish v2");
+  let v2 = db
+    .publish_pipeline_edit(
+      pipeline,
+      &Pipeline::new(steps).expect("pipeline"),
+      v1.number(),
+      None,
+      now,
+    )
+    .expect("publish v2");
   drop(db);
 
   let again = scheduler
@@ -131,11 +136,14 @@ async fn run_again_after_a_cancelled_run_starts_once_per_request() {
   };
   *profile = Some(ResourceId::generate());
   let now = Timestamp::now();
-  let mut draft = v1.to_draft(now);
-  draft.edit(Pipeline::new(steps).expect("pipeline"), now);
-  db.save_draft(pipeline, &draft).expect("save draft");
-  db.publish_draft::<Pipeline>(pipeline, now)
-    .expect("publish invalid-for-run v2");
+  db.publish_pipeline_edit(
+    pipeline,
+    &Pipeline::new(steps).expect("pipeline"),
+    v1.number(),
+    None,
+    now,
+  )
+  .expect("publish invalid-for-run v2");
   drop(db);
   assert_eq!(
     scheduler.run_again(key, project.task, first, None).await,

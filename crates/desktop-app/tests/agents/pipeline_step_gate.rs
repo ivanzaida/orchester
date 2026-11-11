@@ -95,15 +95,15 @@ pub(super) fn one_step(
   let body = edit.validate().expect("a pipeline");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::from_name(&format!("Gate {repository:?}")).expect("slug"),
       Name::new(&format!("Gate {repository:?}")).expect("name"),
       &body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   (id, key)
 }
 

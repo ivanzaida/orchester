@@ -1,4 +1,4 @@
-//! Reading, saving and publishing one pipeline through the project database, and what its steps
+//! Reading one pipeline through the project database, and what its steps
 //! can be assigned to. Every function blocks on SQLite; the UI calls them off the UI thread.
 
 use std::{path::Path, sync::Arc};
@@ -204,27 +204,19 @@ fn single<'a>(mut named: impl Iterator<Item = (ResourceId, &'a str)>, name: &str
     .then_some(found.0)
 }
 
-/// The latest published version of a pipeline, as far as the editor shows it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Published {
-  pub number: VersionNumber,
-  pub at: Timestamp,
-  pub body: Pipeline,
-}
-
-/// A pipeline as the editor opens it: the draft if there is one, otherwise the latest
-/// published version, which editing turns into a new draft.
+/// A pipeline as the editor opens it: its latest version, which a save publishes the next one over
+/// ([`super::write::save_in`]). A pipeline is stored only as published versions (D-032).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OpenedPipeline {
   pub id: ResourceId,
   pub name: Arc<str>,
   pub slug: Arc<str>,
+  /// The latest version's steps.
   pub body: Pipeline,
-  /// When the draft was last saved; `None` without a draft.
-  pub draft_saved_at: Option<Timestamp>,
-  /// The version the draft is based on, or the one a new draft would start from.
-  pub based_on: Option<VersionNumber>,
-  pub latest: Option<Published>,
+  /// The latest version, which an edit is made from.
+  pub version: VersionNumber,
+  /// When it was published.
+  pub published_at: Timestamp,
   /// Tasks that use the pipeline.
   pub used_by: usize,
   pub assignables: Arc<Assignables>,
@@ -236,7 +228,7 @@ pub struct OpenedPipeline {
 pub enum OpenError {
   #[error(transparent)]
   Store(#[from] StoreError),
-  /// The pipeline was removed, or has neither a draft nor a version.
+  /// The pipeline was removed, or has no version used here.
   #[error("the pipeline does not exist")]
   Missing,
 }
@@ -244,28 +236,14 @@ pub enum OpenError {
 impl OpenedPipeline {
   pub fn load(db: &ProjectDb, id: ResourceId) -> Result<Self, OpenError> {
     let resource = db.resource(id)?.ok_or(OpenError::Missing)?;
-    let latest = db
-      .latest_version::<Pipeline>(id)?
-      .map(|version: Version<Pipeline>| Published {
-        number: version.number(),
-        at: version.published_at(),
-        body: version.body().clone(),
-      });
-    let (body, draft_saved_at, based_on) = match db.draft::<Pipeline>(id)? {
-      Some(draft) => (draft.body().clone(), Some(draft.updated_at()), draft.based_on()),
-      None => {
-        let version = latest.as_ref().ok_or(OpenError::Missing)?;
-        (version.body.clone(), None, Some(version.number))
-      }
-    };
+    let version: Version<Pipeline> = db.latest_version::<Pipeline>(id)?.ok_or(OpenError::Missing)?;
     Ok(Self {
       id,
       name: resource.name().as_str().into(),
       slug: resource.slug().as_str().into(),
-      body,
-      draft_saved_at,
-      based_on,
-      latest,
+      version: version.number(),
+      published_at: version.published_at(),
+      body: version.body().clone(),
       used_by: tasks_using(db, id)?,
       assignables: Arc::new(Assignables::load(db)?),
       imported: imported(db, id)?.map(Arc::new),
@@ -287,10 +265,4 @@ pub fn tasks_using<S: TaskStore>(store: &S, id: ResourceId) -> Result<usize, S::
       .filter(|task| task.details().pipeline == Some(id))
       .count(),
   )
-}
-
-/// Publishes the stored draft; the version it became.
-pub fn publish_in(repo_root: &Path, id: ResourceId) -> Result<(VersionNumber, Timestamp), StoreError> {
-  let version = ProjectDb::open(repo_root)?.publish_draft::<Pipeline>(id, Timestamp::now())?;
-  Ok((version.number(), version.published_at()))
 }

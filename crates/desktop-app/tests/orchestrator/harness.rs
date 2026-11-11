@@ -404,15 +404,15 @@ the agent logged: {agent}"
     let mut db = self.db();
     let now = Timestamp::now();
     let created = db
-      .create_resource(
+      .create_published(
         Slug::new(slug).expect("slug"),
         named(name),
         &one_step(builder, "Read README.md."),
         now,
       )
       .expect("pipeline")
+      .0
       .id();
-    db.publish_draft::<Pipeline>(created, now).expect("publish pipeline");
     created
   }
 

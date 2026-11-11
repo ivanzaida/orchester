@@ -25,10 +25,10 @@ fn pipeline(db: &mut ProjectDb, slug: &str, team: bool) -> ResourceId {
   let now = Timestamp::now();
   let body = crate::fixture::one_step(ResourceId::generate(), "Sign in.");
   let id = db
-    .create_resource(Slug::new(slug).expect("slug"), name(slug), body.body(), now)
+    .create_published(Slug::new(slug).expect("slug"), name(slug), body.body(), now)
     .expect("a pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, now).expect("published");
   if team {
     db.set_resource_sharing(id, Some(ResourceSharing::Shared(revision(1))))
       .expect("the team's");

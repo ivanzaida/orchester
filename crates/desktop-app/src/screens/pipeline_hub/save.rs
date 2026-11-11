@@ -1,8 +1,8 @@
-//! What the bar of a pipeline's panel does: *Save* stores the edit the panel holds as the pipeline's draft and
-//! publishes it as the next version at once ([`local_edit::save`]). A save that widens what the pipeline's agents may
-//! do asks first, in the panel, and only a person's press answers it; a refusal says why in place, and a save that
-//! could not publish says it kept the draft and why, and one that did says which version it made ([`Notes`]). A save
-//! ends with the screens that read the pipelines reading them again.
+//! What the bar of a pipeline's panel does: *Save* publishes the edit the panel holds as the next version
+//! ([`local_edit::save`]), or is refused and stores nothing (a pipeline holds no draft, D-032). A save that widens what
+//! the pipeline's agents may do asks first, in the panel, and only a person's press answers it; a refusal says why in
+//! place, and a save says which version it made ([`Notes`]). A save ends with the screens that read the pipelines
+//! reading them again.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -64,8 +64,6 @@ pub(super) type Save = FutureAction<Ask, Done, Message>;
 /// What the last save said, over the bar, until the edit changes or is put back.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct Told {
-  /// A save that did not publish: the draft it kept, and why.
-  pub kept: Option<Message>,
   /// A save that made this version.
   pub made: Option<VersionNumber>,
   /// A refused save: why, and the edit it refused.
@@ -77,7 +75,7 @@ impl DevtoolsInspectable for Told {}
 
 impl Told {
   fn says_nothing(&self) -> bool {
-    self.kept.is_none() && self.made.is_none() && self.refused.is_none()
+    self.made.is_none() && self.refused.is_none()
   }
 }
 
@@ -117,14 +115,13 @@ impl Notes {
     }
   }
 
-  /// The panel shows the changed edit `shown`: a save that kept a draft or made a version said it of an edit that is
-  /// gone, and a refusal belongs to the edit it refused.
+  /// The panel shows the changed edit `shown`: a save that made a version said it of an edit that is gone, and a
+  /// refusal belongs to the edit it refused.
   pub(super) fn forget_stale(&self, shown: &PipelineEdit) {
     let told = self.told.get_untracked();
     let refusal_holds = told.refused.as_ref().is_some_and(|(_, refused)| refused == shown);
-    if told.kept.is_some() || told.made.is_some() || (told.refused.is_some() && !refusal_holds) {
+    if told.made.is_some() || (told.refused.is_some() && !refusal_holds) {
       self.told.update(|told| {
-        told.kept = None;
         told.made = None;
         if !refusal_holds {
           told.refused = None;
@@ -144,10 +141,6 @@ impl Notes {
   fn stored_as(&self, saved: &Saved) {
     self.stored.update(|count| *count += 1);
     self.told.update(|told| {
-      told.kept = match saved {
-        Saved::Drafted(why) => Some(why.clone()),
-        _ => None,
-      };
       told.made = match saved {
         Saved::Published(number) => Some(*number),
         _ => None,

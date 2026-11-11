@@ -203,16 +203,13 @@ impl Editor {
       s.kind = StepKind::Tool { tool: Some(tool_id) };
       s.approval_gate = true;
     });
-    let id = db
-      .create_resource(
-        Slug::new("delivery").expect("valid pipeline fixture"),
-        Name::new("Delivery").expect("valid pipeline fixture"),
+    let (id, _) = db
+      .published_pipeline_for_test(
+        "delivery",
+        "Delivery",
         &body.validate().expect("valid pipeline fixture"),
         Timestamp::now(),
       )
-      .expect("valid pipeline fixture")
-      .id();
-    db.publish_draft::<Pipeline>(id, Timestamp::now())
       .expect("valid pipeline fixture");
     id
   }

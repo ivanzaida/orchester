@@ -35,9 +35,8 @@ pub(super) fn publish_second(agents: &Agents, id: ResourceId, description: &str)
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let latest = db.latest_version::<Pipeline>(id).expect("read").expect("published");
   let body = latest.body().clone().with_description(description.into());
-  db.save_draft(id, &Draft::new(body, Some(latest.number()), Timestamp::now()))
-    .expect("draft");
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
+  db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
+    .expect("published");
 }
 
 /// The panel of `ready` with a second version behind it, open.

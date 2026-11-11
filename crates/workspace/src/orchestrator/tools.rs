@@ -253,7 +253,7 @@ pub async fn call(
     return leads::read_tool((services, translate), scope, name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
-  // A copy saves a draft: a turn a day's report started refuses it, and keeps the refusal.
+  // A copy publishes a pipeline: a turn a day's report started refuses it, and keeps the refusal.
   if name == DUPLICATE_PIPELINE && !guard::in_report_turn(scope).await? {
     return duplicate::duplicate((services, translate, runners), scope, arguments).await;
   }

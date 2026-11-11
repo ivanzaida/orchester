@@ -27,16 +27,15 @@ fn tools_library_reports_kind_state_version_and_published_callers() {
   let pipeline = Pipeline::new(vec![step]).expect("pipeline");
   let mut db = t.db();
   let pipeline_id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &pipeline,
       Timestamp::now(),
     )
     .expect("pipeline created")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(pipeline_id, Timestamp::now())
-    .expect("published");
   let draft = t.seed("Unpublished", false);
   t.go(ProjectPage::Tools);
   let row = t.text(&format!("tool-row-{id}"));

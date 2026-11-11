@@ -72,7 +72,6 @@ fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team
   connections::seed(kontur)?;
   if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
-    drop_drafts::<Pipeline>(kontur)?;
     drop_drafts::<Instruction>(kontur)?;
     drop_drafts::<Skill>(kontur)?;
     drop_drafts::<Tool>(kontur)?;

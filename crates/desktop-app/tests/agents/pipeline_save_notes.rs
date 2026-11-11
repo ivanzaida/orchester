@@ -16,7 +16,7 @@ use orchester_workspace::pipelines::{
 
 use super::{
   harness::Agents,
-  pipeline_hub::{open, project, setup, view},
+  pipeline_hub::{open, project, view},
 };
 
 const SAVE: &str = "pipeline-hub-save";
@@ -34,36 +34,6 @@ fn counts(agents: &Agents, id: ResourceId) -> (usize, bool) {
     db.versions::<Pipeline>(id).expect("versions").len(),
     db.draft::<Pipeline>(id).expect("draft").is_some(),
   )
-}
-
-#[test]
-fn pipeline_save_note_an_edit_back_to_the_latest_version_is_saved_and_does_not_wedge_the_page() {
-  let (mut agents, [ready, ..]) = setup();
-  // A draft over the published version, as an outside edit leaves it.
-  let before = OpenedPipeline::load_in(&agents.root, ready).expect("pipeline");
-  let theirs = before.body.clone().with_description("Draft".into());
-  save_in(&agents.root, &before, theirs, &Allowed::default()).expect("a draft");
-  open(&mut agents, PipelinesFilter::All, Some(ready));
-  agents.until("the draft in the panel", |s| {
-    s.exists(SAVE) && s.value(DESCRIPTION) == "Draft"
-  });
-  assert_eq!(counts(&agents, ready), (1, true));
-
-  // The person puts it back to the published version and saves.
-  agents.set(DESCRIPTION, "");
-  agents.press_until(SAVE, "the draft dropped", |s| counts(s, ready) == (1, false));
-  agents.until("it says so", |s| {
-    s.exists(NOTICE) && s.text(NOTICE).contains("Saved as v1")
-  });
-  assert_eq!(agents.value(DESCRIPTION), "", "the panel shows the version");
-  agents.until("nothing unpublished", |s| {
-    s.text("pipeline-hub-chip-0") == "v1" && !s.text(&format!("pipeline-hub-row-{ready}-line")).starts_with("Unsaved")
-  });
-
-  // The page is not stuck: the next change saves as v2.
-  agents.set(DESCRIPTION, "Next");
-  agents.press_until(SAVE, "v2", |s| counts(s, ready).0 == 2);
-  assert!(!agents.exists("pipeline-hub-refused"), "no refusal on the way");
 }
 
 #[test]
@@ -140,7 +110,7 @@ fn pipeline_save_note_a_refusal_goes_when_the_edit_changes() {
   agents.set(DESCRIPTION, "Mine");
   let before = OpenedPipeline::load_in(&agents.root, ready).expect("pipeline");
   let theirs = before.body.clone().with_description("Theirs".into());
-  save_in(&agents.root, &before, theirs, &Allowed::default()).expect("their draft");
+  save_in(&agents.root, &before, &theirs, &Allowed::default()).expect("their version");
   agents.click(SAVE);
   agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
 
