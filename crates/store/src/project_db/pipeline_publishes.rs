@@ -73,4 +73,26 @@ impl ProjectDb {
     let (resource, version) = self.create_published(slug, name, body, now)?;
     Ok((resource.id(), version))
   }
+
+  /// A pipeline of this computer's own in a team project, for a test: one kept *Not shared* when the project joined,
+  /// at v1, waiting for no server. There [`ProjectDb::create_published`] makes a team pipeline, whose v1 waits for the
+  /// server. The slug and the name given as text must be valid.
+  #[cfg(feature = "test-support")]
+  pub fn kept_pipeline_for_test(
+    &mut self,
+    slug: &str,
+    name: &str,
+    body: &Pipeline,
+    now: Timestamp,
+  ) -> Result<(ResourceId, Version<Pipeline>), StoreError> {
+    let slug = orchester_core::resource::Slug::new(slug).expect("a test's pipeline slug is valid");
+    let name = Name::new(name).expect("a test's pipeline name is valid");
+    let transaction = self.connection.transaction()?;
+    let resource = super::new_resources::insert::<Pipeline>(&transaction, slug, name, now)?.id();
+    super::shared_versions::set_sharing(&transaction, resource, Some(crate::ResourceSharing::NotShared))?;
+    let first = Draft::new(body.clone(), None, now);
+    let version = publish_prepared(&transaction, resource, first, None, now)?;
+    transaction.commit()?;
+    Ok((resource, version))
+  }
 }

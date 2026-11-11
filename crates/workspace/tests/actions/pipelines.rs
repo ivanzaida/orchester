@@ -5,8 +5,7 @@
 use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::ResourceId,
-  resource::{Pipeline, Slug},
-  store::ResourceStore,
+  resource::Slug,
   task::{TaskLimits, organization::TaskOrganization},
   time::Timestamp,
   tokens::TokenBudget,

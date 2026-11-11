@@ -138,6 +138,21 @@ impl Local {
     self.db.publish_draft::<B>(resource, now).expect("next version");
   }
 
+  /// Pipeline `resource`'s next version, with `body`: a pipeline holds no draft, its edit publishes at once.
+  fn republish_pipeline(&mut self, resource: ResourceId, body: &Pipeline) {
+    let latest = self
+      .db
+      .latest_version::<Pipeline>(resource)
+      .expect("read")
+      .expect("published")
+      .number();
+    let now = self.now();
+    self
+      .db
+      .publish_pipeline_edit(resource, body, latest, None, now)
+      .expect("next version");
+  }
+
   fn tool(&mut self, slug: &str, label: &str) -> ResourceId {
     self.publish((slug, label), &Tool::command("", status_action()))
   }
@@ -239,7 +254,7 @@ fn used_by_local_lists_the_resources_whose_latest_version_names_it_by_name_then_
   // Only the latest version counts: v1 ran the tool, v2 runs another.
   let other_tool = local.tool("lint", "Lint");
   let moved_on = local.publish(("moved", "Moved on"), &pipeline_running(tool));
-  local.republish(moved_on, pipeline_running(other_tool));
+  local.republish_pipeline(moved_on, &pipeline_running(other_tool));
   let removed = local.publish(("gone", "Gone"), &pipeline_running(tool));
   local.db.remove_resource(removed, at(100)).expect("removed");
   let own = instruction_for(InstructionScope::Pipeline { pipeline: delivery }, "Be brief");

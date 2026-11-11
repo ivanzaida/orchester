@@ -5,7 +5,7 @@
 mod support;
 
 use orchester_core::{
-  resource::{Draft, Pipeline, VersionNumber},
+  resource::{Pipeline, VersionNumber},
   store::ResourceStore,
 };
 use orchester_workspace::pipelines::history::{Use, VersionHistory};
