@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
+use orchester_app::routes::{HubFilter, HubView, MemoryView, ProjectPage, Route};
 use orchester_core::{
   id::{ResourceId, UserId},
   sharing::MemberRole,
@@ -381,4 +381,31 @@ fn team_hub_member_an_item_with_nothing_to_fill_in_has_no_bar_and_a_ready_one_ne
   open(&mut agents, HubView::new(HubFilter::McpServers, Some(playwright)));
   agents.until("its bar", |s| s.exists("team-hub-actions"));
   assert!(agents.exists("team-hub-fix-switch-on") && !agents.exists("team-hub-edit"));
+}
+
+/// A member's hub has Memory after Tools: this computer's memory of the project, which it says is not shared with the
+/// team, and *New record*, as every person writes their own computer's memory (Y5 `Fnu7A`).
+#[test]
+fn team_hub_member_memory_is_this_computers_and_says_so() {
+  let mut agents = Agents::new(true);
+  team_as(&agents, Some(MemberRole::Member));
+  keep_team(&agents);
+  agents
+    .window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Memory(MemoryView::default())));
+  agents.until("the memory", |s| {
+    s.exists("memory-tabs") && s.exists("team-hub-filter-memory")
+  });
+  assert!(
+    agents
+      .text("memory-not-shared-text")
+      .contains("not shared with the team: it is never published"),
+  );
+  assert!(agents.exists("memory-new"), "a member writes this computer's memory");
+  assert!(!agents.exists("team-hub-new"), "and makes no team resource");
+  assert!(
+    !agents.exists("team-hub-filter-archived"),
+    "a team's hub has no Archived"
+  );
 }

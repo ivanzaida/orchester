@@ -1,5 +1,5 @@
-//! The Memory screens headless, on the QA seed's `memory` and `tasks` scenarios: a task's Memory tab, the project's
-//! Memory page with its tabs and its link to the memory settings, their empty states, their failure and refusal states,
+//! The Memory screens headless, on the QA seed's `memory` and `tasks` scenarios: a task's Memory tab, the Agents hub's
+//! Memory filter with its statuses and its link to the memory settings, their empty states, their failure and refusal states,
 //! a task's Artifacts tab, and their theme roles. No runner is connected (its program does not exist). Needs `git`.
 //!
 //! `cargo test -p orchester-app --test memory memory`

@@ -4,7 +4,7 @@
 //! and the header's New task. A request whose task cannot be read has no link: it says why.
 
 use orchester_app::routes::{
-  AccountsView, MemoryTab, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView,
+  AccountsView, MemoryTab, MemoryView, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView,
 };
 use orchester_core::project::TaskKey;
 use orchester_workspace::{
@@ -87,7 +87,7 @@ fn overview_memory_records_open_the_project_memory_page() {
   seeded.click(&format!("{line}-open"));
   assert_eq!(
     seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Memory(Some(MemoryTab::Waiting)))
+    Route::Project(seeded.project, ProjectPage::Memory(MemoryView::on(MemoryTab::Waiting)))
   );
 }
 

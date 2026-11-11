@@ -23,7 +23,7 @@ use orchester_workspace::memory::{
   handoff::{HandoffList, HandoffParts},
   listing::{self, AuthorFilter, Counts, Filters, Group, StatusFilter},
   next::next_agent,
-  read::{ProjectMemory, TaskMemory},
+  read::{ProjectMemory, TaskMemory, project_active_count_in},
 };
 use parking_lot::Mutex;
 use support::{Fixture, at};
@@ -446,6 +446,11 @@ fn memory_project_page_lists_every_proposal_and_the_projects_records() {
     "the task's proposal waits on the project's page too"
   );
   assert_eq!(read.count(StatusFilter::Active), 1);
+  assert_eq!(
+    project_active_count_in(fixture.repo.path()).expect("counted"),
+    1,
+    "the Agents hub's Memory filter counts the project's active records"
+  );
   assert_eq!(
     read.pool(StatusFilter::Active).len(),
     2,

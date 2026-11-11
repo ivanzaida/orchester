@@ -72,6 +72,8 @@ impl Entry {
       HubFilter::Instructions => self.kind == ResourceKind::Instruction,
       HubFilter::Skills => self.kind == ResourceKind::Skill,
       HubFilter::Tools => self.kind == ResourceKind::Tool,
+      // Memory's records are no resources.
+      HubFilter::Memory => false,
     }
   }
 }

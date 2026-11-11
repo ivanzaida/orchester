@@ -1,7 +1,7 @@
 //! What a Memory screen keeps while it shows: its filters and search, which record is open in an editor or a
-//! delete confirmation, which histories are unfolded, the record whose details are open in place, and the change
-//! under way. The task's Memory tab and the project's Memory page each provide one to the parts they mount; the
-//! page keeps it across its tabs, so a search stays when another tab opens.
+//! delete confirmation, which histories are unfolded, and the change under way. The task's Memory tab and the Agents
+//! hub each provide one to the parts they mount; the hub keeps it across its filters and the Memory filter's
+//! statuses, so a search stays when another status opens.
 
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
@@ -19,7 +19,6 @@ use orchester_workspace::{memory::listing::Filters, secrets::Vault};
 use super::work::{self, Start, Write};
 use crate::{
   project::ProjectFeed,
-  routes::MemoryTab,
   ui::{field::field_error, message::message_text, tinted_note::person_only},
 };
 
@@ -45,12 +44,6 @@ impl DevtoolsInspectable for Opened {}
 pub struct Unfolded(pub BTreeSet<MemoryId>);
 
 impl DevtoolsInspectable for Unfolded {}
-
-/// The record whose details are open in place on the project's page, if a press opened them.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Chosen(pub Option<MemoryId>);
-
-impl DevtoolsInspectable for Chosen {}
 
 /// The record the last change asked for was of, once one was asked for (`Some(None)`: a new record).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -92,7 +85,7 @@ pub struct OfTask {
 #[derive(Clone)]
 pub struct MemoryState {
   pub repo: PathBuf,
-  /// The task of the task's tab; `None` on the project's page.
+  /// The task of the task's tab; `None` in the Agents hub.
   pub task: Option<OfTask>,
   pub project_id: ProjectId,
   /// The project's name.
@@ -104,10 +97,6 @@ pub struct MemoryState {
   pub histories: Signal<Unfolded>,
   /// The task's handoffs before the latest are listed too.
   pub earlier_handoffs: Signal<bool>,
-  /// The tab other than Active whose search and Filter a search or a filter brought up: they stay there while the
-  /// person clears them, so the field keeps its focus, until another tab shows.
-  pub bar_kept: Signal<Option<MemoryTab>>,
-  pub selected: Signal<Chosen>,
   pub action: work::Action,
   pub asked: Signal<Asked>,
   /// Synthetic input asked for the last change, which was not taken.
@@ -122,8 +111,6 @@ pub struct Made {
   pub search: Signal<String>,
   pub histories: Signal<Unfolded>,
   pub earlier_handoffs: Signal<bool>,
-  pub bar_kept: Signal<Option<MemoryTab>>,
-  pub selected: Signal<Chosen>,
   pub action: work::Action,
   pub asked: Signal<Asked>,
   pub refused: Signal<bool>,
@@ -140,18 +127,14 @@ impl Made {
       search: ctx.signal(String::new()),
       histories: ctx.signal(Unfolded::default()),
       earlier_handoffs: ctx.signal(false),
-      bar_kept: ctx.signal(None),
-      selected: ctx.signal(Chosen::default()),
       action: work::action(ctx),
       asked: ctx.signal(Asked::default()),
       refused: ctx.signal(false),
     };
-    let (opened, selected, feed) = (made.opened.clone(), made.selected.clone(), feed.clone());
+    let (opened, feed) = (made.opened.clone(), feed.clone());
     ctx.watch(&made.action.state(), move |done| {
       if done.fulfilled_data().is_some() {
-        // A record's page closes too: what it showed changed.
         opened.set(Opened::Nothing);
-        selected.set(Chosen::default());
         feed.saved();
       } else if done.is_rejected() && done.error.as_ref().is_some_and(|failed| failed.stale) {
         feed.saved();
@@ -178,8 +161,6 @@ impl Made {
       search: self.search.clone(),
       histories: self.histories.clone(),
       earlier_handoffs: self.earlier_handoffs.clone(),
-      bar_kept: self.bar_kept.clone(),
-      selected: self.selected.clone(),
       action: self.action.clone(),
       asked: self.asked.clone(),
       refused: self.refused.clone(),
@@ -227,21 +208,6 @@ impl MemoryState {
     self.open(Opened::Nothing);
   }
 
-  /// Leaves a record's page for its tab's list (the crumb, *Cancel*).
-  pub fn leave_page(&self) {
-    self.close();
-    self.selected.set(Chosen::default());
-  }
-
-  /// The record whose page the project's page shows: one opened for review, editing or deletion, else the one a
-  /// press on its row chose.
-  pub fn page_record(&self) -> Option<MemoryId> {
-    match self.opened.get() {
-      Opened::Review(id) | Opened::Edit(id) | Opened::Delete(id) => Some(id),
-      Opened::Nothing | Opened::New => self.chosen(),
-    }
-  }
-
   /// Unfolds or folds `record`'s earlier versions.
   pub fn toggle_history(&self, record: MemoryId) {
     self.histories.update(|open| {
@@ -254,18 +220,6 @@ impl MemoryState {
   /// Whether `record`'s earlier versions are unfolded.
   pub fn history_open(&self, record: MemoryId) -> bool {
     self.histories.with(|open| open.0.contains(&record))
-  }
-
-  /// The record whose details are open in place, if a press opened them.
-  pub fn chosen(&self) -> Option<MemoryId> {
-    self.selected.get().0
-  }
-
-  /// Opens `record`'s details in place, closing another record's; closes them when they are open.
-  pub fn choose(&self, record: MemoryId) {
-    self.selected.update(|chosen| {
-      chosen.0 = (chosen.0 != Some(record)).then_some(record);
-    });
   }
 
   /// The record the last change asked for was of, once one was asked for.

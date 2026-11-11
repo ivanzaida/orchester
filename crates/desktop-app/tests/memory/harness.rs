@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use orchester_app::routes::{MemoryTab, ProjectPage, Route, TaskView};
+use orchester_app::routes::{MemoryTab, MemoryView, ProjectPage, Route, TaskView};
 use orchester_core::{
   id::{MemoryId, ProjectId, SecretId},
   memory::{Memory, MemoryFilter, MemoryStore, ScopeFilter},
@@ -131,21 +131,30 @@ impl Page {
     });
   }
 
-  /// Opens the project's Memory page on the tab it opens on and waits until it is read.
+  /// Opens the Agents hub's Memory filter on the status it opens on and waits until it is read.
   pub fn project_memory(&mut self) {
-    self.open_memory(None);
+    self.open_memory(MemoryView::default());
   }
 
-  /// Opens the project's Memory page on `tab` and waits until it is read.
+  /// Opens the Memory filter on `tab` and waits until it is read.
   pub fn memory_tab(&mut self, tab: MemoryTab) {
-    self.open_memory(Some(tab));
+    self.open_memory(MemoryView::on(tab));
   }
 
-  fn open_memory(&mut self, tab: Option<MemoryTab>) {
+  /// Opens the Memory filter on `tab` with `record` in its panel and waits until the panel shows it.
+  pub fn memory_record(&mut self, tab: MemoryTab, record: MemoryId) {
+    self.open_memory(MemoryView::new(Some(tab), Some(record)));
+    let row = format!("memory-record-{record}");
+    self.window.until("the record picked", |window| {
+      window.texts("memory-panel").is_some() && window.texts(&row).is_some()
+    });
+  }
+
+  fn open_memory(&mut self, view: MemoryView) {
     self
       .window
       .navigation()
-      .go(Route::Project(self.project, ProjectPage::Memory(tab)));
+      .go(Route::Project(self.project, ProjectPage::Memory(view)));
     // The body stands over bones while the records read (ORC-110).
     self.window.until("the project's memory", |window| {
       (window.texts("memory-body").is_some() && window.texts("memory-loading").is_none())
@@ -153,7 +162,7 @@ impl Page {
     });
   }
 
-  /// The page's tabs in their order from the left, by name (`waiting`, `active`, …), and the one it shows.
+  /// The filter's statuses in their order from the left, by name (`waiting`, `active`, …), and the one it shows.
   pub fn tabs(&mut self) -> (Vec<&'static str>, &'static str) {
     let mut placed: Vec<(f32, &'static str)> = MemoryTab::ALL
       .into_iter()

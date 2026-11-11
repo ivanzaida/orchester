@@ -111,7 +111,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::Review => review::list(ctx, project),
     ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
-    ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
+    // Memory is a filter of the Agents hub (`Section Y · Memory` `Xxl1u`), a team project's too.
+    ProjectPage::Memory(memory) => agents_or_hub(ctx, project, HubView::memory(*memory)),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
     ProjectPage::NewTaskInModule(module) => task_form::new_task(ctx, project, Some(*module)),

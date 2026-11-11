@@ -16,7 +16,6 @@ pub(crate) mod given;
 pub(crate) mod new_button;
 pub(crate) mod page_head;
 pub(crate) mod parts;
-pub(crate) mod pills;
 pub(crate) mod profile_form;
 pub(crate) mod question;
 pub(crate) mod role;
@@ -36,7 +35,7 @@ use orchester_workspace::messages::Message;
 pub(crate) use self::tabs::HubTab;
 use crate::{
   project::ShownProject,
-  routes::{InstructionsView, ProjectPage, Route, SkillsFilter},
+  routes::{InstructionsView, MemoryView, ProjectPage, Route, SkillsFilter},
   theme::HubSpacing,
   ui::failure::{Failure, is_transient},
 };
@@ -56,7 +55,7 @@ impl HubTab {
         Self::Instructions => ProjectPage::Instructions(InstructionsView::default()),
         Self::Skills => ProjectPage::Skills(SkillsFilter::default()),
         Self::Tools => ProjectPage::Tools,
-        Self::Memory => ProjectPage::Memory(None),
+        Self::Memory => ProjectPage::Memory(MemoryView::default()),
       },
     )
   }
@@ -173,18 +172,13 @@ pub(crate) fn list_body(id: &str, pane: impl Into<Element>) -> Element {
   item_body(id, pane, None)
 }
 
-/// [`list_body`] with a pane `width` wide at most, e.g. Memory's 760 (`Pane` `Jy4nw` in 05).
-pub(crate) fn list_body_wide(id: &str, pane: impl Into<Element>, width: f32) -> Element {
-  body(id, (pane.into(), width), None)
-}
-
 /// An opened item: `pane` with `side` beside it, both scrolling as one page under the tabs (the design's tall
 /// windows, 01c, 02, 04b, are whole pages that scroll).
 pub(crate) fn item_body(id: &str, pane: impl Into<Element>, side: Option<Element>) -> Element {
   body(id, (pane.into(), PANE_WIDTH), side.map(|side| (side, SIDE_WIDTH)))
 }
 
-/// [`item_body`] with a pane and a side of their own widths, e.g. a memory record's 680 and 424 (05c).
+/// [`item_body`] with a pane and a side of their own widths, e.g. a skill's page.
 pub(crate) fn page_body(id: &str, pane: (Element, f32), side: (Element, f32)) -> Element {
   body(id, pane, Some(side))
 }

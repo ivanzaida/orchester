@@ -163,6 +163,7 @@ const fn label_key(filter: HubFilter) -> &'static str {
     HubFilter::Instructions => "hub.filter.instructions",
     HubFilter::Skills => "hub.filter.skills",
     HubFilter::Tools => "hub.filter.tools",
+    HubFilter::Memory => "hub.filter.memory",
     HubFilter::Archived => "hub.filter.archived",
   }
 }
@@ -198,6 +199,7 @@ pub(crate) const fn glyph_of(filter: HubFilter) -> Icon {
     HubFilter::Instructions => Icon::FileText,
     HubFilter::Skills => Icon::Sparkles,
     HubFilter::Tools => Icon::Wrench,
+    HubFilter::Memory => Icon::Brain,
     HubFilter::Archived => Icon::Archive,
   }
 }
@@ -211,6 +213,7 @@ pub(crate) const fn empty_words(filter: HubFilter) -> (&'static str, &'static st
     HubFilter::Instructions => ("hub.empty.instructions.title", "hub.empty.instructions.detail"),
     HubFilter::Skills => ("hub.empty.skills.title", "hub.empty.skills.detail"),
     HubFilter::Tools => ("hub.empty.tools.title", "hub.empty.tools.detail"),
+    HubFilter::Memory => ("memory.tabs.empty.activeTitle", "memory.tabs.empty.activeBody"),
     HubFilter::Archived => ("hub.empty.archived.title", "hub.empty.archived.detail"),
   }
 }

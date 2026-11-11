@@ -2,7 +2,8 @@
 //! `U9RFS`, L2): the kind's glyph, the name over its line, and at its end a tag and a version. Every row is the same
 //! height whatever its kind or how it stands, so the list never changes its rhythm between tabs. The chosen row stands
 //! inert on `hover` with a 2 `accent` start (`n330IO`); the others open the hub on them. What the glyph, the line, the
-//! tag and the version say is each hub's own; how the row is laid out is this.
+//! tag and the version say is each hub's own; how the row is laid out is this. The name and the line end in an
+//! ellipsis before the tag and the version, which keep their width, so they never run under them (Y1 `PdesS`).
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
@@ -27,11 +28,13 @@ pub(crate) struct AgentRow<'a> {
   pub id: &'a str,
   pub chosen: bool,
   pub open: Button,
-  pub group: Group,
+  /// How the resource stands here; a memory record has no readiness.
+  pub group: Option<Group>,
   /// What the row is, for tools reading the tree.
   pub kind: String,
   pub mark: Element,
-  pub name: &'a str,
+  /// The name and its color: a record no agent is given is named in `text_muted` (Y6 `JLsNL`).
+  pub name: (&'a str, PaletteColor),
   /// The line under the name and its color.
   pub line: (&'a str, PaletteColor),
   pub tag: Option<Row>,
@@ -55,16 +58,17 @@ pub(crate) fn agent_row(row: AgentRow<'_>) -> Element {
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .describe("state", if row.chosen { "chosen" } else { "enabled" })
-    .describe("group", group_name(row.group))
+    .describe("group", row.group.map_or("none", group_name))
     .describe("kind", row.kind)
     .child(row.mark)
     .child(text(id, row.name, row.line))
-    .with_children(row.tag)
+    .with_children(row.tag.map(|tag| tag.flex_shrink(0.0)))
     .with_children(row.version.map(|version| {
       Text::new(&version)
         .id(format!("{id}-version"))
         .variant(HubText::RowLine.role())
         .color(PaletteColor::TextMuted)
+        .flex_shrink(0.0)
         .nowrap()
     }));
   if row.chosen {
@@ -80,7 +84,7 @@ pub(crate) fn agent_row(row: AgentRow<'_>) -> Element {
 }
 
 /// The name over its line (`Text` in `U9RFS`).
-fn text(id: &str, name: &str, (line, color): (&str, PaletteColor)) -> Column {
+fn text(id: &str, (name, shade): (&str, PaletteColor), (line, color): (&str, PaletteColor)) -> Column {
   Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -89,7 +93,10 @@ fn text(id: &str, name: &str, (line, color): (&str, PaletteColor)) -> Column {
       Text::new(name)
         .id(format!("{id}-name"))
         .variant(HubText::RowName.role())
-        .nowrap(),
+        .color(shade)
+        .width(Dimension::Pct(100.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     )
     .child(
       Text::new(line)

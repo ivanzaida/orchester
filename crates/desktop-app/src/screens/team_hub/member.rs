@@ -35,7 +35,9 @@ pub(super) fn role(ctx: &Ctx) -> Text {
 /// The title and the line of a member's empty tab: that an admin adds it.
 pub(super) const fn empty_words(filter: HubFilter) -> (&'static str, &'static str) {
   match filter {
-    HubFilter::All | HubFilter::Archived => ("team_hub.member.empty.all.title", "team_hub.member.empty.all.detail"),
+    HubFilter::All | HubFilter::Memory | HubFilter::Archived => {
+      ("team_hub.member.empty.all.title", "team_hub.member.empty.all.detail")
+    }
     HubFilter::Profiles => (
       "team_hub.member.empty.profiles.title",
       "team_hub.member.empty.profiles.detail",
