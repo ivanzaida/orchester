@@ -8,7 +8,6 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{Pipeline, PromptText, Slug, Step, StepKey, StepKind},
-  store::ResourceStore,
   time::Timestamp,
 };
 

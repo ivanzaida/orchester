@@ -392,7 +392,7 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
 fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_guard() {
   use orchester_core::{
     name::Name,
-    resource::{Pipeline, Slug},
+    resource::Slug,
     time::Timestamp,
   };
   let mut s = Skills::new();

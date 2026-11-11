@@ -209,16 +209,14 @@ fn instructions_delayed_step_create_keeps_selected_pipeline_and_step_locked() {
     .latest_version::<Pipeline>(pipeline)
     .expect("version")
     .expect("pipeline");
-  let other = store
+  store
     .create_published(
       Slug::new("other").expect("slug"),
       Name::new("Other pipeline").expect("name"),
       version.body(),
       Timestamp::now(),
     )
-    .expect("second private pipeline")
-    .0
-    .id();
+    .expect("second private pipeline");
   screen.list();
   screen.click("instructions-new");
   screen.until("scope choice", |s| s.exists("instruction-scope-step"));
