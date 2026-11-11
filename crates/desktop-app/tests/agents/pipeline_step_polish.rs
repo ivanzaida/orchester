@@ -1,6 +1,7 @@
 //! The open step's polish of PV2-17: retries that survive a change of where changes requested go, the Agent field
 //! saying why a tool cannot run, a model override dropped, and said, when the step moves to another CLI, and a gone
-//! profile or tool said the same way on its flow card and in the field. One press on a strip chip that shows only in
+//! profile or tool said the same way on its flow card and in the field; the CLI an override is read against through
+//! choices whose CLI is not known and after a Restore. One press on a strip chip that shows only in
 //! part opens it. `cargo test -p orchester-app --test agents pipeline_step_polish`.
 
 use std::collections::BTreeMap;
@@ -11,8 +12,8 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId},
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, CommandProgram, DatabaseQuery, DeniedBehavior, Slug,
-    StepKind, Tool, ToolAction,
+    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, CommandProgram, DatabaseQuery, DeniedBehavior, Draft,
+    Pipeline, PipelineEdit, Slug, StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
@@ -25,6 +26,7 @@ use super::{
   pipeline_hub::setup,
   pipeline_step::{CANCEL, chain, keys, open_step, rect, route, save_until, step_route, stored},
   pipeline_step_agent::{FIELD, PICKER, agent, executor, field_has, item, overriding, profile_on, single},
+  pipeline_versions::{RESTORE, open_list},
 };
 
 /// Whether the retries box is there and holds `text`.
@@ -421,4 +423,80 @@ fn pipeline_step_polish_one_press_on_a_chip_partly_under_the_strips_arrow_opens_
       chip.x >= panel.x + panel.width
     }
   });
+}
+
+#[test]
+fn pipeline_step_polish_unknown_codex_unknown_claude_drops_the_override_even_after_leaving_the_step() {
+  let (mut agents, _) = setup();
+  agents.profile(true);
+  let connection = claude(&agents);
+  profile_on(&agents, "Writer", Some(connection));
+  let explorer = profile_on(&agents, "Explorer", None);
+  let pipeline = overriding(&agents, explorer, "some-override");
+  let plan = keys(&agents, pipeline)[0].clone();
+  open_step(&mut agents, pipeline, &plan);
+
+  // Codex is the first CLI known: there is nothing to drop the override on.
+  choose(&mut agents, "Builder");
+  assert!(!agents.exists(DROPPED), "kept on the first known CLI");
+  choose(&mut agents, "Explorer");
+  assert!(!agents.exists(DROPPED), "kept: Explorer's CLI is not known");
+
+  // Away to the pipeline and back: the edit remembers that the step last ran on Codex.
+  open(&mut agents, pipeline);
+  agents.until("the flow", |s| !s.exists(FIELD));
+  open_step(&mut agents, pipeline, &plan);
+
+  choose(&mut agents, "Writer");
+  agents.until("dropped on Claude Code", |s| s.exists(DROPPED));
+  assert_eq!(agents.text(DROPPED), "Model override dropped");
+  assert!(
+    !agents.text("pipeline-hub-step-agent-runs").contains("some-override"),
+    "{}",
+    agents.text("pipeline-hub-step-agent-runs")
+  );
+}
+
+#[test]
+fn pipeline_step_polish_an_override_another_cli_set_goes_and_the_one_the_step_started_with_comes_back() {
+  let (mut agents, _) = setup();
+  let builder = agents.profile(true);
+  let connection = claude(&agents);
+  let writer = profile_on(&agents, "Writer", Some(connection));
+  // v1 runs Writer (Claude Code) with an override of its own; v2, the one the edit starts from, Builder (Codex).
+  let pipeline = overriding(&agents, writer, "claude-override");
+  let plan = keys(&agents, pipeline)[0].clone();
+  {
+    let mut db = ProjectDb::open(&agents.root).expect("database");
+    let latest = db
+      .latest_version::<Pipeline>(pipeline)
+      .expect("read")
+      .expect("published");
+    let mut edit = PipelineEdit::new(latest.body().clone());
+    edit.update(&plan, |step| step.kind = agent(builder, Some("gpt-override")));
+    let body = edit.validate().expect("a pipeline");
+    db.save_draft(pipeline, &Draft::new(body, Some(latest.number()), Timestamp::now()))
+      .expect("draft");
+    db.publish_draft::<Pipeline>(pipeline, Timestamp::now()).expect("v2");
+  }
+  open(&mut agents, pipeline);
+  open_list(&mut agents);
+  agents.click("pipeline-hub-version-1");
+  agents.until("v1", |s| s.exists(RESTORE));
+  agents.click(RESTORE);
+  agents.until("the edit holds v1", |s| !s.exists("pipeline-hub-version-viewing"));
+  open_step(&mut agents, pipeline, &plan);
+  assert!(
+    agents
+      .text("pipeline-hub-step-agent-runs")
+      .ends_with("· model: claude-override")
+  );
+
+  // Claude Code's override is not taken onto Codex; the step's own Codex override comes back.
+  choose(&mut agents, "Builder");
+  agents.until("the started override", |s| {
+    s.text("pipeline-hub-step-agent-runs")
+      .ends_with("· model: gpt-override")
+  });
+  assert!(!agents.exists(DROPPED), "the step runs what it started with");
 }

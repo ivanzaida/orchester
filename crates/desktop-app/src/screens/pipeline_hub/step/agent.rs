@@ -26,7 +26,10 @@ use orchester_core::{
 };
 use orchester_workspace::pipelines::fields::{Executor, dropped_override};
 
-use super::choices::Flag;
+use super::{
+  choices::Flag,
+  known::{self, PathsSignal},
+};
 use crate::{
   navigation::Navigation,
   routes::{AgentTab, ProjectPage, Route},
@@ -64,6 +67,8 @@ pub(super) struct Props {
   pub epoch: u64,
   /// The panel's: a *Choose another* that opened the step asked for the picker to open, once.
   pub pick: Signal<bool>,
+  /// The panel's: the last known CLI each step of the edit ran on.
+  pub paths: PathsSignal,
 }
 
 /// The props are equal when they say the same: the edit's handle is the panel's own.
@@ -174,6 +179,7 @@ impl Agent {
       props.choices.clone(),
     );
     let (clis, from, started) = (props.clis.clone(), props.cli, props.started.clone());
+    let (paths, epoch, now) = (props.paths.clone(), props.epoch, props.value);
     let open = self.open.clone();
     let picked = open.clone();
     let (navigation, project) = (Navigation::of(ctx), props.project);
@@ -187,11 +193,13 @@ impl Agent {
           picked.set(false);
           if let Some(at) = items.iter().position(|item| item.key == key) {
             let (executor, to) = (executors[at], clis[at]);
+            let mut path = known::path(&paths, (epoch, &step), (now, from));
             edit.change(|current| {
               current.update(&step, |step| {
-                executor.apply_in_edit(step, started.as_ref(), (from, to));
+                executor.apply_through(step, started.as_ref(), (&mut path, to));
               });
             });
+            known::keep(&paths, (epoch, &step), (executor, path));
           }
         }),
         on_close: Box::new(move || open.set(false)),

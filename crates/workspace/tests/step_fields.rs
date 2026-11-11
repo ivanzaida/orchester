@@ -170,14 +170,15 @@ fn a_profile_whose_cli_is_not_known_does_not_carry_the_override_to_another_cli()
   let started = (overriding(), Some(AgentProvider::ClaudeCodeCli));
   let mut step = started.0.clone();
   let (claude, codex) = (Some(AgentProvider::ClaudeCodeCli), Some(AgentProvider::CodexCli));
+  let mut known = KnownCli::new(claude);
 
   // A profile with no connection: its CLI is not known, so the override is kept on no guess.
-  let kept = Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (claude, None));
+  let kept = Executor::Profile(ResourceId::generate()).apply_through(&mut step, Some(&started), (&mut known, None));
   assert_eq!(kept, None);
   assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
 
   // Then one on Codex: the override was for Claude, the CLI the step started on.
-  let dropped = Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (None, codex));
+  let dropped = Executor::Profile(ResourceId::generate()).apply_through(&mut step, Some(&started), (&mut known, codex));
   assert_eq!(dropped.as_ref().map(ModelId::as_str), Some("custom-model"));
   assert_eq!(model_of(&step), None);
   assert_eq!(
@@ -187,7 +188,7 @@ fn a_profile_whose_cli_is_not_known_does_not_carry_the_override_to_another_cli()
   );
 
   // Back on Claude, it is taken back.
-  Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (codex, claude));
+  Executor::Profile(ResourceId::generate()).apply_through(&mut step, Some(&started), (&mut known, claude));
   assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
 }
 
@@ -222,4 +223,27 @@ fn an_override_is_read_against_the_last_known_cli_whatever_unknown_choices_came_
     Some("custom-model"),
     "back on Codex after an unknown one keeps it"
   );
+}
+
+#[test]
+fn an_override_set_on_another_cli_is_read_against_that_cli_not_the_one_the_step_started_on() {
+  let (claude, codex) = (Some(AgentProvider::ClaudeCodeCli), Some(AgentProvider::CodexCli));
+  let started = (overriding(), claude);
+  let mut step = started.0.clone();
+  let mut known = KnownCli::new(claude);
+
+  // On Codex the Claude override goes; then the step takes a model of Codex's own.
+  Executor::Profile(ResourceId::generate()).apply_through(&mut step, Some(&started), (&mut known, codex));
+  assert_eq!(model_of(&step), None);
+  ModelChoice(Some(ModelId::new("codex-model").expect("model"))).apply(&mut step);
+
+  // Back on Claude: Codex's model goes too, and the step takes back the override it started with.
+  let dropped =
+    Executor::Profile(ResourceId::generate()).apply_through(&mut step, Some(&started), (&mut known, claude));
+  assert_eq!(
+    dropped.as_ref().map(ModelId::as_str),
+    Some("codex-model"),
+    "Codex's model is not kept on Claude"
+  );
+  assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
 }

@@ -75,6 +75,7 @@ fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::R
       locked: open.locked,
       epoch: open.epoch,
       pick: open.pick_agent.clone(),
+      paths: open.known.clone(),
     },
   );
   let id = "pipeline-hub-step-agent-row";

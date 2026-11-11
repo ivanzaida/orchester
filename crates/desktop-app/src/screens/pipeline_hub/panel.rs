@@ -144,6 +144,8 @@ struct PipelinePanel {
   /// A card's or *Ready?*'s *Choose another* asked for the step it opens to open its Agent picker: read once by that
   /// step's Agent field.
   pick_agent: Signal<bool>,
+  /// The last known CLI each step of the edit ran on, which a model override is read against.
+  known: Signal<step::Paths>,
   id: ResourceId,
 }
 
@@ -175,6 +177,7 @@ impl Component for PipelinePanel {
       reveal_delivers: ctx.signal(false),
       delivers: ctx.element_ref(),
       pick_agent: ctx.signal(false),
+      known: ctx.signal(step::Paths::default()),
       id,
     };
     save::follow(
@@ -321,6 +324,7 @@ impl PipelinePanel {
         faulty: &self.faulty,
         reveal_delivers: &self.reveal_delivers,
         pick_agent: &self.pick_agent,
+        known: &self.known,
       },
     ))
   }

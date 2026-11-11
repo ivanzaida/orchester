@@ -16,6 +16,7 @@ mod executor;
 mod gate;
 mod groups;
 mod head;
+mod known;
 mod name;
 mod permissions;
 mod pieces;
@@ -30,6 +31,7 @@ use lurq::{
 use orchester_core::resource::{PipelineEdit, StepKey};
 use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 
+pub(super) use self::known::Paths;
 use super::{edit::Edit, model::Entry};
 use crate::project::ShownProject;
 
@@ -139,6 +141,8 @@ pub(super) struct Open<'a> {
   pub reveal_delivers: &'a Signal<bool>,
   /// Set by a *Choose another* that opened this step: its Agent field opens its picker once.
   pub pick_agent: &'a Signal<bool>,
+  /// The last known CLI each step of the edit ran on ([`known`]).
+  pub known: &'a known::PathsSignal,
 }
 
 /// What the panel's body shows for the open step: the head, the strip and the groups of fields; nothing when the
