@@ -49,7 +49,9 @@ fn driving(name: &str, own: &str) -> Option<String> {
 /// What the agent reads first of `run_task` while the chat drives.
 const DRIVE_RUN: &str = "Starts the run at once, through the same checks as for any client. A task marked Blocked \
   (its blocked_reason) is refused as task_blocked, naming the reason: you never start it; the person may start it in \
-  the app.";
+  the app. In a turn Orchester started by itself (its message begins with [Orchester]) it starts only a task this \
+  conversation leads, and refuses another as not_led; in a turn a day's report or a watching's end started it is \
+  refused (report_turn). There, start only what the turn's message says you may.";
 
 /// What the agent reads first of `duplicate_pipeline` while the chat drives.
 const DRIVE_DUPLICATE: &str = "In this chat it saves the copy as a draft, and publishes its first version as \

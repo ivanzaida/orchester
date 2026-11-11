@@ -28,7 +28,7 @@ use super::{
   created::{self, CREATE_TASK},
   guard,
   keep::{self, HOLD_QUEUE, Named},
-  proposal,
+  led_start, proposal,
   repository::INIT_REPOSITORY,
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE, app_tool},
 };
@@ -210,7 +210,8 @@ async fn continuing(
 }
 
 /// `run_task`: a start proposed to the person, or, while the chat drives or the project allows Autopilot, the run
-/// started; refused for a task marked Blocked.
+/// started; refused for a task marked Blocked, and while it drives in a turn nobody asked for, for a task its
+/// conversation does not lead ([`led_start`]).
 async fn start(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
@@ -218,6 +219,9 @@ async fn start(
   drives: bool,
 ) -> Result<Acted, ToolError> {
   blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
+  if drives && scope.on_its_own {
+    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str)).await?;
+  }
   // In a turn nobody asked for, a start is only proposed, unless the chat drives.
   if !drives && (scope.on_its_own || !allows_autopilot(scope).await?) {
     let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;

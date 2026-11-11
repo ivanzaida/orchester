@@ -2480,7 +2480,8 @@
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
-      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
+      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
+      "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {
       "ownTask": "A run cannot wait on its own task. Nothing was changed.",

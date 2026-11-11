@@ -2,11 +2,12 @@
 //! seeded Kontur: while it does not drive, in a turn a wait or a run's end started by itself, `merge_run` and
 //! `run_task` only propose, even with Autopilot allowed, and while it drives they are carried out; `resume_run`
 //! refuses a run stopped at a limit or interrupted while it does not drive; and a hold or a release of new starts that
-//! would change nothing is refused.
+//! would change nothing is refused. While it drives, a turn nobody asked for starts only a task its conversation leads
+//! (`not_led`).
 
 use orchester_core::{
   id::IdempotencyKey,
-  orchestrator::ActionOutcome,
+  orchestrator::{ActionOutcome, Subscription, WatchTarget},
   resource::Pipeline,
   run::{AllowAutopilot, InterruptCause, RunLimit},
   store::{MergeStore, ResourceStore, RunStore, TaskStore},
@@ -65,11 +66,30 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
     .find(|task| task.details().title.as_str() == "Drop the legacy sync worker")
     .expect("the ready draft");
   let start = json!({ "project": "Kontur", "key": draft.key().to_string() });
+  // A task this conversation does not lead is not started in a turn nobody asked for.
+  let refused = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not led here");
+  assert_eq!(refusal(&refused), "not_led");
+  assert!(
+    matches!(&actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Refused { code, .. } if code == "not_led"),
+    "the refusal is kept"
+  );
+  assert!(db.runs_of_task(draft.id()).expect("runs").is_empty(), "nothing started");
+  let led = Subscription::new(
+    scope.chat,
+    WatchTarget::Task(draft.id()),
+    "Start it when ready",
+    Timestamp::now(),
+  );
+  db.start_subscription(&led).expect("the person watches it here");
   // Without Autopilot too: this session has no runner, so the tool answers as it does for any client, never a card.
   let started = chat_call(&mut served, &scope, "run_task", start);
   assert!(
     !matches!(&started, Ok(told) if told["waits_for_person"] == true),
     "not proposed: {started:?}"
+  );
+  assert!(
+    !matches!(&started, Err(ToolError::Refused { code, .. }) if code == "not_led"),
+    "a task it leads goes to the tool: {started:?}"
   );
 }
 
