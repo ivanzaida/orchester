@@ -87,10 +87,9 @@ pub fn step(ctx: &Ctx, editing: &Editing, (step, index): (&Step, usize)) -> Elem
   )
 }
 
-/// What the card's step is compared with: the latest version while a version is compared, and in the publish review
-/// (a pipeline holds no draft, D-032).
+/// What the card's step is compared with: the latest version, in the review of what *Save* publishes.
 fn reference(editing: &Editing) -> Option<&orchester_core::resource::Pipeline> {
-  (editing.comparing || editing.view == View::Publish).then_some(&editing.opened.body)
+  (editing.view == View::Publish).then_some(&editing.opened.body)
 }
 
 fn title(ctx: &Ctx, step: &Step, (invalid, changed): (bool, bool)) -> Row {

@@ -1,6 +1,6 @@
 //! The head of an open step (`Head` in `Pipelines · v2` P2 `u2rYEH`): ← and the pipeline's name, which return to the
-//! pipeline's panel, and *step 03 of 6* over the step's name, with *Duplicate* at the end. The step's own ⋯ menu is the
-//! flow card's (P4 `naN3G`): it moves and removes steps, which the flow owns.
+//! pipeline's panel, and *step 03 of 6* over the step's name, with *Duplicate* and ⋯ at the end. The ⋯ opens the flow
+//! card's menu (P4 `naN3G`) for the step ([`super::more`]).
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -10,7 +10,7 @@ use lurq::{
 };
 use orchester_core::resource::Step;
 
-use super::{Open, name};
+use super::{Open, more, name};
 use crate::{
   navigation::Navigation,
   routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
@@ -94,6 +94,17 @@ pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, u
         )),
     )
     .child(duplicate(ctx, open, step, &navigation))
+    .child(more::more(
+      ctx,
+      more::Props {
+        edit: open.edit.clone(),
+        read: open.read.clone(),
+        key: step.key.clone(),
+        project,
+        pipeline: open.entry.id,
+        locked: open.locked,
+      },
+    ))
     .into()
 }
 

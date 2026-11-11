@@ -12,7 +12,7 @@ use orchester_store::ProjectDb;
 use super::{
   active::{pipeline, running},
   harness::Agents,
-  pipeline_hub::{open, project, setup, view},
+  pipeline_hub::{open, project, view},
   pipeline_versions::{BUTTON, CANCEL, DESCRIPTION, RESTORE, SAVE, open_list, publish_second, two_versions, versions},
 };
 
@@ -66,22 +66,6 @@ fn pipeline_versions_list_that_cannot_be_read_says_so_and_try_again_reads_it_aga
     s.exists("pipeline-hub-version-2") && s.exists("pipeline-hub-version-1")
   });
   assert!(!agents.exists("pipeline-hub-versions-error"));
-}
-
-#[test]
-fn pipeline_versions_list_of_a_pipeline_never_published_says_nothing_is_published() {
-  let (mut agents, [_, draft, _]) = setup();
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-  agents.until("the panel", |s| s.exists(BUTTON));
-
-  agents.click(BUTTON);
-  agents.until("the empty list", |s| s.exists("pipeline-hub-versions-none"));
-  assert_eq!(agents.text("pipeline-hub-versions-none"), "Nothing is published yet.");
-  assert_eq!(
-    agents.text("pipeline-hub-versions-foot"),
-    "Runs keep the version they started on."
-  );
-  assert!(!agents.exists("pipeline-hub-version-1"));
 }
 
 #[test]
@@ -251,10 +235,12 @@ fn pipeline_versions_leaving_with_unsaved_changes_while_a_version_is_shown_asks_
   agents.until("kept", |s| !s.exists(DISCARD));
   assert!(agents.exists(VIEWING), "Keep editing leaves everything as it was");
 
-  // A tab: the same question; discarding goes there with no version shown.
-  agents.click("pipeline-hub-filter-drafts");
+  // A tab: the same question; discarding goes there (empty: nothing is archived) with no version shown.
+  agents.click("pipeline-hub-filter-archived");
   agents.until("the question again", |s| s.exists(DISCARD));
   agents.click(DISCARD);
-  agents.until("the tab", |s| s.text("team-hub-panel-title") == "Dependency update");
+  agents.until("the tab", |s| {
+    s.window.navigation().route_now() == view(PipelinesFilter::Archived, None)
+  });
   assert!(!agents.exists(VIEWING));
 }

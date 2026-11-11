@@ -74,27 +74,32 @@ fn publish_opens(
   publication: (Publishing, ResourceId),
 ) -> Vec<Opens> {
   let route = facts::draft_route((project, pipelines), publication);
+  let name = || {
+    view.facts.map_or_else(
+      || {
+        view
+          .action
+          .change
+          .as_ref()
+          .map(|change| change.subject.clone())
+          .unwrap_or_default()
+      },
+      |facts| match facts {
+        read::Facts::Publication(found) => found.name.clone(),
+        read::Facts::Run(_) => String::new(),
+      },
+    )
+  };
+  let open = |route| {
+    (
+      Icon::ArrowUpRight,
+      ctx.t_args("orchestrator.change.publish.open", [("name", name().as_str())]),
+      route,
+    )
+  };
   match view.phase() {
     Phase::Applied | Phase::Done => {
-      let name = view.facts.map_or_else(
-        || {
-          view
-            .action
-            .change
-            .as_ref()
-            .map(|change| change.subject.clone())
-            .unwrap_or_default()
-        },
-        |facts| match facts {
-          read::Facts::Publication(found) => found.name.clone(),
-          read::Facts::Run(_) => String::new(),
-        },
-      );
-      let mut opens = vec![(
-        Icon::ArrowUpRight,
-        ctx.t_args("orchestrator.change.publish.open", [("name", name.as_str())]),
-        route,
-      )];
+      let mut opens = vec![open(route)];
       if view.phase() == Phase::Done {
         opens.push((
           Icon::Settings,
@@ -103,6 +108,10 @@ fn publish_opens(
         ));
       }
       opens
+    }
+    // A pipeline has no draft (D-032): a publication of one kept from before opens the pipeline.
+    Phase::Waits | Phase::Applying | Phase::Dismissed | Phase::Refused(_) if publication.0 == Publishing::Pipeline => {
+      vec![open(route)]
     }
     Phase::Waits | Phase::Applying | Phase::Dismissed | Phase::Refused(_) => {
       vec![(

@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use lurq::app::ctx::Ctx;
+use lurq::app::{ctx::Ctx, events::KeyboardEvent};
 use orchester_core::{
   name::Name,
   resource::{MoveError, PipelineEdit, StepKey},
@@ -63,36 +63,40 @@ impl Drive {
     }
   }
 
-  /// Adds a step after `after`'s stage, or at the end, which `flow` says what follows.
-  pub(super) fn add(&self, name: Name, after: Option<&StepKey>, flow: &PipelineFlow) {
+  /// Adds a step after `after`'s stage, or at the end, which `flow` says what follows; returns the step added.
+  pub(super) fn add(&self, name: Name, after: Option<&StepKey>, flow: &PipelineFlow) -> Option<StepKey> {
     if self.locked() {
-      return;
+      return None;
     }
     let stage = after.and_then(|after| stage_of(flow, after));
     let together: Vec<StepKey> = stage
       .map(|stage| stage.cards.iter().map(|card| card.key.clone()).collect())
       .unwrap_or_default();
     let next = after.and_then(|after| next_after(flow, after));
-    self.settle(
-      add_after(&self.edit, &self.current, (&together, next.as_ref()), name),
-      after,
-    );
+    let outcome = add_after(&self.edit, &self.current, (&together, next.as_ref()), name);
+    // The error is not lost: `settle` says it under the card, and no step was added.
+    let added = outcome.as_ref().ok().cloned();
+    self.settle(outcome.map(|_| ()), after);
+    added
   }
 
-  /// Copies step `key`; the copy is called `name` when the step's own name leaves room for it.
-  pub(super) fn duplicate(&self, key: &StepKey, name: Option<Name>) {
+  /// Copies step `key`; the copy is called `name` when the step's own name leaves room for it. Returns the copy.
+  pub(super) fn duplicate(&self, key: &StepKey, name: Option<Name>) -> Option<StepKey> {
     if self.locked() {
-      return;
+      return None;
     }
     let mut copied = (*self.current).clone();
     let outcome = match copy_of(&mut copied, key, name) {
-      Some(_) => {
+      Some(copy) => {
         self.edit.change(|held| *held = copied);
-        Ok(())
+        Ok(copy)
       }
       None => Err(MoveError::UnknownStep(key.clone())),
     };
-    self.settle(outcome, Some(key));
+    // The error is not lost: `settle` says it under the card, and no copy was made.
+    let copy = outcome.as_ref().ok().cloned();
+    self.settle(outcome.map(|_| ()), Some(key));
+    copy
   }
 
   /// Removes step `key`, which no other step returns to on failure ([`returned_to_by`]).
@@ -189,6 +193,19 @@ pub(super) fn make(edit: &Edit, current: &PipelineEdit, key: &StepKey, change: &
   Ok(true)
 }
 
+/// The move Alt ↑ or Alt ↓ asks for, with no other key held, while no text input has the keys: the card the keys are on
+/// moves by it in the flow, the open step in its head.
+pub(super) fn keyed_move(event: &KeyboardEvent) -> Option<Move> {
+  if event.default_prevented() || event.text_input_focused || !event.alt || event.ctrl || event.meta || event.shift {
+    return None;
+  }
+  match event.key.as_str() {
+    "ArrowUp" => Some(Move::Up),
+    "ArrowDown" => Some(Move::Down),
+    _ => None,
+  }
+}
+
 /// Adds a step after the steps of one stage, `together` (none for the end of the flow), in series with what follows:
 /// the core adds it waiting for one step only, which inside a parallel group is a branch no single line shows, so it
 /// waits for the whole stage before it is moved. The flow's first step after the stage is `next`.
@@ -197,7 +214,7 @@ pub(super) fn add_after(
   current: &PipelineEdit,
   (together, next): (&[StepKey], Option<&StepKey>),
   name: Name,
-) -> Result<(), MoveError> {
+) -> Result<StepKey, MoveError> {
   let mut added = current.clone();
   let key = added.add_step(name, together.last());
   for member in together {
@@ -205,7 +222,7 @@ pub(super) fn add_after(
   }
   added.move_to(&key, next)?;
   edit.change(|held| *held = added);
-  Ok(())
+  Ok(key)
 }
 
 /// The copy of step `key`, named `name` when it has one, so that it can be told from the step; `None` when the edit has

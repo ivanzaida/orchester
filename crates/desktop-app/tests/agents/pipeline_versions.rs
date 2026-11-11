@@ -3,12 +3,7 @@
 //! keeps as the next version. `cargo test -p orchester-app --test agents pipeline_versions`.
 
 use orchester_app::routes::PipelinesFilter;
-use orchester_core::{
-  id::ResourceId,
-  resource::{Draft, Pipeline},
-  store::ResourceStore,
-  time::Timestamp,
-};
+use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore, time::Timestamp};
 use orchester_store::ProjectDb;
 
 use super::{

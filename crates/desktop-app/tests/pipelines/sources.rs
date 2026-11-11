@@ -1,8 +1,9 @@
-//! A pipeline draft's sources: Pipeline settings › Sources (`Q10UQ`) beside the project's, *Add folder* checked in
-//! place, and publishing a version that reads more asked in place; the step inspector's own sources (`O6piA3`).
+//! A pipeline's sources: Pipeline settings › Sources (`Q10UQ`) beside the project's, *Add folder* checked in place,
+//! and saving a version that reads more asked in place (a save publishes, D-032); the step inspector's own sources
+//! (`O6piA3`).
 use std::path::Path;
 
-use orchester_core::{resource::Pipeline, source::SourcePath, store::ResourceStore};
+use orchester_core::source::SourcePath;
 
 use crate::pipelines_support::Editor;
 
@@ -18,16 +19,8 @@ fn folder(files: usize) -> tempfile::TempDir {
   folder
 }
 
-fn drafted(editor: &Editor, id: orchester_core::id::ResourceId) -> Option<Pipeline> {
-  editor
-    .db()
-    .draft::<Pipeline>(id)
-    .expect("the draft reads")
-    .map(|draft| draft.body().clone())
-}
-
 #[test]
-fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
+fn pipelines_sources_a_chosen_folder_joins_the_edit_and_saving_it_asks() {
   let (mut editor, stand_ins) = Editor::with_stand_ins();
   let id = editor.published();
   let (docs, tokens) = (folder(1), folder(2));
@@ -50,27 +43,22 @@ fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
   );
   stand_ins.choose(Some(tokens.path().to_path_buf()));
   editor.click("pipeline-sources-add-add");
-  editor.until("the draft lists it", |e| {
-    drafted(e, id).is_some_and(|body| body.sources().pipeline() == [source(tokens.path())])
-  });
-  assert!(editor.exists("pipeline-source-0"), "it can be removed");
+  editor.until("the edit lists it", |e| e.exists("pipeline-source-0"));
+  assert_eq!(editor.version(id), 1, "reading more waits for a person");
   assert!(!editor.exists("pipeline-sources-add-hint"));
   editor.click("pipeline-tab-steps");
   editor.click("pipeline-publish");
-  editor.until("publish question", |e| e.exists("pipeline-publish-question-confirm"));
+  editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
   editor.arm();
   assert!(editor.gated(), "reading more is a person's to publish");
   assert!(
     editor
-      .text("pipeline-publish-question")
+      .text("pipeline-save-question")
       .contains("The sources the pipeline or its steps list differ")
   );
-  editor.click("pipeline-publish-question-confirm");
-  editor.until("v2", |e| {
-    e.db().latest_version::<Pipeline>(id).unwrap().unwrap().number().get() == 2
-  });
-  let published = editor.db().latest_version::<Pipeline>(id).unwrap().unwrap();
-  assert_eq!(published.body().sources().pipeline(), [source(tokens.path())]);
+  editor.click("pipeline-save-question-confirm");
+  editor.until("v2", |e| e.version(id) == 2);
+  assert_eq!(editor.stored(id).sources().pipeline(), [source(tokens.path())]);
 }
 
 /// Lists a relative path among the project's sources, which no read takes: the store calls it corrupt.

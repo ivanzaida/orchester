@@ -12,7 +12,7 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{Pipeline, PipelineEdit, RepositoryAccess, Slug, StepKind},
-  store::{ResourceStore, TaskStore},
+  store::TaskStore,
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
@@ -81,13 +81,18 @@ pub(super) fn use_pipeline(agents: &Agents, pipeline: ResourceId, tasks: usize) 
     .expect("tasks");
 }
 
-/// A project with a ready pipeline that three tasks use, a draft and one whose profile does not exist (so it cannot
-/// run), with the hub not opened yet.
+/// A project with a ready pipeline that three tasks use, *Dependency update* whose second step runs a profile that is
+/// no longer available (a pipeline is stored only as published versions, D-032, D-034), and one whose profile does not
+/// exist (so it cannot run), with the hub not opened yet.
 pub(super) fn setup() -> (Agents, [ResourceId; 3]) {
   let agents = Agents::new(true);
   let builder = agents.profile(true);
   let ready = pipeline(&agents, "Feature delivery", Some(builder));
-  let draft = pipeline(&agents, "Dependency update", None);
+  let draft = pipeline_of(
+    &agents,
+    "Dependency update",
+    [Some(builder), Some(ResourceId::generate())],
+  );
   let stuck = pipeline(&agents, "Quick fix", Some(ResourceId::generate()));
   use_pipeline(&agents, ready, 3);
   (agents, [ready, draft, stuck])
@@ -115,10 +120,11 @@ fn pipeline_hub_groups_the_pipelines_and_counts_each_tab() {
   assert_eq!(row(&mut agents, ready, "name"), "Feature delivery");
   assert_eq!(row(&mut agents, ready, "line"), "2 steps · used by 3 tasks");
   assert_eq!(row(&mut agents, ready, "version"), "v1");
-  assert_eq!(row(&mut agents, draft, "version"), "draft");
+  assert_eq!(row(&mut agents, draft, "version"), "v1");
+  let line = row(&mut agents, draft, "line");
   assert!(
-    row(&mut agents, draft, "line") == "2 steps not ready",
-    "a draft says how many steps keep it from running"
+    line.starts_with("02 Build"),
+    "it names the step whose profile is gone: {line}"
   );
   assert_eq!(row(&mut agents, stuck, "version"), "v1");
   assert_ne!(
@@ -145,11 +151,40 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
   assert_eq!(agents.text("pipeline-hub-chips-end"), "used by 3 tasks");
 
   agents.click(&format!("pipeline-hub-row-{draft}"));
-  agents.until("the draft", |s| s.text("team-hub-panel-title") == "Dependency update");
-  assert_eq!(agents.text("team-hub-panel-version"), "draft · not published yet");
-  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "2 steps not ready");
+  agents.until("the other pipeline", |s| {
+    s.text("team-hub-panel-title") == "Dependency update"
+  });
+  assert!(agents.text("team-hub-panel-version").starts_with("v1 · published "));
+  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "v1");
+  assert!(agents.text("pipeline-hub-chip-1-label").starts_with("02 Build"));
   assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
+}
+
+#[test]
+fn pipeline_hub_a_tab_keeps_the_chosen_pipeline_when_it_holds_it_and_a_stale_route_is_corrected() {
+  let (mut agents, [ready, _, stuck]) = setup();
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(stuck, Timestamp::now())
+    .expect("archived");
+  open(&mut agents, PipelinesFilter::Archived, Some(stuck));
+  assert!(agents.exists(&format!("pipeline-hub-row-{stuck}")));
+  assert!(
+    !agents.exists(&format!("pipeline-hub-row-{ready}")),
+    "Archived holds archived pipelines only"
+  );
+  assert_eq!(
+    agents.text("pipeline-hub-filter-all-count"),
+    "2",
+    "the counts do not follow the tab"
+  );
+
+  // A route that names a pipeline the tab does not hold shows the tab's first one and is corrected to it.
+  open(&mut agents, PipelinesFilter::Archived, Some(ready));
+  agents.until("the corrected route", |s| {
+    s.window.navigation().route_now() == view(PipelinesFilter::Archived, Some(stuck))
+  });
+  assert_eq!(agents.text("team-hub-panel-title"), "Quick fix");
 }
 
 #[test]
@@ -266,54 +301,6 @@ fn bounds(agents: &mut Agents, id: &str) -> Box {
     y: rect.y,
     height: rect.height,
   }
-}
-
-#[test]
-fn pipeline_hub_a_draft_with_nothing_wrong_is_only_not_published_yet() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let draft = pipeline(&agents, "Release notes", Some(builder));
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-  assert_eq!(agents.text(&format!("pipeline-hub-row-{draft}-version")), "draft");
-  assert_eq!(
-    agents.text(&format!("pipeline-hub-row-{draft}-line")),
-    "Not published yet"
-  );
-  assert_eq!(
-    agents.text("pipeline-hub-section-needs-count"),
-    "1",
-    "a draft stays under Needs you"
-  );
-  assert_eq!(agents.text("team-hub-panel-version"), "draft · not published yet");
-  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
-  assert!(
-    !agents.exists("pipeline-hub-chip-1"),
-    "no second chip says it is not published yet"
-  );
-}
-
-#[test]
-fn pipeline_hub_a_draft_with_a_problem_says_it_in_its_row_and_chips_and_stays_under_needs_you() {
-  let mut agents = Agents::new(true);
-  // A step with no agent profile keeps the draft from being published.
-  let draft = pipeline(&agents, "Dependency update", None);
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-  let line = agents.text(&format!("pipeline-hub-row-{draft}-line"));
-  assert_eq!(line, "2 steps not ready", "the row says how many steps cannot run");
-  assert_ne!(line, "Not published yet", "the problem replaces the plain line");
-  assert_eq!(agents.text(&format!("pipeline-hub-row-{draft}-version")), "draft");
-  assert_eq!(agents.text("pipeline-hub-section-needs-count"), "1");
-  assert!(
-    !agents.exists("pipeline-hub-section-ready"),
-    "a draft is never under Ready"
-  );
-  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
-  assert_eq!(
-    agents.text("pipeline-hub-chip-1-label"),
-    line,
-    "the second chip says the same as the row"
-  );
-  assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
 }
 
 #[test]

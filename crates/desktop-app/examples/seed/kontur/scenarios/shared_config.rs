@@ -148,10 +148,10 @@ fn server(kontur: &mut Kontur, me: &SharedPerson) -> Result<ServerId, SeedError>
 }
 
 /// Marks every resource of `B`'s kind the team's, each version as the server confirmed it, published by dana-k or olha
-/// in turn.
+/// in turn. Every kept resource: a linked project offers only what is the team's already, which none of them is yet.
 fn share<B: ResourceBody + Clone>(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
   let revision = TaskRevision::try_from(1_u64).map_err(invalid)?;
-  for (index, resource) in kontur.db.resources(B::KIND)?.into_iter().enumerate() {
+  for (index, resource) in kontur.db.kept_resources(B::KIND)?.into_iter().enumerate() {
     let versions = kontur.db.versions::<B>(resource.id())?;
     // The server has only what was published: a draft of this computer's own stays local.
     if versions.is_empty() {

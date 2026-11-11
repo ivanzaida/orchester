@@ -117,6 +117,12 @@ impl ProjectDb {
     self.set_publish_state(version, None, Some(code))
   }
 
+  /// Whether `resource` is the team's in a shared project: kept on its server, or created here for it and waiting to
+  /// be sent; `false` in a local project and for what this computer keeps to itself.
+  pub fn is_team_resource(&self, resource: ResourceId) -> Result<bool, StoreError> {
+    team_resource(&self.connection, resource)
+  }
+
   /// The admin publishes `version` anyway, as the next version after the latest the server numbered: it waits to be
   /// sent again, based on that one.
   pub fn publish_again(&mut self, version: VersionId) -> Result<(), StoreError> {
@@ -168,49 +174,17 @@ impl ProjectDb {
     let transaction = self.connection.transaction()?;
     // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
     transaction.pragma_update(None, "defer_foreign_keys", true)?;
-    let (resource, number): (String, i64) = transaction
-      .query_row(
-        "SELECT mine.resource_id, mine.number FROM shared_publishes \
-         JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
-         WHERE shared_publishes.version_id = ?1",
-        [version.to_string()],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-      )
-      .optional()?
-      .ok_or_else(|| corrupt("unsent version", version))?;
-    let resource: ResourceId = parse("resource id", &resource)?;
-    check_kind::<B>(&transaction, resource)?;
-    ensure_may_change(&transaction, resource)?;
+    let (resource, taken) = unsent::<B>(&transaction, version)?;
     let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("unsent version", version))?;
     let based_on = match base {
       DraftBase::Latest => latest,
       DraftBase::Kept => confirmed_base(&transaction, version)?.map_or(latest, |base| base.min(latest)),
     };
-    let taken = load_versions::<B>(
-      &transaction,
-      "WHERE resource_id = ?1 AND number >= ?2 AND id IN (SELECT version_id FROM shared_publishes) ORDER BY number",
-      params![resource.to_string(), number],
-    )?;
-    for kept in &taken {
-      if in_use(&transaction, resource, kept)? {
-        return Err(StoreError::VersionInUse(kept.id()));
-      }
-    }
     let body = match load_draft::<B>(&transaction, resource)? {
       Some(draft) => draft.body().clone(),
-      None => taken
-        .last()
-        .ok_or_else(|| corrupt("unsent version", version))?
-        .body()
-        .clone(),
+      None => newest_body(&taken, version)?,
     };
-    for kept in &taken {
-      transaction.execute("DELETE FROM resource_versions WHERE id = ?1", [kept.id().to_string()])?;
-      transaction.execute(
-        "DELETE FROM shared_publishes WHERE version_id = ?1",
-        [kept.id().to_string()],
-      )?;
-    }
+    drop_unsent(&transaction, &taken)?;
     let draft = Draft::new(body, Some(version_number(based_on)?), now);
     save_draft(&transaction, resource, &draft)?;
     transaction.commit()?;
@@ -279,6 +253,63 @@ enum DraftBase {
   Latest,
   /// The one the version was edited from.
   Kept,
+}
+
+/// `version`, published here and not numbered by the server, with the versions of its resource published here after
+/// it, oldest first, once it is checked that the person may change the resource and that no run or task here uses any
+/// of them ([`StoreError::VersionInUse`]).
+pub(super) fn unsent<B: ResourceBody + Clone>(
+  connection: &Connection,
+  version: VersionId,
+) -> Result<(ResourceId, Vec<Version<B>>), StoreError> {
+  let (resource, number): (String, i64) = connection
+    .query_row(
+      "SELECT mine.resource_id, mine.number FROM shared_publishes \
+       JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
+       WHERE shared_publishes.version_id = ?1",
+      [version.to_string()],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?
+    .ok_or_else(|| corrupt("unsent version", version))?;
+  let resource: ResourceId = parse("resource id", &resource)?;
+  check_kind::<B>(connection, resource)?;
+  ensure_may_change(connection, resource)?;
+  let taken = load_versions::<B>(
+    connection,
+    "WHERE resource_id = ?1 AND number >= ?2 AND id IN (SELECT version_id FROM shared_publishes) ORDER BY number",
+    params![resource.to_string(), number],
+  )?;
+  for kept in &taken {
+    if in_use(connection, resource, kept)? {
+      return Err(StoreError::VersionInUse(kept.id()));
+    }
+  }
+  Ok((resource, taken))
+}
+
+/// The body of the newest of `taken`, the versions taken back from `version` on.
+pub(super) fn newest_body<B: ResourceBody + Clone>(taken: &[Version<B>], version: VersionId) -> Result<B, StoreError> {
+  Ok(
+    taken
+      .last()
+      .ok_or_else(|| corrupt("unsent version", version))?
+      .body()
+      .clone(),
+  )
+}
+
+/// Deletes `taken`, versions published here that the server never numbered, and their rows in `shared_publishes`.
+/// The caller defers foreign keys: the versions go before the rows the delete trigger reads.
+pub(super) fn drop_unsent<B>(connection: &Connection, taken: &[Version<B>]) -> Result<(), StoreError> {
+  for kept in taken {
+    connection.execute("DELETE FROM resource_versions WHERE id = ?1", [kept.id().to_string()])?;
+    connection.execute(
+      "DELETE FROM shared_publishes WHERE version_id = ?1",
+      [kept.id().to_string()],
+    )?;
+  }
+  Ok(())
 }
 
 /// The number of the version `version` was edited from, when that is one the server numbered. A base that waits for the

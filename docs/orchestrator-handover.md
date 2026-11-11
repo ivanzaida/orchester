@@ -193,7 +193,7 @@ The tools you need, with their argument shapes:
 | `list_approvals` / `decide_approval` | project, approval, decision: approve_once / deny |
 | `cancel_run`, `pause_run`, `resume_run` | |
 | `get_profile` / `save_profile_draft` / `publish_profile` | profiles; `save_profile_draft` needs role, responsibilities, instructions, connection, model, effort, mcp_servers; leave permissions out to keep them |
-| `get_pipeline` / `save_pipeline_draft` / `publish_pipeline` | pipelines |
+| `get_pipeline` / `create_pipeline` / `save_pipeline` | pipelines; saving publishes the next version (no pipeline drafts) |
 | `list_models`, `list_tools`, `list_connections`, MCP-server tools | setup |
 
 `continue_run` choices:

@@ -3,7 +3,7 @@
 //! ([`ProjectDb::create_published`]).
 
 use orchester_core::{
-  id::ResourceId,
+  id::{ResourceId, VersionId},
   name::Name,
   resource::{Draft, Pipeline, Version, VersionNumber},
   time::Timestamp,
@@ -58,6 +58,22 @@ impl ProjectDb {
     Ok(version)
   }
 
+  /// Takes back `version` of a team pipeline, published here and not numbered by the server (refused, met by a
+  /// version someone published from the same base, or still waiting to be sent), with the versions of the pipeline
+  /// published here after it, and returns the newest one's steps. A pipeline holds no draft (D-032), so nothing is kept
+  /// of them here: the caller hands the steps back to the person as an edit not saved yet. A version a run or a task
+  /// here uses stays ([`StoreError::VersionInUse`]); nothing is changed then.
+  pub fn take_back_pipeline(&mut self, version: VersionId) -> Result<Pipeline, StoreError> {
+    let transaction = self.connection.transaction()?;
+    // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
+    transaction.pragma_update(None, "defer_foreign_keys", true)?;
+    let (_, taken) = shared_publishes::unsent::<Pipeline>(&transaction, version)?;
+    let body = shared_publishes::newest_body(&taken, version)?;
+    shared_publishes::drop_unsent(&transaction, &taken)?;
+    transaction.commit()?;
+    Ok(body)
+  }
+
   /// A published pipeline in one call, for a test: [`ProjectDb::create_published`] with a slug and a name given as
   /// text, which must be valid.
   #[cfg(feature = "test-support")]
@@ -72,5 +88,27 @@ impl ProjectDb {
     let name = Name::new(name).expect("a test's pipeline name is valid");
     let (resource, version) = self.create_published(slug, name, body, now)?;
     Ok((resource.id(), version))
+  }
+
+  /// A pipeline of this computer's own in a team project, for a test: one kept *Not shared* when the project joined,
+  /// at v1, waiting for no server. There [`ProjectDb::create_published`] makes a team pipeline, whose v1 waits for the
+  /// server. The slug and the name given as text must be valid.
+  #[cfg(feature = "test-support")]
+  pub fn kept_pipeline_for_test(
+    &mut self,
+    slug: &str,
+    name: &str,
+    body: &Pipeline,
+    now: Timestamp,
+  ) -> Result<(ResourceId, Version<Pipeline>), StoreError> {
+    let slug = orchester_core::resource::Slug::new(slug).expect("a test's pipeline slug is valid");
+    let name = Name::new(name).expect("a test's pipeline name is valid");
+    let transaction = self.connection.transaction()?;
+    let resource = super::new_resources::insert::<Pipeline>(&transaction, slug, name, now)?.id();
+    super::shared_versions::set_sharing(&transaction, resource, Some(crate::ResourceSharing::NotShared))?;
+    let first = Draft::new(body.clone(), None, now);
+    let version = publish_prepared(&transaction, resource, first, None, now)?;
+    transaction.commit()?;
+    Ok((resource, version))
   }
 }

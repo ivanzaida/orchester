@@ -349,6 +349,8 @@ impl PipelinePanel {
       self.close_version();
       return (self.step_body(ctx, shown, &key), None);
     }
+    // A question asked while no step is open, or answered here, is new to the step opened next.
+    self.asked_shown.set(false);
     match self.viewing.get() {
       Some(viewed) => (self.version_body(ctx, shown, hosted, &viewed), Some(viewed)),
       None => (self.pipeline_body(ctx, shown, hosted), None),

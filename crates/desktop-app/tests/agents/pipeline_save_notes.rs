@@ -276,16 +276,18 @@ fn pipeline_save_note_ready_describes_the_edit_while_the_panel_holds_one() {
   agents.until("the panel", |s| s.exists(SAVE));
   assert_eq!(agents.text(LABEL), "Ready?", "the version tasks use");
 
-  // The panel shows the edit, so Ready? is about the edit and says it is a draft.
+  // The panel shows the edit, so Ready? reads the edit as it stands, under the same title.
   agents.set(DESCRIPTION, "Changed");
-  agents.until("about the edit", |s| s.text(LABEL) == "Ready? · this draft");
+  agents.until("the edit", |s| s.text(HINT).starts_with("Unsaved changes"));
+  assert_eq!(agents.text(LABEL), "Ready?");
   assert_eq!(agents.text("team-hub-readiness-count"), "all set");
   agents.click(CANCEL);
-  agents.until("about the version again", |s| s.text(LABEL) == "Ready?");
+  agents.until("the version again", |s| s.text(HINT).starts_with("Save makes"));
+  assert_eq!(agents.text(LABEL), "Ready?");
 
   // After a save the panel shows the new version.
   agents.set(DESCRIPTION, "Changed again");
-  agents.until("about the edit", |s| s.text(LABEL) == "Ready? · this draft");
+  agents.until("the edit", |s| s.text(HINT).starts_with("Unsaved changes"));
   agents.press_until(SAVE, "v2", |s| counts(s, ready).0 == 2);
-  agents.until("about the version", |s| s.text(LABEL) == "Ready?");
+  assert_eq!(agents.text(LABEL), "Ready?");
 }

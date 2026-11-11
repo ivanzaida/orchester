@@ -1,4 +1,5 @@
-//! The three supported publication problems and the 340px Summary stay readable and actionable.
+//! The three supported publication problems of a published pipeline (a profile that is gone, one never published and a
+//! tool that cannot run) and the 340px Summary stay readable and actionable.
 use std::collections::BTreeMap;
 
 use orchester_core::{
@@ -67,6 +68,15 @@ fn problems(editor: &Editor) -> (ResourceId, ResourceId) {
   db.publish_draft::<Tool>(tool, now).expect("valid publication fixture");
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("valid publication fixture"));
   let first = edit.add_step(name("Missing profile"), None);
+  // A stored pipeline's steps all run something (D-032): the first runs a profile that is gone.
+  edit.update(&first, |s| {
+    s.kind = StepKind::Agent {
+      profile: Some(ResourceId::generate()),
+      model: None,
+      repository: RepositoryAccess::ReadOnly,
+      permissions: StepPermissions::default(),
+    }
+  });
   let second = edit.add_step(name("Unpublished profile"), Some(&first));
   edit.update(&second, |s| {
     s.kind = StepKind::Agent {
@@ -79,13 +89,14 @@ fn problems(editor: &Editor) -> (ResourceId, ResourceId) {
   let third = edit.add_step(name("Unsupported tool"), Some(&second));
   edit.update(&third, |s| s.kind = StepKind::Tool { tool: Some(tool) });
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("publication-problems").expect("valid publication fixture"),
       name("Publication problems"),
       &edit.validate().expect("valid publication fixture"),
       now,
     )
     .expect("valid publication fixture")
+    .0
     .id();
   (id, profile)
 }
@@ -104,7 +115,7 @@ fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_se
   let mut editor = Editor::team();
   let (id, _) = problems(&editor);
   let mut db = editor.db();
-  let saved = db.draft::<Pipeline>(id).unwrap().unwrap();
+  let saved = db.latest_version::<Pipeline>(id).unwrap().unwrap();
   let mut edit = PipelineEdit::new(saved.body().clone());
   let keys: Vec<_> = edit.steps().iter().map(|step| step.key.clone()).collect();
   for (index, key) in keys.iter().take(2).enumerate() {
@@ -114,19 +125,12 @@ fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_se
     edit.update(key, |step| step.name = name(&long));
   }
   let body = edit.validate().unwrap();
-  db.save_draft(
-    id,
-    &orchester_core::resource::Draft::new(body.clone(), None, Timestamp::now()),
-  )
-  .unwrap();
+  db.publish_pipeline_edit(id, &body, saved.number(), None, Timestamp::now())
+    .unwrap();
   editor.open(id);
   let mut previous_bottom = 0.0;
-  for (index, step) in body.steps().iter().enumerate() {
-    let link = if index == 0 {
-      "pipeline-problem-0".to_owned()
-    } else {
-      format!("pipeline-problem-executor-{}", step.key)
-    };
+  for step in body.steps() {
+    let link = format!("pipeline-problem-executor-{}", step.key);
     let action = bounds(&mut editor, &link);
     let label = bounds(&mut editor, &format!("{link}-label"));
     let strip = bounds(&mut editor, "pipeline-problem-strip");
@@ -184,20 +188,9 @@ fn pipelines_publication_problems_fit_and_select_every_named_step() {
     !strip.contains(&profile.to_string()),
     "raw resource UUID in problem links"
   );
-  let steps = editor
-    .db()
-    .draft::<Pipeline>(id)
-    .unwrap()
-    .unwrap()
-    .body()
-    .steps()
-    .to_vec();
-  for (index, step) in steps.iter().enumerate() {
-    let link = if index == 0 {
-      "pipeline-problem-0".to_owned()
-    } else {
-      format!("pipeline-problem-executor-{}", step.key)
-    };
+  let steps = editor.stored(id).steps().to_vec();
+  for step in &steps {
+    let link = format!("pipeline-problem-executor-{}", step.key);
     let rect = bounds(&mut editor, &link);
     assert!(rect.x >= 240.0 && rect.x + rect.width <= 1440.0, "{link}: {rect:?}");
     let strip = bounds(&mut editor, "pipeline-problem-strip");
@@ -208,9 +201,7 @@ fn pipelines_publication_problems_fit_and_select_every_named_step() {
     editor.click(&link);
     assert_eq!(editor.value("step-name"), step.name.as_str());
   }
-  editor.click("pipeline-publish");
-  assert!(!editor.exists("pipeline-publish-confirm"));
-  assert!(editor.db().latest_version::<Pipeline>(id).unwrap().is_none());
+  assert_eq!(editor.version(id), 1, "choosing a problem's step publishes nothing");
 }
 
 #[test]
@@ -229,42 +220,5 @@ fn pipelines_summary_long_slug_and_zero_gates_have_room_for_their_lines() {
       "{id} clips vertically: {row:?}, {value:?}"
     );
     assert!(value.x + value.width <= 1432.0, "{id} clips horizontally: {value:?}");
-  }
-}
-
-#[test]
-fn pipelines_publication_problem_links_flow_onto_another_line() {
-  let mut editor = Editor::team();
-  let (id, _) = problems(&editor);
-  let mut db = editor.db();
-  let saved = db.draft::<Pipeline>(id).unwrap().unwrap();
-  let mut edit = PipelineEdit::new(saved.body().clone());
-  for n in 1..=5 {
-    edit.add_step(name(&format!("Additional reviewer {n}")), None);
-  }
-  db.save_draft(
-    id,
-    &orchester_core::resource::Draft::new(edit.validate().unwrap(), None, Timestamp::now()),
-  )
-  .unwrap();
-  editor.open(id);
-  let first = bounds(&mut editor, "pipeline-problem-0");
-  let last = bounds(&mut editor, "pipeline-problem-5");
-  assert!(last.y > first.y, "links should wrap onto another line");
-  let strip = bounds(&mut editor, "pipeline-problem-strip");
-  for index in 0..6 {
-    let link = format!("pipeline-problem-{index}");
-    let rect = bounds(&mut editor, &link);
-    assert!(
-      rect.x >= strip.x && rect.x + rect.width <= strip.x + strip.width,
-      "{link}: {rect:?}"
-    );
-    assert!(rect.y + rect.height <= strip.y + strip.height, "{link}: {rect:?}");
-    editor.click(&link);
-    assert!(
-      editor
-        .text("step-executor-row-hint")
-        .contains("Choose a profile before publishing")
-    );
   }
 }

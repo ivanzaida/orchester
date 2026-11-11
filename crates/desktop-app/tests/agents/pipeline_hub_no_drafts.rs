@@ -208,7 +208,7 @@ fn pipeline_hub_no_drafts_a_change_to_a_version_whose_profile_is_gone_cannot_be_
   assert_eq!(agents.text(HINT), "No changes since v1");
 
   agents.set(DESCRIPTION, "Bump one dependency");
-  agents.until("the change", |s| s.exists(CANCEL) && s.text(HINT) != "No changes since v1");
+  agents.until("the change", |s| s.text(HINT) != "No changes since v1");
   assert_eq!(agents.text(HINT), "Choose a profile for 02 Build to save");
   press_save(&mut agents, id);
 }
@@ -217,7 +217,7 @@ fn pipeline_hub_no_drafts_a_change_to_a_version_whose_profile_is_gone_cannot_be_
 fn pipeline_hub_no_drafts_a_refused_save_stores_nothing_and_keeps_the_edit() {
   let (mut agents, id) = ready();
   agents.set(DESCRIPTION, "Mine");
-  agents.until("the change", |s| s.exists(CANCEL));
+  agents.until("the change", |s| s.text(HINT).starts_with("Unsaved changes"));
   assert_eq!(agents.text(HINT), "Unsaved changes · Save makes v2 · runs keep the version they started on");
 
   // Another writer saves a version behind the page: the edit started from v1, so its save is refused.
@@ -257,7 +257,7 @@ fn pipeline_hub_no_drafts_back_from_a_version_names_the_edit_or_the_latest_versi
   agents.until("the panel", |s| s.exists(SAVE));
 
   agents.set(DESCRIPTION, "Not saved yet");
-  agents.until("held", |s| s.exists(CANCEL));
+  agents.until("held", |s| s.text(HINT).starts_with("Unsaved changes"));
   open_list(&mut agents);
   agents.click("pipeline-hub-version-1");
   agents.until("v1 read-only", |s| s.exists("pipeline-hub-version-back"));

@@ -40,8 +40,17 @@ use crate::{
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
+    tooltip::Truncated,
   },
 };
+
+/// The name as words in the box's room, `id`'s, cut with an ellipsis and whole in a tooltip where it does not fit.
+fn as_words(ctx: &mut Ctx, id: &str, name: &str) -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .min_width(Dimension::Px(0.0))
+    .child(Truncated::new(id.to_owned(), name.to_owned(), HubText::PanelTitle.role()).render(ctx))
+}
 
 /// A width this close to the last one is the same layout.
 const SAME_WIDTH: f32 = 0.5;
@@ -138,6 +147,7 @@ impl Component for StepName {
       (Some(error), ..) => Some(
         field_error("pipeline-hub-step-name-error", &message_text(ctx, error))
           .width(Dimension::Auto)
+          .flex_shrink(0.0)
           .padding(Padding::new().left(ExtraSpacing::Snug.role()))
           .into(),
       ),
@@ -147,12 +157,15 @@ impl Component for StepName {
           .variant(HubText::PanelSub.role())
           .padding(Padding::new().left(ExtraSpacing::Snug.role()))
           .nowrap()
+          .flex_shrink(0.0)
           .into(),
       ),
       (None, false, locked) => Some(self.pencil(&props, locked).into()),
     };
     Row::new()
       .id("pipeline-hub-step-name-line")
+      // As wide as the head's column at most: a long name gives way inside its box, so what follows it stays in view.
+      .width(Dimension::Pct(100.0))
       .min_width(Dimension::Px(0.0))
       .offset(-inset, 0.0)
       .align_items(Alignment::Center)
@@ -164,21 +177,18 @@ impl Component for StepName {
 impl StepName {
   /// The box: 28 high, 8 at its sides, radius `md`; the ring while the name is edited or refused, the `hover` fill
   /// under the pointer while it is not.
-  fn name_box(&self, ctx: &Ctx, props: &Props, editing: bool, refused: bool) -> Row {
+  fn name_box(&self, ctx: &mut Ctx, props: &Props, editing: bool, refused: bool) -> Row {
     let hovered = self.hovered.get() && !editing && !props.locked;
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     let content: Element = if props.locked {
-      Text::new(&self.text.get())
-        .id(Kind::Name.name())
-        .variant(HubText::PanelTitle.role())
-        .nowrap()
-        .into()
+      as_words(ctx, Kind::Name.name(), &self.text.get()).into()
     } else {
-      self.input(ctx, props).into()
+      self.input(ctx, props, editing).into()
     };
     let mut name = Row::new()
       .id("pipeline-hub-step-name-box")
       .min_width(Dimension::Px(0.0))
+      .flex_shrink(1.0)
       .height(Dimension::Px(ControlHeight::Md.value()))
       .padding(Padding::horizontal(SpacingSize::Sm))
       .align_items(Alignment::Center)
@@ -193,6 +203,11 @@ impl StepName {
       .on_mouse_enter(move || enter.set(true))
       .on_mouse_leave(move || leave.set(false))
       .child(content);
+    // At rest the name is words over the field: a press on them starts the editing, as the pencil does.
+    if !editing && !props.locked {
+      let asked = self.asked.clone();
+      name = name.on_click(move |_: MouseEvent| asked.update(|n| *n += 1));
+    }
     if hovered {
       name = name.background(ExtraColor::Hover.role());
     }
@@ -207,8 +222,9 @@ impl StepName {
     name
   }
 
-  /// The unseen name that sizes the box, and the input over it as wide as the name was laid out.
-  fn input(&self, ctx: &Ctx, props: &Props) -> Stack {
+  /// The unseen name that sizes the box, and the input over it as wide as the name was laid out. At rest the input is
+  /// unseen under the name as words, which a long name ends in an ellipsis with the whole name in its tooltip.
+  fn input(&self, ctx: &mut Ctx, props: &Props, editing: bool) -> Stack {
     let theme = ctx.theme();
     let shown = FormTextRole {
       typography: HubText::PanelTitle.role(),
@@ -218,7 +234,7 @@ impl StepName {
     let tracking = shown.letter_spacing;
     let (began, ended) = (self.editing.clone(), self.editing.clone());
     let (before, value) = (self.before.clone(), self.text.clone());
-    let (restore, cancelled) = (self.before.clone(), self.text.clone());
+    let (restore, cancelled, edited) = (self.before.clone(), self.text.clone(), self.editing.clone());
     let mut input = TextInput::styled(self.text.clone(), shown)
       .letter_spacing(tracking)
       .caret_color(PaletteColor::TextPrimary)
@@ -231,9 +247,10 @@ impl StepName {
         began.set(true);
       })
       .on_blur(move || ended.set(false))
-      // lurq ends the editing after this, on Enter and on Esc alike.
+      // lurq ends the editing after this, on Enter and on Esc alike. An Esc reaches the input whether or not it has the
+      // focus: only one that ends an editing puts its name back.
       .on_key_down(move |event: KeyboardEvent| {
-        if event.key == "Escape" && !event.composing {
+        if event.key == "Escape" && !event.composing && edited.get_untracked() {
           cancelled.set(restore.get());
         }
       });
@@ -259,7 +276,16 @@ impl StepName {
       .nowrap()
       .opacity(0.0)
       .hit_test(HitTestBehavior::None);
-    Stack::new().child(sizer).child(input)
+    let words = (!editing).then(|| as_words(ctx, "pipeline-hub-step-name-shown", &name));
+    if !editing {
+      input = input.opacity(0.0);
+    }
+    Stack::new()
+      .min_width(Dimension::Px(0.0))
+      .flex_shrink(1.0)
+      .child(sizer)
+      .child(input)
+      .with_children(words)
   }
 
   /// The pencil after the name, which edits it too; faded and not pressable while a save is under way.
@@ -272,6 +298,7 @@ impl StepName {
     let button = Button::empty()
       .id("pipeline-hub-step-name-edit")
       .focusable(false)
+      .flex_shrink(0.0)
       .describe("a11y_name", props.label.clone())
       .child(icon(Icon::Pencil, IconSize::Sm, color));
     if locked {

@@ -347,12 +347,12 @@ fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
   served.let_automation_widen(true);
   let save = |step: Value| json!({ "project": "Kontur", "pipeline": "Narrow", "steps": [step] });
   let refused = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Writer", "narrow": { "only_commands": ["cargo test"] } })),
   );
   assert_eq!(refused["code"], "invalid_step", "{refused}");
   let refused = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Probe", "repository": "write" })),
   );
   assert_eq!(
@@ -360,17 +360,17 @@ fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
     "a read-only profile's step cannot write"
   );
   let refused = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Nobody" })),
   );
   assert_eq!(refused["code"], "invalid_step", "only published profiles");
   let saved = served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Writer", "repository": "write", "narrow": { "ask_before_tool_calls": true } })),
   );
   assert_eq!(saved["pipeline"]["steps"][0]["narrow"]["ask_before_tool_calls"], true);
   let cycle = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Narrow", "steps": [
       { "key": "a", "name": "Alpha", "runs_after": ["b"] },
       { "key": "b", "name": "Beta", "runs_after": ["a"] },
@@ -400,10 +400,10 @@ fn domain_pipeline_tools_tell_the_feed() {
   assert_eq!(counted(&project), before + 1, "create_pipeline");
   served.let_automation_widen(true);
   served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Told", "steps": [{ "key": "fix", "name": "Fix", "profile": "Builder" }] }),
   );
-  assert_eq!(counted(&project), before + 2, "save_pipeline_draft");
+  assert_eq!(counted(&project), before + 2, "save_pipeline");
 }
 
 #[test]
@@ -423,13 +423,13 @@ fn domain_automation_saves_only_a_pipeline_no_weaker_than_the_last() {
     ] })
   };
   served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(true, true, true));
+  served.ok("save_pipeline", &steps(true, true, true));
   served.let_automation_widen(false);
   let mut renamed = steps(true, true, true);
   renamed["steps"][1]["name"] = json!("Build it");
-  served.ok("save_pipeline_draft", &renamed);
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, true, false)));
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, false, true)));
+  served.ok("save_pipeline", &renamed);
+  assert_person_only(&served.refused("save_pipeline", &steps(true, true, false)));
+  assert_person_only(&served.refused("save_pipeline", &steps(true, false, true)));
   let copy = json!({ "project": "Kontur", "pipeline": "Strict", "name": "Strict copy" });
   served.ok("duplicate_pipeline", &copy);
   let mut swapped = json!({ "project": "Kontur", "pipeline": "Strict", "name": "Swapped" });
@@ -456,16 +456,16 @@ fn domain_dropping_a_steps_approval_needs_a_person() {
     json!({ "project": "Kontur", "pipeline": "Gated", "steps": steps })
   };
   served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(true, true, true));
+  served.ok("save_pipeline", &steps(true, true, true));
   served.let_automation_widen(false);
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(false, true, true)));
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, false, true)));
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, true, false)));
+  assert_person_only(&served.refused("save_pipeline", &steps(false, true, true)));
+  assert_person_only(&served.refused("save_pipeline", &steps(true, false, true)));
+  assert_person_only(&served.refused("save_pipeline", &steps(true, true, false)));
   let mut renamed = steps(true, true, true);
   renamed["steps"][1]["name"] = json!("Build it");
-  served.ok("save_pipeline_draft", &renamed);
+  served.ok("save_pipeline", &renamed);
   served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(false, false, true));
+  served.ok("save_pipeline", &steps(false, false, true));
 }
 
 #[test]

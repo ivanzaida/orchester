@@ -108,23 +108,14 @@ fn reading(ctx: &mut Ctx) -> Element {
     row(ctx, "pipelines-reading-1", (150.0, 250.0, 72.0)),
     row(ctx, "pipelines-reading-2", (50.0, 230.0, 84.0)),
   ];
-  let drafts = vec![row(ctx, "pipelines-reading-3", (98.0, 236.0, 120.0))];
-  let groups = fading(vec![
-    skeleton::group(
-      ctx,
-      "pipelines-reading-published",
-      (Words::Real(ctx.t("pipelines.groups.published")), true),
-      None,
-      published,
-    ),
-    skeleton::group(
-      ctx,
-      "pipelines-reading-drafts",
-      (Words::Real(ctx.t("pipelines.groups.draftOnly")), true),
-      None,
-      drafts,
-    ),
-  ]);
+  // A pipeline holds no draft (D-032): every pipeline is under Published.
+  let groups = fading(vec![skeleton::group(
+    ctx,
+    "pipelines-reading-published",
+    (Words::Real(ctx.t("pipelines.groups.published")), true),
+    None,
+    published,
+  )]);
   let foot = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -202,7 +193,8 @@ fn populated(
   )
 }
 
-/// No pipeline yet (`Pane` `O8C4Bn`): what a pipeline is, and starting from the starter or empty.
+/// No pipeline yet (`Pane` `O8C4Bn`): what a pipeline is, and starting from the starter. An empty pipeline is not
+/// offered: it has no steps, so it can never be saved (D-032, D-040).
 fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
   let nav = Navigation::of(ctx);
   let tile = |glyph| {
@@ -228,15 +220,6 @@ fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
       .icon(Icon::Sparkles)
       .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline))),
     );
-  let blank = GroupRow::new("pipeline-empty-blank", ctx.t("pipelines.empty"))
-    .tiled()
-    .leading(tile(Icon::CircleDashed))
-    .hint(ctx.t("pipelines.emptyRowHint"))
-    .end(
-      ActionButton::new("pipeline-empty-start", ButtonKind::Ghost, ctx.t("pipelines.startEmpty"))
-        .icon(Icon::Plus)
-        .opens(nav.to(Route::Project(project, ProjectPage::NewEmptyPipeline))),
-    );
   parts::pane("pipelines-empty")
     .child(
       lurq::components::Column::new()
@@ -249,11 +232,7 @@ fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
         )
         .child(parts::lead("pipelines-empty-lead", &ctx.t("pipelines.emptyDetail"))),
     )
-    .child(
-      RowGroup::new("pipelines-start", ctx.t("pipelines.startFrom"))
-        .row(starter)
-        .row(blank),
-    )
+    .child(RowGroup::new("pipelines-start", ctx.t("pipelines.startFrom")).row(starter))
     .child(note("pipelines-empty-note", &ctx.t("pipelines.emptyCreationHint")))
 }
 

@@ -1,47 +1,5 @@
 //! Rejected futures retain old data; only fulfilled outcomes may advance the editor.
-use orchester_core::{
-  resource::{Draft, Pipeline},
-  store::ResourceStore,
-  time::Timestamp,
-};
-
 use crate::pipelines_support::Editor;
-
-#[test]
-fn pipelines_rejected_publish_after_save_keeps_review_and_error() {
-  let mut editor = Editor::new();
-  let id = editor.published();
-  editor.open(id);
-  editor.set("pipeline-description", "Reviewed");
-  editor.click("pipeline-save");
-  editor.until("saved draft", |e| !e.exists("pipeline-save"));
-  editor.click("pipeline-publish");
-  assert!(editor.exists("pipeline-publish-confirm"));
-  let before = editor.db().draft::<Pipeline>(id).unwrap().unwrap();
-  let external = before.body().clone().with_description("External".into());
-  editor
-    .db()
-    .save_draft(id, &Draft::new(external, before.based_on(), Timestamp::now()))
-    .unwrap();
-  editor.click("pipeline-publish-confirm");
-  editor.until("publish refused", |e| e.exists("pipeline-write-error"));
-  assert!(
-    editor.exists("pipeline-publish-confirm"),
-    "rejected publish must keep its review"
-  );
-  assert!(editor.exists("pipeline-reload"));
-  assert!(!editor.exists("pipeline-publish-notice"));
-  assert_eq!(
-    editor
-      .db()
-      .latest_version::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .number()
-      .get(),
-    1
-  );
-}
 
 #[test]
 fn pipelines_rejected_save_after_success_keeps_local_values_and_error() {
@@ -50,19 +8,18 @@ fn pipelines_rejected_save_after_success_keeps_local_values_and_error() {
   editor.open(id);
   editor.set("pipeline-description", "First");
   editor.click("pipeline-save");
-  editor.until("first saved", |e| !e.exists("pipeline-save"));
+  editor.until("first saved as v2", |e| {
+    e.version(id) == 2 && !e.exists("pipeline-save")
+  });
   editor.set("pipeline-description", "Local second");
-  let before = editor.db().draft::<Pipeline>(id).unwrap().unwrap();
-  let external = before.body().clone().with_description("External second".into());
-  editor
-    .db()
-    .save_draft(id, &Draft::new(external, before.based_on(), Timestamp::now()))
-    .unwrap();
+  // Another editor publishes the next version behind the page: this save is made from a version no longer the latest.
+  editor.publish_behind(id, "External second");
   editor.click("pipeline-save");
   editor.until("second refused", |e| e.exists("pipeline-write-error"));
   assert_eq!(editor.value("pipeline-description"), "Local second");
   assert!(editor.exists("pipeline-save"));
   assert!(editor.exists("pipeline-reload"));
+  assert_eq!(editor.version(id), 3, "nothing of this page's is stored");
 }
 
 #[test]
@@ -120,9 +77,7 @@ fn pipelines_restore_waits_for_pending_save_before_replacing() {
     "restore is unavailable while saving"
   );
   lock.commit().unwrap();
-  editor.until("pending save completed", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().is_some()
-  });
+  editor.until("pending save completed", |e| e.version(id) == 2);
   editor.arm();
   editor.click("pipeline-restore");
   assert!(editor.exists("pipeline-restore-question"));

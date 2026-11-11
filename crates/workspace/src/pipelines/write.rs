@@ -64,10 +64,9 @@ pub fn save_in(
 }
 
 /// Saves `body`, an edit of `before`, as the pipeline's next version, renamed to `name` when that differs; the stable
-/// slug and every published version stay intact. Refused, storing nothing: a body the save check refuses
-/// ([`save_refusals`]), one that widens beyond `allowed` ([`save_reasons`]), and one whose pipeline had a version
-/// published since `before` was read (`pipelines.problems.staleDraft`). Steps equal to the latest version publish
-/// nothing ([`unchanged`]).
+/// slug and every published version stay intact. Refused, storing nothing: what [`refusals`] names, one that widens
+/// beyond `allowed` ([`save_reasons`]), and one whose pipeline had a version published since `before` was read
+/// (`pipelines.problems.staleDraft`). Steps equal to the latest version publish nothing ([`unchanged`]).
 pub fn save_named_in(
   root: &Path,
   before: &OpenedPipeline,
@@ -77,13 +76,13 @@ pub fn save_named_in(
 ) -> Result<OpenedPipeline, WriteError> {
   let mut db = ProjectDb::open(root)?;
   let current = OpenedPipeline::load(&db, before.id)?;
+  let refused = refusals(&current, body, name);
+  if !refused.is_empty() {
+    return Err(WriteError::NotSaved(refused));
+  }
   let renamed = (name.as_str() != &*before.name).then_some((&*before.name, name));
   if *body == current.body {
     return unchanged(&mut db, &current, renamed);
-  }
-  let refusals = save_refusals(body, &current.assignables, Some(current.version));
-  if !refusals.is_empty() {
-    return Err(WriteError::NotSaved(refusals));
   }
   let reasons = save_reasons(Some(&current.body), body, &current.assignables);
   if !reasons.iter().all(|reason| allowed.0.contains(reason)) {
@@ -93,9 +92,24 @@ pub fn save_named_in(
   Ok(OpenedPipeline::load(&db, before.id)?)
 }
 
+/// Every reason a save of `body` named `name` over `opened`, its pipeline as stored, is refused, in the order a person
+/// fixes them; empty when it is saved. A team pipeline's rename (its name is the team server's, and no rename is sent
+/// to it), and for steps that differ from the latest version the save check ([`save_refusals`]): a rename alone
+/// publishes no version, so it is not refused for the steps.
+pub fn refusals(opened: &OpenedPipeline, body: &Pipeline, name: &Name) -> Vec<Message> {
+  let mut refused = Vec::new();
+  if opened.team && name.as_str() != &*opened.name {
+    refused.push(Message::new("pipelines.problems.teamRename"));
+  }
+  if *body != opened.body {
+    refused.extend(save_refusals(body, &opened.assignables, Some(opened.version)));
+  }
+  refused
+}
+
 /// A save whose steps equal the latest version, `current`: no version is published for it. One that only renames the
-/// pipeline (from `renamed.0` to `renamed.1`) renames it, a local one only (a team's is the team's to rename); one
-/// that changes nothing is refused (`pipelines.problems.unchanged`).
+/// pipeline (from `renamed.0` to `renamed.1`) renames it; [`refusals`] has refused a team pipeline's rename already.
+/// One that changes nothing is refused (`pipelines.problems.unchanged`).
 fn unchanged(
   db: &mut ProjectDb,
   current: &OpenedPipeline,

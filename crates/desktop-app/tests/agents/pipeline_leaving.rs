@@ -79,12 +79,12 @@ fn pipeline_leaving_for_another_pipeline_with_unsaved_changes_asks_first_and_dis
 
 #[test]
 fn pipeline_leaving_by_a_filter_with_unsaved_changes_asks_first() {
-  let (mut agents, [_, draft, _], chosen) = editing(|ids| ids[1]);
-  assert_eq!(chosen, draft);
+  let (mut agents, [_, other, _], chosen) = editing(|ids| ids[1]);
+  assert_eq!(chosen, other);
 
   asks_then_goes(
     &mut agents,
-    &view(PipelinesFilter::All, Some(draft)),
+    &view(PipelinesFilter::All, Some(other)),
     "pipeline-hub-filter-archived",
     &view(PipelinesFilter::Archived, None),
   );

@@ -30,7 +30,7 @@ fn pipelines_restore_keep_preserves_unsaved_body_raw_inputs_and_errors() {
   editor.click("step-instructions-row");
   assert_eq!(editor.value("step-instructions"), "Local work");
   assert!(editor.exists("pipeline-field-error"));
-  assert!(editor.db().draft::<Pipeline>(id).unwrap().is_none());
+  assert_eq!(editor.version(id), 1, "an invalid edit is not saved");
 }
 
 #[test]

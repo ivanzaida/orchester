@@ -1,9 +1,9 @@
 # PV2-20 · The step head's ⋯ menu
 
-- **Status:** todo
+- **Status:** done (2026-11-11; 2 checks (review + design) PASS; D-030, D-031; merged `a85e24fb5`)
 - **Kind:** UI
 - **Depends on:** PV2-18
-- **Branch:** —
+- **Branch:** `claude/pv2-20-step-head-menu` → `a85e24fb5`
 - **Tokens:** —
 
 ## Goal

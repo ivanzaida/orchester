@@ -1,7 +1,7 @@
-//! The sources of a pipeline draft: Settings › Sources for every step (`Sources for every step` `Zh2WC` in
+//! The sources of a pipeline's edit: Settings › Sources for every step (`Sources for every step` `Zh2WC` in
 //! `A29iv`), the project's beside the pipeline's own, read-only, with *Add folder* and what the steps add; and a
 //! step's Sources page (`02f · step sources` `z4g9jL`), the step's own with *Add* over what it inherits from the
-//! project and the pipeline. They change the draft only (`orchester_workspace::pipelines::sources`); publishing a
+//! project and the pipeline. They change the edit only (`orchester_workspace::pipelines::sources`); saving a
 //! version that reads more asks a person (`super::editor`).
 
 use std::sync::Arc;
@@ -59,7 +59,7 @@ struct Props {
   locked: bool,
 }
 
-/// The props are equal when they name the same list: the draft is read from the state each render.
+/// The props are equal when they name the same list: the edit is read from the state each render.
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
     (&self.step, self.locked) == (&other.step, other.locked)
@@ -328,7 +328,7 @@ fn step(ctx: &mut Ctx, props: &Props, (key, back): (&StepKey, &str), project: &[
     .child(note("step-sources-tasks", &ctx.t("pipelines.sourcesSection.tasksToo")))
     .child(note(
       "step-sources-draft",
-      &ctx.t_args("pipelines.sourcesSection.draftOnly", [("version", version)]),
+      &ctx.t_args("pipelines.sourcesSection.untilSaved", [("version", version)]),
     ))
     .into()
 }

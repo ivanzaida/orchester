@@ -132,7 +132,7 @@ fn versions_group(ctx: &Ctx, editing: &Editing) -> RowGroup {
   };
   RowGroup::new("pipeline-summary-versions", ctx.t("pipelines.versions"))
     .row(GroupRow::new("pipeline-published", ctx.t("pipelines.publishedLabel")).value(&published(ctx, editing)))
-    .row(GroupRow::new("pipeline-draft-state", ctx.t("pipelines.draftLabel")).value(&draft(ctx, editing)))
+    .row(GroupRow::new("pipeline-draft-state", ctx.t("pipelines.unsavedLabel")).value(&unsaved(ctx, editing)))
     .row(GroupRow::new("pipeline-used-by", ctx.t("pipelines.usedBy")).value(&used))
     .row(GroupRow::new("pipeline-step-count", ctx.t("pipelines.steps")).value(&steps(ctx, &editing.shown())))
 }
@@ -162,7 +162,7 @@ fn links(ctx: &Ctx, editing: &Editing) -> Row {
     )
 }
 
-/// Takes what is typed into the pipeline's `name` and `description` into the draft, once per form, unless the
+/// Takes what is typed into the pipeline's `name` and `description` into the edit, once per form, unless the
 /// form is `locked` now. Shared by the summary and the Settings tab.
 pub(super) fn follow_identity(
   ctx: &mut Ctx,
@@ -214,28 +214,29 @@ pub fn published(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
     ],
   )
 }
-/// The draft with its number: *v4 · 2 changes since v3*, *Draft v1*, or that the next edit starts one.
-pub fn draft(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
+/// What is not saved yet, with the number *Save* publishes: *v4 · 2 changes since v3*, *v4*, or that nothing is
+/// (a pipeline holds no draft, D-032).
+fn unsaved(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
   let number = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
   if !editing.unsaved() {
-    return ctx.t_args("pipelines.noDraftNext", [("version", number)]);
+    return ctx.t_args("pipelines.nothingUnsaved", [("version", number)]);
   }
   if !editing.edit.steps().is_empty() && editing.edit.validate().is_err() {
     return ctx.t("pipelines.unsaved");
   }
-  match draft_detail(ctx, editing) {
+  match unsaved_detail(ctx, editing) {
     Some(detail) => ctx.t_args(
-      "pipelines.draftWith",
+      "pipelines.nextWith",
       [("version", number), ("detail", detail.to_string())],
     ),
-    None => ctx.t_args("pipelines.draftVersion", [("version", number)]),
+    None => ctx.t_args("pipelines.version", [("version", number)]),
   }
 }
 
-/// What the draft holds, without its number: *no steps yet* or *2 changes since v3*; `None` for a first draft with
-/// steps, one that does not validate, or one that changes nothing yet.
-pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>> {
+/// What the edit changes, without its number: *no steps yet* or *2 changes since v3*; `None` for one that does not
+/// validate or changes no step yet.
+pub fn unsaved_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>> {
   if editing.edit.steps().is_empty() {
     return Some(ctx.t("pipelines.noStepsYet"));
   }

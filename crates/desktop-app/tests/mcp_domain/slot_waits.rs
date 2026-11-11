@@ -31,7 +31,7 @@ fn go(served: &Served, project: ProjectId, page: ProjectPage) {
 /// first sentence: a step's prompt shows that of each later step, and the fake would keep Implement working.
 fn parallel_steps_on_one_slot(served: &mut Served) {
   served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [
       { "key": "implement", "name": "Implement", "profile": "Builder", "repository": "write", "instructions": "Append one line." },
       { "key": "checks", "name": "Checks", "profile": "Builder", "repository": "write", "instructions": "Check the work. Keep working.", "runs_after": ["implement"] },

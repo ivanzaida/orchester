@@ -17,11 +17,14 @@ mod gate;
 mod groups;
 mod head;
 mod known;
+mod more;
 mod name;
 mod permissions;
 mod pieces;
 mod strip;
 mod text_field;
+
+use std::sync::Arc;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -130,7 +133,7 @@ pub(super) struct Open<'a> {
   pub edit: &'a Edit,
   /// What the panel shows: the edit, or the stored pipeline.
   pub current: &'a PipelineEdit,
-  pub read: &'a FlowRead,
+  pub read: &'a Arc<FlowRead>,
   pub assignables: &'a Assignables,
   /// A save is under way: nothing is changed now.
   pub locked: bool,

@@ -52,7 +52,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-17](PV2-17-readiness-polish.md) | Readiness and save polish: one story in chips, Ready?, cards and the bar | UI | PV2-09, PV2-10 | done | → `238b0c2e6`, `1f2dc0057` | 352.1M |
 | [PV2-18](PV2-18-step-panel-rest.md) | The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool | design + UI | PV2-07 | done | → `0b8c6f23b` | 184.0M |
 | [PV2-19](PV2-19-save-refusals.md) | A draft is always saved; Save says what publishing would refuse, also while editing | UI + workspace | PV2-17 | todo | — | — |
-| [PV2-20](PV2-20-step-head-menu.md) | The step head's ⋯ menu | UI | PV2-18 | todo | — | — |
+| [PV2-20](PV2-20-step-head-menu.md) | The step head's ⋯ menu | UI | PV2-18 | done | → `a85e24fb5` | — |
 | [PV2-21](PV2-21-tests-on-the-hub.md) | Tests that drove the old step editor of a local project run against the hub | tests | PV2-07 | todo | — | — |
 | [PV2-22](PV2-22-new-and-duplicate.md) | New pipeline and Duplicate in the hub | design + UI | N-012 | todo (design first) | — | — |
 | [PV2-23](PV2-23-deliver-step.md) | The Deliver step in the step panel | design + UI | N-012 | todo (design first) | — | — |
@@ -65,7 +65,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-30](PV2-30-orchestrator-drive-only.md) | Orchestrator: pipelines change only in drive mode | core + UI | PV2-29 | todo | — | — |
 | [PV2-31](PV2-31-hub-without-drafts.md) | The hub without drafts | design + UI | PV2-28 | todo | — | — |
 | [PV2-32](PV2-32-team-page-one-save.md) | Team pipeline page: one Save | UI | PV2-28 | todo | — | — |
-| [PV2-33](PV2-33-hide-import.md) | Import resources hidden | UI + MCP | — | todo | — | — |
+| [PV2-33](PV2-33-hide-import.md) | Pipelines leave Import resources | UI + MCP | — | done | `claude/pv2-33-hide-import` | — |
 
 ## Order
 

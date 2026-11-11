@@ -12,9 +12,9 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{Pipeline, PipelineEdit, Slug, StepKind},
+  resource::{Pipeline, PipelineEdit, StepKind},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
-  store::{BlobStore, ResourceStore},
+  store::BlobStore,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -163,16 +163,11 @@ impl Desktop {
         tool: Some(orchester_core::id::ResourceId::generate()),
       }
     });
+    let body = edit.validate().expect("a step that runs a tool");
     self
       .db()
-      .create_published(
-        Slug::new("delivery").expect("slug"),
-        Name::new("Delivery").expect("name"),
-        &edit.validate().expect("a step that runs a tool"),
-        Timestamp::now(),
-      )
-      .expect("pipeline")
-      .0;
+      .published_pipeline_for_test("delivery", "Delivery", &body, Timestamp::now())
+      .expect("pipeline");
   }
 }
 

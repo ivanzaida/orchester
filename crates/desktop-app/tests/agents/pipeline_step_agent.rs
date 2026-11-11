@@ -111,8 +111,8 @@ pub(super) fn single(agents: &Agents, kind: StepKind) -> ResourceId {
   let key = edit.add_step(Name::new("Plan").expect("name"), None);
   edit.update(&key, |step| step.kind = kind);
   let body = edit.validate().expect("a pipeline");
-  let mut db = ProjectDb::open(&agents.root).expect("database");
-  let id = db
+  ProjectDb::open(&agents.root)
+    .expect("database")
     .create_published(
       Slug::new("single").expect("slug"),
       Name::new("Single").expect("name"),
@@ -121,8 +121,7 @@ pub(super) fn single(agents: &Agents, kind: StepKind) -> ResourceId {
     )
     .expect("the pipeline")
     .0
-    .id();
-  id
+    .id()
 }
 
 /// The first step of the ready pipeline open.

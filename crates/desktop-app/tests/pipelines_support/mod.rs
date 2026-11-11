@@ -106,6 +106,34 @@ impl Editor {
   pub fn db(&self) -> ProjectDb {
     ProjectDb::open(&self.repo).expect("database")
   }
+  /// What `id` stores: its latest version's body (a pipeline holds no draft, D-032).
+  pub fn stored(&self, id: ResourceId) -> Pipeline {
+    self
+      .db()
+      .latest_version::<Pipeline>(id)
+      .expect("read")
+      .expect("a version")
+      .body()
+      .clone()
+  }
+  /// The number of `id`'s latest version.
+  pub fn version(&self, id: ResourceId) -> u32 {
+    self
+      .db()
+      .latest_version::<Pipeline>(id)
+      .expect("read")
+      .expect("a version")
+      .number()
+      .get()
+  }
+  /// Another editor publishes `id`'s next version, described as `description`, behind the page.
+  pub fn publish_behind(&self, id: ResourceId, description: &str) {
+    let mut db = self.db();
+    let latest = db.latest_version::<Pipeline>(id).expect("read").expect("a version");
+    let body = latest.body().clone().with_description(description.into());
+    db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
+      .expect("their version");
+  }
   pub fn selected(&self) -> ResourceId {
     match self.window.navigation().route_now() {
       Route::Project(_, ProjectPage::Pipeline(id, _)) => id,
