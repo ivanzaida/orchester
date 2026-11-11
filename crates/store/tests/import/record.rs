@@ -11,7 +11,7 @@ use super::{at, batch, builder_of, catalog_of, codex, name, personal_website, re
 
 #[test]
 fn import_record_keeps_every_copy_and_what_was_left_unresolved() {
-  let (source_repo, _) = personal_website();
+  let (source_repo, preview) = personal_website();
   let source = catalog_of(source_repo.path());
   let (_target_repo, mut target) = repository("Kontur", "KON");
 
