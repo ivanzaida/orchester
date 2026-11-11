@@ -250,6 +250,15 @@ the order that applies (see [Orders](#orders)).
   decision, the conversation gets an entry linking to the card. The turn answers only what follows plainly from the
   brief, criteria, docs, AGENTS.md or the person's words, otherwise tells the person the question with options and a
   recommendation.
+- **Tool requests** (since 2026-11-11) — a tool request that came to the person gets an entry too, and with *Let the
+  Orchestrator drive* on starts one turn, once: the turn reads the request (`list_approvals`, the run, the brief) and
+  approves it once with `decide_approval` only when it plainly serves the task and is safe (inside the run's
+  worktree, nothing irreversible, nothing that reaches another system or person, no secret), denies it with a
+  `message` that tells the agent why only when it is plainly wrong, and otherwise decides nothing and tells the person
+  what is asked, why it hesitates and what it recommends; the request then waits for them on its card in the task's
+  Conversation (the entry's *Open ↗*). In that turn `decide_approval` decides only that request (`not_this_request`
+  for another); it never allows a tool for good, and it still needs *Let automation answer approvals*
+  (`automation_not_allowed` otherwise, and the request is the person's).
 - **Run ends** — a task's latest run that succeeds, fails, stops for a decision, stops at a limit or is interrupted
   gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person), and
   once merged, where an order applies (see [Orders](#orders)), does what it asks of the work it leads that can start

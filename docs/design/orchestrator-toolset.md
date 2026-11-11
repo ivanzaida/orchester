@@ -68,7 +68,10 @@ drive*, and says what changed.**
      one). With *Let the Orchestrator drive* on (ORC-909 replaced the six switches), the wait also starts one
      Orchestrator turn by itself in its conversation: at most one per wait, never while another turn of that
      conversation runs (it waits for that turn to end; a turn of another conversation does not hold it), whoever raised
-     it, and none for a tool request, which stays the person's.
+     it, a tool request too (decided by the person on 2026-11-11, replacing "none for a tool request, which stays the
+     person's": its turn approves that one request once or denies it with a reason when it is sure, and otherwise
+     leaves it to the person with its recommendation; `decide_approval` there decides only that request,
+     `not_this_request` for another, and keeps its own rules).
      In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.
@@ -233,7 +236,8 @@ drive*, and says what changed.**
      continuation
      does not count there, since a success turn only tells the person and proposes. Each wait or end starts one turn
      at most.
-   - **Never from the chat:** answering approvals, deciding plans, widening permissions, secret values and deleting
+   - **Never from the chat:** answering approvals (but the one request whose wait started a turn while it drives,
+     above, 2026-11-11), deciding plans, widening permissions, secret values and deleting
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
    the place in the app.
@@ -297,7 +301,8 @@ project.
 | Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |
 | Proposals | `apply_proposal` without `proposal` lists the proposals that wait (ORC-96, the chat's own) | — | `apply_proposal` with `proposal`: applies a waiting proposal the person's message in the turn approves, as the card's *Apply*, recorded as theirs; never what only a click applies; decision 13 |
 
-Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
+Deciding approvals (`decide_approval`; since decision 14 and 2026-11-11 the chat has it while it drives, for the
+request whose wait started its turn) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
 widening what agents may do (but as a card the person applies: a publication, decision 3, or an MCP server's change,
 decision 11), secret values, project setup (but the proposed first commit of decision 8), connections' changes but
@@ -637,7 +642,7 @@ project with none of its own; the application-wide values are no longer shown or
   prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*,
   and `decide_approval`, `decide_plan`, `answer_question` and `send_message` still need *Let automation answer
   approvals*, as for any client. What can lose work in git stays `git_propose`, a click-only card.
-- **It is woken for everything.** A wait of an agent, a run's stop (a limit, a step waiting for a decision), end or
+- **It is woken for everything.** A wait of an agent (a tool request too, since 2026-11-11), a run's stop (a limit, a step waiting for a decision), end or
   success, a stall, a merge conflict and a waited task's merge or close start an Orchestrator turn by themselves, whoever
   started the run and whatever raised them — the rule that the chat's own answer, message, decision, resume or start
   raised no turn (`raised_by_own`) is gone — and no per-run or per-step limit stops them. The turn of an interruption
