@@ -98,6 +98,9 @@ pub enum State {
   TeamHub,
   /// As [`Self::TeamHub`], for a member who is not an admin (`team-hub-member` and its variants).
   TeamHubMember,
+  /// As [`Self::TeamHub`], the team server not answering since the join, so this computer never read the team's
+  /// configuration: the hub says it cannot reach the team server, with *Try again* (`A25` `Zhcif`).
+  TeamHubDown,
   /// An Admin on the Agents hub's team MCP servers, which the stand-in team server holds too (`Agents · MCP server ·
   /// admin · draft` A13 `WMtxm`, ORC-836): *Edit* a server, type, *Save* publishes its next version at once. The
   /// server also holds an MCP server named `figma-local` that this computer has not read, so *New MCP server* with
@@ -151,7 +154,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 47] = [
+  pub const ALL: [Self; 48] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -193,6 +196,7 @@ impl State {
     Self::TeamEditVariables,
     Self::TeamHub,
     Self::TeamHubMember,
+    Self::TeamHubDown,
     Self::StartRecovered,
     Self::StartWaiting,
     Self::StartRunnerRefused,
@@ -245,6 +249,7 @@ impl State {
       Self::TeamEditVariables => "team-edit-variables",
       Self::TeamHub => "team-hub",
       Self::TeamHubMember => "team-hub-member",
+      Self::TeamHubDown => "team-hub-down",
       Self::StartRecovered => "team-start-recovered",
       Self::StartWaiting => "team-start-waiting",
       Self::StartRunnerRefused => "team-start-runner-refused",

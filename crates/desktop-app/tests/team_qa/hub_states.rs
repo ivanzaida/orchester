@@ -5,7 +5,7 @@
 use orchester_app::routes::{HubFilter, HubView};
 
 use super::{
-  hub_edit::{on_pencil_until, opened},
+  hub_edit::{on_pencil_until, opened, says_unreachable},
   team::State,
 };
 
@@ -39,4 +39,26 @@ fn team_qa_hub_states_a_set_path_whose_file_is_gone_says_so() {
   assert_eq!(window.text("team-hub-path-sub"), "No file there");
   assert_eq!(window.text("team-hub-fix-set-path"), "Choose another file");
   assert!(window.texts("team-hub-fix-check-again").is_some());
+}
+
+/// A team server that stopped answering before this computer read anything of the team: the hub says it cannot reach
+/// it, which server did not answer, and offers *Try again*, with no *New* (A25 `Zhcif`).
+#[test]
+fn team_qa_hub_states_a_server_never_read_says_it_cannot_be_reached() {
+  let (mut window, _server, _) = opened(
+    ("team-hub-down", State::TeamHubDown),
+    "team-hub-unreachable-title",
+    |_| (HubView::new(HubFilter::All, None), None),
+  );
+  assert_eq!(window.text("team-hub-unreachable-title"), "Can't reach the team server");
+  let line = window.text("team-hub-unreachable-line");
+  assert!(line.contains("didn't answer"), "{line}");
+  assert!(line.contains("nothing older is shown"), "{line}");
+  assert!(window.text("team-hub-unreachable-reason").contains("tried"));
+  assert_eq!(window.text("team-hub-unreachable-again"), "Try again");
+  window.until("the head to say it cannot reach the team", says_unreachable);
+  assert!(
+    window.texts("team-hub-new").is_none(),
+    "nothing is created while the team cannot be reached"
+  );
 }

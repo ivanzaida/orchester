@@ -83,7 +83,8 @@ configuration in its database as today.
   (`open_event_streams`; open, no events), so the read at the stream's open fills memory. Every joined state holds on
   the stand-in, before the join, each team resource the seed cached; `team-hub` and `team-hub-member` wait for that
   read; the `team-edit*` states set their switch (down, demoted, rejecting) after it, and `team-archived` archives
-  `pencil-design` on the stand-in.
+  `pencil-design` on the stand-in. `team-hub-down` joins with the stream not answering and then stops the stand-in, so
+  nothing was read this session and the hub says it cannot reach the team server (A25 `Zhcif`).
 - **Not done yet**: the stream still keeps the copy of the team's resources and versions in the project database
   (`sharing/sync/config`), because these readers still read it: the Pipelines page and editor, the task form's and the
   tools' pipelines (`tasks::data::published_pipelines`, `TeamPipelines`), `sharing::compare`, `team_reads::listed`.

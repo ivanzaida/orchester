@@ -135,6 +135,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamEditVariables
     | State::TeamHub
     | State::TeamHubMember
+    | State::TeamHubDown
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure
@@ -148,8 +149,11 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
 fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Handle) -> Result<(), Box<dyn Error>> {
   let ids = task_ids(services)?;
   let role = member::serve_as(server, state, (&ids, &team_pipelines(services, state)?));
-  // What the team holds is on the server before the join: the read once the project's stream opens holds it.
-  server.open_event_streams();
+  // What the team holds is on the server before the join: the read once the project's stream opens holds it. The
+  // hub of `team-hub-down` never reads it: its stream finds nothing until the server stops answering.
+  if state != State::TeamHubDown {
+    server.open_event_streams();
+  }
   let repo = kontur(services)?;
   edit::hold(state, server, &repo)?;
   archive::hold(state, (server, &repo))?;
@@ -162,6 +166,7 @@ fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Hand
       server.authority_bundle_fault_after(BundleFault::Newer, state::START_ANSWERS_AFTER);
     }
     State::StartWaiting => server.authority_bundle_fault(BundleFault::Unavailable),
+    State::TeamHubDown => server.set_down(true),
     _ => {}
   }
   work::after_join(state, (server, id), (services, runtime), (&kontur, &ids))?;

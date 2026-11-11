@@ -12,6 +12,9 @@
 //! (`Agents · Profile` C1 `NDZXC`). `team-hub-pick` adds a second one, `Claude · Home`, so Builder asks which runs it
 //! (C2 `WPvZx`); `team-hub-no-connection` removes the Claude Code connection, so Builder says what to add (C3 `QOBF2`).
 //!
+//! `team-hub-down` is the team of `team-hub` whose server stops answering before this computer read anything of it, so
+//! the hub says it cannot reach the team server (`A25` `Zhcif`).
+//!
 //! `team-hub-member` is the same team for ivan, a member who is not an admin (`Agents · … · member` M1–M6, ORC-839).
 //! Reach the frames in the Agents hub: M1 `oPF2o` Profiles › Reviewer with `team-hub-member-pick` (two Claude Code
 //! connections, so *Runs on* is a picker; Builder under `team-hub-member` has a missing part and its bar); M2 `dijUt`
@@ -152,6 +155,13 @@ pub fn no_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed_with(kontur, &Mcp::default()).map(|_| ())
+}
+
+/// `team-hub-down`: [`seed`], the QA app's team server not answering once Kontur joined it, before anything of the
+/// team's configuration was read this session (A25 `Zhcif`).
+pub fn down(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  super::team::down(kontur)
 }
 
 /// [`seed`] on a team that also holds the catalogue, made the team's before the team form: `picker-readiness-team`

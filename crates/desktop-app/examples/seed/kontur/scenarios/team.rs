@@ -514,6 +514,12 @@ pub(super) fn served(kontur: &Kontur, member: bool) -> Result<(), SeedError> {
   write_marker(kontur, if member { State::TeamHubMember } else { State::TeamHub })
 }
 
+/// Leaves the marker by which the QA app joins the Agents hub's team on a stand-in team server that stops answering
+/// before this computer read anything of it (`team-hub-down`).
+pub(super) fn down(kontur: &Kontur) -> Result<(), SeedError> {
+  write_marker(kontur, State::TeamHubDown)
+}
+
 fn write_marker(kontur: &Kontur, state: State) -> Result<(), SeedError> {
   let marker = kontur.app_database.with_file_name(FILE);
   fs::write(&marker, state.name()).map_err(io(&marker))

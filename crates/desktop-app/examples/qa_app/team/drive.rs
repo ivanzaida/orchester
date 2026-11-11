@@ -73,6 +73,7 @@ pub fn to(
     | State::TeamEditVariables
     | State::TeamHub
     | State::TeamHubMember
+    | State::TeamHubDown
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure
