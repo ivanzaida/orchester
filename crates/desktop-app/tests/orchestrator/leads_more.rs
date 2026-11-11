@@ -65,8 +65,12 @@ fn orchestrator_leads_more_opens_and_closes_its_list() {
     screen.bounds(LIST),
     screen.bounds("orchestrator-header"),
   );
-  // From +N's start, moved back only as far as the window's edge needs.
-  let start = more.x.min(1000.0 - 320.0);
+  // From +N's start, moved back only as far as keeping 8 from the window's edge needs.
+  let start = more.x.min(1000.0 - 8.0 - 320.0);
+  assert!(
+    list.x + list.width <= 1000.0 - 8.0 + 0.5,
+    "the list ends 8 or more before the window's edge: {list:?}"
+  );
   assert!(
     (list.x - start).abs() < 1.0,
     "the list starts at +N's start: {list:?} {more:?}"

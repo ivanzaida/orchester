@@ -8,11 +8,12 @@
 //!
 //! What fits is learned from the layout: the header's free room after the group ([`HeadRefs`]) says how much is
 //! left, and each chip reports its width. While no room is left a chip folds; a folded chip comes back once the room
-//! has space for it and the gap before it. At least one chip shows. The fold holds while the pointer rests on a chip,
-//! whose × widens it.
+//! has space for it and the gap before it. At least one chip shows. A chip's × always shows ([`stop`]), so the pointer
+//! never changes a chip's width or what fits.
 
 mod chip;
 mod more;
+mod stop;
 
 use std::{path::Path, sync::Arc};
 
@@ -288,17 +289,11 @@ struct Targets(Vec<WatchTarget>);
 
 impl DevtoolsInspectable for Targets {}
 
-/// Each target's chip as wide as it was laid out without its ×.
+/// Each target's chip as wide as it was laid out.
 #[derive(Clone, Default, PartialEq)]
 struct Widths(Vec<(WatchTarget, f32)>);
 
 impl DevtoolsInspectable for Widths {}
-
-/// The chip the pointer rests on.
-#[derive(Clone, Default, PartialEq)]
-struct Resting(Option<WatchTarget>);
-
-impl DevtoolsInspectable for Resting {}
 
 /// How many chips fit the header, learned from its layout.
 #[derive(Clone)]
@@ -307,7 +302,6 @@ struct Fit {
   /// How many of them show; the rest fold into *+N*.
   shown: Signal<usize>,
   widths: Signal<Widths>,
-  resting: Signal<Resting>,
 }
 
 impl Fit {
@@ -316,26 +310,16 @@ impl Fit {
       targets: ctx.signal(Targets::default()),
       shown: ctx.signal(0),
       widths: ctx.signal(Widths::default()),
-      resting: ctx.signal(Resting::default()),
     }
   }
 
   /// How many of `leads`' chips show. Once its targets changed, all of them again while none was folded; while some
-  /// were, as many as before, so *+N* and its open list stay while the fit learns the new chips. A chip that went
-  /// while the pointer rested on it (its × stopped it) no longer holds the fold: it never saw the pointer leave.
+  /// were, as many as before, so *+N* and its open list stay while the fit learns the new chips.
   fn hold(&self, leads: &ChatLeads) -> usize {
     let targets: Vec<WatchTarget> = leads.targets.iter().map(|lead| lead.target.target).collect();
     let total = targets.len();
     let before = self.targets.get_untracked().0;
     if before != targets {
-      if let Some(gone) = self
-        .resting
-        .get_untracked()
-        .0
-        .filter(|resting| !targets.contains(resting))
-      {
-        self.rest(gone, false);
-      }
       let shown = self.shown.get_untracked();
       self.shown.set(if shown < before.len() { shown } else { total });
       self.targets.set(Targets(targets));
@@ -346,7 +330,7 @@ impl Fit {
   /// Folds a chip while the header's free `room` after the group is gone, or brings the next one back once it has
   /// room for it.
   fn adjust(&self, room: &ElementRef) {
-    if self.resting.get_untracked().0.is_some() || !room.is_attached() {
+    if !room.is_attached() {
       return;
     }
     let (room, shown) = (room.width(), self.shown.get_untracked());
@@ -371,7 +355,7 @@ impl Fit {
     }
   }
 
-  /// `target`'s chip was laid out `width` wide without its ×.
+  /// `target`'s chip was laid out `width` wide.
   fn record(&self, target: WatchTarget, width: f32) {
     let mut widths = self.widths.get_untracked();
     match widths.0.iter_mut().find(|(known, _)| *known == target) {
@@ -380,15 +364,5 @@ impl Fit {
       None => widths.0.push((target, width)),
     }
     self.widths.set(widths);
-  }
-
-  /// The pointer rests on `target`'s chip, or left it.
-  fn rest(&self, target: WatchTarget, resting: bool) {
-    let now = self.resting.get_untracked().0;
-    if resting && now != Some(target) {
-      self.resting.set(Resting(Some(target)));
-    } else if !resting && now == Some(target) {
-      self.resting.set(Resting(None));
-    }
   }
 }

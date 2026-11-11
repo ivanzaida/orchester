@@ -95,12 +95,12 @@ fn orchestrator_leads_chips_open_their_target_and_x_stops_one() {
   assert_eq!(screen.text(&format!("{task_chip}-name")), key);
   assert!(!screen.exists("orchestrator-leads-more"), "two chips fit");
   assert!(
-    !screen.exists(&format!("{task_chip}-stop")),
-    "× shows only under the pointer"
+    screen.exists(&format!("{module_chip}-stop")) && screen.exists(&format!("{task_chip}-stop")),
+    "every chip shows its × without the pointer"
   );
+  still_under_the_pointer(&mut screen, &module_chip, &[&task_chip, "orchestrator-leads"]);
 
   hover(&mut screen, &task_chip);
-  screen.until("the chip's ×", |screen| screen.exists(&format!("{task_chip}-stop")));
   screen
     .window
     .tree
@@ -172,6 +172,23 @@ fn orchestrator_leads_fold_what_does_not_fit_into_more() {
   assert!(folded > 0 && folded < total, "{folded} of {total} fold");
   let title = screen.bounds("orchestrator-title");
   assert!(title.width > 0.0, "the title keeps its room");
+}
+
+/// The pointer on `hovered` changes neither its bounds nor those of `others`.
+fn still_under_the_pointer(screen: &mut Orchestrator, hovered: &str, others: &[&str]) {
+  let ids: Vec<&str> = std::iter::once(hovered).chain(others.iter().copied()).collect();
+  let before: Vec<_> = ids.iter().map(|id| screen.bounds(id)).collect();
+  hover(screen, hovered);
+  for _ in 0..5 {
+    screen.window.pass();
+  }
+  for (id, before) in ids.iter().zip(before) {
+    let after = screen.bounds(id);
+    assert!(
+      (before.x - after.x).abs() < 0.01 && (before.width - after.width).abs() < 0.01,
+      "{id} does not move or widen under the pointer: {before:?} {after:?}"
+    );
+  }
 }
 
 /// What the conversation leads sits right after when it started, 8 from it: the eye, then the chips 6 from it, with no
