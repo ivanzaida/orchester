@@ -14,14 +14,23 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{id::MessageId, run::Answerer};
-use orchester_workspace::tasks::conversation::{Entry, EntryState, PanelState, outgoing::after_turn_run};
+use orchester_workspace::{
+  decisions::DecisionKind,
+  tasks::conversation::{
+    Entry, EntryState, PanelState,
+    outgoing::{after_turn_run, resend_answers_question},
+  },
+};
 
 use super::{super::shared::Shared, Composing, state::AfterTurn};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  field::field_error,
-  icon::Icon,
-  message::message_text,
+use crate::{
+  mcp::input_gate::{Guarded, press_answerer},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::field_error,
+    icon::Icon,
+    message::message_text,
+  },
 };
 
 /// The actions under `entry` when its agent's CLI did not take it; `None` for any other message.
@@ -108,13 +117,22 @@ fn buttons(ctx: &Ctx, props: &UndeliveredProps, composing: &Composing, pending: 
       composing.detail.task.id(),
       props.message,
     );
-    let action = composing.state.after_turn.clone();
+    let (action, gate) = (composing.state.after_turn.clone(), composing.state.gate.clone());
+    // Whether the resend answers a question as the person reads the run; the send reads it again.
+    let answers = resend_answers_question(&composing.detail, props.message);
     button.on_click(move || {
-      // Who pressed is read while the press is delivered; whether the resend answers a question, on a fresh read.
-      let by = if is_synthetic_input() {
-        Answerer::Automation
-      } else {
-        Answerer::Person
+      // Who pressed is read while the press is delivered: a client's answer is refused to it without the consent.
+      let by = match (answers, is_synthetic_input()) {
+        (_, false) => Answerer::Person,
+        (false, true) => Answerer::Automation,
+        (true, true) => match press_answerer(
+          gate.as_ref(),
+          Guarded::Decision(DecisionKind::Question),
+          "send again a message that answers an agent's question",
+        ) {
+          Some(by) => by,
+          None => return,
+        },
       };
       action.run(AfterTurn {
         project: project.clone(),

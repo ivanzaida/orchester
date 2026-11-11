@@ -26,6 +26,7 @@ use orchester_workspace::{display::clock, tasks::side_question::failure_message}
 
 use super::{Copied, Pending, SideQuestions, pane::PaneProps};
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, press_answerer},
   navigation::Navigation,
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskView},
   theme::{ControlHeight, ExtraSpacing, IconSize, SideSpacing, SideText},
@@ -307,15 +308,23 @@ fn actions(
         button.loading().into()
       } else {
         let (state, project, task) = (state.clone(), props.project.open.clone(), props.task);
+        let (decision, gate) = (props.decision, ctx.use_context::<InputGate>());
         button
           .on_click(move || {
-            // Who pressed is read while the press is delivered, as the run composer reads it.
-            let by = if lurq::app::events::is_synthetic_input() {
-              Answerer::Automation
-            } else {
-              Answerer::Person
+            // Who pressed is read while the press is delivered, as the run composer reads it. An answer that decides
+            // for the run is automation's only under the person's consent: refused to it otherwise.
+            let by = match decision {
+              None if lurq::app::events::is_synthetic_input() => Some(Answerer::Automation),
+              None => Some(Answerer::Person),
+              Some(kind) => press_answerer(
+                gate.as_ref(),
+                Guarded::Decision(kind),
+                "send a side question's answer that decides for a waiting run",
+              ),
             };
-            state.send(&project, (task, question), by);
+            if let Some(by) = by {
+              state.send(&project, (task, question), by);
+            }
           })
           .into()
       }

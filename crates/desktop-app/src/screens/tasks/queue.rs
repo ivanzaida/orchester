@@ -32,6 +32,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, refuse_press},
   services::Services,
   theme::{ExtraSpacing, IconSize},
   ui::{
@@ -73,7 +74,7 @@ struct Holding {
   root: PathBuf,
   scope: HoldScope,
   held: bool,
-  /// Who pressed: a person, or automation driving the window ([`actor_now`]).
+  /// Who pressed: a person, or automation driving the window ([`hold_actor`]).
   actor: HoldActor,
 }
 
@@ -90,6 +91,7 @@ pub(super) struct QueueControls {
   /// The header's menu, while it is open, and its button.
   open: Signal<bool>,
   anchor: ElementRef,
+  gate: Option<InputGate>,
 }
 
 impl Component for QueueControls {
@@ -132,6 +134,7 @@ impl Component for QueueControls {
       changing,
       open: ctx.signal(false),
       anchor: ElementRef::default(),
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -140,14 +143,17 @@ impl Component for QueueControls {
     let state = self.hold.state().get();
     let pending = state.is_pending() || self.changing.get();
     let press = |scope: HoldScope, held: bool| {
-      let (hold, root) = (self.hold.clone(), props.root.clone());
+      let (hold, root, gate) = (self.hold.clone(), props.root.clone(), self.gate.clone());
+      let by_person = props.queue.held_by_person(scope);
       move || {
-        hold.run(Holding {
-          root: root.clone(),
-          scope,
-          held,
-          actor: actor_now(),
-        });
+        if let Some(actor) = hold_actor(gate.as_ref(), held, by_person) {
+          hold.run(Holding {
+            root: root.clone(),
+            scope,
+            held,
+            actor,
+          });
+        }
       }
     };
     let failed = state.error.as_ref().map(|error| {
@@ -258,14 +264,18 @@ where
     .with_children(rows)
 }
 
-/// Who presses now: lurq's synthetic input (an MCP client driving the window) is automation, held to its rules — it
-/// does not release a hold a person set.
-pub(crate) fn actor_now() -> HoldActor {
-  if is_synthetic_input() {
-    HoldActor::Automation
-  } else {
-    HoldActor::Person
+/// Who presses a change of a hold to `held` now: a person; or lurq's synthetic input (an MCP client driving the
+/// window) as automation, held to its rules — it does not release a hold a person set (`by_person`), so that press is
+/// refused to it (`None`) and the window stays as it was. The workspace checks it again ([`hold_in`]).
+pub(crate) fn hold_actor(gate: Option<&InputGate>, held: bool, by_person: bool) -> Option<HoldActor> {
+  if !is_synthetic_input() {
+    return Some(HoldActor::Person);
   }
+  if !held && by_person {
+    refuse_press(gate, Guarded::Person, "release new starts a person held");
+    return None;
+  }
+  Some(HoldActor::Automation)
 }
 
 /// `button`, taking presses unless a hold is being kept.

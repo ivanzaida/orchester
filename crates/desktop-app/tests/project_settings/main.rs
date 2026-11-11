@@ -11,6 +11,9 @@ mod harness;
 mod index;
 mod layout;
 mod limits;
+mod limits_mcp;
+#[path = "../files/mcp_client.rs"]
+mod mcp_client;
 mod memory;
 mod navigation_status;
 mod orchestrator;

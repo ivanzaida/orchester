@@ -164,8 +164,8 @@ struct Counts {
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
   tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
-  /// The person-only press refused while the input being delivered now ran ([`press`]).
-  refused_press: Mutex<Option<RefusedPress>>,
+  /// The window-input call delivering input now, and the person-only press refused meanwhile ([`press`]).
+  calls: Mutex<press::Calls>,
   /// One forwarded window-input call at a time, so a refused press is answered to the call that delivered it.
   input_turn: tokio::sync::Mutex<()>,
 }
@@ -459,19 +459,13 @@ impl ServerHandler for GuardedTools {
       return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
     let _turn = self.gate.0.input_turn.lock().await;
-    // A refusal still kept came from synthetic input no call delivered (a test's): this call does not answer for it.
-    if let Some(stale) = self.gate.take_refused_press() {
-      tracing::debug!(
-        action = stale.action(),
-        "a refused press no tool call delivered is let go"
-      );
-    }
+    let call = self.gate.begin_call();
     // Only calls that go on to the window count, so refused calls cannot keep a person's change out.
     self.gate.0.in_flight.fetch_add(1, Ordering::SeqCst);
     let _in_flight = InFlight(self.gate.clone());
     let tool = request.name.clone();
     let answer = self.tools.call_tool(request, context).await;
-    let Some(refused) = self.gate.take_refused_press() else {
+    let Some(refused) = self.gate.end_call(call) else {
       return answer;
     };
     tracing::info!(%tool, action = refused.action(), "a person-only press refused to a client");

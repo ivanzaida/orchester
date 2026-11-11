@@ -96,4 +96,33 @@ fn files_person_only_text_a_client_types_into_find_is_refused_to_it() {
   let (error, words) = answer(&said);
   assert!(error, "{said}");
   assert!(words.contains("search within a file"), "{words}");
+  files.window.pass();
+  assert_eq!(find_text(&mut files), "", "typed text never lands in the field");
+
+  // A value set straight into the field is refused to its call too, and the field takes back what it held.
+  let said = client.call(
+    &mut files.window,
+    "lurq_set_value",
+    &json!({ "ref": field, "value": "limit" }),
+  );
+  let (error, words) = answer(&said);
+  assert!(error, "{said}");
+  assert!(words.contains("search within a file"), "{words}");
+  files.window.pass();
+  assert_eq!(find_text(&mut files), "", "the field keeps what it held");
+
+  // The person's own typing is searched.
+  files.type_keys("x");
+  assert_eq!(find_text(&mut files), "x");
+}
+
+/// What the find field holds.
+fn find_text(files: &mut Files) -> String {
+  files
+    .window
+    .tree
+    .get_element_by_id_mut("files-find-field")
+    .and_then(|element| element.as_text_input())
+    .map(|input| input.value())
+    .expect("the find field is a text input")
 }

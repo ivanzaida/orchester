@@ -7,7 +7,10 @@
 //! time.
 
 use lurq::{
-  app::{ctx::Ctx, events::KeyboardEvent},
+  app::{
+    ctx::Ctx,
+    events::{KeyboardEvent, is_synthetic_input},
+  },
   components::Row,
   core::{ElementRef, Signal},
   layout::Alignment,
@@ -16,10 +19,13 @@ use lurq::{
 use orchester_workspace::files::MAX_MATCHES;
 
 use crate::{
-  mcp::input_gate::{InputGate, persons_press},
+  mcp::input_gate::{Guarded, InputGate, persons_press, refuse_press},
   theme::ExtraSpacing,
   ui::{field::FieldInput, icon::Icon, icon_button::IconButton},
 };
+
+/// What searching within a file is, as an MCP client refused reads it.
+const SEARCH: &str = "search within a file";
 
 /// The width of the find field (`kWlG3`).
 const FIELD_WIDTH: f32 = 260.0;
@@ -37,11 +43,12 @@ pub struct FindState {
   typed: Signal<String>,
   focus: Signal<bool>,
   input: ElementRef,
+  gate: Option<InputGate>,
 }
 
 impl FindState {
   pub fn new(ctx: &mut Ctx) -> Self {
-    Self {
+    let state = Self {
       open: ctx.signal(false),
       query: ctx.signal(String::new()),
       // *Match case* is on until a person turns it off, as `b7RGL` draws the search.
@@ -50,7 +57,18 @@ impl FindState {
       typed: ctx.signal(String::new()),
       focus: ctx.signal(false),
       input: ElementRef::new(),
-    }
+      gate: ctx.use_context::<InputGate>(),
+    };
+    // Text a client sets straight into the field (`lurq_set_value`, which no typing handler hears) is refused to it,
+    // and the field takes back what it held, while the input is delivered: the person finds nothing to clear.
+    let (query, typed, gate) = (state.query.clone(), state.typed.clone(), state.gate.clone());
+    ctx.watch(&state.query, move |now: &String| {
+      if is_synthetic_input() && *now != typed.get_untracked() {
+        refuse_press(gate.as_ref(), Guarded::Person, SEARCH);
+        query.set(typed.get_untracked());
+      }
+    });
+    state
   }
 
   /// Opens the search with the focus in its field.
@@ -96,7 +114,7 @@ impl FindState {
       ctx.focus(&self.input);
       self.focus.set(false);
     }
-    let gate = ctx.use_context::<InputGate>();
+    let gate = self.gate.clone();
     let field = FieldInput::new("files-find-field", ctx.t("files.find.placeholder"), self.query.clone())
       .search()
       .placeholder(ctx.t("files.find.placeholder"))
@@ -105,8 +123,11 @@ impl FindState {
       .on_typed({
         let typed = self.typed.clone();
         move |event| {
-          if persons_press(gate.as_ref(), "search within a file") {
+          // Told before the edit lands: a client's is kept out of the field and refused to it.
+          if persons_press(gate.as_ref(), SEARCH) {
             typed.set(event.new_value().to_owned());
+          } else {
+            event.prevent_default();
           }
         }
       });

@@ -155,6 +155,7 @@ fn task_rows_under_a_project_hold_say_every_queued_task_is_held() {
     queue: Arc::new(HeldQueue {
       project: true,
       groups: Vec::new(),
+      by_person: Vec::new(),
     }),
     ..ProjectTasks::default()
   };

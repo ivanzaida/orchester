@@ -2,6 +2,7 @@
 //! version, selected lines, the versions, refused paths, binary files, *Go to file*, search within the file,
 //! *Open file* on the Changes tab, and that a file's text never reaches the MCP tree.
 mod design;
+mod gate_calls;
 mod harness;
 mod mcp_client;
 mod page;

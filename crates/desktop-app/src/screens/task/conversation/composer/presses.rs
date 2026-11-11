@@ -16,6 +16,7 @@ use orchester_core::{
   sharing::TaskRevision,
 };
 use orchester_workspace::{
+  decisions::DecisionKind,
   tasks::conversation::{
     composer::ComposerMode,
     outgoing::{Action, Context, Way},
@@ -40,6 +41,9 @@ pub(super) struct Target {
   pub(super) revision: TaskRevision,
   pub(super) lost: bool,
   pub(super) left: Option<Context>,
+  /// A message to the recipient the composer offers answers a free-text question an agent of the run waits on
+  /// (`outgoing::answers_question`), as the person reads the run: a decision, which the send reads again.
+  pub(super) answers_question: bool,
 }
 
 /// What sending does in `mode` while something is written or attached and no send is under way: the state's way,
@@ -77,6 +81,9 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
     target.revision,
     (target.lost, target.left),
   );
+  let decides = expected
+    .decision_kind()
+    .or_else(|| target.answers_question.then_some(DecisionKind::Question));
   Arc::new(move || {
     let text = state.draft.get_untracked();
     let attachments = state.attached.held();
@@ -86,7 +93,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
     }
     // An answer of what the run waits for is automation's only under the person's consent: refused to it otherwise,
     // and the draft stays as it is.
-    let by = match expected.decision_kind() {
+    let by = match decides {
       None => Some(if lurq::app::events::is_synthetic_input() {
         Answerer::Automation
       } else {
