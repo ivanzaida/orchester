@@ -193,13 +193,7 @@ impl Component for TeamHubScreen {
         new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
       }),
     };
-    let reach = if unreached.is_some() {
-      head::Reach::Unreachable
-    } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
-      head::Reach::Unanswered
-    } else {
-      head::Reach::Answered
-    };
+    let reach = reach(ctx, &project, unreached.is_some());
     let status = head::status(ctx, admin, reach);
     agents::frame(
       ctx,
@@ -245,6 +239,17 @@ impl TeamHubScreen {
       .log(project.open.repo_root.clone())
       .still_works(ctx.t("hub.failure.stillWorks"))
       .page(ctx)
+  }
+}
+
+/// How the team server stands for the head: cannot be reached (`unreached`), has not answered yet, or answered.
+fn reach(ctx: &mut Ctx, project: &ShownProject, unreached: bool) -> head::Reach {
+  if unreached {
+    head::Reach::Unreachable
+  } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
+    head::Reach::Unanswered
+  } else {
+    head::Reach::Answered
   }
 }
 

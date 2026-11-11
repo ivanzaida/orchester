@@ -73,7 +73,7 @@ impl Component for DeleteConfirm {
     let id = format!("memory-delete-{}", memory.id());
     let given = given_count(ctx, &state, memory);
     if props.modal {
-      return self.dialog(ctx, &state, (&props, &id), given);
+      return self.dialog(ctx, &state, (&props, &id), &given);
     }
     let mut confirm = Column::new()
       .id(id.clone())
@@ -120,7 +120,7 @@ impl DeleteConfirm {
     ctx: &Ctx,
     state: &MemoryState,
     (props, id): (&DeleteProps, &str),
-    given: Result<usize, Option<Message>>,
+    given: &Result<usize, Option<Message>>,
   ) -> Element {
     let memory = &props.memory;
     let mut dialog = Dialog::new(
@@ -139,7 +139,7 @@ impl DeleteConfirm {
           .width(Dimension::Pct(100.0)),
       );
     }
-    if let Err(Some(reason)) = &given {
+    if let Err(Some(reason)) = given {
       dialog = dialog.part(field_error(&format!("{id}-given-error"), &message_text(ctx, reason)));
     }
     let failure = state.failure_note(ctx, id, Some(memory.id())).map(Element::from);

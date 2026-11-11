@@ -1,5 +1,5 @@
-//! The Agents hub of a local project: Instructions, Skills, Tools and Memory are tabs of their own pages, each with its
-//! own route; Profiles is the master-detail Agents page (`local_hub`).
+//! The Agents hub of a local project: Instructions, Skills and Tools are tabs of their own pages, each with its own
+//! route; Profiles and Memory are the master-detail Agents page (`local_hub`).
 use orchester_app::routes::{InstructionsView, MemoryView, ProjectPage, Route, SkillsFilter};
 
 use super::{harness::Agents, support::project_id};
@@ -39,8 +39,12 @@ fn hub_tabs_open_each_tab_on_its_own_route() {
   screen.until("memory", |s| {
     s.window.navigation().route_now() == memory && s.exists("local-hub-filter-memory")
   });
-  screen.click("agents-hub-tab-tools");
-  screen.until("tools", |s| s.exists("agents-hub-title"));
+  // The Memory filter is the master-detail hub's, without the old tabs: back to Tools' own page for them.
+  screen
+    .window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Tools));
+  screen.until("tools", |s| s.exists("agents-hub-tab-profiles"));
   // Profiles is the local project's master-detail page, which has its own head.
   screen.click("agents-hub-tab-profiles");
   screen.until("profiles", |s| s.exists("screen-local-hub"));

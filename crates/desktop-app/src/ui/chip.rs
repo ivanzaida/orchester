@@ -1,8 +1,8 @@
 //! Chips. A tag (`Chip` `jI8af`) is its name in 11/500 `text_secondary` on a `surface_raised` pill
 //! inside a `border` stroke, 2 over and under it and 8 at its sides; a removable one ends in an 11
 //! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`); one that says what something is
-//! leads with an 11 `text_secondary` glyph, 4 before the name (`Chip · Decision` `HWxlV` in Y1 `tsfxN`). A badge (`Badge`
-//! `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
+//! leads with an 11 `text_secondary` glyph, 4 before the name (`Chip · Decision` `HWxlV` in Y1 `tsfxN`). A badge
+//! (`Badge` `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
 //! under them and 8 at their sides (`Saved` in `success`, `New` in `info`); a cut one keeps to its room.
 
 use std::sync::Arc;

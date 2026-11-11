@@ -77,13 +77,6 @@ fn memory_theme_roles_resolve_the_design() {
       "Geist",
       PaletteColor::TextSecondary,
     ),
-    (
-      MemoryText::Record,
-      13.0,
-      FontWeight::Normal,
-      "Geist",
-      PaletteColor::TextPrimary,
-    ),
   ];
   for (role, size, weight, family, color) in expected {
     let style = theme.typography_style(role.role());
@@ -94,6 +87,20 @@ fn memory_theme_roles_resolve_the_design() {
     );
     assert_eq!(style.color, theme.palette_color(color), "{role:?}");
   }
+}
+
+/// What a record says in the Agents hub's panel (`i5mAK` in Y1 `tsfxN`): 13 `text_primary`, 1.5.
+#[test]
+fn memory_theme_record_text_resolves_the_design() {
+  let mut app = App::new();
+  theme::install(&mut app, Mode::Dark);
+  let theme = app.theme();
+  let style = theme.typography_style(MemoryText::Record.role());
+  assert_eq!(
+    (style.font_size, style.weight, &*style.font_family),
+    (13.0, FontWeight::Normal, "Geist")
+  );
+  assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
 }
 
 #[test]
