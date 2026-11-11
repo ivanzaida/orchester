@@ -20,11 +20,17 @@ use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
   messages::Message,
-  tasks::recorded,
+  tasks::{
+    approvals::{self, hold_cause},
+    recorded,
+  },
 };
 
 /// The app's tool that decides a tool request.
 pub(super) const DECIDE_APPROVAL: &str = "decide_approval";
+
+/// The decision that allows a request once.
+const APPROVE_ONCE: &str = "approve_once";
 
 /// The chat's own argument of [`DECIDE_APPROVAL`]: its reason, which the conversation shows under the request.
 const REASON: &str = "reason";
@@ -95,7 +101,10 @@ fn asked(request: &PendingToolApproval) -> String {
 }
 
 /// The task and the request `arguments` name, while it waits; refused (`not_this_request`) in a turn nobody asked for
-/// when the request is not the one whose wait started it.
+/// when the request is not the one whose wait started it, (`reviewer_judging`) while auto mode's reviewer judges it,
+/// and (`hard_hold`) an approval of one a hard rule of auto mode holds ([`approvals::hard_hold`]: a push, a destructive
+/// change, a secret, a write outside the folders, …): the chat may only deny such a request or leave it to the person,
+/// in any turn, whatever its agent wrote.
 pub(super) async fn checked(scope: &ChatScope, arguments: &JsonObject) -> Result<Checked, ToolError> {
   let Some(named) = arguments.get("approval").and_then(Value::as_str).map(str::to_owned) else {
     return Ok(Checked {
@@ -104,6 +113,7 @@ pub(super) async fn checked(scope: &ChatScope, arguments: &JsonObject) -> Result
     });
   };
   let (root, chat, on_its_own) = (scope.root.clone(), scope.chat, scope.on_its_own);
+  let approves = arguments.get("decision").and_then(Value::as_str) == Some(APPROVE_ONCE);
   blocking(move || {
     let db = ProjectDb::open(&root)?;
     if on_its_own && !started_by(&db.waits_thinking()?, chat, &named) {
@@ -122,6 +132,18 @@ pub(super) async fn checked(scope: &ChatScope, arguments: &JsonObject) -> Result
         request: None,
       });
     };
+    if db.reviewing_tool_approvals()?.contains(&request.id) {
+      return Err(ToolError::refused(
+        "reviewer_judging",
+        vec![Message::new("orchestrator.tools.approvalReviewerJudging")],
+      ));
+    }
+    if let Some(hold) = approves.then(|| approvals::hard_hold(&db, &root, &request)).flatten() {
+      return Err(ToolError::refused(
+        "hard_hold",
+        vec![Message::new("orchestrator.tools.approvalHardHold"), hold_cause(hold)],
+      ));
+    }
     let run = find_run(&db, &request.run.to_string())?;
     let task = recorded::task_of(&db, run.task())?.map(|task| task.key().to_string());
     Ok(Checked {

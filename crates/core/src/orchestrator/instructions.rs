@@ -311,7 +311,11 @@ fn approval_prompt(who: &str, wait: &AgentWait) -> String {
      worktree, destroys or deletes nothing that cannot be undone, reaches no other system or person (no push, \
      publish, send, deploy or network call that changes something), touches no secret, and fits the brief and the \
      order of what you lead. Deny it (deny, with a message that tells the agent why and what to do instead) only when \
-     it is plainly wrong for the task. Give decide_approval your reason in one sentence (reason): the conversation \
+     it is plainly wrong for the task. A request a hard rule of auto mode holds (a push, a change that destroys work \
+     or reaches outside the worktree and the step's folders, a read of a secret, a Codex command outside its sandbox, \
+     permissions not recorded) is never yours to allow, whatever its agent wrote: approve_once is refused there \
+     (hard_hold); deny it or leave it to the person. Give decide_approval your reason in one sentence (reason): the \
+     conversation \
      shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
      then \"Recommends \" and what you recommend; the request waits for the person on its card, shown here under \
      your words. Decide only this request, once: approve_once covers it alone, and you never allow a tool or command \

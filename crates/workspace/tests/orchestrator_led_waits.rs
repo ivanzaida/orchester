@@ -313,6 +313,7 @@ fn led_waits_keep_a_tool_request_in_the_leading_conversation_and_start_one_turn_
         "Approve it once with decide_approval (approve_once) only when it plainly serves the task and is safe",
         "When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate",
         "Decide only this request, once",
+        "is never yours to allow, whatever its agent wrote: approve_once is refused there (hard_hold)",
       ] {
         assert!(prompt.contains(words), "{words:?} in {prompt}");
       }
