@@ -254,10 +254,10 @@ fn task_group_submission_keeps_reviewed_version_after_new_publication() {
     .expect("published");
   let mut steps = version.body().steps().to_vec();
   steps[0].name = name("Unseen implementation");
-  let mut draft = version.to_draft(at(20));
-  draft.edit(Pipeline::new(steps).expect("pipeline"), at(21));
-  db.save_draft(pipeline, &draft).expect("draft");
-  let newer = db.publish_draft::<Pipeline>(pipeline, at(22)).expect("publish");
+  let edited = Pipeline::new(steps).expect("pipeline");
+  let newer = db
+    .publish_pipeline_edit(pipeline, &edited, version.number(), None, at(22))
+    .expect("publish");
   assert_ne!(newer.number(), reviewed[0].version);
   db.queue_task_group(&group, None, &reviewed)
     .expect("queue reviewed publication");
@@ -286,16 +286,10 @@ fn task_group_changed_assignment_rejects_the_whole_review_atomically() {
     .latest_version::<Pipeline>(pipeline)
     .expect("version")
     .expect("published");
-  let other = db
-    .create_resource(
-      orchester_core::resource::Slug::new("other").expect("slug"),
-      name("Other"),
-      version.body(),
-      at(20),
-    )
-    .expect("resource");
-  db.publish_draft::<Pipeline>(other.id(), at(21)).expect("publish");
-  db.set_tasks_pipeline(&[drafts[1].id()], other.id()).expect("assign");
+  let (other, _) = db
+    .published_pipeline_for_test("other", "Other", version.body(), at(20))
+    .expect("publish");
+  db.set_tasks_pipeline(&[drafts[1].id()], other).expect("assign");
   assert!(
     matches!(db.queue_task_group(&group, None, &reviewed), Err(orchester_store::StoreError::TaskGroupReviewChanged(id)) if id == drafts[1].id())
   );

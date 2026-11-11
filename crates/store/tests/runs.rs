@@ -150,11 +150,9 @@ impl Fixture {
       ..step("plan", builder, &[])
     };
     let pipeline = Pipeline::new(vec![plan, implement, checks]).expect("valid pipeline");
-    let delivery = db
-      .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
-      .expect("create pipeline")
-      .id();
-    let pipeline_version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish pipeline");
+    let (delivery, pipeline_version) = db
+      .published_pipeline_for_test("delivery", "Delivery", &pipeline, at(4))
+      .expect("publish pipeline");
     let profiles = BTreeMap::from([(builder, profile_version)]);
     let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
     let published = PublishedVersions {

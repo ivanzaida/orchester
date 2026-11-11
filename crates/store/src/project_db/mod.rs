@@ -71,6 +71,7 @@ mod organization;
 mod organized_drafts;
 mod owned_records;
 mod permission_events;
+mod pipeline_publishes;
 mod plan_limits;
 mod plans;
 mod project_rules;

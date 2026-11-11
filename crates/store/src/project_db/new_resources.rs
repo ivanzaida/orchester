@@ -51,9 +51,9 @@ pub(super) fn insert<B: ResourceBody>(
   Ok(resource)
 }
 
-/// Whether resources of `kind` are created as their first version: agent profiles, instructions, skills, tools and
-/// MCP servers (the team's; a local project's are plain rows). A pipeline keeps its own flow, and agent testing's kinds
-/// are not covered.
+/// Whether resources of `kind` are created as their first version: agent profiles, instructions, skills, tools, MCP
+/// servers (the team's; a local project's are plain rows) and pipelines, which hold no draft at all
+/// ([`super::pipeline_publishes`]). Agent testing's kinds are not covered.
 const fn created_published(kind: ResourceKind) -> bool {
   matches!(
     kind,
@@ -62,6 +62,7 @@ const fn created_published(kind: ResourceKind) -> bool {
       | ResourceKind::Skill
       | ResourceKind::Tool
       | ResourceKind::McpServer
+      | ResourceKind::Pipeline
   )
 }
 

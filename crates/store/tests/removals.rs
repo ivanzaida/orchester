@@ -98,12 +98,10 @@ impl Fixture {
   /// A published pipeline `title` whose implement step runs Builder.
   fn pipeline_as(&mut self, slug: &str, title: &str) -> ResourceId {
     let pipeline = Pipeline::new(vec![step("implement", self.builder)]).expect("valid pipeline");
-    let id = self
+    let (id, _) = self
       .db
-      .create_resource(Slug::new(slug).expect("slug"), name(title), &pipeline, at(3))
-      .expect("create pipeline")
-      .id();
-    self.db.publish_draft::<Pipeline>(id, at(4)).expect("publish pipeline");
+      .published_pipeline_for_test(slug, title, &pipeline, at(3))
+      .expect("publish pipeline");
     id
   }
 
@@ -166,11 +164,7 @@ fn removals_only_the_latest_version_of_a_pipeline_counts() {
   let first = orchester_core::resource::VersionNumber::FIRST;
   fixture
     .db
-    .save_draft(delivery, &Draft::new(moved, Some(first), at(7)))
-    .expect("save draft");
-  fixture
-    .db
-    .publish_draft::<Pipeline>(delivery, at(8))
+    .publish_pipeline_edit(delivery, &moved, first, None, at(7))
     .expect("publish v2");
   assert_eq!(fixture.users(), [], "v1 ran Builder, v2 does not");
   let removal = fixture.db.remove_resource(fixture.builder, at(9)).expect("remove");
