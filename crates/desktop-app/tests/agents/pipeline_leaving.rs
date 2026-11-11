@@ -78,26 +78,6 @@ fn pipeline_leaving_for_another_pipeline_with_unsaved_changes_asks_first_and_dis
 }
 
 #[test]
-fn pipeline_leaving_by_a_filter_with_unsaved_changes_asks_first() {
-  let (mut agents, [_, draft, _], chosen) = editing(|ids| ids[1]);
-  assert_eq!(chosen, draft);
-
-  asks_then_goes(
-    &mut agents,
-    &view(PipelinesFilter::All, Some(draft)),
-    "pipeline-hub-filter-drafts",
-    &view(PipelinesFilter::Drafts, Some(draft)),
-  );
-  // The pipeline stays chosen under the other filter, and its edit went with the answer.
-  agents.until("its panel", |s| s.exists(DESCRIPTION));
-  assert_eq!(
-    agents.value(DESCRIPTION),
-    "",
-    "Discard changes dropped the edit though the panel stayed"
-  );
-}
-
-#[test]
 fn pipeline_leaving_by_new_pipeline_with_unsaved_changes_asks_first() {
   let (mut agents, [ready, ..], _) = editing(|ids| ids[0]);
   let here = view(PipelinesFilter::All, Some(ready));

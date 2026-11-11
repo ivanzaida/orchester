@@ -110,8 +110,8 @@ pub(super) fn chain(agents: &Agents, count: usize) -> ResourceId {
     before = Some(key);
   }
   let body = edit.validate().expect("a pipeline");
-  let mut db = ProjectDb::open(&agents.root).expect("database");
-  let id = db
+  ProjectDb::open(&agents.root)
+    .expect("database")
     .create_published(
       Slug::from_name("Long release").expect("slug"),
       Name::new("Long release").expect("name"),
@@ -120,8 +120,7 @@ pub(super) fn chain(agents: &Agents, count: usize) -> ResourceId {
     )
     .expect("the pipeline")
     .0
-    .id();
-  id
+    .id()
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use orchester_core::{
   name::Name,
   permission::{RepositoryAccess, StepPermissions},
-  resource::{Draft, ModelId, Pipeline, PromptText, Slug, Step, StepKey, StepKind},
+  resource::{ModelId, Pipeline, PromptText, Slug, Step, StepKey, StepKind},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -12,7 +12,7 @@ use orchester_store::ProjectDb;
 use super::harness::Agents;
 
 #[test]
-fn agents_usage_includes_published_and_draft_steps_with_model_overrides() {
+fn agents_usage_reads_each_pipelines_latest_version_with_model_overrides() {
   let mut screen = Agents::new(true);
   let profile = screen.profile(true);
   let step = Step {
@@ -51,22 +51,19 @@ fn agents_usage_includes_published_and_draft_steps_with_model_overrides() {
   if let StepKind::Agent { model, .. } = &mut second.kind {
     *model = Some(ModelId::new("review-model").expect("model"));
   }
-  let draft = Pipeline::new(vec![pipeline.steps()[0].clone(), second]).expect("draft");
-  db.save_draft(
-    resource.id(),
-    &Draft::new(draft, Some(version.number()), Timestamp::now()),
-  )
-  .expect("save draft");
+  // A pipeline holds no draft (D-032): its uses are its latest version's, v2.
+  let next = Pipeline::new(vec![pipeline.steps()[0].clone(), second]).expect("v2");
+  db.publish_pipeline_edit(resource.id(), &next, version.number(), None, Timestamp::now())
+    .expect("v2");
   screen.open(profile);
   let text = screen.text("agent-editor");
   for expected in [
     "Delivery",
     "Published v1",
-    "Draft v2 saved",
+    "Delivery v2",
     "review-model",
     "Step override",
-    "Drafts don’t run",
-    "1 pipelines · 3 steps",
+    "1 pipelines · 2 steps",
   ] {
     assert!(text.contains(expected), "{expected}: {text}");
   }

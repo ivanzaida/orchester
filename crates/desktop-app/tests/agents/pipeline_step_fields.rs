@@ -7,7 +7,7 @@ use lurq::app::events::MouseButton;
 use orchester_app::routes::{PipelinesFilter, PipelinesView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
-  resource::{DeliverMode, DeliverStep, Draft, MergeMethod, Pipeline},
+  resource::{DeliverMode, DeliverStep, MergeMethod, Pipeline},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -15,53 +15,10 @@ use orchester_store::ProjectDb;
 
 use super::{
   harness::Agents,
-  pipeline_hub::{open, project, setup},
+  pipeline_hub::{open, project},
   pipeline_step::{CANCEL, SAVE, chain, keys, named, open_step, rect, route, save_until, step_route, stored},
   support::project_id,
 };
-
-#[test]
-fn the_agent_field_says_when_no_profile_is_chosen_and_choosing_one_changes_the_step() {
-  // *Dependency update* is a draft whose steps run no profile yet.
-  let (mut agents, [_, draft, _]) = setup();
-  let plan = keys_of_draft(&agents, draft)[0].clone();
-  agents.window.navigation().go(Route::Project(
-    project_id(),
-    ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(draft))),
-  ));
-  agents.window.navigation().go(step_route(draft, &plan));
-  agents.until("the step", |s| s.exists("pipeline-hub-step-head"));
-  assert_eq!(
-    agents.text("pipeline-hub-step-agent-name"),
-    "Choose an agent profile or tool"
-  );
-  assert!(
-    !agents.exists("pipeline-hub-step-agent-row-sub"),
-    "the empty field says it itself, so choosing moves no row under it"
-  );
-
-  agents.click("pipeline-hub-step-agent");
-  agents.until("the picker", |s| s.exists("pipeline-hub-step-agent-picker-item-0"));
-  assert_eq!(agents.text("pipeline-hub-step-agent-picker-item-0-name"), "Builder");
-  agents.click("pipeline-hub-step-agent-picker-item-0");
-  agents.until("the profile is chosen", |s| {
-    s.text("pipeline-hub-step-agent-name") == "Builder" && !s.exists("pipeline-hub-step-agent-row-sub")
-  });
-  agents.until("the edit holds it", |s| s.exists(CANCEL));
-}
-
-fn keys_of_draft(agents: &Agents, pipeline: ResourceId) -> Vec<orchester_core::resource::StepKey> {
-  ProjectDb::open(&agents.root)
-    .expect("database")
-    .draft::<Pipeline>(pipeline)
-    .expect("reads")
-    .expect("a draft")
-    .body()
-    .steps()
-    .iter()
-    .map(|step| step.key.clone())
-    .collect()
-}
 
 /// Whether the retries box is there and holds `text`.
 fn retries_are(agents: &mut Agents, text: &str) -> bool {
@@ -217,7 +174,7 @@ fn duplicate_names_the_copy_and_cancel_puts_the_flow_back_with_the_copy_open() {
   assert_eq!(keys(&agents, ready).len(), 2, "nothing was stored");
 }
 
-/// The ready pipeline's latest version, which ends in a Deliver step the draft adds.
+/// The ready pipeline, whose latest version, v2, ends in a Deliver step.
 fn delivering(agents: &mut Agents) -> ResourceId {
   let pipeline = chain(agents, 3);
   let mut db = ProjectDb::open(&agents.root).expect("database");
@@ -231,8 +188,8 @@ fn delivering(agents: &mut Agents) -> ResourceId {
     None,
     true,
   )));
-  db.save_draft(pipeline, &Draft::new(body, Some(latest.number()), Timestamp::now()))
-    .expect("a draft");
+  db.publish_pipeline_edit(pipeline, &body, latest.number(), None, Timestamp::now())
+    .expect("v2 with a Deliver step");
   pipeline
 }
 

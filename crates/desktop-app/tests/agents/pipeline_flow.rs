@@ -425,38 +425,7 @@ fn pipeline_flow_steps_that_cannot_be_drawn_as_one_line_keep_the_start_and_end_a
 }
 
 #[test]
-fn pipeline_flow_a_draft_with_no_steps_says_so_between_the_markers_and_add_step_adds_the_first() {
-  let mut agents = Agents::new(true);
-  let body = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"))
-    .validate()
-    .expect("a pipeline");
-  let id = store(&agents, "Blank", &body);
-  open(&mut agents, id);
-
-  assert_eq!(
-    agents.text("pipeline-hub-flow-empty-words"),
-    "No steps yet. Add the first one."
-  );
-  let start = rect(&mut agents, "pipeline-hub-flow-row-start").y;
-  let line = rect(&mut agents, "pipeline-hub-flow-empty").y;
-  let end = rect(&mut agents, "pipeline-hub-flow-row-end").y;
-  assert!(
-    start < line && line < end,
-    "between start and end: {start} {line} {end}"
-  );
-  assert_eq!(agents.text("pipeline-hub-steps-count"), "0");
-  agents.click("pipeline-hub-add-step");
-  agents.until("the first step", |s| s.exists("pipeline-hub-flow-step-step"));
-  assert_eq!(
-    agents.text("pipeline-hub-steps-count"),
-    "1",
-    "the count follows the edit"
-  );
-  assert!(!agents.exists("pipeline-hub-flow-empty"));
-}
-
-#[test]
-fn pipeline_flow_a_published_pipeline_with_a_draft_draws_the_drafts_steps() {
+fn pipeline_flow_a_pipeline_draws_its_latest_versions_steps() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
@@ -474,14 +443,11 @@ fn pipeline_flow_a_published_pipeline_with_a_draft_draws_the_drafts_steps() {
     .expect("read")
     .expect("a version")
     .number();
-  db.save_draft(
-    id,
-    &orchester_core::resource::Draft::new(edit.validate().expect("a pipeline"), Some(latest), Timestamp::now()),
-  )
-  .expect("a draft");
+  db.publish_pipeline_edit(id, &edit.validate().expect("a pipeline"), latest, None, Timestamp::now())
+    .expect("v2");
 
   open(&mut agents, id);
-  agents.until("the draft's steps", |s| {
+  agents.until("the latest version's steps", |s| {
     s.exists(&format!("pipeline-hub-flow-step-{second}"))
   });
   assert!(agents.exists(&format!("pipeline-hub-flow-step-{first}")));

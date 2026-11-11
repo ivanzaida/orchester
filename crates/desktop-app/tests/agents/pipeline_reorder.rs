@@ -108,17 +108,15 @@ pub(super) fn focus(agents: &mut Agents, key: &StepKey) {
   agents.window.pass();
 }
 
+/// What `id` stores: its latest version (a pipeline holds no draft, D-032).
 pub(super) fn stored(agents: &Agents, id: ResourceId) -> Pipeline {
-  let db = ProjectDb::open(&agents.root).expect("database");
-  match db.draft::<Pipeline>(id).expect("draft") {
-    Some(draft) => draft.body().clone(),
-    None => db
-      .latest_version::<Pipeline>(id)
-      .expect("version")
-      .expect("a version")
-      .body()
-      .clone(),
-  }
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .latest_version::<Pipeline>(id)
+    .expect("version")
+    .expect("a version")
+    .body()
+    .clone()
 }
 
 pub(super) fn depends(pipeline: &Pipeline, key: &StepKey) -> Vec<String> {

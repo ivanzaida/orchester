@@ -12,7 +12,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId},
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, CommandProgram, DatabaseQuery, DeniedBehavior, Draft,
+    AccessPolicy, AccessWindow, ApprovalMode, CommandAction, CommandProgram, DatabaseQuery, DeniedBehavior,
     Pipeline, PipelineEdit, Slug, StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},

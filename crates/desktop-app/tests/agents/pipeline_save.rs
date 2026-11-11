@@ -160,75 +160,22 @@ fn pipeline_save_a_choice_of_what_a_run_delivers_is_published() {
 }
 
 #[test]
-fn pipeline_save_a_pipeline_never_published_says_its_first_version_and_asks_a_person() {
-  let (mut agents, _) = setup();
-  let builder = agents.profile(true);
-  let fresh = pipeline(&agents, "Fresh pipeline", Some(builder));
-  open(&mut agents, PipelinesFilter::All, Some(fresh));
+fn pipeline_save_refuses_a_change_that_cannot_be_published_and_stores_nothing() {
+  let (mut agents, [_, update, _]) = project();
+  open(&mut agents, PipelinesFilter::All, Some(update));
   agents.until("the panel", |s| s.exists(SAVE));
-  assert_eq!(
-    agents.text(HINT),
-    "Save publishes it as v1",
-    "every step is ready, so Save publishes"
-  );
 
-  // A stored draft nobody changed is where the edit starts, and Save publishes it, once a person allows its first
-  // version.
-  agents.press_until(SAVE, "the question", |s| s.exists("pipeline-hub-confirm-confirm"));
-  assert!(
-    stored(&agents, fresh).0.is_empty(),
-    "nothing is published before the answer"
-  );
-  agents.press_until("pipeline-hub-confirm-confirm", "the first version", |s| {
-    stored(s, fresh).0.len() == 1
-  });
-  assert!(stored(&agents, fresh).1.is_none());
-  agents.until("the panel shows v1", |s| s.text("pipeline-hub-chip-0") == "v1");
-  agents.until("it says which version it made", |s| {
-    s.exists("pipeline-hub-bar-notice") && s.text("pipeline-hub-bar-notice") == "Saved as v1 · the next run uses it"
-  });
-}
-
-#[test]
-fn pipeline_save_keeps_the_draft_and_says_why_when_a_step_has_no_profile() {
-  let (mut agents, [_, draft, _]) = project();
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-  agents.until("the panel", |s| s.exists(SAVE));
-  assert_eq!(
-    agents.text(HINT),
-    "Fix the missing steps to publish",
-    "nothing changed and publishing would fail again"
-  );
-
+  // Build runs a profile that is gone: a save is refused and stores nothing (a pipeline holds no draft, D-032).
   describe(&mut agents, "Waiting for profiles");
-  assert_eq!(
-    agents.text(HINT),
-    "Unsaved changes · Save keeps it as a draft · v1 comes once every step is ready"
-  );
   agents.click(SAVE);
-  agents.until("the draft kept", |s| s.exists("pipeline-hub-bar-notice"));
-
-  let said = agents.text("pipeline-hub-bar-notice");
-  assert!(said.contains("Saved as a draft of Dependency update"), "{said}");
-  assert!(
-    said.contains("2 steps aren't ready: Plan, Build"),
-    "it says why, naming every step: {said}"
-  );
-  let (versions, stored_draft) = stored(&agents, draft);
-  assert!(versions.is_empty(), "it was not published");
-  assert_eq!(
-    stored_draft.expect("the draft is stored").description(),
-    "Waiting for profiles"
-  );
-  assert_eq!(
-    agents.text("pipeline-hub-chip-0"),
-    "draft",
-    "the panel does not say it published"
-  );
-
-  // The next change drops what the last save said.
-  describe(&mut agents, "Still waiting");
-  agents.until("it is gone", |s| !s.exists("pipeline-hub-bar-notice"));
+  agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
+  let said = agents.text("pipeline-hub-refused");
+  assert!(said.contains("Couldn't save Dependency update"), "{said}");
+  assert!(said.contains("Build"), "it names the step: {said}");
+  let (versions, draft) = stored(&agents, update);
+  assert_eq!(versions.len(), 1, "nothing was published");
+  assert_eq!(draft, None, "nothing was stored as a draft");
+  assert_eq!(agents.value(DESCRIPTION), "Waiting for profiles", "what was typed stays");
 }
 
 #[test]

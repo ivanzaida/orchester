@@ -1,7 +1,6 @@
 //! What the Save bar of a local pipeline's panel says and allows around a save (PV2-17): text a step's check refuses is
-//! unsaved and *Save* says why at the button; a saved version says whether runs can take it, pinned over the bar; a
-//! draft kept names every step not ready; a refusal of an unchanged edit can be cancelled; a draft published from
-//! *Drafts* stays in view under *All*; after *Restore* the bar and the *Allow* question name the version.
+//! unsaved and *Save* says why at the button; a saved version says whether runs can take it, pinned over the bar; after
+//! *Restore* the bar and the *Allow* question name the version.
 //! `cargo test -p orchester-app --test agents pipeline_save_polish`.
 
 use std::time::{Duration, Instant};
@@ -12,20 +11,16 @@ use orchester_app::{
 };
 use orchester_core::{
   id::ResourceId,
-  resource::{Draft, Pipeline, PromptText},
+  resource::{Pipeline, PromptText},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::pipelines::{
-  data::OpenedPipeline,
-  write::{Allowed, save_in},
-};
 
 use super::{
   harness::Agents,
-  pipeline_hub::{open, pipeline_of, view},
-  pipeline_hub_ready::{body, lost, store},
+  pipeline_hub::{open, pipeline_of},
+  pipeline_hub_ready::lost,
   pipeline_step::{keys, open_step},
 };
 
@@ -139,57 +134,6 @@ fn pipeline_save_polish_a_saved_version_that_cannot_run_says_runs_wait_over_the_
 }
 
 #[test]
-fn pipeline_save_polish_a_draft_kept_names_every_step_not_ready() {
-  let mut agents = Agents::new(true);
-  let draft = pipeline_of(&agents, "Dependency update", [None, None]);
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-  agents.until("the panel", |s| s.exists(SAVE));
-
-  agents.set(DESCRIPTION, "Waiting for profiles");
-  agents.press_until(SAVE, "the draft kept", |s| s.exists(NOTICE));
-  let said = agents.text(NOTICE);
-  assert!(said.contains("2 steps aren't ready: Plan, Build"), "{said}");
-}
-
-#[test]
-fn pipeline_save_polish_a_refusal_of_an_unchanged_draft_is_cancelled() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let fresh = store(&agents, "Fresh", &body([Some(builder), Some(builder)]));
-  open(&mut agents, PipelinesFilter::All, Some(fresh));
-  agents.until("the panel", |s| s.exists(SAVE));
-  // Another editor stores the draft again behind the page.
-  let before = OpenedPipeline::load_in(&agents.root, fresh).expect("pipeline");
-  let theirs = before.body.clone().with_description("Theirs".into());
-  save_in(&agents.root, &before, &theirs, &Allowed::default()).expect("their version");
-
-  agents.click(SAVE);
-  agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
-  agents.click(CANCEL);
-  agents.until("the refusal is gone", |s| !s.exists("pipeline-hub-refused"));
-}
-
-#[test]
-fn pipeline_save_polish_a_draft_published_from_drafts_stays_in_view_under_all() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let fresh = store(&agents, "Fresh", &body([Some(builder), Some(builder)]));
-  open(&mut agents, PipelinesFilter::Drafts, Some(fresh));
-  agents.until("the panel", |s| s.exists(SAVE));
-  assert_eq!(agents.text(HINT), "Save publishes it as v1");
-
-  agents.click(SAVE);
-  agents.until("the question", |s| s.exists(CONFIRM));
-  agents.press_until(CONFIRM, "v1", |s| versions(s, fresh) == 1);
-  agents.until("the page follows it", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::All, Some(fresh))
-  });
-  agents.until("what the save said", |s| {
-    s.exists(NOTICE) && s.text(NOTICE) == "Saved as v1 · the next run uses it"
-  });
-}
-
-#[test]
 fn pipeline_save_polish_restore_names_the_version_until_saved_and_in_the_question() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
@@ -244,7 +188,7 @@ fn height(agents: &mut Agents, id: &str) -> f32 {
 fn pipeline_save_polish_save_and_cancel_stand_as_tall_whether_save_waits_or_not() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let waits = pipeline_of(&agents, "Waits", [Some(builder), None]);
+  let waits = pipeline_of(&agents, "Waits", [Some(builder), Some(ResourceId::generate())]);
   let ready = pipeline_of(&agents, "Ready", [Some(builder), Some(builder)]);
   for id in [waits, ready] {
     open(&mut agents, PipelinesFilter::All, Some(id));

@@ -9,8 +9,7 @@ use orchester_app::routes::{HubFilter, HubView, PipelineView, PipelinesFilter, P
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{DeliverMode, DeliverStep, MergeMethod, Pipeline, StepKey},
-  store::ResourceStore,
+  resource::{Pipeline, StepKey},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -18,18 +17,18 @@ use orchester_store::ProjectDb;
 use super::{
   harness::Agents,
   pipeline_hub::{open, pipeline_of},
-  pipeline_hub_ready::{body, draft_over, lost, step_at, store},
+  pipeline_hub_ready::{body, lost, step_at, store},
   support::project_id,
 };
 
-const CONFIRM: &str = "pipeline-hub-confirm-confirm";
 const PICKER: &str = "pipeline-hub-step-agent-picker";
 
 #[test]
 fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_list_line_names() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let mut steps = body([Some(builder), None]).into_steps();
+  // Build runs a profile that is gone: a stored pipeline's steps all run something (D-032).
+  let mut steps = body([Some(builder), Some(ResourceId::generate())]).into_steps();
   let mut third = steps[0].clone();
   third.key = StepKey::new("third").expect("key");
   third.name = Name::new("Third").expect("name");
@@ -43,8 +42,8 @@ fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_lis
   open(&mut agents, PipelinesFilter::All, Some(branching));
 
   let line = agents.text(&format!("pipeline-hub-row-{branching}-line"));
-  assert_eq!(line, "02 Build has no agent profile");
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "1 step not ready");
+  assert_eq!(line, "2 things missing", "the layout and the step: {line}");
+  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "2 things missing");
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
   assert_eq!(
     agents.text("team-hub-ready-draft-words"),
@@ -56,8 +55,7 @@ fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_lis
     "Step 02 Build",
     "numbered as the line numbers it"
   );
-  assert_eq!(agents.text(&format!("{row}-words")), "No agent profile");
-  assert_eq!(agents.text(&format!("{row}-choose")), "Choose →");
+  assert!(agents.exists(&format!("{row}-words")), "what the step lacks");
 }
 
 #[test]

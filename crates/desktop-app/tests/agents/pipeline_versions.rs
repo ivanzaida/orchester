@@ -5,7 +5,7 @@
 use orchester_app::routes::PipelinesFilter;
 use orchester_core::{
   id::ResourceId,
-  resource::{Draft, Pipeline},
+  resource::Pipeline,
   store::ResourceStore,
   time::Timestamp,
 };
