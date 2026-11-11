@@ -99,7 +99,8 @@ runs* and *write with git* — and a project that had *answer agents* on starts 
   started the run** and whatever raised it (the chat's own answer included); there is no per-run or per-step limit on
   its turns. A turn starts only while no other turn of its conversation thinks and the project's runner attached.
 - The turn a run's success starts **merges** it once if the rule passes — latest run, every step passed (a person's
-  accept counts, automation's does not), task not Blocked or blocked, new starts not held, task not *Don't merge
+  accept counts, and so does the Orchestrator's own since 2026-11-11: it then says which step it accepted unverified
+  and what was left unverified), task not Blocked or blocked, new starts not held, task not *Don't merge
   automatically*, the main checkout needs no local integration — one at a time, in end order; conflicts → it calls
   `continue_run` `resolve_conflicts`. A task's own *Don't merge automatically* still keeps its runs from being merged
   on their own.

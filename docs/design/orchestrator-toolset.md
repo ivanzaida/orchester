@@ -95,8 +95,10 @@ drive*, and says what changed.**
      the Orchestrator merge runs* and *answer agents* on too, and the switch's row says so. With all three on, the turn
      a task's run success starts by itself (below) merges the run with `merge_run`, directly, only when all of these
      hold (one rule, `orchester_workspace::orchestrator::auto_merge`): it is the task's latest run and succeeded, and
-     every step of its pipeline passed — a step a person accepted as it was counts as passed, one automation accepted
-     does not; the task is not marked Blocked and no unfinished task blocks it (ORC-58); new starts are not held for
+     every step of its pipeline passed — a step accepted as it was counts as passed, whoever accepted it (the
+     person's decision of 2026-11-11, "full autonomy": before, one automation accepted did not count, and the run was
+     left to the person); the turn that merges such a run tells the person which step it accepted unverified and what
+     was left unverified, with the link; the task is not marked Blocked and no unfinished task blocks it (ORC-58); new starts are not held for
      its reviewed group or the project (`hold_queue`); the task does not say *Don't merge automatically*, a task
      organization flag set in the task form or with `create_task`/`update_task` (`no_automatic_merge`); and the run is
      not the chat's own doing in a loop (`raised_by_own`: such an end starts no turn). A shared project's server does

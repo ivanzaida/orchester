@@ -62,7 +62,7 @@ const DRIVE_DUPLICATE: &str = "In this chat it saves the copy as a draft, and pu
 
 /// What the agent reads first of `merge_run` while the chat drives.
 const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself it merges only a run the chat's rule \
-  lets it: the task's latest run, succeeded, every step passed (a step automation accepted does not count), the task \
+  lets it: the task's latest run, succeeded, every step passed (a step accepted as it was counts, whoever accepted it), the task \
   not saying Don't merge automatically, not marked Blocked, no unfinished task blocking it, new starts not held; \
   another run is refused as left_to_person, naming why. The merge keeps the rules below: only a task's latest run \
   that succeeded, and only when the main checkout needs no local integration; a refusal (needs_decision, \

@@ -1,10 +1,10 @@
 //! The Orchestrator merges a finished run on its own behind the person's switch (ORC-69, `docs/design/
 //! orchestrator-toolset.md`, decision 5): the chat's rule (`orchestrator::auto_merge`) merges only a task's latest run
-//! that succeeded with every step passed (a step automation accepted does not count), of a task not marked Blocked,
-//! not blocked by unfinished tasks, not held and not saying *Don't merge automatically*; the follower keeps whether the
-//! turn of a run's success merges it or why it is left to the person, only with *merge finished runs*, *merge runs*
-//! and *answer agents* on; and such turns start one at a time in the order the runs ended, across conversations.
-//! `cargo test -p orchester-workspace --test orchestrator_auto_merge auto_merge`.
+//! that succeeded with every step passed (a step accepted as it was counts, whoever accepted it), of a task not marked
+//! Blocked, not blocked by unfinished tasks, not held and not saying *Don't merge automatically*; the follower keeps
+//! whether the turn of a run's success merges it or why it is left to the person, only with *merge finished runs*,
+//! *merge runs* and *answer agents* on; and such turns start one at a time in the order the runs ended, across
+//! conversations. `cargo test -p orchester-workspace --test orchestrator_auto_merge auto_merge`.
 
 mod support;
 
@@ -220,19 +220,15 @@ fn accepted(fixture: &mut Fixture, by: Answerer) -> Run {
   run
 }
 
+/// The person's decision of 2026-11-11 (full autonomy while the chat drives): a step automation accepted as it was
+/// counts as passed, as a person's acceptance does.
 #[test]
-fn auto_merge_counts_a_step_a_person_accepted_and_not_one_automation_accepted() {
-  let mut fixture = Fixture::new();
-  let person = accepted(&mut fixture, Answerer::Person);
-  assert_eq!(rule(&fixture, &person), Merging::Merges);
-  let mut fixture = Fixture::new();
-  let automation = accepted(&mut fixture, Answerer::Automation);
-  assert_eq!(
-    rule(&fixture, &automation),
-    left(MergeLeft::AcceptedByAutomation {
-      step: "Implement".to_owned()
-    })
-  );
+fn auto_merge_counts_a_step_accepted_as_it_was_whoever_accepted_it() {
+  for by in [Answerer::Person, Answerer::Automation] {
+    let mut fixture = Fixture::new();
+    let run = accepted(&mut fixture, by);
+    assert_eq!(rule(&fixture, &run), Merging::Merges, "accepted by {by:?}");
+  }
 }
 
 #[test]

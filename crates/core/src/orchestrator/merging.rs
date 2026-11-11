@@ -1,11 +1,13 @@
 //! Whether the Orchestrator turn a task's run success starts by itself merges the run (ORC-69,
 //! `docs/design/orchestrator-toolset.md`, decision 5): with *Let the Orchestrator drive* on, a run that passes the
 //! chat's rule (`orchester_workspace::orchestrator:: auto_merge`) is merged once in that turn; one that does not is
-//! left to the person, the turn telling them why.
+//! left to the person, the turn telling them why. A step automation accepted as it was counts as passed, as a person's
+//! acceptance does (the person's decision of 2026-11-11: full autonomy while the chat drives); the turn that merges
+//! such a run tells the person which step it accepted and what it left unverified.
 
 use serde::{Deserialize, Serialize};
 
-use crate::run::{Answerer, AttemptReason, AttemptStart, Run, StepStatus};
+use crate::run::{Run, StepStatus};
 
 /// What the turn of a run's success does about merging the run, while the person lets the Orchestrator merge
 /// finished runs on its own.
@@ -26,7 +28,9 @@ pub enum MergeLeft {
   NotReady,
   /// The step `step` (its name) of its pipeline has not passed.
   StepNotPassed { step: String },
-  /// The step `step` (its name) passed only because automation accepted it as it was; a person's acceptance counts.
+  /// The step `step` (its name) passed only because automation accepted it as it was. Only waits kept before
+  /// 2026-11-11 hold it, when automation's acceptance still left a run to the person; the rule no longer leaves a run
+  /// so, and the variant stays so those conversations can still be read and their lines say what they said then.
   AcceptedByAutomation { step: String },
   /// The task is marked Blocked, for `reason`.
   MarkedBlocked { reason: String },
@@ -49,33 +53,15 @@ pub enum MergeLeft {
 
 impl MergeLeft {
   /// The first step of `run`'s pipeline that has not passed for a merge nobody asked for: one whose latest execution
-  /// did not pass, or that passed only by an acceptance automation decided (`starts`: the run's attempt starts,
-  /// [`crate::run::attempt_starts`]). A step a person accepted as it was counts as passed. `None` when every step
-  /// passed so.
-  pub fn of_steps(run: &Run, starts: &[AttemptStart]) -> Option<Self> {
-    for step in run.snapshot().body().steps() {
-      let name = || step.name.as_str().to_owned();
-      let Some(latest) = run
+  /// did not pass. A step accepted as it was counts as passed, whoever accepted it. `None` when every step passed.
+  pub fn of_steps(run: &Run) -> Option<Self> {
+    run.snapshot().body().steps().iter().find_map(|step| {
+      let passed = run
         .latest_execution(&step.key)
-        .filter(|latest| latest.status() == StepStatus::Passed)
-      else {
-        return Some(Self::StepNotPassed { step: name() });
-      };
-      let accepted_in = run.attempts().iter().find(|attempt| {
-        attempt.execution(latest.id()).is_some()
-          && matches!(attempt.reason(), AttemptReason::Accepted { step: accepted } if *accepted == step.key)
-      });
-      let Some(attempt) = accepted_in else {
-        continue;
-      };
-      let by = starts
-        .iter()
-        .find(|start| start.attempt == attempt.id())
-        .and_then(|start| start.by);
-      if by != Some(Answerer::Person) {
-        return Some(Self::AcceptedByAutomation { step: name() });
-      }
-    }
-    None
+        .is_some_and(|latest| latest.status() == StepStatus::Passed);
+      (!passed).then(|| Self::StepNotPassed {
+        step: step.name.as_str().to_owned(),
+      })
+    })
   }
 }
