@@ -44,6 +44,7 @@ use crate::{
     field::field_error,
     icon::Icon,
     message::message_text,
+    tooltip::Tooltip,
   },
 };
 
@@ -73,19 +74,28 @@ pub(crate) fn waiting_bar(
 }
 
 /// [`waiting_bar`] in a pipeline's editor: taking its version back hands its steps to `hand_back`, then runs `reread`.
+/// While the editor `holds_edit` not saved, which those steps would replace, nothing is taken back (D-040).
 pub(crate) fn pipeline_waiting_bar(
   ctx: &mut Ctx,
   project: &ShownProject,
   standing: (&TeamConfiguration, &SharedStanding),
-  (reread, hand_back): (Reread, HandBack),
+  (reread, hand_back, holds_edit): (Reread, HandBack, bool),
 ) -> Option<Element> {
   bar(
     ctx,
     (&project.open.repo_root, project.open.project.id()),
     standing,
     ("pipeline", Outside::Pipelines),
-    (reread, Some(hand_back)),
+    (reread, Some(PipelineEditor { hand_back, holds_edit })),
   )
+}
+
+/// A pipeline's editor, which holds the steps of its version taken back as its edit (D-032).
+#[derive(Clone)]
+struct PipelineEditor {
+  hand_back: HandBack,
+  /// It holds an edit not saved, which the steps taken back would replace: nothing is taken back then (D-040).
+  holds_edit: bool,
 }
 
 /// [`waiting_bar`] for a panel that has the project's folder and id, not its shown project.
@@ -104,7 +114,7 @@ fn bar(
   (root, project): (&Path, ProjectId),
   (team, standing): (&TeamConfiguration, &SharedStanding),
   (id, kind): (&str, Outside),
-  (reread, hand_back): (Reread, Option<HandBack>),
+  (reread, pipeline): (Reread, Option<PipelineEditor>),
 ) -> Option<Element> {
   let waiting = standing.waiting.first()?.clone();
   if !team.may_change {
@@ -126,7 +136,7 @@ fn bar(
         waiting,
         kind,
         reread,
-        hand_back,
+        pipeline,
       },
     ),
   )
@@ -173,11 +183,12 @@ pub(crate) struct WaitingProps {
   kind: Outside,
   reread: Reread,
   /// The editor of a pipeline, which holds the steps of its version taken back.
-  hand_back: Option<HandBack>,
+  pipeline: Option<PipelineEditor>,
 }
 
 impl PartialEq for WaitingProps {
-  /// `reread` and `hand_back` are made anew on every render of the editor, and only ever run its reload.
+  /// `reread` and a pipeline editor's `hand_back` are made anew on every render of the editor, and only ever run its
+  /// reload.
   fn eq(&self, other: &Self) -> bool {
     (
       &self.id,
@@ -188,6 +199,7 @@ impl PartialEq for WaitingProps {
       self.resource,
       &self.waiting,
       self.kind,
+      self.pipeline.as_ref().map(|editor| editor.holds_edit),
     ) == (
       &other.id,
       &other.root,
@@ -197,6 +209,7 @@ impl PartialEq for WaitingProps {
       other.resource,
       &other.waiting,
       other.kind,
+      other.pipeline.as_ref().map(|editor| editor.holds_edit),
     )
   }
 }
@@ -218,7 +231,10 @@ impl Component for WaitingBar {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<WaitingProps>().clone();
     let services = Services::of(ctx);
-    let (reread, hand_back) = (props.reread.clone(), props.hand_back.clone());
+    let (reread, hand_back) = (
+      props.reread.clone(),
+      props.pipeline.as_ref().map(|editor| editor.hand_back.clone()),
+    );
     let act = ctx.future_action(move |act: Act| {
       let (services, root) = (services.clone(), props.root.clone());
       let (project, kind, resource) = (props.project, props.kind, props.resource.0);
@@ -275,11 +291,8 @@ impl Component for WaitingBar {
         );
         // A version that edited an earlier one goes back to being the draft; a first version has none to go back to.
         let cancel = props.waiting.based_on.is_some().then(|| {
-          self.button(
-            (format!("{id}-cancel-sending"), ButtonKind::Secondary, Icon::X),
-            ctx.t("sharing.config.bar.cancelSending"),
-            take_back(&props),
-          )
+          let label = ctx.t("sharing.config.bar.cancelSending");
+          self.taking_back(ctx, &props, ("cancel-sending", Icon::X, label))
         });
         DraftBar::new(
           format!("{id}-not-sent"),
@@ -299,17 +312,19 @@ impl Component for WaitingBar {
         // A version that edited an earlier one goes back to being the draft; a new resource's first has none, so the
         // way out is to take the resource back as if never created.
         let (way_out, way_out_words) = match props.waiting.based_on {
-          Some(_) if props.hand_back.is_some() => (
+          Some(_) if props.pipeline.is_some() => (
             self.take_back_button(ctx, &props),
             "sharing.config.bar.pipeline.refusedWhy",
           ),
           Some(_) => (self.take_back_button(ctx, &props), "sharing.config.bar.refusedWhy"),
           None => (
-            self.button(
-              (format!("{id}-discard-new"), ButtonKind::Secondary, Icon::Trash2),
-              ctx.t("sharing.config.bar.discardNew"),
-              Act::DiscardNew,
-            ),
+            self
+              .button(
+                (format!("{id}-discard-new"), ButtonKind::Secondary, Icon::Trash2),
+                ctx.t("sharing.config.bar.discardNew"),
+                Act::DiscardNew,
+              )
+              .into(),
             "sharing.config.bar.refusedNewWhy",
           ),
         };
@@ -321,7 +336,7 @@ impl Component for WaitingBar {
         };
         DraftBar::new(format!("{id}-refused"), Standing::Attention, title)
           .sub(ctx.t_args(way_out_words, [("reason", reason.to_string())]))
-          .actions(Some(way_out))
+          .action(way_out)
           .into()
       }
     };
@@ -357,17 +372,30 @@ impl WaitingBar {
   }
 
   /// *Take it back as a draft*, or a pipeline's *Take it back*, whose steps go back to its editor (D-032).
-  fn take_back_button(&self, ctx: &Ctx, props: &WaitingProps) -> ActionButton {
-    let label = if props.hand_back.is_some() {
+  fn take_back_button(&self, ctx: &mut Ctx, props: &WaitingProps) -> Element {
+    let label = ctx.t(if props.pipeline.is_some() {
       "sharing.config.bar.pipeline.takeBack"
     } else {
       "sharing.config.bar.takeBack"
-    };
-    self.button(
-      (format!("{}-take-back", props.id), ButtonKind::Secondary, Icon::Undo2),
-      ctx.t(label),
-      take_back(props),
-    )
+    });
+    self.taking_back(ctx, props, ("take-back", Icon::Undo2, label))
+  }
+
+  /// An action that takes the version back, its id ending in `suffix`. A pipeline's is unavailable while its editor
+  /// holds an edit not saved, which the steps taken back would replace, and says why at the button (D-040).
+  fn taking_back(
+    &self,
+    ctx: &mut Ctx,
+    props: &WaitingProps,
+    (suffix, glyph, label): (&str, Icon, Arc<str>),
+  ) -> Element {
+    let id = format!("{}-{suffix}", props.id);
+    let button = self.button((id.clone(), ButtonKind::Secondary, glyph), label, take_back(props));
+    if !props.pipeline.as_ref().is_some_and(|editor| editor.holds_edit) {
+      return button.into();
+    }
+    let why = ctx.t("sharing.config.bar.pipeline.saveFirst");
+    Tooltip::new(format!("{id}-why"), why.clone()).wrap(ctx, button.unavailable(why))
   }
 
   /// *olha published v5 while you edited v4*, what v5 changed, with *Compare with v5*, *Open my draft on v5* (a
@@ -396,7 +424,7 @@ impl WaitingBar {
     };
     let version = props.waiting.version;
     let comparison = self.comparison(ctx, props, latest);
-    let body = if props.hand_back.is_some() {
+    let body = if props.pipeline.is_some() {
       "sharing.config.bar.pipeline.conflictBody"
     } else {
       "sharing.config.bar.conflictBody"
@@ -435,14 +463,16 @@ impl WaitingBar {
       );
     }
     // A pipeline holds no draft to open on vN (D-032): its version is taken back, to be changed on top of vN.
-    let back = if props.hand_back.is_some() {
+    let back = if props.pipeline.is_some() {
       self.take_back_button(ctx, props)
     } else {
-      self.button(
-        (format!("{id}-open-draft"), ButtonKind::Secondary, Icon::GitMerge),
-        ctx.t_args("sharing.config.bar.openDraft", [("latest", latest_text)]),
-        Act::Reopen(version),
-      )
+      self
+        .button(
+          (format!("{id}-open-draft"), ButtonKind::Secondary, Icon::GitMerge),
+          ctx.t_args("sharing.config.bar.openDraft", [("latest", latest_text)]),
+          Act::Reopen(version),
+        )
+        .into()
     };
     bar
       .action(back)
@@ -482,7 +512,7 @@ impl WaitingBar {
 
 /// What takes the version back: a pipeline's steps go back to its editor (D-032), another resource's to its draft.
 const fn take_back(props: &WaitingProps) -> Act {
-  if props.hand_back.is_some() {
+  if props.pipeline.is_some() {
     Act::TakeBack(props.waiting.version)
   } else {
     Act::Reopen(props.waiting.version)
