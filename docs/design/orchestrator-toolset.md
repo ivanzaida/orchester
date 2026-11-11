@@ -643,7 +643,13 @@ project with none of its own; the application-wide values are no longer shown or
   raised no turn (`raised_by_own`) is gone — and no per-run or per-step limit stops them. The turn of an interruption
   continues the run, still unless it was interrupted again within 10 minutes or the database is under contention, which
   only protects the run and the database from a loop; the turn of a success merges the run by the rule of decision 5
-  (a task's own *Don't merge automatically* keeps it), or says why it is left to the person.
+  (a task's own *Don't merge automatically* keeps it), or says why it is left to the person. Once it merged the run,
+  where an order of the conversation applies (`docs/design/orchestrator-watch.md`), the same turn does what the order
+  asks of the work the conversation leads that can start now: an order to start tasks as they become ready starts,
+  once each, the tasks of what it leads that the merge unblocked or that an agent slot refused before; a refusal such
+  as `no_agent_slot` is told to the person and not retried in the turn, and the next merged success comes back to it
+  (2026-11-11). Without such an order it merges and stops. In any turn Orchester started by itself, `run_task` starts
+  only a task the turn's conversation leads (`not_led` otherwise); the other turns' prompts start nothing.
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run

@@ -74,7 +74,7 @@ only a person may do is `person_only`, as for an outside client.
 |---|---|---|---|---|
 | Reads | direct | direct | direct | direct |
 | `create_task`, `update_task`, `create_module`, `update_module`, `save_*_draft` | direct | direct | direct | refused `report_turn` |
-| `run_task` | direct (refused `task_blocked` for a task marked Blocked) | direct | proposal; direct while the project allows Autopilot in a person's turn | refused `report_turn` |
+| `run_task` | direct (refused `task_blocked` for a task marked Blocked) | direct for a task this conversation leads, refused `not_led` for another | proposal; direct while the project allows Autopilot in a person's turn | refused `report_turn` |
 | `pause_run`, `release_queue` | direct | direct | direct in a person's turn; proposal in a turn it started itself | refused `report_turn` |
 | `resume_run` | direct for a paused run and for an interrupted one; stopped at a limit → `use_continue_run` (decide it with `continue_run`), canceled or failed → `person_only` | direct for a paused run; for an interrupted one only the run whose interruption started the turn, once, not within 10 minutes of the time before (`interrupted_again`) and not while more than 3 runs stopped on a busy database (`storage_contention`) | direct for a paused run; an interrupted one `person_only` | refused `report_turn` |
 | `hold_queue` | direct | direct | direct | refused |
@@ -251,7 +251,10 @@ the order that applies (see [Orders](#orders)).
   brief, criteria, docs, AGENTS.md or the person's words, otherwise tells the person the question with options and a
   recommendation.
 - **Run ends** — a task's latest run that succeeds, fails, stops for a decision, stops at a limit or is interrupted
-  gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person); a
+  gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person), and
+  once merged, where an order applies (see [Orders](#orders)), does what it asks of the work it leads that can start
+  now, such as starting with `run_task`, once each, the tasks the merge unblocked or a slot refused before (a refusal
+  such as `no_agent_slot` is told, not retried; the next merged success comes back to it); a
   decision wait or a limit → decides with `continue_run`; failure → may return the work to a step with `continue_run`
   and explains; an interruption → continues it (see the switch) or explains the person's choices.
 - **No progress** — a run an agent works on that made no progress (no run event such as a step change, no transcript
@@ -328,7 +331,10 @@ the default order as it is when an event comes. Watching a target the conversati
 renews its order.
 
 An order is quoted to the agent as data and **can only narrow** what the person-only switch allows: whether it acts
-at once or only proposes stays as the switch and the tables above say, whatever the order's text says.
+at once or only proposes stays as the switch and the tables above say, whatever the order's text says. While the
+switch is on, an order such as *start tasks as they become ready* is carried out in the turn of a run's success the
+Orchestrator merged: it starts the tasks of what the conversation leads that can start now, once each. A start an
+agent slot refused waits for the next merged success of what it leads; no other event brings it back.
 
 ### Already led elsewhere
 
