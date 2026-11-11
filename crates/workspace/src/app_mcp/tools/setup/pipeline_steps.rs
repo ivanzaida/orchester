@@ -9,7 +9,9 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   permission::StepPermissions,
-  resource::{Draft, DraftSaved, FailureRoute, ModelId, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{
+    Draft, DraftSaved, EditProblem, FailureRoute, ModelId, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind,
+  },
   time::Timestamp,
   tokens::{BudgetInputError, TokenBudget},
 };
@@ -142,11 +144,11 @@ pub async fn save_pipeline_draft(
     edit.set_deliver(current.body.deliver().cloned());
     edit.set_delivers(args.delivers.map_or_else(|| current.body.delivers(), Into::into));
     // The editor keeps no draft whose steps break a rule; steps without a profile or tool only wait to
-    // be published.
+    // be published. The tool keeps such a draft until saving publishes (PV2-28).
     let broken: Vec<Message> = edit
       .problems()
       .iter()
-      .filter(|problem| problem.blocks_saving())
+      .filter(|problem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_)))
       .map(|problem| problem_view(&edit, problem, &then).message)
       .collect();
     if !broken.is_empty() {

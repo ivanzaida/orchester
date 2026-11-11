@@ -88,7 +88,7 @@ pub enum RepositoryAccess {
 pub enum StepKind {
   /// Runs an agent of the selected profile, with the profile's model unless `model`
   /// overrides it for this step, and the profile's permissions narrowed by `repository` and
-  /// `permissions`. A draft may leave the profile unset (`None`); publishing requires it, see
+  /// `permissions`. An edit may leave the profile unset (`None`); saving, which publishes, requires it, see
   /// [`Pipeline::unassigned_steps`].
   Agent {
     profile: Option<ResourceId>,
@@ -157,8 +157,8 @@ pub enum PipelineError {
   RetryTargetNotUpstream { step: StepKey, target: StepKey },
 }
 
-/// Ordered steps forming an acyclic dependency graph. A draft may have no steps yet;
-/// publishing requires at least one (see [`crate::resource::ResourceBody::check_publishable`]).
+/// Ordered steps forming an acyclic dependency graph. An edit may have no steps yet; saving it, which publishes,
+/// requires at least one (see [`crate::resource::ResourceBody::check_publishable`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "PipelineFields")]
 pub struct Pipeline {
@@ -286,8 +286,8 @@ impl Pipeline {
     self.steps.iter().find(|step| &step.key == key)
   }
 
-  /// Steps whose agent profile or tool is not chosen yet. Such a pipeline can be kept as a
-  /// draft but not published.
+  /// Steps whose agent profile or tool is not chosen yet. Such an edit cannot be saved: a pipeline is stored only as a
+  /// published version.
   pub fn unassigned_steps(&self) -> impl Iterator<Item = &StepKey> {
     unassigned(&self.steps)
   }

@@ -14,7 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::VersionNumber;
+use orchester_core::resource::{EditProblem, VersionNumber};
 use orchester_workspace::{
   background, messages,
   pipelines::{
@@ -436,7 +436,9 @@ fn errors(ctx: &Ctx, editing: &Editing) -> Vec<Element> {
     };
     errors.push(field_error("pipeline-field-error", &message).into());
   }
-  for problem in editing.edit.problems().iter().filter(|p| p.blocks_saving()) {
+  // The rules the steps break; a step without a profile or tool shows in the publish strip only.
+  let broken = |problem: &&EditProblem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_));
+  for problem in editing.edit.problems().iter().filter(broken) {
     let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
     errors.push(field_error("pipeline-rule-error", &message_text(ctx, &view.message)).into());
   }
