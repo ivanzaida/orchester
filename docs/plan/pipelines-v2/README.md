@@ -49,8 +49,9 @@ orchestration tool reported it; `—` until known.
 | [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | blocked | — | — |
 | [PV2-15](PV2-15-orchestrator-picker.md) | The orchestrator chat adopts the compact picker | UI | PV2-03, PV2-16 | done | `claude/pv2-15-orchestrator-picker` → `e0c34aa8a` | 108.2M (out 318k) |
 | [PV2-16](PV2-16-design-orchestrator-picker.md) | Design: the orchestrator's picker states with the compact picker | design | — | done | Pencil (unsaved) | 2.51M (out 27k) |
-| [PV2-17](PV2-17-readiness-polish.md) | Readiness and save polish: one story in chips, Ready?, cards and the bar | UI | PV2-09, PV2-10 | todo | — | — |
-| [PV2-18](PV2-18-step-panel-rest.md) | The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool | design + UI | PV2-07 | todo (design first) | — | — |
+| [PV2-17](PV2-17-readiness-polish.md) | Readiness and save polish: one story in chips, Ready?, cards and the bar | UI | PV2-09, PV2-10 | done | → `238b0c2e6`, `1f2dc0057` | 352.1M |
+| [PV2-18](PV2-18-step-panel-rest.md) | The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool | design + UI | PV2-07 | in progress | `claude/pv2-18-step-rest` | — |
+| [PV2-19](PV2-19-save-refusals.md) | A draft is always saved; Save says what publishing would refuse, also while editing | UI + workspace | PV2-17 | todo | — | — |
 
 ## Order
 

@@ -15,7 +15,10 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::resource::VersionNumber;
-use orchester_workspace::{messages::Message, pipelines::local_edit::Unpublishable};
+use orchester_workspace::{
+  messages::Message,
+  pipelines::local_edit::{Unpublishable, version_limit},
+};
 
 use super::model::Entry;
 use crate::{
@@ -48,15 +51,20 @@ pub(super) fn bar(ctx: &mut Ctx, (save, cancel): (Save, Option<Press>), line: &L
   save_bar::bar(ctx, "pipeline-hub", (save, cancel), hint)
 }
 
-/// Why *Save* is off while nothing changed: publishing what the panel shows would fail again, for this.
+/// Why *Save* is off while nothing changed: publishing what the panel shows would fail again, for this; or the
+/// pipeline has its last version number.
 pub(super) fn publish_blocked(ctx: &Ctx, line: &Line<'_>) -> Option<String> {
   if line.unsaved || !line.entry.unpublished {
     return None;
   }
-  let key = match line.unpublishable? {
+  if let Some(limit) = version_limit(line.entry.number) {
+    return Some(message_text(ctx, &limit).to_string());
+  }
+  let key = match line.unpublishable.as_ref()? {
     Unpublishable::NoSteps => "pipeline_hub.bar.publishNoSteps",
-    Unpublishable::Steps(_) => "pipeline_hub.bar.publishMissing",
+    Unpublishable::Steps => "pipeline_hub.bar.publishMissing",
     Unpublishable::Broken => "pipeline_hub.bar.publishBroken",
+    Unpublishable::Refused(why) => return Some(message_text(ctx, why).to_string()),
   };
   Some(ctx.t(key).to_string())
 }
@@ -83,17 +91,26 @@ fn hint(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
 }
 
 /// What *Save* makes: the next version; the first, for a pipeline never published; only the draft, while what the
-/// panel shows cannot be published.
+/// panel shows cannot be published. A published pipeline that holds no change and could not be published again says
+/// only that nothing changed: what keeps its version from running is *Ready?*'s to say.
 fn makes(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
+  if let Some(number) = line
+    .entry
+    .number
+    .filter(|_| !line.unsaved && !line.entry.unpublished && line.unpublishable.is_some())
+  {
+    let said = ctx.t_args("pipeline_hub.bar.noChanges", [("version", number.to_string())]);
+    return (said.to_string(), PaletteColor::TextMuted);
+  }
   let next = line
     .entry
     .number
     .map_or(Some(VersionNumber::FIRST), VersionNumber::next)
     .map_or_else(String::new, |next| next.to_string());
-  let words = match (line.unpublishable, line.entry.number) {
-    (Some(_), _) => ctx.t_args("pipeline_hub.bar.keepsDraft", [("version", next)]),
-    (None, None) => ctx.t_args("pipeline_hub.bar.publishesFirst", [("version", next)]),
-    (None, Some(_)) => return save_bar::makes(ctx, line.entry.number),
+  let words = match (line.unpublishable.is_some(), line.entry.number) {
+    (true, _) => ctx.t_args("pipeline_hub.bar.keepsDraft", [("version", next)]),
+    (false, None) => ctx.t_args("pipeline_hub.bar.publishesFirst", [("version", next)]),
+    (false, Some(_)) => return save_bar::makes(ctx, line.entry.number),
   };
   (words.to_string(), PaletteColor::TextMuted)
 }

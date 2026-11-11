@@ -310,7 +310,7 @@ fn labelled(id: &str, label: Arc<str>, words: Arc<str>, fix: Option<Fix>) -> Par
 }
 
 /// What is wrong with the draft as a whole.
-fn draft_words(ctx: &Ctx, draft: Draft) -> Arc<str> {
+pub(super) fn draft_words(ctx: &Ctx, draft: Draft) -> Arc<str> {
   ctx.t(match draft {
     Draft::NoSteps => "pipeline_hub.ready.noSteps",
     Draft::Broken => "pipeline_hub.flow.broken.title",

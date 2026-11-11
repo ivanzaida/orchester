@@ -87,22 +87,56 @@ impl Executor {
   }
 
   /// Runs the step of an edit that began with it as `started` (with the CLI it ran on then) with this executor, as the
-  /// Agent picker's choice does: [`Self::apply_on`] read against the CLI the override was last kept on, the previous
-  /// choice's (`from`) or, when that is not known, the one the step started on, so a choice whose CLI is not known
-  /// (no connection) does not let the override reach another CLI after it; then [`take_back_override`]. Returns the
-  /// override dropped.
+  /// Agent picker's choice does, for a caller that keeps no [`KnownCli`]: [`Self::apply_through`] from the previous
+  /// choice's CLI (`from`). Returns the override dropped.
   pub fn apply_in_edit(
     self,
     step: &mut Step,
     started: Option<&(Step, Option<AgentProvider>)>,
     (from, to): (Option<AgentProvider>, Option<AgentProvider>),
   ) -> Option<ModelId> {
+    self.apply_through(step, started, (&mut KnownCli::new(from), to))
+  }
+
+  /// Runs the step of an edit with this executor, on CLI `to`: [`Self::apply_on`] read against the CLI the override
+  /// was for, the one the step started on (`started`) or, when that is not known, the last known CLI the edit passed
+  /// through (`path`), so a choice whose CLI is not known (no connection) never lets the override reach another CLI
+  /// after it; then [`take_back_override`]; then `path` takes `to` when it is known. Returns the override dropped.
+  pub fn apply_through(
+    self,
+    step: &mut Step,
+    started: Option<&(Step, Option<AgentProvider>)>,
+    (path, to): (&mut KnownCli, Option<AgentProvider>),
+  ) -> Option<ModelId> {
     let was_for = started.and_then(|(_, cli)| *cli);
-    let dropped = self.apply_on(step, (from.or(was_for), to));
+    let dropped = self.apply_on(step, (was_for.or(path.get()), to));
     if let Some((started, was_for)) = started {
       take_back_override(step, started, (*was_for, to));
     }
+    path.passed(to);
     dropped
+  }
+}
+
+/// The last CLI a step ran on in an edit that is known, which its model override is read against when the CLI it
+/// started on is not known: a choice whose CLI is not known leaves it as it was.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KnownCli(Option<AgentProvider>);
+
+impl KnownCli {
+  pub const fn new(cli: Option<AgentProvider>) -> Self {
+    Self(cli)
+  }
+
+  pub const fn get(self) -> Option<AgentProvider> {
+    self.0
+  }
+
+  /// The edit passed through a choice on `cli`, which is remembered when it is known.
+  pub const fn passed(&mut self, cli: Option<AgentProvider>) {
+    if cli.is_some() {
+      self.0 = cli;
+    }
   }
 }
 

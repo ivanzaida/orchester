@@ -1,9 +1,9 @@
 # PV2-18 · The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool
 
-- **Status:** todo (needs a design first)
+- **Status:** in progress (2026-11-11; design approved and saved by the person: P2b `EGEos`, P2d `D4MDQO`, P2e `FHktg`, P2f `Tv9hK`, P2g `hYIuX`; D-024; implementation running in slot 3)
 - **Kind:** design + UI
 - **Depends on:** PV2-07
-- **Branch:** —
+- **Branch:** `claude/pv2-18-step-rest`
 - **Tokens:** —
 
 ## Goal

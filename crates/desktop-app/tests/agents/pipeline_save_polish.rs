@@ -229,3 +229,56 @@ fn pipeline_save_polish_restore_names_the_version_until_saved_and_in_the_questio
   agents.press_until(CONFIRM, "v3", |s| versions(s, id) == 3);
   agents.until("saved", |s| !s.text(HINT).starts_with("Restored"));
 }
+
+/// The height of `id`.
+fn height(agents: &mut Agents, id: &str) -> f32 {
+  agents
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|found| found.bounds())
+    .unwrap_or_else(|| panic!("{id} laid out"))
+    .height
+}
+
+#[test]
+fn pipeline_save_polish_save_and_cancel_stand_as_tall_whether_save_waits_or_not() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  let waits = pipeline_of(&agents, "Waits", [Some(builder), None], false);
+  let ready = pipeline_of(&agents, "Ready", [Some(builder), Some(builder)], true);
+  for id in [waits, ready] {
+    open(&mut agents, PipelinesFilter::All, Some(id));
+    agents.until("the bar", |s| s.exists(SAVE));
+    agents.window.pass();
+    let (save, cancel) = (height(&mut agents, SAVE), height(&mut agents, CANCEL));
+    assert!((save - cancel).abs() < 0.5, "Save {save} and Cancel {cancel}");
+    assert!((save - 30.0).abs() < 0.5, "the design's 30: {save}");
+  }
+}
+
+#[test]
+fn pipeline_save_polish_an_unchanged_published_pipeline_that_cannot_run_says_nothing_changed() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  let retired = agents.profile(true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(retired)], true);
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(retired, Timestamp::now())
+    .expect("archived");
+  open(&mut agents, PipelinesFilter::All, Some(id));
+  agents.until("the panel", |s| s.exists(SAVE));
+
+  assert_eq!(
+    agents.text(HINT),
+    "No changes since v1",
+    "only what is true now: Ready? says what keeps v1 from running"
+  );
+  agents.set(DESCRIPTION, "Changed");
+  agents.until("the edit", |s| s.text(HINT).starts_with("Unsaved changes"));
+  assert_eq!(
+    agents.text(HINT),
+    "Unsaved changes · Save keeps it as a draft · v2 comes once every step is ready"
+  );
+}

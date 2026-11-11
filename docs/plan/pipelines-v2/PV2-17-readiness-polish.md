@@ -1,10 +1,10 @@
 # PV2-17 · Readiness polish: one story in the chip, *Ready?* and the cards
 
-- **Status:** todo
+- **Status:** done (2026-11-11; half b checked twice and merged `238b0c2e6`; half a checked twice (review + design) and merged `1f2dc0057`; the second check's save/publish findings became PV2-19, the override precedence fix goes with PV2-18's wiring of `apply_through`)
 - **Kind:** UI
 - **Depends on:** PV2-09, PV2-10 (merged)
-- **Branch:** —
-- **Tokens:** —
+- **Branch:** `claude/pv2-17b-step-flow` → `238b0c2e6`; `claude/pv2-17a-ready-save` → `1f2dc0057`
+- **Tokens:** 352.1M (out 665k): half a 236.0M across 3 implementation rounds and 2 checks; half b 116.1M across 2 rounds and 2 checks
 
 ## Goal
 

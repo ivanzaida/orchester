@@ -60,7 +60,9 @@ pub(in crate::screens) fn bar(
     ButtonKind::Secondary,
     ctx.t("local_hub.mcp.cancel"),
   )
-  .icon(Icon::X);
+  .icon(Icon::X)
+  // As tall as *Save*: the bar draws both 30 (`Save` `aOTTS`, `Cancel` `sNCRP` in P1).
+  .pinned();
   let cancelling = match cancel {
     Some(press) => cancelling.press(press),
     None => cancelling.disabled(),
