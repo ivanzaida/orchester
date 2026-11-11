@@ -37,7 +37,8 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{AgentTab, InstructionsView, PipelineView, ProjectPage, Route, TaskTab, TaskView, ToolTab},
+  routes::{AgentTab, InstructionsView, ProjectPage, Route, TaskTab, TaskView, ToolTab},
+  screens::pipeline_link::PipelineLinks,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
   ui::pressable::opening,
 };
@@ -60,10 +61,11 @@ pub(super) enum Part {
 /// A fact: its key and the parts of its value.
 pub(super) type Fact = (Arc<str>, Vec<Part>);
 
-/// The facts of a card, read as `view` shows them, in project `project`.
-pub(super) fn rows(ctx: &Ctx, view: &View, project: ProjectId) -> Vec<Fact> {
+/// The facts of a card, read as `view` shows them, in project `project`; a link to a pipeline opens as `pipelines`
+/// says.
+pub(super) fn rows(ctx: &Ctx, view: &View, (project, pipelines): (ProjectId, PipelineLinks)) -> Vec<Fact> {
   match view.facts {
-    Some(Facts::Publication(publication)) => publication_rows(ctx, view, publication, project),
+    Some(Facts::Publication(publication)) => publication_rows(ctx, view, publication, (project, pipelines)),
     Some(Facts::Run(run)) => run_rows(ctx, view, run, project),
     None => Vec::new(),
   }
@@ -138,12 +140,14 @@ fn part_element(part: Part, navigation: &Navigation) -> Element {
 }
 
 /// Where the draft of `publication` is edited.
-pub(super) fn draft_route(project: ProjectId, publication: (Publishing, orchester_core::id::ResourceId)) -> Route {
-  let (of, resource) = publication;
+pub(super) fn draft_route(
+  (project, pipelines): (ProjectId, PipelineLinks),
+  (of, resource): (Publishing, orchester_core::id::ResourceId),
+) -> Route {
   Route::Project(
     project,
     match of {
-      Publishing::Pipeline => ProjectPage::Pipeline(resource, PipelineView::default()),
+      Publishing::Pipeline => pipelines.page(resource),
       Publishing::Profile => ProjectPage::Agent(resource, AgentTab::default()),
       Publishing::Instruction => ProjectPage::Instructions(InstructionsView::default()),
       Publishing::Skill => ProjectPage::Skill(resource),
@@ -162,7 +166,7 @@ fn publication_rows(
   ctx: &Ctx,
   view: &View,
   publication: &Publication,
-  project: ProjectId,
+  at: (ProjectId, PipelineLinks),
 ) -> Vec<(Arc<str>, Vec<Part>)> {
   let waits = view.phase().waits();
   let version = publication.version.to_string();
@@ -190,7 +194,7 @@ fn publication_rows(
     ),
     (false, None) => ctx.t_args("orchestrator.change.facts.version", [("version", version.as_str())]),
   };
-  let route = draft_route(project, (publication.of, publication.resource));
+  let route = draft_route(at, (publication.of, publication.resource));
   let mut rows = vec![(
     ctx.t(kind_key(publication.of)),
     vec![
@@ -198,7 +202,7 @@ fn publication_rows(
       Part::Value(versions),
     ],
   )];
-  rows.extend(detail_rows(ctx, publication, project));
+  rows.extend(detail_rows(ctx, publication, at));
   if waits && publication.keeping > 0 && publication.version > 1 {
     // On the row of where it applies, which follows the first; else on the first, which names the draft.
     let at = usize::from(!publication.places.is_empty());
@@ -244,13 +248,13 @@ const fn kind_key(of: Publishing) -> &'static str {
 }
 
 /// The rows a publication's kind adds: where it applies, its steps, model, command or files.
-fn detail_rows(ctx: &Ctx, publication: &Publication, project: ProjectId) -> Vec<(Arc<str>, Vec<Part>)> {
+fn detail_rows(ctx: &Ctx, publication: &Publication, at: (ProjectId, PipelineLinks)) -> Vec<(Arc<str>, Vec<Part>)> {
   let mut rows = Vec::new();
   if !publication.places.is_empty() {
     let places = publication
       .places
       .iter()
-      .map(|place| place_part(ctx, place, project))
+      .map(|place| place_part(ctx, place, at))
       .collect();
     rows.push((ctx.t("orchestrator.change.facts.appliesTo"), places));
   }
@@ -293,20 +297,19 @@ fn detail_rows(ctx: &Ctx, publication: &Publication, project: ProjectId) -> Vec<
   rows
 }
 
-fn place_part(ctx: &Ctx, place: &Place, project: ProjectId) -> Part {
+fn place_part(ctx: &Ctx, place: &Place, (project, pipelines): (ProjectId, PipelineLinks)) -> Part {
   match place {
     Place::Project => Part::Value(ctx.t("orchestrator.change.facts.project")),
     Place::Role(role) => Part::Value(ctx.t_args("orchestrator.change.facts.role", [("role", role.as_str())])),
-    Place::Pipeline { pipeline, name } => Part::Link(
-      name.as_str().into(),
-      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelineView::default())),
-    ),
+    Place::Pipeline { pipeline, name } => {
+      Part::Link(name.as_str().into(), Route::Project(project, pipelines.page(*pipeline)))
+    }
     Place::Step { pipeline, name, step } => Part::Link(
       ctx.t_args(
         "orchestrator.change.facts.step",
         [("pipeline", name.as_str()), ("step", step.as_str())],
       ),
-      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelineView::default())),
+      Route::Project(project, pipelines.page(*pipeline)),
     ),
   }
 }

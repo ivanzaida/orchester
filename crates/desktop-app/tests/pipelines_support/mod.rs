@@ -1,18 +1,17 @@
 //! A private project and its pipeline editor; no runners or installed data.
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
-  id::{ProjectId, ResourceId, ServerId},
+  id::ResourceId,
   name::Name,
   resource::{CommandAction, CommandProgram, Pipeline, PipelineEdit, Slug, StepKind, Tool, ToolAction},
-  sharing::MemberRole,
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{AppDb, ProjectDb, SharingLink, StoredServer};
+use orchester_store::ProjectDb;
 
-use crate::support::{Data, Window, project_id, stand_ins::StandIns, team_cache};
+use crate::support::{Data, Window, project_id, stand_ins::StandIns, team_link};
 
 pub struct Editor {
   pub window: Window,
@@ -28,38 +27,7 @@ impl Editor {
   /// step of a local project, and a team project's pipelines are still edited here.
   pub fn team() -> Self {
     let editor = Self::new();
-    let mut db = ProjectDb::open(&editor.repo).expect("database");
-    let server = ServerId::generate();
-    AppDb::open(&editor.window.data.database())
-      .expect("application database")
-      .add_server(
-        &StoredServer {
-          id: server,
-          url: "https://team.test".to_owned(),
-          name: "Team".to_owned(),
-          plain_http_allowed: false,
-          certificate_pin: None,
-          added_at: Timestamp::from_unix_millis(1),
-          joined_with: None,
-          account: None,
-        },
-        None,
-      )
-      .expect("server");
-    let link = SharingLink {
-      server,
-      project: ProjectId::generate(),
-      key: db.project().key().clone(),
-      role: Some(MemberRole::Owner),
-      joined_at: Timestamp::now(),
-      cursor: 0,
-      last_synced_at: Timestamp::now(),
-      removed_at: None,
-      address: None,
-    };
-    db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
-    let workspace = editor.window.launch.workspace().expect("the session");
-    team_cache::keep_cached_team(workspace, &editor.repo);
+    team_link::share_as_owner(&editor.window, &editor.repo);
     editor
   }
   /// The editor with the stand-in pickers, which hand over the folder a test chose.

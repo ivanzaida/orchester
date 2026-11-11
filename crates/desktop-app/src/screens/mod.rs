@@ -23,6 +23,7 @@ mod not_found;
 mod orchestrator;
 mod overview;
 mod pipeline_hub;
+mod pipeline_link;
 mod pipelines;
 mod placeholder;
 mod project_settings;
