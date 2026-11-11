@@ -5,10 +5,10 @@
 //! `border_strong`, its name in `text_primary`, and an 11 `x` in `text_secondary` ends it: a press on the `x` stops
 //! that subscription at once, with no card (`orchester_workspace::orchestrator::watch::stop_in`, ORC-760).
 //!
-//! Once the pointer rested on it as long as a tooltip waits, its tooltip hangs 8 under the header, its end at the
-//! header's end (`Tooltip · subscription` `nzz9r`): `text_primary`, radius 4, 6 over and under and 8 at the sides, its
-//! lines 2 apart in `text_inverse` 11: the name, kind and since when at 600, the order in a 320 wide column at 1.45,
-//! and the hint at 70 % — or why the last stop was not applied.
+//! Once the pointer rested on it as long as a tooltip waits, its tooltip hangs 8 under the header, its start at the
+//! chip's start (`Tooltip · subscription` `nzz9r` in `X93D8T` d): `text_primary`, radius 4, 6 over and under and 8 at
+//! the sides, its lines 2 apart in `text_inverse` 11: the name, kind and since when at 600, the order in a 320 wide
+//! column at 1.45, and the hint at 70 % — or why the last stop was not applied.
 
 use std::sync::Arc;
 
@@ -118,18 +118,23 @@ impl Component for LeadChipView {
     } else {
       (label, PaletteColor::SurfaceRaised, PaletteColor::Border)
     };
-    let route = props
-      .lead
-      .target
-      .link
-      .as_deref()
-      .and_then(|link| Route::parse(link).ok());
-    let base = match route {
+    let base = match route(&props.lead) {
       Some(route) => Press::Open(Navigation::of(ctx).to(route)).button(),
       None => Button::empty().align_items(Alignment::Center).focusable(false),
     };
-    let stop = hovered.then(|| stop_button(ctx, &props, &name));
-    let tip = self.tip.get().then(|| tooltip(ctx, &props));
+    let stop = hovered.then(|| {
+      let named = NamedTarget {
+        target,
+        name: Some(name.to_string()),
+      };
+      stop_button(
+        ctx,
+        &props.id,
+        (&props.hold, named),
+        (IconSize::Xs, PaletteColor::TextSecondary),
+      )
+    });
+    let tip = self.tip.get().then(|| tooltip(ctx, &props, &self.pill));
     let (enter, leave) = (
       self.on_hover(&props.hold.fit, target),
       self.on_leave(&props.hold.fit, target),
@@ -185,28 +190,47 @@ impl LeadChipView {
   }
 }
 
-/// The × of the chip of `props`, named `name`, which stops its subscription.
-fn stop_button(ctx: &Ctx, props: &ChipProps, name: &str) -> Element {
-  let (stop, target, named) = (props.hold.stop.clone(), props.lead.target.target, name.to_owned());
+/// Where a press on `lead`'s chip, or on its row in *+N*'s popover, takes the person; `None` for a target with no
+/// page.
+pub(super) fn route(lead: &LeadChip) -> Option<Route> {
+  lead.target.link.as_deref().and_then(|link| Route::parse(link).ok())
+}
+
+/// The × of the control `id` (a chip, or a row of *+N*'s popover), its `glyph` in that size and color, which stops the
+/// subscription of `named` through `hold` without opening its target.
+pub(super) fn stop_button(
+  ctx: &Ctx,
+  id: &str,
+  (hold, named): (&Hold, NamedTarget),
+  (size, color): (IconSize, PaletteColor),
+) -> Element {
+  let name = named.name.clone().unwrap_or_default();
+  let stop = hold.stop.clone();
   Button::empty()
-    .id(format!("{}-stop", props.id))
+    .id(format!("{id}-stop"))
     .align_items(Alignment::Center)
     .focusable(false)
     .cursor(CursorIcon::Pointer)
-    .describe("a11y_name", ctx.t_args("orchestrator.leads.stop", [("name", name)]))
+    .describe(
+      "a11y_name",
+      ctx.t_args("orchestrator.leads.stop", [("name", name.as_str())]),
+    )
     .on_click(move |event: MouseEvent| {
       event.stop_propagation();
-      stop(NamedTarget {
-        target,
-        name: Some(named.clone()),
-      });
+      stop(named.clone());
     })
-    .child(icon(Icon::X, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(icon(Icon::X, size, color))
     .into()
 }
 
-/// The tooltip of the chip of `props`, hung under the header.
-fn tooltip(ctx: &mut Ctx, props: &ChipProps) -> Popup {
+/// How far down a popup under `anchor` moves to hang `gap` under the header `head` instead, as both were last laid
+/// out.
+pub(super) fn under_head(head: &ElementRef, anchor: &ElementRef, gap: f32) -> f32 {
+  (head.y() + head.height()) - (anchor.y() + anchor.height()) + gap
+}
+
+/// The tooltip of the chip of `props`, laid out as `pill`: 8 under the header, its start at the chip's.
+fn tooltip(ctx: &mut Ctx, props: &ChipProps, pill: &ElementRef) -> Popup {
   let lead = &props.lead;
   let order = match &lead.order {
     WatchOrder::Own(order) => ctx.t_args("orchestrator.leads.order.own", [("order", &**order)]),
@@ -247,10 +271,10 @@ fn tooltip(ctx: &mut Ctx, props: &ChipProps) -> Popup {
         .max_width(Dimension::Px(ORDER_WIDTH)),
     );
   let away = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
-  Popup::new(props.hold.head.clone(), panel)
+  Popup::new(pill.clone(), panel)
     .open_when(true)
-    .placement(Placement::BottomEnd)
-    .offset(0.0, away)
+    .placement(Placement::BottomStart)
+    .offset(0.0, under_head(&props.hold.head, pill, away))
     .hit_test(HitTestBehavior::None)
     .dismiss_on_outside_click(false)
     .dismiss_on_escape(false)
@@ -260,7 +284,7 @@ fn tooltip(ctx: &mut Ctx, props: &ChipProps) -> Popup {
 fn since(ctx: &Ctx, lead: &LeadChip) -> Arc<str> {
   let name = message_text(ctx, &lead.target.name);
   let kind = message_text(ctx, &lead.target.kind);
-  if lead.since.local_day_start() == Timestamp::now().local_day_start() {
+  if today(lead.since) {
     let time = display::clock(lead.since);
     ctx.t_args(
       "orchestrator.leads.since.today",
@@ -275,9 +299,14 @@ fn since(ctx: &Ctx, lead: &LeadChip) -> Arc<str> {
   }
 }
 
+/// Whether `at` is on today's local day: since when a target is led says its time then, else its day.
+pub(super) fn today(at: Timestamp) -> bool {
+  at.local_day_start() == Timestamp::now().local_day_start()
+}
+
 /// A module's `boxes`, a task's `square-check`; the tasks without a module and the whole project, which the design
 /// draws no chip of, a list of tasks and the Overview's icon.
-const fn target_icon(target: WatchTarget) -> Icon {
+pub(super) const fn target_icon(target: WatchTarget) -> Icon {
   match target {
     WatchTarget::Module(_) => Icon::Boxes,
     WatchTarget::Task(_) => Icon::SquareCheck,
