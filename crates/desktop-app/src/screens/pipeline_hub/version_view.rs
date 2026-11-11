@@ -174,16 +174,16 @@ fn what_restore_does(ctx: &Ctx, entry: &Entry, viewed: &Viewed, same: bool) -> A
   }
 }
 
-/// Where *Back* goes: *Back to your changes* while the edit has some, else *Back to v3*, the latest version (*Back to
-/// the draft* for a pipeline without one, which is stored no more, D-032).
+/// Where *Back* goes: *Back to your changes* while the edit has some, else *Back to v3*, the latest version (a pipeline
+/// is stored only as published versions, D-032).
 fn back_label(ctx: &Ctx, entry: &Entry, changed: bool) -> Arc<str> {
   if changed {
     return ctx.t("pipeline_hub.versions.backChanges");
   }
-  match entry.number {
-    Some(latest) => ctx.t_args("pipeline_hub.versions.backLatest", [("version", latest.to_string())]),
-    _ => ctx.t("pipeline_hub.versions.backDraft"),
-  }
+  let latest = entry
+    .number
+    .expect("a pipeline whose versions are shown is not archived, so it has its latest version");
+  ctx.t_args("pipeline_hub.versions.backLatest", [("version", latest.to_string())])
 }
 
 /// *Steps 6*, as the panel's own head says it, without *Edit steps*: a version is not edited.

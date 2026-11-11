@@ -6,11 +6,7 @@
 use std::path::PathBuf;
 
 use orchester_app::routes::PipelinesFilter;
-use orchester_core::{
-  resource::{Draft, Pipeline},
-  store::ResourceStore,
-  time::Timestamp,
-};
+use orchester_core::time::Timestamp;
 use orchester_store::ProjectDb;
 
 use super::{
@@ -203,23 +199,6 @@ fn pipeline_versions_the_notice_says_what_restore_does_and_back_says_where_it_go
     agents.text("pipeline-hub-version-kept"),
     "Your unsaved changes are kept"
   );
-}
-
-#[test]
-fn pipeline_versions_back_says_the_draft_while_the_pipeline_has_one_that_is_not_published() {
-  let (mut agents, [ready, ..]) = setup();
-  publish_second(&agents, ready, "Second version");
-  let mut db = ProjectDb::open(&agents.root).expect("database");
-  let latest = db.latest_version::<Pipeline>(ready).expect("read").expect("published");
-  let body = latest.body().clone().with_description("A draft".into());
-  db.save_draft(ready, &Draft::new(body, Some(latest.number()), Timestamp::now()))
-    .expect("draft");
-  drop(db);
-  open(&mut agents, PipelinesFilter::All, Some(ready));
-  agents.until("the panel", |s| s.exists(BUTTON));
-
-  view_version(&mut agents, 1);
-  assert_eq!(back_label(&mut agents), "Back to the draft");
 }
 
 #[test]

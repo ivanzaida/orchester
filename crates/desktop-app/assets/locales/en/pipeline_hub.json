@@ -329,7 +329,6 @@
       "keptChanges": "Your unsaved changes are kept",
       "backChanges": "Back to your changes",
       "backLatest": "Back to {{version}}",
-      "backDraft": "Back to the draft",
       "noDescription": "No description",
       "noSources": "None",
       "replaceTitle": "Replace your changes with {{version}}?",
