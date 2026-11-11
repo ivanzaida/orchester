@@ -1,6 +1,7 @@
 //! Chips. A tag (`Chip` `jI8af`) is its name in 11/500 `text_secondary` on a `surface_raised` pill
 //! inside a `border` stroke, 2 over and under it and 8 at its sides; a removable one ends in an 11
-//! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`). A badge (`Badge`
+//! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`); one that says what something is
+//! leads with an 11 `text_secondary` glyph, 4 before the name (`Chip · Decision` `HWxlV` in Y1 `tsfxN`). A badge (`Badge`
 //! `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
 //! under them and 8 at their sides (`Saved` in `success`, `New` in `info`); a cut one keeps to its room.
 
@@ -40,6 +41,8 @@ pub struct TagChip {
   mono: bool,
   /// A form's pill under the field that adds it, 24 tall (`Pill · deepseek-v4-pro` `TnP0h`).
   pill: bool,
+  /// The glyph before the name.
+  glyph: Option<Icon>,
 }
 
 impl TagChip {
@@ -50,7 +53,15 @@ impl TagChip {
       remove: None,
       mono: false,
       pill: false,
+      glyph: None,
     }
+  }
+
+  /// `glyph` before the name: what the chip says something is, e.g. a memory record's type.
+  #[must_use]
+  pub const fn glyph(mut self, glyph: Icon) -> Self {
+    self.glyph = Some(glyph);
+    self
   }
 
   /// The name in Geist Mono: an identifier such as a tool's name.
@@ -88,6 +99,11 @@ impl From<TagChip> for Element {
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Full.role())
       .describe("tag", chip.name.clone())
+      .with_children(
+        chip
+          .glyph
+          .map(|glyph| icon(glyph, IconSize::Xs, PaletteColor::TextSecondary)),
+      )
       .child(
         Text::new(&chip.name)
           .id(format!("{}-label", chip.id))

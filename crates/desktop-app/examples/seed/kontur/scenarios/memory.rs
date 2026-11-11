@@ -76,6 +76,14 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
+/// `team-memory-member`: [`seed`]'s memory in a team project seen by a member (the Agents hub's Memory filter, Y5
+/// `Fnu7A`): the team's resources as `team-hub-member` has them, and this computer's memory of the project, which is
+/// never the team's.
+pub fn team_member(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  super::team_hub::member(kontur)
+}
+
 /// KON-12's memory (`a0PLO`).
 fn task_memory(kontur: &mut Kontur) -> Result<(), SeedError> {
   let task = MemoryScope::Task(kontur.find("KON-12")?.id());

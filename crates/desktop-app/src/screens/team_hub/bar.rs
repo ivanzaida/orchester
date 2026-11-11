@@ -23,6 +23,16 @@ pub(in crate::screens) fn bar_saying(buttons: Vec<Element>, hint: Option<(String
 
 /// [`bar_saying`] under `id`: the bar of a panel in bones is not the panel's.
 pub(in crate::screens) fn bar_named(id: &str, buttons: Vec<Element>, hint: Option<(String, PaletteColor)>) -> Element {
+  bar_ending(id, buttons, hint, None)
+}
+
+/// [`bar_named`] with `end` after the hint, at the bar's end: a memory record's *Delete…* (`BMDBw` in Y2 `oIgSL`).
+pub(in crate::screens) fn bar_ending(
+  id: &str,
+  buttons: Vec<Element>,
+  hint: Option<(String, PaletteColor)>,
+  end: Option<Element>,
+) -> Element {
   let bar = Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -46,5 +56,6 @@ pub(in crate::screens) fn bar_named(id: &str, buttons: Vec<Element>, hint: Optio
     ),
     None => bar.child(Row::new().flex(1.0)),
   }
+  .with_children(end)
   .into()
 }

@@ -193,7 +193,14 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) | ProjectPage::TaskReview(key) => insert("key", &key.to_string()),
-    ProjectPage::Memory(Some(tab)) => insert("tab", tab.name()),
+    ProjectPage::Memory(view) => {
+      if let Some(tab) = view.tab {
+        insert("tab", tab.name());
+      }
+      if let Some(record) = view.record {
+        insert("record", &record.to_string());
+      }
+    }
     ProjectPage::Usage(query) => {
       let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {
