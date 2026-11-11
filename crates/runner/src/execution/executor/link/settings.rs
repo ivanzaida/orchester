@@ -10,7 +10,7 @@ use orchester_core::{
   id::RunId,
   limits::QaSlots,
   permission::ApprovalMode,
-  run::{EffectiveMode, review::AutoModeSettings},
+  run::{ApproveMode, EffectiveMode, review::AutoModeSettings},
   workspaces::WarmFolder,
 };
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,10 @@ pub trait SettingsLink {
   /// The mode the step of `request`'s run whose profile asks for its mode answers its agent's requests in now: by the
   /// project's *Allow Autopilot* and the run's switch to Manual.
   fn approval_mode(&self, request: &ApprovalModeRequest) -> Result<EffectiveMode, LinkError>;
+
+  /// The project's *Approve mode*, read at each request the worker routes and at each beat while one waits, so a
+  /// change applies to a run already under way.
+  fn approve_mode(&self, request: &ApproveModeRequest) -> Result<ApproveMode, LinkError>;
 
   /// The reviewer a person chose for auto mode.
   fn auto_mode(&self, request: &AutoModeRequest) -> Result<AutoModeSettings, LinkError>;
@@ -53,6 +57,10 @@ pub struct ApprovalModeRequest {
   pub run: RunId,
   pub profile: ApprovalMode,
 }
+
+/// Project settings › Runs › Approvals › *Approve mode*.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApproveModeRequest {}
 
 /// Project settings › Auto mode: the reviewer a person chose.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
