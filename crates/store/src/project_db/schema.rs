@@ -143,5 +143,14 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
     super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
     super::ProjectMigration::PipelineDrafts => pipeline_drafts::MIGRATION,
+    super::ProjectMigration::PermittedDecisions => permitted_decisions::MIGRATION,
+    super::ProjectMigration::AutomationAnswers => automation_answers::MIGRATION,
+    super::ProjectMigration::AutoMode => auto_mode::MIGRATION,
+    super::ProjectMigration::BaseSources => base_sources::MIGRATION,
+    super::ProjectMigration::DiskGuard => disk_guard::MIGRATION,
+    super::ProjectMigration::ApprovalModes => approval_modes::MIGRATION,
+    super::ProjectMigration::DecisionReviewer => decision_reviewer::MIGRATION,
+    super::ProjectMigration::TaskIdentities => task_identities::MIGRATION,
+    super::ProjectMigration::ArchiveStopsArchived => archive_stops::ARCHIVED_MIGRATION,
   }
 }

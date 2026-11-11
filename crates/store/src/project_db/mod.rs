@@ -356,4 +356,22 @@ pub enum ProjectMigration {
   ProfileGiven,
   /// Pipeline drafts deleted, and every pipeline with no version with what names it.
   PipelineDrafts,
+  /// The `permissions` rebuild of tool approvals: a request permissions decided.
+  PermittedDecisions,
+  /// The automation rebuild of tool approvals, which follows the `permissions` one.
+  AutomationAnswers,
+  /// Auto mode's settings and the rebuild of tool approvals for its answers.
+  AutoMode,
+  /// The project's base branch moved to its tasks and modules.
+  BaseSources,
+  /// The disk guard: the free space a project keeps.
+  DiskGuard,
+  /// Approval modes, which replace auto mode's settings.
+  ApprovalModes,
+  /// The decision reviewer's JSON settings.
+  DecisionReviewer,
+  /// Tasks' identities on a team server.
+  TaskIdentities,
+  /// What an archive stop names: the resource, its kind and who archived it.
+  ArchiveStopsArchived,
 }

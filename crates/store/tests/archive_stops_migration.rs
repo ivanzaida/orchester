@@ -7,20 +7,9 @@
 mod support;
 
 use orchester_core::{id::ResourceId, resource::ResourceKind};
-use orchester_store::{ArchiveStop, Archived, ProjectDb, StoreError};
+use orchester_store::{ArchiveStop, Archived, ProjectDb, ProjectMigration, StoreError};
 use rusqlite::Connection;
 use support::{at, copied_at_version, name, started_run};
-
-/// The migrations after the one that added the three columns: the bindings' removal and the local archive's. A
-/// migration appended later raises it, so the rewound schema stays the one before this migration.
-const LATER_MIGRATIONS: u32 = 2;
-
-fn latest_version(database: &std::path::Path) -> u32 {
-  Connection::open(database)
-    .expect("open")
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("user_version")
-}
 
 #[test]
 fn archive_stops_migration_keeps_a_stop_recorded_before_it_without_a_resource_and_refuses_a_partial_row() {
@@ -28,7 +17,7 @@ fn archive_stops_migration_keeps_a_stop_recorded_before_it_without_a_resource_an
   let task = run.task();
   drop(db);
   let current = repo.path().join(".orchester").join("orchester.db");
-  let before = latest_version(&current) - LATER_MIGRATIONS - 1;
+  let before = ProjectDb::version_before(ProjectMigration::ArchiveStopsArchived);
   let old = copied_at_version(&current, before);
   let old_file = old.path().join(".orchester").join("orchester.db");
   {

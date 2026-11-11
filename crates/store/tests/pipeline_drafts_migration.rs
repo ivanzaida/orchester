@@ -160,8 +160,31 @@ fn raw_rows(
       |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .expect("a pipeline body");
-  let sketch = sketch.to_string();
-  let statements: [(&str, Vec<String>); 15] = [
+  let rows = statements(
+    [sketch.to_string(), delivery.to_string(), team_flow.to_string()],
+    [sketch_task, delivery_task, team_task],
+    (body, team_version),
+  );
+  for (sql, values) in rows {
+    raw
+      .execute(sql, rusqlite::params_from_iter(values))
+      .unwrap_or_else(|error| panic!("{sql}: {error}"));
+  }
+  raw
+    .execute(
+      "UPDATE resources SET sharing = 'shared', server_revision = 1 WHERE id = ?1",
+      params![team_flow.to_string()],
+    )
+    .expect("the team's");
+}
+
+/// The rows [`raw_rows`] writes, with their values: the pipelines' ids, the tasks' and Team flow's body and version.
+fn statements(
+  [sketch, delivery, team_flow]: [String; 3],
+  [sketch_task, delivery_task, team_task]: [TaskId; 3],
+  (body, team_version): (String, String),
+) -> [(&'static str, Vec<String>); 15] {
+  [
     (
       "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'sketch', 'Sketch', 7)",
       vec![sketch.clone()],
@@ -172,15 +195,15 @@ fn raw_rows(
     ),
     (
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 2, 4)",
-      vec![delivery.to_string(), body.clone()],
+      vec![delivery.clone(), body.clone()],
     ),
     (
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 1, 6)",
-      vec![team_flow.to_string(), body],
+      vec![team_flow.clone(), body],
     ),
     (
       "INSERT INTO shared_publishes (version_id, resource_id, idempotency_key) VALUES (?1, ?2, 'publish-1')",
-      vec![team_version, team_flow.to_string()],
+      vec![team_version, team_flow],
     ),
     (
       "INSERT INTO project_default_pipeline (id, pipeline_id) VALUES (1, ?1)",
@@ -205,7 +228,7 @@ fn raw_rows(
     ),
     (
       "INSERT INTO automation_drafts (resource_id, saved_at) VALUES (?1, 4)",
-      vec![delivery.to_string()],
+      vec![delivery.clone()],
     ),
     (
       "INSERT INTO money_step_budgets_before_tokens (owner, owner_id, step_key, micros, currency) \
@@ -222,20 +245,9 @@ fn raw_rows(
     ),
     (
       "UPDATE tasks SET pipeline_id = ?1 WHERE id = ?2",
-      vec![delivery.to_string(), delivery_task.to_string()],
+      vec![delivery, delivery_task.to_string()],
     ),
-  ];
-  for (sql, values) in statements {
-    raw
-      .execute(sql, rusqlite::params_from_iter(values))
-      .unwrap_or_else(|error| panic!("{sql}: {error}"));
-  }
-  raw
-    .execute(
-      "UPDATE resources SET sharing = 'shared', server_revision = 1 WHERE id = ?1",
-      params![team_flow.to_string()],
-    )
-    .expect("the team's");
+  ]
 }
 
 /// The project's database rewound to before the migration, opened again so it applies.
@@ -313,7 +325,12 @@ fn pipeline_drafts_migration_deletes_every_pipeline_draft_and_the_pipelines_with
     .expect("a profile keeps its draft");
   assert_eq!(kept.body().responsibilities(), "Kept");
   drop(db);
+  nothing_names_the_deleted(&old, &seeded);
+}
 
+/// Nothing of the migrated database still names Sketch or the drafts: its imports, removal, automation marks and money
+/// budgets, the drafts' marks; a kept team pipeline's version still waits; every reference holds.
+fn nothing_names_the_deleted(old: &TempDir, seeded: &Seeded) {
   let raw = Connection::open(old.path().join(".orchester").join("orchester.db")).expect("the migrated database");
   for (sql, id) in [
     (
