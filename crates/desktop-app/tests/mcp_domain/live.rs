@@ -271,7 +271,7 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
   });
   served.ok("save_tool_draft", &check);
   served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [
       { "key": "implement", "name": "Implement", "profile": "Builder", "repository": "write", "instructions": "Append one line." },
       {

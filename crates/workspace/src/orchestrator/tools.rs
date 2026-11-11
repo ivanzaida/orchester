@@ -41,7 +41,7 @@ use crate::{
 /// starting a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's
 /// agents a message and continuing a run that waits for a person's decision. While it drives, it has every other tool
 /// of the app too ([`listed`]). A name whose tool the app does not have (yet) is not listed.
-pub const TOOLS: [&str; 58] = [
+pub const TOOLS: [&str; 57] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -72,10 +72,9 @@ pub const TOOLS: [&str; 58] = [
   "get_approvals",
   "list_pipelines",
   "get_pipeline",
-  "save_pipeline_draft",
+  "save_pipeline",
   "create_pipeline",
   "duplicate_pipeline",
-  "publish_pipeline",
   "list_profiles",
   "get_profile",
   "save_profile_draft",

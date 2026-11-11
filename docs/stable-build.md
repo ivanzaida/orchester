@@ -472,7 +472,7 @@ fixed address instead (see *The new app's MCP server* below).
   named in the reason), `version_required`, `invalid_version`, `blank_note`, `note_not_taken` or a runner
   rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
-  agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
+  agent steps, and publishes it as v1 or stores nothing, as Duplicate and Save do), `set_code_index`
   (*Use code index* in Project settings › Context, off until a person turns it on; `list_projects` shows each
   project's setting) and
   `update_project_limits` (Project settings › Runs › Limits: the token budgets, the default time limit,
@@ -547,8 +547,8 @@ project up end to end without its configuration screens: `add_project` and `get_
 `update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
 saved), `check_connection` and `list_models`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
 and `remove_mcp_server` (Connections › MCP servers); `list_profiles`, `get_profile`, `save_profile_draft` and
-`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, empty, or a copy),
-`save_pipeline_draft` and `publish_pipeline`; `list_tools`, `get_tool`, `save_tool_draft` and `publish_tool`
+`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, a copy, or the steps given, published as v1)
+and `save_pipeline` (publishes the next version: a pipeline has no drafts); `list_tools`, `get_tool`, `save_tool_draft` and `publish_tool`
 (command tools, which pipeline steps call; HTTP and database tools are listed by kind and description only,
 and no tool is removed or archived in this version); `list_instructions`, `save_instruction_draft` and
 `publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into main*). Each checks its
@@ -757,7 +757,7 @@ window control allows, and the switch takes no change that turns it on while an 
 applied, nor any before it was shown for one pass; turning it off is always taken. `navigate` may still
 show Settings, and looking at the window stays allowed.
 
-Pipelines follow the same rule. With the setting off, `publish_pipeline` and `duplicate_pipeline` publish
+Pipelines follow the same rule. With the setting off, `save_pipeline` and `duplicate_pipeline` publish
 only a version provably no weaker than the pipeline's latest published one: the same steps, wiring,
 failure routes, profiles and tools, and each step's approval gate, asking about tool calls, write access,
 commands and network the same or stricter. A pipeline's first version and anything else need a person, so
@@ -790,10 +790,9 @@ save_tool_draft     {"project": "Orchester", "name": "Check",
                                    "-Tests", "changed"],
                      "timeout_secs": 10800}
 publish_tool        {"project": "Orchester", "tool": "Check"}
-save_pipeline_draft {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
+save_pipeline       {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
                      {"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
                       "on_failure": {"return_to": "implement", "retries": 2}}]}
-publish_pipeline    {"project": "Orchester", "pipeline": "Orchester change"}
 ```
 
 `-Tests changed` makes the check run tests as well (`tools/check-tests.ps1`): every test binary of the crates the

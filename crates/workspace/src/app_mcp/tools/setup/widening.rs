@@ -7,11 +7,7 @@
 //! unless the person applied it or lets the Orchestrator chat publish drafts ([`prompt_allowed`]). No tool changes
 //! those switches.
 
-use orchester_core::{
-  connection::AgentProvider,
-  id::ResourceId,
-  resource::{AgentProfile, Pipeline},
-};
+use orchester_core::{connection::AgentProvider, id::ResourceId, resource::AgentProfile};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -66,17 +62,4 @@ pub(super) fn check_profile(
     ));
   }
   Ok(())
-}
-
-/// Refused unless a person lets automation publish `new`, or it is provably no weaker than `latest`, the
-/// pipeline's latest published version (by their publishing policy). A pipeline's first version has nothing to be
-/// compared with, so it always needs a person. Every version automation publishes is thus one a person
-/// published, allowed, or could not object to, so a task may run any published version.
-pub(in crate::app_mcp::tools) fn check_pipeline(
-  services: &Services,
-  latest: Option<&Pipeline>,
-  new: &Pipeline,
-) -> Result<(), ToolError> {
-  let reasons = crate::pipelines::widening::publish_reasons(latest, new);
-  allowed(services, reasons)
 }

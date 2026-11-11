@@ -262,7 +262,7 @@ fn task_organization_no_automatic_merge_is_set_read_kept_and_cleared() {
 }
 
 /// What a task's runs deliver (ORC-93): `create_task` sets it, `get_task` reads it, `update_task` keeps it when left
-/// out and follows the pipeline again with `null`; `create_pipeline` and `save_pipeline_draft` set a pipeline's.
+/// out and follows the pipeline again with `null`; `create_pipeline` and `save_pipeline` set a pipeline's.
 #[test]
 fn task_organization_delivers_is_set_read_kept_and_cleared() {
   use orchester_core::resource::Deliverable;
@@ -300,7 +300,7 @@ fn task_organization_delivers_is_set_read_kept_and_cleared() {
   );
   assert_eq!(pipeline["pipeline"]["delivers"], "report", "{pipeline}");
   let saved = served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Investigation", "delivers": "changes_or_report", "steps": [
       { "key": "fix", "name": "Fix", "profile": "Builder" },
     ] }),

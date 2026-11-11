@@ -1636,6 +1636,7 @@
       "toolNotCheck": "{{tool}} is not a check an agent can call: a profile gives its agents only command tools with access rules.",
       "copyOfRequired": "Copying needs the pipeline to copy (copy_of).",
       "copyOfNotTaken": "Only a copy names a pipeline to copy (copy_of).",
+      "stepsNotTaken": "Only a pipeline created empty takes its steps and description (steps, description): a starter or a copy brings its own.",
       "inStep": "Step {{step}}:",
       "stepKeyInvalid": "{{key}} is not a step key: use small letters, digits and -, starting with a letter or digit.",
       "profileOrTool": "A step runs an agent profile or a tool, not both.",

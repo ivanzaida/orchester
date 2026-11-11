@@ -59,7 +59,7 @@ only a person may do is `person_only`, as for an outside client.
 `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`, `get_conversation`, `run_task`, `pause_run`,
 `resume_run`, `cancel_run`, `merge_run`, `continue_run`, `answer_question`, `send_message`, `list_approvals`,
 `list_questions`, `get_plan`, `hold_queue`, `release_queue`, `get_approvals`, `list_pipelines`, `get_pipeline`,
-`save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline`, `publish_pipeline`, `list_profiles`, `get_profile`,
+`save_pipeline`, `create_pipeline`, `duplicate_pipeline`, `list_profiles`, `get_profile`,
 `save_profile_draft`, `publish_profile`, `list_instructions`, `get_instruction`, `save_instruction_draft`,
 `publish_instruction`, `list_skills`, `get_skill`, `save_skill_draft`, `publish_skill`, `list_tools`, `get_tool`,
 `save_tool_draft`, `publish_tool`, `list_secrets`, `list_connections`, `list_accounts`, `list_models`, `get_usage`,
