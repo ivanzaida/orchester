@@ -347,6 +347,8 @@ fn orchestrator_task_events_tool_requests_show_how_they_were_answered() {
   let chat = conversation(&mut db);
   // The person's answer first: the card under the request left to them is tall, and the list lays out what shows.
   let (yours, yours_id) = request_wait(&mut db, &chat, &runs[3]);
+  // The Orchestrator was not sure, then the person allowed it: only the line says so.
+  let yours = turned(&mut db, (chat.id(), yours), "Not sure: it uses the network.").to_string();
   assert!(
     db.claim_tool_approval(runs[3].id(), &yours_id, DecidedBy::Person, Timestamp::now())
       .expect("claimed")
@@ -355,7 +357,6 @@ fn orchestrator_task_events_tool_requests_show_how_they_were_answered() {
     db.delivered_tool_approval(runs[3].id(), &yours_id, ToolApprovalDecision::Approved)
       .expect("delivered")
   );
-  let yours = format!("wait-{yours}");
   let (allowed, allowed_id) = request_wait(&mut db, &chat, &runs[0]);
   let allowed = answered_itself(&mut db, (chat.id(), allowed), (&runs[0], &allowed_id), None).to_string();
   let (denied, denied_id) = request_wait(&mut db, &chat, &runs[1]);
@@ -396,4 +397,12 @@ fn orchestrator_task_events_tool_requests_show_how_they_were_answered() {
     screen.text(&format!("{}-chip", line(&yours))) == "Allowed once by you"
   });
   assert!(!screen.exists(&format!("cards-approval-{yours_id}")));
+  assert!(
+    !screen.exists(&format!("orchestrator-answer-{yours}")),
+    "the Orchestrator's words go once the person answered"
+  );
+  assert!(
+    screen.exists(&format!("orchestrator-answer-{unsure}")),
+    "its words stay while it waits"
+  );
 }

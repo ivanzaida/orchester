@@ -167,42 +167,50 @@ impl Component for RequestCard {
   }
 }
 
-/// What nests under a tool request's line `id` in `row`, standing at `status`: the Orchestrator's answer as its quote
-/// (b, c); else what its turn said, then the request's card while it waits for the person (d).
-pub(in crate::screens::orchestrator) fn under(
+/// A tool request's line `line` (`id`) in `row`, standing at `status`, with what nests right under it, as a line's
+/// own quote does (4 under its 32, `ICzi3`): the Orchestrator's answer (b, c); what its turn said, then the request's
+/// card while it waits for the person (d); nothing once the person answered it (e). While its turn is read (a), what
+/// it says comes as any wait's answer does. The second element is what follows the opening at the chat's spacing.
+pub(in crate::screens::orchestrator) fn opening(
   ctx: &mut Ctx,
   row: &TurnRow,
-  id: &str,
+  (id, line): (&str, Element),
   status: Status,
-) -> Option<Element> {
-  let wait = row.turn.wait.as_deref()?;
-  if let Some(own) = own_answer(&row.turn.answer) {
-    let agent = wait.agent.as_deref().or(wait.step.as_deref()).unwrap_or_default();
-    let quoted = quote(ctx, &format!("{id}-quote"), own, agent);
-    return Some(nested(&format!("{id}-answer"), quoted));
-  }
-  let said = super::super::answer::nested(ctx, row);
-  let card = match (status, &row.turn.request) {
-    (Status::Waits, Some(request)) => {
-      let card = format!("{id}-request");
-      let props = RequestCardProps {
-        id: card.clone(),
-        project: row.env.project,
-        task: wait.task.as_str().into(),
-        request: request.clone(),
-      };
-      Some(ctx.mount_keyed::<RequestCard>(&card, props))
-    }
-    _ => None,
+) -> (Element, Option<Element>) {
+  let Some(wait) = row.turn.wait.as_deref() else {
+    return (line, None);
   };
-  if said.is_none() && card.is_none() {
-    return None;
-  }
-  Some(
+  let attached = |line: Element, under: Vec<Element>| -> Element {
     Column::new()
       .width(Dimension::Pct(100.0))
-      .with_children(said)
-      .with_children(card)
-      .into(),
-  )
+      .child(line)
+      .with_children(under)
+      .into()
+  };
+  match status {
+    Status::Allowed | Status::Denied => {
+      let Some(own) = own_answer(&row.turn.answer) else {
+        return (line, None);
+      };
+      let agent = wait.agent.as_deref().or(wait.step.as_deref()).unwrap_or_default();
+      let quoted = quote(ctx, &format!("{id}-quote"), own, agent);
+      (attached(line, vec![nested(&format!("{id}-answer"), quoted)]), None)
+    }
+    Status::ByYou(_) | Status::Gone => (line, None),
+    Status::Waits => {
+      let said = super::super::answer::nested(ctx, row);
+      let card = row.turn.request.as_ref().map(|request| {
+        let card = format!("{id}-request");
+        let props = RequestCardProps {
+          id: card.clone(),
+          project: row.env.project,
+          task: wait.task.as_str().into(),
+          request: request.clone(),
+        };
+        ctx.mount_keyed::<RequestCard>(&card, props)
+      });
+      (attached(line, said.into_iter().chain(card).collect()), None)
+    }
+    Status::Reading | Status::Answered | Status::AnsweredByYou => (line, super::super::answer::nested(ctx, row)),
+  }
 }
