@@ -222,6 +222,9 @@ pub struct OpenedPipeline {
   pub assignables: Arc<Assignables>,
   /// The import that created the pipeline; `None` when it was not imported.
   pub imported: Option<Arc<Imported>>,
+  /// The team's pipeline in a shared project: its name is the team server's, which a save does not change
+  /// ([`super::write::refusals`]).
+  pub team: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -247,6 +250,7 @@ impl OpenedPipeline {
       used_by: tasks_using(db, id)?,
       assignables: Arc::new(Assignables::load(db)?),
       imported: imported(db, id)?.map(Arc::new),
+      team: db.is_team_resource(id)?,
     })
   }
 
