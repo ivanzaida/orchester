@@ -6,7 +6,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, SelectOption, Text},
   core::ElementRef,
@@ -289,7 +289,7 @@ impl Form {
     let variables = FieldInput::new(
       "connection-mcp-variables",
       ctx.t("connections.mcp.variables"),
-      self.fields.variables.clone(),
+      self.variables_line.clone(),
     )
     .mono()
     .compact_text_area();
@@ -306,7 +306,9 @@ impl Form {
     rows::row(
       "local-hub-mcp-row-variables",
       &ctx.t("connections.mcp.variables"),
-      look.changed(ctx, &look.typed.variables, &look.saved.variables),
+      look
+        .changed(ctx, &look.typed.variables, &look.saved.variables)
+        .or_else(|| look.creating.then(|| Sub::quiet(ctx.t("local_new.mcp.variablesSub")))),
       control,
     )
     .align_items(Alignment::Start)
@@ -341,12 +343,8 @@ impl Form {
     } else {
       "local_hub.mcp.toolsNone"
     }));
-    // A form that makes a server shows its words in the design's sans until a name is typed; tool names are mono.
-    let tools = if look.creating && look.typed.exempt_tools.is_empty() {
-      tools
-    } else {
-      tools.mono()
-    };
+    // Tool names are mono; the placeholder is words, in the design's sans (L4 `P7TFFJ`).
+    let tools = tools.mono().placeholder_style(TypographyStyle::Description);
     let tools = match shown(ctx, look, &look.errors.exempt_tools, &look.typed.exempt_tools) {
       Some(error) => tools.error(error),
       None => tools,

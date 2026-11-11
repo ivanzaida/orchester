@@ -215,9 +215,9 @@ fn local_hub_create_new_opens_the_form_of_each_kind_with_only_create_and_cancel(
 #[test]
 fn local_hub_create_under_all_and_archived_new_opens_the_profile_form() {
   let mut agents = Agents::new(true);
-  for filter in [HubFilter::All, HubFilter::Archived] {
+  for (filter, words) in [(HubFilter::All, "New agent"), (HubFilter::Archived, "New")] {
     open(&mut agents, HubView::new(filter, None));
-    assert_eq!(agents.text("local-hub-new"), "New agent", "{}", filter.name());
+    assert_eq!(agents.text("local-hub-new"), words, "{}", filter.name());
     agents.click("local-hub-new");
     agents.until("the profile's form", |s| {
       s.window.navigation().route_now() == form_route(HubFilter::Profiles) && s.exists("local-hub-new-create")

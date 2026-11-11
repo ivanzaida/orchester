@@ -60,6 +60,13 @@
       "on": "On",
       "onHint": "Runs may use it",
       "onlyHere": "Only on this computer",
+      "takesSecret": "{{name}} ← secret {{secret}}",
+      "fix": {
+        "setPath": "Set program path",
+        "setPathHint": "Asked once",
+        "addValue": "Add a value for {{name}}",
+        "addValueHint": "Kept in the OS secret store"
+      },
       "save": "Save",
       "added": "added {{date}}",
       "runsAs": "Runs as",
@@ -98,8 +105,7 @@
       "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
       "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
       "title": "Archived: hidden from lists and pickers",
-      "readOnly": "· read-only until it is restored",
-      "takesSecret": "{{name}} ← secret {{secret}}"
+      "readOnly": "· read-only until it is restored"
     },
     "profile": {
       "title": "Profile",

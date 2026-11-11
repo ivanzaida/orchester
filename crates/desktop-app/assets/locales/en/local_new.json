@@ -21,6 +21,7 @@
     },
     "mcp": {
       "nameSub": "Unique in this project",
+      "variablesSub": "Each may take its value from a secret",
       "argumentsNone": "e.g. --stdio",
       "toolsNone": "Tool names · listed after the first start",
       "onHint": "Runs may use it once created"

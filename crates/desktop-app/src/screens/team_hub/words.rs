@@ -140,6 +140,29 @@ fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
   }
 }
 
+/// Why nobody can tell whether a resource is ready here, in the panel's sentence: what is not known and, for an
+/// archived resource it names, what moves it on.
+pub(super) fn why_undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
+  let named = |key: &str, name: &String| ctx.t_args(key, [("name", name.clone())]);
+  match why {
+    Undecided::NotTeamForm => ctx.t("team_hub.readiness.why.notTeamForm"),
+    Undecided::ChoosesMcpServer(_) => ctx.t("team_hub.readiness.why.choosesMcpServer"),
+    Undecided::ChoosesArchivedMcpServer(_, name) => named("team_hub.readiness.why.choosesArchivedMcpServer", name),
+    Undecided::UsesArchivedTool(_, name) => named("team_hub.readiness.why.usesArchivedTool", name),
+    Undecided::UsesArchivedInstruction(_, name) => named("team_hub.readiness.why.usesArchivedInstruction", name),
+    Undecided::RunsUnknown(_) => ctx.t("team_hub.readiness.why.runsUnknown"),
+    Undecided::RunsArchived(_, name) => named("team_hub.readiness.why.runsArchived", name),
+    Undecided::ChoosesArchivedLocalMcpServer(_, name) => {
+      named("team_hub.readiness.why.choosesArchivedLocalMcpServer", name)
+    }
+    Undecided::ConnectionGone(_) => ctx.t("team_hub.readiness.why.connectionGone"),
+    Undecided::TeamToolSecretById(_) => ctx.t("team_hub.readiness.why.teamToolSecretById"),
+    Undecided::SecretGone(_) => ctx.t("team_hub.readiness.why.secretGone"),
+    Undecided::SecretUnreadable(_) => ctx.t("team_hub.readiness.why.secretUnreadable"),
+    Undecided::Member { why, .. } => why_undecided(ctx, why),
+  }
+}
+
 /// One missing part, in the words of the resource that has it.
 pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missing) -> Arc<str> {
   let server_name = |server| {

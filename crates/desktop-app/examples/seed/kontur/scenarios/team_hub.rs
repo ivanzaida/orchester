@@ -154,6 +154,14 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed_with(kontur, &Mcp::default()).map(|_| ())
 }
 
+/// [`seed`] on a team that also holds the catalogue, made the team's before the team form: `picker-readiness-team`
+/// shows the catalogue's pipelines beside the team's, which this computer cannot tell are ready.
+pub(super) fn seed_beside_catalogue(kontur: &mut Kontur) -> Result<(), SeedError> {
+  shared_config::admin(kontur)?;
+  resources_with(kontur, &Mcp::default(), Kinds::ALL)?;
+  super::team::served(kontur, false)
+}
+
 /// How the program MCP servers of the scenario differ (`team-hub-mcp-*`, C4–C8 in `acFkz`): the variables of
 /// `pencil-design`, and whether `figma` runs a program (`npx`) instead of being reached at an address.
 #[derive(Default)]
@@ -164,7 +172,7 @@ pub(super) struct Mcp {
 
 /// [`seed`], which also names the id of each MCP server it made.
 pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
-  shared_config::admin(kontur)?;
+  shared_config::admin_alone(kontur)?;
   let made = resources_with(kontur, mcp, Kinds::ALL)?;
   // A QA copy reads the team's configuration from a stand-in team server that holds what was cached here.
   super::team::served(kontur, false)?;

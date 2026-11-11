@@ -73,7 +73,21 @@
     "readiness": {
       "title": "Ready here?",
       "missing": "{{count}} missing",
-      "allSet": "all set"
+      "allSet": "all set",
+      "why": {
+        "notTeamForm": "Its latest version was published before the team's form of its kind, so Orchester can't read what it asks of this computer. An admin publishes it again from the team's form.",
+        "choosesMcpServer": "It chooses an MCP server the team does not offer here yet, so what it asks of this computer is not known.",
+        "choosesArchivedMcpServer": "It chooses {{name}}, an MCP server the team archived. It can't run until an admin restores {{name}} or it stops choosing it.",
+        "usesArchivedTool": "It names {{name}}, a tool the team archived. It can't run until an admin restores {{name}} or it stops naming it.",
+        "usesArchivedInstruction": "It names {{name}}, an instruction the team archived. It can't run until an admin restores {{name}} or it stops naming it.",
+        "runsUnknown": "It runs a profile or tool this computer has no version of.",
+        "runsArchived": "It runs {{name}}, which was archived.",
+        "choosesArchivedLocalMcpServer": "It chooses {{name}}, an MCP server that was archived.",
+        "connectionGone": "It runs on a connection the project no longer has.",
+        "teamToolSecretById": "It holds a project secret by id, and a team can't tell whether that secret has a value on this computer.",
+        "secretGone": "It uses a secret the project no longer has.",
+        "secretUnreadable": "The keychain did not say whether its secret has a value here."
+      }
     },
     "panel": {
       "edit": "Edit",
@@ -131,6 +145,8 @@
       "agentCliSub": "the kind; never a connection",
       "model": "Model",
       "effort": "Reasoning effort",
+      "effortDefault": "CLI default",
+      "none": "None",
       "effortLevel": {
         "low": "Low",
         "medium": "Medium",

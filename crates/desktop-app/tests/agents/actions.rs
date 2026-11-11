@@ -181,7 +181,7 @@ fn agents_archive_a_profile_a_pipeline_step_uses_leaves_the_step_naming_it() {
 }
 
 /// A published Delivery pipeline whose one step runs `profile`.
-fn assigned_pipeline(screen: &Agents, profile: ResourceId) -> ResourceId {
+pub(super) fn assigned_pipeline(screen: &Agents, profile: ResourceId) -> ResourceId {
   assigned_pipeline_as(screen, profile, ("delivery", "Delivery"))
 }
 

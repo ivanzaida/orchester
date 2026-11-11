@@ -5,7 +5,10 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
   components::{Row, SelectOption},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
@@ -49,6 +52,14 @@ pub(super) struct Shown<'a> {
   /// The version an edit starts from: the form is an edit of it, a field that differs says so, and the name is not
   /// in it. `None` for a form that creates.
   pub published: Option<&'a NewTeamMcpServer>,
+}
+
+impl Shown<'_> {
+  /// How wide its rows' keys are: a create form's (A8 `vPoTQ`), or a panel's when it edits a resource in place, as
+  /// every other row of the hub's panels is (170, `P60rze` in `NDZXC`).
+  pub(super) const fn key(&self) -> Key {
+    if self.published.is_some() { Key::Wide } else { Key::Form }
+  }
 }
 
 /// What a kind's form gives the panel.
@@ -138,7 +149,7 @@ impl Error {
 }
 
 /// The row of `spec` with `control` at its end, and under its label what `error` says, else its own line.
-pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl Into<Element>) -> Row {
+pub(super) fn row(ctx: &Ctx, key: Key, spec: &Spec, error: Option<&Error>, control: impl Into<Element>) -> Row {
   let label = if spec.required {
     ctx.t_args("team_new.required", [("label", &*ctx.t(spec.label))])
   } else {
@@ -152,7 +163,7 @@ pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl I
     (None, Some(sub)) => Some(Sub::quiet(ctx.t(sub))),
     (None, None) => None,
   };
-  rows::row_in(Key::Form, &format!("team-new-{}-row", spec.id), &label, sub, control)
+  rows::row_in(key, &format!("team-new-{}-row", spec.id), &label, sub, control)
 }
 
 /// How a text control looks.
@@ -163,6 +174,8 @@ pub(super) enum Look {
   Mono,
   /// Several lines in Geist Mono.
   Lines,
+  /// Names in Geist Mono under a placeholder in words, as *Run without asking* (A8 `vPoTQ`, A9).
+  Names,
 }
 
 /// A text field of `spec` typing into `value`, with `placeholder` (a key) while it is empty; `first` is the form's
@@ -181,6 +194,7 @@ pub(super) fn text(
     Look::Plain => input,
     Look::Mono => input.mono(),
     Look::Lines => input.compact_text_area().mono(),
+    Look::Names => input.mono().placeholder_style(TypographyStyle::Description),
   };
   if let Some(first) = first {
     input = input.element(first.clone());
@@ -197,12 +211,13 @@ pub(super) fn text(
 /// The row of `spec` whose control is a text field: it turns `danger` with `error`.
 pub(super) fn text_row(
   ctx: &mut Ctx,
+  key: Key,
   spec: &Spec,
   error: Option<&Error>,
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked): (Look, bool),
 ) -> Row {
-  text_row_with(ctx, spec, error, (value, placeholder), (look, locked, None))
+  text_row_with(ctx, (key, spec), error, (value, placeholder), (look, locked, None))
 }
 
 /// [`text_row`] of the form's name field, which has the focus when the form opens.
@@ -216,7 +231,7 @@ pub(super) fn name_row(
 ) -> Row {
   text_row_with(
     ctx,
-    spec,
+    (shown.key(), spec),
     error,
     (value, placeholder),
     (look, shown.locked, Some(shown.first)),
@@ -225,7 +240,7 @@ pub(super) fn name_row(
 
 fn text_row_with(
   ctx: &mut Ctx,
-  spec: &Spec,
+  (key, spec): (Key, &Spec),
   error: Option<&Error>,
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked, first): (Look, bool, Option<&ElementRef>),
@@ -237,7 +252,7 @@ fn text_row_with(
     (look, error.is_some_and(Error::is_error), locked),
     first,
   );
-  row(ctx, spec, error, control)
+  row(ctx, key, spec, error, control)
 }
 
 /// A segmented choice: `options` are (value, label key); choosing one sets `value` to it.

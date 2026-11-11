@@ -22,6 +22,7 @@ use orchester_workspace::{
 };
 
 use super::{
+  fill::{self, Tone},
   member,
   model::{Entry, Listing},
   words,
@@ -44,8 +45,29 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
     .child(head(ctx, entry, None))
     .child(chips(ctx, listing, entry))
     .with_children(member::lock_line(ctx, shown.team))
-    .with_children(readiness(ctx, listing, entry));
+    .with_children(readiness(ctx, listing, entry))
+    .with_children(undecided(ctx, entry));
   frame(entry, body, None).into()
+}
+
+/// *Ready here?* of a resource nobody can tell is ready here: why it cannot be told, so the panel never stands empty
+/// under its chips.
+fn undecided(ctx: &Ctx, entry: &Entry) -> Option<Column> {
+  let Some(ReadinessStanding::Undecided(why)) = &entry.standing else {
+    return None;
+  };
+  Some(
+    Column::new()
+      .id("team-hub-readiness")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .child(Text::new(&ctx.t("team_hub.readiness.title")).variant(HubText::PanelLabel.role()))
+      .child(fill::note(
+        "team-hub-undecided",
+        Tone::Warning,
+        &words::why_undecided(ctx, why),
+      )),
+  )
 }
 
 /// The column a panel's sections stand in, 24 from its sides and 20 apart.

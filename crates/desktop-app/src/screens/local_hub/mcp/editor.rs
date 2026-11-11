@@ -32,7 +32,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  Props, actions,
+  Props, actions, fix,
   form::Form,
   notes,
   rows::Look,
@@ -211,7 +211,10 @@ impl Component for Editor {
       ))
       .with_children(notes::not_ready(ctx, entry))
       .with_children(self.form.asking.dialog(ctx, false));
-    let bar = self.bar(ctx, (&props, &server), (&checked, changed), (field, &revision));
+    let pinned = (!changed && !saving.is_pending())
+      .then(|| fix::bar(ctx, entry, &self.form, &secrets))
+      .flatten();
+    let bar = pinned.unwrap_or_else(|| self.bar(ctx, (&props, &server), (&checked, changed), (field, &revision)));
     frame(what, body, Some(bar))
   }
 }

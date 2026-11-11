@@ -106,6 +106,7 @@ impl Fields {
     let program = matches!(input.runs, Runs::Program { .. });
     let mut rows = vec![fields::row(
       ctx,
+      shown.key(),
       &RUNS_AS,
       marks.on(None, marks.runs).as_ref(),
       fields::choice(ctx, &RUNS_AS, &self.runs, &RUNS, view.locked),

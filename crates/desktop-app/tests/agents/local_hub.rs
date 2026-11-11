@@ -73,6 +73,10 @@ fn local_hub_counts_each_kind_and_lists_a_server_without_a_version() {
   assert!(filter(&mut agents, "profiles").contains('1'));
   assert!(filter(&mut agents, "mcp_servers").contains('1'));
   assert!(filter(&mut agents, "archived").contains('0'));
+  assert!(
+    agents.exists("local-hub-filter-divider"),
+    "a rule sets Archived apart from the kinds"
+  );
   let row = format!("local-hub-row-mcp-{docs}");
   assert!(agents.exists(&row));
   let line = agents.text(&format!("{row}-line"));
@@ -82,8 +86,8 @@ fn local_hub_counts_each_kind_and_lists_a_server_without_a_version() {
   assert!(line.contains("program path"), "{line}");
 }
 
-/// The head says the project is local and holds one *New <kind>*: the open tab's kind, a profile under All and
-/// Archived, as wide on every tab; a press opens that kind's form in the hub.
+/// The head says the project is local and holds one *New <kind>*: the open tab's kind, a profile under All, plain *New*
+/// under Archived (which makes a profile), as wide on every tab; a press opens that kind's form in the hub.
 #[test]
 fn local_hub_new_says_the_open_tabs_kind_and_opens_its_form() {
   let mut agents = Agents::new(true);
@@ -95,7 +99,7 @@ fn local_hub_new_says_the_open_tabs_kind_and_opens_its_form() {
     (HubFilter::Instructions, "New instruction", HubFilter::Instructions),
     (HubFilter::Skills, "New skill", HubFilter::Skills),
     (HubFilter::Tools, "New tool", HubFilter::Tools),
-    (HubFilter::Archived, "New agent", HubFilter::Profiles),
+    (HubFilter::Archived, "New", HubFilter::Profiles),
   ] {
     open(&mut agents, HubView::new(filter, None));
     assert_eq!(agents.text("local-hub-local-label"), "Local");
@@ -233,6 +237,10 @@ fn local_hub_archive_an_mcp_server_then_restore_it_from_the_archived_view() {
   agents.click("local-hub-archive");
   agents.until("the confirmation", |s| s.exists("team-hub-archive-confirm"));
   assert!(agents.text("team-hub-archive-body").contains("leaves every list"));
+  assert!(
+    !agents.text("team-hub-archive-body").contains("versions"),
+    "a local MCP server has no versions"
+  );
   agents.press_until("team-hub-archive-confirm", "archived", |s| {
     !s.exists(&format!("local-hub-row-mcp-{docs}"))
   });
