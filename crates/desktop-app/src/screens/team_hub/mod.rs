@@ -57,6 +57,7 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{
   agents::team_hub::{TeamHub, TeamHubRead},
+  memory::listing::Filters,
   messages::Message,
   sharing::team::TeamConfiguration,
   team_config::Unreached,
@@ -68,10 +69,13 @@ use crate::{
   project::ShownProject,
   queries::{self, Again, Session, hub as hub_query},
   routes::{HubFilter, HubView, ProjectPage, Route},
-  screens::hub::{
-    agents::{self, TabCount},
-    agents_bones,
-    new_button::{made_under, new_button, new_words},
+  screens::{
+    hub::{
+      agents::{self, TabCount},
+      agents_bones,
+      new_button::{made_under, new_button, new_words},
+    },
+    memory::{hub as memory_hub, state::Made},
   },
   services::Services,
   team::reached::Reached,
@@ -109,16 +113,20 @@ struct TeamHubScreen {
   again: Again,
   /// Why the hub couldn't be read, kept while it is read again.
   failure: LastFailure,
+  /// What the Memory filter keeps while the hub shows: its search, and what is open in place of a record.
+  memory: Made,
 }
 
 impl Component for TeamHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let feed = ctx.props::<Props>().project.feed.clone();
     Self {
       retry: ctx.signal(0),
       again: Again::default(),
       failure: LastFailure::default(),
+      memory: Made::new(ctx, Filters::default(), &feed),
     }
   }
 
@@ -148,7 +156,15 @@ impl Component for TeamHubScreen {
       .filter(|_| !view.adding)
       .and_then(|listing| listing.selected(view.filter, view.item))
       .map(|entry| entry.id);
+    let memory_count = memory_hub::active_count(ctx, &project);
+    let memory = (view.filter == HubFilter::Memory).then(|| {
+      let state = self.memory.state(ctx, &project, None);
+      ctx.provide(state.clone());
+      state
+    });
     let body = match (failed, hub.zip(listing.as_ref())) {
+      // The memory is this computer's, whatever the team server answers (Y5 `Fnu7A`).
+      _ if memory.is_some() => memory_hub::body(ctx, &project, view.memory, true),
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
         if !reading && !read_behind(ctx, &project, view, listing) {
@@ -168,18 +184,16 @@ impl Component for TeamHubScreen {
       },
     };
     let id = project.open.project.id();
-    // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds.
-    let new = team.may_change.then(|| {
-      let form = Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))));
-      new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
-    });
-    let reach = if unreached.is_some() {
-      head::Reach::Unreachable
-    } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
-      head::Reach::Unanswered
-    } else {
-      head::Reach::Answered
+    // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds. Every person writes
+    // their own computer's memory: a member has *New record* too.
+    let new = match &memory {
+      Some(state) => Some(memory_hub::new_record(ctx, state, view.memory)),
+      None => team.may_change.then(|| {
+        let form = Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))));
+        new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
+      }),
     };
+    let reach = reach(ctx, &project, unreached.is_some());
     let status = head::status(ctx, admin, reach);
     agents::frame(
       ctx,
@@ -188,7 +202,12 @@ impl Component for TeamHubScreen {
         filter: view.filter,
         status,
         new,
-        tabs: tabs(id, (listing.as_ref(), nothing_read), selected, &navigation),
+        tabs: tabs(
+          id,
+          (listing.as_ref(), nothing_read, memory_count),
+          selected,
+          &navigation,
+        ),
         notices: Vec::new(),
         body,
         over: Vec::new(),
@@ -220,6 +239,17 @@ impl TeamHubScreen {
       .log(project.open.repo_root.clone())
       .still_works(ctx.t("hub.failure.stillWorks"))
       .page(ctx)
+  }
+}
+
+/// How the team server stands for the head: cannot be reached (`unreached`), has not answered yet, or answered.
+fn reach(ctx: &mut Ctx, project: &ShownProject, unreached: bool) -> head::Reach {
+  if unreached {
+    head::Reach::Unreachable
+  } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
+    head::Reach::Unanswered
+  } else {
+    head::Reach::Answered
   }
 }
 
@@ -282,10 +312,10 @@ fn keep_route_on_shown(
 }
 
 /// A tab per kind with its count (its bone while the hub is read, none when nothing could be read), each keeping the
-/// chosen resource when it holds it.
+/// chosen resource when it holds it; *Memory* with its active records, which are this computer's.
 fn tabs(
   project: ProjectId,
-  (listing, nothing_read): (Option<&Listing>, bool),
+  (listing, nothing_read, memory): (Option<&Listing>, bool, TabCount),
   selected: Option<ResourceId>,
   navigation: &Navigation,
 ) -> Vec<agents::Tab> {
@@ -297,7 +327,9 @@ fn tabs(
       let navigation = navigation.clone();
       agents::Tab {
         filter: choice,
-        count: if nothing_read {
+        count: if choice == HubFilter::Memory {
+          memory
+        } else if nothing_read {
           TabCount::Unknown
         } else {
           TabCount::of(listing.map(|listing| listing.count(choice)))

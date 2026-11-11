@@ -268,10 +268,6 @@
       "profile": "{{name}} {{version}}",
       "stillUses": "still uses {{resource}} · not ready anywhere until changed",
       "open": "Open →",
-      "ask": "Ask an admin to restore it",
-      "asked": "Request copied · send it to an admin",
-      "askFailed": "Couldn't copy the request",
-      "request": "Please restore {{resource}} in {{project}}: run {{run}} of {{task}} was stopped when it was archived, and Run again waits for it.",
       "adminsOnly": "Restore is admins only · {{admins}}",
       "restoreOnServer": "Restore it on the team server · Run again waits until then",
       "kind": {

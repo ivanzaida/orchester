@@ -1,11 +1,13 @@
 //! How every Markdown of the window shows a link (`Orchestrator · links · states` `agv8r`), in lurq's link
 //! presentation, which runs on the exact destination a press opens. A place in a project: a link in the chat's link
-//! looks, with the tooltip its caller words, if any. A page on the web: the same, followed by its host and an arrow,
-//! its tooltip the address it opens in the browser; with no words, its address as text, so no host can be placed
-//! without the link it belongs to. lurq 0.46 already shows a link whose words draw nothing as those words, without
-//! asking: the check here is defence in depth, should a caller present such a link. lurq also draws every word and
-//! run without bidirectional controls, so nothing here strips them. Anything else: its words as text, followed by its
-//! address in mono, or the address alone when the words are empty or the address itself.
+//! looks, with the tooltip its caller words, if any. A link is the pointer's only, as the app's toolbars and navigation
+//! are (`ui::pressable`): Tab skips it, a press leaves the focus where it was, and it has no focused look. A page on
+//! the web: the same, followed by its host and an arrow, its tooltip the address it opens in the browser; with no
+//! words, its address as text, so no host can be placed without the link it belongs to. lurq 0.46 already shows a link
+//! whose words draw nothing as those words, without asking: the check here is defence in depth, should a caller present
+//! such a link. lurq also draws every word and run without bidirectional controls, so nothing here strips them.
+//! Anything else: its words as text, followed by its address in mono, or the address alone when the words are empty or
+//! the address itself.
 
 use std::sync::Arc;
 
@@ -34,8 +36,8 @@ pub fn presentation(
   let followed = MarkdownLinkPresentation::link()
     .style(looks.link.clone())
     .hovered(looks.hovered)
-    .focused(looks.focused)
-    .radius(looks.radius);
+    .radius(looks.radius)
+    .pointer_only();
   match ChatLink::of(destination) {
     ChatLink::App(route) => match (words.place)(&route) {
       Some(tip) => followed.tooltip(tip),

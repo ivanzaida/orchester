@@ -4,12 +4,13 @@
 //! underline in `accent_hover` on the `hover` fill, square at the underline, which ends where the fill does. A link to
 //! the web is followed by its host in 11.5 `text_muted` and an 11 `arrow-up-right`, 6 after the words and 3 apart,
 //! `text_secondary` under the pointer. A link the chat does not follow is followed by its address in Geist Mono 11.5
-//! `text_muted`. The focus ring and the tooltip are every Markdown link's (`markdown`).
+//! `text_muted`. The tooltip is every Markdown link's (`markdown`); a link takes no keyboard focus
+//! (`ui::chat::presentation`), so it has no focused look.
 
 use lurq::{
   app::theme::{MarkdownInlineStyle, MarkdownLinkState, Theme},
   layout::text_style::{TextStyle, TextUnderline},
-  node::{border::BorderRadius, color::Color},
+  node::border::BorderRadius,
 };
 
 use super::{IconSize, OrchestratorText, markdown::LINK_RADIUS, palette::ExtraColor};
@@ -32,8 +33,6 @@ pub struct ChatLinkLooks {
   /// The words of a link the chat follows.
   pub link: MarkdownInlineStyle,
   pub hovered: MarkdownLinkState,
-  /// With keyboard focus the ring stands for the underline, which goes (`Mjhop` in `agv8r`).
-  pub focused: MarkdownLinkState,
   /// The hovered fill's corners.
   pub radius: BorderRadius,
   pub host: MarkdownInlineStyle,
@@ -68,7 +67,6 @@ impl ChatLinkLooks {
     Self {
       link,
       hovered,
-      focused: MarkdownLinkState::new().underline_color(Color::new(0, 0, 0, 0)),
       radius: BorderRadius::new(LINK_RADIUS, LINK_RADIUS, 0.0, 0.0),
       host: inline(&host),
       host_gap: gap(&host, HOST_GAP),

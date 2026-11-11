@@ -15,7 +15,6 @@
       "forkedOn": "· forked {{date}}"
     },
     "leads": {
-      "label": "Leads",
       "more": "+{{count}}",
       "moreTip": "Also leads {{targets}}",
       "stop": "Stop watching {{name}}",
@@ -29,7 +28,12 @@
         "none": "No order of its own · your switches decide"
       },
       "hint": "× stops watching · /unwatch does the same",
-      "stopFailed": "Not stopped · {{reason}}"
+      "stopFailed": "Not stopped · {{reason}}",
+      "popover": {
+        "title": "This conversation leads",
+        "sinceToday": "since {{time}}",
+        "sinceOn": "since {{date}}"
+      }
     },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",

@@ -374,17 +374,16 @@ fn team_qa_hub_archive_a_profile_that_names_an_archived_server_says_so_in_the_hu
   );
 }
 
-/// A member reads the stopped card as A22 draws it: restoring is the admins', so its foot asks one, by a request the
-/// press copies, and says who they are.
+/// A member reads the stopped card as A22 draws it: restoring is the admins', and this app has no restore, so its
+/// foot only says who the admins are, with no button.
 #[test]
-fn team_qa_hub_archive_a_members_stopped_card_asks_an_admin_to_restore_it() {
+fn team_qa_hub_archive_a_members_stopped_card_names_the_admins_without_a_button() {
   let (mut window, _server, _) = on_task(("team-archived", State::TeamArchived), "KON-12");
   window.until("the card's foot", |window| window.texts("task-archived-foot").is_some());
-  assert_eq!(window.text("task-archived-ask"), "Ask an admin to restore it");
+  assert!(
+    window.texts("task-archived-ask").is_none(),
+    "the foot has no restore request button"
+  );
   let hint = window.text("task-archived-foot-hint");
   assert!(hint.starts_with("Restore is admins only · "), "{hint}");
-  window.press("task-archived-ask");
-  window.until("the request copied", |window| {
-    window.text("task-archived-ask") == "Request copied · send it to an admin"
-  });
 }

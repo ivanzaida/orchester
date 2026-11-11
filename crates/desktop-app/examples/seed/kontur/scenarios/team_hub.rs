@@ -74,6 +74,14 @@ pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
   member_with(kontur, Kinds::ALL)
 }
 
+/// [`member`] on the project as another scenario already seeded it (`team-memory-member`).
+pub fn member_on_project(kontur: &mut Kontur) -> Result<(), SeedError> {
+  shared_config::member_over_project(kontur, |kontur| {
+    resources_with(kontur, &Mcp::default(), Kinds::ALL).map(|_| ())
+  })?;
+  super::team::served(kontur, true)
+}
+
 fn member_with(kontur: &mut Kontur, kinds: Kinds) -> Result<(), SeedError> {
   shared_config::member_over(kontur, |kontur| {
     resources_with(kontur, &Mcp::default(), kinds).map(|_| ())

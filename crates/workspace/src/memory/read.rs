@@ -60,10 +60,19 @@ impl TaskMemory {
 
 /// How many active records task `task` has: the count beside its page's Memory tab.
 pub fn active_count_in(repo_root: &Path, task: TaskId) -> Result<usize, StoreError> {
+  active_of(repo_root, ScopeFilter::Task(task))
+}
+
+/// How many active records the project's own memory has: the count beside the Agents hub's Memory filter.
+pub fn project_active_count_in(repo_root: &Path) -> Result<usize, StoreError> {
+  active_of(repo_root, ScopeFilter::Project)
+}
+
+fn active_of(repo_root: &Path, scope: ScopeFilter) -> Result<usize, StoreError> {
   let db = ProjectDb::open(repo_root)?;
   let active = MemoryFilter {
     status: Some(MemoryStatus::Active),
-    ..every(ScopeFilter::Task(task))
+    ..every(scope)
   };
   Ok(db.memories(&active)?.len())
 }

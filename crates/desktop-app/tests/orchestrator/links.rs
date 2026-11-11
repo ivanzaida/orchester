@@ -2,7 +2,8 @@
 //! `orchester:` link goes to its place in the active tab, for a person and for synthetic input alike, and says where
 //! in its tooltip, the project first when it is another; a link to the web shows its host, says what it opens, and
 //! synthetic input never opens it; a route outside a project, a route the app does not know, or another scheme is
-//! its words and then its address as text. A link is a Tab stop that Enter presses, with the design's ring. A list
+//! its words and then its address as text. A link is the pointer's only: Tab skips it and a press leaves the focus
+//! where it was, so it never shows a focus ring. A list
 //! of labelled links is drawn as their grid. The fake Claude Code answers `Noted: <message>`, so the message carries
 //! the reply's links. A person's press on a link to the web opens the default browser and is not made here.
 
@@ -13,7 +14,7 @@ use std::{
 
 use lurq::{
   app::events::{MouseButton, ScrollPhase, with_synthetic_input},
-  layout::quad::{Quad, QuadContent, RichTextSpan},
+  layout::quad::{QuadContent, RichTextSpan},
   node::color::Color,
 };
 use orchester_app::{
@@ -32,10 +33,11 @@ use super::{
 };
 
 const PULL_REQUEST: &str = "https://github.com/acme/kontur/pull/42";
-/// `text_muted`, `text_secondary` and `border_focus` in the dark mode the harness shows.
+/// How many times Shift+Tab is pressed to look for a stop on a link: more than the stops of the chat's page.
+const STOPS: usize = 30;
+/// `text_muted` and `text_secondary` in the dark mode the harness shows.
 const MUTED: &str = "#8A8A92";
 const SECONDARY: &str = "#B3B3BA";
-const FOCUS: &str = "#A3A3AB";
 /// `hover` and `accent_hover` in the dark mode.
 const HOVER: &str = "#FFFFFF0F";
 const ACCENT_HOVER: &str = "#FFFFFF";
@@ -221,29 +223,36 @@ fn shift_tab(screen: &mut Orchestrator) -> Option<String> {
     .and_then(|element| element.text_content().map(str::to_owned))
 }
 
-/// The id of what has the focus.
-fn focused_id(screen: &mut Orchestrator) -> Option<String> {
-  screen
-    .window
-    .tree
-    .focused_element()
-    .and_then(|element| element.id().map(str::to_owned))
-}
-
-/// The 2 px `border_focus` rings the window draws.
-fn rings(screen: &mut Orchestrator) -> Vec<Quad> {
-  screen.window.pass();
-  let tree = &screen.window.tree;
-  tree
-    .resolve_quads(tree.last_layout().expect("a layout"))
-    .into_iter()
-    .filter(|quad| {
-      quad
-        .border
-        .and_then(|border| border.top)
-        .is_some_and(|top| top.color == Color::from_hex(FOCUS) && top.width == 2.0)
+/// Shift+Tab from the message field, more times than the page has stops: the words and the id of each stop.
+fn stops_back(screen: &mut Orchestrator) -> Vec<(Option<String>, Option<String>)> {
+  focus_message_field(screen);
+  (0..STOPS)
+    .map(|_| {
+      let words = shift_tab(screen);
+      let id = screen
+        .window
+        .tree
+        .focused_element()
+        .and_then(|element| element.id().map(str::to_owned));
+      (words, id)
     })
     .collect()
+}
+
+/// No stop of `stops` is one of the links `links`, or a message's action.
+fn assert_tab_skips(stops: &[(Option<String>, Option<String>)], links: &[&str]) {
+  for (words, id) in stops {
+    assert!(
+      !words.as_deref().is_some_and(|words| links.contains(&words)),
+      "Tab skips the link {words:?}"
+    );
+    assert!(
+      !id
+        .as_deref()
+        .is_some_and(|id| id.ends_with("-fork") || id.ends_with("-copy")),
+      "Tab skips the answer's action {id:?}"
+    );
+  }
 }
 
 /// Under the pointer the link `label`'s fill ends at its underline, a 1 px `accent_hover` line (`K52XFs`).
@@ -373,7 +382,7 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
 }
 
 #[test]
-fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
+fn orchestrator_reply_links_say_where_they_go_and_are_the_pointers_only() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let project = screen.project;
   let atlas = ProjectId::generate();
@@ -405,38 +414,35 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
     &format!("Opens {PULL_REQUEST} in your browser")
   ));
 
-  // From the message field back through the links, last first, as Shift+Tab goes; the focused one has the ring.
-  focus_message_field(&mut screen);
-  // The answer's own *Fork* and *Copy* controls come after its links in the tab order, so Shift+Tab meets them first.
-  for control in ["-fork", "-copy"] {
-    shift_tab(&mut screen);
-    assert!(
-      focused_id(&mut screen).is_some_and(|id| id.ends_with(control)),
-      "Shift+Tab reaches the answer's {control} control before its links"
-    );
-  }
-  for words in ["PR 42", "ATL-9 import", "KON-1 notes"] {
-    assert_eq!(
-      shift_tab(&mut screen).as_deref(),
-      Some(words),
-      "Shift+Tab reaches each link"
-    );
-  }
-  assert!(
-    !rings(&mut screen).is_empty(),
-    "the focused link shows a 2 px `border_focus` ring"
-  );
-  let focused = bounds_of(&mut screen, "KON-1 notes");
-  assert!(
-    rects_over(&mut screen, focused, MUTED, 2.0).is_empty(),
-    "inside the ring the link has no underline"
-  );
+  // Shift+Tab from the message field meets neither a link nor the answer's actions.
+  let stops = stops_back(&mut screen);
+  assert_tab_skips(&stops, &["PR 42", "ATL-9 import", "KON-1 notes"]);
   assert_hover_ends_at_the_underline(&mut screen, "ATL-9 import");
-  screen.key(("Enter", "Enter"), false);
-  assert_eq!(
-    screen.route(),
-    Route::parse(&conversation).expect("the task's Conversation route"),
-    "Enter on a focused link opens its place"
+
+  // A press follows the link and leaves the focus where it was: a key after it has no link to ring or to open.
+  focus_message_field(&mut screen);
+  press_text(&mut screen, "KON-1 notes");
+  let place = Route::parse(&conversation).expect("the task's Conversation route");
+  assert_eq!(screen.route(), place, "a press opens the link's place");
+  back_to_the_chat(&mut screen);
+  let focused = screen
+    .window
+    .tree
+    .focused_element()
+    .and_then(|element| element.text_content().map(str::to_owned));
+  assert_ne!(
+    focused.as_deref(),
+    Some("KON-1 notes"),
+    "the press left no focus on the link"
+  );
+  // A plain key turns the keyboard's looks on; the pointer is off the link, so only a focused look could change it.
+  screen.window.tree.mouse_move(0.0, 0.0);
+  screen.key(("ArrowDown", "ArrowDown"), false);
+  screen.window.pass();
+  let link = bounds_of(&mut screen, "KON-1 notes");
+  assert!(
+    !rects_over(&mut screen, link, MUTED, 2.0).is_empty(),
+    "the link keeps its underline: it has no focused look"
   );
 }
 
@@ -478,31 +484,7 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
     long.width > 100.0 && long.height < 80.0,
     "the detail keeps room beside a long address: {long:?}"
   );
-  // Shift+Tab from the message field: the answer's *Fork* and *Copy*, then the plain list's KON-2, then the grid's #42,
-  // whose ring nothing clips.
-  focus_message_field(&mut screen);
-  for control in ["-fork", "-copy"] {
-    shift_tab(&mut screen);
-    assert!(
-      focused_id(&mut screen).is_some_and(|id| id.ends_with(control)),
-      "Shift+Tab reaches the answer's {control} control before its links"
-    );
-  }
-  shift_tab(&mut screen);
-  assert_eq!(shift_tab(&mut screen).as_deref(), Some("#42 Delivery log"));
-  let rings = rings(&mut screen);
-  assert!(!rings.is_empty(), "the focused grid link shows its ring");
-  for ring in rings {
-    let clip = ring.clip;
-    assert!(
-      !clip.active
-        || (clip.x <= ring.x
-          && clip.y <= ring.y
-          && ring.x + ring.width <= clip.x + clip.width
-          && ring.y + ring.height <= clip.y + clip.height),
-      "the ring {:?} lies inside its clip {:?}",
-      (ring.x, ring.y, ring.width, ring.height),
-      (clip.x, clip.y, clip.width, clip.height)
-    );
-  }
+  // Shift+Tab from the message field meets neither the plain list's link nor the grid's.
+  let stops = stops_back(&mut screen);
+  assert_tab_skips(&stops, &["KON-2", "#42 Delivery log", "KON-1 · Delivery log"]);
 }

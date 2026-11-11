@@ -1,35 +1,20 @@
-//! The Memory tab's status pills (`05` `padSP`): one per status of its records, each with its count (a pill whose
-//! count is 0 shows its name only), and *Memory settings* at the right end, which opens Project settings › Context
-//! (`S15` `BJQn0`). *Waiting for approval* counts its proposals in `warning` and leads the pills while proposals wait;
-//! otherwise it follows *Active*, which the tab then opens on. The order is set once the tab has read its records and
-//! never moves under the pointer. A pill is a place of the route (`ProjectPage::Memory`).
+//! The statuses of the Memory filter's sub-filter (`Memory filter` `cg7EL` in Y1 `tsfxN`): their order, names and
+//! glyphs, the records each lists and its route. *Waiting for approval* leads the statuses while proposals wait;
+//! otherwise it follows *Active*, which the filter then opens on (Y4 `i7aEec`). The order is set once the filter has
+//! read its records and never moves under the pointer.
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::Text,
-  layout::Alignment,
-  node::Element,
-};
+use lurq::app::ctx::Ctx;
 use orchester_core::id::ProjectId;
-use orchester_workspace::memory::{listing::StatusFilter, read::ProjectMemory};
+use orchester_workspace::memory::listing::StatusFilter;
 
 use crate::{
-  navigation::{Navigation, link::Open},
-  routes::{MemoryTab, ProjectPage, ProjectSettingsTab, Route},
-  screens::hub::pills::{self, Pill},
-  theme::{ExtraSpacing, IconSize},
-  ui::{
-    icon::{Icon, icon},
-    pressable::opening,
-  },
+  routes::{MemoryTab, MemoryView, ProjectPage, Route},
+  ui::icon::Icon,
 };
 
-/// The order of the status tabs, set when the page opens.
+/// The order of the statuses, set when the filter opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Order {
   waiting_first: bool,
@@ -102,53 +87,7 @@ pub const fn glyph(tab: MemoryTab) -> Icon {
   }
 }
 
-/// The route of `tab` of the page.
+/// The route of `tab`, with the first record of its list.
 pub const fn route(project: ProjectId, tab: MemoryTab) -> Route {
-  Route::Project(project, ProjectPage::Memory(Some(tab)))
-}
-
-/// The status pills in `order` (`05` `padSP`), `shown` the current one, each with its count of `memory` — the
-/// proposals that wait in `warning` — and *Memory settings* at the right end; while the records are read (`memory`
-/// none), each status's count is a bone.
-pub fn strip(
-  ctx: &mut Ctx,
-  project: ProjectId,
-  (memory, order): (Option<&ProjectMemory>, Order),
-  shown: MemoryTab,
-) -> Element {
-  let navigation = Navigation::of(ctx);
-  let pill = |ctx: &Ctx, tab: MemoryTab| Pill {
-    id: format!("memory-tab-{}", tab.name()).into(),
-    label: name(ctx, tab),
-    count: memory.map(|memory| (memory.count(statuses(tab)), tab == MemoryTab::Waiting)),
-    reading: memory.is_none(),
-    current: tab == shown,
-    open: navigation.to(route(project, tab)),
-  };
-  let statuses = order.statuses().into_iter().map(|status| pill(ctx, status)).collect();
-  let context = navigation.to(Route::Project(
-    project,
-    ProjectPage::Settings(ProjectSettingsTab::Context),
-  ));
-  pills::strip("memory-tabs", statuses, settings_link(ctx, context)).into()
-}
-
-/// *Memory settings ↗* (`Settings link` `m24yD`): a 13 `text_muted` `settings-2`, the words in 12 `text_secondary` and
-/// a 13 `text_muted` arrow, 5 apart. It opens Project settings › Context, which holds the Memory group.
-fn settings_link(ctx: &Ctx, context: Open) -> Element {
-  let label = ctx.t("memory.tabs.settingsLink");
-  opening(context)
-    .id("memory-settings-link")
-    .describe("a11y_name", label.clone())
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(Icon::Settings2, IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      Text::new(&label)
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
-        .nowrap(),
-    )
-    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::TextMuted))
-    .into()
+  Route::Project(project, ProjectPage::Memory(MemoryView::on(tab)))
 }

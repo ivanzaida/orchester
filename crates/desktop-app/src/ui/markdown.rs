@@ -26,8 +26,8 @@ use crate::{
   ui::chat::presentation::{LinkWords, presentation},
 };
 
-/// What a press on a link does with its destination: the event that activated it, a left or middle click or Enter
-/// on the focused link (`MarkdownProps::on_link_activate`), says with which button and keys.
+/// What a press on a link does with its destination: the event that activated it, a left or middle click
+/// (`MarkdownProps::on_link_activate`), says with which button and keys.
 pub type LinkHandler = Arc<dyn Fn(&str, &MouseEvent) + Send + Sync>;
 
 /// How far apart the text's blocks (paragraphs, lists, code) sit.

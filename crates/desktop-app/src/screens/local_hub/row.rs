@@ -42,10 +42,10 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     chosen: shown.selected == Some(entry.what),
     // Opening another entry would drop unsaved edits: the hub asks first.
     open: shown.leave.press(route).button(),
-    group: entry.group,
+    group: Some(entry.group),
     kind: format!("{:?}", entry.kind),
     mark: mark(ctx, entry, unsaved),
-    name: &entry.name,
+    name: (&entry.name, PaletteColor::TextPrimary),
     line: (&said.text, said.color),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),

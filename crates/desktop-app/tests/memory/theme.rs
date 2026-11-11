@@ -89,6 +89,30 @@ fn memory_theme_roles_resolve_the_design() {
   }
 }
 
+/// What a record says in the Agents hub's panel (`i5mAK` in Y1 `tsfxN`): 13 `text_primary`, 1.5.
+#[test]
+fn memory_theme_record_text_resolves_the_design() {
+  let mut app = App::new();
+  theme::install(&mut app, Mode::Dark);
+  let theme = app.theme();
+  let style = theme.typography_style(MemoryText::Record.role());
+  assert_eq!(
+    (style.font_size, style.weight, &*style.font_family),
+    (13.0, FontWeight::Normal, "Geist")
+  );
+  assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
+}
+
+/// A status chip's word in the Agents hub's panel (`H3ItbS` in Y1 `tsfxN`): 11/500, 1.2, so the chip is 19 high.
+#[test]
+fn memory_theme_chip_text_resolves_the_design() {
+  let mut app = App::new();
+  theme::install(&mut app, Mode::Dark);
+  let style = app.theme().typography_style(MemoryText::Chip.role());
+  assert_eq!((style.font_size, style.weight), (11.0, FontWeight::Medium));
+  assert!((style.line_height - 1.2).abs() < f32::EPSILON);
+}
+
 #[test]
 fn memory_theme_group_label_tracking_and_spacing_resolve_the_design() {
   let mut app = App::new();

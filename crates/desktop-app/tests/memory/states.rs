@@ -37,9 +37,9 @@ fn memory_project_page_says_it_couldnt_read_and_tries_again() {
   assert!(!page.has("memory-tabs"), "no tabs before the page has read its records");
   page.edit_outside("ALTER TABLE memories_away RENAME TO memories", None);
   page.press_until("memory-load-error-retry", "the memory read again", |window| {
-    window.texts("memory-body").is_some()
+    window.texts("memory-tabs").is_some()
   });
-  assert_eq!(page.text("memory-tab-active"), "Active 10");
+  assert_eq!(page.text("memory-tab-active"), "Active 11");
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn memory_unreadable_records_are_left_out_and_said() {
       .text("memory-unreadable")
       .starts_with("1 record couldn't be read and is left out")
   );
-  assert_eq!(page.text("memory-tab-active"), "Active 9");
+  assert_eq!(page.text("memory-tab-active"), "Active 10");
   assert!(page.has("memory-records"));
   assert!(!page.has(&format!("memory-record-{layout}")));
   page.task_memory("KON-12");
@@ -73,15 +73,12 @@ fn memory_restore_is_refused_while_the_key_names_another_active_record() {
     page.edit_outside("UPDATE memories SET key = 'ci.runner' WHERE id = ?1", Some(times)),
     1
   );
-  page.memory_tab(MemoryTab::Deprecated);
-  let row = format!("memory-record-{runner}");
-  page.until("the deprecated records", |window| window.texts(&row).is_some());
-  page.hover(&row);
-  page.press_until(&format!("{row}-restore"), "the refusal", |window| {
-    window.texts(&format!("{row}-error")).is_some()
+  page.memory_record(MemoryTab::Deprecated, runner);
+  page.press_until("memory-panel-restore", "the refusal", |window| {
+    window.texts("memory-panel-error").is_some()
   });
   assert_eq!(
-    page.text(&format!("{row}-error")),
+    page.text("memory-panel-error"),
     "Can't restore: ci.runner already names an active record. Deprecate that one first."
   );
   assert_eq!(page.stored(runner).expect("kept").status(), MemoryStatus::Deprecated);
@@ -145,21 +142,20 @@ fn memory_a_change_of_a_record_changed_meanwhile_is_refused_and_read_again() {
 #[test]
 fn memory_synthetic_input_approves_nothing_and_says_only_a_person_changes_memory() {
   let mut page = Page::seeded("memory");
-  page.project_memory();
   let typed = page.record("API handlers return typed errors").id();
-  let proposal = format!("memory-proposal-{typed}");
-  with_synthetic_input(|| page.window.press(&format!("{proposal}-approve")));
+  page.memory_record(MemoryTab::Waiting, typed);
+  with_synthetic_input(|| page.window.press("memory-panel-approve"));
   page.until("the refusal", |window| {
-    window.texts(&format!("{proposal}-person-only")).is_some()
+    window.texts("memory-panel-person-only").is_some()
   });
   assert!(
     page
-      .text(&format!("{proposal}-person-only"))
+      .text("memory-panel-person-only")
       .starts_with("Only a person changes memory here")
   );
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Proposed);
   assert_eq!(page.text("memory-tab-waiting-count"), "4");
-  page.press_until(&format!("{proposal}-approve"), "a person's approval", |window| {
+  page.press_until("memory-panel-approve", "a person's approval", |window| {
     window.text("memory-tab-waiting-count") == "3"
   });
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Active);

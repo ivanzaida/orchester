@@ -144,6 +144,7 @@ pub const ALL: [Scenario; 195] = [
   Scenario::of("tasks-memory", tasks_memory::seed),
   Scenario::of("memory-only", tasks_memory::alone),
   Scenario::of("memory", memory::seed),
+  Scenario::of("team-memory-member", memory::team_member),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("conversation-context-plenty", run_context::plenty),
