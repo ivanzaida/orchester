@@ -446,6 +446,25 @@ fn local_hub_profile_use_holds_the_connection_and_only_save_stores_it() {
   });
 }
 
+/// Choosing the connection a profile runs on is open to automation (the person's decision of 2026-11-11): an MCP
+/// client's *Use* and *Save* publish it, as a person's do, when it moves to no other account.
+#[test]
+fn local_hub_profile_automation_uses_and_saves_a_connection() {
+  let mut agents = Agents::new(true);
+  let (profile, [claude_2, _]) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
+
+  with_synthetic_input(|| agents.click("local-hub-fix-use"));
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
+  with_synthetic_input(|| agents.click(SAVE));
+
+  agents.until("published on Claude 2", |s| {
+    stored(s, profile).0.connection() == claude_2
+  });
+  assert!(!agents.exists(ALLOW), "nothing to ask: no other account");
+}
+
 #[test]
 fn local_hub_profile_choosing_a_connection_in_the_select_and_saving_runs_it_there() {
   let mut agents = Agents::new(true);
