@@ -56,6 +56,7 @@
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
       "programHere": "Set its program path on this computer",
+      "programGone": "Program missing here",
       "programOf": "Set the program path of {{server}}",
       "secret": "Secret {{name}} has no value here",
       "localProgram": "The program of {{server}} is not found here",
@@ -237,8 +238,7 @@
         "otherYear": "{{month}} {{day}}, {{year}}"
       },
       "chip": {
-        "pathNotSet": "Needs the program path here",
-        "pathGone": "Program missing here"
+        "pathNotSet": "Needs the program path here"
       },
       "fromTeam": {
         "runsAs": "Runs as",

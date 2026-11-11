@@ -180,6 +180,11 @@ fn team_hub_mcp_c5_a_path_whose_file_is_gone_stays_marked_until_another_is_chose
   set_path(&agents, pencil, &gone);
   show(&mut agents, pencil);
   assert_eq!(agents.text("team-hub-chip-here-label"), "Program missing here");
+  // The list's line says what the panel's chip says (`h2md5`).
+  assert_eq!(
+    agents.text(&format!("team-hub-row-{pencil}-line")),
+    "Program missing here"
+  );
   assert_eq!(agents.text("team-hub-path-sub"), "No file there");
   assert_eq!(agents.text("team-hub-path-value-text"), gone.display().to_string());
   let note = agents.text("team-hub-mcp-note-text");

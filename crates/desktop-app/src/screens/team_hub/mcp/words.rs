@@ -46,12 +46,12 @@ pub(super) fn program_problem(missing: &[Missing]) -> Option<&ProgramProblem> {
   })
 }
 
-/// The panel's readiness chip: the line of the list, but for a program path, which the panel says in the design's
-/// words (`Chip · Needs the program path here` in `SpRvd`, `Program missing here` in `h2md5`).
+/// The panel's readiness chip: the line of the list, but for a program path not set yet, which the panel says in the
+/// design's words (`Chip · Needs the program path here` in `SpRvd`); a file gone is said as the list says it
+/// (`Program missing here` in `h2md5`).
 pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry, missing: &[Missing]) -> (Arc<str>, BadgeTone) {
   match (missing, program_problem(missing)) {
     ([_], Some(ProgramProblem::NotSet)) => (ctx.t("team_hub.mcp.chip.pathNotSet"), BadgeTone::Warning),
-    ([_], Some(ProgramProblem::FileGone(_))) => (ctx.t("team_hub.mcp.chip.pathGone"), BadgeTone::Danger),
     _ => words::chip(ctx, listing, entry),
   }
 }

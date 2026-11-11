@@ -52,9 +52,10 @@ fn mark(ctx: &Ctx, entry: &Entry) -> Element {
   }
 }
 
-/// What a row's glyph says: how the resource stands here.
-const fn glyph_color(entry: &Entry) -> PaletteColor {
+/// What a row's glyph says: how the resource stands here, in the color of its line.
+fn glyph_color(entry: &Entry) -> PaletteColor {
   match (entry.group, entry.kind) {
+    (Group::NeedsYouHere, _) if words::said_in_danger(entry) => PaletteColor::Danger,
     (Group::NeedsYouHere, _) => PaletteColor::Warning,
     (Group::OffHere, _) => PaletteColor::TextMuted,
     (Group::Ready, Kind::Instruction | Kind::Skill | Kind::Profile) => PaletteColor::TextSecondary,

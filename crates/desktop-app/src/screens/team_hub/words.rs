@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
   connection::AgentProvider,
-  sharing::{ConnectionProblem, Missing},
+  sharing::{ConnectionProblem, Missing, ProgramProblem},
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -27,8 +27,20 @@ pub(in crate::screens) const fn cli_key(cli: AgentProvider) -> &'static str {
   }
 }
 
-/// The CLI kind the resource has no connection of at all here, when that is the one thing it misses: nothing stands in
-/// for it, so it is said in `danger`.
+/// Whether what the resource misses here is said in `danger`: no connection of its CLI kind at all, or, for an MCP
+/// server, its program's file gone from the path set for it; nothing on this computer stands in for either.
+pub(super) fn said_in_danger(entry: &Entry) -> bool {
+  if has_no_connection(entry).is_some() {
+    return true;
+  }
+  matches!(
+    entry.standing.as_ref().map(ReadinessStanding::missing),
+    Some([Missing::McpProgram { server, problem: ProgramProblem::FileGone(_) }])
+      if *server == entry.id && entry.kind == Kind::McpServer
+  )
+}
+
+/// The CLI kind the resource has no connection of at all here, when that is the one thing it misses.
 fn has_no_connection(entry: &Entry) -> Option<AgentProvider> {
   match entry.standing.as_ref()?.missing() {
     [
@@ -53,7 +65,7 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   match entry.group {
     Group::NeedsYouHere => Said {
       text: needs(ctx, listing, entry),
-      color: if has_no_connection(entry).is_some() {
+      color: if said_in_danger(entry) {
         PaletteColor::Danger
       } else {
         PaletteColor::Warning
@@ -186,9 +198,10 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
       ctx.t("team_hub.line.mcpUndecided")
     }
     Missing::McpOff { server } => ctx.t_args("team_hub.line.mcpOff", [("server", server_name(*server))]),
-    Missing::McpProgram { server, .. } if *server == entry.id && entry.kind == Kind::McpServer => {
-      ctx.t("team_hub.line.programHere")
-    }
+    Missing::McpProgram { server, problem } if *server == entry.id && entry.kind == Kind::McpServer => match problem {
+      ProgramProblem::NotSet => ctx.t("team_hub.line.programHere"),
+      ProgramProblem::FileGone(_) => ctx.t("team_hub.line.programGone"),
+    },
     Missing::McpProgram { server, .. } => ctx.t_args("team_hub.line.programOf", [("server", server_name(*server))]),
     Missing::Secret { name } | Missing::LocalSecret { name, .. } => {
       ctx.t_args("team_hub.line.secret", [("name", name.to_string())])
@@ -213,6 +226,7 @@ pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry) -> (Arc<str>, cr
         ctx.t_args("team_hub.chip.noConnection", [("cli", &*ctx.t(cli_key(cli)))]),
         BadgeTone::Danger,
       ),
+      None if said_in_danger(entry) => (needs(ctx, listing, entry), BadgeTone::Danger),
       None => (needs(ctx, listing, entry), BadgeTone::Warning),
     },
     Group::Ready => (ctx.t("team_hub.chip.ready"), BadgeTone::Success),
