@@ -58,6 +58,14 @@ orchestration tool reported it; `—` until known.
 | [PV2-23](PV2-23-deliver-step.md) | The Deliver step in the step panel | design + UI | N-012 | todo (design first) | — | — |
 | [PV2-24](PV2-24-branched-flows.md) | Flows the hub cannot draw | design + UI | N-012 | todo (design first) | — | — |
 | [PV2-25](PV2-25-slug-and-access.md) | Slug and who can use the pipeline | design + UI | N-012 | todo (design first) | — | — |
+| [PV2-26](PV2-26-map-drafts.md) | Map: where pipeline drafts live | research | D-032 | done | — | — |
+| [PV2-27](PV2-27-store-no-pipeline-drafts.md) | Store: a pipeline is created published; drafts deleted | store + core | PV2-26 | todo | — | — |
+| [PV2-28](PV2-28-workspace-save-publishes.md) | Workspace: saving publishes or refuses | workspace | PV2-27 | todo | — | — |
+| [PV2-29](PV2-29-mcp-save-pipeline.md) | MCP: save_pipeline | workspace | PV2-28 | todo | — | — |
+| [PV2-30](PV2-30-orchestrator-drive-only.md) | Orchestrator: pipelines change only in drive mode | core + UI | PV2-29 | todo | — | — |
+| [PV2-31](PV2-31-hub-without-drafts.md) | The hub without drafts | design + UI | PV2-28 | todo | — | — |
+| [PV2-32](PV2-32-team-page-one-save.md) | Team pipeline page: one Save | UI | PV2-28 | todo | — | — |
+| [PV2-33](PV2-33-hide-import.md) | Import resources hidden | UI + MCP | — | todo | — | — |
 
 ## Order
 
