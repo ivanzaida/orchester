@@ -48,6 +48,51 @@ design source is `crates/desktop-app/design/orchester.pen`, read and changed onl
   only for Autopilot. A CLI that can't hand its requests to Orchester never runs Autopilot: its runs use Manual and
   the profile says why.
 - No modals: every setting here is a row on its page; the Autopilot widening is the existing in-place question.
+- **Approve mode and Dangerous auto-approve** (the person's decisions of 2026-11-11, so that unattended work is never
+  held by the hold rules or the reviewer; design `v5d5r` in `Orchestrator WIP` `mPw5l`: `XBtjx` Manual, `CdyBy`
+  Autopilot, `i0Aqq` Dangerous auto-approve with the status bar's chip, `Cuj66` the confirmation `T4bbC`; it supersedes
+  the switch of `m0eUB` / `tvmsJ`). The project override above is now one selector, *Approve mode*, the first row of
+  Project settings › Runs › Approvals: **Manual** (the switch's Off: every agent runs as Manual), **Autopilot** (its
+  On: profiles set to Autopilot approve their own requests) or **Dangerous auto-approve**. It is one closed value in the
+  domain (`orchester_core::run::ApproveMode`), stored as `project_approvals.allow_autopilot` plus
+  `dangerous_auto_approve`, which a CHECK keeps from contradicting each other (Dangerous auto-approve allows Autopilot
+  too); a project keeps the mode it had (off → Manual, on → Autopilot). Moving it up (Manual → Autopilot, anything →
+  Dangerous auto-approve) is a person's alone, in the window; moving it down is anyone's, automation included. Choosing
+  Dangerous auto-approve opens a confirmation whose danger button alone moves the selector (Enter is bound to nothing;
+  *Cancel* has the focus; Esc and *Cancel* leave the mode as it was; an MCP client's press of the danger button is
+  refused); the other choices ask nothing.
+
+  While the mode is Dangerous auto-approve, **every tool request of every agent of the project's runs is approved at
+  once**, before anything else looks at it (`Worker::route` in `runner::execution::executor::step::approval`, the mode
+  read through the coordinator link at each request and at each beat while one waits, never cached per run). It
+  bypasses:
+  - the run's own rules (*Approve similar*, *Always allow*) and the profile's allowed list;
+  - Autopilot's roots check and Manual's rules alike: the profile's approval mode and a run's switch to Manual make no
+    difference;
+  - every hard hold (`ReviewHold`: pushes, destructive commands, credential locations, writes outside the folders,
+    commands Orchester cannot read, a read-only or offline step's limits, escalations out of Codex's sandbox);
+  - the reviewer, which is never started, so no tokens are spent on it;
+  - the person's card and the Orchestrator chat: the request is answered in the same call that records it, so nothing
+    waits on it. A request already waiting for the person, or under the reviewer's review, when the mode is chosen is
+    approved at the worker's next beat (250 ms), its review dropped.
+
+  It covers tool requests only: an agent's questions, plans, messages, limits and every other decision above still
+  come to the person. Each answer is recorded as `AnswerKind::DangerousAutoApprove` (`answered.kind`
+  `dangerous_auto_approve` in `get_run`'s `requests`; the activity's mark stays *auto-approved*,
+  `DecidedBy::AutoApproved`, which keeps the stored answers' table as it is) and shows in the run's Conversation as a
+  quiet row *Approved by Dangerous auto-approve mode*, its `triangle-alert` in `danger`. While it is chosen the row is on
+  `danger_muted`, the Reviewer and *Approved for every run* rows are dimmed and still usable, a line under the group
+  says they are not used, and the status bar shows a *Dangerous auto-approve* chip that opens Project settings › Runs.
+  Over MCP, `get_approvals` and `get_run` report `approve_mode` (`manual`, `autopilot`, `dangerous_auto_approve`);
+  `set_approve_mode` moves it (down always, up refused as `person_only`); `set_allow_autopilot` keeps its meaning for
+  existing clients (`false` moves to Manual, from Dangerous auto-approve too; `true` asks for Autopilot and changes
+  nothing where Autopilot is allowed already) and `get_approvals`' `allow_autopilot` stays (true in Autopilot and
+  Dangerous auto-approve).
+  - **Team projects and remote runners.** A team task's run on this computer is run by this computer's runner, so the
+    project's mode on this computer applies to it as to a local run (the mode is kept per computer, as *Allow
+    Autopilot* was; the team server does not decide requests). Remote runners are not built
+    (`docs/architecture/remote-runners.md`): the executor reads the mode through the coordinator link
+    (`SettingsLink::approve_mode`), the boundary a remote executor will use too.
 
 ## Enforcement
 
@@ -183,7 +228,8 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
 | `agents.permissions.approvals.notAllowed` / `.hint` | Not allowed in {project} / {project} doesn't allow Autopilot, so {profile}'s runs there use Manual. The choice stays for projects that allow it. |
 | `agents.enforcement.approvalMode.{autopilot,manual}` | Orchester answers every request; {cli}'s own prompt is off · Orchester answers: allowed list, then the reviewer, then you |
 | `agents.enforcement.approvalMode.cantEnforce` | Can't hand its requests to Orchester · runs as Manual until {cli} is updated |
-| `projectSettings.runs.approvals.allowAutopilot` / `.on` / `.off` | Allow Autopilot for agents in this project / On · profiles set to Autopilot approve their own requests · only you can turn it on / Off · every agent runs as Manual · {profiles} are set to Autopilot |
+| `project_settings.approveMode` and its choices and hints (2026-11-11, in place of `allowAutopilot`) | Approve mode · Manual / Autopilot / Dangerous auto-approve · Every agent asks for what its allowed list does not cover, whatever its profile says (· {profiles} are set to Autopilot) / Profiles set to Autopilot approve their own requests · only you can choose it / Every tool request of every agent in this project is approved at once: no review, no hold, nobody asked · only you can choose it |
+| `project_settings.dangerousDialog.*`, `cards.approval.quiet.dangerous`, `shell.status.dangerous` | Turn on Dangerous auto-approve mode? with its body, risks and *Turn it on, I accept the risk* · Approved by Dangerous auto-approve mode · Dangerous auto-approve |
 | `projectSettings.runs.approvals.reviewer.hint` | For Manual requests off the allowed list |
 | `task.run.mode.{autopilot,manual,manualRun,manualProject,manualProfile}` | Autopilot · Manual · Manual · this run · Manual · project · Manual · profile |
 | `task.run.mode.switchToManual` | Switch to Manual for this run |
