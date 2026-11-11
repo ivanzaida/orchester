@@ -274,6 +274,15 @@ fn team_hub_links_to_no_editor_page_and_edits_an_mcp_server_in_its_panel() {
   open(&mut agents, HubView::new(HubFilter::All, Some(github)));
   assert!(agents.exists("team-hub-fix-switch-on") && !agents.exists("team-hub-edit"));
   assert!(agents.exists("team-new-mcp-runs-as"), "the form is in place");
+  // In the panel its keys are the panel's, as wide as every other row of the hub's (170), not the create form's 190.
+  let key = agents
+    .window
+    .tree
+    .get_element_by_id_mut("team-new-mcp-runs-as-row-key")
+    .and_then(|key| key.bounds())
+    .expect("the key is laid out")
+    .width;
+  assert!((key - 170.0).abs() < 0.5, "{key}");
 }
 
 #[test]

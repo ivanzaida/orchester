@@ -51,6 +51,14 @@ pub(super) struct Shown<'a> {
   pub published: Option<&'a NewTeamMcpServer>,
 }
 
+impl Shown<'_> {
+  /// How wide its rows' keys are: a create form's (A8 `vPoTQ`), or a panel's when it edits a resource in place, as
+  /// every other row of the hub's panels is (170, `P60rze` in `NDZXC`).
+  pub(super) const fn key(&self) -> Key {
+    if self.published.is_some() { Key::Wide } else { Key::Form }
+  }
+}
+
 /// What a kind's form gives the panel.
 pub(super) struct Body {
   /// A section of its own over the rows' (a profile's *Role*).
@@ -138,7 +146,7 @@ impl Error {
 }
 
 /// The row of `spec` with `control` at its end, and under its label what `error` says, else its own line.
-pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl Into<Element>) -> Row {
+pub(super) fn row(ctx: &Ctx, key: Key, spec: &Spec, error: Option<&Error>, control: impl Into<Element>) -> Row {
   let label = if spec.required {
     ctx.t_args("team_new.required", [("label", &*ctx.t(spec.label))])
   } else {
@@ -152,7 +160,7 @@ pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl I
     (None, Some(sub)) => Some(Sub::quiet(ctx.t(sub))),
     (None, None) => None,
   };
-  rows::row_in(Key::Form, &format!("team-new-{}-row", spec.id), &label, sub, control)
+  rows::row_in(key, &format!("team-new-{}-row", spec.id), &label, sub, control)
 }
 
 /// How a text control looks.
@@ -197,12 +205,13 @@ pub(super) fn text(
 /// The row of `spec` whose control is a text field: it turns `danger` with `error`.
 pub(super) fn text_row(
   ctx: &mut Ctx,
+  key: Key,
   spec: &Spec,
   error: Option<&Error>,
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked): (Look, bool),
 ) -> Row {
-  text_row_with(ctx, spec, error, (value, placeholder), (look, locked, None))
+  text_row_with(ctx, (key, spec), error, (value, placeholder), (look, locked, None))
 }
 
 /// [`text_row`] of the form's name field, which has the focus when the form opens.
@@ -216,7 +225,7 @@ pub(super) fn name_row(
 ) -> Row {
   text_row_with(
     ctx,
-    spec,
+    (shown.key(), spec),
     error,
     (value, placeholder),
     (look, shown.locked, Some(shown.first)),
@@ -225,7 +234,7 @@ pub(super) fn name_row(
 
 fn text_row_with(
   ctx: &mut Ctx,
-  spec: &Spec,
+  (key, spec): (Key, &Spec),
   error: Option<&Error>,
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked, first): (Look, bool, Option<&ElementRef>),
@@ -237,7 +246,7 @@ fn text_row_with(
     (look, error.is_some_and(Error::is_error), locked),
     first,
   );
-  row(ctx, spec, error, control)
+  row(ctx, key, spec, error, control)
 }
 
 /// A segmented choice: `options` are (value, label key); choosing one sets `value` to it.

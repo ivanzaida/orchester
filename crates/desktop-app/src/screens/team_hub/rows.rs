@@ -126,6 +126,7 @@ pub(in crate::screens) fn keyed(
 /// [`keyed`] whose key is `key` wide.
 fn keyed_in(key: Key, id: &str, label: impl Into<Element>, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let key = Column::new()
+    .id(format!("{id}-key"))
     .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Tight.role())
