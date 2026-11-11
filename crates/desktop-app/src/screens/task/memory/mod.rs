@@ -88,6 +88,11 @@ impl Component for TaskMemoryTab {
     let state = self.made.state(ctx, &props.task.project, Some(task));
     ctx.provide(state.clone());
     let read = read(ctx, &props.task, self.retries.get());
+    match &read {
+      Read::Ready(memory) => state.follow_read(Some(memory)),
+      Read::Failed(_) => state.follow_read::<TaskMemory>(None),
+      Read::Reading => {}
+    }
     let filters = state.filters.get();
     // The search and filters show once there are records to search; the count once they are read. With no record
     // yet the empty state has *New record* itself, so the toolbar is left out (`e8oWP4`).

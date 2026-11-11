@@ -126,7 +126,10 @@ impl Component for MemoryHub {
     let state = MemoryState::of(ctx);
     let memory = match read::memory(ctx, &project, (self.retries.get(), &self.failure)) {
       Read::Ready(memory) => memory,
-      Read::Failed(error, retrying) => return self.failure_page(ctx, &project, error, retrying),
+      Read::Failed(error, retrying) => {
+        state.follow_read::<ProjectMemory>(None);
+        return self.failure_page(ctx, &project, error, retrying);
+      }
       Read::Reading => {
         // Until the first reading the statuses keep the order they would have while proposals wait.
         let order = self.order.get().copied().unwrap_or(Order::of(1));
@@ -136,6 +139,7 @@ impl Component for MemoryHub {
         return frame(ctx, (&project, team, tab), (strip, bones));
       }
     };
+    state.follow_read(Some(&memory));
     let order = *self.order.get_or_init(|| Order::of(memory.waiting.len()));
     let tab = view.tab.unwrap_or(order.opening());
     if self.shown.lock().replace(tab).is_some_and(|last| last != tab)
