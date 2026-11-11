@@ -12,7 +12,7 @@ use orchester_core::{
   name::Name,
   orchestrator::{AgentWait, Chat, EntryKind, TaskEvent, TaskEventKind, TurnState, WaitKind},
   resource::ModelId,
-  run::Run,
+  run::{PendingToolApproval, Run},
   store::{ActivityStore, TaskStore},
   task::organization::ChangeActor,
   time::Timestamp,
@@ -42,6 +42,36 @@ fn wait_of(kind: WaitKind, run: &Run, task: &str) -> AgentWait {
     continuing: None,
     merging: None,
   }
+}
+
+/// A tool request of `run`'s current step that came to the person, waiting: the key its wait is kept by.
+fn request_tool(db: &mut ProjectDb, run: &Run) -> String {
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let invocation = db
+    .start_invocation(
+      run.id(),
+      execution,
+      &ModelId::new("haiku").expect("model"),
+      Timestamp::now(),
+    )
+    .expect("invocation")
+    .id;
+  let request = PendingToolApproval {
+    id: format!("{invocation}:call_1"),
+    run: run.id(),
+    execution,
+    invocation,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "command".to_owned(),
+    action: "cargo test".to_owned(),
+    target: None,
+    requested_at: Timestamp::now(),
+    native: None,
+  };
+  db.request_tool_approval(&request).expect("the request waits");
+  format!("approval:{}:{}", run.id(), request.id)
 }
 
 /// The key of `run`'s task.
@@ -203,7 +233,8 @@ fn orchestrator_task_events_a_tool_request_is_a_wait_line_for_the_person() {
     automatic: false,
     ..wait_of(WaitKind::Approval, &asks, &key)
   };
-  let seq = keep(&mut db, &chat, ("approval", &approval));
+  let request = request_tool(&mut db, &asks);
+  let seq = keep(&mut db, &chat, (&request, &approval));
   drop(db);
   screen.go(OrchestratorChat::Chat(chat.id()));
   let line = format!("orchestrator-wait-wait-{seq}");
@@ -221,4 +252,28 @@ fn orchestrator_task_events_a_tool_request_is_a_wait_line_for_the_person() {
     "Open ↗",
     "to its card on the task's Conversation"
   );
+  assert_eq!(screen.text(&format!("{line}-chip")), "Waits for you", "drive was off");
+}
+
+/// While the Orchestrator drives, a tool request is its to read (2026-11-11): the line says it reads it until its
+/// turn decides it or leaves it to the person.
+#[test]
+fn orchestrator_task_events_a_tool_request_is_read_by_the_orchestrator_while_it_drives() {
+  let mut screen = Orchestrator::new(Setup::NoRunner);
+  let delivery = screen.delivery();
+  let (asks, _) = waiting(&screen, delivery, "Sign in");
+  let mut db = screen.db();
+  let key = key_of(&db, &asks);
+  let chat = conversation(&mut db);
+  let approval = AgentWait {
+    automatic: true,
+    ..wait_of(WaitKind::Approval, &asks, &key)
+  };
+  let request = request_tool(&mut db, &asks);
+  let seq = keep(&mut db, &chat, (&request, &approval));
+  drop(db);
+  screen.go(OrchestratorChat::Chat(chat.id()));
+  let line = format!("orchestrator-wait-wait-{seq}");
+  screen.until("the tool request's line", |screen| screen.exists(&line));
+  assert_eq!(screen.text(&format!("{line}-chip")), "Orchestrator is reading");
 }

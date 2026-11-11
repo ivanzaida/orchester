@@ -460,7 +460,8 @@
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
-      "effectApproval": "Approving a tool request is yours, on its card in the task's Conversation: the Orchestrator doesn't decide it, whatever Let the Orchestrator answer agents says.",
+      "effectApproval": "Approving this tool request is yours, on its card in the task's Conversation: Let the Orchestrator drive was off when it came.",
+      "effectApprovalRead": "Let the Orchestrator drive is on, so the Orchestrator reads the request and approves it once or denies it when it is sure; otherwise it tells you what it recommends, and the request waits for you on its card.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
     },
     "watch": {

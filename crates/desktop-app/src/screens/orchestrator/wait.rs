@@ -5,8 +5,10 @@
 //! on the task's Conversation, with a status chip: *Waits for you*, *Orchestrator is reading* (the loader), *Answered
 //! by the Orchestrator*, *Answered by you*, or *No longer waits* once it was dealt with elsewhere (the workspace reads
 //! which waits still stand). What the Orchestrator said or did with it nests under it as a quote
-//! (`super::timeline`). Whether *Let the Orchestrator answer agents* answers it is the chip's tooltip. Deciding a plan
-//! stays the person's: its chip says it waits for them, and the Orchestrator's reading nests as its recommendation.
+//! (`super::timeline`). Whether *Let the Orchestrator drive* answers it is the chip's tooltip. Deciding a plan stays
+//! the person's: its chip says it waits for them, and the Orchestrator's reading nests as its recommendation. A tool
+//! request is read and decided by the Orchestrator while it drives (2026-11-11): *Answered by the Orchestrator* once
+//! its `decide_approval` was done, else it waits for the person on its card.
 //! The end of a task's run is a wait of its own kind, with its own line ([`super::run_end`]).
 
 use std::sync::Arc;
@@ -19,6 +21,9 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::display;
+
+/// The tool whose action decides a tool request.
+const DECIDE_APPROVAL: &str = "decide_approval";
 
 use super::{
   line::{Chip, ChipTone, Line, LineLink, Tone},
@@ -50,8 +55,11 @@ impl Status {
   /// for one that started none) and what that turn's answer did (`answer`).
   pub(super) fn of(wait: &AgentWait, stands: bool, turn: Option<&TurnState>, answer: &[Part]) -> Self {
     let thinking = matches!(turn, Some(TurnState::Thinking));
-    if matches!(wait.kind, WaitKind::Plan | WaitKind::Approval) {
+    if wait.kind == WaitKind::Plan {
       return if stands { Self::Waits } else { Self::Gone };
+    }
+    if wait.kind == WaitKind::Approval {
+      return Self::of_approval(wait, stands, turn, answer);
     }
     if thinking {
       return Self::Reading;
@@ -77,6 +85,21 @@ impl Status {
       None if !stands => Self::Gone,
       None if turn.is_none() && wait.automatic => Self::Reading,
       None => Self::Waits,
+    }
+  }
+
+  /// Where a tool request stands: decided by the Orchestrator's `decide_approval` in its turn, read while that turn
+  /// thinks or waits to start, else the person's.
+  fn of_approval(wait: &AgentWait, stands: bool, turn: Option<&TurnState>, answer: &[Part]) -> Self {
+    let decided = answer.iter().any(|part| {
+      matches!(part, Part::Action { action, .. }
+        if action.tool == DECIDE_APPROVAL && action.outcome == ActionOutcome::Done)
+    });
+    match (decided, stands) {
+      (true, _) => Self::Answered,
+      (false, false) => Self::Gone,
+      (false, true) if matches!(turn, Some(TurnState::Thinking)) || turn.is_none() && wait.automatic => Self::Reading,
+      (false, true) => Self::Waits,
     }
   }
 
@@ -167,11 +190,12 @@ const fn kind_name(kind: WaitKind) -> &'static str {
 }
 
 /// What happens with `wait`: the Orchestrator answers it by itself (in the turn it `turned`, or after the turn under
-/// way), its own answer raised it so it waits for the person, or the person's switch is off. A tool request is always
-/// the person's.
+/// way), its own answer raised it so it waits for the person, or the person's switch is off. A tool request the
+/// Orchestrator decides only when it is sure.
 const fn effect(wait: &AgentWait, turned: bool) -> &'static str {
   match (wait.kind, wait.automatic, turned) {
-    (WaitKind::Approval, ..) => "orchestrator.wait.effectApproval",
+    (WaitKind::Approval, true, _) => "orchestrator.wait.effectApprovalRead",
+    (WaitKind::Approval, false, _) => "orchestrator.wait.effectApproval",
     (WaitKind::Plan, true, _) => "orchestrator.wait.effectPlanRead",
     (WaitKind::Plan, false, _) => "orchestrator.wait.effectPlan",
     (_, true, true) => "orchestrator.wait.effectAnswering",
