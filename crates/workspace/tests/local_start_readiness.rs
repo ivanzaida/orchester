@@ -386,14 +386,18 @@ fn published_pipeline(db: &mut ProjectDb, root: &Path, program: &Path) -> Publis
   }])
   .expect("pipeline");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new("quick-fix").expect("slug"),
       name("Quick fix"),
       &pipeline,
       at(6),
     )
-    .expect("pipeline");
-  let version = db.publish_draft::<Pipeline>(resource.id(), at(7)).expect("published");
+    .expect("pipeline")
+    .0;
+  let version = db
+    .latest_version::<Pipeline>(resource.id())
+    .expect("published")
+    .expect("published");
   let profiles = BTreeMap::from([(profile_id, profile_version)]);
   let snapshot = RunSnapshot::build(
     resource.id(),

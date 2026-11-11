@@ -137,15 +137,20 @@ impl Fixture {
     let pipeline = Pipeline::new(vec![implement, review]).expect("pipeline");
     let delivery = fixture
       .db
-      .create_resource(
+      .create_published(
         Slug::new("review-delivery").expect("slug"),
         name("Review delivery"),
         &pipeline,
         at(8),
       )
       .expect("pipeline")
+      .0
       .id();
-    let version = fixture.db.publish_draft::<Pipeline>(delivery, at(9)).expect("publish");
+    let version = fixture
+      .db
+      .latest_version::<Pipeline>(delivery)
+      .expect("publish")
+      .expect("published");
     let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
     fixture.snapshot = RunSnapshot::build(
       delivery,
@@ -194,15 +199,20 @@ impl Fixture {
     .expect("pipeline");
     let delivery = fixture
       .db
-      .create_resource(
+      .create_published(
         Slug::new("parallel-delivery").expect("slug"),
         name("Parallel delivery"),
         &pipeline,
         at(8),
       )
       .expect("pipeline")
+      .0
       .id();
-    let version = fixture.db.publish_draft::<Pipeline>(delivery, at(9)).expect("publish");
+    let version = fixture
+      .db
+      .latest_version::<Pipeline>(delivery)
+      .expect("publish")
+      .expect("published");
     let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
     fixture.snapshot = RunSnapshot::build(
       delivery,
@@ -271,10 +281,14 @@ impl Fixture {
     };
     let pipeline = Pipeline::new(vec![step]).expect("pipeline");
     let delivery = db
-      .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
+      .create_published(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
       .expect("pipeline")
+      .0
       .id();
-    let version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish");
+    let version = db
+      .latest_version::<Pipeline>(delivery)
+      .expect("publish")
+      .expect("published");
     let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
     let published = PublishedVersions {
       profiles: &profiles,

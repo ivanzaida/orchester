@@ -19,7 +19,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background,
   messages::Message,
-  pipelines::library::{LibraryEntry, VersionState, make_default_in},
+  pipelines::library::{LibraryEntry, make_default_in},
   sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
@@ -83,7 +83,7 @@ impl Component for LibraryRow {
       row = row.toned_hint(message_text(ctx, &error), HintTone::Danger);
     }
     // A member of a shared project duplicates none of the team's pipelines.
-    if !matches!(entry.state, VersionState::DraftOnly) && team::may_change(props.team.as_ref()) {
+    if team::may_change(props.team.as_ref()) {
       row = row.end(self.menu(ctx, &props, &make_default));
     }
     let row = match props
@@ -91,16 +91,10 @@ impl Component for LibraryRow {
       .as_ref()
       .and_then(|team| Some((team, team.standing(entry.id)?)))
     {
-      Some((team, standing)) => {
-        let draft = match entry.state {
-          VersionState::DraftOnly => Some(None),
-          VersionState::PublishedWithDraft(version) => Some(Some(version)),
-          VersionState::Published(_) => None,
-        };
-        row
-          .end(team::publisher(ctx, &format!("{id}-publisher"), team, standing))
-          .end(team::row_state(ctx, &format!("{id}-state"), standing, draft))
-      }
+      // A pipeline holds no draft (D-032).
+      Some((team, standing)) => row
+        .end(team::publisher(ctx, &format!("{id}-publisher"), team, standing))
+        .end(team::row_state(ctx, &format!("{id}-state"), standing, None)),
       None => row.end(state(ctx, entry, &id)),
     };
     row.end(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
@@ -205,34 +199,23 @@ fn chain(ctx: &Ctx, entry: &LibraryEntry) -> Arc<str> {
 
 /// The version state over its tasks and age, both at the row's end (`State` `T5CHp`).
 fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
-  let (words, glyph, color) = match entry.state {
-    VersionState::DraftOnly => (ctx.t("pipelines.draftOnly"), Icon::Pencil, PaletteColor::TextMuted),
-    VersionState::Published(v) => (
-      ctx.t_args("pipelines.published", [("version", v.get().to_string())]),
-      Icon::CircleCheck,
-      PaletteColor::Success,
-    ),
-    VersionState::PublishedWithDraft(v) => (
-      ctx.t_args("pipelines.withDraft", [("version", v.get().to_string())]),
-      Icon::CircleCheck,
-      PaletteColor::Success,
-    ),
-  };
+  let (words, glyph, color) = (
+    ctx.t_args("pipelines.published", [("version", entry.version.get().to_string())]),
+    Icon::CircleCheck,
+    PaletteColor::Success,
+  );
   let tasks = if entry.used_by == 0 {
     ctx.t("pipelines.notUsed")
   } else {
     ctx.t_args("pipelines.tasks", [("count", entry.used_by.to_string())])
   };
-  let meta = match entry.last_published {
-    Some(at) => ctx.t_args(
-      "pipelines.rowMeta",
-      [
-        ("tasks", tasks.to_string()),
-        ("age", super::library::age(ctx, at).to_string()),
-      ],
-    ),
-    None => tasks,
-  };
+  let meta = ctx.t_args(
+    "pipelines.rowMeta",
+    [
+      ("tasks", tasks.to_string()),
+      ("age", super::library::age(ctx, entry.last_published).to_string()),
+    ],
+  );
   Column::new()
     .id(format!("{id}-state"))
     .width(lurq::node::dimension::Dimension::Px(STATE_WIDTH))

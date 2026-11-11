@@ -3,7 +3,7 @@ use orchester_workspace::agents::data::{ProjectAgents, VersionState};
 use super::Seed;
 
 #[test]
-fn seed_agents_has_saved_stale_and_pipeline_draft_states() {
+fn seed_agents_has_saved_and_stale_profile_drafts_and_no_pipeline_draft() {
   let seed = Seed::of("agents");
   let listed = ProjectAgents::for_screen(seed.repo()).expect("profiles");
   let builder = listed
@@ -19,7 +19,10 @@ fn seed_agents_has_saved_stale_and_pipeline_draft_states() {
       .iter()
       .any(|p| matches!(p.state, VersionState::StaleDraft { .. }))
   );
-  assert!(listed.usage.steps.iter().any(|step| step.draft));
+  assert!(
+    !listed.usage.steps.is_empty(),
+    "the pipelines' latest versions use the profiles"
+  );
 }
 
 #[test]

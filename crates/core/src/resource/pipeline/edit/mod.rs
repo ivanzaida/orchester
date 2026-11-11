@@ -1,7 +1,7 @@
-//! Editing the steps of a pipeline draft. Edits may break pipeline rules on the way — a step
-//! returning to a removed one, a cycle, no steps at all — so the edited steps are kept as they
-//! are and [`PipelineEdit::validate`] says which rule is broken. Only a valid list becomes a
-//! [`Pipeline`] that can be saved.
+//! Editing the steps of a pipeline. Edits may break pipeline rules on the way — a step returning to a removed one, a
+//! cycle, no steps at all — so the edited steps are kept as they are and [`PipelineEdit::validate`] says which rule is
+//! broken. Only a valid list becomes a [`Pipeline`], and only one with no [`EditProblem`] at all is saved: a pipeline
+//! is stored only as a published version.
 
 use std::collections::BTreeSet;
 
@@ -23,7 +23,7 @@ const ADDED_KEY: &str = "step";
 /// Suffix of the key of a duplicated step: `review-copy`, `review-copy-2`, …
 const COPY_SUFFIX: &str = "copy";
 
-/// Something that keeps the edited steps from being published.
+/// Something that keeps the edited steps from being saved, which publishes them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EditProblem {
   NoSteps,
@@ -35,13 +35,6 @@ pub enum EditProblem {
   Rule(PipelineError),
   /// A step without an agent profile or tool.
   Unassigned(StepKey),
-}
-
-impl EditProblem {
-  /// Whether the steps cannot even be kept as a draft while this problem lasts.
-  pub const fn blocks_saving(&self) -> bool {
-    matches!(self, Self::Cycle(_) | Self::Rule(_))
-  }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

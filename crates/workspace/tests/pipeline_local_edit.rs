@@ -1,6 +1,8 @@
-//! What *Save* does with the edit the Pipelines page of a local project holds (`Pipelines · v2` P1): it stores the edit
-//! as the draft and publishes it as the next version at once, keeps the draft and says why when it cannot publish,
-//! asks for what a person decides, and leaves what runs started on alone; *Cancel* drops the edit and stores nothing.
+//! What *Save* does with the edit the Pipelines page of a local project holds (`Pipelines · v2` P1): it publishes the
+//! edit as the next version, refuses an edit that cannot be published and stores nothing (a pipeline holds no draft,
+//! D-032), says why, asks for what a person decides, and leaves what runs started on alone; *Cancel* drops the edit
+//! and stores nothing.
+//! `cargo test -p orchester-workspace --test pipeline_local_edit _`.
 use std::sync::Arc;
 
 use orchester_core::{
@@ -29,7 +31,7 @@ struct Fixture {
   step: StepKey,
 }
 
-/// A project with a published tool and a pipeline of one step that runs it, stored as its draft only.
+/// A project with a published tool and a pipeline of one step that runs it, created as its first version.
 fn fixture() -> Fixture {
   let folder = tempfile::tempdir().expect("the fixture is valid");
   std::fs::create_dir(folder.path().join(".git")).expect("the fixture is valid");
@@ -52,28 +54,25 @@ fn fixture() -> Fixture {
     None,
   )
   .expect("the fixture is valid");
-  let tool_id = db
-    .create_resource(
+  let (tool, _) = db
+    .create_published(
       Slug::new("tool").expect("the fixture is valid"),
       Name::new("Tool").expect("the fixture is valid"),
       &tool,
       now,
     )
-    .expect("the fixture is valid")
-    .id();
-  db.publish_draft::<Tool>(tool_id, now).expect("the fixture is valid");
+    .expect("the fixture is valid");
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("the fixture is valid"));
   let step = edit.add_step(Name::new("Check").expect("the fixture is valid"), None);
-  edit.update(&step, |step| step.kind = StepKind::Tool { tool: Some(tool_id) });
-  let pipeline = db
-    .create_resource(
-      Slug::new("pipeline").expect("the fixture is valid"),
-      Name::new("Pipeline").expect("the fixture is valid"),
+  edit.update(&step, |step| step.kind = StepKind::Tool { tool: Some(tool.id()) });
+  let (pipeline, _) = db
+    .published_pipeline_for_test(
+      "pipeline",
+      "Pipeline",
       &edit.validate().expect("the fixture is valid"),
       now,
     )
-    .expect("the fixture is valid")
-    .id();
+    .expect("the fixture is valid");
   Fixture {
     folder,
     db,
@@ -102,33 +101,20 @@ impl Fixture {
     versions.sort_by_key(|version| version.number());
     versions.iter().map(|version| version.body().clone()).collect()
   }
-}
 
-fn first_version() -> Message {
-  Message::new("appMcp.widens.firstPipelineVersion")
-}
-
-#[test]
-fn save_publishes_the_first_version_once_a_person_allows_it() {
-  let pipeline = fixture();
-  let describe = |edit: &mut PipelineEdit| edit.set_description("Check the change");
-
-  let asked = pipeline.save(describe, &[]).unwrap();
-  assert_eq!(asked, Saved::Confirm(vec![first_version()]));
-  assert!(pipeline.versions().is_empty());
-  assert_eq!(pipeline.opened().body.description(), "");
-
-  let saved = pipeline.save(describe, &[first_version()]).unwrap();
-  assert_eq!(saved, Saved::Published(VersionNumber::FIRST));
-  let opened = pipeline.opened();
-  assert_eq!(opened.latest.unwrap().body.description(), "Check the change");
-  assert!(opened.draft_saved_at.is_none());
+  /// Nothing was stored since the fixture: v1 only, and no draft.
+  fn stores_only_the_first_version(&self) {
+    assert_eq!(self.versions().len(), 1, "nothing was published");
+    assert!(
+      self.db.draft::<Pipeline>(self.pipeline).expect("read").is_none(),
+      "a pipeline holds no draft"
+    );
+  }
 }
 
 #[test]
 fn save_makes_the_next_version_and_leaves_the_one_runs_started_on() {
   let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
   let before = pipeline.versions();
   assert_eq!(before.len(), 1);
 
@@ -143,37 +129,111 @@ fn save_makes_the_next_version_and_leaves_the_one_runs_started_on() {
   assert_eq!(after.len(), 2);
   assert_eq!(after[0], before[0], "the version a run started on is untouched");
   assert_eq!(after[1].description(), "Now with a description");
-  assert!(pipeline.opened().draft_saved_at.is_none());
+  assert_eq!(pipeline.opened().version, number);
 }
 
 #[test]
-fn save_keeps_the_edit_as_the_draft_and_says_why_when_it_cannot_publish() {
+fn save_refuses_an_edit_that_cannot_be_published_says_why_and_stores_nothing() {
   let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
+  let stored = pipeline.opened();
 
-  let saved = pipeline
+  let why = pipeline
     .save(
       |edit| {
         edit.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
       },
       &[],
     )
-    .unwrap();
-  let Saved::Drafted(why) = saved else {
-    panic!("expected a draft kept, got {saved:?}");
-  };
+    .unwrap_err();
   assert_eq!(why.key, "pipelines.problems.noProfile");
-  assert_eq!(pipeline.versions().len(), 1, "nothing was published");
-  let opened = pipeline.opened();
-  assert!(opened.draft_saved_at.is_some());
-  assert_eq!(opened.body.steps().len(), 2, "the stored draft is the edit");
-  assert_eq!(opened.latest.unwrap().body.steps().len(), 1);
+  pipeline.stores_only_the_first_version();
+  assert_eq!(pipeline.opened(), stored);
+}
+
+#[test]
+fn save_that_changes_nothing_writes_nothing() {
+  let pipeline = fixture();
+  assert_eq!(pipeline.save(|_| {}, &[]).unwrap(), Saved::Unchanged);
+  pipeline.stores_only_the_first_version();
+}
+
+#[test]
+fn save_of_an_edit_started_before_the_pipeline_changed_is_refused() {
+  let pipeline = fixture();
+  let mut held = Held::start(Arc::new(pipeline.opened().body));
+  held.change(|edit| edit.set_description("Mine"));
+  pipeline
+    .save(|edit| edit.set_description("Another editor's"), &[])
+    .unwrap();
+
+  let refused = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap_err();
+  assert_eq!(refused.key, "errors.draftChanged");
+  assert_eq!(pipeline.versions().len(), 2);
+}
+
+/// A pipeline with two published versions: the first, and a second that has a description.
+fn two_versions(pipeline: &Fixture) -> (Pipeline, Pipeline) {
+  pipeline
+    .save(|edit| edit.set_description("Second version"), &[])
+    .expect("the second version is published");
+  let versions = pipeline.versions();
+  assert_eq!(versions.len(), 2);
+  (versions[0].clone(), versions[1].clone())
+}
+
+#[test]
+fn save_that_cannot_publish_names_every_step_not_ready() {
+  let pipeline = fixture();
+
+  let why = pipeline
+    .save(
+      |edit| {
+        edit.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
+        edit.add_step(Name::new("Merge").unwrap(), Some(&pipeline.step));
+      },
+      &[],
+    )
+    .unwrap_err();
+  // In the order of the flow: each step added after Check comes right after it.
+  assert_eq!(why.key, "pipelines.problems.stepsNotReady");
+  assert_eq!(
+    why.args,
+    [("count", "2".to_owned()), ("steps", "Merge, Review".to_owned())]
+  );
+  pipeline.stores_only_the_first_version();
+}
+
+#[test]
+fn save_of_a_step_whose_profile_is_gone_is_refused_and_names_the_step_not_an_id() {
+  let pipeline = fixture();
+  let gone = ResourceId::generate();
+
+  let runs_gone = |edit: &mut PipelineEdit| {
+    edit.update(&pipeline.step, |step| {
+      step.kind = StepKind::Agent {
+        profile: Some(gone),
+        repository: orchester_core::resource::RepositoryAccess::ReadOnly,
+        model: None,
+        permissions: orchester_core::permission::StepPermissions::default(),
+      };
+    });
+  };
+  let why = pipeline.save(runs_gone, &[]).unwrap_err();
+  assert_eq!(
+    why.key, "pipelines.problems.profileGone",
+    "a profile this project does not have is gone, as Ready? says"
+  );
+  assert_eq!(why.args, [("step", "Check".to_owned())]);
+  assert!(
+    why.args.iter().all(|(_, value)| !value.contains(&gone.to_string())),
+    "no raw id: {why:?}"
+  );
+  pipeline.stores_only_the_first_version();
 }
 
 #[test]
 fn save_that_breaks_a_rule_stores_nothing() {
   let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
   let stored = pipeline.opened();
 
   let refused = pipeline
@@ -190,58 +250,8 @@ fn save_that_breaks_a_rule_stores_nothing() {
 }
 
 #[test]
-fn save_that_changes_nothing_writes_nothing() {
-  let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
-  assert_eq!(pipeline.save(|_| {}, &[]).unwrap(), Saved::Unchanged);
-  assert_eq!(pipeline.versions().len(), 1);
-}
-
-#[test]
-fn save_of_an_edit_started_before_the_pipeline_changed_is_refused() {
-  let pipeline = fixture();
-  let mut held = Held::start(Arc::new(pipeline.opened().body));
-  held.change(|edit| edit.set_description("Mine"));
-  pipeline
-    .save(|edit| edit.set_description("Another editor's"), &[first_version()])
-    .unwrap();
-
-  let allowed = [first_version()];
-  let refused = save(
-    pipeline.folder.path(),
-    pipeline.pipeline,
-    held.base(),
-    held.edit(),
-    &allowed,
-  )
-  .unwrap_err();
-  assert_eq!(refused.key, "errors.draftChanged");
-  assert_eq!(pipeline.versions().len(), 1);
-}
-
-#[test]
-fn a_stored_draft_is_where_an_edit_starts_and_save_publishes_it() {
-  let pipeline = fixture();
-  assert!(pipeline.opened().draft_saved_at.is_some());
-  let held = Held::start(Arc::new(pipeline.opened().body));
-  assert!(!held.is_changed(), "opening a stored draft is not a change");
-
-  let allowed = [first_version()];
-  let saved = save(
-    pipeline.folder.path(),
-    pipeline.pipeline,
-    held.base(),
-    held.edit(),
-    &allowed,
-  )
-  .unwrap();
-  assert_eq!(saved, Saved::Published(VersionNumber::FIRST));
-}
-
-#[test]
 fn cancel_drops_the_edit_and_the_stored_pipeline_is_what_the_page_shows_again() {
   let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
   let stored = pipeline.opened();
 
   let mut held = Held::start(Arc::new(stored.body.clone()));
@@ -256,66 +266,6 @@ fn cancel_drops_the_edit_and_the_stored_pipeline_is_what_the_page_shows_again() 
   assert_eq!(pipeline.opened(), stored, "an edit that was dropped stored nothing");
   let again = Held::start(Arc::new(pipeline.opened().body));
   assert_eq!(again.edit().description(), "");
-}
-
-#[test]
-fn an_edit_back_to_the_latest_version_drops_the_stored_draft_and_does_not_wedge_save() {
-  let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
-  let latest = pipeline.opened().latest.unwrap().body;
-  pipeline
-    .save(
-      |edit| {
-        edit.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
-      },
-      &[],
-    )
-    .unwrap();
-  let drafted = pipeline.opened();
-  assert!(drafted.draft_saved_at.is_some());
-  assert_ne!(drafted.body, latest);
-
-  // The page opens on the stored draft; the person changes it back to the latest version and presses Save.
-  let mut held = Held::start(Arc::new(drafted.body));
-  held.change(|edit| *edit = PipelineEdit::new(latest.clone()));
-  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
-  assert_eq!(saved, Saved::Published(VersionNumber::FIRST));
-
-  let opened = pipeline.opened();
-  assert!(
-    opened.draft_saved_at.is_none(),
-    "the draft the person chose against is gone"
-  );
-  assert_eq!(opened.body, latest);
-  assert_eq!(pipeline.versions().len(), 1, "no version was made");
-
-  // What the page does next: it shows the latest version, and a Save on it neither fails nor writes.
-  let again = Held::start(Arc::new(opened.body));
-  assert_eq!(
-    save(
-      pipeline.folder.path(),
-      pipeline.pipeline,
-      again.base(),
-      again.edit(),
-      &[]
-    )
-    .unwrap(),
-    Saved::Unchanged
-  );
-  assert_eq!(pipeline.versions().len(), 1);
-}
-
-/// A pipeline with two published versions: the first, and a second that has a description.
-fn two_versions(pipeline: &Fixture) -> (Pipeline, Pipeline) {
-  pipeline
-    .save(|_| {}, &[first_version()])
-    .expect("the first version is published");
-  pipeline
-    .save(|edit| edit.set_description("Second version"), &[])
-    .expect("the second version is published");
-  let versions = pipeline.versions();
-  assert_eq!(versions.len(), 2);
-  (versions[0].clone(), versions[1].clone())
 }
 
 #[test]
@@ -371,31 +321,6 @@ fn restoring_the_current_version_is_no_change_and_save_writes_nothing() {
 }
 
 #[test]
-fn save_that_cannot_publish_names_every_step_not_ready() {
-  let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
-
-  let saved = pipeline
-    .save(
-      |edit| {
-        edit.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
-        edit.add_step(Name::new("Merge").unwrap(), Some(&pipeline.step));
-      },
-      &[],
-    )
-    .unwrap();
-  let Saved::Drafted(why) = saved else {
-    panic!("expected a draft kept, got {saved:?}");
-  };
-  // In the order of the flow: each step added after Check comes right after it.
-  assert_eq!(why.key, "pipelines.problems.stepsNotReady");
-  assert_eq!(
-    why.args,
-    [("count", "2".to_owned()), ("steps", "Merge, Review".to_owned())]
-  );
-}
-
-#[test]
 fn unpublishable_says_what_keeps_an_edit_from_being_published() {
   use orchester_workspace::pipelines::{
     flow::FlowRead,
@@ -415,44 +340,6 @@ fn unpublishable_says_what_keeps_an_edit_from_being_published() {
   let mut empty = ready;
   empty.remove_step(&pipeline.step);
   assert_eq!(of(&empty), Some(Unpublishable::NoSteps));
-}
-
-#[test]
-fn save_of_a_step_whose_profile_is_gone_keeps_the_draft_and_names_the_step_not_an_id() {
-  let pipeline = fixture();
-  pipeline.save(|_| {}, &[first_version()]).unwrap();
-  let gone = ResourceId::generate();
-
-  let runs_gone = |edit: &mut PipelineEdit| {
-    edit.update(&pipeline.step, |step| {
-      step.kind = StepKind::Agent {
-        profile: Some(gone),
-        repository: orchester_core::resource::RepositoryAccess::ReadOnly,
-        model: None,
-        permissions: orchester_core::permission::StepPermissions::default(),
-      };
-    });
-  };
-  // Another executor is not provably as strict: a person allows it first.
-  let Saved::Confirm(allowed) = pipeline.save(runs_gone, &[]).unwrap() else {
-    panic!("the change asks first");
-  };
-  let saved = pipeline.save(runs_gone, &allowed).unwrap();
-  let Saved::Drafted(why) = saved else {
-    panic!("a draft is stored whatever its steps can run, got {saved:?}");
-  };
-  assert_eq!(
-    why.key, "pipelines.problems.profileGone",
-    "a profile this project does not have is gone, as Ready? says"
-  );
-  assert_eq!(why.args, [("step", "Check".to_owned())]);
-  assert!(
-    why.args.iter().all(|(_, value)| !value.contains(&gone.to_string())),
-    "no raw id: {why:?}"
-  );
-  let opened = pipeline.opened();
-  assert!(opened.draft_saved_at.is_some(), "the draft is stored");
-  assert_eq!(pipeline.versions().len(), 1, "nothing was published");
 }
 
 #[test]

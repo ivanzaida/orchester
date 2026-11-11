@@ -14,8 +14,8 @@ use orchester_core::{
   id::{ProjectId, ServerId, UserId},
   project::ProjectKey,
   resource::{
-    AgentProfile, Draft, Instruction, Pipeline, PromptText, Removal, RemoveMode, ResourceBody, ResourceKind, Skill,
-    Tool, VersionNumber,
+    AgentProfile, Draft, Instruction, Pipeline, PromptText, Removal, ResourceBody, ResourceKind, Skill, Tool,
+    VersionNumber,
   },
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
@@ -72,7 +72,6 @@ fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team
   connections::seed(kontur)?;
   if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
-    drop_drafts::<Pipeline>(kontur)?;
     drop_drafts::<Instruction>(kontur)?;
     drop_drafts::<Skill>(kontur)?;
     drop_drafts::<Tool>(kontur)?;
@@ -149,10 +148,10 @@ fn server(kontur: &mut Kontur, me: &SharedPerson) -> Result<ServerId, SeedError>
 }
 
 /// Marks every resource of `B`'s kind the team's, each version as the server confirmed it, published by dana-k or olha
-/// in turn.
+/// in turn. Every kept resource: a linked project offers only what is the team's already, which none of them is yet.
 fn share<B: ResourceBody + Clone>(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
   let revision = TaskRevision::try_from(1_u64).map_err(invalid)?;
-  for (index, resource) in kontur.db.resources(B::KIND)?.into_iter().enumerate() {
+  for (index, resource) in kontur.db.kept_resources(B::KIND)?.into_iter().enumerate() {
     let versions = kontur.db.versions::<B>(resource.id())?;
     // The server has only what was published: a draft of this computer's own stays local.
     if versions.is_empty() {
@@ -183,9 +182,7 @@ fn drop_drafts<B: ResourceBody + PartialEq>(kontur: &mut Kontur) -> Result<(), S
       kontur.db.discard_draft_matching(resource.id(), draft.body())?;
       continue;
     }
-    let removal = kontur
-      .db
-      .remove_resource(resource.id(), RemoveMode::Unused, kontur.now)?;
+    let removal = kontur.db.remove_resource(resource.id(), kontur.now)?;
     if let Removal::InUse(_) = removal {
       return Err(SeedError::Invalid(format!("{} is in use", resource.name().as_str())));
     }

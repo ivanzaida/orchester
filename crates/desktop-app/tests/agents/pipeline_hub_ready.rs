@@ -13,8 +13,8 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug,
-    StepKey, StepKind,
+    AgentProfile, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, StepKey,
+    StepKind,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -27,27 +27,22 @@ use super::{
   support::project_id,
 };
 
-/// The key of step `index` of `pipeline`'s draft or version.
+/// The key of step `index` of `pipeline`'s latest version.
 pub(super) fn step_at(agents: &Agents, pipeline: ResourceId, index: usize) -> StepKey {
   let db = ProjectDb::open(&agents.root).expect("database");
-  let body = match db.draft::<Pipeline>(pipeline).expect("read") {
-    Some(draft) => draft.body().clone(),
-    None => db
-      .latest_version::<Pipeline>(pipeline)
-      .expect("read")
-      .expect("a version")
-      .body()
-      .clone(),
-  };
-  body.steps()[index].key.clone()
+  let latest = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("read")
+    .expect("a version");
+  latest.body().steps()[index].key.clone()
 }
 
-/// The key of the first step of `pipeline`'s draft or version, *Plan*.
+/// The key of the first step of `pipeline`'s latest version, *Plan*.
 fn plan_step(agents: &Agents, pipeline: ResourceId) -> StepKey {
   step_at(agents, pipeline, 0)
 }
 
-/// The key of the second step of `pipeline`'s draft or version, *Build*.
+/// The key of the second step of `pipeline`'s latest version, *Build*.
 fn build_step(agents: &Agents, pipeline: ResourceId) -> StepKey {
   step_at(agents, pipeline, 1)
 }
@@ -57,36 +52,10 @@ fn page(page: ProjectPage) -> Route {
 }
 
 #[test]
-fn pipeline_hub_ready_a_draft_with_one_step_not_ready_says_so_in_its_row_chips_and_ready() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let draft = pipeline_of(&agents, "Dependency update", [Some(builder), None], false);
-  let key = build_step(&agents, draft);
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-
-  assert_eq!(agents.text("pipeline-hub-section-needs-count"), "1");
-  assert_eq!(
-    agents.text(&format!("pipeline-hub-row-{draft}-line")),
-    "02 Build has no agent profile"
-  );
-  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "1 step not ready");
-  assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
-  let row = format!("team-hub-ready-step-{key}");
-  assert_eq!(agents.text(&format!("{row}-words")), "No agent profile");
-  assert_eq!(agents.text(&format!("{row}-choose")), "Choose →");
-
-  agents.click(&format!("{row}-choose"));
-  agents.until("the step", |s| {
-    s.window.navigation().route_now() == page(ProjectPage::Pipeline(draft, PipelineView::Step(key.clone())))
-  });
-}
-
-#[test]
 fn pipeline_hub_ready_a_pipeline_that_can_run_is_all_set_with_one_summary_row() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let ready = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let ready = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   open(&mut agents, PipelinesFilter::All, Some(ready));
 
   assert_eq!(agents.text("team-hub-readiness-count"), "all set");
@@ -104,11 +73,15 @@ fn pipeline_hub_ready_a_step_whose_profile_is_not_published_opens_it_in_the_agen
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let draft = agents.profile(false);
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(draft)], false);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(draft)]);
   let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "1 step not ready");
+  assert_eq!(
+    agents.text("pipeline-hub-chip-1-label"),
+    "02 Build runs a profile that is not published yet",
+    "a published pipeline's chip says what its version lacks, as its row does"
+  );
   let row = format!("team-hub-ready-step-{key}");
   assert_eq!(agents.text(&format!("{row}-words")), "Profile not published yet");
   assert_eq!(agents.text(&format!("{row}-open")), "Open →");
@@ -161,29 +134,19 @@ pub(super) fn body(profiles: [Option<ResourceId>; 2]) -> Pipeline {
   edit.validate().expect("a pipeline")
 }
 
+/// Pipeline `name` created as its first version `body` (a pipeline is stored only as published versions, D-032).
 pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId {
   ProjectDb::open(&agents.root)
     .expect("database")
-    .create_resource(
+    .create_published(
       Slug::from_name(name).expect("slug"),
       Name::new(name).expect("name"),
       body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id()
-}
-
-/// Saves `draft` as the next draft of the published pipeline `id`.
-pub(super) fn draft_over(agents: &Agents, id: ResourceId, draft: Pipeline) {
-  let mut db = ProjectDb::open(&agents.root).expect("database");
-  let version = db
-    .latest_version::<Pipeline>(id)
-    .expect("read")
-    .expect("a version")
-    .number();
-  db.save_draft(id, &Draft::new(draft, Some(version), Timestamp::now()))
-    .expect("a draft");
 }
 
 #[test]
@@ -191,7 +154,7 @@ fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_open
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let lost = lost(&agents, "Explorer");
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)]);
   let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
@@ -220,7 +183,7 @@ fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_open
 fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and_the_line_counts_them() {
   let mut agents = Agents::new(true);
   let (first, second) = (lost(&agents, "Explorer"), lost(&agents, "Builder"));
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(first), Some(second)], true);
+  let stuck = pipeline_of(&agents, "Quick fix", [Some(first), Some(second)]);
   let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
@@ -237,115 +200,14 @@ fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and
 }
 
 #[test]
-fn pipeline_hub_ready_a_draft_step_problem_is_listed_beside_a_step_whose_profile_lost_its_connection() {
-  let mut agents = Agents::new(true);
-  let lost = lost(&agents, "Explorer");
-  let stuck = pipeline_of(&agents, "Quick fix", [Some(lost), Some(lost)], true);
-  draft_over(&agents, stuck, body([Some(lost), None]));
-  let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
-  open(&mut agents, PipelinesFilter::All, Some(stuck));
-
-  assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
-  assert_eq!(
-    agents.text(&format!("team-hub-ready-step-{build}-words")),
-    "No agent profile"
-  );
-  assert_eq!(
-    agents.text(&format!("team-hub-ready-step-{plan}-words")),
-    "Explorer has no connection",
-    "the step's problem does not hide the profile's"
-  );
-}
-
-#[test]
-fn pipeline_hub_ready_a_draft_over_a_published_version_says_so_and_leaves_the_version_chips_alone() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
-  draft_over(&agents, id, body([Some(builder), None]));
-  let key = build_step(&agents, id);
-  open(&mut agents, PipelinesFilter::All, Some(id));
-
-  assert_eq!(
-    agents.text("pipeline-hub-section-ready-count"),
-    "1",
-    "the list speaks of the version tasks use"
-  );
-  assert_eq!(agents.text("pipeline-hub-chip-0-label"), "v1");
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "draft");
-  assert_eq!(
-    agents.text("pipeline-hub-chip-2-label"),
-    "Ready",
-    "the draft's step does not turn the published version's chip amber"
-  );
-  assert!(!agents.exists("pipeline-hub-chip-3"));
-  assert_eq!(agents.text("team-hub-readiness-label"), "Ready? · this draft");
-  assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
-  assert_eq!(
-    agents.text(&format!("team-hub-ready-step-{key}-words")),
-    "No agent profile"
-  );
-}
-
-#[test]
 fn pipeline_hub_ready_a_published_pipeline_without_a_draft_keeps_the_plain_title() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)], true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
   open(&mut agents, PipelinesFilter::All, Some(id));
 
   assert_eq!(agents.text("team-hub-readiness-label"), "Ready?");
   assert!(!agents.exists("pipeline-hub-chip-2"), "no draft chip");
-}
-
-#[test]
-fn pipeline_hub_ready_a_draft_with_no_steps_adds_one_in_place_as_the_heads_add_step() {
-  let mut agents = Agents::new(true);
-  let empty = store(&agents, "Empty", &Pipeline::new(Vec::new()).expect("a pipeline"));
-  open(&mut agents, PipelinesFilter::All, Some(empty));
-  let shown = agents.window.navigation().route_now();
-
-  assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
-  assert_eq!(agents.text("team-hub-ready-draft-words"), "No steps yet");
-  let head = agents.text("pipeline-hub-add-step");
-  assert_eq!(
-    agents.text("team-hub-ready-draft-add-step"),
-    format!("{head} →"),
-    "one name for one action: the head's"
-  );
-  agents.click("team-hub-ready-draft-add-step");
-  agents.until("the step, in place", |s| {
-    !s.exists("team-hub-ready-draft-add-step") && s.text("team-hub-readiness-count") == "1 missing"
-  });
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    shown,
-    "the panel stays where it is: nothing else opened"
-  );
-  assert!(
-    agents.text("team-hub-actions-hint").starts_with("Unsaved changes"),
-    "the step is the edit's, not stored: {}",
-    agents.text("team-hub-actions-hint")
-  );
-}
-
-#[test]
-fn pipeline_hub_ready_a_draft_that_is_only_not_published_yet_is_not_all_set() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let fresh = store(&agents, "Fresh", &body([Some(builder), Some(builder)]));
-  open(&mut agents, PipelinesFilter::All, Some(fresh));
-
-  assert_eq!(
-    agents.text(&format!("pipeline-hub-row-{fresh}-line")),
-    "Not published yet"
-  );
-  assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
-  assert_eq!(agents.text("team-hub-ready-draft-words"), "Not published yet");
-  assert!(
-    !agents.exists("team-hub-ready-draft-add-step") && !agents.exists("team-hub-ready-draft-edit-steps"),
-    "nothing to fix in the steps"
-  );
 }
 
 #[test]
@@ -380,7 +242,7 @@ fn pipeline_hub_ready_steps_a_line_cannot_draw_offer_the_editor() {
 fn pipeline_hub_ready_an_archived_pipeline_has_no_ready_group() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let old = pipeline_of(&agents, "Old", [Some(builder), Some(builder)], true);
+  let old = pipeline_of(&agents, "Old", [Some(builder), Some(builder)]);
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(old, Timestamp::now())
@@ -392,13 +254,20 @@ fn pipeline_hub_ready_an_archived_pipeline_has_no_ready_group() {
 #[test]
 fn pipeline_hub_ready_a_row_line_that_is_cut_shows_its_full_text_in_a_tooltip() {
   let mut agents = Agents::new(true);
+  // Steps that run a profile that is gone, so the line says what one lacks (a stored step runs something, D-032).
+  let gone = ResourceId::generate();
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
-  edit.add_step(
+  let key = edit.add_step(
     Name::new("Reconcile the dependency lockfile with the vendored manifests").expect("name"),
     None,
   );
+  edit.update(&key, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(gone);
+    }
+  });
   let long = store(&agents, "Long", &edit.validate().expect("a pipeline"));
-  let short = store(&agents, "Short", &body([None, None]));
+  let short = store(&agents, "Short", &body([Some(gone), Some(gone)]));
   open(&mut agents, PipelinesFilter::All, Some(long));
 
   let line = format!("pipeline-hub-row-{long}-line");
@@ -423,7 +292,7 @@ fn pipeline_hub_ready_a_row_line_that_is_cut_shows_its_full_text_in_a_tooltip() 
   let said = agents.text(&line);
   assert_eq!(
     agents.text(&format!("{line}-tooltip")),
-    "01 Reconcile the dependency lockfile with the vendored manifests has no agent profile",
+    "01 Reconcile the dependency lockfile with the vendored manifests runs a profile that is no longer available",
     "the tooltip holds the whole line, which the row cut to {said:?}"
   );
   assert!(

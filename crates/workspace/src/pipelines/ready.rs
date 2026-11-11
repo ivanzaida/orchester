@@ -1,10 +1,10 @@
 //! What keeps a pipeline from running as it is, in the order the page's *Ready?* lists it (`Pipelines · v2` P1
-//! `j0OZhl`, P8 `eA5ed`): what is wrong with the draft the page shows, the steps whose card stands in amber, then what
-//! the readiness read says this computer lacks ([`crate::readiness`]), then every profile or tool it cannot tell. The
-//! readiness is the hub's own; nothing is computed again here except which steps of the flow cannot run, which the flow
-//! already knows ([`Blocked`]).
+//! `j0OZhl`, P8 `eA5ed`): what is wrong with the steps the page shows as a whole, the steps whose card stands in amber,
+//! then what the readiness read says this computer lacks ([`crate::readiness`]), then every profile or tool it cannot
+//! tell. The readiness is the hub's own; nothing is computed again here except which steps of the flow cannot run,
+//! which the flow already knows ([`Blocked`]).
 //!
-//! The page shows a draft when the pipeline has one, so what it lists about the steps is the draft's, while the
+//! The page shows the edit it holds while there is one, so what it lists about the steps is the edit's, while the
 //! readiness is about the latest published version (the one tasks use).
 
 use std::sync::Arc;
@@ -116,23 +116,22 @@ pub struct UndecidedMember {
   pub why: Undecided,
 }
 
-/// What is wrong with the draft as a whole, not with one of its steps.
+/// What is wrong with the steps as a whole, not with one of them. An edit with one is not saved
+/// ([`super::write::save_refusals`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Draft {
+pub enum Whole {
   /// It has no steps: the person adds one.
   NoSteps,
   /// Its steps wait for each other, or break another rule, so they have no flow.
   Broken,
   /// A step waits for only some of what runs before it, which one line cannot draw.
   Branches,
-  /// Nothing is wrong with it, but it was never published, so tasks cannot use it.
-  NotPublished,
 }
 
 /// One thing a pipeline lacks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Problem {
-  Draft(Draft),
+  Whole(Whole),
   /// A step has no profile or tool, or names one that cannot run.
   Step(StepProblem),
   /// A part of a profile or tool its steps run that this computer lacks.
@@ -146,23 +145,21 @@ pub enum Problem {
 /// What [`problems`] reads of a pipeline.
 #[derive(Clone, Copy, Debug)]
 pub struct Basis<'a> {
-  /// Its steps as the page draws them: the draft's when it has one.
+  /// Its steps as the page draws them: the edit's while the page holds one, else the latest version's.
   pub flow: &'a FlowRead,
   /// How its latest version stands; `None` while it has none.
   pub standing: Option<&'a ReadinessStanding>,
   /// Every profile or tool of the latest version that cannot be told ([`undecided_members`]).
   pub undecided: &'a [UndecidedMember],
-  /// Whether it has a published version.
-  pub published: bool,
-  /// The profiles and tools the steps the page shows run, while that is a draft over a published version: a profile
-  /// or tool of the version that the draft no longer runs is not named. `None` lists every one.
+  /// The profiles and tools the steps the page shows run, while that is an edit of the latest version: a profile or
+  /// tool of the version that the edit no longer runs is not named. `None` lists every one.
   pub runs: Option<&'a [ResourceId]>,
 }
 
 /// Everything that keeps the pipeline from running as it is; empty when it is ready.
 pub fn problems(basis: Basis<'_>) -> Vec<Problem> {
   let steps = step_problems(basis.flow);
-  let mut found: Vec<Problem> = draft_problem(basis).map(Problem::Draft).into_iter().collect();
+  let mut found: Vec<Problem> = whole_problem(basis.flow).map(Problem::Whole).into_iter().collect();
   found.extend(steps.iter().cloned().map(Problem::Step));
   match basis.standing {
     Some(ReadinessStanding::Missing(readiness)) => {
@@ -171,15 +168,12 @@ pub fn problems(basis: Basis<'_>) -> Vec<Problem> {
     Some(ReadinessStanding::Undecided(why)) => found.extend(undecided(why, (basis.undecided, &steps), basis.runs)),
     Some(ReadinessStanding::Ready) | None => {}
   }
-  if found.is_empty() && basis.flow.draft && !basis.published {
-    found.push(Problem::Draft(Draft::NotPublished));
-  }
   found
 }
 
 /// The profiles and tools named when the pipeline is undecided: each undecided one, else the reason as it stands. A
 /// profile or tool a step names already says what keeps it (no version here, archived, no connection), so it is not
-/// named twice; nor is one that `runs` (the draft's) leaves out.
+/// named twice; nor is one that `runs` (the edit's) leaves out.
 fn undecided(
   why: &Undecided,
   (members, steps): (&[UndecidedMember], &[StepProblem]),
@@ -203,16 +197,13 @@ fn undecided(
     .collect()
 }
 
-/// What is wrong with the draft the page shows, besides its steps; none when the page shows a published version.
-fn draft_problem(basis: Basis<'_>) -> Option<Draft> {
-  if !basis.flow.draft {
-    return None;
-  }
-  match &basis.flow.flow {
-    Ok(flow) if flow.is_empty() => Some(Draft::NoSteps),
+/// What is wrong with the steps of `read` as a whole, besides each of them.
+fn whole_problem(read: &FlowRead) -> Option<Whole> {
+  match &read.flow {
+    Ok(flow) if flow.is_empty() => Some(Whole::NoSteps),
     Ok(_) => None,
-    Err(FlowError::Branches(_)) => Some(Draft::Branches),
-    Err(FlowError::Broken(_)) => Some(Draft::Broken),
+    Err(FlowError::Branches(_)) => Some(Whole::Branches),
+    Err(FlowError::Broken(_)) => Some(Whole::Broken),
   }
 }
 

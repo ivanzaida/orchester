@@ -71,6 +71,7 @@ mod organization;
 mod organized_drafts;
 mod owned_records;
 mod permission_events;
+mod pipeline_publishes;
 mod plan_limits;
 mod plans;
 mod project_rules;
@@ -353,4 +354,6 @@ pub enum ProjectMigration {
   TeamPipelineIds,
   /// Local profiles choosing what reached their agents before.
   ProfileGiven,
+  /// Pipeline drafts deleted, and every pipeline with no version with what names it.
+  PipelineDrafts,
 }

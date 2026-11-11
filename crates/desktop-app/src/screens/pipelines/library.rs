@@ -14,7 +14,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background, messages,
-  pipelines::library::{LibraryEntry, VersionState, library_in},
+  pipelines::library::{LibraryEntry, library_in},
   sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
@@ -160,27 +160,21 @@ fn populated(
   (shown, team): (&ShownProject, Option<&TeamConfiguration>),
   entries: &[LibraryEntry],
 ) -> lurq::components::Column {
-  let (published, drafts): (Vec<_>, Vec<_>) = entries
-    .iter()
-    .partition(|entry| !matches!(entry.state, VersionState::DraftOnly));
+  // A pipeline is stored only as published versions (D-032): every entry is published.
+  let published: Vec<&LibraryEntry> = entries.iter().collect();
   let mut pane =
     parts::pane("pipelines-library").with_children(team.map(|team| team::line(ctx, "pipelines-team-line", team)));
-  for (id, title, group) in [
-    ("pipelines-published", "pipelines.groups.published", published.clone()),
-    ("pipelines-drafts", "pipelines.groups.draftOnly", drafts),
-  ] {
-    if group.is_empty() {
-      continue;
-    }
-    let rows: Vec<Element> = group
-      .into_iter()
+  if !published.is_empty() {
+    let (id, title) = ("pipelines-published", "pipelines.groups.published");
+    let rows: Vec<Element> = published
+      .iter()
       .map(|entry| {
         ctx.mount_keyed::<super::library_row::LibraryRow>(
           &format!("pipeline-row-{}", entry.id),
           RowProps {
             project: shown.open.project.id(),
             root: shown.open.repo_root.clone(),
-            entry: entry.clone(),
+            entry: (*entry).clone(),
             team: team.cloned(),
           },
         )

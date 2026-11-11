@@ -131,15 +131,15 @@ fn problems(agents: &Agents) -> (ResourceId, ResourceId, [StepKey; 3]) {
   let lint = edit.add_step(name("Lint"), Some(&checks));
   edit.update(&lint, |step| step.kind = StepKind::Tool { tool: Some(lint_tool) });
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("problems").expect("slug"),
       name("Problems"),
       &edit.validate().expect("a pipeline"),
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   (id, reviewer, [review, checks, lint])
 }
 

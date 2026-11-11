@@ -94,63 +94,49 @@ pub fn save_status(ctx: &Ctx, editing: &Editing, busy: bool) -> Arc<str> {
     ctx.t("pipelines.saving")
   } else if editing.unsaved() {
     ctx.t("pipelines.unsaved")
-  } else if let Some(latest) = &editing.opened.latest {
-    ctx.t_args(
-      if editing.opened.draft_saved_at.is_some() {
-        "pipelines.savedPublished"
-      } else {
-        "pipelines.publishedHint"
-      },
-      [("version", latest.number.get().to_string())],
-    )
   } else {
-    ctx.t("pipelines.savedUnpublished")
+    // A pipeline holds no draft (D-032): what is saved is its latest version.
+    ctx.t_args(
+      "pipelines.publishedHint",
+      [("version", editing.opened.version.get().to_string())],
+    )
   }
 }
 
-/// The version line (`Status line` `Tx2Zh`): the published version, or that none is, and the draft's state.
+/// The version line (`Status line` `Tx2Zh`): the published version, and the unsaved changes' state.
 fn version_line(ctx: &Ctx, editing: &Editing) -> Row {
   let next = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  let (glyph, color, status, detail) = match &editing.opened.latest {
-    Some(latest) => (
-      Icon::CircleCheck,
-      PaletteColor::Success,
-      ctx.t_args("pipelines.published", [("version", latest.number.get().to_string())]),
-      if editing.has_draft() {
-        // The draft's number and what it changes, without the summary's own wording.
-        let draft = match super::summary::draft_detail(ctx, editing) {
-          Some(detail) => ctx.t_args(
-            "pipelines.draftWith",
-            [("version", next), ("detail", detail.to_string())],
-          ),
-          None => ctx.t_args("pipelines.version", [("version", next)]),
-        };
-        ctx.t_args(
-          "pipelines.versionLine",
-          [
-            ("draft", draft.to_string()),
-            ("tasks", editing.opened.used_by.to_string()),
-          ],
-        )
-      } else {
-        ctx.t_args(
-          "pipelines.versionLineNoDraft",
-          [("tasks", editing.opened.used_by.to_string())],
-        )
-      },
+  let (glyph, color, status, detail) = (
+    Icon::CircleCheck,
+    PaletteColor::Success,
+    ctx.t_args(
+      "pipelines.published",
+      [("version", editing.opened.version.get().to_string())],
     ),
-    None => (
-      Icon::CircleDashed,
-      PaletteColor::TextMuted,
-      ctx.t_args("pipelines.draftUnpublished", [("version", next)]),
-      if editing.edit.steps().is_empty() {
-        ctx.t("pipelines.publishEmpty")
-      } else {
-        ctx.t("pipelines.notUsed")
-      },
-    ),
-  };
+    if editing.has_draft() {
+      // The next version's number and what it changes, without the summary's own wording.
+      let draft = match super::summary::draft_detail(ctx, editing) {
+        Some(detail) => ctx.t_args(
+          "pipelines.draftWith",
+          [("version", next), ("detail", detail.to_string())],
+        ),
+        None => ctx.t_args("pipelines.version", [("version", next)]),
+      };
+      ctx.t_args(
+        "pipelines.versionLine",
+        [
+          ("draft", draft.to_string()),
+          ("tasks", editing.opened.used_by.to_string()),
+        ],
+      )
+    } else {
+      ctx.t_args(
+        "pipelines.versionLineNoDraft",
+        [("tasks", editing.opened.used_by.to_string())],
+      )
+    },
+  );
   Row::new()
     .id("pipeline-version-line")
     .spacing(SpacingSize::Sm)
@@ -177,7 +163,7 @@ fn tabs(ctx: &mut Ctx, editing: &Editing) -> Element {
     editing.view.tab()
   };
   let steps = editing.shown().steps().len();
-  let versions = editing.opened.latest.as_ref().map_or(0, |v| v.number.get() as usize);
+  let versions = editing.opened.version.get() as usize;
   let open = |view: View| {
     let views = editing.views.clone();
     move || views.tab(view.clone())

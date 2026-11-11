@@ -1,17 +1,19 @@
 //! What keeps a pipeline of the hub from running as it is, as the page's *Ready?* lists it (`Pipelines · v2` P1, P8):
-//! the steps that cannot run, then what the readiness read says, then why it cannot be told.
+//! what is wrong with the steps as a whole, the steps that cannot run, then what the readiness read says, then why it
+//! cannot be told. A pipeline is stored only as published versions (D-032): the page reads the latest version, or the
+//! edit it holds over it.
 
 use orchester_core::{
   connection::AgentProvider,
   id::{ConnectionId, ResourceId},
-  resource::{Draft as StoredDraft, FlowError, Pipeline, PipelineError, Slug, StepKey},
+  resource::{FlowError, Pipeline, PipelineEdit, PipelineError, StepKey},
   sharing::Missing,
-  store::ResourceStore,
 };
 use orchester_workspace::{
   pipelines::{
+    flow::FlowRead,
     hub::HubPipeline,
-    ready::{Basis, Blocked, Draft, Problem, problems, step_problems},
+    ready::{Basis, Blocked, Problem, Whole, problems, step_problems},
   },
   readiness::{Group, ReadinessStanding, Undecided},
 };
@@ -32,21 +34,26 @@ fn listed(fixture: &Fixture, id: ResourceId) -> HubPipeline {
     .clone()
 }
 
-fn draft(fixture: &Fixture, slug: &str, body: &Pipeline) -> ResourceId {
-  fixture
-    .db()
-    .create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
-    .expect("a draft")
-    .id()
+/// The flow of an edit of the pipeline that holds `body`, as the page reads it while it holds the edit.
+fn edited(fixture: &Fixture, body: &Pipeline) -> FlowRead {
+  let hub = fixture
+    .workspace
+    .pipeline_hub(&fixture.root, &fixture.vault)
+    .expect("the hub");
+  FlowRead::of_edit(&PipelineEdit::new(body.clone()), &hub.assignables())
 }
 
 fn found(pipeline: &HubPipeline) -> Vec<Problem> {
+  found_in(pipeline, &pipeline.flow, None)
+}
+
+/// What *Ready?* lists of `flow` for `pipeline`, leaving out what `runs` does not run when it is given.
+fn found_in(pipeline: &HubPipeline, flow: &FlowRead, runs: Option<&[ResourceId]>) -> Vec<Problem> {
   problems(Basis {
-    flow: &pipeline.flow,
+    flow,
     standing: pipeline.standing.as_ref(),
     undecided: &pipeline.undecided,
-    published: pipeline.number().is_some(),
-    runs: None,
+    runs,
   })
 }
 
@@ -63,18 +70,15 @@ fn readiness_pipeline_ready_a_pipeline_that_can_run_lists_nothing() {
 }
 
 #[test]
-fn readiness_pipeline_ready_a_draft_names_each_step_that_has_nothing_to_run() {
+fn readiness_pipeline_ready_an_edit_names_each_step_that_has_nothing_to_run() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
-  let id = draft(&fixture, "unfinished", &pipeline(&[Some(builder), None, None], None));
-
+  let id = fixture.own("delivery", &pipeline(&[Some(builder)], None));
   let read = listed(&fixture, id);
-  assert_eq!(
-    read.standing, None,
-    "a pipeline never published has no readiness to read"
-  );
-  let steps = step_problems(&read.flow);
+  let flow = edited(&fixture, &pipeline(&[Some(builder), None, None], None));
+
+  let steps = step_problems(&flow);
   assert_eq!(steps.len(), 2);
   assert_eq!(
     steps.iter().map(|step| step.number).collect::<Vec<_>>(),
@@ -84,9 +88,9 @@ fn readiness_pipeline_ready_a_draft_names_each_step_that_has_nothing_to_run() {
   assert_eq!(&*steps[0].name, "Step 1");
   assert!(steps.iter().all(|step| step.blocked == Blocked::NoProfile));
   assert_eq!(
-    found(&read),
+    found_in(&read, &flow, None),
     steps.into_iter().map(Problem::Step).collect::<Vec<_>>(),
-    "the draft's problems are its steps"
+    "the edit's problems are its steps"
   );
 }
 
@@ -156,43 +160,35 @@ fn readiness_pipeline_ready_every_step_whose_profile_lost_its_connection_is_name
 }
 
 #[test]
-fn readiness_pipeline_ready_a_draft_step_problem_stands_beside_a_step_whose_profile_lost_its_connection() {
+fn readiness_pipeline_ready_an_edit_step_problem_stands_beside_a_step_whose_profile_lost_its_connection() {
   let fixture = Fixture::local();
   let lost = lost_profile(&fixture, "lost");
   let id = fixture.own("stuck", &pipeline(&[Some(lost)], None));
-  save_draft(&fixture, id, &pipeline(&[Some(lost), None], None));
-
   let read = listed(&fixture, id);
-  let all = found(&read);
+  let flow = edited(&fixture, &pipeline(&[Some(lost), None], None));
+
+  let all = found_in(&read, &flow, None);
   assert!(
     matches!(
       all.as_slice(),
       [Problem::Step(gone), Problem::Step(empty)]
         if gone.number == 1 && gone.blocked.names() == Some(lost) && empty.blocked == Blocked::NoProfile
     ),
-    "the draft's steps, each with what it lacks, and the profile not again: {all:?}"
+    "the edit's steps, each with what it lacks, and the profile not again: {all:?}"
   );
 }
 
 #[test]
-fn readiness_pipeline_ready_a_profile_of_the_version_the_draft_no_longer_runs_is_left_out() {
+fn readiness_pipeline_ready_a_profile_of_the_version_the_edit_no_longer_runs_is_left_out() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
   let lost = lost_profile(&fixture, "lost");
   let id = fixture.own("stuck", &pipeline(&[Some(builder)], Some(lost)));
-  save_draft(&fixture, id, &pipeline(&[Some(builder)], None));
-
   let read = listed(&fixture, id);
-  let basis = |runs: Option<&[ResourceId]>| {
-    problems(Basis {
-      flow: &read.flow,
-      standing: read.standing.as_ref(),
-      undecided: &read.undecided,
-      published: true,
-      runs,
-    })
-  };
+  let flow = edited(&fixture, &pipeline(&[Some(builder)], None));
+
+  let basis = |runs: Option<&[ResourceId]>| found_in(&read, &flow, runs);
   assert!(
     matches!(basis(None).as_slice(), [Problem::Member(member)] if member.id == lost),
     "the version's integrator cannot be told: {:?}",
@@ -201,26 +197,12 @@ fn readiness_pipeline_ready_a_profile_of_the_version_the_draft_no_longer_runs_is
   assert_eq!(
     basis(Some(&[builder])),
     [],
-    "the draft no longer merges with it, so it is not the draft's problem"
+    "the edit no longer merges with it, so it is not the edit's problem"
   );
   assert!(
     matches!(basis(Some(&[builder, lost])).as_slice(), [Problem::Member(member)] if member.id == lost),
-    "a draft that still runs it keeps it"
+    "an edit that still runs it keeps it"
   );
-}
-
-/// Saves `body` as the draft of the published pipeline `id`.
-fn save_draft(fixture: &Fixture, id: ResourceId, body: &Pipeline) {
-  let version = fixture
-    .db()
-    .latest_version::<Pipeline>(id)
-    .expect("read")
-    .expect("published")
-    .number();
-  fixture
-    .db()
-    .save_draft(id, &StoredDraft::new(body.clone(), Some(version), at(30)))
-    .expect("a draft");
 }
 
 #[test]
@@ -246,56 +228,52 @@ fn readiness_pipeline_ready_a_step_that_names_a_missing_profile_is_listed_once()
 }
 
 #[test]
-fn readiness_pipeline_ready_a_draft_with_no_steps_says_so() {
-  let fixture = Fixture::local();
-  let id = draft(&fixture, "empty", &pipeline(&[], None));
-
-  let read = listed(&fixture, id);
-  assert_eq!(found(&read), [Problem::Draft(Draft::NoSteps)]);
-}
-
-#[test]
-fn readiness_pipeline_ready_a_draft_that_is_only_not_published_yet_says_so() {
+fn readiness_pipeline_ready_an_edit_with_no_steps_says_so() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
-  let id = draft(&fixture, "fresh", &pipeline(&[Some(builder), Some(builder)], None));
-
+  let id = fixture.own("delivery", &pipeline(&[Some(builder)], None));
   let read = listed(&fixture, id);
-  assert_eq!(found(&read), [Problem::Draft(Draft::NotPublished)]);
+
+  let flow = edited(&fixture, &pipeline(&[], None));
+  assert_eq!(found_in(&read, &flow, None), [Problem::Whole(Whole::NoSteps)]);
 }
 
-#[test]
-fn readiness_pipeline_ready_a_draft_a_line_cannot_draw_says_so() {
-  let fixture = Fixture::local();
-  let connection = fixture.connection(CLAUDE, "work");
-  let builder = fixture.own("builder", &profile_on(connection, &[]));
-  let mut steps = pipeline(&[Some(builder), Some(builder), Some(builder)], None).into_steps();
-  // The second step waits for only the first, though the third also starts the run: a branch.
+/// Three steps of `builder` (or none where `None`) whose second waits for only the first, though the third also
+/// starts the run: a branch one line cannot draw.
+fn branching(builder: [Option<ResourceId>; 3]) -> Pipeline {
+  let mut steps = pipeline(&builder, None).into_steps();
   let first = steps[0].key.clone();
   steps[1].depends_on.insert(first);
-  let id = draft(&fixture, "branching", &Pipeline::new(steps).expect("a valid pipeline"));
-
-  let read = listed(&fixture, id);
-  assert_eq!(found(&read), [Problem::Draft(Draft::Branches)]);
+  Pipeline::new(steps).expect("a valid pipeline")
 }
 
 #[test]
-fn readiness_pipeline_ready_a_draft_a_line_cannot_draw_still_names_each_step_that_cannot_run() {
+fn readiness_pipeline_ready_a_pipeline_a_line_cannot_draw_says_so() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
-  let mut steps = pipeline(&[Some(builder), None, Some(builder)], None).into_steps();
-  let first = steps[0].key.clone();
-  steps[1].depends_on.insert(first);
-  let id = draft(&fixture, "branching", &Pipeline::new(steps).expect("a valid pipeline"));
+  // A version an older build published; a save refuses such steps now (`pipelines.problems.branches`).
+  let id = fixture.own("branching", &branching([Some(builder); 3]));
 
   let read = listed(&fixture, id);
-  let all = found(&read);
+  assert_eq!(found(&read), [Problem::Whole(Whole::Branches)]);
+}
+
+#[test]
+fn readiness_pipeline_ready_an_edit_a_line_cannot_draw_still_names_each_step_that_cannot_run() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let id = fixture.own("delivery", &pipeline(&[Some(builder)], None));
+  let read = listed(&fixture, id);
+  let flow = edited(&fixture, &branching([Some(builder), None, Some(builder)]));
+
+  let all = found_in(&read, &flow, None);
   assert!(
     matches!(
       all.as_slice(),
-      [Problem::Draft(Draft::Branches), Problem::Step(step)]
+      [Problem::Whole(Whole::Branches), Problem::Step(step)]
         if step.number == 2 && step.blocked == Blocked::NoProfile && &*step.name == "Step 1"
     ),
     "the layout, then the step the list line names, numbered in the order of the steps: {all:?}"
@@ -307,45 +285,31 @@ fn readiness_pipeline_ready_steps_that_wait_for_each_other_are_broken() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
-  let id = draft(&fixture, "cycle", &pipeline(&[Some(builder)], None));
+  let id = fixture.own("cycle", &pipeline(&[Some(builder)], None));
   let mut read = listed(&fixture, id);
   // A stored pipeline cannot hold a cycle (`Pipeline::new` refuses it), so the flow's failure is put in by hand.
   let key = StepKey::new("step-0").expect("key");
   let flow = std::sync::Arc::make_mut(&mut read.flow);
   flow.flow = Err(FlowError::Broken(PipelineError::Cycle(key)));
 
-  assert_eq!(found(&read), [Problem::Draft(Draft::Broken)]);
+  assert_eq!(found(&read), [Problem::Whole(Whole::Broken)]);
 }
 
 #[test]
-fn readiness_pipeline_ready_a_draft_over_a_published_version_lists_the_drafts_steps_only() {
+fn readiness_pipeline_ready_an_edit_lists_its_own_steps_while_the_list_speaks_of_the_version() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
   let id = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
-  assert!(found(&listed(&fixture, id)).is_empty(), "the version tasks use can run");
-  let version = fixture
-    .db()
-    .latest_version::<Pipeline>(id)
-    .expect("read")
-    .expect("published")
-    .number();
-  fixture
-    .db()
-    .save_draft(
-      id,
-      &StoredDraft::new(pipeline(&[Some(builder), None], None), Some(version), at(30)),
-    )
-    .expect("a draft");
-
   let read = listed(&fixture, id);
-  assert_eq!(read.number(), Some(version));
+  assert!(found(&read).is_empty(), "the version tasks use can run");
+
+  let flow = edited(&fixture, &pipeline(&[Some(builder), None], None));
   assert_eq!(read.group(), Group::Ready, "the list speaks of the version tasks use");
-  assert!(read.flow.draft);
   assert!(
-    matches!(found(&read).as_slice(), [Problem::Step(step)] if step.number == 2),
-    "the page describes the draft: {:?}",
-    found(&read)
+    matches!(found_in(&read, &flow, None).as_slice(), [Problem::Step(step)] if step.number == 2),
+    "the page describes the edit: {:?}",
+    found_in(&read, &flow, None)
   );
 }
 
@@ -369,9 +333,6 @@ fn readiness_pipeline_ready_an_mcp_program_this_computer_lacks_is_a_missing_part
 
 #[test]
 fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it() {
-  use orchester_core::resource::PipelineEdit;
-  use orchester_workspace::pipelines::flow::FlowRead;
-
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
@@ -388,7 +349,6 @@ fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it(
       flow,
       standing: read.standing.as_ref(),
       undecided: &read.undecided,
-      published: true,
       runs: None,
     })
   };
@@ -409,7 +369,7 @@ fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it(
   for step in read.body.steps() {
     emptied.remove_step(&step.key);
   }
-  assert_eq!(basis(&read_of(&emptied)), [Problem::Draft(Draft::NoSteps)]);
+  assert_eq!(basis(&read_of(&emptied)), [Problem::Whole(Whole::NoSteps)]);
 }
 
 #[test]

@@ -6,10 +6,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::pipelines::{
-  levels::levels,
-  library::{LibraryEntry, VersionState},
-};
+use orchester_workspace::pipelines::{levels::levels, library::LibraryEntry};
 
 use super::new_pipeline::{Begin, starter};
 use crate::ui::{
@@ -40,10 +37,7 @@ pub fn group(ctx: &mut Ctx, (start, copy): (&Signal<Begin>, &Signal<String>), co
     copies
       .iter()
       .map(|p| {
-        let version = match p.state {
-          VersionState::Published(v) | VersionState::PublishedWithDraft(v) => v.get().to_string(),
-          VersionState::DraftOnly => String::new(),
-        };
+        let version = p.version.get().to_string();
         SelectOption::new(
           p.id.to_string(),
           ctx.t_args(

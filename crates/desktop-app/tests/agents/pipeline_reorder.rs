@@ -30,10 +30,7 @@ pub(super) fn flow(agents: &Agents, plan_returns: bool) -> (ResourceId, [StepKey
     fails_back_to(&mut edit, &plan, &research);
   }
   let body = edit.validate().expect("a pipeline");
-  (
-    store(agents, "Feature", &body, true),
-    [research, plan, build, checks, review],
-  )
+  (store(agents, "Feature", &body), [research, plan, build, checks, review])
 }
 
 pub(super) fn card(key: &StepKey) -> String {
@@ -111,17 +108,15 @@ pub(super) fn focus(agents: &mut Agents, key: &StepKey) {
   agents.window.pass();
 }
 
+/// What `id` stores: its latest version (a pipeline holds no draft, D-032).
 pub(super) fn stored(agents: &Agents, id: ResourceId) -> Pipeline {
-  let db = ProjectDb::open(&agents.root).expect("database");
-  match db.draft::<Pipeline>(id).expect("draft") {
-    Some(draft) => draft.body().clone(),
-    None => db
-      .latest_version::<Pipeline>(id)
-      .expect("version")
-      .expect("a version")
-      .body()
-      .clone(),
-  }
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .latest_version::<Pipeline>(id)
+    .expect("version")
+    .expect("a version")
+    .body()
+    .clone()
 }
 
 pub(super) fn depends(pipeline: &Pipeline, key: &StepKey) -> Vec<String> {

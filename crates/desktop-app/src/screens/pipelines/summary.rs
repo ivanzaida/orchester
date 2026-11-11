@@ -21,7 +21,6 @@ use crate::ui::{
   button::{ActionButton, ButtonKind},
   field::FieldInput,
   icon::Icon,
-  notice::{Notice, NoticeTone},
   row_group::{GroupRow, RowGroup, note},
 };
 
@@ -84,22 +83,13 @@ impl Component for Summary {
           .id("pipeline-summary-title")
           .variant(TypographyStyle::Title),
       );
-    let unpublished = editing.opened.latest.is_none();
-    // An imported pipeline not published yet shows only what its import did (`06b` `ky5kJ`); its name,
-    // description and slug stay on the Settings tab.
-    if unpublished && !imported.is_empty() {
-      return column.with_children(imported).child(unpublished_notice(ctx));
-    }
+    // A pipeline is stored only as published versions (D-032).
     let pipeline = self.pipeline_group(ctx, &props, &editing);
     column
       .with_children(imported)
       .child(pipeline)
       .child(versions_group(ctx, &editing))
-      .child(if unpublished {
-        unpublished_notice(ctx)
-      } else {
-        note("pipeline-versions-note", &ctx.t("pipelines.versionsExplanation")).into()
-      })
+      .child(note("pipeline-versions-note", &ctx.t("pipelines.versionsExplanation")))
       .child(links(ctx, &editing))
   }
 }
@@ -132,18 +122,6 @@ impl Summary {
       .row(GroupRow::new("pipeline-slug", ctx.t("pipelines.slug")).mono_value(&editing.opened.slug))
       .row(GroupRow::new("pipeline-starts", ctx.t("pipelines.starts")).value(&ctx.t("pipelines.onTaskStart")))
   }
-}
-
-/// That New task lists only published pipelines (`Notice` in `06c` and `06b`).
-fn unpublished_notice(ctx: &Ctx) -> Element {
-  Notice::new(
-    "pipeline-unpublished-note",
-    NoticeTone::Info,
-    ctx.t("pipelines.notAvailableTitle"),
-  )
-  .flat()
-  .body(ctx.t("pipelines.notAvailableDetail"))
-  .into()
 }
 
 fn versions_group(ctx: &Ctx, editing: &Editing) -> RowGroup {
@@ -228,27 +206,22 @@ fn imported_sections(ctx: &mut Ctx, editing: &Editing) -> Vec<Element> {
 }
 
 pub fn published(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
-  editing.opened.latest.as_ref().map_or_else(
-    || ctx.t("pipelines.never"),
-    |v| {
-      ctx.t_args(
-        "pipelines.publishedAt",
-        [
-          ("version", v.number.get().to_string()),
-          ("age", super::library::age(ctx, v.at).to_string()),
-        ],
-      )
-    },
+  ctx.t_args(
+    "pipelines.publishedAt",
+    [
+      ("version", editing.opened.version.get().to_string()),
+      ("age", super::library::age(ctx, editing.opened.published_at).to_string()),
+    ],
   )
 }
 /// The draft with its number: *v4 · 2 changes since v3*, *Draft v1*, or that the next edit starts one.
 pub fn draft(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
   let number = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  if editing.opened.draft_saved_at.is_none() && !editing.unsaved() {
+  if !editing.unsaved() {
     return ctx.t_args("pipelines.noDraftNext", [("version", number)]);
   }
-  if !editing.edit.steps().is_empty() && editing.opened.latest.is_some() && editing.edit.validate().is_err() {
+  if !editing.edit.steps().is_empty() && editing.edit.validate().is_err() {
     return ctx.t("pipelines.unsaved");
   }
   match draft_detail(ctx, editing) {
@@ -266,9 +239,8 @@ pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>>
   if editing.edit.steps().is_empty() {
     return Some(ctx.t("pipelines.noStepsYet"));
   }
-  let latest = editing.opened.latest.as_ref()?;
   let body = editing.edit.validate().ok()?;
-  let changes = orchester_core::resource::changes(&latest.body, &body).len();
+  let changes = orchester_core::resource::changes(&editing.opened.body, &body).len();
   if changes == 0 {
     return None;
   }
@@ -280,7 +252,7 @@ pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>>
     },
     [
       ("count", changes.to_string()),
-      ("base", latest.number.get().to_string()),
+      ("base", editing.opened.version.get().to_string()),
     ],
   ))
 }

@@ -114,11 +114,9 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared | StoreError::OtherServerProject => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
-    StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
-    StoreError::VersionInUse(_) => Message::new("sharing.errors.versionInUse"),
-    StoreError::HoldsMore(_) => Message::new("sharing.errors.holdsMore"),
-    StoreError::NotPublished(_) => Message::new("errors.neverPublished"),
-    StoreError::NoFirstVersion(_) => Message::new("errors.noFirstVersion"),
+    StoreError::DraftChanged(_) | StoreError::VersionInUse(_) | StoreError::HoldsMore(_) => version_error(error),
+    StoreError::NotPublished(_) | StoreError::NoFirstVersion(_) => version_error(error),
+    StoreError::NoDrafts(_) | StoreError::Unchanged(_) => version_error(error),
     StoreError::Sqlite(_) if error.is_locked() => Message::new("errors.databaseLocked"),
     StoreError::Unavailable { .. } => Message::new("errors.databaseLocked"),
     StoreError::Sqlite(_)
@@ -162,6 +160,20 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Publish(error) => publish_error(error),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
   }
+}
+
+/// Why a resource's draft or versions were not changed: what [`store_error`] passes on.
+fn version_error(error: &StoreError) -> Message {
+  Message::new(match error {
+    StoreError::DraftChanged(_) => "errors.draftChanged",
+    StoreError::VersionInUse(_) => "sharing.errors.versionInUse",
+    StoreError::HoldsMore(_) => "sharing.errors.holdsMore",
+    StoreError::NotPublished(_) => "errors.neverPublished",
+    StoreError::NoFirstVersion(_) => "errors.noFirstVersion",
+    StoreError::NoDrafts(_) => "errors.noDrafts",
+    StoreError::Unchanged(_) => "errors.unchanged",
+    _ => "errors.storage",
+  })
 }
 
 /// Why a draft was not published.

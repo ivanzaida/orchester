@@ -225,12 +225,17 @@ fn shared_configuration_marks_a_resource_shared() {
 /// and 3). Two live team resources of one slug are the server's to sort out.
 #[test]
 fn shared_configuration_a_team_resource_keeps_its_slug_beside_a_local_one() {
-  let (_repo, mut db, _run, _execution) = started_run();
-  let body = orchester_core::resource::Pipeline::new(vec![]).expect("an empty pipeline");
-  let own = db
-    .create_resource(Slug::new("review").expect("slug"), name("Review"), &body, at(10))
-    .expect("a local pipeline")
-    .id();
+  let (_repo, mut db, run, _execution) = started_run();
+  let body = db
+    .latest_version::<orchester_core::resource::Pipeline>(run.snapshot().pipeline().resource)
+    .expect("read")
+    .expect("the run's pipeline")
+    .body()
+    .clone();
+  // A pipeline is created as its first version (D-032).
+  let (own, _) = db
+    .published_pipeline_for_test("review", "Review", &body, at(10))
+    .expect("a local pipeline");
   let team_resource = |kind, slug: &str, at_ms| {
     orchester_core::resource::Resource::new(
       ResourceId::generate(),

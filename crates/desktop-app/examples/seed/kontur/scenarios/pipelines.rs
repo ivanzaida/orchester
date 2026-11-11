@@ -1,5 +1,6 @@
 //! Supported private fixtures for the ORC-3 verifier and the step states of the redesigned Pipelines (`03b` `g6Ecy`);
-//! no agents or commands are started.
+//! no agents or commands are started. A pipeline is stored only as published versions (D-032), so every pipeline here
+//! is created as its first version and each of its steps runs something, even one that cannot run here.
 use std::collections::BTreeMap;
 
 use orchester_core::{
@@ -10,9 +11,9 @@ use orchester_core::{
     StepPermissions,
   },
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeliverStep, DeniedBehavior, Draft,
-    HttpAuth, HttpMethod, HttpRequest, MergeMethod, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings,
-    RepositoryAccess, Slug, StepKind, Tool, ToolAction,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeliverStep, DeniedBehavior, HttpAuth,
+    HttpMethod, HttpRequest, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug,
+    StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},
 };
@@ -31,122 +32,35 @@ pub fn empty(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let catalogue = kontur.catalogue()?;
-  let id = catalogue.feature_delivery.id();
-  let latest = kontur
-    .db
-    .latest_version::<Pipeline>(id)?
-    .expect("the catalogue publishes Feature delivery");
-  kontur.db.save_draft(
-    id,
-    &Draft::new(
-      latest
-        .body()
-        .clone()
-        .with_description("Important saved unpublished work".into()),
-      Some(latest.number()),
-      kontur.now,
-    ),
-  )?;
-  create(
-    kontur,
-    "Empty draft",
-    &Pipeline::new(vec![]).expect("empty drafts are valid"),
-  )?;
+  kontur.catalogue()?;
   problems(kontur)?;
   narrowed(kontur)?;
   variants(kontur)
 }
 
-/// Publishing that asks for approval (`02b` `fXnX2`): Feature delivery v3 with a saved draft v4 in which Implement runs
-/// on another model and Deliver squashes, so *Publish v4* opens the review with *Publishing needs your approval*.
-/// Reaching it otherwise takes saving a weaker draft, whose question only a person answers.
-pub fn publish(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let catalogue = kontur.delivering_catalogue()?;
-  let id = catalogue.feature_delivery.id();
-  let latest = kontur
-    .db
-    .latest_version::<Pipeline>(id)?
-    .expect("the catalogue publishes Feature delivery");
-  let mut edit = PipelineEdit::new(latest.body().clone());
-  let implement = latest
-    .body()
-    .steps()
-    .iter()
-    .find(|step| step.name.as_str() == "Implement")
-    .expect("the starter implements")
-    .key
-    .clone();
-  edit.update(&implement, |step| {
-    if let StepKind::Agent { model, .. } = &mut step.kind {
-      *model = Some(ModelId::new("gpt-5.5-pro").expect("fixture model"));
-    }
-  });
-  let deliver = latest.body().deliver().cloned().expect("the catalogue delivers");
-  edit.set_deliver(Some(deliver.with_method(MergeMethod::Squash)));
-  let saved = orchester_core::time::Timestamp::from_unix_millis(kontur.now.unix_millis() - 5 * 60_000);
-  kontur.db.save_draft(
-    id,
-    &Draft::new(
-      edit
-        .validate()
-        .expect("a model and a merge method keep the draft valid"),
-      Some(latest.number()),
-      saved,
-    ),
-  )?;
-  Ok(())
-}
-
-/// `pipelines`, except that the project's database refuses to store a pipeline's draft (a trigger stands for a check
-/// that fails), so *Save* on any pipeline is refused and the panel says why next to the bar.
-pub fn save_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur)?;
-  rusqlite::Connection::open(kontur.database())?.execute_batch(
-    "CREATE TRIGGER qa_refuse_draft_insert BEFORE INSERT ON resource_drafts
-     BEGIN SELECT RAISE(ABORT, 'refused by the checks'); END;
-     CREATE TRIGGER qa_refuse_draft_update BEFORE UPDATE ON resource_drafts
-     BEGIN SELECT RAISE(ABORT, 'refused by the checks'); END;",
-  )?;
-  Ok(())
-}
-
-/// `pipelines` with *Ready draft* added: never published, its one step runs a published profile, so every step is
-/// ready and *Save* publishes its first version (once a person allows it).
-pub fn ready_draft(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur)?;
-  let builder = profile(kontur, "Ready builder", &["cargo test"], true)?;
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
-  let build = edit.add_step(name("Build"), None);
-  edit.update(&build, |step| {
-    step.kind = StepKind::Agent {
-      profile: Some(builder),
-      model: None,
-      repository: RepositoryAccess::ReadOnly,
-      permissions: StepPermissions::default(),
-    }
-  });
-  create(
-    kontur,
-    "Ready draft",
-    &edit.validate().expect("a step with a published profile is valid"),
-  )?;
-  Ok(())
-}
-
+/// Creates pipeline `title` as its first version `body`.
 pub(super) fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceId, SeedError> {
-  Ok(
-    kontur
-      .db
-      .create_resource(
-        Slug::from_name(title).expect("fixture title yields a slug"),
-        name(title),
-        body,
-        kontur.now,
-      )?
-      .id(),
-  )
+  let (resource, _) = kontur.db.create_published(
+    Slug::from_name(title).expect("fixture title yields a slug"),
+    name(title),
+    body,
+    kontur.now,
+  )?;
+  Ok(resource.id())
 }
+
+/// The agent step that runs `profile` and only reads.
+fn runs(profile: ResourceId) -> StepKind {
+  StepKind::Agent {
+    profile: Some(profile),
+    model: None,
+    repository: RepositoryAccess::ReadOnly,
+    permissions: StepPermissions::default(),
+  }
+}
+
+/// *Publication problems*, whose cards stand in amber: a step whose profile is no longer available, one whose profile
+/// is not published, and one whose tool cannot run as a step.
 fn problems(kontur: &mut Kontur) -> Result<(), SeedError> {
   let unpublished = profile(kontur, "Unpublished reviewer", &["cargo test"], false)?;
   let tool = Tool::new(
@@ -155,33 +69,23 @@ fn problems(kontur: &mut Kontur) -> Result<(), SeedError> {
     Some(policy()),
   )
   .expect("database tool carries an access policy");
-  let tool_id = kontur
-    .db
-    .create_resource(
-      Slug::new("unsupported-database").expect("fixture slug"),
-      name("Unsupported database"),
-      &tool,
-      kontur.now,
-    )?
-    .id();
-  kontur.db.publish_draft::<Tool>(tool_id, kontur.now)?;
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let (tool, _) = kontur.db.create_published(
+    Slug::new("unsupported-database").expect("fixture slug"),
+    name("Unsupported database"),
+    &tool,
+    kontur.now,
+  )?;
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let first = edit.add_step(name("Missing profile"), None);
+  edit.update(&first, |s| s.kind = runs(ResourceId::generate()));
   let second = edit.add_step(name("Unpublished profile"), Some(&first));
-  edit.update(&second, |s| {
-    s.kind = StepKind::Agent {
-      profile: Some(unpublished),
-      model: None,
-      repository: RepositoryAccess::ReadOnly,
-      permissions: StepPermissions::default(),
-    }
-  });
+  edit.update(&second, |s| s.kind = runs(unpublished));
   let third = edit.add_step(name("Unsupported tool"), Some(&second));
-  edit.update(&third, |s| s.kind = StepKind::Tool { tool: Some(tool_id) });
+  edit.update(&third, |s| s.kind = StepKind::Tool { tool: Some(tool.id()) });
   create(
     kontur,
     "Publication problems",
-    &edit.validate().expect("incomplete executors are valid in drafts"),
+    &edit.validate().expect("steps that run what is not here are valid"),
   )?;
   Ok(())
 }
@@ -256,7 +160,7 @@ fn narrowed(kontur: &mut Kontur) -> Result<(), SeedError> {
     true,
   )?;
   profile(kontur, "Alternate reviewer", &["cargo test"], true)?;
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let key = edit.add_step(name("Review"), None);
   edit.update(&key, |s| {
     s.approval_gate = true;
@@ -274,20 +178,19 @@ fn narrowed(kontur: &mut Kontur) -> Result<(), SeedError> {
       },
     };
   });
-  let id = create(
+  create(
     kontur,
     "Narrowed permissions",
     &edit.validate().expect("valid narrowed step"),
   )?;
-  kontur.db.publish_draft::<Pipeline>(id, kontur.now)?;
   Ok(())
 }
 
-/// Two drafts for 03b's (`g6Ecy`) variants that need data of their own. In `Status checks`, *Check status page* runs an
-/// HTTP tool, which cannot run as a step yet. In `Read-only review`, *Codex review* and *Summarize* run on a Codex CLI
-/// profile with any command, so a step can narrow neither its commands nor, on Windows, its network; its Deliver step
-/// follows steps that only read the repository, so no step can resolve conflicts and no command tool step runs Check
-/// again; and making *Codex review* run after *Summarize* draws a cycle.
+/// Two pipelines for 03b's (`g6Ecy`) variants that need data of their own. In `Status checks`, *Check status page* runs
+/// an HTTP tool, which cannot run as a step yet. In `Read-only review`, *Codex review* and *Summarize* run on a Codex
+/// CLI profile with any command, so a step can narrow neither its commands nor, on Windows, its network; its Deliver
+/// step follows steps that only read the repository, so no step can resolve conflicts and no command tool step runs
+/// Check again; and making *Codex review* run after *Summarize* draws a cycle.
 fn variants(kontur: &mut Kontur) -> Result<(), SeedError> {
   let request = HttpRequest::new(
     HttpMethod::Get,
@@ -319,16 +222,16 @@ fn variants(kontur: &mut Kontur) -> Result<(), SeedError> {
     ),
     true,
   )?;
-  // On its own: a draft with a tool that cannot run is not saved again, which would cloud the others' states.
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  // On its own: a tool that cannot run keeps a save of it from publishing, which would cloud the others' states.
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let status = edit.add_step(name("Check status page"), None);
   edit.update(&status, |s| s.kind = StepKind::Tool { tool: Some(tool_id) });
   create(
     kontur,
     "Status checks",
-    &edit.validate().expect("a tool that cannot run is valid in a draft"),
+    &edit.validate().expect("a step that runs a tool is valid"),
   )?;
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let review = edit.add_step(name("Codex review"), None);
   let summary = edit.add_step(name("Summarize"), Some(&review));
   for key in [&review, &summary] {
@@ -364,48 +267,47 @@ fn policy() -> AccessPolicy {
 
 /// The steps drawn as the flow they run in (`Steps` `uSoll` in `Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): Feature
 /// delivery with its gate, its checks and review side by side, their failure routes and its Deliver step; *Publication
-/// problems*, whose cards stand in amber (a step without a profile, one whose profile is not published, one whose tool
-/// cannot run); *Gated group*, whose two steps in a group both wait for the person; *Independent chains*, whose steps
-/// wait for only part of what runs before them, so no one line shows them; and an empty draft.
+/// problems*, whose cards stand in amber (a step whose profile is no longer available, one whose profile is not
+/// published, one whose tool cannot run); *Gated group*, whose two steps in a group both wait for the person; and
+/// *Independent chains*, whose steps wait for only part of what runs before them, so no one line shows them.
 pub fn flow(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.delivering_catalogue()?;
   problems(kontur)?;
-  gated_group(kontur)?;
-  chains(kontur)?;
-  create(
-    kontur,
-    "Empty draft",
-    &Pipeline::new(vec![]).expect("empty drafts are valid"),
-  )?;
+  let builder = profile(kontur, "Flow builder", &["cargo test"], true)?;
+  gated_group(kontur, builder)?;
+  chains(kontur, builder)?;
   Ok(())
 }
 
-/// *Prepare*, then *Check* and *Review* side by side, each ending in a gate.
-fn gated_group(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+/// *Prepare*, then *Check* and *Review* side by side, each ending in a gate; every step runs `builder`.
+fn gated_group(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError> {
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let prepare = edit.add_step(name("Prepare"), None);
   let check = edit.add_step(name("Check"), Some(&prepare));
   let review = edit.add_step(name("Review"), Some(&prepare));
+  for key in [&prepare, &check, &review] {
+    edit.update(key, |step| step.kind = runs(builder));
+  }
   for key in [&check, &review] {
     edit.update(key, |step| step.approval_gate = true);
   }
-  create(
-    kontur,
-    "Gated group",
-    &edit.validate().expect("steps without executors are valid in a draft"),
-  )?;
+  create(kontur, "Gated group", &edit.validate().expect("gated steps are valid"))?;
   Ok(())
 }
 
 /// *Fetch* then *Parse*, and apart from them *Lint* then *Report*: no step waits for what a single line would say.
-fn chains(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+/// Every step runs `builder`.
+fn chains(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError> {
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let fetch = edit.add_step(name("Fetch"), None);
   let lint = edit.add_step(name("Lint"), None);
   let parse = edit.add_step(name("Parse"), None);
   let report = edit.add_step(name("Report"), None);
   edit.set_dependency(&parse, &fetch, true);
   edit.set_dependency(&report, &lint, true);
+  for key in [&fetch, &lint, &parse, &report] {
+    edit.update(key, |step| step.kind = runs(builder));
+  }
   create(
     kontur,
     "Independent chains",

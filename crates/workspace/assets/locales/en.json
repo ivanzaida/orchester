@@ -1288,6 +1288,8 @@
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
     "neverPublished": "It was never published, so its draft is all it has. Remove it instead.",
     "noFirstVersion": "A new resource has no draft: create it, which publishes v1, and edit it after that.",
+    "noDrafts": "A pipeline is saved only as a published version, never as a draft. Save the change when it can be published.",
+    "unchanged": "Nothing changed since the latest version, so there is nothing to save.",
     "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
     "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
     "effortOneWord": "A reasoning effort is one word, such as high.",
@@ -1325,9 +1327,7 @@
       }
     },
     "version": {
-      "published": "Published {{version}}",
-      "publishedWithDraft": "{{version}} · Draft v{{draft}} saved",
-      "draftOnly": "Draft v1 · not published"
+      "published": "Published {{version}}"
     },
     "create": {
       "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
@@ -1343,7 +1343,7 @@
     },
     "problems": {
       "missing": "This pipeline no longer exists.",
-      "noSteps": "Add a step before you can publish",
+      "noSteps": "Add a step before you can save",
       "noProfile": "{{step}} has no agent profile",
       "noTool": "{{step}} has no tool",
       "cycle": "Cycle: {{path}}",
@@ -1352,16 +1352,17 @@
       "unknownDependency": "{{step}} runs after a step that no longer exists",
       "unknownRetryTarget": "{{step}} returns to a step that no longer exists",
       "retryTargetNotUpstream": "{{step}} returns to {{target}}, which does not run before it",
-      "staleDraft": "This draft started from {{basedOn}}, but {{latest}} was published since. Publishing it would discard the changes in {{latest}}.",
-      "notPublishable": "The draft has problems that block publishing.",
+      "staleDraft": "This edit started from {{basedOn}}, but {{latest}} was saved since. Saving it would discard the changes in {{latest}}.",
+      "notPublishable": "This pipeline has problems that keep it from being saved.",
       "versionLimit": "This pipeline has reached the highest version number.",
-      "noDraft": "There is no saved draft to publish.",
+      "unchanged": "Nothing changed since {{version}}, so there is nothing to save.",
       "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
       "unknownVariable": "{{name}} is not a variable in the catalog.",
       "invalidRetries": "Enter a whole number of retries, at least 1.",
       "stepsNotReady": "{{count}} steps aren't ready: {{steps}}",
       "profileGone": "Step “{{step}}” runs an agent profile that is no longer available. Choose another.",
-      "toolGone": "Step “{{step}}” calls a tool that is no longer available. Choose another."
+      "toolGone": "Step “{{step}}” calls a tool that is no longer available. Choose another.",
+      "branches": "{{step}} waits for only part of what runs before it, so the steps can't be drawn as one line. Change what it waits for."
     },
     "step": {
       "noProfile": "No agent profile",

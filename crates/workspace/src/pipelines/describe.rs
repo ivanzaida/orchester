@@ -1,11 +1,11 @@
 //! What the pipeline screens say about a step, a version or a change, as messages.
 
 use orchester_core::{
-  resource::{DeliverChange, Deliverable, PipelineChange, RepositoryAccess, Step, StepChange, StepKind},
+  resource::{DeliverChange, Deliverable, PipelineChange, RepositoryAccess, Step, StepChange, StepKind, VersionNumber},
   tokens::compact_tokens,
 };
 
-use super::{data::Assignables, library::VersionState};
+use super::data::Assignables;
 use crate::messages::Message;
 
 /// Second line of a step card: who runs it (`K4DMy` in `ajikA`).
@@ -66,17 +66,9 @@ pub fn repository_access(access: RepositoryAccess) -> Message {
   }
 }
 
-/// The version label of a library row (`gzZlq` in `hn8qO`).
-pub fn version_state(state: VersionState) -> Message {
-  match state {
-    VersionState::DraftOnly => Message::new("pipelines.version.draftOnly"),
-    VersionState::Published(version) => {
-      Message::new("pipelines.version.published").with("version", version.to_string())
-    }
-    VersionState::PublishedWithDraft(version) => Message::new("pipelines.version.publishedWithDraft")
-      .with("version", version.to_string())
-      .with("draft", (version.get() + 1).to_string()),
-  }
+/// The version label of a library row (`gzZlq` in `hn8qO`): its latest version.
+pub fn version_label(version: VersionNumber) -> Message {
+  Message::new("pipelines.version.published").with("version", version.to_string())
 }
 
 /// "6 steps", "1 step".

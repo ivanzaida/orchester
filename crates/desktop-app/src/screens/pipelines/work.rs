@@ -1,4 +1,5 @@
-//! Asynchronous saves and publishes, always carrying the exact reviewed body.
+//! Asynchronous saves, always carrying the exact reviewed body. A pipeline holds no draft (D-032): a save publishes the
+//! next version, or is refused and stores nothing.
 use std::path::PathBuf;
 
 use lurq::app::ctx::{Ctx, FutureAction};
@@ -21,11 +22,6 @@ pub enum Work {
     name: orchester_core::name::Name,
     allowed: Allowed,
   },
-  Publish {
-    root: PathBuf,
-    before: OpenedPipeline,
-    allowed: Allowed,
-  },
 }
 pub type Action = FutureAction<Work, OpenedPipeline, Message>;
 pub fn action(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Action {
@@ -34,36 +30,27 @@ pub fn action(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Action {
     let services = services.clone();
     async move {
       let changes = services.changes.clone();
+      let Work::Save {
+        root,
+        before,
+        body,
+        name,
+        allowed,
+      } = work;
       // A version published in a shared project goes to its team server at once (02).
-      let published = match &work {
-        Work::Publish { root, .. } => Some(root.clone()),
-        Work::Save { .. } => None,
-      };
+      let published = root.clone();
       let result = background::run(move || {
-        let publishing = matches!(work, Work::Publish { .. });
-        let result = match work {
-          Work::Save {
-            root,
-            before,
-            body,
-            name,
-            allowed,
-          } => write::save_named_in(&root, &before, body, &name, &allowed),
-          Work::Publish { root, before, allowed } => write::publish_in(&root, &before, &allowed),
-        }
-        .map_err(|error| error.message());
+        let result = write::save_named_in(&root, &before, &body, &name, &allowed).map_err(|error| error.message());
         if result.is_ok() {
           use orchester_workspace::tasks::outside::Outside;
           changes.record(project, Outside::Pipelines);
-          if publishing {
-            changes.record(project, Outside::Tasks);
-          }
+          changes.record(project, Outside::Tasks);
         }
         result
       })
       .await?;
-      if let Some(root) = published.filter(|_| result.is_ok()) {
-        crate::screens::hub::team::send_published(&services, &root).await;
+      if result.is_ok() {
+        crate::screens::hub::team::send_published(&services, &published).await;
       }
       result
     }

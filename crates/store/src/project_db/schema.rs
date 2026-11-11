@@ -69,6 +69,7 @@ mod orchestrator_watch;
 mod organization;
 mod permission_events;
 mod permitted_decisions;
+mod pipeline_drafts;
 mod plan_decided_by;
 mod plan_limits;
 mod plan_only;
@@ -141,5 +142,6 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::TeamReviewer => team_reviewer::MIGRATION,
     super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
     super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
+    super::ProjectMigration::PipelineDrafts => pipeline_drafts::MIGRATION,
   }
 }

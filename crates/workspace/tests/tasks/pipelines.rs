@@ -65,18 +65,22 @@ fn published_profile(db: &mut ProjectDb, slug: &str, role: &str, model: &str) ->
 fn only_published_pipelines_can_be_chosen() {
   let (repo, mut db) = project_db();
   let pipeline = Pipeline::new(vec![research_step()]).expect("valid pipeline");
-  let create = |db: &mut ProjectDb, slug: &str, name: &str| {
-    db.create_resource(
-      Slug::new(slug).expect("valid slug"),
-      Name::new(name).expect("valid name"),
+  let (published, _) = db
+    .create_published(
+      Slug::new("delivery").expect("valid slug"),
+      Name::new("Delivery").expect("valid name"),
       &pipeline,
       now(),
     )
-    .expect("create pipeline")
-  };
-  let published = create(&mut db, "delivery", "Delivery");
-  create(&mut db, "draft-only", "Draft only");
-  db.publish_draft::<Pipeline>(published.id(), now()).expect("publish");
+    .expect("create pipeline");
+  // A pipeline with no version, as an older build left one (a pipeline is created as v1 now, D-032).
+  rusqlite::Connection::open(repo.path().join(".orchester/orchester.db"))
+    .expect("the database")
+    .execute(
+      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'draft-only', 'Draft only', 1)",
+      [ResourceId::generate().to_string()],
+    )
+    .expect("a pipeline without a version");
 
   let choices = published_pipelines(&db).expect("read pipelines");
   assert_eq!(choices.len(), 1);
@@ -105,21 +109,29 @@ fn queued_pipeline_choice_keeps_its_published_steps_after_republish() {
   let (_repo, mut db) = project_db();
   let pipeline = Pipeline::new(vec![research_step()]).expect("valid pipeline");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &pipeline,
       now(),
     )
     .expect("create pipeline")
+    .0
     .id();
-  let v1 = db.publish_draft::<Pipeline>(id, now()).expect("publish v1");
+  let v1 = db
+    .latest_version::<Pipeline>(id)
+    .expect("publish v1")
+    .expect("published");
   let mut changed = pipeline.steps().to_vec();
   changed[0].name = Name::new("Research updated").expect("name");
-  let mut draft = v1.to_draft(now());
-  draft.edit(Pipeline::new(changed).expect("valid pipeline"), now());
-  db.save_draft(id, &draft).expect("save v2 draft");
-  db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
+  db.publish_pipeline_edit(
+    id,
+    &Pipeline::new(changed).expect("valid pipeline"),
+    v1.number(),
+    None,
+    now(),
+  )
+  .expect("publish v2");
 
   let pinned = pinned_pipeline(&db, id, v1.number())
     .expect("read v1")
@@ -135,15 +147,19 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
   let (repo, mut db) = project_db();
   let pipeline = Pipeline::new(vec![research_step()]).expect("pipeline");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &pipeline,
       now(),
     )
     .expect("create pipeline")
+    .0
     .id();
-  let v1 = db.publish_draft::<Pipeline>(id, now()).expect("publish v1");
+  let v1 = db
+    .latest_version::<Pipeline>(id)
+    .expect("publish v1")
+    .expect("published");
   let details = TaskDetails {
     title: Name::new("Build feature").expect("title"),
     brief: "Complete the requested feature.".into(),
@@ -167,10 +183,9 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
     .expect("saved as read");
   let mut changed = pipeline.steps().to_vec();
   changed[0].name = Name::new("Research updated").expect("name");
-  let mut draft = v1.to_draft(now());
-  draft.edit(Pipeline::new(changed).expect("pipeline"), now());
-  db.save_draft(id, &draft).expect("save draft");
-  let v2 = db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
+  let v2 = db
+    .publish_pipeline_edit(id, &Pipeline::new(changed).expect("pipeline"), v1.number(), None, now())
+    .expect("publish v2");
   drop(db);
 
   let (_data, servers) = servers();
@@ -187,22 +202,30 @@ fn create_and_run_on_a_pipeline_published_again_since_its_version_was_chosen_sav
   let (repo, mut db) = project_db();
   let pipeline = Pipeline::new(vec![research_step()]).expect("pipeline");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &pipeline,
       now(),
     )
     .expect("create pipeline")
+    .0
     .id();
   // The form shows version 1; version 2 is published before Create & run is pressed.
-  let shown = db.publish_draft::<Pipeline>(id, now()).expect("publish v1");
-  let mut draft = shown.to_draft(now());
+  let shown = db
+    .latest_version::<Pipeline>(id)
+    .expect("publish v1")
+    .expect("published");
   let mut changed = pipeline.steps().to_vec();
   changed[0].name = Name::new("Research updated").expect("name");
-  draft.edit(Pipeline::new(changed).expect("pipeline"), now());
-  db.save_draft(id, &draft).expect("save draft");
-  db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
+  db.publish_pipeline_edit(
+    id,
+    &Pipeline::new(changed).expect("pipeline"),
+    shown.number(),
+    None,
+    now(),
+  )
+  .expect("publish v2");
   drop(db);
   let details = TaskDetails {
     title: Name::new("Build feature").expect("title"),
@@ -270,14 +293,14 @@ fn published_pipeline_choices_include_executor_and_approval_gate() {
   };
   let pipeline = Pipeline::new(vec![research, implement]).expect("valid pipeline");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("valid slug"),
       Name::new("Delivery").expect("valid name"),
       &pipeline,
       now(),
     )
-    .expect("create pipeline");
-  db.publish_draft::<Pipeline>(resource.id(), now()).expect("publish");
+    .expect("create pipeline")
+    .0;
 
   let choices = published_pipelines(&db).expect("read pipelines");
   let steps = &choices[0].steps;

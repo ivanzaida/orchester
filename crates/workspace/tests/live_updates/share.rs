@@ -320,15 +320,15 @@ async fn live_updates_share_uploads_nothing_when_a_pipeline_runs_a_profile_it_do
   let (delivery, _) = alice.delivery();
   let mut db = alice.db();
   let hotfix = db
-    .create_resource(
+    .create_published(
       slug("hotfix"),
       name("Hotfix"),
       &one_step(ResourceId::generate()),
       at(30),
     )
     .expect("Hotfix")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(hotfix, at(31)).expect("v1");
   let publisher = Publisher::online(&server, ALICE);
 
   let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;

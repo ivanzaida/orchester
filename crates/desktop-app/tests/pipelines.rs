@@ -1,49 +1,22 @@
-//! Pipelines through the real headless window: page navigation, drafts, validation and publishing.
+//! Pipelines through the real headless window: page navigation, validation and saving, which publishes the next
+//! version (a pipeline holds no draft, D-032).
 mod pipelines_support;
 mod support;
 
 use orchester_app::routes::{PipelineView, ProjectPage};
 use orchester_core::{
-  resource::{Pipeline, PipelineEdit, StepKey},
+  resource::{Pipeline, StepKey},
   store::ResourceStore,
 };
 use pipelines_support::Editor;
-
-#[test]
-fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
-  let mut editor = Editor::new();
-  editor.go(ProjectPage::Pipelines);
-  editor.until("the empty hub", |e| e.exists("pipeline-hub-empty-new"));
-  editor.click("pipeline-hub-empty-new");
-  editor.set("pipeline-name", "Dependency updates");
-  editor.set("pipeline-description", "Keep dependencies current.");
-  editor.click("pipeline-start-2");
-  editor.click("pipeline-create");
-  editor.until("draft editor", |e| e.exists("pipeline-add-step"));
-  let id = editor.selected();
-  let draft = editor.db().draft::<Pipeline>(id).unwrap().unwrap();
-  assert!(draft.body().steps().is_empty());
-  assert_eq!(draft.body().description(), "Keep dependencies current.");
-  editor.click("pipeline-publish");
-  assert!(editor.text("screen-pipelines").contains("Add a step before publishing"));
-  assert!(!editor.exists("pipeline-publish-confirm"));
-  assert!(
-    editor.exists("pipeline-use-starter"),
-    "an empty draft offers its starter steps"
-  );
-  editor.click("pipeline-parent");
-  editor.until("hub row", |e| e.exists(&format!("pipeline-hub-row-{id}")));
-  assert_eq!(editor.text(&format!("pipeline-hub-row-{id}-version")), "draft");
-  editor.open(id);
-  assert_eq!(editor.selected(), id);
-}
 
 #[test]
 fn pipelines_steps_keep_fields_validate_and_save() {
   let mut editor = Editor::team();
   let id = editor.empty("Checks");
   editor.open(id);
-  editor.click("pipeline-add-step");
+  // The fixture's one step, which runs a tool: a step added here would run nothing, which saving refuses.
+  editor.click("pipeline-step-step");
   editor.set("step-name", "Check code");
   editor.click("step-instructions-row");
   editor.set("step-instructions", "Inspect the changes.");
@@ -51,11 +24,9 @@ fn pipelines_steps_keep_fields_validate_and_save() {
   editor.set("step-budget", "4,000");
   editor.click("step-gate");
   editor.click("pipeline-save");
-  editor.until("saved step", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps().len() == 1
-  });
-  let draft = editor.db().draft::<Pipeline>(id).unwrap().unwrap();
-  let step = &draft.body().steps()[0];
+  editor.until("saved step", |e| e.version(id) == 2);
+  let body = editor.stored(id);
+  let step = &body.steps()[0];
   assert_eq!(step.name.as_str(), "Check code");
   assert!(step.approval_gate);
   assert_eq!(step.budget.unwrap().get(), 4000);
@@ -71,16 +42,13 @@ fn pipelines_steps_keep_fields_validate_and_save() {
   editor.click("step-remove-confirm");
   editor.click("pipeline-save");
   editor.until("saved budget", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[0]
-      .budget
-      .unwrap()
-      .get()
-      == 2000
+    let body = e.stored(id);
+    body.steps().len() == 1 && body.steps()[0].budget.is_some_and(|budget| budget.get() == 2000)
   });
 }
 
 #[test]
-fn pipelines_publish_weaker_version_asks_in_place_and_preserves_history() {
+fn pipelines_saving_a_weaker_version_asks_in_place_and_preserves_history() {
   let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
@@ -100,19 +68,7 @@ fn pipelines_publish_weaker_version_asks_in_place_and_preserves_history() {
   editor.arm();
   assert!(editor.gated());
   editor.click("pipeline-save-question-confirm");
-  editor.until("weaker draft saved", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().is_some()
-  });
-  editor.click("pipeline-publish");
-  editor.until("publish question", |e| e.exists("pipeline-publish-question-confirm"));
-  editor.arm();
-  assert!(editor.gated());
-  editor.click("pipeline-publish-question-confirm");
-  editor.until("v2", |e| {
-    e.db().latest_version::<Pipeline>(id).unwrap().unwrap().number().get() == 2
-  });
-  editor.until("published notice", |e| e.exists("pipeline-publish-notice"));
-  editor.click("pipeline-publish-notice-close");
+  editor.until("the weaker version saved as v2", |e| e.version(id) == 2);
   let versions = editor.db().versions::<Pipeline>(id).unwrap();
   assert!(versions[0].body().steps()[0].approval_gate);
   assert!(!versions[1].body().steps()[0].approval_gate);
@@ -125,16 +81,13 @@ fn pipelines_publish_weaker_version_asks_in_place_and_preserves_history() {
   editor.set("pipeline-settings-description", "Updated description");
   editor.click("pipeline-tab-steps");
   editor.click("pipeline-save");
-  editor.until("description saved", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .is_some_and(|d| d.body().description() == "Updated description")
+  editor.until("description saved as v3", |e| {
+    e.version(id) == 3 && e.stored(id).description() == "Updated description"
   });
 }
 
 #[test]
-fn pipelines_slug_collision_and_stale_editor_keep_the_existing_draft() {
+fn pipelines_slug_collision_and_stale_editor_keep_the_latest_version() {
   let mut editor = Editor::new();
   let id = editor.empty("Checks");
   editor.go(ProjectPage::NewPipeline);
@@ -151,22 +104,11 @@ fn pipelines_slug_collision_and_stale_editor_keep_the_existing_draft() {
   );
   editor.open(id);
   editor.set("pipeline-description", "Local");
-  let mut edit = PipelineEdit::new(editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().clone());
-  edit.set_description("External");
-  let changed = edit.validate().unwrap();
-  editor
-    .db()
-    .save_draft(
-      id,
-      &orchester_core::resource::Draft::new(changed, None, orchester_core::time::Timestamp::now()),
-    )
-    .unwrap();
+  // Another editor publishes the next version behind the page.
+  editor.publish_behind(id, "External");
   editor.click("pipeline-save");
   editor.until("conflict", |e| e.exists("pipeline-write-error"));
-  assert_eq!(
-    editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().description(),
-    "External"
-  );
+  assert_eq!(editor.stored(id).description(), "External");
   editor.click("pipeline-reload");
   editor.until("reloaded", |e| e.exists("pipeline-description"));
 }
@@ -176,11 +118,8 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
   let id = editor.published();
   editor.open(id);
   editor.set("pipeline-description", "Automatically saved");
-  editor.until("automatic draft save", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .is_some_and(|d| d.body().description() == "Automatically saved")
+  editor.until("automatic save as v2", |e| {
+    e.version(id) == 2 && e.stored(id).description() == "Automatically saved"
   });
   editor.click("pipeline-history");
   editor.until("history", |e| e.exists("pipeline-version-1"));
@@ -218,9 +157,6 @@ mod reload_pending;
 
 #[path = "pipelines/publication_states.rs"]
 mod publication_states;
-
-#[path = "pipelines/publication_notice.rs"]
-mod publication_notice;
 
 #[path = "pipelines/watch_pileup.rs"]
 mod watch_pileup;

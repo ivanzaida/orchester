@@ -140,12 +140,12 @@ fn website_catalogue(db: &mut ProjectDb, folder: &std::path::Path, now: Timestam
   ]);
   let versions = ["First release.", "Builds before it deploys.", "Deploys a preview."]
     .map(|description| preview.clone().with_description(description.to_owned()));
-  let preview = publish(db, "Preview release", versions.to_vec(), now)?;
+  let preview = publish_pipeline(db, "Preview release", versions.to_vec(), now)?;
   let checks = pipeline(&[
     ("Review", Executor::Agent(reviewer)),
     ("Check links", Executor::Tool(links)),
   ]);
-  let checks = publish(db, "Content checks", vec![checks], now)?;
+  let checks = publish_pipeline(db, "Content checks", vec![checks], now)?;
   // Deploy preview v2: only Preview release may call it.
   let guarded = Tool::new(
     "",
@@ -297,4 +297,22 @@ fn secret(title: &str, environment: Environment, now: Timestamp) -> Secret {
     },
     now,
   )
+}
+
+/// Creates pipeline `title` as the first of `bodies` and publishes each next one as an edit of the version before:
+/// version N is the Nth. A pipeline holds no draft (D-032).
+fn publish_pipeline(
+  db: &mut ProjectDb,
+  title: &str,
+  bodies: Vec<Pipeline>,
+  now: Timestamp,
+) -> Result<ResourceId, SeedError> {
+  let mut bodies = bodies.into_iter();
+  let first = bodies.next().expect("every pipeline has a first version");
+  let slug = Slug::from_name(title).expect("the seed's names have letters");
+  let (resource, mut version) = db.create_published(slug, name(title), &first, now)?;
+  for body in bodies {
+    version = db.publish_pipeline_edit(resource.id(), &body, version.number(), None, now)?;
+  }
+  Ok(resource.id())
 }

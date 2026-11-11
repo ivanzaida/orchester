@@ -14,14 +14,14 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::VersionNumber;
+use orchester_core::resource::{EditProblem, VersionNumber};
 use orchester_workspace::{
   background, messages,
   pipelines::{
     data::OpenedPipeline,
     history::VersionHistory,
     problems::problem_view,
-    widening::draft_reasons,
+    widening::save_reasons,
     write::{Allowed, needs_reload},
   },
   sharing::team::TeamConfiguration,
@@ -136,12 +136,8 @@ impl Component for Editor {
     ctx.provide(super::actions::ColumnWrites(writes.clone()));
     let shared = team.as_ref().and_then(|team| {
       let standing = team.standing(editing.opened.id)?;
-      // A draft is saved here or not; its base is the latest version this computer has.
-      let draft = editing
-        .opened
-        .draft_saved_at
-        .map(|_| editing.opened.latest.as_ref().map(|latest| latest.number));
-      Some(hub::team::head_line(ctx, "pipeline-team-state", team, standing, draft))
+      // A pipeline holds no draft (D-032).
+      Some(hub::team::head_line(ctx, "pipeline-team-state", team, standing, None))
     });
     // A member of a shared project neither saves nor publishes the team's pipeline (03).
     let buttons = if may_change {
@@ -208,7 +204,7 @@ impl Editor {
       .opened
       .imported
       .as_ref()
-      .filter(|imported| imported.shows_result(editing.opened.latest.is_some()))
+      .filter(|imported| imported.shows_result(true))
     {
       notices.push(super::imported::strip(ctx, props.project.open.project.id(), imported));
     }
@@ -401,7 +397,7 @@ impl Editor {
         || !current.errors.is_empty()
         || current.edit.validate().as_ref() != Ok(body)
         || &current.name != name
-        || !draft_reasons(&current.opened, body).is_empty()
+        || !save_reasons(Some(&current.opened.body), body, &current.opened.assignables).is_empty()
       {
         return;
       }
@@ -436,7 +432,9 @@ fn errors(ctx: &Ctx, editing: &Editing) -> Vec<Element> {
     };
     errors.push(field_error("pipeline-field-error", &message).into());
   }
-  for problem in editing.edit.problems().iter().filter(|p| p.blocks_saving()) {
+  // The rules the steps break; a step without a profile or tool shows in the publish strip only.
+  let broken = |problem: &&EditProblem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_));
+  for problem in editing.edit.problems().iter().filter(broken) {
     let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
     errors.push(field_error("pipeline-rule-error", &message_text(ctx, &view.message)).into());
   }

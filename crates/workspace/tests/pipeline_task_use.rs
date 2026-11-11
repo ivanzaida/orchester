@@ -9,8 +9,8 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
-    Version,
+    AgentProfile, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
+    StepKind, Version,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
@@ -36,15 +36,24 @@ fn project() -> (tempfile::TempDir, ProjectDb) {
   (folder, db)
 }
 
+/// A pipeline of one step, created as its first version (D-032).
 fn pipeline(db: &mut ProjectDb, name: &str) -> ResourceId {
-  let body = Pipeline::new(vec![]).expect("a valid fixture");
-  db.create_resource(
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("a valid fixture"));
+  let key = edit.add_step(Name::new("Build").expect("a valid fixture"), None);
+  edit.update(&key, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(ResourceId::generate());
+    }
+  });
+  let body = edit.validate().expect("a valid fixture");
+  db.create_published(
     Slug::from_name(name).expect("a valid fixture"),
     Name::new(name).expect("a valid fixture"),
     &body,
     Timestamp::now(),
   )
   .expect("a valid fixture")
+  .0
   .id()
 }
 
@@ -203,18 +212,13 @@ fn published_pipeline(
     budget: None,
   }])
   .expect("a valid fixture");
-  let docs = db
-    .create_resource(
+  let (docs, version) = db
+    .create_published(
       Slug::new("docs").expect("a valid fixture"),
       Name::new("Docs").expect("a valid fixture"),
       &body,
       now,
     )
-    .expect("a valid fixture")
-    .id();
-  (
-    docs,
-    db.publish_draft::<Pipeline>(docs, now).expect("published"),
-    profiles,
-  )
+    .expect("a valid fixture");
+  (docs.id(), version, profiles)
 }

@@ -28,7 +28,7 @@ pub fn create_in(
   let name = parse_name(name)?;
   let mut db = ProjectDb::open(root).map_err(|e| messages::store_error(&e))?;
   let body = match start {
-    Start::Empty => Pipeline::new(Vec::new()).expect("an empty pipeline is a valid draft"),
+    Start::Empty => Pipeline::new(Vec::new()).expect("an empty pipeline is a valid body"),
     Start::Starter => starter.pipeline(&Assignables::load(&db).map_err(|e| messages::store_error(&e))?),
     Start::Copy(id) => db
       .latest_version::<Pipeline>(id)

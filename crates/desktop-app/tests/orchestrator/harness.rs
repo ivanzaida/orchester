@@ -401,31 +401,17 @@ the agent logged: {agent}"
 
   /// A published pipeline `name` (`slug`) of one step by `builder`.
   pub fn pipeline(&self, builder: ResourceId, (slug, name): (&str, &str)) -> ResourceId {
-    let mut db = self.db();
-    let now = Timestamp::now();
-    let created = db
-      .create_resource(
+    self
+      .db()
+      .create_published(
         Slug::new(slug).expect("slug"),
         named(name),
         &one_step(builder, "Read README.md."),
-        now,
+        Timestamp::now(),
       )
       .expect("pipeline")
-      .id();
-    db.publish_draft::<Pipeline>(created, now).expect("publish pipeline");
-    created
-  }
-
-  /// Saves a draft of `pipeline`, its one step by `builder` told `instructions`, over its latest version.
-  pub fn pipeline_draft(&self, (pipeline, builder): (ResourceId, ResourceId), instructions: &str) {
-    let body = one_step(builder, instructions);
-    self
-      .db()
-      .update_draft::<Pipeline>(pipeline, |_, latest| {
-        let based_on = latest.map(|version| version.number());
-        Ok(Draft::new(body, based_on, Timestamp::now()))
-      })
-      .expect("draft saved");
+      .0
+      .id()
   }
 
   /// A published instruction `name` that applies to step *Implement* of `pipeline`, telling `text`.
@@ -456,17 +442,6 @@ the agent logged: {agent}"
         ))
       })
       .expect("draft saved");
-  }
-
-  /// The number of `pipeline`'s latest published version.
-  pub fn pipeline_version(&self, pipeline: ResourceId) -> u32 {
-    self
-      .db()
-      .latest_version::<Pipeline>(pipeline)
-      .expect("versions")
-      .expect("a published version")
-      .number()
-      .get()
   }
 
   /// The person's *Let the Orchestrator drive* in the project.

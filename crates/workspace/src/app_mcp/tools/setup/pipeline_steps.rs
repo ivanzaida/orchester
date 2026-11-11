@@ -1,15 +1,17 @@
-//! `save_pipeline_draft`: a pipeline's editor through Orchester's MCP server. The steps given replace
-//! the draft's, each field checked as the step inspector checks it, and only what the inspector offers
-//! is taken: published profiles and runnable tools, write access where the profile writes, and a
-//! narrowing of the profile's permissions only where its CLI enforces the narrower choice. Steps that
-//! break a pipeline rule (an unknown step, a cycle, a return to a step that does not run before) are
-//! not saved, as the editor keeps no such draft.
+//! `save_pipeline_draft`: a pipeline's editor through Orchester's MCP server. The steps given replace the latest
+//! version's and are published as the next version (a pipeline holds no draft, D-032), each field checked as the step
+//! inspector checks it, and only what the inspector offers is taken: published profiles and runnable tools, write
+//! access where the profile writes, and a narrowing of the profile's permissions only where its CLI enforces the
+//! narrower choice. Steps that break a pipeline rule (an unknown step, a cycle, a return to a step that does not run
+//! before) are not saved, nor are steps the save check refuses ([`save_refusals`]), as the editor saves no such edit.
 
 use std::num::NonZeroU32;
 
 use orchester_core::{
   permission::StepPermissions,
-  resource::{Draft, DraftSaved, FailureRoute, ModelId, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{
+    EditProblem, FailureRoute, ModelId, PipelineEdit, PublishError, RepositoryAccess, Step, StepKey, StepKind,
+  },
   time::Timestamp,
   tokens::{BudgetInputError, TokenBudget},
 };
@@ -34,7 +36,9 @@ use crate::{
   pipelines::{
     data::{Assignables, ProfileChoice},
     fields::{parse_instructions, parse_name},
-    problems::{problem_view, rule_message},
+    problems::{problem_view, publish_error, rule_message},
+    widening::save_reasons,
+    write::save_refusals,
   },
   tasks::outside::Outside,
 };
@@ -123,7 +127,7 @@ pub async fn save_pipeline_draft(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let then = translate.text(&Message::new("pipelines.flow.then"));
-  let (project, opened, saved) = blocking(move || {
+  let (project, opened) = blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let id = pipeline_named(&db, &args.pipeline)?;
@@ -141,12 +145,11 @@ pub async fn save_pipeline_draft(
     let mut edit = PipelineEdit::from_steps(&description, current.body.sources().clone(), steps);
     edit.set_deliver(current.body.deliver().cloned());
     edit.set_delivers(args.delivers.map_or_else(|| current.body.delivers(), Into::into));
-    // The editor keeps no draft whose steps break a rule; steps without a profile or tool only wait to
-    // be published.
+    // Steps that break a rule are refused first, as the editor refuses them.
     let broken: Vec<Message> = edit
       .problems()
       .iter()
-      .filter(|problem| problem.blocks_saving())
+      .filter(|problem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_)))
       .map(|problem| problem_view(&edit, problem, &then).message)
       .collect();
     if !broken.is_empty() {
@@ -155,26 +158,34 @@ pub async fn save_pipeline_draft(
     let body = edit
       .validate()
       .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))?;
-    let dropped = crate::pipelines::widening::draft_reasons(&current, &body);
-    widening::allowed(&services, dropped)?;
-    let draft = Draft::new(body, current.based_on, Timestamp::now());
-    let saved = db
-      .save_draft_matching(id, &current.body, current.latest.as_ref().map(|v| v.number), &draft)
+    // A pipeline is stored only as published versions (D-032): the steps are published as the next version, or
+    // refused with every reason and nothing stored.
+    let refusals = save_refusals(&body, &current.assignables, Some(current.version));
+    if !refusals.is_empty() {
+      return Err(ToolError::refused("not_publishable", refusals));
+    }
+    widening::allowed(
+      &services,
+      save_reasons(Some(&current.body), &body, &current.assignables),
+    )?;
+    db.publish_pipeline_edit(id, &body, current.version, None, Timestamp::now())
       .map_err(|error| match &error {
-        StoreError::DraftChanged(_) => ToolError::refused("draft_changed", vec![crate::messages::store_error(&error)]),
+        StoreError::Publish(PublishError::StaleDraft { .. }) | StoreError::DraftChanged(_) => {
+          ToolError::refused("draft_changed", vec![publish_error(&error)])
+        }
+        StoreError::Unchanged(_) => ToolError::refused("unchanged", vec![crate::messages::store_error(&error)]),
         _ => error.into(),
       })?;
+    // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
+    services.changes.record(open.project.id(), Outside::Tasks);
     Ok((
       open.project.id(),
       opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?,
-      saved,
     ))
   })
   .await?;
-  let mut value = pipeline_json(&opened, project, translate);
-  value["draft_kept"] = json!(saved == DraftSaved::Stored);
-  Ok(json!({ "pipeline": value }))
+  Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
 /// The step `input` describes, or why the inspector would not take it, naming the step.

@@ -156,13 +156,12 @@ fn active_override(kontur: &mut Kontur) -> Result<(), SeedError> {
     budget: None,
   }])
   .expect("fixture pipeline");
-  let pipeline = kontur.db.create_resource(
+  let (pipeline, version) = kontur.db.create_published(
     Slug::from_name("Model override").expect("slug"),
     name("Model override"),
     &body,
     kontur.now,
   )?;
-  let version = kontur.db.publish_draft::<Pipeline>(pipeline.id(), kontur.now)?;
   let snapshot = RunSnapshot::build(
     pipeline.id(),
     &version,

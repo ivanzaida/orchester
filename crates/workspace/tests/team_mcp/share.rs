@@ -23,15 +23,15 @@ use crate::{Checkout, Standing, fixture, tools::server};
 fn own_delivery(db: &mut ProjectDb, profile: ResourceId) -> ResourceId {
   let body = fixture::one_step(profile, "Say hello.");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       body.body(),
       Timestamp::now(),
     )
     .expect("a pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   id
 }
 
@@ -173,15 +173,15 @@ fn team_mcp_share_pipeline_is_refused_when_the_integrator_is_a_profile_of_this_c
       .clone()
       .with_deliver(Some(deliver));
     let id = db
-      .create_resource(
+      .create_published(
         Slug::new("delivery").expect("slug"),
         Name::new("Delivery").expect("name"),
         &body,
         Timestamp::now(),
       )
       .expect("a pipeline")
+      .0
       .id();
-    db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   });
 
   let refused = checkout

@@ -20,7 +20,7 @@ pub(super) fn in_chat(tool: &Tool, drives: bool) -> Option<String> {
   }
   let first = match name {
     RUN_TASK => return Some(PROPOSE_RUN.to_owned()),
-    DUPLICATE_PIPELINE => DUPLICATE_AS_DRAFT,
+    DUPLICATE_PIPELINE => DRIVE_DUPLICATE,
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
     RESUME_RUN => RESUME_PAUSED,
@@ -51,10 +51,10 @@ const DRIVE_RUN: &str = "Starts the run at once, through the same checks as for 
   (its blocked_reason) is refused as task_blocked, naming the reason: you never start it; the person may start it in \
   the app.";
 
-/// What the agent reads first of `duplicate_pipeline` while the chat drives.
-const DRIVE_DUPLICATE: &str = "In this chat it saves the copy as a draft, and publishes its first version as \
-  publish_pipeline does: a copy always widens what agents may do, so it is refused (person_only) unless a person \
-  turned on Let automation change agent permissions. The answer names the copy and how its publication went.";
+/// What the agent reads first of `duplicate_pipeline`, whether the chat drives or not.
+const DRIVE_DUPLICATE: &str = "In this chat it publishes the copy as its first version at once, as for any client: \
+  a copy that widens what agents may do is refused (person_only) unless a person turned on Let automation change \
+  agent permissions.";
 
 /// What the agent reads first of `merge_run` while the chat drives.
 const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself it merges only a run the chat's rule \
@@ -83,11 +83,6 @@ const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that th
   starts the run instead, through the same checks, and answers with the run, but never in a turn Orchester started \
   by itself: there it only proposes. A task marked Blocked (its blocked_reason) is refused as task_blocked, naming \
   the reason: you never start or propose it; the person may start it in the app. Refusals name why.";
-
-/// What the agent reads first of `duplicate_pipeline`.
-const DUPLICATE_AS_DRAFT: &str = "In this chat it saves the copy as a draft, and its first version is published as \
-  publish_pipeline publishes in this chat: proposed to the person. The answer names the copy and how its publication \
-  went.";
 
 /// What the agent reads first of `cancel_run`.
 const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks what the call names and proposes the \

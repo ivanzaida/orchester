@@ -106,6 +106,34 @@ impl Editor {
   pub fn db(&self) -> ProjectDb {
     ProjectDb::open(&self.repo).expect("database")
   }
+  /// What `id` stores: its latest version's body (a pipeline holds no draft, D-032).
+  pub fn stored(&self, id: ResourceId) -> Pipeline {
+    self
+      .db()
+      .latest_version::<Pipeline>(id)
+      .expect("read")
+      .expect("a version")
+      .body()
+      .clone()
+  }
+  /// The number of `id`'s latest version.
+  pub fn version(&self, id: ResourceId) -> u32 {
+    self
+      .db()
+      .latest_version::<Pipeline>(id)
+      .expect("read")
+      .expect("a version")
+      .number()
+      .get()
+  }
+  /// Another editor publishes `id`'s next version, described as `description`, behind the page.
+  pub fn publish_behind(&self, id: ResourceId, description: &str) {
+    let mut db = self.db();
+    let latest = db.latest_version::<Pipeline>(id).expect("read").expect("a version");
+    let body = latest.body().clone().with_description(description.into());
+    db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
+      .expect("their version");
+  }
   pub fn selected(&self) -> ResourceId {
     match self.window.navigation().route_now() {
       Route::Project(_, ProjectPage::Pipeline(id, _)) => id,
@@ -163,17 +191,50 @@ impl Editor {
   pub fn gated(&self) -> bool {
     self.window.link.input_gate().protecting()
   }
+  /// Pipeline `name` with the fewest steps a stored pipeline holds: one, *Step*, that runs a published tool. A
+  /// pipeline is stored only as published versions, whose steps all run something (D-032), so none is empty.
   pub fn empty(&self, name: &str) -> ResourceId {
-    self
-      .db()
-      .create_resource(
-        Slug::from_name(name).expect("valid pipeline fixture"),
-        Name::new(name).expect("valid pipeline fixture"),
-        &Pipeline::new(Vec::new()).expect("valid pipeline fixture"),
-        Timestamp::now(),
-      )
+    let mut db = self.db();
+    let tool = match db
+      .resources(orchester_core::resource::ResourceKind::Tool)
       .expect("valid pipeline fixture")
-      .id()
+      .into_iter()
+      .find(|tool| tool.slug().as_str() == "fixture-step")
+    {
+      Some(tool) => tool.id(),
+      None => {
+        let body = Tool::new(
+          "",
+          ToolAction::Command(CommandAction::new(
+            CommandProgram::new("cargo").expect("valid pipeline fixture"),
+            vec![],
+          )),
+          None,
+        )
+        .expect("valid pipeline fixture");
+        db.create_published(
+          Slug::new("fixture-step").expect("valid pipeline fixture"),
+          Name::new("Fixture step").expect("valid pipeline fixture"),
+          &body,
+          Timestamp::now(),
+        )
+        .expect("valid pipeline fixture")
+        .0
+        .id()
+      }
+    };
+    let mut body = PipelineEdit::new(Pipeline::new(vec![]).expect("valid pipeline fixture"));
+    let key = body.add_step(Name::new("Step").expect("valid pipeline fixture"), None);
+    body.update(&key, |s| s.kind = StepKind::Tool { tool: Some(tool) });
+    db.create_published(
+      Slug::from_name(name).expect("valid pipeline fixture"),
+      Name::new(name).expect("valid pipeline fixture"),
+      &body.validate().expect("valid pipeline fixture"),
+      Timestamp::now(),
+    )
+    .expect("valid pipeline fixture")
+    .0
+    .id()
   }
   pub fn published(&self) -> ResourceId {
     let mut db = self.db();
@@ -203,16 +264,13 @@ impl Editor {
       s.kind = StepKind::Tool { tool: Some(tool_id) };
       s.approval_gate = true;
     });
-    let id = db
-      .create_resource(
-        Slug::new("delivery").expect("valid pipeline fixture"),
-        Name::new("Delivery").expect("valid pipeline fixture"),
+    let (id, _) = db
+      .published_pipeline_for_test(
+        "delivery",
+        "Delivery",
         &body.validate().expect("valid pipeline fixture"),
         Timestamp::now(),
       )
-      .expect("valid pipeline fixture")
-      .id();
-    db.publish_draft::<Pipeline>(id, Timestamp::now())
       .expect("valid pipeline fixture");
     id
   }

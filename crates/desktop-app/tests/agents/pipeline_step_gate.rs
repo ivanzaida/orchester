@@ -95,15 +95,15 @@ pub(super) fn one_step(
   let body = edit.validate().expect("a pipeline");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::from_name(&format!("Gate {repository:?}")).expect("slug"),
       Name::new(&format!("Gate {repository:?}")).expect("name"),
       &body,
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   (id, key)
 }
 
@@ -361,19 +361,13 @@ fn a_command_the_profile_no_longer_allows_is_said_refused_and_taken_back() {
     agents.text("pipeline-hub-step-permissions-error")
   );
 
-  // A draft is always saved; only publishing refuses the narrowing the profile no longer allows (PV2-19).
+  // A pipeline holds no draft (D-032): a save of a narrowing the profile no longer allows is refused, storing nothing.
   agents.click("pipeline-hub-step-approval");
   agents.click(SAVE);
-  agents.until("the draft kept", |s| s.exists("pipeline-hub-kept"));
-  let kept = agents.text("pipeline-hub-kept");
-  assert!(kept.contains("cargo build"), "the notice names the command: {kept}");
-  let draft = ProjectDb::open(&agents.root)
-    .expect("database")
-    .draft::<Pipeline>(id)
-    .expect("read")
-    .expect("the draft is stored");
-  let step = draft.body().step(&key).expect("the step");
-  assert!(step.approval_gate, "the change is kept in the draft");
+  agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
+  let db = ProjectDb::open(&agents.root).expect("database");
+  assert!(db.draft::<Pipeline>(id).expect("read").is_none(), "no draft is stored");
+  assert_eq!(db.versions::<Pipeline>(id).expect("read").len(), 1, "nothing published");
   assert_eq!(
     narrowing(&agents, id, &key).commands,
     only(&["cargo build"]),

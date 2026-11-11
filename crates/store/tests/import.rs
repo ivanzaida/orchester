@@ -188,16 +188,9 @@ fn personal_website() -> (TempDir, ResourceId) {
     budget: None,
   };
   let pipeline = Pipeline::new(vec![step]).expect("pipeline");
-  let preview = db
-    .create_resource(
-      Slug::new("preview-release").expect("slug"),
-      name("Preview release"),
-      &pipeline,
-      at(3),
-    )
-    .expect("pipeline")
-    .id();
-  db.publish_draft::<Pipeline>(preview, at(4)).expect("published");
+  let (preview, _) = db
+    .published_pipeline_for_test("preview-release", "Preview release", &pipeline, at(3))
+    .expect("published");
   let rules = Instruction::new(
     PromptText::new("Keep the changelog.").expect("prompt"),
     AgentTargets::All,

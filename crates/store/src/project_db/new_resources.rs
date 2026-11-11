@@ -51,9 +51,9 @@ pub(super) fn insert<B: ResourceBody>(
   Ok(resource)
 }
 
-/// Whether resources of `kind` are created as their first version: agent profiles, instructions, skills, tools and
-/// MCP servers (the team's; a local project's are plain rows). A pipeline keeps its own flow, and agent testing's kinds
-/// are not covered.
+/// Whether resources of `kind` are created as their first version: agent profiles, instructions, skills, tools, MCP
+/// servers (the team's; a local project's are plain rows) and pipelines, which hold no draft at all
+/// ([`super::pipeline_publishes`]). Agent testing's kinds are not covered.
 const fn created_published(kind: ResourceKind) -> bool {
   matches!(
     kind,
@@ -62,7 +62,19 @@ const fn created_published(kind: ResourceKind) -> bool {
       | ResourceKind::Skill
       | ResourceKind::Tool
       | ResourceKind::McpServer
+      | ResourceKind::Pipeline
   )
+}
+
+/// Fails for a kind that holds no draft at all: a pipeline is stored only as published versions (D-032), so none is
+/// created as a draft ([`ProjectDb::create_published`] makes it) and none is saved over a version
+/// ([`ProjectDb::publish_pipeline_edit`] publishes an edit).
+pub(super) const fn ensure_holds_drafts(kind: ResourceKind) -> Result<(), StoreError> {
+  if matches!(kind, ResourceKind::Pipeline) {
+    Err(StoreError::NoDrafts(kind))
+  } else {
+    Ok(())
+  }
 }
 
 /// Fails when a draft of `resource` would be the first thing it holds: a resource of a kind created as its first

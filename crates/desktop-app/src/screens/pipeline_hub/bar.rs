@@ -2,9 +2,9 @@
 //! there and in the same place from the first frame, and at the end what *Save* makes: the next version, which runs
 //! already started do not take (*Save makes v4 · runs keep the version they started on*); for a pipeline that was never
 //! published and can be, *Save publishes it as v1*; for one that cannot be published yet, that *Save* keeps it as a
-//! draft. While nothing changed and publishing would fail, *Save* is off and the bar says what to fix; after *Restore*
-//! it says which version the unsaved changes are. The bar is the Agents hub's ([`save_bar`]). Above it, in place, what
-//! a refused save says, what a save that kept the draft says, and the version a save made.
+//! draft, though a pipeline holds no draft any more (D-032): such a save is refused and says why. After *Restore* the
+//! bar says which version the unsaved changes are. The bar is the Agents hub's ([`save_bar`]). Above it, in place, what
+//! a refused save says, and the version a save made.
 
 use lurq::{
   app::{
@@ -51,24 +51,6 @@ pub(super) fn bar(ctx: &mut Ctx, (save, cancel): (Save, Option<Press>), line: &L
   save_bar::bar(ctx, "pipeline-hub", (save, cancel), hint)
 }
 
-/// Why *Save* is off while nothing changed: publishing what the panel shows would fail again, for this; or the
-/// pipeline has its last version number. While the edit has changes *Save* keeps them as the draft, whatever
-/// publishing would refuse, and [`makes`] says what it would.
-pub(super) fn publish_blocked(ctx: &Ctx, line: &Line<'_>) -> Option<String> {
-  if line.unsaved || !line.entry.unpublished {
-    return None;
-  }
-  refused(ctx, line).or_else(|| {
-    let key = match line.unpublishable.as_ref()? {
-      Unpublishable::NoSteps => "pipeline_hub.bar.publishNoSteps",
-      Unpublishable::Steps => "pipeline_hub.bar.publishMissing",
-      Unpublishable::Broken => "pipeline_hub.bar.publishBroken",
-      Unpublishable::Refused(_) => return None,
-    };
-    Some(ctx.t(key).to_string())
-  })
-}
-
 /// What publishing what the panel shows as it stands would refuse, in its own words: the pipeline has its last
 /// version number, or a step publishing does not take; `None` for the steps' own problems, which *Ready?* names.
 fn refused(ctx: &Ctx, line: &Line<'_>) -> Option<String> {
@@ -85,7 +67,7 @@ fn refused(ctx: &Ctx, line: &Line<'_>) -> Option<String> {
 /// *Unsaved changes ·* (or *Restored v2 · not saved ·*) while the edit has changes, so it shows where *Save* is
 /// pressed.
 fn hint(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
-  if let Some(fix) = line.fix.clone().or_else(|| publish_blocked(ctx, line)) {
+  if let Some(fix) = line.fix.clone() {
     return (fix, PaletteColor::Warning);
   }
   let (makes, color) = makes(ctx, line);
@@ -108,11 +90,7 @@ fn hint(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
 /// is *Ready?*'s to say.
 fn makes(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
   let blocked = line.unpublishable.is_some() || version_limit(line.entry.number).is_some();
-  if let Some(number) = line
-    .entry
-    .number
-    .filter(|_| !line.unsaved && !line.entry.unpublished && blocked)
-  {
+  if let Some(number) = line.entry.number.filter(|_| !line.unsaved && blocked) {
     let said = ctx.t_args("pipeline_hub.bar.noChanges", [("version", number.to_string())]);
     return (said.to_string(), PaletteColor::TextMuted);
   }
@@ -133,11 +111,10 @@ fn makes(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
   (words.to_string(), PaletteColor::TextMuted)
 }
 
-/// What the last save said, over the bar: a refusal (*Couldn't save …*, nothing stored and everything typed kept), the
-/// draft a save that could not publish kept and why, or the version a save made and whether the next run takes it.
+/// What the last save said, over the bar: a refusal (*Couldn't save …*, nothing stored and everything typed kept), or
+/// the version a save made and whether the next run takes it.
 pub(super) enum Said<'a> {
   Refused(&'a Message),
-  Kept(&'a Message),
   /// The version, and whether what was saved can run.
   Made(VersionNumber, bool),
 }
@@ -171,13 +148,6 @@ pub(super) fn notice(ctx: &Ctx, entry: &Entry, said: &Said<'_>) -> Element {
       ),
     )
     .icon(Icon::CircleCheck),
-    Said::Kept(why) => Notice::new(
-      "pipeline-hub-kept",
-      NoticeTone::Warning,
-      ctx.t_args("pipeline_hub.bar.keptTitle", [("name", entry.name.to_string())]),
-    )
-    .icon(Icon::FilePen)
-    .body(message_text(ctx, why)),
   };
   Column::new()
     .id("pipeline-hub-bar-notice")

@@ -107,7 +107,7 @@ pub fn read(
         project.open.repo_root.clone(),
         editing.opened.id,
         editing.epoch,
-        editing.opened.latest.as_ref().map(|v| v.number),
+        editing.opened.version,
         retry,
       ),
       |(root, id, ..)| async move {
@@ -197,22 +197,8 @@ fn draft_row(ctx: &Ctx, state: &State) -> GroupRow {
   let editing = state.get();
   let version = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  let detail = super::summary::draft_detail(ctx, &editing);
-  let saved = editing.opened.draft_saved_at.map(|at| {
-    ctx.t_args(
-      "pipelines.draftSavedAt",
-      [("age", super::library::age(ctx, at).to_string())],
-    )
-  });
-  let hint = match (detail, saved) {
-    (Some(detail), Some(saved)) => ctx.t_args(
-      "pipelines.draftRowHint",
-      [("draft", detail.to_string()), ("saved", saved.to_string())],
-    ),
-    (None, Some(saved)) => saved,
-    (Some(detail), None) => detail,
-    (None, None) => super::summary::draft(ctx, &editing),
-  };
+  // A pipeline holds no saved draft (D-032): the row speaks of the edit not saved yet.
+  let hint = super::summary::draft_detail(ctx, &editing).unwrap_or_else(|| super::summary::draft(ctx, &editing));
   let views = editing.views;
   GroupRow::new(
     "pipeline-history-draft",

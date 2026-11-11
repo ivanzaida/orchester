@@ -15,20 +15,10 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{data::Assignables, levels::levels};
+use super::{data::Assignables, levels::levels, write::save_refusals};
 use crate::messages::{self, Message};
 
-/// Where a pipeline is in its lifecycle.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VersionState {
-  /// Never published: tasks cannot use it yet.
-  DraftOnly,
-  Published(VersionNumber),
-  /// Published, with unpublished changes saved as the next draft.
-  PublishedWithDraft(VersionNumber),
-}
-
-/// One row of the library.
+/// One row of the library: a pipeline and its latest version. A pipeline is stored only as published versions (D-032).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LibraryEntry {
   pub id: ResourceId,
@@ -37,28 +27,27 @@ pub struct LibraryEntry {
   /// Step names by dependency level: steps of one level run in parallel.
   pub stages: Vec<Vec<Arc<str>>>,
   pub step_count: usize,
-  pub state: VersionState,
+  /// Its latest version.
+  pub version: VersionNumber,
   pub used_by: usize,
-  pub last_published: Option<Timestamp>,
+  /// When its latest version was published.
+  pub last_published: Timestamp,
   /// The project's default pipeline, which New task starts with.
   pub default: bool,
 }
 
-/// The project's pipelines it offers (in a team project only the team's, `ProjectDb::resources`), ordered by slug.
+/// The project's pipelines it offers (in a team project only the team's, `ProjectDb::resources`), ordered by slug. One
+/// without a version used here is left out.
 pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
   let tasks = db.tasks()?;
   let default = db.default_pipeline()?;
   let mut entries = Vec::new();
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
-    let latest = db.latest_version::<Pipeline>(id)?;
-    let draft = db.draft::<Pipeline>(id)?;
-    let (body, state) = match (draft, &latest) {
-      (Some(draft), None) => (draft.body().clone(), VersionState::DraftOnly),
-      (Some(draft), Some(version)) => (draft.body().clone(), VersionState::PublishedWithDraft(version.number())),
-      (None, Some(version)) => (version.body().clone(), VersionState::Published(version.number())),
-      (None, None) => continue,
+    let Some(latest) = db.latest_version::<Pipeline>(id)? else {
+      continue;
     };
+    let body = latest.body();
     let names = |keys: Vec<usize>| {
       keys
         .into_iter()
@@ -71,9 +60,9 @@ pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
       slug: resource.slug().as_str().into(),
       stages: levels(body.steps()).into_iter().map(names).collect(),
       step_count: body.steps().len(),
-      state,
+      version: latest.number(),
       used_by: tasks.iter().filter(|task| task.details().pipeline == Some(id)).count(),
-      last_published: latest.map(|version| version.published_at()),
+      last_published: latest.published_at(),
       default: default == Some(id),
     });
   }
@@ -169,15 +158,23 @@ pub enum CreateError {
   /// Another pipeline already has the slug the name gives.
   #[error("the slug `{slug}` is used by `{existing}`")]
   SlugTaken { slug: String, existing: String },
+  /// The body cannot be stored as a first version ([`save_refusals`]), for every one of these reasons; nothing was
+  /// created.
+  #[error("the pipeline cannot be saved as it is")]
+  NotSaved(Vec<Message>),
 }
 
 impl CreateError {
-  /// What a person reads when the pipeline is not created.
+  /// What a person reads when the pipeline is not created: for a refused body, its first reason.
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) => messages::store_error(error),
       Self::NoSlug => Message::new("pipelines.create.noSlug"),
       Self::SlugTaken { slug, existing } => slug_taken(slug, existing),
+      Self::NotSaved(reasons) => reasons
+        .first()
+        .cloned()
+        .expect("a refused create has at least one reason"),
     }
   }
 }
@@ -208,23 +205,27 @@ where
   }
 }
 
-/// Creates the pipeline as draft v1 and returns its id. The starter's steps use the project's
-/// published profiles and tools with the names the starter looks for; the others stay unset,
-/// and the editor says what is missing before it can be published. The slug is unique, so
-/// repeating a create that did happen fails with [`CreateError::SlugTaken`] instead of adding
-/// a second pipeline.
+/// Creates the pipeline as its first version and returns its id, or refuses a body the save check refuses
+/// ([`CreateError::NotSaved`]): one without steps always is. The starter's steps use the project's published profiles
+/// and tools with the names the starter looks for; while one is not found its step has none, and the starter is
+/// refused. The slug is unique, so repeating a create that did happen fails with [`CreateError::SlugTaken`] instead of
+/// adding a second pipeline.
 pub fn create(db: &mut ProjectDb, new: NewPipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
   let body = match new.start {
-    StartFrom::Empty => Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid draft"),
+    StartFrom::Empty => Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid body"),
     StartFrom::Starter => new.starter.pipeline(&Assignables::load(db)?),
   };
   create_with(db, new.name, &body, now)
 }
 
-/// Creates pipeline `name` with `body` as its draft v1, as [`create`] does with a start.
+/// Creates pipeline `name` with `body` as its first version, as [`create`] does with a start.
 pub fn create_with(db: &mut ProjectDb, name: Name, body: &Pipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
   let slug = slug_for(db, name.as_str())?;
-  Ok(db.create_resource(slug, name, body, now)?.id())
+  let refusals = save_refusals(body, &Assignables::load(db)?, None);
+  if !refusals.is_empty() {
+    return Err(CreateError::NotSaved(refusals));
+  }
+  Ok(db.create_published(slug, name, body, now)?.0.id())
 }
 
 pub fn create_in(repo_root: &Path, new: NewPipeline) -> Result<ResourceId, CreateError> {

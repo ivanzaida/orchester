@@ -222,22 +222,15 @@ fn comparison(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
 }
 
 fn comparison_title(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
-  let (key, version) = if editing.opened.draft_saved_at.is_some() {
-    ("pipelines.comparedSavedDraft", next_version(&editing.opened))
-  } else {
-    (
-      "pipelines.comparedPublished",
-      editing.opened.latest.as_ref().map(|v| v.number),
-    )
-  };
+  // A pipeline holds no saved draft (D-032): a viewed version is compared with the latest.
   ctx.t_args(
-    key,
-    [("version", version.map_or_else(String::new, |v| v.get().to_string()))],
+    "pipelines.comparedPublished",
+    [("version", editing.opened.version.get().to_string())],
   )
 }
 
 fn no_comparison_draft(editing: &Editing) -> bool {
-  editing.opened.draft_saved_at.is_none() && editing.viewing_version == editing.opened.latest.as_ref().map(|v| v.number)
+  editing.viewing_version == Some(editing.opened.version)
 }
 
 fn compare_button(ctx: &Ctx, state: &State) -> ActionButton {
@@ -248,7 +241,7 @@ fn compare_button(ctx: &Ctx, state: &State) -> ActionButton {
     ButtonKind::Ghost,
     ctx.t(if editing.comparing {
       "pipelines.hideComparison"
-    } else if editing.opened.draft_saved_at.is_some() || no_comparison_draft(&editing) {
+    } else if no_comparison_draft(&editing) {
       "pipelines.compare"
     } else {
       "pipelines.comparePublished"

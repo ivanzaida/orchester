@@ -205,15 +205,14 @@ fn assigned_pipeline_as(screen: &Agents, profile: ResourceId, (slug, title): (&s
   .expect("pipeline");
   let mut db = ProjectDb::open(&screen.root).expect("database");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new(slug).expect("slug"),
       Name::new(title).expect("name"),
       &pipeline,
       Timestamp::now(),
     )
-    .expect("pipeline saves");
-  db.publish_draft::<Pipeline>(resource.id(), Timestamp::now())
-    .expect("pipeline v1");
+    .expect("pipeline saves")
+    .0;
   resource.id()
 }
 

@@ -61,25 +61,18 @@ impl PipelinePanel {
       pinned.push(save::question(ctx, asked, (&self.save, &self.pending), restored));
     }
     let told = self.notes.told();
-    match (told.refused, told.kept, told.made) {
-      (Some((reason, _)), ..) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
-      (None, Some(why), _) => pinned.push(bar::notice(ctx, entry, &Said::Kept(&why))),
-      (None, None, Some(version)) => pinned.push(bar::notice(ctx, entry, &Said::Made(version, runs))),
-      (None, None, None) => {}
+    match (told.refused, told.made) {
+      (Some((reason, _)), _) => pinned.push(bar::notice(ctx, entry, &Said::Refused(&reason))),
+      (None, Some(version)) => pinned.push(bar::notice(ctx, entry, &Said::Made(version, runs))),
+      (None, None) => {}
     }
     pinned
   }
 
   /// What *Save* does now: nothing while a save waits, off with `off`'s reason (text the check refuses, which the edit
-  /// does not hold, so saving would store what the box no longer says; or a draft publishing would only keep again),
-  /// nothing while nothing differs and no draft waits to be published, else it stores and publishes what the panel
-  /// holds.
-  pub(super) fn save_now(
-    &self,
-    edit: &Edit,
-    (changed, unpublished): (bool, bool),
-    (waiting, off): (bool, Option<String>),
-  ) -> SaveState {
+  /// does not hold, so saving would store what the box no longer says), nothing while nothing differs from the latest
+  /// version, else it publishes what the panel holds.
+  pub(super) fn save_now(&self, edit: &Edit, changed: bool, (waiting, off): (bool, Option<String>)) -> SaveState {
     if self.save.state().get().is_pending() {
       return SaveState::Saving;
     }
@@ -89,7 +82,7 @@ impl PipelinePanel {
     if let Some(why) = off {
       return SaveState::Waits(why.into());
     }
-    if !changed && !unpublished {
+    if !changed {
       return SaveState::Unchanged;
     }
     let (edit, save, notes) = (edit.clone(), self.save.clone(), self.notes.clone());

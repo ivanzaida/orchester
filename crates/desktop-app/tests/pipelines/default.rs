@@ -2,7 +2,7 @@
 //! *Default* tag on its row and chip in its panel, stored with the project and chosen at first in New task; and
 //! *Duplicate*, which opens New pipeline copying it.
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore};
+use orchester_core::id::ResourceId;
 
 use crate::{pipelines_support::Editor, support::project_id};
 
@@ -22,7 +22,7 @@ fn open_menu(editor: &mut Editor, id: ResourceId) {
 fn pipelines_default_is_made_from_the_hub_menu_and_new_task_chooses_it() {
   let mut editor = Editor::new();
   let id = editor.published();
-  let draft = editor.empty("Draft only");
+  let other = editor.empty("Other");
   open_menu(&mut editor, id);
   assert_eq!(
     editor.text("pipeline-hub-menu-default-label"),
@@ -37,7 +37,7 @@ fn pipelines_default_is_made_from_the_hub_menu_and_new_task_chooses_it() {
   assert_eq!(editor.text(&format!("pipeline-hub-row-{id}-tag")), "Default");
   assert_eq!(editor.db().default_pipeline().expect("the setting reads"), Some(id));
   assert!(
-    !editor.exists(&format!("pipeline-hub-row-{draft}-tag")),
+    !editor.exists(&format!("pipeline-hub-row-{other}-tag")),
     "only the default is tagged"
   );
   let mut chips = Vec::new();
@@ -75,37 +75,6 @@ fn pipelines_default_is_made_from_the_hub_menu_and_new_task_chooses_it() {
 }
 
 #[test]
-fn pipelines_a_draft_only_pipeline_can_be_neither_made_the_default_nor_duplicated() {
-  let mut editor = Editor::new();
-  let draft = editor.empty("Draft only");
-  editor.go(ProjectPage::Pipelines);
-  editor.until("the list", |e| e.exists(&format!("pipeline-hub-row-{draft}")));
-  editor.until("the panel", |e| e.exists("pipeline-hub-more"));
-  editor.click("pipeline-hub-more");
-  editor.until("the menu", |e| e.exists("pipeline-hub-menu-default"));
-  assert!(
-    editor
-      .text("pipeline-hub-menu-default-detail")
-      .starts_with("Publish it first")
-  );
-  assert!(
-    editor
-      .text("pipeline-hub-menu-duplicate-detail")
-      .starts_with("Publish it first")
-  );
-  editor.click("pipeline-hub-menu-default");
-  editor.click("pipeline-hub-menu-duplicate");
-  assert_eq!(editor.db().default_pipeline().expect("the setting reads"), None);
-  assert!(
-    !matches!(
-      editor.window.navigation().route_now(),
-      Route::Project(_, ProjectPage::CopyPipeline(_))
-    ),
-    "a pipeline with no published version is not copied"
-  );
-}
-
-#[test]
 fn pipelines_duplicate_opens_new_pipeline_copying_the_pipeline() {
   let mut editor = Editor::new();
   let id = editor.published();
@@ -131,11 +100,11 @@ fn pipelines_duplicate_opens_new_pipeline_copying_the_pipeline() {
   editor.until("the copy opened", |e| e.exists("pipeline-step-step"));
   let copy = editor.selected();
   assert_ne!(copy, id);
-  let body = editor.db().draft::<Pipeline>(copy).unwrap().unwrap().body().clone();
+  assert_eq!(editor.version(copy), 1, "the copy is published as its first version");
   assert_eq!(
-    body.steps()[0].name.as_str(),
+    editor.stored(copy).steps()[0].name.as_str(),
     "Check",
-    "draft v1 is the published version's copy"
+    "v1 is the published version's copy"
   );
 }
 

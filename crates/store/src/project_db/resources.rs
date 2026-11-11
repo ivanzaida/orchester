@@ -4,8 +4,8 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    Draft, DraftSaved, PublishError, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version,
-    VersionNumber, publish,
+    Draft, DraftSaved, PublishError, Removal, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
+    publish,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -219,6 +219,7 @@ impl ResourceStore for ProjectDb {
     body: &B,
     now: Timestamp,
   ) -> Result<Resource, StoreError> {
+    super::new_resources::ensure_holds_drafts(B::KIND)?;
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
     let resource = super::new_resources::insert::<B>(&transaction, slug, name, now)?;
@@ -254,8 +255,8 @@ impl ResourceStore for ProjectDb {
     )
   }
 
-  fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, StoreError> {
-    super::removals::remove(&mut self.connection, id, &mode, now)
+  fn remove_resource(&mut self, id: ResourceId, now: Timestamp) -> Result<Removal, StoreError> {
+    super::removals::remove(&mut self.connection, id, now)
   }
 
   fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, StoreError> {
@@ -373,6 +374,7 @@ pub(super) fn save_draft<B: ResourceBody>(
   resource: ResourceId,
   draft: &Draft<B>,
 ) -> Result<DraftSaved, StoreError> {
+  super::new_resources::ensure_holds_drafts(B::KIND)?;
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
   shared_publishes::ensure_may_change(connection, resource)?;

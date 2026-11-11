@@ -46,7 +46,7 @@ fn grouped(agents: &Agents) -> (ResourceId, [StepKey; 4]) {
   let b = add(&mut edit, "Beta", &[&research], kind());
   let last = add(&mut edit, "Last", &[&a, &b], kind());
   let body = edit.validate().expect("a pipeline");
-  (store(agents, "Grouped", &body, true), [research, a, b, last])
+  (store(agents, "Grouped", &body), [research, a, b, last])
 }
 
 /// research → plan (gated) → build.
@@ -59,7 +59,7 @@ fn gated(agents: &Agents) -> (ResourceId, [StepKey; 3]) {
   edit.update(&plan, |step| step.approval_gate = true);
   let build = add(&mut edit, "Build", &[&plan], kind());
   let body = edit.validate().expect("a pipeline");
-  (store(agents, "Gated", &body, true), [research, plan, build])
+  (store(agents, "Gated", &body), [research, plan, build])
 }
 
 #[test]
