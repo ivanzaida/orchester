@@ -2,8 +2,6 @@
 //! pipeline's panel, and *step 03 of 6* over the step's name, with *Duplicate* and ⋯ at the end. The ⋯ opens the flow
 //! card's menu (P4 `naN3G`) for the step ([`super::more`]).
 
-use std::sync::Arc;
-
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
@@ -100,8 +98,7 @@ pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, u
       ctx,
       more::Props {
         edit: open.edit.clone(),
-        current: Arc::new(open.current.clone()),
-        flow: open.read.flow.as_ref().ok().cloned().map(Arc::new),
+        read: open.read.clone(),
         key: step.key.clone(),
         project,
         pipeline: open.entry.id,

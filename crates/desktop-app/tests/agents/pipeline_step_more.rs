@@ -256,3 +256,14 @@ fn a_very_long_name_gives_way_and_its_pencil_stays_in_view() {
   let (pencil_x, _, pencil_w, _) = bounds(&mut agents, "pipeline-hub-step-name-edit");
   assert!(pencil_x + pencil_w <= more_x, "the pencil stays in view: {pencil_x}");
 }
+
+#[test]
+fn alt_up_and_down_move_the_open_step_as_they_move_a_card() {
+  let (mut agents, ..) = middle();
+  super::pipeline_reorder::alt(&mut agents, "ArrowUp");
+  agents.until("moved up", |s| s.text("pipeline-hub-step-position") == "step 01 of 3");
+  super::pipeline_reorder::alt(&mut agents, "ArrowDown");
+  agents.until("moved back down", |s| {
+    s.text("pipeline-hub-step-position") == "step 02 of 3"
+  });
+}

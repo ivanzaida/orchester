@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use lurq::app::ctx::Ctx;
+use lurq::app::{ctx::Ctx, events::KeyboardEvent};
 use orchester_core::{
   name::Name,
   resource::{MoveError, PipelineEdit, StepKey},
@@ -74,6 +74,7 @@ impl Drive {
       .unwrap_or_default();
     let next = after.and_then(|after| next_after(flow, after));
     let outcome = add_after(&self.edit, &self.current, (&together, next.as_ref()), name);
+    // The error is not lost: `settle` says it under the card, and no step was added.
     let added = outcome.as_ref().ok().cloned();
     self.settle(outcome.map(|_| ()), after);
     added
@@ -92,6 +93,7 @@ impl Drive {
       }
       None => Err(MoveError::UnknownStep(key.clone())),
     };
+    // The error is not lost: `settle` says it under the card, and no copy was made.
     let copy = outcome.as_ref().ok().cloned();
     self.settle(outcome.map(|_| ()), Some(key));
     copy
@@ -189,6 +191,19 @@ pub(super) fn make(edit: &Edit, current: &PipelineEdit, key: &StepKey, change: &
   }
   edit.change(|held| *held = moved);
   Ok(true)
+}
+
+/// The move Alt ↑ or Alt ↓ asks for, with no other key held, while no text input has the keys: the card the keys are on
+/// moves by it in the flow, the open step in its head.
+pub(super) fn keyed_move(event: &KeyboardEvent) -> Option<Move> {
+  if event.default_prevented() || event.text_input_focused || !event.alt || event.ctrl || event.meta || event.shift {
+    return None;
+  }
+  match event.key.as_str() {
+    "ArrowUp" => Some(Move::Up),
+    "ArrowDown" => Some(Move::Down),
+    _ => None,
+  }
 }
 
 /// Adds a step after the steps of one stage, `together` (none for the end of the flow), in series with what follows:
