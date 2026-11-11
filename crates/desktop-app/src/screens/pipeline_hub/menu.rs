@@ -1,8 +1,7 @@
 //! The ⋯ in a pipeline's head (`Pipeline menu` `x6ZrKL` in `Pipelines · v2` P11 `nrTt0`): *Rename*, which makes the
 //! title editable in place, *Duplicate*, which opens New pipeline filled from this one, *Make default for New task* (on
 //! the default pipeline *Default for New task* with a check, which does nothing more), a separator and *Archive* with
-//! how many tasks use the pipeline. A pipeline that was never published cannot be copied or made the default, and its
-//! rows say so.
+//! how many tasks use the pipeline. Every pipeline has a published version (D-032), so each row is always available.
 
 use std::sync::Arc;
 
@@ -51,7 +50,7 @@ pub(super) fn panel(
   .icon(Icon::Pencil)
   .render(ctx, open);
   let duplicate = duplicate(ctx, (project, entry)).render(ctx, open);
-  let make_default = make_default(ctx, entry, default, actions).render(ctx, open);
+  let make_default = make_default(ctx, default, actions).render(ctx, open);
   let archive = actions.archive.clone();
   let used = match entry.used_by {
     0 => None,
@@ -82,25 +81,14 @@ pub(super) fn panel(
 fn duplicate(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry)) -> MenuItem {
   let id = "pipeline-hub-menu-duplicate";
   let label = ctx.t("pipeline_hub.menu.duplicate");
-  let item = if entry.is_draft() {
-    MenuItem::unavailable(id, label, ctx.t("pipeline_hub.menu.duplicateDraft"))
-  } else {
-    let copy = Route::Project(project, ProjectPage::CopyPipeline(entry.id));
-    MenuItem::opens(id, label, Navigation::of(ctx).to(copy))
-  };
-  item.icon(Icon::Copy)
+  let copy = Route::Project(project, ProjectPage::CopyPipeline(entry.id));
+  MenuItem::opens(id, label, Navigation::of(ctx).to(copy)).icon(Icon::Copy)
 }
 
-fn make_default(ctx: &mut Ctx, entry: &Entry, default: bool, actions: &Actions) -> MenuItem {
+fn make_default(ctx: &Ctx, default: bool, actions: &Actions) -> MenuItem {
   let id = "pipeline-hub-menu-default";
   let item = if default {
     MenuItem::new(id, ctx.t("pipeline_hub.menu.isDefault"), || {}).chosen(true)
-  } else if entry.is_draft() {
-    MenuItem::unavailable(
-      id,
-      ctx.t("pipeline_hub.menu.makeDefault"),
-      ctx.t("pipeline_hub.menu.makeDefaultDraft"),
-    )
   } else {
     let action = actions.make_default.clone();
     MenuItem::new(id, ctx.t("pipeline_hub.menu.makeDefault"), move || action.run(()))

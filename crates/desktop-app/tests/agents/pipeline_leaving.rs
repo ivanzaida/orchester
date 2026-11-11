@@ -85,15 +85,8 @@ fn pipeline_leaving_by_a_filter_with_unsaved_changes_asks_first() {
   asks_then_goes(
     &mut agents,
     &view(PipelinesFilter::All, Some(draft)),
-    "pipeline-hub-filter-drafts",
-    &view(PipelinesFilter::Drafts, Some(draft)),
-  );
-  // The pipeline stays chosen under the other filter, and its edit went with the answer.
-  agents.until("its panel", |s| s.exists(DESCRIPTION));
-  assert_eq!(
-    agents.value(DESCRIPTION),
-    "",
-    "Discard changes dropped the edit though the panel stayed"
+    "pipeline-hub-filter-archived",
+    &view(PipelinesFilter::Archived, None),
   );
 }
 

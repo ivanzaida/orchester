@@ -1,5 +1,5 @@
 //! The Pipelines hub of a local project (`Pipelines · v2` `pCzIS`, P1): the same master–detail page as the Agents hub
-//! ([`super::local_hub`]): a filter (*All*, *Drafts*, *Archived*) with counts, a list of the project's pipelines
+//! ([`super::local_hub`]): a filter (*All*, *Archived*) with counts, a list of the project's pipelines
 //! grouped by whether they can run as they are (*Needs you*, *Ready*), and the panel of the chosen one ([`panel`]). The
 //! tab and the chosen pipeline are the route's ([`PipelinesView`]). A team project keeps the page it has
 //! ([`super::pipelines`]).
@@ -65,7 +65,7 @@ use orchester_core::{
 use orchester_workspace::messages::Message;
 
 use self::{
-  leave::{Hosted, Published, Unsaved, UnsavedSignal},
+  leave::{Hosted, Unsaved, UnsavedSignal},
   model::{Entry, Listing},
   states::Retry,
 };
@@ -131,8 +131,6 @@ struct PipelineHubScreen {
   archive_waits: Signal<Option<Target>>,
   /// Whether the open panel's save is under way.
   saving: Signal<bool>,
-  /// The pipeline a save in its panel just published, which the page follows out of *Drafts*.
-  published: Signal<Published>,
 }
 
 impl Component for PipelineHubScreen {
@@ -159,7 +157,6 @@ impl Component for PipelineHubScreen {
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
-      published: ctx.signal(Published::default()),
     };
     this.follow_question(ctx);
     this
@@ -176,9 +173,6 @@ impl Component for PipelineHubScreen {
     let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
-    let view = listing.as_ref().map_or(view, |listing| {
-      follow_published(listing, view, &self.published, (project.open.project.id(), &navigation))
-    });
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
     let body = match (failed, listing.as_ref()) {
@@ -282,7 +276,6 @@ impl PipelineHubScreen {
       archiving: self.archiving.clone(),
       archive_waits: self.archive_waits.clone(),
       saving: self.saving.clone(),
-      published: self.published.clone(),
     }
   }
 
@@ -390,11 +383,6 @@ fn empty(ctx: &Ctx, filter: PipelinesFilter, leave: &Leave, project: ProjectId) 
       "pipeline_hub.empty.all.title",
       "pipeline_hub.empty.all.detail",
     ),
-    PipelinesFilter::Drafts => (
-      Icon::FilePen,
-      "pipeline_hub.empty.drafts.title",
-      "pipeline_hub.empty.drafts.detail",
-    ),
     PipelinesFilter::Archived => (
       Icon::Archive,
       "pipeline_hub.empty.archived.title",
@@ -447,7 +435,6 @@ fn tabs(
 const fn label_key(filter: PipelinesFilter) -> &'static str {
   match filter {
     PipelinesFilter::All => "pipeline_hub.filter.all",
-    PipelinesFilter::Drafts => "pipeline_hub.filter.drafts",
     PipelinesFilter::Archived => "pipeline_hub.filter.archived",
   }
 }
@@ -469,31 +456,7 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
   }
 }
 
-/// A save in the panel of the pipeline the *Drafts* tab shows published it (`published`): the page follows it to
-/// *All*, so its panel, with what the save said, stays; the route is corrected to say so. A route that names a pipeline
-/// published elsewhere is left to [`keep_route_on_shown`].
-fn follow_published(
-  listing: &Listing,
-  view: PipelinesView,
-  published: &Signal<Published>,
-  (project, navigation): (ProjectId, &Navigation),
-) -> PipelinesView {
-  let Some(item) = view.item.filter(|item| published.get_untracked().0 == Some(*item)) else {
-    return view;
-  };
-  if view.filter != PipelinesFilter::Drafts || listing.holds(PipelinesFilter::Drafts, item) {
-    return view;
-  }
-  published.set(Published(None));
-  if !listing.holds(PipelinesFilter::All, item) {
-    return view;
-  }
-  let followed = PipelinesView::new(PipelinesFilter::All, Some(item));
-  navigation.replace(Route::Project(project, ProjectPage::pipelines(followed)));
-  followed
-}
-
-/// A route that names a pipeline the tab does not hold (one archived, or not a draft) shows the one the page shows; the
+/// A route that names a pipeline the tab does not hold (one archived, or one that is not) shows the one the page shows; the
 /// route is corrected to it, in place, so a link, Back and a reload land on what the page says.
 fn keep_route_on_shown(project: ProjectId, view: PipelinesView, shown: Option<&Entry>, navigation: &Navigation) {
   if view.item.is_some() && view.item != shown.map(|entry| entry.id) {

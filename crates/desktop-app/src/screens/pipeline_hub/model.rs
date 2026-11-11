@@ -1,5 +1,5 @@
 //! What the hub's list shows: the project's pipelines grouped by whether they can run as they are (*Needs you*,
-//! *Ready*), the drafts, what was archived apart, and the one the panel shows.
+//! *Ready*), what was archived apart, and the one the panel shows.
 
 use std::sync::Arc;
 
@@ -40,18 +40,11 @@ pub(super) struct Entry {
 }
 
 impl Entry {
-  /// Whether it was never published.
-  pub(super) const fn is_draft(&self) -> bool {
-    self.number.is_none()
-  }
-
-  /// Whether the filter holds it: an archived one only under Archived, a draft under Drafts, the others under All.
-  fn held_by(&self, filter: PipelinesFilter) -> bool {
+  /// Whether the filter holds it: an archived one only under Archived, the others under All.
+  const fn held_by(&self, filter: PipelinesFilter) -> bool {
     match filter {
       PipelinesFilter::Archived => self.archived.is_some(),
-      _ if self.archived.is_some() => false,
-      PipelinesFilter::All => true,
-      PipelinesFilter::Drafts => self.is_draft(),
+      PipelinesFilter::All => self.archived.is_none(),
     }
   }
 }

@@ -53,7 +53,7 @@ pub(super) fn view_routes() -> Vec<Route> {
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::Tools, Some(id)))));
   all.extend(PipelinesFilter::ALL.map(|filter| at(ProjectPage::pipelines(PipelinesView::new(filter, None)))));
   all.push(at(ProjectPage::pipelines(PipelinesView::new(
-    PipelinesFilter::Drafts,
+    PipelinesFilter::Archived,
     Some(id),
   ))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::Agent(id, tab))));
@@ -318,10 +318,10 @@ fn views_pipelines_hub_names_its_tab_and_pipeline() {
     format!("{root}?filter=archived")
   );
   let chosen = at(ProjectPage::pipelines(PipelinesView::new(
-    PipelinesFilter::Drafts,
+    PipelinesFilter::Archived,
     Some(id),
   )));
-  assert_eq!(chosen.path(), format!("{root}?filter=drafts&item={CONNECTION}"));
+  assert_eq!(chosen.path(), format!("{root}?filter=archived&item={CONNECTION}"));
   assert_eq!(Route::parse(&chosen.path()), Ok(chosen));
   assert_eq!(
     Route::parse(&format!("{root}?item={CONNECTION}")),
@@ -332,6 +332,23 @@ fn views_pipelines_hub_names_its_tab_and_pipeline() {
   );
   assert!(Route::parse(&format!("{root}?filter=profiles")).is_err());
   assert!(Route::parse(&format!("{root}?item=not-an-id")).is_err());
+}
+
+/// The *Drafts* tab is gone with pipeline drafts (D-032): a route kept from before (the history, a link) that names it
+/// opens *All*, with the pipeline it named, and its path no longer names a tab.
+#[test]
+fn views_pipelines_hub_reads_the_gone_drafts_tab_as_all() {
+  let root = format!("/project/{PROJECT}/pipelines");
+  let id = CONNECTION.parse().expect("a resource id");
+  assert_eq!(PipelinesFilter::ALL, [PipelinesFilter::All, PipelinesFilter::Archived]);
+  assert_eq!(PipelinesFilter::from_name("drafts"), Some(PipelinesFilter::All));
+  let all = at(ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(id))));
+  assert_eq!(
+    Route::parse(&format!("{root}?filter=drafts&item={CONNECTION}")),
+    Ok(all.clone())
+  );
+  assert_eq!(all.path(), format!("{root}?item={CONNECTION}"));
+  assert_eq!(Route::parse(&format!("{root}?filter=drafts")), Ok(at(ProjectPage::Pipelines)));
 }
 
 /// A local project's hub also has *Archived*, and names a local MCP server by its connection id, which is not a

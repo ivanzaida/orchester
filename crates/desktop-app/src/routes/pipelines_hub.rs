@@ -1,5 +1,5 @@
 //! The Pipelines hub of a local project (`Pipelines · v2` `pCzIS`, P1): the tab it filters by and the pipeline its
-//! panel shows, kept in its route (`/project/<id>/pipelines?filter=drafts&item=<id>`).
+//! panel shows, kept in its route (`/project/<id>/pipelines?filter=archived&item=<id>`).
 
 use orchester_core::id::ResourceId;
 
@@ -13,25 +13,30 @@ const ITEM: &str = "item";
 pub enum PipelinesFilter {
   #[default]
   All,
-  /// The pipelines never published.
-  Drafts,
   Archived,
 }
 
+/// The name of the *Drafts* tab, gone with pipeline drafts (D-032), which a route kept from before (the history, a
+/// link) may still name.
+const GONE_DRAFTS: &str = "drafts";
+
 impl PipelinesFilter {
-  pub const ALL: [Self; 3] = [Self::All, Self::Drafts, Self::Archived];
+  pub const ALL: [Self; 2] = [Self::All, Self::Archived];
 
   /// The filter's name in a path's query and in the tab's element id.
   pub const fn name(self) -> &'static str {
     match self {
       Self::All => "all",
-      Self::Drafts => "drafts",
       Self::Archived => "archived",
     }
   }
 
-  /// The filter named `name`, as [`Self::name`] spells it.
+  /// The filter named `name`, as [`Self::name`] spells it; the gone *Drafts* tab's name opens *All*, which lists
+  /// every pipeline it did.
   pub fn from_name(name: &str) -> Option<Self> {
+    if name == GONE_DRAFTS {
+      return Some(Self::All);
+    }
     Self::ALL.into_iter().find(|filter| filter.name() == name)
   }
 }

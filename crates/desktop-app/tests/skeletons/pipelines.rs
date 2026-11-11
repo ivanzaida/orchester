@@ -28,12 +28,11 @@ fn skeletons_pipelines_show_the_lists_and_panels_bones_under_the_real_head_and_t
     "pipeline-hub-title",
     "pipeline-hub-new",
     "pipeline-hub-filter-all",
-    "pipeline-hub-filter-drafts",
     "pipeline-hub-filter-archived",
   ] {
     assert!(held.exists(real), "{real} stays real");
   }
-  for counted in ["all", "drafts", "archived"] {
+  for counted in ["all", "archived"] {
     let count = format!("pipeline-hub-filter-{counted}-count");
     assert!(held.exists(&count), "{counted}'s count keeps its place");
     // A bone holds only the digit's room, a clipped 0.

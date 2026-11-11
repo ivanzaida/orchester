@@ -84,7 +84,7 @@ impl Component for Restore {
       &entry.name,
       (
         ctx.t("pipeline_hub.panel.where").to_string(),
-        Some(words::head_version(ctx, now, &entry)),
+        words::head_version(ctx, now, &entry),
       ),
       None,
     );

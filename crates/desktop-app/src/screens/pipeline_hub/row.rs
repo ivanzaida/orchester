@@ -1,6 +1,6 @@
 //! A row of the hub's list (`Item · Feature delivery` `UbEH3` in `Pipelines · v2` P1): the pipeline's `workflow` mark
 //! in the color of how it stands, the name over its steps and tasks (or what the person has to do, in `warning`) and at
-//! its end a *Default* tag on the pipeline New task offers first, then its version or *draft*. The chosen row stands
+//! its end a *Default* tag on the pipeline New task offers first, then its version. The chosen row stands
 //! inert on `hover` with a 2 `accent` start; the others open the hub on them.
 
 use lurq::{
@@ -42,7 +42,7 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     line,
     tag: (shown.default == Some(entry.id) && entry.archived.is_none())
       .then(|| tag_chip(&format!("{id}-tag"), &ctx.t("pipeline_hub.row.default"))),
-    version: Some(words::version(ctx, entry).to_string()),
+    version: words::version(entry),
   })
 }
 

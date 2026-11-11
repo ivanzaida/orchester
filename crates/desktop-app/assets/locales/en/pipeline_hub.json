@@ -5,7 +5,6 @@
     "reading": "Reading the pipelines…",
     "filter": {
       "all": "All",
-      "drafts": "Drafts",
       "archived": "Archived"
     },
     "group": {
@@ -14,11 +13,9 @@
       "archived": "Archived"
     },
     "row": {
-      "draft": "draft",
       "default": "Default"
     },
     "line": {
-      "notPublished": "Not published yet",
       "oneStepNoTask": "1 step · not used yet",
       "oneStepOneTask": "1 step · used by 1 task",
       "oneStepTasks": "1 step · used by {{tasks}} tasks",
@@ -49,10 +46,8 @@
       "more": "More actions for {{name}}",
       "rename": "Rename",
       "duplicate": "Duplicate",
-      "duplicateDraft": "Publish it first: a copy starts from a published version.",
       "makeDefault": "Make default for New task",
       "isDefault": "Default for New task",
-      "makeDefaultDraft": "Publish it first: New task lists only published pipelines.",
       "archive": "Archive",
       "usedOne": "1 task",
       "used": "{{count}} tasks"
@@ -82,7 +77,6 @@
       "where": "Pipeline",
       "published": "{{version}} · published {{date}}",
       "archivedAt": "{{version}} · archived {{date}}",
-      "draft": "draft · not published yet",
       "usedNone": "not used yet",
       "usedOne": "used by 1 task",
       "used": "used by {{count}} tasks",
@@ -280,10 +274,6 @@
       "all": {
         "title": "No pipelines yet",
         "detail": "A pipeline is the steps a task's run goes through: who plans, who builds, who checks, and how it merges."
-      },
-      "drafts": {
-        "title": "No drafts",
-        "detail": "A new pipeline is a draft until it is first saved."
       },
       "archived": {
         "title": "Nothing archived",

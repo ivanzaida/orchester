@@ -32,11 +32,6 @@ impl DevtoolsInspectable for Unsaved {}
 
 pub(super) type UnsavedSignal = Signal<Unsaved>;
 
-/// The pipeline a save in its panel just published, which the page follows out of the *Drafts* tab.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Published(pub Option<ResourceId>);
-impl DevtoolsInspectable for Published {}
-
 /// What the screen hosts for the panel of the chosen pipeline: where the list hears of its changes, and the
 /// confirmations that outlive the panel.
 #[derive(Clone)]
@@ -48,8 +43,6 @@ pub(super) struct Hosted {
   pub archive_waits: Signal<Option<Target>>,
   /// Whether the panel's save is under way: its changes are being stored, so they cannot be discarded.
   pub saving: Signal<bool>,
-  /// The pipeline a save in the panel just published, which the page follows out of the *Drafts* tab.
-  pub published: Signal<Published>,
 }
 
 impl PartialEq for Hosted {

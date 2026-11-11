@@ -25,11 +25,10 @@ use crate::screens::{
   team_hub::words::date,
 };
 
-/// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), that a draft is
-/// not published yet, or the steps and tasks; with `unsaved` (its panel holds changes) that they are not saved, in
-/// front of the rest.
+/// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), or the steps and
+/// tasks; with `unsaved` (its panel holds changes) that they are not saved, in front of the rest.
 pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: bool) -> Said {
-  let said = step_line::line(ctx, entry).unwrap_or_else(|| state(ctx, now, entry));
+  let said = state(ctx, now, entry);
   if !unsaved {
     return said;
   }
@@ -52,13 +51,8 @@ fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
       color: PaletteColor::Warning,
     };
   }
-  let text = if entry.is_draft() {
-    ctx.t("pipeline_hub.line.notPublished")
-  } else {
-    summary(ctx, entry)
-  };
   Said {
-    text,
+    text: summary(ctx, entry),
     color: PaletteColor::TextSecondary,
   }
 }
@@ -133,34 +127,31 @@ fn summary(ctx: &Ctx, entry: &Entry) -> Arc<str> {
   )
 }
 
-/// The version at a row's end: *v3*, or *draft* while there is none.
-pub(super) fn version(ctx: &Ctx, entry: &Entry) -> Arc<str> {
-  entry.number.map_or_else(
-    || ctx.t("pipeline_hub.row.draft"),
-    |number| Arc::from(number.to_string()),
-  )
+/// The version at a row's end: *v3*; none for an archived pipeline that never had one.
+pub(super) fn version(entry: &Entry) -> Option<String> {
+  entry.number.map(|number| number.to_string())
 }
 
-/// What stands after *Pipeline* in a panel's head: *v3 · published Oct 27*, *v3 · archived Nov 6*, or that it is a
-/// draft.
-pub(super) fn head_version(ctx: &Ctx, now: Timestamp, entry: &Entry) -> String {
-  let Some(number) = entry.number else {
-    return ctx.t("pipeline_hub.panel.draft").to_string();
-  };
+/// What stands after *Pipeline* in a panel's head: *v3 · published Oct 27*, *v3 · archived Nov 6*; none for an
+/// archived pipeline that never had a version.
+pub(super) fn head_version(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Option<String> {
+  let number = entry.number?;
   let (key, at) = match (entry.archived, entry.published_at) {
     (Some(at), _) => ("pipeline_hub.panel.archivedAt", at),
     (None, Some(at)) => ("pipeline_hub.panel.published", at),
-    (None, None) => return number.to_string(),
+    (None, None) => return Some(number.to_string()),
   };
-  ctx
-    .t_args(
-      key,
-      [
-        ("version", number.to_string()),
-        ("date", date(ctx, now, at).to_string()),
-      ],
-    )
-    .to_string()
+  Some(
+    ctx
+      .t_args(
+        key,
+        [
+          ("version", number.to_string()),
+          ("date", date(ctx, now, at).to_string()),
+        ],
+      )
+      .to_string(),
+  )
 }
 
 /// What stands after *Pipeline* in the head while the panel shows a version read-only: *Viewing v2 · published Nov 3*,

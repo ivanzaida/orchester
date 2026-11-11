@@ -165,10 +165,10 @@ impl Component for Head {
       title,
       (
         ctx.t("pipeline_hub.panel.where").to_string(),
-        Some(props.viewing.get().map_or_else(
+        props.viewing.get().map_or_else(
           || words::head_version(ctx, props.now, entry),
-          |viewed| words::head_viewing(ctx, props.now, &viewed),
-        )),
+          |viewed| Some(words::head_viewing(ctx, props.now, &viewed)),
+        ),
       ),
       Some(end.into()),
     );

@@ -76,12 +76,12 @@ fn leaving_an_open_step_for_another_pipeline_asks_and_discard_drops_the_edit() {
 #[test]
 fn leaving_an_open_step_by_a_filter_asks_first() {
   let (mut agents, [ready, ..], plan) = editing();
-  // The ready pipeline is no draft, so the Drafts tab holds no chosen pipeline, as from the pipeline's panel.
+  // The ready pipeline is not archived, so the Archived tab holds no chosen pipeline, as from the pipeline's panel.
   asks_then_goes(
     &mut agents,
     &step_route(ready, &plan),
-    "pipeline-hub-filter-drafts",
-    &view(PipelinesFilter::Drafts, None),
+    "pipeline-hub-filter-archived",
+    &view(PipelinesFilter::Archived, None),
   );
 }
 

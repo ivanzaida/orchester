@@ -1,5 +1,5 @@
 //! The Pipelines hub of a local project (`Pipelines · v2` `pCzIS`, P1; Pipelines v2 PV2-04), the Agents hub's sibling:
-//! a filter (*All*, *Drafts*, *Archived*) with counts over a list grouped by whether a pipeline can run as it is, the
+//! a filter (*All*, *Archived*) with counts over a list grouped by whether a pipeline can run as it is, the
 //! panel of the chosen one, and the route that keeps the tab and the pipeline. A team project keeps its page.
 //! `cargo test -p orchester-app --test agents pipeline_hub`.
 
@@ -106,7 +106,6 @@ fn pipeline_hub_groups_the_pipelines_and_counts_each_tab() {
   assert_eq!(agents.text("pipeline-hub-title"), "Pipelines");
   assert_eq!(agents.text("local-hub-local-label"), "Local");
   assert_eq!(agents.text("pipeline-hub-filter-all-count"), "3");
-  assert_eq!(agents.text("pipeline-hub-filter-drafts-count"), "1");
   assert_eq!(agents.text("pipeline-hub-filter-archived-count"), "0");
   assert_eq!(agents.text("pipeline-hub-section-needs-title"), "Needs you");
   assert_eq!(agents.text("pipeline-hub-section-needs-count"), "2");
@@ -151,34 +150,6 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "draft");
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), "2 steps not ready");
   assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
-}
-
-#[test]
-fn pipeline_hub_a_tab_keeps_the_chosen_pipeline_when_it_holds_it_and_a_stale_route_is_corrected() {
-  let (mut agents, [ready, draft, _]) = project();
-  open(&mut agents, PipelinesFilter::All, Some(draft));
-  agents.click("pipeline-hub-filter-drafts");
-  agents.until("Drafts", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::Drafts, Some(draft))
-  });
-  assert!(agents.exists(&format!("pipeline-hub-row-{draft}")));
-  assert!(
-    !agents.exists(&format!("pipeline-hub-row-{ready}")),
-    "Drafts holds drafts only"
-  );
-  assert!(!agents.exists("pipeline-hub-section-ready"));
-  assert_eq!(
-    agents.text("pipeline-hub-filter-all-count"),
-    "3",
-    "the counts do not follow the tab"
-  );
-
-  // A route that names a pipeline the tab does not hold shows the tab's first one and is corrected to it.
-  open(&mut agents, PipelinesFilter::Drafts, Some(ready));
-  agents.until("the corrected route", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::Drafts, Some(draft))
-  });
-  assert_eq!(agents.text("team-hub-panel-title"), "Dependency update");
 }
 
 #[test]
@@ -366,11 +337,6 @@ fn pipeline_hub_each_empty_tab_has_the_icon_that_says_what_it_is() {
     glyph_of(&mut agents, "pipeline-hub-empty-glyph"),
     Icon::Workflow.glyph().to_string()
   );
-  open(&mut agents, PipelinesFilter::Drafts, None);
-  assert_eq!(
-    glyph_of(&mut agents, "pipeline-hub-empty-glyph"),
-    Icon::FilePen.glyph().to_string()
-  );
   open(&mut agents, PipelinesFilter::Archived, None);
   assert_eq!(
     glyph_of(&mut agents, "pipeline-hub-empty-glyph"),
@@ -441,7 +407,7 @@ fn pipeline_hub_a_read_that_fails_says_so_with_its_reason_keeps_the_head_and_tri
     !agents.exists("pipeline-hub-empty") && !agents.exists("pipeline-hub-list"),
     "nothing pretends to be empty"
   );
-  for tab in ["all", "drafts", "archived"] {
+  for tab in ["all", "archived"] {
     assert!(
       agents.exists(&format!("pipeline-hub-filter-{tab}")),
       "the {tab} tab keeps its name"
@@ -484,20 +450,14 @@ fn pipeline_hub_a_tab_with_nothing_in_it_says_so_while_the_others_keep_their_pip
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   pipeline(&agents, "Feature delivery", Some(builder));
-  open(&mut agents, PipelinesFilter::Drafts, None);
-  assert_eq!(agents.text("pipeline-hub-empty-title"), "No drafts");
-  assert_eq!(
-    agents.text("pipeline-hub-empty-detail"),
-    "A new pipeline is a draft until it is first saved."
-  );
+  open(&mut agents, PipelinesFilter::Archived, None);
+  assert_eq!(agents.text("pipeline-hub-empty-title"), "Nothing archived");
   assert_eq!(agents.text("pipeline-hub-filter-all-count"), "1");
-  assert_eq!(agents.text("pipeline-hub-filter-drafts-count"), "0");
+  assert_eq!(agents.text("pipeline-hub-filter-archived-count"), "0");
   assert!(
     !agents.exists("pipeline-hub-empty-new") && !agents.exists("pipeline-hub-list"),
     "only a project with no pipelines at all offers New pipeline in its body"
   );
-  open(&mut agents, PipelinesFilter::Archived, None);
-  assert_eq!(agents.text("pipeline-hub-empty-title"), "Nothing archived");
   open(&mut agents, PipelinesFilter::All, None);
   assert!(!agents.exists("pipeline-hub-empty"), "the pipeline is still under All");
 }

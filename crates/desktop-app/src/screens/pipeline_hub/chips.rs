@@ -1,7 +1,6 @@
 //! The chips under a panel's head (`Chips` in `Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): its version, whether it can
-//! run or what it lacks, then *used by 13 tasks* at their end. A pipeline that is ready says *Ready* in `success`; one
-//! with a draft stored says *draft* in `neutral` after its version, and a draft never published has a warning chip with
-//! how many of its steps are not ready. A published pipeline's status chip is about the version tasks use.
+//! run or what it lacks, then *used by 13 tasks* at their end. A pipeline that is ready says *Ready* in `success`, one
+//! that is not what it lacks in `warning`; the status chip is about the version tasks use.
 
 use std::sync::Arc;
 
@@ -12,7 +11,7 @@ use lurq::{
   node::dimension::Dimension,
 };
 
-use super::{model::Entry, step_line::steps_not_ready, words};
+use super::{model::Entry, words};
 use crate::{
   theme::HubText,
   ui::chip::{BadgeTone, badge},
@@ -53,23 +52,12 @@ fn standing(ctx: &Ctx, entry: &Entry, default: bool) -> Vec<(Arc<str>, BadgeTone
   let rest = if entry.archived.is_some() {
     vec![(ctx.t("pipeline_hub.chip.archived"), BadgeTone::Neutral)]
   } else {
-    not_ready(ctx, entry)
-      .or_else(|| (!entry.is_draft()).then(|| (ctx.t("pipeline_hub.chip.ready"), BadgeTone::Success)))
-      .into_iter()
-      .collect()
+    let status = words::needs(ctx, entry).map_or_else(
+      || (ctx.t("pipeline_hub.chip.ready"), BadgeTone::Success),
+      |needs| (needs, BadgeTone::Warning),
+    );
+    vec![status]
   };
   let default = default.then(|| (ctx.t("pipeline_hub.chip.default"), BadgeTone::Info));
   version.into_iter().chain(rest).chain(default).collect()
-}
-
-/// The warning chip. A draft never published says how many of its steps are not ready (*1 step not ready*), else its
-/// first problem as the row says it. A published pipeline says what its version lacks as the row does, whatever its
-/// draft holds.
-fn not_ready(ctx: &Ctx, entry: &Entry) -> Option<(Arc<str>, BadgeTone)> {
-  let words = match steps_not_ready(entry) {
-    0 => words::needs(ctx, entry)?,
-    1 => ctx.t("pipeline_hub.chip.stepNotReady"),
-    count => ctx.t_args("pipeline_hub.chip.stepsNotReady", [("count", count.to_string())]),
-  };
-  Some((words, BadgeTone::Warning))
 }

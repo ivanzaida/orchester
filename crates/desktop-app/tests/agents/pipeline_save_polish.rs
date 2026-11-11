@@ -1,7 +1,7 @@
 //! What the Save bar of a local pipeline's panel says and allows around a save (PV2-17): text a step's check refuses is
 //! unsaved and *Save* says why at the button; a saved version says whether runs can take it, pinned over the bar; a
-//! draft kept names every step not ready; a refusal of an unchanged edit can be cancelled; a draft published from
-//! *Drafts* stays in view under *All*; after *Restore* the bar and the *Allow* question name the version.
+//! draft kept names every step not ready; a refusal of an unchanged edit can be cancelled;
+//! after *Restore* the bar and the *Allow* question name the version.
 //! `cargo test -p orchester-app --test agents pipeline_save_polish`.
 
 use std::time::{Duration, Instant};
@@ -24,7 +24,7 @@ use orchester_workspace::pipelines::{
 
 use super::{
   harness::Agents,
-  pipeline_hub::{open, pipeline_of, view},
+  pipeline_hub::{open, pipeline_of},
   pipeline_hub_ready::{body, lost, store},
   pipeline_step::{keys, open_step},
 };
@@ -167,26 +167,6 @@ fn pipeline_save_polish_a_refusal_of_an_unchanged_draft_is_cancelled() {
   agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
   agents.click(CANCEL);
   agents.until("the refusal is gone", |s| !s.exists("pipeline-hub-refused"));
-}
-
-#[test]
-fn pipeline_save_polish_a_draft_published_from_drafts_stays_in_view_under_all() {
-  let mut agents = Agents::new(true);
-  let builder = agents.profile(true);
-  let fresh = store(&agents, "Fresh", &body([Some(builder), Some(builder)]));
-  open(&mut agents, PipelinesFilter::Drafts, Some(fresh));
-  agents.until("the panel", |s| s.exists(SAVE));
-  assert_eq!(agents.text(HINT), "Save publishes it as v1");
-
-  agents.click(SAVE);
-  agents.until("the question", |s| s.exists(CONFIRM));
-  agents.press_until(CONFIRM, "v1", |s| versions(s, fresh) == 1);
-  agents.until("the page follows it", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::All, Some(fresh))
-  });
-  agents.until("what the save said", |s| {
-    s.exists(NOTICE) && s.text(NOTICE) == "Saved as v1 · the next run uses it"
-  });
 }
 
 #[test]
