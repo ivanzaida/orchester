@@ -1,7 +1,7 @@
-//! A pipeline's page (`02 · Pipeline` `IsU5u`): the loaded draft under its header and tabs, the Steps tab's flow
-//! and column, the Settings tab, the Versions tab, or a viewed version over the flow; with the questions, problems
-//! and failures in place under the header (`05b` `eCrOM`). The draft saves itself once its fields rest.
-use std::path::PathBuf;
+//! A pipeline's page (`02 · Pipeline` `IsU5u`): the edit of its latest version under its header and tabs, the Steps
+//! tab's flow and column, the Settings tab, the Versions tab, or a viewed version over the flow; with the questions,
+//! problems and failures in place under the header (`05b` `eCrOM`). Nothing saves on its own: a pipeline holds no
+//! draft (D-032), so *Save* publishes the next version.
 
 use lurq::{
   app::{
@@ -14,25 +14,18 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{EditProblem, VersionNumber};
+use orchester_core::resource::{EditProblem, Pipeline, PipelineEdit, VersionNumber};
 use orchester_workspace::{
   background, messages,
-  pipelines::{
-    data::OpenedPipeline,
-    history::VersionHistory,
-    problems::problem_view,
-    widening::save_reasons,
-    write::{Allowed, needs_reload},
-  },
+  pipelines::{data::OpenedPipeline, history::VersionHistory, problems::problem_view, write::needs_reload},
   sharing::team::TeamConfiguration,
 };
-use parking_lot::Mutex;
 
 use super::{
   actions::Writes,
   parts,
   state::{Editing, State, Tab, View, Views},
-  work::{self, Action, Work},
+  work::{self, Action},
 };
 use crate::{
   navigation::Navigation,
@@ -52,9 +45,12 @@ pub struct EditorProps {
   pub opened: OpenedPipeline,
   /// What the route shows.
   pub view: View,
-  /// The published version the route views, read-only; `None` for the draft.
+  /// The published version the route views, read-only; `None` for the edit.
   pub version: Option<VersionNumber>,
   pub reload: Signal<u64>,
+  /// The steps of the pipeline's version taken back from the team server, which the page holds as its edit, not saved
+  /// (D-032), once it is read again.
+  pub taken_back: Signal<Option<Pipeline>>,
   pub loading: bool,
 }
 impl PartialEq for EditorProps {
@@ -67,18 +63,12 @@ impl PartialEq for EditorProps {
   }
 }
 impl DevtoolsInspectable for EditorProps {}
-/// What autosave writes once the fields rest: the body and name, into the project at the path.
-#[derive(Clone, PartialEq)]
-struct Snapshot(Option<(orchester_core::resource::Pipeline, orchester_core::name::Name, PathBuf)>);
-impl DevtoolsInspectable for Snapshot {}
 pub struct Editor {
   state: State,
   action: Action,
   confirm_save: Signal<bool>,
   writing: Signal<bool>,
   leave: crate::navigation::guard::LeaveGuard,
-  /// Whether autosave's rest is followed already; once per editor.
-  followed: Mutex<bool>,
 }
 impl Component for Editor {
   type Props = EditorProps;
@@ -86,7 +76,12 @@ impl Component for Editor {
     let props = ctx.props::<EditorProps>().clone();
     let navigation = Navigation::of(ctx);
     let views = Views::new(navigation.clone(), props.project.open.project.id(), props.opened.id);
-    let state = ctx.signal(Editing::new(props.opened, (views.clone(), props.view)));
+    let mut editing = Editing::new(props.opened, (views.clone(), props.view));
+    if let Some(steps) = props.taken_back.get_untracked() {
+      props.taken_back.set(None);
+      editing.edit = PipelineEdit::new(steps);
+    }
+    let state = ctx.signal(editing);
     let action = work::action(ctx, props.project.open.project.id());
     follow_writes(ctx, &action, &state);
     let writing = ctx.signal(false);
@@ -101,7 +96,6 @@ impl Component for Editor {
       writing,
       leave,
       confirm_save: ctx.signal(false),
-      followed: Mutex::new(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -116,8 +110,6 @@ impl Component for Editor {
     if self.state.get_untracked().view != props.view {
       self.state.update(|s| s.view = props.view.clone());
     }
-    // First: lurq keeps a component's futures by the order it asks for them.
-    self.autosave(ctx, &props, writing);
     let reading_version = self.follow_version(ctx, &props);
     let opened = self.state.get().opened;
     props.project.feed.pipeline_named(opened.id, &opened.name);
@@ -131,7 +123,6 @@ impl Component for Editor {
       action: self.action.clone(),
       root: props.project.open.repo_root.clone(),
       asking: self.confirm_save.clone(),
-      shared: team.is_some(),
     };
     ctx.provide(super::actions::ColumnWrites(writes.clone()));
     let shared = team.as_ref().and_then(|team| {
@@ -139,19 +130,12 @@ impl Component for Editor {
       // A pipeline holds no draft (D-032).
       Some(hub::team::head_line(ctx, "pipeline-team-state", team, standing, None))
     });
-    // A member of a shared project neither saves nor publishes the team's pipeline (03).
-    let buttons = if may_change {
-      (
-        writes.save_button(ctx, &editing, busy),
-        Some(writes.publish_button(ctx, &editing, busy)),
-      )
-    } else {
-      (None, None)
-    };
+    // A member of a shared project does not save the team's pipeline (03).
+    let save = may_change.then(|| writes.save_button(ctx, &editing, busy));
     let head = super::header::header(
       ctx,
       &self.state,
-      buttons,
+      save,
       // While the save question waits, nothing is being saved: the status says the changes are unsaved.
       (writing || props.loading || reading_version, shared),
     );
@@ -181,18 +165,13 @@ impl Editor {
     let Some(standing) = team.standing(props.opened.id) else {
       return Vec::new();
     };
-    let reload = props.reload.clone();
-    // The page reads the saved pipeline again, as *Reload saved pipeline* does.
+    let (reload, taken) = (props.reload.clone(), props.taken_back.clone());
+    // The page reads the saved pipeline again, as *Reload saved pipeline* does, holding the steps taken back.
     let reread: hub::team::Reread = std::sync::Arc::new(move || reload.update(|n| *n += 1));
-    hub::team::waiting_bar(
-      ctx,
-      &props.project,
-      (team, standing),
-      ("pipeline", orchester_workspace::tasks::outside::Outside::Pipelines),
-      reread,
-    )
-    .into_iter()
-    .collect()
+    let hand_back: hub::team::HandBack = std::sync::Arc::new(move |steps| taken.set(Some(steps)));
+    hub::team::pipeline_waiting_bar(ctx, &props.project, (team, standing), (reread, hand_back))
+      .into_iter()
+      .collect()
   }
 
   /// What sits in place under the header: what an import did, leaving, the save question, problems and failures.
@@ -272,7 +251,7 @@ impl Editor {
       );
     }
     let column = if editing.view == View::Publish {
-      writes.publish_column(ctx, busy)
+      writes.publish_column(ctx)
     } else {
       super::column::column(ctx, &self.state, (locked, busy))
     };
@@ -287,15 +266,15 @@ impl Editor {
 
   fn with_publication_notice(&self, ctx: &mut Ctx, content: Element) -> Element {
     let editing = self.state.get();
-    if self.confirm_save.get() || self.leave.requested() || editing.view == View::Publish || editing.restore_requested {
+    if self.confirm_save.get() || self.leave.requested() || editing.view == View::Publish {
       return content;
     }
     super::publication::with_success(ctx, &self.state, content)
   }
 
-  /// The published version shown is the route's: Back or Forward to a place of the draft shows the draft again,
+  /// The published version shown is the route's: Back or Forward to a place of the edit shows the edit again,
   /// editable, and to a place of a version reads that version once more. `true` while it is read; the page waits
-  /// then. Second of the futures each render asks for.
+  /// then. The first of the futures each render asks for: lurq keeps a component's futures by that order.
   fn follow_version(&self, ctx: &mut Ctx, props: &EditorProps) -> bool {
     let shown = self.state.get_untracked().viewing_version;
     let wanted = props.version.filter(|version| shown != Some(*version));
@@ -320,8 +299,6 @@ impl Editor {
       None if shown.is_some() => self.state.update(|s| {
         s.viewing = None;
         s.viewing_version = None;
-        s.comparing = false;
-        s.restore_requested = false;
         s.epoch += 1;
       }),
       Some(version) if shown != Some(version) => {
@@ -329,13 +306,11 @@ impl Editor {
         let Some(found) = read.data.filter(|_| !pending && !failed) else {
           return !failed;
         };
-        // A version the history no longer has shows the draft.
+        // A version the history no longer has shows the edit.
         if let Some((number, body)) = found.filter(|(number, _)| *number == version) {
           self.state.update(|s| {
             s.viewing = Some(body);
             s.viewing_version = Some(number);
-            s.comparing = false;
-            s.restore_requested = false;
             s.epoch += 1;
           });
         }
@@ -344,75 +319,9 @@ impl Editor {
     }
     false
   }
-
-  /// Saves the fields once they rest valid and unchanged for a moment. The rest is the first future each render asks
-  /// for, so lurq keeps its state across renders and following it once follows every rest. No rest runs while a write
-  /// is `writing`: what was edited meanwhile rests once the write ends, so it is saved after it rather than skipped.
-  fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, writing: bool) {
-    let editing = self.state.get();
-    let root = props.project.open.repo_root.clone();
-    // A member of a shared project saves nothing of the team's pipeline.
-    let may_change = crate::screens::hub::team::may_change(crate::screens::hub::team::of(&props.project).as_ref());
-    let body = (editing.dirty()
-      && may_change
-      && !writing
-      && editing.errors.is_empty()
-      && editing.viewing.is_none()
-      && !editing.restore_requested
-      && !props.loading
-      && !self.leave.requested())
-    .then(|| {
-      editing
-        .edit
-        .validate()
-        .ok()
-        .map(|body| (body, editing.name.clone(), root))
-    })
-    .flatten();
-    let ready = ctx
-      .future(body, |body| async move {
-        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
-        Ok::<_, orchester_workspace::messages::Message>(Snapshot(body))
-      })
-      .state();
-    let mut followed = self.followed.lock();
-    if *followed {
-      return;
-    }
-    *followed = true;
-    let (state, action, leave) = (self.state.clone(), self.action.clone(), self.leave.clone());
-    ctx.watch(&ready, move |ready| {
-      let Some(Snapshot(Some((body, name, root)))) = &ready.data else {
-        return;
-      };
-      let current = state.get();
-      let writing = action.state().get();
-      if ready.is_pending()
-        || leave.requested()
-        || writing.is_pending()
-        || writing.error.is_some()
-        || current.viewing.is_some()
-        || current.restore_requested
-        || !current.dirty()
-        || !current.errors.is_empty()
-        || current.edit.validate().as_ref() != Ok(body)
-        || &current.name != name
-        || !save_reasons(Some(&current.opened.body), body, &current.opened.assignables).is_empty()
-      {
-        return;
-      }
-      action.run(Work::Save {
-        root: root.clone(),
-        name: current.name,
-        before: current.opened,
-        body: body.clone(),
-        allowed: Allowed::default(),
-      });
-    });
-  }
 }
 
-/// The fields' errors and the rules the draft breaks that keep it from being saved.
+/// The fields' errors and the rules the edit breaks that keep it from being saved.
 fn errors(ctx: &Ctx, editing: &Editing) -> Vec<Element> {
   // A step's Instructions page shows its text's error under the field only (`02g` `PexNQ`).
   let instructions = match &editing.view {

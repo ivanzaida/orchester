@@ -662,7 +662,12 @@
         "takeBack": "Take it back as a draft",
         "discardNew": "Discard it",
         "refusedWhy": "{{reason}} Your new runs use it here. It isn't sent again on its own: take it back as a draft, change it and publish again.",
-        "refusedNewWhy": "{{reason}} It was never created for the team and isn't sent again on its own: discard it, then create it again."
+        "refusedNewWhy": "{{reason}} It was never created for the team and isn't sent again on its own: discard it, then create it again.",
+        "pipeline": {
+          "takeBack": "Take it back",
+          "conflictBody": "Your version is kept on this computer. Nothing is merged: take it back to change it on top of v{{latest}}, or publish yours as v{{next}} anyway.",
+          "refusedWhy": "{{reason}} Your new runs use it here. It isn't sent again on its own: take it back, change it and save again."
+        }
       },
       "compare": {
         "title": "v{{latest}} and yours",
