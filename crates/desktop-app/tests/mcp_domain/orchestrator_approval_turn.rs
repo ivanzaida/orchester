@@ -1,7 +1,8 @@
 //! The Orchestrator takes up an agent's tool request while it drives (decided by the person on 2026-11-11), on the
 //! seeded Kontur's cards: in the turn a request's wait started by itself, `decide_approval` decides only that request
 //! (`not_this_request` for another), and the decision is kept as the chat's action naming the request's task; a turn
-//! the person's message started may decide any. The tool keeps its own rules (`approve_once` or `deny`).
+//! the person's message started may decide any. The tool keeps its own rules (`approve_once` or `deny`); the chat's
+//! answer needs its reason, and the drive switch is its consent, not *Let automation answer approvals*.
 //! `cargo test -p orchester-app --test mcp_domain orchestrator_approval_turn`.
 
 use orchester_core::{
@@ -21,7 +22,12 @@ use super::{
 };
 
 fn decide(request: &PendingToolApproval) -> Value {
-  json!({ "project": "Kontur", "approval": request.id, "decision": "approve_once" })
+  json!({
+    "project": "Kontur",
+    "approval": request.id,
+    "decision": "approve_once",
+    "reason": "The brief asks for it.",
+  })
 }
 
 fn refused(called: &Result<Value, ToolError>) -> Option<&str> {
@@ -74,12 +80,8 @@ fn orchestrator_approval_turn_decides_only_the_request_that_started_it() {
   let [first, second, ..] = waiting.as_slice() else {
     panic!("the cards wait on two requests at least: {waiting:?}");
   };
+  // Only the drive switch: the chat's answers follow it, whatever Let automation answer approvals says.
   allow(&served, &seeded.repo);
-  served
-    .services()
-    .workspace
-    .set_automation_answers_approvals(true)
-    .expect("the person lets automation answer approvals");
   let person = chat(&served, &mut db);
   let own = ChatScope {
     on_its_own: true,
@@ -95,9 +97,19 @@ fn orchestrator_approval_turn_decides_only_the_request_that_started_it() {
     "{kept:?}"
   );
 
-  // Its own request goes to the tool, as for any client (this session has no runner to deliver it).
+  // The chat's reason is required: the conversation shows it under the request.
+  let mut unreasoned = decide(first);
+  unreasoned.as_object_mut().expect("an object").remove("reason");
+  let unreasoned = chat_call(&mut served, &own, "decide_approval", unreasoned);
+  assert!(
+    matches!(unreasoned, Err(ToolError::InvalidArguments(_))),
+    "{unreasoned:?}"
+  );
+  // Its own request goes to the tool, as for any client (this session has no runner to deliver it), and the drive
+  // switch is its consent.
   let own_request = chat_call(&mut served, &own, "decide_approval", decide(first));
   assert_ne!(refused(&own_request), Some("not_this_request"), "{own_request:?}");
+  assert_ne!(refused(&own_request), Some("automation_not_allowed"), "{own_request:?}");
   let kept = actions(&db, &own).pop().expect("kept");
   assert!(kept.task.is_some(), "the decision names the request's task: {kept:?}");
 

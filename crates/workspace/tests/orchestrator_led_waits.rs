@@ -311,7 +311,7 @@ fn led_waits_keep_a_tool_request_in_the_leading_conversation_and_start_one_turn_
       for words in [
         "waits for a decision on a tool request in run #1 of ORC-1",
         "Approve it once with decide_approval (approve_once) only when it plainly serves the task and is safe",
-        "When you are not sure, decide nothing: tell the person what is asked, why you hesitate and what you recommend",
+        "When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate",
         "Decide only this request, once",
       ] {
         assert!(prompt.contains(words), "{words:?} in {prompt}");

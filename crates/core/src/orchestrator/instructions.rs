@@ -61,7 +61,8 @@ const AGENTS_WAIT: &str = "Agents that wait:\n\
   one refuses, the person does it in the app. While Let the Orchestrator drive is on, a tool request of what you lead \
   starts a turn of yours: approve it once only when it plainly serves the task and is safe, deny it with a reason for \
   the agent only when it is plainly wrong, and otherwise leave it to the person with your recommendation. In a turn \
-  Orchester started, decide_approval decides only the request that started it (not_this_request). You never widen \
+  Orchester started, decide_approval decides only the request that started it (not_this_request); while you drive, \
+  that switch is what lets you answer it, whatever Let automation answer approvals says. You never widen \
   what agents may do beyond what a tool lets you, read secret values or delete work.";
 
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).
@@ -310,12 +311,12 @@ fn approval_prompt(who: &str, wait: &AgentWait) -> String {
      worktree, destroys or deletes nothing that cannot be undone, reaches no other system or person (no push, \
      publish, send, deploy or network call that changes something), touches no secret, and fits the brief and the \
      order of what you lead. Deny it (deny, with a message that tells the agent why and what to do instead) only when \
-     it is plainly wrong for the task. When you are not sure, decide nothing: tell the person what is asked, why you \
-     hesitate and what you recommend, with the link; the request waits for them on its card. Decide only this \
-     request, once: approve_once covers it alone, and you never allow a tool or command for good or widen what agents \
-     may do. When decide_approval refuses (such as automation_not_allowed, while the person does not let automation \
-     answer approvals), tell the person what is asked and what you recommend, and leave it to them. Either way, say \
-     what you did and why, with the link. Start, resume, cancel, continue or merge nothing.",
+     it is plainly wrong for the task. Give decide_approval your reason in one sentence (reason): the conversation \
+     shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
+     then \"Recommends \" and what you recommend; the request waits for the person on its card, shown here under \
+     your words. Decide only this request, once: approve_once covers it alone, and you never allow a tool or command \
+     for good or widen what agents may do; allowing similar, all of a run or the project's is the person's, on the \
+     card. Start, resume, cancel, continue or merge nothing.",
     number = wait.number,
     task = wait.task,
     title = wait.title,

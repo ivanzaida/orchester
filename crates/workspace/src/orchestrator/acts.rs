@@ -10,7 +10,7 @@
 use orchester_core::{
   id::RunId,
   orchestrator::{
-    ActionOutcome, ChatAction,
+    ActionOutcome, ChatAction, ToolAnswer,
     change::{ProposedChange, Publishing},
   },
   run::Answerer,
@@ -74,6 +74,7 @@ pub(super) async fn act_and_keep(
     resumed: kept.resumed,
     auto_mode: kept.auto_mode,
     on_its_own: kept.on_its_own,
+    tool_answer: kept.tool_answer,
     watch,
     ..ChatAction::new(name, None, outcome)
   };
@@ -109,6 +110,7 @@ struct Kept {
   resumed: Option<RunId>,
   auto_mode: bool,
   on_its_own: bool,
+  tool_answer: Option<ToolAnswer>,
 }
 
 /// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person.
@@ -199,18 +201,22 @@ async fn merge(deps: (&Services, &Translate), scope: &ChatScope, arguments: &Jso
 }
 
 /// `decide_approval` while driving: in a turn nobody asked for, only the request whose wait started the turn
-/// ([`approval_turn::checked`]); the decision is the tool's, kept with the task the request belongs to.
+/// ([`approval_turn::checked`]); the decision is the tool's, kept with the task the request belongs to and, done, as
+/// the chat's answer with what was asked and the chat's reason ([`ToolAnswer`]).
 async fn decide_approval(
   deps: (&Services, &Translate),
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let task = approval_turn::checked(scope, arguments).await?;
-  let result = app_tool(deps, DECIDE_APPROVAL, arguments.clone()).await;
+  let (reason, arguments) = approval_turn::reason(arguments)?;
+  let checked = approval_turn::checked(scope, &arguments).await?;
+  let result = app_tool(deps, DECIDE_APPROVAL, arguments).await;
+  let tool_answer = result.as_ref().ok().and_then(|told| checked.answer(told, reason));
   Ok(Acted {
     result,
     kept: Kept {
-      task,
+      task: checked.task,
+      tool_answer,
       ..Kept::default()
     },
   })

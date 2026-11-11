@@ -71,7 +71,14 @@ const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself
   run back to an agent that may write to resolve them; or the person resolves them on the Local integration page.";
 
 /// What the agent reads first of `decide_approval` while the chat drives.
-const DRIVE_APPROVAL: &str = "Decides one tool request at once. In a turn Orchester started by a tool request it   decides only that request (another is refused as not_this_request). Approve it once only when it plainly serves the   task and is safe: inside the run's worktree, nothing that cannot be undone, nothing that reaches another system or   person, no secret. Deny it, with a message that tells the agent why, only when it is plainly wrong. When you are not   sure, do not call it: tell the person what is asked and what you recommend; the request waits for them on its   card. It never allows a tool or command for good.";
+const DRIVE_APPROVAL: &str = "Decides one tool request at once. In a turn Orchester started by a tool request it \
+  decides only that request (another is refused as not_this_request). Approve it once only when it plainly serves the \
+  task and is safe: inside the run's worktree, nothing that cannot be undone, nothing that reaches another system or \
+  person, no secret. Deny it, with a message that tells the agent why, only when it is plainly wrong. Give your reason \
+  in one sentence (reason): the conversation shows it under the request. While the chat drives, Let the Orchestrator \
+  drive is what lets it answer, whatever Let automation answer approvals says. When you are not sure, do not call it: \
+  tell the person what is asked and what you recommend; the request waits for them on its card. It never allows a \
+  tool or command for good.";
 
 /// What the agent reads first of `resume_run` while the chat drives.
 const DRIVE_RESUME: &str = "Resumes a run a pause stopped, and continues a run that a crash, the runner going away or \

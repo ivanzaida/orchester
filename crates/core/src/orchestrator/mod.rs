@@ -30,7 +30,8 @@ pub mod watch;
 pub use self::{
   chat::{
     ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
-    CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn, WaitsOnRow,
+    CompactionState, EntryKind, HeldWork, Queued, SessionChange, ToolAnswer, TurnFailure, TurnState, WaitTurn,
+    WaitsOnRow,
   },
   leads::{Lead, Leads},
   merging::{MergeLeft, Merging},

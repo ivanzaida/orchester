@@ -22,7 +22,7 @@ use serde_json::Value;
 use super::{
   acts::{act_and_keep, drives},
   approval::{self, APPLY_PROPOSAL},
-  duplicate, git, guard, leads, mcp_servers,
+  approval_turn, duplicate, git, guard, leads, mcp_servers,
   own_project::{in_own_project, own_project_by_id},
   plan::{self, PROPOSE_PLAN},
   repository::{self, INIT_REPOSITORY},
@@ -175,6 +175,7 @@ pub fn listed(drives: bool) -> Vec<Tool> {
       if let Some(told) = told::in_chat(&tool, drives) {
         tool.description = Some(told.into());
       }
+      approval_turn::with_reason(&mut tool);
       tool
     })
     .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])
