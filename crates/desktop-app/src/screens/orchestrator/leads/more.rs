@@ -6,20 +6,21 @@
 //! stop that Enter or Space presses, named for the targets it folds. A press opens or closes its list; Esc and a press
 //! outside close it, and so does *+N* going away (everything fits again, or nothing is led).
 //!
-//! The list hangs 2 under the header, its start at *+N*'s: 320 wide on `surface_raised` in a 1 `border_strong` stroke,
-//! radius md, 6 inside, rows 2 apart. A head line 26 high, 8 at its sides, *This conversation leads* in 11.5
-//! `text_muted`; then a row per target the conversation leads, all of them in the order they were kept: 30 high,
-//! radius sm, 8 at its sides and 8 between its parts, the chip's 13 icon in `text_secondary`, the name (a task by its
-//! key) in 12.5 `text_primary`, cut short with an ellipsis, *since 09:14* (or *since Oct 8* for an earlier day) in 11.5
-//! `text_muted`, the free room, and a 12 `x` in `text_muted`. A row takes the `hover` fill under the pointer; a press
-//! on it opens the module or the task as its chip does and closes the list; its `x` stops that subscription as the
-//! chip's × does, opening nothing. A stop that was not applied is said under the rows.
+//! The list hangs 2 under the header, its start at *+N*'s, or moved back just enough to end 8 before the window's
+//! edge: 320 wide on `surface_raised` in a 1 `border_strong` stroke, radius md, 6 inside, rows 2 apart. A head line 26
+//! high, 8 at its sides, *This conversation leads* in 11.5 `text_muted`; then a row per target the conversation leads,
+//! all of them in the order they were kept: 30 high, radius sm, 8 at its sides and 8 between its parts, the chip's 13
+//! icon in `text_secondary`, the name (a task by its key) in 12.5 `text_primary`, cut short with an ellipsis, *since
+//! 09:14* (or *since Oct 8* for an earlier day) in 11.5 `text_muted`, the free room, and a 12 `x` in `text_muted`,
+//! `text_secondary` under the pointer ([`super::stop`]). A row takes the `hover` fill under the pointer; a press on it
+//! opens the module or the task as its chip does and closes the list; its `x` stops that subscription as the chip's ×
+//! does, opening nothing. A stop that was not applied is said under the rows.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::Ctx,
+    ctx::{CollisionStrategy, Ctx},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Column, Placement, Popup, Row, Text, TextOverflow},
@@ -35,8 +36,9 @@ use orchester_workspace::{
 
 use super::{
   CHIP_HEIGHT, ID, Refused,
-  chip::{Hold, route, stop_button, target_icon, today, under_head},
+  chip::{Hold, route, target_icon, today, under_head},
   slug,
+  stop::stop_button,
 };
 use crate::{
   navigation::Navigation,
@@ -178,10 +180,16 @@ impl More {
       .with_children(rows)
       .with_children(refused);
     let down = under_head(&hold.head, &self.pill, ExtraSpacing::Tight.value());
-    Popup::new(self.pill.clone(), panel)
+    // lurq keeps a popup inside the window, and 8 of clear room after the list keep it 8 from the window's edge. An
+    // offset from where *+N* was laid out would not: a position read back may be from before the pass that moved *+N*.
+    let framed = Column::new()
+      .padding(Padding::new().right(SpacingSize::Sm))
+      .child(panel);
+    Popup::new(self.pill.clone(), framed)
       .open(self.open.clone())
       .placement(Placement::BottomStart)
       .offset(0.0, down)
+      .collision(CollisionStrategy::Clamp)
   }
 
   /// `lead`'s row: a press opens its target as its chip does and closes the list; its `x` stops it through `hold`.
@@ -204,7 +212,7 @@ impl More {
       target,
       name: Some(name.to_string()),
     };
-    let stop = stop_button(ctx, &id, (hold, named), (IconSize::Sm, PaletteColor::TextMuted));
+    let stop = stop_button(ctx, &id, (hold, named), (IconSize::Sm, false));
     base
       .id(id.clone())
       .describe("a11y_name", name.clone())
