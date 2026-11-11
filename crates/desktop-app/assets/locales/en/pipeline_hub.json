@@ -358,6 +358,25 @@
       "toolUnpublished": "This tool has no published version yet",
       "chooseAnother": "Choose another",
       "chooseAnotherAgent": "Choose another profile or tool"
+    },
+    "stepEdit": {
+      "name": "Name",
+      "nameHint": "Enter to save · Esc to cancel",
+      "openProfile": "Open {{name}}",
+      "toolDecides": "Its exit code decides the step",
+      "toolUnavailable": "This tool cannot run as a pipeline step in this version.",
+      "databaseUnavailable": "Database actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
+      "httpUnavailable": "HTTP actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
+      "toolAccessUnavailable": "Pipeline steps cannot run command tools with access rules yet. Pick a command tool without access rules or an agent profile.",
+      "stopped": "When the step fails",
+      "baseMoves": "Merge the base branch when it moves",
+      "baseMovesHint": "On by default for steps that can write, except Review and Verify steps and steps that return their failures to a writing step.",
+      "commands": "Commands",
+      "commandsSub": "A step can only narrow what {{profile}} allows",
+      "networkOff": "Turn network off",
+      "networkUnavailable": "This profile and its connection cannot enforce turning network off on this platform.",
+      "askTools": "Ask when a tool needs approval",
+      "resetPermissions": "Use profile commands and network"
     }
   }
 }

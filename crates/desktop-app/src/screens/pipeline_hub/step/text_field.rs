@@ -9,15 +9,23 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
+  components::Column,
   core::{Ref, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{Step, StepKey};
-use orchester_workspace::{messages::Message, pipelines::fields};
+use orchester_core::{
+  name::Name,
+  resource::{Step, StepKey},
+};
+use orchester_workspace::{
+  messages::{Message, step_name_error},
+  pipelines::fields,
+};
 
 use super::{Faulty, keep, kept};
 use crate::{
   screens::pipeline_hub::edit::Edit,
+  theme::DISABLED_OPACITY,
   ui::{field::FieldInput, message::message_text},
 };
 
@@ -27,6 +35,8 @@ type Change = Box<dyn FnOnce(&mut Step)>;
 /// Which box.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Kind {
+  /// The step's name, edited in its head ([`super::name`]).
+  Name,
   Instructions,
   Budget,
   Retries,
@@ -36,6 +46,7 @@ impl Kind {
   /// The words that name the box, in the bar's *Fix … to save*.
   pub(super) const fn label(self) -> &'static str {
     match self {
+      Self::Name => "pipeline_hub.stepEdit.name",
       Self::Instructions => "pipeline_hub.step.instructions",
       Self::Budget => "pipeline_hub.step.budget",
       Self::Retries => "pipeline_hub.step.retries",
@@ -43,8 +54,9 @@ impl Kind {
   }
 
   /// The box's element id.
-  const fn name(self) -> &'static str {
+  pub(super) const fn name(self) -> &'static str {
     match self {
+      Self::Name => "pipeline-hub-step-name",
       Self::Instructions => "pipeline-hub-step-instructions",
       Self::Budget => "pipeline-hub-step-budget",
       Self::Retries => "pipeline-hub-step-retries",
@@ -54,6 +66,7 @@ impl Kind {
   /// What `step` holds, as the box shows it.
   pub(super) fn shown(self, step: &Step) -> String {
     match self {
+      Self::Name => step.name.as_str().to_owned(),
       Self::Instructions => step.instructions.as_str().to_owned(),
       Self::Budget => fields::budget_text(step.budget, ","),
       Self::Retries => step
@@ -63,9 +76,18 @@ impl Kind {
     }
   }
 
+  /// Why `text` cannot be what `step` holds, if it cannot.
+  pub(super) fn refused(self, text: &str) -> Option<Message> {
+    self.apply(text).err()
+  }
+
   /// Makes `text` what `step` holds, or says why it cannot be.
   fn apply(self, text: &str) -> Result<Change, Message> {
     Ok(match self {
+      Self::Name => {
+        let value = Name::new(text).map_err(|error| step_name_error(&error))?;
+        Box::new(move |step| step.name = value)
+      }
       Self::Instructions => {
         let value = fields::parse_instructions(text)?;
         Box::new(move |step| step.instructions = value)
@@ -125,6 +147,27 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 
+/// Takes `text` typed into the box of `kind` of step `key`: valid, into `edit` (the panel's, as of the last draw), and
+/// any invalid text kept for the step is forgotten; not valid, it is kept in `faulty` and the edit keeps the last valid
+/// value. Returns why it is not valid.
+pub(super) fn take(text: &str, (key, kind): (&StepKey, Kind), faulty: &Faulty, edit: Option<&Edit>) -> Option<Message> {
+  match kind.apply(text) {
+    Ok(change) => {
+      keep(faulty, (key, kind), None);
+      if let Some(edit) = edit {
+        edit.change(|current| {
+          current.update(key, change);
+        });
+      }
+      None
+    }
+    Err(message) => {
+      keep(faulty, (key, kind), Some(text));
+      Some(message)
+    }
+  }
+}
+
 /// The box of `props`, mounted anew for each step and after each save or *Cancel*.
 pub(super) fn field(ctx: &mut Ctx, props: Props) -> Element {
   let key = format!("{}-{}-{}", props.kind.name(), props.key, props.epoch);
@@ -147,7 +190,7 @@ impl Component for TextField {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let typed = kept(&props.faulty, &props.key, props.kind);
-    let error = typed.as_deref().and_then(|text| props.kind.apply(text).err());
+    let error = typed.as_deref().and_then(|text| props.kind.refused(text));
     let this = Self {
       text: ctx.signal(typed.unwrap_or_else(|| props.shown.clone())),
       error: ctx.signal(error),
@@ -155,20 +198,8 @@ impl Component for TextField {
     };
     let (error, edit) = (this.error.clone(), this.edit.clone());
     let (kind, key, faulty) = (props.kind, props.key.clone(), props.faulty);
-    ctx.watch(&this.text, move |text: &String| match kind.apply(text) {
-      Ok(change) => {
-        error.set(None);
-        keep(&faulty, (&key, kind), None);
-        if let Some(edit) = edit.get() {
-          edit.change(|current| {
-            current.update(&key, change);
-          });
-        }
-      }
-      Err(message) => {
-        error.set(Some(message));
-        keep(&faulty, (&key, kind), Some(text));
-      }
+    ctx.watch(&this.text, move |text: &String| {
+      error.set(take(text, (&key, kind), &faulty, edit.get().as_ref()));
     });
     this
   }
@@ -194,6 +225,10 @@ impl Component for TextField {
     if let Some(message) = self.error.get() {
       input = input.error(message_text(ctx, &message));
     }
-    input.render(ctx)
+    // While a save or its question runs the box takes the kit's disabled look, as the step's other fields (P2f).
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .opacity(if props.locked { DISABLED_OPACITY } else { 1.0 })
+      .child(input.render(ctx))
   }
 }

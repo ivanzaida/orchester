@@ -86,22 +86,12 @@ impl Executor {
     Some(dropped)
   }
 
-  /// Runs the step of an edit that began with it as `started` (with the CLI it ran on then) with this executor, as the
-  /// Agent picker's choice does, for a caller that keeps no [`KnownCli`]: [`Self::apply_through`] from the previous
-  /// choice's CLI (`from`). Returns the override dropped.
-  pub fn apply_in_edit(
-    self,
-    step: &mut Step,
-    started: Option<&(Step, Option<AgentProvider>)>,
-    (from, to): (Option<AgentProvider>, Option<AgentProvider>),
-  ) -> Option<ModelId> {
-    self.apply_through(step, started, (&mut KnownCli::new(from), to))
-  }
-
-  /// Runs the step of an edit with this executor, on CLI `to`: [`Self::apply_on`] read against the CLI the override
-  /// was for, the one the step started on (`started`) or, when that is not known, the last known CLI the edit passed
-  /// through (`path`), so a choice whose CLI is not known (no connection) never lets the override reach another CLI
-  /// after it; then [`take_back_override`]; then `path` takes `to` when it is known. Returns the override dropped.
+  /// Runs the step of an edit with this executor, as the Agent picker's choice does, on CLI `to`: [`Self::apply_on`]
+  /// read against the CLI the step's override is for now, the last known CLI the edit passed through (`path`, which
+  /// starts from the CLI the step started on, `started`'s) or, before any, the one it started on; so a choice whose CLI
+  /// is not known (no connection) never lets the override reach another CLI after it, and an override set on another
+  /// CLI than the one the step started on is read against that CLI. Then [`take_back_override`]; then `path` takes
+  /// `to` when it is known. Returns the override dropped.
   pub fn apply_through(
     self,
     step: &mut Step,
@@ -109,7 +99,7 @@ impl Executor {
     (path, to): (&mut KnownCli, Option<AgentProvider>),
   ) -> Option<ModelId> {
     let was_for = started.and_then(|(_, cli)| *cli);
-    let dropped = self.apply_on(step, (was_for.or(path.get()), to));
+    let dropped = self.apply_on(step, (path.get().or(was_for), to));
     if let Some((started, was_for)) = started {
       take_back_override(step, started, (*was_for, to));
     }

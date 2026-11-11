@@ -473,7 +473,7 @@ fn a_press_outside_the_picker_closes_it_and_changes_nothing() {
   let (mut agents, [ready, ..]) = first_step();
   agents.click(FIELD);
   agents.until("the picker", |s| s.exists(PICKER));
-  let (x, y, width, height) = rect(&mut agents, "pipeline-hub-step-title");
+  let (x, y, width, height) = rect(&mut agents, "pipeline-hub-step-position");
   let (x, y) = (x + width / 2.0, y + height / 2.0);
   agents.window.tree.mouse_move(x, y);
   agents.window.tree.mouse_down(x, y, MouseButton::Left);

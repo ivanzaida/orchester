@@ -1225,6 +1225,7 @@
   },
   "errors": {
     "nameRequired": "Enter a project name.",
+    "stepNameRequired": "Enter a step name.",
     "nameTooLong": "Use at most {{max}} characters.",
     "notAGitRepository": "This folder is not the root of a git repository.",
     "alreadyInitialized": "This repository already contains an Orchester project.",

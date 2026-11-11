@@ -77,6 +77,16 @@ pub(super) fn save_until(agents: &mut Agents, what: &str, done: impl Fn(&mut Age
   });
 }
 
+/// Whether the open step's name field shows `name`; false while no step is open.
+pub(super) fn named(agents: &mut Agents, name: &str) -> bool {
+  agents
+    .window
+    .tree
+    .get_element_by_id_mut("pipeline-hub-step-name")
+    .and_then(|element| element.as_text_input())
+    .is_some_and(|input| input.value() == name)
+}
+
 pub(super) fn route(agents: &Agents) -> Route {
   agents.window.navigation().route_now()
 }
@@ -147,7 +157,7 @@ fn a_step_opens_in_the_panel_with_its_head_strip_and_groups() {
 
   assert_eq!(agents.text("pipeline-hub-step-back-name"), "Feature delivery");
   assert_eq!(agents.text("pipeline-hub-step-position"), "step 01 of 2");
-  assert_eq!(agents.text("pipeline-hub-step-title"), "Plan");
+  assert_eq!(agents.value("pipeline-hub-step-name"), "Plan");
   assert!(agents.exists("pipeline-hub-step-duplicate"));
   assert!(!agents.exists("pipeline-hub-flow"), "the flow gives way to the step");
   assert!(
@@ -215,25 +225,23 @@ fn a_chip_switches_steps_and_the_keys_walk_through_them() {
   open_step(&mut agents, ready, &plan);
 
   agents.click(&format!("pipeline-hub-step-chip-{build}"));
-  agents.until("the second step", |s| s.text("pipeline-hub-step-title") == "Build");
+  agents.until("the second step", |s| named(s, "Build"));
   assert_eq!(route(&agents), step_route(ready, &build));
   assert_eq!(agents.text("pipeline-hub-step-position"), "step 02 of 2");
 
   super::pipeline_hub_menu::key(&mut agents, "ArrowLeft");
-  agents.until("the first step", |s| s.text("pipeline-hub-step-title") == "Plan");
+  agents.until("the first step", |s| named(s, "Plan"));
   super::pipeline_hub_menu::key(&mut agents, "ArrowLeft");
   assert_eq!(
-    agents.text("pipeline-hub-step-title"),
+    agents.value("pipeline-hub-step-name"),
     "Plan",
     "nothing runs before the first step"
   );
   super::pipeline_hub_menu::key(&mut agents, "ArrowRight");
-  agents.until("the second step again", |s| {
-    s.text("pipeline-hub-step-title") == "Build"
-  });
+  agents.until("the second step again", |s| named(s, "Build"));
   super::pipeline_hub_menu::key(&mut agents, "ArrowRight");
   assert_eq!(
-    agents.text("pipeline-hub-step-title"),
+    agents.value("pipeline-hub-step-name"),
     "Build",
     "nothing runs after the last step"
   );
@@ -252,7 +260,7 @@ fn what_is_typed_in_a_step_is_held_across_steps_and_the_pipeline_until_save() {
   });
 
   agents.click(&format!("pipeline-hub-step-chip-{build}"));
-  agents.until("the second step", |s| s.text("pipeline-hub-step-title") == "Build");
+  agents.until("the second step", |s| named(s, "Build"));
   assert_eq!(agents.value(INSTRUCTIONS), "", "another step has its own text");
   agents.click("pipeline-hub-step-back");
   agents.until("the pipeline", |s| s.exists("pipeline-hub-flow"));
@@ -425,7 +433,7 @@ fn a_long_pipeline_scrolls_its_strip_and_opens_with_the_open_step_in_view() {
   let middle = all[8].clone();
   agents.window.navigation().go(step_route(long, &middle));
   agents.until("the middle step is in view", |s| {
-    s.text("pipeline-hub-step-title") == "Review stage 9" && in_view(s, &format!("pipeline-hub-step-chip-{middle}"))
+    named(s, "Review stage 9") && in_view(s, &format!("pipeline-hub-step-chip-{middle}"))
   });
 }
 

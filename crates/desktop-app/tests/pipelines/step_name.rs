@@ -3,55 +3,6 @@
 use crate::pipelines_support::Editor;
 
 #[test]
-#[ignore = "PV2-18: renaming a step is not in the step panel"]
-fn pipelines_step_name_edits_in_place_and_esc_puts_the_name_back() {
-  let mut editor = Editor::new();
-  let id = editor.published();
-  editor.open(id);
-  editor.click("pipeline-step-step");
-  assert_eq!(editor.value("step-name"), "Check");
-  editor.arm();
-  let bounds = |editor: &mut Editor, id: &str| {
-    editor
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("laid out: {id}"))
-  };
-  let (input, sizer) = (bounds(&mut editor, "step-name"), bounds(&mut editor, "step-name-sizer"));
-  // As wide as the name, and 2 more for the caret after its last letter.
-  assert!(
-    (input.x - sizer.x).abs() < 0.5 && (input.y - sizer.y).abs() < 0.5 && (input.width - sizer.width - 2.0).abs() < 0.5,
-    "the input lies over the name and is as wide: {input:?} {sizer:?}"
-  );
-  assert!(
-    editor.exists("step-name-edit"),
-    "the pencil says the name can be renamed"
-  );
-  assert!(!editor.exists("step-name-hint"));
-  editor.focus("step-name");
-  editor.until("editing", |e| e.exists("step-name-hint"));
-  assert_eq!(editor.text("step-name-hint"), "Enter to save · Esc to cancel");
-  assert!(
-    !editor.exists("step-name-edit"),
-    "the pencil goes while the name is edited"
-  );
-  editor.set("step-name", "Checked");
-  editor.key("Escape", false);
-  assert_eq!(editor.value("step-name"), "Check", "Esc puts the name back");
-  assert!(!editor.exists("step-name-hint"));
-  assert!(editor.exists("step-name-edit"));
-  editor.click("step-name-edit");
-  editor.until("editing from the pencil", |e| e.exists("step-name-hint"));
-  editor.set("step-name", "Checked");
-  editor.key("Enter", false);
-  assert!(!editor.exists("step-name-hint"), "Enter ends the editing");
-  assert_eq!(editor.value("step-name"), "Checked", "and keeps the name");
-  assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
-}
-
-#[test]
 fn pipelines_step_name_of_a_viewed_version_has_no_pencil() {
   let mut editor = Editor::new();
   let id = editor.published();

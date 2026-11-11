@@ -1,7 +1,9 @@
-//! A step opened in the pipeline's panel (`Pipelines · v2` P2 `u2rYEH`, P13 `KRQ5J`): the head with ← back to the
-//! pipeline ([`head`]), the strip of the whole flow that switches steps ([`strip`]) and the step's fields in groups:
-//! *Step* (*Agent* and *Instructions*), *Run* (what happens when changes are requested, the step budget) and *Gate and
-//! access* ([`groups`]). There is no *Runs after*: where a step runs is set in the flow.
+//! A step opened in the pipeline's panel (`Pipelines · v2` P2 `u2rYEH`, P2b `EGEos`, P13 `KRQ5J`): the head with ← back
+//! to the pipeline and the step's name edited in place ([`head`], [`name`]), the strip of the whole flow that switches
+//! steps ([`strip`]) and the step's fields in groups: *Step* (*Agent* with *Open Builder*, and *Instructions*) and
+//! *Run* (what happens when changes are requested, the step budget, *When the step fails*) ([`groups`]), and *Gate and
+//! access* with the step's permissions ([`gate`], [`permissions`]). There is no *Runs after*: where a step runs is set
+//! in the flow.
 //!
 //! Every field changes the edit the panel holds ([`super::edit`]) and nothing else; *Save* and *Cancel* are the
 //! panel's and act on the whole pipeline. The route holds the open step (`ProjectPage::Pipeline` with
@@ -10,20 +12,26 @@
 
 mod agent;
 mod choices;
+mod executor;
+mod gate;
 mod groups;
 mod head;
+mod known;
+mod name;
+mod permissions;
 mod pieces;
 mod strip;
 mod text_field;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
-  core::Signal,
+  core::{ElementRef, Signal},
   node::Element,
 };
 use orchester_core::resource::{PipelineEdit, StepKey};
 use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 
+pub(super) use self::known::Paths;
 use super::{edit::Edit, model::Entry};
 use crate::project::ShownProject;
 
@@ -133,6 +141,10 @@ pub(super) struct Open<'a> {
   pub reveal_delivers: &'a Signal<bool>,
   /// Set by a *Choose another* that opened this step: its Agent field opens its picker once.
   pub pick_agent: &'a Signal<bool>,
+  /// The last known CLI each step of the edit ran on ([`known`]).
+  pub known: &'a known::PathsSignal,
+  /// *Gate and access*, which the panel brings into view with the question before a save.
+  pub gate: &'a ElementRef,
 }
 
 /// What the panel's body shows for the open step: the head, the strip and the groups of fields; nothing when the
@@ -158,6 +170,6 @@ pub(super) fn parts(ctx: &mut Ctx, open: &Open<'_>) -> Vec<Element> {
     ),
     groups::step(ctx, open, step),
     groups::run(ctx, open, step, &upstream),
-    groups::gate(ctx, open, step),
+    gate::group(ctx, open, step),
   ]
 }
