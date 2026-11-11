@@ -206,7 +206,7 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
     Make::Tool(name, tool) => (
       ResourceKind::Tool,
       name,
-      Publication::of_body(root, id, &*tool).map_err(refused)?,
+      Publication::of_tool(root, id, &tool).map_err(refused)?,
     ),
     // A team project's form makes the team's form of a profile.
     Make::LocalMcpServer(_) | Make::Profile(_) => return Err(Failed::Said(Message::new("team_new.localOnly"))),

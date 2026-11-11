@@ -36,8 +36,9 @@
 //!   [`Undecided::ChoosesArchivedMcpServer`] (one not synced yet is [`Undecided::ChoosesMcpServer`]): Run again is
 //!   refused until an admin restores it or the profile stops naming it. A skill it names cannot be told archived (this
 //!   computer keeps none of the team's), so it does not block ([`archive_blocks_profiles`]).
-//! - A tool of a team project names no secret by name until ORC-830, so one that holds none asks nothing. One that
-//!   holds a project secret by id is [`Undecided::TeamToolSecretById`]: it is not assumed ready.
+//! - A tool of a team project needs a value here for the team secret it names, by name. One whose latest version was
+//!   published before the team's form and holds a project secret by id is [`Undecided::TeamToolSecretById`]: it is not
+//!   assumed ready.
 //!
 //! The read keeps nothing: it is computed from the stores and the filesystem at the call, so a screen or tool that
 //! reads it again after a change sees the change. It changes with a fill-in (counted as

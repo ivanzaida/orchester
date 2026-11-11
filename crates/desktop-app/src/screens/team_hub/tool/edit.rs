@@ -2,8 +2,8 @@
 //! head, the chips with *Unsaved changes* while it differs from the version it is made on, *From the team* with the
 //! form that makes one ([`ToolFields`]: its kind, description, program, arguments one per line and how long it may
 //! run), *On this computer* as the plain panel has it, and the fixed Save/Cancel bar ([`super::super::edit`]). Its exit
-//! codes, output limit and environment stay as the version has them. An HTTP request or a database query names its
-//! secret by id, which has no team form yet, so those tools are not edited here: their panel stays the plain one.
+//! codes, output limit and environment stay as the version has them. An HTTP request or a database query is read
+//! here as values and not edited (A6 `u9Hcc`): its panel stays the plain one.
 
 use std::sync::Arc;
 
@@ -119,7 +119,7 @@ impl Component for ToolEditor {
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
       .with_children(parts.notice)
       .child(from_team::section_of(ctx, drawn.rows))
-      .child(computer::section(ctx, entry, sheet));
+      .child(computer::section(ctx, entry, sheet, &[]));
     panel::frame(entry, body, Some(parts.bar)).into()
   }
 }

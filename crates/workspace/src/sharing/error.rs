@@ -96,6 +96,10 @@ pub enum SharingError {
   /// are theirs. Nothing was sent.
   #[error("resource {resource} has writable folders of this computer ({})", folders.join(", "))]
   WritableFoldersStay { resource: ResourceId, folders: Vec<String> },
+  /// A tool to send the team uses a secret this project does not have, so the team cannot be told its name. Nothing
+  /// was sent.
+  #[error("tool {resource} uses a secret this project does not have")]
+  ToolSecretGone { resource: ResourceId },
   /// Share would upload what the team cannot take in the form it is in ([`ShareRefusal`]): every resource to fix is
   /// listed, and nothing was sent.
   #[error("{} resources cannot be shared as they are", refusals.len())]
@@ -163,6 +167,7 @@ impl SharingError {
       Self::PipelineNamesNonTeam { name, .. } => {
         Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
       }
+      Self::ToolSecretGone { .. } => Message::new("sharing.errors.toolSecretGone"),
       // The names only: each refusal's reason is a message of its own ([`ShareRefusal::message`]), said by the caller.
       Self::ShareRefused { refusals } => Message::new("sharing.errors.shareRefused").with(
         "resources",

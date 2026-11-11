@@ -3,19 +3,20 @@
 //! this computer. An agent profile is turned into the team's ([`profile`]); a pipeline names its profiles and tools by
 //! the id they have on the server, which a team resource keeps on every computer, so its body needs no rewriting and
 //! [`check_pipeline`] refuses one that names an id the team does not have, as the team's configuration was read this
-//! session ([`TeamConfig`]). The bodies of the other kinds are not in the
+//! session ([`TeamConfig`]). A tool names its secret by name ([`tool`]). The bodies of the other kinds are not in the
 //! team's form yet, so one that names an entity of this computer is refused here, before anything is sent: Share lists
 //! it with the other refusals ([`SharingError::ShareRefused`]) until its kind's body has a team form.
 
 use orchester_api::ReferenceTarget;
 use orchester_core::{
-  id::ResourceId,
+  id::{ResourceId, SecretId},
   resource::{
     AgentProfile, Pipeline, ResourceKind, TeamAgentProfile, TeamCounterparts, TeamExecutors, TeamPipelineError,
-    TeamProfileError, TeamReviewer,
+    TeamProfileError, TeamReviewer, TeamTool, TeamToolError, Tool,
   },
+  secret::Secret,
   sharing::{LocalEntities, named},
-  store::{ConnectionStore, McpServerStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 use serde_json::Value;
@@ -179,4 +180,40 @@ pub(crate) fn check_team_pipeline(
   };
   let name = config.name(named).map_or_else(|| named.to_string(), str::to_owned);
   Err(SharingError::PipelineNamesNonTeam { resource, name })
+}
+
+/// `local`, a version of the tool `resource`, as the team holds it: the secret it sends or connects with, held by id
+/// here, becomes the name it has among `secrets`, the project's, and the references repeat that name
+/// ([`ReferenceTarget::of_tool`]). A command tool holds none and goes as it is. Fails with
+/// [`SharingError::ToolSecretGone`] for a secret the project does not have; nothing is sent.
+pub(crate) fn tool(resource: ResourceId, local: &Tool, secrets: &[Secret]) -> Result<Publication, SharingError> {
+  let name = |id: SecretId| {
+    secrets
+      .iter()
+      .find(|secret| secret.id() == id)
+      .map(|secret| secret.name().clone())
+  };
+  let team = TeamTool::from_local(local, name).map_err(|error| match error {
+    TeamToolError::SecretNotHere => SharingError::ToolSecretGone { resource },
+    other => StoreError::Corrupt {
+      what: "tool",
+      detail: other.to_string(),
+    }
+    .into(),
+  })?;
+  Ok(Publication {
+    body: serde_json::to_value(&team).map_err(|error| StoreError::Corrupt {
+      what: "resource body",
+      detail: error.to_string(),
+    })?,
+    references: ReferenceTarget::of_tool(&team),
+  })
+}
+
+/// The project's secrets a tool's versions may name, archived ones too: a secret is archived, never deleted, so an
+/// older version still goes to the team by the name its secret had.
+pub(crate) fn named_secrets(db: &ProjectDb) -> Result<Vec<Secret>, StoreError> {
+  let mut secrets = db.secrets()?;
+  secrets.extend(db.archived_secrets()?);
+  Ok(secrets)
 }

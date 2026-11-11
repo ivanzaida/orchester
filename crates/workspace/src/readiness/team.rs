@@ -3,7 +3,7 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::{ResourceKind, TeamAgentProfile, TeamReviewer, Tool},
+  resource::{ResourceKind, TeamAgentProfile, TeamReviewer, TeamTool, Tool},
   sharing::{McpNeed, Needs, NeedsError},
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -98,21 +98,21 @@ fn first_archived<'a>(config: &'a TeamConfig, ids: &[ResourceId]) -> Option<&'a 
   ids.iter().find_map(|id| config.archived(*id))
 }
 
-/// The team's tools. A team tool body names no secret by name yet, so a tool that holds none asks nothing. One that
-/// holds a project secret by id is undecided: nothing says whether that secret has a value on this computer, and the
-/// tool is not assumed ready (ORC-830 puts tools in the team's form).
+/// The team's tools: each needs a value here for the team secret it names, if any. A latest version published before
+/// the team's form, which holds a project secret by id, is undecided: nothing says whether that secret has a value on
+/// this computer, and the tool is not assumed ready until an admin publishes it again by name.
 pub(super) fn tools(config: &TeamConfig) -> Vec<Entry> {
   let mut tools = Vec::new();
   for resource in config.resources(ResourceKind::Tool) {
-    let (Some(number), Some(body)) = (resource.number(), resource.body::<Tool>()) else {
+    let (Some(number), Some(body)) = (resource.number(), resource.body::<TeamTool>()) else {
       continue;
     };
     let needs = match body {
-      Ok(tool) => match tool.secret() {
-        Some(secret) => Err(Undecided::TeamToolSecretById(secret)),
-        None => Ok(Needs::tool(Vec::new())),
+      Ok(tool) => Ok(Needs::tool(tool.secret().cloned().into_iter().collect())),
+      Err(NotTeamForm) => match resource.body::<Tool>() {
+        Some(Ok(tool)) if tool.secret().is_some() => Err(Undecided::TeamToolSecretById),
+        _ => Err(Undecided::NotTeamForm),
       },
-      Err(NotTeamForm) => Err(Undecided::NotTeamForm),
     };
     tools.push(Entry::team(resource, number, needs));
   }

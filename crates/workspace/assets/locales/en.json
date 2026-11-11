@@ -2143,11 +2143,13 @@
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
       "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",
+      "toolSecretGone": "The team can't take this tool: it uses a secret this project doesn't have, so its name can't be given to the team. Choose a secret the project has, then try again. Nothing was sent.",
       "shareRefused": "Nothing was shared: the team can't take {{resources}} as they are. Fix each one and share again.",
       "shareRefusal": {
         "localEntities": "{{resource}} names {{names}}, which belong to this computer only, and its kind has no form for the team yet. Remove them from it to share it.",
         "pipelineNamesNonTeam": "{{resource}} uses {{name}}, which isn't shared with the team. Use a profile or tool the team gets, or remove the step.",
         "writableFolders": "{{resource}} has writable folders ({{folders}}) that are folders of this computer, so they can't be shared. Remove them from the profile to share it.",
+        "toolSecretGone": "{{resource}} uses a secret this project doesn't have, so the team can't be told its name. Choose a secret the project has to share it.",
         "mcpProgramInWorktree": "The MCP server {{resource}} starts a program inside the worktree. The team names a program by its name on the search path, so use one that is installed on the computer.",
         "mcpProgramName": "The MCP server {{resource}} starts a program whose file name can't be looked up on the search path. Install it under a plain name.",
         "mcpFolder": "The MCP server {{resource}} starts in a folder of this computer. The team's folder is relative to the worktree, so change it to one.",

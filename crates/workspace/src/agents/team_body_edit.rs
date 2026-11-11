@@ -8,7 +8,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, VersionNumber},
+  resource::{AgentProfile, Tool, VersionNumber},
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -67,6 +67,22 @@ pub async fn save_profile(
 ) -> Result<VersionNumber, EditRefused> {
   let (local, owned, config) = (root.to_owned(), profile.clone(), config.clone());
   let publication = background::run(move || Publication::of_profile(&local, id, &owned, &config))
+    .await
+    .map_err(EditRefused::Failed)??;
+  servers.publish_team(root, id, (Some(base), publication)).await
+}
+
+/// Publishes `tool` as the next version of team tool `id` of the project at `root`, made on version `base`, in the
+/// team's form ([`Publication::of_tool`]): the secret it names by an id of this project goes by its name. So an admin's
+/// Save also publishes again a version that named its secret by id.
+pub async fn save_tool(
+  servers: &Servers,
+  root: &Path,
+  (id, base): (ResourceId, VersionNumber),
+  tool: &Tool,
+) -> Result<VersionNumber, EditRefused> {
+  let (local, owned) = (root.to_owned(), tool.clone());
+  let publication = background::run(move || Publication::of_tool(&local, id, &owned))
     .await
     .map_err(EditRefused::Failed)??;
   servers.publish_team(root, id, (Some(base), publication)).await
