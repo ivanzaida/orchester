@@ -364,7 +364,7 @@ impl Fields {
       &EXEMPT,
       marks.on(None, marks.exempt).as_ref(),
       (&self.exempt, "team_new.mcp.exemptPlaceholder"),
-      (Look::Mono, shown.locked),
+      (Look::Names, shown.locked),
     )
   }
 }

@@ -5,7 +5,10 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
   components::{Row, SelectOption},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
@@ -171,6 +174,8 @@ pub(super) enum Look {
   Mono,
   /// Several lines in Geist Mono.
   Lines,
+  /// Names in Geist Mono under a placeholder in words, as *Run without asking* (A8 `vPoTQ`, A9).
+  Names,
 }
 
 /// A text field of `spec` typing into `value`, with `placeholder` (a key) while it is empty; `first` is the form's
@@ -189,6 +194,7 @@ pub(super) fn text(
     Look::Plain => input,
     Look::Mono => input.mono(),
     Look::Lines => input.compact_text_area().mono(),
+    Look::Names => input.mono().placeholder_style(TypographyStyle::Description),
   };
   if let Some(first) = first {
     input = input.element(first.clone());
