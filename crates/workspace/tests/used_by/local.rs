@@ -11,8 +11,7 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandProgram, DeliverStep, DeniedBehavior, Draft, InjectionEvent, Instruction, InstructionScope, ModelId,
-    Pipeline, PromptText, ProviderSettings, RemoveMode, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind, Tool,
-    ToolAction,
+    Pipeline, PromptText, ProviderSettings, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind, Tool, ToolAction,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, StepFailure},
@@ -244,10 +243,7 @@ fn used_by_local_lists_the_resources_whose_latest_version_names_it_by_name_then_
   let moved_on = local.publish(("moved", "Moved on"), &pipeline_running(tool));
   local.republish(moved_on, pipeline_running(other_tool));
   let removed = local.publish(("gone", "Gone"), &pipeline_running(tool));
-  local
-    .db
-    .remove_resource(removed, RemoveMode::Unused, at(100))
-    .expect("removed");
+  local.db.remove_resource(removed, at(100)).expect("removed");
   let own = instruction_for(InstructionScope::Pipeline { pipeline: delivery }, "Be brief");
   local.publish(("style", "Style"), &own);
   // An id in the text of an instruction names nothing.

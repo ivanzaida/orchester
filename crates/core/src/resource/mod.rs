@@ -40,7 +40,7 @@ pub use self::{
     changes, feature_delivery, flow_units, takes_base_moves, takes_base_moves_by_default, weaker_than,
   },
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
-  removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
+  removal::{Removal, StepUser, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   team_agent_profile::{TeamAgentProfile, TeamCounterparts, TeamProfileError},
   team_mcp_server::{

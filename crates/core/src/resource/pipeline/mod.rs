@@ -305,21 +305,6 @@ impl Pipeline {
       .filter(move |(_, step)| step.kind.executor() == Some(executor))
   }
 
-  /// This pipeline with every step `executor` runs left without its profile or tool, as removing that resource
-  /// leaves it (`super::removal`); the steps keep everything else.
-  #[must_use]
-  pub fn without_executor(&self, executor: ResourceId) -> Self {
-    let mut pipeline = self.clone();
-    for step in &mut pipeline.steps {
-      match &mut step.kind {
-        StepKind::Agent { profile, .. } if *profile == Some(executor) => *profile = None,
-        StepKind::Tool { tool } if *tool == Some(executor) => *tool = None,
-        StepKind::Agent { .. } | StepKind::Tool { .. } => {}
-      }
-    }
-    pipeline
-  }
-
   /// The steps in stages: a step's stage is one after the latest stage of the steps it depends
   /// on, so the steps of one stage can run beside each other. Each stage keeps pipeline order.
   pub fn stages(&self) -> Vec<Vec<&Step>> {

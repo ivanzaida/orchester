@@ -1,5 +1,6 @@
 //! Removing a resource (ORC-107): an unused one goes after a plain question; one a pipeline step runs is listed with
-//! its users, and Remove and reset clears it from each of them. Discard draft drops only the draft the editor read.
+//! its users and stays, and only the latest version of a pipeline counts. Discard draft drops only the draft the
+//! editor read.
 use std::fs;
 
 use orchester_core::{
@@ -8,8 +9,8 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, Removal, RemoveMode, RepositoryAccess,
-    ResourceKind, Slug, Step, StepKey, StepKind, StepVersion,
+    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, Removal, RepositoryAccess, ResourceKind,
+    Slug, Step, StepKey, StepKind,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -124,10 +125,7 @@ impl Fixture {
 #[test]
 fn removals_an_unused_profile_goes_and_keeps_its_slug() {
   let mut fixture = Fixture::new();
-  let removal = fixture
-    .db
-    .remove_resource(fixture.builder, RemoveMode::Unused, at(5))
-    .expect("remove");
+  let removal = fixture.db.remove_resource(fixture.builder, at(5)).expect("remove");
   assert_eq!(removal, Removal::Removed);
   assert!(!fixture.listed(), "a removed profile is not listed");
   let slugs = fixture.db.slugs(ResourceKind::AgentProfile).expect("slugs");
@@ -141,65 +139,43 @@ fn removals_an_unused_profile_goes_and_keeps_its_slug() {
 fn removals_a_profile_in_use_lists_its_steps_and_stays() {
   let mut fixture = Fixture::new();
   let delivery = fixture.pipeline();
-  let Removal::InUse(users) = fixture
-    .db
-    .remove_resource(fixture.builder, RemoveMode::Unused, at(5))
-    .expect("remove")
-  else {
+  let Removal::InUse(users) = fixture.db.remove_resource(fixture.builder, at(5)).expect("remove") else {
     panic!("a profile a step runs is in use");
   };
   assert_eq!(users.len(), 1);
   assert_eq!(users[0].pipeline, delivery);
   assert_eq!(users[0].number, 1);
-  assert!(matches!(users[0].version, StepVersion::Published(v) if v.get() == 1));
+  assert_eq!(users[0].version.get(), 1);
   assert!(fixture.listed(), "nothing is removed while it is in use");
 }
 
 #[test]
-fn removals_remove_and_reset_clears_the_profile_from_its_steps() {
+fn removals_only_the_latest_version_of_a_pipeline_counts() {
   let mut fixture = Fixture::new();
   let delivery = fixture.pipeline();
-  let shown = fixture.users();
-  let removal = fixture
+  let other = fixture
     .db
-    .remove_resource(fixture.builder, RemoveMode::Reset(shown), at(5))
-    .expect("remove and reset");
+    .create_resource(Slug::new("other").expect("slug"), name("Other"), &profile(""), at(5))
+    .expect("create profile")
+    .id();
+  fixture
+    .db
+    .publish_draft::<AgentProfile>(other, at(6))
+    .expect("publish profile");
+  let moved = Pipeline::new(vec![step("implement", other)]).expect("valid pipeline");
+  let first = orchester_core::resource::VersionNumber::FIRST;
+  fixture
+    .db
+    .save_draft(delivery, &Draft::new(moved, Some(first), at(7)))
+    .expect("save draft");
+  fixture
+    .db
+    .publish_draft::<Pipeline>(delivery, at(8))
+    .expect("publish v2");
+  assert_eq!(fixture.users(), [], "v1 ran Builder, v2 does not");
+  let removal = fixture.db.remove_resource(fixture.builder, at(9)).expect("remove");
   assert_eq!(removal, Removal::Removed);
   assert!(!fixture.listed());
-  let draft = fixture
-    .db
-    .draft::<Pipeline>(delivery)
-    .expect("draft")
-    .expect("the pipeline's draft asks to choose a profile");
-  assert!(
-    draft.body().steps_run_by(fixture.builder).next().is_none(),
-    "no step of the draft runs the removed profile"
-  );
-}
-
-#[test]
-fn removals_reset_refuses_when_others_started_using_it() {
-  let mut fixture = Fixture::new();
-  let delivery = fixture.pipeline();
-  let shown = fixture.users();
-  // After the question listed Delivery, another pipeline starts running Builder.
-  let review = fixture.pipeline_as("review", "Review");
-  let Removal::InUse(users) = fixture
-    .db
-    .remove_resource(fixture.builder, RemoveMode::Reset(shown), at(5))
-    .expect("remove and reset")
-  else {
-    panic!("a user the question did not list is asked about again");
-  };
-  assert_eq!(users.len(), 2, "{users:?}");
-  assert!(users.iter().any(|user| user.pipeline == review));
-  assert!(fixture.listed(), "nothing is removed");
-  for pipeline in [delivery, review] {
-    assert!(
-      fixture.db.draft::<Pipeline>(pipeline).expect("draft").is_none(),
-      "no pipeline is reset"
-    );
-  }
 }
 
 #[test]

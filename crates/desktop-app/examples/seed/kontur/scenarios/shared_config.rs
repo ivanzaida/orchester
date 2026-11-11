@@ -14,8 +14,8 @@ use orchester_core::{
   id::{ProjectId, ServerId, UserId},
   project::ProjectKey,
   resource::{
-    AgentProfile, Draft, Instruction, Pipeline, PromptText, Removal, RemoveMode, ResourceBody, ResourceKind, Skill,
-    Tool, VersionNumber,
+    AgentProfile, Draft, Instruction, Pipeline, PromptText, Removal, ResourceBody, ResourceKind, Skill, Tool,
+    VersionNumber,
   },
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
@@ -183,9 +183,7 @@ fn drop_drafts<B: ResourceBody + PartialEq>(kontur: &mut Kontur) -> Result<(), S
       kontur.db.discard_draft_matching(resource.id(), draft.body())?;
       continue;
     }
-    let removal = kontur
-      .db
-      .remove_resource(resource.id(), RemoveMode::Unused, kontur.now)?;
+    let removal = kontur.db.remove_resource(resource.id(), kontur.now)?;
     if let Removal::InUse(_) = removal {
       return Err(SeedError::Invalid(format!("{} is in use", resource.name().as_str())));
     }

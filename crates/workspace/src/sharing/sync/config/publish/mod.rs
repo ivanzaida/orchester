@@ -15,9 +15,7 @@ use orchester_core::{
   blob::ContentHash,
   id::{ResourceId, VersionId},
   name::Name,
-  resource::{
-    Draft, DraftSaved, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
-  },
+  resource::{Draft, DraftSaved, Removal, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -156,14 +154,14 @@ impl<S: ConfigServer> ResourceStore for RemoteResourceStore<S> {
 
   /// A resource the server has is archived there, which this store does not send yet: it is refused, not removed here
   /// alone.
-  fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, SharingError> {
+  fn remove_resource(&mut self, id: ResourceId, now: Timestamp) -> Result<Removal, SharingError> {
     if !self.db.may_change_configuration()? {
       return Err(SharingError::NotAdmin);
     }
     if matches!(self.db.resource_sharing(id)?, Some(ResourceSharing::Shared(_))) {
       return Err(StoreError::SharedProject.into());
     }
-    self.db.remove_resource(id, mode, now).map_err(local)
+    self.db.remove_resource(id, now).map_err(local)
   }
 
   fn save_draft<B: ResourceBody>(
