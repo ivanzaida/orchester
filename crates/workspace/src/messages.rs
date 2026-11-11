@@ -37,6 +37,14 @@ pub fn name_error(error: &NameError) -> Message {
   }
 }
 
+/// [`name_error`] for a pipeline step's name, whose empty name asks for a step's name, not a project's.
+pub fn step_name_error(error: &NameError) -> Message {
+  match error {
+    NameError::Blank => Message::new("errors.stepNameRequired"),
+    NameError::TooLong { .. } => name_error(error),
+  }
+}
+
 /// The key of [`OrganizationError::StopRunFirst`](orchester_core::task::organization::OrganizationError):
 /// a form that saves Canceled asks for confirmation when it sees it.
 pub const CANCEL_CONFIRM_REQUIRED: &str = "tasks.cancel.confirmRequired";
