@@ -22,7 +22,7 @@ use std::path::Path;
 use orchester_api::{ReferenceTarget as SharedTarget, SharedResource, SharedResourceKind, SharedVersion};
 use orchester_core::{
   name::Name,
-  resource::{Instruction, Pipeline, Resource, ResourceBody, Slug, Tool},
+  resource::{Instruction, Pipeline, Resource, ResourceBody, Slug, TeamTool, Tool},
   sharing::SharedBody,
   time::Timestamp,
 };
@@ -101,7 +101,7 @@ fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Re
       SharedResourceKind::Pipeline => cache_version::<Pipeline>(&mut db, version)?,
       SharedResourceKind::AgentProfile => cache_profile(&mut db, version)?,
       SharedResourceKind::Instruction => cache_version::<Instruction>(&mut db, version)?,
-      SharedResourceKind::Tool => cache_version::<Tool>(&mut db, version)?,
+      SharedResourceKind::Tool => cache_tool(&mut db, version)?,
       SharedResourceKind::TeamReviewer => cache_version::<orchester_core::resource::TeamReviewer>(&mut db, version)?,
       SharedResourceKind::McpServer => cache_version::<orchester_core::resource::TeamMcpServer>(&mut db, version)?,
       // `sync` leaves skills out.
@@ -119,6 +119,18 @@ fn resource(shared: &SharedResource) -> Result<Resource, SharingError> {
     Name::new(&shared.name).map_err(|_| SharingError::InvalidAnswer("resource name"))?,
     Timestamp::from_unix_millis(shared.created.at),
   ))
+}
+
+/// Keeps a tool `version`: one this computer reads as its own tool, a command (the same in both forms) or a version
+/// before the team's form. An HTTP or database tool in the team's form names its secret by name and has no local
+/// form here; it is read live from the team server (`crate::team_config`), and the readers of this copy run commands
+/// only, so it is not kept.
+fn cache_tool(db: &mut ProjectDb, version: &SharedVersion) -> Result<(), SharingError> {
+  match body::<Tool>(version.body.clone()) {
+    Ok(local) => cache_body(db, version, local),
+    Err(_) if serde_json::from_value::<TeamTool>(version.body.clone()).is_ok() => Ok(()),
+    Err(error) => Err(error),
+  }
 }
 
 fn cache_version<B: ResourceBody + SharedBody>(

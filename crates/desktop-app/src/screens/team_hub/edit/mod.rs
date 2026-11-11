@@ -61,7 +61,7 @@ pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
 }
 
 macro_rules! team_body {
-  ($body:ty, $outside:expr, $widens:expr) => {
+  ($body:ty, $outside:expr, $widens:expr, $save:path) => {
     impl Body for $body {
       const OUTSIDE: Outside = $outside;
 
@@ -79,7 +79,7 @@ macro_rules! team_body {
         target: (ResourceId, VersionNumber),
         body: Self,
       ) -> Result<VersionNumber, EditRefused> {
-        team_body_edit::save(&servers, &root, target, &body).await
+        $save(&servers, &root, target, &body).await
       }
     }
   };
@@ -89,16 +89,28 @@ macro_rules! team_body {
 team_body!(
   Instruction,
   Outside::Instructions,
-  |_: &Instruction, _: &Instruction| false
+  |_: &Instruction, _: &Instruction| false,
+  team_body_edit::save
 );
-team_body!(Skill, Outside::Skills, |_: &Skill, _: &Skill| false);
-team_body!(Tool, Outside::Tools, |before: &Tool, after: &Tool| !changes(
-  Some(before),
-  after,
-  FIRST
-)
-.is_empty());
-team_body!(TeamAgentProfile, Outside::Profiles, profile_widens);
+team_body!(
+  Skill,
+  Outside::Skills,
+  |_: &Skill, _: &Skill| false,
+  team_body_edit::save
+);
+// A tool goes in the team's form, its secret by name, so Save also publishes again one that named it by id.
+team_body!(
+  Tool,
+  Outside::Tools,
+  |before: &Tool, after: &Tool| !changes(Some(before), after, FIRST).is_empty(),
+  team_body_edit::save_tool
+);
+team_body!(
+  TeamAgentProfile,
+  Outside::Profiles,
+  profile_widens,
+  team_body_edit::save
+);
 
 /// The key [`changes`] says a tool that was no command became one with: it widens too.
 const FIRST: &str = "appMcp.projectTools.widens.firstVersion";

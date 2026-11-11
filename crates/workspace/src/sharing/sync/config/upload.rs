@@ -191,7 +191,7 @@ fn versions_of(
     }
     SharedResourceKind::AgentProfile => profile_versions(db, kept, mcp),
     SharedResourceKind::Instruction => versions::<Instruction>(db, kept, entities),
-    SharedResourceKind::Tool => versions::<Tool>(db, kept, entities),
+    SharedResourceKind::Tool => tool_versions(db, kept),
     SharedResourceKind::TeamReviewer => reviewer_versions(db, kept),
     SharedResourceKind::McpServer => versions::<TeamMcpServer>(db, kept, entities),
     SharedResourceKind::Skill => {
@@ -246,6 +246,22 @@ fn profile_versions(db: &ProjectDb, resource: &Resource, mcp: &McpPlan) -> Resul
       let adjusted = mcp.adjusted(version.body(), index + 1 == versions.len());
       let publication = team_body::profile_naming(db, resource.id(), &adjusted, &team_servers)?;
       Ok(upload(version, publication))
+    })
+    .collect()
+}
+
+/// The published versions of the tool `resource`, oldest first, each in the team's form: its secret goes by the name it
+/// has in the project, archived or not ([`team_body::named_secrets`]), and an id of this computer never goes. A version
+/// whose secret the project has no row for is refused ([`SharingError::ToolSecretGone`]).
+fn tool_versions(db: &ProjectDb, resource: &Resource) -> Result<Vec<UploadVersion>, SharingError> {
+  let secrets = team_body::named_secrets(db)?;
+  db.versions::<Tool>(resource.id())?
+    .iter()
+    .map(|version| {
+      Ok(upload(
+        version,
+        team_body::tool(resource.id(), version.body(), &secrets)?,
+      ))
     })
     .collect()
 }

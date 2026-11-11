@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer, Tool, ToolKind, VersionNumber},
+  resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer, ToolKind, VersionNumber},
   secret::SecretVault,
 };
 use orchester_store::ProjectDb;
@@ -140,8 +140,8 @@ fn forms(config: &TeamConfig) -> Vec<(ResourceId, Form)> {
     }
   }
   for resource in config.resources(ResourceKind::Tool) {
-    if let Some(Ok(tool)) = resource.body::<Tool>() {
-      let form = match tool.kind() {
+    if let Some(kind) = team_tool::kind(resource) {
+      let form = match kind {
         ToolKind::Command => Form::ToolCommand,
         ToolKind::Http => Form::ToolHttp,
         ToolKind::Database => Form::ToolDatabase,

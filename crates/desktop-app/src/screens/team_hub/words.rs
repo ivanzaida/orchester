@@ -146,7 +146,7 @@ fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
     | Undecided::ChoosesMcpServer(_)
     | Undecided::RunsUnknown(_)
     | Undecided::ConnectionGone(_)
-    | Undecided::TeamToolSecretById(_)
+    | Undecided::TeamToolSecretById
     | Undecided::SecretGone(_)
     | Undecided::SecretUnreadable(_) => ctx.t("team_hub.line.undecided"),
   }
@@ -168,7 +168,7 @@ pub(super) fn why_undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
       named("team_hub.readiness.why.choosesArchivedLocalMcpServer", name)
     }
     Undecided::ConnectionGone(_) => ctx.t("team_hub.readiness.why.connectionGone"),
-    Undecided::TeamToolSecretById(_) => ctx.t("team_hub.readiness.why.teamToolSecretById"),
+    Undecided::TeamToolSecretById => ctx.t("team_hub.readiness.why.teamToolSecretById"),
     Undecided::SecretGone(_) => ctx.t("team_hub.readiness.why.secretGone"),
     Undecided::SecretUnreadable(_) => ctx.t("team_hub.readiness.why.secretUnreadable"),
     Undecided::Member { why, .. } => why_undecided(ctx, why),

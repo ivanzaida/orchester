@@ -84,7 +84,7 @@ pub use self::{
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
-  preflight::{PreflightInput, PreflightProblem, preflight},
+  preflight::{PreflightInput, PreflightProblem, preflight, preflight_team},
   progress::{ProgressError, StepProgress},
   prompt::{
     AssembledPrompt, BaseMerge, BaseMoved, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages,
@@ -96,7 +96,10 @@ pub use self::{
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
   run_model::{ModelChoice, ModelEvent, ModelEventKind, ModelScope, StepBefore},
   run_permissions::{PermissionEvent, PermissionEventKind, RunPermissionChange, WideningPersonOnly},
-  snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
+  snapshot::{
+    PinnedVersion, Published, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot,
+    TeamPublishedVersions,
+  },
   start_order::StartOrder,
   state::{NewRun, Run, StoredRun},
   status::{

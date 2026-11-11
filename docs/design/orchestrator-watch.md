@@ -159,6 +159,9 @@ From `MvWyD` (frames 01–06, unchanged):
    the conversation watches are added as task subscriptions. **Ending**: a subscription ends when all its tasks are
    Done, with a summary turn, or at once with × or `/unwatch`, which cancels nothing. **Elsewhere**: the Leads chips,
    *Led in* on a module and on a task, and the History row.
+   Since 2026-11-11 the header shows the Leads chips right after the title and its meta, after an `eye` with no word
+   (`X93D8T`, screen A `gTvFf` on `Orchestrator WIP` `mPw5l`); the header's end keeps only its actions, and *+N*
+   opens a list of every target with since when and × (`Jl9jP` in A2 `nF6Ro`), no longer the `/watching` answer.
 
 Added by ORC-751:
 

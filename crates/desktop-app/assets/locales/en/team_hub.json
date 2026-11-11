@@ -345,6 +345,7 @@
       "request": "Request",
       "headers": "Headers",
       "bearer": "Authorization: Bearer ← secret {{secret}}",
+      "bearerById": "Authorization: Bearer ← a secret named by id",
       "arguments": "Arguments",
       "argument": "{{name}} · {{place}}",
       "place": {
@@ -357,8 +358,9 @@
       "approvalNever": "Yes",
       "approvalOnce": "No · a person approves once per run",
       "approvalEvery": "No · a person approves each call",
-      "secretLabel": "Secret it uses",
-      "secretSub": "by id, never a value",
+      "secretLabel": "Secrets it needs",
+      "secretSub": "names only, never values",
+      "byIdValue": "Named by id, which this computer can't read",
       "valueLabel": "Secret value",
       "cannotFill": "Can't be filled in here yet",
       "cannotFillSub": "named by id",
@@ -367,7 +369,15 @@
         "secretById": "Secret named by id"
       },
       "note": {
-        "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again."
+        "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again.",
+        "ready": "Ready here: {{secret}} has a value on this computer.",
+        "secret": "Not ready here: {{secret}} needs a value. Runs whose pipeline uses {{name}} don't start on this computer until then.",
+        "unreadable": "Not ready here: this computer's keychain can't say whether {{secret}} has a value."
+      },
+      "republish": {
+        "button": "Publish again by name",
+        "hint": "Names its secret by the name it has in this project, for the whole team",
+        "unreached": "Publishing needs the team server · it can't be reached now"
       }
     },
     "edit": {

@@ -1,12 +1,13 @@
 //! *From the team* (`From the team` in `Agents · Tools` `u9Hcc`): what the tool runs or calls, the same on every
-//! computer. Only what the tool has is a row: a tool with no arguments has no *Arguments* row. The secret it names is
-//! by id; its value is never here.
+//! computer. Only what the tool has is a row: a tool with no arguments has no *Arguments* row. The secret it needs is
+//! named, never its value; a version that names it by id says so, never the id.
 
 use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
   components::{Column, Row, Text},
+  node::Element,
 };
 use orchester_core::resource::{ApprovalMode, HttpMethod};
 use orchester_workspace::agents::team_tool::{ArgumentPlace, TeamToolSheet, ToolRuns, ToolSecret};
@@ -49,14 +50,7 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamToolSheet) -> Column {
       rows::words("team-hub-from-team-approval-value", &ctx.t(approval_key(approval))),
     ));
   }
-  if let ToolSecret::ById(secret) = sheet.secret {
-    rows.push(rows::row(
-      "team-hub-from-team-secret",
-      &ctx.t("team_hub.tool.secretLabel"),
-      Some(Sub::quiet(ctx.t("team_hub.tool.secretSub"))),
-      rows::mono("team-hub-from-team-secret-value", &secret.to_string()),
-    ));
-  }
+  rows.extend(secret_row(ctx, &sheet.secret));
   section_of(ctx, rows)
 }
 
@@ -104,17 +98,7 @@ fn runs_rows(ctx: &Ctx, sheet: &TeamToolSheet) -> Vec<Row> {
           &format!("{} {url}", method_word(*method)),
         ),
       )];
-      if let ToolSecret::ById(secret) = sheet.secret {
-        rows.push(rows::row(
-          "team-hub-from-team-headers",
-          &ctx.t("team_hub.tool.headers"),
-          None,
-          rows::mono(
-            "team-hub-from-team-headers-value",
-            &ctx.t_args("team_hub.tool.bearer", [("secret", secret.to_string())]),
-          ),
-        ));
-      }
+      rows.extend(headers_row(ctx, &sheet.secret));
       if !arguments.is_empty() {
         let names = arguments.iter().map(|argument| {
           ctx
@@ -169,4 +153,34 @@ const fn approval_key(approval: ApprovalMode) -> &'static str {
     ApprovalMode::OncePerRun => "team_hub.tool.approvalOnce",
     ApprovalMode::EveryCall => "team_hub.tool.approvalEvery",
   }
+}
+
+/// *Secrets it needs*: the name of the team secret, never a value; by id, the words for it and never the id.
+fn secret_row(ctx: &Ctx, secret: &ToolSecret) -> Option<Row> {
+  let value: Element = match secret {
+    ToolSecret::None => return None,
+    ToolSecret::Named(name) => rows::tags("team-hub-from-team-secret-value", [name.to_string()]).into(),
+    ToolSecret::ById => rows::words("team-hub-from-team-secret-value", &ctx.t("team_hub.tool.byIdValue")).into(),
+  };
+  Some(rows::row(
+    "team-hub-from-team-secret",
+    &ctx.t("team_hub.tool.secretLabel"),
+    Some(Sub::quiet(ctx.t("team_hub.tool.secretSub"))),
+    value,
+  ))
+}
+
+/// *Headers*: the bearer token the request sends, the value of the team secret it names.
+fn headers_row(ctx: &Ctx, secret: &ToolSecret) -> Option<Row> {
+  let words = match secret {
+    ToolSecret::None => return None,
+    ToolSecret::Named(name) => ctx.t_args("team_hub.tool.bearer", [("secret", name.to_string())]),
+    ToolSecret::ById => ctx.t("team_hub.tool.bearerById"),
+  };
+  Some(rows::row(
+    "team-hub-from-team-headers",
+    &ctx.t("team_hub.tool.headers"),
+    None,
+    rows::mono("team-hub-from-team-headers-value", &words),
+  ))
 }
