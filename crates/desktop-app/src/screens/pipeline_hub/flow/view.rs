@@ -216,7 +216,9 @@ fn head_action(ctx: &Ctx, drive: &Drive, flow: &PipelineFlow, locked: bool) -> E
     ctx.t("pipeline_hub.flow.move.addStep"),
   )
   .icon(Icon::Plus)
-  .on_click(move || drive.add(name.clone(), None, &flow));
+  .on_click(move || {
+    drive.add(name.clone(), None, &flow);
+  });
   if locked { button.disabled() } else { button }.into()
 }
 
@@ -446,6 +448,7 @@ impl Draw<'_> {
       drive: self.drive,
       flow: self.flow,
       cards: self.cards,
+      opens: None,
     };
     if let Some(open) = self.drive.reorder.menu_for.get().0.filter(|_| !self.locked)
       && let Some(step) = stage.cards.iter().find(|card| card.key == open)

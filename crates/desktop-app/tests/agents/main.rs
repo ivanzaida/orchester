@@ -69,6 +69,7 @@ mod usage;
 mod pipeline_flow_polish;
 mod pipeline_step_builder;
 mod pipeline_step_gate;
+mod pipeline_step_more;
 mod pipeline_step_name;
 mod pipeline_step_polish;
 mod usage_navigation;

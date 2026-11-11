@@ -138,6 +138,7 @@ impl Component for StepName {
       (Some(error), ..) => Some(
         field_error("pipeline-hub-step-name-error", &message_text(ctx, error))
           .width(Dimension::Auto)
+          .flex_shrink(0.0)
           .padding(Padding::new().left(ExtraSpacing::Snug.role()))
           .into(),
       ),
@@ -147,12 +148,15 @@ impl Component for StepName {
           .variant(HubText::PanelSub.role())
           .padding(Padding::new().left(ExtraSpacing::Snug.role()))
           .nowrap()
+          .flex_shrink(0.0)
           .into(),
       ),
       (None, false, locked) => Some(self.pencil(&props, locked).into()),
     };
     Row::new()
       .id("pipeline-hub-step-name-line")
+      // As wide as the head's column at most: a long name gives way inside its box, so what follows it stays in view.
+      .width(Dimension::Pct(100.0))
       .min_width(Dimension::Px(0.0))
       .offset(-inset, 0.0)
       .align_items(Alignment::Center)
@@ -179,6 +183,7 @@ impl StepName {
     let mut name = Row::new()
       .id("pipeline-hub-step-name-box")
       .min_width(Dimension::Px(0.0))
+      .flex_shrink(1.0)
       .height(Dimension::Px(ControlHeight::Md.value()))
       .padding(Padding::horizontal(SpacingSize::Sm))
       .align_items(Alignment::Center)
@@ -259,7 +264,11 @@ impl StepName {
       .nowrap()
       .opacity(0.0)
       .hit_test(HitTestBehavior::None);
-    Stack::new().child(sizer).child(input)
+    Stack::new()
+      .min_width(Dimension::Px(0.0))
+      .flex_shrink(1.0)
+      .child(sizer)
+      .child(input)
   }
 
   /// The pencil after the name, which edits it too; faded and not pressable while a save is under way.
@@ -272,6 +281,7 @@ impl StepName {
     let button = Button::empty()
       .id("pipeline-hub-step-name-edit")
       .focusable(false)
+      .flex_shrink(0.0)
       .describe("a11y_name", props.label.clone())
       .child(icon(Icon::Pencil, IconSize::Sm, color));
     if locked {

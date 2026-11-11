@@ -17,6 +17,7 @@ mod gate;
 mod groups;
 mod head;
 mod known;
+mod more;
 mod name;
 mod permissions;
 mod pieces;

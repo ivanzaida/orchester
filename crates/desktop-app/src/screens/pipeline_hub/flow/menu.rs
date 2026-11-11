@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   name::Name,
-  resource::{MoveOffer, StepMoves},
+  resource::{MoveOffer, StepKey, StepMoves},
 };
 use orchester_workspace::pipelines::flow::{PipelineFlow, StepCard};
 
@@ -40,11 +40,16 @@ use crate::{
 /// The menu's width (`Step menu` `kzSvl`).
 const MENU_WIDTH: f32 = 250.0;
 
+/// What opens a step the menu made (its copy, or the step it added): the open step's head opens it, as its own
+/// *Duplicate* does; a card's menu leaves the flow as it is.
+pub(in crate::screens::pipeline_hub) type OpensMade = Arc<dyn Fn(StepKey) + Send + Sync>;
+
 /// What a menu is made from.
 pub(super) struct Menu<'a> {
   pub drive: &'a Drive,
   pub flow: &'a PipelineFlow,
   pub cards: &'a Cards,
+  pub opens: Option<OpensMade>,
 }
 
 /// `Step menu`'s ⋯ button on `card` (22 square, radius 4, the `hover` fill under the pointer), which opens or closes
@@ -122,11 +127,11 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
   }
   rows.push(separator(ctx));
   rows.push(add_after(ctx, menu, card).render(ctx, open));
-  let (drive, key) = (menu.drive.clone(), card.key.clone());
+  let (drive, key, opens) = (menu.drive.clone(), card.key.clone(), menu.opens.clone());
   let copy = copy_name(ctx, &card.name);
   rows.push(
     MenuItem::new(id("duplicate"), ctx.t("pipeline_hub.flow.move.duplicate"), move || {
-      drive.duplicate(&key, copy.clone());
+      open_made(opens.as_ref(), drive.duplicate(&key, copy.clone()));
     })
     .icon(Icon::Copy)
     .render(ctx, open),
@@ -259,14 +264,26 @@ fn edge(ctx: &Ctx, part: &str) -> Arc<str> {
 
 /// *Add a step after*: a step with no profile yet, named *New step*, in series after the card's stage.
 fn add_after(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> MenuItem {
-  let (drive, flow, key) = (menu.drive.clone(), menu.flow.clone(), card.key.clone());
+  let (drive, flow, key, opens) = (
+    menu.drive.clone(),
+    menu.flow.clone(),
+    card.key.clone(),
+    menu.opens.clone(),
+  );
   let name = new_step_name(ctx);
   MenuItem::new(
     "pipeline-hub-flow-menu-add",
     ctx.t("pipeline_hub.flow.move.addAfter"),
-    move || drive.add(name.clone(), Some(&key), &flow),
+    move || open_made(opens.as_ref(), drive.add(name.clone(), Some(&key), &flow)),
   )
   .icon(Icon::Plus)
+}
+
+/// Opens `made`, a step the menu made, where the menu says so.
+fn open_made(opens: Option<&OpensMade>, made: Option<StepKey>) {
+  if let (Some(opens), Some(made)) = (opens, made) {
+    opens(made);
+  }
 }
 
 /// The name an added step starts with.

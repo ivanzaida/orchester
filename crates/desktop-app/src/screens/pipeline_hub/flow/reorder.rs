@@ -63,36 +63,38 @@ impl Drive {
     }
   }
 
-  /// Adds a step after `after`'s stage, or at the end, which `flow` says what follows.
-  pub(super) fn add(&self, name: Name, after: Option<&StepKey>, flow: &PipelineFlow) {
+  /// Adds a step after `after`'s stage, or at the end, which `flow` says what follows; returns the step added.
+  pub(super) fn add(&self, name: Name, after: Option<&StepKey>, flow: &PipelineFlow) -> Option<StepKey> {
     if self.locked() {
-      return;
+      return None;
     }
     let stage = after.and_then(|after| stage_of(flow, after));
     let together: Vec<StepKey> = stage
       .map(|stage| stage.cards.iter().map(|card| card.key.clone()).collect())
       .unwrap_or_default();
     let next = after.and_then(|after| next_after(flow, after));
-    self.settle(
-      add_after(&self.edit, &self.current, (&together, next.as_ref()), name),
-      after,
-    );
+    let outcome = add_after(&self.edit, &self.current, (&together, next.as_ref()), name);
+    let added = outcome.as_ref().ok().cloned();
+    self.settle(outcome.map(|_| ()), after);
+    added
   }
 
-  /// Copies step `key`; the copy is called `name` when the step's own name leaves room for it.
-  pub(super) fn duplicate(&self, key: &StepKey, name: Option<Name>) {
+  /// Copies step `key`; the copy is called `name` when the step's own name leaves room for it. Returns the copy.
+  pub(super) fn duplicate(&self, key: &StepKey, name: Option<Name>) -> Option<StepKey> {
     if self.locked() {
-      return;
+      return None;
     }
     let mut copied = (*self.current).clone();
     let outcome = match copy_of(&mut copied, key, name) {
-      Some(_) => {
+      Some(copy) => {
         self.edit.change(|held| *held = copied);
-        Ok(())
+        Ok(copy)
       }
       None => Err(MoveError::UnknownStep(key.clone())),
     };
-    self.settle(outcome, Some(key));
+    let copy = outcome.as_ref().ok().cloned();
+    self.settle(outcome.map(|_| ()), Some(key));
+    copy
   }
 
   /// Removes step `key`, which no other step returns to on failure ([`returned_to_by`]).
@@ -197,7 +199,7 @@ pub(super) fn add_after(
   current: &PipelineEdit,
   (together, next): (&[StepKey], Option<&StepKey>),
   name: Name,
-) -> Result<(), MoveError> {
+) -> Result<StepKey, MoveError> {
   let mut added = current.clone();
   let key = added.add_step(name, together.last());
   for member in together {
@@ -205,7 +207,7 @@ pub(super) fn add_after(
   }
   added.move_to(&key, next)?;
   edit.change(|held| *held = added);
-  Ok(())
+  Ok(key)
 }
 
 /// The copy of step `key`, named `name` when it has one, so that it can be told from the step; `None` when the edit has
