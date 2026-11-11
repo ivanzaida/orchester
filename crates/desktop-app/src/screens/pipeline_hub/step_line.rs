@@ -2,8 +2,10 @@
 //! it lacks, or how many; and how many steps cannot run, for the chip next to *draft*. A published pipeline's row
 //! speaks of the version tasks use instead ([`super::words`]).
 
+use std::sync::Arc;
+
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_workspace::pipelines::ready::{Blocked, step_problems};
+use orchester_workspace::pipelines::ready::{Blocked, StepProblem, step_problems};
 
 use super::{flow::number, model::Entry, undecided::Said};
 
@@ -15,21 +17,26 @@ pub(super) fn line(ctx: &Ctx, entry: &Entry) -> Option<Said> {
   let steps = step_problems(entry.flow.as_ref()?);
   let text = match steps.as_slice() {
     [] => return None,
-    [only] => ctx.t_args(
-      line_key(&only.blocked),
-      [
-        ("number", number(only.number)),
-        ("step", only.name.to_string()),
-        ("tool", named(&only.blocked).to_owned()),
-        ("profile", named(&only.blocked).to_owned()),
-      ],
-    ),
+    [only] => step_said(ctx, only),
     many => ctx.t_args("pipeline_hub.line.stepsNotReady", [("count", many.len().to_string())]),
   };
   Some(Said {
     text,
     color: PaletteColor::Warning,
   })
+}
+
+/// The line of one step that cannot run: *02 Review has no agent profile*.
+pub(super) fn step_said(ctx: &Ctx, step: &StepProblem) -> Arc<str> {
+  ctx.t_args(
+    line_key(&step.blocked),
+    [
+      ("number", number(step.number)),
+      ("step", step.name.to_string()),
+      ("tool", named(&step.blocked).to_owned()),
+      ("profile", named(&step.blocked).to_owned()),
+    ],
+  )
 }
 
 const fn line_key(blocked: &Blocked) -> &'static str {

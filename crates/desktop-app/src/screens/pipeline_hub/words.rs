@@ -5,17 +5,24 @@ use std::sync::Arc;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{resource::ResourceKind, time::Timestamp};
-use orchester_workspace::readiness::ReadinessStanding;
+use orchester_workspace::{
+  pipelines::{
+    flow::FlowRead,
+    ready::{Basis, Problem, problems},
+  },
+  readiness::{ReadinessStanding, Undecided},
+};
 
 use super::{
   model::Entry,
+  ready::draft_words,
   step_line,
   undecided::{Said, undecided_words},
   version_view::Viewed,
 };
 use crate::{
   screens::{
-    local_hub::words::{archived_at, missing},
+    local_hub::words::{archived_at, missing, undecided},
     team_hub::words::date,
   },
   ui::message::message_text,
@@ -60,10 +67,15 @@ fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
 }
 
 /// What the person has to do before the pipeline can run: its draft's first problem, or what its profiles and tools
-/// lack; `None` for a pipeline that is ready and for a draft with nothing wrong (it only is not published yet).
+/// lack; `None` for a pipeline that is ready and for a draft with nothing wrong (it only is not published yet). A
+/// published pipeline the panel draws as published says what *Ready?* lists ([`told`]); one with a draft over it says
+/// what the readiness read says of the published version, which the draft's flow does not show.
 pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
   if entry.is_draft() {
     return entry.problem.as_ref().map(|problem| message_text(ctx, problem));
+  }
+  if let Some(read) = entry.flow.as_ref().filter(|read| !read.draft) {
+    return told(ctx, entry, read);
   }
   match entry.standing.as_ref()? {
     ReadinessStanding::Ready => None,
@@ -72,6 +84,42 @@ pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
       many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
     }),
     ReadinessStanding::Undecided(why) => Some(undecided_words(ctx, why, &entry.undecided)),
+  }
+}
+
+/// What *Ready?* lists of a published pipeline, as the row and the chip say it: the one problem, or how many (*2 steps
+/// not ready* when they all are steps, else *3 things missing*), so the three never tell different stories.
+fn told(ctx: &Ctx, entry: &Entry, read: &FlowRead) -> Option<Arc<str>> {
+  let found = problems(Basis {
+    flow: read,
+    standing: entry.standing.as_ref(),
+    undecided: &entry.undecided,
+    published: true,
+    runs: None,
+  });
+  Some(match found.as_slice() {
+    [] => return None,
+    [only] => one(ctx, entry, only),
+    many if many.iter().all(|problem| matches!(problem, Problem::Step(_))) => {
+      ctx.t_args("pipeline_hub.line.stepsNotReady", [("count", many.len().to_string())])
+    }
+    many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
+  })
+}
+
+/// One problem *Ready?* lists, as a row's line says it.
+fn one(ctx: &Ctx, entry: &Entry, problem: &Problem) -> Arc<str> {
+  match problem {
+    Problem::Step(step) => step_line::step_said(ctx, step),
+    Problem::Member(member) => match &member.why {
+      Undecided::ConnectionGone(_) => {
+        ctx.t_args("pipeline_hub.line.connectionGone", [("name", member.name.to_string())])
+      }
+      other => undecided(ctx, other),
+    },
+    Problem::Missing(part) => missing(ctx, ResourceKind::Pipeline, part),
+    Problem::Undecided(why) => undecided_words(ctx, why, &entry.undecided),
+    Problem::Draft(draft) => draft_words(ctx, *draft),
   }
 }
 

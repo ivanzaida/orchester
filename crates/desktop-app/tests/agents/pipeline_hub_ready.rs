@@ -195,12 +195,16 @@ fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_open
   let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
-  let said = "Explorer has no connection";
-  assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), said);
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), said);
+  let line = "02 Build runs Explorer, which has no connection";
+  assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), line);
+  assert_eq!(agents.text("pipeline-hub-chip-1-label"), line);
   assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
   let row = format!("team-hub-ready-step-{key}");
-  assert_eq!(agents.text(&format!("{row}-words")), said, "the step that runs it");
+  assert_eq!(
+    agents.text(&format!("{row}-words")),
+    "Explorer has no connection",
+    "the step that runs it"
+  );
   assert!(
     !agents.exists(&format!("team-hub-ready-member-{lost}")),
     "the profile is not named again"
@@ -220,7 +224,7 @@ fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and
   let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
-  let said = "Explorer and 1 more have no connection";
+  let said = "2 steps not ready";
   assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), said);
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), said);
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");

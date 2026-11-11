@@ -236,3 +236,34 @@ fn pipeline_hub_ready_fixes_an_archived_profile_of_a_published_pipeline_has_one_
     "not also the readiness check's own row about the archived profile"
   );
 }
+
+#[test]
+fn pipeline_hub_ready_fixes_the_chip_and_the_line_count_what_ready_lists_for_a_published_pipeline() {
+  let mut agents = Agents::new(true);
+  let lost = lost(&agents, "Explorer");
+  let retired = agents.profile(true);
+  let id = pipeline_of(&agents, "Agents tour", [Some(lost), Some(retired)], true);
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(retired, Timestamp::now())
+    .expect("archived");
+  let (plan, build) = (step_at(&agents, id, 0), step_at(&agents, id, 1));
+  open(&mut agents, PipelinesFilter::All, Some(id));
+
+  assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
+  assert_eq!(
+    agents.text(&format!("team-hub-ready-step-{plan}-words")),
+    "Explorer has no connection"
+  );
+  assert_eq!(
+    agents.text(&format!("team-hub-ready-step-{build}-words")),
+    "Profile no longer available"
+  );
+  let said = "2 steps not ready";
+  assert_eq!(
+    agents.text(&format!("pipeline-hub-row-{id}-line")),
+    said,
+    "the line counts both"
+  );
+  assert_eq!(agents.text("pipeline-hub-chip-1-label"), said, "so does the chip");
+}
