@@ -58,8 +58,11 @@ const AGENTS_WAIT: &str = "Agents that wait:\n\
   and a message may also follow a run up, continue it, resume it or run its task again; while it is off they are \
   proposed to the person, who applies or dismisses them. Each answer says which happened.\n\
   - Approving tool requests (decide_approval) and deciding plans (decide_plan) follow those tools' rules: when \
-  one refuses, the person does it in the app. You never widen what agents may do beyond what a tool lets you, read \
-  secret values or delete work.";
+  one refuses, the person does it in the app. While Let the Orchestrator drive is on, a tool request of what you lead \
+  starts a turn of yours: approve it once only when it plainly serves the task and is safe, deny it with a reason for \
+  the agent only when it is plainly wrong, and otherwise leave it to the person with your recommendation. In a turn \
+  Orchester started, decide_approval decides only the request that started it (not_this_request). You never widen \
+  what agents may do beyond what a tool lets you, read secret values or delete work.";
 
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).
 const REPOSITORY: &str = "- When the project's folder is not a git repository yet, or its repository has no commit, \
@@ -276,8 +279,7 @@ pub(super) fn wait_prompt_after(wait: &AgentWait, after: AfterMerge) -> String {
     WaitKind::Question => "asks a question with suggested answers",
     WaitKind::Message => "waits for a message: the answer to what it wrote",
     WaitKind::Plan => "proposed a plan that waits for a decision",
-    // Not asked for: a tool request starts no turn ([`WaitKind::starts_turns`]).
-    WaitKind::Approval => "waits for the person's decision on a tool request",
+    WaitKind::Approval => return approval_prompt(&who, wait),
     WaitKind::Ended(end) => return end_prompt(wait, end, after),
     WaitKind::Event(event) => return event_prompt(wait, event, None),
   };
@@ -288,6 +290,32 @@ pub(super) fn wait_prompt_after(wait: &AgentWait, after: AfterMerge) -> String {
      the answer follows plainly from the task's brief and criteria, the project's docs and AGENTS.md, or what the \
      person already said in this chat; a plan's decision follows decide_plan's rules. Otherwise tell the person what \
      is asked, with the options and your recommendation, and wait. Either way, say what you did, with the link.",
+    number = wait.number,
+    task = wait.task,
+    title = wait.title,
+    link = wait.link,
+  )
+}
+
+/// The prompt of the Orchestrator turn a tool request of `who` (`wait`) started by itself: read the request and decide
+/// that one request when it is plainly right or plainly wrong; otherwise leave it to the person with a recommendation.
+fn approval_prompt(who: &str, wait: &AgentWait) -> String {
+  format!(
+    "[Orchester] {who} waits for a decision on a tool request in run #{number} of {task} ({title}); its card: \
+     {link}.\n\
+     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator drive is on. Read the \
+     request first: list_approvals for this run gives the tool or command, its arguments, the working folder and the \
+     step; get_run and get_conversation what the agent was doing; get_task the task's brief. Approve it once with \
+     decide_approval (approve_once) only when it plainly serves the task and is safe: it works inside the run's \
+     worktree, destroys or deletes nothing that cannot be undone, reaches no other system or person (no push, \
+     publish, send, deploy or network call that changes something), touches no secret, and fits the brief and the \
+     order of what you lead. Deny it (deny, with a message that tells the agent why and what to do instead) only when \
+     it is plainly wrong for the task. When you are not sure, decide nothing: tell the person what is asked, why you \
+     hesitate and what you recommend, with the link; the request waits for them on its card. Decide only this \
+     request, once: approve_once covers it alone, and you never allow a tool or command for good or widen what agents \
+     may do. When decide_approval refuses (such as automation_not_allowed, while the person does not let automation \
+     answer approvals), tell the person what is asked and what you recommend, and leave it to them. Either way, say \
+     what you did and why, with the link. Start, resume, cancel, continue or merge nothing.",
     number = wait.number,
     task = wait.task,
     title = wait.title,

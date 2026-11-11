@@ -6,6 +6,7 @@ use orchester_core::orchestrator::change::Publishing;
 use rmcp::model::Tool;
 
 use super::{
+  approval_turn::DECIDE_APPROVAL,
   change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, DUPLICATE_PIPELINE, MERGE_RUN, RUN_TASK, SEND_MESSAGE},
 };
@@ -41,6 +42,7 @@ fn driving(name: &str, own: &str) -> Option<String> {
     DUPLICATE_PIPELINE => DRIVE_DUPLICATE,
     MERGE_RUN => DRIVE_MERGE,
     RESUME_RUN => DRIVE_RESUME,
+    DECIDE_APPROVAL => DRIVE_APPROVAL,
     _ => return None,
   };
   Some(format!("{first} {own}"))
@@ -67,6 +69,9 @@ const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself
   merge_failed) leaves conflict choices and approving the merged result to the person on the Local integration page. \
   When merge_failed names conflicting files, the next step is continue_run with resolve_conflicts, which sends the \
   run back to an agent that may write to resolve them; or the person resolves them on the Local integration page.";
+
+/// What the agent reads first of `decide_approval` while the chat drives.
+const DRIVE_APPROVAL: &str = "Decides one tool request at once. In a turn Orchester started by a tool request it   decides only that request (another is refused as not_this_request). Approve it once only when it plainly serves the   task and is safe: inside the run's worktree, nothing that cannot be undone, nothing that reaches another system or   person, no secret. Deny it, with a message that tells the agent why, only when it is plainly wrong. When you are not   sure, do not call it: tell the person what is asked and what you recommend; the request waits for them on its   card. It never allows a tool or command for good.";
 
 /// What the agent reads first of `resume_run` while the chat drives.
 const DRIVE_RESUME: &str = "Resumes a run a pause stopped, and continues a run that a crash, the runner going away or \

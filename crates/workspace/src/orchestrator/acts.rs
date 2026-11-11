@@ -20,6 +20,7 @@ use rmcp::model::JsonObject;
 use serde_json::Value;
 
 use super::{
+  approval_turn::{self, DECIDE_APPROVAL},
   auto_merge, blocked,
   change::{
     self, continuation,
@@ -137,6 +138,7 @@ async fn act(
   };
   let acted = match name {
     RUN_TASK => start(deps, scope, arguments, drives).await,
+    DECIDE_APPROVAL => decide_approval(deps, scope, arguments).await,
     _ if proposes => propose_change(deps, scope, name, arguments).await,
     MERGE_RUN => merge(deps, scope, arguments).await,
     CANCEL_RUN | INIT_REPOSITORY | ANSWER_QUESTION | SEND_MESSAGE => applied(deps, scope, name, arguments).await,
@@ -194,6 +196,24 @@ async fn merge(deps: (&Services, &Translate), scope: &ChatScope, arguments: &Jso
   let mut acted = applied(deps, scope, MERGE_RUN, arguments).await?;
   acted.kept.on_its_own = scope.on_its_own;
   Ok(acted)
+}
+
+/// `decide_approval` while driving: in a turn nobody asked for, only the request whose wait started the turn
+/// ([`approval_turn::checked`]); the decision is the tool's, kept with the task the request belongs to.
+async fn decide_approval(
+  deps: (&Services, &Translate),
+  scope: &ChatScope,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  let task = approval_turn::checked(scope, arguments).await?;
+  let result = app_tool(deps, DECIDE_APPROVAL, arguments.clone()).await;
+  Ok(Acted {
+    result,
+    kept: Kept {
+      task,
+      ..Kept::default()
+    },
+  })
 }
 
 /// `continue_run` while driving: allow_retry, return_to and resolve_conflicts are carried out as changes the

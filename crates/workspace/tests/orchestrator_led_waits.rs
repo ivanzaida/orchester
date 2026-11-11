@@ -3,7 +3,8 @@
 //! task's own subscription before its module's, the whole project's last), even when another conversation dealt
 //! with the task since; a task nobody leads, or whose subscription ended before its wait was kept, keeps its waits in
 //! no conversation, starts no turn and opens none (ORC-895). A tool request that came to the person is kept in the
-//! leading conversation too, whatever *Let the Orchestrator answer agents* says, and starts no turn (ORC-894).
+//! leading conversation too, whatever *Let the Orchestrator drive* says (ORC-894), and with it on starts one turn,
+//! once, which decides it or leaves it to the person (2026-11-11).
 //! `cargo test -p orchester-workspace --test orchestrator_led_waits led_waits`.
 
 mod support;
@@ -285,7 +286,7 @@ fn request_approval(fixture: &mut Fixture, run: &Run) -> String {
 }
 
 #[test]
-fn led_waits_keep_a_tool_request_for_the_person_in_the_leading_conversation_whatever_answer_agents_says() {
+fn led_waits_keep_a_tool_request_in_the_leading_conversation_and_start_one_turn_while_driving() {
   for answers in [false, true] {
     let mut fixture = Fixture::new();
     ready(&mut fixture);
@@ -296,14 +297,32 @@ fn led_waits_keep_a_tool_request_for_the_person_in_the_leading_conversation_what
     let elsewhere = acted_on(&mut fixture, "ORC-1", 20);
     let request = request_approval(&mut fixture, &run);
     let followed = follow(&fixture, answers);
-    assert!(followed.kept, "answer agents {answers}: {followed:?}");
-    assert_eq!(followed.turn, None, "a tool request is the person's: no turn by itself");
+    assert!(followed.kept, "drive {answers}: {followed:?}");
+    assert_eq!(followed.turn.is_some(), answers, "a turn by itself only while driving");
     assert!(tasks_in(&fixture, &elsewhere).is_empty(), "nowhere else");
     let kept = waits_in(&fixture, &leading);
     assert_eq!(kept.len(), 1, "{kept:?}");
     let (wait, turn) = &kept[0];
     assert_eq!((wait.kind, wait.task.as_str()), (WaitKind::Approval, "ORC-1"));
-    assert!(!wait.automatic && turn.is_none(), "{wait:?}");
+    assert_eq!((wait.automatic, turn.is_some()), (answers, answers), "{wait:?}");
+    if let Some(started) = followed.turn {
+      let prompt = fixture.db.chat_turn(started.message).expect("read").expect("the turn");
+      let prompt = prompt.text.as_str();
+      for words in [
+        "waits for a decision on a tool request in run #1 of ORC-1",
+        "Approve it once with decide_approval (approve_once) only when it plainly serves the task and is safe",
+        "When you are not sure, decide nothing: tell the person what is asked, why you hesitate and what you recommend",
+        "Decide only this request, once",
+      ] {
+        assert!(prompt.contains(words), "{words:?} in {prompt}");
+      }
+      // The turn left it to the person: no turn starts for it again.
+      fixture
+        .db
+        .end_chat_turn(started.message, &TurnState::Answered, at(70))
+        .expect("ended");
+      assert_eq!(follow(&fixture, answers).turn, None, "one turn per request");
+    }
     assert!(wait.link.ends_with("/conversation"), "its card: {}", wait.link);
     let shown = ChatView::load_in(fixture.repo.path(), leading.id())
       .expect("read")
