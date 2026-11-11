@@ -215,6 +215,12 @@ fn pipeline_save_note_switching_to_another_tab_asks_first() {
 
   agents.window.navigation().open_tab();
   agents.until("the question again", |s| s.exists(DISCARD));
+  assert!(
+    agents
+      .text("pipeline-hub-leave-what")
+      .starts_with("Opening anything else"),
+    "another tab is opened, not this one closed"
+  );
   agents.click(DISCARD);
   agents.until("the new tab", |s| s.window.navigation().tabs_now().active().id() != tab);
 }
@@ -232,6 +238,13 @@ fn pipeline_save_note_closing_the_tab_asks_first() {
 
   agents.window.navigation().close_active();
   agents.until("the question", |s| s.exists(DISCARD));
+  assert!(
+    agents
+      .text("pipeline-hub-leave-what")
+      .starts_with("Closing the tab now puts Feature delivery back"),
+    "it says close: {}",
+    agents.text("pipeline-hub-leave-what")
+  );
   assert_eq!(agents.window.navigation().route_now(), here);
   assert_eq!(
     agents.window.navigation().tabs_now().tabs().len(),

@@ -5,7 +5,8 @@
 //! person has to allow.
 //!
 //! A save that cannot be published yet (a step without a profile or tool, a version limit) still keeps the edit as the
-//! stored draft, and says why it was not published; it never says it was.
+//! stored draft, and says why it was not published, naming every step that keeps it; it never says it was.
+//! [`unpublishable`] tells the page beforehand, so *Save* is not offered for a draft it would only keep again.
 
 use std::{path::Path, sync::Arc};
 
@@ -16,8 +17,10 @@ use orchester_core::{
 
 use super::{
   data::OpenedPipeline,
+  flow::FlowRead,
   hub::CYCLE_ARROW,
   problems::{problem_view, rule_message},
+  ready::{Blocked, StepProblem, step_problems},
   widening::{draft_reasons, publish_reasons},
   write::{self, Allowed, WriteError},
 };
@@ -54,6 +57,7 @@ pub fn save(
   }
   let body = edit.validate().map_err(|error| rule_message(edit, &error))?;
   let problems = edit.problems();
+  let blocking = blocking_steps(&FlowRead::of_edit(edit, &current.assignables));
   if let Some(latest) = current.latest.as_ref().filter(|latest| latest.body == body) {
     return back_to_latest(root, &current, latest.number);
   }
@@ -68,7 +72,9 @@ pub fn save(
     write::save_in(root, &current, body, &allowed).map_err(|error| error.message())?
   };
   if let Some(problem) = problems.first() {
-    return Ok(Saved::Drafted(problem_view(edit, problem, CYCLE_ARROW).message));
+    return Ok(Saved::Drafted(
+      every_step(&blocking).unwrap_or_else(|| problem_view(edit, problem, CYCLE_ARROW).message),
+    ));
   }
   match write::publish_in(root, &stored, &allowed) {
     Ok(published) => Ok(Saved::Published(
@@ -77,8 +83,65 @@ pub fn save(
         .expect("a pipeline that was just published has a latest version")
         .number,
     )),
-    Err(error) => Ok(Saved::Drafted(error.message())),
+    Err(error) => Ok(Saved::Drafted(every_step(&blocking).unwrap_or_else(|| error.message()))),
   }
+}
+
+/// What keeps an edit from being published as it stands, so that a save only keeps it as the draft.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Unpublishable {
+  /// It has no steps.
+  NoSteps,
+  /// Steps have no profile or tool, or name one a step cannot run.
+  Steps,
+  /// Its steps break a rule: they wait for each other, or for a step that is not there.
+  Broken,
+  /// Publishing refuses a step for this, as [`super::write::publish_in`] would (a step that writes with a profile
+  /// that cannot, a narrowing its connection does not enforce).
+  Refused(Message),
+}
+
+/// Why a pipeline whose latest version is `latest` takes no next version: it has the last version number.
+pub fn version_limit(latest: Option<VersionNumber>) -> Option<Message> {
+  latest
+    .filter(|number| number.next().is_none())
+    .map(|_| Message::new("pipelines.problems.versionLimit"))
+}
+
+/// What keeps `edit` from being published, its flow read as `read`; `None` when it can be published.
+pub fn unpublishable(edit: &PipelineEdit, read: &FlowRead) -> Option<Unpublishable> {
+  if edit.steps().is_empty() {
+    return Some(Unpublishable::NoSteps);
+  }
+  if !blocking_steps(read).is_empty() {
+    return Some(Unpublishable::Steps);
+  }
+  if !edit.problems().is_empty() {
+    return Some(Unpublishable::Broken);
+  }
+  read.refused.clone().map(Unpublishable::Refused)
+}
+
+/// The steps of `read` publishing refuses: each that cannot run, but one whose profile only lost its connection, which
+/// is this computer's to fix and which publishing takes.
+fn blocking_steps(read: &FlowRead) -> Vec<StepProblem> {
+  step_problems(read)
+    .into_iter()
+    .filter(|step| !matches!(step.blocked, Blocked::ProfileConnectionGone { .. }))
+    .collect()
+}
+
+/// Why a save kept the draft when more than one step keeps it from being published: every one of them, by name.
+fn every_step(blocking: &[StepProblem]) -> Option<Message> {
+  if blocking.len() < 2 {
+    return None;
+  }
+  let names: Vec<&str> = blocking.iter().map(|step| &*step.name).collect();
+  Some(
+    Message::new("pipelines.problems.stepsNotReady")
+      .with("count", blocking.len().to_string())
+      .with("steps", names.join(", ")),
+  )
 }
 
 /// The edit is the latest version. When a different draft is stored the person chose the version over it: the draft

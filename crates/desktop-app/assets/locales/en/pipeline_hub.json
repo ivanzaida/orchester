@@ -33,7 +33,10 @@
       "toolNotRunnable": "{{number}} {{step}} runs {{tool}}, which can't run as a step yet",
       "stepsNotReady": "{{count}} steps not ready",
       "connectionGone": "{{name}} has no connection",
-      "connectionGoneMany": "{{name}} and {{count}} more have no connection"
+      "connectionGoneMany": "{{name}} and {{count}} more have no connection",
+      "profileConnectionGone": "{{number}} {{step}} runs {{profile}}, which has no connection",
+      "profileGone": "{{number}} {{step}} runs a profile that is no longer available",
+      "toolGone": "{{number}} {{step}} runs a tool that is no longer available"
     },
     "chip": {
       "ready": "Ready",
@@ -129,14 +132,22 @@
     },
     "bar": {
       "fix": "Fix {{field}} in {{step}} to save",
-      "makesFirst": "Save makes {{version}} · New task offers it once every step is ready",
       "widenTitle": "Allow these changes to the pipeline?",
       "allow": "Allow and save",
       "keep": "Keep editing",
       "refusedTitle": "Couldn't save {{name}}: {{reason}}",
       "refusedBody": "Nothing was saved and what you changed stays here. Save tries again.",
       "keptTitle": "Saved as a draft of {{name}}, not published",
-      "savedTitle": "Saved as {{version}} · the next run uses it"
+      "savedTitle": "Saved as {{version}} · the next run uses it",
+      "publishesFirst": "Save publishes it as {{version}}",
+      "keepsDraft": "Save keeps it as a draft · {{version}} comes once every step is ready",
+      "publishNoSteps": "Add a step to publish",
+      "publishMissing": "Fix the missing steps to publish",
+      "publishBroken": "Fix what the steps wait for to publish",
+      "restored": "Restored {{version}} · not saved · {{rest}}",
+      "savedTitleWaits": "Saved as {{version}} · runs can start once every step is ready",
+      "widenTitleRestored": "Restoring {{version}} changes the pipeline: allow these changes?",
+      "noChanges": "No changes since {{version}}"
     },
     "leave": {
       "title": "Discard the unsaved changes to {{name}}?",
@@ -145,7 +156,8 @@
       "discard": "Discard changes",
       "savingTitle": "{{name}} is being saved",
       "savingWhat": "Wait for the save to finish, then press again. Nothing is discarded while it saves.",
-      "wait": "Wait"
+      "wait": "Wait",
+      "whatClose": "Closing the tab now puts {{name}} back as it was saved. Keep editing and press Save to keep the changes."
     },
     "settings": {
       "title": "Pipeline",
@@ -258,7 +270,8 @@
       "broken": {
         "title": "These steps have no order to draw",
         "detail": "The steps wait for each other in a circle, or for a step that is not there. Edit the steps to fix what they wait for."
-      }
+      },
+      "profileConnectionGone": "{{profile}} has no connection"
     },
     "states": {
       "failed": {
@@ -299,7 +312,11 @@
       "noSteps": "No steps yet",
       "notPublished": "Not published yet",
       "addStep": "Add step →",
-      "editSteps": "Edit steps →"
+      "editSteps": "Edit steps →",
+      "profileConnectionGone": "{{profile}} has no connection",
+      "save": "Save →",
+      "profilesAndToolsOf": "Profiles and tools · {{version}}",
+      "chooseAnother": "Choose another →"
     },
     "versions": {
       "button": "Versions",
@@ -316,7 +333,7 @@
       "metaNoRun": "Published {{date}} · no runs on it",
       "metaOneRun": "Published {{date}} · 1 run on it",
       "metaRuns": "Published {{date}} · {{count}} runs on it",
-      "viewing": "Viewing {{version}} · read-only",
+      "viewing": "Read-only",
       "restore": "Restore {{version}}",
       "restoreSame": "The panel already holds {{version}}.",
       "restoreHint": "Restore puts {{version}} in the editor as unsaved changes · Save makes {{next}}",

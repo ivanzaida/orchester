@@ -27,8 +27,8 @@ use super::{
   support::project_id,
 };
 
-/// The key of the second step of `pipeline`'s draft or version, *Build*.
-fn build_step(agents: &Agents, pipeline: ResourceId) -> StepKey {
+/// The key of step `index` of `pipeline`'s draft or version.
+pub(super) fn step_at(agents: &Agents, pipeline: ResourceId, index: usize) -> StepKey {
   let db = ProjectDb::open(&agents.root).expect("database");
   let body = match db.draft::<Pipeline>(pipeline).expect("read") {
     Some(draft) => draft.body().clone(),
@@ -39,7 +39,17 @@ fn build_step(agents: &Agents, pipeline: ResourceId) -> StepKey {
       .body()
       .clone(),
   };
-  body.steps()[1].key.clone()
+  body.steps()[index].key.clone()
+}
+
+/// The key of the first step of `pipeline`'s draft or version, *Plan*.
+fn plan_step(agents: &Agents, pipeline: ResourceId) -> StepKey {
+  step_at(agents, pipeline, 0)
+}
+
+/// The key of the second step of `pipeline`'s draft or version, *Build*.
+fn build_step(agents: &Agents, pipeline: ResourceId) -> StepKey {
+  step_at(agents, pipeline, 1)
 }
 
 fn page(page: ProjectPage) -> Route {
@@ -110,7 +120,7 @@ fn pipeline_hub_ready_a_step_whose_profile_is_not_published_opens_it_in_the_agen
 
 /// A published profile that runs on a connection the project does not have, as when the connection is removed after
 /// the profile was published.
-fn lost(agents: &Agents, name: &str) -> ResourceId {
+pub(super) fn lost(agents: &Agents, name: &str) -> ResourceId {
   let profile = AgentProfile::new(
     Name::new(name).expect("name"),
     String::new(),
@@ -135,7 +145,7 @@ fn lost(agents: &Agents, name: &str) -> ResourceId {
 }
 
 /// A pipeline body whose steps *Plan* and *Build* run `profiles`.
-fn body(profiles: [Option<ResourceId>; 2]) -> Pipeline {
+pub(super) fn body(profiles: [Option<ResourceId>; 2]) -> Pipeline {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   for (step, profile) in ["Plan", "Build"].into_iter().zip(profiles) {
     let key = edit.add_step(Name::new(step).expect("name"), None);
@@ -151,7 +161,7 @@ fn body(profiles: [Option<ResourceId>; 2]) -> Pipeline {
   edit.validate().expect("a pipeline")
 }
 
-fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId {
+pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId {
   ProjectDb::open(&agents.root)
     .expect("database")
     .create_resource(
@@ -165,7 +175,7 @@ fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId {
 }
 
 /// Saves `draft` as the next draft of the published pipeline `id`.
-fn draft_over(agents: &Agents, id: ResourceId, draft: Pipeline) {
+pub(super) fn draft_over(agents: &Agents, id: ResourceId, draft: Pipeline) {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let version = db
     .latest_version::<Pipeline>(id)
@@ -177,19 +187,28 @@ fn draft_over(agents: &Agents, id: ResourceId, draft: Pipeline) {
 }
 
 #[test]
-fn pipeline_hub_ready_a_profile_that_lost_its_connection_is_named_and_opens() {
+fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_opens() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let lost = lost(&agents, "Explorer");
   let stuck = pipeline_of(&agents, "Quick fix", [Some(builder), Some(lost)], true);
+  let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
-  let said = "Explorer has no connection";
-  assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), said);
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), said);
+  let line = "02 Build runs Explorer, which has no connection";
+  assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), line);
+  assert_eq!(agents.text("pipeline-hub-chip-1-label"), line);
   assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
-  let row = format!("team-hub-ready-member-{lost}");
-  assert_eq!(agents.text(&format!("{row}-words")), "Its connection is gone");
+  let row = format!("team-hub-ready-step-{key}");
+  assert_eq!(
+    agents.text(&format!("{row}-words")),
+    "Explorer has no connection",
+    "the step that runs it"
+  );
+  assert!(
+    !agents.exists(&format!("team-hub-ready-member-{lost}")),
+    "the profile is not named again"
+  );
   assert_eq!(agents.text(&format!("{row}-open")), "Open →");
   agents.click(&format!("{row}-open"));
   agents.until("the profile", |s| {
@@ -198,41 +217,42 @@ fn pipeline_hub_ready_a_profile_that_lost_its_connection_is_named_and_opens() {
 }
 
 #[test]
-fn pipeline_hub_ready_every_profile_that_lost_its_connection_has_a_row_and_the_line_counts_them() {
+fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and_the_line_counts_them() {
   let mut agents = Agents::new(true);
   let (first, second) = (lost(&agents, "Explorer"), lost(&agents, "Builder"));
   let stuck = pipeline_of(&agents, "Quick fix", [Some(first), Some(second)], true);
+  let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
-  let said = "Explorer and 1 more have no connection";
+  let said = "2 steps not ready";
   assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), said);
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), said);
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
-  for profile in [first, second] {
+  for (key, name) in [(plan, "Explorer"), (build, "Builder")] {
     assert_eq!(
-      agents.text(&format!("team-hub-ready-member-{profile}-words")),
-      "Its connection is gone"
+      agents.text(&format!("team-hub-ready-step-{key}-words")),
+      format!("{name} has no connection")
     );
   }
 }
 
 #[test]
-fn pipeline_hub_ready_a_draft_step_problem_is_listed_beside_a_profile_that_lost_its_connection() {
+fn pipeline_hub_ready_a_draft_step_problem_is_listed_beside_a_step_whose_profile_lost_its_connection() {
   let mut agents = Agents::new(true);
   let lost = lost(&agents, "Explorer");
   let stuck = pipeline_of(&agents, "Quick fix", [Some(lost), Some(lost)], true);
   draft_over(&agents, stuck, body([Some(lost), None]));
-  let key = build_step(&agents, stuck);
+  let (plan, build) = (plan_step(&agents, stuck), build_step(&agents, stuck));
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
   assert_eq!(
-    agents.text(&format!("team-hub-ready-step-{key}-words")),
+    agents.text(&format!("team-hub-ready-step-{build}-words")),
     "No agent profile"
   );
   assert_eq!(
-    agents.text(&format!("team-hub-ready-member-{lost}-words")),
-    "Its connection is gone",
+    agents.text(&format!("team-hub-ready-step-{plan}-words")),
+    "Explorer has no connection",
     "the step's problem does not hide the profile's"
   );
 }
@@ -279,18 +299,34 @@ fn pipeline_hub_ready_a_published_pipeline_without_a_draft_keeps_the_plain_title
 }
 
 #[test]
-fn pipeline_hub_ready_a_draft_with_no_steps_offers_to_add_one() {
+fn pipeline_hub_ready_a_draft_with_no_steps_adds_one_in_place_as_the_heads_add_step() {
   let mut agents = Agents::new(true);
   let empty = store(&agents, "Empty", &Pipeline::new(Vec::new()).expect("a pipeline"));
   open(&mut agents, PipelinesFilter::All, Some(empty));
+  let shown = agents.window.navigation().route_now();
 
   assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
   assert_eq!(agents.text("team-hub-ready-draft-words"), "No steps yet");
-  assert_eq!(agents.text("team-hub-ready-draft-add-step"), "Add step →");
+  let head = agents.text("pipeline-hub-add-step");
+  assert_eq!(
+    agents.text("team-hub-ready-draft-add-step"),
+    format!("{head} →"),
+    "one name for one action: the head's"
+  );
   agents.click("team-hub-ready-draft-add-step");
-  agents.until("the editor", |s| {
-    s.window.navigation().route_now() == page(ProjectPage::Pipeline(empty, PipelineView::default()))
+  agents.until("the step, in place", |s| {
+    !s.exists("team-hub-ready-draft-add-step") && s.text("team-hub-readiness-count") == "1 missing"
   });
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    shown,
+    "the panel stays where it is: nothing else opened"
+  );
+  assert!(
+    agents.text("team-hub-actions-hint").starts_with("Unsaved changes"),
+    "the step is the edit's, not stored: {}",
+    agents.text("team-hub-actions-hint")
+  );
 }
 
 #[test]

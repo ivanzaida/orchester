@@ -32,6 +32,11 @@ impl DevtoolsInspectable for Unsaved {}
 
 pub(super) type UnsavedSignal = Signal<Unsaved>;
 
+/// The pipeline a save in its panel just published, which the page follows out of the *Drafts* tab.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Published(pub Option<ResourceId>);
+impl DevtoolsInspectable for Published {}
+
 /// What the screen hosts for the panel of the chosen pipeline: where the list hears of its changes, and the
 /// confirmations that outlive the panel.
 #[derive(Clone)]
@@ -43,6 +48,8 @@ pub(super) struct Hosted {
   pub archive_waits: Signal<Option<Target>>,
   /// Whether the panel's save is under way: its changes are being stored, so they cannot be discarded.
   pub saving: Signal<bool>,
+  /// The pipeline a save in the panel just published, which the page follows out of the *Drafts* tab.
+  pub published: Signal<Published>,
 }
 
 impl PartialEq for Hosted {
@@ -93,7 +100,17 @@ fn saving_question(ctx: &Ctx, name: &str, open: &Signal<bool>) -> Element {
   .render(ctx, open)
 }
 
-/// The question while a press or a departure waits, naming the pipeline whose edit it would drop. A press of the hub's
+/// Whether the departure the `guard` holds closes the tab the panel is in.
+fn closes_tab(navigation: &Navigation, guard: &LeaveGuard) -> bool {
+  let shown = navigation.tabs_now().active().id();
+  guard
+    .attempt()
+    .get_untracked()
+    .is_some_and(|tabs| !tabs.tabs().iter().any(|tab| tab.id() == shown))
+}
+
+/// The question while a press or a departure waits, naming the pipeline whose edit it would drop; a tab closed with
+/// the panel in it is said to close. A press of the hub's
 /// own waits in `leaving`; any other departure waits in the `guard`.
 pub(super) fn question(
   ctx: &Ctx,
@@ -106,6 +123,7 @@ pub(super) fn question(
   if route.is_none() && archiving.is_none() && !guard.requested() {
     return None;
   }
+  let closing = route.is_none() && archiving.is_none() && closes_tab(navigation, guard);
   let name = listing.name_of(hosted.unsaved.get().0?)?.to_owned();
   if hosted.saving.get() {
     return Some(saving_question(ctx, &name, open));
@@ -136,7 +154,14 @@ pub(super) fn question(
       ctx.t("pipeline_hub.leave.keep"),
     )
     .tone(Tone::Neutral)
-    .what(ctx.t_args("pipeline_hub.leave.what", [("name", name)]))
+    .what(ctx.t_args(
+      if closing {
+        "pipeline_hub.leave.whatClose"
+      } else {
+        "pipeline_hub.leave.what"
+      },
+      [("name", name)],
+    ))
     .action(discard)
     .render(ctx, open),
   )

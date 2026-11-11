@@ -24,7 +24,7 @@ use orchester_core::{
   id::ProjectId,
   resource::{Step, StepKey},
 };
-use orchester_workspace::pipelines::fields::{Executor, dropped_override, take_back_override};
+use orchester_workspace::pipelines::fields::{Executor, dropped_override};
 
 use super::choices::Flag;
 use crate::{
@@ -62,6 +62,8 @@ pub(super) struct Props {
   pub unset: Arc<str>,
   pub locked: bool,
   pub epoch: u64,
+  /// The panel's: a *Choose another* that opened the step asked for the picker to open, once.
+  pub pick: Signal<bool>,
 }
 
 /// The props are equal when they say the same: the edit's handle is the panel's own.
@@ -121,6 +123,12 @@ impl Component for Agent {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    if props.pick.get_untracked() {
+      props.pick.set(false);
+      if !props.locked {
+        self.open.set(true);
+      }
+    }
     if props.locked && self.open.get_untracked() {
       self.open.set(false);
     }
@@ -181,10 +189,7 @@ impl Agent {
             let (executor, to) = (executors[at], clis[at]);
             edit.change(|current| {
               current.update(&step, |step| {
-                executor.apply_on(step, (from, to));
-                if let Some((started, was_for)) = &started {
-                  take_back_override(step, started, (*was_for, to));
-                }
+                executor.apply_in_edit(step, started.as_ref(), (from, to));
               });
             });
           }

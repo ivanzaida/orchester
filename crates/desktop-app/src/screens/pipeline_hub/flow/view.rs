@@ -9,10 +9,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::KeyboardEvent,
+    events::{KeyboardEvent, MouseEvent},
     theme::SpacingSize,
   },
   components::{Column, Row, Stack, Text},
+  core::Signal,
   layout::{Alignment, StackAlignment},
   node::{Element, dimension::Dimension},
 };
@@ -61,6 +62,8 @@ pub(super) struct Props {
   /// A save is under way or *Allow these changes?* is open: the flow offers no change, so none is lost when the save
   /// ends and what *Allow* publishes is what is on screen.
   pub locked: bool,
+  /// The panel's: set by a card whose profile or tool is gone, so the step it opens opens its Agent picker.
+  pub pick_agent: Signal<bool>,
 }
 
 impl PartialEq for Props {
@@ -117,6 +120,7 @@ impl Component for FlowView {
       project: &props.project,
       pipeline: props.pipeline,
       read_only: false,
+      pick_agent: Some(props.pick_agent.clone()),
     };
     let action = props
       .read
@@ -489,6 +493,11 @@ impl Draw<'_> {
     let (enter, leave, gained, lost) = (key.clone(), key.clone(), key.clone(), key.clone());
     let (hovered, left, focused, blurred) = (reorder.clone(), reorder.clone(), reorder.clone(), reorder.clone());
     let open = self.opens.button(PipelineView::Step(step.key.clone())).map(|button| {
+      // *Choose another*: the step opens with its Agent picker open.
+      let button = match self.opens.pick_agent.clone().filter(|_| step.gone) {
+        Some(pick) => button.on_click(move |_: MouseEvent| pick.set(true)),
+        None => button,
+      };
       Focus::Keyboard
         .apply(button)
         .ref_element(element.clone())

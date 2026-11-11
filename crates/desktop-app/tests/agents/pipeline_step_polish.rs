@@ -284,6 +284,31 @@ fn pipeline_step_polish_an_override_kept_on_a_profile_whose_cli_is_not_known_sta
 }
 
 #[test]
+fn pipeline_step_polish_an_override_kept_through_an_unknown_cli_is_dropped_on_another_known_one() {
+  let (mut agents, _) = setup();
+  let builder = agents.profile(true);
+  let connection = claude(&agents);
+  profile_on(&agents, "Writer", Some(connection));
+  profile_on(&agents, "Explorer", None);
+  let pipeline = overriding(&agents, builder, "gpt-override");
+  let plan = keys(&agents, pipeline)[0].clone();
+  open_step(&mut agents, pipeline, &plan);
+  choose(&mut agents, "Explorer");
+  agents.until("held", |s| s.exists(CANCEL));
+  assert!(!agents.exists(DROPPED), "kept: Explorer's CLI is not known");
+
+  // The override was for Codex, the CLI the step started on; Writer runs on Claude Code.
+  choose(&mut agents, "Writer");
+  agents.until("dropped", |s| s.exists(DROPPED));
+  assert_eq!(agents.text(DROPPED), "Model override dropped: it was for Codex");
+  assert!(
+    !agents.text("pipeline-hub-step-agent-runs").contains("gpt-override"),
+    "{}",
+    agents.text("pipeline-hub-step-agent-runs")
+  );
+}
+
+#[test]
 fn pipeline_step_polish_a_gone_profile_reads_the_same_on_the_card_and_offers_to_choose_another() {
   let (mut agents, _) = setup();
   let retired = profile_on(&agents, "Retired", Some(agents.listed().connections[0].id()));

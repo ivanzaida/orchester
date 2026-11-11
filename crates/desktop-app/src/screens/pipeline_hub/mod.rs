@@ -51,10 +51,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureState},
+    theme::{BorderSize, Breakpoint, PaletteColor, RadiusSize},
   },
-  components::Row,
+  components::{Column, Row},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
@@ -64,7 +65,7 @@ use orchester_core::{
 use orchester_workspace::messages::Message;
 
 use self::{
-  leave::{Hosted, Unsaved, UnsavedSignal},
+  leave::{Hosted, Published, Unsaved, UnsavedSignal},
   model::{Entry, Listing},
   states::Retry,
 };
@@ -80,8 +81,9 @@ use crate::{
       head,
       leave::Leave,
     },
+    team_hub::list::LIST_WIDTH,
   },
-  theme::HubSpacing,
+  theme::{HubSpacing, PIPELINE_HUB_LIST_NARROW},
   ui::{
     button::{ActionButton, ButtonKind},
     failure::LastFailure,
@@ -129,6 +131,8 @@ struct PipelineHubScreen {
   archive_waits: Signal<Option<Target>>,
   /// Whether the open panel's save is under way.
   saving: Signal<bool>,
+  /// The pipeline a save in its panel just published, which the page follows out of *Drafts*.
+  published: Signal<Published>,
 }
 
 impl Component for PipelineHubScreen {
@@ -155,6 +159,7 @@ impl Component for PipelineHubScreen {
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
+      published: ctx.signal(Published::default()),
     };
     this.follow_question(ctx);
     this
@@ -171,6 +176,9 @@ impl Component for PipelineHubScreen {
     let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
+    let view = listing.as_ref().map_or(view, |listing| {
+      follow_published(listing, view, &self.published, (project.open.project.id(), &navigation))
+    });
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
     let body = match (failed, listing.as_ref()) {
@@ -274,6 +282,7 @@ impl PipelineHubScreen {
       archiving: self.archiving.clone(),
       archive_waits: self.archive_waits.clone(),
       saving: self.saving.clone(),
+      published: self.published.clone(),
     }
   }
 
@@ -332,7 +341,36 @@ fn hub_body(
       step,
     },
   );
-  agents::master_detail("pipeline-hub", reading, (list, panel))
+  master_detail(ctx, reading, (list, panel))
+}
+
+/// The list beside the panel, as the Agents hub's ([`agents::master_detail`]), except that in a window under the `xl`
+/// breakpoint the list gives way first, to [`PIPELINE_HUB_LIST_NARROW`], so the panel keeps a width its rows, cards and
+/// bar are read at.
+fn master_detail(ctx: &Ctx, reading: bool, (list, panel): (Element, Element)) -> Element {
+  let list_width = if ctx.breakpoint() >= Some(Breakpoint::Xl) {
+    LIST_WIDTH
+  } else {
+    PIPELINE_HUB_LIST_NARROW
+  };
+  Row::new()
+    .id("pipeline-hub-master-detail")
+    .describe("state", if reading { "reading" } else { "read" })
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .child(
+      Column::new()
+        .id("pipeline-hub-list-column")
+        .width(Dimension::Px(list_width))
+        .height(Dimension::Pct(100.0))
+        .flex_shrink(0.0)
+        .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .child(list),
+    )
+    .child(panel)
+    .into()
 }
 
 /// *New pipeline*, which opens the page that makes one: the head's is the primary button, the empty body's the
@@ -429,6 +467,30 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
       _ => false,
     }
   }
+}
+
+/// A save in the panel of the pipeline the *Drafts* tab shows published it (`published`): the page follows it to
+/// *All*, so its panel, with what the save said, stays; the route is corrected to say so. A route that names a pipeline
+/// published elsewhere is left to [`keep_route_on_shown`].
+fn follow_published(
+  listing: &Listing,
+  view: PipelinesView,
+  published: &Signal<Published>,
+  (project, navigation): (ProjectId, &Navigation),
+) -> PipelinesView {
+  let Some(item) = view.item.filter(|item| published.get_untracked().0 == Some(*item)) else {
+    return view;
+  };
+  if view.filter != PipelinesFilter::Drafts || listing.holds(PipelinesFilter::Drafts, item) {
+    return view;
+  }
+  published.set(Published(None));
+  if !listing.holds(PipelinesFilter::All, item) {
+    return view;
+  }
+  let followed = PipelinesView::new(PipelinesFilter::All, Some(item));
+  navigation.replace(Route::Project(project, ProjectPage::pipelines(followed)));
+  followed
 }
 
 /// A route that names a pipeline the tab does not hold (one archived, or not a draft) shows the one the page shows; the

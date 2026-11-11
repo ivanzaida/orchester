@@ -11,7 +11,7 @@ use lurq::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
   },
-  core::Signal,
+  core::{Ref, Signal},
   node::Element,
 };
 use orchester_core::{
@@ -26,7 +26,7 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::edit::Holding;
+use super::{edit::Holding, leave::Published};
 use crate::{
   mcp::input_gate::Guarded,
   screens::connections::widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
@@ -175,7 +175,9 @@ pub(super) struct Followed {
   pub holding: Signal<Holding>,
   pub notes: Notes,
   /// The pipeline as stored now, which the panel keeps current.
-  pub stored: lurq::core::Ref<Option<Arc<Pipeline>>>,
+  pub stored: Ref<Option<Arc<Pipeline>>>,
+  /// Where the screen hears that the pipeline was published, and which pipeline it is.
+  pub published: (Signal<Published>, ResourceId),
 }
 
 /// What follows a save that ended. One that stored the edit leaves the panel showing it as nothing changed, until the
@@ -188,8 +190,10 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
     holding,
     notes,
     stored,
+    published,
   } = followed;
   let (pending, holding, notes, stored) = (pending.clone(), holding.clone(), notes.clone(), stored.clone());
+  let published = published.clone();
   ctx.watch(&save.state(), move |state| {
     if state.is_pending() {
       return;
@@ -221,23 +225,34 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
       saved => {
         pending.set(None);
         notes.stored_as(&saved);
-        if let Some(body) = done.ask.held.edit().validate().ok().map(Arc::new) {
-          holding.set(Holding {
-            held: Some(Held::start(body)),
-            saved_over: stored.get(),
-          });
-        }
+        let body = done
+          .ask
+          .held
+          .edit()
+          .validate()
+          .expect("a save that stored the edit validated it first");
+        holding.set(Holding {
+          held: Some(Held::start(Arc::new(body))),
+          saved_over: stored.get(),
+        });
         changes.record(project, Outside::Pipelines);
         if matches!(saved, Saved::Published(_)) {
           changes.record(project, Outside::Tasks);
+          published.0.set(Published(Some(published.1)));
         }
       }
     }
   });
 }
 
-/// The question of a save that widens, in the panel: what it widens, *Allow* and *Keep editing*.
-pub(super) fn question(ctx: &mut Ctx, asked: &Asked, (save, pending): (&Save, &Pending)) -> Element {
+/// The question of a save that widens, in the panel: what it widens, *Allow* and *Keep editing*. After *Restore*
+/// (`restored`) its title names the version the changes come from.
+pub(super) fn question(
+  ctx: &mut Ctx,
+  asked: &Asked,
+  (save, pending): (&Save, &Pending),
+  restored: Option<VersionNumber>,
+) -> Element {
   let automation = if answers_in_persons_place(&asked.reasons) {
     Guarded::ApprovalWidening
   } else {
@@ -250,7 +265,15 @@ pub(super) fn question(ctx: &mut Ctx, asked: &Asked, (save, pending): (&Save, &P
     look: WidenLook::Band,
     affirming: false,
     automation,
-    title: ctx.t("pipeline_hub.bar.widenTitle"),
+    title: restored.map_or_else(
+      || ctx.t("pipeline_hub.bar.widenTitle"),
+      |version| {
+        ctx.t_args(
+          "pipeline_hub.bar.widenTitleRestored",
+          [("version", version.to_string())],
+        )
+      },
+    ),
     reasons: reasons.into(),
     confirm: ctx.t("pipeline_hub.bar.allow"),
     keep: ctx.t("pipeline_hub.bar.keep"),

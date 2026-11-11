@@ -23,7 +23,7 @@ use super::{
 };
 use crate::{
   routes::PipelinesFilter,
-  screens::{hub::section::section, local_hub::leave::Leave, team_hub::list::LIST_WIDTH},
+  screens::{hub::section::section, local_hub::leave::Leave},
   theme::ExtraSpacing,
 };
 
@@ -64,9 +64,10 @@ pub(super) fn list(ctx: &mut Ctx, listing: &Listing, shown: &Shown<'_>) -> Eleme
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
     .with_children(sections);
+  // As wide as the list's column, which gives way in a narrow window (`super::master_detail`).
   ScrollVertical::new(groups)
     .id("pipeline-hub-list-scroll")
-    .width(Dimension::Px(LIST_WIDTH))
+    .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()
 }

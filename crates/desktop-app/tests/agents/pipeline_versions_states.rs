@@ -169,7 +169,8 @@ fn pipeline_versions_the_head_names_the_version_that_is_shown() {
   assert!(shown.starts_with("Viewing v1 · published "), "{shown}");
   assert_eq!(
     agents.text("pipeline-hub-version-viewing-title"),
-    "Viewing v1 · read-only"
+    "Read-only",
+    "the head names the version; the notice says only that it is read-only"
   );
 
   agents.click(BACK);

@@ -104,7 +104,8 @@ fn pipeline_versions_a_row_opens_that_version_read_only_and_back_to_editing_retu
   );
   assert_eq!(
     agents.text("pipeline-hub-version-viewing-title"),
-    "Viewing v1 · read-only"
+    "Read-only",
+    "the head names the version; the notice says only that it is read-only"
   );
   assert_eq!(agents.text("pipeline-hub-version-description-value"), "No description");
   assert_eq!(agents.text("pipeline-hub-version-steps-count"), "2");

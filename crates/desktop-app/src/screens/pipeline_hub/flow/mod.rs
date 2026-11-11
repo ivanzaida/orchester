@@ -25,7 +25,7 @@ mod words;
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, components::Button, node::Element};
+use lurq::{app::ctx::Ctx, components::Button, core::Signal, node::Element};
 use orchester_core::{
   id::ResourceId,
   resource::{FlowError, PipelineEdit},
@@ -57,6 +57,8 @@ struct Opens<'a> {
   pipeline: ResourceId,
   /// The flow only shows the steps of a published version: nothing in it opens a step or the editor.
   read_only: bool,
+  /// Set by a card whose profile or tool is gone: the step it opens opens its Agent picker.
+  pick_agent: Option<Signal<bool>>,
 }
 
 impl Opens<'_> {
@@ -92,7 +94,7 @@ pub(in crate::screens::pipeline_hub) fn section(
   (project, pipeline, count): (&ShownProject, ResourceId, usize),
   read: &Arc<FlowRead>,
   (edit, current): (&Edit, &PipelineEdit),
-  locked: bool,
+  (locked, pick_agent): (bool, &Signal<bool>),
 ) -> Element {
   ctx.mount_keyed::<view::FlowView>(
     &format!("pipeline-hub-flow-{pipeline}"),
@@ -104,6 +106,7 @@ pub(in crate::screens::pipeline_hub) fn section(
       current: current.clone(),
       edit: edit.clone(),
       locked,
+      pick_agent: pick_agent.clone(),
     },
   )
 }
@@ -122,6 +125,7 @@ pub(super) fn read_only(
     project,
     pipeline,
     read_only: true,
+    pick_agent: None,
   };
   read_only::drawn(ctx, &opens, read)
 }

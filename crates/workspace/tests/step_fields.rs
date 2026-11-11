@@ -9,7 +9,7 @@ use orchester_core::{
   permission::StepPermissions,
   resource::{ModelId, Pipeline, PipelineEdit, RepositoryAccess, Step, StepKind},
 };
-use orchester_workspace::pipelines::fields::{Executor, ModelChoice, dropped_override, take_back_override};
+use orchester_workspace::pipelines::fields::{Executor, KnownCli, ModelChoice, dropped_override, take_back_override};
 
 /// A step that runs a profile and overrides its model with `custom-model`.
 fn overriding() -> Step {
@@ -162,5 +162,64 @@ fn choosing_the_overrides_cli_again_takes_it_back() {
   assert!(
     !take_back_override(&mut unknown, &started, (None, None)),
     "a CLI that is not known takes nothing back on a guess"
+  );
+}
+
+#[test]
+fn a_profile_whose_cli_is_not_known_does_not_carry_the_override_to_another_cli() {
+  let started = (overriding(), Some(AgentProvider::ClaudeCodeCli));
+  let mut step = started.0.clone();
+  let (claude, codex) = (Some(AgentProvider::ClaudeCodeCli), Some(AgentProvider::CodexCli));
+
+  // A profile with no connection: its CLI is not known, so the override is kept on no guess.
+  let kept = Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (claude, None));
+  assert_eq!(kept, None);
+  assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
+
+  // Then one on Codex: the override was for Claude, the CLI the step started on.
+  let dropped = Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (None, codex));
+  assert_eq!(dropped.as_ref().map(ModelId::as_str), Some("custom-model"));
+  assert_eq!(model_of(&step), None);
+  assert_eq!(
+    dropped_override(&started.0, &step).as_ref().map(ModelId::as_str),
+    Some("custom-model"),
+    "the field says it was dropped"
+  );
+
+  // Back on Claude, it is taken back.
+  Executor::Profile(ResourceId::generate()).apply_in_edit(&mut step, Some(&started), (codex, claude));
+  assert_eq!(model_of(&step).as_deref(), Some("custom-model"));
+}
+
+/// The step started on a profile whose CLI is not known, with its override: then `path`, a choice per CLI (`None` for
+/// one not known), read through one [`KnownCli`] as the edit remembers it. Gives the override at the end.
+fn through(path: &[Option<AgentProvider>]) -> Option<String> {
+  let started = (overriding(), None);
+  let mut step = started.0.clone();
+  let mut known = KnownCli::default();
+  for cli in path {
+    Executor::Profile(ResourceId::generate()).apply_through(&mut step, Some(&started), (&mut known, *cli));
+  }
+  model_of(&step)
+}
+
+#[test]
+fn an_override_is_read_against_the_last_known_cli_whatever_unknown_choices_came_between() {
+  let (claude, codex) = (Some(AgentProvider::ClaudeCodeCli), Some(AgentProvider::CodexCli));
+  assert_eq!(
+    through(&[None, codex]).as_deref(),
+    Some("custom-model"),
+    "the first known CLI keeps it: there is no guess to drop it on"
+  );
+  assert_eq!(through(&[None, codex, claude]), None, "unknown, Codex, Claude: dropped");
+  assert_eq!(
+    through(&[None, codex, None, claude]),
+    None,
+    "unknown, Codex, unknown, Claude: dropped too, Codex is remembered"
+  );
+  assert_eq!(
+    through(&[None, codex, None, codex]).as_deref(),
+    Some("custom-model"),
+    "back on Codex after an unknown one keeps it"
   );
 }

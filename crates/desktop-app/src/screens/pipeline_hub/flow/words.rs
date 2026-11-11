@@ -26,6 +26,9 @@ pub(super) fn runs(ctx: &Ctx, card: &StepCard) -> Arc<str> {
     Runs::NoProfile => ctx.t("pipeline_hub.flow.noProfile"),
     Runs::NoTool => ctx.t("pipeline_hub.flow.noTool"),
     Runs::ProfileNotPublished { .. } => ctx.t("pipeline_hub.flow.profileNotPublished"),
+    Runs::ProfileConnectionGone { name, .. } => {
+      ctx.t_args("pipeline_hub.flow.profileConnectionGone", [("profile", name.as_ref())])
+    }
     Runs::ToolNotPublished { .. } => ctx.t("pipeline_hub.flow.toolNotPublished"),
     Runs::ToolNotRunnable { name, .. } => ctx.t_args("pipeline_hub.flow.toolNotRunnable", [("tool", name.as_ref())]),
   }
