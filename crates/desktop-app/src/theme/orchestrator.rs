@@ -254,10 +254,12 @@ pub enum OrchestratorSpacing {
   StartComposer,
   /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`).
   LeftOpen,
+  /// 24: a tool request's card in from the chat column's start, under its wait (`ICzi3` d in `mPw5l`).
+  RequestCard,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 9] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
@@ -266,6 +268,7 @@ impl OrchestratorSpacing {
     Self::LinkColumns,
     Self::StartComposer,
     Self::LeftOpen,
+    Self::RequestCard,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -282,6 +285,7 @@ impl OrchestratorSpacing {
       Self::LinkColumns => "orchestrator_link_columns",
       Self::StartComposer => "orchestrator_start_composer",
       Self::LeftOpen => "orchestrator_left_open",
+      Self::RequestCard => "orchestrator_request_card",
     }
   }
 
@@ -295,6 +299,7 @@ impl OrchestratorSpacing {
       Self::LinkColumns => 12.0,
       Self::StartComposer => 28.0,
       Self::LeftOpen => 27.0,
+      Self::RequestCard => 24.0,
     }
   }
 }

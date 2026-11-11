@@ -10,9 +10,11 @@ use orchester_core::{
   id::{ChatId, ChatMessageId},
   module::{ModuleDetails, ModuleState},
   name::Name,
-  orchestrator::{AgentWait, Chat, EntryKind, TaskEvent, TaskEventKind, TurnState, WaitKind},
+  orchestrator::{
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, TaskEvent, TaskEventKind, ToolAnswer, TurnState, WaitKind,
+  },
   resource::ModelId,
-  run::{PendingToolApproval, Run},
+  run::{DecidedBy, PendingToolApproval, Run, ToolApprovalDecision},
   store::{ActivityStore, TaskStore},
   task::organization::ChangeActor,
   time::Timestamp,
@@ -276,4 +278,122 @@ fn orchestrator_task_events_a_tool_request_is_read_by_the_orchestrator_while_it_
   let line = format!("orchestrator-wait-wait-{seq}");
   screen.until("the tool request's line", |screen| screen.exists(&line));
   assert_eq!(screen.text(&format!("{line}-chip")), "Orchestrator is reading");
+}
+
+/// Keeps a tool request of `asks` in `chat` as a wait to start a turn by itself; its entry and the request's id.
+fn request_wait(db: &mut ProjectDb, chat: &Chat, asks: &Run) -> (i64, String) {
+  let key = key_of(db, asks);
+  let request = request_tool(db, asks);
+  let id = request
+    .strip_prefix(&format!("approval:{}:", asks.id()))
+    .expect("the key names the run")
+    .to_owned();
+  let wait = wait_of(WaitKind::Approval, asks, &key);
+  (keep(db, chat, (&request, &wait)), id)
+}
+
+/// The Orchestrator answers request `id` of `asks` itself in the turn of wait `seq`: allowed once, or denied with
+/// `told`.
+fn answered_itself(
+  db: &mut ProjectDb,
+  (chat, seq): (ChatId, i64),
+  (asks, id): (&Run, &str),
+  told: Option<&str>,
+) -> ChatMessageId {
+  let by = if told.is_some() {
+    DecidedBy::AutomationDeny
+  } else {
+    DecidedBy::Automation
+  };
+  assert!(
+    db.claim_tool_approval(asks.id(), id, by, Timestamp::now())
+      .expect("claimed")
+  );
+  let decision = if told.is_some() {
+    ToolApprovalDecision::Denied
+  } else {
+    ToolApprovalDecision::Approved
+  };
+  assert!(db.delivered_tool_approval(asks.id(), id, decision).expect("delivered"));
+  let message = ChatMessageId::generate();
+  assert!(db.start_wait_turn((chat, seq), message).expect("started"));
+  let action = ChatAction {
+    tool_answer: Some(ToolAnswer {
+      request: id.to_owned(),
+      asked: "cargo test".to_owned(),
+      allowed: told.is_none(),
+      reason: "the brief asks for the tests to pass.".to_owned(),
+      told: told.map(str::to_owned),
+    }),
+    ..ChatAction::new("decide_approval", None, ActionOutcome::Done)
+  };
+  db.add_chat_action(chat, &action, Timestamp::now()).expect("kept");
+  db.end_chat_turn(message, &TurnState::Answered, Timestamp::now())
+    .expect("ended");
+  message
+}
+
+/// The chat's tool requests in states b–e (2026-11-11, `ICzi3`): allowed and denied by the Orchestrator with its
+/// answer nested, left to the person with the task's own card under its line, and answered by the person.
+#[test]
+fn orchestrator_task_events_tool_requests_show_how_they_were_answered() {
+  let mut screen = Orchestrator::new(Setup::NoRunner);
+  let delivery = screen.delivery();
+  let runs: Vec<Run> = ["Allow", "Deny", "Unsure", "Yours"]
+    .into_iter()
+    .map(|title| waiting(&screen, delivery, title).0)
+    .collect();
+  let mut db = screen.db();
+  let chat = conversation(&mut db);
+  // The person's answer first: the card under the request left to them is tall, and the list lays out what shows.
+  let (yours, yours_id) = request_wait(&mut db, &chat, &runs[3]);
+  assert!(
+    db.claim_tool_approval(runs[3].id(), &yours_id, DecidedBy::Person, Timestamp::now())
+      .expect("claimed")
+  );
+  assert!(
+    db.delivered_tool_approval(runs[3].id(), &yours_id, ToolApprovalDecision::Approved)
+      .expect("delivered")
+  );
+  let yours = format!("wait-{yours}");
+  let (allowed, allowed_id) = request_wait(&mut db, &chat, &runs[0]);
+  let allowed = answered_itself(&mut db, (chat.id(), allowed), (&runs[0], &allowed_id), None).to_string();
+  let (denied, denied_id) = request_wait(&mut db, &chat, &runs[1]);
+  let words = "Do not push; go on with the tests.";
+  let denied = answered_itself(&mut db, (chat.id(), denied), (&runs[1], &denied_id), Some(words)).to_string();
+  let (unsure, unsure_id) = request_wait(&mut db, &chat, &runs[2]);
+  let unsure = turned(&mut db, (chat.id(), unsure), "Not sure: it uses the network.").to_string();
+  drop(db);
+  screen.go(OrchestratorChat::Chat(chat.id()));
+  let line = |key: &str| format!("orchestrator-wait-{key}");
+  screen.until("the requests' lines", |screen| screen.exists(&line(&yours)));
+  assert_eq!(
+    screen.text(&format!("{}-chip", line(&allowed))),
+    "Allowed by the Orchestrator"
+  );
+  assert_eq!(
+    screen.text(&format!("{}-quote-said", line(&allowed))),
+    "Allowed once: the brief asks for the tests to pass."
+  );
+  assert_eq!(screen.text(&format!("{}-quote-asked", line(&allowed))), "cargo test");
+  assert_eq!(
+    screen.text(&format!("{}-chip", line(&denied))),
+    "Denied by the Orchestrator"
+  );
+  assert_eq!(
+    screen.text(&format!("{}-quote-said", line(&denied))),
+    format!("Told Builder: “{words}”")
+  );
+  assert_eq!(screen.text(&format!("{}-chip", line(&unsure))), "Waits for you");
+  let card = format!("cards-approval-{unsure_id}");
+  screen.until("the request's card under its line", |screen| screen.exists(&card));
+  assert!(
+    !screen.exists(&format!("cards-approval-{allowed_id}")),
+    "no card once answered"
+  );
+  assert!(!screen.exists(&format!("cards-approval-{denied_id}")));
+  screen.until("the person's answer on its line", |screen| {
+    screen.text(&format!("{}-chip", line(&yours))) == "Allowed once by you"
+  });
+  assert!(!screen.exists(&format!("cards-approval-{yours_id}")));
 }

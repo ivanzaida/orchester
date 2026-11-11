@@ -7,9 +7,12 @@
 //! which waits still stand). What the Orchestrator said or did with it nests under it as a quote
 //! (`super::timeline`). Whether *Let the Orchestrator drive* answers it is the chip's tooltip. Deciding a plan stays
 //! the person's: its chip says it waits for them, and the Orchestrator's reading nests as its recommendation. A tool
-//! request is read and decided by the Orchestrator while it drives (2026-11-11): *Answered by the Orchestrator* once
-//! its `decide_approval` was done, else it waits for the person on its card.
+//! request is read and decided by the Orchestrator while it drives (2026-11-11, [`super::approval`]): *Allowed by the
+//! Orchestrator* or *Denied by the Orchestrator* once its `decide_approval` was done, how the person answered it once
+//! they did, else it waits for them on its card.
 //! The end of a task's run is a wait of its own kind, with its own line ([`super::run_end`]).
+
+pub(super) mod approval;
 
 use std::sync::Arc;
 
@@ -20,10 +23,7 @@ use orchester_core::{
   project::TaskKey,
   time::Timestamp,
 };
-use orchester_workspace::display;
-
-/// The tool whose action decides a tool request.
-const DECIDE_APPROVAL: &str = "decide_approval";
+use orchester_workspace::{display, orchestrator::requests::ChatRequest};
 
 use super::{
   line::{Chip, ChipTone, Line, LineLink, Tone},
@@ -48,18 +48,29 @@ pub(super) enum Status {
   AnsweredByYou,
   /// It was dealt with elsewhere, on its task's page: its agent no longer waits.
   Gone,
+  /// A tool request the Orchestrator allowed once.
+  Allowed,
+  /// A tool request the Orchestrator denied.
+  Denied,
+  /// A tool request the person answered, as the chip's words (`key`) say.
+  ByYou(&'static str),
 }
 
 impl Status {
   /// Where `wait` stands, by whether it still `stands` (its agent still waits), the turn it started (`turn`, `None`
   /// for one that started none) and what that turn's answer did (`answer`).
-  pub(super) fn of(wait: &AgentWait, stands: bool, turn: Option<&TurnState>, answer: &[Part]) -> Self {
+  pub(super) fn of(
+    wait: &AgentWait,
+    (stands, request): (bool, Option<&ChatRequest>),
+    turn: Option<&TurnState>,
+    answer: &[Part],
+  ) -> Self {
     let thinking = matches!(turn, Some(TurnState::Thinking));
     if wait.kind == WaitKind::Plan {
       return if stands { Self::Waits } else { Self::Gone };
     }
     if wait.kind == WaitKind::Approval {
-      return Self::of_approval(wait, stands, turn, answer);
+      return Self::of_approval(wait, (stands, request), turn, answer);
     }
     if thinking {
       return Self::Reading;
@@ -88,18 +99,28 @@ impl Status {
     }
   }
 
-  /// Where a tool request stands: decided by the Orchestrator's `decide_approval` in its turn, read while that turn
-  /// thinks or waits to start, else the person's.
-  fn of_approval(wait: &AgentWait, stands: bool, turn: Option<&TurnState>, answer: &[Part]) -> Self {
-    let decided = answer.iter().any(|part| {
-      matches!(part, Part::Action { action, .. }
-        if action.tool == DECIDE_APPROVAL && action.outcome == ActionOutcome::Done)
-    });
-    match (decided, stands) {
-      (true, _) => Self::Answered,
-      (false, false) => Self::Gone,
-      (false, true) if matches!(turn, Some(TurnState::Thinking)) || turn.is_none() && wait.automatic => Self::Reading,
-      (false, true) => Self::Waits,
+  /// Where a tool request (`request`) stands: allowed or denied by the Orchestrator's `decide_approval` in its turn,
+  /// answered by the person, read while that turn thinks or waits to start, else the person's.
+  fn of_approval(
+    wait: &AgentWait,
+    (stands, request): (bool, Option<&ChatRequest>),
+    turn: Option<&TurnState>,
+    answer: &[Part],
+  ) -> Self {
+    if let Some(own) = approval::own_answer(answer) {
+      return if own.allowed { Self::Allowed } else { Self::Denied };
+    }
+    if let Some(key) = request
+      .and_then(|request| request.decided.as_ref())
+      .and_then(approval::by_you)
+    {
+      return Self::ByYou(key);
+    }
+    match (stands, turn) {
+      (false, _) => Self::Gone,
+      (true, Some(TurnState::Thinking)) => Self::Reading,
+      (true, None) if wait.automatic => Self::Reading,
+      (true, _) => Self::Waits,
     }
   }
 
@@ -111,6 +132,9 @@ impl Status {
       Self::Answered => "answered",
       Self::AnsweredByYou => "answered_by_you",
       Self::Gone => "gone",
+      Self::Allowed => "allowed",
+      Self::Denied => "denied",
+      Self::ByYou(_) => "decided_by_you",
     }
   }
 
@@ -121,6 +145,9 @@ impl Status {
       Self::Answered => ("orchestrator.wait.status.answered", ChipTone::Success),
       Self::AnsweredByYou => ("orchestrator.wait.status.answeredByYou", ChipTone::Neutral),
       Self::Gone => ("orchestrator.wait.status.gone", ChipTone::Neutral),
+      Self::Allowed => ("orchestrator.wait.status.allowed", ChipTone::Success),
+      Self::Denied => ("orchestrator.wait.status.denied", ChipTone::Danger),
+      Self::ByYou(key) => (key, ChipTone::Neutral),
     };
     Chip::new(ctx.t(key), tone)
   }
