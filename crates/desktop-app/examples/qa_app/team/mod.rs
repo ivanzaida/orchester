@@ -279,14 +279,18 @@ fn join_linked_as(
   server.answer_tasks(tasks);
   let kontur = kontur(services)?;
   let (address, id) = add(server, services, runtime)?;
-  link(&kontur, server, (id, role))?;
+  link((&kontur, services), server, (id, role))?;
   join(&address, services, runtime)?;
   Ok((kontur, id))
 }
 
 /// Links the project at `repo` to the team's Kontur on `server` with `id`, the person's role there `role`, with nothing
 /// of it cached yet.
-fn link(repo: &Path, server: &TeamServer, (id, role): (ServerId, Option<MemberRole>)) -> Result<(), Box<dyn Error>> {
+fn link(
+  (repo, services): (&Path, &Services),
+  server: &TeamServer,
+  (id, role): (ServerId, Option<MemberRole>),
+) -> Result<(), Box<dyn Error>> {
   let link = SharingLink {
     server: id,
     project: server.project(SLUG).ok_or("the team shares Kontur")?,
@@ -298,7 +302,11 @@ fn link(repo: &Path, server: &TeamServer, (id, role): (ServerId, Option<MemberRo
     removed_at: None,
     address: Some(format!("{}/{SLUG}", server.url())),
   };
-  ProjectDb::open(repo)?.start_sharing(&link, &[], (&[], &Default::default()))?;
+  let mut db = ProjectDb::open(repo)?;
+  if db.sharing()?.is_some() {
+    return hub::move_link((repo, services), &link);
+  }
+  db.start_sharing(&link, &[], (&[], &Default::default()))?;
   Ok(())
 }
 

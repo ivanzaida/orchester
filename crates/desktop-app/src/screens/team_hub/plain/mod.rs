@@ -121,13 +121,15 @@ impl Component for PlainPanel {
   }
 }
 
+/// The keys of *given by N profiles* at the end of an instruction's chips.
+pub(super) const GIVEN_BY: (&str, &str) = ("team_hub.panel.givenBy.one", "team_hub.panel.givenBy.other");
+
 /// *Team · v6*, *Ready here* and what the panel says of where it is used at their end.
 fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &Sheet) -> Row {
   let end = match sheet {
     Sheet::Instruction(sheet) if matches!(sheet.added, Added::Project) => Some(ctx.t("team_hub.plain.everyRun")),
-    Sheet::Instruction(TeamInstructionSheet { used_by, .. }) | Sheet::Skill(TeamSkillSheet { used_by, .. }) => {
-      panel::used_by(ctx, used_by)
-    }
+    Sheet::Instruction(TeamInstructionSheet { used_by, .. }) => panel::given_by(ctx, GIVEN_BY, used_by.len()),
+    Sheet::Skill(TeamSkillSheet { used_by, .. }) => panel::used_by(ctx, used_by),
   };
   panel::chips_saying(ctx, entry, words::chip(ctx, listing, entry), end)
 }

@@ -30,10 +30,11 @@ use orchester_workspace::{
   sharing::{Servers, team_edit::EditRefused},
   tasks::outside::Outside,
   team_config::TeamConfig,
+  tools::widening::changes,
 };
 use parking_lot::Mutex;
 
-pub(super) use self::view::{Parts, View};
+pub(super) use self::view::{Parts, View, hint};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, may_press},
   services::Services,
@@ -46,6 +47,9 @@ pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
   /// What Save does, as an MCP client refused it reads it after "Only a person can".
   const SAVE: &'static str;
 
+  /// Whether `after` widens what agents may do over `before`, which only a person (or automation they let change
+  /// that) saves.
+  fn widens(before: &Self, after: &Self) -> bool;
   /// What an edit of team resource `id` starts from as `config` holds it now.
   fn latest(config: &TeamConfig, id: ResourceId) -> Option<Latest<Self>>;
 
@@ -59,10 +63,14 @@ pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
 }
 
 macro_rules! team_body {
-  ($body:ty, $outside:expr, $save:literal) => {
+  ($body:ty, $outside:expr, $save:literal, $widens:expr) => {
     impl Body for $body {
       const OUTSIDE: Outside = $outside;
       const SAVE: &'static str = $save;
+
+      fn widens(before: &Self, after: &Self) -> bool {
+        $widens(before, after)
+      }
 
       fn latest(config: &TeamConfig, id: ResourceId) -> Option<Latest<Self>> {
         team_body_edit::latest(config, id)
@@ -80,18 +88,46 @@ macro_rules! team_body {
   };
 }
 
+// An instruction's or a skill's text is what agents read, not what they may do.
 team_body!(
   Instruction,
   Outside::Instructions,
-  "publish a new version of a team instruction"
+  "publish a new version of a team instruction",
+  |_: &Instruction, _: &Instruction| false
 );
-team_body!(Skill, Outside::Skills, "publish a new version of a team skill");
-team_body!(Tool, Outside::Tools, "publish a new version of a team tool");
+team_body!(
+  Skill,
+  Outside::Skills,
+  "publish a new version of a team skill",
+  |_: &Skill, _: &Skill| false
+);
+team_body!(
+  Tool,
+  Outside::Tools,
+  "publish a team tool's version that widens what agents may do",
+  |before: &Tool, after: &Tool| !changes(Some(before), after, FIRST).is_empty()
+);
 team_body!(
   TeamAgentProfile,
   Outside::Profiles,
-  "publish a new version of a team profile"
+  "publish a team profile's version that widens what agents may do",
+  profile_widens
 );
+
+/// The key [`changes`] says a tool that was no command became one with: it widens too.
+const FIRST: &str = "appMcp.projectTools.widens.firstVersion";
+
+/// A profile widens what its agents may do when its role's prompts change (what they are told to do first), its
+/// permissions grow, or it gives them an MCP server or a tool it did not.
+fn profile_widens(before: &TeamAgentProfile, after: &TeamAgentProfile) -> bool {
+  let gained = |was: &[ResourceId], now: &[ResourceId]| now.iter().any(|id| !was.contains(id));
+  before.role() != after.role()
+    || before.responsibilities() != after.responsibilities()
+    || before.instructions() != after.instructions()
+    || !after.permissions().widenings_from(before.permissions()).is_empty()
+    || gained(before.mcp_servers(), after.mcp_servers())
+    || gained(before.tools(), after.tools())
+}
 
 /// What the fields take when they are put back or reloaded: every field takes the body's value.
 pub(super) type Load<B> = Arc<dyn Fn(&B) + Send + Sync>;
@@ -208,12 +244,14 @@ impl<B: Body> Edit<B> {
     self.refused.set(None);
   }
 
-  /// Save: a person's press (or automation's where they let it change what agents may do) sends `body`, made on
-  /// `base`; automation's press otherwise is refused to it, and the panel stays as it was.
-  fn press_save(&self, body: B, base: VersionNumber) {
-    if may_press(self.gate.as_ref(), Guarded::PermissionWidening, B::SAVE) {
-      self.save.run(Asked { body, base });
+  /// Save sends `body`, made on `base`: what widens what agents may do over `base` only on a person's press (or
+  /// automation's where they let it change that), refused to automation otherwise and the panel left as it was;
+  /// anything else on any press.
+  fn press_save(&self, body: B, (base, was): (VersionNumber, &B)) {
+    if B::widens(was, &body) && !may_press(self.gate.as_ref(), Guarded::PermissionWidening, B::SAVE) {
+      return;
     }
+    self.save.run(Asked { body, base });
   }
 }
 

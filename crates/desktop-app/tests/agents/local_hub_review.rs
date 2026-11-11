@@ -81,11 +81,11 @@ fn local_hub_review_an_archived_servers_name_stays_taken() {
     project_id(),
     ProjectPage::hub(HubView::adding(HubFilter::McpServers)),
   ));
-  agents.until("the form", |s| s.exists("team-new-mcp-name"));
+  agents.until("the form", |s| s.exists("local-hub-mcp-name"));
 
-  agents.set("team-new-mcp-name", "docs");
+  agents.set("local-hub-mcp-name", "docs");
 
   agents.until("the name is refused", |s| {
-    s.text("team-new-mcp-name-row-sub").contains("already has this name")
+    s.text("local-hub-mcp-row-name-sub").contains("already has this name")
   });
 }

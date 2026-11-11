@@ -5,10 +5,10 @@
 //! them: `docs/design/team-configuration.md`, "Decided 2026-11-09"), *Ready?* with the fix of what is missing, and
 //! the pinned *Save* and *Cancel* ([`super::save_bar`]). The parts are the team profile's
 //! ([`crate::screens::team_hub::profile`]) over the local profile store. The profile is edited in place, as the design
-//! draws it ([`table`], [`pick`], [`add_menu`]): the CLI, the connection, the model, the reasoning effort, the MCP
-//! servers, instructions, skills and tools are selects, and each choice changes only what the panel holds, at once and
-//! without locking anything it shows ([`choices`]). *Save* publishes it as the next
-//! version at once ([`edit`]); *Cancel* puts back what is published.
+//! draws it ([`table`], [`add_menu`]): the CLI, the connection, the model and the reasoning effort are the selects
+//! every profile form has ([`HeldFields`]), the MCP servers, instructions, skills and tools tags with *Add*, and each
+//! choice changes only what the panel holds, at once and without locking anything it shows ([`choices`]). *Save*
+//! publishes it as the next version at once ([`edit`]); *Cancel* puts back what is published.
 //!
 //! The panel has no drafts (decided by the person 2026-11-09): it opens on the published version, unchanged, even when
 //! a draft of the profile is stored (an MCP client's), which *Save* replaces with what it publishes and *Cancel* leaves
@@ -17,7 +17,7 @@
 pub(in crate::screens) mod add_menu;
 mod choices;
 mod edit;
-mod pick;
+mod pinned;
 mod ready;
 mod role;
 mod table;
@@ -33,10 +33,7 @@ use lurq::{
   core::{Ref, Signal},
   node::Element,
 };
-use orchester_core::{
-  id::{ConnectionId, ResourceId},
-  resource::AgentProfile,
-};
+use orchester_core::{id::ResourceId, resource::AgentProfile};
 use orchester_workspace::{
   agents::{
     local_edit::Edit,
@@ -65,16 +62,25 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{AccountsView, HubFilter, ProjectPage, Route},
-  screens::team_hub::{
-    actions::Busy,
-    panel::{body, head_named},
-    profile::ready::section,
+  screens::{
+    hub::profile_form::{Form, HeldFields, Ids, Offer, OnEdit, Scope},
+    team_hub::{
+      actions::Busy,
+      panel::{body, head_named},
+      profile::ready::section,
+    },
   },
   ui::{field::field_error, message::message_text, pressable::Press},
 };
 
 /// The ids of the panel's parts start with it.
 const PREFIX: &str = "local-hub-profile";
+
+/// The ids of the fields of what it runs with: `local-hub-profile-cli`, `local-hub-profile-connection-row`, …
+const IDS: Ids = Ids {
+  role: "local-hub-profile-role",
+  rows: PREFIX,
+};
 
 #[derive(Clone)]
 pub(super) struct Props {
@@ -103,8 +109,10 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
 }
 
 struct ProfilePanel {
-  /// The connection the select holds, by id; empty while none is.
-  chosen: Signal<String>,
+  /// The selects of what it runs with.
+  fields: HeldFields,
+  /// What changing a field does: makes the change on what the panel holds, dropping a question about a save.
+  on_edit: OnEdit,
   /// What the panel holds: `None` while it is what is stored.
   held: Signal<Holding>,
   /// The choices on their way to what the panel holds.
@@ -113,8 +121,6 @@ struct ProfilePanel {
   save: edit::Save,
   /// What a save would widen, which waits for the person.
   pending: edit::Pending,
-  /// The connection the panel shows, which a choice in the select differs from.
-  shown_connection: Ref<Option<ConnectionId>>,
   /// The profile as the hub lists it now, and when the last save ended ([`Followed`]).
   listed: (Ref<Option<LocalProfile>>, Ref<Option<LocalProfile>>),
   unsaved: UnsavedSignal,
@@ -151,23 +157,27 @@ impl Component for ProfilePanel {
         publish(&saving.0, &saving.1, body, saving.3.get());
       }
     });
-    let current = props.profile.current;
-    let this = Self {
-      chosen: ctx.signal(current.map_or_else(String::new, |connection| connection.to_string())),
+    let on_edit: OnEdit = {
+      let (choices, pending) = (choices.clone(), pending.clone());
+      Arc::new(move |change| {
+        clear(&pending);
+        choices.make(change);
+      })
+    };
+    Self {
+      fields: HeldFields::new(ctx, &on_edit),
+      on_edit,
       held,
       choices,
       save,
       pending,
-      shown_connection: ctx.create_ref(current),
       listed,
       unsaved: props.unsaved,
       what: props.entry.what,
       typed: ctx.signal(None),
       decided,
       gate: ctx.use_context::<InputGate>(),
-    };
-    this.follow_select(ctx);
-    this
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -182,7 +192,7 @@ impl Component for ProfilePanel {
     let holding = self.holding(&listed);
     let shown = holding.0.as_ref().map_or(&listed, |held| &held.shown);
     let choosing = self.choices.checking();
-    self.keep_select(shown, choosing);
+    self.fields.keep(shown, choosing);
     // A choice under way is a change already: *Save* and *Cancel* take it at once, *Save* once it is held.
     let role_refused = role::refused(&self.typed);
     let changed = choosing || role_refused.is_some() || holding.0.as_ref().is_some_and(|held| held.changed);
@@ -203,14 +213,6 @@ impl Component for ProfilePanel {
       .pending
       .get()
       .map(|asked| edit::question(ctx, &asked, (&self.save, &self.pending)));
-    let rows = table::Rows {
-      profile: shown,
-      chosen: &self.chosen,
-      on_edit: self.on_edit(),
-      choosing,
-      busy: locked,
-      add_connection: navigation.to(Route::Accounts(AccountsView::default())),
-    };
     let body = body()
       .child(head_named(
         &entry.name,
@@ -225,8 +227,8 @@ impl Component for ProfilePanel {
         words::used_by(ctx, shown),
       ))
       .with_children(widening)
-      .child(role::section(ctx, &self.typed, shown, (self.on_edit(), locked)))
-      .child(table::section(ctx, &rows))
+      .child(role::section(ctx, &self.typed, shown, (self.on_edit.clone(), locked)))
+      .child(self.profile_section(ctx, shown, (&listed, locked)))
       .child(section(
         ctx,
         (&ctx.t("local_hub.readiness.title"), &parts),
@@ -236,14 +238,12 @@ impl Component for ProfilePanel {
       .with_children(
         refused.map(|error| -> Element { field_error("local-hub-profile-error", &message_text(ctx, &error)).into() }),
       );
-    let bar = save_bar::bar(
+    let fix = pinned::first(&parts).filter(|_| !changed);
+    let bar = self.bar(
       ctx,
-      PREFIX,
-      (
-        self.save_now(ctx, (changed, role_refused.as_ref())),
-        (changed && busy == Busy::Idle).then(|| self.cancel_now()),
-      ),
-      save_bar::makes(ctx, entry.number),
+      (&entry, shown),
+      fix.map(|fix| (press(&fix), fix)),
+      (changed, role_refused.as_ref()),
     );
     frame(entry.what, body, Some(bar))
   }
@@ -274,33 +274,33 @@ impl ProfilePanel {
     holding
   }
 
-  /// A choice in the connection's select is a change of what the panel holds, unless it is the one it shows.
-  fn follow_select(&self, ctx: &mut Ctx) {
-    let (shown, choices, pending) = (
-      self.shown_connection.clone(),
-      self.choices.clone(),
-      self.pending.clone(),
-    );
-    ctx.watch(&self.chosen, move |value| {
-      let Ok(connection) = value.parse::<ConnectionId>() else {
-        return;
-      };
-      if shown.get() != Some(connection) {
-        clear(&pending);
-        choices.make(Edit::Connection(connection));
-      }
-    });
-  }
-
-  /// The select shows the connection the panel shows, once no choice is being checked.
-  fn keep_select(&self, shown: &LocalProfile, choosing: bool) {
-    self.shown_connection.set(shown.current);
-    let wanted = shown
-      .current
-      .map_or_else(String::new, |connection| connection.to_string());
-    if !choosing && self.chosen.get_untracked() != wanted {
-      self.chosen.set(wanted);
-    }
+  /// *Profile*: what `shown` runs with, as every profile form has it, and what it gives its agents; tags added since
+  /// `published` are marked. Nothing is changed while `locked`.
+  fn profile_section(
+    &self,
+    ctx: &mut Ctx,
+    shown: &LocalProfile,
+    (published, locked): (&LocalProfile, bool),
+  ) -> lurq::components::Column {
+    let form = Form {
+      scope: Scope::Local,
+      ids: IDS,
+      offer: &Offer::default(),
+      base: None,
+      tried: false,
+      locked,
+      name_said: None,
+      first: None,
+      held: Some(shown),
+    };
+    let rows = table::Rows {
+      profile: shown,
+      published,
+      runs: self.fields.rows(ctx, &form),
+      on_edit: self.on_edit.clone(),
+      busy: locked,
+    };
+    table::section(ctx, rows)
   }
 
   /// A save is under way: nothing is changed meanwhile. A choice being checked locks nothing.
@@ -310,15 +310,6 @@ impl ProfilePanel {
     } else {
       Busy::Idle
     }
-  }
-
-  /// What changing a field does: makes the change on what the panel holds, dropping a question about a save.
-  fn on_edit(&self) -> table::OnEdit {
-    let (choices, pending) = (self.choices.clone(), self.pending.clone());
-    Arc::new(move |change| {
-      clear(&pending);
-      choices.make(change);
-    })
   }
 
   /// What *Save* does now: nothing while nothing differs, why it waits while the role as typed cannot be saved, else
@@ -379,17 +370,37 @@ impl ProfilePanel {
     })
   }
 
-  /// What a press on `fix` does: a connection to use is a change of what the panel holds; the others open where the
-  /// missing part is set.
+  /// The pinned bar: while nothing is changed the fix of the first missing part (`fix`, with what pressing it does), as
+  /// a team profile's panel has it; else *Save* and *Cancel*.
+  fn bar(
+    &self,
+    ctx: &Ctx,
+    (entry, shown): (&Entry, &LocalProfile),
+    fix: Option<(Press, Fix)>,
+    (changed, role): (bool, Option<&RoleErrors>),
+  ) -> Element {
+    let idle = self.busy() == Busy::Idle;
+    if let Some((press, fix)) = fix {
+      let connection = shown.connections.first().map_or("", |choice| choice.name.as_str());
+      return pinned::bar(ctx, (&entry.name, shown, connection), (&fix, press), !idle);
+    }
+    save_bar::bar(
+      ctx,
+      PREFIX,
+      (
+        self.save_now(ctx, (changed, role)),
+        (changed && idle).then(|| self.cancel_now()),
+      ),
+      save_bar::makes(ctx, entry.number),
+    )
+  }
+
+  /// What a press on `fix` does: a connection to use (the first of its CLI: while the fix shows, the panel holds no
+  /// choice of another) is a change of what the panel holds; the others open where the missing part is set.
   fn press(&self, fix: &Fix, (project, shown): (&ShownProject, &LocalProfile), navigation: &Navigation) -> Press {
     match fix {
       Fix::UseConnection => {
-        let target = self
-          .chosen
-          .get_untracked()
-          .parse::<ConnectionId>()
-          .ok()
-          .or_else(|| shown.connections.first().map(|choice| choice.id));
+        let target = shown.connections.first().map(|choice| choice.id);
         let choices = self.choices.clone();
         Press::run(move || {
           if let Some(connection) = target {

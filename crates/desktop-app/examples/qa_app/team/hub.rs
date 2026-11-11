@@ -14,14 +14,15 @@ use std::{
 use orchester_api::{ResourceCreate, SharedResourceKind, VersionContent, test_support::team_server::TeamServer};
 use orchester_app::services::Services;
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId},
+  id::{IdempotencyKey, ResourceId, ServerId},
   resource::{
     AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, TeamMcpServer, TeamReviewer, Tool,
     VersionNumber,
   },
+  sharing::MemberRole,
   store::ResourceStore,
 };
-use orchester_store::{ProjectDb, ResourceSharing};
+use orchester_store::{AppDb, ProjectDb, ResourceSharing, SharingLink};
 use serde_json::Value;
 
 /// The team's kinds the seed caches.
@@ -117,4 +118,39 @@ pub fn read(services: &Services, root: &Path) -> Result<(), Box<dyn Error>> {
     }
     thread::sleep(Duration::from_millis(20));
   }
+}
+
+/// Moves the link the seed made to `link`: the hub's seeds link Kontur to the team whose configuration they cache
+/// (`shared_config`), and in a QA copy that team is the stand-in, so the link names it and its cache is kept, where
+/// linking again would be refused as already shared. What this computer filled in for the seed's server goes with it:
+/// a program path is kept by the server it was set for (`team-hub-mcp-path-gone`, `team-hub-mcp-secret`).
+pub fn move_link((repo, services): (&Path, &Services), link: &SharingLink) -> Result<(), Box<dyn Error>> {
+  let seeded = ProjectDb::open(repo)?.sharing()?.ok_or("Kontur is linked")?.server;
+  move_programs(services, seeded, link.server)?;
+  let role = link.role.map(|role| match role {
+    MemberRole::Owner => "owner",
+    MemberRole::Member => "member",
+  });
+  let moved = rusqlite::Connection::open(repo.join(".orchester").join("orchester.db"))?.execute(
+    "UPDATE sharing SET server_id = ?1, project_id = ?2, role = ?3, event_cursor = 0, project_address = ?4",
+    rusqlite::params![link.server.to_string(), link.project.to_string(), role, link.address],
+  )?;
+  if moved == 1 {
+    Ok(())
+  } else {
+    Err(format!("Kontur has one link to move, found {moved}").into())
+  }
+}
+
+/// Sets each program path the seed set for the MCP servers of `from` for those of `to`, which the stand-in serves.
+fn move_programs(services: &Services, from: ServerId, to: ServerId) -> Result<(), Box<dyn Error>> {
+  let database = services
+    .workspace
+    .database_path()
+    .ok_or("the QA copy's application database is a file")?;
+  let mut db = AppDb::open(&database)?;
+  for program in db.mcp_server_programs(from)? {
+    db.set_mcp_server_program(to, program.resource, &program.program, program.set_at)?;
+  }
+  Ok(())
 }

@@ -96,7 +96,7 @@ fn draft_ready_to_run(kontur: &mut Kontur, pipeline: ResourceId) -> Result<(), S
 /// The team project of `team-hub` with the team's pipelines Team delivery (Builder, then Reviewer) and Team quick fix
 /// (Reviewer), beside the catalogue's, which this computer has no team form of.
 pub fn team(kontur: &mut Kontur) -> Result<(), SeedError> {
-  team_hub::seed(kontur)?;
+  team_hub::seed_beside_catalogue(kontur)?;
   team_pipelines(kontur)
 }
 

@@ -34,9 +34,13 @@ pub(crate) const fn made_under(filter: HubFilter) -> HubFilter {
   }
 }
 
-/// The words of *New <kind>* under `filter`: of the kind [`made_under`] it.
+/// The words of *New <kind>* under `filter`: of the kind [`made_under`] it; under Archived, which holds every kind,
+/// plain *New* (L13 `moPNo`, L14 `a6ZLLg`).
 #[must_use]
 pub(crate) fn new_words(filter: HubFilter) -> &'static str {
+  if filter == HubFilter::Archived {
+    return "hub.new.any";
+  }
   let made = made_under(filter);
   KINDS
     .iter()

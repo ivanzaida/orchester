@@ -1,7 +1,7 @@
 //! The form of a new instruction (`Agents · New instruction` A10 `hGdGu`, L5 `f8QbK3`): the instruction's fields as
-//! its edit has them ([`InstructionFields`]: its name, format and text), empty, with where it is added after its name.
-//! An instruction is the team's whole: nothing is filled in on a computer afterwards. In a local project nothing
-//! chooses where it is added or who gets it: a profile chooses the instructions its agents are given
+//! its edit has them ([`InstructionFields`]: its name, format and text), empty, with who gets it after its name.
+//! An instruction is the team's whole: nothing is filled in on a computer afterwards. Nothing chooses where it is
+//! added or who gets it, in a team's project or a local one: a profile chooses the instructions its agents are given
 //! (`docs/design/team-configuration.md`, "Decided 2026-11-09"), so the form says that instead.
 
 use lurq::app::ctx::Ctx;
@@ -66,27 +66,16 @@ impl Fields {
         locked: shown.locked,
       },
     );
-    let added = if shown.mode.is_local() {
-      rows::row(
-        "team-new-instruction-given-to",
-        &ctx.t("local_new.instruction.givenTo"),
-        Some(rows::Sub::quiet(ctx.t("local_new.instruction.givenToSub"))),
-        rows::words(
-          "team-new-instruction-given-to-value",
-          &ctx.t("local_new.instruction.givenToValue"),
-        ),
-      )
-    } else {
-      rows::row(
-        "team-new-instruction-added-to",
-        &ctx.t("team_new.instruction.addedTo"),
-        Some(rows::Sub::quiet(ctx.t("team_new.instruction.addedToSub"))),
-        rows::words(
-          "team-new-instruction-added-to-value",
-          &ctx.t("team_new.instruction.everyRun"),
-        ),
-      )
-    };
+    // A profile, the team's or a local one, chooses the instructions its agents are given (*+ Add* in its panel).
+    let added = rows::row(
+      "team-new-instruction-given-to",
+      &ctx.t("local_new.instruction.givenTo"),
+      Some(rows::Sub::quiet(ctx.t("local_new.instruction.givenToSub"))),
+      rows::words(
+        "team-new-instruction-given-to-value",
+        &ctx.t("local_new.instruction.givenToValue"),
+      ),
+    );
     let make = match (named, drawn.made) {
       (Ok(named), Ok(body)) => Some(Make::Instruction(named, Box::new(body))),
       _ => None,

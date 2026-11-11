@@ -44,6 +44,10 @@
       "connection": "Runs on",
       "mcpServers": "MCP servers",
       "usedBy": "used by {{names}}",
+      "givenBy": {
+        "one": "given by 1 profile",
+        "other": "given by {{count}} profiles"
+      },
       "wasUsedBy": "was used by {{names}}"
     },
     "readiness": {
@@ -56,6 +60,13 @@
       "on": "On",
       "onHint": "Runs may use it",
       "onlyHere": "Only on this computer",
+      "takesSecret": "{{name}} ← secret {{secret}}",
+      "fix": {
+        "setPath": "Set program path",
+        "setPathHint": "Asked once",
+        "addValue": "Add a value for {{name}}",
+        "addValueHint": "Kept in the OS secret store"
+      },
       "save": "Save",
       "added": "added {{date}}",
       "runsAs": "Runs as",
@@ -94,22 +105,19 @@
       "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
       "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
       "title": "Archived: hidden from lists and pickers",
-      "readOnly": "· read-only until it is restored",
-      "takesSecret": "{{name}} ← secret {{secret}}"
+      "readOnly": "· read-only until it is restored"
     },
     "profile": {
       "title": "Profile",
-      "connection": "Connection",
       "ofItsKind": "{{count}} of its kind on this computer",
-      "effortDefault": "CLI default",
       "none": "None",
       "version": "{{version}} · published {{date}}",
       "add": "Add",
+      "nothingToAdd": "There is nothing else of this kind to give",
       "addConnection": "Add",
       "instructions": "Instructions",
       "skills": "Skills",
-      "tools": "Tools",
-      "chooseCli": "Choose a CLI"
+      "tools": "Tools"
     },
     "edit": {
       "widenTitle": "Allow these changes to the agent profile?",
@@ -159,7 +167,9 @@
       "none": "No agent profile gives it, so no agent gets it"
     },
     "tool": {
-      "title": "Tool"
+      "title": "Tool",
+      "widenTitle": "Allow these changes to the tool?",
+      "execution": "A command tool runs its program with your rights, network access and no sandbox, on files agents wrote. Allow it only for a command you would let agents run that way."
     },
     "instruction": {
       "title": "Instruction"

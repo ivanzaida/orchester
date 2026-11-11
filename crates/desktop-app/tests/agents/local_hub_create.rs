@@ -51,7 +51,7 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
 fn name_field(name: &str) -> String {
   match name {
     "profile" => "team-new-profile-role-name-input".to_owned(),
-    "mcp" => "team-new-mcp-name".to_owned(),
+    "mcp" => "local-hub-mcp-name".to_owned(),
     _ => format!("team-new-{name}-name-input"),
   }
 }
@@ -60,7 +60,7 @@ fn name_field(name: &str) -> String {
 fn name_sub(name: &str) -> String {
   match name {
     "profile" => "team-new-profile-role-name-sub".to_owned(),
-    "mcp" => "team-new-mcp-name-row-sub".to_owned(),
+    "mcp" => "local-hub-mcp-row-name-sub".to_owned(),
     _ => format!("team-new-{name}-name-sub"),
   }
 }
@@ -215,9 +215,9 @@ fn local_hub_create_new_opens_the_form_of_each_kind_with_only_create_and_cancel(
 #[test]
 fn local_hub_create_under_all_and_archived_new_opens_the_profile_form() {
   let mut agents = Agents::new(true);
-  for filter in [HubFilter::All, HubFilter::Archived] {
+  for (filter, words) in [(HubFilter::All, "New agent"), (HubFilter::Archived, "New")] {
     open(&mut agents, HubView::new(filter, None));
-    assert_eq!(agents.text("local-hub-new"), "New agent", "{}", filter.name());
+    assert_eq!(agents.text("local-hub-new"), words, "{}", filter.name());
     agents.click("local-hub-new");
     agents.until("the profile's form", |s| {
       s.window.navigation().route_now() == form_route(HubFilter::Profiles) && s.exists("local-hub-new-create")
@@ -333,7 +333,7 @@ fn local_hub_create_an_mcp_server_has_its_program_path_and_the_value_of_its_secr
   show_form(&mut agents, HubFilter::McpServers);
   agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
   let program = std::env::current_exe().expect("the test program");
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set("connection-mcp-program", &program.to_string_lossy());
   agents.set(
     "connection-mcp-variables",
@@ -403,7 +403,7 @@ fn local_hub_create_an_mcp_server_the_secret_store_refuses_is_not_created_and_sa
   figma_token(&agents);
   show_form(&mut agents, HubFilter::McpServers);
   agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
     &std::env::current_exe().expect("a program").to_string_lossy(),
@@ -510,7 +510,7 @@ fn local_hub_create_what_adds_to_what_agents_may_do_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::McpServers);
   agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
     &std::env::current_exe().expect("a program").to_string_lossy(),

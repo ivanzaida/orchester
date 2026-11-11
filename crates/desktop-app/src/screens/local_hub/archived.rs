@@ -15,13 +15,14 @@ use lurq::{
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{
-  agents::local_hub::StoppedRun,
+  agents::local_hub::{LocalProfile, StoppedRun},
   connections::mcp::{McpServerText, TransportChoice},
   local_archive,
   messages::Message,
 };
 
 use super::{
+  archived_profile,
   model::Entry,
   panel::{chips_of, frame},
   words::{archived_at, kind_where_key},
@@ -83,6 +84,8 @@ pub(super) struct Props {
   pub stopped: Vec<StoppedRun>,
   /// An MCP server's fields, shown read-only.
   pub details: Option<McpServerText>,
+  /// A profile's values, shown read-only.
+  pub profile: Option<Box<LocalProfile>>,
   pub now: Timestamp,
 }
 impl DevtoolsInspectable for Props {}
@@ -136,6 +139,12 @@ impl Component for Restore {
       ))
       .child(notice(ctx, entry, &props.stopped))
       .with_children(props.details.as_ref().map(|details| read_only(ctx, details)))
+      .with_children(
+        props
+          .profile
+          .as_ref()
+          .map(|profile| archived_profile::read_only(ctx, profile)),
+      )
       .with_children(
         state
           .error
@@ -213,7 +222,7 @@ fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Element {
 }
 
 /// One row of the read-only table: its label and its value, in mono where it is a path or a name.
-fn read_row(id: &str, label: &str, value: &str, mono: bool) -> Row {
+pub(super) fn read_row(id: &str, label: &str, value: &str, mono: bool) -> Row {
   let id = format!("local-hub-archived-{id}");
   let shown = format!("{id}-value");
   let value = if mono {
@@ -277,7 +286,7 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
     rows.push(read_row(
       "variables",
       &ctx.t("connections.mcp.variables"),
-      &variables_read(ctx, &text.variables),
+      &super::mcp::variables::Notation::new(ctx).shown(&text.variables),
       true,
     ));
   }
@@ -293,27 +302,4 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
     ],
     rows,
   )
-}
-
-/// `FIGMA_API_KEY ← secret FIGMA_TOKEN` for a variable that takes a secret, `NAME=value` for the others.
-fn variables_read(ctx: &Ctx, variables: &str) -> String {
-  variables
-    .lines()
-    .map(|line| match line.split_once('=') {
-      Some((name, value)) => match value.strip_prefix("${secret:").and_then(|rest| rest.strip_suffix('}')) {
-        Some(secret) => ctx
-          .t_args(
-            "local_hub.archived.takesSecret",
-            [
-              ("name", name.to_owned()),
-              ("secret", secret.split('@').next().unwrap_or(secret).to_owned()),
-            ],
-          )
-          .to_string(),
-        None => line.to_owned(),
-      },
-      None => line.to_owned(),
-    })
-    .collect::<Vec<_>>()
-    .join("\n")
 }

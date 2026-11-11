@@ -104,13 +104,22 @@ fn text(id: &str, name: &str, (line, color): (&str, PaletteColor)) -> Column {
 
 /// A tag (`Tag` `uJ2rP`).
 pub(crate) fn tag_chip(id: &str, words: &str) -> Row {
+  tag_in(id, words, PaletteColor::Border)
+}
+
+/// A tag added in an edit that is not saved yet: the `accent` outline until Save (A26 `WSw0W`).
+pub(crate) fn added_tag_chip(id: &str, words: &str) -> Row {
+  tag_in(id, words, PaletteColor::Accent).describe("added", "true")
+}
+
+fn tag_in(id: &str, words: &str, outline: PaletteColor) -> Row {
   Row::new()
     .id(id)
     .height(Dimension::Px(TAG_HEIGHT))
     .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .border(Border::inside(BorderSize::Sm, outline))
     .rounded(RadiusSize::Sm)
     .child(
       Text::new(words)

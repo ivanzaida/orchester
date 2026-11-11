@@ -20,7 +20,7 @@ use crate::ui::{
 };
 
 /// The first part the server lacks.
-fn first_missing(entry: &Entry) -> Option<&Missing> {
+pub(super) fn first_missing(entry: &Entry) -> Option<&Missing> {
   match &entry.standing {
     Some(ReadinessStanding::Missing(missing)) => missing.first(),
     _ => None,

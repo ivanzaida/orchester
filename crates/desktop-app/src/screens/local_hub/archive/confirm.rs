@@ -220,6 +220,7 @@ impl Confirmation {
         name: props.name.clone(),
         blocks_profiles: archive_blocks_profiles(props.kind),
         local: true,
+        versioned: props.kind != ResourceKind::McpServer,
       },
       &State {
         read,

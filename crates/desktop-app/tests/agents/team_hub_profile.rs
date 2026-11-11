@@ -129,9 +129,10 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   assert_eq!(agents.text("team-hub-from-team-effort-value"), "High");
   assert_eq!(agents.text("team-hub-from-team-mcp-value-0-label"), "gh");
   assert_eq!(agents.text("team-hub-from-team-secrets-value-0-label"), "GITHUB_TOKEN");
-  assert!(
-    !agents.exists("team-hub-from-team-tools"),
-    "a profile with no tool has no Tools row"
+  assert_eq!(
+    agents.text("team-hub-from-team-tools-value"),
+    "None",
+    "a profile with no tool says so as a value"
   );
   // On this computer: the only connection of its kind, chosen without asking.
   assert_eq!(agents.text("team-hub-runs-on-name"), "Claude Code · Claude 2");

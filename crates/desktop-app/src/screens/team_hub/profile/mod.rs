@@ -16,6 +16,7 @@ pub(in crate::screens) mod fix;
 pub(in crate::screens) mod from_team;
 pub(in crate::screens) mod parts;
 pub(in crate::screens) mod ready;
+mod role_read;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -216,7 +217,10 @@ impl ProfilePanel {
       return TeamPart {
         chips: panel::chips(ctx, &props.listing, &props.entry),
         notice: None,
-        sections: vec![from_team::section(ctx, &props.sheet).into()],
+        sections: role_read::section(ctx, &props.sheet)
+          .into_iter()
+          .chain([from_team::section(ctx, &props.sheet).into()])
+          .collect(),
         bar: None,
       };
     };

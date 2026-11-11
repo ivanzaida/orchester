@@ -45,7 +45,8 @@
       "mcpServers": "New MCP server",
       "instructions": "New instruction",
       "skills": "New skill",
-      "tools": "New tool"
+      "tools": "New tool",
+      "any": "New"
     },
     "filter": {
       "all": "All",

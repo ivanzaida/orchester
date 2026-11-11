@@ -63,8 +63,8 @@ impl<B: Body> Edit<B> {
     } else {
       match view.made {
         Ok(body) => {
-          let (edit, number) = (self.clone(), base.number);
-          Save::Ready(Press::run(move || edit.press_save(body.clone(), number)))
+          let (edit, number, was) = (self.clone(), base.number, base.body.clone());
+          Save::Ready(Press::run(move || edit.press_save(body.clone(), (number, &was))))
         }
         Err(why) => Save::Waits(why),
       }
@@ -90,7 +90,12 @@ impl<B: Body> Edit<B> {
 }
 
 /// What the bar says at its end: what Save makes, that nothing differs, or that it needs the team server.
-fn hint(ctx: &Ctx, base: VersionNumber, changed: bool, unreached: bool) -> (String, PaletteColor) {
+pub(in crate::screens::team_hub) fn hint(
+  ctx: &Ctx,
+  base: VersionNumber,
+  changed: bool,
+  unreached: bool,
+) -> (String, PaletteColor) {
   let next = base.next().map_or_else(String::new, |next| next.to_string());
   let words = if unreached {
     ctx.t("team_hub.edit.needsServer")

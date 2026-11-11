@@ -7,6 +7,7 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_hub_edit_kinds`
 
+use lurq::app::events::with_synthetic_input;
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::{
   routes::{HubFilter, HubView},
@@ -71,6 +72,11 @@ impl Opened {
   /// Presses Save and waits for the stand-in to hold `count` versions and the panel to read the latest.
   fn saved(&mut self, count: usize) {
     self.window.press(SAVE);
+    self.published(count);
+  }
+
+  /// Waits for the stand-in to hold `count` versions and the panel to read the latest.
+  fn published(&mut self, count: usize) {
     let id = self.id;
     let server = &self.server;
     self.window.until("the server to number it", |_| {
@@ -112,6 +118,19 @@ fn team_qa_hub_edit_kinds_an_instructions_save_publishes_its_next_version() {
     text,
     &json!("Keep each commit small.\n\nRun the tests before you hand off.")
   );
+}
+
+/// An instruction's text widens nothing agents may do, so an MCP client's Save publishes it too.
+#[test]
+fn team_qa_hub_edit_kinds_automation_saves_an_instructions_text() {
+  let mut opened = instruction(("team-edit", State::TeamEdit));
+  opened
+    .window
+    .until("the text to edit", |window| window.texts(TEXT).is_some());
+  opened.type_into(TEXT, "Keep each commit small.");
+  with_synthetic_input(|| opened.window.press(SAVE));
+  opened.published(2);
+  assert!(opened.window.texts("team-hub-edit-refused").is_none());
 }
 
 #[test]
@@ -236,46 +255,27 @@ fn team_qa_hub_edit_kinds_a_profiles_role_and_what_it_gives_are_published_as_its
   assert_eq!(body["instruction_resources"], json!([rules.to_string()]));
 }
 
-/// A Save an MCP client presses on any kind's form is refused to it, as its tool call's error, while the person has
-/// not let automation change agent permissions: nothing is sent, the panel shows no refusal and keeps what was typed,
-/// and the person's own Save publishes it.
+/// A Save an MCP client presses on a tool's or a profile's form that widens what agents may do is refused to it, as
+/// its tool call's error, while the person has not let automation change agent permissions: nothing is sent, the
+/// panel shows no refusal and keeps what was typed, and the person's own Save publishes it.
 #[test]
-fn team_qa_hub_edit_kinds_a_clients_save_is_refused_to_it_and_changes_nothing_in_the_panel() {
+fn team_qa_hub_edit_kinds_a_clients_widening_save_is_refused_to_it_and_changes_nothing_in_the_panel() {
   let cases = [
     (
-      (HubFilter::Instructions, ResourceKind::Instruction, "Project rules"),
-      (TEXT, "Keep each commit small."),
-      "publish a new version of a team instruction",
-    ),
-    (
-      (HubFilter::Skills, ResourceKind::Skill, "review-diff"),
-      (
-        "team-hub-skill-md-input",
-        "# review-diff
-
-End with a verdict.",
-      ),
-      "publish a new version of a team skill",
-    ),
-    (
       (HubFilter::Tools, ResourceKind::Tool, "cargo-check"),
-      (
-        "team-hub-from-team-arguments-input",
-        "check
---workspace",
-      ),
-      "publish a new version of a team tool",
+      ("team-hub-from-team-arguments-input", "check\n--workspace"),
+      "publish a team tool's version that widens what agents may do",
     ),
     (
       (HubFilter::Profiles, ResourceKind::AgentProfile, "Reviewer"),
       ("team-hub-role-instructions-input", "You are the Reviewer."),
-      "publish a new version of a team profile",
+      "publish a team profile's version that widens what agents may do",
     ),
   ];
   for (resource, (field, typed), action) in cases {
     let mut opened = on(("team-edit", State::TeamEdit), resource, field);
     opened.type_into(field, typed);
-    lurq::app::events::with_synthetic_input(|| opened.window.press(SAVE));
+    with_synthetic_input(|| opened.window.press(SAVE));
     assert_eq!(
       opened.window.refused_press(),
       Some(action),

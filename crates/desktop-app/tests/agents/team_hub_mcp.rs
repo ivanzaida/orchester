@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use super::{
   harness::Agents,
   team_hub::{cached, open, team},
-  team_hub_other::bounds,
+  team_hub_other::{as_member, bounds},
   team_hub_profile_fixes::Client,
 };
 
@@ -102,7 +102,7 @@ pub(super) fn program_file(agents: &Agents) -> std::path::PathBuf {
 pub(super) fn show(agents: &mut Agents, server: ResourceId) {
   open(agents, HubView::new(HubFilter::McpServers, Some(server)));
   agents.until("the server panel", |s| {
-    s.exists("team-hub-from-team-runs") || s.exists("team-hub-from-team-url")
+    s.exists("team-hub-from-team") && s.exists("team-hub-here")
   });
 }
 
@@ -127,6 +127,8 @@ fn team_hub_mcp_c4_a_program_without_a_path_asks_for_it_and_says_what_the_team_h
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
   give_value(&agents, "PENCIL_TOKEN");
+  // What the team holds, as values: a member's panel (an admin's is the form).
+  as_member(&agents);
   show(&mut agents, pencil);
   // From the team: how it runs, by names and never a path or a value.
   assert_eq!(agents.text("team-hub-panel-title"), "pencil-design");
@@ -240,6 +242,7 @@ fn team_hub_mcp_c7_a_remote_server_has_no_path_and_shows_its_header() {
   let mut agents = Agents::new(true);
   team(&agents);
   let github = server(&agents, ("copilot", remote_body()), Switch::On);
+  as_member(&agents);
   show(&mut agents, github);
   assert_eq!(
     agents.text("team-hub-from-team-url-value"),
@@ -276,10 +279,10 @@ fn team_hub_mcp_c8_a_ready_server_offers_to_change_its_path() {
   );
   assert_eq!(agents.text("team-hub-fix-set-path"), "Change path");
   assert_eq!(agents.text("team-hub-actions-hint"), "Nothing missing on this computer");
-  // A ready remote server has nothing to fix, so no bar.
+  // A ready remote server has nothing to fix: an admin's bar is Save and Cancel, with nothing to save yet.
   open(&mut agents, HubView::new(HubFilter::McpServers, Some(ready)));
-  agents.until("the remote panel", |s| s.exists("team-hub-from-team-url"));
-  assert!(!agents.exists("team-hub-actions"));
+  agents.until("the remote panel", |s| s.exists("team-hub-edit-save"));
+  assert!(!agents.exists("team-hub-fix-set-path"));
 }
 
 #[test]
@@ -373,6 +376,7 @@ fn team_hub_mcp_keys_are_170_wide_from_the_team_and_on_this_computer() {
   let mut agents = Agents::new(true);
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
+  as_member(&agents);
   show(&mut agents, pencil);
   let mut key = |row: &str| {
     let (value, ..) = bounds(&mut agents, &format!("{row}-value"));

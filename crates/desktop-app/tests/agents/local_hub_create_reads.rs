@@ -73,7 +73,7 @@ fn local_hub_create_the_old_new_page_says_so_when_the_team_read_failed() {
   hold.set(true);
   let old = Route::Project(project_id(), ProjectPage::NewAgent(AgentTab::default()));
   agents.window.navigation().go(old.clone());
-  agents.until("loading", |s| s.exists("local-hub-form-opening"));
+  agents.until("loading", |s| s.exists("team-hub-team-loading"));
 
   let db = rusqlite::Connection::open(agents.root.join(".orchester/orchester.db")).expect("fixture db");
   let version: u32 = db

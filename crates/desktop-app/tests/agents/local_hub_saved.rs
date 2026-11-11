@@ -31,7 +31,7 @@ fn local_hub_saved_the_tools_that_run_without_asking_stay_as_typed_and_nothing_i
   let docs = server(&agents, "docs");
   show(&mut agents, docs);
   agents.set("connection-mcp-tools", "search_docs");
-  agents.until("saveable", |s| s.exists(SAVE));
+  agents.until("saveable", |s| s.exists("local-hub-mcp-unsaved"));
   agents.click(SAVE);
   agents.until("the question", |s| s.exists("local-hub-mcp-confirm-save-confirm"));
   agents.press_until("local-hub-mcp-confirm-save-confirm", "saved", |s| {
@@ -42,12 +42,12 @@ fn local_hub_saved_the_tools_that_run_without_asking_stay_as_typed_and_nothing_i
   // left to save, which the panel it replaced (the value typed, Save offered) and the one opened on the old text (no
   // value) are not.
   agents.until("the value saved shows", |s| {
-    !s.exists(SAVE) && s.value("connection-mcp-tools") == "search_docs"
+    !s.exists("local-hub-mcp-unsaved") && s.value("connection-mcp-tools") == "search_docs"
   });
   for _ in 0..20 {
     agents.until("a pass", |_| true);
   }
-  assert!(!agents.exists(SAVE), "no save is offered again");
+  assert!(!agents.exists("local-hub-mcp-unsaved"), "nothing is left to save");
   assert!(!agents.exists("local-hub-mcp-confirm-save"), "no widening is flagged");
   assert_eq!(agents.value("connection-mcp-tools"), "search_docs");
 }

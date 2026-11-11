@@ -17,6 +17,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -29,7 +30,12 @@ use orchester_core::{
 use orchester_store::{ArchiveStop, Archived};
 use orchester_workspace::{display, readiness::archive_blocks_profiles};
 
-use super::{TaskContext, not_ready::rows_box, summary::team_run};
+use super::{
+  TaskContext,
+  archived_ask::{self, Asked},
+  not_ready::rows_box,
+  summary::team_run,
+};
 use crate::{
   navigation::{Navigation, link::Open},
   routes::{HubFilter, HubView, ProjectPage, Route},
@@ -106,13 +112,17 @@ fn stopped_step(ctx: &Ctx, task: &TaskContext) -> Option<Arc<str>> {
   ))
 }
 
-struct ArchivedCard;
+struct ArchivedCard {
+  asked: Signal<Asked>,
+}
 
 impl Component for ArchivedCard {
   type Props = Props;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      asked: ctx.signal(Asked::Not),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -178,6 +188,7 @@ impl Component for ArchivedCard {
           .variant(ExtraTypography::Lead.role()),
       )
       .child(rows_box(rows))
+      .with_children(archived_ask::foot(ctx, &task, (resource, run), &self.asked))
   }
 }
 

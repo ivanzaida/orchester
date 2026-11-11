@@ -114,6 +114,17 @@ fn team_hub_member_a_profile_and_a_tool_name_the_admins_too() {
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   assert_eq!(lock(&mut agents), LOCK);
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-new"));
+  // The role is the team's too: read-only, as the rest of *From the team*.
+  assert_eq!(
+    agents.text("team-hub-role-name-value"),
+    agents.text("team-hub-panel-title"),
+    "the member reads its role"
+  );
+  assert!(
+    !agents.exists("team-hub-role-name-input"),
+    "its role is values, not locked fields"
+  );
+  assert_eq!(agents.text("team-hub-from-team-skills-value"), "None");
   open(&mut agents, HubView::new(HubFilter::Tools, Some(tool)));
   assert_eq!(lock(&mut agents), LOCK);
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-actions"));

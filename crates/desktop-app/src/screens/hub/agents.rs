@@ -23,7 +23,7 @@ use crate::{
   ui::{
     icon::Icon,
     state::glyph_tile,
-    tabs::{PageTab, page_tabs},
+    tabs::{PageTab, page_tabs_divided},
   },
 };
 
@@ -129,25 +129,30 @@ fn head(ctx: &Ctx, prefix: &str, (status, new): (Vec<Element>, Option<Element>))
 /// The kinds as the app's page tabs (as on Tasks), nothing else on the line. A tab whose count is still read shows the
 /// count's bone, so the tabs keep their place when the counts arrive.
 fn tabs(ctx: &mut Ctx, prefix: &str, current: HubFilter, tabs: Vec<Tab>) -> Stack {
-  let tabs: Vec<PageTab> = tabs
-    .into_iter()
-    .map(|tab| {
-      let open = tab.open;
-      let page_tab = PageTab::new(
-        format!("{prefix}-filter-{}", tab.filter.name()),
-        ctx.t(label_key(tab.filter)),
-        tab.filter == current,
-        move || open(),
-      )
-      .compact();
-      match tab.count {
-        TabCount::Counted(count) => page_tab.count(count, false),
-        TabCount::Reading => page_tab.count_reading(),
-        TabCount::Unknown => page_tab,
-      }
-    })
-    .collect();
-  page_tabs(ctx, &format!("{prefix}-filter"), tabs)
+  let (archived, kinds): (Vec<Tab>, Vec<Tab>) = tabs.into_iter().partition(|tab| tab.filter == HubFilter::Archived);
+  let shown = |ctx: &mut Ctx, tabs: Vec<Tab>| -> Vec<PageTab> {
+    tabs
+      .into_iter()
+      .map(|tab| {
+        let open = tab.open;
+        let page_tab = PageTab::new(
+          format!("{prefix}-filter-{}", tab.filter.name()),
+          ctx.t(label_key(tab.filter)),
+          tab.filter == current,
+          move || open(),
+        )
+        .compact();
+        match tab.count {
+          TabCount::Counted(count) => page_tab.count(count, false),
+          TabCount::Reading => page_tab.count_reading(),
+          TabCount::Unknown => page_tab,
+        }
+      })
+      .collect()
+  };
+  let (kinds, archived) = (shown(ctx, kinds), shown(ctx, archived));
+  // Archived is set apart from the kinds by a rule (L13 `moPNo`).
+  page_tabs_divided(ctx, &format!("{prefix}-filter"), kinds, archived)
 }
 
 const fn label_key(filter: HubFilter) -> &'static str {
