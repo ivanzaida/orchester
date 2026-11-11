@@ -258,16 +258,31 @@ fn orchestrator_leads_standing_instructions_say_where_a_turn_orchester_started_m
 }
 
 /// The person's decision of 2026-11-11: a run whose step automation accepted as it was is merged on its own too, and
-/// the merging turn tells the person which step it accepted unverified and what it left unverified.
+/// the merging turn is told which steps it accepted unverified and what each left unverified.
 #[test]
 fn orchestrator_leads_merge_turn_tells_a_step_accepted_unverified() {
-  let prompt = wait_prompt(&merges());
-  assert!(
-    prompt.contains(
-      "When a step of this run passed only because you accepted it as it was (get_run shows the step's accepted \
-       attempt and its report), say plainly when you tell the person you merged it which step you accepted \
-       unverified and what it left unverified, with the link."
-    ),
-    "{prompt}"
-  );
+  use orchester_core::{orchestrator::AcceptedUnverified, run::UnverifiedCheck};
+
+  assert_eq!(AcceptedUnverified::note(&[]), None);
+  let note = AcceptedUnverified::note(&[
+    AcceptedUnverified {
+      step: "Implement".to_owned(),
+      unverified: vec![UnverifiedCheck {
+        check: "Imports the live feed".to_owned(),
+        reason: "not reachable".to_owned(),
+      }],
+    },
+    AcceptedUnverified {
+      step: "Review".to_owned(),
+      unverified: Vec::new(),
+    },
+  ])
+  .expect("a note");
+  for words in [
+    "When you tell the person you merged it, name each such step and what it left unverified, plainly, with the link:",
+    "- Implement:\n  - Imports the live feed (not reachable)",
+    "- Review: its result named nothing it could not check.",
+  ] {
+    assert!(note.contains(words), "{words:?} in {note}");
+  }
 }

@@ -406,9 +406,7 @@ fn merging_todo(merging: &Merging, number: u32, after: AfterMerge) -> String {
        revision and the link. If merge_run refuses with merge_failed naming conflicting files, call continue_run with \
        resolve_conflicts for this run, naming the files; do not call merge_run again. For any other refusal (such as \
        needs_decision or scoped_integration_required), tell the person why in its words and leave the merge to them. \
-       When a step of this run passed only because you accepted it as it was (get_run shows the step's accepted \
-       attempt and its report), say plainly when you tell the person you merged it which step you accepted unverified \
-       and what it left unverified, with the link. {}",
+       {}",
       after_merge_todo(after)
     ),
     Merging::Left { why } => format!(

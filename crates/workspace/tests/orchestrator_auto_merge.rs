@@ -23,8 +23,8 @@ use orchester_core::{
   },
   resource::ModelId,
   revision::Revision,
-  run::{Answerer, Run, StepFailure, StuckDecision},
-  store::ConnectionStore,
+  run::{Answerer, Run, StepFailure, StepOutcome, StepOutput, StuckDecision, UnverifiedCheck},
+  store::{ActivityStore, ConnectionStore},
   task::organization::{BlockingTask, ChangeActor, DependencyGate, TaskOrganization},
   task_group::{HoldActor, HoldScope},
   time::Timestamp,
@@ -204,6 +204,20 @@ fn accepted(fixture: &mut Fixture, by: Answerer) -> Run {
   let task = fixture.task("Check the import", at(40));
   let mut run = fixture.started_run(task, at(50));
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let step = run.execution(execution).expect("its execution").step().clone();
+  let unverified = StepOutput {
+    run: run.id(),
+    execution,
+    step,
+    outcome: Some(StepOutcome::Unverified),
+    text: "The importer runs; the live feed could not be reached.".to_owned(),
+    unverified: vec![UnverifiedCheck {
+      check: "Imports the live feed".to_owned(),
+      reason: "the feed is not reachable from the worktree".to_owned(),
+    }],
+    created_at: Timestamp::now(),
+  };
+  fixture.db.save_step_output(&unverified).expect("its result");
   let revision = Revision::new(&"b".repeat(40)).expect("revision");
   let events = run
     .fail_judged(execution, (StepFailure::Unverified, Some(revision)), Timestamp::now())
@@ -228,6 +242,36 @@ fn auto_merge_counts_a_step_accepted_as_it_was_whoever_accepted_it() {
     let mut fixture = Fixture::new();
     let run = accepted(&mut fixture, by);
     assert_eq!(rule(&fixture, &run), Merging::Merges, "accepted by {by:?}");
+  }
+}
+
+/// The turn that merges a run whose step automation accepted as it was is told which step and what it left
+/// unverified, read from the run (2026-11-11); a step a person accepted is not the Orchestrator's to report.
+#[test]
+fn auto_merge_turn_names_the_step_automation_accepted_and_what_it_left_unverified() {
+  for (by, told) in [(Answerer::Automation, true), (Answerer::Person, false)] {
+    let mut fixture = Fixture::new();
+    ready(&mut fixture);
+    fixture.everything(at(5));
+    accepted(&mut fixture, by);
+    let followed = follow(&fixture, MERGING);
+    let prompt = fixture
+      .db
+      .chat_turn(followed.turn.expect("a turn").message)
+      .expect("read")
+      .expect("the turn")
+      .text;
+    let prompt = prompt.as_str();
+    for words in [
+      "Steps of this run passed only because you accepted them as they were, unverified.",
+      "- Implement:\n  - Imports the live feed (the feed is not reachable from the worktree)",
+    ] {
+      assert_eq!(
+        prompt.contains(words),
+        told,
+        "accepted by {by:?}: {words:?} in {prompt}"
+      );
+    }
   }
 }
 

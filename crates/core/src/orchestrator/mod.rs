@@ -34,7 +34,7 @@ pub use self::{
     WaitsOnRow,
   },
   leads::{Lead, Leads},
-  merging::{MergeLeft, Merging},
+  merging::{AcceptedUnverified, MergeLeft, Merging},
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},

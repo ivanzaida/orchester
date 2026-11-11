@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::run::{Run, StepStatus};
+use crate::run::{Answerer, Run, RunEvent, RunEventKind, StepOutput, StepStatus, UnverifiedCheck};
 
 /// What the turn of a run's success does about merging the run, while the person lets the Orchestrator merge
 /// finished runs on its own.
@@ -63,5 +63,62 @@ impl MergeLeft {
         step: step.name.as_str().to_owned(),
       })
     })
+  }
+}
+
+/// A step of a run that passed because automation accepted it as it was, and what it left unverified: the checks its
+/// agent's result could not make, as that result named them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AcceptedUnverified {
+  /// The step's name.
+  pub step: String,
+  pub unverified: Vec<UnverifiedCheck>,
+}
+
+impl AcceptedUnverified {
+  /// The steps of `run` (its `events` and its steps' `outputs`) that automation accepted as they were, in the order it
+  /// accepted them.
+  pub fn of_run(run: &Run, events: &[RunEvent], outputs: &[StepOutput]) -> Vec<Self> {
+    events
+      .iter()
+      .filter_map(|event| match event.kind() {
+        RunEventKind::StepAccepted {
+          execution,
+          by: Answerer::Automation,
+        } => Some(*execution),
+        _ => None,
+      })
+      .filter_map(|execution| {
+        let key = run.execution(execution)?.step();
+        let step = run.snapshot().body().step(key)?.name.as_str().to_owned();
+        let unverified = outputs
+          .iter()
+          .find(|output| output.execution == execution)
+          .map(|output| output.unverified.clone())
+          .unwrap_or_default();
+        Some(Self { step, unverified })
+      })
+      .collect()
+  }
+
+  /// What the turn that merges such a run tells the agent about `accepted`; `None` when automation accepted no step.
+  pub fn note(accepted: &[Self]) -> Option<String> {
+    if accepted.is_empty() {
+      return None;
+    }
+    let mut note = String::from(
+      "Steps of this run passed only because you accepted them as they were, unverified. When you tell the person you \
+       merged it, name each such step and what it left unverified, plainly, with the link:",
+    );
+    for step in accepted {
+      note.push_str(&format!("\n- {}:", step.step));
+      if step.unverified.is_empty() {
+        note.push_str(" its result named nothing it could not check.");
+      }
+      for check in &step.unverified {
+        note.push_str(&format!("\n  - {} ({})", check.check, check.reason));
+      }
+    }
+    Some(note)
   }
 }

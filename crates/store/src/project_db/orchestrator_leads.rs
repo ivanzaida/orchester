@@ -8,10 +8,10 @@
 use orchester_core::{
   id::{ChatId, RunId, TaskId},
   orchestrator::{
-    AgentWait, Lead, Leads, Subscription, Subscriptions, WatchTarget, instructions::wait_prompt,
-    watch::event_subscription,
+    AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, WatchTarget,
+    instructions::wait_prompt, watch::event_subscription,
   },
-  store::TaskStore,
+  store::{ActivityStore, RunStore, TaskStore},
   task::Task,
 };
 use rusqlite::OptionalExtension;
@@ -38,10 +38,32 @@ impl ProjectDb {
   /// otherwise [`Leads::event_prompt`], with what it leads and the subscription the wait came through.
   pub fn wait_turn_prompt(&self, chat: ChatId, wait: &AgentWait) -> Result<String, StoreError> {
     let leads = self.chat_leads(chat)?;
-    if leads.is_empty() {
-      return Ok(wait_prompt(wait));
+    let prompt = if leads.is_empty() {
+      wait_prompt(wait)
+    } else {
+      leads.event_prompt(wait, self.came_through(chat, wait.run)?)
+    };
+    Ok(match self.accepted_note(wait)? {
+      Some(note) => format!("{prompt}\n\n{note}"),
+      None => prompt,
+    })
+  }
+
+  /// For the turn of a run's success that merges it, the steps of the run automation accepted as they were and what
+  /// they left unverified ([`AcceptedUnverified::note`]); `None` for any other turn, and for a run automation accepted
+  /// no step of.
+  fn accepted_note(&self, wait: &AgentWait) -> Result<Option<String>, StoreError> {
+    if wait.merging != Some(Merging::Merges) {
+      return Ok(None);
     }
-    Ok(leads.event_prompt(wait, self.came_through(chat, wait.run)?))
+    let Some(run) = self.run(wait.run).map_err(|error| corrupt("run", error))? else {
+      return Ok(None);
+    };
+    let events = self.events(wait.run).map_err(|error| corrupt("run events", error))?;
+    let outputs = self.step_outputs(wait.run)?;
+    Ok(AcceptedUnverified::note(&AcceptedUnverified::of_run(
+      &run, &events, &outputs,
+    )))
   }
 
   /// The target of the subscription of `chat` an event of `run`'s task comes through ([`Self::task_came_through`]);
