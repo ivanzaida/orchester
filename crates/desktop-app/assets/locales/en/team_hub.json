@@ -129,6 +129,9 @@
         }
       }
     },
+    "empty": {
+      "mcpServers": "Add a server the team's runs can use. Once published it is here for everyone; each computer sets its program path."
+    },
     "cli": {
       "claude": "Claude Code",
       "codex": "Codex",

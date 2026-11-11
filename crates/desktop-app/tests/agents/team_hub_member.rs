@@ -256,6 +256,35 @@ fn team_hub_member_every_kind_with_nothing_published_says_an_admin_adds_it_insid
   }
 }
 
+/// An admin's empty MCP servers tab says what a team server is (A24 `OZ056`); the other kinds say what the kind is, in
+/// the same words as a local project's.
+#[test]
+fn team_hub_member_an_admins_empty_mcp_servers_say_the_teams_runs_use_them() {
+  let mut agents = Agents::new(true);
+  let resources = team(&agents);
+  publish_nothing(&agents, resources);
+  for (filter, detail) in [
+    (
+      HubFilter::McpServers,
+      "Add a server the team's runs can use. Once published it is here for everyone; each computer sets its program path.",
+    ),
+    (
+      HubFilter::Tools,
+      "Commands and requests agents may run, with their approvals.",
+    ),
+  ] {
+    agents.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::hub(HubView::new(filter, None)),
+    ));
+    agents.until("the empty state", |s| {
+      s.exists("team-hub-empty-body") && s.text("team-hub-empty-detail") == detail
+    });
+    assert!(agents.exists("team-hub-empty-new"), "{filter:?}");
+  }
+  assert_eq!(agents.text("team-hub-empty-title"), "No tools yet");
+}
+
 #[test]
 fn team_hub_member_the_palette_offers_no_new_pipeline_or_agent_but_an_admins_does() {
   let offered = |role| {

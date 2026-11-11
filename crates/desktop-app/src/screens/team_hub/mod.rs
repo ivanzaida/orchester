@@ -376,12 +376,21 @@ fn empty(
     let admins = member::admins_line(ctx, team);
     return agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![admins]);
   }
-  let (title, detail) = agents::empty_words(filter);
+  let (title, detail) = admin_empty_words(filter);
   let form = Route::Project(project, ProjectPage::hub(HubView::adding(made_under(filter))));
   let action = ActionButton::new("team-hub-empty-new", ButtonKind::Secondary, ctx.t(new_words(filter)))
     .icon(Icon::Plus)
     .opens(navigation.to(form));
   agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![action.into()])
+}
+
+/// The title and the line of an admin's empty tab: the hub's, but for MCP servers, which the team's runs use once
+/// published and each computer gives its program path (A24 `OZ056`).
+const fn admin_empty_words(filter: HubFilter) -> (&'static str, &'static str) {
+  match filter {
+    HubFilter::McpServers => ("hub.empty.mcpServers.title", "team_hub.empty.mcpServers"),
+    _ => agents::empty_words(filter),
+  }
 }
 
 /// The panel of `selected`: the one of its kind where the team holds what it shows, else the frame every kind has.
