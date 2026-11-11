@@ -403,6 +403,28 @@ fn team_hub_mcp_a_long_path_ends_in_an_ellipsis_inside_its_box() {
 }
 
 #[test]
+fn team_hub_mcp_a_long_found_path_ends_in_an_ellipsis_inside_its_row() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
+  let folder = agents.root.join("a".repeat(60)).join("b".repeat(60));
+  std::fs::create_dir_all(&folder).expect("a long folder");
+  let program = folder.join("pencil-mcp");
+  std::fs::write(&program, "#!/bin/sh\n").expect("a program");
+  set_path(&agents, pencil, &program);
+  show(&mut agents, pencil);
+  assert!(agents.text("team-hub-path-sub").starts_with("found · "));
+  let (x, width, _) = bounds(&mut agents, "team-hub-path-value-text");
+  let (row_x, row_width, _) = bounds(&mut agents, "team-hub-path");
+  assert!(
+    x + width <= row_x + row_width,
+    "the found path keeps to its row (C6 `LiS1F`, C8 `lSA4x`): ends at {}, the row at {}",
+    x + width,
+    row_x + row_width
+  );
+}
+
+#[test]
 fn team_hub_mcp_switching_off_is_allowed_to_automation_and_leaves_the_server_off_here() {
   let mut agents = Agents::new(true);
   team(&agents);
