@@ -1,4 +1,5 @@
-//! `orchestrator-requests`: the `orchestrator` scenario with a conversation, the one the Orchestrator opens on, of
+//! `orchestrator-requests`: the `orchestrator` scenario with a conversation, *Tool requests of Webhooks v2* (open it
+//! from History: the `orchestrator` scenario's own conversations come later), of
 //! agents' tool requests in each state the chat shows (2026-11-11; `Orchestrator WIP` `mPw5l`, states `ICzi3`): a
 //! the Orchestrator reads one (its wait keeps no turn yet, and *Let the Orchestrator drive* stays off, so none
 //! starts); b it allowed one once, with its reason; c it denied one, with the words it told the agent; d it was not
@@ -41,7 +42,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let at = |minutes: i64| later(start, minutes * 60);
   let reading = request(kontur, &catalogue, "Retry failed deliveries", 90)?;
   let allowed = request(kontur, &catalogue, "Backoff schedule for retries", 85)?;
-  let denied = request(kontur, &catalogue, "Push the webhooks branch", 80)?;
+  let denied = request(kontur, &catalogue, "Keep the webhook payloads small", 80)?;
   let unsure = request(kontur, &catalogue, "Parse Retry-After headers", 75)?;
   let by_you = request(kontur, &catalogue, "Delivery log", 70)?;
 
@@ -106,7 +107,7 @@ fn answered_itself(
   wait_turn(kontur, (chat.id(), seq), at(11), vec![decided(allowed, answer)])?;
 
   let (seq, asked) = waits(kontur, chat, denied, at(20))?;
-  let words = "Do not push. This branch is merged here after review; go on with the tests.";
+  let words = "Do not add serde: the brief keeps the dependencies as they are; use the JSON helpers the crate has.";
   decide(
     kontur,
     &asked,
@@ -117,7 +118,7 @@ fn answered_itself(
     request: asked.id.clone(),
     asked: asked.action.clone(),
     allowed: false,
-    reason: "it pushes to the remote, which the brief leaves to review.".to_owned(),
+    reason: "it adds a dependency the brief does not name.".to_owned(),
     told: Some(words.to_owned()),
   };
   wait_turn(kontur, (chat.id(), seq), at(21), vec![decided(denied, answer)])?;
