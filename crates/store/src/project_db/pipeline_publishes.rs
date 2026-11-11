@@ -3,7 +3,7 @@
 //! ([`ProjectDb::create_published`]).
 
 use orchester_core::{
-  id::ResourceId,
+  id::{ResourceId, VersionId},
   name::Name,
   resource::{Draft, Pipeline, Version, VersionNumber},
   time::Timestamp,
@@ -56,6 +56,22 @@ impl ProjectDb {
     let version = publish_prepared(&transaction, resource, edit, latest, now)?;
     transaction.commit()?;
     Ok(version)
+  }
+
+  /// Takes back `version` of a team pipeline, published here and not numbered by the server (refused, met by a
+  /// version someone published from the same base, or still waiting to be sent), with the versions of the pipeline
+  /// published here after it, and returns the newest one's steps. A pipeline holds no draft (D-032), so nothing is kept
+  /// of them here: the caller hands the steps back to the person as an edit not saved yet. A version a run or a task
+  /// here uses stays ([`StoreError::VersionInUse`]); nothing is changed then.
+  pub fn take_back_pipeline(&mut self, version: VersionId) -> Result<Pipeline, StoreError> {
+    let transaction = self.connection.transaction()?;
+    // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
+    transaction.pragma_update(None, "defer_foreign_keys", true)?;
+    let (_, taken) = shared_publishes::unsent::<Pipeline>(&transaction, version)?;
+    let body = shared_publishes::newest_body(&taken, version)?;
+    shared_publishes::drop_unsent(&transaction, &taken)?;
+    transaction.commit()?;
+    Ok(body)
   }
 
   /// A published pipeline in one call, for a test: [`ProjectDb::create_published`] with a slug and a name given as

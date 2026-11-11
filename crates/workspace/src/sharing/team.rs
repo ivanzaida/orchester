@@ -14,7 +14,7 @@ use orchester_core::{
   sharing::MemberRole,
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, SharedStanding};
+use orchester_store::{ProjectDb, SharedStanding, StoreError};
 
 use super::{
   Servers, SharingError, TakenBack,
@@ -126,30 +126,52 @@ impl Servers {
 
   /// *Open my draft on vN*: `version` of a resource of `kind`, published here at `repo_root` and met by a version
   /// someone published from the same base, is taken back, and the resource's draft is edited from that version
-  /// ([`ProjectDb::reopen_draft`]). Nothing is sent. Fails with what to tell the person.
+  /// ([`ProjectDb::reopen_draft`]). Nothing is sent. A pipeline holds no draft (D-032): it is refused, and
+  /// [`Self::take_back_pipeline`] takes a pipeline's version back. Fails with what to tell the person.
   pub async fn reopen_draft(&self, repo_root: &Path, kind: ResourceKind, version: VersionId) -> Result<(), Message> {
+    self
+      .between_sends(repo_root, move |db| {
+        let now = Timestamp::now();
+        match kind {
+          ResourceKind::AgentProfile => db.reopen_draft::<AgentProfile>(version, now),
+          ResourceKind::Pipeline => Err(StoreError::NoDrafts(kind)),
+          ResourceKind::Instruction => db.reopen_draft::<Instruction>(version, now),
+          ResourceKind::Skill => db.reopen_draft::<Skill>(version, now),
+          ResourceKind::Tool => db.reopen_draft::<Tool>(version, now),
+          ResourceKind::TeamReviewer => db.reopen_draft::<orchester_core::resource::TeamReviewer>(version, now),
+          ResourceKind::McpServer => db.reopen_draft::<orchester_core::resource::TeamMcpServer>(version, now),
+          // Agent testing's kinds are never the team's, so none of their versions waits for the server.
+          ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
+        }
+      })
+      .await
+  }
+
+  /// *Cancel sending* and *Take it back* for a pipeline: `version`, published here at `repo_root` and not numbered by
+  /// the server, is taken back with the versions published here after it ([`ProjectDb::take_back_pipeline`]), and
+  /// its steps are returned for the editor to hold, not saved. Nothing is sent. Fails with what to tell the person.
+  pub async fn take_back_pipeline(&self, repo_root: &Path, version: VersionId) -> Result<Pipeline, Message> {
+    self
+      .between_sends(repo_root, move |db| db.take_back_pipeline(version))
+      .await
+  }
+
+  /// Runs `change` on the project database at `repo_root` on a worker, between two sends of its versions.
+  async fn between_sends<T: Send + 'static>(
+    &self,
+    repo_root: &Path,
+    change: impl FnOnce(&mut ProjectDb) -> Result<T, StoreError> + Send + 'static,
+  ) -> Result<T, Message> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
-    background::run(move || {
+    let changed = background::run(move || {
       let lane = servers.send_lane(&root);
       let _between = between_sends(&lane)?;
       let mut db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
-      let now = Timestamp::now();
-      let reopened = match kind {
-        ResourceKind::AgentProfile => db.reopen_draft::<AgentProfile>(version, now),
-        ResourceKind::Pipeline => db.reopen_draft::<Pipeline>(version, now),
-        ResourceKind::Instruction => db.reopen_draft::<Instruction>(version, now),
-        ResourceKind::Skill => db.reopen_draft::<Skill>(version, now),
-        ResourceKind::Tool => db.reopen_draft::<Tool>(version, now),
-        ResourceKind::TeamReviewer => db.reopen_draft::<orchester_core::resource::TeamReviewer>(version, now),
-        ResourceKind::McpServer => db.reopen_draft::<orchester_core::resource::TeamMcpServer>(version, now),
-        // Agent testing's kinds are never the team's, so none of their versions waits for the server.
-        ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
-      };
-      reopened.map_err(|error| messages::store_error(&error))
+      change(&mut db).map_err(|error| messages::store_error(&error))
     })
     .await??;
     self.shared_changed();
-    Ok(())
+    Ok(changed)
   }
 
   /// Runs `send` with the store of the project at `repo_root` on a worker; nothing for a local project.
