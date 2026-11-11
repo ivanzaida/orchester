@@ -86,8 +86,8 @@ fn local_hub_counts_each_kind_and_lists_a_server_without_a_version() {
   assert!(line.contains("program path"), "{line}");
 }
 
-/// The head says the project is local and holds one *New <kind>*: the open tab's kind, a profile under All and
-/// Archived, as wide on every tab; a press opens that kind's form in the hub.
+/// The head says the project is local and holds one *New <kind>*: the open tab's kind, a profile under All, plain *New*
+/// under Archived (which makes a profile), as wide on every tab; a press opens that kind's form in the hub.
 #[test]
 fn local_hub_new_says_the_open_tabs_kind_and_opens_its_form() {
   let mut agents = Agents::new(true);
@@ -99,7 +99,7 @@ fn local_hub_new_says_the_open_tabs_kind_and_opens_its_form() {
     (HubFilter::Instructions, "New instruction", HubFilter::Instructions),
     (HubFilter::Skills, "New skill", HubFilter::Skills),
     (HubFilter::Tools, "New tool", HubFilter::Tools),
-    (HubFilter::Archived, "New agent", HubFilter::Profiles),
+    (HubFilter::Archived, "New", HubFilter::Profiles),
   ] {
     open(&mut agents, HubView::new(filter, None));
     assert_eq!(agents.text("local-hub-local-label"), "Local");
