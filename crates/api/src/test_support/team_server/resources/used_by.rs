@@ -7,7 +7,9 @@
 
 use orchester_core::{
   id::{ResourceId, RunId},
-  resource::{AgentTargets, Instruction, InstructionScope, Pipeline, Skill, Tool, VersionNumber},
+  resource::{
+    AccessPolicy, AgentTargets, Instruction, InstructionScope, Pipeline, Skill, TeamTool, Tool, VersionNumber,
+  },
 };
 use serde_json::{Value, json};
 
@@ -198,11 +200,7 @@ fn names(kind: &Value, version: &Value, target: ResourceId) -> bool {
       Ok(SharedResourceKind::Skill) => {
         serde_json::from_value::<Skill>(body).is_ok_and(|skill| scope_names(skill.scope(), target))
       }
-      Ok(SharedResourceKind::Tool) => serde_json::from_value::<Tool>(body).is_ok_and(|tool| {
-        tool
-          .access()
-          .is_some_and(|access| access.callers().contains_key(&target))
-      }),
+      Ok(SharedResourceKind::Tool) => tool_access(body).is_some_and(|access| access.callers().contains_key(&target)),
       Ok(SharedResourceKind::AgentProfile | SharedResourceKind::TeamReviewer | SharedResourceKind::McpServer)
       | Err(_) => false,
     }
@@ -212,5 +210,13 @@ fn scope_names(scope: &InstructionScope, target: ResourceId) -> bool {
   match scope {
     InstructionScope::Pipeline { pipeline } | InstructionScope::Step { pipeline, .. } => *pipeline == target,
     InstructionScope::Project | InstructionScope::AgentRole { .. } => false,
+  }
+}
+
+/// The access policy of a tool body: the team's form, or the local one an older version still holds.
+fn tool_access(body: serde_json::Value) -> Option<AccessPolicy> {
+  match serde_json::from_value::<TeamTool>(body.clone()) {
+    Ok(tool) => tool.access().cloned(),
+    Err(_) => serde_json::from_value::<Tool>(body).ok()?.access().cloned(),
   }
 }
