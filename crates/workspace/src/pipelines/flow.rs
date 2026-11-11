@@ -15,7 +15,8 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{data::Assignables, deliver::integrating_step};
+use super::{data::Assignables, deliver::integrating_step, write::refused_step};
+use crate::messages::Message;
 
 /// What a step runs, as its card's second line says it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -296,6 +297,8 @@ pub struct FlowRead {
   /// The cards of steps the flow cannot draw, numbered in the order of the steps, so what each step lacks is still
   /// known; empty when the flow draws them.
   pub unplaced: Vec<StepCard>,
+  /// What publishing these steps would refuse now ([`super::write::refused_step`]), which the page says before *Save*.
+  pub refused: Option<Message>,
 }
 
 /// A pipeline as it is stored, read for the page: what it draws, and what an edit of the page starts from.
@@ -327,6 +330,7 @@ impl FlowRead {
         draft,
         ending: Ending::of(&body),
         unplaced: unplaced(&flow, body.steps(), assignables),
+        refused: refused_step(body.steps(), assignables),
         flow,
       },
       body,
@@ -350,6 +354,7 @@ impl FlowRead {
       draft: true,
       ending,
       unplaced: unplaced(&flow, edit.steps(), assignables),
+      refused: refused_step(edit.steps(), assignables),
       flow,
     }
   }

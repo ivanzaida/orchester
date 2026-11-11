@@ -88,14 +88,24 @@ pub fn save(
 }
 
 /// What keeps an edit from being published as it stands, so that a save only keeps it as the draft.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unpublishable {
   /// It has no steps.
   NoSteps,
-  /// This many steps have no profile or tool, or name one a step cannot run.
-  Steps(usize),
+  /// Steps have no profile or tool, or name one a step cannot run.
+  Steps,
   /// Its steps break a rule: they wait for each other, or for a step that is not there.
   Broken,
+  /// Publishing refuses a step for this, as [`super::write::publish_in`] would (a step that writes with a profile
+  /// that cannot, a narrowing its connection does not enforce).
+  Refused(Message),
+}
+
+/// Why a pipeline whose latest version is `latest` takes no next version: it has the last version number.
+pub fn version_limit(latest: Option<VersionNumber>) -> Option<Message> {
+  latest
+    .filter(|number| number.next().is_none())
+    .map(|_| Message::new("pipelines.problems.versionLimit"))
 }
 
 /// What keeps `edit` from being published, its flow read as `read`; `None` when it can be published.
@@ -103,10 +113,13 @@ pub fn unpublishable(edit: &PipelineEdit, read: &FlowRead) -> Option<Unpublishab
   if edit.steps().is_empty() {
     return Some(Unpublishable::NoSteps);
   }
-  match blocking_steps(read).len() {
-    0 => (!edit.problems().is_empty()).then_some(Unpublishable::Broken),
-    steps => Some(Unpublishable::Steps(steps)),
+  if !blocking_steps(read).is_empty() {
+    return Some(Unpublishable::Steps);
   }
+  if !edit.problems().is_empty() {
+    return Some(Unpublishable::Broken);
+  }
+  read.refused.clone().map(Unpublishable::Refused)
 }
 
 /// The steps of `read` publishing refuses: each that cannot run, but one whose profile only lost its connection, which

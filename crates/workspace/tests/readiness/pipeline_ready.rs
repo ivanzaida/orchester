@@ -440,3 +440,42 @@ fn readiness_pipeline_ready_a_step_that_names_an_archived_profile_is_listed_once
     }
   );
 }
+
+#[test]
+fn readiness_pipeline_ready_unpublishable_says_what_publishing_refuses_before_the_press() {
+  use orchester_core::resource::{PipelineEdit, RepositoryAccess, StepKind};
+  use orchester_workspace::pipelines::{
+    flow::FlowRead,
+    local_edit::{Unpublishable, unpublishable},
+  };
+
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let reader = fixture.own("reader", &profile_on(connection, &[]));
+  let id = fixture.own("delivery", &pipeline(&[Some(reader)], None));
+  let hub = fixture
+    .workspace
+    .pipeline_hub(&fixture.root, &fixture.vault)
+    .expect("the hub");
+  let read = listed(&fixture, id);
+  let mut edit = PipelineEdit::new(read.body.as_ref().clone());
+  assert_eq!(
+    unpublishable(&edit, &FlowRead::of_edit(&edit, &hub.assignables())),
+    None
+  );
+
+  // The step asks to write with a profile that only reads: publishing refuses it, and the page knows before Save.
+  let key = edit.steps()[0].key.clone();
+  edit.update(&key, |step| {
+    if let StepKind::Agent { repository, .. } = &mut step.kind {
+      *repository = RepositoryAccess::Write;
+    }
+  });
+  assert!(
+    matches!(
+      unpublishable(&edit, &FlowRead::of_edit(&edit, &hub.assignables())),
+      Some(Unpublishable::Refused(why)) if why.key == "appMcp.errors.stepCannotWrite"
+    ),
+    "the refusal publishing gives"
+  );
+}

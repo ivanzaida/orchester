@@ -3,13 +3,13 @@
 use std::path::Path;
 
 use orchester_core::{
-  resource::{Draft, Pipeline, VersionNumber},
+  resource::{Draft, Pipeline, Step, VersionNumber},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  data::{OpenError, OpenedPipeline},
+  data::{Assignables, OpenError, OpenedPipeline},
   problems::publish_error,
   widening::{draft_reasons, publish_reasons},
 };
@@ -64,8 +64,8 @@ pub fn save_named_in(
 ) -> Result<OpenedPipeline, WriteError> {
   let mut db = ProjectDb::open(root)?;
   let current = OpenedPipeline::load(&db, before.id)?;
-  for step in body.steps() {
-    super::narrowing::check_step(step, &current.assignables).map_err(WriteError::InvalidStep)?;
+  if let Some(refused) = refused_step(body.steps(), &current.assignables) {
+    return Err(WriteError::InvalidStep(refused));
   }
   if !draft_reasons(&current, &body)
     .iter()
@@ -99,6 +99,15 @@ pub fn publish_in(root: &Path, before: &OpenedPipeline, allowed: &Allowed) -> Re
   }
   db.publish_draft_matching_version(id, body, before.latest.as_ref().map(|v| v.number), Timestamp::now())?;
   Ok(OpenedPipeline::load(&db, id)?)
+}
+
+/// What publishing `steps` refuses in one of them now, the first: an executor or a narrowing `assignables` cannot
+/// honour ([`super::narrowing::check_step`]). [`publish_in`] asks it, and the page asks it before *Save*
+/// ([`super::local_edit::unpublishable`]).
+pub fn refused_step(steps: &[Step], assignables: &Assignables) -> Option<Message> {
+  steps
+    .iter()
+    .find_map(|step| super::narrowing::check_step(step, assignables).err())
 }
 
 /// The next draft's number, or none at the version limit.

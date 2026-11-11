@@ -410,7 +410,7 @@ fn unpublishable_says_what_keeps_an_edit_from_being_published() {
 
   let mut missing = ready.clone();
   missing.add_step(Name::new("Review").unwrap(), Some(&pipeline.step));
-  assert_eq!(of(&missing), Some(Unpublishable::Steps(1)));
+  assert_eq!(of(&missing), Some(Unpublishable::Steps));
 
   let mut empty = ready;
   empty.remove_step(&pipeline.step);
