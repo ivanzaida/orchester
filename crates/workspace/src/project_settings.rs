@@ -13,7 +13,7 @@ use orchester_core::{
   permission::ApprovalMode,
   resource::ModelId,
   run::{
-    AllowAutopilot, Answerer, ProjectRule, ProjectRuleId,
+    Answerer, ApproveMode, ApproveModePersonOnly, ProjectRule, ProjectRuleId,
     review::{AutoModeSettings, ReviewerChoice, default_review_model, resolve_reviewer, reviewer_kind},
   },
   store::{ConnectionStore, SettingsStore},
@@ -44,8 +44,8 @@ pub struct Settings {
   pub code_index: CodeIndexSetting,
   /// The reviewer Manual asks before the person.
   pub auto_mode: AutoModeSettings,
-  /// *Allow Autopilot for agents in this project*; off until a person turns it on.
-  pub allow_autopilot: AllowAutopilot,
+  /// The project's *Approve mode*; Manual until a person moves it.
+  pub approve_mode: ApproveMode,
   /// The roles of the profiles whose published version is set to Autopilot, by slug: what new runs would use while
   /// the project allows it.
   pub autopilot_profiles: Vec<String>,
@@ -64,7 +64,7 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     agent_files: db.repository_agent_files()?,
     code_index: db.code_index()?,
     auto_mode: db.auto_mode_settings()?,
-    allow_autopilot: db.allow_autopilot()?,
+    approve_mode: db.approve_mode()?,
     autopilot_profiles: published_profiles(&db)?
       .into_iter()
       .filter(|entry| entry.profile.permissions().approval_mode() == ApprovalMode::Autopilot)
@@ -87,20 +87,29 @@ pub fn save_base_notices_in(root: &Path, on: bool) -> Result<(), StoreError> {
   ProjectDb::open(root)?.save_tells_base_moves(on)
 }
 
-/// Turns *Allow Autopilot for agents in this project* `on` or off, as `by` asks ([`AllowAutopilot::changed`]): turning
-/// it on is a person's alone; turning it off is anyone's. The setting saved.
-pub fn save_allow_autopilot_in(root: &Path, on: bool, by: Answerer) -> Result<AllowAutopilot, Message> {
+/// Moves the project's *Approve mode* to `to`, as `by` asks ([`ApproveMode::changed`]): up is a person's alone; down,
+/// or what it is already, is anyone's. The mode saved; the runner reads it at each request, and in Dangerous
+/// auto-approve approves what waits too.
+pub fn save_approve_mode_in(root: &Path, to: ApproveMode, by: Answerer) -> Result<ApproveMode, Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  let current = db.allow_autopilot().map_err(|error| messages::store_error(&error))?;
-  let changed = current.changed(on, by).map_err(|_| autopilot_person_only())?;
-  db.save_allow_autopilot(changed)
-    .map_err(|error| messages::store_error(&error))?;
+  let current = db.approve_mode().map_err(|error| messages::store_error(&error))?;
+  let changed = current
+    .changed(to, by)
+    .map_err(|ApproveModePersonOnly(up)| person_only(up))?;
+  // Nothing to write when nothing changes: a person's move between this read and a write would be undone.
+  if changed != current {
+    db.save_approve_mode(changed)
+      .map_err(|error| messages::store_error(&error))?;
+  }
   Ok(changed)
 }
 
-/// Why allowing Autopilot from anyone but a person was not taken.
-pub fn autopilot_person_only() -> Message {
-  Message::new("projectSettings.autopilotPersonOnly")
+/// Why moving the Approve mode up to `to` from anyone but a person was not taken.
+pub fn person_only(to: ApproveMode) -> Message {
+  Message::new(match to {
+    ApproveMode::DangerousAutoApprove => "projectSettings.dangerousPersonOnly",
+    ApproveMode::Manual | ApproveMode::Autopilot => "projectSettings.autopilotPersonOnly",
+  })
 }
 
 /// Revokes the project's approval rule `rule`: the requests it answered ask again from the next one on. A rule

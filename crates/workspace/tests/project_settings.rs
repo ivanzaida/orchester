@@ -164,38 +164,56 @@ fn project_settings_auto_mode_reviewer_needs_a_person_and_a_connection_and_refus
   assert_eq!(db.auto_mode_settings().expect("kept"), asked);
 }
 
+/// The project's *Approve mode*: Manual by default; up (Manual → Autopilot, anything → Dangerous auto-approve) only for
+/// a person, with why for anyone else; down for anyone. Whether Autopilot is allowed and what the status bar reads
+/// follow it.
 #[test]
-fn project_settings_approval_mode_effective_allow_autopilot_is_turned_on_by_a_person_alone() {
+fn project_settings_approval_mode_effective_approve_mode_moves_up_by_a_person_alone() {
+  use orchester_core::run::ApproveMode::{Autopilot, DangerousAutoApprove, Manual};
   let (repo, db) = project();
+  let mode = |db: &ProjectDb| db.approve_mode().expect("read");
+  assert_eq!(
+    project_settings::load_in(repo.path()).expect("load").approve_mode,
+    Manual
+  );
+  for (to, key) in [
+    (Autopilot, "projectSettings.autopilotPersonOnly"),
+    (DangerousAutoApprove, "projectSettings.dangerousPersonOnly"),
+  ] {
+    assert_eq!(
+      project_settings::save_approve_mode_in(repo.path(), to, Answerer::Automation)
+        .expect_err("person only")
+        .key,
+      key
+    );
+    assert_eq!(mode(&db), Manual, "{to:?} refused");
+  }
+  for to in [Autopilot, DangerousAutoApprove] {
+    assert_eq!(
+      project_settings::save_approve_mode_in(repo.path(), to, Answerer::Person).expect("a person"),
+      to
+    );
+    assert_eq!(project_settings::load_in(repo.path()).expect("load").approve_mode, to);
+  }
   assert!(
-    !project_settings::load_in(repo.path())
-      .expect("load")
-      .allow_autopilot
-      .is_on()
-  );
-  assert_eq!(
-    project_settings::save_allow_autopilot_in(repo.path(), true, Answerer::Automation)
-      .expect_err("person only")
-      .key,
-    "projectSettings.autopilotPersonOnly"
-  );
-  assert_eq!(db.allow_autopilot().expect("unchanged"), AllowAutopilot::OFF);
-  assert_eq!(
-    project_settings::save_allow_autopilot_in(repo.path(), true, Answerer::Person).expect("a person"),
-    AllowAutopilot::ON
+    db.allow_autopilot().expect("read").is_on(),
+    "Dangerous auto-approve allows Autopilot"
   );
   assert!(
-    project_settings::load_in(repo.path())
-      .expect("load")
-      .allow_autopilot
-      .is_on()
+    orchester_workspace::tasks::data::ProjectTasks::read(&db, repo.path(), None)
+      .expect("tasks")
+      .dangerous_auto_approve,
+    "the status bar's read"
   );
-  // Turning it off is anyone's.
-  assert_eq!(
-    project_settings::save_allow_autopilot_in(repo.path(), false, Answerer::Automation).expect("off"),
-    AllowAutopilot::OFF
-  );
-  assert_eq!(db.allow_autopilot().expect("saved"), AllowAutopilot::OFF);
+  // Down is anyone's.
+  for to in [Autopilot, Manual] {
+    assert_eq!(
+      project_settings::save_approve_mode_in(repo.path(), to, Answerer::Automation).expect("down"),
+      to
+    );
+    assert_eq!(mode(&db), to);
+  }
+  assert_eq!(db.allow_autopilot().expect("read"), AllowAutopilot::OFF);
 }
 
 #[test]
