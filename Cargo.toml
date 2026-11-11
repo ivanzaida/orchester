@@ -104,9 +104,11 @@ keyring-core = "1"
 # of a scroll container, off unless it asks (`middle_button_autoscroll`), on only in the chats (`ui::chat::follow`);
 # 0.58: a press or a wheel lands on what the next frame shows, and `VirtualizedList` keeps the first row in view where
 # it is when measured heights change (a tall row opened in a chat no longer moves it);
+# 0.59: a Markdown link only the pointer follows (`MarkdownLinkPresentation::pointer_only`), as every link of the
+# app's Markdown is: no Tab stop, and a press leaves the focus where it was;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.58.2", default-features = false, features = ["query"] }
+lurq = { version = "0.59.0", default-features = false, features = ["query"] }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"

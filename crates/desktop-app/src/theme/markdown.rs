@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{MarkdownBlockStyle, MarkdownFocusRing, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
+  app::theme::{MarkdownBlockStyle, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
   layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::{border::BorderRadius, color::Color, padding::Padding},
 };
@@ -25,9 +25,10 @@ const ITEM_SPACING: f32 = 2.0;
 /// The room before a list item's text: a numeral with its period, a bullet.
 const ORDERED_MARKER: f32 = 20.0;
 const BULLET_MARKER: f32 = 12.0;
-/// A link's corners and its focus ring's (`Mjhop`, `K52XFs` in `agv8r`).
+/// A link's corners, and those of the ring of a form's link (`K52XFs`, `Mjhop` in `agv8r`).
 pub const LINK_RADIUS: f32 = 3.0;
-/// A focused link's ring: 2 of `border_focus` outside its words (`Mjhop` in `agv8r`).
+/// The ring of a form's focused link (`ExtraShadow::LinkFocusRing`): 2 of `border_focus` outside its words (`Mjhop`
+/// in `agv8r`).
 pub(super) const LINK_RING_WIDTH: f32 = 2.0;
 /// A link's tooltip, as the kit's (`Tooltip` `b6q3OZ`): 11/500 `text_inverse` on `text_primary`, radius 4, 4 over
 /// and under its words and 8 at their sides, 22 high.
@@ -137,8 +138,8 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
     },
     // A table's columns share the text's width, however narrow: it never runs past its text.
     table_cell_min_width: 0.0,
-    // Every link is a Tab stop: keyboard focus draws the design's ring, not lurq's.
-    link_focus_ring: Some(MarkdownFocusRing::new(LINK_RING_WIDTH, palette.border_focus).radius(LINK_RADIUS)),
+    // No link of a Markdown takes the keyboard (`ui::chat::presentation`), so none draws a ring.
+    link_focus_ring: None,
     link_radius: BorderRadius::all(LINK_RADIUS),
     link_tooltip: inline(|style| {
       style.text.font_size = Some(TOOLTIP_SIZE);
