@@ -98,20 +98,9 @@ pub(super) fn own_profile(db: &mut ProjectDb) -> ResourceId {
 
 /// A pipeline of this computer's own, kept on it when the project joined, at v1, run by `profile`.
 pub(super) fn own_pipeline(db: &mut ProjectDb, profile: ResourceId) -> ResourceId {
-  let body = one_step(profile);
-  let id = db
-    .create_published(
-      Slug::new("delivery").expect("slug"),
-      Name::new("Delivery").expect("name"),
-      &body,
-      Timestamp::now(),
-    )
-    .expect("a pipeline")
+  db.kept_pipeline_for_test("delivery", "Delivery", &one_step(profile), Timestamp::now())
+    .expect("a pipeline kept on this computer")
     .0
-    .id();
-  db.set_resource_sharing(id, Some(ResourceSharing::NotShared))
-    .expect("kept on this computer");
-  id
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -236,8 +225,8 @@ async fn live_updates_a_task_goes_up_naming_its_team_pipeline_by_id() {
 }
 
 /// In a team project only what the team server has live is offered: an archived team pipeline leaves every list and
-/// comes back once restored; a pipeline the server refused to take, and an agent profile of this computer's own, are
-/// offered nowhere, kept as they are.
+/// comes back once restored; a new pipeline the team cannot take is offered only while it waits, and is taken back
+/// whole once refused.
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_team_project_offers_only_what_its_server_has_live() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
@@ -267,32 +256,25 @@ async fn live_updates_a_team_project_offers_only_what_its_server_has_live() {
     .expect("restored");
   assert_eq!(offered(&db), [team], "restored, it is back");
 
-  // An Admin's pipeline the server refused (its slug taken there, say) never became the team's.
+  // An Admin's new pipeline the team cannot take (it runs a profile the team does not have) never becomes the team's:
+  // created as its v1, which is refused when sent, it is taken back whole.
   let refused = db
-    .create_published(
-      Slug::new("hotfix").expect("slug"),
-      Name::new("Hotfix").expect("name"),
-      &one_step(ResourceId::generate()),
-      Timestamp::now(),
-    )
+    .published_pipeline_for_test("hotfix", "Hotfix", &one_step(ResourceId::generate()), Timestamp::now())
     .expect("a pipeline")
-    .0
-    .id();
+    .0;
   assert_eq!(offered(&db).len(), 2, "waiting for the server, it is the team's");
-  let waiting = db.waiting_publishes().expect("read");
-  let version = waiting
-    .iter()
-    .find(|waiting| waiting.resource == refused)
-    .expect("waits")
-    .version;
-  db.record_publish_refused(version, "slug_taken").expect("refused");
+  let taken = alice.send_waiting(&server).await.expect("sent");
+  assert_eq!(
+    taken.iter().map(|taken| taken.resource).collect::<Vec<_>>(),
+    [refused]
+  );
   assert_eq!(offered(&db), [team]);
   assert!(
-    db.kept_resources(orchester_core::resource::ResourceKind::Pipeline)
+    !db.kept_resources(orchester_core::resource::ResourceKind::Pipeline)
       .expect("read")
       .iter()
       .any(|kept| kept.id() == refused),
-    "kept as it is"
+    "taken back whole"
   );
 }
 

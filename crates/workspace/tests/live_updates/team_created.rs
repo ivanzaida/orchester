@@ -22,7 +22,6 @@ use orchester_workspace::sharing::TakenBack;
 use super::{
   ALICE, BOB, TeamServer,
   publish::Computer,
-  team_copy::{one_step, own_profile},
 };
 
 fn rule(text: &str) -> Instruction {
@@ -176,38 +175,31 @@ async fn live_updates_a_v1_the_server_numbered_keeps_its_resource_when_v2_is_ref
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_first_version_published_from_a_draft_is_not_taken_back_when_refused() {
-  let (server, alice, _bob) = team();
-  let own = own_profile(&mut alice.workspace.db());
-  let flow = {
-    let mut db = alice.workspace.db();
-    let flow = db
-      .create_published(
-        Slug::new("hotfix").expect("slug"),
-        Name::new("Hotfix").expect("name"),
-        &one_step(own),
+  let (server, _alice, bob) = team();
+  // A pipeline is never a draft (it is created as its v1); an instruction copied here as a draft still is.
+  let imported = {
+    let mut db = bob.workspace.db();
+    let imported = db
+      .create_resource(
+        Slug::new("imported").expect("slug"),
+        Name::new("Imported").expect("name"),
+        &rule("Imported."),
         Timestamp::now(),
       )
-      .expect("a pipeline")
-      .0
+      .expect("a draft")
       .id();
-    flow
+    db.publish_draft::<Instruction>(imported, Timestamp::now())
+      .expect("v1 from the draft");
+    imported
   };
 
-  let taken = alice.send_waiting(&server).await.expect("sent");
+  let taken = bob.send_waiting(&server).await.expect("sent");
 
   assert!(taken.is_empty(), "{taken:?}");
-  let db = alice.workspace.db();
+  let db = bob.workspace.db();
   assert!(
-    db.resource(flow).expect("read").is_some(),
+    db.resource(imported).expect("read").is_some(),
     "the work of a draft is never discarded"
   );
-  assert_eq!(
-    standings(&db, flow),
-    [(
-      1,
-      PublishState::Refused {
-        code: "pipeline_names_non_team".to_owned()
-      }
-    )]
-  );
+  assert_eq!(standings(&db, imported), [(1, not_admin())]);
 }

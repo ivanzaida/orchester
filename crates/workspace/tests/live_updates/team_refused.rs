@@ -1,7 +1,8 @@
 //! A version this computer knows the team cannot take (a pipeline running a profile the team does not have, a profile
 //! with writable folders of this computer) is recorded as refused, as one the server refused is, instead of waiting to
-//! be retried: the editors show it, the other versions are still sent, and a profile stuck on it is not the team's.
-//! A server that cannot be reached leaves a version waiting.
+//! be retried: the editors show it, the other versions are still sent, and a profile stuck on it is not the team's. A
+//! new pipeline, created here as its first version, is taken back whole once that version is refused. A server that
+//! cannot be reached leaves a version waiting.
 
 use orchester_core::{
   id::ResourceId,
@@ -13,7 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, PublishState};
-use orchester_workspace::sharing::SharingError;
+use orchester_workspace::sharing::{SharingError, TakenBack};
 
 use super::{
   ALICE, TeamServer,
@@ -22,19 +23,20 @@ use super::{
   team_copy::{one_step, own_pipeline, own_profile, team_profile},
 };
 
-/// A pipeline made here running `profile`, published as a version that waits for the server.
+/// A new pipeline made here running `profile`, created as its first version, which waits for the server.
 fn waiting_pipeline(db: &mut ProjectDb, slug: &str, profile: ResourceId) -> ResourceId {
-  let id = db
-    .create_published(
-      Slug::new(slug).expect("slug"),
-      Name::new(slug).expect("name"),
-      &one_step(profile),
-      Timestamp::now(),
-    )
+  db.published_pipeline_for_test(slug, slug, &one_step(profile), Timestamp::now())
     .expect("a pipeline")
     .0
-    .id();
-  id
+}
+
+/// Whether `resource` was taken back whole: listed in `taken` for running a profile the team does not have, and kept
+/// nowhere here.
+fn taken_back_for_a_non_team_profile(db: &ProjectDb, taken: &[TakenBack], resource: ResourceId) -> bool {
+  let told = taken
+    .iter()
+    .any(|taken| taken.resource == resource && taken.reason.key == "sharing.errors.pipelineNamesNonTeam");
+  told && db.resource(resource).expect("read").is_none() && standing(db, resource).is_none()
 }
 
 /// Where the version of `resource` published here stands; `None` once the server numbered it.
@@ -68,20 +70,16 @@ async fn live_updates_a_pipeline_naming_a_profile_the_team_lacks_is_refused_and_
   };
   assert_eq!(standing(&alice.workspace.db(), bad), Some(PublishState::Waiting));
 
-  alice.send_waiting(&server).await.expect("sent");
+  let taken = alice.send_waiting(&server).await.expect("sent");
 
   let db = alice.workspace.db();
-  assert_eq!(
-    standing(&db, bad),
-    refused("pipeline_names_non_team"),
-    "recorded, not retried"
-  );
+  assert!(taken_back_for_a_non_team_profile(&db, &taken, bad), "{taken:?}");
   assert!(server.versions_of(bad).is_empty(), "nothing of it reached the server");
   assert_eq!(standing(&db, good), None, "the others were still sent");
   assert_eq!(server.versions_of(good).len(), 1);
 
-  alice.send_waiting(&server).await.expect("nothing to send");
-  assert_eq!(standing(&alice.workspace.db(), bad), refused("pipeline_names_non_team"));
+  let again = alice.send_waiting(&server).await.expect("nothing to send");
+  assert!(again.is_empty(), "{again:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -109,13 +107,14 @@ async fn live_updates_a_profile_with_writable_folders_is_refused_and_leaves_the_
   };
   assert_eq!(standing(&alice.workspace.db(), stuck), Some(PublishState::Waiting));
 
-  alice.send_waiting(&server).await.expect("sent");
+  let taken = alice.send_waiting(&server).await.expect("sent");
 
   let db = alice.workspace.db();
   assert_eq!(standing(&db, stuck), refused("writable_folders_stay"));
   assert!(server.versions_of(stuck).is_empty());
-  // While the profile waited it was the team's to come, so the pipeline running it could wait too; refused, it is not.
-  assert_eq!(standing(&db, pipeline), refused("pipeline_names_non_team"));
+  // While the profile waited it was the team's to come, so the pipeline running it could wait too; refused, it is not,
+  // and the new pipeline is taken back.
+  assert!(taken_back_for_a_non_team_profile(&db, &taken, pipeline), "{taken:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -147,8 +146,8 @@ async fn live_updates_a_version_waits_while_the_server_cannot_be_reached() {
   );
 
   alice.go_offline(false);
-  alice.send_waiting(&server).await.expect("sent");
+  let taken = alice.send_waiting(&server).await.expect("sent");
   let db = alice.workspace.db();
   assert_eq!(standing(&db, good), None);
-  assert_eq!(standing(&db, bad), refused("pipeline_names_non_team"));
+  assert!(taken_back_for_a_non_team_profile(&db, &taken, bad), "{taken:?}");
 }

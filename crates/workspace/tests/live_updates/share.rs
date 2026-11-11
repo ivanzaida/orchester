@@ -184,7 +184,7 @@ async fn live_updates_share_uploads_every_resource_with_its_numbers_and_skill_fi
     [(1, 11, alice_moreau()), (2, 13, alice_moreau())],
     "every version, numbers and times kept"
   );
-  assert_eq!(on_server(&server, delivery), [(1, 5, alice_moreau())]);
+  assert_eq!(on_server(&server, delivery), [(1, 4, alice_moreau())], "created as v1");
   assert_eq!(on_server(&server, builder), [(1, 3, alice_moreau())]);
   assert_eq!(on_server(&server, alice.skill), [(1, 15, alice_moreau())]);
   let (hash, content) = alice.part.clone();
