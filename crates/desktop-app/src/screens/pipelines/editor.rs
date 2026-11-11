@@ -14,7 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{EditProblem, Pipeline, PipelineEdit, VersionNumber};
+use orchester_core::resource::{EditProblem, VersionNumber};
 use orchester_workspace::{
   background, messages,
   pipelines::{data::OpenedPipeline, history::VersionHistory, problems::problem_view, write::needs_reload},
@@ -48,9 +48,6 @@ pub struct EditorProps {
   /// The published version the route views, read-only; `None` for the edit.
   pub version: Option<VersionNumber>,
   pub reload: Signal<u64>,
-  /// The steps of the pipeline's version taken back from the team server, which the page holds as its edit, not saved
-  /// (D-032), once it is read again.
-  pub taken_back: Signal<Option<Pipeline>>,
   pub loading: bool,
 }
 impl PartialEq for EditorProps {
@@ -76,11 +73,7 @@ impl Component for Editor {
     let props = ctx.props::<EditorProps>().clone();
     let navigation = Navigation::of(ctx);
     let views = Views::new(navigation.clone(), props.project.open.project.id(), props.opened.id);
-    let mut editing = Editing::new(props.opened, (views.clone(), props.view));
-    if let Some(steps) = props.taken_back.get_untracked() {
-      props.taken_back.set(None);
-      editing.edit = PipelineEdit::new(steps);
-    }
+    let editing = Editing::new(props.opened, (views.clone(), props.view));
     let state = ctx.signal(editing);
     let action = work::action(ctx, props.project.open.project.id());
     follow_writes(ctx, &action, &state);
@@ -139,7 +132,7 @@ impl Component for Editor {
       // While the save question waits, nothing is being saved: the status says the changes are unsaved.
       (writing || props.loading || reading_version, shared),
     );
-    let mut notices = self.team_notice(ctx, &props, team.as_ref());
+    let mut notices: Vec<Element> = Self::team_notice(ctx, team.as_ref()).into_iter().collect();
     notices.extend(self.notices(ctx, &props, (&writes, writing)));
     // A member's page is locked as one being saved is: its fields take no edit.
     let content = self.content(ctx, &props, (&writes, (locked || !may_change, busy)));
@@ -153,27 +146,11 @@ impl Component for Editor {
   }
 }
 impl Editor {
-  /// In a shared project, under the header: who may change the pipeline for a member (03), and for an admin a version
-  /// published here that waits (02b, 02c).
-  fn team_notice(&self, ctx: &mut Ctx, props: &EditorProps, team: Option<&TeamConfiguration>) -> Vec<Element> {
-    let Some(team) = team else {
-      return Vec::new();
-    };
-    if !team.may_change {
-      return vec![hub::team::line(ctx, "pipeline-team-line", team).into()];
-    }
-    let Some(standing) = team.standing(props.opened.id) else {
-      return Vec::new();
-    };
-    let (reload, taken) = (props.reload.clone(), props.taken_back.clone());
-    // The page reads the saved pipeline again, as *Reload saved pipeline* does, holding the steps taken back.
-    let reread: hub::team::Reread = std::sync::Arc::new(move || reload.update(|n| *n += 1));
-    let hand_back: hub::team::HandBack = std::sync::Arc::new(move |steps| taken.set(Some(steps)));
-    // Taking the version back would replace an edit not saved, so the bar does not while there is one (D-040).
-    let holds_edit = self.state.get().unsaved();
-    hub::team::pipeline_waiting_bar(ctx, &props.project, (team, standing), (reread, hand_back, holds_edit))
-      .into_iter()
-      .collect()
+  /// In a shared project, under the header: who may change the pipeline, for a member (03). An admin's save waits for
+  /// the team server's answer (D-043), so no version of the pipeline waits here to be sent.
+  fn team_notice(ctx: &mut Ctx, team: Option<&TeamConfiguration>) -> Option<Element> {
+    let team = team.filter(|team| !team.may_change)?;
+    Some(hub::team::line(ctx, "pipeline-team-line", team).into())
   }
 
   /// What sits in place under the header: what an import did, leaving, the save question, problems and failures.
@@ -205,9 +182,24 @@ impl Editor {
     notices
   }
 
-  /// A write that failed, and *Reload saved pipeline* when the saved one changed meanwhile.
+  /// A write that failed, and *Reload saved pipeline* when the saved one changed meanwhile; or a team pipeline's save
+  /// whose new name the team server took and whose steps it did not, which says so.
   fn write_failure(&self, ctx: &Ctx, props: &EditorProps) -> Option<Element> {
-    let error = self.action.state().get().error?;
+    let state = self.action.state().get();
+    let partly = state
+      .data
+      .as_ref()
+      .filter(|_| state.is_fulfilled())
+      .and_then(|stored| stored.steps_not_saved.clone());
+    if let Some(why) = partly {
+      let notice = Notice::new("pipeline-write-error", NoticeTone::Danger, ctx.t("pipelines.error"))
+        .stacked()
+        .flat()
+        .body(message_text(ctx, &why))
+        .part(parts::note(&ctx.t("pipelines.renamedOnly")));
+      return Some(notice.into());
+    }
+    let error = state.error?;
     let notice = Notice::new("pipeline-write-error", NoticeTone::Danger, ctx.t("pipelines.error"))
       .stacked()
       .flat()
@@ -358,11 +350,12 @@ fn follow_writes(ctx: &mut Ctx, action: &Action, state: &State) {
   ctx.watch(&action.state(), move |result| {
     if !result.is_pending()
       && result.error.is_none()
-      && let Some(opened) = &result.data
+      && let Some(stored) = &result.data
     {
-      state.update(|state| state.saved(opened.clone()));
+      state.update(|state| state.saved(stored.opened.clone()));
       let editing = state.get_untracked();
-      if editing.view == View::Publish {
+      // Steps the team server did not take stay in the edit, with their review open.
+      if editing.view == View::Publish && stored.steps_not_saved.is_none() {
         editing.views.close();
       }
     }

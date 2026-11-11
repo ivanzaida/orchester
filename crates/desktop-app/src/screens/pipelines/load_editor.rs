@@ -7,10 +7,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{
-  id::ResourceId,
-  resource::{Pipeline, VersionNumber},
-};
+use orchester_core::{id::ResourceId, resource::VersionNumber};
 use orchester_workspace::{background, pipelines::data::OpenedPipeline};
 
 use super::{
@@ -40,8 +37,6 @@ impl DevtoolsInspectable for LoadProps {}
 pub struct LoadEditor {
   retry: Signal<u64>,
   accepted: Signal<Option<(u64, OpenedPipeline)>>,
-  /// The steps of a version taken back from the team server, held by the next editor as its edit.
-  taken_back: Signal<Option<Pipeline>>,
 }
 impl Component for LoadEditor {
   type Props = LoadProps;
@@ -49,7 +44,6 @@ impl Component for LoadEditor {
     Self {
       retry: ctx.signal(0),
       accepted: ctx.signal(None),
-      taken_back: ctx.signal(None),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -90,7 +84,6 @@ impl Component for LoadEditor {
           view: props.view,
           version: props.version,
           reload: self.retry.clone(),
-          taken_back: self.taken_back.clone(),
           loading: loaded.is_pending(),
         },
       ));

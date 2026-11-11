@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_api::client::ServerAddress;
 use orchester_core::{
   id::{ResourceId, VersionId},
-  resource::{AgentProfile, Instruction, Pipeline, ResourceKind, Skill, Tool},
+  resource::{AgentProfile, Instruction, ResourceKind, Skill, Tool},
   sharing::MemberRole,
   time::Timestamp,
 };
@@ -126,8 +126,8 @@ impl Servers {
 
   /// *Open my draft on vN*: `version` of a resource of `kind`, published here at `repo_root` and met by a version
   /// someone published from the same base, is taken back, and the resource's draft is edited from that version
-  /// ([`ProjectDb::reopen_draft`]). Nothing is sent. A pipeline holds no draft (D-032): it is refused, and
-  /// [`Self::take_back_pipeline`] takes a pipeline's version back. Fails with what to tell the person.
+  /// ([`ProjectDb::reopen_draft`]). Nothing is sent. A pipeline holds no draft (D-032): it is refused. Fails with what
+  /// to tell the person.
   pub async fn reopen_draft(&self, repo_root: &Path, kind: ResourceKind, version: VersionId) -> Result<(), Message> {
     self
       .between_sends(repo_root, move |db| {
@@ -144,15 +144,6 @@ impl Servers {
           ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
         }
       })
-      .await
-  }
-
-  /// *Cancel sending* and *Take it back* for a pipeline: `version`, published here at `repo_root` and not numbered by
-  /// the server, is taken back with the versions published here after it ([`ProjectDb::take_back_pipeline`]), and
-  /// its steps are returned for the editor to hold, not saved. Nothing is sent. Fails with what to tell the person.
-  pub async fn take_back_pipeline(&self, repo_root: &Path, version: VersionId) -> Result<Pipeline, Message> {
-    self
-      .between_sends(repo_root, move |db| db.take_back_pipeline(version))
       .await
   }
 

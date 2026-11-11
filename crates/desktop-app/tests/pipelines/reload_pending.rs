@@ -4,7 +4,6 @@ use orchester_core::{
   name::Name,
   resource::{Pipeline, PipelineEdit},
   store::ResourceStore,
-  time::Timestamp,
 };
 
 use crate::pipelines_support::Editor;
@@ -31,16 +30,7 @@ fn starting_reload(page: Page) -> (Editor, orchester_core::id::ResourceId, Pipel
     let kind = latest.body().steps()[0].kind.clone();
     let follow = edit.add_step(Name::new("Follow-up").expect("fixture step name is valid"), None);
     edit.update(&follow, |step| step.kind = kind);
-    editor
-      .db()
-      .publish_pipeline_edit(
-        id,
-        &edit.validate().expect("two-step fixture is valid"),
-        latest.number(),
-        None,
-        Timestamp::now(),
-      )
-      .expect("dependency fixture version is stored");
+    editor.publish_next(id, edit.validate().expect("two-step fixture is valid"));
   }
   editor.open(id);
   let field = match page {

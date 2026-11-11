@@ -1,16 +1,16 @@
 //! `share_pipeline`: an Admin of a team project makes one of their own local pipelines, hidden there
 //! (`docs/architecture/server.md` row 80), a team pipeline. Its newest version is copied as a new team pipeline's first
-//! version and sent through the shared configuration's publishing ([`crate::sharing::Servers::send_published`]), with
-//! what its body names as references by name and role, never a secret's value. The agent profiles and tools its steps
-//! run, and its Deliver step's integrator, must be the team's already: a pipeline that names one of this computer's own
-//! is refused, naming it, since the team's copy would name what the server does not have. Every member's agents may
-//! then run it, so it is a person's decision unless a person lets automation change agent permissions. The local
-//! pipeline stays as it is, hidden, its slug shared with the copy while the project is the team's.
+//! version on the team server at once ([`crate::sharing::Servers::create_team_pipeline`]), with what its body names as
+//! references by name and role, never a secret's value, and kept here only once the server made it; a refusal says why
+//! and stores nothing (D-043). The agent profiles and tools its steps run, and its Deliver step's integrator, must be
+//! the team's already: a pipeline that names one of this computer's own is refused, naming it, since the team's copy
+//! would name what the server does not have. Every member's agents may then run it, so it is a person's decision unless
+//! a person lets automation change agent permissions. The local pipeline stays as it is, hidden, its slug shared with
+//! the copy while the project is the team's.
 
 use orchester_core::{
   resource::{Pipeline, Resource, ResourceKind},
   store::ResourceStore,
-  time::Timestamp,
 };
 use orchester_store::{ProjectDb, ResourceSharing, StoreError};
 use serde_json::{Value, json};
@@ -28,9 +28,9 @@ use crate::{
 
 pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Value, ToolError> {
   let shared = services.clone();
-  let (root, copy) = blocking(move || {
+  let (copy, id) = blocking(move || {
     let open = shared.project(&args.project)?;
-    let mut db = ProjectDb::open(&open.repo_root)?;
+    let db = ProjectDb::open(&open.repo_root)?;
     if db.sharing()?.is_none() {
       return Err(ToolError::refused(
         "team_project_required",
@@ -47,33 +47,27 @@ pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Val
     refuse_local_executors(&db, version.body())?;
     let widens = Message::new("appMcp.widens.teamPipeline").with("pipeline", local.name().as_str().to_owned());
     widening::allowed(&shared, vec![widens])?;
-    let copy = db.copy_for_the_team::<Pipeline>(local.id(), Timestamp::now())?;
+    let id = shared
+      .servers
+      .create_team_pipeline(
+        &open.repo_root,
+        (local.slug().clone(), local.name().clone()),
+        version.body(),
+      )
+      .map_err(|refused| ToolError::refused(refused.code(), vec![refused.message()]))?;
     shared.changes.record(open.project.id(), Outside::Pipelines);
     shared.changes.record(open.project.id(), Outside::Tasks);
-    Ok((open.repo_root, copy))
+    Ok((local, id))
   })
   .await?;
-  // The copy waits for the server once kept here: a send that fails leaves it waiting, sent again on reconnect.
-  let not_sent = services.servers.send_published(&root).await.err();
-  let id = copy.id();
-  let team = blocking(move || {
-    let db = ProjectDb::open(&root)?;
-    Ok(matches!(db.resource_sharing(id)?, Some(ResourceSharing::Shared(_))))
-  })
-  .await?;
-  let mut result = json!({
+  Ok(json!({
     "pipeline": {
       "id": id.to_string(),
       "name": copy.name().as_str(),
       "slug": copy.slug().as_str(),
-      "state": if team { "team" } else { "waiting" },
+      "state": "team",
     }
-  });
-  if let Some(reason) = not_sent {
-    tracing::warn!(key = reason.key, "a pipeline shared for the team waits to be sent");
-    result["not_sent"] = json!({ "code": "team_share_waiting" });
-  }
-  Ok(result)
+  }))
 }
 
 /// The local pipeline `named` by its id or, ignoring case, its name: a pipeline of this computer's own, not the team's.

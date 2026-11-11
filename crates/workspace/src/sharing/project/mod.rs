@@ -31,6 +31,7 @@ pub mod share_task;
 pub mod state;
 pub mod store;
 mod sync;
+mod team_pipeline;
 mod team_reports;
 pub mod work;
 
@@ -55,6 +56,7 @@ pub use self::{
   members::{MemberChange, MembersRead, ProjectMembers},
   restore_resource::NotRestored,
   share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
+  team_pipeline::NotTaken,
 };
 use super::{Behalf, Connection, ServerEntry, Servers, SharingError};
 

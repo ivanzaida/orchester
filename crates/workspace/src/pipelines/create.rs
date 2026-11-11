@@ -1,4 +1,6 @@
-//! Page-based creation, including copying a published version.
+//! Page-based creation, including copying a published version. In a team project the new pipeline goes to the team
+//! server at once and is kept only once the server made it ([`create_with`]).
+
 use std::path::Path;
 
 use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore, time::Timestamp};
@@ -9,7 +11,10 @@ use super::{
   fields::parse_name,
   library::{StarterText, create_with},
 };
-use crate::messages::{self, Message};
+use crate::{
+  messages::{self, Message},
+  sharing::Servers,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Start {
@@ -19,7 +24,7 @@ pub enum Start {
 }
 
 pub fn create_in(
-  root: &Path,
+  (root, servers): (&Path, &Servers),
   name: &str,
   description: &str,
   start: Start,
@@ -38,5 +43,5 @@ pub fn create_in(
       .clone(),
   }
   .with_description(description.to_owned());
-  create_with(&mut db, name, &body, Timestamp::now()).map_err(|e| e.message())
+  create_with(&mut db, (root, servers), name, &body, Timestamp::now()).map_err(|e| e.message())
 }

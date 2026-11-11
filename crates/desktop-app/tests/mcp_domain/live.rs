@@ -157,7 +157,7 @@ fn delivery(repo: &Path) {
     budget: None,
   };
   let body = Pipeline::new(vec![step]).expect("a pipeline");
-  orchester_workspace::pipelines::library::create_with(
+  orchester_workspace::pipelines::library::create_here(
     &mut db,
     Name::new("Delivery").expect("name"),
     &body,

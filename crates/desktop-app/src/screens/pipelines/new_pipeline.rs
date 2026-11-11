@@ -281,13 +281,15 @@ type CreateAction = lurq::app::ctx::FutureAction<(String, String, Start), Create
 fn create_action(ctx: &mut Ctx, project: &ShownProject) -> CreateAction {
   let root = project.open.repo_root.clone();
   let project_id = project.open.project.id();
-  let changes = crate::services::Services::of(ctx).changes;
+  let services = crate::services::Services::of(ctx);
+  let (changes, servers) = (services.changes, services.servers);
   let starter = starter(ctx);
   ctx.future_action(move |(name, description, start): (String, String, Start)| {
-    let (root, starter, changes) = (root.clone(), starter.clone(), changes.clone());
+    let (root, starter, changes, servers) = (root.clone(), starter.clone(), changes.clone(), servers.clone());
     async move {
+      // In a team project the new pipeline waits for the team server's answer (D-043): the action is pending meanwhile.
       background::run(move || {
-        let id = create::create_in(&root, &name, &description, start, &starter)?;
+        let id = create::create_in((&root, &servers), &name, &description, start, &starter)?;
         changes.record(project_id, orchester_workspace::tasks::outside::Outside::Pipelines);
         Ok(Created(project_id, id))
       })

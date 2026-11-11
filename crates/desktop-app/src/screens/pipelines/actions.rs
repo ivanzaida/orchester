@@ -160,8 +160,8 @@ impl Writes {
 }
 
 /// Why the edit cannot be saved as it stands, the first reason: a field's error, a rule the steps break, or what the
-/// save check refuses ([`refusals`]: a step not ready, the flow, the version limit, a team pipeline's rename); `None`
-/// when it can be saved.
+/// save check refuses ([`refusals`]: a step not ready, the flow, the version limit); `None` when it can be
+/// saved.
 pub fn refused(editing: &Editing) -> Option<Message> {
   if let Some(error) = editing.errors.values().next() {
     return Some(error.clone());
@@ -170,7 +170,7 @@ pub fn refused(editing: &Editing) -> Option<Message> {
     Ok(body) => body,
     Err(error) => return Some(rule_message(&editing.edit, &error)),
   };
-  refusals(&editing.opened, &body, &editing.name).into_iter().next()
+  refusals(&editing.opened, &body).into_iter().next()
 }
 
 /// What saving `body` over the latest version needs a person to allow.

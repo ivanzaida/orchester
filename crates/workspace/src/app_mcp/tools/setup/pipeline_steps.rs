@@ -4,7 +4,8 @@
 //! access where the profile writes, and a narrowing of the profile's permissions only where its CLI enforces the
 //! narrower choice. Steps that break a pipeline rule (an unknown step, a cycle, a return to a step that does not run
 //! before) are refused, and so are steps the save check refuses ([`save_refusals`]): nothing is stored then.
-//! `create_pipeline` takes its steps the same way ([`body_of`]).
+//! A team pipeline's version goes to the team server at once and is kept here only once it took it; a refusal says
+//! why and stores nothing (D-043). `create_pipeline` takes its steps the same way ([`body_of`]).
 
 use std::num::NonZeroU32;
 
@@ -153,14 +154,7 @@ pub async fn save_pipeline(services: &Services, args: SavePipeline, translate: &
       &services,
       save_reasons(Some(&current.body), &body, &current.assignables),
     )?;
-    db.publish_pipeline_edit(id, &body, current.version, None, Timestamp::now())
-      .map_err(|error| match &error {
-        StoreError::Publish(PublishError::StaleDraft { .. }) | StoreError::DraftChanged(_) => {
-          ToolError::refused("version_changed", vec![publish_error(&error)])
-        }
-        StoreError::Unchanged(_) => ToolError::refused("unchanged", vec![crate::messages::store_error(&error)]),
-        _ => error.into(),
-      })?;
+    publish(&services, (&open.repo_root, &mut db), &current, &body)?;
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
     services.changes.record(open.project.id(), Outside::Tasks);
@@ -171,6 +165,40 @@ pub async fn save_pipeline(services: &Services, args: SavePipeline, translate: &
   })
   .await?;
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
+}
+
+/// Publishes `body` as the version after `current`, as stored in the project at `root` whose database is `db`: a
+/// team pipeline's at the team server, kept here only once it took it (D-043), and refused with why, storing nothing,
+/// when it did not; a local one here. Steps equal to the latest version are refused (`unchanged`).
+fn publish(
+  services: &Services,
+  (root, db): (&std::path::Path, &mut ProjectDb),
+  current: &crate::pipelines::data::OpenedPipeline,
+  body: &Pipeline,
+) -> Result<(), ToolError> {
+  let (id, latest) = (current.id, current.version);
+  if current.team {
+    if current.body == *body {
+      return Err(ToolError::refused(
+        "unchanged",
+        vec![crate::messages::store_error(&StoreError::Unchanged(id))],
+      ));
+    }
+    services
+      .servers
+      .publish_team_pipeline(root, id, latest, body)
+      .map_err(|refused| ToolError::refused(refused.code(), vec![refused.message()]))?;
+    return Ok(());
+  }
+  db.publish_pipeline_edit(id, body, latest, None, Timestamp::now())
+    .map_err(|error| match &error {
+      StoreError::Publish(PublishError::StaleDraft { .. }) | StoreError::DraftChanged(_) => {
+        ToolError::refused("version_changed", vec![publish_error(&error)])
+      }
+      StoreError::Unchanged(_) => ToolError::refused("unchanged", vec![crate::messages::store_error(&error)]),
+      _ => error.into(),
+    })?;
+  Ok(())
 }
 
 /// What a pipeline keeps beside the steps a tool gives it: its description, its sources, its Deliver step and what its

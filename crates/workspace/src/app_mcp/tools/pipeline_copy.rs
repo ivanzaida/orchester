@@ -2,7 +2,8 @@
 //! with the steps of another pipeline's latest version, some agent steps given another published profile, checked as
 //! the editor checks an edit and published as v1, or refused with nothing stored (a pipeline is always a published
 //! version, D-032). A step keeps its repository access, model and permission narrowing when its profile changes, as the
-//! editor's profile choice does.
+//! editor's profile choice does. In a team project the copy goes to the team server at once and is kept only once it
+//! took it (D-043).
 
 use std::collections::BTreeMap;
 
@@ -71,7 +72,8 @@ pub async fn duplicate_pipeline(
     let name =
       Name::new(&args.name).map_err(|error| ToolError::refused("invalid_name", vec![messages::name_error(&error)]))?;
     // The copy is created as its first version, or not at all.
-    let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
+    let id = create_with(&mut db, (&root, &services.servers), name, &body, Timestamp::now())
+      .map_err(|error| create_error(&error))?;
     // The library lists it, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
     services.changes.record(open.project.id(), Outside::Tasks);
@@ -157,6 +159,7 @@ pub(super) fn create_error(error: &CreateError) -> ToolError {
     CreateError::NoSlug => "invalid_name",
     CreateError::SlugTaken { .. } => "name_taken",
     CreateError::NotSaved(_) => "not_publishable",
+    CreateError::Team(refused) => refused.code(),
   };
   let reasons = match error {
     CreateError::NotSaved(reasons) => reasons.clone(),

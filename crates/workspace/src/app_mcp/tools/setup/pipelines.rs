@@ -111,7 +111,14 @@ pub async fn create_pipeline(
       return Err(ToolError::refused("not_publishable", refusals));
     }
     widening::allowed(&services, save_reasons(None, &body, &assignables))?;
-    let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
+    let id = create_with(
+      &mut db,
+      (&open.repo_root, &services.servers),
+      name,
+      &body,
+      Timestamp::now(),
+    )
+    .map_err(|error| create_error(&error))?;
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
     services.changes.record(open.project.id(), Outside::Tasks);
