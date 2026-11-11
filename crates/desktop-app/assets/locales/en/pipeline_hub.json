@@ -147,7 +147,8 @@
       "restored": "Restored {{version}} · not saved · {{rest}}",
       "savedTitleWaits": "Saved as {{version}} · runs can start once every step is ready",
       "widenTitleRestored": "Restoring {{version}} changes the pipeline: allow these changes?",
-      "noChanges": "No changes since {{version}}"
+      "noChanges": "No changes since {{version}}",
+      "keepsDraftRefused": "Save keeps it as a draft · {{why}}"
     },
     "leave": {
       "title": "Discard the unsaved changes to {{name}}?",

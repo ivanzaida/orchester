@@ -416,3 +416,38 @@ fn unpublishable_says_what_keeps_an_edit_from_being_published() {
   empty.remove_step(&pipeline.step);
   assert_eq!(of(&empty), Some(Unpublishable::NoSteps));
 }
+
+#[test]
+fn save_of_a_step_whose_profile_is_gone_keeps_the_draft_and_names_the_step_not_an_id() {
+  let pipeline = fixture();
+  pipeline.save(|_| {}, &[first_version()]).unwrap();
+  let gone = ResourceId::generate();
+
+  let runs_gone = |edit: &mut PipelineEdit| {
+    edit.update(&pipeline.step, |step| {
+      step.kind = StepKind::Agent {
+        profile: Some(gone),
+        repository: orchester_core::resource::RepositoryAccess::ReadOnly,
+        model: None,
+        permissions: orchester_core::permission::StepPermissions::default(),
+      };
+    });
+  };
+  // Another executor is not provably as strict: a person allows it first.
+  let Saved::Confirm(allowed) = pipeline.save(runs_gone, &[]).unwrap() else {
+    panic!("the change asks first");
+  };
+  let saved = pipeline.save(runs_gone, &allowed).unwrap();
+  let Saved::Drafted(why) = saved else {
+    panic!("a draft is stored whatever its steps can run, got {saved:?}");
+  };
+  assert_eq!(why.key, "runs.preflight.profileNotPublished");
+  assert_eq!(why.args, [("step", "Check".to_owned())]);
+  assert!(
+    why.args.iter().all(|(_, value)| !value.contains(&gone.to_string())),
+    "no raw id: {why:?}"
+  );
+  let opened = pipeline.opened();
+  assert!(opened.draft_saved_at.is_some(), "the draft is stored");
+  assert_eq!(pipeline.versions().len(), 1, "nothing was published");
+}

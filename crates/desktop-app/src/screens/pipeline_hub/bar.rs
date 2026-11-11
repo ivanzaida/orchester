@@ -52,21 +52,33 @@ pub(super) fn bar(ctx: &mut Ctx, (save, cancel): (Save, Option<Press>), line: &L
 }
 
 /// Why *Save* is off while nothing changed: publishing what the panel shows would fail again, for this; or the
-/// pipeline has its last version number.
+/// pipeline has its last version number. While the edit has changes *Save* keeps them as the draft, whatever
+/// publishing would refuse, and [`makes`] says what it would.
 pub(super) fn publish_blocked(ctx: &Ctx, line: &Line<'_>) -> Option<String> {
   if line.unsaved || !line.entry.unpublished {
     return None;
   }
+  refused(ctx, line).or_else(|| {
+    let key = match line.unpublishable.as_ref()? {
+      Unpublishable::NoSteps => "pipeline_hub.bar.publishNoSteps",
+      Unpublishable::Steps => "pipeline_hub.bar.publishMissing",
+      Unpublishable::Broken => "pipeline_hub.bar.publishBroken",
+      Unpublishable::Refused(_) => return None,
+    };
+    Some(ctx.t(key).to_string())
+  })
+}
+
+/// What publishing what the panel shows as it stands would refuse, in its own words: the pipeline has its last
+/// version number, or a step publishing does not take; `None` for the steps' own problems, which *Ready?* names.
+fn refused(ctx: &Ctx, line: &Line<'_>) -> Option<String> {
   if let Some(limit) = version_limit(line.entry.number) {
     return Some(message_text(ctx, &limit).to_string());
   }
-  let key = match line.unpublishable.as_ref()? {
-    Unpublishable::NoSteps => "pipeline_hub.bar.publishNoSteps",
-    Unpublishable::Steps => "pipeline_hub.bar.publishMissing",
-    Unpublishable::Broken => "pipeline_hub.bar.publishBroken",
-    Unpublishable::Refused(why) => return Some(message_text(ctx, why).to_string()),
-  };
-  Some(ctx.t(key).to_string())
+  match line.unpublishable.as_ref()? {
+    Unpublishable::Refused(why) => Some(message_text(ctx, why).to_string()),
+    Unpublishable::NoSteps | Unpublishable::Steps | Unpublishable::Broken => None,
+  }
 }
 
 /// The words at the bar's end: what to correct, in `warning`, while there is something; else what *Save* makes, after
@@ -91,15 +103,21 @@ fn hint(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
 }
 
 /// What *Save* makes: the next version; the first, for a pipeline never published; only the draft, while what the
-/// panel shows cannot be published. A published pipeline that holds no change and could not be published again says
-/// only that nothing changed: what keeps its version from running is *Ready?*'s to say.
+/// panel shows cannot be published, with why when publishing would refuse it ([`refused`]). A published pipeline that
+/// holds no change and could not be published again says only that nothing changed: what keeps its version from running
+/// is *Ready?*'s to say.
 fn makes(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
+  let blocked = line.unpublishable.is_some() || version_limit(line.entry.number).is_some();
   if let Some(number) = line
     .entry
     .number
-    .filter(|_| !line.unsaved && !line.entry.unpublished && line.unpublishable.is_some())
+    .filter(|_| !line.unsaved && !line.entry.unpublished && blocked)
   {
     let said = ctx.t_args("pipeline_hub.bar.noChanges", [("version", number.to_string())]);
+    return (said.to_string(), PaletteColor::TextMuted);
+  }
+  if let Some(why) = refused(ctx, line) {
+    let said = ctx.t_args("pipeline_hub.bar.keepsDraftRefused", [("why", why)]);
     return (said.to_string(), PaletteColor::TextMuted);
   }
   let next = line

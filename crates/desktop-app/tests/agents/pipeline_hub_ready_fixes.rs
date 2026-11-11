@@ -267,3 +267,37 @@ fn pipeline_hub_ready_fixes_the_chip_and_the_line_count_what_ready_lists_for_a_p
   );
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), said, "so does the chip");
 }
+
+#[test]
+fn pipeline_hub_ready_fixes_a_draft_over_the_version_leaves_the_chip_and_the_line_on_the_versions_whole_story() {
+  let mut agents = Agents::new(true);
+  let lost = lost(&agents, "Explorer");
+  let retired = agents.profile(true);
+  let id = pipeline_of(&agents, "Agents tour", [Some(lost), Some(retired)], true);
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(retired, Timestamp::now())
+    .expect("archived");
+  open(&mut agents, PipelinesFilter::All, Some(id));
+  agents.until("the panel", |s| s.exists("pipeline-hub-save"));
+  let line = format!("pipeline-hub-row-{id}-line");
+  assert_eq!(agents.text(&line), "2 steps not ready");
+
+  // A draft is stored over v1: v1 still has both problems, which the line and the chip go on telling.
+  agents.set("pipeline-hub-description", "Changed");
+  agents.until("unsaved", |s| s.text(&line).starts_with("Unsaved changes"));
+  agents.click("pipeline-hub-save");
+  agents.until("the draft kept", |s| {
+    if s.exists(CONFIRM) {
+      s.click(CONFIRM);
+    }
+    s.exists("pipeline-hub-kept")
+  });
+  agents.until("the draft listed", |s| s.text("pipeline-hub-chip-1-label") == "draft");
+  assert_eq!(agents.text(&line), "2 steps not ready", "the line speaks of v1");
+  assert_eq!(
+    agents.text("pipeline-hub-chip-2-label"),
+    "2 steps not ready",
+    "so does v1's chip"
+  );
+}
