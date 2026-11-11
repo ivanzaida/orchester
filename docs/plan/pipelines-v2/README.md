@@ -65,7 +65,7 @@ orchestration tool reported it; `—` until known.
 | [PV2-30](PV2-30-orchestrator-drive-only.md) | Orchestrator: pipelines change only in drive mode | core + UI | PV2-29 | todo | — | — |
 | [PV2-31](PV2-31-hub-without-drafts.md) | The hub without drafts | design + UI | PV2-28 | todo | — | — |
 | [PV2-32](PV2-32-team-page-one-save.md) | Team pipeline page: one Save | UI | PV2-28 | todo | — | — |
-| [PV2-33](PV2-33-hide-import.md) | Import resources hidden | UI + MCP | — | todo | — | — |
+| [PV2-33](PV2-33-hide-import.md) | Pipelines leave Import resources | UI + MCP | — | todo | — | — |
 
 ## Order
 
