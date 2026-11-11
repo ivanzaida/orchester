@@ -140,7 +140,6 @@ fn pipelines_slug_collision_and_stale_editor_keep_the_existing_draft() {
   editor.go(ProjectPage::NewPipeline);
   editor.until("new pipeline form", |e| e.exists("pipeline-name"));
   editor.set("pipeline-name", "Checks");
-  editor.click("pipeline-start-2");
   editor.click("pipeline-create");
   editor.until("collision", |e| e.exists("pipeline-open-existing"));
   assert!(editor.text("pipeline-slug-hint").contains("Already used by Checks"));

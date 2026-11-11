@@ -8,7 +8,6 @@
     "emptyTitle": "No pipelines yet",
     "emptyDetail": "A pipeline is the steps a task runs through: which agent profile or tool does each step, where it waits for you, and where the work goes back when a check fails. Tasks can use a pipeline once it is published.",
     "createFromStarter": "Create from starter",
-    "startEmpty": "Start empty",
     "emptyCreationHint": "Create v1 saves a pipeline once every step is ready. Nothing is saved before.",
     "starterLibraryHint": "6 steps · 2 approval gates · Review can send the work back to Implement",
     "columns": {
@@ -45,8 +44,6 @@
     "starterHint": "6 steps · 2 approval gates",
     "copy": "Copy a pipeline",
     "copyHint": "Its latest version becomes v1 of the copy.",
-    "empty": "Empty pipeline",
-    "emptyHint": "Start from On task start and add steps.",
     "description": "Description",
     "descriptionPlaceholder": "What this pipeline is for",
     "slug": "Slug",
@@ -285,7 +282,6 @@
     "groups": {
       "published": "Published"
     },
-    "emptyRowHint": "No steps yet: Create v1 needs at least one, so it cannot be saved empty",
     "default": {
       "chip": "Default",
       "make": "Make default"
