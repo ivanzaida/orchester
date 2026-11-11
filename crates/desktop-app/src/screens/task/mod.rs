@@ -17,7 +17,7 @@
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
 mod archived;
-mod archived_ask;
+mod archived_foot;
 pub(crate) mod cards;
 pub(crate) mod changes;
 mod ci;
