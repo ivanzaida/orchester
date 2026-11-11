@@ -12,7 +12,7 @@ use std::{
 use orchester_app::routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
-  resource::{Draft, Pipeline, PipelineEdit, ResourceKind, StepKind},
+  resource::{Pipeline, PipelineEdit, ResourceKind, StepKind},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -46,12 +46,12 @@ struct Fixture {
 }
 
 /// Publishes `body` as the pipeline's next version, as another editor would behind the app.
-fn publish(db: &mut ProjectDb, id: ResourceId, body: Pipeline) {
+fn publish(db: &mut ProjectDb, id: ResourceId, body: &Pipeline) {
   let latest = db
     .latest_version::<Pipeline>(id)
     .expect("read version")
     .expect("published fixture");
-  db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
+  db.publish_pipeline_edit(id, body, latest.number(), None, Timestamp::now())
     .expect("next version");
 }
 
@@ -91,7 +91,7 @@ impl Fixture {
           permissions.interactive_tool_approvals = false;
         }
       });
-      publish(&mut db, id, edit.validate().expect("v2"));
+      publish(&mut db, id, &edit.validate().expect("v2"));
       let asking = latest(&db).with_description("asks again".into());
       let mut edit = PipelineEdit::new(asking);
       edit.update(&key, |step| {
@@ -99,7 +99,7 @@ impl Fixture {
           permissions.interactive_tool_approvals = true;
         }
       });
-      publish(&mut db, id, edit.validate().expect("v3"));
+      publish(&mut db, id, &edit.validate().expect("v3"));
     }
     let before = latest(&db);
     let versions = db.versions::<Pipeline>(id).expect("versions").len();
