@@ -177,3 +177,69 @@ fn approval_mode_effective_migration_keeps_the_reviewer_and_drops_the_old_settin
     .expect("tables");
   assert!(!everything);
 }
+
+/// The project's *Approve mode* round-trips as one value; a row that would contradict itself (Dangerous auto-approve
+/// without Autopilot allowed) is refused; the former switch's write keeps its meaning.
+#[test]
+fn approval_mode_effective_approve_mode_is_one_value() {
+  use orchester_core::run::ApproveMode;
+  let (current, mut db, ..) = started_run();
+  assert_eq!(
+    db.approve_mode().expect("read"),
+    ApproveMode::Manual,
+    "Manual without a row"
+  );
+  for mode in [
+    ApproveMode::DangerousAutoApprove,
+    ApproveMode::Autopilot,
+    ApproveMode::Manual,
+  ] {
+    db.save_approve_mode(mode).expect("save");
+    assert_eq!(db.approve_mode().expect("read"), mode);
+    assert_eq!(db.allow_autopilot().expect("read"), mode.allows_autopilot());
+  }
+  db.save_approve_mode(ApproveMode::DangerousAutoApprove).expect("save");
+  db.save_allow_autopilot(AllowAutopilot::ON).expect("save");
+  assert_eq!(
+    db.approve_mode().expect("read"),
+    ApproveMode::DangerousAutoApprove,
+    "on changes nothing"
+  );
+  db.save_allow_autopilot(AllowAutopilot::OFF).expect("save");
+  assert_eq!(
+    db.approve_mode().expect("read"),
+    ApproveMode::Manual,
+    "off leaves Dangerous auto-approve"
+  );
+  let raw = Connection::open(database(current.path())).expect("open");
+  assert!(
+    raw
+      .execute(
+        "UPDATE project_approvals SET allow_autopilot = 0, dangerous_auto_approve = 1 WHERE id = 1",
+        [],
+      )
+      .is_err(),
+    "no contradictory pair"
+  );
+}
+
+/// A project that allowed Autopilot before the Approve mode is in Autopilot after it; one that did not is in Manual.
+#[test]
+fn approval_mode_effective_approve_mode_migrates_from_allow_autopilot() {
+  use orchester_core::run::ApproveMode;
+  for (allowed, mode) in [(true, ApproveMode::Autopilot), (false, ApproveMode::Manual)] {
+    let (current, db, ..) = started_run();
+    drop(db);
+    let latest = schema_version(&database(current.path()));
+    let old = copied_at_version(&database(current.path()), latest - 1);
+    Connection::open(database(old.path()))
+      .expect("open the old database")
+      .execute(
+        "INSERT INTO project_approvals (id, allow_autopilot) VALUES (1, ?1)",
+        [allowed],
+      )
+      .expect("the former switch");
+    let db = ProjectDb::open(old.path()).expect("migrate");
+    assert_eq!(db.approve_mode().expect("read"), mode, "allowed {allowed}");
+  }
+}

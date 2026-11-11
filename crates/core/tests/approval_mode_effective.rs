@@ -10,8 +10,8 @@ use orchester_core::{
     category::{CommandCategory, CommandScope},
   },
   run::{
-    AllowAutopilot, Answerer, ApprovalSubject, AutoAsk, AutoVerdict, AutopilotPersonOnly, EffectiveMode, ManualBecause,
-    PendingToolApproval, ToolReach, auto_approves, auto_verdict,
+    AllowAutopilot, Answerer, ApprovalSubject, ApproveMode, ApproveModePersonOnly, AutoAsk, AutoVerdict, EffectiveMode,
+    ManualBecause, PendingToolApproval, ToolReach, auto_approves, auto_verdict,
   },
   time::Timestamp,
 };
@@ -119,18 +119,46 @@ fn approval_mode_effective_names_the_mode_and_its_reason_for_the_chip() {
 }
 
 #[test]
-fn approval_mode_effective_widening_gate_lets_only_a_person_allow_autopilot() {
-  let off = AllowAutopilot::OFF;
-  assert_eq!(off.changed(true, Answerer::Person), Ok(AllowAutopilot::ON));
-  assert_eq!(off.changed(true, Answerer::Automation), Err(AutopilotPersonOnly));
-  // Asking for what it is changes nothing.
-  let on = AllowAutopilot::ON;
-  assert_eq!(on.changed(true, Answerer::Automation), Ok(on));
-  // Turning it off is anyone's.
-  for by in [Answerer::Person, Answerer::Automation] {
-    assert_eq!(on.changed(false, by), Ok(AllowAutopilot::OFF));
-    assert_eq!(off.changed(false, by), Ok(AllowAutopilot::OFF));
+fn approval_mode_effective_widening_gate_lets_only_a_person_move_the_approve_mode_up() {
+  use ApproveMode::{Autopilot, DangerousAutoApprove, Manual};
+  assert_eq!(ApproveMode::default(), Manual, "Manual until a person moves it");
+  for (from, to) in [
+    (Manual, Autopilot),
+    (Manual, DangerousAutoApprove),
+    (Autopilot, DangerousAutoApprove),
+  ] {
+    assert_eq!(
+      from.changed(to, Answerer::Person),
+      Ok(to),
+      "{from:?} up to {to:?} by a person"
+    );
+    assert_eq!(
+      from.changed(to, Answerer::Automation),
+      Err(ApproveModePersonOnly(to)),
+      "{from:?} up to {to:?} by automation"
+    );
   }
+  // Down, or what it is already, is anyone's.
+  for (from, to) in [
+    (DangerousAutoApprove, Autopilot),
+    (DangerousAutoApprove, Manual),
+    (Autopilot, Manual),
+    (Autopilot, Autopilot),
+    (DangerousAutoApprove, DangerousAutoApprove),
+  ] {
+    for by in [Answerer::Person, Answerer::Automation] {
+      assert_eq!(from.changed(to, by), Ok(to), "{from:?} to {to:?} by {by:?}");
+    }
+  }
+  // The former switch: off is Manual, on is Autopilot and leaves Dangerous auto-approve as it is.
+  assert_eq!(DangerousAutoApprove.with_autopilot(false), Manual);
+  assert_eq!(DangerousAutoApprove.with_autopilot(true), DangerousAutoApprove);
+  assert_eq!(Manual.with_autopilot(true), Autopilot);
+  assert_eq!(
+    [Manual, Autopilot, DangerousAutoApprove].map(|mode| mode.allows_autopilot()),
+    [AllowAutopilot::OFF, AllowAutopilot::ON, AllowAutopilot::ON]
+  );
+  assert!(DangerousAutoApprove.approves_everything() && !Autopilot.approves_everything());
 }
 
 #[test]
@@ -190,5 +218,19 @@ fn approval_mode_effective_manual_answers_nothing_itself_and_the_runs_own_choice
   assert!(
     answered(&subject, Some(true), EffectiveMode::Manual(ManualBecause::Profile)),
     "Approve everything in this run"
+  );
+}
+
+/// Dangerous auto-approve's answers are recorded as a kind of their own.
+#[test]
+fn approval_mode_effective_dangerous_answers_are_a_kind_of_their_own() {
+  use orchester_core::run::{AnswerKind, RequestAnswer};
+  assert_eq!(
+    serde_json::to_value(RequestAnswer::by(AnswerKind::DangerousAutoApprove)).expect("json"),
+    json!({"kind": "dangerous_auto_approve"})
+  );
+  assert_eq!(
+    serde_json::to_value(ApproveMode::DangerousAutoApprove).expect("json"),
+    json!("dangerous_auto_approve")
   );
 }

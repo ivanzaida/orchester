@@ -1,11 +1,14 @@
 //! Approval modes (`docs/design/approval-modes.md`): a run's step is in Autopilot only when its agent profile says
-//! Autopilot, its project allows Autopilot (*Allow Autopilot for agents in this project*) and the run was not switched
-//! to Manual; otherwise it is in Manual, for the first of those that says so. Autopilot approves its agent's requests
-//! itself; Manual runs the profile's allowed commands, then asks the reviewer, then the person. The project's
-//! *Approved for every run* rules answer only in Manual.
+//! Autopilot, its project allows Autopilot (its *Approve mode* is Autopilot) and the run was not switched to Manual;
+//! otherwise it is in Manual, for the first of those that says so. Autopilot approves its agent's requests itself;
+//! Manual runs the profile's allowed commands, then asks the reviewer, then the person. The project's *Approved for
+//! every run* rules answer only in Manual.
 //!
-//! Allowing Autopilot widens what agents do without a person, so only a person turns it on; turning it off is anyone's.
-//! A run drops to Manual for itself, from the person or automation, and never goes back to Autopilot.
+//! A project's *Approve mode* ([`ApproveMode`], the person's decision of 2026-11-11) is Manual, Autopilot or Dangerous
+//! auto-approve. In Dangerous auto-approve every tool request of every agent of its runs is approved at once, before
+//! the allowed list, the hold rules, the reviewer or anyone is asked. Moving it up widens what agents do without a
+//! person, so only a person moves it up; moving it down is anyone's. A run drops to Manual for itself, from the person
+//! or automation, and never goes back to Autopilot.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -13,14 +16,9 @@ use thiserror::Error;
 use super::Answerer;
 use crate::{permission::ApprovalMode, time::Timestamp};
 
-/// The project's *Allow Autopilot for agents in this project*; off until a person turns it on.
+/// Whether a project allows Autopilot for its agents: what [`EffectiveMode::of`] reads of its [`ApproveMode`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AllowAutopilot(bool);
-
-/// Someone other than a person asked to allow Autopilot.
-#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
-#[error("only a person allows Autopilot in a project")]
-pub struct AutopilotPersonOnly;
 
 impl AllowAutopilot {
   pub const OFF: Self = Self(false);
@@ -29,15 +27,58 @@ impl AllowAutopilot {
   pub const fn is_on(self) -> bool {
     self.0
   }
+}
 
-  /// The setting once `by` asked for it `on`: turning it off is always taken, and asking for what it is already
-  /// changes nothing; turning it on is a person's alone.
-  pub const fn changed(self, on: bool, by: Answerer) -> Result<Self, AutopilotPersonOnly> {
-    match (on, by) {
-      (false, _) => Ok(Self::OFF),
-      (true, _) if self.0 => Ok(self),
-      (true, Answerer::Person) => Ok(Self::ON),
-      (true, Answerer::Automation) => Err(AutopilotPersonOnly),
+/// A project's *Approve mode* (Project settings › Runs › Approvals), from the safest up; Manual until a person moves
+/// it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApproveMode {
+  /// Autopilot is not allowed: every agent runs as Manual, whatever its profile says.
+  #[default]
+  Manual,
+  /// Agents whose profile is set to Autopilot approve their own requests; the others stay Manual.
+  Autopilot,
+  /// Every tool request of every agent is approved at once: no allowed list, hold, reviewer or person.
+  DangerousAutoApprove,
+}
+
+/// Someone other than a person asked to move a project's Approve mode up.
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+#[error("only a person moves a project's Approve mode up to {0:?}")]
+pub struct ApproveModePersonOnly(pub ApproveMode);
+
+impl ApproveMode {
+  /// Whether Autopilot is allowed: in Autopilot, and in Dangerous auto-approve, which approves before any mode is
+  /// consulted.
+  pub const fn allows_autopilot(self) -> AllowAutopilot {
+    match self {
+      Self::Manual => AllowAutopilot::OFF,
+      Self::Autopilot | Self::DangerousAutoApprove => AllowAutopilot::ON,
+    }
+  }
+
+  /// Whether every tool request is approved at once.
+  pub const fn approves_everything(self) -> bool {
+    matches!(self, Self::DangerousAutoApprove)
+  }
+
+  /// The mode once `by` asked for `to`: down, or what it is already, is always taken; up is a person's alone.
+  pub fn changed(self, to: Self, by: Answerer) -> Result<Self, ApproveModePersonOnly> {
+    if to <= self || by == Answerer::Person {
+      Ok(to)
+    } else {
+      Err(ApproveModePersonOnly(to))
+    }
+  }
+
+  /// The mode the former *Allow Autopilot* switch asks for: off is Manual; on is Autopilot, and changes nothing in
+  /// Dangerous auto-approve, which allows it already.
+  pub const fn with_autopilot(self, on: bool) -> Self {
+    match (on, self) {
+      (false, _) => Self::Manual,
+      (true, Self::DangerousAutoApprove) => Self::DangerousAutoApprove,
+      (true, _) => Self::Autopilot,
     }
   }
 }
