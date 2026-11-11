@@ -615,7 +615,7 @@ the turns in one column, and the composer at the foot.
      the project's *Default order for watching* applies. An order only narrows what your switches allow.
    - **/watching** (*What I watch*) shows what the conversation leads and what waits there, with *Stop watching*.
      **/unwatch** (*Stop watching*) picks among what this conversation watches, or *All of them*; Ctrl Enter stops
-     them. × on a *Leads* chip in the header and the `/watching` answer stop one too. Stopping cancels and pauses
+     them. × on a chip of what it leads in the header (or in the *+N* list) and the `/watching` answer stop one too. Stopping cancels and pauses
      nothing.
    - The most specific subscription wins: the task, then its module (or the tasks without a module), then the
      project. A target another conversation leads shows a card: **Open that conversation** or **Take it here**.
