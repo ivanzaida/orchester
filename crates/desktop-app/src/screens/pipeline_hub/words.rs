@@ -26,15 +26,26 @@ use crate::screens::{
 };
 
 /// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), or the steps and
-/// tasks; with `unsaved` (its panel holds changes) that they are not saved, in front of the rest.
-pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: bool) -> Said {
+/// tasks. While its panel holds changes (`unsaved`, with how many of the edit's steps cannot run), that they are not
+/// saved, in front of how many steps are not ready (P8 `vujkk`) or of the rest.
+pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: Option<usize>) -> Said {
   let said = state(ctx, now, entry);
-  if !unsaved {
+  let Some(steps) = unsaved else {
     return said;
-  }
+  };
+  let rest = steps_not_ready(ctx, steps).unwrap_or(said.text);
   Said {
-    text: ctx.t_args("pipeline_hub.line.unsaved", [("rest", said.text.to_string())]),
+    text: ctx.t_args("pipeline_hub.line.unsaved", [("rest", rest.to_string())]),
     color: PaletteColor::Warning,
+  }
+}
+
+/// *1 step not ready*, *2 steps not ready*; none when every step can run.
+pub(super) fn steps_not_ready(ctx: &Ctx, count: usize) -> Option<Arc<str>> {
+  match count {
+    0 => None,
+    1 => Some(ctx.t("pipeline_hub.chip.stepNotReady")),
+    count => Some(ctx.t_args("pipeline_hub.chip.stepsNotReady", [("count", count.to_string())])),
   }
 }
 
@@ -132,10 +143,14 @@ pub(super) fn version(entry: &Entry) -> Option<String> {
   entry.number.map(|number| number.to_string())
 }
 
-/// What stands after *Pipeline* in a panel's head: *v3 · published Oct 27*, *v3 · archived Nov 6*; none for an
-/// archived pipeline that never had a version.
-pub(super) fn head_version(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Option<String> {
+/// What stands after *Pipeline* in a panel's head: *v3 · published Oct 27*, *v3 · unsaved changes* while the panel
+/// `holds` changes (P8 `vujkk`), *v3 · archived Nov 6*; none for an archived pipeline that never had a version.
+pub(super) fn head_version(ctx: &Ctx, now: Timestamp, (entry, holds): (&Entry, bool)) -> Option<String> {
   let number = entry.number?;
+  if holds && entry.archived.is_none() {
+    let said = ctx.t_args("pipeline_hub.panel.unsaved", [("version", number.to_string())]);
+    return Some(said.to_string());
+  }
   let (key, at) = match (entry.archived, entry.published_at) {
     (Some(at), _) => ("pipeline_hub.panel.archivedAt", at),
     (None, Some(at)) => ("pipeline_hub.panel.published", at),

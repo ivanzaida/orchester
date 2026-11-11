@@ -84,7 +84,7 @@ impl Component for Restore {
       &entry.name,
       (
         ctx.t("pipeline_hub.panel.where").to_string(),
-        words::head_version(ctx, now, &entry),
+        words::head_version(ctx, now, (&entry, false)),
       ),
       None,
     );
@@ -116,7 +116,7 @@ impl Component for Restore {
     let body = body()
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
-      .child(chips(ctx, &entry, false))
+      .child(chips(ctx, &entry, (false, None)))
       .child(notice)
       .with_children(unread)
       .with_children(failed);

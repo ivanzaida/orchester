@@ -27,8 +27,30 @@ use crate::{
 
 /// The pipeline whose panel has changes that are not saved, which its row says: read by the list, written by the panel.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Unsaved(pub Option<ResourceId>);
+pub(super) struct Unsaved(pub Option<Edited>);
 impl DevtoolsInspectable for Unsaved {}
+
+/// A pipeline whose panel holds changes, and how many steps of the edit cannot run, which its row says (`Pipelines ·
+/// v2` P8 `vujkk`): the edit is not stored, so the list cannot read it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Edited {
+  pub pipeline: ResourceId,
+  pub steps_not_ready: usize,
+}
+
+impl Unsaved {
+  pub(super) fn pipeline(self) -> Option<ResourceId> {
+    self.0.map(|edited| edited.pipeline)
+  }
+
+  /// How many steps of `pipeline`'s edit cannot run, while its panel holds changes; `None` while it holds none.
+  pub(super) fn steps_not_ready(self, pipeline: ResourceId) -> Option<usize> {
+    self
+      .0
+      .filter(|edited| edited.pipeline == pipeline)
+      .map(|edited| edited.steps_not_ready)
+  }
+}
 
 pub(super) type UnsavedSignal = Signal<Unsaved>;
 
@@ -63,10 +85,13 @@ impl Hosted {
   }
 }
 
-/// Tells the list that `pipeline` has changes that are not saved (`changed`); set only when it differs so the page is
-/// not read again for nothing.
-pub(super) fn mark_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId, changed: bool) {
-  let wanted = Unsaved(changed.then_some(pipeline));
+/// Tells the list that `pipeline` has changes that are not saved (`changed`), of which `steps_not_ready` steps cannot
+/// run; set only when it differs so the page is not read again for nothing.
+pub(super) fn mark_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId, (changed, steps_not_ready): (bool, usize)) {
+  let wanted = Unsaved(changed.then_some(Edited {
+    pipeline,
+    steps_not_ready,
+  }));
   if unsaved.get_untracked() != wanted {
     unsaved.set(wanted);
   }
@@ -74,7 +99,7 @@ pub(super) fn mark_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId, change
 
 /// The panel of `pipeline` is gone, with its edit: the list must not go on saying it is there.
 pub(super) fn clear_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId) {
-  if unsaved.get_untracked().0 == Some(pipeline) {
+  if unsaved.get_untracked().pipeline() == Some(pipeline) {
     unsaved.set(Unsaved(None));
   }
 }
@@ -117,7 +142,7 @@ pub(super) fn question(
     return None;
   }
   let closing = route.is_none() && archiving.is_none() && closes_tab(navigation, guard);
-  let name = listing.name_of(hosted.unsaved.get().0?)?.to_owned();
+  let name = listing.name_of(hosted.unsaved.get().pipeline()?)?.to_owned();
   if hosted.saving.get() {
     return Some(saving_question(ctx, &name, open));
   }

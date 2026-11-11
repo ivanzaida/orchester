@@ -6,10 +6,10 @@
 //! card stands in amber (also when the steps cannot be drawn as one line), and what the readiness read says this
 //! computer lacks. The rows are the Agents hub's ([`crate::screens::team_hub::profile::ready`]).
 //!
-//! The panel draws the edit it holds when it holds one, so *Ready?* describes the edit; over the published version it
-//! says so in its title, as the list and the chips speak of the version tasks use. What the readiness read says is
-//! about that version: a profile or tool the edit no longer runs is left out, and a row about the version's profiles
-//! and tools as a whole names the version.
+//! The panel draws the edit it holds when it holds one, so *Ready?* reads the edit as it stands; while *Save* is off for
+//! it, its count says so (*1 missing · Save stays off*, P8). What the readiness read says is about the published
+//! version: a profile or tool the edit no longer runs is left out, and a row about the version's profiles and tools as a
+//! whole names the version.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -42,7 +42,7 @@ use crate::{
       profile::{
         fix::Offer,
         parts::{Part, State},
-        ready::section,
+        ready::{counted, section_saying},
       },
     },
   },
@@ -102,6 +102,8 @@ pub(super) struct Shown<'a> {
   pub edit: &'a Edit,
   /// A save is under way or asks: nothing is changed now.
   pub locked: bool,
+  /// *Save* is off: the edit cannot be published as it stands, which the count says after what is missing.
+  pub save_off: bool,
   /// Set by *Choose another →*: the step it opens opens its Agent picker.
   pub pick_agent: &'a Signal<bool>,
 }
@@ -132,13 +134,16 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
   let navigation = Navigation::of(ctx);
   let new_step = new_step_name(ctx);
   let press = |fix: &Fix| press(shown, (&navigation, &new_step), fix);
-  let title = if over.is_some() {
-    ctx.t("pipeline_hub.ready.titleDraft")
-  } else {
-    ctx.t("pipeline_hub.ready.title")
-  };
+  let title = ctx.t("pipeline_hub.ready.title");
   let busy = if shown.locked { Busy::Taking } else { Busy::Idle };
-  Some(section(ctx, (&title, &parts), found.len(), (&press, busy)).into())
+  let (words, color) = counted(ctx, &parts, found.len());
+  // *1 missing · Save stays off* (P8 `vujkk`): what is missing keeps the edit from being stored.
+  let words = if shown.save_off && !found.is_empty() {
+    ctx.t_args("pipeline_hub.ready.missingSaveOff", [("count", found.len().to_string())])
+  } else {
+    words
+  };
+  Some(section_saying(ctx, (&title, &parts), (words, color), (&press, busy)).into())
 }
 
 /// Whether the pipeline as the panel draws it can run once saved: nothing is missing.
@@ -229,8 +234,8 @@ fn summary(ctx: &Ctx, flow: Option<&PipelineFlow>) -> Part<Fix> {
 fn part(ctx: &Ctx, problem: &Problem, (index, over): (usize, Option<VersionNumber>)) -> Part<Fix> {
   match problem {
     Problem::Whole(whole) => labelled(
-      "draft",
-      ctx.t("pipeline_hub.ready.draft"),
+      "steps",
+      ctx.t("pipeline_hub.panel.steps"),
       whole_words(ctx, *whole),
       Some(whole_fix(*whole)),
     ),
@@ -260,7 +265,7 @@ fn part(ctx: &Ctx, problem: &Problem, (index, over): (usize, Option<VersionNumbe
 }
 
 /// The label of a row about what the steps run as a whole: *Profiles and tools*, or *Profiles and tools · v3* when it
-/// is about the published version `over` a draft.
+/// is about the published version under the edit the panel holds (`over`).
 fn runs_label(ctx: &Ctx, over: Option<VersionNumber>) -> Arc<str> {
   over.map_or_else(
     || ctx.t("pipeline_hub.ready.profilesAndTools"),

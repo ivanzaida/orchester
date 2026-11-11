@@ -26,7 +26,7 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     shown.project,
     ProjectPage::pipelines(PipelinesView::new(shown.filter, Some(entry.id))),
   );
-  let said = words::line(ctx, shown.now, entry, shown.unsaved.0 == Some(entry.id));
+  let said = words::line(ctx, shown.now, entry, shown.unsaved.steps_not_ready(entry.id));
   let mark = icon(Icon::Workflow, IconSize::Lg, mark_color(entry));
   let line = Truncated::new(format!("{id}-line"), said.text.clone(), HubText::RowLine.role())
     .color(said.color)

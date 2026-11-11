@@ -166,7 +166,7 @@ impl Component for Head {
       (
         ctx.t("pipeline_hub.panel.where").to_string(),
         props.viewing.get().map_or_else(
-          || words::head_version(ctx, props.now, entry),
+          || words::head_version(ctx, props.now, (entry, props.holds_changes)),
           |viewed| Some(words::head_viewing(ctx, props.now, &viewed)),
         ),
       ),

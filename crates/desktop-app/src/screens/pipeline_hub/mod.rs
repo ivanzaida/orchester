@@ -443,7 +443,7 @@ const fn label_key(filter: PipelinesFilter) -> &'static str {
 /// one of its steps open: moving between them leaves the edit where it is, so the navigation does not ask.
 fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> bool + Send + Sync + 'static {
   move |route| {
-    let Some(edited) = edits.get_untracked().0 else {
+    let Some(edited) = edits.get_untracked().pipeline() else {
       return false;
     };
     match route {

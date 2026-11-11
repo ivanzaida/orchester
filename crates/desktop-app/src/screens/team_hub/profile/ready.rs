@@ -1,6 +1,8 @@
 //! *Ready here?* (`Ready here?` `cLHSH` in `Agents · Profile` `NDZXC`): the parts the profile needs on this computer,
 //! each ready or with what is missing and the fix at its row's end, under *N missing* in the color of the worst.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -32,21 +34,34 @@ pub(in crate::screens) fn section<F: Offer>(
   missing: usize,
   (press, busy): (&dyn Fn(&F) -> Press, Busy),
 ) -> Column {
+  section_saying(ctx, (title, parts), counted(ctx, parts, missing), (press, busy))
+}
+
+/// What the section's count says: *all set* in `success`, or *N missing* in `warning` (`danger` when a part blocks).
+pub(in crate::screens) fn counted<F>(ctx: &Ctx, parts: &[Part<F>], missing: usize) -> (Arc<str>, PaletteColor) {
+  if missing == 0 {
+    return (ctx.t("team_hub.readiness.allSet"), PaletteColor::Success);
+  }
   let blocked = parts
     .iter()
     .any(|part| matches!(part.state, State::Missing { blocking: true, .. }));
-  let (words, color) = if missing == 0 {
-    (ctx.t("team_hub.readiness.allSet"), PaletteColor::Success)
-  } else {
-    (
-      ctx.t_args("team_hub.readiness.missing", [("count", missing.to_string())]),
-      if blocked {
-        PaletteColor::Danger
-      } else {
-        PaletteColor::Warning
-      },
-    )
-  };
+  (
+    ctx.t_args("team_hub.readiness.missing", [("count", missing.to_string())]),
+    if blocked {
+      PaletteColor::Danger
+    } else {
+      PaletteColor::Warning
+    },
+  )
+}
+
+/// [`section`] whose count says `words` in `color`.
+pub(in crate::screens) fn section_saying<F: Offer>(
+  ctx: &Ctx,
+  (title, parts): (&str, &[Part<F>]),
+  (words, color): (Arc<str>, PaletteColor),
+  (press, busy): (&dyn Fn(&F) -> Press, Busy),
+) -> Column {
   let count = Text::new(&words)
     .id("team-hub-readiness-count")
     .variant(HubText::Hint.role())

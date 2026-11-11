@@ -36,15 +36,16 @@ impl PipelinePanel {
   /// What the panel tells the list and the bar of the edit it shows: whether it has changes, which a save's note and
   /// the description's box then follow. Text the check refuses is unsaved too (`unsaved`), though the edit does not
   /// hold it: leaving would drop it. The question before *Restore* goes with the version it was asked about, and what
-  /// *Restore* put in is forgotten once the edit holds no change.
-  pub(super) fn follow_edit(&self, current: &PipelineEdit, (changed, unsaved): (bool, bool)) {
+  /// *Restore* put in is forgotten once the edit holds no change. The list also hears how many of the edit's steps
+  /// cannot run (`steps_not_ready`), which the row of an unsaved edit says.
+  pub(super) fn follow_edit(&self, current: &PipelineEdit, (changed, unsaved): (bool, bool), steps_not_ready: usize) {
     if self.restoring.get_untracked() && self.viewing.get_untracked().is_none() {
       self.restoring.set(false);
     }
     if !changed && self.restored.get_untracked().0.is_some() {
       self.restored.set(Restored(None));
     }
-    mark_unsaved(&self.unsaved, self.id, unsaved);
+    mark_unsaved(&self.unsaved, self.id, (unsaved, steps_not_ready));
     if changed {
       self.notes.forget_stale(current);
     } else if self.description.get_untracked() != current.description() {
@@ -149,7 +150,7 @@ impl PipelinePanel {
     ctx.watch(&self.unsaved, move |unsaved: &Unsaved| {
       let holds =
         holding.get_untracked().held.is_some_and(|held| held.is_changed()) || !faulty.get_untracked().is_empty();
-      if unsaved.0 != Some(id) && holds {
+      if unsaved.pipeline() != Some(id) && holds {
         holding.set(Holding::default());
         put_back();
       }
