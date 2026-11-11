@@ -306,7 +306,9 @@ impl Form {
     rows::row(
       "local-hub-mcp-row-variables",
       &ctx.t("connections.mcp.variables"),
-      look.changed(ctx, &look.typed.variables, &look.saved.variables),
+      look
+        .changed(ctx, &look.typed.variables, &look.saved.variables)
+        .or_else(|| look.creating.then(|| Sub::quiet(ctx.t("local_new.mcp.variablesSub")))),
       control,
     )
     .align_items(Alignment::Start)
