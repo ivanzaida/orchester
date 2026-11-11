@@ -178,8 +178,8 @@ pub fn problems(basis: Basis<'_>) -> Vec<Problem> {
 }
 
 /// The profiles and tools named when the pipeline is undecided: each undecided one, else the reason as it stands. A
-/// profile or tool a step names already says what keeps it (no version here, no connection), so it is not named twice;
-/// nor is one that `runs` (the draft's) leaves out.
+/// profile or tool a step names already says what keeps it (no version here, archived, no connection), so it is not
+/// named twice; nor is one that `runs` (the draft's) leaves out.
 fn undecided(
   why: &Undecided,
   (members, steps): (&[UndecidedMember], &[StepProblem]),
@@ -187,7 +187,7 @@ fn undecided(
 ) -> Vec<Problem> {
   let named = |id: ResourceId| steps.iter().any(|step| step.blocked.names() == Some(id));
   let left_out = |id: ResourceId| runs.is_some_and(|runs| !runs.contains(&id));
-  if matches!(why, Undecided::RunsUnknown(id) if named(*id))
+  if matches!(why, Undecided::RunsUnknown(id) | Undecided::RunsArchived(id, _) if named(*id))
     || matches!(why, Undecided::RunsUnknown(id) | Undecided::RunsArchived(id, _) if left_out(*id))
   {
     return Vec::new();

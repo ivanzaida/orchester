@@ -9,7 +9,7 @@ use orchester_app::routes::{HubFilter, HubView, PipelineView, PipelinesFilter, P
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{Pipeline, StepKey},
+  resource::{DeliverMode, DeliverStep, MergeMethod, Pipeline, StepKey},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -109,14 +109,31 @@ fn pipeline_hub_ready_fixes_this_draft_leaves_out_what_only_the_version_runs_and
   let builder = agents.profile(true);
   let old = agents.profile(true);
   let dropped = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(old)], true);
-  let kept = pipeline_of(&agents, "Quick fix", [Some(builder), Some(old)], true);
+  // Quick fix merges with the archived profile: no step names it, so the version's row about it stays.
+  let merging = |body: Pipeline| {
+    body.with_deliver(Some(DeliverStep::new(
+      DeliverMode::AutoMerge,
+      MergeMethod::Squash,
+      Some(old),
+      true,
+    )))
+  };
+  let kept = store(&agents, "Quick fix", &merging(body([Some(builder), Some(builder)])));
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .publish_draft::<Pipeline>(kept, Timestamp::now())
+    .expect("published");
   ProjectDb::open(&agents.root)
     .expect("database")
     .archive_local_resource(old, Timestamp::now())
     .expect("archived");
-  // One draft no longer runs the archived profile, the other still does.
+  // One draft no longer runs the archived profile, the other still merges with it.
   draft_over(&agents, dropped, body([Some(builder), Some(builder)]));
-  draft_over(&agents, kept, body([Some(old), Some(builder)]));
+  draft_over(
+    &agents,
+    kept,
+    merging(body([Some(builder), Some(builder)]).with_description("Still merging".into())),
+  );
 
   open(&mut agents, PipelinesFilter::All, Some(dropped));
   assert_eq!(agents.text("team-hub-readiness-label"), "Ready? · this draft");
@@ -191,4 +208,31 @@ fn pipeline_hub_ready_fixes_a_card_whose_profile_is_gone_opens_its_step_with_the
   agents.until("the plan", |s| s.exists("pipeline-hub-step-agent-name"));
   agents.window.pass();
   assert!(!agents.exists(PICKER), "only Choose another opens the picker");
+}
+
+#[test]
+fn pipeline_hub_ready_fixes_an_archived_profile_of_a_published_pipeline_has_one_row_its_steps() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  let retired = agents.profile(true);
+  let id = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(retired)], true);
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .archive_local_resource(retired, Timestamp::now())
+    .expect("archived");
+  let build = step_at(&agents, id, 1);
+  open(&mut agents, PipelinesFilter::All, Some(id));
+
+  assert_eq!(
+    agents.text("team-hub-readiness-count"),
+    "1 missing",
+    "one problem, one row"
+  );
+  let row = format!("team-hub-ready-step-{build}");
+  assert_eq!(agents.text(&format!("{row}-words")), "Profile no longer available");
+  assert_eq!(agents.text(&format!("{row}-choose-another")), "Choose another →");
+  assert!(
+    !agents.exists("team-hub-ready-undecided"),
+    "not also the readiness check's own row about the archived profile"
+  );
 }

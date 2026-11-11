@@ -13,7 +13,7 @@ use orchester_workspace::{
     hub::HubPipeline,
     ready::{Basis, Blocked, Draft, Problem, problems, step_problems},
   },
-  readiness::{Group, Undecided},
+  readiness::{Group, ReadinessStanding, Undecided},
 };
 
 use crate::support::{Fixture, at, name, pipeline, profile_on};
@@ -410,4 +410,33 @@ fn readiness_pipeline_ready_an_edit_the_page_holds_is_read_as_the_page_shows_it(
     emptied.remove_step(&step.key);
   }
   assert_eq!(basis(&read_of(&emptied)), [Problem::Draft(Draft::NoSteps)]);
+}
+
+#[test]
+fn readiness_pipeline_ready_a_step_that_names_an_archived_profile_is_listed_once() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let retired = fixture.own("retired", &profile_on(connection, &[]));
+  let id = fixture.own("delivery", &pipeline(&[Some(builder), Some(retired)], None));
+  fixture.db().archive_local_resource(retired, at(40)).expect("archived");
+
+  let read = listed(&fixture, id);
+  assert!(
+    matches!(read.standing, Some(ReadinessStanding::Undecided(Undecided::RunsArchived(named, _))) if named == retired),
+    "the readiness names the archived profile: {:?}",
+    read.standing
+  );
+  assert_eq!(
+    found(&read),
+    [Problem::Step(step_problems(&read.flow).remove(0))],
+    "the step that runs it says so; the readiness's own row is the same problem"
+  );
+  assert_eq!(
+    step_problems(&read.flow)[0].blocked,
+    Blocked::Gone {
+      id: retired,
+      tool: false
+    }
+  );
 }
