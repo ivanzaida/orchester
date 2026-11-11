@@ -1,17 +1,22 @@
 //! A pipeline through Orchester's MCP tools and the Orchestrator chat, with pipelines that are always a published
 //! version (D-032, D-033): `create_pipeline`, `save_pipeline` and `duplicate_pipeline` publish or refuse with nothing
-//! stored, the draft-era names are unknown tools ([`mcp`]).
+//! stored, the draft-era names are unknown tools ([`mcp`]); the chat changes pipelines only while it drives, and a
+//! publication of a pipeline kept from before reads stale ([`chat`]).
 //! `cargo test -p orchester-workspace --test pipeline_tools pipeline_tools`.
 
+mod chat;
 mod mcp;
 
 use std::{fs, sync::Arc};
 
 use orchester_core::{
-  id::{ConnectionId, ProjectId},
+  conversation::MessageBody,
+  id::{ChatId, ChatMessageId, ConnectionId, ProjectId, ResourceId},
   name::Name,
+  orchestrator::{Chat, ChatAction, EntryKind, TurnMode, TurnState},
   project::{Project, ProjectKey},
   resource::{AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, Slug},
+  run::Answerer,
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   store::ResourceStore,
   time::Timestamp,
@@ -21,6 +26,7 @@ use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   activity::Activity,
   app_mcp::{self, Translate},
+  orchestrator::tools::{self, ChatScope},
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
@@ -48,12 +54,15 @@ impl SecretVault for NoVault {
   }
 }
 
-/// The app's session with one local project, Kontur, whose agent profiles Builder and Reviewer are published.
+/// The app's session with one local project, Kontur, whose agent profiles Builder and Reviewer are published, and a
+/// conversation of its chat.
 struct Desktop {
   workspace: Workspace,
   services: app_mcp::Services,
+  runners: Runners,
   runtime: Runtime,
   repo: TempDir,
+  scope: ChatScope,
   _data: TempDir,
 }
 
@@ -81,16 +90,25 @@ impl Desktop {
     let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(NoVault)), version);
     let services = app_mcp::Services::new(
       workspace.clone(),
-      runners,
+      runners.clone(),
       servers,
       Programs::processes(),
       (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
     );
+    let scope = ChatScope {
+      project: workspace.projects().expect("projects")[0].id,
+      name: "Kontur".to_owned(),
+      root: repo.path().to_path_buf(),
+      chat: ChatId::generate(),
+      on_its_own: false,
+    };
     let desktop = Self {
       workspace,
       services,
+      runners,
       runtime,
       repo,
+      scope,
       _data: data,
     };
     desktop.profile("builder", "Builder");
@@ -163,6 +181,91 @@ impl Desktop {
       Ok(answer) => panic!("{name} was not refused: {answer}"),
       Err(error) => error,
     }
+  }
+
+  /// Whether the person lets the Orchestrator chat drive in Kontur.
+  fn drives(&self, drives: bool) {
+    self
+      .workspace
+      .set_orchestrator_drives(self.repo.path(), drives)
+      .expect("the switch is saved");
+  }
+
+  /// A message `text` of the person's in the conversation, whose turn thinks now.
+  fn says(&self, text: &str) {
+    let mut db = self.db();
+    let body = MessageBody::new(text).expect("text");
+    let kept = db
+      .chat(self.scope.chat)
+      .expect("read")
+      .unwrap_or_else(|| Chat::start(self.scope.chat, &body, Timestamp::now()));
+    db.keep_chat_message_in(
+      &kept,
+      (ChatMessageId::generate(), &body),
+      (&[], Answerer::Person),
+      (&TurnState::Thinking, Timestamp::now()),
+      TurnMode::Acts,
+    )
+    .expect("kept");
+  }
+
+  /// The chat's tool `name` with `arguments`, as its agent calls it.
+  fn chat_call(&self, name: &str, arguments: Value) -> Result<Value, Value> {
+    let Value::Object(arguments) = arguments else {
+      panic!("arguments are an object");
+    };
+    let translate = Translate::new(|message| message.key.to_owned());
+    self
+      .runtime
+      .block_on(tools::call(
+        (&self.services, &translate, &self.runners),
+        &self.scope,
+        name,
+        arguments,
+      ))
+      .map_err(|error| error.to_json(|message| message.key.to_owned())["error"].clone())
+  }
+
+  /// The chat's tool `name`'s answer, which must not be a refusal.
+  fn chat(&self, name: &str, arguments: Value) -> Value {
+    self
+      .chat_call(name, arguments)
+      .unwrap_or_else(|error| panic!("{name} refused in the chat: {error}"))
+  }
+
+  /// The chat's tool `name`'s refusal, which it must give.
+  fn chat_refused(&self, name: &str, arguments: Value) -> Value {
+    match self.chat_call(name, arguments) {
+      Ok(answer) => panic!("{name} was not refused in the chat: {answer}"),
+      Err(error) => error,
+    }
+  }
+
+  /// The action the conversation kept last.
+  fn last_action(&self) -> ChatAction {
+    self
+      .db()
+      .chat_entries(self.scope.chat)
+      .expect("entries")
+      .into_iter()
+      .rev()
+      .find_map(|entry| match entry.kind {
+        EntryKind::Action(action) => Some(action),
+        _ => None,
+      })
+      .expect("an action is kept")
+  }
+
+  /// Pipeline `name`'s id.
+  fn pipeline(&self, name: &str) -> ResourceId {
+    self
+      .db()
+      .resources(orchester_core::resource::ResourceKind::Pipeline)
+      .expect("pipelines")
+      .into_iter()
+      .find(|resource| resource.name().as_str() == name)
+      .expect("the pipeline")
+      .id()
   }
 
   /// The project's pipelines: their names, and how many versions and drafts each has.

@@ -6,7 +6,8 @@
 //! project's switch *Let the Orchestrator drive* is on, the chat has every domain tool of the app and each change is
 //! carried out at once; while it is off, publishing a draft, canceling, merging a run, answering an agent's question,
 //! sending a run's agents a message and deciding how a stopped run goes on wait for the person ([`super::change`]),
-//! and so does starting a run unless the project allows Autopilot ([`super::proposal`]) ([`super::acts`]). The chat's
+//! and so does starting a run unless the project allows Autopilot ([`super::proposal`]) ([`super::acts`]), and it
+//! changes no pipeline at all ([`PIPELINE_CHANGES`], D-033): a pipeline is always a published version. The chat's
 //! own `init_repository` makes the project a git repository ([`super::repository`]); its git tools read always and
 //! write while the chat drives, and only propose what can lose work ([`super::git`]); its MCP server tools only
 //! propose what widens what agents may do while it does not drive ([`super::mcp_servers`]). What the agent changed, or
@@ -37,7 +38,8 @@ use crate::{
 
 /// The tools of the chat while it does not drive, by name: reading every project's work, setup and tasks'
 /// conversations, task drafts and drafts of what agents run on, making and changing modules (drafts-level: they only
-/// organize tasks), pausing and resuming a run, holding and releasing new starts, and what waits for the person:
+/// organize tasks), pausing and resuming a run, holding and releasing new starts, the pipeline tools it is refused
+/// ([`PIPELINE_CHANGES`]: listed so it reads what to tell the person instead), and what waits for the person:
 /// starting a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's
 /// agents a message and continuing a run that waits for a person's decision. While it drives, it has every other tool
 /// of the app too ([`listed`]). A name whose tool the app does not have (yet) is not listed.
@@ -147,8 +149,11 @@ pub(in crate::orchestrator) const MERGE_RUN: &str = "merge_run";
 pub(super) const CONTINUE_RUN: &str = "continue_run";
 pub(super) const ANSWER_QUESTION: &str = "answer_question";
 pub(super) const SEND_MESSAGE: &str = "send_message";
-/// The tool whose copy the chat saves as a draft before it publishes it by the publication rule.
+/// The tool whose copy the chat publishes as its first version while it drives.
 pub(super) const DUPLICATE_PIPELINE: &str = "duplicate_pipeline";
+/// The tools that change a pipeline, each by publishing a version: the chat calls them only while it drives, and is
+/// refused them (`drive_only`) while it does not (D-033).
+pub(super) const PIPELINE_CHANGES: [&str; 3] = ["create_pipeline", "save_pipeline", DUPLICATE_PIPELINE];
 
 /// The app's tools the chat does not get even while it drives: creating a project is no work of one project's chat,
 /// and the chat has MCP server tools of its own ([`mcp_servers::NAMES`]) that apply the app's.
@@ -221,7 +226,8 @@ pub async fn call(
   name: &str,
   mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
-  let tools = listed(drives(services, scope).await?);
+  let drives = drives(services, scope).await?;
+  let tools = listed(drives);
   if !tools.iter().any(|tool| tool.name == name) {
     return Err(no_tool(name));
   }
@@ -252,8 +258,9 @@ pub async fn call(
     return leads::read_tool((services, translate), scope, name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
-  // A copy publishes a pipeline: a turn a day's report started refuses it, and keeps the refusal.
-  if name == DUPLICATE_PIPELINE && !guard::in_report_turn(scope).await? {
+  // A copy publishes a pipeline: only while the chat drives, and never in a turn a day's report started; a refusal
+  // is kept ([`act_and_keep`]).
+  if name == DUPLICATE_PIPELINE && drives && !guard::in_report_turn(scope).await? {
     return duplicate::duplicate((services, translate, runners), scope, arguments).await;
   }
   act_and_keep((services, translate, runners), scope, name, &arguments).await

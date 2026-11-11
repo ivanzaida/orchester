@@ -390,12 +390,18 @@ fn orchestrator_tools_judge_what_every_person_only_publication_widens() {
 
 #[test]
 fn orchestrator_tools_say_a_duplicate_is_published_as_its_first_version() {
-  let told = listed(false)
-    .into_iter()
-    .find(|tool| tool.name == "duplicate_pipeline")
-    .and_then(|tool| tool.description.map(|description| description.to_string()))
-    .expect("duplicate_pipeline is listed");
-  assert!(told.contains("publishes the copy as its first version"), "{told}");
+  let told = |drives: bool| {
+    listed(drives)
+      .into_iter()
+      .find(|tool| tool.name == "duplicate_pipeline")
+      .and_then(|tool| tool.description.map(|description| description.to_string()))
+      .expect("duplicate_pipeline is listed")
+  };
+  let driving = told(true);
+  assert!(driving.contains("publishes the copy as its first version"), "{driving}");
+  // A pipeline changes only while the chat drives (D-033).
+  let resting = told(false);
+  assert!(resting.contains("drive_only"), "{resting}");
 }
 
 #[test]

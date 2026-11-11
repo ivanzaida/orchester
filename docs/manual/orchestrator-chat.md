@@ -28,8 +28,10 @@ describes how the chat works, which tools its agent has and what it does directl
 1. **Reading is open** — tasks, runs, changes, approvals, questions, plans, conversations, pipelines, profiles,
    instructions, skills, tools, secrets (names and use only), connections, accounts, models, usage and pull requests,
    in **every** project. Changes stay in the chat's own project (another → `other_project`).
-2. **Drafts are free** — tasks, modules, and drafts of pipelines, profiles, instructions, skills and tools are saved
-   without asking.
+2. **Drafts are free** — tasks, modules, and drafts of profiles, instructions, skills and tools are saved without
+   asking. A pipeline has no drafts (saving one publishes its next version), so the chat changes pipelines
+   (`create_pipeline`, `save_pipeline`, `duplicate_pipeline`) only while it drives; while it does not, they are
+   refused as `drive_only` and it tells the person what to change in Pipelines (D-033).
 3. **While it drives, the chat is a client of the app** — every change is made at once by the tool's own rules, and a
    refusal is the tool's. Publishing, starting, canceling, pausing, resuming, continuing (accepting a step, raising
    limits and budgets and resuming after the daily budget included), merging, answering agents and messaging their
@@ -39,6 +41,9 @@ describes how the chat works, which tools its agent has and what it does directl
    client.
 4. **While it does not drive, changes are cards** — publishing, starting a run (unless the project allows Autopilot),
    canceling, merging, answering agents and continuing a stopped run are proposal cards, and no turn starts by itself.
+   Pipelines are the exception: there is no card for them, the chat changes none. A card to publish a pipeline kept
+   from before pipelines lost their drafts still shows; it opens the pipeline, and *Apply* is refused with nothing
+   published.
 
 ## Domain tools the chat has
 
@@ -48,8 +53,8 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 **While it drives**, the chat has every domain tool of the app except `add_project` and the app's `*_mcp_server` tools
 (the chat has its own): the reads, tasks and modules, runs (`run_task`, `pause_run`, `resume_run`, `cancel_run`,
 `continue_run` with every choice, `merge_run`, `complete_run`, `remove_worktree`, `return_to_draft`), questions and
-approvals (`answer_question`, `send_message`, `decide_plan`, `decide_approval`), queue holds, the pipeline, profile,
-instruction, skill, tool, service and stack drafts and their publication, connections and accounts, the project's
+approvals (`answer_question`, `send_message`, `decide_plan`, `decide_approval`), queue holds, creating, saving and
+duplicating pipelines, the profile, instruction, skill, tool, service and stack drafts and their publication, connections and accounts, the project's
 settings the app lets automation change (Autopilot, reviewer, environment, limits, code index, repository agent
 files). Each keeps its own rules: `decide_approval` and `decide_plan` need *Let automation answer approvals*, and what
 only a person may do is `person_only`, as for an outside client.
@@ -59,7 +64,8 @@ only a person may do is `person_only`, as for an outside client.
 `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`, `get_conversation`, `run_task`, `pause_run`,
 `resume_run`, `cancel_run`, `merge_run`, `continue_run`, `answer_question`, `send_message`, `list_approvals`,
 `list_questions`, `get_plan`, `hold_queue`, `release_queue`, `get_approvals`, `list_pipelines`, `get_pipeline`,
-`save_pipeline`, `create_pipeline`, `duplicate_pipeline`, `list_profiles`, `get_profile`,
+`save_pipeline`, `create_pipeline`, `duplicate_pipeline` (all three refused as `drive_only`), `list_profiles`,
+`get_profile`,
 `save_profile_draft`, `publish_profile`, `list_instructions`, `get_instruction`, `save_instruction_draft`,
 `publish_instruction`, `list_skills`, `get_skill`, `save_skill_draft`, `publish_skill`, `list_tools`, `get_tool`,
 `save_tool_draft`, `publish_tool`, `list_secrets`, `list_connections`, `list_accounts`, `list_models`, `get_usage`,
