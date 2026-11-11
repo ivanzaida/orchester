@@ -109,7 +109,9 @@
     },
     "profile": {
       "title": "Profile",
+      "connection": "Connection",
       "ofItsKind": "{{count}} of its kind on this computer",
+      "effortDefault": "CLI default",
       "none": "None",
       "version": "{{version}} · published {{date}}",
       "add": "Add",

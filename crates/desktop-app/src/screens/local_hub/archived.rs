@@ -163,7 +163,10 @@ impl Component for Restore {
     let restore = if state.is_pending() {
       restore.loading()
     } else {
-      restore.on_click(move || action.run(()))
+      // A second press while the first restore is in flight leaves it to finish.
+      restore.on_click(move || {
+        action.run_if_idle(());
+      })
     };
     frame(
       entry.what,

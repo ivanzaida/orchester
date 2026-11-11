@@ -252,7 +252,9 @@ fn local_hub_archive_an_mcp_server_then_restore_it_from_the_archived_view() {
   open(&mut agents, HubView::on_server(HubFilter::Archived, docs));
   agents.until("its panel", |s| s.exists("archive-restore"));
   assert_eq!(agents.text("archive-restore"), "Restore docs");
-  agents.press_until("archive-restore", "restored", |s| !s.exists(&row));
+  // Pressed once: each press restores again and records a change, which starts the list's read over.
+  agents.click("archive-restore");
+  agents.until("restored", |s| !s.exists(&row));
   open(&mut agents, HubView::new(HubFilter::McpServers, None));
   agents.until("back in the list", |s| s.exists(&format!("local-hub-row-mcp-{docs}")));
 }
