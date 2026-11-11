@@ -193,14 +193,6 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) | ProjectPage::TaskReview(key) => insert("key", &key.to_string()),
-    ProjectPage::Memory(view) => {
-      if let Some(tab) = view.tab {
-        insert("tab", tab.name());
-      }
-      if let Some(record) = view.record {
-        insert("record", &record.to_string());
-      }
-    }
     ProjectPage::Usage(query) => {
       let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {
@@ -261,12 +253,25 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   }
 }
 
-/// The parameters `navigate` takes back for the places of Modules and the code viewer.
+/// The parameters `navigate` takes back for the places of Modules, the code viewer and the Agents hub.
 fn other_params(page: &ProjectPage) -> impl Iterator<Item = (&'static str, String)> {
   module_params(page)
     .into_iter()
     .chain(files_params(page))
     .chain(hub_params(page))
+    .chain(memory_params(page))
+}
+
+/// The parameters `navigate` takes back for the Agents hub's Memory filter: its status `tab` and the `record` its
+/// panel shows.
+fn memory_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  let ProjectPage::Memory(view) = page else {
+    return Vec::new();
+  };
+  let mut params: Vec<(&'static str, String)> =
+    view.tab.map(|tab| ("tab", tab.name().to_owned())).into_iter().collect();
+  params.extend(view.record.map(|record| ("record", record.to_string())));
+  params
 }
 
 /// The parameters `navigate` takes back for the Agents hub of a team project: its `filter` and the `item` its panel

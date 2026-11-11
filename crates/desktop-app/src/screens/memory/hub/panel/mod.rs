@@ -2,8 +2,8 @@
 //! *Memory* and its status over its title — its chips (the status, the type, whose it is, *Pinned*, *This computer* in
 //! a team project) with who wrote it and what happened to it since at their end, what approving it replaces or what
 //! deprecating it did, its *Text* and *Tags*, where it came from (*Source*) and the invocations that were given it
-//! (*Given to agents*); its actions are pinned at the bottom ([`bar`]). A record being reviewed, edited or written takes
-//! the panel as its editor ([`crate::screens::memory::editor`]).
+//! (*Given to agents*); its actions are pinned at the bottom ([`bar`]). A record being reviewed, edited or written
+//! takes the panel as its editor ([`crate::screens::memory::editor`]).
 
 mod bar;
 mod source;

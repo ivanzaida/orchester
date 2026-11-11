@@ -128,7 +128,7 @@ fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<Review
     .unwrap_or_default();
   let written = ctx.t_args("memory.editor.sourceStep", [("step", &*step)]);
   let source = match memory.sources().len() {
-    0 => written.clone(),
+    0 => written,
     1 => ctx.t_args("memory.editor.sourceEvent", [("step", &*step)]),
     count => ctx.t_args(
       "memory.editor.sourceEvents",

@@ -91,44 +91,7 @@ fn agent_rows(
 ) -> Vec<Row> {
   let value = |id: &str, words: &str| rows::words(&format!("{id}-value"), words);
   let mut rows = Vec::new();
-  if let Some((number, name)) = &place.step {
-    let step = words::step(ctx, *number, name);
-    let mut said = vec![ctx.t_args("memory.editor.sourceStep", [("step", &*step)]).to_string()];
-    said.extend(match record.sources().len() {
-      0 => None,
-      1 => Some(ctx.t("memory.hub.source.eventOne").to_string()),
-      count => Some(
-        ctx
-          .t_args("memory.hub.source.events", [("count", count.to_string())])
-          .to_string(),
-      ),
-    });
-    let link = opened::source_task(record, &memory.origins).map(|task| {
-      parts::conversation_link(
-        ctx,
-        (state.project_id, &task),
-        ("memory-source-conversation", &ctx.t("memory.editor.sourceLink")),
-      )
-    });
-    let step = Row::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .wrap()
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(
-        Text::new(&words::join(ctx, &said))
-          .id("memory-source-step-value")
-          .variant(HubText::Value.role()),
-      )
-      .with_children(link);
-    rows.push(rows::row(
-      "memory-source-step",
-      &ctx.t("memory.hub.source.step"),
-      None,
-      step,
-    ));
-  }
+  rows.extend(step_row(ctx, state, (memory, record), place));
   if let Some(run) = place.run {
     let mut said = vec![
       ctx
@@ -175,6 +138,53 @@ fn agent_rows(
     ),
   ));
   rows
+}
+
+/// *Step*: the step that wrote the record with how many transcript events, and *Show in Conversation ↗* when it came
+/// from a task; none when the agent worked on no step.
+fn step_row(
+  ctx: &mut Ctx,
+  state: &MemoryState,
+  (memory, record): (&ProjectMemory, &Memory),
+  place: &Workplace,
+) -> Option<Row> {
+  let (number, name) = place.step.as_ref()?;
+  let step = words::step(ctx, *number, name);
+  let mut said = vec![ctx.t_args("memory.editor.sourceStep", [("step", &*step)]).to_string()];
+  said.extend(match record.sources().len() {
+    0 => None,
+    1 => Some(ctx.t("memory.hub.source.eventOne").to_string()),
+    count => Some(
+      ctx
+        .t_args("memory.hub.source.events", [("count", count.to_string())])
+        .to_string(),
+    ),
+  });
+  let link = opened::source_task(record, &memory.origins).map(|task| {
+    parts::conversation_link(
+      ctx,
+      (state.project_id, &task),
+      ("memory-source-conversation", &ctx.t("memory.editor.sourceLink")),
+    )
+  });
+  let step = Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .wrap()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(&words::join(ctx, &said))
+        .id("memory-source-step-value")
+        .variant(HubText::Value.role()),
+    )
+    .with_children(link);
+  Some(rows::row(
+    "memory-source-step",
+    &ctx.t("memory.hub.source.step"),
+    None,
+    step,
+  ))
 }
 
 /// The invocations given `record`, read when it is picked; `Err(None)` while they are read.
