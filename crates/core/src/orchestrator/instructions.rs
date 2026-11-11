@@ -197,9 +197,12 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      review`). The chat shows such a list as labelled links.\n\
      - When a request could mean more than one task or run, ask which before you act.\n\
      - Creating a task makes a draft; nothing runs until a run is started. While Let the Orchestrator drive is on, \
-     run_task starts the run. While it is off, run_task proposes a run: the person starts or dismisses it in the \
-     conversation, so tell them it waits for them, unless the project allows Autopilot (get_approvals): then it \
-     starts the run and its answer says so. A task marked Blocked is never started by you.\n\
+     run_task starts the run; in a turn Orchester started by itself, start a task only where that turn's message \
+     says you may (the turn of a run's success you merged, when the order that applies asks to start work as it \
+     becomes ready), and only a task this conversation leads: run_task refuses another there (not_led). While it is \
+     off, run_task proposes a run: the person starts or dismisses it in the conversation, so tell them it waits for \
+     them, unless the project allows Autopilot (get_approvals): then it starts the run and its answer says so. A task \
+     marked Blocked is never started by you.\n\
      - Saving a draft reaches no agent. While Let the Orchestrator drive is on, publishing it (publish_pipeline, \
      publish_profile, publish_instruction, publish_skill, publish_tool), cancel_run and merge_run are done at once, \
      by the tool's rules (what widens what agents may do is refused person_only unless a person turned on Let \
@@ -245,9 +248,24 @@ const MERGING_RULES: &str = "- While Let the Orchestrator drive is on, merge a r
   automatically, is marked Blocked or is blocked by unfinished tasks, or whose group is held, is left to the person \
   (left_to_person). While the switch is off, merge_run only proposes the merge.";
 
+/// What the turn of a run's success does once it merged the run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AfterMerge {
+  /// It stops: nobody asked for more.
+  Stops,
+  /// An order applies to the turn ([`super::Leads::event_prompt`]): it does what the order asks of the work of what
+  /// the conversation leads that can start now, such as the tasks the merge unblocked.
+  StartsAsOrdered,
+}
+
 /// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it. An
 /// event's turn here is one no conversation's order leads ([`event_prompt`] with no order).
 pub fn wait_prompt(wait: &AgentWait) -> String {
+  wait_prompt_after(wait, AfterMerge::Stops)
+}
+
+/// [`wait_prompt`], whose turn of a run's success does `after` once it merged the run.
+pub(super) fn wait_prompt_after(wait: &AgentWait, after: AfterMerge) -> String {
   let who = match (&wait.agent, &wait.step) {
     (Some(agent), Some(step)) => format!("The agent {agent} at the step {step}"),
     (Some(agent), None) => format!("The agent {agent}"),
@@ -260,7 +278,7 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
     WaitKind::Plan => "proposed a plan that waits for a decision",
     // Not asked for: a tool request starts no turn ([`WaitKind::starts_turns`]).
     WaitKind::Approval => "waits for the person's decision on a tool request",
-    WaitKind::Ended(end) => return end_prompt(wait, end),
+    WaitKind::Ended(end) => return end_prompt(wait, end, after),
     WaitKind::Event(event) => return event_prompt(wait, event, None),
   };
   format!(
@@ -282,7 +300,7 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
 /// decision, stopped at a limit or failed is read and decided on with `continue_run`; an interruption the chat may
 /// continue is continued once, unless it came again soon; any other end is read and explained with the choices the
 /// person has.
-fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
+fn end_prompt(wait: &AgentWait, end: RunEnd, after: AfterMerge) -> String {
   let at = wait
     .step
     .as_deref()
@@ -306,7 +324,7 @@ fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   };
   let todo = match (end, wait.continuing, &wait.merging) {
     (RunEnd::Interrupted, Some(continuing), _) => continuing_todo(continuing),
-    (RunEnd::Succeeded, _, Some(merging)) => merging_todo(merging, wait.number),
+    (RunEnd::Succeeded, _, Some(merging)) => merging_todo(merging, wait.number, after),
     _ => end_todo(end).to_owned(),
   };
   format!(
@@ -346,21 +364,42 @@ fn continuing_todo(continuing: Continuing) -> String {
   }
 }
 
-/// What the turn of run `#number`'s success does: merge it once, or tell the person why it is left to them.
-fn merging_todo(merging: &Merging, number: u32) -> String {
+/// What the turn of run `#number`'s success does: merge it once, or tell the person why it is left to them; once
+/// merged, `after` says whether it goes on as the order that applies asks.
+fn merging_todo(merging: &Merging, number: u32, after: AfterMerge) -> String {
   match merging {
     Merging::Merges => format!(
       "Merge this run once with merge_run (run #{number}), then tell the person you merged it on your own, with the \
        revision and the link. If merge_run refuses with merge_failed naming conflicting files, call continue_run with \
        resolve_conflicts for this run, naming the files; do not call merge_run again. For any other refusal (such as \
        needs_decision or scoped_integration_required), tell the person why in its words and leave the merge to them. \
-       Start, resume, cancel or continue nothing else."
+       {}",
+      after_merge_todo(after)
     ),
     Merging::Left { why } => format!(
       "This run is left to the person: {}. Do not merge it. Tell the person it is ready to merge and why it was not \
        merged on its own, with the link. Start, resume, cancel, continue or merge nothing.",
       left_words(why)
     ),
+  }
+}
+
+/// What the turn of a run's success does once merge_run merged the run.
+const fn after_merge_todo(after: AfterMerge) -> &'static str {
+  match after {
+    AfterMerge::Stops => "Start, resume, cancel or continue nothing else.",
+    AfterMerge::StartsAsOrdered => {
+      "Once merge_run has merged it, and only then, do what the order that applies to this turn (below) asks of work \
+       that can start now: when it asks you to start tasks as they become ready, read the tasks of what this \
+       conversation leads (list_tasks) and start with run_task each one the order asks for that has no run yet and \
+       can start now (not marked Blocked, no unfinished task blocking it: held_by_blocking_tasks is false). This merge \
+       may have unblocked some, and a task whose start an agent slot refused before may start now. Call run_task once \
+       per task in this turn: when it refuses (such as no_agent_slot, task_blocked or not_led), tell the person what \
+       was not started and why, in its words, and do not call it again for that task in this turn; the turn of the \
+       next run of what you lead that succeeds and is merged comes back to it. Start nothing the order does not ask \
+       for and nothing outside what this conversation leads, and tell the person what you started, with the links. \
+       When the merge was refused, start nothing. Resume, cancel or continue nothing else."
+    }
   }
 }
 
