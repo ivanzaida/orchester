@@ -264,7 +264,9 @@ pub(super) fn unsent<B: ResourceBody + Clone>(
 ) -> Result<(ResourceId, Vec<Version<B>>), StoreError> {
   let (resource, number): (String, i64) = connection
     .query_row(
-      "SELECT mine.resource_id, mine.number FROM shared_publishes        JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id        WHERE shared_publishes.version_id = ?1",
+      "SELECT mine.resource_id, mine.number FROM shared_publishes \
+       JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
+       WHERE shared_publishes.version_id = ?1",
       [version.to_string()],
       |row| Ok((row.get(0)?, row.get(1)?)),
     )
