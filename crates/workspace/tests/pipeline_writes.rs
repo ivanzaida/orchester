@@ -19,17 +19,17 @@ use orchester_workspace::pipelines::{
 use tempfile::TempDir;
 
 fn project() -> (TempDir, ProjectDb) {
-  let folder = tempfile::tempdir().unwrap();
-  std::fs::create_dir(folder.path().join(".git")).unwrap();
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  std::fs::create_dir(folder.path().join(".git")).expect("a .git folder");
   let db = ProjectDb::create(
     folder.path(),
     Project::new(
       ProjectId::generate(),
-      ProjectKey::new("TEST").unwrap(),
-      Name::new("Test").unwrap(),
+      ProjectKey::new("TEST").expect("key"),
+      Name::new("Test").expect("name"),
     ),
   )
-  .unwrap();
+  .expect("the project database");
   (folder, db)
 }
 
@@ -37,30 +37,33 @@ fn project() -> (TempDir, ProjectDb) {
 fn tool(db: &mut ProjectDb) -> ResourceId {
   let tool = Tool::new(
     "",
-    ToolAction::Command(CommandAction::new(CommandProgram::new("cargo").unwrap(), vec![])),
+    ToolAction::Command(CommandAction::new(
+      CommandProgram::new("cargo").expect("program"),
+      vec![],
+    )),
     None,
   )
-  .unwrap();
+  .expect("a command tool");
   db.create_published(
-    Slug::new("tool").unwrap(),
-    Name::new("Tool").unwrap(),
+    Slug::new("tool").expect("slug"),
+    Name::new("Tool").expect("name"),
     &tool,
     Timestamp::now(),
   )
-  .unwrap()
+  .expect("a published tool")
   .0
   .id()
 }
 
 /// One step that runs `tool`, waiting for approval when `gate`.
 fn checks(tool: ResourceId, gate: bool) -> Pipeline {
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).unwrap());
-  let key = edit.add_step(Name::new("Check").unwrap(), None);
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("an empty pipeline"));
+  let key = edit.add_step(Name::new("Check").expect("name"), None);
   edit.update(&key, |step| {
     step.kind = StepKind::Tool { tool: Some(tool) };
     step.approval_gate = gate;
   });
-  edit.validate().unwrap()
+  edit.validate().expect("a valid pipeline")
 }
 
 #[test]

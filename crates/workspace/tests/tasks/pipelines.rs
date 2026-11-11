@@ -292,15 +292,8 @@ fn published_pipeline_choices_include_executor_and_approval_gate() {
     budget: None,
   };
   let pipeline = Pipeline::new(vec![research, implement]).expect("valid pipeline");
-  let resource = db
-    .create_published(
-      Slug::new("delivery").expect("valid slug"),
-      Name::new("Delivery").expect("valid name"),
-      &pipeline,
-      now(),
-    )
-    .expect("create pipeline")
-    .0;
+  db.published_pipeline_for_test("delivery", "Delivery", &pipeline, now())
+    .expect("create pipeline");
 
   let choices = published_pipelines(&db).expect("read pipelines");
   let steps = &choices[0].steps;

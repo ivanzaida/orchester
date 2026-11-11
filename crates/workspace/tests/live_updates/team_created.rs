@@ -19,10 +19,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, PublishState};
 use orchester_workspace::sharing::TakenBack;
 
-use super::{
-  ALICE, BOB, TeamServer,
-  publish::Computer,
-};
+use super::{ALICE, BOB, TeamServer, publish::Computer};
 
 fn rule(text: &str) -> Instruction {
   Instruction::new(

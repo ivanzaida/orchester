@@ -113,7 +113,6 @@ fn skills_reference_files_are_stored_and_duplicate_paths_are_refused() {
 fn skills_tool_step_scopes_are_visible_but_cannot_be_selected() {
   use orchester_core::{
     resource::{Pipeline, PipelineEdit, Slug, StepKind},
-    store::ResourceStore,
     time::Timestamp,
   };
   let (repo, mut db) = project();

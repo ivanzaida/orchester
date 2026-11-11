@@ -264,13 +264,11 @@ async fn live_updates_a_team_project_offers_only_what_its_server_has_live() {
     .0;
   assert_eq!(offered(&db).len(), 2, "waiting for the server, it is the team's");
   let taken = alice.send_waiting(&server).await.expect("sent");
-  assert_eq!(
-    taken.iter().map(|taken| taken.resource).collect::<Vec<_>>(),
-    [refused]
-  );
+  assert_eq!(taken.iter().map(|taken| taken.resource).collect::<Vec<_>>(), [refused]);
   assert_eq!(offered(&db), [team]);
   assert!(
-    !db.kept_resources(orchester_core::resource::ResourceKind::Pipeline)
+    !db
+      .kept_resources(orchester_core::resource::ResourceKind::Pipeline)
       .expect("read")
       .iter()
       .any(|kept| kept.id() == refused),
