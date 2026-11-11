@@ -19,6 +19,7 @@ mod local_hub_drafts;
 mod local_hub_edit_secrets;
 mod local_hub_fix;
 mod local_hub_forms;
+mod local_hub_keep;
 mod local_hub_leaving;
 mod local_hub_profile;
 mod local_hub_refusals;
