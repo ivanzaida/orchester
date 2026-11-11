@@ -1,7 +1,8 @@
-//! Real reload success is delivered after input attempts made while the old editor is loading.
+//! Real reload success is delivered after input attempts made while the old editor is loading. Another editor's next
+//! version makes the page's save stale (a pipeline holds no draft, D-032).
 use orchester_core::{
   name::Name,
-  resource::{Draft, Pipeline, PipelineEdit},
+  resource::{Pipeline, PipelineEdit},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -10,7 +11,6 @@ use crate::pipelines_support::Editor;
 
 #[derive(Clone, Copy)]
 enum Page {
-  Empty,
   Settings,
   Step,
   Remove,
@@ -19,11 +19,7 @@ enum Page {
 
 fn starting_reload(page: Page) -> (Editor, orchester_core::id::ResourceId, Pipeline, &'static str) {
   let mut editor = Editor::team();
-  let id = if matches!(page, Page::Empty) {
-    editor.empty("Pending reload")
-  } else {
-    editor.published()
-  };
+  let id = editor.published();
   if matches!(page, Page::Dependencies) {
     let latest = editor
       .db()
@@ -31,22 +27,23 @@ fn starting_reload(page: Page) -> (Editor, orchester_core::id::ResourceId, Pipel
       .expect("published fixture can be read")
       .expect("fixture has a published version");
     let mut edit = PipelineEdit::new(latest.body().clone());
-    edit.add_step(Name::new("Follow-up").expect("fixture step name is valid"), None);
+    // The second step runs what the first does: a stored pipeline's steps all run something.
+    let kind = latest.body().steps()[0].kind.clone();
+    let follow = edit.add_step(Name::new("Follow-up").expect("fixture step name is valid"), None);
+    edit.update(&follow, |step| step.kind = kind);
     editor
       .db()
-      .save_draft(
+      .publish_pipeline_edit(
         id,
-        &Draft::new(
-          edit.validate().expect("two-step fixture is valid"),
-          Some(latest.number()),
-          Timestamp::now(),
-        ),
+        &edit.validate().expect("two-step fixture is valid"),
+        latest.number(),
+        None,
+        Timestamp::now(),
       )
-      .expect("dependency fixture draft is stored");
+      .expect("dependency fixture version is stored");
   }
   editor.open(id);
   let field = match page {
-    Page::Empty => "pipeline-description",
     Page::Settings => {
       editor.click("pipeline-settings");
       "pipeline-settings-description"
@@ -57,28 +54,8 @@ fn starting_reload(page: Page) -> (Editor, orchester_core::id::ResourceId, Pipel
     }
   };
   editor.set(field, "Local unsaved text");
-  let current = editor
-    .db()
-    .draft::<Pipeline>(id)
-    .expect("current fixture draft can be read");
-  let latest = editor
-    .db()
-    .latest_version::<Pipeline>(id)
-    .expect("current fixture version can be read");
-  let external = current
-    .as_ref()
-    .map(Draft::body)
-    .or_else(|| latest.as_ref().map(|v| v.body()))
-    .expect("fixture supplies a draft or published pipeline")
-    .clone()
-    .with_description("External successful reload".into());
-  editor
-    .db()
-    .save_draft(
-      id,
-      &Draft::new(external.clone(), latest.as_ref().map(|v| v.number()), Timestamp::now()),
-    )
-    .expect("external reload fixture edit is stored");
+  editor.publish_behind(id, "External successful reload");
+  let external = editor.stored(id);
   editor.click("pipeline-save");
   editor.until("stale write refused", |e| e.exists("pipeline-reload"));
   match page {
@@ -104,20 +81,15 @@ fn pending_reload(page: Page) {
   editor.until("successful reload accepted", |e| !e.exists("pipeline-loading"));
   // The reloaded page keeps what the route shows; the summary holds the description.
   match page {
-    Page::Empty => {}
     Page::Settings => editor.click("pipeline-tab-steps"),
     Page::Step | Page::Remove | Page::Dependencies => editor.click("pipeline-start"),
   }
   assert_eq!(editor.value("pipeline-description"), "External successful reload");
   assert!(!editor.exists("pipeline-write-error"));
   assert_eq!(
-    editor
-      .db()
-      .draft::<Pipeline>(id)
-      .expect("accepted draft can be read")
-      .expect("external draft survives accepted reload")
-      .body(),
-    &external
+    editor.stored(id),
+    external,
+    "their version survives the accepted reload"
   );
   editor.focus("pipeline-description");
   editor.key("y", false);
@@ -129,13 +101,6 @@ fn pending_reload(page: Page) {
 }
 fn attempt_controls(editor: &mut Editor, page: Page, field: &str) {
   match page {
-    Page::Empty => {
-      editor.click("pipeline-add-step");
-      editor.click("pipeline-use-starter");
-      assert!(!editor.exists("step-name"));
-      assert!(!editor.exists("pipeline-step-implement"));
-      assert_eq!(editor.value(field), "Local unsaved text");
-    }
     Page::Settings => {
       assert!(editor.exists("pipeline-settings-undo"));
       editor.click("pipeline-settings-undo");
@@ -174,10 +139,6 @@ fn attempt_controls(editor: &mut Editor, page: Page, field: &str) {
   }
 }
 
-#[test]
-fn pipelines_pending_successful_reload_locks_summary_and_empty_canvas_mutations() {
-  pending_reload(Page::Empty);
-}
 #[test]
 fn pipelines_pending_successful_reload_locks_settings_fields_and_both_undo_controls() {
   pending_reload(Page::Settings);

@@ -1,10 +1,7 @@
 //! The Steps tab's vertical flow: dependency order, parallel steps in one bracket, each route that sends work back
-//! with its target, the Deliver step or its absence; Publish waiting for a saved draft; and a viewed version that only
-//! reads, restored at once while no draft exists.
-use orchester_core::{
-  resource::{DeliverStep, Pipeline},
-  store::ResourceStore,
-};
+//! with its target, the Deliver step or its absence; and a viewed version that only reads, restored at once while
+//! nothing is unsaved.
+use orchester_core::resource::DeliverStep;
 
 use crate::pipelines_support::Editor;
 
@@ -86,51 +83,13 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
   assert!(editor.exists("deliver-mode-approve"));
   assert!(editor.text("deliver-mode-pull-request").contains("Coming later"));
   editor.click("deliver-mode-auto");
-  editor.until("the Deliver step saved", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().is_some_and(|draft| {
-      draft
-        .body()
+  editor.until("the Deliver step saved as v2", |e| {
+    e.version(id) == 2
+      && e
+        .stored(id)
         .deliver()
         .is_some_and(|deliver| deliver != &DeliverStep::default())
-    })
   });
-}
-
-#[test]
-fn pipelines_publish_waits_while_changes_are_unsaved() {
-  let mut editor = Editor::team();
-  let id = editor.published();
-  editor.open(id);
-  assert!(
-    editor.exists("pipeline-header-history"),
-    "a published pipeline with no draft offers its history"
-  );
-  editor.click("pipeline-step-step");
-  editor.click("step-gate");
-  assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
-  assert!(editor.exists("pipeline-save"));
-  editor.click("pipeline-publish");
-  assert!(
-    !editor.exists("pipeline-publish-review"),
-    "Publish is disabled while changes are unsaved"
-  );
-  editor.click("pipeline-save");
-  editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
-  editor.click("pipeline-save-question-confirm");
-  editor.until("draft saved", |e| e.db().draft::<Pipeline>(id).unwrap().is_some());
-  editor.until("save status", |e| {
-    e.text("pipeline-save-status") == "Draft saved · Published v1"
-  });
-  editor.click("pipeline-publish");
-  assert!(
-    editor.exists("pipeline-publish-review"),
-    "a saved draft can be reviewed"
-  );
-  assert!(editor.text("pipeline-publish-review").contains("1 change since v1"));
-  assert!(
-    editor.exists("pipeline-step-changed-step"),
-    "the review tags the changed step on the flow"
-  );
 }
 
 #[test]
@@ -186,10 +145,7 @@ fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
   assert!(editor.exists("pipeline-save"), "Save draft stays in the header");
   editor.click("pipeline-save");
   editor.arm();
-  assert!(
-    editor.db().draft::<Pipeline>(id).unwrap().is_none(),
-    "an invalid draft is not saved"
-  );
+  assert!(editor.version(id) == 1, "an invalid edit is not saved");
   editor.click("step-page-back");
   assert!(
     editor.exists("pipeline-field-error"),

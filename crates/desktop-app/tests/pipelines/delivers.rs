@@ -1,5 +1,5 @@
 //! What a pipeline's runs deliver, in Pipeline settings › Delivery (ORC-93): changes until a person chooses otherwise,
-//! the choice saved in the draft and kept as the published version's until the next one is published.
+//! the choice saved as the next version while the version before keeps its own (a pipeline holds no draft, D-032).
 
 use orchester_core::{
   resource::{Deliverable, Pipeline},
@@ -9,7 +9,7 @@ use orchester_core::{
 use crate::pipelines_support::Editor;
 
 #[test]
-fn pipelines_delivers_is_chosen_in_settings_and_saved_in_the_draft() {
+fn pipelines_delivers_is_chosen_in_settings_and_saved_as_the_next_version() {
   let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
@@ -28,25 +28,14 @@ fn pipelines_delivers_is_chosen_in_settings_and_saved_in_the_draft() {
     "each choice says what it means"
   );
   editor.click("pipeline-delivers-report");
-  editor.until("the report choice saved in the draft", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .is_some_and(|draft| draft.body().delivers() == Deliverable::Report)
+  editor.until("the report choice saved as v2", |e| {
+    e.version(id) == 2 && e.stored(id).delivers() == Deliverable::Report
   });
+  let versions = editor.db().versions::<Pipeline>(id).expect("versions");
+  let first = versions.iter().find(|version| version.number().get() == 1).expect("v1");
   assert_eq!(
-    editor
-      .db()
-      .latest_version::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .body()
-      .delivers(),
+    first.body().delivers(),
     Deliverable::Changes,
-    "the published version keeps what it delivers until the next is published"
-  );
-  assert!(
-    editor.text("pipeline-settings-delivery").contains("Changed"),
-    "the section says it changed from the published version"
+    "the version before keeps what it delivers"
   );
 }

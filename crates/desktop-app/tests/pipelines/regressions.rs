@@ -1,52 +1,9 @@
-//! Review regressions: incomplete starters, input identity and leaving with pending edits.
+//! Review regressions: input identity and leaving with pending edits. A pipeline holds no draft (D-032): what the page
+//! saves is its next version.
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::{
-  resource::{Pipeline, RepositoryAccess, StepKind},
-  store::ResourceStore,
-};
+use orchester_core::resource::StepKind;
 
 use crate::pipelines_support::Editor;
-
-#[test]
-fn pipelines_unassigned_starter_saves_edits_but_cannot_publish() {
-  let mut editor = Editor::team();
-  editor.go(ProjectPage::NewPipeline);
-  editor.until("new pipeline", |e| e.exists("pipeline-name"));
-  editor.set("pipeline-name", "Delivery");
-  editor.click("pipeline-create");
-  editor.until("starter", |e| e.exists("pipeline-step-implement"));
-  let id = editor.selected();
-  editor.set("pipeline-description", "An incomplete starter");
-  editor.until("starter saved", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().description() == "An incomplete starter"
-  });
-  editor.click("pipeline-publish");
-  assert!(editor.exists("pipeline-publish-problem"));
-  assert!(!editor.exists("pipeline-publish-confirm"));
-  assert!(editor.db().latest_version::<Pipeline>(id).unwrap().is_none());
-  editor.click("pipeline-step-implement");
-  assert!(editor.exists("step-write"));
-  editor.click("step-read");
-  editor.until("write removed", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .body()
-      .steps()
-      .iter()
-      .any(|step| {
-        step.key.as_str() == "implement"
-          && matches!(
-            step.kind,
-            StepKind::Agent {
-              repository: RepositoryAccess::ReadOnly,
-              ..
-            }
-          )
-      })
-  });
-}
 
 #[test]
 fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
@@ -57,8 +14,8 @@ fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
   editor.click("pipeline-settings");
   keyboard_across_save(&mut editor, "pipeline-settings-description", "d");
   editor.click("pipeline-tab-steps");
-  editor.click("pipeline-add-step");
-  editor.set("step-name", "Typing");
+  // The fixture's one step, which runs a tool: a step added here would run nothing, which saving refuses.
+  editor.click("pipeline-step-step");
   editor.click("step-instructions-row");
   keyboard_across_save(&mut editor, "step-instructions", "g");
 }
@@ -76,15 +33,11 @@ fn keyboard_across_save(editor: &mut Editor, field: &str, first: &str) {
   editor.until("autosave completed", |e| {
     !e.exists("pipeline-save") && !e.text("screen-pipelines").contains("Saving draft")
   });
-  let saved = editor
-    .db()
-    .draft::<Pipeline>(editor.selected())
-    .expect("read the saved pipeline")
-    .expect("autosave created a draft");
+  let saved = editor.stored(editor.selected());
   let saved_text = if field == "step-instructions" {
-    saved.body().steps()[0].instructions.as_str()
+    saved.steps()[0].instructions.as_str()
   } else {
-    saved.body().description()
+    saved.description()
   };
   assert_eq!(saved_text, typed, "the typed value reached the database");
   assert_eq!(
@@ -120,14 +73,11 @@ fn pipelines_leaving_before_autosave_requires_a_decision_and_keep_preserves_edit
   assert_eq!(editor.selected(), id);
   assert!(editor.exists("pipeline-leave-question"));
   assert_eq!(editor.value("pipeline-description"), "Pending description");
-  assert_eq!(
-    editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().description(),
-    ""
-  );
+  assert_eq!(editor.stored(id).description(), "");
   editor.click("pipeline-leave-keep");
   assert!(!editor.exists("pipeline-leave-question"));
   editor.until("kept work saved", |e| {
-    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().description() == "Pending description"
+    e.stored(id).description() == "Pending description"
   });
   editor.click("pipeline-parent");
   editor.until("hub", |e| e.exists(&format!("pipeline-hub-row-{id}")));
@@ -169,7 +119,7 @@ fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
   editor.click("pipeline-save");
   editor.until("protected save", |e| e.exists("pipeline-save-question-confirm"));
   assert!(editor.gated(), "navigation must never authorize the weaker edit");
-  assert!(editor.db().draft::<Pipeline>(id).unwrap().is_none());
+  assert_eq!(editor.version(id), 1, "nothing is saved while the person decides");
   editor.click("pipeline-save-question-keep");
   editor.set("step-budget", "invalid");
   editor.window.navigation().close_active();
@@ -182,10 +132,7 @@ fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
   editor.window.until("departed", |w| {
     matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Tasks(_)))
   });
-  assert!(
-    editor.db().draft::<Pipeline>(id).unwrap().is_none(),
-    "explicit discard never saves"
-  );
+  assert_eq!(editor.version(id), 1, "explicit discard never saves");
   editor.open(id);
   editor.click("pipeline-step-step");
   assert_eq!(editor.value("step-budget"), "No limit");
@@ -203,18 +150,12 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
   editor.click("pipeline-add-step");
   editor.choose("step-executor", "Reviewer");
   editor.choose("step-model", "test-model");
+  // The added step is the agent step; the fixture's first runs a tool.
   editor.until("model override saved", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .body()
-      .steps()
-      .first()
-      .is_some_and(|step| {
-        matches!(&step.kind, StepKind::Agent { model: Some(model), .. }
+    e.stored(id).steps().iter().any(|step| {
+      matches!(&step.kind, StepKind::Agent { model: Some(model), .. }
         if model.as_str() == "test-model")
-      })
+    })
   });
   editor.choose("step-executor", "Choose a profile");
   assert!(
@@ -228,17 +169,27 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
   // Taken from the profile, the box shows the profile's model id (`DuMJh` in `IsU5u`).
   assert_eq!(editor.text("step-model-label"), "test-model");
   editor.until("inherited model saved", |e| {
-    matches!(
-      e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[0].kind,
-      StepKind::Agent {
-        model: None,
-        profile: Some(_),
-        ..
-      }
-    )
+    e.stored(id).steps().iter().any(|step| {
+      matches!(
+        step.kind,
+        StepKind::Agent {
+          model: None,
+          profile: Some(_),
+          ..
+        }
+      )
+    })
   });
   assert_eq!(editor.text("step-model-label"), "test-model");
+  let agent = editor
+    .stored(id)
+    .steps()
+    .iter()
+    .find(|step| matches!(step.kind, StepKind::Agent { .. }))
+    .expect("the agent step")
+    .key
+    .clone();
   editor.click("pipeline-start");
-  editor.click("pipeline-step-step");
+  editor.click(&format!("pipeline-step-{agent}"));
   assert_eq!(editor.text("step-model-label"), "test-model");
 }
