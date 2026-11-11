@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
@@ -52,7 +52,11 @@ pub(super) fn key(ctx: &mut Ctx, open: &Open<'_>, step: &Step, label: Text) -> K
   match Executor::of(step) {
     Executor::Profile(id) => match builder(ctx, open, id) {
       Some(link) => Key {
-        label: Column::new().child(label).child(link).into(),
+        label: Column::new()
+          .width(Dimension::Pct(100.0))
+          .child(label)
+          .child(link)
+          .into(),
         sub: None,
         lead: Some(ExtraSpacing::Snug),
       },
@@ -97,6 +101,7 @@ fn builder(ctx: &mut Ctx, open: &Open<'_>, id: ResourceId) -> Option<Element> {
       .apply(Press::Open(Navigation::of(ctx).to(route)).button())
       .id("pipeline-hub-step-open-profile")
       .describe("a11y_name", words.clone())
+      .max_width(Dimension::Pct(100.0))
       .height(Dimension::Px(ControlHeight::Helper.value()))
       .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
       .spacing(ExtraSpacing::Snug.role())
@@ -109,7 +114,10 @@ fn builder(ctx: &mut Ctx, open: &Open<'_>, id: ResourceId) -> Option<Element> {
           .id("pipeline-hub-step-open-profile-label")
           .variant(TypographyStyle::Button)
           .color(PaletteColor::TextSecondary)
-          .nowrap(),
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+          .flex_shrink(1.0)
+          .min_width(Dimension::Px(0.0)),
       )
       .into(),
   )

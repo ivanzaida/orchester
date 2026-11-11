@@ -25,7 +25,7 @@ mod text_field;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
-  core::Signal,
+  core::{ElementRef, Signal},
   node::Element,
 };
 use orchester_core::resource::{PipelineEdit, StepKey};
@@ -143,6 +143,8 @@ pub(super) struct Open<'a> {
   pub pick_agent: &'a Signal<bool>,
   /// The last known CLI each step of the edit ran on ([`known`]).
   pub known: &'a known::PathsSignal,
+  /// *Gate and access*, which the panel brings into view with the question before a save.
+  pub gate: &'a ElementRef,
 }
 
 /// What the panel's body shows for the open step: the head, the strip and the groups of fields; nothing when the

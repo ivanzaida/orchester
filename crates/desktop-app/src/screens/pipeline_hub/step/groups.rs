@@ -235,7 +235,7 @@ fn stopped_row(ctx: &Ctx) -> lurq::components::Row {
     .flex(1.0)
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .child(
-      Text::new(&ctx.t("pipeline_hub.stepEdit.stoppedValue"))
+      Text::new(&ctx.t("pipeline_hub.settings.failureValue"))
         .id("pipeline-hub-step-stopped")
         .variant(HubText::Value.role())
         .color(PaletteColor::TextSecondary),

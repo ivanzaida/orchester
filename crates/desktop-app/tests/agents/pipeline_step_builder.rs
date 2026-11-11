@@ -12,8 +12,9 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeniedBehavior, ModelId, Pipeline,
-    PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, StepKey, StepKind, Tool, ToolAction,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandAction, CommandProgram, DatabaseQuery,
+    DeniedBehavior, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, StepKey,
+    StepKind, Tool, ToolAction,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -72,6 +73,21 @@ fn database_tool(db: &mut ProjectDb) -> ResourceId {
   id
 }
 
+/// A command tool without access rules, which a step runs, published.
+fn command_tool(db: &mut ProjectDb) -> ResourceId {
+  let action = ToolAction::Command(CommandAction::new(
+    CommandProgram::new("cargo").expect("program"),
+    Vec::new(),
+  ));
+  let tool = Tool::new("", action, None).expect("tool");
+  let id = db
+    .create_resource(Slug::new("lint").expect("slug"), name("Lint"), &tool, Timestamp::now())
+    .expect("the tool")
+    .id();
+  db.publish_draft::<Tool>(id, Timestamp::now()).expect("published");
+  id
+}
+
 /// A profile with a draft and no published version.
 fn draft_profile(agents: &Agents, db: &mut ProjectDb) -> ResourceId {
   let connection = agents.listed().connections[0].id();
@@ -93,11 +109,12 @@ fn draft_profile(agents: &Agents, db: &mut ProjectDb) -> ResourceId {
   .id()
 }
 
-/// A published pipeline whose step *Review* runs a profile with only a draft and whose step *Checks* runs the database
-/// tool.
-fn problems(agents: &Agents) -> (ResourceId, ResourceId, [StepKey; 2]) {
+/// A published pipeline whose step *Review* runs a profile with only a draft, whose step *Checks* runs the database
+/// tool and whose step *Lint* runs the command tool.
+fn problems(agents: &Agents) -> (ResourceId, ResourceId, [StepKey; 3]) {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let tool = database_tool(&mut db);
+  let lint_tool = command_tool(&mut db);
   let reviewer = draft_profile(agents, &mut db);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let review = edit.add_step(name("Review"), None);
@@ -111,6 +128,8 @@ fn problems(agents: &Agents) -> (ResourceId, ResourceId, [StepKey; 2]) {
   });
   let checks = edit.add_step(name("Checks"), Some(&review));
   edit.update(&checks, |step| step.kind = StepKind::Tool { tool: Some(tool) });
+  let lint = edit.add_step(name("Lint"), Some(&checks));
+  edit.update(&lint, |step| step.kind = StepKind::Tool { tool: Some(lint_tool) });
   let id = db
     .create_resource(
       Slug::new("problems").expect("slug"),
@@ -121,7 +140,7 @@ fn problems(agents: &Agents) -> (ResourceId, ResourceId, [StepKey; 2]) {
     .expect("the pipeline")
     .id();
   db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
-  (id, reviewer, [review, checks])
+  (id, reviewer, [review, checks, lint])
 }
 
 #[test]
@@ -172,7 +191,7 @@ fn open_builder_over_unsaved_changes_asks_first() {
 #[test]
 fn a_profile_with_only_a_draft_opens_too_and_a_tool_that_cannot_run_says_why() {
   let mut agents = Agents::new(true);
-  let (id, reviewer, [review, checks]) = problems(&agents);
+  let (id, reviewer, [review, checks, lint]) = problems(&agents);
   open_step(&mut agents, id, &review);
   assert_eq!(agents.text("pipeline-hub-step-open-profile-label"), "Open Reviewer");
 
@@ -204,6 +223,17 @@ fn a_profile_with_only_a_draft_opens_too_and_a_tool_that_cannot_run_says_why() {
     assert!(!agents.exists(row), "a tool step has no {row}");
   }
   assert!(agents.exists("pipeline-hub-step-stopped-row"), "Run keeps its rows");
+
+  // A command tool that can run says nothing of the kind, and keeps its instructions.
+  agents.click(&format!("pipeline-hub-step-chip-{lint}"));
+  agents.until("the runnable tool step", |s| {
+    s.exists("pipeline-hub-step-instructions-row")
+  });
+  assert!(!agents.exists("pipeline-hub-step-tool-unavailable"));
+  assert_eq!(
+    agents.text("pipeline-hub-step-agent-row-sub"),
+    "Its exit code decides the step"
+  );
 
   agents.click(&format!("pipeline-hub-step-chip-{review}"));
   agents.until("the profile step", |s| s.exists(LINK));

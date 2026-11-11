@@ -65,16 +65,20 @@ pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, u
       .variant(HubText::PanelHint.role())
       .nowrap(),
     );
+  // The name's box stands 8 to the start of the name (D-022), past the head's start: neither the head nor its column
+  // cuts what stands past them, so its ring and hover fill draw whole.
   Row::new()
     .id("pipeline-hub-step-head")
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
+    .overflow_visible()
     .child(
       // The name's box is 28 high with the name in its middle, which brings the name as near the line over it as the
       // other spacing would.
       Column::new()
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
+        .overflow_visible()
         .child(where_)
         .child(name::field(
           ctx,

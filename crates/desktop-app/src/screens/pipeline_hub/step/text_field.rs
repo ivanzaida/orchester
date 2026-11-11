@@ -9,6 +9,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
+  components::Column,
   core::{Ref, Signal},
   node::{Element, dimension::Dimension},
 };
@@ -24,6 +25,7 @@ use orchester_workspace::{
 use super::{Faulty, keep, kept};
 use crate::{
   screens::pipeline_hub::edit::Edit,
+  theme::DISABLED_OPACITY,
   ui::{field::FieldInput, message::message_text},
 };
 
@@ -223,6 +225,10 @@ impl Component for TextField {
     if let Some(message) = self.error.get() {
       input = input.error(message_text(ctx, &message));
     }
-    input.render(ctx)
+    // While a save or its question runs the box takes the kit's disabled look, as the step's other fields (P2f).
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .opacity(if props.locked { DISABLED_OPACITY } else { 1.0 })
+      .child(input.render(ctx))
   }
 }

@@ -369,7 +369,6 @@
       "httpUnavailable": "HTTP actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
       "toolAccessUnavailable": "Pipeline steps cannot run command tools with access rules yet. Pick a command tool without access rules or an agent profile.",
       "stopped": "When the step fails",
-      "stoppedValue": "Restart once, then ask",
       "baseMoves": "Merge the base branch when it moves",
       "baseMovesHint": "On by default for steps that can write, except Review and Verify steps and steps that return their failures to a writing step.",
       "commands": "Commands",

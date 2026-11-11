@@ -53,6 +53,7 @@ pub(super) fn group(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Element {
     Vec::new(),
     rows,
   )
+  .ref_element(open.gate.clone())
   .into()
 }
 

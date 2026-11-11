@@ -22,7 +22,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   harness::Agents,
-  pipeline_step::{SAVE, open_step, save_until, stored},
+  pipeline_step::{SAVE, open_step, rect, route, save_until, stored},
 };
 
 /// A published profile `name` on a Claude Code connection, which enforces a list of commands but cannot turn the
@@ -127,6 +127,28 @@ fn only(commands: &[&str]) -> StepCommands {
   )
 }
 
+/// Where the bottom of `id` is laid out.
+fn bottom(agents: &mut Agents, id: &str) -> f32 {
+  let bounds = agents
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  bounds.y + bounds.height
+}
+
+/// How tall `id` is laid out.
+fn tall(agents: &mut Agents, id: &str) -> f32 {
+  agents
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+    .height
+}
+
 /// The panel's question before a save that widens what the pipeline's agents may do.
 const CONFIRM: &str = "pipeline-hub-confirm-confirm";
 const HINT: &str = "team-hub-actions-hint";
@@ -195,6 +217,23 @@ fn a_step_narrows_the_profile_s_commands_and_takes_them_back_keeping_ask() {
     "nothing to take back while the step narrows nothing"
   );
 
+  let (network, ask) = (
+    rect(&mut agents, "pipeline-hub-step-network-off"),
+    rect(&mut agents, "pipeline-hub-step-ask-tools"),
+  );
+  assert!(
+    (network.x - ask.x).abs() < 0.5,
+    "the locked switch stands at the end as the others do: {network:?} {ask:?}"
+  );
+  let (label, row) = (
+    rect(&mut agents, "pipeline-hub-step-ask-tools-row-label"),
+    rect(&mut agents, "pipeline-hub-step-network-row-label"),
+  );
+  assert!(
+    tall(&mut agents, "pipeline-hub-step-ask-tools-row") <= tall(&mut agents, "pipeline-hub-step-network-row") + 0.5,
+    "Ask keeps one line: {label:?} {row:?}"
+  );
+
   // Claude Code cannot turn the network off: the switch is locked and changes nothing.
   agents.click("pipeline-hub-step-network-off");
   assert!(
@@ -246,6 +285,27 @@ fn turning_ask_off_asks_before_saving_and_the_step_waits_unchanged() {
     "{}",
     agents.text("pipeline-hub-confirm")
   );
+
+  // The question stands over the end of the panel; the rows it asks about are brought into view with it.
+  agents.until("the Ask row in view", |s| {
+    let (row, view) = (
+      bottom(s, "pipeline-hub-step-ask-tools-row"),
+      bottom(s, "pipeline-hub-panel-scroll"),
+    );
+    row <= view + 0.5
+  });
+
+  // Open Builder does not leave while the question waits: it asks about leaving, as any way out of the panel does, and
+  // *Keep editing* returns to the question.
+  let at = route(&agents);
+  agents.click("pipeline-hub-step-open-profile");
+  agents.until("the question about leaving", |s| s.exists("pipeline-hub-leave-cancel"));
+  assert_eq!(route(&agents), at, "nothing was left");
+  agents.click("pipeline-hub-leave-cancel");
+  agents.until("back to the question", |s| {
+    !s.exists("pipeline-hub-leave-cancel") && s.exists(CONFIRM)
+  });
+  assert_eq!(route(&agents), at);
 
   // P2f: while the question waits the step is locked; its controls keep their place and take no press.
   for id in [

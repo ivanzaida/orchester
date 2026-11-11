@@ -146,6 +146,10 @@ struct PipelinePanel {
   pick_agent: Signal<bool>,
   /// The last known CLI each step of the edit ran on, which a model override is read against.
   known: Signal<step::Paths>,
+  /// An open step's *Gate and access*, which the question before a save that widens brings into view with it, and
+  /// whether that question was asked when the step was last drawn.
+  gate: ElementRef,
+  asked_shown: Ref<bool>,
   id: ResourceId,
 }
 
@@ -178,6 +182,8 @@ impl Component for PipelinePanel {
       delivers: ctx.element_ref(),
       pick_agent: ctx.signal(false),
       known: ctx.signal(step::Paths::default()),
+      gate: ctx.element_ref(),
+      asked_shown: ctx.create_ref(false),
       id,
     };
     save::follow(
@@ -309,6 +315,12 @@ impl PipelinePanel {
 
   /// The body of an open step ([`step`]).
   fn step_body(&self, ctx: &mut Ctx, shown: &Shown<'_>, key: &StepKey) -> Column {
+    // The question covers the end of the step, where the gate's rows it asks about stand.
+    let asked = self.pending.get().is_some();
+    if asked && !self.asked_shown.get() {
+      ctx.scroll_into_view(&self.gate);
+    }
+    self.asked_shown.set(asked);
     body().spacing(ExtraSpacing::Inset.role()).with_children(step::parts(
       ctx,
       &step::Open {
@@ -325,6 +337,7 @@ impl PipelinePanel {
         reveal_delivers: &self.reveal_delivers,
         pick_agent: &self.pick_agent,
         known: &self.known,
+        gate: &self.gate,
       },
     ))
   }

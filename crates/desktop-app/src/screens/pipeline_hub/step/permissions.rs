@@ -8,7 +8,7 @@
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -220,7 +220,7 @@ fn network_row(ctx: &mut Ctx, choice: &ProfileChoice, now: &Now, change: Option<
   )
   .end()
   .wrap(ctx, toggle);
-  rows::keyed(id, name, None, Row::new().flex(1.0).child(reason)).describe("locked", "true")
+  rows::keyed(id, name, None, Row::new().flex(1.0).justify(Justify::End).child(reason)).describe("locked", "true")
 }
 
 /// *Ask when a tool needs approval*.
@@ -234,7 +234,7 @@ fn ask_row(ctx: &Ctx, now: &Now, change: Option<&Change>) -> Row {
     }) as OnSwitch
   });
   let toggle = switch("pipeline-hub-step-ask-tools", label.clone(), now.ask, on_change);
-  rows::row("pipeline-hub-step-ask-tools-row", &label, None, toggle)
+  rows::row_one_line("pipeline-hub-step-ask-tools-row", &label, toggle)
 }
 
 /// *Use profile commands and network* (`Reset` `uhKjE`), the group's last line, once the step narrows its profile's
