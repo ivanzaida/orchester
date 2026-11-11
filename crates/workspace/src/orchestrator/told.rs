@@ -62,7 +62,7 @@ const DRIVE_DUPLICATE: &str = "In this chat it publishes the copy as its first v
 const PIPELINE_DRIVE_ONLY: &str = "In this chat it changes no pipeline while Let the Orchestrator drive is off: the \
   call is refused (drive_only) and nothing is proposed, since a pipeline is always a published version and has no \
   draft. Tell the person what to change and that they save it in Pipelines, or that they can turn on Let the \
-  Orchestrator drive for you to do it. While the chat drives, it is done as follows.";
+  Orchestrator drive for you to do it. What the tool does once the chat drives:";
 
 /// What the agent reads first of `merge_run` while the chat drives.
 const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself it merges only a run the chat's rule \

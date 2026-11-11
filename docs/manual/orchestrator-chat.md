@@ -54,22 +54,21 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 (the chat has its own): the reads, tasks and modules, runs (`run_task`, `pause_run`, `resume_run`, `cancel_run`,
 `continue_run` with every choice, `merge_run`, `complete_run`, `remove_worktree`, `return_to_draft`), questions and
 approvals (`answer_question`, `send_message`, `decide_plan`, `decide_approval`), queue holds, creating, saving and
-duplicating pipelines, the profile, instruction, skill, tool, service and stack drafts and their publication, connections and accounts, the project's
-settings the app lets automation change (Autopilot, reviewer, environment, limits, code index, repository agent
-files). Each keeps its own rules: `decide_approval` and `decide_plan` need *Let automation answer approvals*, and what
-only a person may do is `person_only`, as for an outside client.
+duplicating pipelines, the profile, instruction, skill, tool, service and stack drafts and their publication,
+connections and accounts, the project's settings the app lets automation change (Autopilot, reviewer, environment,
+limits, code index, repository agent files). Each keeps its own rules: `decide_approval` and `decide_plan` need *Let
+automation answer approvals*, and what only a person may do is `person_only`, as for an outside client.
 
 **While it does not drive**, it has these: `list_projects`, `get_project`, `list_tasks`, `get_task`, `create_task`,
-`update_task`, `list_modules`, `get_module`,
-`create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`, `get_conversation`, `run_task`, `pause_run`,
-`resume_run`, `cancel_run`, `merge_run`, `continue_run`, `answer_question`, `send_message`, `list_approvals`,
-`list_questions`, `get_plan`, `hold_queue`, `release_queue`, `get_approvals`, `list_pipelines`, `get_pipeline`,
-`save_pipeline`, `create_pipeline`, `duplicate_pipeline` (all three refused as `drive_only`), `list_profiles`,
-`get_profile`,
-`save_profile_draft`, `publish_profile`, `list_instructions`, `get_instruction`, `save_instruction_draft`,
-`publish_instruction`, `list_skills`, `get_skill`, `save_skill_draft`, `publish_skill`, `list_tools`, `get_tool`,
-`save_tool_draft`, `publish_tool`, `list_secrets`, `list_connections`, `list_accounts`, `list_models`, `get_usage`,
-`get_delivery`, `get_story_point_calibration`, `get_daily_report`.
+`update_task`, `list_modules`, `get_module`, `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`,
+`get_conversation`, `run_task`, `pause_run`, `resume_run`, `cancel_run`, `merge_run`, `continue_run`,
+`answer_question`, `send_message`, `list_approvals`, `list_questions`, `get_plan`, `hold_queue`, `release_queue`,
+`get_approvals`, `list_pipelines`, `get_pipeline`, `save_pipeline`, `create_pipeline`, `duplicate_pipeline` (all three
+refused as `drive_only`), `list_profiles`, `get_profile`, `save_profile_draft`, `publish_profile`,
+`list_instructions`, `get_instruction`, `save_instruction_draft`, `publish_instruction`, `list_skills`, `get_skill`,
+`save_skill_draft`, `publish_skill`, `list_tools`, `get_tool`, `save_tool_draft`, `publish_tool`, `list_secrets`,
+`list_connections`, `list_accounts`, `list_models`, `get_usage`, `get_delivery`, `get_story_point_calibration`,
+`get_daily_report`.
 
 **Never available to the chat**: `add_project`; deleting anything; the app's `*_mcp_server` tools (the chat has its own
 `mcp_*` tools).

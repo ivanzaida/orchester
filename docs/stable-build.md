@@ -537,25 +537,25 @@ on approving risky requests or granting wider approval. Free-text answers and co
 A native acceptance of an Orchestrator proposal is the person's decision; automatic answers still require consent.
 
 **The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
-`127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
-how the app was started (below). It hosts lurq's window tools, the app's
-own (`app_state`, `navigate`, `set_theme`, `update_state`, and `hold_reads` and `set_update_state` in debug
-builds) and Orchester's domain tools:
-every tool of Orchester's MCP server above, and the setup tools that only this app serves, which set a
-project up end to end without its configuration screens: `add_project` and `get_project`;
+`127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept
+depend on how the app was started (below). It hosts lurq's window tools, the app's own (`app_state`,
+`navigate`, `set_theme`, `update_state`, and `hold_reads` and `set_update_state` in debug builds) and
+Orchester's domain tools: every tool of Orchester's MCP server above, and the setup tools that only this app
+serves, which set a project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
 `update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
 saved), `check_connection` and `list_models`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
 and `remove_mcp_server` (Connections › MCP servers); `list_profiles`, `get_profile`, `save_profile_draft` and
-`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, a copy, or the steps given, published as v1)
-and `save_pipeline` (publishes the next version: a pipeline has no drafts); `list_tools`, `get_tool`, `save_tool_draft` and `publish_tool`
-(command tools, which pipeline steps call; HTTP and database tools are listed by kind and description only,
-and no tool is removed or archived in this version); `list_instructions`, `save_instruction_draft` and
-`publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into main*). Each checks its
-input with the rules of the screen it stands for and takes only what that screen offers; no tool takes or
-returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
-`data` scope that is always granted, apart from window control (`navigate`, `set_theme`, lurq's input),
-which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on` allow it.
+`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, a copy, or the steps given, published
+as v1) and `save_pipeline` (publishes the next version: a pipeline has no drafts); `list_tools`, `get_tool`,
+`save_tool_draft` and `publish_tool` (command tools, which pipeline steps call; HTTP and database tools are
+listed by kind and description only, and no tool is removed or archived in this version); `list_instructions`,
+`save_instruction_draft` and `publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into
+main*). Each checks its input with the rules of the screen it stands for and takes only what that screen
+offers; no tool takes or returns a secret's value. Tools that read are in lurq's Observe scope. Tools that
+change data are in a `data` scope that is always granted, apart from window control (`navigate`, `set_theme`,
+lurq's input), which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on`
+allow it.
 
 **Update states in a QA copy.** A QA copy never updates itself, so `update_state` always answers
 `not_this_copy` (reason `qa`). To see the other states on screen, debug builds (QA copies included) serve
@@ -757,18 +757,18 @@ window control allows, and the switch takes no change that turns it on while an 
 applied, nor any before it was shown for one pass; turning it off is always taken. `navigate` may still
 show Settings, and looking at the window stays allowed.
 
-Pipelines follow the same rule. With the setting off, `save_pipeline` and `duplicate_pipeline` publish
-only a version provably no weaker than the pipeline's latest published one: the same steps, wiring,
-failure routes, profiles and tools, and each step's approval gate, asking about tool calls, write access,
-commands and network the same or stricter. A pipeline's first version and anything else need a person, so
-every version a task can run is one a person published, allowed, or could not object to. A version is
-weaker also when a step gets more retries, a larger step budget or none, other instructions or another model;
-the pipeline's description may change. Accepted behaviour, as the user decided: automation may create a
-task on any published pipeline with the setting off, since every published version is one a person
-published, allowed, or could not object to. Only moving an existing task to another pipeline
-(`update_task`) is a person's decision, refused as `person_only` while the setting is off; a task without a
-pipeline may get any published one.
-`duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
+Pipelines follow the same rule. With the setting off, `save_pipeline` and `duplicate_pipeline` publish only a
+version provably no weaker than the pipeline's latest published one: the same steps, wiring, failure routes,
+profiles and tools, and each step's approval gate, asking about tool calls, write access, commands and network
+the same or stricter. A pipeline's first version, which `create_pipeline` publishes, has nothing to be
+compared with: it and anything else need a person, so every version a task can run is one a person published,
+allowed, or could not object to. A version is weaker also when a step gets more retries, a larger step budget
+or none, other instructions or another model; the pipeline's description may change. Accepted behaviour, as
+the user decided: automation may create a task on any published pipeline with the setting off, since every
+published version is one a person published, allowed, or could not object to. Only moving an existing task to
+another pipeline (`update_task`) is a person's decision, refused as `person_only` while the setting is off; a
+task without a pipeline may get any published one. `duplicate_pipeline` is shared with the deprecated
+desktop's server, which follows the rule too.
 
 Command tools through the tools: `save_tool_draft` takes the program as a name found on the search path (the
 tool's own `PATH` variable, else the project's, else the app's; relative folders are skipped) or as the absolute

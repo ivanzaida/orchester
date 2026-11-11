@@ -1,8 +1,8 @@
 //! The Orchestrator chat changes pipelines only while *Let the Orchestrator drive* is on (D-033, PV2-30): while it is
 //! off, `create_pipeline`, `save_pipeline` and `duplicate_pipeline` are refused as `drive_only` with words that tell
 //! the agent to say what to change, nothing is stored and the refusal is kept; while it is on they publish as for any
-//! client. A publication of a pipeline kept before pipelines lost their drafts reads, and applying it is refused as
-//! changed since it was proposed, publishing nothing.
+//! client. A publication of a pipeline kept before pipelines lost their drafts reads, applying it is refused as
+//! changed since it was proposed, publishing nothing, and one an earlier session claimed is never read as carried out.
 
 use orchester_core::{
   orchestrator::{
@@ -15,6 +15,7 @@ use orchester_core::{
 use orchester_workspace::orchestrator::{
   facts,
   proposal::{Decision, decide},
+  recover::recover_in,
   tools::listed,
 };
 use serde_json::{Value, json};
@@ -119,19 +120,16 @@ fn pipeline_tools_chat_while_driving_saves_creates_and_duplicates() {
   assert_eq!(widens["code"], "person_only", "{widens}");
 }
 
-#[test]
-fn pipeline_tools_chat_publication_kept_from_drafts_reads_stale_and_publishes_nothing() {
-  let desktop = Desktop::new();
-  delivery(&desktop);
-  desktop.says("Publish Delivery");
-  let pipeline = desktop.pipeline("Delivery");
+/// A proposal to publish Delivery as `version`, kept in the conversation as the chat kept one before pipelines lost
+/// their drafts, waiting for the person; it and its place in the conversation.
+fn kept_publication(desktop: &Desktop, version: u32) -> (ChatAction, i64) {
   let kept = ChatAction {
     change: Some(Box::new(ProposedChange {
       subject: "Delivery".to_owned(),
       change: Change::Publish {
         of: Publishing::Pipeline,
-        resource: pipeline,
-        version: 2,
+        resource: desktop.pipeline("Delivery"),
+        version,
         saved: Timestamp::now(),
       },
     })),
@@ -148,6 +146,15 @@ fn pipeline_tools_chat_publication_kept_from_drafts_reads_stale_and_publishes_no
     .find(|entry| matches!(entry.kind, EntryKind::Action(_)))
     .expect("the old proposal")
     .seq;
+  (kept, seq)
+}
+
+#[test]
+fn pipeline_tools_chat_publication_kept_from_drafts_reads_stale_and_publishes_nothing() {
+  let desktop = Desktop::new();
+  delivery(&desktop);
+  desktop.says("Publish Delivery");
+  let (kept, seq) = kept_publication(&desktop, 2);
   let read = facts::load_in(
     &desktop.scope.root,
     &orchester_exec::programs::Programs::processes(),
@@ -183,5 +190,38 @@ fn pipeline_tools_chat_publication_kept_from_drafts_reads_stale_and_publishes_no
     desktop.pipelines(),
     vec![("Delivery".to_owned(), 1, false)],
     "nothing was published"
+  );
+}
+
+#[test]
+fn pipeline_tools_chat_publication_kept_from_drafts_is_never_recovered_as_applied() {
+  let desktop = Desktop::new();
+  delivery(&desktop);
+  desktop.says("Publish Delivery");
+  // Claimed by a person's Apply in a session that ended before it settled; Delivery stands at v2 since, saved by
+  // someone else, which is the version the old proposal named.
+  let (_, seq) = kept_publication(&desktop, 2);
+  let claimed_at = Timestamp::now();
+  desktop
+    .db()
+    .claim_chat_action_approved((desktop.scope.chat, seq), None, claimed_at)
+    .expect("claimed")
+    .expect("it waited");
+  let mut plan = step("plan", "Builder", &[]);
+  plan["budget"] = json!(1000);
+  desktop.done(
+    "save_pipeline",
+    json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [plan] }),
+  );
+  assert_eq!(desktop.pipelines(), vec![("Delivery".to_owned(), 2, false)]);
+  let translate = orchester_workspace::app_mcp::Translate::new(|message| message.key.to_owned());
+  let next_session = Timestamp::from_unix_millis(claimed_at.unix_millis() + 60_000);
+  let settled = recover_in(&desktop.scope.root, next_session, &translate).expect("recovered");
+  assert_eq!(settled, 1, "the claim is settled");
+  let recovered = desktop.last_action();
+  assert!(
+    matches!(&recovered.outcome, ActionOutcome::Refused { code, .. } if code == "interrupted"),
+    "a later save is not this decision's: {:?}",
+    recovered.outcome
   );
 }
