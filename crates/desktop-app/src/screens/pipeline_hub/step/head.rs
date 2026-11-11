@@ -10,7 +10,7 @@ use lurq::{
 };
 use orchester_core::resource::Step;
 
-use super::Open;
+use super::{Open, name};
 use crate::{
   navigation::Navigation,
   routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
@@ -70,16 +70,24 @@ pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, u
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .child(
+      // The name's box is 28 high with the name in its middle, which brings the name as near the line over it as the
+      // other spacing would.
       Column::new()
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
-        .spacing(SpacingSize::Xs)
         .child(where_)
-        .child(
-          Text::new(step.name.as_str())
-            .id("pipeline-hub-step-title")
-            .variant(HubText::PanelTitle.role()),
-        ),
+        .child(name::field(
+          ctx,
+          name::Props {
+            edit: open.edit.clone(),
+            key: step.key.clone(),
+            shown: step.name.as_str().to_owned(),
+            label: ctx.t("pipeline_hub.stepEdit.name"),
+            locked: open.locked,
+            epoch: open.epoch,
+            faulty: open.faulty.clone(),
+          },
+        )),
     )
     .child(duplicate(ctx, open, step, &navigation))
     .into()

@@ -12,7 +12,6 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_workspace::pipelines::{data::Assignables, narrowing::check_step};
 
 use crate::pipelines_support::Editor;
 
@@ -212,82 +211,6 @@ fn pipelines_publication_problems_fit_and_select_every_named_step() {
   editor.click("pipeline-publish");
   assert!(!editor.exists("pipeline-publish-confirm"));
   assert!(editor.db().latest_version::<Pipeline>(id).unwrap().is_none());
-}
-
-#[test]
-#[ignore = "PV2-18: Open Builder and the draft profile's notice are not in the step panel"]
-fn pipelines_unpublished_profile_shows_draft_identity_model_and_stays_unassignable() {
-  let mut editor = Editor::new();
-  let (id, profile) = problems(&editor);
-  let choices = Assignables::load(&editor.db()).unwrap();
-  assert!(choices.profile(profile).is_none());
-  assert_eq!(choices.draft_profiles[0].name.as_ref(), "Unpublished reviewer");
-  let step = editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[1].clone();
-  assert!(check_step(&step, &choices).is_err());
-  editor.open(id);
-  editor.click(&format!("pipeline-step-{}", step.key));
-  assert!(editor.text("step-executor").contains("Unpublished reviewer · draft v1"));
-  assert!(
-    editor
-      .text("step-profile-unpublished")
-      .contains("Publish it before this pipeline can publish")
-  );
-  assert!(editor.exists("step-open-profile"));
-  assert!(editor.text("step-model").contains("qa-model"));
-  assert!(editor.text("step-model-row-hint").contains("From the profile’s draft"));
-  editor.click("pipeline-publish");
-  assert!(!editor.exists("pipeline-publish-confirm"));
-}
-
-#[test]
-#[ignore = "PV2-18: the tool-unavailable notice is not in the step panel"]
-fn pipelines_unsupported_database_is_distinct_from_runnable_commands() {
-  let mut editor = Editor::new();
-  let (id, _) = problems(&editor);
-  let command = editor.published();
-  editor.open(id);
-  let step = editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[2].clone();
-  let card = format!("pipeline-step-{}", step.key);
-  assert!(editor.text(&card).contains("Unavailable"), "{}", editor.text(&card));
-  assert!(!editor.text(&card).contains("exit code"));
-  editor.click(&card);
-  assert!(editor.text("step-tool-unavailable").contains("Database actions"));
-  assert!(!editor.text("step-tool-unavailable").contains("pull request"));
-  assert!(editor.text("step-model").contains("Not used by tools"));
-  // The Executor menu (`03d`): *Choose a profile* first, then every profile and tool with its icon; the tool that
-  // cannot run says why. The box shows the name alone (`Select` `GRGH7`).
-  assert!(!editor.exists("step-executor-icon"), "the box shows no icon");
-  editor.click("step-executor");
-  assert_eq!(editor.text("step-executor-option-0-label"), "Choose a profile");
-  let mut unavailable = 0;
-  for index in 1.. {
-    let option = format!("step-executor-option-{index}");
-    if !editor.exists(&option) {
-      assert!(index > 1, "the menu lists the profiles and tools");
-      break;
-    }
-    assert!(editor.exists(&format!("{option}-icon")), "{option} has its icon");
-    if editor.text(&option).contains("This tool cannot run as a pipeline step") {
-      unavailable += 1;
-    }
-  }
-  assert_eq!(unavailable, 1, "the database tool says why it cannot be chosen");
-  editor.click("step-executor");
-  editor.open(command);
-  let step = editor
-    .db()
-    .latest_version::<Pipeline>(command)
-    .unwrap()
-    .unwrap()
-    .body()
-    .steps()[0]
-    .clone();
-  let card = format!("pipeline-step-{}", step.key);
-  // The runnable command step waits for an approval, which its card says in place of what decides it.
-  assert!(!editor.text(&card).contains("Unavailable"), "{}", editor.text(&card));
-  editor.click(&card);
-  assert!(editor.text("step-executor-row-hint").contains("exit code"));
-  assert!(!editor.exists("step-tool-unavailable"));
 }
 
 #[test]

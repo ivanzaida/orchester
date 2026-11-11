@@ -16,7 +16,7 @@ use orchester_store::ProjectDb;
 use super::{
   harness::Agents,
   pipeline_hub::{open, project, setup},
-  pipeline_step::{CANCEL, SAVE, chain, keys, open_step, rect, route, save_until, step_route, stored},
+  pipeline_step::{CANCEL, SAVE, chain, keys, named, open_step, rect, route, save_until, step_route, stored},
   support::project_id,
 };
 
@@ -192,7 +192,7 @@ fn duplicate_names_the_copy_and_cancel_puts_the_flow_back_with_the_copy_open() {
   open_step(&mut agents, ready, &plan);
 
   agents.click("pipeline-hub-step-duplicate");
-  agents.until("the copy is open", |s| s.text("pipeline-hub-step-title") == "Plan copy");
+  agents.until("the copy is open", |s| named(s, "Plan copy"));
   assert_eq!(
     agents.text("pipeline-hub-step-position").split(" of ").nth(1),
     Some("3")

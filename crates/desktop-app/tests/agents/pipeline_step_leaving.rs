@@ -11,7 +11,7 @@ use orchester_core::{id::ResourceId, resource::StepKey};
 use super::{
   harness::Agents,
   pipeline_hub::{project, view},
-  pipeline_step::{INSTRUCTIONS, SAVE, keys, open_step, route, step_route},
+  pipeline_step::{INSTRUCTIONS, SAVE, keys, named, open_step, route, step_route},
   support::project_id,
 };
 
@@ -153,7 +153,7 @@ fn text_that_is_not_valid_is_kept_across_steps_and_the_bar_says_what_to_fix() {
 
   // Another step: the text stays with the step it was typed in, and the bar goes on saying so.
   agents.click(&format!("pipeline-hub-step-chip-{build}"));
-  agents.until("the second step", |s| s.text("pipeline-hub-step-title") == "Build");
+  agents.until("the second step", |s| named(s, "Build"));
   assert_eq!(agents.text(HINT), "Fix Instructions in Plan to save");
   agents.click(&format!("pipeline-hub-step-chip-{plan}"));
   agents.until("the first step again", |s| s.exists(INSTRUCTIONS));

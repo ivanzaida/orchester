@@ -1,7 +1,9 @@
-//! A step opened in the pipeline's panel (`Pipelines · v2` P2 `u2rYEH`, P13 `KRQ5J`): the head with ← back to the
-//! pipeline ([`head`]), the strip of the whole flow that switches steps ([`strip`]) and the step's fields in groups:
-//! *Step* (*Agent* and *Instructions*), *Run* (what happens when changes are requested, the step budget) and *Gate and
-//! access* ([`groups`]). There is no *Runs after*: where a step runs is set in the flow.
+//! A step opened in the pipeline's panel (`Pipelines · v2` P2 `u2rYEH`, P2b `EGEos`, P13 `KRQ5J`): the head with ← back
+//! to the pipeline and the step's name edited in place ([`head`], [`name`]), the strip of the whole flow that switches
+//! steps ([`strip`]) and the step's fields in groups: *Step* (*Agent* with *Open Builder*, and *Instructions*) and
+//! *Run* (what happens when changes are requested, the step budget, *When the step fails*) ([`groups`]), and *Gate and
+//! access* with the step's permissions ([`gate`], [`permissions`]). There is no *Runs after*: where a step runs is set
+//! in the flow.
 //!
 //! Every field changes the edit the panel holds ([`super::edit`]) and nothing else; *Save* and *Cancel* are the
 //! panel's and act on the whole pipeline. The route holds the open step (`ProjectPage::Pipeline` with
@@ -10,8 +12,12 @@
 
 mod agent;
 mod choices;
+mod executor;
+mod gate;
 mod groups;
 mod head;
+mod name;
+mod permissions;
 mod pieces;
 mod strip;
 mod text_field;
@@ -158,6 +164,6 @@ pub(super) fn parts(ctx: &mut Ctx, open: &Open<'_>) -> Vec<Element> {
     ),
     groups::step(ctx, open, step),
     groups::run(ctx, open, step, &upstream),
-    groups::gate(ctx, open, step),
+    gate::group(ctx, open, step),
   ]
 }
