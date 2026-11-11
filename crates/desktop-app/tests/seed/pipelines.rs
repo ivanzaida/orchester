@@ -2,7 +2,7 @@
 use orchester_core::{
   connection::AgentProvider,
   permission::{StepCommands, StepNetwork},
-  resource::{AgentProfile, FlowError, Pipeline, ResourceKind, StepKind, ToolKind},
+  resource::{AgentProfile, FlowError, Pipeline, ResourceKind, StepKind, Tool, ToolKind},
   store::ResourceStore,
 };
 use orchester_store::StoreError;
@@ -104,23 +104,26 @@ fn seed_pipelines_publish_saves_a_draft_whose_publishing_asks() {
 }
 
 #[test]
-fn seed_import_done_has_an_imported_pipeline_with_a_secret_missing() {
+fn seed_import_done_has_an_imported_tool_with_a_secret_missing() {
   let db = Seed::of("import-done").db();
-  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let rows = db.resources(ResourceKind::Tool).unwrap();
   let copy = rows
     .iter()
-    .find(|r| r.name().as_str() == "Preview release")
+    .find(|r| r.name().as_str() == "Preview host")
     .expect("the imported copy")
     .id();
+  assert!(db.latest_version::<Tool>(copy).unwrap().is_none(), "not published yet");
   assert!(
-    db.latest_version::<Pipeline>(copy).unwrap().is_none(),
-    "not published yet"
+    db.resources(ResourceKind::Pipeline)
+      .unwrap()
+      .iter()
+      .all(|r| r.name().as_str() != "Preview release"),
+    "pipelines are not imported"
   );
   let imported = orchester_workspace::import::imported::imported(&db, copy)
     .unwrap()
     .expect("what its import did");
   assert_eq!(imported.project, "Personal website");
-  assert!(!imported.with_it.is_empty(), "something came along");
   let missing: Vec<(bool, &str)> = imported
     .missing
     .iter()

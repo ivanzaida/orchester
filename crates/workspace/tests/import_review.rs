@@ -1,6 +1,7 @@
 //! Import resources as each step reads it (`orchester_workspace::import`): which resources a tab and the search
 //! show and what each refers to, how every item of the plan is resolved and what blocks the import, and what Create
-//! drafts lists. Personal website and Kontur are the core import tests' projects.
+//! drafts lists. Pipelines, and what is written for one, are not offered. Personal website and Kontur are the core
+//! import tests' projects.
 
 #[path = "../../core/tests/import/fixture.rs"]
 #[allow(dead_code, reason = "the core tests' fixture: these tests use a part of it")]
@@ -37,91 +38,104 @@ fn catalogs(source: &Source, target: &Target) -> Catalogs {
   }
 }
 
-/// Preview release v3 selected, with `choices`.
-fn preview(source: &Source, catalogs: &Catalogs, choices: &Choices) -> Plan {
+/// Builder v2 and Deploy preview v2 selected, with `choices`.
+fn site(source: &Source, catalogs: &Catalogs, choices: &Choices) -> Plan {
   Plan::new(
     &catalogs.source,
     &catalogs.target,
-    &[(source.pipeline, Pick::Published(fixture::version(3)))],
+    &[
+      (source.builder, Pick::Published(fixture::version(2))),
+      (source.deploy, Pick::Published(fixture::version(2))),
+    ],
     choices,
   )
+}
+
+fn shown_names(catalogs: &Catalogs, kind: Option<ResourceKind>, search: &str) -> Vec<String> {
+  select::shown(catalogs, kind, search)
+    .iter()
+    .map(|entry| entry.resource().name().as_str().to_owned())
+    .collect()
 }
 
 #[test]
 fn import_review_lists_a_tab_and_the_search() {
   let source = source();
   let catalogs = catalogs(&source, &target(Vec::new()));
-  let names = |kind, search| -> Vec<String> {
-    select::shown(&catalogs, kind, search)
-      .iter()
-      .map(|entry| entry.resource().name().as_str().to_owned())
-      .collect()
-  };
-  assert_eq!(select::count(&catalogs, None), 6);
-  assert_eq!(select::count(&catalogs, Some(ResourceKind::Pipeline)), 2);
-  assert_eq!(names(Some(ResourceKind::AgentProfile), ""), ["Builder", "Reviewer"]);
-  assert_eq!(names(None, "  PREVIEW "), ["Preview release", "Deploy preview"]);
-  assert!(names(Some(ResourceKind::Tool), "builder").is_empty());
+  assert_eq!(select::count(&catalogs, None), 3);
+  assert_eq!(
+    shown_names(&catalogs, Some(ResourceKind::AgentProfile), ""),
+    ["Builder", "Reviewer"]
+  );
+  assert_eq!(shown_names(&catalogs, None, "  DEPLOY "), ["Deploy preview"]);
+  assert!(shown_names(&catalogs, Some(ResourceKind::Tool), "builder").is_empty());
+}
+
+#[test]
+fn import_review_does_not_list_pipelines_or_the_instructions_written_for_one() {
+  let source = source();
+  let catalogs = catalogs(&source, &target(Vec::new()));
+  assert!(
+    catalogs.source.resource(source.pipeline).is_some() && catalogs.source.resource(source.rules).is_some(),
+    "the source has them"
+  );
+  assert_eq!(select::count(&catalogs, Some(ResourceKind::Pipeline)), 0);
+  assert!(shown_names(&catalogs, Some(ResourceKind::Pipeline), "").is_empty());
+  assert!(shown_names(&catalogs, None, "preview release").is_empty());
+  assert!(shown_names(&catalogs, None, "nightly").is_empty());
+  assert!(
+    shown_names(&catalogs, Some(ResourceKind::Instruction), "").is_empty(),
+    "Release rules is written for a pipeline"
+  );
+  assert_eq!(
+    shown_names(&catalogs, None, ""),
+    ["Builder", "Reviewer", "Deploy preview"]
+  );
 }
 
 #[test]
 fn import_review_line_says_what_a_resource_is_and_refers_to() {
   let source = source();
   let catalogs = catalogs(&source, &target(Vec::new()));
-  let nothing = preview(&source, &catalogs, &Choices::default());
-  let pipeline = catalogs.source.resource(source.pipeline).expect("Preview release");
-  let line = select::line(&catalogs, pipeline, &nothing);
+  let selected = site(&source, &catalogs, &Choices::default());
+  let builder = catalogs.source.resource(source.builder).expect("Builder");
+  let line = select::line(&catalogs, builder, &selected);
   assert_eq!(
     line.summary,
-    Summary::Pipeline {
-      steps: 2,
-      dependencies: 5
-    }
+    Summary::AgentProfile(Users::Nobody),
+    "Preview release and Nightly run Builder, but pipelines are not part of an import"
   );
-  assert_eq!(
-    line.depends_on,
-    [
-      "Builder",
-      "Deploy preview",
-      "Release rules",
-      "Codex",
-      "PREVIEW_HOST_API_KEY"
-    ]
-  );
-  let builder = catalogs.source.resource(source.builder).expect("Builder");
-  let line = select::line(&catalogs, builder, &nothing);
-  assert_eq!(line.summary, Summary::AgentProfile(Users::Many(2)));
-  assert_eq!(
-    line.included_with.as_deref(),
-    Some("Preview release"),
-    "selecting Preview release takes Builder along"
-  );
+  assert_eq!(line.depends_on, ["Codex"]);
+  assert_eq!(line.included_with, None, "it is selected itself");
   let deploy = catalogs.source.resource(source.deploy).expect("Deploy preview");
-  let line = select::line(&catalogs, deploy, &nothing);
-  assert_eq!(line.summary, Summary::Tool(ToolKind::Http, Users::Many(2)));
+  let line = select::line(&catalogs, deploy, &selected);
+  assert_eq!(line.summary, Summary::Tool(ToolKind::Http, Users::Nobody));
   assert_eq!(line.depends_on, ["PREVIEW_HOST_API_KEY"]);
 }
 
 #[test]
 fn import_review_status_says_how_each_item_is_resolved() {
   let source = source();
-  let builder = published(
-    "builder",
-    "Builder",
-    1,
-    profile("Builder", fixture::codex("Codex").id()),
-  );
-  let target = target(vec![builder]);
+  let target = target(Vec::new());
   let catalogs = catalogs(&source, &target);
-  let plan = preview(&source, &catalogs, &Choices::default());
+  let mut choices = Choices::default();
+  choices.choose(
+    Entity::Connection(source.codex),
+    Choice::Use(Entity::Connection(target.codex)),
+  );
+  let plan = site(&source, &catalogs, &choices);
   let status = |entity| review::status(&catalogs, plan.item(entity).expect("in the plan"));
   assert_eq!(
-    status(Entity::Resource(source.pipeline)),
-    Status::Ready(Some(ResourceKind::Pipeline))
+    status(Entity::Resource(source.builder)),
+    Status::Ready(Some(ResourceKind::AgentProfile))
   );
   assert_eq!(
-    status(Entity::Resource(source.builder)),
-    Status::Reused { name: "Builder".into() }
+    status(Entity::Resource(source.deploy)),
+    Status::Ready(Some(ResourceKind::Tool))
+  );
+  assert_eq!(
+    status(Entity::Connection(source.codex)),
+    Status::Mapped { name: "Codex".into() }
   );
   assert_eq!(status(Entity::Secret(source.key)), Status::Unresolved);
   assert_eq!(
@@ -132,11 +146,18 @@ fn import_review_status_says_how_each_item_is_resolved() {
     review::readiness(&catalogs, &plan),
     Readiness::Ready { unresolved: true }
   );
+  assert_eq!(review::selection(&catalogs, &plan), Selection::Several(2));
+  let builder_only = Plan::new(
+    &catalogs.source,
+    &catalogs.target,
+    &[(source.builder, Pick::Published(fixture::version(2)))],
+    &choices,
+  );
   assert_eq!(
-    review::selection(&catalogs, &plan),
+    review::selection(&catalogs, &builder_only),
     Selection::One {
-      name: "Preview release".into(),
-      pick: Some(Pick::Published(fixture::version(3)))
+      name: "Builder".into(),
+      pick: Some(Pick::Published(fixture::version(2)))
     }
   );
 }
@@ -153,8 +174,7 @@ fn import_review_blocks_on_a_taken_or_missing_name_and_says_which() {
   let target = target(vec![taken]);
   let catalogs = catalogs(&source, &target);
   let mut choices = Choices::default();
-  choices.choose(Entity::Resource(source.builder), Choice::Copy);
-  let plan = preview(&source, &catalogs, &choices);
+  let plan = site(&source, &catalogs, &choices);
   let builder = plan.item(Entity::Resource(source.builder)).expect("Builder");
   assert_eq!(
     review::status(&catalogs, builder),
@@ -179,11 +199,11 @@ fn import_review_blocks_on_a_taken_or_missing_name_and_says_which() {
   );
   choices.choose(Entity::Resource(source.builder), Choice::Rename);
   choices.rename(Entity::Resource(source.builder), "  ".into());
-  let plan = preview(&source, &catalogs, &choices);
+  let plan = site(&source, &catalogs, &choices);
   let builder = plan.item(Entity::Resource(source.builder)).expect("Builder");
   assert_eq!(review::status(&catalogs, builder), Status::NameNeeded);
   choices.rename(Entity::Resource(source.builder), "Site builder".into());
-  let plan = preview(&source, &catalogs, &choices);
+  let plan = site(&source, &catalogs, &choices);
   let builder = plan.item(Entity::Resource(source.builder)).expect("Builder");
   assert_eq!(
     review::status(&catalogs, builder),
@@ -200,11 +220,11 @@ fn import_review_offers_planned_choices_only_where_they_would_apply() {
   let source = source();
   let target = target(Vec::new());
   let catalogs = catalogs(&source, &target);
-  let plan = preview(&source, &catalogs, &Choices::default());
+  let plan = site(&source, &catalogs, &Choices::default());
   let secret = plan.item(Entity::Secret(source.key)).expect("the secret");
   assert_eq!(review::planned(secret), [Planned::ImportSecret, Planned::SupplyValue]);
-  let pipeline = plan.item(Entity::Resource(source.pipeline)).expect("the pipeline");
-  assert!(review::planned(pipeline).is_empty());
+  let builder = plan.item(Entity::Resource(source.builder)).expect("the profile");
+  assert!(review::planned(builder).is_empty());
   assert_eq!(
     review::offer(&catalogs, secret, Choice::Use(Entity::Secret(target.key))).0,
     Offer::UseSecret {
@@ -224,7 +244,7 @@ fn import_review_drafts_list_what_is_created_reused_and_left_unresolved() {
     Entity::Connection(source.codex),
     Choice::Use(Entity::Connection(target.codex)),
   );
-  let plan = preview(&source, &catalogs, &choices);
+  let plan = site(&source, &catalogs, &choices);
   let drafts = drafts::drafts(&catalogs, &plan);
   let created: Vec<(&str, Subject)> = drafts
     .created
@@ -234,10 +254,8 @@ fn import_review_drafts_list_what_is_created_reused_and_left_unresolved() {
   assert_eq!(
     created,
     [
-      ("Preview release", Subject::Pipeline),
       ("Builder", Subject::AgentProfile),
       ("Deploy preview", Subject::Tool(ToolKind::Http)),
-      ("Release rules", Subject::Instruction),
     ]
   );
   assert_eq!(drafts.reused.len(), 1);
@@ -245,11 +263,11 @@ fn import_review_drafts_list_what_is_created_reused_and_left_unresolved() {
   assert_eq!(drafts.missing.len(), 1);
   assert_eq!(drafts.missing[0].name, "PREVIEW_HOST_API_KEY");
   assert_eq!(drafts.missing[0].users, ["Deploy preview"]);
-  assert_eq!(drafts.access.len(), 1, "Preview release keeps calling its copied tool");
-  assert_eq!(drafts.access[0].pipeline, "Preview release");
-  assert_eq!(drafts.access[0].allowed[0].step, 2);
-  assert_eq!(drafts.access[0].allowed[0].tool, "Deploy preview");
-  assert_eq!(review::dependencies(&plan), 5);
+  assert!(
+    drafts.access.is_empty(),
+    "no pipeline is copied, so none keeps calling the copied tool"
+  );
+  assert_eq!(review::dependencies(&plan), 2);
 }
 
 fn denied(path: &str) -> StoreError {
@@ -330,18 +348,16 @@ fn import_review_load_notice_names_the_project_and_the_refused_folder() {
 #[test]
 fn import_review_imported_copy_shows_where_it_came_from_and_what_came_with_it() {
   let source = source();
-  let builder = published(
-    "builder",
-    "Builder",
-    1,
-    profile("Builder", fixture::codex("Codex").id()),
-  );
-  let target = target(vec![builder]);
+  let target = target(Vec::new());
   let catalogs = catalogs(&source, &target);
   let mut choices = Choices::default();
   choices.choose(Entity::Resource(source.deploy), Choice::Rename);
   choices.rename(Entity::Resource(source.deploy), "Website preview".into());
-  let plan = preview(&source, &catalogs, &choices);
+  choices.choose(
+    Entity::Connection(source.codex),
+    Choice::Use(Entity::Connection(target.codex)),
+  );
+  let plan = site(&source, &catalogs, &choices);
   let at = Timestamp::from_unix_millis(10);
   let batch = plan
     .batch(&catalogs.source, IdempotencyKey::generate(), at)
@@ -374,33 +390,32 @@ fn import_review_imported_copy_shows_where_it_came_from_and_what_came_with_it() 
     catalogs.target.mcp_servers().to_vec(),
     catalogs.target.secrets().to_vec(),
   );
-  let pipeline = batch.copies()[0].resource().id();
+  let tool = batch
+    .copies()
+    .iter()
+    .find(|copy| copy.provenance().resource == source.deploy)
+    .expect("a copy of Deploy preview")
+    .resource()
+    .id();
 
-  let shown = imported::view(&record, &written, pipeline).expect("the pipeline was imported");
+  let shown = imported::view(&record, &written, tool).expect("the tool was imported");
 
   assert_eq!(shown.at, at);
   assert_eq!(shown.project, "Personal website");
-  assert_eq!(shown.source, "Preview release");
-  assert_eq!(shown.version, Some(fixture::version(3)));
+  assert_eq!(shown.source, "Deploy preview");
+  assert_eq!(shown.version, Some(fixture::version(2)));
   let with_it: Vec<(&str, Came, Option<u32>)> = shown
     .with_it
     .iter()
     .map(|came| (came.name.as_str(), came.came, came.published.map(|v| v.get())))
     .collect();
-  assert_eq!(
-    with_it,
-    [
-      ("Website preview", Came::Created { renamed: true }, None),
-      ("Release rules", Came::Created { renamed: false }, None),
-      ("Builder", Came::Reused, Some(1)),
-    ]
-  );
+  assert_eq!(with_it, [("Builder", Came::Created { renamed: false }, None)]);
   let missing: Vec<&str> = shown.missing.iter().map(|missing| missing.name.as_str()).collect();
   assert_eq!(missing, ["PREVIEW_HOST_API_KEY"]);
   assert_eq!(
     (shown.created, shown.reused, shown.unresolved),
-    (3, 1, 1),
-    "the pipeline, its tool and its rules; Builder; the secret"
+    (2, 1, 1),
+    "the tool and Builder; Codex; the secret"
   );
   assert!(shown.shows_result(false), "shown until it is published");
   assert!(!shown.shows_result(true));
