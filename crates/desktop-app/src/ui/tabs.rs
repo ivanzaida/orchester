@@ -341,6 +341,33 @@ pub fn page_tabs_with_note(
   tab_line(ctx, id, row)
 }
 
+/// [`page_tabs`] with `after` set apart by a rule (`Divider` `Fbmqe` before *Archived* in `Agents · v2` L13 `moPNo`):
+/// a line as wide as the tabs' stroke and [`TAB_DIVIDER_HEIGHT`] high in `border_strong`, centered on the tabs.
+pub fn page_tabs_divided(
+  ctx: &mut Ctx,
+  id: &str,
+  tabs: impl IntoIterator<Item = PageTab>,
+  after: Vec<PageTab>,
+) -> Stack {
+  let mut row: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
+  if !after.is_empty() {
+    let width = ctx.theme().border_size_value(BorderSize::Sm);
+    row.push(
+      Row::new()
+        .id(format!("{id}-divider"))
+        .width(Dimension::Px(width))
+        .height(Dimension::Px(TAB_DIVIDER_HEIGHT))
+        .background(PaletteColor::BorderStrong)
+        .into(),
+    );
+    row.extend(after.into_iter().map(|tab| tab.render(ctx)));
+  }
+  tab_line(ctx, id, row)
+}
+
+/// The height of the rule between groups of tabs (`Rule` `Y3Ixz4` in `Fbmqe`).
+const TAB_DIVIDER_HEIGHT: f32 = 14.0;
+
 fn tab_line(ctx: &Ctx, id: &str, tabs: Vec<Element>) -> Stack {
   let line = ctx.theme().border_size_value(BorderSize::Sm);
   Stack::new()
