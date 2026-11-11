@@ -145,6 +145,8 @@
       "agentCliSub": "the kind; never a connection",
       "model": "Model",
       "effort": "Reasoning effort",
+      "effortDefault": "CLI default",
+      "none": "None",
       "effortLevel": {
         "low": "Low",
         "medium": "Medium",
