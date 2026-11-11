@@ -182,6 +182,13 @@ fn of_entry(
   (standing, problem, undecided): (Option<ReadinessStanding>, Option<Message>, Vec<UndecidedMember>),
   stored: Stored,
 ) -> HubPipeline {
+  let read = Arc::new(stored.read);
+  // Without a draft over it the published version is what `read` holds: one `Arc` for both.
+  let published = match (entry.state, stored.published) {
+    (_, Some(version)) => Some(Arc::new(version)),
+    (VersionState::Published(_), None) => Some(read.clone()),
+    (VersionState::DraftOnly | VersionState::PublishedWithDraft(_), None) => None,
+  };
   HubPipeline {
     id: entry.id,
     name: entry.name,
@@ -192,10 +199,10 @@ fn of_entry(
     standing,
     problem,
     undecided,
-    flow: Arc::new(stored.read),
+    flow: read,
     body: Arc::new(stored.body),
     unpublished: stored.unpublished,
-    published: stored.published.map(Arc::new),
+    published,
   }
 }
 

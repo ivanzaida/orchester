@@ -441,7 +441,10 @@ fn save_of_a_step_whose_profile_is_gone_keeps_the_draft_and_names_the_step_not_a
   let Saved::Drafted(why) = saved else {
     panic!("a draft is stored whatever its steps can run, got {saved:?}");
   };
-  assert_eq!(why.key, "runs.preflight.profileNotPublished");
+  assert_eq!(
+    why.key, "pipelines.problems.profileGone",
+    "a profile this project does not have is gone, as Ready? says"
+  );
   assert_eq!(why.args, [("step", "Check".to_owned())]);
   assert!(
     why.args.iter().all(|(_, value)| !value.contains(&gone.to_string())),
@@ -450,4 +453,48 @@ fn save_of_a_step_whose_profile_is_gone_keeps_the_draft_and_names_the_step_not_a
   let opened = pipeline.opened();
   assert!(opened.draft_saved_at.is_some(), "the draft is stored");
   assert_eq!(pipeline.versions().len(), 1, "nothing was published");
+}
+
+#[test]
+fn publishing_tells_a_profile_not_published_yet_from_one_that_is_gone() {
+  use orchester_workspace::pipelines::{
+    data::{Assignables, DraftProfileChoice},
+    write::refused_step,
+  };
+
+  let drafted = ResourceId::generate();
+  let assignables = Assignables {
+    draft_profiles: vec![DraftProfileChoice {
+      id: drafted,
+      name: "Planner".into(),
+      model: orchester_core::resource::ModelId::new("test-model").unwrap(),
+    }],
+    ..Assignables::default()
+  };
+  let runs = |profile: ResourceId| {
+    let mut edit = PipelineEdit::new(Pipeline::new(vec![]).unwrap());
+    let key = edit.add_step(Name::new("Plan").unwrap(), None);
+    edit.update(&key, |step| {
+      step.kind = StepKind::Agent {
+        profile: Some(profile),
+        repository: orchester_core::resource::RepositoryAccess::ReadOnly,
+        model: None,
+        permissions: orchester_core::permission::StepPermissions::default(),
+      };
+    });
+    edit.validate().unwrap()
+  };
+
+  let waiting = refused_step(runs(drafted).steps(), &assignables).expect("refused");
+  assert_eq!(
+    waiting.key, "runs.preflight.profileNotPublished",
+    "a draft waits to be published"
+  );
+  let gone = refused_step(runs(ResourceId::generate()).steps(), &assignables).expect("refused");
+  assert_eq!(gone.key, "pipelines.problems.profileGone");
+  assert_eq!(
+    gone.args,
+    [("step", "Plan".to_owned())],
+    "by the step's name, never an id"
+  );
 }

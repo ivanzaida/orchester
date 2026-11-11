@@ -72,7 +72,7 @@ fn pipeline_save_refusals_a_draft_with_a_gone_profile_is_saved_and_names_the_ste
     "kept, not refused: {said}"
   );
   assert!(
-    said.contains("Step “Build” uses an agent profile without a published version."),
+    said.contains("Step “Build” runs an agent profile that is no longer available. Choose another."),
     "the step by its name: {said}"
   );
   assert!(!said.contains(&retired.to_string()), "no raw id: {said}");

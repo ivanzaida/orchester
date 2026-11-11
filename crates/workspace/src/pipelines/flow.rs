@@ -310,7 +310,8 @@ pub struct Stored {
   /// Whether `body` differs from the latest published version, or none was published: a save has something to
   /// publish. A stored draft that equals the latest version has nothing.
   pub unpublished: bool,
-  /// The latest published version's flow, which is `read` while no draft stands over it; `None` while it has none.
+  /// The latest published version's flow while a draft stands over it; `None` when `read` is that version's, or the
+  /// pipeline has none.
   pub published: Option<FlowRead>,
 }
 
@@ -327,11 +328,9 @@ impl FlowRead {
     };
     let unpublished = latest.as_ref().is_none_or(|version| version.body() != &body);
     let read = Self::of_body(&body, draft, assignables);
-    let published = match &latest {
-      Some(version) if draft => Some(Self::of_body(version.body(), false, assignables)),
-      Some(_) => Some(read.clone()),
-      None => None,
-    };
+    let published = latest
+      .filter(|_| draft)
+      .map(|version| Self::of_body(version.body(), false, assignables));
     Ok(Some(Stored {
       read,
       body,
