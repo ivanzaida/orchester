@@ -17,12 +17,12 @@ use orchester_store::{ProjectDb, StoreError};
 
 fn instruction(text: &str) -> Instruction {
   Instruction::new(
-    PromptText::new(text).unwrap(),
+    PromptText::new(text).expect("the fixture's instructions are a valid prompt"),
     AgentTargets::All,
     BTreeSet::from([InjectionEvent::Start]),
     InstructionScope::Project,
   )
-  .unwrap()
+  .expect("the fixture's instruction is valid")
 }
 
 #[test]

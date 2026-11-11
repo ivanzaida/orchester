@@ -13,7 +13,7 @@ use orchester_core::{
     WorkspaceNumber, WorkspaceSettings,
   },
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ProjectMigration};
 use rusqlite::Connection;
 
 use self::support::{at, copied_at_version, started_run};
@@ -192,12 +192,7 @@ fn workspaces_migration_keeps_the_free_space_only_a_project_with_workspaces_on_k
     let (current, db, _run, _execution) = started_run();
     drop(db);
     let database = current.path().join(".orchester").join("orchester.db");
-    let latest: u32 = Connection::open(&database)
-      .expect("open")
-      .pragma_query_value(None, "user_version", |row| row.get(0))
-      .expect("user_version");
-    // Before the disk guard, which the Orchestrator's switches follow.
-    let old = copied_at_version(&database, latest - 2);
+    let old = copied_at_version(&database, ProjectDb::version_before(ProjectMigration::DiskGuard));
     Connection::open(old.path().join(".orchester").join("orchester.db"))
       .expect("open")
       .execute(
