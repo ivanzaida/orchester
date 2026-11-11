@@ -9,6 +9,7 @@ use std::path::Path;
 
 use orchester_api::{
   ErrorCode, ResourceCreate, ResourcePatch, SharedResourceKind, SharingErrorDetails, VersionPublish,
+  client::ClientError,
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
@@ -37,7 +38,11 @@ pub enum NotTaken {
   Changed { latest: Option<VersionNumber> },
   /// The team server refused it, or this computer, which knows the team cannot take it, did not send it.
   Refused(Refusal),
-  /// The team server could not be reached, or nobody is signed in to it: nothing was sent.
+  /// The team server already has `version` with these very steps, edited from the same version: an earlier send of them
+  /// reached it and its answer did not come back. Nothing more was sent; the stream brings that version here.
+  Reached { version: VersionNumber },
+  /// The team server could not be reached, or nobody is signed in to it, or it did not answer in time: nothing more was
+  /// sent.
   Unreached(Message),
   /// It failed otherwise. The server may have taken it: then it shows here once the team's changes are read.
   Failed(Message),
@@ -51,7 +56,12 @@ impl NotTaken {
         Message::new("pipelines.problems.teamChanged").with("version", latest.get().to_string())
       }
       Self::Changed { latest: None } => Message::new("pipelines.problems.teamRenameChanged"),
+      Self::Reached { version } => {
+        Message::new("pipelines.problems.teamAlreadySaved").with("version", version.get().to_string())
+      }
       Self::Refused(Refusal::NotAdmin | Refusal::NotAdminHere) => Message::new("sharing.errors.notAdmin"),
+      // A create that got no answer may have made the pipeline: the name is then taken by the person's own.
+      Self::Refused(Refusal::NameTaken) => Message::new("pipelines.problems.teamNameTaken"),
       Self::Refused(refusal) => refusal.message(),
       Self::Unreached(reason) | Self::Failed(reason) => reason.clone(),
     }
@@ -61,6 +71,7 @@ impl NotTaken {
   pub const fn code(&self) -> &'static str {
     match self {
       Self::Changed { .. } => "version_changed",
+      Self::Reached { .. } => "already_on_server",
       Self::Refused(Refusal::NotAdmin | Refusal::NotAdminHere) => "not_admin",
       Self::Refused(Refusal::Local(Local::NamesNonTeam)) => "pipeline_names_non_team",
       Self::Refused(Refusal::Local(_)) => "local_entities_named",
@@ -85,6 +96,7 @@ impl Servers {
     let address = server.entry().address.clone();
     let taken = |error: SharingError| not_taken(error, Some(&address));
     let content = pipeline_content(&db, resource, body).map_err(taken)?;
+    let sent = content.body.clone();
     let publish = VersionPublish {
       idempotency_key: IdempotencyKey::generate(),
       based_on: Some(based_on),
@@ -93,7 +105,10 @@ impl Servers {
     };
     let version = runtime()?
       .block_on(server.publish_version(resource, publish))
-      .map_err(taken)?;
+      .map_err(|error| match own_version(&error, &sent) {
+        Some(version) => NotTaken::Reached { version },
+        None => taken(error),
+      })?;
     keep_pipeline_version(&mut db, None, &version, body).map_err(|error| failed(&error))?;
     self.shared_changed();
     Ok(version.number)
@@ -176,6 +191,20 @@ fn failed(error: &SharingError) -> NotTaken {
   NotTaken::Failed(said(error, None))
 }
 
+/// The version a `version_conflict` names when it holds the `sent` body itself: the person's own earlier send, which
+/// reached the server though its answer did not come back.
+fn own_version(error: &SharingError, sent: &serde_json::Value) -> Option<VersionNumber> {
+  let SharingError::Client(client) = error else {
+    return None;
+  };
+  match (client.code(), client.details()) {
+    (Some(ErrorCode::VersionConflict), Some(SharingErrorDetails::Version { latest })) if latest.body == *sent => {
+      Some(latest.number)
+    }
+    _ => None,
+  }
+}
+
 /// What `error`, from the server at `address` when it was opened, says of the change.
 fn not_taken(error: SharingError, address: Option<&orchester_api::client::ServerAddress>) -> NotTaken {
   if let SharingError::Client(client) = &error
@@ -194,6 +223,8 @@ fn not_taken(error: SharingError, address: Option<&orchester_api::client::Server
     SharingError::PipelineNamesNonTeam { .. } => NotTaken::Refused(Refusal::Local(Local::NamesNonTeam)),
     SharingError::LocalEntitiesNamed { .. } => NotTaken::Refused(Refusal::Local(Local::Entities)),
     SharingError::Offline => NotTaken::Unreached(Message::new("pipelines.problems.teamUnreached")),
+    // The request went out: the server may have taken it.
+    SharingError::Client(ClientError::TimedOut) => NotTaken::Unreached(Message::new("pipelines.problems.teamNoAnswer")),
     SharingError::Client(_) if error.unreached() => {
       NotTaken::Unreached(Message::new("pipelines.problems.teamUnreached"))
     }

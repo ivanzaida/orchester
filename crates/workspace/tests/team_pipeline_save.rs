@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TeamServer, USERNAME},
+  test_support::team_server::{CODE, Standing, TeamServer, USERNAME},
 };
 use orchester_core::{
   id::{ProjectId, ResourceId, ServerId},
@@ -28,17 +28,23 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
+use orchester_ipc::SessionEnd;
 use orchester_store::{ProjectDb, ResourceSharing, SharingLink};
 use orchester_workspace::{
+  activity::Activity,
+  app_mcp::{self, Translate},
   pipelines::{
     data::OpenedPipeline,
     write::{Allowed, Stored, WriteError, save_named_in},
   },
+  runner::Runners,
   sharing::{
     CodeRequest, NotTaken, Servers, Trust,
     team_edit::{Local, Refusal, Rejection},
     team_join::JoinOutcome,
   },
+  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
 };
 use support::Desk;
 
@@ -57,6 +63,12 @@ impl Team {
   /// Kontur linked as `role`; an owner changes the team's configuration, a member does not.
   fn as_role(role: MemberRole) -> Self {
     let server = TeamServer::named("Acme");
+    // The server takes an admin's writes and refuses a member's (`403 not_admin`).
+    server.stand_as(if role == MemberRole::Owner {
+      Standing::Admin
+    } else {
+      Standing::Member
+    });
     server.share(&[("Kontur", SLUG, None)]);
     let desk = Desk::new();
     let joined = join(&desk, &server);
@@ -93,7 +105,7 @@ impl Team {
     let (servers, root) = (self.servers(), self.root.clone());
     self
       .desk
-      .run(tokio::task::spawn_blocking(move || work(servers, root)))
+      .run(async move { tokio::task::spawn_blocking(move || work(servers, root)).await })
       .expect("the work finished")
   }
 
@@ -432,4 +444,102 @@ fn team_pipeline_save_a_step_running_what_the_team_lacks_is_not_sent() {
   assert_eq!(refused.code(), "pipeline_names_non_team");
   assert!(team.server.resources(SLUG).is_empty(), "nothing reached the server");
   assert_eq!(team.pipelines_here(), 0);
+}
+
+/// `share_pipeline` makes a pipeline of this computer's own, hidden in the team project, a team pipeline on the team
+/// server at once: the copy takes the hidden one's slug, which stays this computer's, and nothing waits.
+#[test]
+fn team_pipeline_save_share_pipeline_makes_the_team_copy_beside_the_hidden_local_one() {
+  let team = Team::owner();
+  let (local, _) = team
+    .db()
+    .kept_pipeline_for_test("delivery", "Delivery", &checks(team.tool, "Ours."), Timestamp::now())
+    .expect("a pipeline of this computer's own");
+  team
+    .desk
+    .workspace
+    .set_automation_changes_permissions(true)
+    .expect("the switch");
+  let services = app_mcp::Services::new(
+    team.desk.workspace.clone(),
+    Runners::new(
+      team.root.join("no-runner"),
+      team.desk.runtime.handle().clone(),
+      Activity::new(),
+      SessionEnd::Clean,
+    ),
+    team.servers(),
+    Programs::processes(),
+    (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
+  );
+  let translate = Translate::new(|message| message.key.to_owned());
+  let serde_json::Value::Object(args) = serde_json::json!({"project": "Kontur", "pipeline": "Delivery"}) else {
+    unreachable!("an object");
+  };
+
+  let shared = team
+    .desk
+    .run(app_mcp::setup::call(&services, &translate, "share_pipeline", args))
+    .expect("a setup tool")
+    .unwrap_or_else(|error| panic!("{}", error.to_json(|message| message.key.to_owned())));
+
+  assert_eq!(shared["pipeline"]["state"], "team");
+  assert_eq!(shared["pipeline"]["slug"], "delivery");
+  let copy: ResourceId = shared["pipeline"]["id"]
+    .as_str()
+    .and_then(|id| id.parse().ok())
+    .expect("the copy's id");
+  assert_ne!(copy, local, "a new team pipeline");
+  let db = team.db();
+  assert!(matches!(
+    db.resource_sharing(copy).expect("read"),
+    Some(ResourceSharing::Shared(_))
+  ));
+  assert_eq!(
+    db.resource_sharing(local).expect("read"),
+    Some(ResourceSharing::NotShared)
+  );
+  let kept = db.resource(local).expect("read").expect("the hidden one stays");
+  assert_eq!(kept.slug().as_str(), "delivery", "it keeps its slug");
+  assert_eq!(team.latest(copy), (1, "Ours.".to_owned()));
+  assert_eq!(team.on_server(copy), Some((1, "Delivery".to_owned())));
+  team.assert_no_pipeline_waits();
+}
+
+/// A save sent again after its answer was lost meets its own version on the server: it says the changes are there
+/// already, not that someone published first, and stores nothing more.
+#[test]
+fn team_pipeline_save_a_retry_that_meets_its_own_earlier_send_says_it_reached_the_server() {
+  let team = Team::owner();
+  let id = team.created();
+  // The earlier send reached the server, which numbered it v2; its answer never came back here.
+  let mine = serde_json::to_value(checks(team.tool, "Changed.")).expect("a body");
+  team.server.publish_as(SLUG, id, mine, "bohdan");
+
+  let again = team.publish(id, 1, "Changed.").expect_err("not sent twice");
+
+  assert_eq!(again, NotTaken::Reached { version: number(2) });
+  assert_eq!(again.message().key, "pipelines.problems.teamAlreadySaved");
+  assert_eq!(again.code(), "already_on_server");
+  assert_eq!(
+    team.on_server(id).map(|(versions, _)| versions),
+    Some(2),
+    "no third version"
+  );
+  assert_eq!(team.latest(id), (1, "Ours.".to_owned()), "the stream brings v2");
+  team.assert_no_pipeline_waits();
+}
+
+/// A new pipeline whose name the team has already says an earlier *Create* that got no answer may have made it: the
+/// server cannot tell this computer whose it is.
+#[test]
+fn team_pipeline_save_a_create_whose_name_the_team_has_says_an_earlier_create_may_have_made_it() {
+  let team = Team::owner();
+  team.created();
+
+  let again = team.create(team.tool, "Ours.").expect_err("the name is taken");
+
+  assert_eq!(again, NotTaken::Refused(Refusal::NameTaken));
+  assert_eq!(again.message().key, "pipelines.problems.teamNameTaken");
+  assert_eq!(team.pipelines_here(), 1, "nothing more is kept");
 }
