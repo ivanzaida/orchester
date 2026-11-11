@@ -147,6 +147,15 @@ impl Servers {
       .await
   }
 
+  /// *Discard it* for a pipeline (D-044): `version`, which an older build published here at `repo_root` and the server
+  /// never numbered, is deleted with the versions published here after it ([`ProjectDb::discard_unsent_pipeline`]).
+  /// Nothing is sent. Fails with what to tell the person.
+  pub async fn discard_pipeline_version(&self, repo_root: &Path, version: VersionId) -> Result<(), Message> {
+    self
+      .between_sends(repo_root, move |db| db.discard_unsent_pipeline(version))
+      .await
+  }
+
   /// Runs `change` on the project database at `repo_root` on a worker, between two sends of its versions.
   async fn between_sends<T: Send + 'static>(
     &self,

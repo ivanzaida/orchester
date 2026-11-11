@@ -3,7 +3,7 @@
 //! ([`ProjectDb::create_published`]).
 
 use orchester_core::{
-  id::ResourceId,
+  id::{ResourceId, VersionId},
   name::Name,
   resource::{Draft, Pipeline, Version, VersionNumber},
   time::Timestamp,
@@ -56,6 +56,21 @@ impl ProjectDb {
     let version = publish_prepared(&transaction, resource, edit, latest, now)?;
     transaction.commit()?;
     Ok(version)
+  }
+
+  /// *Discard it* (D-044): `version` of a team pipeline, which an older build published here and the server never
+  /// numbered (still waiting, refused, or met by a version someone published from the same base), is deleted with the
+  /// versions of the pipeline published here after it; the version the server numbered last is the latest again. A
+  /// team pipeline's save no longer leaves such a version (D-043). A version a run or a task here uses stays
+  /// ([`StoreError::VersionInUse`]); nothing is changed then.
+  pub fn discard_unsent_pipeline(&mut self, version: VersionId) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
+    transaction.pragma_update(None, "defer_foreign_keys", true)?;
+    let (_, taken) = shared_publishes::unsent::<Pipeline>(&transaction, version)?;
+    shared_publishes::drop_unsent(&transaction, &taken)?;
+    transaction.commit()?;
+    Ok(())
   }
 
   /// A published pipeline in one call, for a test: [`ProjectDb::create_published`] with a slug and a name given as

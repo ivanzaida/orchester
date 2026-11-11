@@ -2,8 +2,9 @@
 //! (`Shared configuration · redesign` `UC5xk`): not sent, with *Try again* (`p2Qaq` in 02b `iLwm9`); met a version
 //! someone published from the same base meanwhile, with what that version changed, *Compare with vN*, *Open my draft
 //! on vN* and *Publish mine as vN+1* (`Conflict bar` `n9GgD` in 02c `JZFlA`); or refused by the server. Nothing is
-//! merged. A pipeline has no such bar: its save waits for the team server's answer (D-043), so no version of it waits.
-//! Versions of a pipeline that an older build left waiting are still sent as before.
+//! merged. A pipeline's save waits for the team server's answer (D-043), so it leaves no version waiting; one an older
+//! build left is still sent as before, and its bar ([`pipeline_waiting_bar`]) has *Try again* and *Discard it* (D-044)
+//! where others take a version back as their draft, as a pipeline holds none.
 
 use std::{
   path::{Path, PathBuf},
@@ -44,6 +45,7 @@ use crate::{
     field::field_error,
     icon::Icon,
     message::message_text,
+    tooltip::Tooltip,
   },
 };
 
@@ -69,6 +71,24 @@ pub(crate) fn waiting_bar(
   )
 }
 
+/// [`waiting_bar`] in a pipeline's editor (D-044), for a version an older build left waiting: *Discard it* deletes it
+/// and runs `reread`, so while the editor `holds_edit` not saved, which reading the pipeline again would replace, it is
+/// not offered and says why.
+pub(crate) fn pipeline_waiting_bar(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  standing: (&TeamConfiguration, &SharedStanding),
+  (reread, holds_edit): (Reread, bool),
+) -> Option<Element> {
+  bar(
+    ctx,
+    (&project.open.repo_root, project.open.project.id()),
+    standing,
+    ("pipeline", Outside::Pipelines),
+    (reread, Some(holds_edit)),
+  )
+}
+
 /// [`waiting_bar`] for a panel that has the project's folder and id, not its shown project.
 pub(crate) fn waiting_bar_in(
   ctx: &mut Ctx,
@@ -76,6 +96,16 @@ pub(crate) fn waiting_bar_in(
   (team, standing): (&TeamConfiguration, &SharedStanding),
   (id, kind): (&str, Outside),
   reread: Reread,
+) -> Option<Element> {
+  bar(ctx, (root, project), (team, standing), (id, kind), (reread, None))
+}
+
+fn bar(
+  ctx: &mut Ctx,
+  (root, project): (&Path, ProjectId),
+  (team, standing): (&TeamConfiguration, &SharedStanding),
+  (id, kind): (&str, Outside),
+  (reread, pipeline): (Reread, Option<bool>),
 ) -> Option<Element> {
   let waiting = standing.waiting.first()?.clone();
   if !team.may_change {
@@ -97,6 +127,7 @@ pub(crate) fn waiting_bar_in(
         waiting,
         kind,
         reread,
+        pipeline,
       },
     ),
   )
@@ -113,6 +144,8 @@ enum Act {
   Reopen(VersionId),
   /// *Discard it*: the new resource whose first version the server did not take is taken back as if never created.
   DiscardNew,
+  /// A pipeline's *Discard it* (D-044): the version, and those published here after it, are deleted.
+  DiscardPipeline(VersionId),
 }
 
 impl DevtoolsInspectable for Act {}
@@ -131,6 +164,8 @@ pub(crate) struct WaitingProps {
   /// The library whose screens read their resources again after an action.
   kind: Outside,
   reread: Reread,
+  /// A pipeline's editor, and whether it holds an edit not saved; `None` for another kind.
+  pipeline: Option<bool>,
 }
 
 impl PartialEq for WaitingProps {
@@ -145,6 +180,7 @@ impl PartialEq for WaitingProps {
       self.resource,
       &self.waiting,
       self.kind,
+      self.pipeline,
     ) == (
       &other.id,
       &other.root,
@@ -154,6 +190,7 @@ impl PartialEq for WaitingProps {
       other.resource,
       &other.waiting,
       other.kind,
+      other.pipeline,
     )
   }
 }
@@ -175,7 +212,7 @@ impl Component for WaitingBar {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<WaitingProps>().clone();
     let services = Services::of(ctx);
-    let reread = props.reread.clone();
+    let (reread, pipeline) = (props.reread.clone(), props.pipeline.is_some());
     let act = ctx.future_action(move |act: Act| {
       let (services, root) = (services.clone(), props.root.clone());
       let (project, kind, resource) = (props.project, props.kind, props.resource.0);
@@ -185,18 +222,20 @@ impl Component for WaitingBar {
           Act::PublishAgain(version) => services.servers.publish_again(&root, version).await?,
           Act::Reopen(version) => services.servers.reopen_draft(&root, resource, version).await?,
           Act::DiscardNew => services.servers.cancel_created(&root, props.resource.1).await?,
+          Act::DiscardPipeline(version) => services.servers.discard_pipeline_version(&root, version).await?,
         }
         // The library's screens read the resource again: with the number the server gave it, or its draft.
         services.changes.record(project, kind);
         Ok(act)
       }
     });
-    // The draft the editor shows is not the one it wrote: it shows the saved one anew.
+    // The draft the editor shows is not the one it wrote, or a pipeline's versions changed: it shows the saved one
+    // anew.
     ctx.watch(&act.state(), move |state| {
       let Some(acted) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
         return;
       };
-      if matches!(acted, Act::Reopen(_)) {
+      if matches!(acted, Act::Reopen(_) | Act::DiscardPipeline(_)) || (pipeline && *acted == Act::DiscardNew) {
         reread();
       }
     });
@@ -224,11 +263,16 @@ impl Component for WaitingBar {
           ctx.t("sharing.config.bar.tryAgain"),
           Act::Send,
         );
-        // A version that edited an earlier one goes back to being the draft; a first version has none to go back to.
-        let cancel = props.waiting.based_on.is_some().then(|| {
-          let label = ctx.t("sharing.config.bar.cancelSending");
-          self.taking_back(&props, ("cancel-sending", Icon::X, label))
-        });
+        // A version that edited an earlier one goes back to being the draft; a first version has none to go back to. A
+        // pipeline's, which holds no draft, is discarded (D-044).
+        let cancel = if props.pipeline.is_some() {
+          Some(self.discard_button(ctx, &props))
+        } else {
+          props.waiting.based_on.is_some().then(|| {
+            let label = ctx.t("sharing.config.bar.cancelSending");
+            self.taking_back(&props, ("cancel-sending", Icon::X, label))
+          })
+        };
         DraftBar::new(
           format!("{id}-not-sent"),
           Standing::NotSent,
@@ -240,36 +284,7 @@ impl Component for WaitingBar {
         .into()
       }
       PublishState::Conflict { latest } => self.conflict(ctx, &props, *latest),
-      PublishState::Refused { code } => {
-        // What was said, in words: the draft comes back to be changed, and then published again.
-        let refusal = Refusal::of_code(code);
-        let reason = message_text(ctx, &refusal.message());
-        // A version that edited an earlier one goes back to being the draft; a new resource's first has none, so the
-        // way out is to take the resource back as if never created.
-        let (way_out, way_out_words) = match props.waiting.based_on {
-          Some(_) => (self.take_back_button(ctx, &props), "sharing.config.bar.refusedWhy"),
-          None => (
-            self
-              .button(
-                (format!("{id}-discard-new"), ButtonKind::Secondary, Icon::Trash2),
-                ctx.t("sharing.config.bar.discardNew"),
-                Act::DiscardNew,
-              )
-              .into(),
-            "sharing.config.bar.refusedNewWhy",
-          ),
-        };
-        // This computer found the team cannot take it: nothing reached the server, so it did not refuse anything.
-        let title = if refusal.is_local() {
-          ctx.t_args("sharing.config.bar.refusedHere", [("time", time)])
-        } else {
-          ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)])
-        };
-        DraftBar::new(format!("{id}-refused"), Standing::Attention, title)
-          .sub(ctx.t_args(way_out_words, [("reason", reason.to_string())]))
-          .action(way_out)
-          .into()
-      }
+      PublishState::Refused { code } => self.refused(ctx, &props, code, (host, time)),
     };
     let failure = state
       .error
@@ -308,6 +323,69 @@ impl WaitingBar {
     self.taking_back(props, ("take-back", Icon::Undo2, label))
   }
 
+  /// *Discard it*: a new resource's first version takes the resource back as if never created; a pipeline's later
+  /// version is deleted with those after it (D-044). A pipeline's editor reads the pipeline again after it, so while
+  /// the editor holds an edit not saved it is unavailable and says why: nothing typed is lost unasked.
+  fn discard_button(&self, ctx: &mut Ctx, props: &WaitingProps) -> Element {
+    let (suffix, act) = match props.waiting.based_on {
+      None => ("discard-new", Act::DiscardNew),
+      Some(_) => ("discard", Act::DiscardPipeline(props.waiting.version)),
+    };
+    let id = format!("{}-{suffix}", props.id);
+    let button = self.button(
+      (id.clone(), ButtonKind::Secondary, Icon::Trash2),
+      ctx.t("sharing.config.bar.discardNew"),
+      act,
+    );
+    if props.pipeline != Some(true) {
+      return button.into();
+    }
+    let why = ctx.t("sharing.config.bar.pipeline.saveFirst");
+    Tooltip::new(format!("{id}-why"), why.clone()).wrap(ctx, button.unavailable(why))
+  }
+
+  /// The server refused the version, or this computer found the team cannot take it: why, and the way out. A version
+  /// that edited an earlier one goes back to being the draft; a new resource's first has none, so it is taken back as
+  /// if never created; a pipeline's is sent again or discarded (D-044).
+  fn refused(&self, ctx: &mut Ctx, props: &WaitingProps, code: &str, (host, time): (String, String)) -> Element {
+    let id = props.id.as_ref();
+    let refusal = Refusal::of_code(code);
+    let reason = message_text(ctx, &refusal.message());
+    let mut actions = Vec::new();
+    let words = match (props.waiting.based_on, props.pipeline.is_some()) {
+      (Some(_), true) => {
+        actions.push(
+          self
+            .button(
+              (format!("{id}-try-again"), ButtonKind::Secondary, Icon::RefreshCw),
+              ctx.t("sharing.config.bar.tryAgain"),
+              Act::PublishAgain(props.waiting.version),
+            )
+            .into(),
+        );
+        actions.push(self.discard_button(ctx, props));
+        "sharing.config.bar.pipeline.refusedWhy"
+      }
+      (Some(_), false) => {
+        actions.push(self.take_back_button(ctx, props));
+        "sharing.config.bar.refusedWhy"
+      }
+      (None, _) => {
+        actions.push(self.discard_button(ctx, props));
+        "sharing.config.bar.refusedNewWhy"
+      }
+    };
+    // This computer found the team cannot take it: nothing reached the server, so it did not refuse anything.
+    let title = if refusal.is_local() {
+      ctx.t_args("sharing.config.bar.refusedHere", [("time", time)])
+    } else {
+      ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)])
+    };
+    let bar = DraftBar::new(format!("{id}-refused"), Standing::Attention, title)
+      .sub(ctx.t_args(words, [("reason", reason.to_string())]));
+    actions.into_iter().fold(bar, DraftBar::action).into()
+  }
+
   /// An action that takes the version back as the draft, its id ending in `suffix`.
   fn taking_back(&self, props: &WaitingProps, (suffix, glyph, label): (&str, Icon, Arc<str>)) -> Element {
     let id = format!("{}-{suffix}", props.id);
@@ -320,8 +398,8 @@ impl WaitingBar {
       .into()
   }
 
-  /// *olha published v5 while you edited v4*, what v5 changed, with *Compare with v5*, *Open my draft on v5* and
-  /// *Publish mine as v6* (`n9GgD` in 02c). Nothing is merged.
+  /// *olha published v5 while you edited v4*, what v5 changed, with *Compare with v5*, *Open my draft on v5* (a
+  /// pipeline's *Discard it*) and *Publish mine as v6* (`n9GgD` in 02c). Nothing is merged.
   fn conflict(&self, ctx: &mut Ctx, props: &WaitingProps, latest: VersionNumber) -> Element {
     let id = props.id.as_ref();
     let name = props
@@ -346,11 +424,13 @@ impl WaitingBar {
     };
     let version = props.waiting.version;
     let comparison = self.comparison(ctx, props, latest);
+    let body = if props.pipeline.is_some() {
+      "sharing.config.bar.pipeline.conflictBody"
+    } else {
+      "sharing.config.bar.conflictBody"
+    };
     let mut bar = DraftBar::new(format!("{id}-conflict"), Standing::Conflict, status)
-      .sub(ctx.t_args(
-        "sharing.config.bar.conflictBody",
-        [("latest", latest_text.clone()), ("next", next.clone())],
-      ))
+      .sub(ctx.t_args(body, [("latest", latest_text.clone()), ("next", next.clone())]))
       .actions_below();
     if let Some(comparison) = &comparison {
       if !comparison.latest_changed.is_empty() {
@@ -382,11 +462,18 @@ impl WaitingBar {
           .child(opened(ctx, &self.compare_anchor, &self.comparing, panel)),
       );
     }
-    let back = self.button(
-      (format!("{id}-open-draft"), ButtonKind::Secondary, Icon::GitMerge),
-      ctx.t_args("sharing.config.bar.openDraft", [("latest", latest_text)]),
-      Act::Reopen(version),
-    );
+    // A pipeline holds no draft to open on vN: its version is discarded instead (D-044).
+    let back = if props.pipeline.is_some() {
+      self.discard_button(ctx, props)
+    } else {
+      self
+        .button(
+          (format!("{id}-open-draft"), ButtonKind::Secondary, Icon::GitMerge),
+          ctx.t_args("sharing.config.bar.openDraft", [("latest", latest_text)]),
+          Act::Reopen(version),
+        )
+        .into()
+    };
     bar
       .action(back)
       .action(self.button(

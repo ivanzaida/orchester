@@ -132,7 +132,7 @@ impl Component for Editor {
       // While the save question waits, nothing is being saved: the status says the changes are unsaved.
       (writing || props.loading || reading_version, shared),
     );
-    let mut notices: Vec<Element> = Self::team_notice(ctx, team.as_ref()).into_iter().collect();
+    let mut notices: Vec<Element> = self.team_notice(ctx, &props, team.as_ref()).into_iter().collect();
     notices.extend(self.notices(ctx, &props, (&writes, writing)));
     // A member's page is locked as one being saved is: its fields take no edit.
     let content = self.content(ctx, &props, (&writes, (locked || !may_change, busy)));
@@ -147,10 +147,19 @@ impl Component for Editor {
 }
 impl Editor {
   /// In a shared project, under the header: who may change the pipeline, for a member (03). An admin's save waits for
-  /// the team server's answer (D-043), so no version of the pipeline waits here to be sent.
-  fn team_notice(ctx: &mut Ctx, team: Option<&TeamConfiguration>) -> Option<Element> {
-    let team = team.filter(|team| !team.may_change)?;
-    Some(hub::team::line(ctx, "pipeline-team-line", team).into())
+  /// the team server's answer (D-043), so it leaves no version waiting; one an older build left shows its bar, with
+  /// *Try again* and *Discard it* (D-044), after which the page reads the pipeline again.
+  fn team_notice(&self, ctx: &mut Ctx, props: &EditorProps, team: Option<&TeamConfiguration>) -> Option<Element> {
+    let team = team?;
+    if !team.may_change {
+      return Some(hub::team::line(ctx, "pipeline-team-line", team).into());
+    }
+    let standing = team.standing(props.opened.id)?;
+    let reload = props.reload.clone();
+    let reread: hub::team::Reread = std::sync::Arc::new(move || reload.update(|n| *n += 1));
+    // Reading the pipeline again would replace an edit not saved: the bar does not discard while there is one.
+    let holds_edit = self.state.get().unsaved();
+    hub::team::pipeline_waiting_bar(ctx, &props.project, (team, standing), (reread, holds_edit))
   }
 
   /// What sits in place under the header: what an import did, leaving, the save question, problems and failures.

@@ -16,7 +16,7 @@ use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore, t
 use orchester_store::ProjectDb;
 use orchester_workspace::pipelines::{
   data::OpenedPipeline,
-  write::{Allowed, save_in},
+  write::{Allowed, save_here_in},
 };
 
 use super::{
@@ -249,7 +249,8 @@ fn pipeline_hub_no_drafts_a_refused_save_stores_nothing_and_keeps_the_edit() {
   // Another writer saves a version behind the page: the edit started from v1, so its save is refused.
   let before = OpenedPipeline::load_in(&agents.root, id).expect("pipeline");
   let theirs = before.body.clone().with_description("Theirs".into());
-  save_in(&agents.root, &before, &theirs, &Allowed::default()).expect("their version");
+  let name = orchester_core::name::Name::new(&before.name).expect("a stored name");
+  save_here_in(&agents.root, &before, &theirs, &name, &Allowed::default()).expect("their version");
   assert_eq!(versions(&agents, id), 2);
 
   agents.click(SAVE);

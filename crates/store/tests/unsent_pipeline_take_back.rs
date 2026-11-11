@@ -1,6 +1,6 @@
 //! A pipeline's version published here that the team server has not numbered, as an older build left one waiting, is
-//! never taken back as a draft: a pipeline holds no draft (D-032). A new build makes no such version: a team pipeline's
-//! save waits for the team server (D-043).
+//! never taken back as a draft: a pipeline holds no draft (D-032); it is discarded instead (D-044). A new build makes
+//! no such version: a team pipeline's save waits for the team server (D-043).
 
 use std::{collections::HashMap, fs, num::NonZeroU32};
 
@@ -138,4 +138,18 @@ fn a_pipeline_version_is_never_taken_back_as_a_draft() {
     "nothing is changed"
   );
   assert_eq!(latest(&team), (two(), pipeline(team.tool, "Mine.")));
+}
+
+#[test]
+fn a_pipeline_version_left_waiting_is_discarded_and_the_teams_version_is_the_latest_again() {
+  let mut team = team_with_waiting_edit();
+
+  team.db.discard_unsent_pipeline(team.mine).expect("discarded");
+
+  assert!(team.db.waiting_publishes().expect("outbox").is_empty());
+  assert_eq!(latest(&team), (VersionNumber::FIRST, pipeline(team.tool, "Ours.")));
+  assert!(
+    team.db.draft::<Pipeline>(team.pipeline).expect("read").is_none(),
+    "no draft is made"
+  );
 }

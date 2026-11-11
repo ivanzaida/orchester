@@ -1,7 +1,8 @@
 //! The pipeline page has one *Save*, which publishes the next version (PV2-32, D-033): in a team project and in a
 //! local one; unavailable with why while the edit cannot be saved; no *Restore as draft* or *Compare*; a rename alone
-//! saves a local pipeline's name; and a team profile's conflict still offers *Open my draft on vN*. A team pipeline's
-//! save waiting for the team server is [`super::team_save`].
+//! saves a local pipeline's name; a team profile's conflict still offers *Open my draft on vN*; and a pipeline version
+//! an older build left waiting has *Try again* and *Discard it* (D-044). A team pipeline's save waiting for the team
+//! server is [`super::team_save`].
 use std::{
   num::NonZeroU32,
   time::{Duration, Instant},
@@ -16,7 +17,8 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, UserId, VersionId},
   name::Name,
   resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, ResourceBody, ResourceKind, VersionNumber,
+    AgentProfile, Draft, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, ResourceBody, ResourceKind,
+    VersionNumber,
   },
   sharing::SharedPerson,
   store::ResourceStore,
@@ -315,4 +317,67 @@ fn pipelines_one_save_the_empty_start_is_not_offered() {
   editor.until("the empty list", |e| e.exists("pipelines-start"));
   assert!(!editor.exists("pipeline-empty-blank"), "no Empty pipeline row");
   assert!(!editor.exists("pipeline-empty-start"), "no Start empty");
+}
+
+/// A team pipeline whose v2 *Mine.*, published here from v1 by an older build, still waits for a server that does not
+/// answer, open with its waiting bar (D-044): the pipeline and its v1 steps.
+fn left_waiting(editor: &mut Editor) -> (ResourceId, Pipeline) {
+  let id = editor.published();
+  let mut db = editor.db();
+  let ours = first_numbered::<Pipeline>(&mut db, id);
+  let mut edit = PipelineEdit::new(ours.clone());
+  edit.set_description("Mine.");
+  db.publish_pipeline_edit(
+    id,
+    &edit.validate().expect("a valid pipeline"),
+    VersionNumber::FIRST,
+    None,
+    Timestamp::now(),
+  )
+  .expect("published here");
+  editor.open(id);
+  editor.until("the waiting bar", |e| e.exists("pipeline-not-sent"));
+  (id, ours)
+}
+
+/// A version an older build left waiting shows its bar with *Try again* and *Discard it* (D-044): discarding deletes
+/// it, and the page shows the version the team has again.
+#[test]
+fn pipelines_one_save_a_version_an_older_build_left_waiting_can_be_discarded() {
+  let mut editor = Editor::team_without_server();
+  let (id, ours) = left_waiting(&mut editor);
+  assert_eq!(editor.text("pipeline-try-again"), "Try again");
+  assert_eq!(editor.text("pipeline-discard"), "Discard it");
+  assert!(
+    !editor.exists("pipeline-take-back"),
+    "a pipeline has no draft to take it back to"
+  );
+
+  editor.click("pipeline-discard");
+  editor.until("discarded", |e| !e.exists("pipeline-not-sent"));
+
+  assert!(editor.db().waiting_publishes().expect("outbox").is_empty());
+  assert_eq!(latest(&editor, id), (VersionNumber::FIRST, ours));
+  editor.until("the team's version shows", |e| e.exists("pipeline-header-history"));
+  assert_eq!(editor.value("pipeline-description"), "");
+}
+
+/// *Discard it* reads the pipeline again, which would replace an edit not saved: while there is one it is unavailable
+/// and says why, and nothing is discarded or lost.
+#[test]
+fn pipelines_one_save_a_waiting_version_is_not_discarded_over_an_edit_not_saved() {
+  let mut editor = Editor::team_without_server();
+  let (id, _) = left_waiting(&mut editor);
+  editor.set("pipeline-description", "Not saved yet.");
+  editor.until("the edit", |e| e.exists("pipeline-save"));
+
+  let why = tooltip(&mut editor, "pipeline-discard", "pipeline-discard-why-tooltip");
+  assert!(why.starts_with("Save or undo your changes first"), "{why}");
+  editor.click("pipeline-discard");
+  editor.arm();
+
+  assert!(editor.exists("pipeline-not-sent"), "nothing was discarded");
+  assert_eq!(editor.value("pipeline-description"), "Not saved yet.", "the edit stays");
+  assert_eq!(editor.db().waiting_publishes().expect("outbox").len(), 1);
+  assert_eq!(latest(&editor, id).0, two(), "the waiting version stays");
 }
