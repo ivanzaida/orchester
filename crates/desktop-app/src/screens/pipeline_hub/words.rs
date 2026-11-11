@@ -68,13 +68,12 @@ fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
 
 /// What the person has to do before the pipeline can run: its draft's first problem, or what its profiles and tools
 /// lack; `None` for a pipeline that is ready and for a draft with nothing wrong (it only is not published yet). A
-/// published pipeline the panel draws as published says what *Ready?* lists ([`told`]); one with a draft over it says
-/// what the readiness read says of the published version, which the draft's flow does not show.
+/// published pipeline says what *Ready?* lists of its published version ([`told`]), with or without a draft over it.
 pub(super) fn needs(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
   if entry.is_draft() {
     return entry.problem.as_ref().map(|problem| message_text(ctx, problem));
   }
-  if let Some(read) = entry.flow.as_ref().filter(|read| !read.draft) {
+  if let Some(read) = &entry.published {
     return told(ctx, entry, read);
   }
   match entry.standing.as_ref()? {

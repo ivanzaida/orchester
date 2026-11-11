@@ -78,6 +78,9 @@ pub struct HubPipeline {
   pub body: Arc<Pipeline>,
   /// Whether they differ from the latest published version, or none was published: a save has something to publish.
   pub unpublished: bool,
+  /// The latest published version's steps as the page reads them, which the list and the chips speak of: the same as
+  /// `flow` while no draft stands over it; `None` while it has no version.
+  pub published: Option<Arc<FlowRead>>,
 }
 
 impl HubPipeline {
@@ -192,6 +195,7 @@ fn of_entry(
     flow: Arc::new(stored.read),
     body: Arc::new(stored.body),
     unpublished: stored.unpublished,
+    published: stored.published.map(Arc::new),
   }
 }
 

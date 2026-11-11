@@ -40,6 +40,8 @@ pub(super) struct Entry {
   pub body: Option<Arc<Pipeline>>,
   /// Whether `body` differs from the latest published version, or none was published: *Save* has something to publish.
   pub unpublished: bool,
+  /// The latest published version's steps, which the list line and the chips speak of; `None` while it has none.
+  pub published: Option<Arc<FlowRead>>,
 }
 
 impl Entry {
@@ -91,6 +93,7 @@ impl Listing {
         flow: Some(found.flow.clone()),
         body: Some(found.body.clone()),
         unpublished: found.unpublished,
+        published: found.published.clone(),
       })
       .collect();
     entries.sort_by_cached_key(|entry| (group_rank(entry.group), entry.name.to_lowercase()));
@@ -109,6 +112,7 @@ impl Listing {
       flow: None,
       body: None,
       unpublished: false,
+      published: None,
     }));
     Self {
       entries,
