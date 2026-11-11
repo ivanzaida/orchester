@@ -54,6 +54,10 @@ orchestration tool reported it; `—` until known.
 | [PV2-19](PV2-19-save-refusals.md) | A draft is always saved; Save says what publishing would refuse, also while editing | UI + workspace | PV2-17 | todo | — | — |
 | [PV2-20](PV2-20-step-head-menu.md) | The step head's ⋯ menu | UI | PV2-18 | todo | — | — |
 | [PV2-21](PV2-21-tests-on-the-hub.md) | Tests that drove the old step editor of a local project run against the hub | tests | PV2-07 | todo | — | — |
+| [PV2-22](PV2-22-new-and-duplicate.md) | New pipeline and Duplicate in the hub | design + UI | N-012 | todo (design first) | — | — |
+| [PV2-23](PV2-23-deliver-step.md) | The Deliver step in the step panel | design + UI | N-012 | todo (design first) | — | — |
+| [PV2-24](PV2-24-branched-flows.md) | Flows the hub cannot draw | design + UI | N-012 | todo (design first) | — | — |
+| [PV2-25](PV2-25-slug-and-access.md) | Slug and who can use the pipeline | design + UI | N-012 | todo (design first) | — | — |
 
 ## Order
 

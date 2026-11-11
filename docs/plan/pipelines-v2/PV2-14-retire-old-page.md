@@ -2,7 +2,7 @@
 
 - **Status:** blocked (PV2-05 … PV2-13)
 - **Kind:** UI
-- **Depends on:** PV2-05 to PV2-13, PV2-17 to PV2-21
+- **Depends on:** PV2-05 to PV2-13, PV2-17 to PV2-25
 - **Branch:** —
 - **Tokens:** —
 
