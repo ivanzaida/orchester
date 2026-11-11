@@ -25,6 +25,7 @@ mod pipeline_hub;
 mod pipeline_hub_archive;
 mod pipeline_hub_menu;
 mod pipeline_hub_narrow;
+mod pipeline_hub_no_drafts;
 mod pipeline_hub_ready;
 mod pipeline_hub_ready_fixes;
 mod pipeline_leaving;
