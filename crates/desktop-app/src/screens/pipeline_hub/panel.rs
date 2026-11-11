@@ -33,7 +33,7 @@ use orchester_core::{
   resource::{Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
-use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead, local_edit::unpublishable, ready::step_problems};
+use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead, local_edit::unpublishable};
 
 use super::{
   archived, bar, chips,
@@ -230,8 +230,7 @@ impl Component for PipelinePanel {
     } else {
       listed
     };
-    let steps_not_ready = step_problems(&read).len();
-    self.follow_edit(&current, (changed, unsaved), steps_not_ready);
+    self.follow_edit(&current, changed);
     let asked = self.pending.get();
     let saving = self.save.state().get().is_pending();
     mark_saving(&hosted.saving, saving);
@@ -240,13 +239,15 @@ impl Component for PipelinePanel {
       entry: &entry,
       unsaved,
       fix: step::fix_words(ctx, &self.faulty, &current),
-      unpublishable: unpublishable(&current, &read),
+      unpublishable: unpublishable(&current, &read, &assignables),
       read: &read,
       restored: self.restored.get().0,
     };
     // A pipeline is stored only as a published version (D-032): an edit that cannot be published is not saved.
     let save_off = changed.then(|| bar::save_off(ctx, &line)).flatten();
-    let save = self.save_now(&edit, changed, (locked, line.fix.clone().or_else(|| save_off.clone())));
+    let off = line.fix.clone().or_else(|| save_off.clone());
+    let steps_not_ready = self.tell_list(unsaved, &read, off.is_some());
+    let save = self.save_now(&edit, changed, (locked, off));
     let shown = Shown {
       project: &project,
       entry: &entry,
@@ -262,7 +263,12 @@ impl Component for PipelinePanel {
     };
     let (body, viewed) = self.views(ctx, &shown, hosted, step);
     let refused = self.notes.told().refused.is_some();
-    let mut pinned = self.pinned(ctx, &entry, asked.as_ref(), ready::can_run(&entry, &read));
+    let mut pinned = self.pinned(
+      ctx,
+      &entry,
+      asked.as_ref(),
+      (ready::can_run(&entry, &read), viewed.is_some()),
+    );
     let bar = match &viewed {
       // A version is read, not edited: the bar belongs to the edit, which waits behind it.
       Some(viewed) => {

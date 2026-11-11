@@ -342,13 +342,19 @@ fn views_pipelines_hub_reads_the_gone_drafts_tab_as_all() {
   let id = CONNECTION.parse().expect("a resource id");
   assert_eq!(PipelinesFilter::ALL, [PipelinesFilter::All, PipelinesFilter::Archived]);
   assert_eq!(PipelinesFilter::from_name("drafts"), Some(PipelinesFilter::All));
-  let all = at(ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(id))));
+  let all = at(ProjectPage::pipelines(PipelinesView::new(
+    PipelinesFilter::All,
+    Some(id),
+  )));
   assert_eq!(
     Route::parse(&format!("{root}?filter=drafts&item={CONNECTION}")),
     Ok(all.clone())
   );
   assert_eq!(all.path(), format!("{root}?item={CONNECTION}"));
-  assert_eq!(Route::parse(&format!("{root}?filter=drafts")), Ok(at(ProjectPage::Pipelines)));
+  assert_eq!(
+    Route::parse(&format!("{root}?filter=drafts")),
+    Ok(at(ProjectPage::Pipelines))
+  );
 }
 
 /// A local project's hub also has *Archived*, and names a local MCP server by its connection id, which is not a

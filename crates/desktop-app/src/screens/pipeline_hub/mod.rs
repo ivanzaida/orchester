@@ -456,8 +456,8 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
   }
 }
 
-/// A route that names a pipeline the tab does not hold (one archived, or one that is not) shows the one the page shows; the
-/// route is corrected to it, in place, so a link, Back and a reload land on what the page says.
+/// A route that names a pipeline the tab does not hold (one archived, or one that is not) shows the one the page shows;
+/// the route is corrected to it, in place, so a link, Back and a reload land on what the page says.
 fn keep_route_on_shown(project: ProjectId, view: PipelinesView, shown: Option<&Entry>, navigation: &Navigation) {
   if view.item.is_some() && view.item != shown.map(|entry| entry.id) {
     let corrected = Route::Project(

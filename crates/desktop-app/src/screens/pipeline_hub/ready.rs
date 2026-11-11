@@ -6,10 +6,10 @@
 //! card stands in amber (also when the steps cannot be drawn as one line), and what the readiness read says this
 //! computer lacks. The rows are the Agents hub's ([`crate::screens::team_hub::profile::ready`]).
 //!
-//! The panel draws the edit it holds when it holds one, so *Ready?* reads the edit as it stands; while *Save* is off for
-//! it, its count says so (*1 missing · Save stays off*, P8). What the readiness read says is about the published
-//! version: a profile or tool the edit no longer runs is left out, and a row about the version's profiles and tools as a
-//! whole names the version.
+//! The panel draws the edit it holds when it holds one, so *Ready?* reads the edit as it stands; while *Save* is off
+//! for it, its count says so (*1 missing · Save stays off*, P8). What the readiness read says is about the published
+//! version: a profile or tool the edit no longer runs is left out, and a row about the version's profiles and tools as
+//! a whole names the version.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -139,7 +139,10 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
   let (words, color) = counted(ctx, &parts, found.len());
   // *1 missing · Save stays off* (P8 `vujkk`): what is missing keeps the edit from being stored.
   let words = if shown.save_off && !found.is_empty() {
-    ctx.t_args("pipeline_hub.ready.missingSaveOff", [("count", found.len().to_string())])
+    ctx.t_args(
+      "pipeline_hub.ready.missingSaveOff",
+      [("count", found.len().to_string())],
+    )
   } else {
     words
   };

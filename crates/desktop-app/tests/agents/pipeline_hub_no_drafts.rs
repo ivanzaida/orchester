@@ -1,8 +1,10 @@
 //! The local Pipelines hub without drafts (PV2-31, D-032; `Pipelines · v2` P1 `s7LMyQ`, P7 `mFNXi`, P8 `vujkk`, P12
-//! `nSr5q`): no *Drafts* tab, and a route that names it opens *All*; *Save* is off and says why while the edit cannot be
-//! published, and nothing is stored; a refused save stores nothing; an unsaved edit with a step not ready stays under
-//! *Ready* and says so in its row, its chips, its head and *Ready?*; *Back* from a version names the edit or the latest
-//! version; leaving an unsaved edit asks first. `cargo test -p orchester-app --test agents pipeline_hub_no_drafts`.
+//! `nSr5q`): no *Drafts* tab, and a route that names it opens *All*; *Save* is off and says why while the edit cannot
+//! be published, and nothing is stored; a refused save stores nothing; an unsaved edit with a step not ready stays
+//! under *Ready* and says so in its row, its chips, its head and *Ready?*; *Back* from a version names the edit or the
+//! latest version, and what the last save said waits while a version is shown; leaving an unsaved edit asks first, and
+//! says to press *Save* only while *Save* can keep it. `cargo test -p orchester-app --test agents
+//! pipeline_hub_no_drafts`.
 
 use std::time::{Duration, Instant};
 
@@ -80,7 +82,10 @@ fn press_save(agents: &mut Agents, id: ResourceId) {
   for _ in 0..5 {
     agents.window.pass();
   }
-  assert!(!agents.exists("pipeline-hub-refused"), "a Save that is off asks nothing");
+  assert!(
+    !agents.exists("pipeline-hub-refused"),
+    "a Save that is off asks nothing"
+  );
   assert!(!agents.exists("pipeline-hub-bar-notice"), "and says nothing was saved");
   assert_eq!(versions(agents, id), before, "nothing is stored");
 }
@@ -139,16 +144,27 @@ fn pipeline_hub_no_drafts_a_tab_keeps_the_pipeline_it_holds_and_a_stale_route_is
 fn pipeline_hub_no_drafts_an_unsaved_edit_with_a_step_not_ready_stays_under_ready_and_save_is_off() {
   let (mut agents, id) = ready();
   agents.click(ADD_STEP);
-  agents.until("the edit holds the new step", |s| s.text("pipeline-hub-steps-count") == "3");
+  agents.until("the edit holds the new step", |s| {
+    s.text("pipeline-hub-steps-count") == "3"
+  });
 
   let row = format!("pipeline-hub-row-{id}");
   assert!(agents.exists("pipeline-hub-section-ready"));
-  assert!(!agents.exists("pipeline-hub-section-needs"), "an edit moves no pipeline between groups");
-  assert_eq!(agents.text(&format!("{row}-line")), "Unsaved changes · 1 step not ready");
+  assert!(
+    !agents.exists("pipeline-hub-section-needs"),
+    "an edit moves no pipeline between groups"
+  );
+  assert_eq!(
+    agents.text(&format!("{row}-line")),
+    "Unsaved changes · 1 step not ready"
+  );
   assert_eq!(agents.text(&format!("{row}-version")), "v1");
   assert_eq!(agents.text("team-hub-panel-version"), "v1 · unsaved changes");
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "1 step not ready");
-  assert!(!agents.exists("pipeline-hub-chip-1"), "the edit has no version of its own yet");
+  assert!(
+    !agents.exists("pipeline-hub-chip-1"),
+    "the edit has no version of its own yet"
+  );
   assert_eq!(agents.text("team-hub-readiness-label"), "Ready?");
   assert_eq!(agents.text("team-hub-readiness-count"), "1 missing · Save stays off");
 
@@ -197,10 +213,17 @@ fn pipeline_hub_no_drafts_save_says_every_reason_it_is_off() {
 fn pipeline_hub_no_drafts_a_change_to_a_version_whose_profile_is_gone_cannot_be_saved() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
-  let id = pipeline_of(&agents, "Dependency update", [Some(builder), Some(ResourceId::generate())]);
+  let id = pipeline_of(
+    &agents,
+    "Dependency update",
+    [Some(builder), Some(ResourceId::generate())],
+  );
   open(&mut agents, PipelinesFilter::All, Some(id));
   agents.until("the panel", |s| s.exists(SAVE));
-  assert!(agents.exists("pipeline-hub-section-needs"), "the stored version needs the person");
+  assert!(
+    agents.exists("pipeline-hub-section-needs"),
+    "the stored version needs the person"
+  );
   assert_eq!(
     agents.text(&format!("pipeline-hub-row-{id}-line")),
     "02 Build runs a profile that is no longer available"
@@ -218,7 +241,10 @@ fn pipeline_hub_no_drafts_a_refused_save_stores_nothing_and_keeps_the_edit() {
   let (mut agents, id) = ready();
   agents.set(DESCRIPTION, "Mine");
   agents.until("the change", |s| s.text(HINT).starts_with("Unsaved changes"));
-  assert_eq!(agents.text(HINT), "Unsaved changes · Save makes v2 · runs keep the version they started on");
+  assert_eq!(
+    agents.text(HINT),
+    "Unsaved changes · Save makes v2 · runs keep the version they started on"
+  );
 
   // Another writer saves a version behind the page: the edit started from v1, so its save is refused.
   let before = OpenedPipeline::load_in(&agents.root, id).expect("pipeline");
@@ -264,23 +290,66 @@ fn pipeline_hub_no_drafts_back_from_a_version_names_the_edit_or_the_latest_versi
   assert_eq!(agents.text("pipeline-hub-version-back-label"), "Back to your changes");
 }
 
-#[test]
-fn pipeline_hub_no_drafts_leaving_an_unsaved_edit_asks_and_says_the_change_is_lost() {
-  let (mut agents, id) = ready();
-  agents.click(ADD_STEP);
-  agents.until("the edit", |s| s.text("pipeline-hub-steps-count") == "3");
+/// Leaves the hub for All projects and gives what the question says it loses and how to keep it.
+fn leave_question(agents: &mut Agents) -> String {
   agents.window.navigation().go(Route::AllProjects);
   agents.until("the question", |s| s.exists("pipeline-hub-leave-discard"));
   assert_eq!(
     agents.text("pipeline-hub-leave-title"),
     "Discard the unsaved changes to Feature delivery?"
   );
+  agents.text("pipeline-hub-leave-what")
+}
+
+#[test]
+fn pipeline_hub_no_drafts_leaving_an_edit_save_can_keep_asks_to_press_save() {
+  let (mut agents, id) = ready();
+  agents.set(DESCRIPTION, "Mine");
+  agents.until("the change", |s| s.text(HINT).starts_with("Unsaved changes"));
   assert_eq!(
-    agents.text("pipeline-hub-leave-what"),
+    leave_question(&mut agents),
     "Opening anything else now puts Feature delivery back as it was saved. Keep editing and press Save to keep the \
      changes."
   );
   agents.click("pipeline-hub-leave-discard");
   agents.until("gone", |s| s.window.navigation().route_now() == Route::AllProjects);
   assert_eq!(versions(&agents, id), 1, "nothing was stored");
+}
+
+#[test]
+fn pipeline_hub_no_drafts_leaving_an_edit_save_waits_for_asks_to_fix_it_first() {
+  let (mut agents, id) = ready();
+  agents.click(ADD_STEP);
+  agents.until("the edit", |s| s.text("pipeline-hub-steps-count") == "3");
+  assert_eq!(
+    leave_question(&mut agents),
+    "Opening anything else now puts Feature delivery back as it was saved. Keep editing and fix what Save waits for \
+     to keep the changes.",
+    "Save is off, so the question does not send the person to it"
+  );
+  agents.click("pipeline-hub-leave-discard");
+  agents.until("gone", |s| s.window.navigation().route_now() == Route::AllProjects);
+  assert_eq!(versions(&agents, id), 1, "nothing was stored");
+}
+
+#[test]
+fn pipeline_hub_no_drafts_what_the_last_save_said_waits_while_a_version_is_shown() {
+  const NOTICE: &str = "pipeline-hub-bar-notice";
+  let (mut agents, id) = ready();
+  agents.set(DESCRIPTION, "Plan, then build");
+  agents.until("the change", |s| s.text(HINT).starts_with("Unsaved changes"));
+  agents.press_until(SAVE, "v2", |s| versions(s, id) == 2);
+  agents.until("what the save said", |s| s.exists(NOTICE));
+
+  open_list(&mut agents);
+  agents.click("pipeline-hub-version-1");
+  agents.until("v1 read-only", |s| s.exists("pipeline-hub-version-back"));
+  assert!(
+    !agents.exists(NOTICE),
+    "the bar is not there, nor what the last save said of it"
+  );
+
+  agents.click("pipeline-hub-version-back");
+  agents.until("the panel", |s| s.exists(SAVE));
+  assert!(agents.exists(NOTICE), "back with the bar");
 }

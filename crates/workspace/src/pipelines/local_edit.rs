@@ -14,7 +14,7 @@ use orchester_core::{
 };
 
 use super::{
-  data::OpenedPipeline,
+  data::{Assignables, OpenedPipeline},
   flow::FlowRead,
   problems::rule_message,
   ready::{Blocked, StepProblem, step_problems},
@@ -87,18 +87,23 @@ pub fn version_limit(latest: Option<VersionNumber>) -> Option<Message> {
     .map(|_| Message::new("pipelines.problems.versionLimit"))
 }
 
-/// What keeps `edit` from being published, its flow read as `read`; `None` when it can be published.
-pub fn unpublishable(edit: &PipelineEdit, read: &FlowRead) -> Option<Unpublishable> {
+/// What keeps `edit` from being published, its flow read as `read` with what the project's steps can run
+/// (`assignables`); `None` when it can be published. The last word is the save check's own ([`save_refusals`], the
+/// version limit aside), so *Save* is never offered for an edit that saving refuses.
+pub fn unpublishable(edit: &PipelineEdit, read: &FlowRead, assignables: &Assignables) -> Option<Unpublishable> {
   if edit.steps().is_empty() {
     return Some(Unpublishable::NoSteps);
   }
   if !blocking_steps(read).is_empty() {
     return Some(Unpublishable::Steps);
   }
-  if !edit.problems().is_empty() {
+  let Ok(body) = edit.validate() else {
     return Some(Unpublishable::Broken);
-  }
-  read.refused.clone().map(Unpublishable::Refused)
+  };
+  save_refusals(&body, assignables, None)
+    .into_iter()
+    .next()
+    .map(Unpublishable::Refused)
 }
 
 /// The steps of `read` saving refuses: each that cannot run, but one whose profile only lost its connection, which is

@@ -140,9 +140,9 @@
       "offSteps": "Make {{count}} steps ready to save",
       "offProfile": "Choose a profile for {{number}} {{step}} to save",
       "offTool": "Choose a tool for {{number}} {{step}} to save",
-      "offProfileReady": "Make the profile of {{number}} {{step}} ready to save",
-      "offToolReady": "Make the tool of {{number}} {{step}} ready to save",
-      "offBroken": "Fix what the steps wait for to save"
+      "offProfileReady": "Publish the profile of {{number}} {{step}} to save",
+      "offToolReady": "Publish the tool of {{number}} {{step}} to save",
+      "offBroken": "Fix the order of the steps to save"
     },
     "leave": {
       "title": "Discard the unsaved changes to {{name}}?",
@@ -152,7 +152,9 @@
       "savingTitle": "{{name}} is being saved",
       "savingWhat": "Wait for the save to finish, then press again. Nothing is discarded while it saves.",
       "wait": "Wait",
-      "whatClose": "Closing the tab now puts {{name}} back as it was saved. Keep editing and press Save to keep the changes."
+      "whatClose": "Closing the tab now puts {{name}} back as it was saved. Keep editing and press Save to keep the changes.",
+      "whatOff": "Opening anything else now puts {{name}} back as it was saved. Keep editing and fix what Save waits for to keep the changes.",
+      "whatCloseOff": "Closing the tab now puts {{name}} back as it was saved. Keep editing and fix what Save waits for to keep the changes."
     },
     "settings": {
       "title": "Pipeline",

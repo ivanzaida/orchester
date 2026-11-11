@@ -30,12 +30,14 @@ use crate::{
 pub(super) struct Unsaved(pub Option<Edited>);
 impl DevtoolsInspectable for Unsaved {}
 
-/// A pipeline whose panel holds changes, and how many steps of the edit cannot run, which its row says (`Pipelines ·
-/// v2` P8 `vujkk`): the edit is not stored, so the list cannot read it.
+/// A pipeline whose panel holds changes: how many steps of the edit cannot run, which its row says (`Pipelines · v2`
+/// P8 `vujkk`), and whether *Save* is off for it, which the question about leaving says. The edit is not stored, so the
+/// list cannot read it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Edited {
   pub pipeline: ResourceId,
   pub steps_not_ready: usize,
+  pub save_off: bool,
 }
 
 impl Unsaved {
@@ -49,6 +51,11 @@ impl Unsaved {
       .0
       .filter(|edited| edited.pipeline == pipeline)
       .map(|edited| edited.steps_not_ready)
+  }
+
+  /// Whether *Save* is off for the edit the panel holds: it cannot keep the changes until they are fixed.
+  fn save_off(self) -> bool {
+    self.0.is_some_and(|edited| edited.save_off)
   }
 }
 
@@ -85,13 +92,10 @@ impl Hosted {
   }
 }
 
-/// Tells the list that `pipeline` has changes that are not saved (`changed`), of which `steps_not_ready` steps cannot
-/// run; set only when it differs so the page is not read again for nothing.
-pub(super) fn mark_unsaved(unsaved: &UnsavedSignal, pipeline: ResourceId, (changed, steps_not_ready): (bool, usize)) {
-  let wanted = Unsaved(changed.then_some(Edited {
-    pipeline,
-    steps_not_ready,
-  }));
+/// Tells the list that the panel holds `edited`, or nothing (`None`); set only when it differs so the page is not read
+/// again for nothing.
+pub(super) fn mark_unsaved(unsaved: &UnsavedSignal, edited: Option<Edited>) {
+  let wanted = Unsaved(edited);
   if unsaved.get_untracked() != wanted {
     unsaved.set(wanted);
   }
@@ -142,7 +146,8 @@ pub(super) fn question(
     return None;
   }
   let closing = route.is_none() && archiving.is_none() && closes_tab(navigation, guard);
-  let name = listing.name_of(hosted.unsaved.get().pipeline()?)?.to_owned();
+  let unsaved = hosted.unsaved.get();
+  let name = listing.name_of(unsaved.pipeline()?)?.to_owned();
   if hosted.saving.get() {
     return Some(saving_question(ctx, &name, open));
   }
@@ -172,15 +177,19 @@ pub(super) fn question(
       ctx.t("pipeline_hub.leave.keep"),
     )
     .tone(Tone::Neutral)
-    .what(ctx.t_args(
-      if closing {
-        "pipeline_hub.leave.whatClose"
-      } else {
-        "pipeline_hub.leave.what"
-      },
-      [("name", name)],
-    ))
+    .what(ctx.t_args(what_key(closing, unsaved.save_off()), [("name", name)]))
     .action(discard)
     .render(ctx, open),
   )
+}
+
+/// What dropping the edit loses, and how to keep it: *press Save*, or, while *Save* is off for the edit (`save_off`),
+/// fix what it waits for; said for a press, or for the tab closing (`closing`).
+const fn what_key(closing: bool, save_off: bool) -> &'static str {
+  match (closing, save_off) {
+    (false, false) => "pipeline_hub.leave.what",
+    (true, false) => "pipeline_hub.leave.whatClose",
+    (false, true) => "pipeline_hub.leave.whatOff",
+    (true, true) => "pipeline_hub.leave.whatCloseOff",
+  }
 }

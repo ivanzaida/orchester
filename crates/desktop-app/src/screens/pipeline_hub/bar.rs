@@ -82,16 +82,11 @@ fn steps_off(ctx: &Ctx, steps: &[StepProblem]) -> Option<std::sync::Arc<str>> {
   };
   let key = match &step.blocked {
     Blocked::NoProfile | Blocked::Gone { tool: false, .. } => "pipeline_hub.bar.offProfile",
-    Blocked::NoTool | Blocked::Gone { tool: true, .. } | Blocked::ToolNotRunnable { .. } => {
-      "pipeline_hub.bar.offTool"
-    }
+    Blocked::NoTool | Blocked::Gone { tool: true, .. } | Blocked::ToolNotRunnable { .. } => "pipeline_hub.bar.offTool",
     Blocked::ProfileNotPublished { .. } | Blocked::ProfileConnectionGone { .. } => "pipeline_hub.bar.offProfileReady",
     Blocked::ToolNotPublished { .. } => "pipeline_hub.bar.offToolReady",
   };
-  Some(ctx.t_args(
-    key,
-    [("number", number(step.number)), ("step", step.name.to_string())],
-  ))
+  Some(ctx.t_args(key, [("number", number(step.number)), ("step", step.name.to_string())]))
 }
 
 /// The words at the bar's end: what to correct, in `warning`, while there is something; while the edit has changes,

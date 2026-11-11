@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::resource::{Pipeline, PipelineEdit};
+use orchester_workspace::pipelines::{flow::FlowRead, ready::step_problems};
 
 use super::{PipelinePanel, Restored};
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
     pipeline_hub::{
       bar::{self, Said},
       edit::{Edit, Holding},
-      leave::{Unsaved, mark_unsaved},
+      leave::{Edited, Unsaved, mark_unsaved},
       model::Entry,
       save::{self, Ask, Asked},
     },
@@ -33,19 +34,16 @@ impl PipelinePanel {
     }
   }
 
-  /// What the panel tells the list and the bar of the edit it shows: whether it has changes, which a save's note and
-  /// the description's box then follow. Text the check refuses is unsaved too (`unsaved`), though the edit does not
-  /// hold it: leaving would drop it. The question before *Restore* goes with the version it was asked about, and what
-  /// *Restore* put in is forgotten once the edit holds no change. The list also hears how many of the edit's steps
-  /// cannot run (`steps_not_ready`), which the row of an unsaved edit says.
-  pub(super) fn follow_edit(&self, current: &PipelineEdit, (changed, unsaved): (bool, bool), steps_not_ready: usize) {
+  /// What the panel follows of the edit it shows: whether it has changes, which a save's note and the description's
+  /// box then follow. The question before *Restore* goes with the version it was asked about, and what *Restore* put
+  /// in is forgotten once the edit holds no change.
+  pub(super) fn follow_edit(&self, current: &PipelineEdit, changed: bool) {
     if self.restoring.get_untracked() && self.viewing.get_untracked().is_none() {
       self.restoring.set(false);
     }
     if !changed && self.restored.get_untracked().0.is_some() {
       self.restored.set(Restored(None));
     }
-    mark_unsaved(&self.unsaved, self.id, (unsaved, steps_not_ready));
     if changed {
       self.notes.forget_stale(current);
     } else if self.description.get_untracked() != current.description() {
@@ -53,13 +51,38 @@ impl PipelinePanel {
     }
   }
 
+  /// Tells the list of the edit the panel holds while it is `unsaved` (text the check refuses is unsaved too, though
+  /// the edit does not hold it: leaving would drop it): how many of its steps cannot run (`read`), which its row says,
+  /// and whether *Save* is off for it (`save_off`), which the question about leaving says. Gives how many steps cannot
+  /// run.
+  pub(super) fn tell_list(&self, unsaved: bool, read: &FlowRead, save_off: bool) -> usize {
+    let steps_not_ready = step_problems(read).len();
+    let edited = unsaved.then_some(Edited {
+      pipeline: self.id,
+      steps_not_ready,
+      save_off,
+    });
+    mark_unsaved(&self.unsaved, edited);
+    steps_not_ready
+  }
+
   /// What is pinned over the bar: the question a save asks, and what the last save said. `runs`: what was saved can
-  /// run, which the saved version's notice says.
-  pub(super) fn pinned(&self, ctx: &mut Ctx, entry: &Entry, asked: Option<&Asked>, runs: bool) -> Vec<Element> {
+  /// run, which the saved version's notice says. While a version is shown read-only (`viewing`) the bar is not there,
+  /// so neither is what the last save said, which speaks of it; it shows again on *Back*.
+  pub(super) fn pinned(
+    &self,
+    ctx: &mut Ctx,
+    entry: &Entry,
+    asked: Option<&Asked>,
+    (runs, viewing): (bool, bool),
+  ) -> Vec<Element> {
     let mut pinned: Vec<Element> = Vec::new();
     if let Some(asked) = asked {
       let restored = self.restored.get_untracked().0;
       pinned.push(save::question(ctx, asked, (&self.save, &self.pending), restored));
+    }
+    if viewing {
+      return pinned;
     }
     let told = self.notes.told();
     match (told.refused, told.made) {

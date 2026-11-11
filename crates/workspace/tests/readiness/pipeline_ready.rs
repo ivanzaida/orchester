@@ -420,7 +420,7 @@ fn readiness_pipeline_ready_unpublishable_says_what_publishing_refuses_before_th
   let read = listed(&fixture, id);
   let mut edit = PipelineEdit::new(read.body.as_ref().clone());
   assert_eq!(
-    unpublishable(&edit, &FlowRead::of_edit(&edit, &hub.assignables())),
+    unpublishable(&edit, &FlowRead::of_edit(&edit, &hub.assignables()), &hub.assignables()),
     None
   );
 
@@ -433,7 +433,7 @@ fn readiness_pipeline_ready_unpublishable_says_what_publishing_refuses_before_th
   });
   assert!(
     matches!(
-      unpublishable(&edit, &FlowRead::of_edit(&edit, &hub.assignables())),
+      unpublishable(&edit, &FlowRead::of_edit(&edit, &hub.assignables()), &hub.assignables()),
       Some(Unpublishable::Refused(why)) if why.key == "appMcp.errors.stepCannotWrite"
     ),
     "the refusal publishing gives"

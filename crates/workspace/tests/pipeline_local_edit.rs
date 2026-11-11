@@ -329,7 +329,8 @@ fn unpublishable_says_what_keeps_an_edit_from_being_published() {
 
   let pipeline = fixture();
   let opened = pipeline.opened();
-  let of = |edit: &PipelineEdit| unpublishable(edit, &FlowRead::of_edit(edit, &opened.assignables));
+  let of =
+    |edit: &PipelineEdit| unpublishable(edit, &FlowRead::of_edit(edit, &opened.assignables), &opened.assignables);
   let ready = PipelineEdit::new(opened.body.clone());
   assert_eq!(of(&ready), None, "its one step runs a published tool");
 
@@ -340,6 +341,42 @@ fn unpublishable_says_what_keeps_an_edit_from_being_published() {
   let mut empty = ready;
   empty.remove_step(&pipeline.step);
   assert_eq!(of(&empty), Some(Unpublishable::NoSteps));
+}
+
+/// A step that waits for only part of what starts the run with it cannot be drawn as one line: saving refuses it, so
+/// the page offers no *Save* for it either, by the same reason.
+#[test]
+fn unpublishable_and_save_refuse_steps_that_wait_for_only_part_of_a_parallel_group() {
+  use orchester_workspace::pipelines::{
+    flow::FlowRead,
+    local_edit::{Unpublishable, unpublishable},
+  };
+
+  let pipeline = fixture();
+  let opened = pipeline.opened();
+  let mut branching = PipelineEdit::new(opened.body.clone());
+  let kind = branching.step(&pipeline.step).expect("its one step").kind.clone();
+  let lint = branching.add_step(Name::new("Lint").expect("a name"), Some(&pipeline.step));
+  let notes = branching.add_step(Name::new("Notes").expect("a name"), Some(&pipeline.step));
+  for key in [&lint, &notes] {
+    branching.update(key, |step| step.kind = kind.clone());
+  }
+  // Notes starts the run beside the first step, while Lint waits for the first step only.
+  branching.update(&notes, |step| step.depends_on.clear());
+  assert!(branching.problems().is_empty(), "the steps break no rule of their own");
+
+  let read = FlowRead::of_edit(&branching, &opened.assignables);
+  assert!(
+    matches!(
+      unpublishable(&branching, &read, &opened.assignables),
+      Some(Unpublishable::Refused(why)) if why.key == "pipelines.problems.branches"
+    ),
+    "Save is off with the reason saving gives"
+  );
+  let refused =
+    save(pipeline.folder.path(), pipeline.pipeline, &opened.body, &branching, &[]).expect_err("saving refuses it");
+  assert_eq!(refused.key, "pipelines.problems.branches");
+  assert_eq!(pipeline.versions().len(), 1, "nothing is stored");
 }
 
 #[test]
