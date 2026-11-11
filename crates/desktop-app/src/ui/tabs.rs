@@ -400,6 +400,9 @@ pub enum SegmentFace {
   Icon(Icon, Arc<str>),
   /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
   Labelled(Icon, Arc<str>),
+  /// A choice that warns: an 11 `triangle-alert` in `danger` before the label, 5 apart; chosen, on `danger_muted` with
+  /// its label in `danger` (`Segment · Dangerous auto-approve` `cky7h`, `vBuWb` in `v5d5r`).
+  Warned(Arc<str>),
 }
 
 pub struct Segment {
@@ -504,6 +507,18 @@ impl Segment {
           .child(icon(face, IconSize::Base, glyph))
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
+      }
+      SegmentFace::Warned(label) => {
+        let color = if self.chosen { PaletteColor::Danger } else { text };
+        let button = button
+          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
+          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+          .spacing(ExtraSpacing::Pair.role())
+          .align_items(Alignment::Center)
+          .describe("a11y_name", label.clone())
+          .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Danger))
+          .child(Text::new(&label).id(label_id).variant(typography).color(color).nowrap());
+        chosen_fill(button, self.chosen, PaletteColor::DangerMuted)
       }
       SegmentFace::Icon(face, label) => {
         let button = button

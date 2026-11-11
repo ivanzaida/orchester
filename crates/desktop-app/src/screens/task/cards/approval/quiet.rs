@@ -30,10 +30,29 @@ pub(crate) fn line(ctx: &Ctx, id: &str, card: &ApprovalCard, more: Option<(usize
   let Some(answer) = card.quiet() else {
     return Row::new().into();
   };
-  let (glyph, lead) = match answer.kind {
-    AnswerKind::Profile => (Icon::ListChecks, "cards.approval.quiet.profile"),
-    AnswerKind::Reviewer => (Icon::ShieldCheck, "cards.approval.quiet.reviewer"),
-    AnswerKind::Autopilot | AnswerKind::Person => (Icon::CheckCheck, "cards.approval.quiet.autopilot"),
+  let (glyph, tint, lead) = match answer.kind {
+    AnswerKind::Profile => (
+      Icon::ListChecks,
+      PaletteColor::TextMuted,
+      "cards.approval.quiet.profile",
+    ),
+    AnswerKind::Reviewer => (
+      Icon::ShieldCheck,
+      PaletteColor::TextMuted,
+      "cards.approval.quiet.reviewer",
+    ),
+    // The setting's own glyph and color (`triangle-alert` in `danger`, `T4bbC`), so its answers never pass for the
+    // others'.
+    AnswerKind::DangerousAutoApprove => (
+      Icon::TriangleAlert,
+      PaletteColor::Danger,
+      "cards.approval.quiet.dangerous",
+    ),
+    AnswerKind::Autopilot | AnswerKind::Person => (
+      Icon::CheckCheck,
+      PaletteColor::TextMuted,
+      "cards.approval.quiet.autopilot",
+    ),
   };
   let time = card.decided_at.map_or_else(String::new, display::clock);
   let detail = match (answer.kind, answer.reason.as_deref()) {
@@ -61,7 +80,7 @@ pub(crate) fn line(ctx: &Ctx, id: &str, card: &ApprovalCard, more: Option<(usize
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(Row::new().width(Dimension::Px(AVATAR_SIZE)).flex_shrink(0.0))
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, tint))
     .child(
       Text::new(&ctx.t(lead))
         .id(format!("{id}-lead"))
@@ -97,5 +116,6 @@ const fn answer_name(kind: AnswerKind) -> &'static str {
     AnswerKind::Profile => "profile",
     AnswerKind::Reviewer => "reviewer",
     AnswerKind::Person => "person",
+    AnswerKind::DangerousAutoApprove => "dangerous_auto_approve",
   }
 }

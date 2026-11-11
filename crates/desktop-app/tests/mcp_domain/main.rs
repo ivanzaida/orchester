@@ -19,6 +19,7 @@ mod codex_sandbox;
 mod completion;
 mod connections_window;
 mod context_use;
+mod dangerous_auto_approve;
 mod decisions_reach_person;
 mod delivery;
 mod drafts;

@@ -7,7 +7,7 @@ use super::harness::Settings;
 
 /// Autopilot allowed by the person, saved: the reviewer's saves keep working beside it.
 fn turned_on(page: &mut Settings) {
-  page.click("settings-allow-autopilot");
+  page.click("settings-approve-mode-autopilot");
   page.until("Autopilot allowed", |p| {
     p.db().allow_autopilot().expect("settings").is_on()
   });

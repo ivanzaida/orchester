@@ -45,6 +45,7 @@ use parking_lot::Mutex;
 
 mod activity;
 mod browser;
+mod dangerous;
 mod fresh;
 mod give_way;
 mod items;

@@ -1,12 +1,12 @@
-//! Approvals' rows (`Auto mode` `WSQqT` in `02 · Runs`, as `m0eUB` redraws it): *Allow Autopilot for agents in this
-//! project*, Manual's reviewer's connection, model and effort as three selects with the domain's effective-reviewer
-//! read-back in the row's (i) and, in its hint's place in `warning` while the reviewer cannot run, why (ORC-611), and
-//! *Approved for every run*.
+//! Approvals' rows (`Auto mode` `WSQqT` in `02 · Runs`, as `m0eUB` and `v5d5r` redraw it): *Approve mode*, Manual's
+//! reviewer's connection, model and effort as three selects with the domain's effective-reviewer read-back in the row's
+//! (i) and, in its hint's place in `warning` while the reviewer cannot run, why (ORC-611), and *Approved for every
+//! run*. In Dangerous auto-approve the two rows under the Approve mode are dimmed, as nothing uses them (`i0Aqq`).
 use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
-  components::{Row, SelectOption},
+  components::{Column, Row, SelectOption},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -19,7 +19,7 @@ use crate::{
     kit::{Group, SettingRow, Tone},
     work::Save,
   },
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, UNUSED_ROWS_OPACITY},
   ui::{
     button::{ActionButton, ButtonKind},
     choice_field::{Choice, ChoiceField},
@@ -47,7 +47,7 @@ pub fn group(
 ) -> Group {
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending();
-  let autopilot = super::autopilot::row(ctx, (tab, props), settings, (save, busy));
+  let mode = super::approve_mode::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() && options.decisions.is_empty() {
     unavailable_reviewer(ctx, props)
   } else {
@@ -55,11 +55,34 @@ pub fn group(
     reviewer_row(ctx, (tab, props), (options, cannot_run), busy)
   };
   let rules = super::rules::row(ctx, props, settings);
-  Group::new("settings-auto", ctx.t("project_settings.auto"))
-    .row(autopilot)
-    .row(reviewer)
-    .row(rules)
-    .foot(&ctx.t("project_settings.approvalsFoot"))
+  let on = settings.approve_mode.approves_everything();
+  // In Dangerous auto-approve nothing uses the rows under the Approve mode, which stay usable (`i0Aqq`).
+  let unused = |row: Element| -> Element {
+    if on {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .opacity(UNUSED_ROWS_OPACITY)
+        .child(row)
+        .into()
+    } else {
+      row
+    }
+  };
+  let group = Group::new("settings-auto", ctx.t("project_settings.auto"))
+    .row(mode)
+    .row(unused(reviewer))
+    .row(unused(rules));
+  let group = if on {
+    group.after(super::dangerous::unused_note(ctx))
+  } else {
+    group.foot(&ctx.t("project_settings.approvalsFoot"))
+  };
+  let root = props.tab.project.open.repo_root.clone();
+  let project = props.tab.project.open.project.name().as_str().to_owned();
+  match tab.dangerous.render(ctx, &project, (save, &root), tab.gate.as_ref()) {
+    Some(dialog) => group.after(dialog),
+    None => group,
+  }
 }
 fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);

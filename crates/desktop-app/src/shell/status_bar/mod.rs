@@ -22,6 +22,7 @@ mod activity;
 mod auto_approving;
 mod browser;
 mod cloud;
+mod dangerous;
 mod facts;
 mod health;
 mod item;
@@ -342,6 +343,15 @@ impl Component for StatusBarView {
       }
     }
     // The right group in the design's order (`18 · Several at once` `y0SDOa`), the dot always last.
+    if let Some(project) = project
+      && let Some(tasks) = project.tasks.as_ref()
+    {
+      right.extend(dangerous::item(
+        ctx,
+        (project.id, tasks.dangerous_auto_approve),
+        &dispatch,
+      ));
+    }
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
       right.extend(auto_approving::auto_approving(
         ctx,
