@@ -77,6 +77,13 @@ fn memory_theme_roles_resolve_the_design() {
       "Geist",
       PaletteColor::TextSecondary,
     ),
+    (
+      MemoryText::Record,
+      13.0,
+      FontWeight::Normal,
+      "Geist",
+      PaletteColor::TextPrimary,
+    ),
   ];
   for (role, size, weight, family, color) in expected {
     let style = theme.typography_style(role.role());

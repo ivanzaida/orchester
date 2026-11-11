@@ -30,7 +30,7 @@
 //! `/project/<id>/merges` and what is under them, with any query, open the project's Overview. The Skills
 //! library, an agent profile, Instructions, a pipeline's page and Memory keep their tab,
 //! filter, item and panel in the query too ([`SkillsFilter`], [`AgentTab`],
-//! [`InstructionsView`], [`PipelineView`], [`MemoryTab`]);
+//! [`InstructionsView`], [`PipelineView`], [`MemoryView`]);
 //! `/project/<id>/settings?tab=sharing&ask=make-local` opens Sharing with *Make local*'s question. A tab, source
 //! or kind left out of the query is the one the screen opens on.
 //!
@@ -88,7 +88,7 @@ pub use self::{
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
   join_team::JoinWay,
-  memory::MemoryTab,
+  memory::{MemoryTab, MemoryView},
   modules::{ModuleListTab, ModuleTab},
   orchester::{ConnectStep, OrchesterAsk, OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,

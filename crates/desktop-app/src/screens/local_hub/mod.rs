@@ -22,7 +22,7 @@ mod editing;
 mod head;
 mod instruction;
 mod leave;
-mod list;
+pub(in crate::screens) mod list;
 pub(in crate::screens) mod mcp;
 mod model;
 mod panel;
@@ -48,7 +48,9 @@ use orchester_core::{
   resource::ResourceKind,
   time::Timestamp,
 };
-use orchester_workspace::{agents::local_hub::LocalHub, local_archive::Archivable, messages::Message};
+use orchester_workspace::{
+  agents::local_hub::LocalHub, local_archive::Archivable, memory::listing::Filters, messages::Message,
+};
 
 pub(in crate::screens) use self::model::view_of;
 use self::{
@@ -64,9 +66,11 @@ use crate::{
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::{
     hub::{
-      agents, agents_bones,
+      agents::{self, TabCount},
+      agents_bones,
       new_button::{made_under, new_button, new_words},
     },
+    memory::{hub as memory_hub, state::Made},
     team_hub::{create, model::Kind, unread},
   },
   ui::{
@@ -110,12 +114,15 @@ struct LocalHubScreen {
   archiving: Asking,
   /// Holds every other departure (Back, a tab, the sidebar) while a panel's edits are not saved.
   guard: LeaveGuard,
+  /// What the Memory filter keeps while the hub shows: its search, and what is open in place of a record.
+  memory: Made,
 }
 
 impl Component for LocalHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let feed = ctx.props::<Props>().project.feed.clone();
     let unsaved: UnsavedSignal = ctx.signal(None);
     let edits = unsaved.clone();
     let archiving = Asking::new(ctx);
@@ -129,6 +136,7 @@ impl Component for LocalHubScreen {
       asking: ctx.signal(false),
       archiving,
       guard: Navigation::of(ctx).guard(move || edits.get_untracked().is_some()),
+      memory: Made::new(ctx, Filters::default(), &feed),
     };
     // The question follows what waits for an answer, and what waits follows the question closing; each writes only
     // when it differs, or they would write each other for ever.
@@ -166,6 +174,10 @@ impl Component for LocalHubScreen {
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
     let listing = hub.map(Listing::of);
+    let memory_count = memory_hub::active_count(ctx, &project);
+    if view.filter == HubFilter::Memory {
+      return self.memory_page(ctx, &project, view, (listing.as_ref(), memory_count));
+    }
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().is_some());
     let selected = listing.as_ref().and_then(|listing| listing.selected(&view)).cloned();
@@ -214,7 +226,12 @@ impl Component for LocalHubScreen {
       )
     });
     let status = head::status(ctx);
-    let tabs = tabs(id, listing.as_ref(), selected.as_ref().map(|entry| entry.what), &leave);
+    let tabs = tabs(
+      id,
+      (listing.as_ref(), memory_count),
+      selected.as_ref().map(|entry| entry.what),
+      &leave,
+    );
     let over: Vec<Element> = leaving.into_iter().chain(self.archiving.question(ctx)).collect();
     agents::frame(
       ctx,
@@ -232,11 +249,11 @@ impl Component for LocalHubScreen {
   }
 }
 
-/// A tab per kind and *Archived* with its count (none while the hub is read), each keeping the chosen entry when it
-/// holds it.
+/// A tab per kind, *Memory* with its active records, and *Archived* with its count (none while the hub is read), each
+/// keeping the chosen entry when it holds it.
 fn tabs(
   project: ProjectId,
-  listing: Option<&Listing>,
+  (listing, memory): (Option<&Listing>, TabCount),
   selected: Option<Archivable>,
   leave: &Leave,
 ) -> Vec<agents::Tab> {
@@ -248,11 +265,48 @@ fn tabs(
       let leave = leave.clone();
       agents::Tab {
         filter: choice,
-        count: agents::TabCount::of(listing.map(|listing| listing.count(choice))),
+        count: if choice == HubFilter::Memory {
+          memory
+        } else {
+          TabCount::of(listing.map(|listing| listing.count(choice)))
+        },
         open: Arc::new(move || leave.go(route.clone())),
       }
     })
     .collect()
+}
+
+impl LocalHubScreen {
+  /// The hub on its Memory filter (Y1–Y4, Y6): the memory's sub-filter, list and panel under the hub's head and
+  /// filter, with *New record* in the head.
+  fn memory_page(
+    &self,
+    ctx: &mut Ctx,
+    project: &ShownProject,
+    view: HubView,
+    (listing, memory): (Option<&Listing>, TabCount),
+  ) -> Element {
+    let state = self.memory.state(ctx, project, None);
+    ctx.provide(state.clone());
+    let leave = Leave::new(&Navigation::of(ctx), &self.leaving, false);
+    let tabs = tabs(project.open.project.id(), (listing, memory), None, &leave);
+    let status = head::status(ctx);
+    let new = memory_hub::new_record(ctx, &state, view.memory);
+    let body = memory_hub::body(ctx, project, view.memory, false);
+    agents::frame(
+      ctx,
+      agents::Frame {
+        prefix: "local-hub",
+        filter: HubFilter::Memory,
+        status,
+        new: Some(new),
+        tabs,
+        notices: Vec::new(),
+        body,
+        over: Vec::new(),
+      },
+    )
+  }
 }
 
 impl LocalHubScreen {

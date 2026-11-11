@@ -11,11 +11,12 @@ mod views;
 
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsView, JoinTarget, JoinWay, MemoryTab, NewConnection, OverviewTab, ProjectPage,
-  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsView, HubFilter, HubView, JoinTarget, JoinWay, MemoryTab, MemoryView,
+  NewConnection, OverviewTab, ProjectPage, Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab,
+  TaskView, routes,
 };
 use orchester_core::{
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, MemoryId, ProjectId},
   project::TaskKey,
 };
 
@@ -114,7 +115,11 @@ fn every_route() -> Vec<Route> {
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
   all.extend(files_routes());
   all.extend(view_routes());
-  all.extend(MemoryTab::ALL.map(|tab| at(ProjectPage::Memory(Some(tab)))));
+  all.extend(MemoryTab::ALL.map(|tab| at(ProjectPage::Memory(MemoryView::on(tab)))));
+  all.push(at(ProjectPage::Memory(MemoryView::new(
+    Some(MemoryTab::Deprecated),
+    Some(MemoryId::generate()),
+  ))));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -244,17 +249,40 @@ fn paths_of_join_a_team_are_the_documented_ones() {
   );
 }
 
-/// Memory opens on the tab it chooses without one in its path; another screen opens a tab by naming it, as *Review
-/// records* opens Waiting for approval.
+/// Memory opens on the status it chooses without one in its path; another screen opens a status by naming it, as
+/// *Review records* opens Waiting for approval, and a record by naming it too. The Agents hub's Memory filter is the
+/// same page, and old `/memory?tab=…` links stay what they were.
 #[test]
-fn memory_paths_name_their_tab() {
+fn memory_paths_name_their_tab_and_record() {
   let root = format!("/project/{PROJECT}");
-  assert_eq!(at(ProjectPage::Memory(None)).path(), format!("{root}/memory"));
   assert_eq!(
-    at(ProjectPage::Memory(Some(MemoryTab::Waiting))).path(),
+    at(ProjectPage::Memory(MemoryView::default())).path(),
+    format!("{root}/memory")
+  );
+  assert_eq!(
+    at(ProjectPage::Memory(MemoryView::on(MemoryTab::Waiting))).path(),
     format!("{root}/memory?tab=waiting")
   );
-  assert_eq!(ProjectPage::of(Screen::Memory), Some(ProjectPage::Memory(None)));
+  let record = MemoryId::generate();
+  let picked = at(ProjectPage::Memory(MemoryView::new(
+    Some(MemoryTab::Active),
+    Some(record),
+  )));
+  assert_eq!(picked.path(), format!("{root}/memory?tab=active&record={record}"));
+  assert_eq!(Route::parse(&picked.path()), Ok(picked));
+  assert_eq!(
+    ProjectPage::of(Screen::Memory),
+    Some(ProjectPage::Memory(MemoryView::default()))
+  );
+  assert_eq!(
+    ProjectPage::hub(HubView::new(HubFilter::Memory, None)),
+    ProjectPage::Memory(MemoryView::default()),
+    "the hub's Memory filter is the Memory page"
+  );
+  assert_eq!(
+    Route::parse(&format!("{root}/agents?filter=memory")),
+    Ok(at(ProjectPage::Memory(MemoryView::default())))
+  );
 }
 
 #[test]

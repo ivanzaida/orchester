@@ -1,209 +1,163 @@
-//! The record editor on the project's page, as the record's own page (`05c Memory record` `CF0R7`, `05e Review
-//! proposal` `Ybk74`): what approving replaces as a diff on top while a proposal is reviewed, then the *Record* group's
-//! rows — *Type* and *Key · optional* in 240 fields, *Importance* as a segmented control, *Text* and *Tags* under their
-//! labels, *Pinned · always give it to agents* with its switch — and the footer: what saving does, then *Cancel* and
-//! *Save record*, or *Reject* and *Approve*. The page's crumb, head and side are the record page's
-//! ([`crate::screens::memory::record_page`]).
+//! The record editor in the Memory filter's panel (`Detail · editor` `p639jn` in Y3 `hnMhi`), in place of the record
+//! while the list stays: *Memory* and where the record stands over *Edit decision*, *Review proposed decision* or *New
+//! record*; the fields as the task's editor has them — *Type*, *Key · optional* and *Importance* on one line, *Text*,
+//! *Tags* with *Add a tag…*, what approving replaces, *Pinned · always give it to agents* with its hint — then what the
+//! person does not change under *Record*; and pinned at the bottom *Save record* or *Approve*, *Cancel*, what saving
+//! does, and *Delete…* or *Reject* at the end.
 
-use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row, SelectOption, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
-};
-use orchester_core::memory::{Importance, MemoryKind};
-use orchester_workspace::memory::{change::Change, listing::KIND_ORDER};
+use lurq::{app::ctx::Ctx, components::Text, node::Element};
+use orchester_core::memory::Memory;
+use orchester_workspace::memory::change::Change;
 
-use super::{EditorMode, EditorProps, ImportanceChoice, KindChoice, RecordEditor};
+use super::{EditorMode, EditorProps, RecordEditor, mode_name};
 use crate::{
   screens::{
-    hub::parts,
-    memory::{state::MemoryState, words, work::Write},
+    memory::{
+      hub::panel::{frame, status_word},
+      parts,
+      state::{MemoryState, Opened},
+      words,
+      work::Write,
+    },
+    team_hub::{
+      bar::bar_ending,
+      panel::{body, head_named},
+      rows,
+    },
   },
-  theme::{HubSpacing, HubText},
+  theme::HubText,
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, SelectField},
-    pressable::Focus,
-    tabs::{Segment, SegmentFace, segmented},
-    toggle::{Toggle, ToggleKind},
+    icon::Icon,
   },
 };
 
-/// A field's width in the record's rows (`x7cbm`, `RTAOi` in `Qw8g5`).
-const FIELD_WIDTH: f32 = 240.0;
-/// The text's box (`s4566J`).
-const TEXT_HEIGHT: f32 = 64.0;
-
 impl RecordEditor {
-  /// The editor as the main column of the record's page.
-  pub(super) fn page(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
-    let mut column = Column::new()
-      .id(id.to_owned())
-      .width(Dimension::Pct(100.0))
-      .describe("mode", super::mode_name(props.mode))
-      .spacing(HubSpacing::Sections.role());
-    if let Some(replaced) = &props.replaced {
-      column = column.child(self.replaces(ctx, (replaced, props.memory.as_ref()), (id, true)));
-    }
-    let record = props.memory.as_ref().map(orchester_core::memory::Memory::id);
-    column
-      .child(self.record_rows(ctx, props, id))
-      .with_children(state.failure_note(ctx, id, record))
-      .child(self.page_footer(ctx, state, props, id))
-      .into()
-  }
-
-  /// The *Record* group (`ymE2V`).
-  fn record_rows(&self, ctx: &mut Ctx, props: &EditorProps, id: &str) -> Element {
-    let kind_label = ctx.t("memory.editor.type");
-    let kinds = KIND_ORDER
-      .into_iter()
-      .filter(|kind| *kind != MemoryKind::Handoff || self.kind.get().0 == MemoryKind::Handoff)
-      .map(|kind| SelectOption::new(KindChoice(kind), words::kind_name(ctx, kind)))
-      .collect();
-    let kind = SelectField::new(format!("{id}-type"), kind_label.clone(), self.kind.clone(), kinds).render(ctx);
-    let key_label = ctx.t("memory.editor.key");
-    let key = FieldInput::new(format!("{id}-key"), key_label.clone(), self.key.clone())
-      .mono()
-      .render(ctx);
-    let text = FieldInput::new(format!("{id}-text"), ctx.t("memory.editor.text"), self.text.clone())
-      .text_area()
-      .area_height(TEXT_HEIGHT)
-      .render(ctx);
-    let mut rows: Vec<Element> = vec![
-      parts::field(&format!("{id}-type-field"), &kind_label, None, sized(kind)).into(),
-      parts::field(&format!("{id}-key-field"), &key_label, None, sized(key)).into(),
-      parts::field(
-        &format!("{id}-importance-field"),
-        &ctx.t("memory.editor.importance"),
-        None,
-        self.importance_segments(ctx, id),
-      )
-      .into(),
-      parts::stacked_field(
-        &format!("{id}-text-field"),
-        (&ctx.t("memory.editor.text"), None),
-        text,
-        None,
-      )
-      .into(),
-      parts::stacked_field(
-        &format!("{id}-tags-row"),
-        (&ctx.t("memory.editor.tags"), None),
-        self.tags_field(ctx, id, false),
-        None,
-      )
-      .into(),
-    ];
-    if props.mode == EditorMode::Edit {
-      let pinned = self.pinned.clone();
-      let title = ctx.t("memory.editor.pinned");
-      let switch = Toggle::new(
-        format!("{id}-pin"),
-        ToggleKind::Switch,
-        self.pinned.get(),
-        title.clone(),
-      )
-      .hide_label()
-      .on_change(move |on| pinned.set(on));
-      rows.push(
-        parts::field(
-          &format!("{id}-pin-field"),
-          &title,
-          Some(&ctx.t("memory.editor.pinnedHintProject")),
-          switch,
-        )
-        .into(),
-      );
-    }
-    let group = "memory-record-group";
-    parts::group(
-      group,
-      parts::head(group, &ctx.t("memory.editor.record"), None, None),
-      parts::boxed(&format!("{id}-fields"), rows),
+  /// The editor as the panel of the record it edits, or of *New record*.
+  pub(super) fn panel(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
+    let body = body()
+      .id(format!("{id}-body"))
+      .child(self.panel_head(ctx, props))
+      .with_children(self.field_list(ctx, state, props, id))
+      .with_children(record_section(ctx, state, props, id));
+    let record = props.memory.as_ref().map(Memory::id);
+    let failure = state.failure_note(ctx, id, record);
+    frame(
+      id,
+      (mode_name(props.mode), body),
+      failure,
+      self.panel_bar(ctx, state, props, id),
     )
-    .into()
   }
 
-  /// *Low · Normal · High* (`M7BjL`).
-  fn importance_segments(&self, ctx: &Ctx, id: &str) -> Row {
-    let chosen = self.importance.get().0;
-    let segments = [Importance::Low, Importance::Normal, Importance::High].map(|importance| {
-      let set = self.importance.clone();
-      Segment::new(
-        format!("{id}-importance-{}", importance_name(importance)),
-        SegmentFace::Text(words::importance(ctx, importance)),
-        chosen == importance,
-        move || set.set(ImportanceChoice(importance)),
-      )
+  /// *Memory* and where the record stands (*Active · webhook-retry*) over what is done to it (`Head` `Q03dN0`).
+  fn panel_head(&self, ctx: &Ctx, props: &EditorProps) -> lurq::components::Row {
+    let kind = words::kind_lower(ctx, self.kind.get().0);
+    let title = match props.mode {
+      EditorMode::Review => ctx.t_args("memory.editor.reviewTitle", [("kind", &*kind)]),
+      EditorMode::Edit => ctx.t_args("memory.editor.editTitle", [("kind", &*kind)]),
+      EditorMode::New => ctx.t("memory.editor.newTitle"),
+    };
+    let stands = props.memory.as_ref().map(|memory| {
+      let mut parts = vec![status_word(ctx, memory.status()).to_string()];
+      parts.extend(memory.content().key().map(|key| key.as_str().to_owned()));
+      words::join(ctx, &parts).to_string()
     });
-    segmented(&format!("{id}-importance"), segments, Focus::Keyboard)
+    head_named(&title, (ctx.t("memory.title").to_string(), stands), None)
   }
 
-  /// What saving does, then *Cancel* and *Save record*, or *Reject* and *Approve* (`vj1hs`, `b6qp3c`).
-  fn page_footer(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
-    let record = props.memory.as_ref().map(orchester_core::memory::Memory::id);
+  /// *Save record* or *Approve*, *Cancel*, what saving does, and *Delete…* on an active record or *Reject* on a
+  /// proposal (`Actions` `Q7T0g0`).
+  fn panel_bar(&self, ctx: &Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
+    let record = props.memory.as_ref().map(Memory::id);
     let busy = state.busy();
     let held = |button: ActionButton| if busy { button.disabled() } else { button };
-    let note = ctx.t(match props.mode {
-      EditorMode::Review => "memory.editor.approveNotePage",
-      EditorMode::Edit | EditorMode::New => "memory.editor.saveNote",
-    });
-    let mut row = Row::new()
-      .id(format!("{id}-footer"))
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(
-        Text::new(&note)
-          .id(format!("{id}-note"))
-          .variant(HubText::Hint.role())
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0)),
-      );
-    match (&props.memory, props.mode) {
-      (Some(memory), EditorMode::Review) => {
-        let (state, record, revision) = (state.clone(), memory.id(), memory.revision());
-        row = row.child(held(
-          ActionButton::new(
-            format!("{id}-reject"),
-            ButtonKind::DangerGhost,
-            ctx.t("memory.actions.reject"),
-          )
-          .on_click(move || state.write(Write::Change(record, revision, Change::Reject))),
-        ));
-      }
-      _ => {
-        let close = state.clone();
-        row = row.child(held(
-          ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, ctx.t("memory.editor.cancel"))
-            .on_click(move || close.leave_page()),
-        ));
-      }
-    }
-    let primary = self.primary(ctx, state, props, id);
+    let primary = self.primary(ctx, state, props, id).pinned();
     let primary = if state.pending_for(record) {
       primary.loading()
     } else {
       held(primary)
     };
-    row.child(primary).into()
+    let close = state.clone();
+    let cancel = held(
+      ActionButton::new(
+        format!("{id}-cancel"),
+        ButtonKind::Secondary,
+        ctx.t("memory.editor.cancel"),
+      )
+      .pinned()
+      .on_click(move || close.close()),
+    );
+    let note = ctx.t(match props.mode {
+      EditorMode::Review => "memory.editor.approveNote",
+      EditorMode::Edit | EditorMode::New => "memory.editor.saveNote",
+    });
+    let end = props.memory.as_ref().and_then(|memory| {
+      let (record, revision, state) = (memory.id(), memory.revision(), state.clone());
+      let end = match props.mode {
+        EditorMode::Review => ActionButton::new(
+          format!("{id}-reject"),
+          ButtonKind::DangerGhost,
+          ctx.t("memory.actions.reject"),
+        )
+        .icon(Icon::X)
+        .on_click(move || state.write(Write::Change(record, revision, Change::Reject))),
+        EditorMode::Edit => ActionButton::new(
+          format!("{id}-delete"),
+          ButtonKind::DangerGhost,
+          ctx.t("memory.editor.delete"),
+        )
+        .icon(Icon::Trash2)
+        .on_click(move || state.open(Opened::Delete(record))),
+        EditorMode::New => return None,
+      };
+      Some(held(end.pinned()).into())
+    });
+    bar_ending(
+      &format!("{id}-actions"),
+      vec![primary.into(), cancel.into()],
+      Some((note.to_string(), lurq::app::theme::PaletteColor::TextMuted)),
+      end,
+    )
   }
 }
 
-/// A control in a record row's 240 field.
-fn sized(control: Element) -> Row {
-  Row::new()
-    .width(Dimension::Px(FIELD_WIDTH))
-    .flex_shrink(0.0)
-    .child(control)
-}
-
-const fn importance_name(importance: Importance) -> &'static str {
-  match importance {
-    Importance::Low => "low",
-    Importance::Normal => "normal",
-    Importance::High => "high",
+/// *Record*: what the person does not change, a row each (`Record` `lThsB`), the source's with *Show in Conversation
+/// ↗*; none for a new record.
+fn record_section(ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Option<Element> {
+  if props.facts.is_empty() {
+    return None;
   }
+  let mut link = props.source_task.as_ref().map(|task| {
+    parts::conversation_link(
+      ctx,
+      (state.project_id, task),
+      (&format!("{id}-source-link"), &ctx.t("memory.editor.sourceLink")),
+    )
+  });
+  let rows = props
+    .facts
+    .iter()
+    .enumerate()
+    .map(|(index, (label, value))| {
+      let fact = format!("{id}-fact-{index}");
+      let said = Text::new(value)
+        .id(format!("{fact}-value"))
+        .variant(HubText::Value.role());
+      let value = lurq::components::Row::new()
+        .spacing(lurq::app::theme::SpacingSize::Sm)
+        .child(said)
+        .with_children(if index == 0 { link.take() } else { None });
+      rows::row(&fact, label, None, value)
+    })
+    .collect();
+  Some(
+    rows::section(
+      &format!("{id}-record"),
+      &ctx.t("memory.editor.record"),
+      Vec::new(),
+      rows,
+    )
+    .into(),
+  )
 }

@@ -1,7 +1,7 @@
 //! The Agents hub's *New* (`+ New` in `Header` `NRqwv`, A1; L2): the same primary button in a team and a local project,
 //! saying the kind the open tab holds (*New skill* under Skills) and opening that kind's form; All and Archived hold no
-//! one kind, so there it makes an agent profile. It is always as wide as its longest words, so switching tabs moves
-//! nothing in the head.
+//! one kind, so there it makes an agent profile; Memory's is *New record* (Y1 `EjEcD`). It is always as wide as its
+//! longest words, so switching tabs moves nothing in the head.
 
 use std::sync::Arc;
 
@@ -48,14 +48,26 @@ pub(crate) fn new_words(filter: HubFilter) -> &'static str {
     .map_or("hub.new.profiles", |(_, key)| key)
 }
 
+/// The words of Memory's *New record*, which takes the same slot.
+const NEW_RECORD: &str = "memory.newRecord";
+
 /// *New <kind>* for `filter`, its element id `id`, which `press` answers by opening the form of [`made_under`].
 pub(crate) fn new_button(ctx: &Ctx, id: &str, filter: HubFilter, press: Press) -> Element {
-  let words = |key: &str| -> Arc<str> { ctx.t(key) };
-  let button = ActionButton::new(id.to_owned(), ButtonKind::Primary, words(new_words(filter)))
+  let button = ActionButton::new(id.to_owned(), ButtonKind::Primary, ctx.t(new_words(filter)))
     .icon(Icon::Plus)
     .press(press);
-  let sizes = KINDS.iter().map(|(kind, key)| {
-    ActionButton::new(format!("{id}-size-{}", kind.name()), ButtonKind::Primary, words(key)).icon(Icon::Plus)
-  });
+  slot(ctx, id, button)
+}
+
+/// `button`, the head's primary action `id`, as wide as the widest of the hub's *New* buttons.
+pub(crate) fn slot(ctx: &Ctx, id: &str, button: ActionButton) -> Element {
+  let words = |key: &str| -> Arc<str> { ctx.t(key) };
+  let sizes = KINDS
+    .iter()
+    .map(|(kind, key)| (kind.name(), *key))
+    .chain([("memory", NEW_RECORD)])
+    .map(|(name, key)| {
+      ActionButton::new(format!("{id}-size-{name}"), ButtonKind::Primary, words(key)).icon(Icon::Plus)
+    });
   as_wide_as_widest(&format!("{id}-slot"), button, sizes).into()
 }

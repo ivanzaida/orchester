@@ -37,10 +37,12 @@ pub enum MemoryText {
   PanelTitle,
   /// 12 `text_secondary`, 1.5: what a task's empty or no-match state explains, centered (`M22vg`, `QtSG5`).
   StateText,
+  /// 13 `text_primary`, 1.5: what a record says in the Agents hub's panel (`i5mAK` in Y1 `tsfxN`).
+  Record,
 }
 
 impl MemoryText {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 11] = [
     Self::GroupLabel,
     Self::GroupCount,
     Self::Flag,
@@ -51,6 +53,7 @@ impl MemoryText {
     Self::Lead,
     Self::PanelTitle,
     Self::StateText,
+    Self::Record,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -69,6 +72,7 @@ impl MemoryText {
       Self::Lead => "memory_lead",
       Self::PanelTitle => "memory_panel_title",
       Self::StateText => "memory_state_text",
+      Self::Record => "memory_record",
     }
   }
 
@@ -90,6 +94,7 @@ impl MemoryText {
       Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::PanelTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::StateText => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
+      Self::Record => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
     }
   }
 }

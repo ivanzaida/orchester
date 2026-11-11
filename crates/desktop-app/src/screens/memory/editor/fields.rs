@@ -36,7 +36,22 @@ const SAVE_TO_WIDTH: f32 = 260.0;
 const TEXT_HEIGHT: f32 = 64.0;
 
 impl RecordEditor {
+  /// The fields in the task's editor, with the facts under them.
   pub(super) fn fields(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
+    let mut fields = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+      .spacing(ExtraSpacing::Inset.role())
+      .with_children(self.field_list(ctx, state, props, id));
+    if !props.facts.is_empty() {
+      fields = fields.child(facts(ctx, state, props, id));
+    }
+    fields.into()
+  }
+
+  /// The fields, in their order: the type, key and importance on one line, the text, the tags, where a new record of
+  /// a task's tab is saved, what approving replaces, and *Pinned* unless a proposal is reviewed.
+  pub(super) fn field_list(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Vec<Element> {
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
@@ -46,33 +61,29 @@ impl RecordEditor {
     let text = FieldInput::new(format!("{id}-text"), ctx.t("memory.editor.text"), self.text.clone())
       .text_area()
       .area_height(TEXT_HEIGHT);
-    let mut fields = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-      .spacing(ExtraSpacing::Inset.role())
-      .child(line)
-      .child(field(
+    let mut fields: Vec<Element> = vec![
+      line.into(),
+      field(
         &format!("{id}-text-field"),
         Some(&ctx.t("memory.editor.text")),
         text.render(ctx),
         None,
-      ))
-      .child(self.tags_field(ctx, id, true));
+      )
+      .into(),
+      self.tags_field(ctx, id, true),
+    ];
     if props.mode == EditorMode::New && state.task.is_some() {
-      fields = fields.child(self.save_to_field(ctx, state, id));
+      fields.push(self.save_to_field(ctx, state, id));
     }
     if let Some(replaced) = &props.replaced {
       let page = state.task.is_none();
-      fields = fields.child(self.replaces(ctx, (replaced, props.memory.as_ref()), (id, page)));
+      fields.push(self.replaces(ctx, (replaced, props.memory.as_ref()), (id, page)));
     }
     if props.mode != EditorMode::Review {
       let of_task = state.task.is_some() && self.save_to.get().0 == SaveTo::Task;
-      fields = fields.child(self.pin_field(ctx, id, of_task));
+      fields.push(self.pin_field(ctx, id, of_task));
     }
-    if !props.facts.is_empty() {
-      fields = fields.child(facts(ctx, state, props, id));
-    }
-    fields.into()
+    fields
   }
 
   fn kind_field(&self, ctx: &Ctx, id: &str) -> Element {

@@ -1,8 +1,7 @@
-//! The grouped list of records the Memory screens share (`Record list` `sglU2` in `a0PLO`, `Fqhrb` in `TeKGM`): the
-//! records waiting for approval first on a task's tab, then a group per type under its heading, and in a record's
-//! place its editor or its delete confirmation while one is open. On the project's page each group is the hub's
-//! group of rows (`Handoffs` `yG8AV` in 05b) and a press on a record opens its own page ([`super::record_page`]). A
-//! task's handoffs show the latest, with *Show N earlier handoffs* for the steps' other ones.
+//! The grouped list of a task's records (`Record list` `sglU2` in `a0PLO`): the records waiting for approval first,
+//! then a group per type under its heading, and in a record's place its editor or its delete confirmation while one
+//! is open. A task's handoffs show the latest, with *Show N earlier handoffs* for the steps' other ones. The Agents
+//! hub's Memory filter lists the project's records as the hub's rows instead ([`super::hub`]).
 
 use std::sync::Arc;
 
@@ -21,21 +20,18 @@ use orchester_core::{
 use orchester_workspace::memory::{
   listing::{self, Filters, Group, Listed},
   origin::Origins,
-  read::ProjectMemory,
 };
 
 use super::{
   delete::DeleteConfirm,
   editor::{RecordEditor, opened_on},
   opened::{self, Among},
-  parts,
-  proposal::{self, Listed as Place},
+  parts, proposal,
   row::{Earlier, RecordRow, RowProps},
   state::{MemoryState, Opened},
   words,
 };
 use crate::{
-  screens::hub::parts as hub_parts,
   theme::{ExtraSpacing, IconSize, MemorySpacing},
   ui::{
     icon::{Icon, icon},
@@ -43,16 +39,12 @@ use crate::{
   },
 };
 
-/// What a list shows, and how.
+/// What a list shows: the task's records, the waiting ones first, and its latest handoff flagged.
 #[derive(Clone, Copy)]
 pub struct ListInput<'a> {
   pub records: &'a [Memory],
   pub origins: &'a Origins,
   pub filters: &'a Filters,
-  /// The task's tab: the waiting records first, and the latest handoff flagged.
-  pub task_tab: bool,
-  /// The project's page, whose records open their details in place.
-  pub project: Option<&'a Arc<ProjectMemory>>,
 }
 
 impl<'a> ListInput<'a> {
@@ -60,7 +52,7 @@ impl<'a> ListInput<'a> {
     Among {
       records: self.records,
       origins: self.origins,
-      with_task: !self.task_tab,
+      with_task: false,
       project: None,
     }
   }
@@ -68,24 +60,11 @@ impl<'a> ListInput<'a> {
 
 /// The groups of `input`'s records, each its heading and its records.
 pub fn groups(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>) -> Vec<Element> {
-  let latest = input.task_tab.then(|| listing::latest_handoff(input.records)).flatten();
-  listing::grouped(input.records, input.filters, input.task_tab)
+  let latest = listing::latest_handoff(input.records);
+  listing::grouped(input.records, input.filters, true)
     .into_iter()
     .map(|listed| group(ctx, state, input, (&listed, latest)))
     .collect()
-}
-
-/// `input`'s records in one list without group headings, as the project page's *Deprecated*, *Superseded* and
-/// *Rejected* tabs show them (`hxQhj` in `C0OJpC`), there in one box of rows (05f).
-pub fn flat(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>) -> Vec<Element> {
-  let rows: Vec<Element> = listing::flat(input.records, input.filters)
-    .into_iter()
-    .map(|memory| entry(ctx, state, input, (memory, None)))
-    .collect();
-  if rows.is_empty() || input.project.is_none() {
-    return rows;
-  }
-  vec![hub_parts::boxed("memory-flat-rows", rows).into()]
 }
 
 fn group(
@@ -94,11 +73,8 @@ fn group(
   input: ListInput<'_>,
   (listed, latest): (&Listed<'_>, Option<MemoryId>),
 ) -> Element {
-  let project = input.project.is_some();
   let (key, label) = match listed.group {
     Group::Waiting => ("waiting".to_owned(), ctx.t("memory.group.waiting")),
-    // The project's page heads its groups as the hub does (`Handoffs` `yG8AV` in 05b).
-    Group::Kind(kind) if project => (kind.name().to_owned(), words::kind_plural(ctx, kind)),
     Group::Kind(kind) => (
       kind.name().to_owned(),
       words::kind_plural(ctx, kind).to_uppercase().into(),
@@ -115,18 +91,6 @@ fn group(
   }
   let handoffs =
     listed.group == Group::Kind(MemoryKind::Handoff) && (!earlier.is_empty() || state.earlier_handoffs.get());
-  if project {
-    let mut rows: Vec<Element> = shown
-      .into_iter()
-      .map(|memory| entry(ctx, state, input, (memory, latest)))
-      .collect();
-    if handoffs {
-      rows.push(earlier_handoffs(ctx, state, input, &earlier));
-    }
-    let count = listed.records.len().to_string();
-    let head = hub_parts::head(&format!("{id}-heading"), &label, Some(&count), None);
-    return hub_parts::group(&id, head, hub_parts::boxed(&format!("{id}-rows"), rows)).into();
-  }
   let heading = parts::group_heading(&format!("{id}-heading"), &label, listed.records.len());
   let mut column = Column::new()
     .id(id)
@@ -164,15 +128,14 @@ fn entry(
     let props = opened::delete(memory, input.among());
     return ctx.mount_keyed::<DeleteConfirm>(&format!("memory-delete-{}", memory.id()), props);
   }
-  if input.task_tab && memory.status() == MemoryStatus::Proposed {
-    return proposal::proposal(ctx, (memory, input.records), input.origins, Place::Task);
+  if memory.status() == MemoryStatus::Proposed {
+    return proposal::proposal(ctx, (memory, input.records), input.origins);
   }
   let props = RowProps {
     memory: memory.clone(),
-    meta: words::meta(ctx, memory, input.origins, !input.task_tab),
+    meta: words::meta(ctx, memory, input.origins, false),
     latest: Some(memory.id()) == latest,
     earlier: earlier_versions(ctx, memory, input),
-    page: input.project.is_some(),
   };
   let row = ctx.mount_keyed::<RecordRow>(&format!("memory-row-{}", memory.id()), props);
   let Some(note) = row_note(ctx, state, memory.id()).map(note_line) else {
@@ -210,7 +173,7 @@ fn earlier_versions(ctx: &Ctx, memory: &Memory, input: ListInput<'_>) -> Arc<[Ea
     .into_iter()
     .map(|earlier| Earlier {
       text: earlier.content().text().into(),
-      meta: words::meta(ctx, earlier, input.origins, !input.task_tab),
+      meta: words::meta(ctx, earlier, input.origins, false),
     })
     .collect()
 }

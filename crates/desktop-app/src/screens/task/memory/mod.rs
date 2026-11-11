@@ -33,7 +33,7 @@ use super::TaskContext;
 use crate::{
   project::{run_changes, settled_read::settled_read},
   screens::memory::{
-    self as memory_ui, Centered, FilterBar, FiltersProps, ListInput,
+    self as memory_ui, Centered, FilterBar, ListInput,
     state::{Made, MemoryState, OfTask, Opened, Shared},
     words,
   },
@@ -238,13 +238,7 @@ fn toolbar(ctx: &mut Ctx, state: &MemoryState, searchable: bool, counted: Option
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border));
   if searchable {
-    bar = bar.child(ctx.mount_keyed::<FilterBar>(
-      "memory-task-filters",
-      FiltersProps {
-        project: false,
-        tags: Arc::from([]),
-      },
-    ));
+    bar = bar.child(ctx.mount_keyed::<FilterBar>("memory-task-filters", ()));
   }
   bar
     .child(Spacer::new().flex(1.0))
@@ -287,8 +281,6 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Shown {
       records: &memory.records,
       origins: &memory.origins,
       filters: &filters,
-      task_tab: true,
-      project: None,
     },
   );
   if groups.is_empty() {
