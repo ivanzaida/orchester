@@ -103,7 +103,7 @@ pub fn unpublishable(edit: &PipelineEdit, read: &FlowRead) -> Option<Unpublishab
 
 /// The steps of `read` saving refuses: each that cannot run, but one whose profile only lost its connection, which is
 /// this computer's to fix and which saving takes.
-fn blocking_steps(read: &FlowRead) -> Vec<StepProblem> {
+pub fn blocking_steps(read: &FlowRead) -> Vec<StepProblem> {
   step_problems(read)
     .into_iter()
     .filter(|step| !matches!(step.blocked, Blocked::ProfileConnectionGone { .. }))

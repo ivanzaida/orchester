@@ -240,9 +240,11 @@ impl Component for PipelinePanel {
       unsaved,
       fix: step::fix_words(ctx, &self.faulty, &current),
       unpublishable: unpublishable(&current, &read),
+      read: &read,
       restored: self.restored.get().0,
     };
-    let off = line.fix.clone();
+    // A pipeline is stored only as a published version (D-032): an edit that cannot be published is not saved.
+    let off = line.fix.clone().or_else(|| changed.then(|| bar::save_off(ctx, &line)).flatten());
     let save = self.save_now(&edit, changed, (locked, off));
     let shown = Shown {
       project: &project,

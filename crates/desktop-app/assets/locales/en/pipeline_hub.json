@@ -131,13 +131,17 @@
       "refusedTitle": "Couldn't save {{name}}: {{reason}}",
       "refusedBody": "Nothing was saved and what you changed stays here. Save tries again.",
       "savedTitle": "Saved as {{version}} · the next run uses it",
-      "publishesFirst": "Save publishes it as {{version}}",
-      "keepsDraft": "Save keeps it as a draft · {{version}} comes once every step is ready",
       "restored": "Restored {{version}} · not saved · {{rest}}",
       "savedTitleWaits": "Saved as {{version}} · runs can start once every step is ready",
       "widenTitleRestored": "Restoring {{version}} changes the pipeline: allow these changes?",
       "noChanges": "No changes since {{version}}",
-      "keepsDraftRefused": "Save keeps it as a draft · {{why}}"
+      "offNoSteps": "Add a step to save",
+      "offSteps": "Make {{count}} steps ready to save",
+      "offProfile": "Choose a profile for {{number}} {{step}} to save",
+      "offTool": "Choose a tool for {{number}} {{step}} to save",
+      "offProfileReady": "Make the profile of {{number}} {{step}} ready to save",
+      "offToolReady": "Make the tool of {{number}} {{step}} ready to save",
+      "offBroken": "Fix what the steps wait for to save"
     },
     "leave": {
       "title": "Discard the unsaved changes to {{name}}?",
