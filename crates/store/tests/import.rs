@@ -245,16 +245,27 @@ fn fingerprint(repo: &Path) -> (Vec<u8>, SystemTime) {
   (hash, modified)
 }
 
-/// Preview release v1 into `target`, Builder's connection mapped to `connection`.
-fn batch(source: &Catalog, target: &ProjectDb, preview: ResourceId, connection: Option<ConnectionId>) -> ImportBatch {
+/// Builder, which the pipeline runs: the one resource of Personal website an import takes (the pipeline and its
+/// rules are not offered).
+fn builder_of(source: &Catalog) -> ResourceId {
+  source
+    .resources()
+    .iter()
+    .find(|entry| entry.resource().name().as_str() == "Builder")
+    .expect("Builder")
+    .resource()
+    .id()
+}
+
+/// Builder's draft into `target`, its connection mapped to `connection`.
+fn batch(source: &Catalog, target: &ProjectDb, connection: Option<ConnectionId>) -> ImportBatch {
   let target = Catalog::read(target.project().clone(), target).expect("the target reads");
   let mut choices = Choices::default();
   if let Some(connection) = connection {
     let codex = source.connections()[0].id();
     choices.choose(Entity::Connection(codex), Choice::Use(Entity::Connection(connection)));
   }
-  let first = VersionNumber::FIRST;
-  let plan = Plan::new(source, &target, &[(preview, Pick::Published(first))], &choices);
+  let plan = Plan::new(source, &target, &[(builder_of(source), Pick::Draft)], &choices);
   plan.batch(source, IdempotencyKey::generate(), at(10)).expect("ready")
 }
 
@@ -264,57 +275,53 @@ fn count(db: &ProjectDb, kind: ResourceKind) -> usize {
 
 #[test]
 fn import_writes_every_copy_as_a_draft_with_its_origin() {
-  let (source_repo, preview) = personal_website();
+  let (source_repo, _) = personal_website();
   let source = catalog_of(source_repo.path());
+  let builder = builder_of(&source);
   let (target_repo, mut target) = repository("Kontur", "KON");
   let connection = codex(&mut target);
 
   let created = target
-    .import(&batch(&source, &target, preview, Some(connection)))
+    .import(&batch(&source, &target, Some(connection)))
     .expect("imported");
 
   let kinds: Vec<_> = created.iter().map(|resource| resource.kind()).collect();
   assert_eq!(
     kinds,
-    [
-      ResourceKind::Pipeline,
-      ResourceKind::AgentProfile,
-      ResourceKind::Instruction
-    ]
+    [ResourceKind::AgentProfile],
+    "the pipeline that runs Builder and its rules are not imported"
   );
   for resource in &created {
     assert_eq!(target.resource(resource.id()).expect("read").as_ref(), Some(resource));
   }
-  let pipeline = created[0].id();
+  let profile_id = created[0].id();
   assert_eq!(
-    target.latest_version::<Pipeline>(pipeline).expect("read"),
+    target.latest_version::<AgentProfile>(profile_id).expect("read"),
     None,
     "nothing is published"
   );
-  let draft = target.draft::<Pipeline>(pipeline).expect("read").expect("a draft");
-  assert_eq!(draft.based_on(), None);
-  assert_eq!(draft.body().steps()[0].kind.executor(), Some(created[1].id()));
   let profile = target
-    .draft::<AgentProfile>(created[1].id())
+    .draft::<AgentProfile>(profile_id)
     .expect("read")
     .expect("a draft");
+  assert_eq!(profile.based_on(), None);
   assert_eq!(profile.body().connection(), connection);
   let origin: (String, String, String, Option<i64>, i64) = rusqlite::Connection::open(database(target_repo.path()))
     .expect("open")
     .query_row(
       "SELECT source_project_id, source_project_name, source_resource_id, source_version, imported_at \
        FROM resource_imports WHERE resource_id = ?1",
-      [pipeline.to_string()],
+      [profile_id.to_string()],
       |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
     )
-    .expect("the pipeline's origin");
+    .expect("the profile's origin");
   assert_eq!(
     origin,
     (
       source.project().id().to_string(),
       "Personal website".to_owned(),
-      preview.to_string(),
-      Some(1),
+      builder.to_string(),
+      None,
       10
     )
   );
@@ -322,14 +329,12 @@ fn import_writes_every_copy_as_a_draft_with_its_origin() {
 
 #[test]
 fn import_leaves_the_source_database_untouched() {
-  let (source_repo, preview) = personal_website();
+  let (source_repo, _) = personal_website();
   let before = fingerprint(source_repo.path());
   let (_target_repo, mut target) = repository("Kontur", "KON");
 
   let source = catalog_of(source_repo.path());
-  target
-    .import(&batch(&source, &target, preview, None))
-    .expect("imported");
+  target.import(&batch(&source, &target, None)).expect("imported");
 
   assert_eq!(
     fingerprint(source_repo.path()),
@@ -346,22 +351,22 @@ fn import_leaves_the_source_database_untouched() {
 
 #[test]
 fn import_with_a_key_already_written_creates_nothing_new() {
-  let (source_repo, preview) = personal_website();
+  let (source_repo, _) = personal_website();
   let source = catalog_of(source_repo.path());
   let (_target_repo, mut target) = repository("Kontur", "KON");
-  let batch = batch(&source, &target, preview, None);
+  let batch = batch(&source, &target, None);
 
   let first = target.import(&batch).expect("imported");
   let again = target.import(&batch).expect("the retry succeeds");
 
   assert_eq!(again, first);
-  assert_eq!(count(&target, ResourceKind::Pipeline), 1);
+  assert_eq!(count(&target, ResourceKind::Pipeline), 0);
   assert_eq!(count(&target, ResourceKind::AgentProfile), 1);
 }
 
 #[test]
 fn import_writes_nothing_when_a_mapped_connection_is_gone() {
-  let (source_repo, preview) = personal_website();
+  let (source_repo, _) = personal_website();
   let source = catalog_of(source_repo.path());
   let (_target_repo, mut target) = repository("Kontur", "KON");
   let gone = ConnectionId::generate();
@@ -387,12 +392,7 @@ fn import_writes_nothing_when_a_mapped_connection_is_gone() {
     Entity::Connection(source.connections()[0].id()),
     Choice::Use(Entity::Connection(gone)),
   );
-  let plan = Plan::new(
-    &source,
-    &with_gone,
-    &[(preview, Pick::Published(VersionNumber::FIRST))],
-    &choices,
-  );
+  let plan = Plan::new(&source, &with_gone, &[(builder_of(&source), Pick::Draft)], &choices);
   let batch = plan.batch(&source, IdempotencyKey::generate(), at(10)).expect("ready");
 
   let refused = target.import(&batch);
@@ -407,35 +407,31 @@ fn import_writes_nothing_when_a_mapped_connection_is_gone() {
 
 #[test]
 fn import_refuses_a_slug_taken_since_the_plan() {
-  let (source_repo, preview) = personal_website();
+  let (source_repo, _) = personal_website();
   let source = catalog_of(source_repo.path());
   let (_target_repo, mut target) = repository("Kontur", "KON");
-  let batch = batch(&source, &target, preview, None);
-  let taken = Instruction::new(
+  let batch = batch(&source, &target, None);
+  let taken = AgentProfile::new(
+    name("Ours"),
+    String::new(),
     PromptText::new("Ours.").expect("prompt"),
-    AgentTargets::All,
-    BTreeSet::from([InjectionEvent::Start]),
-    InstructionScope::Project,
-  )
-  .expect("instruction");
+    codex(&mut target),
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  );
   target
-    .create_resource(
-      Slug::new("release-rules").expect("slug"),
-      name("Our rules"),
-      &taken,
-      at(9),
-    )
+    .create_resource(Slug::new("builder").expect("slug"), name("Ours"), &taken, at(9))
     .expect("created meanwhile");
 
   let refused = target.import(&batch);
 
   assert!(
-    matches!(&refused, Err(StoreError::DuplicateSlug { slug, .. }) if slug == "release-rules"),
+    matches!(&refused, Err(StoreError::DuplicateSlug { slug, .. }) if slug == "builder"),
     "{refused:?}"
   );
   assert_eq!(
-    count(&target, ResourceKind::Pipeline),
-    0,
+    count(&target, ResourceKind::AgentProfile),
+    1,
     "the transaction wrote nothing"
   );
 }

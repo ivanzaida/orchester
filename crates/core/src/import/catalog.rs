@@ -8,7 +8,9 @@ use crate::{
   connection::{Connection, mcp::McpServer},
   id::{ConnectionId, ResourceId, SecretId},
   project::Project,
-  resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, ResourceKind, Tool, VersionNumber},
+  resource::{
+    AgentProfile, Instruction, InstructionScope, Pipeline, Resource, ResourceBody, ResourceKind, Tool, VersionNumber,
+  },
   secret::Secret,
   store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
 };
@@ -116,6 +118,21 @@ impl CatalogResource {
       (Pick::Draft, _, Some(content)) => Some(content),
       _ => None,
     }
+  }
+
+  /// Whether an import offers the resource. Pipelines are not imported, and neither is an instruction written
+  /// for a pipeline or one of its steps in any of its versions: a copy without the pipeline would name one that is
+  /// not in this project. The pipeline stays in the catalog, so the access a tool gives it is still recognised and
+  /// dropped from the tool's copy.
+  pub fn is_offered(&self) -> bool {
+    self.resource.kind() != ResourceKind::Pipeline
+      && self.picks().into_iter().all(|pick| {
+        !matches!(
+          self.content(pick),
+          Some(Content::Instruction(instruction))
+            if matches!(instruction.scope(), InstructionScope::Pipeline { .. } | InstructionScope::Step { .. })
+        )
+      })
   }
 
   /// `pick` when the resource has it, otherwise its default pick.
