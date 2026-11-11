@@ -121,6 +121,7 @@
     "stepName": "Step name",
     "stepNameHint": "Enter to save · Esc to cancel",
     "error": "The pipeline could not be saved",
+    "renamedOnly": "The new name was saved for the team; the steps were not. Save again to save them.",
     "reload": "Reload saved pipeline",
     "conflict": "The saved pipeline changed elsewhere. Reload it before saving; your unsaved changes will be replaced.",
     "publishTitle": "PUBLISH",

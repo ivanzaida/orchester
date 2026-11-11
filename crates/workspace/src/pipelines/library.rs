@@ -16,7 +16,10 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{data::Assignables, levels::levels, write::save_refusals};
-use crate::messages::{self, Message};
+use crate::{
+  messages::{self, Message},
+  sharing::{NotTaken, Servers},
+};
 
 /// One row of the library: a pipeline and its latest version. A pipeline is stored only as published versions (D-032).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -162,6 +165,9 @@ pub enum CreateError {
   /// created.
   #[error("the pipeline cannot be saved as it is")]
   NotSaved(Vec<Message>),
+  /// The team server did not take a team pipeline; nothing of it was stored.
+  #[error("the team server did not take the pipeline")]
+  Team(NotTaken),
 }
 
 impl CreateError {
@@ -175,6 +181,7 @@ impl CreateError {
         .first()
         .cloned()
         .expect("a refused create has at least one reason"),
+      Self::Team(refused) => refused.message(),
     }
   }
 }
@@ -209,27 +216,67 @@ where
 /// ([`CreateError::NotSaved`]): one without steps always is. The starter's steps use the project's published profiles
 /// and tools with the names the starter looks for; while one is not found its step has none, and the starter is
 /// refused. The slug is unique, so repeating a create that did happen fails with [`CreateError::SlugTaken`] instead of
-/// adding a second pipeline.
-pub fn create(db: &mut ProjectDb, new: NewPipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
+/// adding a second pipeline. The project at `at`'s path, with its servers, is the one `db` holds ([`create_with`]).
+pub fn create(
+  db: &mut ProjectDb,
+  at: (&Path, &Servers),
+  new: NewPipeline,
+  now: Timestamp,
+) -> Result<ResourceId, CreateError> {
   let body = match new.start {
     StartFrom::Empty => Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid body"),
     StartFrom::Starter => new.starter.pipeline(&Assignables::load(db)?),
   };
-  create_with(db, new.name, &body, now)
+  create_with(db, at, new.name, &body, now)
 }
 
-/// Creates pipeline `name` with `body` as its first version, as [`create`] does with a start.
-pub fn create_with(db: &mut ProjectDb, name: Name, body: &Pipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
+/// Creates pipeline `name` with `body` as its first version, as [`create`] does with a start. In a team project, the
+/// one at `at`'s path that `db` holds, it is sent to the team server through `at`'s servers at once and kept only once
+/// the server made it (D-043): this blocks on the answer, so it runs on a worker of the application's runtime.
+pub fn create_with(
+  db: &mut ProjectDb,
+  (root, servers): (&Path, &Servers),
+  name: Name,
+  body: &Pipeline,
+  now: Timestamp,
+) -> Result<ResourceId, CreateError> {
+  if db.sharing()?.is_none() {
+    return create_here(db, name, body, now);
+  }
+  let slug = checked(db, &name, body)?;
+  servers
+    .create_team_pipeline(root, (slug, name), body)
+    .map_err(CreateError::Team)
+}
+
+/// Creates pipeline `name` with `body` as its first version in a local project, as [`create_with`] does there. A team
+/// project's new pipeline is the team server's to make, so it is refused here ([`StoreError::SharedProject`]) and
+/// nothing is stored.
+pub fn create_here(db: &mut ProjectDb, name: Name, body: &Pipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
+  let slug = checked(db, &name, body)?;
+  if db.sharing()?.is_some() {
+    return Err(StoreError::SharedProject.into());
+  }
+  Ok(db.create_published(slug, name, body, now)?.0.id())
+}
+
+/// The slug of a new pipeline `name` with `body` as its first version, or why it cannot be created.
+fn checked(db: &ProjectDb, name: &Name, body: &Pipeline) -> Result<Slug, CreateError> {
   let slug = slug_for(db, name.as_str())?;
   let refusals = save_refusals(body, &Assignables::load(db)?, None);
   if !refusals.is_empty() {
     return Err(CreateError::NotSaved(refusals));
   }
-  Ok(db.create_published(slug, name, body, now)?.0.id())
+  Ok(slug)
 }
 
-pub fn create_in(repo_root: &Path, new: NewPipeline) -> Result<ResourceId, CreateError> {
-  create(&mut ProjectDb::open(repo_root)?, new, Timestamp::now())
+pub fn create_in(repo_root: &Path, servers: &Servers, new: NewPipeline) -> Result<ResourceId, CreateError> {
+  create(
+    &mut ProjectDb::open(repo_root)?,
+    (repo_root, servers),
+    new,
+    Timestamp::now(),
+  )
 }
 
 /// The published profiles and tools whose names the starter looks for.

@@ -213,7 +213,9 @@ const SPECS: &[Spec] = &[
                   completed instead of merged), outside (work done through MCP tools outside the repository: the \
                   report and the tool calls that changed something) or changes_or_report. A first version widens what \
                   agents may do, as there is nothing to compare it with, so it is refused as person_only unless a \
-                  person turned on Let automation change agent permissions.",
+                  person turned on Let automation change agent permissions. In a team project v1 goes to the \
+                  team server at once and is kept here only once the server made it; otherwise it is refused with \
+                  why and nothing is stored (team_server_refused, team_server_not_reached, not_admin).",
     schema: schema_for_type::<pipelines::CreatePipeline>,
     read_only: false,
   },
@@ -244,13 +246,16 @@ const SPECS: &[Spec] = &[
                   same steps, wiring, failure routes, profiles and tools, each step's approval, asking about tool \
                   calls, write access, commands and network the same or stricter). So every version a task can run is \
                   one a person saved, allowed, or could not object to. `delivers` changes what its runs deliver \
-                  (changes, report, outside or changes_or_report); left out, it stays as it is.",
+                  (changes, report, outside or changes_or_report); left out, it stays as it is. In a team project the \
+                  version goes to the team server at once and is kept here only once the server took it; otherwise \
+                  it is refused with why and nothing is stored (team_server_refused, team_server_not_reached, \
+                  version_changed when someone published first, not_admin).",
     schema: schema_for_type::<pipeline_steps::SavePipeline>,
     read_only: false,
   },
   Spec {
     name: "share_pipeline",
-    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version becomes a new team pipeline's first version, sent to                   the team server as Publish for the team sends one (names and roles of what it uses, never a                   secret's value), and team tasks can then name it by its new id. The agent profiles and tools its                   steps run must be the team's already (team_resources_required names those that are not). Refused                   in a local project (team_project_required) and for a member (not_admin); every member's agents may                   run it, so it is person_only unless a person turned on Let automation change agent permissions.                   The local pipeline stays as it is, hidden, under the slug <slug>-local. state is team once the                   server took it, or waiting (with not_sent) until it can be sent.",
+    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version becomes a new team pipeline's first version, sent to                   the team server as Publish for the team sends one (names and roles of what it uses, never a                   secret's value), and team tasks can then name it by its new id. The agent profiles and tools its                   steps run must be the team's already (team_resources_required names those that are not). Refused                   in a local project (team_project_required) and for a member (not_admin); every member's agents may                   run it, so it is person_only unless a person turned on Let automation change agent permissions.                   The local pipeline stays as it is, hidden, under the slug <slug>-local. The copy is made on the                   team server at once and kept here only once the server made it (state team); a refusal                   (team_server_refused) or a server that cannot be reached (team_server_not_reached) stores nothing.",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: false,
   },

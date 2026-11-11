@@ -1,6 +1,6 @@
-//! A pipeline's version published here that the team server has not numbered is taken back without a draft
-//! (`ProjectDb::take_back_pipeline`, PV2-32): a pipeline holds no draft (D-032), so its steps are returned for the
-//! editor to hold, nothing of them is kept here, and the draft take-back is refused for it.
+//! A pipeline's version published here that the team server has not numbered, as an older build left one waiting, is
+//! never taken back as a draft: a pipeline holds no draft (D-032). A new build makes no such version: a team pipeline's
+//! save waits for the team server (D-043).
 
 use std::{collections::HashMap, fs, num::NonZeroU32};
 
@@ -120,42 +120,6 @@ fn latest(team: &Team) -> (VersionNumber, Pipeline) {
     .expect("read")
     .expect("a version");
   (version.number(), version.body().clone())
-}
-
-#[test]
-fn a_pipeline_version_that_waits_is_taken_back_with_its_steps_and_no_draft() {
-  let mut team = team_with_waiting_edit();
-  assert_eq!(team.db.waiting_publishes().expect("outbox").len(), 1);
-
-  let steps = team.db.take_back_pipeline(team.mine).expect("taken back");
-
-  assert_eq!(steps, pipeline(team.tool, "Mine."), "what the person saved comes back");
-  assert!(team.db.waiting_publishes().expect("outbox").is_empty());
-  assert_eq!(
-    latest(&team),
-    (VersionNumber::FIRST, pipeline(team.tool, "Ours.")),
-    "the version the server numbered is the latest again"
-  );
-  assert!(
-    team.db.draft::<Pipeline>(team.pipeline).expect("read").is_none(),
-    "a pipeline holds no draft"
-  );
-}
-
-#[test]
-fn a_pipeline_version_that_met_another_is_taken_back_over_the_teammates() {
-  let mut team = team_with_waiting_edit();
-  team
-    .db
-    .cache_shared_version::<Pipeline>(team.pipeline, &cached(two(), &pipeline(team.tool, "Theirs.")))
-    .expect("cached");
-  team.db.record_publish_conflict(team.mine, two()).expect("recorded");
-
-  let steps = team.db.take_back_pipeline(team.mine).expect("taken back");
-
-  assert_eq!(steps, pipeline(team.tool, "Mine."));
-  assert!(team.db.waiting_publishes().expect("outbox").is_empty());
-  assert_eq!(latest(&team), (two(), pipeline(team.tool, "Theirs.")));
 }
 
 #[test]

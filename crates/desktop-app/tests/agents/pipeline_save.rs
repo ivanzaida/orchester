@@ -15,7 +15,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::pipelines::{
   data::OpenedPipeline,
-  write::{Allowed, save_in},
+  write::{Allowed, save_here_in},
 };
 
 use super::{
@@ -192,7 +192,14 @@ fn pipeline_save_refused_because_the_pipeline_changed_says_so_and_keeps_what_was
   // Another editor saves the next version behind the page.
   let before = OpenedPipeline::load_in(&agents.root, ready).expect("pipeline");
   let theirs = before.body.clone().with_description("Theirs".into());
-  save_in(&agents.root, &before, &theirs, &Allowed::default()).expect("their version");
+  save_here_in(
+    &agents.root,
+    &before,
+    &theirs,
+    &orchester_core::name::Name::new(&before.name).expect("a stored name"),
+    &Allowed::default(),
+  )
+  .expect("their version");
 
   agents.click(SAVE);
   agents.until("the refusal", |s| s.exists("pipeline-hub-bar-notice"));

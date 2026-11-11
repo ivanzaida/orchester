@@ -1,7 +1,8 @@
 //! `share_pipeline` (`docs/architecture/server.md` row 80): an Admin makes one of their own local pipelines, hidden in
-//! a team project, a team pipeline, its newest version the new team pipeline's first, waiting here until the server
-//! took it; refused for a member, in a local project, without a person's switch, and while its steps run what is not
-//! the team's.
+//! a team project, a team pipeline, its newest version the new team pipeline's first, made on the team server at once
+//! and kept here only once it took it (D-043; the made copy is `team_pipeline_save`'s): refused, storing nothing, while
+//! the server cannot be reached, for a member, in a local project, without a person's switch, and while its steps run
+//! what is not the team's.
 
 use orchester_core::{
   id::{ConnectionId, ResourceId},
@@ -57,7 +58,7 @@ fn listed(checkout: &Checkout) -> Vec<String> {
 const SHARE: &str = "share_pipeline";
 
 #[test]
-fn team_mcp_an_admin_shares_a_pipeline_of_their_own_for_the_team() {
+fn team_mcp_a_pipeline_shared_while_the_team_server_cannot_be_reached_is_refused_and_nothing_is_kept() {
   let (server, _seen) = server();
   let mut local = None;
   let admin = Standing {
@@ -71,23 +72,14 @@ fn team_mcp_an_admin_shares_a_pipeline_of_their_own_for_the_team() {
   let local = local.expect("made");
   assert!(listed(&checkout).is_empty(), "a team project hides its own");
 
-  let shared = checkout
-    .call(SHARE, &json!({"project": "Kontur", "pipeline": "Delivery"}))
-    .expect("shared");
-  let copy = shared["pipeline"]["id"].as_str().expect("an id").to_owned();
-  assert_ne!(copy, local.to_string(), "a new team pipeline");
-  assert_eq!(shared["pipeline"]["slug"], "delivery");
-  // This computer is not signed in to the fake server's account: the version waits to be sent, never shown as sent.
-  assert_eq!(shared["pipeline"]["state"], "waiting");
-  assert_eq!(listed(&checkout), std::slice::from_ref(&copy), "offered as the team's");
+  // This computer is not signed in to the fake server's account: nothing reaches it, and nothing waits to be sent.
+  assert_eq!(
+    checkout.refused(SHARE, &json!({"project": "Kontur", "pipeline": "Delivery"})),
+    "team_server_not_reached"
+  );
+  assert!(listed(&checkout).is_empty(), "no team pipeline is kept");
   let db = checkout.db();
-  let waiting: Vec<String> = db
-    .waiting_publishes()
-    .expect("read")
-    .iter()
-    .map(|waiting| waiting.resource.to_string())
-    .collect();
-  assert_eq!(waiting, [copy]);
+  assert!(db.waiting_publishes().expect("read").is_empty(), "nothing waits");
   let kept = db.resource(local).expect("read").expect("kept");
   assert_eq!(
     kept.slug().as_str(),

@@ -386,7 +386,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "duplicate_pipeline",
-    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. A copy that is not the same as its source (other profiles included) is refused as person_only unless a person turned on Let automation change agent permissions. Refusals name why.",
+    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. A copy that is not the same as its source (other profiles included) is refused as person_only unless a person turned on Let automation change agent permissions. In a team project the copy goes to the team server at once and is kept here only once the server made it; otherwise it is refused with why and nothing is stored (team_server_refused, team_server_not_reached). Refusals name why.",
     schema: schema_for_type::<pipeline_copy::DuplicatePipeline>,
     read_only: false,
   },

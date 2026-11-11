@@ -1,6 +1,7 @@
 //! A private project and its pipeline editor; no runners or installed data.
 use std::{path::PathBuf, time::Duration};
 
+use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
@@ -10,22 +11,37 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::sharing::Servers;
 
 use crate::support::{Data, Window, project_id, stand_ins::StandIns, team_link};
 
 pub struct Editor {
   pub window: Window,
   repo: PathBuf,
+  /// The stand-in team server a team project is shared on, held while the window is open; `None` for a local project.
+  pub team: Option<TeamServer>,
 }
 impl Editor {
   pub fn new() -> Self {
     let window = Window::open();
     let repo = window.data.dir.path().join("repo-kontur");
-    Self { window, repo }
+    Self {
+      window,
+      repo,
+      team: None,
+    }
   }
-  /// The editor of a project shared with a team, which keeps the step's own page: the Pipelines hub's panel shows a
-  /// step of a local project, and a team project's pipelines are still edited here.
+  /// The editor of a project shared with the stand-in team server, which keeps the step's own page: the Pipelines hub's
+  /// panel shows a step of a local project, and a team project's pipelines are still edited here. Its pipelines are the
+  /// team server's, and a save goes there (D-043).
   pub fn team() -> Self {
+    let mut editor = Self::new();
+    editor.team = Some(team_link::share_on_stand_in(&editor.window, &editor.repo));
+    editor
+  }
+  /// The editor of a project shared with a team no server answers for: what is published here waits in the outbox,
+  /// as a version an older build left there (pipelines no longer make one, D-043).
+  pub fn team_without_server() -> Self {
     let editor = Self::new();
     team_link::share_as_owner(&editor.window, &editor.repo);
     editor
@@ -37,7 +53,14 @@ impl Editor {
     data.add_kontur(launch.workspace().expect("the session started"));
     let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
     let repo = window.data.dir.path().join("repo-kontur");
-    (Self { window, repo }, stand_ins)
+    (
+      Self {
+        window,
+        repo,
+        team: None,
+      },
+      stand_ins,
+    )
   }
   pub fn repo(&self) -> &std::path::Path {
     &self.repo
@@ -128,11 +151,58 @@ impl Editor {
   }
   /// Another editor publishes `id`'s next version, described as `description`, behind the page.
   pub fn publish_behind(&self, id: ResourceId, description: &str) {
-    let mut db = self.db();
+    let db = self.db();
     let latest = db.latest_version::<Pipeline>(id).expect("read").expect("a version");
     let body = latest.body().clone().with_description(description.into());
-    db.publish_pipeline_edit(id, &body, latest.number(), None, Timestamp::now())
-      .expect("their version");
+    drop(db);
+    self.publish_next(id, body);
+  }
+  /// Publishes `body` as `id`'s next version behind the page: here in a local project, at the team server in a team
+  /// project, which numbers it and keeps it here.
+  pub fn publish_next(&self, id: ResourceId, body: Pipeline) {
+    let latest = self.version(id);
+    let based_on =
+      orchester_core::resource::VersionNumber::new(std::num::NonZeroU32::new(latest).expect("a stored version number"));
+    if self.team.is_none() {
+      self
+        .db()
+        .publish_pipeline_edit(id, &body, based_on, None, Timestamp::now())
+        .expect("their version");
+      return;
+    }
+    self
+      .on_worker(move |servers, repo| servers.publish_team_pipeline(&repo, id, based_on, &body))
+      .expect("the team server numbers their version");
+  }
+  /// Runs `work` with the session's servers on a worker of the window's runtime, as the app does.
+  fn on_worker<T: Send + 'static>(&self, work: impl FnOnce(Servers, PathBuf) -> T + Send + 'static) -> T {
+    let servers = self.window.launch.services().expect("the session").servers.clone();
+    let repo = self.repo.clone();
+    self
+      .window
+      .data
+      .runtime
+      .block_on(tokio::task::spawn_blocking(move || work(servers, repo)))
+      .expect("the work finished")
+  }
+  /// Keeps pipeline `name` under `slug` with `body` as its first version: here in a local project, made by the team
+  /// server in a team project.
+  fn first_version(&self, (slug, name): (&str, &str), body: &Pipeline) -> ResourceId {
+    if self.team.is_none() {
+      let (id, _) = self
+        .db()
+        .published_pipeline_for_test(slug, name, body, Timestamp::now())
+        .expect("valid pipeline fixture");
+      return id;
+    }
+    let (slug, name) = (
+      Slug::new(slug).expect("valid pipeline fixture"),
+      Name::new(name).expect("valid pipeline fixture"),
+    );
+    let body = body.clone();
+    self
+      .on_worker(move |servers, repo| servers.create_team_pipeline(&repo, (slug, name), &body))
+      .expect("the team server makes it")
   }
   pub fn selected(&self) -> ResourceId {
     match self.window.navigation().route_now() {
@@ -226,15 +296,9 @@ impl Editor {
     let mut body = PipelineEdit::new(Pipeline::new(vec![]).expect("valid pipeline fixture"));
     let key = body.add_step(Name::new("Step").expect("valid pipeline fixture"), None);
     body.update(&key, |s| s.kind = StepKind::Tool { tool: Some(tool) });
-    db.create_published(
-      Slug::from_name(name).expect("valid pipeline fixture"),
-      Name::new(name).expect("valid pipeline fixture"),
-      &body.validate().expect("valid pipeline fixture"),
-      Timestamp::now(),
-    )
-    .expect("valid pipeline fixture")
-    .0
-    .id()
+    let slug = Slug::from_name(name).expect("valid pipeline fixture");
+    drop(db);
+    self.first_version((slug.as_str(), name), &body.validate().expect("valid pipeline fixture"))
   }
   pub fn published(&self) -> ResourceId {
     let mut db = self.db();
@@ -264,15 +328,11 @@ impl Editor {
       s.kind = StepKind::Tool { tool: Some(tool_id) };
       s.approval_gate = true;
     });
-    let (id, _) = db
-      .published_pipeline_for_test(
-        "delivery",
-        "Delivery",
-        &body.validate().expect("valid pipeline fixture"),
-        Timestamp::now(),
-      )
-      .expect("valid pipeline fixture");
-    id
+    drop(db);
+    self.first_version(
+      ("delivery", "Delivery"),
+      &body.validate().expect("valid pipeline fixture"),
+    )
   }
 }
 

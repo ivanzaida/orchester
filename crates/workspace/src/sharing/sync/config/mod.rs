@@ -8,6 +8,7 @@
 //! by hash. An admin publishes from this computer through [`RemoteResourceStore`]; Share uploads the project's own
 //! configuration ([`upload`]).
 
+mod pipeline;
 mod profile;
 mod publish;
 mod share_fill_ins;
@@ -30,6 +31,7 @@ use serde_json::Value;
 
 use self::profile::cache_profile;
 pub(crate) use self::{
+  pipeline::{keep_pipeline_version, keep_resource, pipeline_content},
   profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles},
   team_body::{non_team_name, team_executors},
 };

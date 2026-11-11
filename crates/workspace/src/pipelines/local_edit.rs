@@ -62,7 +62,9 @@ pub fn save(
   if !reasons.iter().all(|reason| allowed.contains(reason)) {
     return Ok(Saved::Confirm(reasons));
   }
-  let stored = write::save_in(root, &current, &body, &Allowed(allowed.to_vec())).map_err(|error| error.message())?;
+  let name = orchester_core::name::Name::new(&current.name).expect("stored resource names are valid");
+  let stored =
+    write::save_here_in(root, &current, &body, &name, &Allowed(allowed.to_vec())).map_err(|error| error.message())?;
   Ok(Saved::Published(stored.version))
 }
 

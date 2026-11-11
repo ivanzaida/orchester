@@ -205,7 +205,7 @@ fn single<'a>(mut named: impl Iterator<Item = (ResourceId, &'a str)>, name: &str
 }
 
 /// A pipeline as the editor opens it: its latest version, which a save publishes the next one over
-/// ([`super::write::save_in`]). A pipeline is stored only as published versions (D-032).
+/// ([`super::write::save_named_in`]). A pipeline is stored only as published versions (D-032).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OpenedPipeline {
   pub id: ResourceId,
@@ -222,8 +222,8 @@ pub struct OpenedPipeline {
   pub assignables: Arc<Assignables>,
   /// The import that created the pipeline; `None` when it was not imported.
   pub imported: Option<Arc<Imported>>,
-  /// The team's pipeline in a shared project: its name is the team server's, which a save does not change
-  /// ([`super::write::refusals`]).
+  /// The team's pipeline in a shared project: a save goes to the team server and is kept only once it took it
+  /// ([`super::write::save_named_in`]).
   pub team: bool,
 }
 

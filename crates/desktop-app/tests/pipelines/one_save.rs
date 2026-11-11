@@ -1,7 +1,7 @@
 //! The pipeline page has one *Save*, which publishes the next version (PV2-32, D-033): in a team project and in a
 //! local one; unavailable with why while the edit cannot be saved; no *Restore as draft* or *Compare*; a rename alone
-//! saves a local pipeline's name and is refused for a team's; and a team pipeline's waiting version offers *Take it
-//! back* where a profile's offers *Open my draft on vN*.
+//! saves a local pipeline's name; and a team profile's conflict still offers *Open my draft on vN*. A team pipeline's
+//! save waiting for the team server is [`super::team_save`].
 use std::{
   num::NonZeroU32,
   time::{Duration, Instant},
@@ -16,8 +16,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, UserId, VersionId},
   name::Name,
   resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, ResourceBody, ResourceKind,
-    VersionNumber,
+    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, ResourceBody, ResourceKind, VersionNumber,
   },
   sharing::SharedPerson,
   store::ResourceStore,
@@ -171,30 +170,6 @@ fn pipelines_one_save_a_rename_alone_saves_a_local_pipelines_name() {
   editor.until("saved", |e| e.exists("pipeline-header-history"));
 }
 
-#[test]
-fn pipelines_one_save_a_team_pipelines_rename_is_refused_with_why() {
-  let mut editor = Editor::team();
-  let id = editor.published();
-  editor.open(id);
-
-  editor.set("pipeline-summary-name", "Gates");
-  editor.until("Save", |e| e.exists("pipeline-save"));
-
-  let why = tooltip(&mut editor, "pipeline-save", "pipeline-save-why-tooltip");
-  assert!(
-    why.starts_with("A team pipeline keeps the name the team server has"),
-    "{why}"
-  );
-  editor.click("pipeline-save");
-  editor.arm();
-  let db = editor.db();
-  assert_eq!(
-    db.resource(id).expect("read").expect("the pipeline").name().as_str(),
-    "Delivery"
-  );
-  assert_eq!(latest(&editor, id).0, VersionNumber::FIRST);
-}
-
 /// `body` as the server numbered it `number`, published by olha.
 fn cached<B: ResourceBody + Clone>(number: VersionNumber, body: &B) -> CachedVersion<B> {
   CachedVersion {
@@ -239,53 +214,10 @@ fn role(name: &str) -> AgentProfile {
   )
 }
 
-fn described(body: &Pipeline, text: &str) -> Pipeline {
-  let mut edit = PipelineEdit::new(body.clone());
-  edit.set_description(text);
-  edit.validate().expect("a valid pipeline")
-}
-
-/// A team pipeline whose v2 *Mine.*, published here from v1, met olha's v2 *Theirs.*, open with its conflict bar: the
-/// pipeline and its v1 steps.
-fn pipeline_in_conflict(editor: &mut Editor) -> (ResourceId, Pipeline) {
-  let id = editor.published();
-  let mut db = editor.db();
-  let ours = first_numbered::<Pipeline>(&mut db, id);
-  let mine = db
-    .publish_pipeline_edit(
-      id,
-      &described(&ours, "Mine."),
-      VersionNumber::FIRST,
-      None,
-      Timestamp::now(),
-    )
-    .expect("published here");
-  meets_a_teammate(&mut db, id, mine.id(), &described(&ours, "Theirs."));
-  editor.open(id);
-  editor.until("the conflict", |e| e.exists("pipeline-conflict"));
-  (id, ours)
-}
-
-#[test]
-fn pipelines_one_save_a_team_pipelines_conflict_takes_it_back_instead_of_opening_a_draft() {
-  let mut editor = Editor::team();
-  let (id, ours) = pipeline_in_conflict(&mut editor);
-
-  assert!(!editor.exists("pipeline-open-draft"), "a pipeline has no draft to open");
-  assert!(editor.exists("pipeline-publish-again"));
-  assert_eq!(editor.text("pipeline-take-back"), "Take it back");
-
-  editor.click("pipeline-take-back");
-  editor.until("taken back", |e| !e.exists("pipeline-conflict"));
-  editor.until("the edit holds mine", |e| e.value("pipeline-description") == "Mine.");
-  assert!(editor.exists("pipeline-save"), "what came back is not saved");
-  assert!(editor.db().waiting_publishes().expect("outbox").is_empty());
-  assert_eq!(latest(&editor, id), (two(), described(&ours, "Theirs.")));
-}
-
 #[test]
 fn pipelines_one_save_a_team_profiles_conflict_still_opens_its_draft() {
-  let editor = Editor::team();
+  // No server answers: the versions made here wait in the outbox, as this conflict needs.
+  let editor = Editor::team_without_server();
   editor.profile();
   let mut db = editor.db();
   let profile = db
@@ -315,26 +247,6 @@ fn pipelines_one_save_a_team_profiles_conflict_still_opens_its_draft() {
 
   assert!(editor.exists("agent-open-draft"), "a profile keeps Open my draft on vN");
   assert!(!editor.exists("agent-take-back"));
-}
-
-/// *Take it back* replaces the page's edit with the steps taken back, so while the page holds an edit not saved it is
-/// unavailable and says why, and the edit stays (D-040).
-#[test]
-fn pipelines_one_save_take_it_back_waits_while_an_edit_is_not_saved() {
-  let mut editor = Editor::team();
-  let (id, ours) = pipeline_in_conflict(&mut editor);
-  editor.set("pipeline-description", "Not saved yet.");
-  editor.until("the edit", |e| e.exists("pipeline-save"));
-
-  let why = tooltip(&mut editor, "pipeline-take-back", "pipeline-take-back-why-tooltip");
-  assert!(why.starts_with("Save or undo your changes first"), "{why}");
-  editor.click("pipeline-take-back");
-  editor.arm();
-
-  assert!(editor.exists("pipeline-conflict"), "nothing was taken back");
-  assert_eq!(editor.value("pipeline-description"), "Not saved yet.", "the edit stays");
-  assert_eq!(editor.db().waiting_publishes().expect("outbox").len(), 1);
-  assert_eq!(latest(&editor, id), (two(), described(&ours, "Theirs.")));
 }
 
 /// Pipelines of the project, as stored.
