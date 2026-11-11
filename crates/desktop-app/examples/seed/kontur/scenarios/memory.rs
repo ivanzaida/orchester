@@ -4,15 +4,18 @@
 //! pinned warning a person wrote and edited, two facts, and two proposals waiting: Builder's replacement of the
 //! retry budget decision and a warning. The project has decisions (db.engine superseding an earlier version, pinned
 //! and edited by a person), a warning, facts, a to do, a summary and an observation, a deprecated and a rejected
-//! fact, and Planner's proposal to replace api.errors; KON-16 has a fact waiting too.
+//! fact, Planner's handoff of KON-16's plan, and Planner's proposal to replace api.errors; KON-16 has a fact waiting
+//! too. db.engine was given to KON-12's and KON-16's agents.
 
 use orchester_core::{
+  id::MemoryId,
   memory::{
-    AgentProvenance, AgentWrite, Confidence, Importance, Memory, MemoryContent, MemoryKey, MemoryKind, MemoryScope,
-    MemorySettings, MemoryStore, ScreenedContent, SecretScreen, Tags, WritePolicy,
+    AgentProvenance, AgentWrite, Confidence, Delivery, Importance, InjectedMemory, InjectionReason, Memory,
+    MemoryContent, MemoryKey, MemoryKind, MemoryScope, MemorySettings, MemoryStore, ScreenedContent, SecretScreen,
+    Tags, WritePolicy,
   },
   run::StepExecutor,
-  store::RunStore,
+  store::{ActivityStore, RunStore},
 };
 
 use super::tasks;
@@ -81,7 +84,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// never the team's.
 pub fn team_member(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur)?;
-  super::team_hub::member(kontur)
+  super::team_hub::member_on_project(kontur)
 }
 
 /// KON-12's memory (`a0PLO`).
@@ -131,6 +134,12 @@ fn project_memory(kontur: &mut Kontur) -> Result<(), SeedError> {
     agent(kontur, (project, built), RETRY_HELPER, 100)?,
     agent(kontur, (project, review), OVERVIEW, 3 * 24 * 60)?,
     agent(kontur, (project, built), CI_TIMES, 6 * 24 * 60)?,
+    agent(
+      kontur,
+      (project, by("KON-16", "plan", Attempt::Latest)),
+      handoff(PROJECT_HANDOFF),
+      2 * 24 * 60,
+    )?,
   ];
   let mut deprecated = agent(kontur, (project, research), CI_RUNNER, 12 * 24 * 60)?;
   deprecated.deprecate(kontur.ago(5 * 24 * 60)).map_err(invalid)?;
@@ -167,6 +176,36 @@ fn db_engine(kontur: &mut Kontur, (project, research, plan): (MemoryScope, By, B
     .edit(screened(DB_ENGINE_SQLITE)?, kontur.ago(18 * 24 * 60))
     .map_err(invalid)?;
   kontur.db.save_memory(&mut engine)?;
+  given_to(kontur, engine.id(), &["KON-12", "KON-16"])
+}
+
+/// Gives `memory` to the first invocation of the latest run of each of `tasks`, as their prompts had it pinned
+/// (*Given to agents*).
+fn given_to(kontur: &mut Kontur, memory: MemoryId, tasks: &[&str]) -> Result<(), SeedError> {
+  let given = InjectedMemory {
+    memory,
+    reason: InjectionReason::Pinned,
+    tokens: 180,
+    delivery: Delivery::Given,
+  };
+  for key in tasks {
+    let task = kontur.find(key)?;
+    let run = kontur
+      .db
+      .runs_of_task(task.id())?
+      .pop()
+      .ok_or_else(|| SeedError::Invalid(format!("{key} has no run")))?
+      .map_err(|unreadable| SeedError::Invalid(format!("{key}'s run cannot be read: {unreadable:?}")))?;
+    let invocation = kontur
+      .db
+      .invocations(run.id())?
+      .into_iter()
+      .next()
+      .ok_or_else(|| SeedError::Invalid(format!("{key}'s run has no invocation")))?;
+    kontur
+      .db
+      .save_injected_memory(invocation.id, std::slice::from_ref(&given))?;
+  }
   Ok(())
 }
 
@@ -282,6 +321,8 @@ const fn handoff(text: &'static str) -> Says {
   says(MemoryKind::Handoff, None, text, &[])
 }
 
+const PROJECT_HANDOFF: &str = "02 Plan passed: plan approved with 4 steps for the contacts import.\n\nCompleted:\n- \
+                               Mapped the CSV columns\n- Wrote the plan and had it approved";
 const RESEARCH_HANDOFF: &str = "The sender retries in a fixed loop of 5 in crates/webhooks/src/sender.rs.\n\nCompleted:\n- Read the \
                                 sender and its tests";
 const PLAN_HANDOFF: &str = "Planned exponential backoff with a per-endpoint retry budget.\n\nCompleted:\n- Wrote the plan \

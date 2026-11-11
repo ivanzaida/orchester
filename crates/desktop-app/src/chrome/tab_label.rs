@@ -22,7 +22,7 @@ use crate::{
     tabs::{Tab, TabId},
   },
   project::Projects,
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, Screen},
   shell::needs_you::{self, Attention, count_words},
   theme::{ExtraColor, IconSize, NeedsYouText},
   ui::{
@@ -126,7 +126,8 @@ pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 }
 
 /// The page a tab shows: its screen's name, a task by its key and its Edit task as `Edit <key>`
-/// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`).
+/// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`); Memory, a
+/// filter of the Agents hub, as the hub (`Kontur · Agents` in Y1 `tsfxN`).
 pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _) | ProjectPage::KeptTask(key, _)) => key.to_string(),
@@ -146,6 +147,7 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
       || ctx.t(route.screen().title_key()).to_string(),
       |file| file.rsplit('/').next().unwrap_or(file).to_owned(),
     ),
+    Route::Project(_, ProjectPage::Memory(_)) => ctx.t(Screen::Agents.title_key()).to_string(),
     route => ctx.t(route.screen().title_key()).to_string(),
   }
 }
@@ -156,6 +158,7 @@ pub fn tab_icon(route: &Route) -> Icon {
   match route {
     Route::Project(_, ProjectPage::Files(view)) => view.file().map_or(Icon::FolderTree, file_icon),
     Route::AllProjects | Route::Usage(_) => Icon::LayoutGrid,
+    Route::Project(_, ProjectPage::Memory(_)) => screen_icon(Screen::Agents),
     route => screen_icon(route.screen()),
   }
 }

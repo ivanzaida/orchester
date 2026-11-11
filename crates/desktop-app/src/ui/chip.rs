@@ -161,11 +161,16 @@ impl BadgeTone {
 
 /// A badge saying `word` in `tone`.
 pub fn badge(id: &str, tone: BadgeTone, word: &str) -> Row {
+  badge_in(id, tone, word, TypographyStyle::FieldLabel)
+}
+
+/// [`badge`] with its word in `style`, e.g. 11/500 where a panel draws it 19 high (`Chip · Active` `cwhcK` in Y2).
+pub fn badge_in(id: &str, tone: BadgeTone, word: &str, style: TypographyStyle) -> Row {
   let color = tone.colors().0;
   badge_frame(id, tone).child(
     Text::new(word)
       .id(format!("{id}-label"))
-      .variant(TypographyStyle::FieldLabel)
+      .variant(style)
       .color(color)
       .nowrap(),
   )

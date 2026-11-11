@@ -38,8 +38,12 @@ pub fn editor(ctx: &Ctx, memory: &Memory, mode: EditorMode, among: Among<'_>) ->
   // The hub's panel says where an edited record came from too (`Record` `lThsB` in Y3); a task's tab does not.
   let in_hub = among.project.is_some();
   let facts = match mode {
-    EditorMode::Review => review_facts(ctx, memory, among.origins),
-    EditorMode::Edit if in_hub => [review_facts(ctx, memory, among.origins), edit_facts(ctx, memory, among)].concat(),
+    EditorMode::Review => review_facts(ctx, memory, (among.origins, in_hub)),
+    EditorMode::Edit if in_hub => [
+      review_facts(ctx, memory, (among.origins, in_hub)),
+      edit_facts(ctx, memory, among),
+    ]
+    .concat(),
     EditorMode::Edit => edit_facts(ctx, memory, among),
     EditorMode::New => Vec::new(),
   };
@@ -100,8 +104,9 @@ fn subtitle(ctx: &Ctx, memory: &Memory, mode: EditorMode, origins: &Origins) -> 
 }
 
 /// *Source* and *Agent's confidence* of a proposal.
-fn review_facts(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Vec<(Arc<str>, Arc<str>)> {
-  let Some(ReviewSource { source, confidence }) = review_source(ctx, memory, origins) else {
+/// `in_hub`: the Agents hub's panel says the agent's confidence in lower case, as its read panel does (Y1, Y3).
+fn review_facts(ctx: &Ctx, memory: &Memory, (origins, in_hub): (&Origins, bool)) -> Vec<(Arc<str>, Arc<str>)> {
+  let Some(ReviewSource { source, confidence }) = review_source(ctx, memory, (origins, in_hub)) else {
     return Vec::new();
   };
   vec![
@@ -119,7 +124,7 @@ struct ReviewSource {
 }
 
 /// The [`ReviewSource`] of `memory`; `None` when no agent wrote it.
-fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<ReviewSource> {
+fn review_source(ctx: &Ctx, memory: &Memory, (origins, in_hub): (&Origins, bool)) -> Option<ReviewSource> {
   let place = origins.written(memory)?;
   let step = place
     .step
@@ -139,7 +144,14 @@ fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<Review
   let confidence = ctx.t_args(
     "memory.editor.confidenceValue",
     [
-      ("confidence", &*words::confidence_title(ctx, memory.confidence())),
+      (
+        "confidence",
+        &*if in_hub {
+          words::confidence(ctx, memory.confidence())
+        } else {
+          words::confidence_title(ctx, memory.confidence())
+        },
+      ),
       ("agent", &*agent),
     ],
   );

@@ -59,8 +59,15 @@ impl RecordEditor {
       .child(self.key_field(ctx, id))
       .child(self.importance_field(ctx, id));
     let text = FieldInput::new(format!("{id}-text"), ctx.t("memory.editor.text"), self.text.clone())
+      .element(self.text_input.clone())
       .text_area()
       .area_height(TEXT_HEIGHT);
+    // The hub's panel draws the tags' field as high as its other fields with a label over them (`zHzVw` in Y3).
+    let tags = if state.task.is_none() {
+      ControlHeight::Lg
+    } else {
+      ControlHeight::Md
+    };
     let mut fields: Vec<Element> = vec![
       line.into(),
       field(
@@ -70,7 +77,7 @@ impl RecordEditor {
         None,
       )
       .into(),
-      self.tags_field(ctx, id, true),
+      self.tags_field(ctx, id, tags),
     ];
     if props.mode == EditorMode::New && state.task.is_some() {
       fields.push(self.save_to_field(ctx, state, id));
@@ -132,14 +139,13 @@ impl RecordEditor {
   }
 
   /// *Tags*: the record's tags as removable chips in a field-like box, and *Add a tag…*, where a space, a comma or
-  /// leaving the field makes what was typed a tag (`B0ra2`); under its `labelled` label, or under the row's on the
-  /// record's page.
-  pub(super) fn tags_field(&self, ctx: &Ctx, id: &str, labelled: bool) -> Element {
+  /// leaving the field makes what was typed a tag (`B0ra2`); under its label, the box `height` high at least.
+  fn tags_field(&self, ctx: &Ctx, id: &str, height: ControlHeight) -> Element {
     let label = ctx.t("memory.editor.tags");
     let mut chips = Row::new()
       .id(format!("{id}-tags"))
       .width(Dimension::Pct(100.0))
-      .min_height(Dimension::Px(ControlHeight::Md.value()))
+      .min_height(Dimension::Px(height.value()))
       .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
@@ -157,7 +163,7 @@ impl RecordEditor {
       .id(format!("{id}-tags-field"))
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
-      .with_children(labelled.then(|| Text::new(&label).variant(TypographyStyle::FieldLabel)))
+      .child(Text::new(&label).variant(TypographyStyle::FieldLabel))
       .child(chips.child(self.tag_input(ctx, id)));
     if let Some(problem) = self.tag_problem.get() {
       column = column.child(field_error(&format!("{id}-tag-error"), &message_text(ctx, &problem)));
@@ -270,9 +276,14 @@ impl RecordEditor {
       .child(
         Column::new()
           .flex(1.0)
+          .min_width(Dimension::Px(0.0))
           .spacing(ExtraSpacing::Tight.role())
           .child(Text::new(&title).variant(TypographyStyle::Label))
-          .child(Text::new(&hint).variant(TypographyStyle::Caption)),
+          .child(
+            Text::new(&hint)
+              .variant(TypographyStyle::Caption)
+              .width(Dimension::Pct(100.0)),
+          ),
       )
       .into()
   }

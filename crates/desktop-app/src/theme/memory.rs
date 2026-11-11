@@ -39,10 +39,12 @@ pub enum MemoryText {
   StateText,
   /// 13 `text_primary`, 1.5: what a record says in the Agents hub's panel (`i5mAK` in Y1 `tsfxN`).
   Record,
+  /// 11/500, 1.2: a status chip's word in the Agents hub's panel, in its tone (`H3ItbS` in Y1 `tsfxN`).
+  Chip,
 }
 
 impl MemoryText {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::GroupLabel,
     Self::GroupCount,
     Self::Flag,
@@ -54,6 +56,7 @@ impl MemoryText {
     Self::PanelTitle,
     Self::StateText,
     Self::Record,
+    Self::Chip,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -73,6 +76,7 @@ impl MemoryText {
       Self::PanelTitle => "memory_panel_title",
       Self::StateText => "memory_state_text",
       Self::Record => "memory_record",
+      Self::Chip => "memory_chip",
     }
   }
 
@@ -95,6 +99,7 @@ impl MemoryText {
       Self::PanelTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::StateText => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
       Self::Record => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
+      Self::Chip => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.text_secondary),
     }
   }
 }

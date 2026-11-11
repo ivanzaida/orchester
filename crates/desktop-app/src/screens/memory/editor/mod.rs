@@ -19,7 +19,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -109,6 +109,10 @@ pub struct RecordEditor {
   importance: Signal<ImportanceChoice>,
   pinned: Signal<bool>,
   save_to: Signal<SaveToChoice>,
+  /// The text's input, which has the focus when the editor opens in the Agents hub's panel (Y3 `p95FK`).
+  text_input: ElementRef,
+  /// The text's input is still to take the focus.
+  focus_text: Signal<bool>,
 }
 
 impl Component for RecordEditor {
@@ -128,6 +132,8 @@ impl Component for RecordEditor {
       importance: ctx.signal(ImportanceChoice(draft.importance)),
       pinned: ctx.signal(props.memory.as_ref().is_some_and(Memory::is_pinned)),
       save_to: ctx.signal(SaveToChoice(if task_tab { SaveTo::Task } else { SaveTo::Project })),
+      text_input: ElementRef::default(),
+      focus_text: ctx.signal(true),
     }
   }
 
@@ -367,6 +373,8 @@ impl RecordEditor {
       importance: self.importance.clone(),
       pinned: self.pinned.clone(),
       save_to: self.save_to.clone(),
+      text_input: self.text_input.clone(),
+      focus_text: self.focus_text.clone(),
     }
   }
 }

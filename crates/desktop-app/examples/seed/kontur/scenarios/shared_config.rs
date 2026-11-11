@@ -57,7 +57,16 @@ pub fn member_over(
   kontur: &mut Kontur,
   resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
 ) -> Result<(), SeedError> {
-  shared(kontur, (MemberRole::Owner, Person::Ivan))?;
+  connections::seed(kontur)?;
+  member_over_project(kontur, resources)
+}
+
+/// [`member_over`] on the project as another scenario already seeded it, with its own catalogue and connections.
+pub fn member_over_project(
+  kontur: &mut Kontur,
+  resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
+) -> Result<(), SeedError> {
+  linked(kontur, (MemberRole::Owner, Person::Ivan))?;
   resources(kontur)?;
   kontur.db.record_sharing_state(Some(MemberRole::Member), None, None)?;
   Ok(())
@@ -74,6 +83,11 @@ enum Person {
 /// computer has no drafts of the team's: the catalogue's are dropped, and a resource never published with them.
 fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
   connections::seed(kontur)?;
+  linked(kontur, (role, who))
+}
+
+/// The project as it is, linked to the team server's project with the person in `role`.
+fn linked(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
   if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
     drop_drafts::<Pipeline>(kontur)?;

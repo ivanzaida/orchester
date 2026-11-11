@@ -6,6 +6,7 @@
 //! takes the panel as its editor ([`crate::screens::memory::editor`]).
 
 mod bar;
+mod head;
 mod source;
 
 use std::sync::Arc;
@@ -16,27 +17,20 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::MemoryId,
-  memory::{Memory, MemoryAuthor, MemoryStatus},
+  memory::{Memory, MemoryStatus},
 };
 use orchester_workspace::memory::read::ProjectMemory;
 
-use super::super::{parts, state::MemoryState, words};
-use crate::{
-  screens::team_hub::panel::{body, head_named},
-  theme::{ExtraSpacing, HubText, MemoryText},
-  ui::{
-    chip::{BadgeTone, TagChip, badge},
-    icon::Icon,
-    notice::{Notice, NoticeTone},
-  },
-};
+pub(in crate::screens::memory) use self::head::status_word;
+use self::head::{chips, head, notice};
+use super::super::{parts, state::MemoryState};
+use crate::theme::{ExtraSpacing, HubSpacing, HubText, MemoryText};
 
 #[derive(Clone, PartialEq)]
 pub(in crate::screens::memory) struct PanelProps {
@@ -75,16 +69,18 @@ impl Component for RecordPanel {
       return Element::new();
     };
     let given = source::given(ctx, &state, record);
-    let proposed = record.status() == MemoryStatus::Proposed;
+    // A proposal was given to no agent.
+    let given = (record.status() != MemoryStatus::Proposed)
+      .then_some(given)
+      .and_then(|given| source::given_section(ctx, given, &self.all_given));
     let body = body()
-      .id("memory-panel-body")
       .child(head(ctx, record))
       .child(chips(ctx, memory, record, props.team))
       .with_children(notice(ctx, memory, record))
       .child(text(ctx, record))
       .with_children(tags(ctx, record))
       .child(source::source(ctx, &state, memory, record))
-      .with_children((!proposed).then(|| source::given_section(ctx, given, &self.all_given)));
+      .with_children(given);
     let failure = state.failure_note(ctx, "memory-panel", Some(record.id()));
     frame(
       "memory-panel",
@@ -93,6 +89,20 @@ impl Component for RecordPanel {
       bar::bar(ctx, &state, record),
     )
   }
+}
+
+/// The column the panel's sections stand in (`Scroll` `mQscF`): 24 from its sides, 20 under its top and apart, and
+/// nothing over its bottom: the design fits a record's sections over the pinned bar with what its rows round to.
+pub(in crate::screens::memory) fn body() -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(HubSpacing::BodyTop.role())
+        .left(HubSpacing::Sections.role())
+        .right(HubSpacing::Sections.role()),
+    )
+    .spacing(HubSpacing::BodyTop.role())
 }
 
 /// A panel of the Memory filter, `id` with what it shows in its `status`: `body` scrolls over the pinned `bar`, and why
@@ -118,155 +128,11 @@ pub(in crate::screens::memory) fn frame(
     .with_children(failure.map(|failure| {
       Row::new()
         .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(
-          crate::theme::HubSpacing::Sections.role(),
-          SpacingSize::Sm,
-        ))
+        .padding(Padding::symmetric(HubSpacing::Sections.role(), SpacingSize::Sm))
         .child(failure)
     }))
     .child(bar)
     .into()
-}
-
-/// *Memory* and the record's status over its title (`Head` `E6whl0`): *Review proposed decision*, *Decision ·
-/// webhook-retry*, *Warning*.
-fn head(ctx: &Ctx, record: &Memory) -> Row {
-  let kind = record.content().kind();
-  let title = if record.status() == MemoryStatus::Proposed {
-    ctx.t_args("memory.editor.reviewTitle", [("kind", &*words::kind_lower(ctx, kind))])
-  } else {
-    match record.content().key() {
-      Some(key) => ctx.t_args(
-        "memory.page.titleKeyed",
-        [
-          ("kind", words::kind_name(ctx, kind).to_string()),
-          ("key", key.as_str().to_owned()),
-        ],
-      ),
-      None => words::kind_name(ctx, kind),
-    }
-  };
-  let status = status_word(ctx, record.status());
-  head_named(
-    &title,
-    (ctx.t("memory.title").to_string(), Some(status.to_string())),
-    None,
-  )
-}
-
-/// The record's status as the panel's head says it: *Waiting for approval*, *Active*.
-pub(in crate::screens::memory) fn status_word(ctx: &Ctx, status: MemoryStatus) -> Arc<str> {
-  ctx.t(match status {
-    MemoryStatus::Proposed => "memory.tabs.waiting",
-    MemoryStatus::Active => "memory.status.active",
-    MemoryStatus::Deprecated => "memory.status.deprecated",
-    MemoryStatus::Superseded => "memory.status.superseded",
-    MemoryStatus::Rejected => "memory.status.rejected",
-    MemoryStatus::Withdrawn => "memory.status.withdrawn",
-  })
-}
-
-/// The chips (`Chips` `z6peUe`): the status's badge, the type, whose record it is, *Pinned* and *This computer*; at
-/// their end who wrote it and what happened to it since, cut with an ellipsis when it runs out of room.
-fn chips(ctx: &Ctx, memory: &ProjectMemory, record: &Memory, team: bool) -> Row {
-  let (tone, word) = match record.status() {
-    MemoryStatus::Proposed => (BadgeTone::Warning, ctx.t("memory.proposal.waiting")),
-    MemoryStatus::Active => (BadgeTone::Success, ctx.t("memory.status.active")),
-    MemoryStatus::Deprecated => (BadgeTone::Danger, ctx.t("memory.status.deprecated")),
-    status => (BadgeTone::Neutral, status_word(ctx, status)),
-  };
-  let kind = record.content().kind();
-  Row::new()
-    .id("memory-panel-chips")
-    .width(Dimension::Pct(100.0))
-    .wrap()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(badge("memory-panel-status", tone, &word))
-    .child(TagChip::new("memory-panel-kind", words::kind_name(ctx, kind)).glyph(words::glyph(kind)))
-    .child(TagChip::new(
-      "memory-panel-scope",
-      words::scope(ctx, record, &memory.origins),
-    ))
-    .with_children(
-      record
-        .is_pinned()
-        .then(|| TagChip::new("memory-panel-pinned", ctx.t("memory.hub.pinned")).glyph(Icon::Pin)),
-    )
-    .with_children(
-      team.then(|| TagChip::new("memory-panel-computer", ctx.t("memory.hub.thisComputer")).glyph(Icon::Laptop)),
-    )
-    .child(Row::new().flex(1.0))
-    .child(
-      Text::new(&written(ctx, memory, record))
-        .id("memory-panel-written")
-        .variant(HubText::PanelHint.role())
-        .nowrap()
-        .min_width(Dimension::Px(0.0))
-        .text_overflow(TextOverflow::Elipsis),
-    )
-}
-
-/// Who wrote the record and when, or what happened to it since: *proposed by Builder · Nov 10, 16:01*, *by Builder ·
-/// edited by you Nov 8*, *by you · Nov 2*.
-fn written(ctx: &Ctx, memory: &ProjectMemory, record: &Memory) -> Arc<str> {
-  let agent = memory.origins.written(record).and_then(|place| place.agent);
-  let mut parts = vec![match (&agent, record.status()) {
-    (Some(agent), MemoryStatus::Proposed) => ctx
-      .t_args("memory.editor.proposedBy", [("agent", &**agent)])
-      .to_string(),
-    (Some(agent), _) => ctx.t_args("memory.hub.by", [("agent", &**agent)]).to_string(),
-    (None, _) if matches!(record.author(), MemoryAuthor::Agent(_)) => ctx.t("memory.hub.byAgent").to_string(),
-    (None, _) => ctx.t("memory.hub.byYou").to_string(),
-  }];
-  let since = words::change(ctx, record);
-  if since.is_empty() {
-    parts.push(words::when(ctx, record.created_at()));
-  } else {
-    parts.extend(since);
-  }
-  words::join(ctx, &parts)
-}
-
-/// What approving a proposal replaces (`Notice · replaces` `cNzwQ` in Y1), or what deprecating a record did (`Notice`
-/// `igQyv` in Y6); none on the others.
-fn notice(ctx: &Ctx, memory: &ProjectMemory, record: &Memory) -> Option<Element> {
-  let (glyph, mark, title, body) = match record.status() {
-    MemoryStatus::Proposed => {
-      let replaced = memory
-        .records
-        .iter()
-        .chain(&memory.replaced)
-        .find(|old| Some(old.id()) == record.supersedes() && old.status() == MemoryStatus::Active)?;
-      let kind = words::kind_lower(ctx, replaced.content().kind());
-      let title = match replaced.content().key() {
-        Some(key) => ctx.t_args("memory.editor.replacesKeyed", [("kind", &*kind), ("key", key.as_str())]),
-        None => ctx.t_args("memory.editor.replaces", [("kind", &*kind)]),
-      };
-      (
-        Icon::Replace,
-        PaletteColor::Info,
-        title,
-        ctx.t("memory.editor.replacesTextDiff"),
-      )
-    }
-    MemoryStatus::Deprecated => (
-      Icon::Archive,
-      PaletteColor::TextMuted,
-      ctx.t("memory.hub.deprecatedTitle"),
-      ctx.t("memory.hub.deprecatedBody"),
-    ),
-    _ => return None,
-  };
-  Some(
-    Notice::new("memory-panel-notice", NoticeTone::Neutral, title)
-      .flat()
-      .icon(glyph)
-      .mark(mark)
-      .title_style(HubText::NoticeTitle.role())
-      .body(body)
-      .into(),
-  )
 }
 
 /// A section's label (`Label` `jJ0Xd`) over `content`, 8 apart.

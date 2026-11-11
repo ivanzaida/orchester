@@ -325,8 +325,6 @@
       "edited": "You edited it · {{time}}",
       "version": "v{{version}} · superseded {{time}} by this record",
       "given": "Given to agents",
-      "givenReading": "Reading the invocations…",
-      "givenNone": "No invocation was given it yet.",
       "invocationsOne": "1 invocation",
       "invocations": "{{count}} invocations",
       "tokens": "≈ {{tokens}} tokens",

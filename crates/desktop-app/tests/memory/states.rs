@@ -39,7 +39,7 @@ fn memory_project_page_says_it_couldnt_read_and_tries_again() {
   page.press_until("memory-load-error-retry", "the memory read again", |window| {
     window.texts("memory-tabs").is_some()
   });
-  assert_eq!(page.text("memory-tab-active"), "Active 10");
+  assert_eq!(page.text("memory-tab-active"), "Active 11");
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn memory_unreadable_records_are_left_out_and_said() {
       .text("memory-unreadable")
       .starts_with("1 record couldn't be read and is left out")
   );
-  assert_eq!(page.text("memory-tab-active"), "Active 9");
+  assert_eq!(page.text("memory-tab-active"), "Active 10");
   assert!(page.has("memory-records"));
   assert!(!page.has(&format!("memory-record-{layout}")));
   page.task_memory("KON-12");

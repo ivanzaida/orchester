@@ -20,13 +20,13 @@ fn memory_tabs_lead_with_waiting_while_proposals_wait() {
   assert_eq!(shown, "waiting", "the filter opens on what waits");
   assert_eq!(page.text("memory-tab-waiting"), "Waiting for approval 4");
   assert_eq!(page.text("memory-tab-waiting-count"), "4");
-  assert_eq!(page.text("memory-tab-active"), "Active 10");
+  assert_eq!(page.text("memory-tab-active"), "Active 11");
   assert_eq!(page.text("memory-tab-rejected"), "Rejected 1");
   // The hub's Memory filter counts the active records, and All does not count them (Question B `lmKu1`).
   page.until("the hub's counts", |window| {
     window.texts("local-hub-filter-memory-count").is_some()
   });
-  assert_eq!(page.text("local-hub-filter-memory-count"), "10");
+  assert_eq!(page.text("local-hub-filter-memory-count"), "11");
   let mut left = |id: &str| page.bounds_of(id).unwrap_or_else(|| panic!("{id} is laid out")).x;
   assert!(
     left("local-hub-filter-memory") > left("local-hub-filter-tools"),

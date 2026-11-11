@@ -60,7 +60,7 @@ fn memory_hub_lists_every_proposal_under_waiting_with_the_first_picked() {
 fn memory_hub_lists_its_active_records_grouped_by_type() {
   let mut page = project();
   page.memory_tab(MemoryTab::Active);
-  assert_eq!(page.text("memory-tab-active"), "Active 10");
+  assert_eq!(page.text("memory-tab-active"), "Active 11");
   for kind in ["decision", "warning", "fact", "todo", "summary", "observation"] {
     assert!(page.has(&format!("memory-group-{kind}")), "{kind} grouped");
   }
@@ -78,7 +78,16 @@ fn memory_hub_lists_its_active_records_grouped_by_type() {
       .text("memory-tab-note")
       .ends_with("Grouped by type · pinned first.")
   );
+  // The project's handoffs are a group of their own (`Section · Handoffs` `OiuKs` in Y2).
+  let handoff = page.record("02 Plan passed: plan approved");
+  assert!(page.has("memory-group-handoff"));
+  assert!(page.has(&format!("memory-record-{}", handoff.id())));
   assert!(page.has("memory-search"), "the search sits beside the statuses");
+  // A record no invocation was given has no *Given to agents* (Y6 `tcffY` draws none).
+  let layout = page.record("Domain code lives in crates/core").id();
+  page.memory_record(MemoryTab::Active, layout);
+  page.until("the panel", |window| window.texts("memory-panel-text").is_some());
+  assert!(!page.has("memory-given"));
   assert!(page.has("memory-settings-link"));
 }
 
@@ -146,11 +155,12 @@ fn memory_hub_edits_a_record_in_the_panel_and_deprecates_and_restores_it() {
   page.memory_record(MemoryTab::Active, engine);
   assert_eq!(page.text("team-hub-panel-kind"), "Memory");
   assert!(page.has("memory-source"));
+  // It was given to two invocations (the seed's KON-12 and KON-16), the latest listed (Y2 `kIRpz`).
   page.until("the invocations it was given", |window| {
-    window
-      .texts("memory-given")
-      .is_some_and(|texts| texts.join(" ").contains("No invocation was given it yet."))
+    window.texts("memory-given").is_some()
   });
+  assert_eq!(page.text("memory-given-count"), "2 invocations");
+  assert!(page.has("memory-given-invocation-0") && page.has("memory-given-invocation-1"));
   page.window.press("memory-panel-edit");
   let editor = format!("memory-editor-{engine}");
   page.until("the editor in the panel", |window| window.texts(&editor).is_some());

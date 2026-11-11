@@ -5,7 +5,11 @@
 //! person does not change under *Record*; and pinned at the bottom *Save record* or *Approve*, *Cancel*, what saving
 //! does, and *Delete…* or *Reject* at the end.
 
-use lurq::{app::ctx::Ctx, components::Text, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Row, Text, TextOverflow},
+  node::{Element, dimension::Dimension},
+};
 use orchester_core::memory::Memory;
 use orchester_workspace::memory::change::Change;
 
@@ -13,17 +17,13 @@ use super::{EditorMode, EditorProps, RecordEditor, mode_name};
 use crate::{
   screens::{
     memory::{
-      hub::panel::{frame, status_word},
+      hub::panel::{body, frame, status_word},
       parts,
       state::{MemoryState, Opened},
       words,
       work::Write,
     },
-    team_hub::{
-      bar::bar_ending,
-      panel::{body, head_named},
-      rows,
-    },
+    team_hub::{bar::bar_ending, panel::head_named, rows},
   },
   theme::HubText,
   ui::{
@@ -35,6 +35,10 @@ use crate::{
 impl RecordEditor {
   /// The editor as the panel of the record it edits, or of *New record*.
   pub(super) fn panel(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
+    if self.focus_text.get_untracked() {
+      ctx.focus(&self.text_input);
+      self.focus_text.set(false);
+    }
     let body = body()
       .id(format!("{id}-body"))
       .child(self.panel_head(ctx, props))
@@ -51,7 +55,7 @@ impl RecordEditor {
   }
 
   /// *Memory* and where the record stands (*Active · webhook-retry*) over what is done to it (`Head` `Q03dN0`).
-  fn panel_head(&self, ctx: &Ctx, props: &EditorProps) -> lurq::components::Row {
+  fn panel_head(&self, ctx: &Ctx, props: &EditorProps) -> Row {
     let kind = words::kind_lower(ctx, self.kind.get().0);
     let title = match props.mode {
       EditorMode::Review => ctx.t_args("memory.editor.reviewTitle", [("kind", &*kind)]),
@@ -141,11 +145,18 @@ fn record_section(ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &
     .enumerate()
     .map(|(index, (label, value))| {
       let fact = format!("{id}-fact-{index}");
+      // A long value ends in an ellipsis where the row ends (`Author` `Qfewq` in Y3).
       let said = Text::new(value)
         .id(format!("{fact}-value"))
-        .variant(HubText::Value.role());
-      let value = lurq::components::Row::new()
-        .spacing(lurq::app::theme::SpacingSize::Sm)
+        .variant(HubText::Value.role())
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis);
+      let value = Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(SpacingSize::Sm)
         .child(said)
         .with_children(if index == 0 { link.take() } else { None });
       rows::row(&fact, label, None, value)

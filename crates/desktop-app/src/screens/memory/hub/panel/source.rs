@@ -211,24 +211,23 @@ pub(super) fn given(ctx: &mut Ctx, state: &MemoryState, record: &Memory) -> Resu
   read.data.map(|given| given.0).ok_or(None)
 }
 
-/// *Given to agents · N invocations* and the latest of them, or what stands in for them while they are read, when
-/// they cannot be, and when none was given it.
-pub(super) fn given_section(ctx: &Ctx, given: Result<Arc<GivenTo>, Option<Message>>, all: &Signal<bool>) -> Column {
+/// *Given to agents · N invocations* and the latest of them, or why they cannot be read; none while they are read and
+/// when no invocation was given the record, as the design draws no section then (Y6 `tcffY`).
+pub(super) fn given_section(
+  ctx: &Ctx,
+  given: Result<Arc<GivenTo>, Option<Message>>,
+  all: &Signal<bool>,
+) -> Option<Column> {
   let id = "memory-given";
   let label = ctx.t("memory.inspector.given");
   let given = match given {
     Ok(given) => given,
-    Err(reason) => {
-      let words = reason.map_or_else(
-        || ctx.t("memory.inspector.givenReading"),
-        |reason| message_text(ctx, &reason),
-      );
-      return quiet(id, &label, &words);
-    }
+    Err(None) => return None,
+    Err(Some(reason)) => return Some(quiet(id, &label, &message_text(ctx, &reason))),
   };
   let count = given.invocations.len();
   if count == 0 {
-    return quiet(id, &label, &ctx.t("memory.inspector.givenNone"));
+    return None;
   }
   let invocations = if count == 1 {
     ctx.t("memory.inspector.invocationsOne")
@@ -277,7 +276,7 @@ pub(super) fn given_section(ctx: &Ctx, given: Result<Arc<GivenTo>, Option<Messag
       ),
     );
   }
-  column
+  Some(column)
 }
 
 /// A section that says `words` in place of its rows.
