@@ -40,6 +40,7 @@ mod mentions;
 mod menu_layout;
 mod open_long;
 mod paste;
+mod pipeline_links;
 mod plan_only;
 mod proposal;
 mod qa_person;

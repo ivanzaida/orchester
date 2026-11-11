@@ -17,14 +17,15 @@ use super::{
 };
 use crate::{
   routes::{ProjectPage, ProjectSettingsTab, Route, TaskTab},
+  screens::pipeline_link::PipelineLinks,
   ui::icon::Icon,
 };
 
 /// A place a card opens: its icon, its words and where it leads.
 pub(super) type Opens = (Icon, Arc<str>, Route);
 
-/// The places the card of `view` opens, in project `project`.
-pub(super) fn opens(ctx: &Ctx, (project, _name): (ProjectId, &str), view: &View) -> Vec<Opens> {
+/// The places the card of `view` opens, in project `project`; a pipeline opens as `pipelines` says.
+pub(super) fn opens(ctx: &Ctx, (project, pipelines): (ProjectId, PipelineLinks), view: &View) -> Vec<Opens> {
   let task = view.action.task.as_deref();
   let task_open = |tab| {
     task.and_then(|key| {
@@ -38,7 +39,7 @@ pub(super) fn opens(ctx: &Ctx, (project, _name): (ProjectId, &str), view: &View)
     })
   };
   match view.action.change.as_ref().map(|change| &change.change) {
-    Some(Change::Publish { of, resource, .. }) => publish_opens(ctx, (project, view), (*of, *resource)),
+    Some(Change::Publish { of, resource, .. }) => publish_opens(ctx, ((project, pipelines), view), (*of, *resource)),
     Some(Change::Merge { .. }) if view.phase().waits() => task
       .and_then(|key| facts::task_route(project, key, TaskTab::Changes))
       .map(|route| {
@@ -67,8 +68,12 @@ pub(super) fn opens(ctx: &Ctx, (project, _name): (ProjectId, &str), view: &View)
   }
 }
 
-fn publish_opens(ctx: &Ctx, (project, view): (ProjectId, &View), publication: (Publishing, ResourceId)) -> Vec<Opens> {
-  let route = facts::draft_route(project, publication);
+fn publish_opens(
+  ctx: &Ctx,
+  ((project, pipelines), view): ((ProjectId, PipelineLinks), &View),
+  publication: (Publishing, ResourceId),
+) -> Vec<Opens> {
+  let route = facts::draft_route((project, pipelines), publication);
   match view.phase() {
     Phase::Applied | Phase::Done => {
       let name = view.facts.map_or_else(

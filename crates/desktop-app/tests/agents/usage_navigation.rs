@@ -1,7 +1,7 @@
 //! Cross-feature navigation uses the real row action and independent fixture databases.
 use std::collections::BTreeSet;
 
-use orchester_app::routes::{AgentTab, ProjectPage, Route};
+use orchester_app::routes::{AgentTab, PipelinesFilter, PipelinesView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -61,13 +61,18 @@ fn used_profile() -> (Agents, ResourceId, ResourceId) {
   .expect("a distinct current draft saves");
   (screen, profile, resource.id())
 }
+/// In a local project a link to a pipeline opens the Pipelines hub with its panel.
+fn in_hub(pipeline: ResourceId) -> Route {
+  Route::Project(
+    project_id(),
+    ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline))),
+  )
+}
+
 fn current_pipeline(screen: &mut Agents, pipeline: ResourceId) {
-  assert_eq!(
-    screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipeline(pipeline, Default::default()))
-  );
-  screen.until("actual current pipeline page", |s| s.exists("pipeline-flow"));
-  assert!(screen.text("screen-pipelines").contains("Linked delivery"));
+  assert_eq!(screen.window.navigation().route_now(), in_hub(pipeline));
+  screen.until("the pipeline's panel in the hub", |s| s.exists("pipeline-hub-panel"));
+  assert!(screen.text("pipeline-hub-panel").contains("Linked delivery"));
   let db = ProjectDb::open(&screen.root).expect("fixture opens after navigation");
   assert_eq!(
     db.draft::<Pipeline>(pipeline)
@@ -131,7 +136,7 @@ fn agents_used_link_waits_until_the_edit_is_saved() {
   screen.press_until("agent-use-open-1", "the pipeline opens", |s| {
     matches!(
       s.window.navigation().route_now(),
-      Route::Project(_, ProjectPage::Pipeline(..))
+      Route::Project(_, ProjectPage::PipelinesHub(..))
     )
   });
   current_pipeline(&mut screen, pipeline);
