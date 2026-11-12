@@ -31,7 +31,13 @@ use orchester_workspace::{
 use crate::{
   project::ProjectFeed,
   screens::task::TaskContext,
-  ui::{chip::TagChip, field::field_error, message::message_text, pressable::pressable},
+  ui::{
+    chip::{BadgeTone, TagChip, state_badge},
+    field::field_error,
+    icon::Icon,
+    message::message_text,
+    pressable::pressable,
+  },
 };
 
 /// The mode chip of `task`'s latest run, and its switch while it may be switched; nothing once the run ended.
@@ -102,7 +108,19 @@ impl Component for RunMode {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ModeProps>().clone();
     let state = self.switch.state().get();
-    let chip = TagChip::new("task-run-mode", ctx.t(chip_key(props.mode)));
+    // Dangerous auto-approve reads as it does in the composer and the status bar: a `triangle-alert` and its words in
+    // `danger` on `danger_muted`.
+    let chip: Element = if let EffectiveMode::DangerousAutoApprove(_) = props.mode {
+      state_badge(
+        "task-run-mode",
+        BadgeTone::Danger,
+        Icon::TriangleAlert,
+        &ctx.t(chip_key(props.mode)),
+      )
+      .into()
+    } else {
+      TagChip::new("task-run-mode", ctx.t(chip_key(props.mode))).into()
+    };
     let switch = props.may_switch.then(|| {
       let words = Text::new(&ctx.t("task.run.mode.switchToManual"))
         .variant(TypographyStyle::Button)
