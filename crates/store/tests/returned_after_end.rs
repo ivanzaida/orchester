@@ -15,7 +15,7 @@ use orchester_core::{
   },
   store::{MergeStore, RunStore},
 };
-use orchester_store::{ProjectDb, ResolutionStart, RunStoreError, StoreError};
+use orchester_store::{ProjectDb, ProjectMigration, ResolutionStart, RunStoreError, StoreError};
 use rusqlite::Connection;
 
 use self::support::{at, copied_at_version, started_run};
@@ -184,12 +184,8 @@ fn returned_after_end_migration_keeps_the_attempts() {
   let (repo, db, run) = succeeded();
   drop(db);
   let current = repo.path().join(".orchester/orchester.db");
-  let latest: u32 = rusqlite::Connection::open(&current)
-    .expect("open")
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
   // Before both migrations of this change: the attempts table is rebuilt, the resolutions table is new.
-  let old = copied_at_version(&current, latest - 2);
+  let old = copied_at_version(&current, ProjectDb::version_before(ProjectMigration::ReturnedAfterEnd));
   let upgraded = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(upgraded.run(run.id()).expect("read").expect("the run"), run);
 }
