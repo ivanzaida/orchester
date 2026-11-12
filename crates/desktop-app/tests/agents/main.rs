@@ -44,6 +44,7 @@ mod pipeline_links;
 mod pipeline_menu_edit;
 mod pipeline_reorder;
 mod pipeline_reorder_changes;
+mod pipeline_reorder_edges;
 mod pipeline_reorder_guards;
 mod pipeline_reorder_readonly;
 mod pipeline_reorder_stable;

@@ -50,8 +50,19 @@ pub(super) enum Drop {
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Refused {
   pub key: Option<StepKey>,
-  pub error: MoveError,
+  pub why: Why,
   pub lasts: Lasts,
+}
+
+/// Why a move was refused.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum Why {
+  /// The steps' rules do not take it.
+  Rule(MoveError),
+  /// Alt ↑ on a step nothing runs before.
+  NothingBefore,
+  /// Alt ↓ on a step nothing runs after.
+  NothingAfter,
 }
 
 /// How long a refusal under its card is said.

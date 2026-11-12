@@ -257,7 +257,9 @@
           "removeTarget": "{{step}} returns to it on failure, so it can't be removed.",
           "returnsToIt": "{{step}} returns to it on failure.",
           "itReturnsTo": "it returns to {{target}} on failure.",
-          "returnsTo": "{{step}} returns to {{target}} on failure."
+          "returnsTo": "{{step}} returns to {{target}} on failure.",
+          "nothingBefore": "nothing runs before it.",
+          "nothingAfter": "nothing runs after it."
         }
       },
       "branches": {
