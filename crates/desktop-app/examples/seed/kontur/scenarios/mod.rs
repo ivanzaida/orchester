@@ -116,7 +116,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 196] = [
+pub const ALL: [Scenario; 197] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -185,6 +185,7 @@ pub const ALL: [Scenario; 196] = [
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),
   Scenario::of("cards-approval-modes", approval_answers::seed),
+  Scenario::of("dangerous-auto-approve", approval_answers::dangerous),
   Scenario::of("approval-modes", approval_modes::seed),
   Scenario::of("approval-modes-project", approval_modes::project),
   Scenario::of("decisions", decisions::seed),

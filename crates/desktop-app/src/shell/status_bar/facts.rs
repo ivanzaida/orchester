@@ -63,6 +63,8 @@ pub struct ProjectFacts {
   pub limits: Vec<AccountLimits>,
   /// How many tabs the project's browser has.
   pub browser_tabs: usize,
+  /// Whether the project is in Dangerous auto-approve: its own read, so the chip shows while the tasks are read too.
+  pub dangerous: bool,
 }
 
 /// An account a project's connection runs on, with the newest plan reading its CLI reported, and where that came from:

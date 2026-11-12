@@ -89,6 +89,9 @@ impl ProjectSettingsText {
   }
 }
 
+/// The Approvals rows nothing uses while Dangerous auto-approve mode is on, still usable (`ovMiY`, `wUY2Q` in `i0Aqq`).
+pub const UNUSED_ROWS_OPACITY: f32 = 0.5;
+
 /// A 16 line, as the design draws a 12 or 12.5 text.
 const LINE_16: f32 = 16.0;
 
@@ -104,10 +107,19 @@ pub enum ProjectSettingsSpacing {
   RowY,
   /// 14: a row's sides (`Pt6ry`).
   RowX,
+  /// 7: over and under a risk row of the Dangerous auto-approve mode confirmation (`MKn70` in `T4bbC`).
+  RiskY,
 }
 
 impl ProjectSettingsSpacing {
-  pub const ALL: [Self; 5] = [Self::HeaderTop, Self::Side, Self::BodyTop, Self::RowY, Self::RowX];
+  pub const ALL: [Self; 6] = [
+    Self::HeaderTop,
+    Self::Side,
+    Self::BodyTop,
+    Self::RowY,
+    Self::RowX,
+    Self::RiskY,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -120,6 +132,7 @@ impl ProjectSettingsSpacing {
       Self::BodyTop => "project_settings_body_top",
       Self::RowY => "project_settings_row_y",
       Self::RowX => "project_settings_row_x",
+      Self::RiskY => "project_settings_risk_y",
     }
   }
 
@@ -130,6 +143,7 @@ impl ProjectSettingsSpacing {
       Self::BodyTop => 22.0,
       Self::RowY => 11.0,
       Self::RowX => 14.0,
+      Self::RiskY => 7.0,
     }
   }
 }

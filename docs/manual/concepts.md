@@ -277,9 +277,14 @@ approves network, writes outside the worktree, credential reads, installs, histo
 tool requests at once, except work outside the run's worktree, its Sources and the agent's temp folders, pushes to a
 remote and refs other than the run's branch, which still come to the person. Manual runs the profile's allowed
 commands, asks the project's **reviewer** about the rest, and leaves what it denies or is unsure about to the person.
-A step is in Autopilot only when its profile says so, the project allows it (*Allow Autopilot for agents in this
-project*, Project settings › Runs, off until a person turns it on) and the run was not switched to Manual; a run can
+A step is in Autopilot only when its profile says so, the project allows it (its *Approve mode*, Project
+settings › Runs, is Autopilot or Dangerous auto-approve; Manual until a person moves it) and the run was not switched to Manual; a run can
 switch itself to Manual, never back. Questions, plans, limits and conflicts always come to the person.
+
+**Approve mode.** A project setting (Project settings › Runs › Approvals, Manual until a person moves it): Manual,
+Autopilot or **Dangerous auto-approve**, which, chosen through its confirmation, approves every tool request of every
+agent in the project at once, before the allowed list, the hold rules, the reviewer or anyone is asked. Questions, plans and other decisions still come to the
+person. Its answers show in a run's Conversation as *Approved by Dangerous auto-approve mode*.
 
 **Reviewer.** A separate model judges the requests a Manual step's rules leave to a person and approves only what
 clearly serves the task. Hard rules go to the person first (credential reads, unparsed parts, history rewrites,

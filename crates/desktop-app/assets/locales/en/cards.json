@@ -231,6 +231,7 @@
         "autopilot": "Approved by autopilot",
         "profile": "Allowed by the profile",
         "reviewer": "Approved by the reviewer",
+        "dangerous": "Approved by Dangerous auto-approve mode",
         "at": "· {{time}}",
         "listedAt": "· on the allowed list · {{time}}",
         "reasonAt": "· “{{reason}}” · {{time}}",

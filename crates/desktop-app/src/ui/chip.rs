@@ -216,14 +216,17 @@ fn badge_frame(id: &str, tone: BadgeTone) -> Row {
   )
 }
 
-/// A state's badge: a 12 `glyph` and `word`, 6 apart, in `tone` (`Badge` `sNWem` in T11a `ujJ6U`).
+/// A state's badge: a 12 `glyph` (`<id>-glyph`) and `word` (`<id>-label`), 6 apart, in `tone` (`Badge` `sNWem` in T11a
+/// `ujJ6U`).
 pub fn state_badge(id: &str, tone: BadgeTone, glyph: Icon, word: &str) -> Row {
   let color = tone.colors().0;
-  pill(id, tone).child(icon(glyph, IconSize::Sm, tone.colors().0)).child(
-    Text::new(word)
-      .id(format!("{id}-label"))
-      .variant(TypographyStyle::FieldLabel)
-      .color(color)
-      .nowrap(),
-  )
+  pill(id, tone)
+    .child(icon(glyph, IconSize::Sm, tone.colors().0).id(format!("{id}-glyph")))
+    .child(
+      Text::new(word)
+        .id(format!("{id}-label"))
+        .variant(TypographyStyle::FieldLabel)
+        .color(color)
+        .nowrap(),
+    )
 }

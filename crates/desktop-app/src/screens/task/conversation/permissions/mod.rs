@@ -10,6 +10,7 @@
 //! anyone's; widening — *Approve everything in this run* — is a person's: an MCP client's press (lurq's synthetic
 //! input) is refused, and the refusal shows as an event line.
 
+mod dangerous;
 mod menu;
 
 use std::{path::PathBuf, sync::Arc};
@@ -280,7 +281,10 @@ fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
     ChipMode::Everything => (Icon::ShieldAlert, PaletteColor::Warning),
     ChipMode::Autopilot => (Icon::ShieldCheck, PaletteColor::TextSecondary),
     ChipMode::Manual | ChipMode::ManualRun | ChipMode::ManualProject => (Icon::Shield, PaletteColor::TextSecondary),
+    ChipMode::Dangerous => (Icon::TriangleAlert, PaletteColor::Danger),
   };
+  // The project decides for every run while it approves every request: the profile's word would say nothing true.
+  let dangerous = shown.chip == ChipMode::Dangerous;
   let profile = match shown.profile {
     ApprovalMode::Manual => "conversation.permissions.chip.profileManual",
     ApprovalMode::Autopilot => "conversation.permissions.chip.profileAutopilot",
@@ -293,21 +297,27 @@ fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
       Text::new(&ctx.t(chip_key(shown.chip)))
         .id("conversation-permissions-label")
         .variant(PermissionsText::Chip.role())
+        .color(if dangerous {
+          PaletteColor::Danger
+        } else {
+          PaletteColor::TextSecondary
+        })
         .nowrap(),
     )
-    .child(
+    .with_children((!dangerous).then(|| {
       Text::new(&ctx.t(profile))
         .id("conversation-permissions-profile")
         .variant(PermissionsText::Chip.role())
         .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
+        .nowrap()
+    }))
     .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted))
 }
 
 /// The chip's tooltip: what the profile is and what the project allows, in a sentence.
 fn tip(ctx: &Ctx, shown: &PermissionsMenu, props: &ChipProps) -> Arc<str> {
   let key = match (shown.profile, props.approvals.allow_autopilot.is_on()) {
+    _ if shown.chip == ChipMode::Dangerous => "conversation.permissions.chip.tip.dangerous",
     (ApprovalMode::Manual, _) => "conversation.permissions.chip.tip.manual",
     (ApprovalMode::Autopilot, true) => "conversation.permissions.chip.tip.autopilot",
     (ApprovalMode::Autopilot, false) => "conversation.permissions.chip.tip.projectOff",
@@ -322,6 +332,7 @@ const fn chip_key(mode: ChipMode) -> &'static str {
     ChipMode::Everything => "conversation.permissions.chip.everything",
     ChipMode::ManualRun => "conversation.permissions.chip.manualRun",
     ChipMode::ManualProject => "conversation.permissions.chip.manualProject",
+    ChipMode::Dangerous => "conversation.permissions.chip.dangerous",
   }
 }
 
@@ -333,5 +344,6 @@ const fn chip_name(mode: ChipMode) -> &'static str {
     ChipMode::Everything => "everything",
     ChipMode::ManualRun => "manual-run",
     ChipMode::ManualProject => "manual-project",
+    ChipMode::Dangerous => "dangerous-auto-approve",
   }
 }
