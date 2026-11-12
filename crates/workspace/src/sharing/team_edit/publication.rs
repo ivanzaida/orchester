@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, Tool},
+  resource::{AgentProfile, TeamTool, Tool},
   sharing::LocalEntities,
   store::{ConnectionStore, McpServerStore, SecretStore},
 };
@@ -63,6 +63,12 @@ impl Publication {
     let db = ProjectDb::open(root).map_err(|error| store_failure(&error))?;
     let secrets = team_body::named_secrets(&db).map_err(|error| store_failure(&error))?;
     team_body::tool(resource, tool, &secrets).map_err(refused)
+  }
+
+  /// `tool`, a team tool in the team's form, which names its secret by name and nothing of this computer: sent as it
+  /// is.
+  pub fn of_team_tool(tool: &TeamTool) -> Result<Self, EditRefused> {
+    team_body::team_tool(tool).map_err(|error| store_failure(&error))
   }
 }
 

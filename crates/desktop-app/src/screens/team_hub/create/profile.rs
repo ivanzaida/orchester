@@ -59,7 +59,7 @@ impl Fields {
       lead: Some(drawn.role),
       after: Vec::new(),
       rows: drawn.rows,
-      computer: Some("team_new.computer.profile"),
+      computer: Some(ctx.t("team_new.computer.profile")),
       make,
       off: fields::off(shown, &name),
       overlay: None,

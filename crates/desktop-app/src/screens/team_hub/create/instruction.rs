@@ -84,7 +84,7 @@ impl Fields {
       lead: None,
       rows: drawn.name.into_iter().chain([added]).chain(drawn.rows).collect(),
       after: drawn.sections,
-      computer: Some("team_new.computer.instruction"),
+      computer: Some(ctx.t("team_new.computer.instruction")),
       make,
       off: fields::off(shown, &name),
       overlay: None,

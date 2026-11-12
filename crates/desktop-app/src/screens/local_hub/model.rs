@@ -55,6 +55,7 @@ impl Entry {
       (ResourceKind::McpServer, _) => Icon::Plug,
       (ResourceKind::Tool, Some(Form::ToolCommand)) => Icon::Terminal,
       (ResourceKind::Tool, Some(Form::ToolHttp)) => Icon::Globe,
+      (ResourceKind::Tool, Some(Form::ToolDatabase)) => Icon::Database,
       (ResourceKind::Tool, _) => Icon::Wrench,
       (ResourceKind::Instruction, _) => Icon::FileText,
       _ => Icon::Sparkles,

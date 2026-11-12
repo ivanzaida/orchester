@@ -1,5 +1,6 @@
-//! The editor of a local command tool's panel: the form that makes one ([`ToolFields`]) over its published version, and
-//! the pinned *Save* and *Cancel*. Typing changes only the fields. *Save* publishes what they hold as the next version
+//! The editor of a local tool's panel: the form that makes one ([`ToolFields`]) over its published version, and the
+//! pinned *Save* and *Cancel*. An HTTP request or a database query picks its secret from the project's (L21 `ldRQO`,
+//! L24 `OSniP`). Typing changes only the fields. *Save* publishes what they hold as the next version
 //! at once ([`local_edit::save_and_publish_in`]), over a draft stored meanwhile too; what it widens beyond what the
 //! person allowed is asked first, in the panel, and only a person's press allows it. *Cancel* puts the published
 //! version back in the fields. A refusal says why in place and keeps what was typed.
@@ -16,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ResourceId,
-  resource::{Tool, VersionNumber},
+  resource::{Tool, ToolKind, VersionNumber},
 };
 use orchester_workspace::{
   activity::operations,
@@ -31,16 +32,20 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::{PREFIX, Props, UnsavedSignal};
+use super::{PREFIX, Props, UnsavedSignal, standing};
 use crate::{
   mcp::input_gate::Guarded,
+  queries,
   screens::{
-    connections::widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
-    hub::forms::{Form, Ids, ToolFields},
+    connections::{
+      data,
+      widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
+    },
+    hub::forms::{Form, Ids, LocalSecrets, ToolFields},
     local_hub::{
       leave::{clear_unsaved, mark_unsaved},
       model::Entry,
-      panel::{chips_of, frame, head_end, readiness, standing_chips, used_by},
+      panel::{chips_of, frame, head_end, readiness, used_by},
       save_bar::{self, Save},
       words::kind_where_key,
     },
@@ -138,6 +143,13 @@ impl Component for Editor {
     let Published(stored) = self.stored.get();
     let saving = self.save.state().get();
     let busy = saving.is_pending();
+    let connections = queries::state(&data::load(ctx, props.project.open.repo_root.clone())).data;
+    let entry = &props.entry;
+    let valueless = standing::valueless(entry);
+    let local = LocalSecrets {
+      listed: connections.as_ref().map(|connections| &connections.secrets[..]),
+      valueless: &valueless,
+    };
     let drawn = self.fields.draw(
       ctx,
       &Form {
@@ -147,6 +159,7 @@ impl Component for Editor {
         tried: true,
         locked: busy,
       },
+      local,
     );
     let changed = drawn.made.as_ref().map_or(true, |tool| *tool != stored);
     let refused = saving.error.clone().filter(|_| saving.is_rejected());
@@ -155,7 +168,6 @@ impl Component for Editor {
       self.what,
       (changed, refused.is_some() || drawn.made.is_err()),
     );
-    let entry = &props.entry;
     let head = head_named(
       &entry.name,
       (
@@ -168,14 +180,16 @@ impl Component for Editor {
     let rows = [used_by(ctx, PREFIX, entry)].into_iter().chain(drawn.rows).collect();
     let body = body()
       .child(head)
-      .child(chips_of(standing_chips(ctx, entry), None))
+      .child(chips_of(standing::chips(ctx, entry, changed), None))
       .with_children(widening)
       .child(rows::section(PREFIX, &ctx.t("local_hub.tool.title"), Vec::new(), rows))
+      .with_children(drawn.sections)
       .with_children(
         refused
           .map(|error| -> Element { field_error(&format!("{PREFIX}-refused"), &message_text(ctx, &error)).into() }),
       )
-      .with_children(readiness(ctx, entry));
+      // An HTTP or database tool's secret row says what its secret lacks here (L21 `ldRQO`).
+      .with_children(readiness(ctx, entry).filter(|_| stored.kind() == ToolKind::Command));
     let save = self.save_now((&stored, drawn.made), (changed, busy));
     let bar = save_bar::bar(
       ctx,
@@ -233,7 +247,9 @@ impl Editor {
   /// answers it.
   fn question(&self, ctx: &mut Ctx, asked: &Asked) -> Element {
     let mut reasons: Vec<Arc<str>> = asked.reasons.iter().map(|reason| message_text(ctx, reason)).collect();
-    reasons.push(ctx.t("local_hub.tool.execution"));
+    if asked.ask.tool.kind() == ToolKind::Command {
+      reasons.push(ctx.t("local_hub.tool.execution"));
+    }
     let (keep, pending, save, ask) = (
       self.pending.clone(),
       self.pending.clone(),

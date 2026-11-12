@@ -15,6 +15,21 @@ pub enum HttpMethod {
   Delete,
 }
 
+impl HttpMethod {
+  pub const ALL: [Self; 5] = [Self::Get, Self::Post, Self::Put, Self::Patch, Self::Delete];
+
+  /// The method as a request line writes it, e.g. `POST`.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Get => "GET",
+      Self::Post => "POST",
+      Self::Put => "PUT",
+      Self::Patch => "PATCH",
+      Self::Delete => "DELETE",
+    }
+  }
+}
+
 /// How the request authenticates. The secret is resolved by the runner at call time; the
 /// body holds only its reference.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,7 +104,9 @@ pub enum RequestTarget {
 }
 
 impl RequestTarget {
-  fn is_valid(&self) -> bool {
+  /// Whether its key is one a request can carry: a query name without whitespace, a header name of token characters,
+  /// or a body path of dot-separated keys.
+  pub fn is_valid(&self) -> bool {
     match self {
       Self::Query(name) => is_token(name),
       Self::Header(name) => is_header_name(name),
@@ -108,7 +125,8 @@ pub enum ResponseSource {
 }
 
 impl ResponseSource {
-  fn is_valid(&self) -> bool {
+  /// Whether its name is one a response can carry, as [`RequestTarget::is_valid`] says of a request's.
+  pub fn is_valid(&self) -> bool {
     match self {
       Self::Status => true,
       Self::Header(name) => is_header_name(name),
@@ -129,6 +147,22 @@ pub enum HttpError {
   InvalidLocation(FieldName),
   #[error("input `{0}` targets the Authorization header, which is reserved for the tool's authentication")]
   ReservedHeader(FieldName),
+}
+
+/// What a request takes of its URL: whether it is https, which a bearer token needs, and its host without the port,
+/// which must be the allowed host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HttpUrl<'a> {
+  pub https: bool,
+  pub host: &'a str,
+}
+
+impl<'a> HttpUrl<'a> {
+  /// `url` as a request reads it; [`HttpError::InvalidUrl`] for one that is not an absolute http(s) URL with a host
+  /// and without embedded credentials.
+  pub fn parse(url: &'a str) -> Result<Self, HttpError> {
+    split_url(url).map(|(https, host)| Self { https, host })
+  }
 }
 
 /// A single HTTP request with a fixed URL. Agents supply mapped inputs; they never choose the

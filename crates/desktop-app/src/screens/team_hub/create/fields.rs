@@ -13,7 +13,10 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections, messages::Message};
+use orchester_workspace::{
+  agents::team_tool::CallingPipeline, app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections,
+  messages::Message,
+};
 
 use super::{
   super::rows::{self, Key, Sub},
@@ -45,6 +48,8 @@ pub(super) struct Shown<'a> {
   pub offer: &'a Offer,
   /// What this computer's MCP servers and secrets are, which a local MCP server's form reads; `None` while it is read.
   pub connections: Option<&'a ProjectConnections>,
+  /// The team's pipelines, which a team tool's form lets call it; empty for another form.
+  pub pipelines: &'a [CallingPipeline],
   /// The name field, which has the focus when the form opens (`Name` is focused in A7–A12).
   pub first: &'a ElementRef,
   /// The name the team server refused as taken, though the list had no resource of it.
@@ -69,8 +74,8 @@ pub(super) struct Body {
   pub rows: Vec<Row>,
   /// Sections of their own under the rows' (an instruction's *Text*, a skill's *SKILL.md*).
   pub after: Vec<Element>,
-  /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
-  pub computer: Option<&'static str>,
+  /// What each computer fills in afterwards; a local project has no one else.
+  pub computer: Option<Arc<str>>,
   /// What Create makes, when every field is valid.
   pub make: Option<Make>,
   /// Why Create stays off before it is pressed, as a key said at the bar's end: the name is the team's already, or

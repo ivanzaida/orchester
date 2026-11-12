@@ -167,6 +167,7 @@ impl Entry {
       (Kind::McpServer, _) => Icon::Plug,
       (Kind::Tool, Some(Form::ToolCommand)) => Icon::Terminal,
       (Kind::Tool, Some(Form::ToolHttp)) => Icon::Globe,
+      (Kind::Tool, Some(Form::ToolDatabase)) => Icon::Database,
       (Kind::Tool, _) => Icon::Wrench,
       (Kind::Instruction, _) => Icon::FileText,
       (Kind::Skill, _) => Icon::Sparkles,

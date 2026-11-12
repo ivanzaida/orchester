@@ -28,6 +28,7 @@ mod local_hub_role;
 mod local_hub_runs_on;
 mod local_hub_saved;
 mod local_hub_tool;
+mod local_hub_tool_http;
 mod local_hub_variables;
 mod models;
 mod pipeline_flow;

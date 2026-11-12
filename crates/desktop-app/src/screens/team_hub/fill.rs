@@ -16,7 +16,10 @@ use orchester_core::{secret::SecretName, sharing::Missing};
 use super::rows::{self, Sub};
 use crate::{
   theme::{ControlHeight, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
-  ui::icon::{Icon, icon},
+  ui::{
+    icon::{Icon, icon},
+    pressable::Press,
+  },
 };
 
 /// A box that looks like a field and holds `text` after its glyph; it is not typed in. A text that is too long for it
@@ -62,8 +65,10 @@ pub(super) fn value_of(missing: &[Missing], name: &SecretName) -> Value {
     .unwrap_or(Value::Set)
 }
 
-/// One secret a resource takes: its name over *secret value*, and whether it has a value here.
-pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value) -> Row {
+/// One secret a resource takes: its name over *secret value*, and whether it has a value here. A value missing here is
+/// given by pressing its box when `ask` says what that does (an admin's edit, whose bar is Save and Cancel), else from
+/// the panel's bar.
+pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value, ask: Option<Press>) -> Row {
   let id = format!("team-hub-value-{name}");
   let (sub, shown): (Sub, Element) = match value {
     Value::Set => (
@@ -85,18 +90,7 @@ pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value) -> Row {
         words: ctx.t("team_hub.mcp.secret.sub"),
         color: PaletteColor::Warning,
       },
-      Row::new()
-        .id(format!("{id}-value"))
-        .width(Dimension::Pct(100.0))
-        .child(input_box(
-          &format!("{id}-field"),
-          (Icon::KeyRound, PaletteColor::TextMuted),
-          Text::new(&ctx.t("team_hub.mcp.secret.noValue"))
-            .id(format!("{id}-words"))
-            .variant(HubText::Value.role())
-            .color(PaletteColor::TextMuted),
-        ))
-        .into(),
+      missing_value(ctx, &id, ask),
     ),
     Value::Unreadable => (
       Sub {
@@ -121,6 +115,32 @@ pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value) -> Row {
     .variant(ExtraTypography::PropertyMono.role())
     .color(PaletteColor::TextSecondary);
   rows::keyed(&id, label, Some(sub), shown)
+}
+
+/// The box of a value missing here, which `ask` gives when it is pressed.
+fn missing_value(ctx: &Ctx, id: &str, ask: Option<Press>) -> Element {
+  let field = input_box(
+    &format!("{id}-field"),
+    (Icon::KeyRound, PaletteColor::TextMuted),
+    Text::new(&ctx.t("team_hub.mcp.secret.noValue"))
+      .id(format!("{id}-words"))
+      .variant(HubText::Value.role())
+      .color(PaletteColor::TextMuted),
+  );
+  let Some(ask) = ask else {
+    return Row::new()
+      .id(format!("{id}-value"))
+      .width(Dimension::Pct(100.0))
+      .child(field)
+      .into();
+  };
+  ask
+    .button()
+    .id(format!("{id}-value"))
+    .width(Dimension::Pct(100.0))
+    .describe("a11y_name", ctx.t("team_hub.mcp.bar.addValue"))
+    .child(field)
+    .into()
 }
 
 /// How a resource stands, in the note's colors.
