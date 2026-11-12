@@ -96,12 +96,20 @@ pub fn save_approve_mode_in(root: &Path, to: ApproveMode, by: Answerer) -> Resul
   let changed = current
     .changed(to, by)
     .map_err(|ApproveModePersonOnly(up)| person_only(up))?;
-  // Nothing to write when nothing changes: a person's move between this read and a write would be undone.
-  if changed != current {
-    db.save_approve_mode(changed)
-      .map_err(|error| messages::store_error(&error))?;
+  // One conditional write: a move decided on a mode someone changed meanwhile is not made.
+  if changed != current
+    && !db
+      .save_approve_mode_if(current, changed)
+      .map_err(|error| messages::store_error(&error))?
+  {
+    return Err(Message::new("projectSettings.changedOutside"));
   }
   Ok(changed)
+}
+
+/// The project's *Approve mode* at `root`, for the status bar's chip.
+pub fn approve_mode_in(root: &Path) -> Result<ApproveMode, StoreError> {
+  ProjectDb::open(root)?.approve_mode()
 }
 
 /// Why moving the Approve mode up to `to` from anyone but a person was not taken.

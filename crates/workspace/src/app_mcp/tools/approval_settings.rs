@@ -183,8 +183,9 @@ pub async fn set_allow_autopilot(services: &Services, args: SetAllowAutopilot) -
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    let to = db.approve_mode()?.with_autopilot(args.allow_autopilot);
-    moved(&services, (&mut db, open.project.id()), to)?;
+    moved(&services, (&mut db, open.project.id()), |current| {
+      current.with_autopilot(args.allow_autopilot)
+    })?;
     approvals_json(&db, open.project.id())
   })
   .await
@@ -196,24 +197,32 @@ pub async fn set_approve_mode(services: &Services, args: SetApproveMode) -> Resu
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    moved(&services, (&mut db, open.project.id()), args.approve_mode.into())?;
+    let to = ApproveMode::from(args.approve_mode);
+    moved(&services, (&mut db, open.project.id()), |_| to)?;
     approvals_json(&db, open.project.id())
   })
   .await
 }
 
 /// Moves the Approve mode of `project`, whose database is `db`, to `to` as automation: refused as `person_only` up.
-fn moved(services: &Services, (db, project): (&mut ProjectDb, ProjectId), to: ApproveMode) -> Result<(), ToolError> {
+fn moved(
+  services: &Services,
+  (db, project): (&mut ProjectDb, ProjectId),
+  to: impl FnOnce(ApproveMode) -> ApproveMode,
+) -> Result<(), ToolError> {
   let current = db.approve_mode()?;
   let mode = current
-    .changed(to, Answerer::Automation)
+    .changed(to(current), Answerer::Automation)
     .map_err(|ApproveModePersonOnly(up)| ToolError::refused("person_only", vec![person_only(up)]))?;
-  // Nothing to write when nothing changes: a person's move between this read and a write would be undone.
   if mode != current {
-    db.save_approve_mode(mode)?;
+    // One conditional write: a move decided on a mode a person changed meanwhile is refused, never made.
+    if !db.save_approve_mode_if(current, mode)? {
+      return Err(ToolError::refused(
+        "changed_outside",
+        vec![Message::new("projectSettings.changedOutside")],
+      ));
+    }
     services.changes.record(project, Outside::AutoMode);
-    // The status bar's chip reads the mode with the project's tasks.
-    services.changes.record(project, Outside::Tasks);
   }
   Ok(())
 }

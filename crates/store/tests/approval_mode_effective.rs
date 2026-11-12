@@ -243,3 +243,25 @@ fn approval_mode_effective_approve_mode_migrates_from_allow_autopilot() {
     assert_eq!(db.approve_mode().expect("read"), mode, "allowed {allowed}");
   }
 }
+
+/// A move decided on a mode someone changed meanwhile is not made: automation read Dangerous auto-approve and asks for
+/// Autopilot, but a person moved it to Manual first, so Autopilot — a raise from Manual — is not written.
+#[test]
+fn approval_mode_effective_approve_mode_move_on_a_stale_read_is_not_made() {
+  use orchester_core::run::ApproveMode;
+  let (_current, mut db, ..) = started_run();
+  assert!(
+    db.save_approve_mode_if(ApproveMode::Manual, ApproveMode::DangerousAutoApprove)
+      .expect("save"),
+    "from Manual without a row"
+  );
+  db.save_approve_mode(ApproveMode::Manual)
+    .expect("a person moves it down");
+  assert!(
+    !db
+      .save_approve_mode_if(ApproveMode::DangerousAutoApprove, ApproveMode::Autopilot)
+      .expect("save"),
+    "the stale move is refused"
+  );
+  assert_eq!(db.approve_mode().expect("read"), ApproveMode::Manual);
+}

@@ -45,6 +45,26 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Moves the Approve mode from `current` to `mode` in one write, only if it is still `current`: a move decided on a
+  /// mode someone changed meanwhile is not made. Whether it was.
+  pub fn save_approve_mode_if(&mut self, current: ApproveMode, mode: ApproveMode) -> Result<bool, StoreError> {
+    self.connection.execute(
+      "INSERT OR IGNORE INTO project_approvals (id, allow_autopilot, dangerous_auto_approve) VALUES (1, 0, 0)",
+      [],
+    )?;
+    let changed = self.connection.execute(
+      "UPDATE project_approvals SET allow_autopilot = ?1, dangerous_auto_approve = ?2 \
+       WHERE id = 1 AND allow_autopilot = ?3 AND dangerous_auto_approve = ?4",
+      [
+        mode.allows_autopilot().is_on(),
+        mode.approves_everything(),
+        current.allows_autopilot().is_on(),
+        current.approves_everything(),
+      ],
+    )?;
+    Ok(changed == 1)
+  }
+
   /// Whether the project allows Autopilot: in its Autopilot and Dangerous auto-approve modes.
   pub fn allow_autopilot(&self) -> Result<AllowAutopilot, StoreError> {
     Ok(self.approve_mode()?.allows_autopilot())
