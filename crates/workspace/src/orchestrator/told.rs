@@ -78,7 +78,9 @@ const DRIVE_APPROVAL: &str = "Decides one tool request at once. In a turn Orches
   task and is safe: inside the run's worktree, nothing that cannot be undone, nothing that reaches another system or \
   person, no secret. list_approvals names a request's hold (hold), a hard rule of auto mode \
   that would send it to a person: a reason to look harder, not a refusal; a push, rewriting history, deleting outside \
-  the worktree or touching credentials only when the task plainly needs it. One auto mode's reviewer still judges is \
+  the worktree or touching credentials only when the task plainly needs it. The runner still refuses approve_once \
+  (person_only) for what auto-approval leaves to a person (history, deleting outside the temporary folder, writes \
+  outside the worktree, credentials, installs, the network). One auto mode's reviewer still judges is \
   refused (reviewer_judging). Deny it, with a message that tells the agent why, only when it is \
   plainly wrong. Give your reason \
   in one sentence (reason): the conversation shows it under the request. While the chat drives, Let the Orchestrator \
