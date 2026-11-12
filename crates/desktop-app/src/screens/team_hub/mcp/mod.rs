@@ -15,7 +15,7 @@ mod computer;
 mod edit;
 mod edit_view;
 mod fix;
-mod from_team;
+pub(super) mod from_team;
 mod modes;
 mod words;
 

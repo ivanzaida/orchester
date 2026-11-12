@@ -6,8 +6,9 @@ use orchester_core::{
   secret::SecretName,
   sharing::{ConnectionProblem, Missing},
 };
+use orchester_workspace::readiness::{ReadinessStanding, Undecided};
 
-use crate::ui::icon::Icon;
+use crate::{screens::team_hub::model::Entry, ui::icon::Icon};
 
 /// A fix this computer takes by itself; a part this panel does not fix (a server this app cannot run, a keychain
 /// that cannot say, a reviewer's connection) has none, and no action stands in its place.
@@ -22,6 +23,9 @@ pub(in crate::screens) enum Fix {
   SwitchOn(ResourceId),
   SetPath(ResourceId),
   AddValue(SecretName),
+  /// Open what the profile names that the team archived in the hub's *Archived*, where an admin restores it (A37
+  /// `AFbIb`).
+  OpenArchived(ResourceId),
 }
 
 impl Fix {
@@ -56,6 +60,7 @@ impl Fix {
       Self::SwitchOn(_) => "team_hub.fix.link.switchOn",
       Self::SetPath(_) => "team_hub.fix.link.setPath",
       Self::AddValue(_) => "team_hub.fix.link.addValue",
+      Self::OpenArchived(_) => "team_hub.fix.link.openArchived",
     }
   }
 
@@ -68,6 +73,7 @@ impl Fix {
       Self::SwitchOn(_) => Icon::Power,
       Self::SetPath(_) => Icon::FolderOpen,
       Self::AddValue(_) => Icon::KeyRound,
+      Self::OpenArchived(_) => Icon::Archive,
     }
   }
 
@@ -80,8 +86,37 @@ impl Fix {
       Self::SwitchOn(_) => "switch-on",
       Self::SetPath(_) => "set-path",
       Self::AddValue(_) => "add-value",
+      Self::OpenArchived(_) => "open-archived",
     }
   }
+}
+
+/// What the profile `entry` names that the team archived, which keeps it from running on any computer: its id and its
+/// name (`docs/design/team-configuration.md`, edge case 8).
+pub(in crate::screens::team_hub) fn archived_named(entry: &Entry) -> Option<(ResourceId, &str)> {
+  match entry.standing.as_ref()? {
+    ReadinessStanding::Undecided(
+      Undecided::ChoosesArchivedMcpServer(id, name)
+      | Undecided::UsesArchivedTool(id, name)
+      | Undecided::UsesArchivedInstruction(id, name),
+    ) => Some((*id, name.as_str())),
+    _ => None,
+  }
+}
+
+/// The fix to offer first for `entry`: opening what it names that the team archived, else the fix of the first part
+/// its readiness misses.
+pub(in crate::screens::team_hub) fn first(entry: &Entry) -> Option<Fix> {
+  archived_named(entry).map_or_else(
+    || {
+      entry
+        .standing
+        .as_ref()
+        .and_then(|standing| standing.missing().first())
+        .and_then(Fix::of)
+    },
+    |(id, _)| Some(Fix::OpenArchived(id)),
+  )
 }
 
 /// What a row of *Ready here?* shows of a fix: the words of its link and what its control is called in element ids. A

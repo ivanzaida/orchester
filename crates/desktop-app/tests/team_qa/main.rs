@@ -8,6 +8,7 @@
 
 mod first_download;
 mod hub_archive;
+mod hub_archived;
 mod hub_edit;
 mod hub_edit_kinds;
 mod hub_forms;

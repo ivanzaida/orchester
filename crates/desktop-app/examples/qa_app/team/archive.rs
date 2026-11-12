@@ -4,8 +4,8 @@
 //! the server's own answers. `team-archive` also has two runs that pin `pencil-design`, which the confirmation lists as
 //! the runs that stop. `team-archived` is what a person's *Archive and stop N runs* leaves behind, which no MCP client
 //! can press: `pencil-design` is archived on the server and gone from this computer's lists, as the server's
-//! `resource.archived` leaves it, and the run the seed recorded as stopped by it is run 8 of KON-12. Fixture data for
-//! QA, never shipped.
+//! `resource.archived` leaves it, and the run the seed recorded as stopped by it is run 8 of KON-12; the person is a
+//! member there, and an Admin in `team-archived-admin`. Fixture data for QA, never shipped.
 
 use std::{error::Error, path::Path};
 
@@ -24,7 +24,7 @@ use orchester_store::{ProjectDb, ResourceSharing};
 use super::State;
 
 /// Holds the resources the archive states need on `server`, before Kontur at `root` joins it: `pencil-design` archived
-/// there for `team-archived`.
+/// there for `team-archived` and `team-archived-admin`.
 pub fn hold(state: State, (server, root): (&TeamServer, &Path)) -> Result<(), Box<dyn Error>> {
   if !state.archives() {
     return Ok(());
@@ -94,7 +94,7 @@ pub fn hold(state: State, (server, root): (&TeamServer, &Path)) -> Result<(), Bo
       references,
     },
   );
-  if state == State::TeamArchived {
+  if matches!(state, State::TeamArchived | State::TeamArchivedAdmin) {
     server.archive("kontur", pencil);
   }
   Ok(())
@@ -105,7 +105,7 @@ pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(),
   match state {
     State::TeamArchive => pin_runs(server, super::edit::pencil(root)?),
     // The server's archive reached this computer: the server is not asked again, the resource leaves the lists.
-    State::TeamArchived => ProjectDb::open(root)?
+    State::TeamArchived | State::TeamArchivedAdmin => ProjectDb::open(root)?
       .mark_shared_archived(super::edit::pencil(root)?, true, Timestamp::now())
       .map(drop)?,
     _ => {}

@@ -25,24 +25,13 @@ pub enum HubFilter {
   /// What the project's agents remember on this computer (`Section Y · Memory` `Xxl1u`): a team project's too, never
   /// the team's.
   Memory,
-  /// What a local project archived (`Agents · Archived` L13 `MXma9`); only a local project's hub offers it.
+  /// What the project archived (`Agents · Archived` L13 `MXma9`; the team's, A36 `qvMZD`).
   Archived,
 }
 
 impl HubFilter {
-  /// The filters a team project's hub offers.
-  pub const ALL: [Self; 7] = [
-    Self::All,
-    Self::Profiles,
-    Self::McpServers,
-    Self::Instructions,
-    Self::Skills,
-    Self::Tools,
-    Self::Memory,
-  ];
-
-  /// The filters a local project's hub offers: the team's and *Archived*.
-  pub const LOCAL: [Self; 8] = [
+  /// The filters the hub offers, a team project's and a local one's.
+  pub const ALL: [Self; 8] = [
     Self::All,
     Self::Profiles,
     Self::McpServers,
@@ -69,7 +58,7 @@ impl HubFilter {
 
   /// The filter named `name`, as [`Self::name`] spells it.
   pub fn from_name(name: &str) -> Option<Self> {
-    Self::LOCAL.into_iter().find(|filter| filter.name() == name)
+    Self::ALL.into_iter().find(|filter| filter.name() == name)
   }
 }
 

@@ -17,7 +17,7 @@ use lurq::{
 use orchester_core::resource::Skill;
 use orchester_workspace::agents::team_text::TeamSkillSheet;
 
-use super::{Props, Sheet, from_team, on_this_computer, used_by_row};
+use super::{FromTeam, Props, Sheet, from_team, on_this_computer, used_by_row};
 use crate::{
   screens::{
     hub::forms::{Form, Ids, SkillFields},
@@ -115,7 +115,11 @@ impl Component for SkillEditor {
       .child(head)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
       .with_children(parts.notice)
-      .child(from_team(ctx, drawn.rows.into_iter().chain([used_by]).collect()))
+      .child(from_team(
+        ctx,
+        FromTeam::Shared,
+        drawn.rows.into_iter().chain([used_by]).collect(),
+      ))
       .with_children(drawn.sections)
       .child(on_this_computer(ctx, &Sheet::Skill(sheet.clone())));
     panel::frame(entry, body, Some(parts.bar)).into()

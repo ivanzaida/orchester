@@ -154,7 +154,7 @@ impl McpPanel {
         end: panel::used_by(ctx, &sheet.used_by),
       },
       above: Vec::new(),
-      from_team: from_team::section(ctx, sheet),
+      from_team: from_team::section(ctx, sheet, rows::FromTeam::Shared),
       bar: fix_bar(ctx, props, (busy, press)),
     }
   }

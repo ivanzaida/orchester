@@ -122,6 +122,14 @@ impl Component for ArchivedCard {
     let project = task.project.open.project.id();
     let resource = stop.resource.as_str();
     let (body, need, glyph) = explain(ctx, &stop, (run, task.team.is_some()));
+    // A team's archived resource opens in the hub's Archived with it picked, where an admin restores it (A22, A36).
+    let open = stop.archived.as_ref().filter(|_| task.team.is_some()).map(|archived| {
+      let route = Route::Project(
+        project,
+        ProjectPage::hub(HubView::new(HubFilter::Archived, Some(archived.id))),
+      );
+      open_link(ctx, "task-archived-resource", navigation.to(route))
+    });
     let words = |key: &str| {
       let (run, at) = (run.to_string(), display::clock(stop.stopped_at));
       ctx.t_args(
@@ -138,7 +146,7 @@ impl Component for ArchivedCard {
           .variant(TypographyStyle::Description)
           .color(PaletteColor::Danger),
       ),
-      None,
+      open,
     )];
     for (index, profile) in still.iter().enumerate() {
       let open = navigation.to(Route::Project(
@@ -285,9 +293,7 @@ fn profile_row(ctx: &Ctx, (index, profile): (usize, &Profile), (resource, last):
     ],
   );
   let need = ctx.t_args("summary.archived.stillUses", [("resource", resource)]);
-  let link = opening(open)
-    .id(format!("{id}-open"))
-    .child(Text::new(&ctx.t("summary.archived.open")).variant(TypographyStyle::Button));
+  let link = open_link(ctx, &id, open);
   let glyph: Element = match profile.cli {
     Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Md),
     None => icon(Icon::Bot, IconSize::Md, PaletteColor::TextSecondary).into(),
@@ -297,8 +303,16 @@ fn profile_row(ctx: &Ctx, (index, profile): (usize, &Profile), (resource, last):
     (glyph, last),
     Text::new(&name).variant(CardsText::Decided.role()),
     Some(Text::new(&need).variant(TypographyStyle::Description)),
-    Some(link.into()),
+    Some(link),
   )
+}
+
+/// *Open →* at the end of the row `id`, which opens `open`.
+fn open_link(ctx: &Ctx, id: &str, open: Open) -> Element {
+  opening(open)
+    .id(format!("{id}-open"))
+    .child(Text::new(&ctx.t("summary.archived.open")).variant(TypographyStyle::Button))
+    .into()
 }
 
 /// One row of the list: its `glyph`, what it is about, what is the matter with it and, at the end, where to look; every

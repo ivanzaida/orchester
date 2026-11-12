@@ -1,7 +1,8 @@
 //! The hub's list (`List` `gETjg` in `t4mtQL`): the resources of the filter in three groups by what this computer
 //! needs, each under a title with its count (`Section · Needs you here` `o6TEKq`), a row with its glyph, name, line
 //! and at its end its tag and version (`Item · Builder` `tF2OL`, [`super::row`]); the instructions' and skills' lists
-//! say under their group why every one is ready (`Why` `e1C14P`).
+//! say under their group why every one is ready (`Why` `e1C14P`). Under *Archived* it is one list of what the team
+//! archived, each row with its kind and who archived it when (`List` in A36 `qvMZD`).
 
 use lurq::{
   app::theme::{PaletteColor, SpacingSize},
@@ -39,18 +40,24 @@ pub(super) struct Shown<'a> {
 }
 
 pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
-  let groups = GROUPS.into_iter().filter_map(|group| {
-    let entries: Vec<&Entry> = listing.group(shown.filter, group).collect();
-    if entries.is_empty() {
-      return None;
-    }
-    Some(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .child(section(ctx, group, entries.len()))
-        .with_children(entries.into_iter().map(|entry| row(ctx, listing, entry, shown))),
-    )
-  });
+  let groups: Vec<Column> = if shown.filter == HubFilter::Archived {
+    let archived: Vec<&Entry> = listing.shown(shown.filter).collect();
+    let named = ("archived", "team_hub.group.archived", PaletteColor::TextMuted);
+    vec![group_of(
+      ctx,
+      listing,
+      (section_named(ctx, named, archived.len()), archived),
+      shown,
+    )]
+  } else {
+    GROUPS
+      .into_iter()
+      .filter_map(|group| {
+        let entries: Vec<&Entry> = listing.group(shown.filter, group).collect();
+        (!entries.is_empty()).then(|| group_of(ctx, listing, (section(ctx, group, entries.len()), entries), shown))
+      })
+      .collect()
+  };
   let groups = Column::new()
     .id("team-hub-list")
     .width(Dimension::Pct(100.0))
@@ -63,6 +70,19 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
     .width(Dimension::Px(LIST_WIDTH))
     .height(Dimension::Pct(100.0))
     .into()
+}
+
+/// A group's title row over its rows.
+fn group_of(
+  ctx: &lurq::app::ctx::Ctx,
+  listing: &Listing,
+  (title, entries): (Row, Vec<&Entry>),
+  shown: &Shown<'_>,
+) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(title)
+    .with_children(entries.into_iter().map(|entry| row(ctx, listing, entry, shown)))
 }
 
 fn section(ctx: &lurq::app::ctx::Ctx, group: Group, count: usize) -> Row {

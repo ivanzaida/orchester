@@ -2,26 +2,19 @@
 //! same on every computer, every row a value: *None* where the profile has nothing of a kind, *CLI default* for an
 //! effort it leaves to the CLI (M1 `oPF2o`).
 
-use lurq::{
-  app::ctx::Ctx,
-  components::{Row, Text},
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
 use orchester_workspace::agents::team_profile::{Listed, TeamProfileSheet};
 
-use crate::{
-  screens::team_hub::{
-    rows::{self, Sub},
-    words::cli_key,
-  },
-  theme::HubText,
+use crate::screens::team_hub::{
+  rows::{self, FromTeam, Sub},
+  words::cli_key,
 };
 
-pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet) -> lurq::components::Column {
-  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-    .id("team-hub-from-team-note")
-    .variant(HubText::PanelHint.role())
-    .nowrap();
+pub(in crate::screens::team_hub) fn section(
+  ctx: &Ctx,
+  sheet: &TeamProfileSheet,
+  note: FromTeam,
+) -> lurq::components::Column {
   let mut rows = vec![
     rows::row(
       "team-hub-from-team-cli",
@@ -66,12 +59,7 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet) -> lurq::components::
   let secrets = sheet.secrets.iter().map(ToString::to_string).collect();
   let sub = Some(Sub::quiet(ctx.t("team_hub.profile.secretsSub")));
   rows.push(listed_row(ctx, "secrets", "team_hub.profile.secrets", secrets, sub));
-  rows::section(
-    "team-hub-from-team",
-    &ctx.t("team_hub.profile.fromTeam"),
-    vec![note.into()],
-    rows,
-  )
+  rows::from_team(ctx, note, rows)
 }
 
 fn names(listed: &[Listed]) -> Vec<String> {
