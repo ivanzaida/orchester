@@ -1,7 +1,7 @@
-//! What the Orchestrator chat may not allow (the orchestrating session's decision of 2026-11-11): a tool request a hard
-//! rule of auto mode holds — a push, a change that destroys work or reaches outside the worktree, a read of a secret
-//! — is never the chat's to allow, whatever its agent wrote; it reads the rule from the request, its run and the step's
-//! recorded permissions, the stricter where a fact cannot be read.
+//! The hard rule of auto mode that holds a tool request, as the Orchestrator chat reads it for its decision (the
+//! person's decision of 2026-11-11: information, not a refusal): a push, a change that destroys work or reaches outside
+//! the worktree, a read of a secret; read from the request, its run and the step's recorded permissions, the stricter
+//! where a fact cannot be read.
 //! `cargo test -p orchester-workspace --test orchestrator_approval_hold approval_hold`.
 
 mod support;

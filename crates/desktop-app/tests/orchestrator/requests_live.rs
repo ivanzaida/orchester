@@ -68,13 +68,15 @@ fn turn_ended(db: &ProjectDb, id: &str) -> bool {
 }
 
 /// Starts a new task of `pipeline` whose agent asks to push, from a person's message; its key and its request, once
-/// the request's own turn ended.
+/// the request's own turn ended ([`asking`]).
 fn pushing(screen: &mut Orchestrator, pipeline: ResourceId, title: &str) -> (String, String) {
-  let key = screen.draft_with(
-    pipeline,
-    title,
-    ("Run `git push origin main`.", &["The branch is pushed."]),
-  );
+  asking(screen, pipeline, (title, "Run `git push origin main`."))
+}
+
+/// Starts a new task `title` of `pipeline` whose `brief` has its agent ask for a tool, from a person's message; its
+/// key and its request, once the request's own turn ended.
+fn asking(screen: &mut Orchestrator, pipeline: ResourceId, (title, brief): (&str, &str)) -> (String, String) {
+  let key = screen.draft_with(pipeline, title, (brief, &["It is done."]));
   screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
   screen.until("the agent's tool request", |screen| {
     !waiting(&screen.db(), &key).is_empty()
@@ -92,11 +94,11 @@ fn requests_live_wait_for_the_person_with_the_card_and_take_both_answers() {
   screen.allow_autopilot(false);
   // A Builder that asks before commands, on a pipeline of its own.
   let builder = screen.builder();
-  let asking = screen.pipeline(builder, ("asking", "Asking"));
+  let pipeline = screen.pipeline(builder, ("asking", "Asking"));
   watching_everything(&mut screen);
 
   // The stand-in decides nothing, so it is left to the person with the card (d); their Approve once answers it (e).
-  let (first_key, first) = pushing(&mut screen, asking, "Push the notes");
+  let (first_key, first) = pushing(&mut screen, pipeline, "Push the notes");
   let card = format!("cards-approval-{first}");
   screen.until("the task's own card under the request", |screen| screen.exists(&card));
   screen.press(&format!("{card}-approve"));
@@ -108,7 +110,7 @@ fn requests_live_wait_for_the_person_with_the_card_and_take_both_answers() {
   );
 
   // The Orchestrator denies another, with words for the agent and its reason.
-  let (second_key, second) = pushing(&mut screen, asking, "Push the log");
+  let (second_key, second) = pushing(&mut screen, pipeline, "Push the log");
   let deny = format!(
     r#"Call decide_approval {{"project":"Kontur","approval":"{second}","decision":"deny","message":"Do not push from a run.","reason":"The brief leaves pushing to review."}}"#
   );
@@ -137,4 +139,20 @@ fn requests_live_wait_for_the_person_with_the_card_and_take_both_answers() {
   assert!(!answer.allowed);
   assert_eq!(answer.reason, "The brief leaves pushing to review.");
   assert_eq!(answer.told.as_deref(), Some("Do not push from a run."));
+
+  // A hold is no refusal (the person's decision of 2026-11-11): the Orchestrator may allow a held request once; here a
+  // folder made in a step that only reads, which auto mode's hard rules send to the person.
+  let (third_key, third) = asking(&mut screen, pipeline, ("Make the output folder", "Make a folder."));
+  let allow = format!(
+    r#"Call decide_approval {{"project":"Kontur","approval":"{third}","decision":"approve_once","reason":"The brief asks for the output folder."}}"#
+  );
+  screen.send(&allow);
+  screen.until("the agent answered", |screen| {
+    waiting(&screen.db(), &third_key).is_empty()
+  });
+  let allowed = decided(&screen.db(), &third_key, &third);
+  assert_eq!(
+    (allowed.decision, allowed.decided_by),
+    (Some(ToolApprovalDecision::Approved), Some(DecidedBy::Automation))
+  );
 }

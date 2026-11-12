@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 
 use super::tools::ChatScope;
 use crate::{
-  app_mcp::{ToolError, blocking, find_run},
+  app_mcp::{ToolError, Translate, blocking, find_run},
   messages::Message,
   tasks::{
     approvals::{self, hold_cause},
@@ -26,11 +26,11 @@ use crate::{
   },
 };
 
+/// The app's tool that lists the waiting tool requests.
+const LIST_APPROVALS: &str = "list_approvals";
+
 /// The app's tool that decides a tool request.
 pub(super) const DECIDE_APPROVAL: &str = "decide_approval";
-
-/// The decision that allows a request once.
-const APPROVE_ONCE: &str = "approve_once";
 
 /// The chat's own argument of [`DECIDE_APPROVAL`]: its reason, which the conversation shows under the request.
 const REASON: &str = "reason";
@@ -101,10 +101,8 @@ fn asked(request: &PendingToolApproval) -> String {
 }
 
 /// The task and the request `arguments` name, while it waits; refused (`not_this_request`) in a turn nobody asked for
-/// when the request is not the one whose wait started it, (`reviewer_judging`) while auto mode's reviewer judges it,
-/// and (`hard_hold`) an approval of one a hard rule of auto mode holds ([`approvals::hard_hold`]: a push, a destructive
-/// change, a secret, a write outside the folders, …): the chat may only deny such a request or leave it to the person,
-/// in any turn, whatever its agent wrote.
+/// when the request is not the one whose wait started it, and (`reviewer_judging`) while auto mode's reviewer judges
+/// it.
 pub(super) async fn checked(scope: &ChatScope, arguments: &JsonObject) -> Result<Checked, ToolError> {
   let Some(named) = arguments.get("approval").and_then(Value::as_str).map(str::to_owned) else {
     return Ok(Checked {
@@ -113,7 +111,6 @@ pub(super) async fn checked(scope: &ChatScope, arguments: &JsonObject) -> Result
     });
   };
   let (root, chat, on_its_own) = (scope.root.clone(), scope.chat, scope.on_its_own);
-  let approves = arguments.get("decision").and_then(Value::as_str) == Some(APPROVE_ONCE);
   blocking(move || {
     let db = ProjectDb::open(&root)?;
     if on_its_own && !started_by(&db.waits_thinking()?, chat, &named) {
@@ -138,12 +135,6 @@ pub(super) async fn checked(scope: &ChatScope, arguments: &JsonObject) -> Result
         vec![Message::new("orchestrator.tools.approvalReviewerJudging")],
       ));
     }
-    if let Some(hold) = approves.then(|| approvals::hard_hold(&db, &root, &request)).flatten() {
-      return Err(ToolError::refused(
-        "hard_hold",
-        vec![Message::new("orchestrator.tools.approvalHardHold"), hold_cause(hold)],
-      ));
-    }
     let run = find_run(&db, &request.run.to_string())?;
     let task = recorded::task_of(&db, run.task())?.map(|task| task.key().to_string());
     Ok(Checked {
@@ -160,4 +151,44 @@ fn started_by(thinking: &[KeptWait], chat: ChatId, approval: &str) -> bool {
   thinking
     .iter()
     .any(|kept| kept.chat == chat && kept.wait.kind == WaitKind::Approval && kept.key.ends_with(&suffix))
+}
+
+/// The app tool's answer `told` to the chat's call of `name`; for `list_approvals`, each request of `scope`'s project
+/// with the hard rule of auto mode that holds it (`hold`, in `translate`'s words, `null` when none): information for
+/// the chat's decision, never a refusal.
+pub(super) async fn with_holds(
+  (scope, translate): (&ChatScope, &Translate),
+  name: &str,
+  mut told: Value,
+) -> Result<Value, ToolError> {
+  if name != LIST_APPROVALS {
+    return Ok(told);
+  }
+  let root = scope.root.clone();
+  let holds = blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    Ok(
+      db.pending_tool_approvals_all()?
+        .into_iter()
+        .map(|request| {
+          let hold = approvals::hard_hold(&db, &root, &request);
+          (request.id, hold)
+        })
+        .collect::<Vec<_>>(),
+    )
+  })
+  .await?;
+  if let Some(Value::Array(listed)) = told.get_mut("approvals") {
+    for approval in listed.iter_mut() {
+      let id = approval.get("id").and_then(Value::as_str).map(str::to_owned);
+      let Some((_, hold)) = holds.iter().find(|(request, _)| Some(request) == id.as_ref()) else {
+        continue;
+      };
+      if let Value::Object(fields) = approval {
+        let words = hold.map(|hold| Value::from(translate.text(&hold_cause(hold))));
+        fields.insert("hold".to_owned(), words.unwrap_or(Value::Null));
+      }
+    }
+  }
+  Ok(told)
 }

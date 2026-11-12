@@ -76,10 +76,10 @@ const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself
 const DRIVE_APPROVAL: &str = "Decides one tool request at once. In a turn Orchester started by a tool request it \
   decides only that request (another is refused as not_this_request). Approve it once only when it plainly serves the \
   task and is safe: inside the run's worktree, nothing that cannot be undone, nothing that reaches another system or \
-  person, no secret. A request a hard rule of auto mode holds (a push, a destructive change, a write outside the \
-  worktree and the step's folders, a secret, a Codex command outside its sandbox, permissions not recorded) is refused \
-  for approve_once (hard_hold), whatever its agent wrote: deny it or leave it to the person. One auto mode's reviewer \
-  still judges is refused (reviewer_judging). Deny it, with a message that tells the agent why, only when it is \
+  person, no secret. list_approvals names a request's hold (hold), a hard rule of auto mode \
+  that would send it to a person: a reason to look harder, not a refusal; a push, rewriting history, deleting outside \
+  the worktree or touching credentials only when the task plainly needs it. One auto mode's reviewer still judges is \
+  refused (reviewer_judging). Deny it, with a message that tells the agent why, only when it is \
   plainly wrong. Give your reason \
   in one sentence (reason): the conversation shows it under the request. While the chat drives, Let the Orchestrator \
   drive is what lets it answer, whatever Let automation answer approvals says. When you are not sure, do not call it: \

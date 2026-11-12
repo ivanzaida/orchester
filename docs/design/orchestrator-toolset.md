@@ -73,13 +73,16 @@ drive*, and says what changed.**
      leaves it to the person with its recommendation; `decide_approval` there decides only that request,
      `not_this_request` for another, and keeps its own rules: Allow once or Deny with words only). While the chat
      drives, the drive switch is its consent to answer, not *Let automation answer approvals* (the person's decision of
-     2026-11-11: that setting is to be removed later; other MCP clients still need it). The chat never allows a
-     request a hard rule of auto mode holds (`orchester_workspace::tasks::approvals::hard_hold`: a push, a destructive
-     change, a write outside the worktree and the step's folders, a secret, a Codex escalation, permissions not
-     recorded; read the stricter where a fact cannot be read): `approve_once` is refused `hard_hold` in code, in any
-     turn, whatever the request's text says, and the chat may only deny it or leave it to the person; one auto mode's
-     reviewer still judges is refused `reviewer_judging`. This guard is the orchestrating session's decision of
-     2026-11-11 ("if not sure, ask me": a hard hold is never sure), not the person's words; the person may overrule it. The chat gives a one-sentence
+     2026-11-11: that setting is to be removed later; other MCP clients still need it). The chat may allow a
+     request a hard rule of auto mode holds (the person's decision of 2026-11-11): the hold
+     (`orchester_workspace::tasks::approvals::hard_hold`: a push, a destructive change, a write outside the worktree and
+     the step's folders, a secret, a Codex escalation, permissions not recorded; read the stricter where a fact cannot
+     be read) reaches it as information, the `hold` of each request in the chat's `list_approvals`, and its prompt says
+     a hold is a reason to look harder, not a refusal: reading outside the folders is normally fine; a push, rewriting
+     history, deleting outside the worktree or touching credentials only when the task plainly needs it, otherwise deny
+     or leave it to the person. The independent review of 2026-11-11 raised that the command text comes from the agent
+     and a prompt-injected command could steer the model into allowing it; the person accepted that risk. One auto
+     mode's reviewer still judges is refused `reviewer_judging`. The chat gives a one-sentence
      `reason`, kept with what was asked as its answer (`ChatAction::tool_answer`). The conversation shows the request in
      the states of `Orchestrator WIP` `mPw5l` (`ICzi3`): being read, allowed or denied by the Orchestrator with its
      answer nested, waiting for the person with the Orchestrator's words and the Conversation tab's own card under

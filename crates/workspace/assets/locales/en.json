@@ -2529,7 +2529,6 @@
         "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's.",
         "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here. Nothing was merged."
       },
-      "approvalHardHold": "The chat does not allow a request a hard rule of auto mode holds: it may deny it, with words for the agent, or leave it to the person on its card with your recommendation. Nothing was allowed. The rule:",
       "approvalReviewerJudging": "Auto mode's reviewer is judging this request: wait for its answer, or leave it to the person. Nothing was decided.",
       "approvalNotThisRequest": "This turn was started by another tool request, or by no tool request: in a turn Orchester started by itself, the chat decides only the request that started it. Nothing was decided; tell the person what you recommend instead.",
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",

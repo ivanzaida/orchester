@@ -251,7 +251,8 @@ pub async fn call(
   }
   if read_only {
     own_project_by_id(scope, &mut arguments);
-    return leads::read_tool((services, translate), scope, name, arguments).await;
+    let told = leads::read_tool((services, translate), scope, name, arguments).await?;
+    return approval_turn::with_holds((scope, translate), name, told).await;
   }
   in_own_project(scope, &mut arguments)?;
   // A copy saves a draft: a turn a day's report started refuses it, and keeps the refusal.

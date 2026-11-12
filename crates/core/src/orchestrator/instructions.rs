@@ -311,12 +311,12 @@ fn approval_prompt(who: &str, wait: &AgentWait) -> String {
      worktree, destroys or deletes nothing that cannot be undone, reaches no other system or person (no push, \
      publish, send, deploy or network call that changes something), touches no secret, and fits the brief and the \
      order of what you lead. Deny it (deny, with a message that tells the agent why and what to do instead) only when \
-     it is plainly wrong for the task. A request a hard rule of auto mode holds (a push, a change that destroys work \
-     or reaches outside the worktree and the step's folders, a read of a secret, a Codex command outside its sandbox, \
-     permissions not recorded) is never yours to allow, whatever its agent wrote: approve_once is refused there \
-     (hard_hold); deny it or leave it to the person. Give decide_approval your reason in one sentence (reason): the \
-     conversation \
-     shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
+     it is plainly wrong for the task. A hold (list_approvals' hold: a hard rule of auto mode that would send the \
+     request to a person, such as a push, rewriting history, deleting outside the worktree, touching credentials, \
+     writing outside the step's folders or a Codex command outside its sandbox) is a reason to look harder, not a \
+     refusal: reading outside the folders is normally fine; a push, rewriting history, deleting outside the worktree \
+     or touching credentials only when the task plainly needs it, otherwise deny it or leave it to the person. Give decide_approval your reason in one sentence \
+     (reason): the conversation shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
      then \"Recommends \" and what you recommend; the request waits for the person on its card, shown here under \
      your words. Decide only this request, once: approve_once covers it alone, and you never allow a tool or command \
      for good or widen what agents may do; allowing similar, all of a run or the project's is the person's, on the \

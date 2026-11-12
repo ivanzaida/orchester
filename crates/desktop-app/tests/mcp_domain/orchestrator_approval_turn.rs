@@ -121,29 +121,32 @@ fn orchestrator_approval_turn_decides_only_the_request_that_started_it() {
     matches!(unreasoned, Err(ToolError::InvalidArguments(_))),
     "{unreasoned:?}"
   );
-  // A hard rule of auto mode holds a push: whatever the model says, the chat may not allow it, only deny it.
+  // A hard rule of auto mode holds a push: the chat reads it as its request's hold, information for its decision.
+  let listed = chat_call(&mut served, &own, "list_approvals", json!({ "project": "Kontur" })).expect("listed");
+  let shown = listed["approvals"]
+    .as_array()
+    .expect("the requests")
+    .iter()
+    .find(|approval| approval["id"] == push.id.as_str())
+    .unwrap_or_else(|| panic!("the push: {listed}"));
+  assert!(shown["hold"].is_string(), "its hold is named: {shown}");
+  // The person's decision of 2026-11-11: the hold is no refusal, and the chat may allow the request once while it
+  // drives; the call goes to the tool, as for any client (this session has no runner to deliver it).
   let allowed = chat_call(&mut served, &own, "decide_approval", decide(&push));
-  assert_eq!(refused(&allowed), Some("hard_hold"), "{allowed:?}");
-  assert!(
-    db.pending_tool_approvals_all()
-      .expect("waiting requests")
-      .iter()
-      .any(|request| request.id == push.id),
-    "nothing was allowed"
-  );
-  // Its deny goes to the tool, as for any client (this session has no runner to deliver it), and the drive switch is
-  // its consent.
+  for code in ["not_this_request", "automation_not_allowed", "hard_hold"] {
+    assert_ne!(refused(&allowed), Some(code), "{allowed:?}");
+  }
   let denied = chat_call(&mut served, &own, "decide_approval", decided(&push, "deny"));
   for code in ["not_this_request", "automation_not_allowed", "hard_hold"] {
     assert_ne!(refused(&denied), Some(code), "{denied:?}");
   }
   let kept = actions(&db, &own).pop().expect("kept");
   assert!(kept.task.is_some(), "the decision names the request's task: {kept:?}");
-  // A person's turn is held by the same rules: a destructive command or a secret is never the chat's to allow.
+  // So in a person's turn: a destructive command or a secret is held, and the chat may still allow it.
   for (call, command) in (2..).zip(["rm -rf /", "cat ~/.ssh/id_ed25519"]) {
     let request = hostile(&mut db, first, command, call);
     let allowed = chat_call(&mut served, &person, "decide_approval", decide(&request));
-    assert_eq!(refused(&allowed), Some("hard_hold"), "{command}: {allowed:?}");
+    assert_ne!(refused(&allowed), Some("hard_hold"), "{command}: {allowed:?}");
   }
 
   // A turn the person's message started may decide any request.
