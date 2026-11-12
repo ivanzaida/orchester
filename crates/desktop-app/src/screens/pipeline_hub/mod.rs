@@ -229,26 +229,8 @@ impl Component for PipelineHubScreen {
     let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
-    let view = match listing.as_ref() {
-      Some(listing) if named.item != self.shown.get() => listing.landing(named),
-      _ => named,
-    };
     let id = project.open.project.id();
-    let followed = listing
-      .as_ref()
-      .filter(|_| failed.is_none())
-      .map_or(new::Followed::Nothing, |listing| {
-        self.new.follow(ctx, (begin, view), listing, (&navigation, id))
-      });
-    // The route *Create v1* just replaced is not the one this render was given: the hub shows the stored pipeline.
-    let (making, named, view) = match followed {
-      new::Followed::Making(making) => (Some(making), named, view),
-      new::Followed::Created(created) => {
-        let stored = PipelinesView::new(PipelinesFilter::All, Some(created));
-        (None, stored, stored)
-      }
-      new::Followed::Nothing => (None, named, view),
-    };
+    let (making, named, view) = self.landed(ctx, listing.as_ref(), (named, begin), (&navigation, id));
     let selected = listing
       .as_ref()
       .filter(|_| making.is_none())
@@ -306,6 +288,34 @@ impl Component for PipelineHubScreen {
 }
 
 impl PipelineHubScreen {
+  /// What this render shows of the route `named`: the pipeline being made while the route shows it, the route as the
+  /// hub now has it, and the view it lands on. A pipeline only the other tab holds opens that tab; once *Create v1*
+  /// stored the pipeline being made, both are the stored pipeline's, in place of the route this render was given,
+  /// which was just replaced.
+  fn landed(
+    &self,
+    ctx: &Ctx,
+    listing: Option<&Listing>,
+    (named, begin): (PipelinesView, Option<Start>),
+    (navigation, project): (&Navigation, ProjectId),
+  ) -> (Option<new::Making>, PipelinesView, PipelinesView) {
+    let view = match listing {
+      Some(listing) if named.item != self.shown.get() => listing.landing(named),
+      _ => named,
+    };
+    let followed = listing.map_or(new::Followed::Nothing, |listing| {
+      self.new.follow(ctx, (begin, view), listing, (navigation, project))
+    });
+    match followed {
+      new::Followed::Making(making) => (Some(making), named, view),
+      new::Followed::Created(created) => {
+        let stored = PipelinesView::new(PipelinesFilter::All, Some(created));
+        (None, stored, stored)
+      }
+      new::Followed::Nothing => (None, named, view),
+    }
+  }
+
   /// The question follows what waits for an answer, and what waits follows the question closing; each writes only when
   /// it differs, or they would write each other for ever.
   fn follow_question(&self, ctx: &mut Ctx) {

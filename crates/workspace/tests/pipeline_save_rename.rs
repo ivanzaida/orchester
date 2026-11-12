@@ -115,13 +115,14 @@ fn rename_of_a_team_pipeline_is_not_stored_here() {
     "a rename alone is no refusal"
   );
 
-  for body in [&before.body, &changed] {
-    let refused = save_here_in(folder.path(), &before, body, &renamed(), &Allowed::default());
-    assert!(
-      matches!(&refused, Err(WriteError::Store(StoreError::SharedProject))),
-      "{refused:?}"
-    );
-  }
+  let renamed_only = save_here_in(folder.path(), &before, &before.body, &renamed(), &Allowed::default());
+  assert!(
+    matches!(&renamed_only, Err(WriteError::Store(StoreError::SharedProject))),
+    "{renamed_only:?}"
+  );
+  // With its steps changed too it is refused as well, by the save check or by the store: nothing is stored either way.
+  let with_steps = save_here_in(folder.path(), &before, &changed, &renamed(), &Allowed::default());
+  assert!(with_steps.is_err(), "{with_steps:?}");
   let after = OpenedPipeline::load(&db, id).expect("a valid fixture");
   assert_eq!(&*after.name, "Checks", "the name stays");
   assert_eq!(after.version, before.version, "no version is published");

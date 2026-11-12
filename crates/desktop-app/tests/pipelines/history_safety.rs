@@ -3,7 +3,6 @@ use orchester_core::{
   name::Name,
   resource::{Pipeline, PipelineChange, PipelineEdit, VersionNumber},
   store::ResourceStore,
-  time::Timestamp,
 };
 use orchester_workspace::pipelines::history::VersionHistory;
 
