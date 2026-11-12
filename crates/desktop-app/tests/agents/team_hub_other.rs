@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::{
   routes::{HubFilter, HubView},
   theme::HubSpacing,
@@ -406,6 +407,15 @@ fn team_hub_other_a6_m6_a_tool_names_its_secret_by_name_and_a_value_is_added_her
       agents.exists("team-hub-member-lock"),
       member,
       "only a member reads the lock line"
+    );
+    // Only a person adds a value: automation's press is refused to it, and opens no dialog.
+    with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
+    assert!(agents.refused().is_some(), "refused to the client that pressed it");
+    agents.window.pass();
+    assert!(!agents.exists("team-hub-secret-value"), "automation opened no dialog");
+    assert!(
+      !agents.exists("team-hub-fix-person-only"),
+      "and the panel says nothing of it"
     );
     agents.press_until("team-hub-fix-add-value", "the value's dialog", |s| {
       s.exists("team-hub-secret-value")

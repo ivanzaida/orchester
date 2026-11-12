@@ -193,10 +193,9 @@ impl Answers {
     }
   }
 
-  /// Signs out to sign in again with a code for an invite to `to`, which the sign-in names, when a person pressed the
-  /// button `id`.
-  pub(super) fn sign_in_again(&self, id: &str, to: &str) {
-    if self.person.allows(id) {
+  /// Signs out to sign in again with a code for an invite to `to`, which the sign-in names, when a person pressed it.
+  pub(super) fn sign_in_again(&self, to: &str) {
+    if self.person.allows("sign out to sign in to Orchester Cloud again") {
       self.sign_in_again.run(Some(to.to_owned()));
     }
   }
@@ -229,9 +228,9 @@ impl Answers {
     self.accept.state().get().is_pending() && !self.stopped.get()
   }
 
-  /// Accepts `invite` when a person pressed the button `id`, connecting to its server.
-  pub(super) fn accept(&self, id: &str, invite: &CloudInvite) {
-    if !self.person.allows(id) {
+  /// Accepts `invite` when a person pressed it, connecting to its server.
+  pub(super) fn accept(&self, invite: &CloudInvite) {
+    if !self.person.allows("accept an invite to a team server") {
       return;
     }
     self.accepting.set(Asked(Some(invite.id)));
@@ -239,18 +238,18 @@ impl Answers {
     self.accept.run(invite.clone());
   }
 
-  /// Declines `invite` when a person pressed the button `id`.
-  pub(super) fn decline(&self, id: &str, invite: InviteId) {
-    if !self.person.allows(id) {
+  /// Declines `invite` when a person pressed it.
+  pub(super) fn decline(&self, invite: InviteId) {
+    if !self.person.allows("decline an invite to a team server") {
       return;
     }
     self.declining.set(Asked(None));
     self.decline.run(invite);
   }
 
-  /// Asks again for `invite`, accepted here, when a person pressed the button `id`.
-  pub(super) fn try_again(&self, id: &str, invite: &AcceptedInvite) {
-    if self.person.allows(id) {
+  /// Asks again for `invite`, accepted here, when a person pressed it.
+  pub(super) fn try_again(&self, invite: &AcceptedInvite) {
+    if self.person.allows("ask a team server again for an accepted invite") {
       self.finish.run((invite.invite, invite.server_name.clone()));
     }
   }

@@ -260,7 +260,6 @@ fn card(
   if declining {
     row = row.below(decline_question(ctx, &id, invite, answers));
   }
-  row = row.below_all(answers.person.reason(ctx, &format!("{id}-accept")));
   let card = Column::new().id(id).width(Dimension::Pct(100.0)).child(row.render(ctx));
   pointed.ring(ctx, invite.id, card).into()
 }
@@ -295,8 +294,8 @@ fn buttons(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Row 
   let accept_button = if busy {
     accept_button.disabled()
   } else {
-    let (answers, invite, button) = (answers.clone(), invite.clone(), format!("{id}-accept"));
-    accept_button.on_click(move || answers.accept(&button, &invite))
+    let (answers, invite) = (answers.clone(), invite.clone());
+    accept_button.on_click(move || answers.accept(&invite))
   };
   Row::new()
     .flex_shrink(0.0)
@@ -313,13 +312,15 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
     .map_or(invite.server.name.as_str(), |project| project.name.as_str());
   let (answers_now, invite_id) = (answers.clone(), invite.id);
   let pending = answers.decline.state().get().is_pending();
-  let button = format!("{id}-decline-confirm");
-  let confirm = ActionButton::new(button.clone(), ButtonKind::Danger, ctx.t("cloud.invites.decline"));
+  let confirm = ActionButton::new(
+    format!("{id}-decline-confirm"),
+    ButtonKind::Danger,
+    ctx.t("cloud.invites.decline"),
+  );
   let confirm = if pending {
     confirm.loading()
   } else {
-    let button = button.clone();
-    confirm.on_click(move || answers_now.decline(&button, invite_id))
+    confirm.on_click(move || answers_now.decline(invite_id))
   };
   let keep = answers.declining.clone();
   let notice = SettingNotice::new(format!("{id}-decline-question"), NoticeTone::Warning)
@@ -333,8 +334,5 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
       ActionButton::new(format!("{id}-keep"), ButtonKind::Ghost, ctx.t("cloud.invites.keep"))
         .on_click(move || keep.set(Asked(None))),
     );
-  match answers.person.reason(ctx, &button) {
-    Some(reason) => notice.part(reason).into(),
-    None => notice.into(),
-  }
+  notice.into()
 }

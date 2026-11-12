@@ -20,6 +20,7 @@ use orchester_exec::external;
 use url::Url;
 
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, refuse_press},
   navigation::{
     Navigation,
     press::{LinkPress, OpenIn},
@@ -80,7 +81,7 @@ pub enum Followed {
   NotFollowed,
   /// The default browser was asked to open the page.
   Opened,
-  /// Synthetic input pressed a link to the web, which only a person opens.
+  /// Synthetic input pressed a link to the web, which only a person opens; refused to the client that sent it.
   NotOpened,
   /// The browser could not be asked: no launcher on this platform, or it did not start.
   Failed(std::io::Error),
@@ -108,15 +109,13 @@ pub fn follow(navigation: &Navigation, destination: &str, press: LinkPress) -> F
 }
 
 /// What a press on a link in a chat does: [`follow`] in `navigation`, with the button and keys of the event that
-/// activated the link. A screen makes it once and keeps it, so a message is laid out again only when what it says
-/// changes.
-pub fn handler(navigation: Navigation) -> LinkHandler {
+/// activated the link; a link to the web that synthetic input pressed is refused to it through `gate`. A screen makes
+/// it once and keeps it, so a message is laid out again only when what it says changes.
+pub fn handler(navigation: Navigation, gate: Option<InputGate>) -> LinkHandler {
   Arc::new(
     move |destination: &str, event: &MouseEvent| match follow(&navigation, destination, LinkPress::of(event)) {
       Followed::Went(_) | Followed::NotFollowed | Followed::Opened => {}
-      Followed::NotOpened => {
-        tracing::warn!("synthetic input pressed a link to the web; it opens only on a person's press")
-      }
+      Followed::NotOpened => refuse_press(gate.as_ref(), Guarded::Person, "open a link to the web from a chat"),
       Followed::Failed(error) => tracing::warn!(%error, "the message's link was not opened"),
       Followed::NotALink => tracing::warn!("a press reached a link that is shown as text; nothing followed"),
     },
@@ -129,8 +128,8 @@ pub fn handler(navigation: Navigation) -> LinkHandler {
 pub struct ChatLinks(LinkHandler);
 
 impl ChatLinks {
-  pub fn new(navigation: Navigation) -> Self {
-    Self(handler(navigation))
+  pub fn new(navigation: Navigation, gate: Option<InputGate>) -> Self {
+    Self(handler(navigation, gate))
   }
 
   /// The handler the window provides.

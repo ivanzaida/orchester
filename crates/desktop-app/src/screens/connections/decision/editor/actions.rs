@@ -21,7 +21,7 @@ use orchester_workspace::{
 
 use super::{DecisionEditor, Props};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press, persons_press},
   screens::project_settings::kit::form_actions,
   services::Services,
   ui::{
@@ -185,25 +185,30 @@ impl DecisionEditor {
         save.loading()
       }
     } else if let Some((draft, key)) = self.draft(props) {
-      let (work, open, guard, refused) = (
+      let (work, open, guard) = (
         self.work.clone(),
         props.project.open.clone(),
         self.fields.key.save_guard(),
-        self.refused.clone(),
       );
       let gate = ctx.use_context::<InputGate>();
       let checking = self.checking.clone();
       let expected = self.original.get().cloned();
       save.on_click(move || {
         let synthetic = lurq::app::events::is_synthetic_input();
-        // Hosted decision connections are strictly person-only, even with automation consent.
-        if (hosted && synthetic)
-          || (matches!(key, Some(KeySecret::New(_))) && !input_may_decide(gate.as_ref(), Guarded::PermissionWidening))
-        {
-          refused.set(true);
+        // Hosted decision connections are strictly person-only, even with automation consent. Refused, the form stays
+        // as it was.
+        if hosted && !persons_press(gate.as_ref(), "save a decision connection on another computer") {
           return;
         }
-        refused.set(false);
+        if matches!(key, Some(KeySecret::New(_)))
+          && !may_press(
+            gate.as_ref(),
+            Guarded::PermissionWidening,
+            "save a decision connection with a new key",
+          )
+        {
+          return;
+        }
         checking.set(false);
         work.run(Start {
           open: open.clone(),
@@ -221,17 +226,6 @@ impl DecisionEditor {
     };
     let reason = self
       .error(ctx)
-      .or_else(|| {
-        self.refused.get().then(|| {
-          ctx
-            .t(if hosted {
-              "decision_connection.personOnly"
-            } else {
-              "decision_connection.secretPersonOnly"
-            })
-            .to_string()
-        })
-      })
       .or_else(|| hosted.then(|| ctx.t("decision_connection.personOnly").to_string()));
     form_actions(
       "decision-edit-actions",

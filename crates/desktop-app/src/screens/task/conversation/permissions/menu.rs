@@ -323,10 +323,14 @@ fn way_press(
       pressable(move || open.set(false)).describe("state", "current")
     }
     Offer::Change(RunPermissionChange::ApproveEverything) => {
-      let confirming = confirming.clone();
-      pressable(move || confirming.set(true))
-        .describe("state", "enabled")
-        .describe("person_only", ctx.t("conversation.permissions.unavailable.personOnly"))
+      let (confirming, permissions) = (confirming.clone(), permissions.clone());
+      pressable(move || {
+        if permissions.may_widen() {
+          confirming.set(true);
+        }
+      })
+      .describe("state", "enabled")
+      .describe("person_only", ctx.t("conversation.permissions.unavailable.personOnly"))
     }
     Offer::Change(change) => {
       let (permissions, root, run) = (permissions.clone(), props.root.clone(), props.run.0);

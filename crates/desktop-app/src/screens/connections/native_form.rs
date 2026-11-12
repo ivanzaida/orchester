@@ -90,11 +90,6 @@ impl NativeForm {
     self.fields.save_guard()
   }
 
-  /// That automation's input tried to save the connection, which only a person may.
-  pub(super) fn refusal(&self, ctx: &Ctx) -> Option<Arc<str>> {
-    self.fields.refusal(ctx)
-  }
-
   /// The first reason the connection cannot be saved, in field order; `None` once it can.
   pub(super) fn reason(&self, ctx: &Ctx, listed: &ProjectConnections) -> Option<Arc<str>> {
     self.fields.reason(ctx, listed)

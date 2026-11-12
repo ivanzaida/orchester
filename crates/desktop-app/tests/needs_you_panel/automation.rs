@@ -1,8 +1,8 @@
 //! Answering in place with an MCP client's input (lurq's synthetic input): while automation may not answer, the
-//! card refuses it and says that only a person answers here, and the person's own press still answers; once the
-//! person lets automation answer approvals and change agent permissions, the client's Approve once goes to the
-//! runner as automation's; a wider answer stays a person's. Recorded as whose is `input_gate::answerer`'s rule
-//! (`tests/automation_permissions.rs`); here no runner takes the answer, so the card says why it did not go.
+//! card refuses it to the client, as its tool call's error, and stays as it was, and the person's own press still
+//! answers; once the person lets automation answer approvals and change agent permissions, the client's Approve once
+//! goes to the runner as automation's; a wider answer stays a person's. Recorded as whose is `input_gate::answerer`'s
+//! rule (`tests/automation_permissions.rs`); here no runner takes the answer, so the card says why it did not go.
 
 use lurq::app::events::with_synthetic_input;
 
@@ -12,9 +12,10 @@ use super::{
   open, seeded, settle,
 };
 
-const PERSON_ONLY: &str = "Only a person answers this here: input from an MCP client answers only while you let \
-                           automation answer approvals.";
-const WIDER: &str = "Only a person gives a wider answer: automation approves a request once or denies it.";
+/// What a refused client reads the card's answer as.
+const ANSWER: &str = "answer an agent's request";
+/// What a refused client reads a wider answer as.
+const WIDER: &str = "give a wider answer than approving once";
 
 fn refusal(window: &mut Window, card: &str) -> Option<String> {
   window.texts(&format!("{card}-refused")).map(|texts| texts.join(" "))
@@ -41,18 +42,16 @@ fn needs_you_panel_refuses_an_mcp_clients_approval_without_consent() {
     window.tree.get_element_by_id(&approve).is_some()
   });
   with_synthetic_input(|| click(&mut window, &approve));
-  window.until("why the client's answer was not taken", |window| {
-    refusal(window, &card).is_some()
-  });
-  assert_eq!(refusal(&mut window, &card).as_deref(), Some(PERSON_ONLY));
+  assert_eq!(window.refused_press(), Some(ANSWER), "refused to the client");
+  assert_eq!(refusal(&mut window, &card), None, "the card says nothing of it");
   with_synthetic_input(|| click(&mut window, &format!("{card}-deny")));
   settle(&mut window);
-  assert_eq!(refusal(&mut window, &card).as_deref(), Some(PERSON_ONLY), "Deny too");
+  assert_eq!(window.refused_press(), Some(ANSWER), "Deny too");
+  assert_eq!(refusal(&mut window, &card), None);
   // The person's own press answers: it goes to the runner, none here, and the card says that instead.
   click(&mut window, &approve);
-  window.until("the person's answer sent", |window| {
-    refusal(window, &card).is_some_and(|refused| refused != PERSON_ONLY)
-  });
+  window.until("the person's answer sent", |window| refusal(window, &card).is_some());
+  assert_eq!(window.refused_press(), None);
 }
 
 #[test]
@@ -66,9 +65,8 @@ fn needs_you_panel_sends_an_mcp_clients_approval_as_automation_under_consent() {
     window.tree.get_element_by_id(&approve).is_some()
   });
   with_synthetic_input(|| click(&mut window, &approve));
-  window.until("the client's answer sent", |window| {
-    refusal(window, &card).is_some_and(|refused| refused != PERSON_ONLY)
-  });
+  assert_eq!(window.refused_press(), None, "taken as automation's");
+  window.until("the client's answer sent", |window| refusal(window, &card).is_some());
   // A wider answer stays a person's even under consent: its confirm takes the client's input, the card refuses it.
   let similar = format!("{card}-similar");
   click(&mut window, &similar);
@@ -78,9 +76,11 @@ fn needs_you_panel_sends_an_mcp_clients_approval_as_automation_under_consent() {
   });
   settle(&mut window);
   with_synthetic_input(|| click(&mut window, &confirm));
-  window.until("why the wider answer was not taken", |window| {
-    refusal(window, &card).as_deref() == Some(WIDER)
-  });
+  assert_eq!(
+    window.refused_press(),
+    Some(WIDER),
+    "the wider answer is refused to the client"
+  );
 }
 
 #[test]
@@ -92,19 +92,16 @@ fn needs_you_panel_refuses_an_mcp_clients_answer_to_a_question_without_consent()
   window.until("the options", |window| window.tree.get_element_by_id(&option).is_some());
   click(&mut window, &option);
   with_synthetic_input(|| click(&mut window, &format!("{card}-send")));
-  window.until("why the client's answer was not taken", |window| {
-    refusal(window, &card).is_some()
-  });
-  assert_eq!(refusal(&mut window, &card).as_deref(), Some(PERSON_ONLY));
+  assert_eq!(window.refused_press(), Some(ANSWER), "refused to the client");
+  assert_eq!(refusal(&mut window, &card), None, "the card says nothing of it");
   // Enter in the own answer is the same press.
   let own = format!("{card}-own-0");
   click(&mut window, &own);
   press(&mut window, "x", "KeyX");
   with_synthetic_input(|| press(&mut window, "Enter", "Enter"));
   settle(&mut window);
-  assert_eq!(refusal(&mut window, &card).as_deref(), Some(PERSON_ONLY), "Enter too");
+  assert_eq!(window.refused_press(), Some(ANSWER), "Enter too");
+  assert_eq!(refusal(&mut window, &card), None);
   press(&mut window, "Enter", "Enter");
-  window.until("the person's answer sent", |window| {
-    refusal(window, &card).is_some_and(|refused| refused != PERSON_ONLY)
-  });
+  window.until("the person's answer sent", |window| refusal(window, &card).is_some());
 }

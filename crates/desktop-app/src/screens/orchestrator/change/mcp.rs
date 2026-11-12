@@ -57,7 +57,6 @@ pub(super) fn words(ctx: &Ctx, view: &View, mcp: &McpChange) -> Words {
         ButtonKind::Primary
       },
     }),
-    person_only: "orchestrator.change.personOnly.mcp",
   }
 }
 

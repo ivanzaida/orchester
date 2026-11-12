@@ -71,8 +71,13 @@ fn skills_window_publication_matches_ordinary_saved_domain_data_without_permissi
   assert!(db.latest_version::<Skill>(entry.id).expect("version").is_none());
   s.click_by_client("skill-publish").expect("renew review");
   s.until("review renewed", |s| s.shows("skill-confirm-confirm"));
-  s.click_by_client("skill-confirm-confirm")
-    .expect("the click is delivered");
+  let refused = s
+    .click_by_client("skill-confirm-confirm")
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("publish a skill"),
+    "it names the action: {refused}"
+  );
   for _ in 0..5 {
     s.pass();
   }
@@ -121,9 +126,17 @@ fn project_settings_turn_on_repository_files_by_client_input_only_under_the_pers
     ProjectPage::Settings(ProjectSettingsTab::Context),
   ));
   s.until("the switch off", |s| shows_switch(s, OFF));
-  s.click_by_client("settings-agent-files")
-    .expect("the click is delivered");
-  s.until("the refusal", |s| s.shows("settings-agent-files-person-only"));
+  let refused = s
+    .click_by_client("settings-agent-files")
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("turn on the repository's agent files"),
+    "it names the action: {refused}"
+  );
+  assert!(
+    !s.shows("settings-agent-files-person-only"),
+    "the row says nothing of it"
+  );
   for _ in 0..5 {
     s.pass();
   }
@@ -135,10 +148,6 @@ fn project_settings_turn_on_repository_files_by_client_input_only_under_the_pers
   s.until("on", |_| db.repository_agent_files().expect("setting").is_on());
   // Turning them off only takes the repository's words away: a client's input is taken.
   s.until("the switch on", |s| shows_switch(s, ON));
-  assert!(
-    !s.shows("settings-agent-files-person-only"),
-    "a person's press clears the refusal"
-  );
   s.click_by_client("settings-agent-files")
     .expect("the click is delivered");
   s.until("off", |_| !db.repository_agent_files().expect("setting").is_on());
@@ -252,9 +261,15 @@ fn agents_window_publishes_new_role_text_by_client_input_only_under_the_persons_
     .expect("navigation")
     .go(Route::Project(project, ProjectPage::Agent(id, AgentTab::default())));
   s.until("the editor", |s| s.shows("agent-publish"));
-  s.click_by_client("agent-publish").expect("the click is delivered");
-  // The refused request has ended once its refusal shows; until then a press is ignored as busy.
-  s.until("the refusal", |s| s.shows("agent-save-error"));
+  // The page reads whether the draft reaches the role's prompts; until it knows, a client's publish is refused too.
+  let refused = s
+    .click_by_client("agent-publish")
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("reaches agents' prompts"),
+    "it names the action: {refused}"
+  );
+  assert!(!s.shows("agent-save-error"), "the page says nothing of it");
   assert_eq!(
     latest(),
     before,

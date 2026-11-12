@@ -71,9 +71,6 @@ pub(super) struct Props {
 }
 impl DevtoolsInspectable for Props {}
 
-/// The id the person-only check of a fix is made under.
-const FIX: &str = "team-hub-fix";
-
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<ProfilePanel>(&format!("team-hub-profile-{}", props.entry.id), props)
 }
@@ -172,12 +169,10 @@ impl Component for ProfilePanel {
         .and_then(Fix::of)
         .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy))
     });
-    let under = self.person.reason(ctx, secret::SAVE);
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      under,
     );
     Column::new()
       .id("team-hub-panel")
@@ -298,7 +293,7 @@ impl ProfilePanel {
     let person = self.person.clone();
     let guarded = |action: Arc<dyn Fn() + Send + Sync>| {
       Press::run(move || {
-        if person.allows(FIX) {
+        if person.allows("fix what a team profile needs on this computer") {
           action();
         }
       })
@@ -331,13 +326,11 @@ impl ProfilePanel {
     }
   }
 
-  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong
-  /// with a secret's value shows in its dialog.
+  /// Why the last fix did nothing: what the workspace refused with. What went wrong with a secret's value shows in its
+  /// dialog.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    if let Some(reason) = self.actions.refused() {
-      return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
-    }
-    self.person.reason(ctx, FIX)
+    let reason = self.actions.refused()?;
+    Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into())
   }
 }
 

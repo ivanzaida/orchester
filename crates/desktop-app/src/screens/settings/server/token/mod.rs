@@ -93,7 +93,6 @@ pub struct TokenRow {
   /// Whether this row rotated the token since it showed.
   rotated: Signal<bool>,
   copied: Signal<Copied>,
-  blocked: Signal<bool>,
 }
 
 impl Component for TokenRow {
@@ -124,7 +123,6 @@ impl Component for TokenRow {
       asked: parking_lot::Mutex::new(false),
       rotated: ctx.signal(false),
       copied: ctx.signal(Copied::Not),
-      blocked: ctx.signal(false),
     }
   }
 
@@ -162,15 +160,6 @@ impl Component for TokenRow {
     below.extend(self.not_read(ctx, &read));
     below.extend(self.copy_line(ctx));
     below.extend(self.rotation_lines(ctx, &rotate));
-    if self.blocked.get() {
-      below.push(
-        field_error(
-          "settings-mcp-token-blocked",
-          &ctx.t("settings.automation.server.blocked"),
-        )
-        .into(),
-      );
-    }
     let row = SettingRow::new("settings-mcp-token", ctx.t("settings.automation.server.token.title"))
       .hint(hint)
       .info(ctx.t(WHERE_KEY))
@@ -202,9 +191,9 @@ impl TokenRow {
     .small();
     let copy = match readable {
       Some(server) => {
-        let (copied, blocked) = (self.copied.clone(), self.blocked.clone());
+        let copied = self.copied.clone();
         copy.on_click(move || {
-          if refused(&blocked) {
+          if refused() {
             return;
           }
           let done = server
@@ -243,9 +232,9 @@ impl TokenRow {
 
   /// Opens the question under the row, unless synthetic input brought the press.
   fn ask_rotate(&self) -> impl Fn() + Send + Sync + 'static {
-    let (confirming, blocked, rotated) = (self.confirming.clone(), self.blocked.clone(), self.rotated.clone());
+    let (confirming, rotated) = (self.confirming.clone(), self.rotated.clone());
     move || {
-      if !refused(&blocked) {
+      if !refused() {
         rotated.set(false);
         confirming.set(true);
       }

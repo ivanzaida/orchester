@@ -219,7 +219,6 @@
     "environmentChanges": "Changes apply to the next agent or command that starts",
     "environmentChangesDetail": "An agent or command already running keeps the environment it started with.",
     "confirmEnvironment": "Change the environment for new agents and commands?",
-    "autoPersonOnly": "Only a person changes the reviewer: the change from automation was not saved.",
     "confirm": "Save this change",
     "keep": "Keep editing",
     "indexHeading": "Code index",
@@ -358,7 +357,6 @@
       "noLanguage": "Estimates unavailable · no language reviewer is available in this project. Add a Claude Code connection to estimate story points with a reason.",
       "unreadable": "This setting can't be read: {{reason}}",
       "notSaved": "Not saved: {{reason}}",
-      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
       "couldNotRun": "The last estimate couldn't run: {{reason}}"
     },
     "orchestrator": {
@@ -368,7 +366,6 @@
       "foot": "Off: the Orchestrator proposes each change in the chat and you apply it, and no turn starts by itself. Each project has its own; a new project starts with it off.",
       "unreadable": "This setting can't be read: {{reason}}",
       "notSaved": "Not saved: {{reason}}",
-      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
       "drive": {
         "label": "Let the Orchestrator drive",
         "hint": "It acts itself with Orchester's tools: runs, merges, answers, publishes, git",

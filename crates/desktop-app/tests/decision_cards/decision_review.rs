@@ -179,7 +179,16 @@ fn card_decision_review_shortcuts_only_answer_the_focused_card() {
     window.pass();
     window.pass();
     let suffix = match digit {
-      "1" => "refused",
+      // Approve once from synthetic input is refused to the client; neither card says anything of it.
+      "1" => {
+        assert!(
+          window.refused_press().is_some(),
+          "active {digit}: refused to the client"
+        );
+        assert!(window.tree.get_element_by_id(&format!("{active}-refused")).is_none());
+        assert!(window.tree.get_element_by_id(&format!("{other}-refused")).is_none());
+        continue;
+      }
       "2" | "3" => "widen",
       "4" => "message",
       "5" => "automation",
@@ -287,11 +296,12 @@ fn card_decision_review_denial_enter_sends_but_preserves_the_person_only_guard()
       .tree
       .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
   });
+  assert!(window.refused_press().is_some(), "refused to the client");
   window.pass();
-  window.until("person-only refusal", |window| {
-    window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
-  });
-  assert!(text(&mut window, &format!("{card}-refused")).contains("Only a person"));
+  assert!(
+    window.tree.get_element_by_id(&format!("{card}-refused")).is_none(),
+    "the card says nothing of it"
+  );
   assert_eq!(
     window.texts(&format!("{card}-message")).unwrap_or_default().join(""),
     words
@@ -301,6 +311,6 @@ fn card_decision_review_denial_enter_sends_but_preserves_the_person_only_guard()
     .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
   window.pass();
   window.until("runner refusal", |window| {
-    !text(window, &format!("{card}-refused")).contains("Only a person")
+    window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
   });
 }

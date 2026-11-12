@@ -2,8 +2,8 @@
 //! in 04d), its branch with *Change* for an Admin (`t3oYel`) and its question (`04b` `InYp8`, `04c` `E4Evt`), what the
 //! last action did not do (`APbft` in 04d, `m8l3MZ` in 04c) and a branch someone else changed first, to reapply or keep
 //! (`QcaYU` in 04c); its delivery is in [`super::team_work_delivery`]. Take over and Authorize are a person's: their
-//! handlers refuse an MCP client's input, as no MCP tool takes a claim over or authorizes a delivery, and the
-//! person-only note says why under the line.
+//! handlers refuse an MCP client's input to it, as no MCP tool takes a claim over or authorizes a delivery, and the
+//! line stays as it was.
 
 use std::sync::Arc;
 
@@ -86,25 +86,20 @@ impl View<'_> {
     if self.pending() {
       return button.loading();
     }
-    let run = self.runs(id);
+    let run = self.runs();
     button.on_click(move || run(ask.clone()))
   }
 
-  /// What a press of the button `id` does with its ask: Take over and Authorize only on a person's press.
-  fn runs(&self, id: &str) -> impl Fn(ModuleAsk) + 'static {
-    let (action, person, id) = (self.action.clone(), self.person.clone(), id.to_owned());
+  /// What a press does with its ask: Take over and Authorize only on a person's press.
+  fn runs(&self) -> impl Fn(ModuleAsk) + 'static {
+    let (action, person) = (self.action.clone(), self.person.clone());
     move |ask: ModuleAsk| {
       let person_only = matches!(ask, ModuleAsk::TakeOver | ModuleAsk::Authorize);
-      if !person_only || person.allows(&id) {
+      if !person_only || person.allows("take over or authorize a team module") {
         action.run(ask);
       }
     }
   }
-}
-
-/// Why a press of Take over, Authorize or their Try again did nothing: an MCP client pressed it.
-pub fn person_only(ctx: &Ctx, view: &View<'_>, ids: &[&str]) -> Option<Element> {
-  ids.iter().find_map(|id| view.person.reason(ctx, id))
 }
 
 /// The module's claim: who holds it and since when, stale when nothing renewed it, or nobody; with what the server
@@ -266,7 +261,7 @@ pub fn refusal(ctx: &Ctx, view: &View<'_>) -> Option<Element> {
     ModuleAsk::Branch(_) => "modules.team.work.refused.branchTitle",
     ModuleAsk::Deliver(_) | ModuleAsk::Authorize | ModuleAsk::Merge => "modules.team.work.refused.deliverTitle",
   };
-  let run = view.runs(AGAIN);
+  let run = view.runs();
   let again = ActionButton::new(AGAIN, ButtonKind::Secondary, ctx.t("common.tryAgain"))
     .icon(Icon::RefreshCw)
     .on_click(move || run(ask.clone()));

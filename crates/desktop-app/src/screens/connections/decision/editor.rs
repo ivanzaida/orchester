@@ -41,7 +41,6 @@ pub(in super::super) struct DecisionEditor {
   fields: super::form::DecisionForm,
   original: OnceLock<DecisionConnection>,
   work: actions::Action,
-  refused: Signal<bool>,
   checking: Signal<bool>,
   server: Signal<super::super::add_decision::Server>,
 }
@@ -71,7 +70,6 @@ impl Component for DecisionEditor {
       fields: super::form::DecisionForm::new(ctx),
       original: OnceLock::new(),
       work,
-      refused: ctx.signal(false),
       checking: ctx.signal(false),
       server: ctx.signal(super::super::add_decision::Server::TypeSafe),
     }

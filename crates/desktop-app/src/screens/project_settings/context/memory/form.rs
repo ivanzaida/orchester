@@ -16,7 +16,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
   },
   core::Signal,
 };
@@ -28,6 +27,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   project::ShownProject,
   queries::{
     Session,
@@ -92,8 +92,8 @@ pub(crate) struct MemoryForm {
   seen: Signal<Option<Kept>>,
   /// The settings the running save asked for.
   submitted: Signal<Option<Kept>>,
-  /// Synthetic input asked for the last save, which was not taken.
-  pub(crate) refused: Signal<bool>,
+  /// Refuses a save asked for by synthetic input to the automation that sent it.
+  gate: Option<InputGate>,
   /// The selects are being put back on settings, not chosen.
   putting_back: Arc<AtomicBool>,
   pub(crate) save: Save,
@@ -112,7 +112,7 @@ impl MemoryForm {
       base: ctx.signal(None),
       seen: ctx.signal(None),
       submitted: ctx.signal(None),
-      refused: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
       putting_back: Arc::default(),
       save: action(ctx),
       separator: ctx.t("memory.groupSeparator"),
@@ -276,15 +276,12 @@ impl MemoryForm {
 
   /// Saves `asked` over `base`. Called in a handler: only a person changes these settings, as they decide whether
   /// agents' records reach every later agent without approval and how much each agent gets. lurq's synthetic input
-  /// (an MCP client driving the window) is refused, and the view says so.
+  /// (an MCP client driving the window) is refused to the client, and the selects go back where they were.
   fn submit(&self, base: MemorySettings, asked: MemorySettings) {
     if asked == base || self.save.state().get_untracked().is_pending() {
       return;
     }
-    let synthetic = is_synthetic_input();
-    self.refused.set(synthetic);
-    if synthetic {
-      tracing::warn!("synthetic input asked to change the memory settings; not taken");
+    if !persons_press(self.gate.as_ref(), "change a project's memory settings") {
       return;
     }
     self.submitted.set(Some(Kept(asked)));

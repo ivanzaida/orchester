@@ -95,10 +95,7 @@ fn orchestrator_qa_person_takes_a_synthetic_take_it_here_in_a_qa_copy() {
   let words = format!("{card}-words");
   screen.until("the line in the card's place", |screen| screen.exists(&words));
   assert_eq!(leader(&screen, billing), Some(mine.id()), "the subscription moved here");
-  assert!(
-    !screen.exists(&format!("{card}-person-only")),
-    "no refusal in a QA copy"
-  );
+  assert!(screen.window.refused_press().is_none(), "no refusal in a QA copy");
 }
 
 #[test]
@@ -113,7 +110,7 @@ fn orchestrator_qa_person_is_off_outside_a_qa_copy_and_refuses_a_synthetic_take_
   screen.until("the card", |screen| screen.exists(&take));
 
   with_synthetic_input(|| screen.click(&take));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert_eq!(
     leader(&screen, billing),
     Some(theirs.id()),

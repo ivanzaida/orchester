@@ -111,7 +111,7 @@ fn project_settings_approval_mode_effective_widening_from_automation_is_put_back
   use lurq::app::events::with_synthetic_input;
   let mut page = Settings::new(true);
   with_synthetic_input(|| page.click("settings-allow-autopilot"));
-  page.until("the refusal", |p| p.exists("settings-allow-autopilot-person-only"));
+  page.until("the refusal", |p| p.window.refused_press().is_some());
   assert!(!page.db().allow_autopilot().expect("unchanged").is_on());
   assert!(!page.switch_on("settings-allow-autopilot"));
   page.click("settings-allow-autopilot");
@@ -119,10 +119,10 @@ fn project_settings_approval_mode_effective_widening_from_automation_is_put_back
     p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  assert!(!page.exists("settings-allow-autopilot-person-only"));
+  assert!(page.window.refused_press().is_none());
   let before = page.db().auto_mode_settings().expect("the reviewer");
   with_synthetic_input(|| page.choose("settings-reviewer-model", "sonnet"));
-  page.until("the reviewer put back", |p| p.exists("settings-auto-person-only"));
+  page.until("the reviewer put back", |p| p.window.refused_press().is_some());
   for _ in 0..10 {
     page.window.tree.tick_futures();
     page.window.pass();

@@ -145,13 +145,12 @@ fn tasks_close_delete_by_an_mcp_client_deletes_nothing_and_says_only_a_person_de
   });
 
   with_synthetic_input(|| seeded.click("tasks-close-delete-confirm"));
-  seeded.until("why it was refused", |seeded| {
-    seeded.laid_out("tasks-close-delete-person-only")
-  });
-  assert_eq!(
-    seeded.text("tasks-close-delete-person-only"),
-    "Only a person deletes a task: input from an MCP client is not taken here."
+  assert!(seeded.window.refused_press().is_some(), "refused to the client");
+  assert!(
+    !seeded.laid_out("tasks-close-delete-person-only"),
+    "nothing in the window says it"
   );
+  assert!(seeded.laid_out("tasks-close-delete-confirm"), "the confirmation stays");
   assert!(stored(&seeded, "KON-11").is_some(), "nothing was deleted");
 }
 

@@ -23,7 +23,7 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 use orchester_ipc::Command;
-use orchester_workspace::{decisions::DecisionKind, messages::Message, tasks::detail::RunView};
+use orchester_workspace::{decisions::DecisionKind, tasks::detail::RunView};
 
 use super::{
   super::{
@@ -35,7 +35,7 @@ use super::{
   Deciding, Target,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, answerer},
+  mcp::input_gate::{Guarded, InputGate, press_answerer},
   theme::{ExtraSpacing, ExtraTypography, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -54,8 +54,6 @@ pub struct DecideCard<'a> {
   pub target: &'a Signal<Target>,
   pub note: &'a Signal<String>,
   pub asked: &'a Signal<Option<Deciding>>,
-  /// Set when synthetic input pressed a decision without the person's consent.
-  pub person_only: &'a Signal<bool>,
   pub action: &'a DecisionAction<Deciding>,
   pub gate: Option<&'a InputGate>,
   /// Why nothing can be decided now: no runner is connected to carry it out.
@@ -84,12 +82,6 @@ impl DecideCard<'_> {
           .variant(TaskText::SectionTitle.role()),
       )
       .child(self.facts(ctx))
-      .with_children(self.person_only.get().then(|| {
-        field_error(
-          "task-decision-person-only",
-          &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
-        )
-      }))
       .with_children(self.choices(ctx, pending))
       .with_children(self.returning(ctx, pending))
       .child(divider())
@@ -301,18 +293,19 @@ impl DecideCard<'_> {
       None => {
         let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.run.id());
         let expected = self.run.run.last_sequence();
-        let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
+        let gate = self.gate.cloned();
         button.on_click(move || {
           // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
           if action.state().get_untracked().is_pending() {
             return;
           }
-          let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
-            tracing::warn!("synthetic input reached a waiting run's decision without consent; not taken");
-            person_only.set(true);
+          let Some(by) = press_answerer(
+            gate.as_ref(),
+            Guarded::Decision(DecisionKind::Stuck),
+            "decide how a waiting run goes on",
+          ) else {
             return;
           };
-          person_only.set(false);
           let decision = match &decision {
             StuckDecision::Accept { .. } => StuckDecision::Accept { by },
             other => other.clone(),

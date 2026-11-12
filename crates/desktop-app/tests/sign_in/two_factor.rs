@@ -77,7 +77,7 @@ fn sign_in_two_factor_tab_and_enter_go_through_the_code_step() {
   let code = window.data.cloud.next_code();
   window.set("sign-in-code", &code);
   with_synthetic_input(|| enter(&mut window));
-  shows(&mut window, "sign-in-verify-person-only");
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(!has(&mut window, "sign-in-code-checking"));
   enter(&mut window);
   shows(&mut window, ACCOUNT_CARD);
@@ -213,12 +213,10 @@ fn sign_in_two_factor_synthetic_input_cannot_verify() {
   let code = window.data.cloud.next_code();
   window.set("sign-in-code", &code);
   with_synthetic_input(|| press(&mut window, "sign-in-verify"));
-  shows(&mut window, "sign-in-verify-person-only");
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(
-    window
-      .text("sign-in-verify-person-only")
-      .contains("Only a person does this here"),
-    "the app's person-only reason"
+    !has(&mut window, "sign-in-verify-person-only"),
+    "nothing in the window says it"
   );
   assert!(!has(&mut window, "sign-in-code-checking"));
   assert!(!signed_in(&window));

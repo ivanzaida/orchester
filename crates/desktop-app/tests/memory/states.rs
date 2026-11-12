@@ -145,14 +145,8 @@ fn memory_synthetic_input_approves_nothing_and_says_only_a_person_changes_memory
   let typed = page.record("API handlers return typed errors").id();
   page.memory_record(MemoryTab::Waiting, typed);
   with_synthetic_input(|| page.window.press("memory-panel-approve"));
-  page.until("the refusal", |window| {
-    window.texts("memory-panel-person-only").is_some()
-  });
-  assert!(
-    page
-      .text("memory-panel-person-only")
-      .starts_with("Only a person changes memory here")
-  );
+  assert!(page.window.refused_press().is_some(), "refused to the client");
+  assert!(!page.has("memory-panel-person-only"), "nothing in the window says it");
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Proposed);
   assert_eq!(page.text("memory-tab-waiting-count"), "4");
   page.press_until("memory-panel-approve", "a person's approval", |window| {
@@ -174,9 +168,7 @@ fn memory_synthetic_input_deletes_nothing() {
     window.texts(&format!("{confirm}-confirm")).is_some()
   });
   with_synthetic_input(|| page.window.press(&format!("{confirm}-confirm")));
-  page.until("the refusal", |window| {
-    window.texts(&format!("{confirm}-person-only")).is_some()
-  });
+  assert!(page.window.refused_press().is_some(), "refused to the client");
   assert!(page.stored(id).is_some(), "nothing was deleted");
   assert!(page.has(&confirm), "the confirmation stays open");
 }

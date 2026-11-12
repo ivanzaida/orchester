@@ -39,7 +39,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{connection::plan_limits::PlanReadings, time::Timestamp};
+use orchester_core::{connection::plan_limits::PlanReadings, task_group::HoldScope, time::Timestamp};
 use orchester_workspace::{
   overview::{
     at_work::at_work as runs_at_work,
@@ -210,7 +210,8 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
     ));
   }
   if !queued.is_empty() || tasks.queue.project {
-    main = main.child(queue::queue(ctx, (id, root.clone()), &queued, tasks.queue.project));
+    let held = (tasks.queue.project, tasks.queue.held_by_person(HoldScope::Project));
+    main = main.child(queue::queue(ctx, (id, root.clone()), &queued, held));
   }
   main = main.with_children(notices::unreadable(ctx, (id, &root), tasks));
   let account_ids: Vec<_> = around.accounts.0.iter().map(|account| account.id()).collect();

@@ -15,7 +15,7 @@ use super::{
   Ask, Editor, Props,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   screens::{
     hub::{
       discard,
@@ -53,8 +53,11 @@ impl Editor {
     .on_confirm(false, move || {
       // A published skill reaches agents' prompts (ORC-30): an MCP client publishes it only under the person's
       // consent, as for an instruction.
-      if !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
-        tracing::warn!("synthetic input confirmed publishing a skill; not taken");
+      if !may_press(
+        gate.as_ref(),
+        Guarded::PermissionWidening,
+        "publish a skill, which reaches agents' prompts",
+      ) {
         return;
       }
       if let Some(entry) = &entry {

@@ -85,8 +85,6 @@ impl DevtoolsInspectable for Held {}
 pub(super) struct WhatIWatch {
   ask: FutureAction<Asked, (), Message>,
   stop: FutureAction<Stopping, (), Message>,
-  /// The last stop came from automation and was not taken.
-  refused: Signal<bool>,
   held: Signal<Held>,
   /// Whether a stop takes synthetic input as the person's: in a QA copy only.
   qa_person: QaPerson,
@@ -141,7 +139,6 @@ impl WhatIWatch {
     Self {
       ask,
       stop,
-      refused: ctx.signal(false),
       held: ctx.signal(Held::default()),
       qa_person: QaPerson::of(ctx),
     }
@@ -167,16 +164,14 @@ impl WhatIWatch {
 
   /// Stops `what` that conversation `chat` of the project at `root` watches, `by` the person: whether it started. A
   /// stop is a person's press only: stopping stays the person's command in the conversation and no MCP tool stops a
-  /// subscription either, so synthetic input (an MCP client's) is refused outside a QA copy (`mcp::qa_person`), the
-  /// subscriptions go on and the notice over the composer says so. Nothing starts while a stop is under way.
+  /// subscription either, so synthetic input (an MCP client's) is refused to it outside a QA copy (`mcp::qa_person`),
+  /// and the subscriptions go on. Nothing starts while a stop is under way.
   fn stop_by_person(&self, (root, chat): (PathBuf, ChatId), what: StopWhat, by: StopBy) -> bool {
-    if self.qa_person.refuses_input() {
-      tracing::warn!("synthetic input asked to stop watching; not taken");
-      self.refused.set(true);
+    if self
+      .qa_person
+      .refuses("stop what a conversation of the Orchestrator watches")
+    {
       return false;
-    }
-    if self.refused.get_untracked() {
-      self.refused.set(false);
     }
     if self.stop.state().get_untracked().is_pending() {
       return false;
@@ -237,15 +232,10 @@ impl WhatIWatch {
   }
 
   /// A `/watching` or a *Stop watching* that applied nothing: why, until the person dismisses it or applies one again.
-  /// A refused click of automation says that only a person stops watching.
   pub(super) fn problem(&self, ctx: &mut Ctx) -> Option<Element> {
-    let (asked, stopped, refused) = (self.ask.state(), self.stop.state(), self.refused.clone());
-    let body = if refused.get() {
-      ctx.t("orchestrator.watching.personOnly")
-    } else {
-      let error = asked.get().error.or_else(|| stopped.get().error)?;
-      message_text(ctx, &error)
-    };
+    let (asked, stopped) = (self.ask.state(), self.stop.state());
+    let error = asked.get().error.or_else(|| stopped.get().error)?;
+    let body = message_text(ctx, &error);
     let dismiss = ActionButton::new(
       "orchestrator-watching-dismiss",
       ButtonKind::Secondary,
@@ -254,7 +244,6 @@ impl WhatIWatch {
     .on_click(move || {
       asked.set(FutureState::idle());
       stopped.set(FutureState::idle());
-      refused.set(false);
     });
     Some(
       Notice::new(

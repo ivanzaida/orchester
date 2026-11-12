@@ -21,7 +21,7 @@ use orchester_core::{
 };
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   navigation::Navigation,
   routes::{AccountsView, Route},
   services::accounts::{Accounts, DetailPlace, identity_detail, short_state},
@@ -185,10 +185,13 @@ impl Component for AccountPicker {
         value.set(shown);
         navigation.go(Route::Accounts(AccountsView::default()));
       } else if *chosen != shown {
-        if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+        if may_press(
+          gate.as_ref(),
+          Guarded::PermissionWidening,
+          "choose the account a connection runs on",
+        ) {
           on_choose(chosen.clone());
         } else {
-          tracing::warn!("synthetic input chose a connection's account; not taken");
           value.set(shown);
         }
       }

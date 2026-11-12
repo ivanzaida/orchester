@@ -49,7 +49,6 @@ impl PartialEq for SensitiveProps {
 }
 impl DevtoolsInspectable for SensitiveProps {}
 struct SensitiveField {
-  refused: Signal<bool>,
   _protected: Option<crate::mcp::input_gate::Protected>,
 }
 impl Component for SensitiveField {
@@ -57,7 +56,6 @@ impl Component for SensitiveField {
   fn create(ctx: &mut Ctx) -> Self {
     let gate: Option<crate::mcp::input_gate::InputGate> = ctx.use_context();
     Self {
-      refused: ctx.signal(false),
       _protected: gate.map(|gate| gate.protect(crate::mcp::input_gate::Guarded::LocalIntegrationQuestion)),
     }
   }
@@ -65,8 +63,7 @@ impl Component for SensitiveField {
     let props = ctx.props::<SensitiveProps>().clone();
     let id = props.id;
     let value = props.value;
-    let refused = self.refused.clone();
-    let notice = Notice::new(
+    Notice::new(
       format!("{id}-sensitive"),
       NoticeTone::Warning,
       ctx.t("local_integration.sensitiveDraft"),
@@ -78,17 +75,13 @@ impl Component for SensitiveField {
         ctx.t("local_integration.clearSensitiveDraft"),
       )
       .on_click(move || {
-        if input_source() != InputSource::Synthetic {
-          value.set(String::new());
+        // The gate refuses an MCP client's input while the field shows; what reaches it all the same is only logged.
+        if input_source() == InputSource::Synthetic {
+          tracing::warn!("synthetic input reached the clearing of a sensitive draft; not taken");
         } else {
-          refused.set(true);
+          value.set(String::new());
         }
       }),
-    );
-    if self.refused.get() {
-      notice.body(ctx.t("local_integration.error.metadata"))
-    } else {
-      notice
-    }
+    )
   }
 }

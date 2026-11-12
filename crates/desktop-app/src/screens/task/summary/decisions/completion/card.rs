@@ -9,7 +9,6 @@ use std::sync::Arc;
 use lurq::{
   app::{ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
   components::{Column, Row},
-  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -26,7 +25,7 @@ use orchester_workspace::{
 
 use super::CompleteAction;
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, answerer},
+  mcp::input_gate::{Guarded, InputGate, press_answerer},
   navigation::{
     Navigation,
     pointed::{Pointed, PointedCard},
@@ -52,8 +51,6 @@ use crate::{
 /// The person's leave for window input, which *Complete anyway* needs as any decision on a run that waits for them.
 pub struct Gated<'a> {
   pub gate: Option<&'a InputGate>,
-  /// Window input pressed *Complete anyway* without it.
-  pub person_only: &'a Signal<bool>,
 }
 
 /// The Ready card of a run whose result is its report: *Ready to complete*, with *Complete task*.
@@ -123,18 +120,11 @@ pub fn flagged(
   ]
   .into_iter()
   .filter_map(|(id, reason)| reason.map(|reason| Element::from(reason_line(id, &reason))));
-  let person_only = gated.person_only.get().then(|| {
-    Element::from(field_error(
-      "task-complete-person-only",
-      &ctx.t("decisions.complete.personOnly"),
-    ))
-  });
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .child(notice)
     .with_children(reasons)
-    .with_children(person_only)
     .with_children(refused(ctx, action))
     .into()
 }
@@ -179,19 +169,20 @@ fn pressed(
     return button.disabled();
   }
   let (action, id, anyway) = (action.clone(), run.id(), gated.is_some());
-  let gate = gated.map(|gated| (gated.gate.cloned(), gated.person_only.clone()));
+  let gate = gated.map(|gated| gated.gate.cloned());
   button.on_click(move || {
     if action.state().get_untracked().is_pending() {
       return;
     }
     let by = match &gate {
-      Some((gate, person_only)) => {
-        let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
-          tracing::warn!("synthetic input completed a run anyway without consent; not taken");
-          person_only.set(true);
+      Some(gate) => {
+        let Some(by) = press_answerer(
+          gate.as_ref(),
+          Guarded::Decision(DecisionKind::Stuck),
+          "complete a run anyway",
+        ) else {
           return;
         };
-        person_only.set(false);
         by
       }
       None if is_synthetic_input() => Answerer::Automation,

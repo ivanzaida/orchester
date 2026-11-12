@@ -10,7 +10,7 @@
 //! Memory is never team configuration: in a team project the filter shows this computer's memory of the project and
 //! says so under its sub-filter (Y5 `Fnu7A`); nothing of it is sent to the team server. Every change happens through
 //! the workspace's memory rules (`orchester_workspace::memory`), off the UI thread, and only a person makes it: input
-//! from an MCP client is refused where the change was asked for.
+//! from an MCP client is refused to the client that sent it, and the screen stays as it was.
 
 mod filter;
 mod list;

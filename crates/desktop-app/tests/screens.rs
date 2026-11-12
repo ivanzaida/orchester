@@ -126,7 +126,7 @@ impl Component for ScreensRoot {
     let router = ctx.router(routes());
     let navigation = Navigation::new(ctx.signal(TabSet::default()), router.clone());
     *ctx.props::<RouterSlot>().0.lock() = Some(router.clone());
-    let links = ChatLinks::new(navigation.clone());
+    let links = ChatLinks::new(navigation.clone(), None);
     Self {
       router,
       navigation,

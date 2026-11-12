@@ -668,7 +668,6 @@
         "choice": "Answer: {{choice}}",
         "ownWords": "In its words: “{{text}}”",
         "dismiss": "Dismiss",
-        "personOnly": "Only a person can apply the Orchestrator’s proposal; nothing was sent.",
         "dismissed": "The Orchestrator’s proposal was dismissed · nothing was sent",
         "stale": "The Orchestrator’s proposal no longer applies · nothing was sent",
         "refused": "The Orchestrator’s proposal could not be applied · nothing was sent: {{reason}}"

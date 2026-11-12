@@ -7,7 +7,7 @@
 //! the others yet: they
 //! follow Run again's confirmation in place and the Memory page's *Delete this record?* (`YdVse`). A shared project's
 //! tasks are its team server's, which keeps no deletion: *Delete task* is unavailable there, with why. Only a person
-//! deletes a task: an MCP client's press is refused, and the confirmation says so.
+//! deletes a task: an MCP client's press is refused to it, and the confirmation stays as it was.
 
 mod confirm;
 mod delete;
@@ -44,6 +44,7 @@ pub use self::{
   delete::confirmation_in,
 };
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   navigation::{Navigation, press::OpenIn},
   project::ProjectFeed,
   routes::Route,
@@ -134,9 +135,8 @@ pub struct Closer {
   asked: Signal<Asked>,
   /// The delete confirmation's choice to remove unmerged work too; off each time it opens.
   unmerged: Signal<bool>,
-  /// An MCP client pressed Delete: refused, which the confirmation says.
-  person_only: Signal<bool>,
   action: Action,
+  gate: Option<InputGate>,
   root: PathBuf,
 }
 
@@ -157,8 +157,8 @@ impl Closer {
     Self {
       asked,
       unmerged: ctx.signal(false),
-      person_only: ctx.signal(false),
       action,
+      gate: ctx.use_context::<InputGate>(),
       root: project.repo_root,
     }
   }
@@ -256,18 +256,14 @@ impl Closer {
   /// Opens the delete confirmation of `subject` in place, its choice off.
   pub fn ask_delete(&self, subject: Subject) {
     self.unmerged.set(false);
-    self.person_only.set(false);
     self.asked.set(Asked::Delete(subject));
   }
 
-  /// Deletes `subject`, a person's press only.
+  /// Deletes `subject`, a person's press only: automation's is refused to it.
   fn delete(&self, subject: Subject) {
-    if is_synthetic_input() {
-      tracing::warn!("synthetic input asked to delete a task; not taken");
-      self.person_only.set(true);
+    if !persons_press(self.gate.as_ref(), "delete a task") {
       return;
     }
-    self.person_only.set(false);
     self.run(Request::Delete(subject, self.unmerged.get_untracked()));
   }
 

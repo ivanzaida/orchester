@@ -25,6 +25,15 @@ pub struct HeldQueue {
   pub project: bool,
   /// The groups whose new starts are held, each with its tasks' keys in their reviewed order.
   pub groups: Vec<HeldGroup>,
+  /// The holds a person set, which only a person releases ([`hold_in`]).
+  pub by_person: Vec<HoldScope>,
+}
+
+impl HeldQueue {
+  /// Whether a person set the hold on `scope`, so automation does not release it.
+  pub fn held_by_person(&self, scope: HoldScope) -> bool {
+    self.by_person.contains(&scope)
+  }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,6 +61,7 @@ pub fn held_in(db: &ProjectDb) -> Result<HeldQueue, StoreError> {
   Ok(HeldQueue {
     project: holds.project,
     groups,
+    by_person: holds.by_person,
   })
 }
 

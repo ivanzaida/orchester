@@ -410,17 +410,15 @@ fn local_hub_profile_automation_cannot_answer_allow_for_a_profile() {
   // The confirm takes no press before the question lived through a pass: press it as a client would, until it answers.
   agents.until("the refusal", |s| {
     with_synthetic_input(|| s.click(ALLOW));
-    s.exists("local-hub-profile-confirm-person-only")
+    s.refused().is_some()
   });
   passes(&mut agents);
 
   assert!(!chooses(&agents, profile, docs), "automation allowed nothing");
   assert!(agents.exists(ALLOW), "it still asks");
   assert!(
-    agents
-      .text("local-hub-profile-confirm-person-only")
-      .starts_with("Only a person does this here"),
-    "the refusal is said under the question"
+    !agents.exists("local-hub-profile-confirm-person-only"),
+    "nothing in the window says it"
   );
   agents.press_until(ALLOW, "a person allows it", |s| chooses(s, profile, docs));
 }

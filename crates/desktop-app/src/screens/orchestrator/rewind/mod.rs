@@ -8,7 +8,8 @@
 //! compacts its session or a message waits: the person stops the answer first. A rewind that failed changes nothing
 //! and the dialog, or the edit field when the edit went without it, says why; an edit the conversation went back for
 //! but that was not sent is back in the composer, and the chat says so (`orchester_workspace::orchestrator::rewind`).
-//! Only a person goes back: synthetic input (an MCP client's) is refused, and the dialog or the edit field says so.
+//! Only a person goes back: synthetic input (an MCP client's) is refused to it, before anything is asked, and the
+//! screen stays as it was.
 //! *Fork from here* (ORC-334, [`fork`]) drops nothing: it opens a new conversation with the messages up to the point,
 //! at once and while the Orchestrator answers too, and the fork shows where it came from ([`forked`]).
 
@@ -135,9 +136,6 @@ pub(super) struct Rewinding {
   pub(super) asked: Signal<Option<Asked>>,
   /// The dialog shows; *Cancel*, Esc and the scrim end the question.
   pub(super) open: Signal<bool>,
-  /// Synthetic input (an MCP client's) asked to go back and was refused: the dialog or the edit field says only a
-  /// person does.
-  pub(super) refused: Signal<bool>,
   pub(super) action: RewindAction,
   /// Keeps a fork ([`fork`]).
   pub(super) fork: fork::ForkAction,
@@ -183,7 +181,6 @@ impl Rewinding {
       words: ctx.signal(String::new()),
       asked: ctx.signal(None),
       open: ctx.signal(false),
-      refused: ctx.signal(false),
       action,
       fork: fork::action(ctx),
       qa_person: QaPerson::of(ctx),
@@ -233,14 +230,13 @@ impl Rewinding {
   /// Asks whether to go back to `point`, which drops the entries from `from` on, from the message or answer of `at`.
   /// Nothing while a rewind is under way.
   pub(super) fn ask(&self, point: RewindPoint, from: i64, at: Timestamp) {
-    if self.pending() {
+    if self.pending() || self.refuse() {
       return;
     }
     let Some((chat, dropped)) = self.dropped(from) else {
       return;
     };
     self.action.state().set(FutureState::idle());
-    self.refused.set(false);
     self.asked.set(Some(Asked {
       chat,
       point,
@@ -260,7 +256,6 @@ impl Rewinding {
     if matches!(self.action.state().get_untracked().error, Some(Failed::Unchanged(_))) {
       self.action.state().set(FutureState::idle());
     }
-    self.refused.set(false);
     self
       .words
       .set(orchester_workspace::mentions::facts::said(words).to_owned());
@@ -271,7 +266,7 @@ impl Rewinding {
   /// once when nothing follows it, else once the person confirmed what it drops. Nothing while its words say nothing
   /// or a rewind is under way; synthetic input is refused, as it is in the dialog, since what an edit drops is gone.
   pub(super) fn send_edit(&self, project: &OpenProject, (mode, plan_only): (TurnMode, bool)) {
-    if self.pending() {
+    if self.pending() || self.refuse() {
       return;
     }
     let words = self.words.get_untracked();
@@ -284,9 +279,6 @@ impl Rewinding {
     self.action.state().set(FutureState::idle());
     let point = RewindPoint::Before(editing.message);
     if dropped.count() <= 1 {
-      if self.refuse() {
-        return;
-      }
       self.run(
         project,
         (chat, point),
@@ -294,7 +286,6 @@ impl Rewinding {
       );
       return;
     }
-    self.refused.set(false);
     self.asked.set(Some(Asked {
       chat,
       point,
@@ -319,16 +310,13 @@ impl Rewinding {
     self.action.state().get_untracked().is_pending()
   }
 
-  /// Refuses synthetic input (an MCP client's) outside a QA copy (`mcp::qa_person`): what a rewind drops cannot be
-  /// brought back and no MCP tool rewinds either, so only a person goes back, and the screen says so. Whether it
+  /// Refuses synthetic input (an MCP client's) outside a QA copy (`mcp::qa_person`) to the client that sent it: what a
+  /// rewind drops cannot be brought back and no MCP tool rewinds either, so only a person goes back. Whether it
   /// refused.
   fn refuse(&self) -> bool {
-    let refused = self.qa_person.refuses_input();
-    if refused {
-      tracing::warn!("synthetic input asked to rewind a conversation; not taken");
-    }
-    self.refused.set(refused);
-    refused
+    self
+      .qa_person
+      .refuses("take a conversation of the Orchestrator back to an earlier point")
   }
 
   /// Goes back, unless a rewind is already under way: a second Send or Enter never replaces the first.

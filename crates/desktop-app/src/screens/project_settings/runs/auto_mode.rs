@@ -34,9 +34,8 @@ use super::super::{
   work::{self, Change, Save},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, input_may_decide, refuse_press},
   screens::reviewer_trouble,
-  ui::unavailable::reason_line,
 };
 
 #[derive(Clone)]
@@ -76,13 +75,9 @@ pub struct AutoMode {
   attempted: Signal<Asked>,
   failed: Signal<bool>,
   gate: Option<InputGate>,
-  /// An MCP client's input asked to allow Autopilot and was refused.
-  autopilot_refused: Signal<bool>,
   /// Whether the input that made the last edit may choose another reviewer, read while it was delivered.
   may_widen: Arc<AtomicBool>,
   may_review: Arc<AtomicBool>,
-  /// A widening from input that may not make it was put back; said under the group until the next change.
-  refused: Signal<bool>,
 }
 impl Component for AutoMode {
   type Props = Props;
@@ -104,10 +99,8 @@ impl Component for AutoMode {
       attempted: ctx.signal(Asked(None)),
       failed: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
-      autopilot_refused: ctx.signal(false),
       may_widen: Arc::new(AtomicBool::new(true)),
       may_review: Arc::new(AtomicBool::new(true)),
-      refused: ctx.signal(false),
     };
     let save = tab.save.clone();
     tab.follow(ctx, &save);
@@ -154,12 +147,6 @@ impl Component for AutoMode {
     let settings = self.stored.get().0;
     let cannot_run = cannot_run(ctx, &props, &settings);
     let mut group = controls::group(ctx, (self, &props), (&settings, cannot_run), &save);
-    if self.refused.get() {
-      group = group.after(reason_line(
-        "settings-auto-person-only",
-        &ctx.t("project_settings.autoPersonOnly"),
-      ));
-    }
     if self.failed.get() {
       group = group.after(
         Row::new()
@@ -188,17 +175,36 @@ impl Component for AutoMode {
 }
 impl AutoMode {
   /// Notes whether the input being delivered may choose another reviewer: a person's always; an MCP client's only
-  /// under the stored opt-ins. Called from a control's handler, or a watcher it sets off.
+  /// under the stored opt-ins. Called from a control's handler, or a watcher it sets off. An edit [`Self::request`]
+  /// will put back is refused to the automation that made it now, while its input is delivered.
   fn note_input(&self) {
-    let may = input_may_decide(self.gate.as_ref(), Guarded::ApprovalWidening);
-    self.may_widen.store(may, Ordering::SeqCst);
-    self.may_review.store(
-      input_may_decide(
+    let review = Guarded::Decision(orchester_workspace::decisions::DecisionKind::Approval);
+    let may_widen = input_may_decide(self.gate.as_ref(), Guarded::ApprovalWidening);
+    let may_review = input_may_decide(self.gate.as_ref(), review);
+    self.may_widen.store(may_widen, Ordering::SeqCst);
+    self.may_review.store(may_review, Ordering::SeqCst);
+    let refused = if may_review {
+      (!may_widen && self.widens()).then_some(Guarded::ApprovalWidening)
+    } else {
+      Some(review)
+    };
+    if let Some(policy) = refused {
+      refuse_press(
         self.gate.as_ref(),
-        Guarded::Decision(orchester_workspace::decisions::DecisionKind::Approval),
-      ),
-      Ordering::SeqCst,
-    );
+        policy,
+        "choose the reviewer of a project's auto mode",
+      );
+    }
+  }
+  /// Whether the reviewer the controls hold now widens what the stored one may be sent, outside a hosted reviewer,
+  /// which its own question confirms.
+  fn widens(&self) -> bool {
+    let settings = self.stored.get_untracked().0;
+    self.draft().is_some_and(|asked| {
+      project_settings::decision_reviewer::choosing_hosted(&settings.auto_mode, &asked, &settings.decision_connections)
+        .is_none()
+        && project_settings::reviewer_widens(&settings.auto_mode, &asked)
+    })
   }
   fn dirty(&self) -> bool {
     let stored = self.stored.get_untracked().0;
@@ -311,7 +317,8 @@ impl AutoMode {
     }
     self.request(props, save, asked);
   }
-  /// Saves `asked` at once; a widening from input that may not make it is put back and said instead.
+  /// Saves `asked` at once; a widening from input that may not make it is put back, and was refused to it as it was
+  /// delivered ([`Self::note_input`]).
   fn request(&self, props: &Props, save: &Save, asked: AutoModeSettings) {
     let settings = self.stored.get_untracked().0;
     let base = settings.auto_mode.clone();
@@ -324,12 +331,10 @@ impl AutoMode {
     }
     let confirmed = hosted || self.may_widen.load(Ordering::SeqCst);
     self.failed.set(false);
-    self.refused.set(false);
     if !self.may_review.load(Ordering::SeqCst) || (!confirmed && project_settings::reviewer_widens(&base, &asked)) {
       tracing::warn!("input that may not choose another reviewer changed it; put back");
       self.attempted.set(Asked(None));
       self.fill(settings);
-      self.refused.set(true);
       return;
     }
     self.attempted.set(Asked(Some(asked.clone())));

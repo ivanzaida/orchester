@@ -10,7 +10,6 @@ use crate::ui::{
   icon::Icon,
   message::message_text,
   notice::{Notice, NoticeTone},
-  tinted_note::person_only,
 };
 
 /// Why the team server did not create the resource, or this computer did not send it.
@@ -21,7 +20,6 @@ pub(super) fn refused(ctx: &Ctx, failed: &Failed, admins: &str) -> Element {
       .stacked()
   };
   match failed {
-    Failed::PersonOnly => person_only("team-new-person-only", &ctx.t("team_new.personOnly")).into(),
     Failed::Refused(Refusal::NameTaken, name) => danger(
       "team-new-refused",
       ctx

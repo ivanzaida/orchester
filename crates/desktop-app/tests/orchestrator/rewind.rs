@@ -204,14 +204,15 @@ fn orchestrator_rewind_is_a_persons_alone() {
   hover(&mut screen, &id);
   screen.press(&format!("{id}-rewind"));
   screen.until("the question", |screen| screen.exists("orchestrator-rewind-confirm"));
-  assert!(!screen.exists("orchestrator-rewind-person-only"));
+  assert!(screen.window.refused_press().is_none());
   with_synthetic_input(|| screen.click("orchestrator-rewind-confirm"));
-  screen.until("the refusal", |screen| screen.exists("orchestrator-rewind-person-only"));
-  assert_eq!(
-    screen.text("orchestrator-rewind-person-only"),
-    "Only a person edits or rewinds the conversation: input from an MCP client is not taken here."
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
+  assert!(
+    !screen.exists("orchestrator-rewind-person-only"),
+    "nothing in the window says it"
   );
   with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
+  assert!(screen.window.refused_press().is_some(), "Enter is refused too");
   // A rewind that started would be under way by now: its background work had time to run and was polled.
   std::thread::sleep(std::time::Duration::from_millis(200));
   screen.until("a pass", |_| true);

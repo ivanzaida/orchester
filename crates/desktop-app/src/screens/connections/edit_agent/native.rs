@@ -133,11 +133,7 @@ impl EditConnection {
       )
     });
     let reason = failed.or_else(|| self.native.reason(ctx, known));
-    let note = match (self.native.refusal(ctx), reason) {
-      (Some(refusal), _) => Some((refusal, Tone::Warning)),
-      (None, reason) => reason.map(|reason| (reason, Tone::Muted)),
-    };
-    let note = note.as_ref().map(|(words, tone)| (&**words, *tone));
+    let note = reason.as_ref().map(|words| (&**words, Tone::Muted));
     action_bar_noted(vec![cancel.into(), save.into()], note)
   }
 }

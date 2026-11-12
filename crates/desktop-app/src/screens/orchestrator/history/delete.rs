@@ -4,7 +4,7 @@
 //! *Archive* keeps it out of History instead — then *Enter deletes* and *Esc cancels*, *Cancel* and *Delete
 //! conversation*. A delete that failed says why under those lines and the dialog stays; one that succeeded closes it,
 //! and the conversation the screen showed falls back to a new one. Only a person deletes: an MCP client's press or
-//! Enter is refused, and the dialog says so.
+//! Enter is refused to it, and the dialog stays as it was.
 
 use std::{path::Path, sync::Arc};
 
@@ -63,8 +63,6 @@ type DeleteAction = FutureAction<(Arc<Path>, ChatId), (), Message>;
 struct DeleteView {
   /// The dialog shows; *Cancel*, Esc and the scrim end the question.
   open: Signal<bool>,
-  /// Synthetic input (an MCP client's) asked to delete and was refused: the dialog says only a person deletes.
-  refused: Signal<bool>,
   delete: DeleteAction,
   /// Whether deleting takes synthetic input as the person's: in a QA copy only.
   qa_person: QaPerson,
@@ -76,7 +74,6 @@ impl Component for DeleteView {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<DeleteProps>().clone();
     let open = ctx.signal(true);
-    let refused = ctx.signal(false);
     let asked = props.rows.deleting.clone();
     ctx.watch(&open, move |open| {
       if !*open {
@@ -110,7 +107,6 @@ impl Component for DeleteView {
     });
     Self {
       open,
-      refused,
       delete,
       qa_person: QaPerson::of(ctx),
     }
@@ -177,11 +173,6 @@ impl Component for DeleteView {
     .tone(Tone::Danger)
     .width(NARROW_DIALOG_WIDTH)
     .part(does);
-    let dialog = if self.refused.get() {
-      dialog.person_only(ctx.t("orchestrator.historyPanel.delete.personOnly"))
-    } else {
-      dialog
-    };
     dialog
       .on_enter(ctx.t("orchestrator.historyPanel.delete.enterDeletes"), confirm)
       .action(button)
@@ -192,17 +183,14 @@ impl Component for DeleteView {
 
 impl DeleteView {
   /// Deletes `chat` of the project at `root`, a person's press or Enter only: what goes cannot be brought back, and no
-  /// MCP tool deletes a conversation either, so synthetic input (an MCP client's) is refused outside a QA copy
-  /// (`mcp::qa_person`) and the dialog says so.
+  /// MCP tool deletes a conversation either, so synthetic input (an MCP client's) is refused to it outside a QA copy
+  /// (`mcp::qa_person`).
   fn confirm(&self, root: Arc<Path>, chat: ChatId) -> impl Fn() + Clone + Send + Sync + 'static {
-    let (delete, refused, qa_person) = (self.delete.clone(), self.refused.clone(), self.qa_person.clone());
+    let (delete, qa_person) = (self.delete.clone(), self.qa_person.clone());
     move || {
-      if qa_person.refuses_input() {
-        tracing::warn!("synthetic input asked to delete a conversation; not taken");
-        refused.set(true);
+      if qa_person.refuses("delete a conversation of the Orchestrator") {
         return;
       }
-      refused.set(false);
       if !delete.state().get_untracked().is_pending() {
         delete.run((root.clone(), chat));
       }

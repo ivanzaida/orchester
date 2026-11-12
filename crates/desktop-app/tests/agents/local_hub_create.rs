@@ -516,8 +516,9 @@ fn local_hub_create_what_adds_to_what_agents_may_do_is_a_persons_press() {
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(servers(&agents), 0, "an MCP client's press made nothing");
+  assert_eq!(agents.value("local-hub-mcp-name"), "figma", "the form stays as it was");
 }
 
 #[test]
@@ -549,7 +550,7 @@ fn local_hub_create_a_profile_is_a_persons_press() {
   choose(&mut agents, "team-new-profile-cli", "Codex");
   choose(&mut agents, "team-new-profile-model", "test-model");
   with_synthetic_input(|| agents.click("local-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(
     held(&agents, ResourceKind::AgentProfile),
     0,

@@ -28,7 +28,7 @@ mod not_shared;
 mod phrase;
 mod queue;
 
-pub(crate) use self::{list::age, phrase::phrases, queue::actor_now};
+pub(crate) use self::{list::age, phrase::phrases, queue::hold_actor};
 mod row;
 mod shared;
 mod skeleton;

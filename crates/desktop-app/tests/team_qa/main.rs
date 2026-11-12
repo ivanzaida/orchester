@@ -102,8 +102,7 @@ fn team_qa_join_opens_on_the_code_with_the_address_typed_and_takes_no_mcp_press(
   assert_eq!(value(&mut window, CODE_FIELD), "");
 
   with_synthetic_input(|| window.press(SUBMIT));
-  let refused = format!("{SUBMIT}-person-only");
-  window.until("the press to be refused", |window| window.texts(&refused).is_some());
+  window.until("the press to be refused", |window| window.refused_press().is_some());
   assert_eq!(server.code_joins(), Vec::<bool>::new());
 }
 

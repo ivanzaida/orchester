@@ -1816,8 +1816,7 @@
       "instruction": "Publishing the instruction adds its text to the prompts of every agent it applies to.",
       "skill": "Publishing the skill gives every agent it applies to its description in the prompt and its body and reference files to read.",
       "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
-      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
-      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
+      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt."
     }
   },
   "statusBar": {
@@ -2139,7 +2138,6 @@
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
       "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
       "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
-      "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
       "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",

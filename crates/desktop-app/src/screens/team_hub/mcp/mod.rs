@@ -88,9 +88,6 @@ impl PartialEq for Props {
   }
 }
 
-/// The id the person-only check of a fix is made under.
-const FIX: &str = "team-hub-fix";
-
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<McpPanel>(&format!("team-hub-mcp-{}", props.entry.id), props)
 }
@@ -179,7 +176,6 @@ impl Component for McpPanel {
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      self.person.reason(ctx, secret::SAVE),
     );
     Column::new()
       .id("team-hub-panel")
@@ -206,7 +202,7 @@ impl McpPanel {
     let person = self.person.clone();
     let guarded = |action: Arc<dyn Fn() + Send + Sync>| {
       Press::run(move || {
-        if person.allows(FIX) {
+        if person.allows("fix what a team MCP server needs on this computer") {
           action();
         }
       })
@@ -241,18 +237,16 @@ impl McpPanel {
     Arc::new(move |now| {
       if !now {
         off.run(server);
-      } else if person.allows(FIX) {
+      } else if person.allows("fix what a team MCP server needs on this computer") {
         on.run(server);
       }
     })
   }
 
-  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong
-  /// with a secret's value shows in its dialog.
+  /// Why the last fix did nothing: what the workspace refused with. What went wrong with a secret's value shows in its
+  /// dialog.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    if let Some(reason) = self.actions.refused() {
-      return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
-    }
-    self.person.reason(ctx, FIX)
+    let reason = self.actions.refused()?;
+    Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into())
   }
 }
