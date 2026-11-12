@@ -1,10 +1,10 @@
 //! The fields and chips of an open step that PV2-07's first tests leave: *Agent* and what it says when no profile is
 //! chosen, *Retries* with the route they belong to, the step's *Sources*, *Duplicate* put back by *Cancel*, the Deliver
-//! chip, and a chip pressed by the pointer in a strip that scrolls. `cargo test -p orchester-app --test agents
-//! pipeline_step_fields`.
+//! chip, which opens the Deliver step (P15 `nPaMj`), and a chip pressed by the pointer in a strip that scrolls. `cargo
+//! test -p orchester-app --test agents pipeline_step_fields`.
 
 use lurq::app::events::MouseButton;
-use orchester_app::routes::{PipelinesFilter, PipelinesView, ProjectPage, Route};
+use orchester_app::routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   resource::{DeliverMode, DeliverStep, MergeMethod, Pipeline},
@@ -194,7 +194,7 @@ fn delivering(agents: &mut Agents) -> ResourceId {
 }
 
 #[test]
-fn the_deliver_chip_opens_the_pipeline_keeps_the_edit_and_shows_what_a_run_delivers() {
+fn the_deliver_chip_opens_the_deliver_step_and_keeps_the_edit() {
   let mut agents = Agents::new(true);
   let pipeline = delivering(&mut agents);
   let first = keys(&agents, pipeline)[0].clone();
@@ -206,13 +206,10 @@ fn the_deliver_chip_opens_the_pipeline_keeps_the_edit_and_shows_what_a_run_deliv
   });
 
   agents.click("pipeline-hub-step-chip-deliver");
-  agents.until("the pipeline", |s| s.exists("pipeline-hub-flow"));
+  agents.until("the Deliver step", |s| s.exists("pipeline-hub-deliver-head"));
   assert_eq!(
     route(&agents),
-    Route::Project(
-      project_id(),
-      ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline)))
-    )
+    Route::Project(project_id(), ProjectPage::Pipeline(pipeline, PipelineView::Deliver))
   );
   assert!(
     !agents.exists("pipeline-hub-leave"),
@@ -223,15 +220,7 @@ fn the_deliver_chip_opens_the_pipeline_keeps_the_edit_and_shows_what_a_run_deliv
       .text(&format!("pipeline-hub-row-{pipeline}-line"))
       .starts_with("Unsaved changes")
   );
-
-  // The row of what a run delivers is brought into view, inside the panel's scroll.
-  agents.until("A run delivers is in view", |s| {
-    let (row, scroll) = (
-      rect_y(s, "pipeline-hub-delivers"),
-      rect_y(s, "pipeline-hub-panel-scroll"),
-    );
-    row.0 >= scroll.0 - 0.5 && row.0 + row.1 <= scroll.0 + scroll.1 + 0.5
-  });
+  assert_eq!(agents.text("pipeline-hub-step-position"), "step 04 of 4");
 }
 
 #[test]
@@ -251,16 +240,6 @@ fn the_head_counts_deliver_as_the_strip_numbers_it() {
     "step 03 of 4",
     "the head counts what the strip numbers, Deliver too"
   );
-}
-
-fn rect_y(agents: &mut Agents, id: &str) -> (f32, f32) {
-  let found = agents
-    .window
-    .tree
-    .get_element_by_id_mut(id)
-    .and_then(|element| element.bounds())
-    .unwrap_or_else(|| panic!("{id} is laid out"));
-  (found.y, found.height)
 }
 
 #[test]

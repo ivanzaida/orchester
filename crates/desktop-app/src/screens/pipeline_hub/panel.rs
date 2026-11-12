@@ -9,10 +9,10 @@
 //! ([`super::leave`]). The head with its ⋯ menu and *Versions* is [`super::panel_head`]; an archived pipeline's panel
 //! is [`super::archived`], which has no Save bar.
 //!
-//! The panel has three views of one pipeline: its own body, a step the route holds open ([`super::step`]) and a
-//! published version read-only ([`versions`], [`super::version_view`]). The route is the stronger: a route that names a
-//! step closes the version shown. Only the pipeline's own views have the head, and only the version view has no Save
-//! bar.
+//! The panel has three views of one pipeline: its own body, a step or the Deliver step the route holds open
+//! ([`super::step`]) and a published version read-only ([`versions`], [`super::version_view`]). The route is the
+//! stronger: a route that names a step closes the version shown. Only the pipeline's own views have the head, and only
+//! the version view has no Save bar.
 
 mod saving;
 mod versions;
@@ -36,7 +36,7 @@ use orchester_core::{
 use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead, local_edit::unpublishable};
 
 use super::{
-  archived, bar, chips,
+  OpenStep, archived, bar, chips,
   edit::{Edit, Holding},
   leave::{Hosted, UnsavedSignal, clear_unsaved},
   model::Entry,
@@ -71,7 +71,7 @@ pub(super) struct Props {
   /// What the screen hosts for the panel: the list's word of unsaved changes, and the archive confirmation.
   pub hosted: Hosted,
   /// The step the route holds open: the panel shows it in place of the pipeline's own body.
-  pub step: Option<StepKey>,
+  pub step: Option<OpenStep>,
 }
 
 impl PartialEq for Props {
@@ -136,10 +136,6 @@ struct PipelinePanel {
   reset: Signal<u64>,
   /// The version *Restore* put in the edit, until it is saved or dropped.
   restored: Signal<Restored>,
-  /// The Deliver chip of an open step asked for the *A run delivers* row to be shown once the pipeline's body is.
-  reveal_delivers: Signal<bool>,
-  /// That row.
-  delivers: ElementRef,
   /// A card's or *Ready?*'s *Choose another* asked for the step it opens to open its Agent picker: read once by that
   /// step's Agent field.
   pick_agent: Signal<bool>,
@@ -177,8 +173,6 @@ impl Component for PipelinePanel {
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
       restored: ctx.signal(Restored::default()),
-      reveal_delivers: ctx.signal(false),
-      delivers: ctx.element_ref(),
       pick_agent: ctx.signal(false),
       known: ctx.signal(step::Paths::default()),
       gate: ctx.element_ref(),
@@ -308,10 +302,14 @@ struct Shown<'a> {
 
 impl PipelinePanel {
   /// The step the route holds open, when the pipeline has it. A route that names a step the pipeline has not (any
-  /// more, as after *Cancel* dropped a copy) shows the pipeline and is corrected to say so.
-  fn open_step(&self, ctx: &mut Ctx, shown: &Shown<'_>, named: Option<StepKey>) -> Option<StepKey> {
+  /// more, as after *Cancel* dropped a copy or an added Deliver step) shows the pipeline and is corrected to say so.
+  fn open_step(&self, ctx: &mut Ctx, shown: &Shown<'_>, named: Option<OpenStep>) -> Option<OpenStep> {
     let named = named?;
-    if shown.current.step(&named).is_some() {
+    let held = match &named {
+      OpenStep::Step(key) => shown.current.step(key).is_some(),
+      OpenStep::Deliver => shown.current.deliver().is_some(),
+    };
+    if held {
       return Some(named);
     }
     let route = ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(shown.entry.id)));
@@ -340,7 +338,6 @@ impl PipelinePanel {
         locked: shown.locked,
         epoch: self.notes.stored.get() + self.reset.get(),
         faulty: &self.faulty,
-        reveal_delivers: &self.reveal_delivers,
         pick_agent: &self.pick_agent,
         known: &self.known,
         gate: &self.gate,
@@ -348,12 +345,42 @@ impl PipelinePanel {
     ))
   }
 
+  /// The body of the open Deliver step ([`step::deliver_parts`]).
+  fn deliver_body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Column {
+    self.asked_shown.set(false);
+    body()
+      .spacing(ExtraSpacing::Inset.role())
+      .with_children(step::deliver_parts(
+        ctx,
+        &step::DeliverOpen {
+          project: shown.project,
+          entry: shown.entry,
+          edit: shown.edit,
+          current: shown.current,
+          read: shown.read,
+          assignables: shown.assignables,
+          locked: shown.locked,
+          epoch: self.notes.stored.get() + self.reset.get(),
+        },
+      ))
+  }
+
   /// The body the panel shows, and the version in it when it is the version's: a step the route holds open wins over a
   /// version that was shown, which it closes.
-  fn views(&self, ctx: &mut Ctx, shown: &Shown<'_>, hosted: Hosted, step: Option<StepKey>) -> (Column, Option<Viewed>) {
-    if let Some(key) = self.open_step(ctx, shown, step) {
+  fn views(
+    &self,
+    ctx: &mut Ctx,
+    shown: &Shown<'_>,
+    hosted: Hosted,
+    step: Option<OpenStep>,
+  ) -> (Column, Option<Viewed>) {
+    if let Some(open) = self.open_step(ctx, shown, step) {
       self.close_version();
-      return (self.step_body(ctx, shown, &key), None);
+      let body = match open {
+        OpenStep::Step(key) => self.step_body(ctx, shown, &key),
+        OpenStep::Deliver => self.deliver_body(ctx, shown),
+      };
+      return (body, None);
     }
     // A question asked while no step is open, or answered here, is new to the step opened next.
     self.asked_shown.set(false);
@@ -392,10 +419,6 @@ impl PipelinePanel {
       ..
     } = *shown;
     let head = self.head(ctx, shown, hosted);
-    if self.reveal_delivers.get_untracked() {
-      ctx.scroll_into_view(&self.delivers);
-      self.reveal_delivers.set(false);
-    }
     body()
       .spacing(ExtraSpacing::Inset.role())
       .child(head)
@@ -413,10 +436,10 @@ impl PipelinePanel {
           project,
           edit,
           current,
+          slug: &entry.slug,
           description: &self.description,
           locked,
           saved: self.notes.stored.get(),
-          delivers: &self.delivers,
         },
       ))
       .with_children(ready::group(

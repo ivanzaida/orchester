@@ -216,92 +216,126 @@ impl Agent {
     .element(ctx)
   }
 
-  /// The box (`Input` `rMu3f`): 28 high on `surface_input`, the chosen agent's mark, its name and what it runs on, and
-  /// the chevron; the `accent` stroke while open, `danger` with no agent chosen and `warning` for one that is not ready
-  /// or gone; what is wrong with it is the field's own second line, in place of what it runs on, so fixing it moves
-  /// nothing under the field.
+  /// The box of the step's agent ([`field_box`]).
   fn trigger(&self, ctx: &Ctx, props: &Props, open: bool) -> Element {
     let current = props
       .executors
       .iter()
       .position(|executor| *executor == props.value)
       .map(|at| &props.choices[at]);
-    let stroke = match (props.flag, open) {
-      (Some(Flag::Unset), _) => PaletteColor::Danger,
-      (Some(Flag::NotReady), _) => PaletteColor::Warning,
-      (None, true) => PaletteColor::Accent,
-      (None, false) => PaletteColor::Border,
-    };
-    let toggle = self.open.clone();
-    let mut row = Focus::Keyboard
-      .apply(pressable(move || toggle.update(|open| *open = !*open)))
-      .id("pipeline-hub-step-agent")
-      .ref_element(self.anchor.clone())
-      .describe("a11y_name", props.name.clone())
-      .describe("state", if open { "open" } else { "closed" })
-      .describe("locked", props.locked.to_string())
-      .hit_test(if props.locked {
-        HitTestBehavior::None
-      } else {
-        HitTestBehavior::Auto
-      })
-      .opacity(if props.locked { DISABLED_OPACITY } else { 1.0 })
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ControlHeight::Md.value()))
-      .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceInput)
-      .border_inside(BorderSize::Sm, stroke.clone())
-      .hovered_style(Style::new().border_inside(
-        BorderSize::Sm,
-        if props.flag.is_none() && !open {
-          PaletteColor::BorderStrong
-        } else {
-          stroke
-        },
-      ));
-    row = match props.flag {
-      Some(Flag::Unset) => row.class("unset"),
-      Some(Flag::NotReady) => row.class("not-ready"),
-      None => row,
-    };
-    row = match current {
-      Some(item) => row
-        .child(agent_picker::mark(ctx, item.mark))
-        .child(
-          Text::new(&item.name)
-            .id("pipeline-hub-step-agent-name")
-            .variant(AgentPickerText::FieldName.role())
-            .nowrap(),
-        )
-        .child(
-          Row::new()
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .with_children(agent_picker::second_line(
-              "pipeline-hub-step-agent-runs".to_owned(),
-              item,
-              AgentPickerText::FieldRuns.role(),
-            )),
-        ),
-      None => row.child(
-        Text::new(&props.unset)
-          .id("pipeline-hub-step-agent-name")
-          .variant(AgentPickerText::FieldRuns.role())
-          .flex(1.0)
-          .nowrap(),
-      ),
-    };
-    row
-      .child(icon(
-        if open { Icon::ChevronUp } else { Icon::ChevronDown },
-        IconSize::Md,
-        PaletteColor::TextMuted,
-      ))
-      .into()
+    field_box(
+      ctx,
+      &FieldBox {
+        id: "pipeline-hub-step-agent",
+        anchor: &self.anchor,
+        open: (&self.open, open),
+        current,
+        unset: &props.unset,
+        flag: props.flag,
+        name: props.name.clone(),
+        locked: props.locked,
+      },
+    )
   }
+}
+
+/// What [`field_box`] shows.
+pub(super) struct FieldBox<'a> {
+  /// The box's element id; its parts' ids start with it.
+  pub id: &'a str,
+  /// What the picker under it hangs from.
+  pub anchor: &'a ElementRef,
+  /// Whether the picker is open, which the box toggles, and whether it is open now.
+  pub open: (&'a Signal<bool>, bool),
+  /// The chosen agent; `None` shows `unset`.
+  pub current: Option<&'a Item>,
+  pub unset: &'a str,
+  pub flag: Option<Flag>,
+  /// What tools call the box.
+  pub name: Arc<str>,
+  pub locked: bool,
+}
+
+/// The box of an agent field (`Input` `rMu3f`): 28 high on `surface_input`, the chosen agent's mark, its name and what
+/// it runs on, and the chevron; the `accent` stroke while open, `danger` with no agent chosen and `warning` for one
+/// that is not ready or gone; what is wrong with it is the field's own second line, in place of what it runs on, so
+/// fixing it moves nothing under the field. It is as wide as its place.
+pub(super) fn field_box(ctx: &Ctx, field: &FieldBox<'_>) -> Element {
+  let (toggle, open) = (field.open.0.clone(), field.open.1);
+  let stroke = match (field.flag, open) {
+    (Some(Flag::Unset), _) => PaletteColor::Danger,
+    (Some(Flag::NotReady), _) => PaletteColor::Warning,
+    (None, true) => PaletteColor::Accent,
+    (None, false) => PaletteColor::Border,
+  };
+  let mut row = Focus::Keyboard
+    .apply(pressable(move || toggle.update(|open| *open = !*open)))
+    .id(field.id.to_owned())
+    .ref_element(field.anchor.clone())
+    .describe("a11y_name", field.name.clone())
+    .describe("state", if open { "open" } else { "closed" })
+    .describe("locked", field.locked.to_string())
+    .hit_test(if field.locked {
+      HitTestBehavior::None
+    } else {
+      HitTestBehavior::Auto
+    })
+    .opacity(if field.locked { DISABLED_OPACITY } else { 1.0 })
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ControlHeight::Md.value()))
+    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .rounded(RadiusSize::Md)
+    .background(PaletteColor::SurfaceInput)
+    .border_inside(BorderSize::Sm, stroke.clone())
+    .hovered_style(Style::new().border_inside(
+      BorderSize::Sm,
+      if field.flag.is_none() && !open {
+        PaletteColor::BorderStrong
+      } else {
+        stroke
+      },
+    ));
+  row = match field.flag {
+    Some(Flag::Unset) => row.class("unset"),
+    Some(Flag::NotReady) => row.class("not-ready"),
+    None => row,
+  };
+  row = match field.current {
+    Some(item) => row
+      .child(agent_picker::mark(ctx, item.mark))
+      .child(
+        Text::new(&item.name)
+          .id(format!("{}-name", field.id))
+          .variant(AgentPickerText::FieldName.role())
+          .nowrap(),
+      )
+      .child(
+        Row::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .with_children(agent_picker::second_line(
+            format!("{}-runs", field.id),
+            item,
+            AgentPickerText::FieldRuns.role(),
+          )),
+      ),
+    None => row.child(
+      Text::new(field.unset)
+        .id(format!("{}-name", field.id))
+        .variant(AgentPickerText::FieldRuns.role())
+        .flex(1.0)
+        .nowrap(),
+    ),
+  };
+  row
+    .child(icon(
+      if open { Icon::ChevronUp } else { Icon::ChevronDown },
+      IconSize::Md,
+      PaletteColor::TextMuted,
+    ))
+    .into()
 }
 
 /// What the field says while the edit has dropped the model override the step began with (`started`, with the CLI it

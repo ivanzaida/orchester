@@ -7,9 +7,11 @@
 //! the panel (PV2-07).
 //!
 //! The order is changed here, through the edit the panel holds ([`super::edit`]): a card the pointer or the keys are on
-//! shows its drag handle and its ⋯ menu (P3 `K4B56`, P4 `naN3G`); *Add step* in the section's head adds one. Nothing
-//! is saved until *Save*.
+//! shows its drag handle and its ⋯ menu (P3 `K4B56`, P4 `naN3G`); *Add step* in the section's head adds one, and
+//! *Add Deliver step* where the Deliver card would be adds that ([`add_deliver`], P15b `uDfc0`). Nothing is saved until
+//! *Save*.
 
+mod add_deliver;
 mod card;
 mod drag;
 mod fix;

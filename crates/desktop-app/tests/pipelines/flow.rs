@@ -59,7 +59,8 @@ fn pipelines_flow_shows_steps_in_order_parallel_ones_together_and_their_routes()
 
 #[test]
 fn pipelines_flow_without_deliver_step_offers_to_add_one() {
-  let mut editor = Editor::new();
+  // A team project: a local one adds the Deliver step in the Pipelines hub's flow.
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   assert!(

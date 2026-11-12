@@ -20,7 +20,8 @@ use crate::routes::{PipelinesFilter, PipelinesView};
 pub(super) struct Entry {
   pub id: ResourceId,
   pub name: Arc<str>,
-  /// What it is stored by, archived or not: a new pipeline's name may not give it again.
+  /// How tools, Orchester's MCP server and shared tasks name it; it never changes, and a new pipeline's name may not
+  /// give it again, archived or not.
   pub slug: Arc<str>,
   pub step_count: usize,
   pub used_by: usize,

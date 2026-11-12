@@ -43,6 +43,7 @@ use crate::{
   screens::{
     local_hub::leave::Leave,
     pipeline_hub::{
+      OpenStep,
       edit::{Edit, Holding},
       flow,
       leave::{Edited, UnsavedSignal, clear_unsaved, mark_unsaved},
@@ -68,8 +69,8 @@ pub(in crate::screens::pipeline_hub) struct Props {
   pub unsaved: UnsavedSignal,
   /// Where the hub hears that *Create v1* is storing it: leaving waits for that.
   pub saving: Signal<bool>,
-  /// The step the route holds open.
-  pub step: Option<StepKey>,
+  /// The step, or the Deliver step, the route holds open.
+  pub step: Option<OpenStep>,
 }
 
 impl PartialEq for Props {
@@ -105,7 +106,6 @@ struct NewPanel {
   select: Signal<bool>,
   faulty: step::Faulty,
   reset: Signal<u64>,
-  reveal_delivers: Signal<bool>,
   pick_agent: Signal<bool>,
   known: Signal<step::Paths>,
   gate: ElementRef,
@@ -131,7 +131,6 @@ impl Component for NewPanel {
       select: ctx.signal(!props.making.first_name.is_empty()),
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
-      reveal_delivers: ctx.signal(false),
       pick_agent: ctx.signal(false),
       known: ctx.signal(step::Paths::default()),
       gate: ctx.element_ref(),
@@ -152,7 +151,8 @@ impl Component for NewPanel {
     mark(&self.saving, self.create.state().get().is_pending());
     self.tell_hub(&props, &made, &state);
     let body = match self.open_step(ctx, &props, &made) {
-      Some(key) => self.step_body(ctx, &props, (&made, busy), &key),
+      Some(OpenStep::Step(key)) => self.step_body(ctx, &props, (&made, busy), &key),
+      Some(OpenStep::Deliver) => self.deliver_body(ctx, &props, (&made, busy)),
       None => self.pipeline_body(ctx, &props, (&made, &state, busy)),
     };
     let refused = self
@@ -310,11 +310,17 @@ impl NewPanel {
     }
   }
 
-  /// The step the route holds open, when the pipeline's flow has it; a route that names a step it has not (any more,
-  /// as after another start) shows the pipeline and is corrected to say so.
-  fn open_step(&self, ctx: &mut Ctx, props: &Props, made: &Made) -> Option<StepKey> {
+  /// The step or the Deliver step the route holds open, when the pipeline has it (a copy's too, whose steps are not
+  /// drawn); a route that names one it has not (any more, as after another start) shows
+  /// the pipeline and is corrected to say so.
+  fn open_step(&self, ctx: &mut Ctx, props: &Props, made: &Made) -> Option<OpenStep> {
     let named = props.step.clone()?;
-    if made.choice != Choice::Copy && made.current.step(&named).is_some() {
+    let held = made.edit.is_some()
+      && match &named {
+        OpenStep::Step(key) => made.current.step(key).is_some(),
+        OpenStep::Deliver => made.current.deliver().is_some(),
+      };
+    if held {
       return Some(named);
     }
     let route = ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(props.making.id)));
@@ -403,12 +409,34 @@ impl NewPanel {
         locked: busy,
         epoch: self.reset.get(),
         faulty: &self.faulty,
-        reveal_delivers: &self.reveal_delivers,
         pick_agent: &self.pick_agent,
         known: &self.known,
         gate: &self.gate,
       },
     ))
+  }
+
+  /// The Deliver step of the pipeline opened in the panel, as a stored pipeline's opens (P15 `nPaMj`).
+  fn deliver_body(&self, ctx: &mut Ctx, props: &Props, (made, busy): (&Made, bool)) -> Column {
+    let Some(edit) = made.edit.as_ref() else {
+      return body();
+    };
+    let entry = entry_of(ctx, props, made);
+    body()
+      .spacing(ExtraSpacing::Inset.role())
+      .with_children(step::deliver_parts(
+        ctx,
+        &step::DeliverOpen {
+          project: &props.project,
+          entry: &entry,
+          edit,
+          current: &made.current,
+          read: &made.read,
+          assignables: props.listing.assignables(),
+          locked: busy,
+          epoch: self.reset.get(),
+        },
+      ))
   }
 
   /// What *Create v1* does now: it stores the pipeline once nothing keeps it off.

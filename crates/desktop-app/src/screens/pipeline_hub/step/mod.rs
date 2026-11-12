@@ -3,7 +3,7 @@
 //! steps ([`strip`]) and the step's fields in groups: *Step* (*Agent* with *Open Builder*, and *Instructions*) and
 //! *Run* (what happens when changes are requested, the step budget, *When the step fails*) ([`groups`]), and *Gate and
 //! access* with the step's permissions ([`gate`], [`permissions`]). There is no *Runs after*: where a step runs is set
-//! in the flow.
+//! in the flow. The Deliver step opens in the same panel with the same head and strip ([`deliver`], P15 `nPaMj`).
 //!
 //! Every field changes the edit the panel holds ([`super::edit`]) and nothing else; *Save* and *Cancel* are the
 //! panel's and act on the whole pipeline. The route holds the open step (`ProjectPage::Pipeline` with
@@ -12,6 +12,7 @@
 
 mod agent;
 mod choices;
+mod deliver;
 mod executor;
 mod gate;
 mod groups;
@@ -34,8 +35,11 @@ use lurq::{
 use orchester_core::resource::{PipelineEdit, StepKey};
 use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead};
 
-pub(super) use self::known::Paths;
-use super::{edit::Edit, model::Entry};
+pub(super) use self::{
+  deliver::{Open as DeliverOpen, parts as deliver_parts},
+  known::Paths,
+};
+use super::{OpenStep, edit::Edit, model::Entry};
 use crate::project::ShownProject;
 
 /// Text typed into a field of a step that is not valid, kept while the person goes to another step or back to the
@@ -140,8 +144,6 @@ pub(super) struct Open<'a> {
   /// How many times the panel put the edit back or stored it: the fields are mounted anew after each.
   pub epoch: u64,
   pub faulty: &'a Faulty,
-  /// Set by the Deliver chip, which opens the pipeline and has its *A run delivers* row shown.
-  pub reveal_delivers: &'a Signal<bool>,
   /// Set by a *Choose another* that opened this step: its Agent field opens its picker once.
   pub pick_agent: &'a Signal<bool>,
   /// The last known CLI each step of the edit ran on ([`known`]).
@@ -157,7 +159,7 @@ pub(super) fn parts(ctx: &mut Ctx, open: &Open<'_>) -> Vec<Element> {
     return Vec::new();
   };
   let pieces = pieces::of(open.read, open.current, &ctx.t("pipeline_hub.flow.deliver"));
-  let place = pieces::place(&pieces, open.key).unwrap_or((0, 0));
+  let place = pieces::place(&pieces, Some(open.key)).unwrap_or((0, 0));
   let upstream = pieces::upstream(&pieces, open.key);
   vec![
     head::head(ctx, open, step, place),
@@ -167,8 +169,7 @@ pub(super) fn parts(ctx: &mut Ctx, open: &Open<'_>) -> Vec<Element> {
         project: open.project.open.project.id(),
         pipeline: open.entry.id,
         pieces,
-        current: open.key.clone(),
-        reveal_delivers: open.reveal_delivers.clone(),
+        current: OpenStep::Step(open.key.clone()),
       },
     ),
     groups::step(ctx, open, step),

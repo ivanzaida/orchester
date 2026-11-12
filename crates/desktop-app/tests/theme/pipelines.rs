@@ -23,6 +23,8 @@ fn theme_pipelines_and_grouped_rows_follow_the_design() {
     (PipelinesText::Status.role(), 12.0, FontWeight::Medium, "Geist"),
     // Why the pipelines could not be read (`v3szq` in P9 `H4fLj`).
     (PipelinesText::ReadReason.role(), 12.0, FontWeight::Normal, "Geist"),
+    // A pipeline's slug in its settings (`tb7tA` in P17 `LzGvn`).
+    (PipelinesText::Slug.role(), 12.0, FontWeight::Normal, "Geist Mono"),
   ] {
     let style = theme.typography_style(role);
     assert_eq!(
@@ -42,6 +44,10 @@ fn theme_pipelines_and_grouped_rows_follow_the_design() {
   assert_eq!(
     theme.typography_style(PipelinesText::ReadReason.role()).color,
     theme.palette_color(PaletteColor::TextSecondary)
+  );
+  assert_eq!(
+    theme.typography_style(PipelinesText::Slug.role()).color,
+    theme.palette_color(PaletteColor::TextPrimary)
   );
   // The bones of P5 `TF9O3`: the first two rows and cards whole, then fading (`vaAc2`, `FfeE8`).
   assert_eq!(PIPELINES_BONE_FADE, [1.0, 1.0, 0.7, 0.45]);

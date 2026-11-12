@@ -46,10 +46,7 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  id::{ProjectId, ResourceId},
-  resource::StepKey,
-};
+use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::pipelines::create::Start;
 
 use crate::{
@@ -140,7 +137,12 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_) => {
       new_pipeline_or_hub(ctx, project, page)
     }
-    ProjectPage::Pipeline(id, PipelineView::Step(key)) => pipeline_step(ctx, project, *id, key),
+    ProjectPage::Pipeline(id, PipelineView::Step(key)) => {
+      pipeline_step(ctx, project, *id, pipeline_hub::OpenStep::Step(key.clone()))
+    }
+    ProjectPage::Pipeline(id, PipelineView::Deliver) => {
+      pipeline_step(ctx, project, *id, pipeline_hub::OpenStep::Deliver)
+    }
     ProjectPage::Pipeline(id, view) => pipelines::editor(ctx, project, *id, (view.clone(), None)),
     ProjectPage::PipelineVersion(id, version, view) => {
       pipelines::editor(ctx, project, *id, (view.clone(), Some(*version)))
@@ -274,19 +276,18 @@ fn new_pipeline_or_hub(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage
   }
 }
 
-/// A step of pipeline `id` (a card of the flow, a fix): in a local project it opens in the Pipelines hub's panel
-/// (`Pipelines · v2` P2), which keeps the edit the pipeline's panel holds; a team project keeps the step's own page.
-/// While it is not yet read whether the project is shared the page the route had before stays, as the pipeline's own
-/// route does, so a team project's editor is not replaced by a placeholder for as long as that takes.
-fn pipeline_step(ctx: &mut Ctx, project: &ShownProject, id: ResourceId, key: &StepKey) -> Element {
+/// A step of pipeline `id` (a card of the flow, a fix) or its Deliver step: in a local project it opens in the
+/// Pipelines hub's panel (`Pipelines · v2` P2, P15), which keeps the edit the pipeline's panel holds; a team project
+/// keeps the step's own page. While it is not yet read whether the project is shared the page the route had before
+/// stays, as the pipeline's own route does, so a team project's editor is not replaced by a placeholder for as long as
+/// that takes.
+fn pipeline_step(ctx: &mut Ctx, project: &ShownProject, id: ResourceId, open: pipeline_hub::OpenStep) -> Element {
   match project.feed.team.get() {
     TeamRead::Read(None) => {
       let view = PipelinesView::new(PipelinesFilter::All, Some(id));
-      pipeline_hub::screen(ctx, project, view, Some(key.clone()))
+      pipeline_hub::screen(ctx, project, view, Some(open))
     }
-    TeamRead::Read(Some(_)) | TeamRead::Unread => {
-      pipelines::editor(ctx, project, id, (PipelineView::Step(key.clone()), None))
-    }
+    TeamRead::Read(Some(_)) | TeamRead::Unread => pipelines::editor(ctx, project, id, (open.view(), None)),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
 }

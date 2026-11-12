@@ -1,12 +1,12 @@
 //! The step strip on an open step (`Step strip` in `Pipelines · v2` P2 `u2rYEH`, P13 `KRQ5J`): the whole flow in one
 //! row, a chip with the number and name of each step, `›` between them, a hand where the run waits for the person, the
 //! steps that run side by side in one frame (`04 ∥ 05`) and the Deliver step last. The open step is outlined in
-//! `accent`; a chip opens its step in the same panel.
+//! `accent`; a chip opens its step in the same panel, the Deliver chip the Deliver step (P15 `nPaMj`).
 //!
 //! A flow longer than the strip scrolls sideways: it opens with the open step in view, shows ‹ and › only on the side
 //! that has more (each moves by one screen), the wheel and a swipe scroll it, a thin thumb under the chips shows where
-//! it is, and ← and → open the previous and the next step, keeping it in view. The strip measures its own room from
-//! its last layout.
+//! it is, and ← and → open the previous and the next step, Deliver among them, keeping it in view. The strip measures
+//! its own room from its last layout.
 
 use lurq::{
   app::{
@@ -23,16 +23,13 @@ use lurq::{
   },
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  id::{ProjectId, ResourceId},
-  resource::StepKey,
-};
+use orchester_core::id::{ProjectId, ResourceId};
 
 use super::pieces::{self, Chip, Piece};
 use crate::{
   navigation::Navigation,
-  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
-  screens::pipeline_hub::flow::number,
+  routes::{ProjectPage, Route},
+  screens::pipeline_hub::{OpenStep, flow::number},
   theme::{
     ExtraColor, ExtraRadius, ExtraSpacing, FlowText, IconSize, StripSpacing, StripText, chip_radius, strip_scrollbar,
   },
@@ -57,22 +54,13 @@ const ARROW_ZONE: f32 = PANEL + 4.0;
 /// A scroll of less than this is not one.
 const EPSILON: f32 = 0.5;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub project: ProjectId,
   pub pipeline: ResourceId,
   pub pieces: Vec<Piece>,
   /// The open step.
-  pub current: StepKey,
-  /// What the Deliver chip sets before it opens the pipeline: its *A run delivers* row is shown.
-  pub reveal_delivers: Signal<bool>,
-}
-/// The props are equal when they show the same: the signal is the panel's own.
-impl PartialEq for Props {
-  fn eq(&self, other: &Self) -> bool {
-    (self.project, self.pipeline, &self.pieces, &self.current)
-      == (other.project, other.pipeline, &other.pieces, &other.current)
-  }
+  pub current: OpenStep,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -165,7 +153,7 @@ impl Measured {
 struct Strip {
   measured: Measured,
   /// The step last brought into view.
-  followed: Ref<Option<StepKey>>,
+  followed: Ref<Option<OpenStep>>,
 }
 
 impl Component for Strip {
@@ -329,28 +317,10 @@ impl Strip {
   }
 
   fn chip(&self, props: &Props, navigation: &Navigation, chip: &Chip) -> Element {
-    let press = match &chip.key {
-      Some(key) => {
-        let route = Route::Project(
-          props.project,
-          ProjectPage::Pipeline(props.pipeline, PipelineView::Step(key.clone())),
-        );
-        Press::Open(navigation.to(route))
-      }
-      // The Deliver step is the pipeline's own: it opens the pipeline, with its *A run delivers* row shown.
-      None => {
-        let route = Route::Project(
-          props.project,
-          ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(props.pipeline))),
-        );
-        let (navigation, reveal) = (navigation.clone(), props.reveal_delivers.clone());
-        Press::run(move || {
-          reveal.set(true);
-          navigation.go(route.clone());
-        })
-      }
-    };
-    let current = chip.key.as_ref() == Some(&props.current);
+    let opens = chip.opens();
+    let route = Route::Project(props.project, ProjectPage::Pipeline(props.pipeline, opens.view()));
+    let press = Press::Open(navigation.to(route));
+    let current = opens == props.current;
     let id = chip.key.as_ref().map_or_else(
       || "pipeline-hub-step-chip-deliver".to_owned(),
       |key| format!("pipeline-hub-step-chip-{key}"),
@@ -428,7 +398,7 @@ fn gate(index: usize) -> Element {
     .into()
 }
 
-/// ← and → open the previous and the next step, unless a field has the keys.
+/// ← and → open the previous and the next step, Deliver the last of them, unless a field has the keys.
 fn keys(props: &Props, navigation: Navigation) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let (order, current) = (pieces::order(&props.pieces), props.current.clone());
   let (project, pipeline) = (props.project, props.pipeline);
@@ -449,9 +419,6 @@ fn keys(props: &Props, navigation: Navigation) -> impl Fn(KeyboardEvent) + Send 
       return;
     };
     event.prevent_default();
-    navigation.go(Route::Project(
-      project,
-      ProjectPage::Pipeline(pipeline, PipelineView::Step(next.clone())),
-    ));
+    navigation.go(Route::Project(project, ProjectPage::Pipeline(pipeline, next.view())));
   }
 }

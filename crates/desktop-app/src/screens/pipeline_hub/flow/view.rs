@@ -24,7 +24,7 @@ use orchester_core::{
 use orchester_workspace::pipelines::flow::{FlowRead, PipelineFlow, Stage, StepCard};
 
 use super::{
-  Opens,
+  Opens, add_deliver,
   card::{self, Look, Opening, Place},
   drag::{self, Lifted, LiftedProps},
   fix::Fix,
@@ -305,7 +305,7 @@ struct Draw<'a> {
 
 impl Draw<'_> {
   /// The rows between the start and the end: the stages with their gates, the line where a lifted card would land, then
-  /// the Deliver card.
+  /// the Deliver card, or *Add Deliver step* in its place.
   fn rows(&self, ctx: &mut Ctx) -> Vec<Element> {
     let mut rows = Vec::new();
     if self.flow.stages.is_empty() {
@@ -337,6 +337,8 @@ impl Draw<'_> {
           SpacingSize::Sm,
         ),
       ));
+    } else {
+      rows.push(add_deliver::row(ctx, self.opens, &self.drive.edit, self.locked));
     }
     rows
   }

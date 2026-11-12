@@ -56,7 +56,8 @@ impl HubError {
 pub struct HubPipeline {
   pub id: ResourceId,
   pub name: Arc<str>,
-  /// What it is stored by, which a new pipeline's name may not give again.
+  /// How tools, Orchester's MCP server and shared tasks name it: made from the name when it was created, never
+  /// changed. A new pipeline's name may not give it again.
   pub slug: Arc<str>,
   pub step_count: usize,
   /// Its latest version.
