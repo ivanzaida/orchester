@@ -196,7 +196,7 @@ fn publish_pipeline(
   Ok((resource.id(), version))
 }
 
-fn command_tool(
+pub(super) fn command_tool(
   db: &mut ProjectDb,
   title: &str,
   line: &[&str],

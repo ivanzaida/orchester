@@ -16,6 +16,7 @@ mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;
+mod pipelines_new;
 mod plan_only;
 #[allow(
   dead_code,

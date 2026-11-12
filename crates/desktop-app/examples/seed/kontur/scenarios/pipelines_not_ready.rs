@@ -26,7 +26,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// A published pipeline whose steps run in the order given, each on its profile.
-fn published(kontur: &mut Kontur, title: &str, steps: &[(&str, ResourceId)]) -> Result<(), SeedError> {
+pub(super) fn published(kontur: &mut Kontur, title: &str, steps: &[(&str, ResourceId)]) -> Result<(), SeedError> {
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let mut before = None;
   for (step, profile) in steps {
@@ -39,7 +39,7 @@ fn published(kontur: &mut Kontur, title: &str, steps: &[(&str, ResourceId)]) -> 
 }
 
 /// P8's pipeline: *Update* runs on the builder, *Review* on a profile that is no longer available, then *Deliver*.
-fn dependency_update(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError> {
+pub(super) fn dependency_update(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError> {
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let update = edit.add_step(name("Update"), None);
   let review = edit.add_step(name("Review"), Some(&update));
