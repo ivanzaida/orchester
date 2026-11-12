@@ -23,7 +23,7 @@ fn pipelines_steps_keep_fields_validate_and_save() {
   editor.click("step-page-back");
   editor.set("step-budget", "4,000");
   editor.click("step-gate");
-  editor.click("pipeline-save");
+  editor.save();
   editor.until("saved step", |e| e.version(id) == 2);
   let body = editor.stored(id);
   let step = &body.steps()[0];
@@ -40,7 +40,7 @@ fn pipelines_steps_keep_fields_validate_and_save() {
   editor.click("step-remove");
   editor.until("remove question", |e| e.exists("step-remove-confirm"));
   editor.click("step-remove-confirm");
-  editor.click("pipeline-save");
+  editor.save();
   editor.until("saved budget", |e| {
     let body = e.stored(id);
     body.steps().len() == 1 && body.steps()[0].budget.is_some_and(|budget| budget.get() == 2000)
@@ -112,13 +112,14 @@ fn pipelines_slug_collision_and_stale_editor_keep_the_latest_version() {
   editor.until("reloaded", |e| e.exists("pipeline-description"));
 }
 #[test]
-fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
+fn pipelines_valid_changes_save_and_published_history_is_read_only() {
   let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
-  editor.set("pipeline-description", "Automatically saved");
-  editor.until("automatic save as v2", |e| {
-    e.version(id) == 2 && e.stored(id).description() == "Automatically saved"
+  editor.set("pipeline-description", "Saved");
+  editor.click("pipeline-save");
+  editor.until("saved as v2", |e| {
+    e.version(id) == 2 && e.stored(id).description() == "Saved"
   });
   editor.click("pipeline-history");
   editor.until("history", |e| e.exists("pipeline-version-1"));

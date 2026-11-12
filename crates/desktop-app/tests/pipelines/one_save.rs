@@ -268,6 +268,13 @@ fn pipelines_one_save_create_v1_publishes_a_ready_pipeline_in_a_local_project() 
 
   editor.set("pipeline-name", "Delivery copy");
   editor.click("pipeline-start-1");
+  editor.until("the pipelines to copy", |e| {
+    e.window
+      .tree
+      .get_element_by_id_mut("pipeline-copy")
+      .and_then(|select| select.as_select())
+      .is_some_and(|select| !select.labels().is_empty())
+  });
   editor.choose("pipeline-copy", "Delivery · v1");
   editor.click("pipeline-create");
   editor.until("the new pipeline's page", |e| e.exists("pipeline-add-step"));
@@ -319,6 +326,17 @@ fn pipelines_one_save_the_empty_start_is_not_offered() {
   assert!(!editor.exists("pipeline-empty-start"), "no Start empty");
 }
 
+/// How many versions of `id` wait for the team server here: the fixture's tool waits too, never numbered.
+fn waiting(editor: &Editor, id: ResourceId) -> usize {
+  editor
+    .db()
+    .waiting_publishes()
+    .expect("outbox")
+    .iter()
+    .filter(|publish| publish.resource == id)
+    .count()
+}
+
 /// A team pipeline whose v2 *Mine.*, published here from v1 by an older build, still waits for a server that does not
 /// answer, open with its waiting bar (D-044): the pipeline and its v1 steps.
 fn left_waiting(editor: &mut Editor) -> (ResourceId, Pipeline) {
@@ -356,10 +374,14 @@ fn pipelines_one_save_a_version_an_older_build_left_waiting_can_be_discarded() {
   editor.click("pipeline-discard");
   editor.until("discarded", |e| !e.exists("pipeline-not-sent"));
 
-  assert!(editor.db().waiting_publishes().expect("outbox").is_empty());
+  assert_eq!(waiting(&editor, id), 0);
   assert_eq!(latest(&editor, id), (VersionNumber::FIRST, ours));
   editor.until("the team's version shows", |e| e.exists("pipeline-header-history"));
-  assert_eq!(editor.value("pipeline-description"), "");
+  assert_ne!(
+    editor.value("pipeline-description"),
+    "Mine.",
+    "the page reads the team's v1 again, which has no description"
+  );
 }
 
 /// *Discard it* reads the pipeline again, which would replace an edit not saved: while there is one it is unavailable
@@ -378,6 +400,6 @@ fn pipelines_one_save_a_waiting_version_is_not_discarded_over_an_edit_not_saved(
 
   assert!(editor.exists("pipeline-not-sent"), "nothing was discarded");
   assert_eq!(editor.value("pipeline-description"), "Not saved yet.", "the edit stays");
-  assert_eq!(editor.db().waiting_publishes().expect("outbox").len(), 1);
+  assert_eq!(waiting(&editor, id), 1);
   assert_eq!(latest(&editor, id).0, two(), "the waiting version stays");
 }

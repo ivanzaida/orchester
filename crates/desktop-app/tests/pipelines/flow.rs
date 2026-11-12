@@ -1,6 +1,5 @@
 //! The Steps tab's vertical flow: dependency order, parallel steps in one bracket, each route that sends work back
-//! with its target, the Deliver step or its absence; and a viewed version that only reads, restored at once while
-//! nothing is unsaved.
+//! with its target, the Deliver step or its absence; and a viewed version that only reads.
 use orchester_core::resource::DeliverStep;
 
 use crate::pipelines_support::Editor;
@@ -17,9 +16,11 @@ fn top(editor: &mut Editor, id: &str) -> f32 {
 
 #[test]
 fn pipelines_flow_shows_steps_in_order_parallel_ones_together_and_their_routes() {
-  let mut editor = Editor::new();
+  // A team project: a local one opens a step in the Pipelines hub's panel, not on this page.
+  let mut editor = Editor::team();
   let id = editor.empty("Feature delivery");
   editor.open(id);
+  editor.remove_only_step();
   editor.click("pipeline-use-starter");
   editor.until("starter steps", |e| e.exists("pipeline-step-implement"));
   let order = [
@@ -83,6 +84,7 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
   assert!(editor.exists("deliver-mode-approve"));
   assert!(editor.text("deliver-mode-pull-request").contains("Coming later"));
   editor.click("deliver-mode-auto");
+  editor.click("pipeline-save");
   editor.until("the Deliver step saved as v2", |e| {
     e.version(id) == 2
       && e
@@ -93,7 +95,7 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
 }
 
 #[test]
-fn pipelines_viewed_version_reads_each_step_and_restores_at_once_without_a_draft() {
+fn pipelines_viewed_version_reads_each_step() {
   let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
@@ -108,21 +110,19 @@ fn pipelines_viewed_version_reads_each_step_and_restores_at_once_without_a_draft
   assert!(!editor.exists("step-duplicate"), "a viewed step reads, never edits");
   assert!(!editor.exists("step-executor"));
   assert_eq!(editor.text("step-executor-row-value"), "Checks");
-  editor.click("pipeline-restore");
   assert!(
-    !editor.exists("pipeline-restore-question"),
-    "with no draft, nothing is replaced, so nothing is asked"
+    !editor.exists("pipeline-restore"),
+    "a viewed version is not restored (D-033)"
   );
-  assert!(
-    !editor.exists("pipeline-viewing-banner"),
-    "the restored version is the draft now"
-  );
+  editor.click("pipeline-back-draft");
+  editor.until("the edit again", |e| !e.exists("pipeline-viewing-banner"));
   assert!(editor.exists("pipeline-add-step"));
 }
 
 #[test]
-fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
-  let mut editor = Editor::team();
+fn pipelines_instructions_error_shows_under_its_field_and_save_stays_unavailable() {
+  // A local project: a team page has the team's head line in place of the version line.
+  let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-step-step");
@@ -139,10 +139,10 @@ fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
   assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
   assert_eq!(
     editor.text("pipeline-version-detail"),
-    "Draft v2 · used by 0 tasks",
-    "an unsaved, invalid draft is named by its number alone"
+    "Not saved yet: v2 · used by 0 tasks",
+    "an unsaved, invalid edit is named by the number Save would publish alone"
   );
-  assert!(editor.exists("pipeline-save"), "Save draft stays in the header");
+  assert!(editor.exists("pipeline-save"), "Save stays in the header, unavailable");
   editor.click("pipeline-save");
   editor.arm();
   assert!(editor.version(id) == 1, "an invalid edit is not saved");
@@ -158,6 +158,7 @@ fn pipelines_flow_add_step_names_by_the_number_it_adds_and_counts_on_from_a_take
   let mut editor = Editor::team();
   let id = editor.empty("Names");
   editor.open(id);
+  editor.remove_only_step();
   editor.click("pipeline-add-step");
   assert_eq!(editor.value("step-name"), "New step 1");
   editor.click("pipeline-add-step");
@@ -176,6 +177,7 @@ fn pipelines_flow_a_step_on_a_cycle_says_so_on_its_runs_after_row() {
   let mut editor = Editor::team();
   let id = editor.empty("Cycle");
   editor.open(id);
+  editor.remove_only_step();
   editor.click("pipeline-add-step");
   editor.click("pipeline-add-step");
   assert!(!editor.exists("step-dependencies-hint"));
