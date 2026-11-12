@@ -56,6 +56,7 @@ mod pipeline_save_refusals;
 mod pipeline_step;
 mod pipeline_step_agent;
 mod pipeline_step_fields;
+mod pipeline_step_keys;
 mod pipeline_step_leaving;
 mod pipeline_step_scroll;
 mod pipeline_versions;
