@@ -1,16 +1,23 @@
 //! *Pipeline* under the flow (`Pipeline` `rsIh5` in `Pipelines · v2` P1): the pipeline's own settings as rows in one
 //! outline, edited in place. They change only the edit the panel holds ([`super::edit`]); *Save* stores it.
 //!
-//! The rows are *Description* (a box), *Starts* and *When a step fails* (what every run does today, shown as their
-//! value: nothing else can be chosen), *Sources for every step* ([`super::sources`]) and *A run delivers* (a select of
-//! what a passing run leaves, with what the chosen one means under its label).
+//! The rows are *Description* (a box), *Slug* (fixed, with a lock: `Slug` `Sni1T` in P17 `LzGvn`), *Starts* and *When a
+//! step fails* (what every run does today, shown as their value: nothing else can be chosen), *Sources for every step*
+//! ([`super::sources`]) and *A run delivers* (a select of what a passing run leaves, with what the chosen one means
+//! under its label). The old Settings tab's *Who can use it* is not here: it only ever said *This project*, and a
+//! pipeline stores no access setting (P17).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
-  components::Column,
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
+  components::{Column, Row, Text},
   core::{ElementRef, Signal},
+  layout::Alignment,
+  node::dimension::Dimension,
 };
 use orchester_core::resource::{Deliverable, PipelineEdit};
 use orchester_workspace::pipelines::sources::Listing;
@@ -25,7 +32,11 @@ use crate::{
     pipeline_hub::pick::{self, Pick},
     team_hub::rows::{self, Sub},
   },
-  ui::field::FieldInput,
+  theme::{IconSize, PipelinesText},
+  ui::{
+    field::FieldInput,
+    icon::{Icon, icon},
+  },
 };
 
 /// What the section needs of the panel.
@@ -34,6 +45,8 @@ pub(super) struct Settings<'a> {
   pub edit: &'a Edit,
   /// What the panel shows: the edit, or the stored pipeline.
   pub current: &'a PipelineEdit,
+  /// The pipeline's slug, which neither an edit nor a rename changes.
+  pub slug: &'a str,
   /// What the description's box holds.
   pub description: &'a Signal<String>,
   /// A save is under way: nothing is changed now.
@@ -47,6 +60,7 @@ pub(super) struct Settings<'a> {
 pub(super) fn section(ctx: &mut Ctx, settings: &Settings<'_>) -> Column {
   let list = vec![
     description(ctx, settings),
+    slug(ctx, settings.slug),
     rows::row(
       "pipeline-hub-starts",
       &ctx.t("pipeline_hub.settings.starts"),
@@ -83,6 +97,31 @@ fn description(ctx: &mut Ctx, settings: &Settings<'_>) -> lurq::components::Row 
     input = input.locked();
   }
   rows::row("pipeline-hub-description-row", &label, None, input.render(ctx))
+}
+
+/// *Slug*: how tools, Orchester's MCP server, tasks and runs name the pipeline. It was made from the name when the
+/// pipeline was created and never changes (a rename keeps it), so it is plain text with a lock, not a field.
+fn slug(ctx: &mut Ctx, slug: &str) -> Row {
+  let value = Row::new()
+    .id("pipeline-hub-slug-value")
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(slug)
+        .id("pipeline-hub-slug")
+        .variant(PipelinesText::Slug.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
+    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted).id("pipeline-hub-slug-locked"));
+  rows::row(
+    "pipeline-hub-slug-row",
+    &ctx.t("pipeline_hub.settings.slug"),
+    Some(Sub::quiet(ctx.t("pipeline_hub.settings.slugSub"))),
+    value,
+  )
 }
 
 /// *Sources for every step*: the pills and *Add*.

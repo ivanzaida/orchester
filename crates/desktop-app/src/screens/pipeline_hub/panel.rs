@@ -413,6 +413,7 @@ impl PipelinePanel {
           project,
           edit,
           current,
+          slug: &entry.slug,
           description: &self.description,
           locked,
           saved: self.notes.stored.get(),

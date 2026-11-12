@@ -56,6 +56,9 @@ impl HubError {
 pub struct HubPipeline {
   pub id: ResourceId,
   pub name: Arc<str>,
+  /// How tools, Orchester's MCP server and shared tasks name it: made from the name when it was created, never
+  /// changed.
+  pub slug: Arc<str>,
   pub step_count: usize,
   /// Its latest version.
   pub version: VersionNumber,
@@ -90,6 +93,7 @@ impl HubPipeline {
 pub struct ArchivedPipeline {
   pub id: ResourceId,
   pub name: Arc<str>,
+  pub slug: Arc<str>,
   pub at: Timestamp,
   /// Its latest version and when it was published; `None` when it never had one.
   pub latest: Option<(VersionNumber, Timestamp)>,
@@ -159,6 +163,7 @@ fn of_entry(
   HubPipeline {
     id: entry.id,
     name: entry.name,
+    slug: entry.slug,
     step_count: entry.step_count,
     version: entry.version,
     used_by: entry.used_by,
@@ -179,6 +184,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<ArchivedPipeline>, StoreError> {
     archived.push(ArchivedPipeline {
       id: resource.id(),
       name: resource.name().as_str().into(),
+      slug: resource.slug().as_str().into(),
       at,
       latest,
     });

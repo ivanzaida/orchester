@@ -27,15 +27,19 @@ pub enum PipelinesText {
   /// 12 `text_secondary`: the store's own words for why the pipelines couldn't be read (`Reason` `v3szq` in P9
   /// `H4fLj`, `Pipelines · v2`).
   ReadReason,
+  /// Geist Mono 12 `text_primary`, 1.3: a pipeline's slug in its settings (`Slug` `tb7tA` in P17 `LzGvn`,
+  /// `Pipelines · v2`).
+  Slug,
 }
 
 impl PipelinesText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::FlowLabel,
     Self::CardNumber,
     Self::StepNumber,
     Self::Status,
     Self::ReadReason,
+    Self::Slug,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -49,6 +53,7 @@ impl PipelinesText {
       Self::StepNumber => "pipelines_step_number",
       Self::Status => "pipelines_status",
       Self::ReadReason => "pipelines_read_reason",
+      Self::Slug => "pipelines_slug",
     }
   }
 
@@ -59,6 +64,7 @@ impl PipelinesText {
       Self::StepNumber => mono(style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::Status => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::ReadReason => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Slug => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
     }
   }
 }
