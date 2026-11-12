@@ -370,6 +370,21 @@ pub struct ChatAction {
   /// its row *KON-41 · #17 waits on KON-52*.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub waits_on: Option<WaitsOnRow>,
+  /// For `decide_approval` (2026-11-11): the tool request the chat answered itself, with what it asked and why.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub tool_answer: Option<ToolAnswer>,
+}
+
+/// The chat's own answer to an agent's tool request: the request's id, what it asked (a command, or an MCP server's
+/// tool), whether it was allowed once or denied, the chat's reason, and the words a denial told the agent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolAnswer {
+  pub request: String,
+  pub asked: String,
+  pub allowed: bool,
+  pub reason: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub told: Option<String>,
 }
 
 impl ChatAction {
@@ -395,6 +410,7 @@ impl ChatAction {
       approved_in: None,
       watch: None,
       waits_on: None,
+      tool_answer: None,
     }
   }
 }

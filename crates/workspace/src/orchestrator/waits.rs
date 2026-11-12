@@ -7,8 +7,8 @@
 //! card (a run's end or a merge's conflicts: its task's Summary), whatever the switches. A wait of a task no
 //! conversation leads goes to no conversation and starts no turn (ORC-895): only subscriptions route the waits, and
 //! none opens a conversation. With *Let the Orchestrator drive* on, a kept wait, whoever started the run and whatever
-//! raised it (ORC-909), except a tool request ([`WaitKind::starts_turns`]), also starts one Orchestrator turn by itself
-//! in its conversation
+//! raised it (ORC-909), a tool request too (2026-11-11, [`super::approval_turn`]), also starts one Orchestrator turn by
+//! itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. The turn of an interrupted run's end
@@ -255,7 +255,7 @@ fn keep_new(
       continue;
     };
     // Kept whatever the switch: the switch only decides whether it starts a turn by itself (ORC-894).
-    let automatic = switches.drives && wait.kind.starts_turns();
+    let automatic = switches.drives;
     let continuing = if automatic { continuing((db, root), wait)? } else { None };
     let merging = if automatic && wait.kind == WaitKind::Ended(RunEnd::Succeeded) {
       Some(merging_in(db, wait.run)?)

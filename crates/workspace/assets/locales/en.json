@@ -2486,7 +2486,10 @@
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
-      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
+      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
+      "notMergeTurn": "In a turn Orchester started by itself, the chat starts tasks only in the turn of a run's success it merged, where the order of what this conversation leads asks for it. Nothing started; the person can start it in the app.",
+      "alreadyRan": "{{task}} has run already: running a task again is the person's, never a turn Orchester started by itself. Nothing started; the person can run it again in the app.",
+      "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {
       "ownTask": "A run cannot wait on its own task. Nothing was changed.",
@@ -2532,6 +2535,8 @@
         "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's.",
         "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here. Nothing was merged."
       },
+      "approvalReviewerJudging": "Auto mode's reviewer is judging this request: wait for its answer, or leave it to the person. Nothing was decided.",
+      "approvalNotThisRequest": "This turn was started by another tool request, or by no tool request: in a turn Orchester started by itself, the chat decides only the request that started it. Nothing was decided; tell the person what you recommend instead.",
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
       "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",

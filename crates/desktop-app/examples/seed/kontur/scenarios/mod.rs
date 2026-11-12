@@ -166,6 +166,7 @@ pub const ALL: [Scenario; 196] = [
   Scenario::of("orchestrator-waits-on", orchestrator::waits_on::seed),
   Scenario::of("orchestrator-watch", orchestrator::watch::seed),
   Scenario::of("orchestrator-leads", orchestrator::leads::seed),
+  Scenario::of("orchestrator-requests", orchestrator::requests::seed),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),

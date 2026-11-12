@@ -1,7 +1,8 @@
 //! The chat's rule for merging a finished run on its own (ORC-69, `docs/design/orchestrator-toolset.md`, decision 5).
 //! While the project lets the Orchestrator drive, the turn a task's run success starts by itself merges the run with
 //! `merge_run`, only when all of these hold ([`merging_in`]): it is the task's latest run and succeeded; every step of
-//! its pipeline passed, a step accepted as it was counting only when a person accepted it; the task does not say
+//! its pipeline passed, a step accepted as it was counting as passed whoever accepted it (the person's decision of
+//! 2026-11-11); the task does not say
 //! *Don't merge automatically*, is not marked Blocked and no unfinished task blocks it; and new starts are not held for
 //! its reviewed group or the whole project. `merge_run`'s own rules (the main checkout needs no local integration) hold
 //! on top. In a turn nobody asked for, `merge_run` merges only a run this rule lets it ([`check`]). A run that
@@ -12,7 +13,7 @@ use orchester_core::{
   id::RunId,
   orchestrator::{MergeLeft, Merging},
   resource::WithoutCommits,
-  run::{Run, RunStatus, attempt_starts, run_delivers},
+  run::{Run, RunStatus, run_delivers},
   store::RunStore,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -98,8 +99,7 @@ fn left(db: &ProjectDb, run: &Run, route: RunRoute, merge: Merge) -> Result<Opti
   if organization.no_automatic_merge() {
     return Ok(Some(MergeLeft::OptedOut));
   }
-  let starts = attempt_starts(&db.events(run.id()).map_err(run_store_error)?);
-  if let Some(steps) = MergeLeft::of_steps(run, &starts) {
+  if let Some(steps) = MergeLeft::of_steps(run) {
     return Ok(Some(steps));
   }
   if let Some(reason) = organization.blocked_reason() {

@@ -131,3 +131,33 @@ fn seed_orchestrator_leads_has_led_modules_a_task_the_project_and_an_already_led
     "the Orchestrator opens on the leading conversation"
   );
 }
+
+/// `orchestrator-requests` (2026-11-11): five tool requests kept under the follower's keys, each where the chat's
+/// states a–e need it: two still wait (one being read, one left to the person), the Orchestrator allowed one and
+/// denied one, and the person allowed one once.
+#[test]
+fn seed_orchestrator_requests_keep_a_request_in_each_state() {
+  use orchester_core::run::{DecidedBy, ToolApprovalDecision};
+
+  let seed = Seed::of("orchestrator-requests");
+  let shown = conversation(&seed, "Tool requests of Webhooks v2");
+  assert_eq!(shown.requests.len(), 5, "{:?}", shown.requests);
+  assert_eq!(
+    shown.standing.len(),
+    2,
+    "the request being read and the one left to the person wait"
+  );
+  let decided: Vec<_> = shown
+    .requests
+    .values()
+    .filter_map(|request| request.decided)
+    .map(|decided| (decided.decision, decided.by))
+    .collect();
+  for expected in [
+    (Some(ToolApprovalDecision::Approved), Some(DecidedBy::Automation)),
+    (Some(ToolApprovalDecision::Denied), Some(DecidedBy::AutomationDeny)),
+    (Some(ToolApprovalDecision::Approved), Some(DecidedBy::Person)),
+  ] {
+    assert!(decided.contains(&expected), "{expected:?} in {decided:?}");
+  }
+}

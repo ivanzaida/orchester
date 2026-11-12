@@ -10,7 +10,7 @@
 use orchester_core::{
   id::RunId,
   orchestrator::{
-    ActionOutcome, ChatAction,
+    ActionOutcome, ChatAction, ToolAnswer,
     change::{ProposedChange, Publishing},
   },
   run::Answerer,
@@ -20,6 +20,7 @@ use rmcp::model::JsonObject;
 use serde_json::Value;
 
 use super::{
+  approval_turn::{self, DECIDE_APPROVAL},
   auto_merge, blocked,
   change::{
     self, continuation,
@@ -28,7 +29,7 @@ use super::{
   created::{self, CREATE_TASK},
   guard,
   keep::{self, HOLD_QUEUE, Named},
-  proposal,
+  led_start, proposal,
   repository::INIT_REPOSITORY,
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE, app_tool},
 };
@@ -73,6 +74,7 @@ pub(super) async fn act_and_keep(
     resumed: kept.resumed,
     auto_mode: kept.auto_mode,
     on_its_own: kept.on_its_own,
+    tool_answer: kept.tool_answer,
     watch,
     ..ChatAction::new(name, None, outcome)
   };
@@ -108,6 +110,7 @@ struct Kept {
   resumed: Option<RunId>,
   auto_mode: bool,
   on_its_own: bool,
+  tool_answer: Option<ToolAnswer>,
 }
 
 /// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person.
@@ -137,6 +140,7 @@ async fn act(
   };
   let acted = match name {
     RUN_TASK => start(deps, scope, arguments, drives).await,
+    DECIDE_APPROVAL => decide_approval(deps, scope, arguments).await,
     _ if proposes => propose_change(deps, scope, name, arguments).await,
     MERGE_RUN => merge(deps, scope, arguments).await,
     CANCEL_RUN | INIT_REPOSITORY | ANSWER_QUESTION | SEND_MESSAGE => applied(deps, scope, name, arguments).await,
@@ -196,6 +200,28 @@ async fn merge(deps: (&Services, &Translate), scope: &ChatScope, arguments: &Jso
   Ok(acted)
 }
 
+/// `decide_approval` while driving: in a turn nobody asked for, only the request whose wait started the turn
+/// ([`approval_turn::checked`]); the decision is the tool's, kept with the task the request belongs to and, done, as
+/// the chat's answer with what was asked and the chat's reason ([`ToolAnswer`]).
+async fn decide_approval(
+  deps: (&Services, &Translate),
+  scope: &ChatScope,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  let (reason, arguments) = approval_turn::reason(arguments)?;
+  let checked = approval_turn::checked(scope, &arguments).await?;
+  let result = app_tool(deps, DECIDE_APPROVAL, arguments).await;
+  let tool_answer = result.as_ref().ok().and_then(|told| checked.answer(told, reason));
+  Ok(Acted {
+    result,
+    kept: Kept {
+      task: checked.task,
+      tool_answer,
+      ..Kept::default()
+    },
+  })
+}
+
 /// `continue_run` while driving: allow_retry, return_to and resolve_conflicts are carried out as changes the
 /// conversation keeps; every other choice (accept, raise_limits, raise_step_budget, resume) goes to the tool as it is.
 async fn continuing(
@@ -210,7 +236,8 @@ async fn continuing(
 }
 
 /// `run_task`: a start proposed to the person, or, while the chat drives or the project allows Autopilot, the run
-/// started; refused for a task marked Blocked.
+/// started; refused for a task marked Blocked, and while it drives in a turn nobody asked for, for a task its
+/// conversation does not lead ([`led_start`]).
 async fn start(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
@@ -218,6 +245,9 @@ async fn start(
   drives: bool,
 ) -> Result<Acted, ToolError> {
   blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
+  if drives && scope.on_its_own {
+    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str)).await?;
+  }
   // In a turn nobody asked for, a start is only proposed, unless the chat drives.
   if !drives && (scope.on_its_own || !allows_autopilot(scope).await?) {
     let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
