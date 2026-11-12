@@ -66,6 +66,8 @@ fn orchestrator_merge_proposal_needs_committed_work() {
 fn orchestrator_duplicates_a_pipeline_as_its_first_version() {
   let mut screen = Orchestrator::new(Setup::Ready);
   screen.delivery();
+  // The chat changes pipelines only while it drives (D-033).
+  screen.let_orchestrator_drive(true);
   screen.go(OrchestratorChat::New);
   // A copy that asks for nothing more than its source is published as v1 at once, as for any client (D-032).
   call(
