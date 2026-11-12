@@ -361,10 +361,16 @@ fn a_command_the_profile_no_longer_allows_is_said_refused_and_taken_back() {
     agents.text("pipeline-hub-step-permissions-error")
   );
 
-  // A pipeline holds no draft (D-032): a save of a narrowing the profile no longer allows is refused, storing nothing.
+  // A pipeline holds no draft (D-032): a narrowing the profile no longer allows cannot be saved, so Save is off and
+  // says why, and pressing it stores nothing.
   agents.click("pipeline-hub-step-approval");
+  agents.until("the bar says why", |s| s.text(HINT).contains("cargo build"));
   agents.click(SAVE);
-  agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
+  agents.window.pass();
+  assert!(
+    !agents.exists("pipeline-hub-refused"),
+    "a Save that is off tries nothing"
+  );
   let db = ProjectDb::open(&agents.root).expect("database");
   assert!(db.draft::<Pipeline>(id).expect("read").is_none(), "no draft is stored");
   assert_eq!(db.versions::<Pipeline>(id).expect("read").len(), 1, "nothing published");
