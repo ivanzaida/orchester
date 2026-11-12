@@ -1,8 +1,8 @@
 //! The migration by which pipelines have no drafts (D-032, D-033): a database before it opens with every pipeline draft
 //! deleted, a local one's, one over a version and an admin's of a team pipeline, and every pipeline with no version
-//! deleted with what names it; the other kinds keep their drafts, a version a run pinned or that waits for the team
-//! server stays, a shared task naming a deleted pipeline reads it as missing, and the references the database checks
-//! still hold. A project without pipelines is left as it is.
+//! deleted with what names it; the other kinds keep their drafts, a version a run pinned or the team's stays, a shared
+//! task naming a deleted pipeline reads it as missing, and the references the database checks still hold. A project
+//! without pipelines is left as it is.
 //! `cargo test -p orchester-store --test pipeline_drafts_migration pipeline_drafts_migration`.
 
 mod support;
@@ -98,7 +98,7 @@ struct Seeded {
   /// v2 with a draft over it, saved by automation, and chosen by `delivery_task`.
   delivery: ResourceId,
   delivery_task: TaskId,
-  /// The team's, v1 waiting for the server, with an admin's local draft over it.
+  /// The team's, its v1 kept, with an admin's local draft over it.
   team_flow: ResourceId,
 }
 
@@ -153,17 +153,17 @@ fn raw_rows(
   [sketch, delivery, team_flow]: [ResourceId; 3],
   [sketch_task, delivery_task, team_task]: [TaskId; 3],
 ) {
-  let (body, team_version): (String, String) = raw
+  let body: String = raw
     .query_row(
-      "SELECT body, id FROM resource_versions WHERE resource_id = ?1",
+      "SELECT body FROM resource_versions WHERE resource_id = ?1",
       [team_flow.to_string()],
-      |row| Ok((row.get(0)?, row.get(1)?)),
+      |row| row.get(0),
     )
     .expect("a pipeline body");
   let rows = statements(
     [sketch.to_string(), delivery.to_string(), team_flow.to_string()],
     [sketch_task, delivery_task, team_task],
-    (body, team_version),
+    body,
   );
   for (sql, values) in rows {
     raw
@@ -178,12 +178,12 @@ fn raw_rows(
     .expect("the team's");
 }
 
-/// The rows [`raw_rows`] writes, with their values: the pipelines' ids, the tasks' and Team flow's body and version.
+/// The rows [`raw_rows`] writes, with their values: the pipelines' ids, the tasks' and Team flow's body.
 fn statements(
   [sketch, delivery, team_flow]: [String; 3],
   [sketch_task, delivery_task, team_task]: [TaskId; 3],
-  (body, team_version): (String, String),
-) -> [(&'static str, Vec<String>); 15] {
+  body: String,
+) -> [(&'static str, Vec<String>); 14] {
   [
     (
       "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'sketch', 'Sketch', 7)",
@@ -199,11 +199,7 @@ fn statements(
     ),
     (
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 1, 6)",
-      vec![team_flow.clone(), body],
-    ),
-    (
-      "INSERT INTO shared_publishes (version_id, resource_id, idempotency_key) VALUES (?1, ?2, 'publish-1')",
-      vec![team_version, team_flow],
+      vec![team_flow, body],
     ),
     (
       "INSERT INTO project_default_pipeline (id, pipeline_id) VALUES (1, ?1)",
@@ -329,7 +325,7 @@ fn pipeline_drafts_migration_deletes_every_pipeline_draft_and_the_pipelines_with
 }
 
 /// Nothing of the migrated database still names Sketch or the drafts: its imports, removal, automation marks and money
-/// budgets, the drafts' marks; a kept team pipeline's version still waits; every reference holds.
+/// budgets, the drafts' marks; every reference holds.
 fn nothing_names_the_deleted(old: &TempDir, seeded: &Seeded) {
   let raw = Connection::open(old.path().join(".orchester").join("orchester.db")).expect("the migrated database");
   for (sql, id) in [
@@ -360,15 +356,6 @@ fn nothing_names_the_deleted(old: &TempDir, seeded: &Seeded) {
   ] {
     assert_eq!(count(&raw, sql, id), 0, "{sql}");
   }
-  assert_eq!(
-    count(
-      &raw,
-      "SELECT COUNT(*) FROM shared_publishes WHERE resource_id = ?1",
-      seeded.team_flow
-    ),
-    1,
-    "a kept team pipeline's version still waits for the server"
-  );
   let references: i64 = raw
     .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))
     .expect("check");

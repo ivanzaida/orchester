@@ -3,16 +3,19 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId, SecretId},
+  blob::ContentHash,
+  id::{ConnectionId, ResourceId, SecretId, UserId},
   name::Name,
   permission::StepPermissions,
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeniedBehavior, ModelId, Pipeline,
     PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, StepKind, Tool, ToolAction,
   },
+  sharing::{SharedPerson, TaskRevision},
   store::ResourceStore,
   time::Timestamp,
 };
+use orchester_store::{CachedVersion, ResourceSharing};
 
 use crate::pipelines_support::Editor;
 
@@ -114,8 +117,7 @@ fn bounds(editor: &mut Editor, id: &str) -> lurq::core::ElementRect {
 fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_separate() {
   let mut editor = Editor::team();
   let (id, _) = problems(&editor);
-  let mut db = editor.db();
-  let saved = db.latest_version::<Pipeline>(id).unwrap().unwrap();
+  let saved = editor.db().latest_version::<Pipeline>(id).unwrap().unwrap();
   let mut edit = PipelineEdit::new(saved.body().clone());
   let keys: Vec<_> = edit.steps().iter().map(|step| step.key.clone()).collect();
   for (index, key) in keys.iter().take(2).enumerate() {
@@ -125,8 +127,27 @@ fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_se
     edit.update(key, |step| step.name = name(&long));
   }
   let body = edit.validate().unwrap();
-  db.publish_pipeline_edit(id, &body, saved.number(), None, Timestamp::now())
-    .unwrap();
+  // A team pipeline's next version is kept here only as the team server numbered it (D-043), as the stream keeps it.
+  let mut db = editor.db();
+  db.set_resource_sharing(id, Some(ResourceSharing::Shared(TaskRevision::FIRST)))
+    .expect("the team's");
+  db.cache_shared_version(
+    id,
+    &CachedVersion {
+      number: saved.number().next().expect("v2"),
+      published_at: Timestamp::now(),
+      publisher: SharedPerson {
+        id: UserId::generate(),
+        name: "olha".to_owned(),
+      },
+      server_body: serde_json::to_value(&body).expect("the body"),
+      hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
+      references: Vec::new(),
+      local_body: body.clone(),
+    },
+  )
+  .expect("v2 as the server numbered it");
+  drop(db);
   editor.open(id);
   let mut previous_bottom = 0.0;
   for step in body.steps() {

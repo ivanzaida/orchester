@@ -7,10 +7,11 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{CommandAction, CommandProgram, Pipeline, PipelineEdit, Slug, StepKind, Tool, ToolAction},
+  sharing::TaskRevision,
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ResourceSharing};
 use orchester_workspace::sharing::Servers;
 
 use crate::support::{Data, Window, project_id, stand_ins::StandIns, team_link};
@@ -272,6 +273,15 @@ impl Editor {
       .id();
     db.publish_draft::<AgentProfile>(id, Timestamp::now())
       .expect("valid pipeline fixture");
+    self.as_the_teams(&mut db, id);
+  }
+  /// In a team project, marks `id` the team's, as the stream keeps a resource the team server has: a team pipeline's
+  /// steps may run only the team's profiles and tools (D-043), and nothing made here waits to be sent any more.
+  fn as_the_teams(&self, db: &mut ProjectDb, id: ResourceId) {
+    if self.team.is_some() {
+      db.set_resource_sharing(id, Some(ResourceSharing::Shared(TaskRevision::FIRST)))
+        .expect("the team's");
+    }
   }
   pub fn gated(&self) -> bool {
     self.window.link.input_gate().protecting()
@@ -297,15 +307,18 @@ impl Editor {
           None,
         )
         .expect("valid pipeline fixture");
-        db.create_published(
-          Slug::new("fixture-step").expect("valid pipeline fixture"),
-          Name::new("Fixture step").expect("valid pipeline fixture"),
-          &body,
-          Timestamp::now(),
-        )
-        .expect("valid pipeline fixture")
-        .0
-        .id()
+        let made = db
+          .create_published(
+            Slug::new("fixture-step").expect("valid pipeline fixture"),
+            Name::new("Fixture step").expect("valid pipeline fixture"),
+            &body,
+            Timestamp::now(),
+          )
+          .expect("valid pipeline fixture")
+          .0
+          .id();
+        self.as_the_teams(&mut db, made);
+        made
       }
     };
     let mut body = PipelineEdit::new(Pipeline::new(vec![]).expect("valid pipeline fixture"));
@@ -337,6 +350,7 @@ impl Editor {
       .id();
     db.publish_draft::<Tool>(tool_id, Timestamp::now())
       .expect("valid pipeline fixture");
+    self.as_the_teams(&mut db, tool_id);
     let mut body = PipelineEdit::new(Pipeline::new(vec![]).expect("valid pipeline fixture"));
     let key = body.add_step(Name::new("Check").expect("valid pipeline fixture"), None);
     body.update(&key, |s| {

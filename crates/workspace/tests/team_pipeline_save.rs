@@ -24,7 +24,7 @@ use orchester_core::{
     CommandAction, CommandProgram, Pipeline, PipelineEdit, ResourceKind, Slug, StepKind, Tool, ToolAction,
     VersionNumber,
   },
-  sharing::MemberRole,
+  sharing::{MemberRole, TaskRevision},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -172,6 +172,40 @@ impl Team {
       })
   }
 
+  /// The app MCP's answer to `tool` with `args`, as a person who lets automation change agent permissions calls it;
+  /// a refusal fails the test.
+  fn call(&self, tool: &str, args: serde_json::Value) -> serde_json::Value {
+    self
+      .desk
+      .workspace
+      .set_automation_changes_permissions(true)
+      .expect("the switch");
+    let services = app_mcp::Services::new(
+      self.desk.workspace.clone(),
+      Runners::new(
+        self.root.join("no-runner"),
+        self.desk.runtime.handle().clone(),
+        Activity::new(),
+        SessionEnd::Clean,
+      ),
+      self.servers(),
+      Programs::processes(),
+      (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
+    );
+    let translate = Translate::new(|message| message.key.to_owned());
+    let serde_json::Value::Object(args) = args else {
+      unreachable!("an object");
+    };
+    let answer = match self.desk.run(app_mcp::call(&services, &translate, tool, args.clone())) {
+      Some(answer) => answer,
+      None => self
+        .desk
+        .run(app_mcp::setup::call(&services, &translate, tool, args))
+        .expect("a tool of the app"),
+    };
+    answer.unwrap_or_else(|error| panic!("{tool}: {}", error.to_json(|message| message.key.to_owned())))
+  }
+
   fn pipelines_here(&self) -> usize {
     self.db().resources(ResourceKind::Pipeline).expect("read").len()
   }
@@ -215,7 +249,7 @@ fn link(root: &std::path::Path, (server, project): (ServerId, ProjectId), role: 
     .expect("linked");
 }
 
-/// The team tool *Cargo*, new here and on its way to the team.
+/// The team tool *Cargo*, as the stream keeps one the team server has.
 fn cargo(db: &mut ProjectDb) -> ResourceId {
   let tool = Tool::new(
     "",
@@ -226,10 +260,15 @@ fn cargo(db: &mut ProjectDb) -> ResourceId {
     None,
   )
   .expect("a tool");
-  db.create_published(slug("cargo"), name("Cargo"), &tool, Timestamp::now())
+  let id = db
+    .create_published(slug("cargo"), name("Cargo"), &tool, Timestamp::now())
     .expect("the tool")
     .0
-    .id()
+    .id();
+  // The team's, as the stream keeps what the team server has: nothing waits to be sent any more.
+  db.set_resource_sharing(id, Some(ResourceSharing::Shared(TaskRevision::FIRST)))
+    .expect("the team's tool");
+  id
 }
 
 /// A pipeline of one step running `tool`, described `text`.
@@ -438,33 +477,10 @@ fn team_pipeline_save_share_pipeline_makes_the_team_copy_beside_the_hidden_local
     .db()
     .kept_pipeline_for_test("delivery", "Delivery", &checks(team.tool, "Ours."), Timestamp::now())
     .expect("a pipeline of this computer's own");
-  team
-    .desk
-    .workspace
-    .set_automation_changes_permissions(true)
-    .expect("the switch");
-  let services = app_mcp::Services::new(
-    team.desk.workspace.clone(),
-    Runners::new(
-      team.root.join("no-runner"),
-      team.desk.runtime.handle().clone(),
-      Activity::new(),
-      SessionEnd::Clean,
-    ),
-    team.servers(),
-    Programs::processes(),
-    (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
+  let shared = team.call(
+    "share_pipeline",
+    serde_json::json!({"project": "Kontur", "pipeline": "Delivery"}),
   );
-  let translate = Translate::new(|message| message.key.to_owned());
-  let serde_json::Value::Object(args) = serde_json::json!({"project": "Kontur", "pipeline": "Delivery"}) else {
-    unreachable!("an object");
-  };
-
-  let shared = team
-    .desk
-    .run(app_mcp::setup::call(&services, &translate, "share_pipeline", args))
-    .expect("a setup tool")
-    .unwrap_or_else(|error| panic!("{}", error.to_json(|message| message.key.to_owned())));
 
   assert_eq!(shared["pipeline"]["state"], "team");
   assert_eq!(shared["pipeline"]["slug"], "delivery");
@@ -486,6 +502,31 @@ fn team_pipeline_save_share_pipeline_makes_the_team_copy_beside_the_hidden_local
   assert_eq!(kept.slug().as_str(), "delivery", "it keeps its slug");
   assert_eq!(team.latest(copy), (1, "Ours.".to_owned()));
   assert_eq!(team.on_server(copy), Some((1, "Delivery".to_owned())));
+}
+
+/// `duplicate_pipeline` in a team project is not refused as a draft tool: the copy is made on the team server at once
+/// and kept here once the server made it (D-043).
+#[test]
+fn team_pipeline_save_duplicate_pipeline_makes_the_copy_on_the_team_server() {
+  let team = Team::owner();
+  let source = team.created();
+
+  let copied = team.call(
+    "duplicate_pipeline",
+    serde_json::json!({"project": "Kontur", "pipeline": "Checks", "name": "Checks copy"}),
+  );
+
+  let copy: ResourceId = copied["pipeline"]["id"]
+    .as_str()
+    .and_then(|id| id.parse().ok())
+    .expect("the copy's id");
+  assert_ne!(copy, source);
+  assert_eq!(team.on_server(copy), Some((1, "Checks copy".to_owned())));
+  assert!(matches!(
+    team.db().resource_sharing(copy).expect("read"),
+    Some(ResourceSharing::Shared(_))
+  ));
+  assert_eq!(team.latest(copy), (1, "Ours.".to_owned()));
 }
 
 /// A save sent again after its answer was lost meets its own version on the server: it says the changes are there
