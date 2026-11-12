@@ -1,8 +1,7 @@
 //! Pipelines (`Pipelines · redesign` `evQ4U`): the list, New pipeline, and a pipeline's page with its Steps,
 //! Settings and Versions tabs: a team project's Pipelines page. A local project's is the Pipelines hub
-//! ([`super::pipeline_hub`]); it reaches this page only for New pipeline and Duplicate (until PV2-22) and for the Steps
-//! tab of steps the hub cannot draw (*Edit steps*, until PV2-24) — every other route here opens the hub
-//! (`screens::pipeline_page`).
+//! ([`super::pipeline_hub`]), which every route here opens for it (`screens::pipeline_page`,
+//! `screens::new_pipeline_or_hub`).
 mod actions;
 mod column;
 mod command_picker;

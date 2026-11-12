@@ -38,25 +38,18 @@ impl PipelineLinks {
   }
 }
 
-/// What a route to a pipeline's own page shows in a local project.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::screens) enum LocalPipeline {
-  /// The Pipelines hub with the pipeline's panel, and what it holds open there: a step or the Deliver step.
-  Hub(Option<OpenStep>),
-  /// The Steps tab of the edit on the old page, which the hub's *Edit steps* opens for steps it cannot draw (PV2-24).
-  EditSteps,
-}
+/// A route to a pipeline's own page, as a local project shows it: always the Pipelines hub with the pipeline's panel.
+pub(in crate::screens) struct LocalPipeline;
 
 impl LocalPipeline {
-  /// What `view` of the edit, or of published `version`, shows: a step, one of its pages or the Deliver step opens in
-  /// the panel; a published version, the Settings and Versions tabs and the publish review show the pipeline's panel,
-  /// which holds them all (its settings, *Versions* in its head, *Save*).
-  pub(in crate::screens) fn of(view: &PipelineView, version: Option<VersionNumber>) -> Self {
+  /// What the panel holds open for `view` of the edit, or of published `version`: a step, one of its pages or the
+  /// Deliver step; a published version, the Steps, Settings and Versions tabs and the publish review show the
+  /// pipeline's panel itself, which holds them all (its flow, its settings, *Versions* in its head, *Save*).
+  pub(in crate::screens) fn open(view: &PipelineView, version: Option<VersionNumber>) -> Option<OpenStep> {
     match (view, version) {
-      (PipelineView::Steps, None) => Self::EditSteps,
-      (PipelineView::Step(key) | PipelineView::StepPage(key, _), None) => Self::Hub(Some(OpenStep::Step(key.clone()))),
-      (PipelineView::Deliver, None) => Self::Hub(Some(OpenStep::Deliver)),
-      _ => Self::Hub(None),
+      (PipelineView::Step(key) | PipelineView::StepPage(key, _), None) => Some(OpenStep::Step(key.clone())),
+      (PipelineView::Deliver, None) => Some(OpenStep::Deliver),
+      _ => None,
     }
   }
 

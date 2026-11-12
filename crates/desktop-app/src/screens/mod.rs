@@ -276,10 +276,9 @@ fn new_pipeline_or_hub(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage
 /// A route to pipeline `id`'s own page, of the edit or of published `version`: in a local project the Pipelines hub
 /// (`Pipelines · v2`), whose panel shows the step or the Deliver step the route names (P2, P15) and the pipeline itself
 /// for every other place of the old page (its Settings and Versions tabs, a published version, the publish review),
-/// with the route made the hub's own ([`pipeline_in_hub`]). Only the Steps tab of the edit still opens the old page in
-/// a local project: the hub's *Edit steps* opens it for steps it cannot draw (PV2-24 moves that). A team project keeps
-/// the old page. While it is not yet read whether the project is shared the page the route had before stays, so a team
-/// project's editor is not replaced by a placeholder for as long as that takes.
+/// with the route made the hub's own ([`pipeline_in_hub`]). A team project keeps the old page. While it is not yet
+/// read whether the project is shared the page the route had before stays, so a team project's editor is not replaced
+/// by a placeholder for as long as that takes.
 fn pipeline_page(
   ctx: &mut Ctx,
   project: &ShownProject,
@@ -287,10 +286,7 @@ fn pipeline_page(
   (view, version): (&PipelineView, Option<VersionNumber>),
 ) -> Element {
   match project.feed.team.get() {
-    TeamRead::Read(None) => match LocalPipeline::of(view, version) {
-      LocalPipeline::Hub(open) => pipeline_in_hub(ctx, project, id, open),
-      LocalPipeline::EditSteps => pipelines::editor(ctx, project, id, (view.clone(), None)),
-    },
+    TeamRead::Read(None) => pipeline_in_hub(ctx, project, id, LocalPipeline::open(view, version)),
     TeamRead::Read(Some(_)) | TeamRead::Unread => pipelines::editor(ctx, project, id, (view.clone(), version)),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
