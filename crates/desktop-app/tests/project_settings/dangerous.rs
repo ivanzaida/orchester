@@ -169,3 +169,58 @@ fn approve_mode_dangerous_is_chosen_by_a_persons_danger_button_alone_and_left_by
   settle(&mut page);
   assert_eq!(mode(&page), ApproveMode::Manual);
 }
+
+/// At the app's narrowest window (960 × 640) and one step above, the label and its (i) keep their width and the
+/// selector stays inside the row with every segment's words: where the line cannot hold both, the selector takes a line
+/// of its own under the label, before the hint.
+#[test]
+fn approve_mode_row_keeps_its_label_and_every_segment_in_a_narrow_window() {
+  let mut page = Settings::new(true);
+  for (width, height) in [(960, 640), (1100, 700)] {
+    page.window.tree.resize(width, height);
+    settle(&mut page);
+    let row = bounds(&mut page, "settings-auto-approve-mode-row");
+    let label = bounds(&mut page, "settings-auto-approve-mode-label");
+    let info = bounds(&mut page, "settings-auto-approve-mode-info");
+    let control = bounds(&mut page, "settings-approve-mode");
+    let hint = bounds(&mut page, HINT);
+    let at = format!("{width} × {height}");
+    assert!(
+      label.width > 0.0 && info.width > 0.0,
+      "{at}: the label and its (i) are shown"
+    );
+    assert!(
+      info.x >= label.x + label.width - 0.5,
+      "{at}: the (i) after the whole label"
+    );
+    assert!(
+      info.x + info.width <= row.x + row.width + 0.5,
+      "{at}: the (i) inside the row"
+    );
+    assert!(control.x >= row.x - 0.5, "{at}: the selector inside the row");
+    assert!(
+      control.x + control.width <= row.x + row.width + 0.5,
+      "{at}: the selector inside the row"
+    );
+    for segment in [
+      "settings-approve-mode-manual",
+      "settings-approve-mode-autopilot",
+      "settings-approve-mode-dangerous",
+    ] {
+      let words = bounds(&mut page, &format!("{segment}-label"));
+      assert!(
+        words.x >= control.x - 0.5 && words.x + words.width <= control.x + control.width + 0.5,
+        "{at}: {segment}'s words inside the selector"
+      );
+    }
+    let on_its_line = control.y + control.height / 2.0 - (label.y + label.height / 2.0);
+    assert!(
+      on_its_line.abs() < 1.0 || control.y >= label.y + label.height,
+      "{at}: on the label's line, or on its own under it"
+    );
+    assert!(
+      hint.y >= control.y + control.height,
+      "{at}: the hint under the selector"
+    );
+  }
+}

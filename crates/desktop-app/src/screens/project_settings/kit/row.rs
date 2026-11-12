@@ -13,7 +13,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 
@@ -148,7 +148,8 @@ impl SettingRow {
   }
 
   /// The controls sit at the end of the label's line, centred on it, and the hint runs the row's full width under both,
-  /// 6 apart (`Approve mode` `aHLLh`: `Top`, then `Hint`).
+  /// 6 apart (`Approve mode` `aHLLh`: `Top`, then `Hint`). Where the line cannot hold the label and the controls, the
+  /// controls take a line of their own under the label; neither shrinks.
   pub(crate) fn on_label(mut self) -> Self {
     self.on_label = true;
     self
@@ -320,11 +321,16 @@ impl SettingRow {
         .with_children(self.controls)
     });
     if self.on_label {
+      // The label and its (i) keep their width, the controls theirs: where the line cannot hold both, the controls go
+      // to a line of their own under the label, never over the row's edge.
       let top = Row::new()
+        .id(format!("{}-top", self.id))
         .width(Dimension::Pct(100.0))
+        .wrap()
+        .justify(Justify::SpaceBetween)
         .spacing(SpacingSize::Lg)
         .align_items(Alignment::Center)
-        .child(heading.flex(1.0).min_width(Dimension::Px(0.0)))
+        .child(heading.flex_shrink(0.0))
         .with_children(controls);
       return Column::new()
         .width(Dimension::Pct(100.0))
