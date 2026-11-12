@@ -21,6 +21,8 @@ fn pipelines_deliver_recheck_without_a_command_tool_step_is_off_and_inert() {
   let mut editor = Editor::team();
   let id = editor.empty("No checks");
   editor.open(id);
+  // The fixture's one step runs a command tool: without it, an added step runs nothing to check again.
+  editor.remove_only_step();
   editor.click("pipeline-add-step");
   editor.click("pipeline-deliver-chip");
   editor.click("deliver-add");

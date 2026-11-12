@@ -8,14 +8,17 @@ fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_ty
   let mut editor = Editor::new();
   let id = editor.empty("Pointer focus");
   editor.open(id);
-  for (horizontal, vertical) in [
+  for (typed_count, (horizontal, vertical)) in [
     (0.1, 0.2),
     (0.5, 0.7),
     (0.99, 0.2),
     (0.01, 0.5),
     (0.5, 0.03),
     (0.5, 0.97),
-  ] {
+  ]
+  .into_iter()
+  .enumerate()
+  {
     let bounds = editor
       .window
       .tree
@@ -39,14 +42,15 @@ fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_ty
       Some("pipeline-description"),
       "pointer at {horizontal},{vertical}"
     );
-    let before = editor.stored(id).description().to_owned();
     editor.key("x", false);
-    let typed = editor.value("pipeline-description");
-    assert_eq!(typed.len(), before.len() + 1);
-    editor.until("pointer edit saved", |current| {
-      current.stored(id).description() == typed
-    });
+    // The fixture has no description: each pointer focus adds one more letter.
+    assert_eq!(editor.value("pipeline-description"), "x".repeat(typed_count + 1));
   }
+  let typed = editor.value("pipeline-description");
+  editor.click("pipeline-save");
+  editor.until("the typed text saved", |current| {
+    current.stored(id).description() == typed
+  });
 }
 
 #[test]
@@ -119,6 +123,7 @@ fn pipelines_settings_save_the_next_version_and_history_shows_the_selected_one()
   assert!(editor.text("tab-1").contains("Delivery"));
   editor.click("pipeline-settings");
   editor.set("pipeline-settings-name", "Shipping");
+  editor.click("pipeline-save");
   editor.until("name saved", |e| {
     e.db()
       .resource(id)
@@ -128,6 +133,7 @@ fn pipelines_settings_save_the_next_version_and_history_shows_the_selected_one()
   editor.until("tab renamed", |e| e.text("tab-1").contains("Shipping"));
   assert_eq!(editor.db().resource(id).unwrap().unwrap().slug().as_str(), "delivery");
   editor.set("pipeline-settings-description", "Changed description");
+  editor.click("pipeline-save");
   // A pipeline holds no draft (D-032): the description is saved as the next version.
   editor.until("description saved as v2", |e| {
     e.version(id) == 2 && e.stored(id).description() == "Changed description"
@@ -164,6 +170,7 @@ fn pipelines_settings_preserves_invalid_name_across_navigation() {
   assert_eq!(editor.value("pipeline-settings-name"), "");
   assert!(editor.text("pipeline-settings-page").contains("Enter a pipeline name"));
   editor.set("pipeline-settings-name", "Recovered");
+  editor.click("pipeline-save");
   editor.until("valid name saved after remount", |e| {
     e.db()
       .resource(id)
@@ -180,6 +187,7 @@ fn pipelines_failure_routes_are_visible_and_do_not_intercept_card_centers() {
   let mut editor = Editor::team();
   let id = editor.empty("Routes");
   editor.open(id);
+  editor.remove_only_step();
   editor.click("pipeline-use-starter");
   let route = editor
     .window

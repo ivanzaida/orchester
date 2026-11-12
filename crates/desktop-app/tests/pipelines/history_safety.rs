@@ -10,30 +10,6 @@ use orchester_workspace::pipelines::history::VersionHistory;
 use crate::pipelines_support::Editor;
 
 #[test]
-fn pipelines_restore_keep_preserves_unsaved_body_raw_inputs_and_errors() {
-  let mut editor = Editor::team();
-  let id = editor.published();
-  editor.open(id);
-  editor.click("pipeline-step-step");
-  editor.set("step-budget", "invalid budget");
-  editor.click("step-instructions-row");
-  editor.set("step-instructions", "Local work");
-  editor.click("pipeline-history");
-  editor.until("version", |e| e.exists("pipeline-version-1"));
-  editor.click("pipeline-version-1");
-  editor.click("pipeline-restore");
-  assert!(editor.exists("pipeline-restore-question"));
-  editor.click("pipeline-restore-keep");
-  editor.click("pipeline-back-draft");
-  editor.click("pipeline-step-step");
-  assert_eq!(editor.value("step-budget"), "invalid budget");
-  editor.click("step-instructions-row");
-  assert_eq!(editor.value("step-instructions"), "Local work");
-  assert!(editor.exists("pipeline-field-error"));
-  assert_eq!(editor.version(id), 1, "an invalid edit is not saved");
-}
-
-#[test]
 fn pipelines_failed_reload_preserves_local_editor_and_exposes_retry() {
   let mut editor = Editor::new();
   let id = editor.published();
@@ -70,7 +46,7 @@ fn pipelines_failed_reload_preserves_local_editor_and_exposes_retry() {
 }
 
 #[test]
-fn pipelines_history_keeps_immutable_changes_separate_from_comparison() {
+fn pipelines_history_keeps_each_versions_own_changes() {
   let mut editor = Editor::new();
   let id = editor.published();
   let v1 = editor.db().latest_version::<Pipeline>(id).unwrap().unwrap();
@@ -108,17 +84,5 @@ fn pipelines_history_keeps_immutable_changes_separate_from_comparison() {
   editor.click("pipeline-version-2");
   editor.until("v2's changes", |e| e.exists("pipeline-version-changes"));
   assert!(!editor.text("screen-pipelines").contains("description edited"));
-  editor.click("pipeline-compare");
-  assert!(editor.text("screen-pipelines").contains("description edited"));
   assert_eq!(editor.text("pipeline-version-changes-title"), "Changes in v2");
-  assert_eq!(
-    editor.text("pipeline-comparison-changes-title"),
-    "Compared with published v3"
-  );
-  // Leaving the version for one of its steps and going back to Versions used to keep comparison hidden.
-  editor.click("pipeline-step-step");
-  editor.click("pipeline-back-versions");
-  editor.until("versions remounted", |e| e.exists("pipeline-version-2"));
-  assert!(!editor.exists("pipeline-comparison-changes"));
-  assert!(!editor.text("screen-pipelines").contains("description edited"));
 }

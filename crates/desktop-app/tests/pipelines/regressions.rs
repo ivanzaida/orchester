@@ -5,33 +5,35 @@ use orchester_core::resource::StepKind;
 
 use crate::pipelines_support::Editor;
 
+/// Text typed with the keyboard in each field, the caret moved back within it, is saved exactly as typed. Nothing saves
+/// on its own (PV2-32), so typing is never interrupted by a save; pressing *Save* takes the keyboard's focus.
 #[test]
-fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
+fn pipelines_keyboard_typed_text_in_each_field_is_saved_as_typed() {
   let mut editor = Editor::team();
   let id = editor.empty("Typing");
   editor.open(id);
-  keyboard_across_save(&mut editor, "pipeline-description", "a");
+  type_and_save(&mut editor, "pipeline-description", "a");
   editor.click("pipeline-settings");
-  keyboard_across_save(&mut editor, "pipeline-settings-description", "d");
+  type_and_save(&mut editor, "pipeline-settings-description", "d");
   editor.click("pipeline-tab-steps");
   // The fixture's one step, which runs a tool: a step added here would run nothing, which saving refuses.
   editor.click("pipeline-step-step");
   editor.click("step-instructions-row");
-  keyboard_across_save(&mut editor, "step-instructions", "g");
+  type_and_save(&mut editor, "step-instructions", "g");
 }
 
-fn keyboard_across_save(editor: &mut Editor, field: &str, first: &str) {
+fn type_and_save(editor: &mut Editor, field: &str, first: &str) {
   editor.set(field, "");
   editor.focus(field);
-  // Position the caret immediately before the save, independently of insertion behavior.
-  for key in [first, "b", "c", "ArrowLeft"] {
+  for key in [first, "b", "c", "ArrowLeft", "y"] {
     editor.key(key, false);
   }
-  let typed = format!("{first}bc");
-  assert_eq!(editor.value(field), typed);
+  let typed = format!("{first}byc");
+  assert_eq!(editor.value(field), typed, "the caret moved back within the text");
   assert!(editor.exists("pipeline-save"), "each field must cause a new save");
-  editor.until("autosave completed", |e| {
-    !e.exists("pipeline-save") && !e.text("screen-pipelines").contains("Saving draft")
+  editor.save();
+  editor.until("saved", |e| {
+    !e.exists("pipeline-save") && e.text("pipeline-save-status").starts_with("Saved as")
   });
   let saved = editor.stored(editor.selected());
   let saved_text = if field == "step-instructions" {
@@ -40,30 +42,11 @@ fn keyboard_across_save(editor: &mut Editor, field: &str, first: &str) {
     saved.description()
   };
   assert_eq!(saved_text, typed, "the typed value reached the database");
-  assert_eq!(
-    editor
-      .window
-      .tree
-      .focused_element()
-      .and_then(|e| e.id().map(str::to_owned))
-      .as_deref(),
-    Some(field)
-  );
-  // No refocus: typing resumes at the same caret, and Undo reaches the pre-save history.
-  editor.key("y", false);
-  assert_eq!(
-    editor.value(field),
-    format!("{first}byc"),
-    "the caret stays in the middle"
-  );
-  editor.key("z", true);
-  assert_eq!(editor.value(field), typed);
-  editor.key("z", true);
-  assert_eq!(editor.value(field), format!("{first}b"));
+  assert_eq!(editor.value(field), typed, "the field shows what was saved");
 }
 
 #[test]
-fn pipelines_leaving_before_autosave_requires_a_decision_and_keep_preserves_edits() {
+fn pipelines_leaving_with_unsaved_edits_requires_a_decision_and_keep_preserves_edits() {
   let mut editor = Editor::new();
   let id = editor.empty("Pending");
   editor.go(ProjectPage::Pipelines);
@@ -76,6 +59,12 @@ fn pipelines_leaving_before_autosave_requires_a_decision_and_keep_preserves_edit
   assert_eq!(editor.stored(id).description(), "");
   editor.click("pipeline-leave-keep");
   assert!(!editor.exists("pipeline-leave-question"));
+  assert_eq!(
+    editor.value("pipeline-description"),
+    "Pending description",
+    "the edit is kept"
+  );
+  editor.click("pipeline-save");
   editor.until("kept work saved", |e| {
     e.stored(id).description() == "Pending description"
   });
@@ -150,6 +139,7 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
   editor.click("pipeline-add-step");
   editor.choose("step-executor", "Reviewer");
   editor.choose("step-model", "test-model");
+  editor.save();
   // The added step is the agent step; the fixture's first runs a tool.
   editor.until("model override saved", |e| {
     e.stored(id).steps().iter().any(|step| {
@@ -168,6 +158,7 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
   editor.choose("step-executor", "Reviewer");
   // Taken from the profile, the box shows the profile's model id (`DuMJh` in `IsU5u`).
   assert_eq!(editor.text("step-model-label"), "test-model");
+  editor.save();
   editor.until("inherited model saved", |e| {
     e.stored(id).steps().iter().any(|step| {
       matches!(

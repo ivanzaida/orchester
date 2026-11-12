@@ -47,7 +47,7 @@ fn pipelines_sources_a_chosen_folder_joins_the_edit_and_saving_it_asks() {
   assert_eq!(editor.version(id), 1, "reading more waits for a person");
   assert!(!editor.exists("pipeline-sources-add-hint"));
   editor.click("pipeline-tab-steps");
-  editor.click("pipeline-publish");
+  editor.click("pipeline-save");
   editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
   editor.arm();
   assert!(editor.gated(), "reading more is a person's to publish");

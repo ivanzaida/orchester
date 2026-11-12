@@ -28,6 +28,8 @@ fn pipelines_delivers_is_chosen_in_settings_and_saved_as_the_next_version() {
     "each choice says what it means"
   );
   editor.click("pipeline-delivers-report");
+  assert_eq!(editor.version(id), 1, "nothing saves on its own");
+  editor.click("pipeline-save");
   editor.until("the report choice saved as v2", |e| {
     e.version(id) == 2 && e.stored(id).delivers() == Deliverable::Report
   });

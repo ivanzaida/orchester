@@ -213,11 +213,11 @@ impl Editor {
   /// Chooses `label` in the select `id`, or in the menu the field `id` opens (the step's Executor).
   pub fn choose(&mut self, id: &str, label: &str) {
     if let Some(mut select) = self.window.tree.get_element_by_id_mut(id).and_then(|e| e.as_select()) {
-      let index = select
-        .labels()
+      let labels = select.labels();
+      let index = labels
         .iter()
         .position(|option| &**option == label)
-        .expect("option");
+        .unwrap_or_else(|| panic!("option {label} in {id}: {labels:?}"));
       select.commit(index);
       self.window.pass();
       return;
@@ -230,6 +230,28 @@ impl Editor {
         self.click(&option);
         return;
       }
+    }
+  }
+  /// Removes the one step of the open pipeline's edit ([`Self::empty`]'s), as a person does: with no steps the page
+  /// offers the starter's (*Use starter*). A stored pipeline always has a step (D-032).
+  pub fn remove_only_step(&mut self) {
+    self.click("pipeline-step-step");
+    self.click("step-remove");
+    self.until("remove question", |e| e.exists("step-remove-confirm"));
+    self.click("step-remove-confirm");
+    self.until("no steps", |e| e.exists("pipeline-use-starter"));
+  }
+  /// Presses *Save* once no save is under way (a team pipeline's waits for the server, and Save is off meanwhile), and
+  /// allows what it asks a person to allow, if it asks (*Saving needs your approval*).
+  pub fn save(&mut self) {
+    self.until("no save under way", |e| {
+      !e.text("pipeline-save-status").starts_with("Saving")
+    });
+    self.click("pipeline-save");
+    self.arm();
+    if self.exists("pipeline-save-question-confirm") {
+      self.arm();
+      self.click("pipeline-save-question-confirm");
     }
   }
   pub fn profile(&self) {

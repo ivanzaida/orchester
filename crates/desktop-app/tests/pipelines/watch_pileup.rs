@@ -1,6 +1,6 @@
 //! The editor follows its fields and its writes once, by what it shows now, however often it rendered:
-//! a save is written once, a rest of the fields autosaves once, and a field the editor locked since it
-//! was first shown does not change the version a save publishes (a pipeline holds no draft, D-032).
+//! a save is written once, and a field the editor locked since it was first shown does not change the version a save
+//! publishes (a pipeline holds no draft, D-032; nothing saves on its own, PV2-32).
 use std::time::{Duration, Instant};
 
 use orchester_core::{id::ResourceId, resource::StepKind};
@@ -18,7 +18,7 @@ fn writes(editor: &Editor) -> u64 {
     .pipelines
 }
 
-/// Delivers what finishes for longer than autosave's rest of the fields.
+/// Delivers what finishes within a second and a half, so a second write would have shown.
 fn rest(editor: &mut Editor) {
   let until = Instant::now() + Duration::from_millis(1500);
   while Instant::now() < until {
@@ -42,25 +42,6 @@ fn pipelines_watch_save_after_many_renders_is_written_once() {
   assert_eq!(writes(&editor) - before, 1, "one press of Save writes once");
   assert!(!editor.exists("pipeline-write-error"));
   assert_eq!(editor.stored(id).description(), "Five");
-}
-
-#[test]
-fn pipelines_watch_autosave_writes_once_per_rest() {
-  let mut editor = Editor::new();
-  let id = editor.published();
-  editor.open(id);
-  let before = writes(&editor);
-  for round in 1..=2u64 {
-    for text in ["First", "Second", "Third"] {
-      editor.set("pipeline-description", &format!("{text} {round}"));
-      editor.arm();
-    }
-    let saved = format!("Third {round}");
-    editor.until("automatic save", |e| e.stored(id).description() == saved);
-    rest(&mut editor);
-    assert_eq!(writes(&editor) - before, round, "rest {round} writes once");
-    assert!(!editor.exists("pipeline-write-error"));
-  }
 }
 
 /// Where the edit is tried while the weaker save's question locks the editor.
@@ -137,43 +118,12 @@ fn pipelines_watch_fields_follow_again_once_the_question_is_answered() {
       ("Unlocked", "Unlocked")
     };
     editor.set(field, typed);
+    editor.until("the unlocked edit", |e| e.exists("pipeline-save"));
     // v2 dropped the gate already: the next edit weakens nothing, so it saves without the question.
+    editor.click("pipeline-save");
     editor.until("the unlocked edit saved", |e| saved(e, id, page) == stored);
     assert!(!editor.exists("pipeline-save-question-confirm"));
   }
-}
-
-#[test]
-fn pipelines_watch_edit_during_a_slow_write_is_saved_after_it() {
-  let mut editor = Editor::new();
-  let id = editor.published();
-  editor.open(id);
-  let path = editor
-    .window
-    .data
-    .dir
-    .path()
-    .join("repo-kontur/.orchester/orchester.db");
-  let mut connection = rusqlite::Connection::open(path).unwrap();
-  let lock = connection
-    .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-    .unwrap();
-  let before = writes(&editor);
-  editor.set("pipeline-description", "First");
-  editor.until("first autosave under way", |e| {
-    e.text("screen-pipelines").contains("Saving draft")
-  });
-  editor.set("pipeline-description", "Second");
-  // The second edit's rest ends while the first write still waits for the database.
-  rest(&mut editor);
-  assert!(editor.text("screen-pipelines").contains("Saving draft"));
-  lock.commit().unwrap();
-  editor.until("the second edit autosaved without another keystroke", |e| {
-    saved(e, id, Page::Summary) == "Second"
-  });
-  rest(&mut editor);
-  assert_eq!(writes(&editor) - before, 2, "the first edit, then the second once");
-  assert!(!editor.exists("pipeline-write-error"));
 }
 
 #[test]
