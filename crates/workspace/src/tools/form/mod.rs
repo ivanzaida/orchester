@@ -1,6 +1,12 @@
 //! The command tool editor's fields (06.02 `YEWFo`, for a command) as entered, and their mapping to
 //! and from a [`Tool`]: arguments one per line, exit codes separated by commas or spaces and
 //! environment variables as `NAME=value` lines. Every value is checked by the core type it becomes.
+//! An HTTP or database tool's fields are [`SecretToolText`]'s, with their *Access* ([`AccessText`]).
+
+mod access;
+mod http;
+mod lines;
+mod secret_tool;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,6 +18,12 @@ use orchester_core::{
   },
 };
 
+pub use self::{
+  access::{AccessErrors, AccessText, environment_name, environment_of},
+  http::{HttpErrors, HttpText, http_message},
+  lines::{inputs_text, outputs_text, parse_inputs, parse_outputs},
+  secret_tool::{ActionText, SecretToolErrors, SecretToolText, named_secret},
+};
 use crate::messages::{self, Message};
 
 /// The fields as the user left them.

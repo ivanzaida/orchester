@@ -1449,7 +1449,36 @@
       "variableLine": "Write each variable as NAME=value: {{line}}",
       "variableName": "{{name}} is not a variable name: a letter or underscore, then letters, digits or underscores.",
       "duplicateVariable": "{{name}} is set more than once.",
-      "variableValue": "The value of {{name}} contains a NUL character."
+      "variableValue": "The value of {{name}} contains a NUL character.",
+      "urlRequired": "Enter the URL it calls.",
+      "invalidUrl": "Enter an absolute http or https URL with a host, without a user name or password",
+      "insecureBearer": "A bearer token needs an https URL",
+      "hostRequired": "Enter the one host it may call.",
+      "hostNotAllowed": "The URL's host is {{host}}, not {{allowed}}",
+      "invalidLocation": "{{name}} is not put in or read from a valid place.",
+      "reservedHeader": "{{name}} is sent in the Authorization header, which is the token's · pick another header",
+      "secretRequired": "Choose the secret it uses.",
+      "secretNameRequired": "Enter the name of the team secret it uses.",
+      "secretNameTooLong": "A secret's name is at most {{max}} characters.",
+      "secretName": "A secret's name is in capitals, digits and underscores, e.g. API_TOKEN.",
+      "queryRequired": "Write the query it runs.",
+      "environmentRequired": "Choose the environment whose secret values it uses.",
+      "minutes": "Enter whole minutes, from 1.",
+      "noStepsSelected": "Choose at least one step of each pipeline that calls it.",
+      "line": {
+        "inputShape": "Line {{line}}: write it as name → query, header or body and its key",
+        "outputShape": "Line {{line}}: write it as name ← status, header or body",
+        "name": "Line {{line}}: {{name}} is not a name",
+        "twice": "Line {{line}}: {{name}} is there twice",
+        "inputPlace": "Line {{line}}: {{place}} is not query, header or body",
+        "outputPlace": "Line {{line}}: {{place}} is not status, header or body",
+        "needsPath": "Line {{line}}: {{place}} needs a path",
+        "needsName": "Line {{line}}: {{place}} needs a name",
+        "invalidPath": "Line {{line}}: {{key}} is not a body path",
+        "invalidName": "Line {{line}}: {{key}} is not a {{place}} name",
+        "statusKey": "Line {{line}}: status takes nothing after it",
+        "reserved": "Line {{line}}: the Authorization header is the token's · pick another header"
+      }
     }
   },
   "projectImport": {
@@ -1742,7 +1771,7 @@
       "errors": {
         "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",
         "nameTaken": "Another tool is named {{name}}. Give the new tool a name of its own.",
-        "notACommandTool": "{{tool}} is not a command tool; only command tools are made and changed in this version.",
+        "notACommandTool": "{{tool}} is an HTTP or database tool, which this server does not change: a person makes and changes those in the Agents hub of the app.",
         "programInRepository": "{{program}} lies inside the project's repository, where a run's work can change it. A command tool's program is a fixed file outside it; run a script of the repository through its interpreter, e.g. program powershell (pwsh on macOS) with -File tools/check.ps1.",
         "programInWorktree": "A command tool's program is a fixed file: name it as found on the search path, or by its absolute path outside the repository. A script of the repository runs through its interpreter, e.g. program powershell (pwsh on macOS) with -File tools/check.ps1.",
         "programNotFound": "No program {{program}} was found on the search path or at that path.",
@@ -1754,7 +1783,14 @@
         "program": "The tool would run {{program}} where it ran {{before}}.",
         "arguments": "The tool's arguments would change, and with them what its program does.",
         "exitCodes": "Exit codes {{codes}} would pass, which did not.",
-        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
+        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that.",
+        "address": "The tool would send requests to {{url}} on agents' behalf.",
+        "method": "The tool would send {{method}} requests.",
+        "headers": "The headers the agents' inputs are sent in would change.",
+        "database": "The tool would query a database with the credentials of a secret.",
+        "query": "The tool's query would change, and with it what it reads or changes.",
+        "access": "Who may call the tool, and how a call is approved, would change.",
+        "secret": "The tool would release a secret's value to its calls, which it did not."
       }
     },
     "services": {

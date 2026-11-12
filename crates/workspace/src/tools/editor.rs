@@ -161,11 +161,6 @@ fn apply_existing(db: &mut ProjectDb, edit: &Edit, allowed: &Allowed) -> Result<
     Edit::Save { before: Some(e), .. } | Edit::Publish(e) | Edit::KeepDraft(e) | Edit::StartLatest(e) => e,
     Edit::Save { before: None, .. } => unreachable!("new tools are created separately"),
   };
-  if !matches!(expected.tool.action(), ToolAction::Command(_)) {
-    return Err(EditorError::Message(
-      Message::new("appMcp.projectTools.errors.notACommandTool").with("tool", expected.name.to_string()),
-    ));
-  }
   let id = expected.id;
   db.update_resource::<Tool, EditorError>(id, |resource, draft: Option<Draft<Tool>>, latest| {
     let based_on = draft
@@ -199,9 +194,11 @@ fn apply_existing(db: &mut ProjectDb, edit: &Edit, allowed: &Allowed) -> Result<
   Ok(id)
 }
 
+/// `tool` with its program fixed outside the repository, as a step starts it; an HTTP or database tool runs no program
+/// and is taken as it is.
 pub(super) fn fixed_tool(db: &ProjectDb, root: &Path, tool: &Tool) -> Result<Tool, EditorError> {
   let ToolAction::Command(command) = tool.action() else {
-    return Err(EditorError::Message(Message::new("tools.errors.programRequired")));
+    return Ok(tool.clone());
   };
   let project = db.project_environment()?;
   let path = command.search_path(&project, orchester_exec::search_path::search_path());

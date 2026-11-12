@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use orchester_core::{
   id::ResourceId,
   resource::{
-    ApprovalMode, FieldName, HttpMethod, RequestTarget, ResourceKind, TeamTool, TeamToolAction, Tool, ToolAction,
-    ToolKind,
+    ApprovalMode, FieldName, HttpMethod, Pipeline, RequestTarget, ResourceKind, StepKey, TeamTool, TeamToolAction,
+    Tool, ToolAction, ToolKind,
   },
   secret::SecretName,
 };
@@ -79,9 +79,11 @@ pub struct TeamToolSheet {
   pub used_by: Vec<String>,
   /// Who published its latest version.
   pub published: Option<Published>,
-  /// What an admin's edit starts from: its latest version, as this computer's tool. A command, which is the same on
-  /// every computer, or a version that names its secret by id, which an admin whose project has that secret publishes
-  /// again by name; `None` for an HTTP or database tool in the team's form.
+  /// What an admin's edit starts from: its latest version in the team's form, which names its secret by name. `None`
+  /// for a version that names its secret by id ([`Self::edit`]).
+  pub latest: Option<Latest<TeamTool>>,
+  /// A latest version that names its secret by id, as this computer's tool, which an admin whose project has that
+  /// secret publishes again by name; `None` for a version in the team's form.
   pub edit: Option<Latest<Tool>>,
 }
 
@@ -151,7 +153,8 @@ fn team_sheet(resource: &TeamResource, tool: &TeamTool) -> TeamToolSheet {
     approval: tool.access().map(|access| access.approval()),
     used_by: Vec::new(),
     published: team_sheets::published(resource),
-    edit: tool.command_tool().and_then(|local| latest_of(resource, &local)),
+    latest: latest_of(resource, tool),
+    edit: None,
   }
 }
 
@@ -173,6 +176,7 @@ fn by_id_sheet(resource: &TeamResource, tool: &Tool) -> TeamToolSheet {
     approval: tool.access().map(|access| access.approval()),
     used_by: Vec::new(),
     published: team_sheets::published(resource),
+    latest: None,
     edit: latest_of(resource, tool),
   }
 }
@@ -193,4 +197,33 @@ fn http_runs(method: HttpMethod, url: &str, inputs: &BTreeMap<FieldName, Request
       })
       .collect(),
   }
+}
+
+/// A pipeline of the team whose steps a team tool's access may let call it (*Pipelines that call it*, A32 `gLLEv`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CallingPipeline {
+  pub id: ResourceId,
+  pub name: String,
+  /// Its latest version's steps in order, by key and name.
+  pub steps: Vec<(StepKey, String)>,
+}
+
+/// The team's live pipelines whose latest version this computer reads, in the order `config` holds them.
+pub fn calling_pipelines(config: &TeamConfig) -> Vec<CallingPipeline> {
+  config
+    .resources(ResourceKind::Pipeline)
+    .into_iter()
+    .filter_map(|resource| {
+      let pipeline = resource.body::<Pipeline>()?.ok()?;
+      Some(CallingPipeline {
+        id: resource.id,
+        name: resource.name.as_str().to_owned(),
+        steps: pipeline
+          .steps()
+          .iter()
+          .map(|step| (step.key.clone(), step.name.as_str().to_owned()))
+          .collect(),
+      })
+    })
+    .collect()
 }
