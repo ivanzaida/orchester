@@ -109,7 +109,7 @@ impl ProjectDb {
   pub fn approval_mode(&self, run: RunId, profile: ApprovalMode) -> Result<EffectiveMode, StoreError> {
     Ok(EffectiveMode::of(
       profile,
-      self.allow_autopilot()?,
+      self.approve_mode()?,
       self.run_switched_to_manual(run)?,
     ))
   }

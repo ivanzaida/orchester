@@ -143,12 +143,14 @@ fn answerer() -> Answerer {
   }
 }
 
-/// The chip's words for `mode` (04c): *Autopilot*, *Manual · profile*, *Manual · project*, *Manual · this run*.
+/// The chip's words for `mode` (04c): *Autopilot*, *Manual · profile*, *Manual · project*, *Manual · this run*, or
+/// *Dangerous auto-approve* while the project approves every request.
 const fn chip_key(mode: EffectiveMode) -> &'static str {
   match mode {
     EffectiveMode::Autopilot => "task.run.mode.autopilot",
     EffectiveMode::Manual(ManualBecause::Profile) => "task.run.mode.manualProfile",
     EffectiveMode::Manual(ManualBecause::Project) => "task.run.mode.manualProject",
     EffectiveMode::Manual(ManualBecause::Run) => "task.run.mode.manualRun",
+    EffectiveMode::DangerousAutoApprove(_) => "task.run.mode.dangerous",
   }
 }

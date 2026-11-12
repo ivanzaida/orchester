@@ -109,13 +109,27 @@ pub struct ManualSwitch {
 pub enum EffectiveMode {
   Autopilot,
   Manual(ManualBecause),
+  /// Every request is approved at once, whatever the profile and the run say; their mode comes back once the project
+  /// leaves Dangerous auto-approve.
+  DangerousAutoApprove(ApprovedBecause),
+}
+
+/// Why every request of a run is approved at once: its project's Approve mode, read as `{"mode":
+/// "dangerous_auto_approve", "because": "project"}`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovedBecause {
+  Project,
 }
 
 impl EffectiveMode {
-  /// The mode of a step whose profile asks for `profile`, in a project whose setting is `project`, in a run that was
-  /// `switched_to_manual` or not.
-  pub const fn of(profile: ApprovalMode, project: AllowAutopilot, switched_to_manual: bool) -> Self {
-    match (profile, project.is_on(), switched_to_manual) {
+  /// The mode of a step whose profile asks for `profile`, in a project in `project`'s Approve mode, in a run that was
+  /// `switched_to_manual` or not: Dangerous auto-approve before anything else.
+  pub const fn of(profile: ApprovalMode, project: ApproveMode, switched_to_manual: bool) -> Self {
+    if project.approves_everything() {
+      return Self::DangerousAutoApprove(ApprovedBecause::Project);
+    }
+    match (profile, project.allows_autopilot().is_on(), switched_to_manual) {
       (ApprovalMode::Manual, ..) => Self::Manual(ManualBecause::Profile),
       (ApprovalMode::Autopilot, false, _) => Self::Manual(ManualBecause::Project),
       (ApprovalMode::Autopilot, true, true) => Self::Manual(ManualBecause::Run),
@@ -131,6 +145,6 @@ impl EffectiveMode {
 /// The mode of a step whose profile and project keep their defaults: Manual, by the profile.
 impl Default for EffectiveMode {
   fn default() -> Self {
-    Self::of(ApprovalMode::Manual, AllowAutopilot::OFF, false)
+    Self::of(ApprovalMode::Manual, ApproveMode::Manual, false)
   }
 }

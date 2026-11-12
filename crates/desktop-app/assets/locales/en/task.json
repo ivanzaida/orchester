@@ -135,6 +135,7 @@
         "manualRun": "Manual · this run",
         "manualProject": "Manual · project",
         "manualProfile": "Manual · profile",
+        "dangerous": "Dangerous auto-approve",
         "switchToManual": "Switch to Manual for this run"
       }
     },

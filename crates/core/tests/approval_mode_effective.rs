@@ -64,7 +64,10 @@ fn answered(subject: &ApprovalSubject, chosen: Option<bool>, mode: EffectiveMode
 #[test]
 fn approval_mode_effective_is_autopilot_only_when_profile_project_and_run_all_let_it() {
   use ApprovalMode::{Autopilot, Manual};
-  let (allowed, disallowed) = (AllowAutopilot::ON, AllowAutopilot::OFF);
+  let (allowed, disallowed) = (
+    orchester_core::run::ApproveMode::Autopilot,
+    orchester_core::run::ApproveMode::Manual,
+  );
   let cases = [
     (Autopilot, allowed, false, EffectiveMode::Autopilot),
     (Autopilot, allowed, true, EffectiveMode::Manual(ManualBecause::Run)),
@@ -90,6 +93,24 @@ fn approval_mode_effective_is_autopilot_only_when_profile_project_and_run_all_le
     assert_eq!(mode, expected, "{profile:?} · {project:?} · switched {switched}");
     assert_eq!(mode.is_autopilot(), expected == EffectiveMode::Autopilot);
   }
+  // Dangerous auto-approve comes first, whatever the profile and the run say.
+  for (profile, switched) in [(Autopilot, false), (Autopilot, true), (Manual, false)] {
+    assert_eq!(
+      EffectiveMode::of(
+        profile,
+        orchester_core::run::ApproveMode::DangerousAutoApprove,
+        switched
+      ),
+      EffectiveMode::DangerousAutoApprove(orchester_core::run::ApprovedBecause::Project)
+    );
+  }
+  assert_eq!(
+    serde_json::to_value(EffectiveMode::DangerousAutoApprove(
+      orchester_core::run::ApprovedBecause::Project
+    ))
+    .expect("json"),
+    json!({"mode": "dangerous_auto_approve", "because": "project"})
+  );
 }
 
 #[test]

@@ -65,7 +65,9 @@ pub use self::{
     autopilot_check, autopilot_step, codex_denial, denial_message, denial_with_message, listing, permitted,
     without_reviewer,
   },
-  approval_mode::{AllowAutopilot, ApproveMode, ApproveModePersonOnly, EffectiveMode, ManualBecause, ManualSwitch},
+  approval_mode::{
+    AllowAutopilot, ApproveMode, ApproveModePersonOnly, ApprovedBecause, EffectiveMode, ManualBecause, ManualSwitch,
+  },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
   chosen_profile::ChosenProfile,

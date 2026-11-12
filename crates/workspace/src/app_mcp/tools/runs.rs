@@ -141,6 +141,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
     "steps": steps,
     "plans": decided,
     "approval_mode": approval_mode,
+    "switched_to_manual": db.run_switched_to_manual(run.id())?,
     "approve_mode": db.approve_mode()?,
     "requests": request_answers(&db, run.id())?,
     "worktree": worktree_state(&db, &root, run.id())?,

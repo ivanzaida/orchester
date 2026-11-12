@@ -217,3 +217,38 @@ fn permissions_roles_follow_the_design() {
     );
   }
 }
+
+/// While the project is in Dangerous auto-approve the chip says so in `danger`, without the profile's word, and its
+/// menu offers no way of answering: one line that the project approves every request and a link to Project settings ›
+/// Runs.
+#[test]
+fn permissions_chip_says_dangerous_auto_approve_and_offers_no_way() {
+  use orchester_core::run::ApproveMode;
+  let mut page = Page::seeded("task-states");
+  let (key, _) = autopilot(&page);
+  ProjectDb::open(&page.repo)
+    .expect("the project")
+    .save_approve_mode(ApproveMode::DangerousAutoApprove)
+    .expect("a person chooses it");
+  page.open(&key, TaskTab::Conversation, CHIP);
+  page.until_label("Dangerous auto-approve");
+  assert!(!page.has("conversation-permissions-profile"), "no profile's word");
+  page.window.press(CHIP);
+  page.window.until("the menu", |window| window.texts(MENU).is_some());
+  assert!(
+    page
+      .text("conversation-permissions-dangerous-note")
+      .contains("is in Dangerous auto-approve: every tool request of every agent is approved at once")
+  );
+  for way in [
+    "conversation-permissions-manual",
+    "conversation-permissions-autopilot",
+    "conversation-permissions-everything",
+  ] {
+    assert!(!page.has(way), "{way} is not offered");
+  }
+  assert_eq!(
+    page.text("conversation-permissions-settings-link"),
+    "Approve mode in Project settings"
+  );
+}

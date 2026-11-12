@@ -99,3 +99,29 @@ fn dangerous_auto_approve_window_takes_a_persons_danger_button_alone() {
   s.until("down by the client", |_| mode(&repo) == ApproveMode::Manual);
   s.until("the chip gone", |s| !s.shows("status-dangerous"));
 }
+
+/// In Dangerous auto-approve no run reads as Manual or Autopilot: each one's mode is `dangerous_auto_approve` because
+/// of the project, its own switch to Manual kept beside it.
+#[test]
+fn dangerous_auto_approve_reads_say_every_running_run_is_approved_at_once() {
+  let (mut served, seeded) = Served::seeded("cards");
+  ProjectDb::open(&seeded.repo)
+    .expect("db")
+    .save_approve_mode(ApproveMode::DangerousAutoApprove)
+    .expect("a person chooses it");
+  let read = served.ok("get_approvals", &json!({ "project": "Kontur" }));
+  let runs = read["approvals"]["runs"].as_array().expect("runs");
+  assert!(!runs.is_empty(), "{read}");
+  for run in runs {
+    assert_eq!(
+      run["approval_mode"],
+      json!({"mode": "dangerous_auto_approve", "because": "project"}),
+      "{run}"
+    );
+    assert!(run["switched_to_manual"].is_boolean(), "{run}");
+  }
+  let number = runs[0]["number"].to_string();
+  let one = served.ok("get_run", &json!({ "project": "Kontur", "run": number }));
+  assert_eq!(one["approval_mode"]["mode"], "dangerous_auto_approve", "{one}");
+  assert_eq!(one["approve_mode"], "dangerous_auto_approve", "{one}");
+}

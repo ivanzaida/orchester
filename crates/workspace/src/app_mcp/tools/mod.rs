@@ -221,8 +221,9 @@ const SPECS: &[Spec] = &[
                   else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, \
                   failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of \
                   its failed steps' log, null when gh gave none). approval_mode is the mode its agents' requests are \
-                  answered in now, approve_mode the project's Approve mode (in dangerous_auto_approve every one is \
-                  approved at once instead), and requests how each tool request was answered (answered.kind autopilot, \
+                  answered in now (dangerous_auto_approve with because project while its project approves every one at \
+                  once; switched_to_manual keeps the run's own choice), approve_mode the project's Approve mode, and \
+                  requests how each tool request was answered (answered.kind autopilot, \
                   profile, reviewer, person or dangerous_auto_approve) and why one came to the person (came_to_you). \
                   The run's link is its task's page; the waiting \
                   approvals, questions, messages and plans link to their cards on the task's Conversation. A team task's run \
@@ -294,7 +295,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_approvals",
-    description: "A project's approvals: its Approve mode (approve_mode: manual, autopilot or dangerous_auto_approve; while dangerous_auto_approve, every tool request of the project's agents is approved at once, whatever the approval_mode below says), whether it allows Autopilot for its agents (allow_autopilot: true in autopilot and dangerous_auto_approve), which connection, model and effort review Manual's requests (reviewer, or why it has none), and each run that has not ended (runs: id, number, task, link) with the approval mode it answers its agents' requests in now (approval_mode: mode autopilot, or manual with because profile, project or run). A step is in Autopilot only when its agent profile says Autopilot (get_profile's permissions.approval_mode), the project allows it and the run was not switched to Manual. The runs listed include a team task's runs, named by the key they recorded when they started.",
+    description: "A project's approvals: its Approve mode (approve_mode: manual, autopilot or dangerous_auto_approve; in dangerous_auto_approve every tool request of the project's agents is approved at once), whether it allows Autopilot for its agents (allow_autopilot: true in autopilot and dangerous_auto_approve), which connection, model and effort review Manual's requests (reviewer, or why it has none), and each run that has not ended (runs: id, number, task, link) with the approval mode it answers its agents' requests in now (approval_mode: mode autopilot, manual with because profile, project or run, or dangerous_auto_approve with because project while the project's Approve mode approves every request; switched_to_manual: whether the run switched itself to Manual, which applies again once the project leaves Dangerous auto-approve). A step is in Autopilot only when its agent profile says Autopilot (get_profile's permissions.approval_mode), the project allows it and the run was not switched to Manual. The runs listed include a team task's runs, named by the key they recorded when they started.",
     schema: schema_for_type::<approval_settings::GetApprovals>,
     read_only: true,
   },

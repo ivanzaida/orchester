@@ -406,6 +406,7 @@ fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> 
         "number": run.number().get(),
         "task": task.key().to_string(),
         "approval_mode": db.run_approval_mode(run.id())?,
+        "switched_to_manual": db.run_switched_to_manual(run.id())?,
         "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
       }));
     }
@@ -419,6 +420,7 @@ fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> 
         "task": null,
         "unrecorded": true,
         "approval_mode": db.run_approval_mode(run.id())?,
+        "switched_to_manual": db.run_switched_to_manual(run.id())?,
         "link": null,
       }));
     }

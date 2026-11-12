@@ -134,19 +134,25 @@
       }
     },
     "permissions": {
+      "dangerous": {
+        "note": "{{project}} is in Dangerous auto-approve: every tool request of every agent is approved at once, with no review and nobody asked. This run's own choices come back once the project leaves it.",
+        "settings": "Approve mode in Project settings"
+      },
       "chip": {
         "manual": "Manual",
         "autopilot": "Autopilot",
         "everything": "Everything in this run",
         "manualRun": "Manual · this run",
         "manualProject": "Manual · project",
+        "dangerous": "Dangerous auto-approve",
         "profileManual": "· profile: Manual",
         "profileAutopilot": "· profile: Autopilot",
         "name": "Permissions of Run {{run}}",
         "tip": {
           "manual": "{{agent}}’s profile is Manual: requests off its allowed list go to the reviewer, then to you",
           "autopilot": "{{agent}}’s profile is Autopilot and {{project}} allows it: requests inside the worktree are approved at once",
-          "projectOff": "{{agent}}’s profile is Autopilot, but {{project}} doesn’t allow Autopilot: requests off its allowed list go to the reviewer, then to you"
+          "projectOff": "{{agent}}’s profile is Autopilot, but {{project}} doesn’t allow Autopilot: requests off its allowed list go to the reviewer, then to you",
+          "dangerous": "{{project}} is in Dangerous auto-approve: every tool request of {{agent}} is approved at once, whatever its profile and this run say"
         }
       },
       "menu": {
