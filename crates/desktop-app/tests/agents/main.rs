@@ -31,6 +31,8 @@ mod local_hub_tool;
 mod local_hub_tool_http;
 mod local_hub_variables;
 mod models;
+mod pipeline_deliver;
+mod pipeline_deliver_add;
 mod pipeline_flow;
 mod pipeline_hub;
 mod pipeline_hub_archive;

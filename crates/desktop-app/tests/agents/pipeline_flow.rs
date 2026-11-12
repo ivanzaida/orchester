@@ -65,7 +65,7 @@ pub(super) fn store(agents: &Agents, name: &str, body: &Pipeline) -> ResourceId 
 }
 
 /// A command tool the steps can run, published or only a draft.
-fn tool(agents: &Agents, published: bool) -> ResourceId {
+pub(super) fn tool(agents: &Agents, published: bool) -> ResourceId {
   let body = Tool::new(
     "",
     ToolAction::Command(CommandAction::new(

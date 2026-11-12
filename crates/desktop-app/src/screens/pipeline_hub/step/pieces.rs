@@ -7,6 +7,8 @@ use std::sync::Arc;
 use orchester_core::resource::{PipelineEdit, StepKey};
 use orchester_workspace::pipelines::flow::FlowRead;
 
+use crate::screens::pipeline_hub::OpenStep;
+
 /// One chip: a step, or the Deliver step (`key` none), numbered as the flow numbers them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Chip {
@@ -53,13 +55,23 @@ pub(super) fn of(read: &FlowRead, edit: &PipelineEdit, deliver: &str) -> Vec<Pie
         }));
       }
     }
-    Err(_) => pieces.extend(edit.steps().iter().enumerate().map(|(index, step)| {
-      Piece::Chip(Chip {
-        key: Some(step.key.clone()),
-        number: index + 1,
-        name: step.name.as_str().into(),
-      })
-    })),
+    Err(_) => {
+      pieces.extend(edit.steps().iter().enumerate().map(|(index, step)| {
+        Piece::Chip(Chip {
+          key: Some(step.key.clone()),
+          number: index + 1,
+          name: step.name.as_str().into(),
+        })
+      }));
+      // The Deliver step runs after every step, so it is numbered after them however they are stored.
+      if edit.deliver().is_some() {
+        pieces.push(Piece::Chip(Chip {
+          key: None,
+          number: edit.steps().len() + 1,
+          name: deliver.into(),
+        }));
+      }
+    }
   }
   pieces
 }
@@ -72,16 +84,23 @@ fn chips(pieces: &[Piece]) -> impl Iterator<Item = &Chip> {
   })
 }
 
-/// The steps in the order they run, which the keys ← and → walk through.
-pub(super) fn order(pieces: &[Piece]) -> Vec<StepKey> {
-  chips(pieces).filter_map(|chip| chip.key.clone()).collect()
+impl Chip {
+  /// What pressing the chip opens.
+  pub fn opens(&self) -> OpenStep {
+    self.key.clone().map_or(OpenStep::Deliver, OpenStep::Step)
+  }
 }
 
-/// Where step `key` stands: its number, and how many chips the strip numbers, the Deliver step's among them, so that
-/// *step 05 of 6* stands over a strip whose last chip, Deliver, reads *06* (P2 `u2rYEH`: *step 03 of 6* over five
-/// steps and Deliver).
-pub(super) fn place(pieces: &[Piece], key: &StepKey) -> Option<(usize, usize)> {
-  let number = chips(pieces).find(|chip| chip.key.as_ref() == Some(key))?.number;
+/// The steps in the order they run, the Deliver step last, which the keys ← and → walk through.
+pub(super) fn order(pieces: &[Piece]) -> Vec<OpenStep> {
+  chips(pieces).map(Chip::opens).collect()
+}
+
+/// Where step `key` (`None`: the Deliver step) stands: its number, and how many chips the strip numbers, the Deliver
+/// step's among them, so that *step 05 of 6* stands over a strip whose last chip, Deliver, reads *06* (P2 `u2rYEH`:
+/// *step 03 of 6* over five steps and Deliver; P15 `nPaMj`: *step 06 of 6* over Deliver itself).
+pub(super) fn place(pieces: &[Piece], key: Option<&StepKey>) -> Option<(usize, usize)> {
+  let number = chips(pieces).find(|chip| chip.key.as_ref() == key)?.number;
   Some((number, chips(pieces).count()))
 }
 

@@ -167,7 +167,12 @@ fn unlisted(ctx: &Ctx, assignables: &Assignables, current: Executor, model: Opti
 
 /// A published profile: its CLI's mark, and *Claude Code · Work · claude-opus-5-5* (the step's own model after it,
 /// `overridden`, when the step overrides the model); why it cannot run here in `warning`, as readiness says it.
-fn profile_item(ctx: &Ctx, assignables: &Assignables, profile: &ProfileChoice, overridden: Option<&str>) -> Item {
+pub(super) fn profile_item(
+  ctx: &Ctx,
+  assignables: &Assignables,
+  profile: &ProfileChoice,
+  overridden: Option<&str>,
+) -> Item {
   let model = profile.model.as_str();
   let runs_on: Arc<str> = match (profile.provider, &profile.connection) {
     (Some(cli), Some(connection)) => ctx.t_args(

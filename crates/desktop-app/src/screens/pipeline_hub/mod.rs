@@ -97,11 +97,28 @@ pub struct Props {
   pub project: ShownProject,
   pub view: PipelinesView,
   /// The step the panel shows open, which the route holds; none for the pipeline's own panel.
-  pub step: Option<StepKey>,
+  pub step: Option<OpenStep>,
 }
 impl DevtoolsInspectable for Props {}
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView, step: Option<StepKey>) -> Element {
+/// What the panel shows open in place of the pipeline's own body: one of its steps, or its Deliver step (P15 `nPaMj`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OpenStep {
+  Step(StepKey),
+  Deliver,
+}
+
+impl OpenStep {
+  /// The view of the pipeline's route that opens it.
+  pub fn view(&self) -> PipelineView {
+    match self {
+      Self::Step(key) => PipelineView::Step(key.clone()),
+      Self::Deliver => PipelineView::Deliver,
+    }
+  }
+}
+
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView, step: Option<OpenStep>) -> Element {
   ctx.mount_keyed::<PipelineHubScreen>(
     &format!("pipeline-hub-{}", project.open.project.id()),
     Props {
@@ -307,7 +324,7 @@ fn hub_body(
   project: &ShownProject,
   (listing, view): (&Listing, PipelinesView),
   (selected, leave, reading): (Option<&Entry>, &Leave, bool),
-  (default, hosted, step): (Option<ResourceId>, Hosted, Option<StepKey>),
+  (default, hosted, step): (Option<ResourceId>, Hosted, Option<OpenStep>),
 ) -> Element {
   let id = project.open.project.id();
   let Some(entry) = selected else {
@@ -442,7 +459,8 @@ const fn label_key(filter: PipelinesFilter) -> &'static str {
 }
 
 /// Whether `route` shows the pipeline whose panel holds changes that are not saved (`edits`), in its own view or with
-/// one of its steps open: moving between them leaves the edit where it is, so the navigation does not ask.
+/// one of its steps or its Deliver step open: moving between them leaves the edit where it is, so the navigation does
+/// not ask.
 fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> bool + Send + Sync + 'static {
   move |route| {
     let Some(edited) = edits.get_untracked().pipeline() else {
@@ -450,7 +468,7 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
     };
     match route {
       Route::Project(at, ProjectPage::PipelinesHub(view)) => *at == project && view.item == Some(edited),
-      Route::Project(at, ProjectPage::Pipeline(pipeline, PipelineView::Step(_))) => {
+      Route::Project(at, ProjectPage::Pipeline(pipeline, PipelineView::Step(_) | PipelineView::Deliver)) => {
         *at == project && *pipeline == edited
       }
       _ => false,
