@@ -2,7 +2,8 @@
 //! `naN3G`): the moves that dragging does, without dragging, then *Add a step after*, *Duplicate* and *Remove step*.
 //! *Move up* and *Move down* are always listed (with their keys, Alt ↑ and Alt ↓); at the end of the line, or when a
 //! move would break a failure route, the row is faded and says why. *Run in parallel with …* lists only the neighbours
-//! the step can join, *Run on its own* only a step in a parallel group.
+//! the step can join, *Run on its own* only a step in a parallel group, and *Wait for some steps only…* only a step
+//! with a stage before it whose *Waits for* row is not shown yet (P16b `P1853`).
 
 use std::sync::Arc;
 
@@ -50,6 +51,9 @@ pub(super) struct Menu<'a> {
   pub flow: &'a PipelineFlow,
   pub cards: &'a Cards,
   pub opens: Option<OpensMade>,
+  /// What opens the step whose *Waits for* row *Wait for some steps only…* shows: the card's menu opens it; the open
+  /// step's own menu has it open already.
+  pub to_step: Option<OpensMade>,
 }
 
 /// `Step menu`'s ⋯ button on `card` (22 square, radius 4, the `hover` fill under the pointer), which opens or closes
@@ -114,7 +118,10 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
   let id = |part: &str| format!("pipeline-hub-flow-menu-{part}");
   let mut rows: Vec<Element> = Vec::new();
   match menu.drive.current.possible_moves(&card.key) {
-    Ok(moves) => rows.extend(move_rows(ctx, menu, card, &moves)),
+    Ok(moves) => {
+      rows.extend(move_rows(ctx, menu, card, &moves));
+      rows.extend(wait_some(ctx, menu, card));
+    }
     Err(error) => rows.push(
       MenuItem::unavailable(
         id("moves"),
@@ -140,6 +147,35 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
   menu_panel("pipeline-hub-flow-menu")
     .width(Dimension::Px(MENU_WIDTH))
     .with_children(rows)
+}
+
+/// *Wait for some steps only…* (P16b `P1853`): the step opens with its *Waits for* row, which names the steps it waits
+/// for. Only for a step with a stage before it whose row is not shown yet: one that waits for part of that stage, or
+/// whose row the person opened or changed, has the row already.
+fn wait_some(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Option<Element> {
+  let first = menu
+    .flow
+    .stages
+    .first()
+    .is_some_and(|stage| stage.cards.iter().any(|other| other.key == card.key));
+  if first || card.waits.is_some() || menu.drive.edit.shows_waits(&card.key) {
+    return None;
+  }
+  let (drive, key, to_step) = (menu.drive.clone(), card.key.clone(), menu.to_step.clone());
+  let item = MenuItem::new(
+    "pipeline-hub-flow-menu-wait-some",
+    ctx.t("pipeline_hub.flow.move.waitSome"),
+    move || {
+      if drive.locked() {
+        return;
+      }
+      drive.edit.show_waits(&key);
+      if let Some(to_step) = &to_step {
+        to_step(key.clone());
+      }
+    },
+  );
+  Some(item.icon(Icon::GitMerge).render(ctx, &menu.drive.reorder.menu_open))
 }
 
 /// *Remove step*, faded with why when another step returns to this one on failure.

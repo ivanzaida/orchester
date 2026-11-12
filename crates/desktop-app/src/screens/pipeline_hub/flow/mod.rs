@@ -2,9 +2,10 @@
 //! amber card of P8): a vertical line with a node per step from *ON TASK START* to where the run ends, a card per step,
 //! an approval gate on the line after its step, steps that run side by side in one *RUN IN PARALLEL* frame, and where a
 //! failure sends the run back on its card. Nothing of the layout is stored: it is read from the steps' dependencies
-//! (`orchester_workspace::pipelines::flow`). A pipeline with no steps, or whose steps one line cannot show, keeps the
-//! start and the end and says so between them. A card opens its step through today's step page until the step opens in
-//! the panel (PV2-07).
+//! (`orchester_workspace::pipelines::flow`), stage by stage: a step stands one stage below the latest step it waits
+//! for, and one that waits for only part of the stage before it says which on its card (P16 `T9KJFP`). A pipeline with
+//! no steps, or whose steps have no order to draw, keeps the start and the end and says so between them, offering *Make
+//! it a line* for the latter ([`unordered`], P16c `YHAyx`). A card opens its step in the panel.
 //!
 //! The order is changed here, through the edit the panel holds ([`super::edit`]): a card the pointer or the keys are on
 //! shows its drag handle and its ⋯ menu (P3 `K4B56`, P4 `naN3G`); *Add step* in the section's head adds one, and
@@ -23,16 +24,14 @@ mod read_only;
 mod reorder;
 mod state;
 mod step_menu;
+mod unordered;
 mod view;
 mod words;
 
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Button, core::Signal, node::Element};
-use orchester_core::{
-  id::ResourceId,
-  resource::{FlowError, PipelineEdit},
-};
+use orchester_core::{id::ResourceId, resource::PipelineEdit};
 use orchester_workspace::pipelines::flow::FlowRead;
 
 pub(super) use self::{
@@ -47,12 +46,7 @@ use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{PipelineView, ProjectPage, Route},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-    notice::{Notice, NoticeTone},
-    pressable::Press,
-  },
+  ui::pressable::Press,
 };
 
 /// How the flow reaches the routes of the steps.
@@ -82,13 +76,17 @@ impl Opens<'_> {
     let route = Route::Project(self.project.open.project.id(), fix.page());
     (!self.read_only).then(|| Press::Open(self.navigation.to(route)).button())
   }
-}
 
-/// *Edit steps*: the editor the pipeline has today, where steps are added, moved and removed until the panel does.
-pub(super) fn edit_steps(ctx: &Ctx, id: &str, open: Open) -> ActionButton {
-  ActionButton::new(id.to_owned(), ButtonKind::Ghost, ctx.t("pipeline_hub.panel.openSteps"))
-    .icon(Icon::Pencil)
-    .opens(open)
+  /// What opens a step of the pipeline in the panel.
+  fn to_step(&self) -> OpensMade {
+    let (navigation, project, pipeline) = (self.navigation.clone(), self.project.open.project.id(), self.pipeline);
+    Arc::new(move |key| {
+      navigation.go(Route::Project(
+        project,
+        ProjectPage::Pipeline(pipeline, PipelineView::Step(key)),
+      ));
+    })
+  }
 }
 
 /// The steps section of pipeline `pipeline`: its head with *Add step*, and the flow from the start to the end, with the
@@ -117,8 +115,8 @@ pub(in crate::screens::pipeline_hub) fn section(
 }
 
 /// [`section`]'s flow of a published version viewed read-only: the same line, cards and gates, but no card opens a
-/// step, shows the `›`, a handle or a ⋯, or takes the hover or the keys, there is no *Add step* or *Edit steps*, and
-/// nothing in it moves.
+/// step, shows the `›`, a handle or a ⋯, or takes the hover or the keys, there is no *Add step*, and nothing in it
+/// moves.
 pub(super) fn read_only(
   ctx: &Ctx,
   (project, navigation): (&ShownProject, &Navigation),
@@ -133,26 +131,4 @@ pub(super) fn read_only(
     pick_agent: None,
   };
   read_only::drawn(ctx, &opens, read)
-}
-
-/// Steps one line cannot show: a step that waits for only some of what runs before it, or steps that wait for each
-/// other. They are not guessed at; the page that edits steps, which the notice opens, shows their dependencies.
-fn undrawable(ctx: &Ctx, opens: &Opens<'_>, error: &FlowError) -> Element {
-  let (title, body) = match error {
-    FlowError::Branches(_) => ("pipeline_hub.flow.branches.title", "pipeline_hub.flow.branches.detail"),
-    FlowError::Broken(_) => ("pipeline_hub.flow.broken.title", "pipeline_hub.flow.broken.detail"),
-  };
-  let notice = Notice::new("pipeline-hub-flow-undrawable", NoticeTone::Warning, ctx.t(title))
-    .flat()
-    .body(ctx.t(body));
-  if opens.read_only {
-    return notice.into();
-  }
-  notice
-    .action(edit_steps(
-      ctx,
-      "pipeline-hub-flow-undrawable-edit",
-      opens.open(PipelineView::default()),
-    ))
-    .into()
 }

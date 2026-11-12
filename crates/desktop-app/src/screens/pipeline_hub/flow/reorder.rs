@@ -143,7 +143,7 @@ fn next_after(flow: &PipelineFlow, key: &StepKey) -> Option<StepKey> {
 }
 
 /// A step that returns to step `key` on failure, which keeps `key` from being removed: the route would point at a step
-/// that is gone and the steps could not be drawn as one line. Removing it is refused, not guessed at by dropping the
+/// that is gone and the steps would have no order to draw. Removing it is refused, not guessed at by dropping the
 /// route.
 pub(super) fn returned_to_by(current: &PipelineEdit, key: &StepKey) -> Option<StepKey> {
   current
@@ -312,6 +312,10 @@ impl Cards {
       MoveError::UnknownStep(_) => ctx.t("pipeline_hub.flow.move.reason.unknownStep"),
       MoveError::WithItself(_) => ctx.t("pipeline_hub.flow.move.reason.withItself"),
       MoveError::Broken(_) => ctx.t("pipeline_hub.flow.move.reason.broken"),
+      MoveError::WaitsForIt { dependency, .. } => ctx.t_args(
+        "pipeline_hub.flow.move.reason.waitsForIt",
+        [("step", self.label(ctx, dependency).to_string())],
+      ),
       MoveError::RetryTargetNotUpstream { step, target } => {
         let (key, args) = match moved {
           Some(moved) if moved == target => (

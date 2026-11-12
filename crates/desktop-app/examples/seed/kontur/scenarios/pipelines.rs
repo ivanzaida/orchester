@@ -3,6 +3,7 @@
 //! is created as its first version and each of its steps runs something, even one that cannot run here.
 use std::collections::BTreeMap;
 
+use orchester_app::test_support::pipeline_edit;
 use orchester_core::{
   connection::{AgentEndpoint, AgentProvider, Connection, ConnectionKind},
   id::{ConnectionId, ResourceId, SecretId},
@@ -13,7 +14,7 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeliverStep, DeniedBehavior, HttpAuth,
     HttpMethod, HttpRequest, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug,
-    StepKind, Tool, ToolAction,
+    StepKey, StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},
 };
@@ -269,7 +270,8 @@ fn policy() -> AccessPolicy {
 /// delivery with its gate, its checks and review side by side, their failure routes and its Deliver step; *Publication
 /// problems*, whose cards stand in amber (a step whose profile is no longer available, one whose profile is not
 /// published, one whose tool cannot run); *Gated group*, whose two steps in a group both wait for the person; and
-/// *Independent chains*, whose steps wait for only part of what runs before them, so no one line shows them.
+/// *Independent chains*, whose steps wait for only part of what runs before them, drawn by stage with what each waits
+/// for (P16 `T9KJFP`).
 pub fn flow(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.delivering_catalogue()?;
   problems(kontur)?;
@@ -295,8 +297,8 @@ fn gated_group(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError
   Ok(())
 }
 
-/// *Fetch* then *Parse*, and apart from them *Lint* then *Report*: no step waits for what a single line would say.
-/// Every step runs `builder`.
+/// *Fetch* then *Parse*, and apart from them *Lint* then *Report*: *Parse* waits for *Fetch* only and *Report* for
+/// *Lint* only, each starting before the other chain's step ends. Every step runs `builder`.
 fn chains(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError> {
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty edit"));
   let fetch = edit.add_step(name("Fetch"), None);
@@ -314,4 +316,45 @@ fn chains(kontur: &mut Kontur, builder: ResourceId) -> Result<(), SeedError> {
     &edit.validate().expect("two chains are valid steps"),
   )?;
   Ok(())
+}
+
+/// The design's catalogue with Feature delivery's next version, whose *Create pull request* (06) waits for *Run
+/// checks* (04) only, not for *Review* (05) beside it (`Pipelines · v2` P16 `T9KJFP`; open step 06 for its *Waits
+/// for*, P16b `P1853`).
+pub fn branched(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let id = catalogue.feature_delivery.id();
+  let latest = kontur
+    .db
+    .latest_version::<Pipeline>(id)?
+    .ok_or_else(|| SeedError::Invalid("Feature delivery has no version".to_owned()))?;
+  let mut edit = PipelineEdit::new(latest.body().clone());
+  let checks = StepKey::new("run-checks").expect("a starter step's key");
+  edit.update(
+    &StepKey::new("create-pull-request").expect("a starter step's key"),
+    |step| step.depends_on = std::iter::once(checks).collect(),
+  );
+  let body = edit.validate().map_err(|error| SeedError::Invalid(error.to_string()))?;
+  kontur
+    .db
+    .publish_pipeline_edit(id, &body, latest.number(), None, kontur.now)?;
+  Ok(())
+}
+
+/// The design's catalogue, with Feature delivery's *Review* (05) made to wait for *Create pull request* (06) in the
+/// panel's edit, so the two wait for each other and the steps have no order to draw (`Pipelines · v2` P16c `YHAyx`).
+/// No version can hold such steps: the seed leaves the change beside the application database and the QA app puts it
+/// into the panel's edit when the hub opens Feature delivery (`orchester_app::test_support::pipeline_edit`).
+pub fn unordered(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let key = |text: &str| StepKey::new(text).expect("a starter step's key");
+  pipeline_edit::write_marker(
+    &kontur.app_database,
+    catalogue.feature_delivery.id(),
+    &[(key("review"), key("create-pull-request"))],
+  )
+  .map_err(|source| SeedError::Io {
+    path: kontur.app_database.with_file_name(pipeline_edit::MARKER),
+    source,
+  })
 }

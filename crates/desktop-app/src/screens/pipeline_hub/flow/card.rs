@@ -2,7 +2,7 @@
 //! · 02 Review` `zLMvF` in P8): the name, what the step runs, a pill for what it may do to the repository and `›`. A
 //! card that sends the run back says where. Under the pointer it takes the `hover` fill and a `border_strong` outline;
 //! a press opens the step. The step that cannot run as it is stands in `warning`, with *Choose profile* when nothing is
-//! chosen yet.
+//! chosen yet. A step that waits for only part of the stage before it says what it waits for (P16 `T9KJFP`).
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
@@ -10,7 +10,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, ReturnsTo, StepCard};
+use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, ReturnsTo, StepCard, Waits};
 
 use super::words;
 use crate::{
@@ -114,6 +114,9 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .spacing(SpacingSize::Xs)
     .child(top)
     .child(indented(second_line(&id, "runs", &words::runs(ctx, step), not_ready)));
+  if let Some(waits) = &step.waits {
+    body = body.child(waits_line(ctx, &id, waits));
+  }
   if let Some(route) = &step.on_failure {
     body = body.child(failure_line(ctx, (&id, step, route)));
   }
@@ -144,6 +147,25 @@ fn failure_line(ctx: &lurq::app::ctx::Ctx, (id, step, route): (&str, &StepCard, 
         .id(format!("{id}-failure-words"))
         .variant(FlowText::Line.role())
         .color(PaletteColor::TextMuted),
+    )
+}
+
+/// What a step that waits for only part of the stage before it waits for (`Waits` `QoOD3` in `Card · 06 Write notes`,
+/// P16 `T9KJFP`): the merge glyph in `accent`, then *waits for 04 Run checks only · starts before 05 Review ends*.
+fn waits_line(ctx: &lurq::app::ctx::Ctx, id: &str, waits: &Waits) -> Row {
+  Row::new()
+    .id(format!("{id}-waits"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().left(Dimension::Px(HANDLE_INDENT)))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::GitMerge, IconSize::Sm, PaletteColor::Accent))
+    .child(
+      Text::new(&words::waits(ctx, waits))
+        .id(format!("{id}-waits-words"))
+        .variant(FlowText::Line.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
 }
 

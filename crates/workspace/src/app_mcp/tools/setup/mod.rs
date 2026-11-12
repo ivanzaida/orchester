@@ -234,7 +234,7 @@ const SPECS: &[Spec] = &[
                   {\"key\": \"check\", \"name\": \"Check\", \"tool\": \"Check\", \"runs_after\": [\"implement\"], \
                   \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. Refused as invalid_pipeline when the \
                   steps do not form a pipeline, as not_publishable with every reason when it has no steps, a step has \
-                  no profile or tool or cannot run here, the steps branch where the flow is one line, or the version \
+                  no profile or tool or cannot run here, or the version \
                   limit is reached, as unchanged when they equal the latest version, and as version_changed when a \
                   version was published since it was read. Unless a person turned on Let automation change agent \
                   permissions, a save that widens what agents may do is refused as person_only, with every reason: \

@@ -192,6 +192,8 @@ impl Component for PipelinePanel {
     );
     this.follow_discard(ctx);
     this.follow_typed(ctx);
+    #[cfg(feature = "test-support")]
+    super::edit::armed(&this.holding, id, props.entry.body);
     this
   }
 

@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 
 use orchester_app::{
-  routes::{HubFilter, HubView, PipelineView, PipelinesFilter, ProjectPage, Route},
+  routes::{HubFilter, HubView, PipelinesFilter, ProjectPage, Route},
   ui::tooltip::TOOLTIP_DELAY,
 };
 use orchester_core::{
@@ -211,7 +211,7 @@ fn pipeline_hub_ready_a_published_pipeline_without_a_draft_keeps_the_plain_title
 }
 
 #[test]
-fn pipeline_hub_ready_steps_a_line_cannot_draw_offer_the_editor() {
+fn pipeline_hub_ready_steps_that_wait_for_part_of_a_stage_lack_nothing() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let mut steps = body([Some(builder), Some(builder)]).into_steps();
@@ -226,16 +226,15 @@ fn pipeline_hub_ready_steps_a_line_cannot_draw_offer_the_editor() {
   let branching = store(&agents, "Branching", &Pipeline::new(steps).expect("a pipeline"));
   open(&mut agents, PipelinesFilter::All, Some(branching));
 
-  assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
-  assert_eq!(
-    agents.text("team-hub-ready-steps-words"),
-    "These steps can't be drawn as one line"
+  assert!(
+    !agents.exists("team-hub-ready-steps"),
+    "no row about the steps as a whole: they are drawn by stage"
   );
-  assert_eq!(agents.text("team-hub-ready-steps-edit-steps"), "Edit steps →");
-  agents.click("team-hub-ready-steps-edit-steps");
-  agents.until("the editor", |s| {
-    s.window.navigation().route_now() == page(ProjectPage::Pipeline(branching, PipelineView::default()))
-  });
+  assert!(
+    !agents.exists("team-hub-ready-steps-edit-steps"),
+    "nothing sends them to the old editor"
+  );
+  assert!(agents.exists("team-hub-ready-summary"), "all set");
 }
 
 #[test]

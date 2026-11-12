@@ -223,6 +223,7 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
         holding.set(Holding {
           held: Some(Held::start(Arc::new(body))),
           saved_over: stored.get(),
+          ..Holding::default()
         });
         changes.record(project, Outside::Pipelines);
         if matches!(saved, Saved::Published(_)) {

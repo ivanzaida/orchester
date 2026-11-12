@@ -17,6 +17,7 @@ use super::{
   Open, agent, choices, executor, keep,
   pieces::Chip,
   text_field::{self, Kind},
+  waits,
 };
 use crate::{
   screens::{
@@ -124,9 +125,11 @@ fn instructions_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::compon
   .align_items(Alignment::Start)
 }
 
-/// *Run*: where changes requested go (with its retries), and the step budget.
+/// *Run*: what the step waits for when that row shows, where changes requested go (with its retries), and the step
+/// budget.
 pub(super) fn run(ctx: &mut Ctx, open: &Open<'_>, step: &Step, upstream: &[Chip]) -> Element {
-  let mut rows = vec![changes_row(ctx, open, step, upstream)];
+  let mut rows: Vec<Row> = waits_row(ctx, open, step).into_iter().collect();
+  rows.push(changes_row(ctx, open, step, upstream));
   if step.on_failure.is_some() {
     rows.push(text_row(ctx, open, step, Kind::Retries));
   } else {
@@ -142,6 +145,35 @@ pub(super) fn run(ctx: &mut Ctx, open: &Open<'_>, step: &Step, upstream: &[Chip]
     rows,
   )
   .into()
+}
+
+/// *Waits for* (P16b `P1853`): for a step that waits for only part of the stage before it, or whose row the person
+/// opened or changed; every other step keeps the group as it is. Steps with no order to draw have none.
+fn waits_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Option<Row> {
+  let flow = open.read.flow.as_ref().ok()?;
+  let all = || flow.stages.iter().flat_map(|stage| &stage.cards);
+  let partly = all().any(|card| card.key == step.key && card.waits.is_some());
+  if !partly && !open.edit.shows_waits(&step.key) {
+    return None;
+  }
+  let cards = all()
+    .map(|card| waits::Card {
+      key: card.key.clone(),
+      number: card.number,
+      name: card.name.clone(),
+    })
+    .collect();
+  let row = waits::row(
+    ctx,
+    waits::Props {
+      edit: open.edit.clone(),
+      key: step.key.clone(),
+      current: open.current.clone(),
+      cards,
+      locked: open.locked,
+    },
+  );
+  Some(Row::new().width(Dimension::Pct(100.0)).child(row))
 }
 
 /// *When changes are requested*: *Fail the run*, or the earlier step the run goes back to.

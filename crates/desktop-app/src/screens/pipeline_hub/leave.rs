@@ -2,7 +2,7 @@
 //! dialog over the page, as the Agents hub does ([`crate::screens::local_hub::leave`]). Every way out of the panel asks
 //! the same question: the hub's own presses through that module's `Leave` (another pipeline, a filter, *New pipeline*),
 //! and every other departure through the navigation's [`LeaveGuard`] (Back and Forward, a tab switched or closed, the
-//! sidebar, a link, *Edit steps*, a card, the ⋯ menu's *Duplicate*). The ⋯ menu's *Archive* asks it too, before the
+//! sidebar, a link, a card, the ⋯ menu's *Duplicate*). The ⋯ menu's *Archive* asks it too, before the
 //! archive confirmation: an archived pipeline has no panel to keep the edit in. *Keep editing* leaves everything as it
 //! is; *Discard changes* drops the edit and goes where the person pressed. A pipeline being made ([`super::new`]) is
 //! asked about the same way while something is typed for it, in its own words: nothing of it is stored, so it is lost.

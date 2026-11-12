@@ -82,8 +82,7 @@
       "usedOne": "used by 1 task",
       "used": "used by {{count}} tasks",
       "viewing": "Viewing {{version}} · published {{date}}",
-      "steps": "Steps",
-      "openSteps": "Edit steps"
+      "steps": "Steps"
     },
     "agent": {
       "choose": "Choose an agent profile or tool",
@@ -111,6 +110,17 @@
       "budget": "Step budget",
       "noLimit": "No limit",
       "tokens": "tokens",
+      "waitsFor": {
+        "label": "Waits for",
+        "hint": "Starts when all of these passed.",
+        "nothing": "Nothing: it starts with the run",
+        "add": "Add",
+        "remove": "Stop waiting for {{name}}",
+        "through": "through {{number}}",
+        "everything": "Wait for everything before it",
+        "waitsForAll": "It waits for everything before it",
+        "nothingBefore": "Nothing runs before it"
+      },
       "gateGroup": "Gate and access",
       "approval": "Wait for your approval",
       "access": "Repository access",
@@ -273,6 +283,7 @@
         "addAfter": "Add a step after",
         "duplicate": "Duplicate",
         "remove": "Remove step",
+        "waitSome": "Wait for some steps only…",
         "nothingBefore": "Nothing runs before it",
         "nothingAfter": "Nothing runs after it",
         "step": "{{number}} {{name}}",
@@ -293,16 +304,21 @@
           "removeTarget": "{{step}} returns to it on failure, so it can't be removed.",
           "returnsToIt": "{{step}} returns to it on failure.",
           "itReturnsTo": "it returns to {{target}} on failure.",
-          "returnsTo": "{{step}} returns to {{target}} on failure."
+          "returnsTo": "{{step}} returns to {{target}} on failure.",
+          "waitsForIt": "{{step}} waits for it."
         }
       },
-      "branches": {
-        "title": "These steps can't be drawn as one line",
-        "detail": "A step waits for only part of what runs before it, so no single line shows their order. Edit the steps to see and change what each one waits for."
+      "waits": {
+        "one": "waits for {{on}} only · starts before {{before}} ends",
+        "many": "waits for {{on}} only · starts before {{before}} end"
       },
       "broken": {
         "title": "These steps have no order to draw",
-        "detail": "The steps wait for each other in a circle, or for a step that is not there. Edit the steps to fix what they wait for."
+        "cycleTwo": "{{first}} and {{second}} wait for each other, so neither can start. Make it a line to give the steps an order: each step then waits for the step listed before it.",
+        "cycle": "{{steps}} wait for each other in a circle, so none of them can start. Make it a line to give the steps an order: each step then waits for the step listed before it.",
+        "detail": "A step waits for a step that is not there, or returns on failure to a step that runs after it. Make it a line to give the steps an order: each step then waits for the step listed before it.",
+        "noLine": "The steps break a rule no order puts right, such as two steps with one key. Cancel puts the saved steps back.",
+        "line": "Make it a line"
       },
       "profileConnectionGone": "{{profile}} has no connection"
     },
@@ -338,7 +354,7 @@
       "connectionGone": "Its connection is gone",
       "noSteps": "No steps yet",
       "addStep": "Add step →",
-      "editSteps": "Edit steps →",
+      "makeLine": "Make it a line →",
       "profileConnectionGone": "{{profile}} has no connection",
       "profilesAndToolsOf": "Profiles and tools · {{version}}",
       "chooseAnother": "Choose another →",

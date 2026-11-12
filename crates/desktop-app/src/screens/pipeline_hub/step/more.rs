@@ -35,7 +35,7 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct Props {
   pub edit: Edit,
-  /// The panel's read of what it shows, whose flow has the step's card when its steps make one line.
+  /// The panel's read of what it shows, whose flow has the step's card when its steps have an order to draw.
   pub read: Arc<FlowRead>,
   pub key: StepKey,
   pub project: ProjectId,

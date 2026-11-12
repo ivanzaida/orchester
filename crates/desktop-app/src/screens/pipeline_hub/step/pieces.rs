@@ -1,6 +1,6 @@
 //! What the step strip draws, read from the flow of the edit the panel holds: a chip per step in the order they run,
 //! the steps that run side by side in one group, a hand where the run waits for the person, and the Deliver step last.
-//! Steps one line cannot show (the flow has no layout for them) keep the order they are stored in, one chip each.
+//! Steps with no order to draw (the flow has no layout for them) keep the order they are stored in, one chip each.
 
 use std::sync::Arc;
 

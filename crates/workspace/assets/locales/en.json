@@ -1373,8 +1373,7 @@
       "invalidRetries": "Enter a whole number of retries, at least 1.",
       "stepsNotReady": "{{count}} steps aren't ready: {{steps}}",
       "profileGone": "Step “{{step}}” runs an agent profile that is no longer available. Choose another.",
-      "toolGone": "Step “{{step}}” calls a tool that is no longer available. Choose another.",
-      "branches": "{{step}} waits for only part of what runs before it, so the steps can't be drawn as one line. Change what it waits for."
+      "toolGone": "Step “{{step}}” calls a tool that is no longer available. Choose another."
     },
     "step": {
       "noProfile": "No agent profile",

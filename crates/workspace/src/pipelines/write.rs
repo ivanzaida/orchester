@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   name::Name,
-  resource::{FlowError, Pipeline, PublishError, ResourceBody, Step, StepKind, VersionNumber, flow_units},
+  resource::{Pipeline, PublishError, ResourceBody, Step, StepKind, VersionNumber},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -180,8 +180,8 @@ pub fn refusals(opened: &OpenedPipeline, body: &Pipeline) -> Vec<Message> {
 
 /// The save check (D-032): every reason `body` cannot be stored as the version after `latest` (`None` for a new
 /// pipeline's first), in the order a person fixes them; empty when it can. A body without steps, a step without a
-/// profile or tool, a step whose executor or narrowing `assignables` cannot honour ([`refused_step`]), steps the flow
-/// cannot draw as one line, and the version limit.
+/// profile or tool, a step whose executor or narrowing `assignables` cannot honour ([`refused_step`]), and the version
+/// limit. A step that waits for only part of what runs before it is drawn as it is (P16), so it is not refused.
 pub fn save_refusals(body: &Pipeline, assignables: &Assignables, latest: Option<VersionNumber>) -> Vec<Message> {
   let mut refusals = Vec::new();
   let mut add = |reason: Message| {
@@ -199,12 +199,6 @@ pub fn save_refusals(body: &Pipeline, assignables: &Assignables, latest: Option<
     if let Err(refused) = super::narrowing::check_step(step, assignables) {
       add(refused);
     }
-  }
-  if let Err(FlowError::Branches(key)) = flow_units(body.steps()) {
-    let name = body
-      .step(&key)
-      .map_or_else(|| key.as_str().to_owned(), |step| step.name.as_str().to_owned());
-    add(Message::new("pipelines.problems.branches").with("step", name));
   }
   if let Some(limit) = version_limit(latest) {
     add(limit);

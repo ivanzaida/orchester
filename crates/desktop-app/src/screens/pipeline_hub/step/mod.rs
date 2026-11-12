@@ -2,8 +2,10 @@
 //! to the pipeline and the step's name edited in place ([`head`], [`name`]), the strip of the whole flow that switches
 //! steps ([`strip`]) and the step's fields in groups: *Step* (*Agent* with *Open Builder*, and *Instructions*) and
 //! *Run* (what happens when changes are requested, the step budget, *When the step fails*) ([`groups`]), and *Gate and
-//! access* with the step's permissions ([`gate`], [`permissions`]). There is no *Runs after*: where a step runs is set
-//! in the flow. The Deliver step opens in the same panel with the same head and strip ([`deliver`], P15 `nPaMj`).
+//! access* with the step's permissions ([`gate`], [`permissions`]). Where a step runs is set in the flow; *Run* has
+//! *Waits for* only for a step that waits for part of the stage before it, or whose row the person opened (P16b
+//! `P1853`, [`waits`]). The Deliver step opens in the same panel with the same head and strip ([`deliver`], P15
+//! `nPaMj`).
 //!
 //! Every field changes the edit the panel holds ([`super::edit`]) and nothing else; *Save* and *Cancel* are the
 //! panel's and act on the whole pipeline. The route holds the open step (`ProjectPage::Pipeline` with
@@ -24,6 +26,7 @@ mod permissions;
 mod pieces;
 mod strip;
 mod text_field;
+mod waits;
 
 use std::sync::Arc;
 

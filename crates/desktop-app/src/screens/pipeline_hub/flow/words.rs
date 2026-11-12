@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::resource::{DeliverMode, Deliverable, MergeMethod, RepositoryAccess};
-use orchester_workspace::pipelines::flow::{Conflicts, DeliverCard, Ending, Gate, ReturnsTo, Runs, StepCard};
+use orchester_workspace::pipelines::flow::{
+  Conflicts, DeliverCard, Ending, Gate, Named, ReturnsTo, Runs, StepCard, Waits,
+};
 
 /// A card's number as the design writes it: `03`.
 pub(in crate::screens::pipeline_hub) fn number(number: usize) -> String {
@@ -115,4 +117,48 @@ pub(super) fn end(ctx: &Ctx, ending: Ending) -> (Arc<str>, Arc<str>) {
     Ending::Delivers(Deliverable::Outside) => ("pipeline_hub.flow.endOutside", "pipeline_hub.flow.endOutsideHint"),
   };
   (ctx.t(label), ctx.t(hint))
+}
+
+/// What a step that waits for only part of the stage before it waits for (P16 `T9KJFP`): *waits for 04 Run checks only
+/// · starts before 05 Review ends*.
+pub(super) fn waits(ctx: &Ctx, waits: &Waits) -> Arc<str> {
+  ctx.t_args(
+    if waits.not_on.len() == 1 {
+      "pipeline_hub.flow.waits.one"
+    } else {
+      "pipeline_hub.flow.waits.many"
+    },
+    [
+      ("on", listed(ctx, &waits.on).to_string()),
+      ("before", listed(ctx, &waits.not_on).to_string()),
+    ],
+  )
+}
+
+/// Steps by number and name: *04 Run checks*, *04 Run checks and 05 Review*, *03 Implement, 04 Run checks and 05
+/// Review*.
+fn listed(ctx: &Ctx, steps: &[Named]) -> Arc<str> {
+  let named: Vec<String> = steps
+    .iter()
+    .map(|step| {
+      ctx
+        .t_args(
+          "pipeline_hub.flow.move.step",
+          [("number", number(step.number)), ("name", step.name.to_string())],
+        )
+        .to_string()
+    })
+    .collect();
+  match named.as_slice() {
+    [only] => Arc::from(only.as_str()),
+    [first, second] => ctx.t_args(
+      "pipeline_hub.flow.move.two",
+      [("first", first.as_str()), ("second", second.as_str())],
+    ),
+    [head @ .., last] if !head.is_empty() => ctx.t_args(
+      "pipeline_hub.flow.move.several",
+      [("head", head.join(", ")), ("last", last.clone())],
+    ),
+    _ => Arc::from(""),
+  }
 }

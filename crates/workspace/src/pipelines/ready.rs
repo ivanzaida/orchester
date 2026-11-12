@@ -124,8 +124,6 @@ pub enum Whole {
   NoSteps,
   /// Its steps wait for each other, or break another rule, so they have no flow.
   Broken,
-  /// A step waits for only some of what runs before it, which one line cannot draw.
-  Branches,
 }
 
 /// One thing a pipeline lacks.
@@ -202,7 +200,6 @@ fn whole_problem(read: &FlowRead) -> Option<Whole> {
   match &read.flow {
     Ok(flow) if flow.is_empty() => Some(Whole::NoSteps),
     Ok(_) => None,
-    Err(FlowError::Branches(_)) => Some(Whole::Branches),
     Err(FlowError::Broken(_)) => Some(Whole::Broken),
   }
 }

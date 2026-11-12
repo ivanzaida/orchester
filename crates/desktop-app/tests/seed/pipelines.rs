@@ -2,7 +2,7 @@
 use orchester_core::{
   connection::AgentProvider,
   permission::{StepCommands, StepNetwork},
-  resource::{AgentProfile, FlowError, Pipeline, ResourceKind, StepKind, Tool, ToolKind},
+  resource::{AgentProfile, Pipeline, ResourceKind, StepKind, Tool, ToolKind},
   store::ResourceStore,
 };
 use orchester_store::StoreError;
@@ -207,7 +207,11 @@ fn seed_pipelines_flow_reaches_every_state_the_steps_are_drawn_in() {
 
   let gated = flow("Gated group").expect("a gated group is drawn");
   assert_eq!((gated.stages[1].cards.len(), gated.stages[1].gates.len()), (2, 2));
-  assert!(matches!(flow("Independent chains"), Err(FlowError::Branches(_))));
+  let chains = flow("Independent chains").expect("chains are drawn by stage");
+  assert!(
+    chains.stages[1].cards.iter().all(|card| card.waits.is_some()),
+    "each chain's second step waits for its own first only"
+  );
 }
 
 #[test]

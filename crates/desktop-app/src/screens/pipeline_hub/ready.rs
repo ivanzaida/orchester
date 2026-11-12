@@ -1,10 +1,10 @@
 //! *Ready?* under the pipeline's flow (`Ready?` `j0OZhl` in `Pipelines · v2` P1 `s7LMyQ`, `eA5ed` in P8 `vujkk`): *all
 //! set* in `success` with one summary row, or *N missing* in `warning` with one row per problem and what to do about it
 //! at its end (*Choose →* opens the step, *Open →* the profile or tool in the Agents hub, *Add step →* adds a step as
-//! the head's *Add step* does, *Edit steps →* opens the editor as the flow's notice does). What is missing is the
-//! workspace's ([`orchester_workspace::pipelines::ready`]): what is wrong with the steps as a whole, the steps whose
-//! card stands in amber (also when the steps cannot be drawn as one line), and what the readiness read says this
-//! computer lacks. The rows are the Agents hub's ([`crate::screens::team_hub::profile::ready`]).
+//! the head's *Add step* does, *Make it a line →* gives steps with no order one line as the flow's notice does). What
+//! is missing is the workspace's ([`orchester_workspace::pipelines::ready`]): what is wrong with the steps as a whole,
+//! the steps whose card stands in amber (also when the steps have no order to draw), and what the readiness read says
+//! this computer lacks. The rows are the Agents hub's ([`crate::screens::team_hub::profile::ready`]).
 //!
 //! The panel draws the edit it holds when it holds one, so *Ready?* reads the edit as it stands; while *Save* is off
 //! for it, its count says so (*1 missing · Save stays off*, P8). What the readiness read says is about the published
@@ -60,8 +60,8 @@ enum Fix {
   Resource(flow::Fix),
   /// Add a step at the end of the line, as the head's *Add step* does.
   AddStep,
-  /// Open the editor, where the steps are put right.
-  EditSteps,
+  /// Give steps with no order one line, as the flow's notice does (P16c `YHAyx`).
+  MakeLine,
   /// Open the Agents hub, where connections, programs and values are set.
   Agents,
 }
@@ -73,7 +73,7 @@ impl Offer for Fix {
       Self::ChooseAnother(_) => "pipeline_hub.ready.chooseAnother",
       Self::Resource(_) | Self::Agents => "pipeline_hub.ready.open",
       Self::AddStep => "pipeline_hub.ready.addStep",
-      Self::EditSteps => "pipeline_hub.ready.editSteps",
+      Self::MakeLine => "pipeline_hub.ready.makeLine",
     }
   }
 
@@ -83,7 +83,7 @@ impl Offer for Fix {
       Self::ChooseAnother(_) => "choose-another",
       Self::Resource(_) => "open",
       Self::AddStep => "add-step",
-      Self::EditSteps => "edit-steps",
+      Self::MakeLine => "make-line",
       Self::Agents => "agents",
     }
   }
@@ -122,13 +122,15 @@ pub(super) fn group(ctx: &mut Ctx, shown: &Shown<'_>) -> Option<Element> {
     undecided: &entry.undecided,
     runs: runs.as_deref(),
   });
+  // Steps with no order offer *Make it a line →* only when a line puts them right.
+  let line = shown.current.line_fixes();
   let parts = if found.is_empty() {
     vec![summary(ctx, read.flow.as_ref().ok())]
   } else {
     found
       .iter()
       .enumerate()
-      .map(|(index, problem)| part(ctx, problem, (index, over)))
+      .map(|(index, problem)| part(ctx, problem, (index, over, line)))
       .collect()
   };
   let navigation = Navigation::of(ctx);
@@ -175,6 +177,14 @@ fn runs_of(current: &PipelineEdit) -> Vec<ResourceId> {
 fn press(shown: &Shown<'_>, (navigation, new_step): (&Navigation, &Name), fix: &Fix) -> Press {
   let id = shown.entry.id;
   let page = match fix {
+    Fix::MakeLine => {
+      let edit = shown.edit.clone();
+      return Press::run(move || {
+        edit.change(|held| {
+          held.make_line();
+        });
+      });
+    }
     Fix::AddStep => {
       let (edit, name) = (shown.edit.clone(), new_step.clone());
       return Press::run(move || {
@@ -196,7 +206,6 @@ fn press(shown: &Shown<'_>, (navigation, new_step): (&Navigation, &Name), fix: &
     }
     Fix::Choose(key) => ProjectPage::Pipeline(id, PipelineView::Step(key.clone())),
     Fix::Resource(resource) => resource.page(),
-    Fix::EditSteps => ProjectPage::Pipeline(id, PipelineView::default()),
     Fix::Agents => ProjectPage::AgentsHub(HubView::default()),
   };
   Press::Open(navigation.to(Route::Project(shown.project.open.project.id(), page)))
@@ -233,14 +242,14 @@ fn summary(ctx: &Ctx, flow: Option<&PipelineFlow>) -> Part<Fix> {
 }
 
 /// The row of `problem`. Over a published version (`over`), a row about that version's profiles and tools as a whole
-/// names it, as the edit may run others.
-fn part(ctx: &Ctx, problem: &Problem, (index, over): (usize, Option<VersionNumber>)) -> Part<Fix> {
+/// names it, as the edit may run others; steps with no order offer a line when `line` puts them right.
+fn part(ctx: &Ctx, problem: &Problem, (index, over, line): (usize, Option<VersionNumber>, bool)) -> Part<Fix> {
   match problem {
     Problem::Whole(whole) => labelled(
       "steps",
       ctx.t("pipeline_hub.panel.steps"),
       whole_words(ctx, *whole),
-      Some(whole_fix(*whole)),
+      whole_fix(*whole, line),
     ),
     Problem::Step(step) => labelled(
       &format!("step-{}", step.key),
@@ -298,15 +307,16 @@ pub(super) fn whole_words(ctx: &Ctx, whole: Whole) -> Arc<str> {
   ctx.t(match whole {
     Whole::NoSteps => "pipeline_hub.ready.noSteps",
     Whole::Broken => "pipeline_hub.flow.broken.title",
-    Whole::Branches => "pipeline_hub.flow.branches.title",
   })
 }
 
-/// *Add step →* for steps with none, *Edit steps →* for steps the editor puts right.
-const fn whole_fix(whole: Whole) -> Fix {
+/// *Add step →* for steps with none, *Make it a line →* for steps with no order when `line` puts them right; nothing
+/// for steps a line does not, which *Cancel* puts back.
+const fn whole_fix(whole: Whole, line: bool) -> Option<Fix> {
   match whole {
-    Whole::NoSteps => Fix::AddStep,
-    Whole::Broken | Whole::Branches => Fix::EditSteps,
+    Whole::NoSteps => Some(Fix::AddStep),
+    Whole::Broken if line => Some(Fix::MakeLine),
+    Whole::Broken => None,
   }
 }
 

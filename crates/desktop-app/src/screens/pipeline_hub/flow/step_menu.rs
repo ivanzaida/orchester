@@ -96,6 +96,7 @@ impl StepMenu {
       flow: target.flow,
       cards: &cards,
       opens: Some(opens),
+      to_step: None,
     };
     popup(ctx, &menu, target.card, anchor)
   }
