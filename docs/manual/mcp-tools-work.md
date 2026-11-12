@@ -65,13 +65,16 @@ limits, conflicts) always come to the person in both modes.
 A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
 - `approve_mode` — the project's *Approve mode*: `manual`, `autopilot` or `dangerous_auto_approve` (every tool
-  request of the project's agents is approved at once, whatever `approval_mode` below says).
+  request of the project's agents is approved at once).
 - `allow_autopilot` — whether Autopilot is allowed: `true` in `autopilot` and `dangerous_auto_approve`.
 - `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
   or `unavailable` with why the project has none.
 - `runs` — each run of the project that has not ended: `id`, `number`, `task`, `link`, and `approval_mode`: `{"mode":
   "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
-  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
+  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so; while the project is
+  in `dangerous_auto_approve`, `{"mode": "dangerous_auto_approve", "because": "project"}` for every run. Beside it,
+  `switched_to_manual`: whether the run switched itself to Manual, which applies again once the project leaves
+  Dangerous auto-approve.
 
 **Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
 
@@ -88,7 +91,8 @@ Autopilot, in Project settings › Runs (asking for it while Autopilot is allowe
 Moves the project's *Approve mode*: `manual`, `autopilot` or `dangerous_auto_approve`. In `dangerous_auto_approve` every
 tool request of every agent of the project's runs is approved at once: no allowed list, hold rule, reviewer, person or
 Orchestrator is asked, and each answer is recorded as `dangerous_auto_approve` (`get_run`'s
-`requests[].answered.kind`). Moving it down, or asking for what it is already, is always taken; moving it up is refused
+`requests[].answered.kind`). Moving it down, or asking for what it is already, is always taken; a move decided on a mode a person changed meanwhile is
+refused as `changed_outside`; moving it up is refused
 as `person_only` whatever automation may do: only a person moves it up, in Project settings › Runs (to
 `dangerous_auto_approve` through its confirmation). Parameters: `project`, `approve_mode` — both required. Answers as
 `get_approvals`.

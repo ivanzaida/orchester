@@ -82,17 +82,32 @@ design source is `crates/desktop-app/design/orchester.pen`, read and changed onl
   `DecidedBy::AutoApproved`, which keeps the stored answers' table as it is) and shows in the run's Conversation as a
   quiet row *Approved by Dangerous auto-approve mode*, its `triangle-alert` in `danger`. While it is chosen the row is on
   `danger_muted`, the Reviewer and *Approved for every run* rows are dimmed and still usable, a line under the group
-  says they are not used, and the status bar shows a *Dangerous auto-approve* chip that opens Project settings › Runs.
+  says they are not used, and the status bar shows a *Dangerous auto-approve* chip that opens Project settings › Runs
+  (its own read of the mode, shown while the project's tasks are still read). Each run says so too: its mode is
+  `EffectiveMode::DangerousAutoApprove` (`{"mode": "dangerous_auto_approve", "because": "project"}` in
+  `get_approvals`' `runs` and `get_run`), the Conversation's permissions chip reads *Dangerous auto-approve* in
+  `danger` without the profile's word, its menu offers no way of answering but one line and a link to Project settings
+  › Runs, and the header's mode chip reads the same. A run's own switch to Manual is kept (`switched_to_manual` beside
+  its mode in the reads) and applies again once the project leaves Dangerous auto-approve.
   Over MCP, `get_approvals` and `get_run` report `approve_mode` (`manual`, `autopilot`, `dangerous_auto_approve`);
-  `set_approve_mode` moves it (down always, up refused as `person_only`); `set_allow_autopilot` keeps its meaning for
-  existing clients (`false` moves to Manual, from Dangerous auto-approve too; `true` asks for Autopilot and changes
-  nothing where Autopilot is allowed already) and `get_approvals`' `allow_autopilot` stays (true in Autopilot and
-  Dangerous auto-approve).
+  `set_approve_mode` moves it (down always, up refused as `person_only`; a move decided on a mode someone changed
+  meanwhile is refused as `changed_outside`: the store writes it only if the mode is still the one read);
+  `set_allow_autopilot` keeps its meaning for existing clients (`false` moves to Manual, from Dangerous auto-approve
+  too; `true` asks for Autopilot and changes nothing where Autopilot is allowed already) and `get_approvals`'
+  `allow_autopilot` stays (true in Autopilot and Dangerous auto-approve).
   - **Team projects and remote runners.** A team task's run on this computer is run by this computer's runner, so the
     project's mode on this computer applies to it as to a local run (the mode is kept per computer, as *Allow
     Autopilot* was; the team server does not decide requests). Remote runners are not built
     (`docs/architecture/remote-runners.md`): the executor reads the mode through the coordinator link
     (`SettingsLink::approve_mode`), the boundary a remote executor will use too.
+  - **Not a hold: Orchester's own tools' validity.** "Every request is approved" means every request that reaches the
+    worker's routing. A call of Orchester's own tools whose arguments are not valid is still refused before it is
+    routed (the relay's check, `runner::execution::executor::step::relay`): a malformed call, not a hold.
+  - **An older build of the app.** A build from before the Approve mode reads only `allow_autopilot`, so it runs a
+    project left in Dangerous auto-approve as Autopilot, and cannot move it down: its write of `allow_autopilot = 0`
+    fails the column's CHECK (Dangerous auto-approve needs Autopilot allowed), and its read of a run whose requests
+    were answered so may fail on the answer kind `dangerous_auto_approve` it does not know. Move the project to
+    Autopilot or Manual with this build before opening it with an older one.
 
 ## Enforcement
 
