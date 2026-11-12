@@ -45,7 +45,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{AccountsView, Route},
+  routes::{AccountsView, HubFilter, HubView, ProjectPage, Route},
   screens::settings::orchester::PersonOnly,
   services::Services,
   theme::HubSpacing,
@@ -154,7 +154,7 @@ impl Component for ProfilePanel {
       .child(ready::section(
         ctx,
         (&ctx.t("team_hub.readiness.title"), &parts),
-        missing.len(),
+        missing.len() + usize::from(fix::archived_named(entry).is_some()),
         (&press, busy),
       ))
       .with_children(self.failure(ctx));
@@ -163,12 +163,9 @@ impl Component for ProfilePanel {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
-    let pinned = team.bar.or_else(|| {
-      missing
-        .first()
-        .and_then(Fix::of)
-        .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy))
-    });
+    let pinned = team
+      .bar
+      .or_else(|| fix::first(entry).map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy)));
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
@@ -219,7 +216,7 @@ impl ProfilePanel {
         notice: None,
         sections: role_read::section(ctx, &props.sheet)
           .into_iter()
-          .chain([from_team::section(ctx, &props.sheet).into()])
+          .chain([from_team::section(ctx, &props.sheet, super::rows::FromTeam::Shared).into()])
           .collect(),
         bar: None,
       };
@@ -231,12 +228,7 @@ impl ProfilePanel {
       .collect();
     // The fix of what this computer lacks stays pinned while nothing is edited; Save's bar takes its place once
     // something is.
-    let fix = props
-      .entry
-      .standing
-      .as_ref()
-      .and_then(|standing| standing.missing().first())
-      .and_then(Fix::of);
+    let fix = fix::first(&props.entry);
     TeamPart {
       chips: panel::chips_of(ctx, &props.entry, badges, None),
       notice: parts.notice,
@@ -300,6 +292,10 @@ impl ProfilePanel {
     };
     match fix {
       Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
+      Fix::OpenArchived(resource) => Press::Open(navigation.to(Route::Project(
+        props.project,
+        ProjectPage::hub(HubView::new(HubFilter::Archived, Some(*resource))),
+      ))),
       Fix::UseConnection => {
         let (action, profile, chosen) = (self.actions.pick.clone(), props.entry.id, self.chosen.clone());
         let connections = props.sheet.connections.clone();

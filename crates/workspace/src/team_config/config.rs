@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use orchester_api::{SharedResource, SharedVersion};
+use orchester_api::{Attribution, SharedResource, SharedVersion};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -73,15 +73,34 @@ impl TeamConfig {
     self.resources.insert(resource.id, resource);
   }
 
-  /// Follows the team's archived mark of `id`; whether it changed.
-  pub(crate) fn mark_archived(&mut self, id: ResourceId, archived: bool) -> bool {
+  /// Follows the team's archived mark of `id`, which `change` made; whether it changed.
+  pub(crate) fn mark_archived(&mut self, id: ResourceId, archived: bool, change: Changed) -> bool {
     match self.resources.get_mut(&id) {
       Some(resource) if resource.archived != archived => {
         resource.archived = archived;
+        resource.changed_by(change);
         true
       }
       _ => false,
     }
+  }
+
+  /// Keeps what the server answered a change of the resource with (its name, archived mark and revision), unless this
+  /// configuration holds a later revision of it or none of the resource; whether it changed.
+  pub(crate) fn changed(&mut self, shared: &SharedResource) -> bool {
+    let Some(kept) = self.resources.get_mut(&shared.id) else {
+      return false;
+    };
+    if kept.revision.get() >= shared.revision.get() {
+      return false;
+    }
+    if let Ok(name) = Name::new(&shared.name) {
+      kept.name = name;
+    }
+    kept.archived = shared.archived;
+    kept.revision = shared.revision;
+    kept.updated = Changed::of(&shared.updated);
+    true
   }
 
   /// Keeps `version` as the latest version of its resource, unless this configuration holds a newer one or none of the
@@ -96,11 +115,12 @@ impl TeamConfig {
     }
   }
 
-  /// Renames `id`; whether it changed.
-  pub(crate) fn rename(&mut self, id: ResourceId, name: Name) -> bool {
+  /// Renames `id`, as `change` did; whether it changed.
+  pub(crate) fn rename(&mut self, id: ResourceId, name: Name, change: Changed) -> bool {
     match self.resources.get_mut(&id) {
       Some(resource) if resource.name != name => {
         resource.name = name;
+        resource.changed_by(change);
         true
       }
       _ => false,
@@ -119,6 +139,24 @@ pub struct TeamResource {
   pub revision: TaskRevision,
   /// `None` while the server has numbered no version of it.
   pub latest: Option<TeamVersion>,
+  /// Its last rename or archived mark (or its creation): for an archived resource, who archived it and when.
+  pub updated: Changed,
+}
+
+/// Who changed a resource's name or archived mark, by the name the server gives them, and when.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Changed {
+  pub by: String,
+  pub at: Timestamp,
+}
+
+impl Changed {
+  pub(crate) fn of(attribution: &Attribution) -> Self {
+    Self {
+      by: attribution.by.display_name.clone(),
+      at: Timestamp::from_unix_millis(attribution.at),
+    }
+  }
 }
 
 impl TeamResource {
@@ -135,7 +173,17 @@ impl TeamResource {
       archived: shared.archived,
       revision: shared.revision,
       latest,
+      updated: Changed::of(&shared.updated),
     })
+  }
+
+  /// Follows a change of its name or archived mark the event stream told: the server counts each such change in the
+  /// resource's revision, so a change made on what this computer holds is made on the revision after it.
+  fn changed_by(&mut self, change: Changed) {
+    if let Ok(next) = self.revision.next() {
+      self.revision = next;
+    }
+    self.updated = change;
   }
 
   /// The latest version's body read as `B`, its kind's team form: `None` without a version, `Some(Err)` for a body that

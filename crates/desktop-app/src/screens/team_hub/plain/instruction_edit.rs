@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::resource::Instruction;
 use orchester_workspace::agents::team_text::TeamInstructionSheet;
 
-use super::{Props, Sheet, from_team, on_this_computer, used_by_row};
+use super::{FromTeam, Props, Sheet, from_team, on_this_computer, used_by_row};
 use crate::{
   screens::{
     hub::forms::{Form, Ids, InstructionFields},
@@ -119,7 +119,11 @@ impl Component for InstructionEditor {
         panel::given_by(ctx, super::GIVEN_BY, sheet.used_by.len()),
       ))
       .with_children(parts.notice)
-      .child(from_team(ctx, std::iter::once(used_by).chain(drawn.rows).collect()))
+      .child(from_team(
+        ctx,
+        FromTeam::Shared,
+        std::iter::once(used_by).chain(drawn.rows).collect(),
+      ))
       .with_children(drawn.sections)
       .child(on_this_computer(ctx, &Sheet::Instruction(sheet.clone())));
     panel::frame(entry, body, Some(parts.bar)).into()

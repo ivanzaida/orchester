@@ -13,6 +13,7 @@ use orchester_workspace::{
   agents::{team_hub::Form, team_mcp::Published, team_text::Added},
   display,
   readiness::{Group, ReadinessStanding, Undecided},
+  team_config::Changed,
 };
 
 use super::model::{Entry, Kind, Listing, Reach};
@@ -52,6 +53,18 @@ fn has_no_connection(entry: &Entry) -> Option<AgentProvider> {
     ] => Some(*cli),
     _ => None,
   }
+}
+
+/// *Archived by dana-k · Nov 12, 15:21*: who archived a resource of the team and when.
+pub(super) fn archived_by(ctx: &Ctx, changed: &Changed) -> Arc<str> {
+  ctx.t_args(
+    "team_hub.line.archivedBy",
+    [
+      ("who", changed.by.clone()),
+      ("date", date(ctx, Timestamp::now(), changed.at).to_string()),
+      ("time", display::clock(changed.at)),
+    ],
+  )
 }
 
 /// A line of words and the color it is said in.
@@ -220,6 +233,10 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
 /// The readiness chip of the panel: what it says and its tone.
 pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry) -> (Arc<str>, crate::ui::chip::BadgeTone) {
   use crate::ui::chip::BadgeTone;
+  // What it names that the team archived is the one thing it misses (`Chip` in A37 `AFbIb`).
+  if super::profile::fix::archived_named(entry).is_some() {
+    return (ctx.t("team_hub.chip.archivedMissing"), BadgeTone::Warning);
+  }
   match entry.group {
     Group::NeedsYouHere => match has_no_connection(entry) {
       Some(cli) => (

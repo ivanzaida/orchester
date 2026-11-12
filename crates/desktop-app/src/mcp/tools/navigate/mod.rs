@@ -131,7 +131,7 @@ fn schema() -> Value {
       "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
-      "filter": { "type": "string", "enum": HubFilter::LOCAL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills, tools or memory (the memory screen), and archived in a local project (a team project shows all instead)." },
+      "filter": { "type": "string", "enum": HubFilter::ALL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills, tools or memory (the memory screen), and archived (what the project archived; a team project's is what the team archived)." },
       "item": { "type": "string", "description": "agents: the id of the resource the hub's panel shows; the first of the list when left out." },
       "record": { "type": "string", "description": "memory: the id of the record the Agents hub's Memory filter shows in its panel; the first of the status's list when left out." },
       "server": { "type": "string", "description": "agents of a local project: the id of the local MCP server the hub's panel shows (its connection id), in place of `item`." },

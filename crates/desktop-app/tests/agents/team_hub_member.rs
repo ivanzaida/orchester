@@ -405,7 +405,7 @@ fn team_hub_member_memory_is_this_computers_and_says_so() {
   assert!(agents.exists("memory-new"), "a member writes this computer's memory");
   assert!(!agents.exists("team-hub-new"), "and makes no team resource");
   assert!(
-    !agents.exists("team-hub-filter-archived"),
-    "a team's hub has no Archived"
+    agents.exists("team-hub-filter-archived"),
+    "a team's hub has Archived too, a member's as well (M7 `Ml7HN`)"
   );
 }

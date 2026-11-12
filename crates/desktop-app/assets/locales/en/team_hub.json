@@ -14,7 +14,8 @@
     "group": {
       "needs": "Needs you here",
       "ready": "Ready here",
-      "off": "Off here"
+      "off": "Off here",
+      "archived": "Archived"
     },
     "kind": {
       "tag": {
@@ -62,14 +63,16 @@
       "localProgram": "The program of {{server}} is not found here",
       "unsupportedHere": "Takes several secret headers, which this app can't send yet",
       "unsupportedOf": "{{server}} takes several secret headers, which this app can't send yet",
-      "secretUnreadable": "The keychain can't say whether secret {{name}} has a value here"
+      "secretUnreadable": "The keychain can't say whether secret {{name}} has a value here",
+      "archivedBy": "Archived by {{who}} · {{date}}, {{time}}"
     },
     "chip": {
       "team": "Team · {{version}}",
       "teamUnnumbered": "Team · not numbered yet",
       "ready": "Ready here",
       "off": "Off here",
-      "noConnection": "No {{cli}} connection here"
+      "noConnection": "No {{cli}} connection here",
+      "archivedMissing": "1 thing missing here"
     },
     "readiness": {
       "title": "Ready here?",
@@ -193,7 +196,8 @@
       "switchedOff": "Switched off on this computer",
       "valueSet": "Value set here",
       "noValue": "No value set here",
-      "ready": "Ready"
+      "ready": "Ready",
+      "archived": "The team archived it · {{profile}} can't run until an admin restores it or {{profile}} stops choosing it"
     },
     "fix": {
       "link": {
@@ -202,7 +206,8 @@
         "signIn": "Sign in →",
         "switchOn": "Switch on →",
         "setPath": "Set path →",
-        "addValue": "Add value →"
+        "addValue": "Add value →",
+        "openArchived": "Open →"
       },
       "programTitle": "Choose the MCP server's program",
       "action": {
@@ -211,14 +216,16 @@
         "signIn": "Sign in to {{cli}}",
         "switchOn": "Switch on {{server}}",
         "setPath": "Set {{server}}'s program path",
-        "addValue": "Add value for {{name}}"
+        "addValue": "Add value for {{name}}",
+        "openArchived": "Open {{name}}"
       },
       "hint": {
         "then": "Then {{what}}",
         "done": "{{profile}} runs here once nothing is missing",
         "use": "Asked once per profile · kept on this computer",
         "add": "Opens Settings › Accounts",
-        "signIn": "Opens Settings › Accounts"
+        "signIn": "Opens Settings › Accounts",
+        "openArchived": "In Archived · an admin restores it there"
       }
     },
     "secretDialog": {
@@ -422,6 +429,32 @@
       "newer": {
         "title": "{{name}} published {{version}} while you edited",
         "body": "The team keeps one latest version, so yours was not saved. The panel shows {{version}} now; make your changes again on it."
+      }
+    },
+    "archived": {
+      "nothingTitle": "Pick an archived resource",
+      "nothingDetail": "The team's archived resources are hidden from every list and picker, and the runs that pinned them were stopped. Pick one to see what archiving did; an admin restores it.",
+      "chip": "Archived",
+      "wasUsedBy": "was used by {{names}}",
+      "lock": "Only team admins restore it: {{admins}}.",
+      "title": "Archived: hidden from lists and pickers",
+      "run": "{{key}} · {{title}}",
+      "noVersion": "with no version yet",
+      "stoppedOne": "Archiving stopped the run that pinned it, {{runs}}. Restore puts {{name}} back for the whole team as it was, {{version}}; that run stays stopped, so run it again to use it.",
+      "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back for the whole team as it was, {{version}}; those runs stay stopped, so run them again to use it.",
+      "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back for the whole team as it was, {{version}}.",
+      "blocksMcpOne": "Until then {{names}}, which chooses it, is not ready on any computer.",
+      "blocksMcp": "Until then {{names}}, which choose it, are not ready on any computer.",
+      "blocksOne": "Until then {{names}}, which names it, is not ready on any computer.",
+      "blocks": "Until then {{names}}, which name it, are not ready on any computer.",
+      "sentences": "{{first}} {{then}}",
+      "readOnly": "· read-only until it is restored",
+      "restore": "Restore {{name}}",
+      "restoreHint": "Back for the whole team at once · stopped runs stay stopped",
+      "refused": {
+        "notAdmin": "Only team admins restore the team's resources: the team server refused it. Nothing was restored.",
+        "conflict": "{{name}} changed on the team server since this page read it. Nothing was restored; look at it again.",
+        "other": "The team server refused it ({{code}}). Nothing was restored."
       }
     }
   }

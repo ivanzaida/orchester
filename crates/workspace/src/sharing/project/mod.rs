@@ -43,7 +43,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
-  archive_resource::NotArchived,
+  archive_resource::{NotArchived, NotRestored},
   authority::TeamAdmins,
   claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},

@@ -45,7 +45,12 @@ pub(in crate::screens) struct Part<F = Fix> {
 pub(super) fn parts(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &TeamProfileSheet) -> Vec<Part> {
   let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
   let mut parts = vec![connection(ctx, sheet, missing)];
-  parts.extend(sheet.mcp_servers.iter().map(|used| server(ctx, listing, used, missing)));
+  parts.extend(
+    sheet
+      .mcp_servers
+      .iter()
+      .map(|used| server(ctx, (listing, entry), used, missing)),
+  );
   parts.extend(sheet.secrets.iter().map(|name| secret(ctx, name, missing)));
   parts
 }
@@ -102,8 +107,19 @@ fn connection_words(ctx: &Ctx, sheet: &TeamProfileSheet, cli: &str) -> Arc<str> 
   }
 }
 
-fn server(ctx: &Ctx, listing: &Listing, used: &UsedServer, missing: &[Missing]) -> Part {
+fn server(ctx: &Ctx, (listing, entry): (&Listing, &Entry), used: &UsedServer, missing: &[Missing]) -> Part {
   let id = used.server.id;
+  if super::fix::archived_named(entry).is_some_and(|(archived, _)| archived == id) {
+    return Part {
+      id: format!("mcp-{id}"),
+      label: ctx.t_args("team_hub.ready.mcpServer", [("name", used.server.name.as_str())]),
+      state: State::Missing {
+        words: ctx.t_args("team_hub.ready.archived", [("profile", entry.name.as_str())]),
+        fix: Some(Fix::OpenArchived(id)),
+        blocking: false,
+      },
+    };
+  }
   let problem = missing.iter().find(|part| of_server(part, id)).or_else(|| {
     missing
       .iter()

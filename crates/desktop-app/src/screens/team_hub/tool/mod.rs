@@ -11,7 +11,7 @@
 
 mod computer;
 mod edit;
-mod from_team;
+pub(super) mod from_team;
 mod republish;
 
 use std::{path::PathBuf, sync::Arc};
@@ -134,7 +134,7 @@ impl Component for ToolPanel {
       .child(panel::head_of(entry, (kind.to_string(), version), head_end))
       .child(chips)
       .with_children(member::lock_line(ctx, team))
-      .child(from_team::section(ctx, sheet))
+      .child(from_team::section(ctx, sheet, super::rows::FromTeam::Shared))
       .child(computer::section(ctx, entry, sheet, missing))
       .with_children(self.failure(ctx));
     let dialog = self.secret.dialog(

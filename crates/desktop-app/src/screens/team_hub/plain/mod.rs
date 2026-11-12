@@ -4,9 +4,9 @@
 //! every computer) and, pinned at the bottom, the admin's *Edit*. A person who may not change the team's resources
 //! reads it, with no bar and nothing disabled (`Member view`, notes rule 15, [`super::member`]).
 
-mod instruction;
+pub(super) mod instruction;
 mod instruction_edit;
-mod skill;
+pub(super) mod skill;
 mod skill_edit;
 
 use std::{path::PathBuf, sync::Arc};
@@ -17,7 +17,7 @@ use lurq::{
     ctx::Ctx,
     theme::PaletteColor,
   },
-  components::{Column, Row, Text},
+  components::{Column, Row},
   node::Element,
 };
 use orchester_core::id::ProjectId;
@@ -33,10 +33,10 @@ use super::{
   member,
   model::{Entry, Listing},
   panel,
-  rows::{self, Sub},
+  rows::{self, FromTeam, Sub},
   words,
 };
-use crate::{services::Services, theme::HubText};
+use crate::services::Services;
 
 /// What the team holds of the resource shown.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,12 +101,12 @@ impl Component for PlainPanel {
       Sheet::Instruction(sheet) => (
         ctx.t("team_hub.kind.where.instruction").to_string(),
         sheet.published.as_ref(),
-        instruction::sections(ctx, sheet),
+        instruction::sections(ctx, sheet, FromTeam::Shared),
       ),
       Sheet::Skill(sheet) => (
         ctx.t("team_hub.kind.where.skill").to_string(),
         sheet.published.as_ref(),
-        skill::sections(ctx, sheet),
+        skill::sections(ctx, sheet, FromTeam::Shared),
       ),
     };
     let head_end = archive::menu(ctx, &repo_root, &entry, team.may_change);
@@ -171,15 +171,6 @@ fn added_row(ctx: &Ctx, added: &Added) -> Row {
 }
 
 /// The *From the team* section of `rows`.
-fn from_team(ctx: &Ctx, rows: Vec<Row>) -> Column {
-  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-    .id("team-hub-from-team-note")
-    .variant(HubText::PanelHint.role())
-    .nowrap();
-  rows::section(
-    "team-hub-from-team",
-    &ctx.t("team_hub.profile.fromTeam"),
-    vec![note.into()],
-    rows,
-  )
+fn from_team(ctx: &Ctx, note: FromTeam, rows: Vec<Row>) -> Column {
+  rows::from_team(ctx, note, rows)
 }
