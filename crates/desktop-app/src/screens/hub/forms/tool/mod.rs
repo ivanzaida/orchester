@@ -18,13 +18,13 @@ use orchester_workspace::{
   tools::form::{CommandText, SecretToolErrors, SecretToolText},
 };
 
+pub(in crate::screens) use self::request::LocalSecrets;
 use self::{
   access::{AccessFields, Team},
   choice::{chosen, segments, text_of},
   command::CommandFields,
   request::{RequestFields, Secrets},
 };
-pub(in crate::screens) use self::request::LocalSecrets;
 use super::{Drawn, Form, Line, Look, Need};
 use crate::screens::team_hub::rows;
 

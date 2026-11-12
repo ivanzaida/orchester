@@ -300,10 +300,16 @@ impl RequestFields {
           color: PaletteColor::Danger,
         }
       }
-      None if self.picked(local.listed, environment).is_some_and(|id| local.valueless.contains(&id)) => Sub {
-        words: ctx.t("team_new.tool.noValueHere"),
-        color: PaletteColor::Warning,
-      },
+      None
+        if self
+          .picked(local.listed, environment)
+          .is_some_and(|id| local.valueless.contains(&id)) =>
+      {
+        Sub {
+          words: ctx.t("team_new.tool.noValueHere"),
+          color: PaletteColor::Warning,
+        }
+      }
       None => Sub::quiet(ctx.t("team_new.tool.pickedSub")),
     };
     let label = form.label(ctx, line.label, line.required);
