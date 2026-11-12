@@ -82,10 +82,17 @@ drive*, and says what changed.**
      history, deleting outside the worktree or touching credentials only when the task plainly needs it, otherwise deny
      or leave it to the person. The independent review of 2026-11-11 raised that the command text comes from the agent
      and a prompt-injected command could steer the model into allowing it; the person accepted that risk. The core
-     rule that only a person approves what auto-approval leaves to a person (`AutomationAnswerError::PersonOnly`:
-     rewriting history or deleting outside the temporary folder, a write outside the worktree, credentials, installs,
-     the network) still holds for the chat, as for any automation: its `approve_once` there is refused `person_only`
-     and its prompt says so; lifting it is a separate decision. One auto mode's reviewer still judges is refused
+     rule that only a person approves what auto-approval leaves to a person still holds for the chat, as for any
+     automation (`ApprovalAnswer::given_by`, `crates/core/src/run/answer/mod.rs`; `auto_verdict`,
+     `answer/auto.rs`; enforced by the runner, `crates/runner/src/execution/executor/step/answer.rs`). It covers
+     command requests only, in these categories: a command not read to the end (`Unknown`), rewriting history (a
+     `git push` counts), deleting outside the temporary folder, a write outside the worktree, reading credentials,
+     installing software, and any network category; the chat's `approve_once` there is refused `person_only`, its
+     prompt says so, and lifting it is a separate decision. It covers neither MCP tool requests, which auto-approval
+     approves and the chat may allow whatever they do (its prompt tells it to judge an MCP tool that acts outside the
+     worktree as carefully as a push), nor the holds that are not person-only: a Codex command outside its sandbox, a
+     write in a step that only reads, network turned off for the step, a project program, the browser, a command too
+     long to read, permissions not recorded. One auto mode's reviewer still judges is refused
      `reviewer_judging`. The chat gives a one-sentence
      `reason`, kept with what was asked as its answer (`ChatAction::tool_answer`). The conversation shows the request in
      the states of `Orchestrator WIP` `mPw5l` (`ICzi3`): being read, allowed or denied by the Orchestrator with its

@@ -315,11 +315,16 @@ fn approval_prompt(who: &str, wait: &AgentWait) -> String {
      request to a person, such as a push, rewriting history, deleting outside the worktree, touching credentials, \
      writing outside the step's folders or a Codex command outside its sandbox) is a reason to look harder, not a \
      refusal: reading outside the folders is normally fine; a push, rewriting history, deleting outside the worktree \
-     or touching credentials only when the task plainly needs it, otherwise deny it or leave it to the person. The \
-     runner still lets only a person approve what auto-approval leaves to a person (rewriting history or deleting \
-     outside the temporary folder, a write outside the worktree, credentials, installs, the network): approve_once is \
-     refused there (person_only), so leave such a request to the person with your recommendation, or deny it. Give decide_approval your reason in one sentence \
-     (reason): the conversation shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
+     or touching credentials only when the task plainly needs it, otherwise deny it or leave it to the person. For \
+     a command, the runner still lets only a person approve what auto-approval leaves to a person: a command it could \
+     not read to the end, rewriting history (a git push counts), deleting outside the temporary folder, writing \
+     outside the worktree, reading credentials, installing software, or reaching the network. approve_once on such a \
+     command is refused (person_only), so leave it to the person with your recommendation, or deny it. Every other \
+     hold you may allow (a Codex command outside its sandbox, a write in a step that only reads, network turned off \
+     for the step, a project program, the browser, a command too long to read, permissions not recorded), and so is \
+     every MCP tool request: nothing stops your approve_once there, so judge an MCP tool that acts outside the \
+     worktree (publishes, sends, deploys, changes another system) as carefully as a push. Give decide_approval your \
+     reason in one sentence (reason): the conversation shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
      then \"Recommends \" and what you recommend; the request waits for the person on its card, shown here under \
      your words. Decide only this request, once: approve_once covers it alone, and you never allow a tool or command \
      for good or widen what agents may do; allowing similar, all of a run or the project's is the person's, on the \
