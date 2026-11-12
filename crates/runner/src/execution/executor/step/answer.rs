@@ -37,7 +37,10 @@ use orchester_store::{AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, Rule
 
 use super::{
   super::{
-    link::approvals::{approval_review, approval_rules, project_approval_rules, run_auto_approve},
+    link::{
+      approvals::{approval_review, approval_rules, project_approval_rules, run_auto_approve},
+      settings::ApproveModeRequest,
+    },
     tool_approval::refusal,
   },
   approval::Awaiting,
@@ -136,6 +139,25 @@ impl Worker {
       return Ok(self.autopilot(watch, &subject, category));
     }
     self.manual(watch, approval, (&subject, category))
+  }
+
+  /// The answer to `approval` while the project's *Approve mode* is Dangerous auto-approve: approved at once, before a
+  /// rule, the allowed list, a hold, the reviewer or anyone is asked. Read through the link at each call, so a switch
+  /// a person turns applies to a run already under way from its next request.
+  pub(super) fn dangerously(
+    &self,
+    watch: &Watch,
+    approval: &PendingToolApproval,
+  ) -> Result<Option<Settled>, WorkerError> {
+    if !watch.link.approve_mode(&ApproveModeRequest {})?.approves_everything() {
+      return Ok(None);
+    }
+    let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
+    Ok(Some(Settled {
+      answer: RequestAnswer::by(AnswerKind::DangerousAutoApprove),
+      secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
+      ..Settled::by(DecidedBy::AutoApproved, category_of(&subject))
+    }))
   }
 
   /// Autopilot's rule for `subject`: by what it touches compared with the run's roots, which cannot be placed when the

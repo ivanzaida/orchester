@@ -305,6 +305,10 @@ impl Worker {
     (approval, awaiting): (PendingToolApproval, Awaiting),
     since: Timestamp,
   ) -> Result<(), WorkerError> {
+    // First, so nothing after it holds the request: no rule, hold, reviewer, person or Orchestrator turn.
+    if let Some(settled) = self.dangerously(watch, &approval)? {
+      return self.settle_dangerously(watch, (approval, awaiting), settled).await;
+    }
     // Read again at each request: disallowing Autopilot, or switching the run to Manual, stops it from the next one.
     let autopilot = watch.in_autopilot()?;
     let came = match self.answer_itself(watch, &approval, autopilot)? {
@@ -345,6 +349,48 @@ impl Worker {
       task: self.task,
     });
     watch.approval = Some((approval, awaiting));
+    Ok(())
+  }
+
+  /// The project's Dangerous auto-approve mode was turned on while a request waited, for the person or under the
+  /// reviewer's review: it is approved now, the review dropped.
+  pub(super) async fn approve_waiting_dangerously(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
+    let Some((approval, _)) = watch.approval.as_ref() else {
+      return Ok(());
+    };
+    if watch.stop.is_some() {
+      return Ok(());
+    }
+    let Some(settled) = self.dangerously(watch, approval)? else {
+      return Ok(());
+    };
+    let (approval, awaiting) = watch.approval.take().expect("a waiting request was found above");
+    watch.asked_in_autopilot = false;
+    if self.reviewing.is_some() {
+      let record = ApprovalRecord::reviewing(approval.run, &approval.id, false);
+      watch.sink.approval(record)?;
+    }
+    self.settle_dangerously(watch, (approval, awaiting), settled).await
+  }
+
+  /// Gives Dangerous auto-approve mode's answer `settled` to `approval`, and tells the app, as for a person's answer:
+  /// the request may have shown as waiting.
+  async fn settle_dangerously(
+    &mut self,
+    watch: &mut Watch,
+    (approval, awaiting): (PendingToolApproval, Awaiting),
+    settled: Settled,
+  ) -> Result<(), WorkerError> {
+    if let Err(rejection) = self.settle(watch, &approval, awaiting, settled).await? {
+      tracing::debug!(
+        ?rejection,
+        "Dangerous auto-approve mode's answer did not reach the agent"
+      );
+    }
+    self.notifier.send(Event::ToolApprovalChanged {
+      run: approval.run,
+      task: self.task,
+    });
     Ok(())
   }
 

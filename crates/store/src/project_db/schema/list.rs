@@ -464,4 +464,5 @@ CREATE TABLE run_merges (
   super::profile_given::MIGRATION,
   super::team_outbox::MIGRATION,
   super::local_drafts::MIGRATION,
+  super::approval_modes::DANGEROUS_MIGRATION,
 ];

@@ -161,7 +161,7 @@ fn hint(read: &Read, key: &str) -> Hint {
   let plain = |key| (key, Vec::new());
   match key {
     "autopilot" => read.settings.as_ref().map(|s| {
-      plain(if s.allow_autopilot.is_on() {
+      plain(if s.approve_mode.allows_autopilot().is_on() {
         "agents.projectSets.autopilot.allowed"
       } else {
         "agents.projectSets.autopilot.notAllowed"

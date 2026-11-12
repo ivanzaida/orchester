@@ -64,7 +64,7 @@ fn project_settings_review_limits_revert_during_save_is_committed() {
 #[test]
 fn project_settings_review_default_model_edit_with_autopilot_allowed_saves_a_persons_change_at_once() {
   let mut page = Settings::new(true);
-  page.click("settings-allow-autopilot");
+  page.click("settings-approve-mode-autopilot");
   page.until("Autopilot allowed", |p| {
     p.db().allow_autopilot().expect("settings").is_on()
   });
@@ -90,7 +90,7 @@ fn project_settings_review_reselecting_a_reviewer_with_autopilot_allowed_saves_e
     p.db().auto_mode_settings().expect("settings").reviewer.is_some()
   });
   page.saved();
-  page.click("settings-allow-autopilot");
+  page.click("settings-approve-mode-autopilot");
   page.until("Autopilot allowed", |p| {
     p.db().allow_autopilot().expect("settings").is_on()
   });

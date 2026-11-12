@@ -12,7 +12,7 @@ use orchester_core::{
   question::AskedQuestions,
   resource::CommandEnvironment,
   run::{
-    ApprovalRule, EffectiveMode, PendingToolApproval, ProjectRule,
+    ApprovalRule, ApproveMode, EffectiveMode, PendingToolApproval, ProjectRule,
     review::{AutoModeSettings, Review},
   },
 };
@@ -29,8 +29,8 @@ use crate::execution::executor::link::{
   questions::{QuestionRequestById, QuestionsRequest},
   resources::{Blob, BlobRequest, PinnedBody, ResourceNames, ResourceRequest, VersionRequest},
   settings::{
-    AgentFilesRequest, ApprovalModeRequest, AutoModeRequest, CodeIndexRequest, QaAppsAtOnce, QaAppsRequest,
-    WarmFolders, WarmFoldersRequest,
+    AgentFilesRequest, ApprovalModeRequest, ApproveModeRequest, AutoModeRequest, CodeIndexRequest, QaAppsAtOnce,
+    QaAppsRequest, WarmFolders, WarmFoldersRequest,
   },
   usage::{StepUsage, StepUsageRequest},
 };
@@ -82,6 +82,7 @@ fn serve(link: &mut Backend, method: &str, text: &str) -> Reply {
     code_index,
     agent_files,
     approval_mode,
+    approve_mode,
     auto_mode,
     warm_folders,
     qa_apps_at_once,
@@ -154,6 +155,7 @@ impl SettingsLink for ChannelLink {
     code_index(CodeIndexRequest) -> CodeIndexSetting;
     agent_files(AgentFilesRequest) -> RepositoryAgentFiles;
     approval_mode(ApprovalModeRequest) -> EffectiveMode;
+    approve_mode(ApproveModeRequest) -> ApproveMode;
     auto_mode(AutoModeRequest) -> AutoModeSettings;
     warm_folders(WarmFoldersRequest) -> WarmFolders;
     qa_apps_at_once(QaAppsRequest) -> QaAppsAtOnce;

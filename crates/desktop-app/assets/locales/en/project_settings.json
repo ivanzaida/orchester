@@ -130,16 +130,32 @@
     "baseMovedOn": "On · writing agents merge the moved base early",
     "baseMovedOff": "Off · agents are not told",
     "auto": "Approvals",
-    "allowAutopilot": "Allow Autopilot for agents in this project",
-    "allowAutopilotOn": "On · profiles set to Autopilot approve their own requests · only you can turn it on",
-    "allowAutopilotOff": "Off · every agent runs as Manual",
-    "allowAutopilotOffProfiles": {
-      "one": "Off · every agent runs as Manual · {{profiles}} is set to Autopilot",
-      "other": "Off · every agent runs as Manual · {{profiles}} are set to Autopilot"
+    "approveMode": "Approve mode",
+    "approveModeManual": "Manual",
+    "approveModeAutopilot": "Autopilot",
+    "approveModeDangerous": "Dangerous auto-approve",
+    "approveModeManualHint": "Every agent asks for what its allowed list does not cover, whatever its profile says",
+    "approveModeManualHintProfiles": {
+      "one": "Every agent asks for what its allowed list does not cover, whatever its profile says · {{profiles}} is set to Autopilot",
+      "other": "Every agent asks for what its allowed list does not cover, whatever its profile says · {{profiles}} are set to Autopilot"
     },
     "listSeparator": ", ",
     "listAnd": "{{rest}} and {{last}}",
-    "allowAutopilotDetail": "Autopilot approves an agent's tool requests at once; work outside the worktree, pushes to a remote and other branches still ask you. Off, every agent here runs as Manual: its allowed commands run, the reviewer judges the rest, then you. A run can switch itself to Manual, never back. Kept on this computer only.",
+    "approveModeAutopilotHint": "Profiles set to Autopilot approve their own requests · only you can choose it",
+    "approveModeDangerousHint": "Every tool request of every agent in this project is approved at once: no review, no hold, nobody asked · only you can choose it",
+    "approveModeDetail": "Manual: every agent here runs as Manual — its allowed commands run, the reviewer judges the rest, then you. Autopilot: agents whose profile is set to Autopilot approve their own requests; work outside the worktree, pushes to a remote and other branches still ask you. Dangerous auto-approve: every tool request of every agent is approved at once, with no allowed list, hold, reviewer or question; questions and plans still come to you. Only you move it up; anyone, automation included, moves it down. A run can switch itself to Manual, never back. Kept on this computer only.",
+    "dangerousFoot": "The hold rules, the reviewer and the approved rules are not used while Dangerous auto-approve is chosen.",
+    "dangerousDialog": {
+      "title": "Turn on Dangerous auto-approve mode?",
+      "text": "Every tool request of every agent in {{project}} will be approved at once. Nothing is reviewed or held and nobody is asked: not you, not the reviewer, not the Orchestrator. An agent, or text it read somewhere, can then:",
+      "push": "Push or force-push to any branch",
+      "delete": "Delete or overwrite files outside its worktree",
+      "credentials": "Read credentials and send them out",
+      "run": "Run any command, MCP tool or web page",
+      "after": "It stays on until you turn it off here. What it approved is listed in each run's Conversation as “Approved by Dangerous auto-approve mode”.",
+      "cancel": "Cancel",
+      "confirm": "Turn it on, I accept the risk"
+    },
     "on": "On",
     "off": "Off",
     "decision": {

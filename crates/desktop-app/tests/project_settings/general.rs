@@ -4,6 +4,10 @@ use orchester_core::store::SettingsStore;
 
 use super::harness::Settings;
 
+/// What Manual and Autopilot mean, under the Approve mode (`aHLLh`, `oWUo9`).
+const MANUAL: &str = "Every agent asks for what its allowed list does not cover, whatever its profile says";
+const AUTOPILOT: &str = "Profiles set to Autopilot approve their own requests · only you can choose it";
+
 /// General (`S01` `WHjIP`) keeps the project and its repository; the repository's agent files are not among them.
 #[test]
 fn project_settings_general_shows_project_identity_without_repository_agent_files() {
@@ -110,16 +114,16 @@ fn project_settings_auto_mode_without_a_reviewer_says_why() {
 fn project_settings_approval_mode_effective_widening_from_automation_is_put_back() {
   use lurq::app::events::with_synthetic_input;
   let mut page = Settings::new(true);
-  with_synthetic_input(|| page.click("settings-allow-autopilot"));
-  page.until("the refusal", |p| p.exists("settings-allow-autopilot-person-only"));
+  with_synthetic_input(|| page.click("settings-approve-mode-autopilot"));
+  page.until("the refusal", |p| p.exists("settings-approve-mode-person-only"));
   assert!(!page.db().allow_autopilot().expect("unchanged").is_on());
-  assert!(!page.switch_on("settings-allow-autopilot"));
-  page.click("settings-allow-autopilot");
+  assert_eq!(page.text("settings-auto-approve-mode-hint"), MANUAL);
+  page.click("settings-approve-mode-autopilot");
   page.until("a person's switch saved", |p| {
     p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  assert!(!page.exists("settings-allow-autopilot-person-only"));
+  assert!(!page.exists("settings-approve-mode-person-only"));
   let before = page.db().auto_mode_settings().expect("the reviewer");
   with_synthetic_input(|| page.choose("settings-reviewer-model", "sonnet"));
   page.until("the reviewer put back", |p| p.exists("settings-auto-person-only"));
@@ -139,11 +143,11 @@ fn project_settings_approval_mode_effective_widening_from_automation_is_put_back
   page.saved();
 }
 
-/// A person's switch saves at once; nothing is asked and no input is locked.
+/// A person's choice of Autopilot saves at once; nothing is asked and no input is locked; Manual then saves too.
 #[test]
 fn project_settings_approval_mode_effective_saves_a_persons_switch_at_once_and_turns_off() {
   let mut page = Settings::new(true);
-  page.click("settings-allow-autopilot");
+  page.click("settings-approve-mode-autopilot");
   assert_eq!(page.text("project-settings-save-status"), "Saving…");
   assert!(!page.exists("settings-auto-question"), "nothing is asked");
   assert!(!page.window.link.input_gate().protecting());
@@ -151,8 +155,8 @@ fn project_settings_approval_mode_effective_saves_a_persons_switch_at_once_and_t
     p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  assert!(page.switch_on("settings-allow-autopilot"));
-  page.click("settings-allow-autopilot");
+  assert_eq!(page.text("settings-auto-approve-mode-hint"), AUTOPILOT);
+  page.click("settings-approve-mode-manual");
   page.until("Autopilot not allowed", |p| {
     !p.db().allow_autopilot().expect("saved").is_on()
   });
@@ -211,17 +215,14 @@ fn published_profile(page: &Settings, role: &str, mode: orchester_core::permissi
   data::publish(&mut db, id, Timestamp::now()).expect("publish");
 }
 
-/// Approvals as `m0eUB` and `tvmsJ` draw it: *Allow Autopilot* with what On and Off mean, Off naming the published
-/// profiles set to Autopilot; the reviewer for Manual's requests; the old auto-mode switches gone.
+/// Approvals as `v5d5r` and `tvmsJ` draw it: the *Approve mode* with what its choice means, Manual naming the
+/// published profiles set to Autopilot; the reviewer for Manual's requests; the old auto-mode switches gone.
 #[test]
 fn project_settings_approval_mode_effective_off_names_the_profiles_set_to_autopilot() {
   use orchester_core::permission::ApprovalMode;
   let mut page = Settings::new(true);
   assert!(page.text("settings-auto").starts_with("Approvals"));
-  assert_eq!(
-    page.text("settings-auto-allow-autopilot-hint"),
-    "Off · every agent runs as Manual"
-  );
+  assert_eq!(page.text("settings-auto-approve-mode-hint"), MANUAL);
   assert_eq!(
     page.text("settings-auto-reviewer-hint"),
     "For Manual requests off the allowed list"
@@ -236,20 +237,16 @@ fn project_settings_approval_mode_effective_off_names_the_profiles_set_to_autopi
   // The profiles' screens count their publication, which reads the settings again.
   page.outside(orchester_workspace::tasks::outside::Outside::Profiles);
   page.tab("general", "settings-project-name");
-  page.tab("runs", "settings-auto-allow-autopilot-row");
+  page.tab("runs", "settings-auto-approve-mode-row");
   page.until("the profiles named", |p| {
-    p.text("settings-auto-allow-autopilot-hint")
-      == "Off · every agent runs as Manual · Builder and Fixer are set to Autopilot"
+    p.text("settings-auto-approve-mode-hint") == format!("{MANUAL} · Builder and Fixer are set to Autopilot")
   });
-  page.click("settings-allow-autopilot");
+  page.click("settings-approve-mode-autopilot");
   page.until("Autopilot allowed", |p| {
     p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  assert_eq!(
-    page.text("settings-auto-allow-autopilot-hint"),
-    "On · profiles set to Autopilot approve their own requests · only you can turn it on"
-  );
+  assert_eq!(page.text("settings-auto-approve-mode-hint"), AUTOPILOT);
   let estimates = page.text("settings-estimate-points-hint");
   assert!(estimates.contains("uses the reviewer’s model"), "{estimates}");
 }

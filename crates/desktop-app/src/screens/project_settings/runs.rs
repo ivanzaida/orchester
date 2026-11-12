@@ -29,6 +29,8 @@ use crate::{
 
 /// The reviewer's connection, model and effort selects (`Reviewer` in `lUFjj`).
 const REVIEWER: (f32, f32, f32) = (142.0, 116.0, 132.0);
+/// The Approve mode's segmented control and the bone of its words (`Approve mode · segmented` `kudvl` in `aHLLh`).
+const APPROVE_MODE: (f32, f32) = (304.0, 240.0);
 
 pub(super) struct Runs {
   /// What the page's last save read back, until the settings' query moves on.
@@ -100,14 +102,15 @@ fn approval_bones(ctx: &mut Ctx) -> Element {
     .child(skeleton::select(ctx, REVIEWER.1, 60.0))
     .child(skeleton::select(ctx, REVIEWER.2, 70.0));
   let rows = [
-    // Its hint says whether Autopilot is allowed: a bone until the setting is read.
+    // Its hint says what the chosen mode means: a bone until the mode is read.
     SettingRow::new(
-      "settings-auto-allow-autopilot-reading",
-      ctx.t("project_settings.allowAutopilot"),
+      "settings-auto-approve-mode-reading",
+      ctx.t("project_settings.approveMode"),
     )
-    .info(ctx.t("project_settings.allowAutopilotDetail"))
+    .info(ctx.t("project_settings.approveModeDetail"))
+    .on_label()
     .hint_reading(300.0)
-    .control(skeleton::switch()),
+    .control(skeleton::field(ctx, APPROVE_MODE.0, APPROVE_MODE.1)),
     SettingRow::new("settings-auto-reviewer-reading", ctx.t("project_settings.reviewer"))
       .info(ctx.t("project_settings.reviewerDetail"))
       .hint(ctx.t("project_settings.reviewerHint"))

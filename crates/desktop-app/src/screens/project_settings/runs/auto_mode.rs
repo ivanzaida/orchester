@@ -4,8 +4,9 @@
 //! what is approved in the person's place in every Manual run, so only a person's input does it (or automation's under
 //! both of its opt-ins, [`Guarded::ApprovalWidening`]); such a change from other input is put back and said under the
 //! group.
-mod autopilot;
+mod approve_mode;
 mod controls;
+mod dangerous;
 mod decision;
 mod feedback;
 mod hosted;
@@ -76,7 +77,9 @@ pub struct AutoMode {
   attempted: Signal<Asked>,
   failed: Signal<bool>,
   gate: Option<InputGate>,
-  /// An MCP client's input asked to allow Autopilot and was refused.
+  /// Turning on Dangerous auto-approve mode asks first, in its dialog.
+  dangerous: dangerous::Confirmation,
+  /// An MCP client's input moved the Approve mode up and was refused.
   autopilot_refused: Signal<bool>,
   /// Whether the input that made the last edit may choose another reviewer, read while it was delivered.
   may_widen: Arc<AtomicBool>,
@@ -105,6 +108,7 @@ impl Component for AutoMode {
       failed: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
       autopilot_refused: ctx.signal(false),
+      dangerous: dangerous::Confirmation::new(ctx),
       may_widen: Arc::new(AtomicBool::new(true)),
       may_review: Arc::new(AtomicBool::new(true)),
       refused: ctx.signal(false),
