@@ -17,7 +17,6 @@ use crate::{
   screens::pipeline_hub::edit::Edit,
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
     notice::{Notice, NoticeTone},
   },
 };
@@ -63,7 +62,6 @@ pub(super) fn make_line(ctx: &Ctx, id: &str, edit: &Edit) -> ActionButton {
     ButtonKind::Secondary,
     ctx.t("pipeline_hub.flow.broken.line"),
   )
-  .icon(Icon::Plus)
   .on_click(move || {
     edit.change(|held| {
       held.make_line();
