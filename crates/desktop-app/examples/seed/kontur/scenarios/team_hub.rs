@@ -162,7 +162,7 @@ pub(super) struct Mcp {
 
 /// [`seed`], which also names the id of each MCP server it made.
 pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
-  shared_config::admin(kontur)?;
+  shared_config::owner_linked(kontur)?;
   resources_with(kontur, mcp, Kinds::ALL)
 }
 
