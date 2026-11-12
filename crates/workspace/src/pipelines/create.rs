@@ -1,5 +1,6 @@
-//! Page-based creation, including copying a published version. In a team project the new pipeline goes to the team
-//! server at once and is kept only once the server made it ([`create_with`]).
+//! Page-based creation, including copying a published version, and the Pipelines hub's, which creates the pipeline the
+//! person made in its panel. In a team project the new pipeline goes to the team server at once and is kept only once
+//! the server made it ([`create_with`]).
 
 use std::path::Path;
 
@@ -44,4 +45,12 @@ pub fn create_in(
   }
   .with_description(description.to_owned());
   create_with(&mut db, (root, servers), name, &body, Timestamp::now()).map_err(|e| e.message())
+}
+
+/// Creates pipeline `name` with `body`, the steps and description the person made in the hub's panel, as its first
+/// version: nothing of it is stored before (D-032), and a body the save check refuses is not stored at all.
+pub fn create_made_in((root, servers): (&Path, &Servers), name: &str, body: &Pipeline) -> Result<ResourceId, Message> {
+  let name = parse_name(name)?;
+  let mut db = ProjectDb::open(root).map_err(|e| messages::store_error(&e))?;
+  create_with(&mut db, (root, servers), name, body, Timestamp::now()).map_err(|e| e.message())
 }
