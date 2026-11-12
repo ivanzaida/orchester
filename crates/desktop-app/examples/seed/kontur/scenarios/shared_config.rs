@@ -47,13 +47,20 @@ pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
   shared(kontur, (MemberRole::Member, Person::Ivan)).map(|_| ())
 }
 
+/// As dana-k, the owner, with the catalogue linked to the team server but none of it the team's: what a scenario makes
+/// the team's afterwards is all the team has (`team-hub`).
+pub fn owner_linked(kontur: &mut Kontur) -> Result<(), SeedError> {
+  linked(kontur, (MemberRole::Owner, Person::Dana)).map(|_| ())
+}
+
 /// As ivan, a member, over what `resources` makes of the team's configuration: a member cannot make a team resource,
-/// so it is made while the project is still linked in the owner's role, which is dropped for ivan's afterwards.
+/// so it is made while the project is still linked in the owner's role, which is dropped for ivan's afterwards. None of
+/// the catalogue is the team's.
 pub fn member_over(
   kontur: &mut Kontur,
   resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
 ) -> Result<(), SeedError> {
-  shared(kontur, (MemberRole::Owner, Person::Ivan))?;
+  linked(kontur, (MemberRole::Owner, Person::Ivan))?;
   resources(kontur)?;
   kontur.db.record_sharing_state(Some(MemberRole::Member), None, None)?;
   Ok(())
@@ -66,9 +73,21 @@ enum Person {
   Ivan,
 }
 
-/// The catalogue, linked to the team server's project with the person in `role`, every resource the team's. Ivan's
-/// computer has no drafts of the team's: the catalogue's are dropped, and a resource never published with them.
+/// The catalogue, linked to the team server's project with the person in `role`, every resource the team's.
 fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
+  let team = linked(kontur, (role, who))?;
+  share::<AgentProfile>(kontur, &team)?;
+  share::<Pipeline>(kontur, &team)?;
+  share::<Instruction>(kontur, &team)?;
+  share::<Skill>(kontur, &team)?;
+  share::<Tool>(kontur, &team)?;
+  Ok(team)
+}
+
+/// The catalogue, linked to the team server's project with the person in `role`, its members and its admin, none of it
+/// the team's yet. Ivan's computer has no drafts of the team's: the catalogue's are dropped, and a resource never
+/// published with them.
+fn linked(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
   connections::seed(kontur)?;
   if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
@@ -115,11 +134,6 @@ fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team
     username: team.olha.name.clone(),
   };
   kontur.db.record_server_admins(&[admin])?;
-  share::<AgentProfile>(kontur, &team)?;
-  share::<Pipeline>(kontur, &team)?;
-  share::<Instruction>(kontur, &team)?;
-  share::<Skill>(kontur, &team)?;
-  share::<Tool>(kontur, &team)?;
   Ok(team)
 }
 
