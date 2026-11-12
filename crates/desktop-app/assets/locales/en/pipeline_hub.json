@@ -194,6 +194,8 @@
       "title": "Pipeline",
       "description": "Description",
       "descriptionNone": "What this pipeline is for",
+      "slug": "Slug",
+      "slugSub": "Fixed once saved. Renaming keeps it.",
       "starts": "Starts",
       "onTaskStart": "On task start",
       "failure": "When a step fails",
