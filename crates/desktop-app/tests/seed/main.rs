@@ -17,6 +17,7 @@ mod native;
 mod orchestrator;
 mod pipelines;
 mod pipelines_branched;
+mod pipelines_unordered;
 mod plan_only;
 #[allow(
   dead_code,

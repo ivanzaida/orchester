@@ -34,7 +34,7 @@ use orchester_app::{
   app_log, clipboard,
   error_reports::{self, Environment},
   startup::{Launch, WindowPosition},
-  test_support::signed_in,
+  test_support::{pipeline_edit, signed_in},
   window,
 };
 use orchester_workspace::{accounts::trash::FolderTrash, app_paths};
@@ -119,6 +119,8 @@ fn main() -> Result<(), Box<dyn Error>> {
   );
   // Kept to the end of `main`.
   let _reports = as_qa_copy(&launch, &location.database);
+  // The panel edit the seed's `pipelines-unordered` asks for: steps with no order, which no version can hold.
+  pipeline_edit::arm_from_marker(&location.database)?;
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));

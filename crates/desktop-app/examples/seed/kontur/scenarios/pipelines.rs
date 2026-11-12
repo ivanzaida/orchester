@@ -3,6 +3,7 @@
 //! is created as its first version and each of its steps runs something, even one that cannot run here.
 use std::collections::BTreeMap;
 
+use orchester_app::test_support::pipeline_edit;
 use orchester_core::{
   connection::{AgentEndpoint, AgentProvider, Connection, ConnectionKind},
   id::{ConnectionId, ResourceId, SecretId},
@@ -338,4 +339,22 @@ pub fn branched(kontur: &mut Kontur) -> Result<(), SeedError> {
     .db
     .publish_pipeline_edit(id, &body, latest.number(), None, kontur.now)?;
   Ok(())
+}
+
+/// The design's catalogue, with Feature delivery's *Review* (05) made to wait for *Create pull request* (06) in the
+/// panel's edit, so the two wait for each other and the steps have no order to draw (`Pipelines · v2` P16c `YHAyx`).
+/// No version can hold such steps: the seed leaves the change beside the application database and the QA app puts it
+/// into the panel's edit when the hub opens Feature delivery (`orchester_app::test_support::pipeline_edit`).
+pub fn unordered(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let key = |text: &str| StepKey::new(text).expect("a starter step's key");
+  pipeline_edit::write_marker(
+    &kontur.app_database,
+    catalogue.feature_delivery.id(),
+    &[(key("review"), key("create-pull-request"))],
+  )
+  .map_err(|source| SeedError::Io {
+    path: kontur.app_database.with_file_name(pipeline_edit::MARKER),
+    source,
+  })
 }
