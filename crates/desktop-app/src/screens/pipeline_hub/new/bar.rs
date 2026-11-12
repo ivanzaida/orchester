@@ -1,6 +1,6 @@
-//! The pinned bar of a new pipeline's panel (`Actions` `vtZ9C` in P14 `Rszkt`): *Create v1* and *Cancel*, and at its end
-//! why *Create v1* is off (the reason also in its tooltip, as *Save*'s is), each step it names a link that opens the
-//! step in the panel, or what it saves. Above it, in place, what a
+//! The pinned bar of a new pipeline's panel (`Actions` `vtZ9C` in P14 `Rszkt`): *Create v1* and *Cancel*, and at its
+//! end why *Create v1* is off (the reason also in its tooltip, as *Save*'s is), each step it names a link that opens
+//! the step in the panel, or what it saves. Above it, in place, what a
 //! refused create says: nothing was stored and everything typed stays.
 
 use std::sync::Arc;
@@ -18,7 +18,6 @@ use orchester_core::resource::StepKey;
 use orchester_workspace::messages::Message;
 
 use super::reason::{Piece, Reason};
-
 use crate::{
   screens::team_hub::bar::{bar_ending, bar_saying},
   theme::{HubSpacing, HubText},

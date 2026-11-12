@@ -2,7 +2,8 @@
 //! the head or the empty state, and the ⋯ menu's *Duplicate*, open an unsaved pipeline in the panel at once, listed
 //! first under *New* ([`row`]). The panel ([`panel`]) has the name, where v1 starts from ([`start`]: the starter, a
 //! copy of a pipeline or nothing), the starter's flow, the description and the slug ([`details`]), and the bar with
-//! *Create v1* ([`bar`]), the only thing that stores it ([`create`]): a pipeline exists only as a saved version (D-032).
+//! *Create v1* ([`bar`]), the only thing that stores it ([`create`]): a pipeline exists only as a saved version
+//! (D-032).
 //!
 //! The routes that begin one (`ProjectPage::NewPipeline`, `NewEmptyPipeline`, `CopyPipeline`) are replaced by the
 //! hub's view of it, which names it by an id of its own that is never stored ([`Making`]): its steps open in the panel

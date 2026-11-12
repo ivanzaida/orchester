@@ -1,7 +1,8 @@
-//! The head of a new pipeline's panel (`Head` `IJr2M` in P14 `Rszkt`): *Pipeline* and what it is (*new · nothing is saved
-//! yet*, or *new · a copy of Feature delivery v3 · nothing is saved yet*) over its name, typed in place in the panel
-//! title's 16/600. The field has the caret and the ring as the panel opens; a copy's prefilled name is selected, so
-//! typing replaces it (P14b `sVNK4`). A name whose slug another pipeline has takes the `danger` ring (P14a `d4f9Vi`).
+//! The head of a new pipeline's panel (`Head` `IJr2M` in P14 `Rszkt`): *Pipeline* and what it is (*new · nothing is
+//! saved yet*, or *new · a copy of Feature delivery v3 · nothing is saved yet*) over its name, typed in place in the
+//! panel title's 16/600. The field has the caret and the ring as the panel opens; a copy's prefilled name is selected,
+//! so typing replaces it (P14b `sVNK4`). A name whose slug another pipeline has takes the `danger` ring (P14a
+//! `d4f9Vi`).
 
 use lurq::{
   app::{

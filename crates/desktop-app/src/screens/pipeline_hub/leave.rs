@@ -195,9 +195,9 @@ struct Words {
 }
 
 impl Words {
-  /// For a pipeline being made (`made`), which is lost whole, or a stored one's edit; how to keep it is *press Save* (or
-  /// *Create v1*), or, while that is off (`save_off`), fix what it waits for; said for a press, or for the tab closing
-  /// (`closing`).
+  /// For a pipeline being made (`made`), which is lost whole, or a stored one's edit; how to keep it is *press Save*
+  /// (or *Create v1*), or, while that is off (`save_off`), fix what it waits for; said for a press, or for the tab
+  /// closing (`closing`).
   const fn of(made: bool, closing: bool, save_off: bool) -> Self {
     if made {
       return Self {

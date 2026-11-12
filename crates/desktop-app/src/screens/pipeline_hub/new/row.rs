@@ -1,6 +1,6 @@
 //! The pipeline being made in the hub's list (`Section · New` `ddYrV`, `Item · New pipeline` `arETz` in P14 `Rszkt`):
-//! first, under *New · not saved*, chosen, with what is typed as its name (*New pipeline* while nothing is) over where it
-//! starts from and that nothing is saved.
+//! first, under *New · not saved*, chosen, with what is typed as its name (*New pipeline* while nothing is) over where
+//! it starts from and that nothing is saved.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
