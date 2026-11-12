@@ -7,11 +7,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use lurq::{
-  app::ctx::Ctx,
-  components::{Column, Text},
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Column, node::Element};
 use orchester_core::resource::TeamAgentProfile;
 use orchester_workspace::{agents::team_profile::TeamProfileSheet, messages::Message, team_config::TeamConfig};
 
@@ -24,7 +20,6 @@ use crate::{
       rows::{self, Sub},
     },
   },
-  theme::HubText,
 };
 
 /// The ids of the edit's parts, which tests and automation address: `team-hub-role-name-input`,
@@ -122,16 +117,5 @@ impl ProfileEdit {
 
 /// *From the team*: what the team holds of it, the same on every computer.
 fn team_section(ctx: &Ctx, rows: Vec<lurq::components::Row>) -> Column {
-  rows::section(
-    "team-hub-from-team",
-    &ctx.t("team_hub.profile.fromTeam"),
-    vec![
-      Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-        .id("team-hub-from-team-note")
-        .variant(HubText::PanelHint.role())
-        .nowrap()
-        .into(),
-    ],
-    rows,
-  )
+  rows::from_team(ctx, rows::FromTeam::Shared, rows)
 }

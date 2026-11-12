@@ -28,6 +28,12 @@ use orchester_workspace::{
 use super::{TaskContext, action::decision_action, arranged};
 use crate::{mcp::input_gate::InputGate, services::accounts::listed as accounts_listed};
 
+/// What *Continue on* and *Start now on* do, as an MCP client refused reads it: which account the step's agent runs on
+/// is a person's decision, as the Account field's.
+const CONTINUE_ON: &str = "continue a run's step on another account";
+/// What *Try again now* does, as an MCP client refused reads it.
+const TRY_NOW: &str = "try a run at its plan limit again now";
+
 /// The request to continue, for its button to show it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Continuing;

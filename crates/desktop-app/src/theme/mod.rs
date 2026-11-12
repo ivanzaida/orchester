@@ -121,7 +121,7 @@ pub use self::{
   palette::{ExtraColor, Mode},
   permissions::{PermissionsSpacing, PermissionsText},
   pipelines::{PIPELINE_HUB_LIST_NARROW, PIPELINES_BONE_FADE, PipelinesSpacing, PipelinesText},
-  project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
+  project_settings::{ProjectSettingsSpacing, ProjectSettingsText, UNUSED_ROWS_OPACITY},
   projects::{ProjectsSpacing, ProjectsText},
   review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
   run_model::ModelText,

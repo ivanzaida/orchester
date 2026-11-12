@@ -173,7 +173,8 @@ impl TeamServer {
     stored.resource["updated"]["by"] = teammate;
   }
 
-  /// A teammate archives the resource `resource` of the project at `slug`: the server refuses new versions of it.
+  /// A teammate, dana-k, archives the resource `resource` of the project at `slug`: the server refuses new versions of
+  /// it, and its last change is dana-k's, now.
   ///
   /// # Panics
   /// When the project is not shared or the server does not hold the resource.
@@ -192,6 +193,7 @@ impl TeamServer {
     let revision = stored.resource["revision"].as_u64().unwrap_or(1);
     stored.resource["archived"] = json!(true);
     stored.resource["revision"] = json!(revision + 1);
+    stored.resource["updated"] = json!({"by": Person::Named("dana-k").wire(), "at": now_millis()});
   }
 
   /// The server of the project at `slug` already holds `create` and its versions up to `latest`, each with the body of

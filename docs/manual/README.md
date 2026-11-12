@@ -113,8 +113,9 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `list_projects` | RO | All projects |
 | `set_code_index` | | Turn the code index on or off |
 | `update_project_limits` | | Budgets, time limit, agent and QA slots |
-| `get_approvals` | RO | Allow Autopilot, the reviewer, running runs' approval modes |
-| `set_allow_autopilot` | person only to turn on | Allow Autopilot in the project, or stop |
+| `get_approvals` | RO | Approve mode, Allow Autopilot, the reviewer, running runs' approval modes |
+| `set_allow_autopilot` | person only to turn on | The former switch: Autopilot or Manual |
+| `set_approve_mode` | person only to move up | Approve mode: manual, autopilot or dangerous_auto_approve |
 | `set_reviewer` | AA; AP for another reviewer | Manual's reviewer |
 | `get_auto_mode` / `set_auto_mode` / `set_run_auto_mode` | retired | Answer `retired`, naming the tools above |
 | `list_tasks` / `get_task` | RO | Tasks |

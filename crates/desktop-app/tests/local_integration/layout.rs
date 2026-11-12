@@ -323,12 +323,12 @@ fn local_layout_acknowledgement_is_the_persons_in_commit_and_preservation_review
     "window automation cannot acknowledge a preservation"
   );
   assert!(
-    text(&mut page, "local-confirm-scope-refused").contains("Only you can tick"),
-    "and the refusal is shown, not dropped"
+    page.window.refused_press().is_some(),
+    "and the refusal goes to the client, not dropped"
   );
+  assert!(!page.has("local-confirm-scope-refused"), "the page says nothing of it");
   page.click("local-confirm-scope");
   assert!(acknowledged(&mut page), "the person's own input does");
-  assert!(!page.has("local-confirm-scope-refused"));
   page.click("local-cancel-review");
   page.click("local-review-commit");
   page.ready("local-commit-message-label");

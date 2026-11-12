@@ -26,7 +26,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   display,
-  tasks::run_permissions::{NotAutopilot, Offer, PermissionsMenu},
+  tasks::run_permissions::{ChipMode, NotAutopilot, Offer, PermissionsMenu},
 };
 
 use super::{ChipProps, Permissions};
@@ -46,7 +46,7 @@ use crate::{
 };
 
 /// The menu's width (`WAMn1`) and a heading's height (`m7aak`, `p0SAXr`).
-const WIDTH: f32 = 400.0;
+pub(super) const WIDTH: f32 = 400.0;
 const HEADING_HEIGHT: f32 = 26.0;
 
 /// What a way of answering shows at its end.
@@ -78,6 +78,9 @@ pub(super) fn panel(
     "conversation.permissions.menu.heading",
     [("run", run.as_str()), ("agent", &*props.agent)],
   );
+  if shown.chip == ChipMode::Dangerous {
+    return super::dangerous::panel(ctx, props, &heading);
+  }
   let everything = if confirming.get() {
     confirm(ctx, props, permissions, confirming)
   } else {
@@ -132,7 +135,7 @@ pub(super) fn panel(
     .into()
 }
 
-fn heading_row(id: &str, glyph: Option<Icon>, words: &str) -> Element {
+pub(super) fn heading_row(id: &str, glyph: Option<Icon>, words: &str) -> Element {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -323,10 +326,14 @@ fn way_press(
       pressable(move || open.set(false)).describe("state", "current")
     }
     Offer::Change(RunPermissionChange::ApproveEverything) => {
-      let confirming = confirming.clone();
-      pressable(move || confirming.set(true))
-        .describe("state", "enabled")
-        .describe("person_only", ctx.t("conversation.permissions.unavailable.personOnly"))
+      let (confirming, permissions) = (confirming.clone(), permissions.clone());
+      pressable(move || {
+        if permissions.may_widen() {
+          confirming.set(true);
+        }
+      })
+      .describe("state", "enabled")
+      .describe("person_only", ctx.t("conversation.permissions.unavailable.personOnly"))
     }
     Offer::Change(change) => {
       let (permissions, root, run) = (permissions.clone(), props.root.clone(), props.run.0);

@@ -139,7 +139,6 @@
       "returnToStep": "Return to a step",
       "returnUnavailable": "The run's work can't go back to one of its steps now; Run details says why.",
       "runAgain": "Run again",
-      "personOnly": "Completing a run anyway is your decision: window input from automation takes it only while you let automation answer approvals.",
       "completedTitle": "Task completed",
       "completedByYou": "You completed the task at {{time}}. Run #{{run}} committed nothing; its report is kept as the run's Report.",
       "completedByAutomation": "Automation completed the task at {{time}} through Orchester's MCP server. Run #{{run}} committed nothing; its report is kept as the run's Report.",
@@ -207,8 +206,7 @@
           "include": "This run's branch started from your local {{base}}, which had them and {{remote}} doesn't.",
           "push": "Push them to {{remote}} first, then create the pull request. Orchester doesn't push {{base}} for you.",
           "anyway": "Create anyway",
-          "cancel": "Cancel",
-          "personOnly": "Only a person decides this in the window: window automation can't create it anyway or put this away."
+          "cancel": "Cancel"
         }
       },
       "mergedTitle": "Merged into {{branch}}",

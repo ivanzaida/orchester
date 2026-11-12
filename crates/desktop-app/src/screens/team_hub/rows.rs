@@ -54,6 +54,32 @@ impl Sub {
   }
 }
 
+/// What *From the team* says after its label.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::screens) enum FromTeam {
+  /// The same on every computer.
+  Shared,
+  /// Read-only until an admin restores it: the team archived it (`From the team` in A36 `qvMZD`).
+  Archived,
+}
+
+/// *From the team* over `rows`, with what `note` says after its label.
+pub(in crate::screens) fn from_team(ctx: &Ctx, note: FromTeam, rows: Vec<Row>) -> Column {
+  let note = Text::new(&ctx.t(match note {
+    FromTeam::Shared => "team_hub.profile.fromTeamNote",
+    FromTeam::Archived => "team_hub.archived.readOnly",
+  }))
+  .id("team-hub-from-team-note")
+  .variant(HubText::PanelHint.role())
+  .nowrap();
+  section(
+    "team-hub-from-team",
+    &ctx.t("team_hub.profile.fromTeam"),
+    vec![note.into()],
+    rows,
+  )
+}
+
 /// A section: its head (the label, then what follows it on the line) over its rows.
 pub(in crate::screens) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>) -> Column {
   let label = Text::new(label)

@@ -1089,8 +1089,9 @@ Agents · v2 (`acFkz`) finished on master, 2026-11-11 (outside Orchester):
 - **Memory in the hub.** Memory is a filter of the Agents hub after Tools (Section Y `Xxl1u`, Y1–Y6): status sub-filter, list and panel, and the old Memory page's shell gone (`claude/memory-hub`, last `63efe46b2`). Scenarios `memory`, `tasks` and `team-memory-member`.
 - **A22.** The stopped card has no *Ask an admin to restore it* (`41ac7da69`).
 - **Choosing a profile's connection** is open to the person, external MCP clients and the driving Orchestrator, and out of reach of run agents; tests pin it (`0b9bd86ca`).
+- **The team hub's Archived** (A36 `qvMZD`, M7 `Ml7HN`, A37 `AFbIb`, A22, `claude/team-archived`, 2026-11-12): every team resource the team archived, read-only, with an admin's *Restore* (`Servers::restore_resource`, the `PATCH` with `archived: false`; pending until the hub reads it again, a refusal said in place); a member reads the lock line. *Open →* on a profile's *Ready here?* row, its pinned *Open <name>* and the stopped card's resource row open it there by route. The team's configuration keeps the answer of an archive or a restore, and follows the revision and who changed it from the stream. QA states `team-archived` (member) and `team-archived-admin`.
 
-Not built (no design): HTTP and database tool forms; *Open →* on an archived team resource; the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
+Not built (no design): HTTP and database tool forms; the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
 
 Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2` (tasks `docs/plan/pipelines-v2/`,
 decisions `docs/design/pipelines-v2.md`; PV2-02 canceled, PV2-14 open under *U · Screens*):

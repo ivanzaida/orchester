@@ -210,7 +210,7 @@ fn new_code(ctx: &mut Ctx, panel: &ServerPanel, (entry, presented): (&ServerEntr
   .icon(Icon::Check)
   .on_click(move || {
     // A person compares the code with the server's console; synthetic input never confirms it.
-    if person.confirms_code(CERTIFICATE_MATCHES) {
+    if person.confirms_code() {
       trust.run(chosen.clone());
     }
   });
@@ -233,7 +233,6 @@ fn new_code(ctx: &mut Ctx, panel: &ServerPanel, (entry, presented): (&ServerEntr
       Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into(),
     ]
     .into_iter()
-    .chain(panel.person.reason(ctx, CERTIFICATE_MATCHES))
     .chain([hint(
       "orchester-server-certificate-person",
       &ctx.t("cloud.server.certificate.person"),
@@ -255,7 +254,7 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
     again.loading()
   } else {
     again.on_click(move || {
-      if person.allows(JOIN_AGAIN) {
+      if person.allows("join a team server again") {
         join.run(());
       }
     })
@@ -288,9 +287,6 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
     }))
     .action(again)
     .action(with_code);
-  if let Some(reason) = panel.person.reason(ctx, JOIN_AGAIN) {
-    notice = notice.part(reason);
-  }
   match state.data.clone().filter(|_| state.is_fulfilled()) {
     Some(JoinedAgain::Waiting) => {
       notice = notice.note(ctx.t("cloud.server.signedOut.waiting"));
@@ -339,7 +335,7 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
     confirm.loading()
   } else {
     confirm.on_click(move || {
-      if person.allows(SIGN_OUT) {
+      if person.allows("sign out of a team server") {
         confirming.set(false);
         sign_out.run(());
       }
@@ -365,10 +361,7 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
       )
       .on_click(move || keep.set(false)),
     );
-  match panel.person.reason(ctx, SIGN_OUT) {
-    Some(reason) => notice.part(reason).into(),
-    None => notice.into(),
-  }
+  notice.into()
 }
 
 /// The server admin's address, which opens in the browser.

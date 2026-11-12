@@ -30,9 +30,6 @@ use crate::{
   },
 };
 
-/// The id the person-only check of the dialog's *Save* is made under.
-pub(super) const SAVE: &str = "team-hub-secret-save";
-
 /// What the dialog's *Save value* hands over: the secret's name and its value.
 pub(super) type Save = Arc<dyn Fn(SecretName, SecretValue) + Send + Sync>;
 
@@ -92,7 +89,7 @@ impl Entry {
   pub(super) fn save_by(add_value: &FutureAction<(SecretName, SecretValue), (), Message>, person: &PersonOnly) -> Save {
     let (action, person) = (add_value.clone(), person.clone());
     Arc::new(move |name, value| {
-      if person.allows(SAVE) {
+      if person.allows("save a secret's value") {
         action.run((name, value));
       }
     })
@@ -104,8 +101,8 @@ impl Entry {
   }
 
   /// The dialog while it is open. `save` takes the value for the name the dialog asks about; `saving` while the save
-  /// is under way; `under` is what the body says after the field.
-  pub(super) fn dialog(&self, ctx: &mut Ctx, save: Save, saving: bool, under: Option<Element>) -> Option<Element> {
+  /// is under way.
+  pub(super) fn dialog(&self, ctx: &mut Ctx, save: Save, saving: bool) -> Option<Element> {
     // The text is a secret's name that `ask` put there; empty (no name) while the dialog is not asked.
     let name = SecretName::new(&self.name.get()).ok()?;
     let field = FieldInput::new(
@@ -144,7 +141,7 @@ impl Entry {
       .tone(Tone::Neutral)
       .what(ctx.t("team_hub.secretDialog.what"))
       .part(Column::new().child(field))
-      .under(under.into_iter().chain(failed))
+      .under(failed)
       .action(button)
       .render(ctx, &self.open),
     )
@@ -155,8 +152,9 @@ impl Entry {
     // The copy `SecretValue` takes is the one that goes on; a blank text is refused and wiped by it.
     match self.value.with(|typed| SecretValue::new(typed.clone())) {
       Ok(value) => {
-        self.error.set(None);
+        // After the save, so a press refused to automation leaves the dialog as it was.
         save(name.clone(), value);
+        self.error.set(None);
       }
       Err(_) => self.error.set(Some(FillInError::blank_value_message())),
     }

@@ -1,5 +1,6 @@
 //! What the hub's list shows: the team's resources of the kinds the filter names, grouped by what this computer needs
-//! (*Needs you here*, *Ready here*, *Off here*), and the one the panel shows.
+//! (*Needs you here*, *Ready here*, *Off here*), what the team archived apart under *Archived* (A36 `qvMZD`), and the
+//! one the panel shows.
 
 use orchester_core::{
   connection::AgentProvider,
@@ -8,10 +9,14 @@ use orchester_core::{
 };
 use orchester_workspace::{
   agents::{
+    team_archived::{ArchivedSheet, TeamArchived},
     team_hub::{Form, TeamHub},
+    team_mcp::McpRuns,
     team_text::Added,
+    team_tool::ToolRuns,
   },
   readiness::{Group, ReadinessStanding},
+  team_config::Changed,
 };
 
 use crate::{routes::HubFilter, ui::icon::Icon};
@@ -145,8 +150,10 @@ pub(super) struct Entry {
   pub reach: Option<Reach>,
   /// Where the list puts it: how it stands on this computer.
   pub group: Group,
-  /// How it stands here; `None` for an instruction or a skill, which need nothing.
+  /// How it stands here; `None` for an instruction or a skill, which need nothing, and for an archived one.
   pub standing: Option<ReadinessStanding>,
+  /// Who archived it and when; `None` while the team has not archived it.
+  pub archived: Option<Changed>,
 }
 
 impl Entry {
@@ -190,6 +197,7 @@ impl Listing {
         reach: reach(hub, found.resource(), found.kind()),
         group: found.group(),
         standing: Some(found.standing().clone()),
+        archived: None,
       })
     });
     let plain = hub.plain().iter().filter_map(|found| {
@@ -203,10 +211,12 @@ impl Listing {
         reach: reach(hub, found.id, found.kind),
         group: Group::Ready,
         standing: None,
+        archived: None,
       })
     });
     let mut entries: Vec<Entry> = readiness.chain(plain).collect();
     entries.sort_by_cached_key(|entry| (group_rank(entry.group), entry.kind as u8, entry.name.to_lowercase()));
+    entries.extend(hub.archived().iter().filter_map(archived));
     Self { entries }
   }
 
@@ -215,12 +225,14 @@ impl Listing {
     self.shown(filter).count()
   }
 
-  /// The resources `filter` holds, in the order of the list.
+  /// The resources `filter` holds, in the order of the list: an archived one only under Archived.
   pub(super) fn shown(&self, filter: HubFilter) -> impl Iterator<Item = &Entry> {
-    self
-      .entries
-      .iter()
-      .filter(move |entry| filter == HubFilter::All || entry.kind.filter() == filter)
+    self.entries.iter().filter(move |entry| match filter {
+      HubFilter::Archived => entry.archived.is_some(),
+      _ if entry.archived.is_some() => false,
+      HubFilter::All => true,
+      _ => entry.kind.filter() == filter,
+    })
   }
 
   /// The resources of `group` that `filter` holds.
@@ -233,17 +245,57 @@ impl Listing {
     self.shown(filter).any(|entry| entry.id == id)
   }
 
-  /// The resource the panel shows: `chosen` while the filter holds it, else the first one of the list.
+  /// The resource the panel shows: `chosen` while the filter holds it, else the first one of the list; under Archived
+  /// nothing is chosen until the person picks one, as in a local project (`Agents · Archived` L13).
   pub(super) fn selected(&self, filter: HubFilter, chosen: Option<ResourceId>) -> Option<&Entry> {
     chosen
       .and_then(|id| self.shown(filter).find(|entry| entry.id == id))
-      .or_else(|| self.shown(filter).next())
+      .or_else(|| {
+        (filter != HubFilter::Archived)
+          .then(|| self.shown(filter).next())
+          .flatten()
+      })
   }
 
   /// A resource of the team, wherever the filter stands.
   pub(super) fn find(&self, id: ResourceId) -> Option<&Entry> {
     self.entries.iter().find(|entry| entry.id == id)
   }
+}
+
+/// The row of a resource the team archived, with what its sheet says it is.
+fn archived(found: &TeamArchived) -> Option<Entry> {
+  let (form, cli) = match &found.sheet {
+    Some(ArchivedSheet::McpServer(sheet)) => (
+      Some(match sheet.runs {
+        McpRuns::Program { .. } => Form::McpProgram,
+        McpRuns::Remote { .. } => Form::McpRemote,
+      }),
+      None,
+    ),
+    Some(ArchivedSheet::Tool(sheet)) => (
+      Some(match sheet.runs {
+        ToolRuns::Command { .. } => Form::ToolCommand,
+        ToolRuns::Http { .. } => Form::ToolHttp,
+        ToolRuns::Database { .. } => Form::ToolDatabase,
+      }),
+      None,
+    ),
+    Some(ArchivedSheet::Profile(sheet)) => (None, Some(sheet.cli)),
+    Some(ArchivedSheet::Instruction(_) | ArchivedSheet::Skill(_)) | None => (None, None),
+  };
+  Some(Entry {
+    id: found.id,
+    kind: Kind::of(found.kind)?,
+    name: found.name.clone(),
+    number: found.number,
+    form,
+    cli,
+    reach: None,
+    group: Group::Ready,
+    standing: None,
+    archived: Some(found.archived.clone()),
+  })
 }
 
 fn reach(hub: &TeamHub, id: ResourceId, kind: ResourceKind) -> Option<Reach> {

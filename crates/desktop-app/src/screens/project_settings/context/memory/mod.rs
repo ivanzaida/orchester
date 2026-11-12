@@ -4,7 +4,7 @@
 //! invocation gets, each a number with its unit and what it reads back as; *Only you, here in the window* at the
 //! heading's right and a note under the box. It reads through its query, which the project's loader read as the
 //! project opened, and saves through its [`MemoryForm`]: a choice when it is made, a limit when its field is left.
-//! Only a person's input saves: an MCP client's is refused, and the group says so under its box.
+//! Only a person's input saves: an MCP client's is refused to it, and the group stays as it was.
 
 mod form;
 
@@ -40,7 +40,6 @@ use crate::{
     setting_rows::marked_words,
     skeleton::{self, Skeleton},
     state::load_error,
-    tinted_note::person_only,
   },
 };
 
@@ -151,12 +150,6 @@ fn group(ctx: &mut Ctx, form: &MemoryForm, project: &ShownProject) -> Element {
     })
     .collect::<Vec<_>>();
   let mut group = heading(ctx).rows(rows);
-  if form.refused.get() {
-    group = group.after(person_only(
-      "settings-memory-person-only",
-      &ctx.t("memory.settings.personOnly"),
-    ));
-  }
   let state = form.save.state().get();
   let pending = state.is_pending();
   if let Some(error) = state.error.filter(|_| !pending) {

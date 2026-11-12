@@ -414,10 +414,11 @@ fn orchestrator_watch_module_refuses_synthetic_enter_and_keeps_the_badge_and_the
   screen.set(INPUT, "Ask before merging.");
 
   with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
-  let problem = "orchestrator-watch-problem";
-  screen.until("the person-only notice", |screen| {
-    screen.exists(problem) && screen.text(problem).contains("Only you can start watching")
-  });
+  assert!(screen.window.refused_press().is_some(), "refused to the client");
+  assert!(
+    !screen.exists("orchestrator-watch-problem"),
+    "the chat says nothing of it"
+  );
   assert!(!watched(&screen, webhooks), "synthetic input watches nothing");
   assert!(screen.exists(BADGE), "the badge stays");
   assert!(screen.text(INPUT).contains("Ask before merging."), "and the message");

@@ -4,7 +4,8 @@
 //! the panel of the chosen one, with the action that moves it on pinned at its bottom. The filter and the chosen
 //! resource are the route's ([`HubView`]), so links, Back and Forward land on them; a route that names none shows the
 //! first resource of the list. Instructions and skills need nothing of a computer and stand under *Ready here*. An
-//! admin has New in the head ([`create`]).
+//! admin has New in the head ([`create`]). *Archived* lists what the team archived, read-only, with an admin's
+//! *Restore* ([`archived`], A36 `qvMZD`, M7 `Ml7HN`); nothing is picked there until the person picks it.
 //!
 //! The readiness is read off the UI thread through its query (`queries::hub::team_hub`), kept for the session: a visit
 //! shows the last answer at once and reads it again behind it, as do a change of the project's resources or fill-ins
@@ -23,6 +24,7 @@
 
 pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
+mod archived;
 pub(in crate::screens) mod bar;
 pub(in crate::screens) mod create;
 mod edit;
@@ -50,7 +52,6 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::Row,
   core::Signal,
   node::Element,
 };
@@ -355,7 +356,9 @@ fn hub_body(
   // Only an admin creates: a member who follows a link to a form sees the kind's list.
   let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
   let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
-  if selected.is_none() && adding.is_none() {
+  // Under Archived nothing is picked until the person picks it; the list stands beside what archived means.
+  let picking = view.filter == HubFilter::Archived && listing.count(view.filter) > 0;
+  if selected.is_none() && adding.is_none() && !picking {
     return empty(ctx, view.filter, team, navigation, id);
   }
   let list = list::list(
@@ -394,13 +397,14 @@ fn hub_body(
         (&shown, reading, retry),
       )
     }
-    (None, None) => return Element::from(Row::new()),
+    (None, None) => archived::nothing_picked(ctx),
   };
   agents::master_detail("team-hub", reading, (list, panel))
 }
 
 /// The open tab holds nothing: for an admin, what the kind is and *New <kind>*; for a member, that an admin adds it and
-/// who the admins are, with no action.
+/// who the admins are, with no action. *Archived* says what archiving does, with no action for anyone: archiving starts
+/// from a resource's … menu.
 fn empty(
   ctx: &Ctx,
   filter: HubFilter,
@@ -409,6 +413,10 @@ fn empty(
   project: ProjectId,
 ) -> Element {
   let glyph = agents::glyph_of(filter);
+  if filter == HubFilter::Archived {
+    let (title, detail) = agents::empty_words(filter);
+    return agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), Vec::new());
+  }
   if !team.may_change {
     let (title, detail) = member::empty_words(filter);
     let admins = member::admins_line(ctx, team);
@@ -440,6 +448,15 @@ fn detail(
 ) -> Element {
   let id = project.open.project.id();
   let repo_root = project.open.repo_root.clone();
+  if let Some(found) = hub.archived().iter().find(|found| found.id == selected.id) {
+    let props = archived::Props {
+      root: repo_root,
+      entry: selected.clone(),
+      archived: found.clone(),
+      team: team.clone(),
+    };
+    return archived::panel(ctx, props);
+  }
   let unreached = unreached.map(|unreached| unreached.reason.clone());
   let plain = |sheet| plain::Props {
     repo_root: repo_root.clone(),

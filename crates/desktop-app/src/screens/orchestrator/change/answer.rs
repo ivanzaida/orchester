@@ -77,7 +77,6 @@ pub(super) fn answer(ctx: &Ctx, view: &View, (number, answer): (u32, &str)) -> W
       glyph: Icon::Reply,
       kind: ButtonKind::Primary,
     }),
-    person_only: "orchestrator.change.personOnly.answer",
   }
 }
 
@@ -130,7 +129,6 @@ pub(super) fn message(ctx: &Ctx, view: &View, (number, text, then): (u32, &str, 
       glyph: Icon::MessageSquareText,
       kind: ButtonKind::Primary,
     }),
-    person_only: "orchestrator.change.personOnly.message",
   }
 }
 

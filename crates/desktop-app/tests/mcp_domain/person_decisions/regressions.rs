@@ -51,9 +51,7 @@ fn person_decisions_undelivered_resend_answering_a_question_refuses_and_records_
         .expect("the message")
     };
     if by == Answerer::Automation {
-      f.press(&button, by);
-      let refused = format!("composer-undelivered-failed-{id}");
-      f.app.until("synthetic resend refused", |app| app.shows(&refused));
+      f.refused_then_consent(&button, &format!("composer-undelivered-failed-{id}"));
       let message = stored(&db);
       assert!(matches!(
         message.sender(),
@@ -63,7 +61,6 @@ fn person_decisions_undelivered_resend_answering_a_question_refuses_and_records_
         }
       ));
       assert_eq!(message.answerer(), Some(Answerer::Person));
-      f.consent();
     }
     f.press(&button, by);
     f.app.until("resend stored with its decider", |_| {
@@ -93,8 +90,7 @@ fn person_decisions_leaving_a_question_still_requires_consent_to_send() {
     let before = db.run(f.run).expect("run").expect("run");
     let task = before.task();
     if by == Answerer::Automation {
-      f.press("composer-send", by);
-      f.app.until("refusal", |app| app.shows("composer-failed"));
+      f.refused_then_consent("composer-send", "composer-failed");
       assert_eq!(
         db.run(f.run).expect("run").expect("run").last_sequence(),
         before.last_sequence()
@@ -105,7 +101,6 @@ fn person_decisions_leaving_a_question_still_requires_consent_to_send() {
           .iter()
           .all(|message| message.body().as_str() != "Keep the current behavior.")
       );
-      f.consent();
     }
     f.press("composer-send", by);
     f.app.until("answer stored with its decider", |_| {

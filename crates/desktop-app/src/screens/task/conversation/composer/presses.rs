@@ -16,6 +16,7 @@ use orchester_core::{
   sharing::TaskRevision,
 };
 use orchester_workspace::{
+  decisions::DecisionKind,
   tasks::conversation::{
     composer::ComposerMode,
     outgoing::{Action, Context, Way},
@@ -28,7 +29,7 @@ use super::{
   controls::Sending,
   state::{ComposerState, Request},
 };
-use crate::mcp::input_gate::{Guarded, answerer};
+use crate::mcp::input_gate::{Guarded, press_answerer};
 
 /// Whose message a press sends, as the person reads the run: for `task`'s latest run `written_for`, `lost`
 /// its runner, the mode's context `left`.
@@ -40,6 +41,9 @@ pub(super) struct Target {
   pub(super) revision: TaskRevision,
   pub(super) lost: bool,
   pub(super) left: Option<Context>,
+  /// A message to the recipient the composer offers answers a free-text question an agent of the run waits on
+  /// (`outgoing::answers_question`), as the person reads the run: a decision, which the send reads again.
+  pub(super) answers_question: bool,
 }
 
 /// What sending does in `mode` while something is written or attached and no send is under way: the state's way,
@@ -77,11 +81,31 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
     target.revision,
     (target.lost, target.left),
   );
+  let decides = expected
+    .decision_kind()
+    .or_else(|| target.answers_question.then_some(DecisionKind::Question));
   Arc::new(move || {
     let text = state.draft.get_untracked();
     let attachments = state.attached.held();
     let still_reading = state.attached.reading.get_untracked() > 0;
     if (text.trim().is_empty() && attachments.is_empty()) || still_reading || state.sending() {
+      return;
+    }
+    // An answer of what the run waits for is automation's only under the person's consent: refused to it otherwise,
+    // and the draft stays as it is.
+    let by = match decides {
+      None => Some(if lurq::app::events::is_synthetic_input() {
+        Answerer::Automation
+      } else {
+        Answerer::Person
+      }),
+      Some(kind) => press_answerer(
+        state.gate.as_ref(),
+        Guarded::Decision(kind),
+        "answer what an agent's run waits for",
+      ),
+    };
+    if by.is_none() {
       return;
     }
     state.send.run(Request {
@@ -96,16 +120,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       text,
       attachments,
       skill: state.skill.get_untracked().and_then(|skill| skill.chosen()),
-      by: expected.decision_kind().map_or_else(
-        || {
-          Some(if lurq::app::events::is_synthetic_input() {
-            Answerer::Automation
-          } else {
-            Answerer::Person
-          })
-        },
-        |kind| answerer(state.gate.as_ref(), Guarded::Decision(kind)),
-      ),
+      by,
     });
   })
 }

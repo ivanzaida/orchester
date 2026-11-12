@@ -6,16 +6,13 @@ use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
-  components::{Column, Row, Text},
+  components::{Column, Row},
   node::Element,
 };
 use orchester_core::resource::{ApprovalMode, HttpMethod};
 use orchester_workspace::agents::team_tool::{ArgumentPlace, TeamToolSheet, ToolRuns, ToolSecret};
 
-use crate::{
-  screens::team_hub::rows::{self, Sub},
-  theme::HubText,
-};
+use crate::screens::team_hub::rows::{self, FromTeam, Sub};
 
 /// What the tool is: a command, an HTTP request or a database query.
 pub(super) fn kind(ctx: &Ctx, sheet: &TeamToolSheet) -> Arc<str> {
@@ -26,7 +23,7 @@ pub(super) fn kind(ctx: &Ctx, sheet: &TeamToolSheet) -> Arc<str> {
   })
 }
 
-pub(super) fn section(ctx: &Ctx, sheet: &TeamToolSheet) -> Column {
+pub(in crate::screens::team_hub) fn section(ctx: &Ctx, sheet: &TeamToolSheet, note: FromTeam) -> Column {
   let mut rows = vec![rows::row(
     "team-hub-from-team-kind",
     &ctx.t("team_hub.tool.kindLabel"),
@@ -51,21 +48,7 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamToolSheet) -> Column {
     ));
   }
   rows.extend(secret_row(ctx, &sheet.secret));
-  section_of(ctx, rows)
-}
-
-/// *From the team* over `rows`.
-pub(super) fn section_of(ctx: &Ctx, rows: Vec<Row>) -> Column {
-  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-    .id("team-hub-from-team-note")
-    .variant(HubText::PanelHint.role())
-    .nowrap();
-  rows::section(
-    "team-hub-from-team",
-    &ctx.t("team_hub.profile.fromTeam"),
-    vec![note.into()],
-    rows,
-  )
+  rows::from_team(ctx, note, rows)
 }
 
 /// The rows of what the tool runs or calls.

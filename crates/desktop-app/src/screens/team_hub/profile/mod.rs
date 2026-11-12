@@ -45,7 +45,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{AccountsView, Route},
+  routes::{AccountsView, HubFilter, HubView, ProjectPage, Route},
   screens::settings::orchester::PersonOnly,
   services::Services,
   theme::HubSpacing,
@@ -70,9 +70,6 @@ pub(super) struct Props {
   pub sheet: TeamProfileSheet,
 }
 impl DevtoolsInspectable for Props {}
-
-/// The id the person-only check of a fix is made under.
-const FIX: &str = "team-hub-fix";
 
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<ProfilePanel>(&format!("team-hub-profile-{}", props.entry.id), props)
@@ -157,7 +154,7 @@ impl Component for ProfilePanel {
       .child(ready::section(
         ctx,
         (&ctx.t("team_hub.readiness.title"), &parts),
-        missing.len(),
+        missing.len() + usize::from(fix::archived_named(entry).is_some()),
         (&press, busy),
       ))
       .with_children(self.failure(ctx));
@@ -166,18 +163,13 @@ impl Component for ProfilePanel {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
-    let pinned = team.bar.or_else(|| {
-      missing
-        .first()
-        .and_then(Fix::of)
-        .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy))
-    });
-    let under = self.person.reason(ctx, secret::SAVE);
+    let pinned = team
+      .bar
+      .or_else(|| fix::first(entry).map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy)));
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      under,
     );
     Column::new()
       .id("team-hub-panel")
@@ -224,7 +216,7 @@ impl ProfilePanel {
         notice: None,
         sections: role_read::section(ctx, &props.sheet)
           .into_iter()
-          .chain([from_team::section(ctx, &props.sheet).into()])
+          .chain([from_team::section(ctx, &props.sheet, super::rows::FromTeam::Shared).into()])
           .collect(),
         bar: None,
       };
@@ -236,12 +228,7 @@ impl ProfilePanel {
       .collect();
     // The fix of what this computer lacks stays pinned while nothing is edited; Save's bar takes its place once
     // something is.
-    let fix = props
-      .entry
-      .standing
-      .as_ref()
-      .and_then(|standing| standing.missing().first())
-      .and_then(Fix::of);
+    let fix = fix::first(&props.entry);
     TeamPart {
       chips: panel::chips_of(ctx, &props.entry, badges, None),
       notice: parts.notice,
@@ -298,13 +285,17 @@ impl ProfilePanel {
     let person = self.person.clone();
     let guarded = |action: Arc<dyn Fn() + Send + Sync>| {
       Press::run(move || {
-        if person.allows(FIX) {
+        if person.allows("fix what a team profile needs on this computer") {
           action();
         }
       })
     };
     match fix {
       Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
+      Fix::OpenArchived(resource) => Press::Open(navigation.to(Route::Project(
+        props.project,
+        ProjectPage::hub(HubView::new(HubFilter::Archived, Some(*resource))),
+      ))),
       Fix::UseConnection => {
         let (action, profile, chosen) = (self.actions.pick.clone(), props.entry.id, self.chosen.clone());
         let connections = props.sheet.connections.clone();
@@ -331,13 +322,11 @@ impl ProfilePanel {
     }
   }
 
-  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong
-  /// with a secret's value shows in its dialog.
+  /// Why the last fix did nothing: what the workspace refused with. What went wrong with a secret's value shows in its
+  /// dialog.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    if let Some(reason) = self.actions.refused() {
-      return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
-    }
-    self.person.reason(ctx, FIX)
+    let reason = self.actions.refused()?;
+    Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into())
   }
 }
 

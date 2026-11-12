@@ -99,10 +99,17 @@ fn domain_window_input_completes_anyway_only_as_automation() {
     &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
   served.until("Complete anyway", |served| served.shows("task-complete-anyway"));
-  served
+  let refused = served
     .click_by_client("task-complete-anyway")
-    .expect("the press reaches the button, whose handler refuses it");
-  served.until("the refusal", |served| served.shows("task-complete-person-only"));
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("complete a run anyway"),
+    "it names the action: {refused}"
+  );
+  assert!(
+    !served.shows("task-complete-person-only"),
+    "the card says nothing of it"
+  );
   assert_eq!(completed_by(&seeded, run), None, "nothing was completed");
   served
     .services()

@@ -28,7 +28,7 @@ use crate::{
     team::said,
     team_edit::{Local, Refusal, recorded},
   },
-  team_config::TeamResource,
+  team_config::{Changed, TeamResource},
 };
 
 /// Why a team pipeline's change was not taken; nothing of it was stored here.
@@ -178,12 +178,12 @@ impl Servers {
         }))
         .map_err(|error| not_taken(error, Some(&address)))?;
     keep_resource(&mut db, &renamed).map_err(|error| failed(&error))?;
-    let name = name.clone();
+    let (name, change) = (name.clone(), Changed::of(&renamed.updated));
     self
       .inner
       .workspace
       .team
-      .update(repo_root, |config| config.rename(resource, name));
+      .update(repo_root, |config| config.rename(resource, name, change));
     self.shared_changed();
     Ok(())
   }

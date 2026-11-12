@@ -8,10 +8,11 @@
 //! answer without a sign-in, and signing in stays a person's ([`Guarded::Sharing`]).
 
 mod local;
+mod press;
 use std::{
   borrow::Cow,
   sync::{
-    Arc, Weak,
+    Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
   },
 };
@@ -31,6 +32,7 @@ use lurq::mcp::{
 use orchester_core::run::Answerer;
 use orchester_workspace::{app_mcp, decisions::DecisionKind};
 use parking_lot::Mutex;
+pub use press::{RefusedPress, may_press, persons_press, press_answerer, refuse_press};
 
 use super::clients::SessionMark;
 
@@ -113,6 +115,9 @@ pub enum Guarded {
   StepAccept,
   /// An answer on the person's behalf, under the same per-kind policy as the domain MCP tools.
   Decision(DecisionKind),
+  /// A press only a person makes and no setting opens to automation, refused in its handler alone
+  /// ([`persons_press`]).
+  Person,
 }
 
 /// Whether the input being delivered may take a decision classified as `policy`: a person's (OS input) always; lurq's
@@ -159,11 +164,11 @@ struct Counts {
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
   tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
-  /// The panels that say so in the window when the gate refuses a client's input.
-  refusal_listeners: Mutex<Vec<Weak<Listener>>>,
+  /// The window-input call delivering input now, and the person-only press refused meanwhile ([`press`]).
+  calls: Mutex<press::Calls>,
+  /// One forwarded window-input call at a time, so a refused press is answered to the call that delivered it.
+  input_turn: tokio::sync::Mutex<()>,
 }
-
-type Listener = Box<dyn Fn() + Send + Sync>;
 
 #[derive(Default)]
 struct Controls {
@@ -228,7 +233,8 @@ impl InputGate {
       | Guarded::McpServer
       | Guarded::Accounts
       | Guarded::CheckCode
-      | Guarded::Sharing => false,
+      | Guarded::Sharing
+      | Guarded::Person => false,
     }
   }
 
@@ -241,7 +247,7 @@ impl InputGate {
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
       // Only their handlers refuse: they lock no window input, whoever marks them.
-      Guarded::StepAccept | Guarded::Decision(_) | Guarded::CheckCode | Guarded::Sharing => return,
+      Guarded::StepAccept | Guarded::Decision(_) | Guarded::CheckCode | Guarded::Sharing | Guarded::Person => return,
     };
     if add {
       *count += 1;
@@ -276,28 +282,6 @@ impl InputGate {
         }
       }
     }
-  }
-
-  /// Calls `heard` each time the gate refuses a client's window input, until the returned guard is dropped: a
-  /// question that locks the window says in place why the client's press did nothing.
-  pub fn on_refusal(&self, heard: impl Fn() + Send + Sync + 'static) -> RefusalListener {
-    let listener = Arc::new(Box::new(heard) as Listener);
-    self.0.refusal_listeners.lock().push(Arc::downgrade(&listener));
-    RefusalListener { _alive: listener }
-  }
-
-  /// A client's window input is refused: the panels listening say so in the window, and the words the client reads.
-  /// The listeners are called with the lock let go.
-  pub fn refuse_input(&self) -> String {
-    let heard: Vec<Arc<Listener>> = {
-      let mut listeners = self.0.refusal_listeners.lock();
-      listeners.retain(|listener| listener.strong_count() > 0);
-      listeners.iter().filter_map(Weak::upgrade).collect()
-    };
-    for listener in heard {
-      listener();
-    }
-    self.refusal()
   }
 
   /// Marks a secret (the access token, a pairing code) as shown in the window until the returned guard is dropped:
@@ -404,12 +388,6 @@ impl Drop for TokenShown {
   }
 }
 
-/// A panel listening for refused input ([`InputGate::on_refusal`]); dropping it stops the calls.
-pub struct RefusalListener {
-  /// The gate holds only a weak reference, so the call lives as long as this does.
-  _alive: Arc<Listener>,
-}
-
 /// Counts a forwarded input call while it is in flight.
 struct InFlight(InputGate);
 
@@ -477,12 +455,21 @@ impl ServerHandler for GuardedTools {
     self.gate.refresh_consent().await;
     if self.gate.protecting() {
       tracing::info!(tool = %request.name, "window input refused while a person-only control shows");
-      let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refuse_input() });
+      let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refusal() });
       return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
+    let _turn = self.gate.0.input_turn.lock().await;
+    let call = self.gate.begin_call();
     // Only calls that go on to the window count, so refused calls cannot keep a person's change out.
     self.gate.0.in_flight.fetch_add(1, Ordering::SeqCst);
     let _in_flight = InFlight(self.gate.clone());
-    self.tools.call_tool(request, context).await
+    let tool = request.name.clone();
+    let answer = self.tools.call_tool(request, context).await;
+    let Some(refused) = self.gate.end_call(call) else {
+      return answer;
+    };
+    tracing::info!(%tool, action = refused.action(), "a person-only press refused to a client");
+    let refusal = serde_json::json!({ "code": "person_only", "action": refused.action(), "message": refused.words() });
+    Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into())
   }
 }

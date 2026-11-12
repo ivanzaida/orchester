@@ -255,6 +255,53 @@ fn team_qa_hub_edit_kinds_a_profiles_role_and_what_it_gives_are_published_as_its
   assert_eq!(body["instruction_resources"], json!([rules.to_string()]));
 }
 
+/// A Save an MCP client presses on a tool's or a profile's form that widens what agents may do is refused to it, as
+/// its tool call's error, while the person has not let automation change agent permissions: nothing is sent, the
+/// panel shows no refusal and keeps what was typed, and the person's own Save publishes it.
+#[test]
+fn team_qa_hub_edit_kinds_a_clients_widening_save_is_refused_to_it_and_changes_nothing_in_the_panel() {
+  let cases = [
+    (
+      (HubFilter::Tools, ResourceKind::Tool, "cargo-check"),
+      ("team-hub-from-team-arguments-input", "check\n--workspace"),
+      "publish a team tool's version that widens what agents may do",
+    ),
+    (
+      (HubFilter::Profiles, ResourceKind::AgentProfile, "Reviewer"),
+      ("team-hub-role-instructions-input", "You are the Reviewer."),
+      "publish a team profile's version that widens what agents may do",
+    ),
+  ];
+  for (resource, (field, typed), action) in cases {
+    let mut opened = on(("team-edit", State::TeamEdit), resource, field);
+    opened.type_into(field, typed);
+    with_synthetic_input(|| opened.window.press(SAVE));
+    assert_eq!(
+      opened.window.refused_press(),
+      Some(action),
+      "{action}: refused to the client"
+    );
+    for _ in 0..5 {
+      opened.window.tree.tick_futures();
+      opened.window.pass();
+    }
+    assert!(
+      opened.window.texts("team-hub-edit-refused").is_none(),
+      "{action}: the panel says nothing of it"
+    );
+    let kept = opened
+      .window
+      .tree
+      .get_element_by_id_mut(field)
+      .and_then(|element| element.as_text_input())
+      .map(|input| input.value());
+    assert_eq!(kept.as_deref(), Some(typed), "{action}: what was typed stays");
+    assert!(unsaved(&mut opened.window), "{action}: still unsaved");
+    assert_eq!(opened.versions().len(), 1, "{action}: nothing was published");
+    opened.saved(2);
+  }
+}
+
 /// Whether the panel's chips say it holds changes that are not saved.
 fn unsaved(window: &mut Window) -> bool {
   window

@@ -76,10 +76,15 @@ fn project_settings_orchestrator_has_one_switch_which_is_the_projects_and_only_a
   page.until("the switch read", |p| p.exists(&format!("{SWITCH}-mark")));
   assert!(page.text(&format!("{SWITCH}-row")).contains(LABEL));
   assert!(!page.switch_on(SWITCH), "{LABEL} is off until turned on");
-  page.until("automation's change refused", |p| {
-    lurq::app::events::with_synthetic_input(|| p.click(SWITCH));
-    p.exists(&format!("{SWITCH}-blocked"))
-  });
+  assert!(
+    page.window.link.input_gate().protecting(),
+    "the gate refuses an MCP client's window input while the row shows"
+  );
+  // Synthetic input that reaches the switch all the same (a test's own) is only logged: nothing changes.
+  for _ in 0..5 {
+    lurq::app::events::with_synthetic_input(|| page.click(SWITCH));
+  }
+  assert!(!page.exists(&format!("{SWITCH}-blocked")));
   assert!(!workspace.orchestrator_drives(&repo).expect("read"));
   page.until("the person's choice saved for the project", |p| {
     let stored = workspace.orchestrator_drives(&repo).expect("read");

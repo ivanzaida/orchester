@@ -359,8 +359,12 @@ fn delete_button(ctx: &Ctx, dropping: &Dropping, busy: bool, subjects: &[Subject
     () if dropping.shared => delete.unavailable(ctx.t("task_close.menu.deleteShared")),
     () if busy => delete.disabled(),
     () => {
-      let (asked, tasks) = (dropping.state.asked.clone(), subjects.to_vec());
-      delete.on_click(move || asked.set(Some(Ask::BulkDelete(tasks.clone()))))
+      let (state, tasks) = (dropping.state.clone(), subjects.to_vec());
+      delete.on_click(move || {
+        if state.may_delete() {
+          state.asked.set(Some(Ask::BulkDelete(tasks.clone())));
+        }
+      })
     }
   }
 }

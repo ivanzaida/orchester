@@ -6,6 +6,7 @@ use orchester_core::orchestrator::change::Publishing;
 use rmcp::model::Tool;
 
 use super::{
+  approval_turn::DECIDE_APPROVAL,
   change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
   tools::{
     ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, DUPLICATE_PIPELINE, MERGE_RUN, PIPELINE_CHANGES, RUN_TASK, SEND_MESSAGE,
@@ -43,6 +44,7 @@ fn driving(name: &str, own: &str) -> Option<String> {
     DUPLICATE_PIPELINE => DRIVE_DUPLICATE,
     MERGE_RUN => DRIVE_MERGE,
     RESUME_RUN => DRIVE_RESUME,
+    DECIDE_APPROVAL => DRIVE_APPROVAL,
     _ => return None,
   };
   Some(format!("{first} {own}"))
@@ -51,7 +53,11 @@ fn driving(name: &str, own: &str) -> Option<String> {
 /// What the agent reads first of `run_task` while the chat drives.
 const DRIVE_RUN: &str = "Starts the run at once, through the same checks as for any client. A task marked Blocked \
   (its blocked_reason) is refused as task_blocked, naming the reason: you never start it; the person may start it in \
-  the app.";
+  the app. In a turn Orchester started by itself (its message begins with [Orchester]) it starts only in the turn of a \
+  run's success you merged where an order of what you lead applies (not_merge_turn otherwise), only a task this \
+  conversation leads (not_led otherwise) and only one that has no run yet (already_ran: running a task again is the \
+  person's); in a turn a day's report or a watching's end started it is \
+  refused (report_turn). There, start only what the turn's message says you may.";
 
 /// What the agent reads first of `duplicate_pipeline` while the chat drives.
 const DRIVE_DUPLICATE: &str = "In this chat it publishes the copy as its first version at once, as for any client: \
@@ -66,13 +72,31 @@ const PIPELINE_DRIVE_ONLY: &str = "In this chat it changes no pipeline while Let
 
 /// What the agent reads first of `merge_run` while the chat drives.
 const DRIVE_MERGE: &str = "Merges at once. In a turn Orchester started by itself it merges only a run the chat's rule \
-  lets it: the task's latest run, succeeded, every step passed (a step automation accepted does not count), the task \
+  lets it: the task's latest run, succeeded, every step passed (a step accepted as it was counts, whoever accepted it), the task \
   not saying Don't merge automatically, not marked Blocked, no unfinished task blocking it, new starts not held; \
   another run is refused as left_to_person, naming why. The merge keeps the rules below: only a task's latest run \
   that succeeded, and only when the main checkout needs no local integration; a refusal (needs_decision, \
   merge_failed) leaves conflict choices and approving the merged result to the person on the Local integration page. \
   When merge_failed names conflicting files, the next step is continue_run with resolve_conflicts, which sends the \
   run back to an agent that may write to resolve them; or the person resolves them on the Local integration page.";
+
+/// What the agent reads first of `decide_approval` while the chat drives.
+const DRIVE_APPROVAL: &str = "Decides one tool request at once. In a turn Orchester started by a tool request it \
+  decides only that request (another is refused as not_this_request). Approve it once only when it plainly serves the \
+  task and is safe: inside the run's worktree, nothing that cannot be undone, nothing that reaches another system or \
+  person, no secret. list_approvals names a request's hold (hold), a hard rule of auto mode \
+  that would send it to a person: a reason to look harder, not a refusal; a push, rewriting history, deleting outside \
+  the worktree or touching credentials only when the task plainly needs it. For a command, the runner still refuses \
+  approve_once (person_only) for what auto-approval leaves to a person: a command not read to the end, rewriting \
+  history (a git push counts), deleting outside the temporary folder, writing outside the worktree, reading \
+  credentials, installing software, reaching the network. Other holds and every MCP tool request may be allowed: judge \
+  an MCP tool that acts outside the worktree as carefully as a push. One auto mode's reviewer still judges is \
+  refused (reviewer_judging). Deny it, with a message that tells the agent why, only when it is \
+  plainly wrong. Give your reason \
+  in one sentence (reason): the conversation shows it under the request. While the chat drives, Let the Orchestrator \
+  drive is what lets it answer, whatever Let automation answer approvals says. When you are not sure, do not call it: \
+  tell the person what is asked and what you recommend; the request waits for them on its card. It never allows a \
+  tool or command for good.";
 
 /// What the agent reads first of `resume_run` while the chat drives.
 const DRIVE_RESUME: &str = "Resumes a run a pause stopped, and continues a run that a crash, the runner going away or \

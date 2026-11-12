@@ -146,7 +146,7 @@ fn orchestrator_publication_waits_for_the_person_with_its_facts_and_diff() {
 
   let publish = format!("{card}-start");
   with_synthetic_input(|| screen.click(&publish));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert_eq!(
     actions(&screen)[0].outcome,
     ActionOutcome::Waits,

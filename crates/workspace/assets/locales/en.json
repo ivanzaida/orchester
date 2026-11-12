@@ -38,7 +38,13 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
-    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is."
+    "autopilotPersonOnly": "Only you can choose Autopilot as the Approve mode: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; moving it down to Manual is.",
+    "dangerousPersonOnly": "Only you can choose Dangerous auto-approve as the Approve mode: it approves every tool request of every agent in this project with nothing checked. Input from an MCP client is not taken; moving it down is.",
+    "approveModeChanged": {
+      "manual": "The Approve mode was changed meanwhile and is now Manual: nothing was moved. Look again and choose anew if you still want to.",
+      "autopilot": "The Approve mode was changed meanwhile and is now Autopilot: nothing was moved. Look again and choose anew if you still want to.",
+      "dangerous": "The Approve mode was changed meanwhile and is now Dangerous auto-approve: nothing was moved. Look again and choose anew if you still want to."
+    }
   },
   "projects": {
     "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",
@@ -1835,8 +1841,7 @@
       "instruction": "Publishing the instruction adds its text to the prompts of every agent it applies to.",
       "skill": "Publishing the skill gives every agent it applies to its description in the prompt and its body and reference files to read.",
       "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
-      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
-      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
+      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt."
     }
   },
   "statusBar": {
@@ -2158,7 +2163,6 @@
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
       "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
       "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
-      "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
       "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",
@@ -2500,7 +2504,10 @@
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
-      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
+      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
+      "notMergeTurn": "In a turn Orchester started by itself, the chat starts tasks only in the turn of a run's success it merged, where the order of what this conversation leads asks for it. Nothing started; the person can start it in the app.",
+      "alreadyRan": "{{task}} has run already: running a task again is the person's, never a turn Orchester started by itself. Nothing started; the person can run it again in the app.",
+      "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {
       "ownTask": "A run cannot wait on its own task. Nothing was changed.",
@@ -2547,6 +2554,8 @@
         "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's.",
         "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here. Nothing was merged."
       },
+      "approvalReviewerJudging": "Auto mode's reviewer is judging this request: wait for its answer, or leave it to the person. Nothing was decided.",
+      "approvalNotThisRequest": "This turn was started by another tool request, or by no tool request: in a turn Orchester started by itself, the chat decides only the request that started it. Nothing was decided; tell the person what you recommend instead.",
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
       "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",

@@ -24,7 +24,7 @@ use crate::{
     team_hub::{
       archive,
       edit::{Edit, View},
-      panel, words,
+      panel, rows, words,
     },
   },
   services::Services,
@@ -118,7 +118,7 @@ impl Component for ToolEditor {
       .child(head)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
       .with_children(parts.notice)
-      .child(from_team::section_of(ctx, drawn.rows))
+      .child(rows::from_team(ctx, rows::FromTeam::Shared, drawn.rows))
       .child(computer::section(ctx, entry, sheet, &[]));
     panel::frame(entry, body, Some(parts.bar)).into()
   }

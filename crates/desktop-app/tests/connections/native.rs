@@ -76,8 +76,8 @@ fn connections_native_anthropic_is_added_with_its_key_secret_and_tested_through_
   let name = "Anthropic API · Kontur";
   lurq::app::events::with_synthetic_input(|| seeded.click("connection-save"));
   assert!(
-    seeded.text(Seeded::REASON).contains("Only a person"),
-    "an MCP client's click is refused, and the page says so"
+    seeded.window.refused_press().is_some(),
+    "an MCP client's click is refused to it"
   );
   assert!(native(&seeded, name).is_none(), "nothing was saved");
   seeded.click("connection-save");

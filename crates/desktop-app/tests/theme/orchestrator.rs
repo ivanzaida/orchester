@@ -46,6 +46,16 @@ fn orchestrator_roles_follow_the_design() {
     ),
     (OrchestratorText::LeadsTipOrder, 11.0, 1.45, FontWeight::Normal, "Geist"),
     (OrchestratorText::LeadsTipHint, 11.0, 1.3, FontWeight::Normal, "Geist"),
+    // A tool request's answer under its line (`ICzi3`): what it asked, why the Orchestrator is not sure, what it said.
+    (
+      OrchestratorText::RequestAsked,
+      12.0,
+      1.5,
+      FontWeight::Normal,
+      "Geist Mono",
+    ),
+    (OrchestratorText::RequestDoubt, 12.0, 1.5, FontWeight::Normal, "Geist"),
+    (OrchestratorText::RequestSaid, 12.5, 1.5, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

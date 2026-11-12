@@ -120,7 +120,6 @@ struct AttemptScreen {
   shown: Signal<bool>,
   /// The agent *Ask the agent to resolve* returns the run to, chosen for this time.
   choice: AgentChoice,
-  person_only: Signal<bool>,
   copied: Signal<Copied>,
   reset: Timeout,
   scroll: ScrollState,
@@ -140,7 +139,6 @@ impl Component for AttemptScreen {
       expanded: ctx.signal(Expanded::default()),
       shown: ctx.signal(false),
       choice: AgentChoice::new(ctx),
-      person_only: ctx.signal(false),
       copied,
       reset,
       scroll: ScrollState::new(),
@@ -325,7 +323,6 @@ impl AttemptScreen {
       resolving: shown.resolving,
       choice: &self.choice,
       ask: shown.ask,
-      person_only: &self.person_only,
     })
   }
 

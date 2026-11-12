@@ -105,7 +105,6 @@
       "unavailableValue": "An HTTP request and a database query name secrets by name, which a new tool cannot yet. Create a command.",
       "kindOff": "Choose Command to create it"
     },
-    "personOnly": "Only a person creates this: it adds to what agents may do. Press Create yourself; input from an MCP client is refused unless a person lets automation change agent permissions.",
     "refused": {
       "nameTaken": {
         "title": "The team's server refused: the name {{name}} is taken",

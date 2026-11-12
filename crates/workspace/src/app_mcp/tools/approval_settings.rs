@@ -1,11 +1,12 @@
 //! Approvals through Orchester's MCP server (`docs/design/approval-modes.md`): `get_approvals` reads a project's
-//! *Allow Autopilot for agents in this project*, which connection and model review Manual's requests, and the mode
-//! each run that has not ended answers its agents' requests in, with why; `set_allow_autopilot` turns the project's
-//! setting on or off, as Project settings does; `set_reviewer` chooses the reviewer; `set_run_manual` switches a run
-//! to Manual for itself, as its status line does. Allowing Autopilot is a person's alone, so automation's asking for
-//! it is refused; turning it off is always taken. The reviewer approves requests in the person's place, so automation
-//! chooses another one only while a person lets automation answer approvals and change agent permissions. Switching a
-//! run to Manual narrows what it does without a person: always taken, and never undone.
+//! *Approve mode* (and, as before, whether it allows Autopilot), which connection and model review Manual's requests,
+//! and the mode each run that has not ended answers its agents' requests in, with why; `set_approve_mode` moves the
+//! Approve mode and `set_allow_autopilot` keeps the former switch's meaning (off is Manual, on is Autopilot), as
+//! Project settings does; `set_reviewer` chooses the reviewer; `set_run_manual` switches a run to Manual for itself, as
+//! its status line does. Moving the Approve mode up is a person's alone, so automation's asking for it is refused;
+//! moving it down is always taken. The reviewer approves requests in the person's place, so automation chooses another
+//! one only while a person lets automation answer approvals and change agent permissions. Switching a run to Manual
+//! narrows what it does without a person: always taken, and never undone.
 //!
 //! Auto mode's tools (`get_auto_mode`, `set_auto_mode`, `set_run_auto_mode`) are retired: for one release they stay
 //! listed and answer `retired`, naming the tools that replace them ([`retired`]).
@@ -15,7 +16,7 @@ use orchester_core::{
   id::ProjectId,
   resource::ModelId,
   run::{
-    Answerer,
+    Answerer, ApproveMode, ApproveModePersonOnly,
     review::{
       AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, resolve_reviewer, reviewer_kind,
     },
@@ -36,7 +37,7 @@ use crate::{
   },
   links::{Link, TaskPage},
   messages::Message,
-  project_settings::{autopilot_person_only, decision_reviewer},
+  project_settings::{changed_meanwhile, decision_reviewer, person_only},
   tasks::{
     detail::run_store_error,
     outside::Outside,
@@ -69,9 +70,43 @@ pub struct GetApprovals {
 pub struct SetAllowAutopilot {
   /// The project's id, or its name.
   pub project: String,
-  /// *Allow Autopilot for agents in this project*: `false` is always taken; `true` only while it is on already, as
-  /// only a person allows Autopilot.
+  /// The former *Allow Autopilot* switch: `false` moves the Approve mode to Manual and is always taken; `true` asks
+  /// for Autopilot, taken only while Autopilot is allowed already (Autopilot or Dangerous auto-approve, which it
+  /// leaves as it is), as only a person moves the mode up.
   pub allow_autopilot: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct SetApproveMode {
+  /// The project's id, or its name.
+  pub project: String,
+  /// The *Approve mode* asked for: down (or what it is already) is always taken; up only a person chooses.
+  pub approve_mode: ApproveModeArg,
+}
+
+/// A project's *Approve mode*, from the safest up.
+#[derive(Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum ApproveModeArg {
+  /// Every agent runs as Manual, whatever its profile says.
+  Manual,
+  /// Agents whose profile is set to Autopilot approve their own requests.
+  Autopilot,
+  /// Every tool request of every agent is approved at once, nothing checked.
+  DangerousAutoApprove,
+}
+
+impl From<ApproveModeArg> for ApproveMode {
+  fn from(mode: ApproveModeArg) -> Self {
+    match mode {
+      ApproveModeArg::Manual => Self::Manual,
+      ApproveModeArg::Autopilot => Self::Autopilot,
+      ApproveModeArg::DangerousAutoApprove => Self::DangerousAutoApprove,
+    }
+  }
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -148,18 +183,48 @@ pub async fn set_allow_autopilot(services: &Services, args: SetAllowAutopilot) -
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    let current = db.allow_autopilot()?;
-    let autopilot = current
-      .changed(args.allow_autopilot, Answerer::Automation)
-      .map_err(|_| ToolError::refused("person_only", vec![autopilot_person_only()]))?;
-    // Nothing to write when nothing changes: a person's Off between this read and a write would be undone.
-    if autopilot != current {
-      db.save_allow_autopilot(autopilot)?;
-      services.changes.record(open.project.id(), Outside::AutoMode);
-    }
+    moved(&services, (&mut db, open.project.id()), |current| {
+      current.with_autopilot(args.allow_autopilot)
+    })?;
     approvals_json(&db, open.project.id())
   })
   .await
+}
+
+/// Moves the project's Approve mode down for anyone, up for no one but a person (refused as `person_only` here).
+pub async fn set_approve_mode(services: &Services, args: SetApproveMode) -> Result<Value, ToolError> {
+  let services = services.clone();
+  blocking(move || {
+    let open = services.project(&args.project)?;
+    let mut db = ProjectDb::open(&open.repo_root)?;
+    let to = ApproveMode::from(args.approve_mode);
+    moved(&services, (&mut db, open.project.id()), |_| to)?;
+    approvals_json(&db, open.project.id())
+  })
+  .await
+}
+
+/// Moves the Approve mode of `project`, whose database is `db`, to `to` as automation: refused as `person_only` up.
+fn moved(
+  services: &Services,
+  (db, project): (&mut ProjectDb, ProjectId),
+  to: impl FnOnce(ApproveMode) -> ApproveMode,
+) -> Result<(), ToolError> {
+  let current = db.approve_mode()?;
+  let mode = current
+    .changed(to(current), Answerer::Automation)
+    .map_err(|ApproveModePersonOnly(up)| ToolError::refused("person_only", vec![person_only(up)]))?;
+  if mode != current {
+    // One conditional write: a move decided on a mode a person changed meanwhile is refused, never made.
+    if !db.save_approve_mode_if(current, mode)? {
+      return Err(ToolError::refused(
+        "changed_outside",
+        vec![changed_meanwhile(db.approve_mode()?)],
+      ));
+    }
+    services.changes.record(project, Outside::AutoMode);
+  }
+  Ok(())
 }
 
 pub async fn set_reviewer(services: &Services, args: SetReviewer) -> Result<Value, ToolError> {
@@ -325,6 +390,7 @@ fn approvals_json(db: &ProjectDb, project: ProjectId) -> Result<Value, ToolError
   let resolved = decision_reviewer::read(db)?;
   Ok(json!({ "approvals": {
     "allow_autopilot": db.allow_autopilot()?.is_on(),
+    "approve_mode": db.approve_mode()?,
     "reviewer": resolved,
     "runs": running(db, project)?,
   } }))
@@ -349,6 +415,7 @@ fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> 
         "number": run.number().get(),
         "task": task.key().to_string(),
         "approval_mode": db.run_approval_mode(run.id())?,
+        "switched_to_manual": db.run_switched_to_manual(run.id())?,
         "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
       }));
     }
@@ -362,6 +429,7 @@ fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> 
         "task": null,
         "unrecorded": true,
         "approval_mode": db.run_approval_mode(run.id())?,
+        "switched_to_manual": db.run_switched_to_manual(run.id())?,
         "link": null,
       }));
     }

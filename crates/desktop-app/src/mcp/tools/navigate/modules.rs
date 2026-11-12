@@ -71,7 +71,7 @@ fn hub_page(filter: Option<&str>, (item, server): (Option<&str>, Option<&str>)) 
     None => HubFilter::default(),
     Some(name) => HubFilter::from_name(name).ok_or_else(|| ToolError::UnknownTab {
       name: name.to_owned(),
-      known: HubFilter::LOCAL.map(HubFilter::name).to_vec(),
+      known: HubFilter::ALL.map(HubFilter::name).to_vec(),
     })?,
   };
   let item = item

@@ -34,7 +34,7 @@ use super::{
   work::{self, Author, Change},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   project::ShownProject,
   theme::{HubSpacing, HubText},
   ui::{
@@ -44,13 +44,13 @@ use crate::{
 };
 
 /// Whether the input being delivered may publish an instruction (ORC-30): a person's always; an MCP client's only
-/// under *Let automation change agent permissions*, as `publish_instruction` takes it.
+/// under *Let automation change agent permissions*, as `publish_instruction` takes it, and refused to it otherwise.
 pub(super) fn may_publish(gate: Option<&InputGate>) -> bool {
-  let may = input_may_decide(gate, Guarded::PermissionWidening);
-  if !may {
-    tracing::warn!("synthetic input pressed Publish on an instruction; not taken");
-  }
-  may
+  may_press(
+    gate,
+    Guarded::PermissionWidening,
+    "publish an instruction, which reaches agents' prompts",
+  )
 }
 
 #[derive(Clone)]

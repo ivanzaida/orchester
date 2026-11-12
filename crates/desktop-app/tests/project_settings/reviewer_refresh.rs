@@ -7,7 +7,7 @@ use super::harness::Settings;
 
 /// Autopilot allowed by the person, saved: the reviewer's saves keep working beside it.
 fn turned_on(page: &mut Settings) {
-  page.click("settings-allow-autopilot");
+  page.click("settings-approve-mode-autopilot");
   page.until("Autopilot allowed", |p| {
     p.db().allow_autopilot().expect("settings").is_on()
   });
@@ -111,7 +111,7 @@ fn project_settings_failed_widening_is_retried_only_by_a_person() {
   page.until("failure", |p| p.exists("settings-auto-retry"));
   fail_writes(&page, false);
   with_synthetic_input(|| page.click("settings-auto-retry"));
-  page.until("the retry put back", |p| p.exists("settings-auto-person-only"));
+  page.until("the retry put back", |p| p.window.refused_press().is_some());
   for _ in 0..10 {
     page.window.tree.tick_futures();
     page.window.pass();

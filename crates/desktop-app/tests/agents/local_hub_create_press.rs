@@ -23,7 +23,7 @@ fn local_hub_create_a_tool_is_a_persons_press() {
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(
     held(&agents, ResourceKind::Tool),
     0,
@@ -42,7 +42,7 @@ fn local_hub_create_an_instruction_is_not_refused_to_synthetic_input() {
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   agents.until("the instruction is made", |s| held(s, ResourceKind::Instruction) == 1);
-  assert!(!agents.exists("team-new-person-only"));
+  assert_eq!(agents.refused(), None);
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn local_hub_create_a_skill_is_not_refused_to_synthetic_input() {
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   agents.until("the skill is made", |s| held(s, ResourceKind::Skill) == 1);
-  assert!(!agents.exists("team-new-person-only"));
+  assert_eq!(agents.refused(), None);
 }
 
 /// A team project's New profile page is the team hub's form (A7), not the old page of its own nor a local hub's form:

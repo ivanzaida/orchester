@@ -266,8 +266,44 @@ fn team_qa_hub_edit_automation_does_not_save_what_agents_may_do_unless_a_person_
   let (mut window, server, _) = on_pencil(("team-edit", State::TeamEdit));
   typed(&mut window);
   with_synthetic_input(|| window.press(SAVE));
-  window.until("the refusal", |window| window.texts("team-hub-edit-refused").is_some());
-  let body = window.text("team-hub-edit-refused-body");
-  assert!(body.contains("Only a person can do this"), "{body}");
+  assert_eq!(
+    window.refused_press(),
+    Some("publish a new version of a team MCP server"),
+    "refused to the client, as its tool call's error"
+  );
+  for _ in 0..5 {
+    window.tree.tick_futures();
+    window.pass();
+  }
+  assert!(
+    window.texts("team-hub-edit-refused").is_none(),
+    "the panel says nothing of it"
+  );
+  let kept = window
+    .tree
+    .get_element_by_id_mut(ARGUMENTS)
+    .and_then(|element| element.as_text_input())
+    .map(|input| input.value());
+  assert_eq!(
+    kept.as_deref(),
+    Some(
+      "--stdio
+--app
+desktop
+--no-telemetry"
+    ),
+    "what was typed stays"
+  );
   assert!(nothing_published(&server), "nothing was sent");
+
+  // Once the person lets automation change agent permissions, the client's Save publishes.
+  window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_automation_changes_permissions(true)
+    .expect("the permissions opt-in");
+  with_synthetic_input(|| window.press(SAVE));
+  assert_eq!(window.refused_press(), None, "taken under the consent");
+  window.until("the server to number it", |_| !nothing_published(&server));
 }

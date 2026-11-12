@@ -8,7 +8,7 @@ use orchester_core::{
   orchestrator::MergeLeft,
   run::{
     Answerer, AttemptReason, PlanDecision, Run, RunError, RunEventKind, RunStatus, StepFailure, StepOutcome,
-    StepOutput, StepResult, StepStatus, Stuck, StuckDecision, UnverifiedCheck, attempt_starts,
+    StepOutput, StepResult, StepStatus, Stuck, StuckDecision, UnverifiedCheck,
   },
 };
 
@@ -272,26 +272,18 @@ fn accepted_and_passed(by: Answerer) -> Logged {
   logged
 }
 
+/// The person's decision of 2026-11-11: a step accepted as it was counts as passed for a merge nobody asked for,
+/// whoever accepted it.
 #[test]
-fn unverified_a_step_counts_as_passed_for_a_merge_nobody_asked_for_only_when_a_person_accepted_it() {
-  let person = accepted_and_passed(Answerer::Person);
-  assert_eq!(
-    MergeLeft::of_steps(&person.run, &attempt_starts(&person.log)),
-    None,
-    "a person's acceptance counts as passed"
-  );
-  let automation = accepted_and_passed(Answerer::Automation);
-  assert!(
-    matches!(
-      MergeLeft::of_steps(&automation.run, &attempt_starts(&automation.log)),
-      Some(MergeLeft::AcceptedByAutomation { .. })
-    ),
-    "automation's acceptance does not"
-  );
+fn unverified_a_step_accepted_as_it_was_counts_as_passed_for_a_merge_nobody_asked_for() {
+  for by in [Answerer::Person, Answerer::Automation] {
+    let accepted = accepted_and_passed(by);
+    assert_eq!(MergeLeft::of_steps(&accepted.run), None, "accepted by {by:?}");
+  }
   // A run that stopped before its steps passed has a step that has not passed.
   let stopped = unverified();
   assert!(matches!(
-    MergeLeft::of_steps(&stopped.run, &attempt_starts(&stopped.log)),
+    MergeLeft::of_steps(&stopped.run),
     Some(MergeLeft::StepNotPassed { .. })
   ));
 }

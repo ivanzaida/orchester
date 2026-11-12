@@ -118,7 +118,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 200] = [
+pub const ALL: [Scenario; 203] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -174,6 +174,7 @@ pub const ALL: [Scenario; 200] = [
   Scenario::of("orchestrator-waits-on", orchestrator::waits_on::seed),
   Scenario::of("orchestrator-watch", orchestrator::watch::seed),
   Scenario::of("orchestrator-leads", orchestrator::leads::seed),
+  Scenario::of("orchestrator-requests", orchestrator::requests::seed),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),
@@ -192,6 +193,7 @@ pub const ALL: [Scenario; 200] = [
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),
   Scenario::of("cards-approval-modes", approval_answers::seed),
+  Scenario::of("dangerous-auto-approve", approval_answers::dangerous),
   Scenario::of("approval-modes", approval_modes::seed),
   Scenario::of("approval-modes-project", approval_modes::project),
   Scenario::of("decisions", decisions::seed),
@@ -318,6 +320,7 @@ pub const ALL: [Scenario; 200] = [
   Scenario::of("local-hub-archived", local_hub::archived),
   Scenario::of("team-archive", team::archive),
   Scenario::of("team-archived", team::archived),
+  Scenario::of("team-archived-admin", team::archived_admin),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
   Scenario::of("storage-low-disk", storage::low_disk),

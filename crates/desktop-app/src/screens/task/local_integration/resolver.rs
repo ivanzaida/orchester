@@ -24,6 +24,7 @@ use super::{
   work::{Action, Outcome, Request, Work},
 };
 use crate::{
+  mcp::input_gate::Guarded,
   navigation::guard::LeaveGuard,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -224,14 +225,6 @@ impl Resolver {
   fn retained_notice(&self, ctx: &Ctx, busy: bool) -> Element {
     let editor = self.editor.clone();
     let props = ctx.props::<Props>();
-    let work = props.work.clone();
-    let refused = Request {
-      task: props.task.clone(),
-      action: Action::Refused,
-      stop: props.stop.clone(),
-      input: None,
-      generation: props.view.operation.as_ref().map(|op| op.version()),
-    };
     let gate = self.gate.clone();
     let safe = !props.view.editor_policy.sensitive(&editor.text.get())
       && !props.view.editor_policy.sensitive(&editor.destination.get());
@@ -244,10 +237,14 @@ impl Resolver {
       button.disabled()
     } else {
       button.on_click(move || {
-        if (input_source() == InputSource::Synthetic && !safe) || !gate.local_input(input_source()).allowed() {
-          let mut refused = refused.clone();
-          refused.initiate(&gate);
-          work.run_if_idle(refused);
+        // Discarding what was typed is a person's unless nothing is lost; refused, the editor stays as it was.
+        if input_source() == InputSource::Synthetic && !safe {
+          gate.refuse_press("discard a local integration's edited file", Guarded::Person);
+        } else if !gate.local_input(input_source()).allowed() {
+          gate.refuse_press(
+            "discard a local integration's edited file",
+            Guarded::LocalIntegrationQuestion,
+          );
         } else {
           editor.discard();
         }
@@ -378,14 +375,7 @@ impl Resolver {
     };
     let safe = !props.view.editor_policy.sensitive(&self.editor.text.get())
       && !props.view.editor_policy.sensitive(&self.editor.destination.get());
-    super::draft_controls::inline(
-      ctx,
-      &props.work,
-      &props.state,
-      Some(request),
-      (props.busy, safe),
-      &props.task,
-    )
+    super::draft_controls::inline(ctx, &props.work, &props.state, Some(request), (props.busy, safe))
   }
 }
 

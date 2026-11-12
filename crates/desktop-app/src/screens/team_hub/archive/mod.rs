@@ -43,9 +43,6 @@ use crate::{
   },
 };
 
-/// The id the person-only check of the confirmation's *Archive* is made under.
-pub(super) const CONFIRM: &str = "team-hub-archive-confirm";
-
 #[derive(Clone, PartialEq)]
 pub(in crate::screens) struct Props {
   pub root: PathBuf,
@@ -235,7 +232,7 @@ impl ArchiveMenu {
       .map(|used| used.runs.clone())
       .unwrap_or_default();
     let confirm: dialog::Confirm = Arc::new(move || {
-      if person.allows(CONFIRM) {
+      if person.allows("archive a team resource and stop the runs that use it") {
         action.run(shown.clone());
       }
     });
@@ -247,14 +244,13 @@ impl ArchiveMenu {
         local: false,
         versioned: true,
       },
-      dialog::State {
+      &dialog::State {
         read,
         lines: Vec::new(),
         tasks: None,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
         stopped: None,
-        person_refused: self.person.reason(ctx, CONFIRM),
       },
       (&self.open, &self.retry, confirm),
     )

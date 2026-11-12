@@ -78,7 +78,8 @@ pub fn to(
     | State::StartRunnerRefused
     | State::StartPastFailure
     | State::TeamArchive
-    | State::TeamArchived => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::TeamArchived
+    | State::TeamArchivedAdmin => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

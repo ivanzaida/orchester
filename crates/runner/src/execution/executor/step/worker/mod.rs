@@ -445,11 +445,13 @@ impl Worker {
     matches!(self.driver, Driver::Native(_))
   }
 
-  /// The worker's regular beat: what waits is written, and a request Autopilot brought to the person is looked at
-  /// again should its run have dropped to Manual ([`Worker::recheck_mode`]).
+  /// The worker's regular beat: what waits is written, a waiting request is approved should the project have turned on
+  /// Dangerous auto-approve mode ([`Worker::approve_waiting_dangerously`]), and a request Autopilot brought to the
+  /// person is looked at again should its run have dropped to Manual ([`Worker::recheck_mode`]).
   async fn tick(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
     self.flush(watch)?;
     self.poll_servers(watch).await?;
+    self.approve_waiting_dangerously(watch).await?;
     self.recheck_mode(watch).await
   }
 

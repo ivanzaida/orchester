@@ -16,7 +16,7 @@
 //! counts. Before it was ever read the list and the panel stand in bones (`hub::agents_bones`).
 
 pub(in crate::screens) mod archive;
-mod archived;
+pub(in crate::screens) mod archived;
 mod archived_profile;
 mod editing;
 pub(in crate::screens) mod head;
@@ -258,7 +258,7 @@ fn tabs(
   selected: Option<Archivable>,
   leave: &Leave,
 ) -> Vec<agents::Tab> {
-  HubFilter::LOCAL
+  HubFilter::ALL
     .into_iter()
     .map(|choice| {
       let item = selected.filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
@@ -372,7 +372,11 @@ impl LocalHubScreen {
   /// The panel of `selected`: an archived entry's, an MCP server's, or the frame the other kinds share.
   fn panel(&self, ctx: &mut Ctx, (project, hub): (&ShownProject, &LocalHub), selected: Option<&Entry>) -> Element {
     let Some(entry) = selected else {
-      return archived::nothing_picked(ctx);
+      return archived::nothing_picked(
+        ctx,
+        "local-hub-archived-none",
+        ("local_hub.archived.nothingTitle", "local_hub.archived.nothingDetail"),
+      );
     };
     let id = project.open.project.id();
     if entry.archived.is_some() {

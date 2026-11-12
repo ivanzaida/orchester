@@ -140,7 +140,8 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::StartRunnerRefused
     | State::StartPastFailure
     | State::TeamArchive
-    | State::TeamArchived => joined(state, &server, services, runtime)?,
+    | State::TeamArchived
+    | State::TeamArchivedAdmin => joined(state, &server, services, runtime)?,
   }
   Ok(server)
 }

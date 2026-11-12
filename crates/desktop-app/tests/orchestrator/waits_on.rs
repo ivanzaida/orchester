@@ -190,16 +190,14 @@ fn orchestrator_only_the_person_drops_a_wait_from_its_row() {
   screen.until("Drop the wait", |screen| screen.exists(&drop_it));
 
   with_synthetic_input(|| screen.click(&drop_it));
-  screen.until("the refusal", |screen| screen.exists(&format!("{row}-line")));
-  screen.click(&format!("{row}-line"));
-  screen.until("why it was refused", |screen| screen.exists(&format!("{row}-reason")));
-  assert!(
-    screen
-      .text(&format!("{row}-reason"))
-      .starts_with("Only you can drop a run's wait"),
-    "{}",
-    screen.text(&format!("{row}-reason"))
+  assert_eq!(
+    screen.window.refused_press(),
+    Some("drop a run's wait"),
+    "refused to the client"
   );
+  screen.window.pass();
+  assert!(!screen.exists(&format!("{row}-reason")), "the chat says nothing of it");
+  assert!(screen.exists(&drop_it), "the row stays as it was");
   let ended = screen
     .db()
     .run_wait(canceled.0.id())

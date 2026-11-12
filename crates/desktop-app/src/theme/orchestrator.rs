@@ -95,13 +95,22 @@ pub enum OrchestratorText {
   LeadsTipOrder,
   /// 11 `text_inverse`, 1.3: the hint at a Leads chip's tooltip's foot (`j1E7E`), at [`LEADS_HINT_OPACITY`].
   LeadsTipHint,
+  /// Mono 12 `text_muted`, 1.5: what a tool request asked, in the Orchestrator's answer under its line (`TBozG`,
+  /// `XZVR6` in `ICzi3`).
+  RequestAsked,
+  /// 12 `text_muted`, 1.5: why the Orchestrator is not sure of a request (`JIvk5` in `ICzi3`), as an answered wait's
+  /// question (`qqssz` in `Jzqle`).
+  RequestDoubt,
+  /// 12.5 `text_secondary`, 1.5: the Orchestrator's reason, the words it told the agent or its recommendation, under a
+  /// tool request's line (`nAFS9`, `O8p4u6`, `GESeJ` in `ICzi3`).
+  RequestSaid,
 }
 
 /// The hint at a Leads chip's tooltip's foot, *× stops watching* (`j1E7E` in `X93D8T`).
 pub const LEADS_HINT_OPACITY: f32 = 0.7;
 
 impl OrchestratorText {
-  pub const ALL: [Self; 34] = [
+  pub const ALL: [Self; 37] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -136,6 +145,9 @@ impl OrchestratorText {
     Self::LeadsTipTitle,
     Self::LeadsTipOrder,
     Self::LeadsTipHint,
+    Self::RequestAsked,
+    Self::RequestDoubt,
+    Self::RequestSaid,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -178,6 +190,9 @@ impl OrchestratorText {
       Self::LeadsTipTitle => "orchestrator_leads_tip_title",
       Self::LeadsTipOrder => "orchestrator_leads_tip_order",
       Self::LeadsTipHint => "orchestrator_leads_tip_hint",
+      Self::RequestAsked => "orchestrator_request_asked",
+      Self::RequestDoubt => "orchestrator_request_doubt",
+      Self::RequestSaid => "orchestrator_request_said",
     }
   }
 
@@ -223,6 +238,9 @@ impl OrchestratorText {
       Self::LeadsTipTitle => style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_inverse),
       Self::LeadsTipOrder => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_inverse),
       Self::LeadsTipHint => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_inverse),
+      Self::RequestAsked => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted)),
+      Self::RequestDoubt => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
+      Self::RequestSaid => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
     }
   }
 }
@@ -248,10 +266,12 @@ pub enum OrchestratorSpacing {
   StartComposer,
   /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`).
   LeftOpen,
+  /// 24: a tool request's card in from the chat column's start, under its wait (`ICzi3` d in `mPw5l`).
+  RequestCard,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 9] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
@@ -260,6 +280,7 @@ impl OrchestratorSpacing {
     Self::LinkColumns,
     Self::StartComposer,
     Self::LeftOpen,
+    Self::RequestCard,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -276,6 +297,7 @@ impl OrchestratorSpacing {
       Self::LinkColumns => "orchestrator_link_columns",
       Self::StartComposer => "orchestrator_start_composer",
       Self::LeftOpen => "orchestrator_left_open",
+      Self::RequestCard => "orchestrator_request_card",
     }
   }
 
@@ -289,6 +311,7 @@ impl OrchestratorSpacing {
       Self::LinkColumns => 12.0,
       Self::StartComposer => 28.0,
       Self::LeftOpen => 27.0,
+      Self::RequestCard => 24.0,
     }
   }
 }

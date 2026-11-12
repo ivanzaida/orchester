@@ -27,6 +27,7 @@ pub mod leads;
 mod live;
 pub mod picker_notes;
 mod proposals;
+pub mod requests;
 pub mod waits_on;
 pub mod watch;
 

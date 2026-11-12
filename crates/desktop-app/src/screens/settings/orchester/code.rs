@@ -156,7 +156,7 @@ impl Component for ShownCode {
     let copy = ActionButton::new(COPY, ButtonKind::Secondary, ctx.t("cloud.pairing.copy"))
       .icon(Icon::Copy)
       .on_click(move || {
-        if !person.allows(COPY) {
+        if !person.allows("copy a pairing code") {
           return;
         }
         let copied = match &clipboard {
@@ -180,7 +180,6 @@ impl Component for ShownCode {
       .child(code_box("orchester-pairing-code", shown.code.expose()))
       .child(paragraph("orchester-pairing-explanation", &explanation))
       .child(Row::new().spacing(SpacingSize::Sm).child(copy).child(done))
-      .with_children(self.person.reason(ctx, COPY))
       .child(hint("orchester-pairing-once", &ctx.t("cloud.pairing.once")))
   }
 }

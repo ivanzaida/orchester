@@ -10,6 +10,7 @@
 //! anyone's; widening — *Approve everything in this run* — is a person's: an MCP client's press (lurq's synthetic
 //! input) is refused, and the refusal shows as an event line.
 
+mod dangerous;
 mod menu;
 
 use std::{path::PathBuf, sync::Arc};
@@ -42,6 +43,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   project::{ProjectFeed, ShownProject},
   theme::{ExtraColor, ExtraSpacing, IconSize, PermissionsText},
   ui::{
@@ -78,6 +80,7 @@ impl DevtoolsInspectable for Changed {}
 pub(super) struct Permissions {
   pub(super) open: Signal<bool>,
   change: FutureAction<Asked, Changed, Message>,
+  gate: Option<InputGate>,
 }
 
 impl Permissions {
@@ -103,6 +106,7 @@ impl Permissions {
     let permissions = Self {
       open: ctx.signal(false),
       change,
+      gate: ctx.use_context::<InputGate>(),
     };
     ctx.provide(permissions);
   }
@@ -114,9 +118,13 @@ impl Permissions {
   }
 
   /// Asks `change` of `run` of the project at `root`, as whoever gives the input now: a person, or an MCP client's
-  /// synthetic input; nothing while a change is under way.
+  /// synthetic input; nothing while a change is under way. A widening is a person's alone
+  /// ([`RunPermissionChange::asked_by`]): automation's is refused to it here, and nothing is asked or recorded.
   pub(super) fn ask(&self, root: &std::path::Path, run: RunId, change: RunPermissionChange) {
     if self.change.state().get_untracked().is_pending() {
+      return;
+    }
+    if change.widens() && !self.may_widen() {
       return;
     }
     let by = if is_synthetic_input() {
@@ -130,6 +138,11 @@ impl Permissions {
       change,
       by,
     });
+  }
+
+  /// Whether the press being delivered may widen the run: a person's; automation's is refused to it.
+  pub(super) fn may_widen(&self) -> bool {
+    persons_press(self.gate.as_ref(), "approve everything in a run")
   }
 
   /// Why the last change was not saved, while it shows.
@@ -268,7 +281,10 @@ fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
     ChipMode::Everything => (Icon::ShieldAlert, PaletteColor::Warning),
     ChipMode::Autopilot => (Icon::ShieldCheck, PaletteColor::TextSecondary),
     ChipMode::Manual | ChipMode::ManualRun | ChipMode::ManualProject => (Icon::Shield, PaletteColor::TextSecondary),
+    ChipMode::Dangerous => (Icon::TriangleAlert, PaletteColor::Danger),
   };
+  // The project decides for every run while it approves every request: the profile's word would say nothing true.
+  let dangerous = shown.chip == ChipMode::Dangerous;
   let profile = match shown.profile {
     ApprovalMode::Manual => "conversation.permissions.chip.profileManual",
     ApprovalMode::Autopilot => "conversation.permissions.chip.profileAutopilot",
@@ -281,21 +297,27 @@ fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
       Text::new(&ctx.t(chip_key(shown.chip)))
         .id("conversation-permissions-label")
         .variant(PermissionsText::Chip.role())
+        .color(if dangerous {
+          PaletteColor::Danger
+        } else {
+          PaletteColor::TextSecondary
+        })
         .nowrap(),
     )
-    .child(
+    .with_children((!dangerous).then(|| {
       Text::new(&ctx.t(profile))
         .id("conversation-permissions-profile")
         .variant(PermissionsText::Chip.role())
         .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
+        .nowrap()
+    }))
     .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted))
 }
 
 /// The chip's tooltip: what the profile is and what the project allows, in a sentence.
 fn tip(ctx: &Ctx, shown: &PermissionsMenu, props: &ChipProps) -> Arc<str> {
   let key = match (shown.profile, props.approvals.allow_autopilot.is_on()) {
+    _ if shown.chip == ChipMode::Dangerous => "conversation.permissions.chip.tip.dangerous",
     (ApprovalMode::Manual, _) => "conversation.permissions.chip.tip.manual",
     (ApprovalMode::Autopilot, true) => "conversation.permissions.chip.tip.autopilot",
     (ApprovalMode::Autopilot, false) => "conversation.permissions.chip.tip.projectOff",
@@ -310,6 +332,7 @@ const fn chip_key(mode: ChipMode) -> &'static str {
     ChipMode::Everything => "conversation.permissions.chip.everything",
     ChipMode::ManualRun => "conversation.permissions.chip.manualRun",
     ChipMode::ManualProject => "conversation.permissions.chip.manualProject",
+    ChipMode::Dangerous => "conversation.permissions.chip.dangerous",
   }
 }
 
@@ -321,5 +344,6 @@ const fn chip_name(mode: ChipMode) -> &'static str {
     ChipMode::Everything => "everything",
     ChipMode::ManualRun => "manual-run",
     ChipMode::ManualProject => "manual-project",
+    ChipMode::Dangerous => "dangerous-auto-approve",
   }
 }

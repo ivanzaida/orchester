@@ -4,7 +4,9 @@
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
+  connection::{
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+  },
   id::{ConnectionId, ResourceId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
@@ -53,8 +55,9 @@ pub struct Catalogue {
 }
 
 /// The project's Codex connection, `Codex · Kontur`. With `fake_codex` it runs that program, checked and
-/// signed in as the runner's tests record it (the fake answers no `--version`); without, no connection is
-/// stored and the profiles name one that is missing, so nothing can run, as with the old app's test
+/// signed in as the runner's tests record it (the fake answers no `--version`), its catalogue the profiles' model so
+/// that the Orchestrator can be set to run on it too (the fake stands in for Codex's app server); without, no
+/// connection is stored and the profiles name one that is missing, so nothing can run, as with the old app's test
 /// fixture.
 pub fn codex(db: &mut ProjectDb, fake_codex: Option<&Path>, now: Timestamp) -> Result<ConnectionId, SeedError> {
   let Some(program) = fake_codex else {
@@ -72,7 +75,13 @@ pub fn codex(db: &mut ProjectDb, fake_codex: Option<&Path>, now: Timestamp) -> R
     result: CheckResult::Available {
       version: FAKE_CODEX_VERSION.to_owned(),
       sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      catalog: ModelCatalog::new(
+        CatalogSource::Provider,
+        vec![CatalogModel::new(
+          ModelId::new(MODEL).expect("a valid model id"),
+          Vec::new(),
+        )],
+      ),
     },
   })?;
   let connection = connection.into_connection();

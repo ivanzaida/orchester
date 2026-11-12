@@ -6,8 +6,9 @@
 //! caller gives (a choice under its label, lines of what it does, [`line`]), and for a person-only action the line on
 //! `hover` that only the person confirms it. Its footer, under a `border` line, says *Esc cancels* at its start, after
 //! what Enter does where Enter confirms it (`Keys` `D0v5t` in `08e · History · Delete confirmation` `I4xzOf`), and
-//! ends in *Cancel* and the actions; a plain footer (`Footer` `a2EDb` of `03 · Install now · runs at work` `MGILm`)
-//! ends in a ghost *Cancel* with its ×, then the actions. Esc and a press on the scrim cancel.
+//! ends in *Cancel* (which its caller may give the focus) and the actions; a plain footer (`Footer` `a2EDb` of `03 ·
+//! Install now · runs at work` `MGILm`) ends in a ghost *Cancel* with its ×, then the actions. Esc and a press on the
+//! scrim cancel.
 
 use std::sync::Arc;
 
@@ -18,7 +19,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
   components::{Column, Modal, ModalTarget, Row, Stack, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::{Alignment, StackAlignment, layout_kind::Justify},
   node::{Element, HitTestBehavior, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -95,6 +96,7 @@ pub struct Dialog {
   /// The footer's start in place of *Esc cancels*: why the action cannot be taken, or what Esc does in words.
   note: Option<FooterNote>,
   enter: Option<Enter>,
+  cancel_ref: Option<ElementRef>,
   actions: Vec<ActionButton>,
   under: Vec<Element>,
 }
@@ -115,6 +117,7 @@ impl Dialog {
       plain_footer: false,
       note: None,
       enter: None,
+      cancel_ref: None,
       actions: Vec::new(),
       under: Vec::new(),
     }
@@ -158,6 +161,12 @@ impl Dialog {
     self
   }
 
+  /// `cancel` refers to *Cancel*, so its caller can give it the focus as the dialog opens.
+  pub fn cancel_ref(mut self, cancel: ElementRef) -> Self {
+    self.cancel_ref = Some(cancel);
+    self
+  }
+
   /// A part of its body, in order.
   pub fn part(mut self, part: impl Into<Element>) -> Self {
     self.parts.push(part.into());
@@ -191,7 +200,13 @@ impl Dialog {
     let footer = if self.plain_footer {
       plain_footer(&id, &self.cancel, (note, actions), open)
     } else {
-      footer(ctx, &id, (&self.cancel, enter.as_ref()), actions, open)
+      footer(
+        ctx,
+        &id,
+        (&self.cancel, enter.as_ref(), self.cancel_ref.take()),
+        actions,
+        open,
+      )
     };
     let width = self.width;
     let body = self.body();
@@ -320,7 +335,7 @@ pub fn over_window(
 fn footer(
   ctx: &Ctx,
   id: &str,
-  (cancel, enter): (&str, Option<&Enter>),
+  (cancel, enter, cancel_ref): (&str, Option<&Enter>, Option<ElementRef>),
   actions: Vec<ActionButton>,
   open: &Signal<bool>,
 ) -> Row {
@@ -328,6 +343,10 @@ fn footer(
   let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Secondary, cancel)
     .in_form()
     .on_click(move || shut.set(false));
+  let cancel = match cancel_ref {
+    Some(element) => cancel.element_ref(element),
+    None => cancel,
+  };
   let words = |text: &str| Text::new(text).variant(DialogText::Keys.role()).nowrap();
   // The pairs are a cap's gap further apart than a key and its words (`Gap` `t5dAz`).
   let enter = enter.map(|(does, _)| -> [Element; 3] {

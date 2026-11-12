@@ -26,10 +26,12 @@ pub enum ShellText {
   JumpResult,
   /// 11.5 `text_muted`: how many results *Jump to* shows (`Count` `qiz3y` in `aDYAX`).
   JumpCount,
+  /// 11/500 `danger`: *Dangerous auto-approve* on the status bar's chip (`Label` `STTfE` in `D3OhA`).
+  DangerChip,
 }
 
 impl ShellText {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::SwitcherInitial,
     Self::SwitcherPath,
     Self::MenuSection,
@@ -37,6 +39,7 @@ impl ShellText {
     Self::FolderBody,
     Self::JumpResult,
     Self::JumpCount,
+    Self::DangerChip,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -52,6 +55,7 @@ impl ShellText {
       Self::FolderBody => "shell_folder_body",
       Self::JumpResult => "shell_jump_result",
       Self::JumpCount => "shell_jump_count",
+      Self::DangerChip => "shell_danger_chip",
     }
   }
 
@@ -64,6 +68,7 @@ impl ShellText {
       Self::FolderBody => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
       Self::JumpResult => style(12.5, FontWeight::Normal, 1.35, 0.0, palette.text_primary),
       Self::JumpCount => style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted),
+      Self::DangerChip => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.danger),
     }
   }
 }

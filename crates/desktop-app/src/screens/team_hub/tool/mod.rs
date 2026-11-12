@@ -4,14 +4,14 @@
 //! secret here, and how the tool stands) and, pinned at the bottom, *Add value* while the secret has none here, or the
 //! admin's *Edit* of a command.
 //!
-//! A secret's value is a person's alone to set, as an MCP server's is: a press automation made does nothing and says
-//! so. A latest version published before the team's form names its secret by the id it had on the publisher's
-//! computer, which is never shown: nothing can be filled in for it here, and an admin publishes it again by name
-//! ([`republish`]).
+//! A secret's value is a person's alone to set, as an MCP server's is: a press automation made is refused to the
+//! client that sent it, and the panel stays as it was. A latest version published before the team's form names its
+//! secret by the id it had on the publisher's computer, which is never shown: nothing can be filled in for it here, and
+//! an admin publishes it again by name ([`republish`]).
 
 mod computer;
 mod edit;
-mod from_team;
+pub(super) mod from_team;
 mod republish;
 
 use std::{path::PathBuf, sync::Arc};
@@ -82,9 +82,6 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<ToolPanel>(&key, props)
 }
 
-/// The id the person-only check of *Add value* is made under.
-const ADD_VALUE: &str = "team-hub-fix";
-
 /// The panel of one tool, keyed by the resource so its scroll, an open dialog or a typed value never carries over to
 /// another.
 struct ToolPanel {
@@ -137,14 +134,13 @@ impl Component for ToolPanel {
       .child(panel::head_of(entry, (kind.to_string(), version), head_end))
       .child(chips)
       .with_children(member::lock_line(ctx, team))
-      .child(from_team::section(ctx, sheet))
+      .child(from_team::section(ctx, sheet, super::rows::FromTeam::Shared))
       .child(computer::section(ctx, entry, sheet, missing))
       .with_children(self.failure(ctx));
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      self.person.reason(ctx, secret::SAVE),
     );
     panel::frame(entry, body, self.bar(ctx, &props)).with_children(dialog)
   }
@@ -180,7 +176,7 @@ impl ToolPanel {
   fn add_value(&self, ctx: &Ctx, name: &SecretName) -> Element {
     let (entry, name, person) = (self.secret.clone(), name.clone(), self.person.clone());
     let press = Press::run(move || {
-      if person.allows(ADD_VALUE) {
+      if person.allows("fix what a team tool needs on this computer") {
         entry.ask(&name);
       }
     });
@@ -198,12 +194,10 @@ impl ToolPanel {
     )
   }
 
-  /// Why the last press did nothing: automation pressed *Add value*, or the team refused the version published again.
+  /// Why the last press did nothing: the team refused the version published again.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    if let Some(reason) = self.republish.refused() {
-      return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
-    }
-    self.person.reason(ctx, ADD_VALUE)
+    let reason = self.republish.refused()?;
+    Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into())
   }
 }
 

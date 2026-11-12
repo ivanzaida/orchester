@@ -7,7 +7,7 @@
 use orchester_core::{
   id::{ChatId, ModuleId, ProjectId, RunId},
   orchestrator::{
-    AgentWait, Lead, Leads, RunEnd, Subscription, WaitKind, WatchSettings, WatchTarget,
+    AgentWait, Lead, Leads, MergeLeft, Merging, RunEnd, Subscription, WaitKind, WatchSettings, WatchTarget,
     instructions::{ProjectReads, system_prompt, wait_prompt},
   },
   time::Timestamp,
@@ -164,4 +164,125 @@ fn orchestrator_leads_without_a_subscription_keep_todays_prompts() {
     none.system_prompt("Konto", project, ProjectReads::GitTools),
     system_prompt("Konto", project, ProjectReads::GitTools)
   );
+}
+
+/// The turn of a run's success that merges the run.
+fn merges() -> AgentWait {
+  AgentWait {
+    merging: Some(Merging::Merges),
+    ..wait(WaitKind::Ended(RunEnd::Succeeded))
+  }
+}
+
+const STOPS: &str = "Start, resume, cancel or continue nothing else.";
+const STARTS: &str = "Once merge_run has merged it, and only then, do what the order that applies to this turn";
+
+/// The bug of 2026-11-11: a conversation that leads a module with an order to start work as it becomes ready merged a
+/// run in a turn Orchester started and stopped there, its prompt telling it to start nothing. Where an order applies,
+/// the turn of a success it merges goes on to what the order asks: the tasks of what it leads that can start now, each
+/// once, a refusal told and not retried.
+#[test]
+fn orchestrator_leads_merge_turn_starts_what_the_order_asks() {
+  let (leads, delivery, billing) = two_modules("Start tasks as they become ready.");
+  let own = leads.event_prompt(&merges(), Some(delivery));
+  let by_default = leads.event_prompt(&merges(), Some(billing));
+  for prompt in [&own, &by_default] {
+    assert!(!prompt.contains(STOPS), "{prompt}");
+    for words in [
+      STARTS,
+      "read the tasks of what this conversation leads (list_tasks) and start with run_task each one the order asks \
+       for that has no run yet and can start now",
+      "Call run_task once per task in this turn: when it refuses (such as no_agent_slot, task_blocked or not_led), \
+       tell the person what was not started and why, in its words, and do not call it again for that task in this \
+       turn",
+      "Start nothing the order does not ask for and nothing outside what this conversation leads",
+      "When the merge was refused, start nothing.",
+      "Merge this run once with merge_run (run #3)",
+    ] {
+      assert!(prompt.contains(words), "{words:?} in {prompt}");
+    }
+  }
+}
+
+/// Without an order that applies, a merge turn keeps merging and stopping; a run left to the person, and every other
+/// end, starts nothing whatever the order says.
+#[test]
+fn orchestrator_leads_merge_turn_without_an_order_stops_after_the_merge() {
+  let (no_default, _, billing) = two_modules("");
+  let unordered = no_default.event_prompt(&merges(), Some(billing));
+  assert!(unordered.contains(STOPS) && !unordered.contains(STARTS), "{unordered}");
+  let elsewhere = no_default.event_prompt(&merges(), Some(WatchTarget::Project));
+  assert!(elsewhere.contains(STOPS) && !elsewhere.contains(STARTS), "{elsewhere}");
+  assert!(wait_prompt(&merges()).contains(STOPS));
+
+  let (ordered, delivery, _) = two_modules("Start tasks as they become ready.");
+  let left = AgentWait {
+    merging: Some(Merging::Left {
+      why: MergeLeft::OptedOut,
+    }),
+    ..wait(WaitKind::Ended(RunEnd::Succeeded))
+  };
+  for other in [
+    left,
+    wait(WaitKind::Ended(RunEnd::Failed)),
+    wait(WaitKind::Ended(RunEnd::Succeeded)),
+    wait(WaitKind::Question),
+  ] {
+    let prompt = ordered.event_prompt(&other, Some(delivery));
+    assert!(prompt.starts_with(&wait_prompt(&other)), "{prompt}");
+    assert!(!prompt.contains(STARTS), "{prompt}");
+  }
+}
+
+/// The standing instructions and what a conversation leads say where a start in a turn Orchester started is allowed,
+/// so the agent never explains a rule the tools do not have.
+#[test]
+fn orchestrator_leads_standing_instructions_say_where_a_turn_orchester_started_may_start() {
+  let base = system_prompt("Konto", ProjectId::generate(), ProjectReads::FileTools);
+  for words in [
+    "While Let the Orchestrator drive is on, run_task starts the run; in a turn Orchester started by itself, start a \
+     task only where that turn's message says you may",
+    "only a task this conversation leads: run_task refuses another there (not_led)",
+  ] {
+    assert!(base.contains(words), "{words:?} in {base}");
+  }
+  let (leads, ..) = two_modules("");
+  let standing = leads.system_prompt("Konto", ProjectId::generate(), ProjectReads::FileTools);
+  assert!(
+    standing.contains(
+      "an order that asks you to start tasks as they become ready is carried out in the turn of a run's success you \
+       merged"
+    ),
+    "{standing}"
+  );
+}
+
+/// The person's decision of 2026-11-11: a run whose step automation accepted as it was is merged on its own too, and
+/// the merging turn is told which steps it accepted unverified and what each left unverified.
+#[test]
+fn orchestrator_leads_merge_turn_tells_a_step_accepted_unverified() {
+  use orchester_core::{orchestrator::AcceptedUnverified, run::UnverifiedCheck};
+
+  assert_eq!(AcceptedUnverified::note(&[]), None);
+  let note = AcceptedUnverified::note(&[
+    AcceptedUnverified {
+      step: "Implement".to_owned(),
+      unverified: vec![UnverifiedCheck {
+        check: "Imports the live feed".to_owned(),
+        reason: "not reachable".to_owned(),
+      }],
+    },
+    AcceptedUnverified {
+      step: "Review".to_owned(),
+      unverified: Vec::new(),
+    },
+  ])
+  .expect("a note");
+  for words in [
+    "When you tell the person you merged it, name each such step and what it left unverified, plainly, with the link:",
+    "- Implement:\n  - Imports the live feed (not reachable)",
+    "- Review: its result named nothing it could not check.",
+  ] {
+    assert!(note.contains(words), "{words:?} in {note}");
+  }
 }

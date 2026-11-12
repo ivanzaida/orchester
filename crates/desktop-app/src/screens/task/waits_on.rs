@@ -16,7 +16,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
@@ -40,6 +39,7 @@ use orchester_workspace::{
 
 use super::TaskContext;
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   services::Services,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
@@ -189,6 +189,7 @@ impl DevtoolsInspectable for WaitProps {}
 /// The row, with the person's *Drop the wait*: a press made by automation is refused, and says so.
 pub struct WaitRow {
   dropping: FutureAction<Answerer, (), Message>,
+  gate: Option<InputGate>,
 }
 
 impl Component for WaitRow {
@@ -212,7 +213,10 @@ impl Component for WaitRow {
         Ok(())
       }
     });
-    Self { dropping }
+    Self {
+      dropping,
+      gate: ctx.use_context::<InputGate>(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -319,10 +323,10 @@ impl WaitRow {
     } else {
       "summary.waitsOn.drop"
     });
-    let dropping = self.dropping.clone();
+    let (dropping, gate) = (self.dropping.clone(), self.gate.clone());
     pressable(move || {
-      if !dropping.state().get_untracked().is_pending() {
-        dropping.run(pressed_by());
+      if !dropping.state().get_untracked().is_pending() && may_drop(gate.as_ref()) {
+        dropping.run(Answerer::Person);
       }
     })
     .id(format!("{}-drop", props.id))
@@ -336,14 +340,10 @@ impl WaitRow {
   }
 }
 
-/// Who pressed *Drop the wait*: automation when the press came as synthetic input (an MCP client's), else the person.
-pub(in crate::screens) fn pressed_by() -> Answerer {
-  if is_synthetic_input() {
-    tracing::warn!("synthetic input reached Drop the wait; refused as automation's");
-    Answerer::Automation
-  } else {
-    Answerer::Person
-  }
+/// Whether the press being delivered may drop a run's wait: a person's (`drop_wait` takes no other); automation's is
+/// refused to it, and the row stays as it was.
+pub(in crate::screens) fn may_drop(gate: Option<&InputGate>) -> bool {
+  persons_press(gate, "drop a run's wait")
 }
 
 /// What the row says of the wait, where it shows.
