@@ -56,6 +56,7 @@ mod pipeline_step_agent;
 mod pipeline_step_fields;
 mod pipeline_step_leaving;
 mod pipeline_step_scroll;
+mod pipeline_unordered;
 mod pipeline_versions;
 mod pipeline_versions_held;
 mod pipeline_versions_states;

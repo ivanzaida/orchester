@@ -7,6 +7,7 @@
 //! it.
 
 pub mod browser_qa;
+pub mod pipeline_edit;
 pub mod signed_in;
 mod stand_in_console;
 pub mod stand_ins;

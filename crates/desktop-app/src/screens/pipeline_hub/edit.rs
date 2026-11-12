@@ -162,3 +162,13 @@ impl Edit {
     self.holding.set(Holding::default());
   }
 }
+
+/// The change a test or the QA app armed for pipeline `id` ([`crate::test_support::pipeline_edit`]), made to the edit
+/// `holding` holds of `stored` as if the person had made it: steps the hub never makes reach the panel this way. Only
+/// the `test-support` feature builds it.
+#[cfg(feature = "test-support")]
+pub(super) fn armed(holding: &Signal<Holding>, id: orchester_core::id::ResourceId, stored: Option<Arc<Pipeline>>) {
+  if let (Some(change), Some(stored)) = (crate::test_support::pipeline_edit::take(id), stored) {
+    Edit::new(holding, stored).change(change);
+  }
+}

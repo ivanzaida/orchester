@@ -1,8 +1,8 @@
 //! Flows the hub used to send to the old editor (`Pipelines · v2` P16 `T9KJFP`, P16b `P1853`; PV2-24): a step that
 //! waits for only part of the stage before it is drawn under that stage with a *waits for … only* line on its card, and
 //! its *Waits for* row in the step's *Run* group names and changes what it waits for; the card's ⋯ offers *Wait for
-//! some steps only…* to every other step after the first stage. Steps with no order to draw (P16c) cannot be reached in
-//! the app: the hub never makes them and a version cannot hold them (core's `pipeline_waits` tests *Make it a line*).
+//! some steps only…* to every other step after the first stage. Steps with no order to draw (P16c) are
+//! [`super::pipeline_unordered`]'s.
 //! `cargo test -p orchester-app --test agents pipeline_waits`.
 
 use std::time::{Duration, Instant};
