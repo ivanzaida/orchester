@@ -1,6 +1,6 @@
 //! The project's default pipeline (ORC-106): made from the Pipelines hub's panel `…` menu (PV2-12), shown with a
 //! *Default* tag on its row and chip in its panel, stored with the project and chosen at first in New task; and
-//! *Duplicate*, which opens New pipeline copying it.
+//! *Duplicate*, which makes a copy of it in the hub's panel.
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::id::ResourceId;
 
@@ -80,25 +80,38 @@ fn pipelines_duplicate_opens_new_pipeline_copying_the_pipeline() {
   let id = editor.published();
   open_menu(&mut editor, id);
   editor.click("pipeline-hub-menu-duplicate");
-  editor.until("New pipeline", |e| e.exists("pipeline-name"));
-  assert_eq!(
-    editor.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::CopyPipeline(id))
-  );
-  editor.until("the pipeline chosen to copy", |e| {
-    e.text("pipeline-copy").contains("Delivery")
-  });
-  // With Copy chosen, its row and the page's note say what it copies (`04b` `I49xek`).
-  assert_eq!(editor.text("pipeline-start-1-hint"), "Latest version → v1");
+  // The copy is made in the hub's panel, unsaved (`Pipelines · v2` P14b).
+  editor.until("New pipeline", |e| e.exists("pipeline-new-name"));
   assert!(
-    editor
-      .text("pipeline-nothing-saved-text")
-      .starts_with("Create v1 saves the copy as its v1")
+    matches!(
+      editor.window.navigation().route_now(),
+      Route::Project(_, ProjectPage::PipelinesHub(view)) if view.item.is_some_and(|shown| shown != id)
+    ),
+    "the hub shows the copy being made"
   );
-  editor.set("pipeline-name", "Delivery copy");
-  editor.click("pipeline-create");
-  editor.until("the copy opened", |e| e.exists("pipeline-step-step"));
-  let copy = editor.selected();
+  assert_eq!(editor.value("pipeline-new-name"), "Delivery copy");
+  assert_eq!(
+    editor.window.tree.focused_element().and_then(|element| element.id()),
+    Some("pipeline-new-name"),
+    "the name has the keys"
+  );
+  editor.key("x", false);
+  assert_eq!(
+    editor.value("pipeline-new-name"),
+    "x",
+    "the prefilled name is selected, so typing replaces it"
+  );
+  editor.set("pipeline-new-name", "Delivery copy");
+  assert_eq!(editor.text("pipeline-new-start-copy-line-0"), "Published version → v1");
+  assert_eq!(editor.text("team-hub-actions-hint"), "Saves Delivery copy as v1");
+  editor.click("pipeline-new-create");
+  editor.until("the copy opened", |e| {
+    !e.exists("pipeline-new-panel") && e.exists("pipeline-hub-panel")
+  });
+  let copy = match editor.window.navigation().route_now() {
+    Route::Project(_, ProjectPage::PipelinesHub(view)) => view.item.expect("the copy"),
+    other => panic!("the hub: {other:?}"),
+  };
   assert_ne!(copy, id);
   assert_eq!(editor.version(copy), 1, "the copy is published as its first version");
   assert_eq!(
@@ -106,6 +119,7 @@ fn pipelines_duplicate_opens_new_pipeline_copying_the_pipeline() {
     "Check",
     "v1 is the published version's copy"
   );
+  assert_eq!(editor.version(id), 1, "the original is not touched");
 }
 
 /// What the project stores as its default is what New task chooses at first, whichever page made it the default.

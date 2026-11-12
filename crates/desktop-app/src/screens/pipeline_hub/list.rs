@@ -1,6 +1,6 @@
 //! The hub's list (`List` `l5LJYx` in `Pipelines · v2` P1): the pipelines of the tab in two groups by whether they can
 //! run as they are (*Needs you*, *Ready*), each under its title with a count, or under *Archived* one list of what was
-//! archived.
+//! archived. A pipeline being made stands first, under *New* ([`super::new::section`]).
 
 use lurq::{
   app::{
@@ -41,7 +41,8 @@ pub(super) struct Shown<'a> {
   pub default: Option<ResourceId>,
 }
 
-pub(super) fn list(ctx: &mut Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
+/// The list, with `first` over the groups: the pipeline being made.
+pub(super) fn list(ctx: &mut Ctx, listing: &Listing, shown: &Shown<'_>, first: Option<Element>) -> Element {
   let sections: Vec<Column> = if shown.filter == PipelinesFilter::Archived {
     let archived: Vec<&Entry> = listing.shown(shown.filter).collect();
     vec![section_of(
@@ -63,6 +64,7 @@ pub(super) fn list(ctx: &mut Ctx, listing: &Listing, shown: &Shown<'_>) -> Eleme
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
+    .with_children(first)
     .with_children(sections);
   // As wide as the list's column, which gives way in a narrow window (`super::master_detail`).
   ScrollVertical::new(groups)

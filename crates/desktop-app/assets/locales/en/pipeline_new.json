@@ -1,0 +1,85 @@
+{
+  "pipeline_new": {
+    "untitled": "New pipeline",
+    "section": "New",
+    "notSaved": "not saved",
+    "where": "Pipeline",
+    "what": "new · nothing is saved yet",
+    "whatCopy": "new · a copy of {{name}} {{version}} · nothing is saved yet",
+    "name": "Name",
+    "namePlaceholder": "e.g. Dependency updates",
+    "then": " → ",
+    "parallel": " ∥ ",
+    "start": {
+      "title": "Start from",
+      "lead": "Pick how v1 begins. Every step can be changed afterwards.",
+      "starter": "Starter · Feature delivery",
+      "starterSummary": "{{steps}} steps · {{gates}} approval gates",
+      "starterSummaryOneGate": "{{steps}} steps · 1 approval gate",
+      "starterSummaryNoGate": "{{steps}} steps",
+      "copy": "Copy a pipeline",
+      "copySub": "Its latest version becomes v1.",
+      "copyChosen": "Published version → v1",
+      "copySteps": "{{steps}} steps · {{chain}}",
+      "copyOption": "{{name}} · {{version}}",
+      "choosePipeline": "Choose a pipeline",
+      "empty": "Empty pipeline",
+      "emptySub": "Start from On task start and add steps."
+    },
+    "details": {
+      "title": "Pipeline",
+      "description": "Description",
+      "descriptionNone": "What this pipeline is for",
+      "slug": "Slug",
+      "slugSub": "Made from the name. Fixed once saved.",
+      "slugTaken": "Already used by {{name}}.",
+      "noSlug": "—",
+      "open": "Open {{name}}"
+    },
+    "bar": {
+      "create": "Create v1",
+      "cancel": "Cancel",
+      "creates": "Saves {{name}} as v1",
+      "slugTaken": "Choose a name with a free slug",
+      "noSlug": "Choose a name with a letter or a digit",
+      "name": "Name it to create v1 · nothing is saved yet",
+      "copy": "Choose a pipeline to copy · nothing is saved yet",
+      "noSteps": "Add a step first to Create v1",
+      "broken": "Fix the order of the steps to Create v1",
+      "profile": "Choose a profile for {{steps}} · nothing is saved yet",
+      "tool": "Choose a tool for {{steps}} · nothing is saved yet",
+      "ready": "Make {{steps}} ready · nothing is saved yet",
+      "named": {
+        "copy": "Name it and choose a pipeline to copy · nothing is saved yet",
+        "noSteps": "Name it and add a step first to Create v1",
+        "broken": "Name it and fix the order of the steps to Create v1",
+        "profile": "Name it and choose a profile for {{steps}} · nothing is saved yet",
+        "tool": "Name it and choose a tool for {{steps}} · nothing is saved yet",
+        "ready": "Name it and make {{steps}} ready · nothing is saved yet"
+      },
+      "refusedTitle": "Couldn't create {{name}}: {{reason}}",
+      "refusedBody": "Nothing was saved and what you typed stays here. Create v1 tries again."
+    },
+    "steps": {
+      "one": "{{number}} {{step}}",
+      "two": "{{first}} and {{second}}",
+      "many": "{{count}} steps"
+    },
+    "line": {
+      "starter": "Starter · {{steps}} steps · nothing saved",
+      "copy": "Copy of {{name}} · nothing saved",
+      "copyNone": "Copy of a pipeline · nothing saved",
+      "empty": "Empty · nothing saved",
+      "emptyOne": "Empty · 1 step · nothing saved",
+      "emptySteps": "Empty · {{steps}} steps · nothing saved"
+    },
+    "leave": {
+      "title": "Leave this pipeline?",
+      "what": "Nothing of {{name}} is saved yet: opening anything else now loses it. Keep editing and press Create v1 to keep it.",
+      "whatClose": "Nothing of {{name}} is saved yet: closing the tab now loses it. Keep editing and press Create v1 to keep it.",
+      "whatOff": "Nothing of {{name}} is saved yet: opening anything else now loses it. Keep editing and fix what Create v1 waits for to keep it.",
+      "whatCloseOff": "Nothing of {{name}} is saved yet: closing the tab now loses it. Keep editing and fix what Create v1 waits for to keep it.",
+      "discard": "Discard pipeline"
+    }
+  }
+}

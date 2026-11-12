@@ -165,30 +165,41 @@ fn pipelines(editor: &Editor) -> Vec<orchester_core::resource::Resource> {
   editor.db().resources(ResourceKind::Pipeline).expect("read")
 }
 
-/// A local project's New pipeline publishes v1 when every step is ready: a copy of a published pipeline.
+/// The pipeline the hub's panel shows, by the route.
+fn shown(editor: &Editor) -> Option<ResourceId> {
+  match editor.window.navigation().route_now() {
+    Route::Project(_, ProjectPage::PipelinesHub(view)) => view.item,
+    _ => None,
+  }
+}
+
+/// A local project's new pipeline, made in the hub's panel (`Pipelines · v2` P14), is stored only by *Create v1*, as
+/// its v1, once every step is ready: a copy of a published pipeline.
 #[test]
 fn pipelines_one_save_create_v1_publishes_a_ready_pipeline_in_a_local_project() {
   let mut editor = Editor::new();
   let source = editor.published();
   editor.go(ProjectPage::NewPipeline);
-  editor.until("New pipeline", |e| e.exists("pipeline-name"));
-  assert!(editor.text("pipeline-create").contains("Create v1"));
-  assert!(!editor.exists("pipeline-start-2"), "no empty pipeline is offered");
+  editor.until("New pipeline", |e| e.exists("pipeline-new-name"));
+  assert!(editor.text("pipeline-new-create").contains("Create v1"));
 
-  editor.set("pipeline-name", "Delivery copy");
-  editor.click("pipeline-start-1");
+  editor.set("pipeline-new-name", "Delivery copy");
+  editor.click("pipeline-new-start-copy-pick");
   editor.until("the pipelines to copy", |e| {
     e.window
       .tree
-      .get_element_by_id_mut("pipeline-copy")
+      .get_element_by_id_mut("pipeline-new-copy")
       .and_then(|select| select.as_select())
       .is_some_and(|select| !select.labels().is_empty())
   });
-  editor.choose("pipeline-copy", "Delivery · v1");
-  editor.click("pipeline-create");
-  editor.until("the new pipeline's page", |e| e.exists("pipeline-add-step"));
+  editor.choose("pipeline-new-copy", "Delivery · v1");
+  assert_eq!(pipelines(&editor).len(), 1, "nothing is stored before Create v1");
+  editor.click("pipeline-new-create");
+  editor.until("the new pipeline's own panel", |e| {
+    !e.exists("pipeline-new-panel") && e.exists("pipeline-hub-panel")
+  });
 
-  let id = editor.selected();
+  let id = shown(&editor).expect("the hub shows the pipeline");
   assert_ne!(id, source);
   let (number, body) = latest(&editor, id);
   assert_eq!(number, VersionNumber::FIRST, "created as v1");
@@ -196,24 +207,23 @@ fn pipelines_one_save_create_v1_publishes_a_ready_pipeline_in_a_local_project() 
   assert!(editor.db().draft::<Pipeline>(id).expect("read").is_none());
 }
 
-/// A local project's New pipeline whose steps are not all ready is refused with why, and nothing is stored: the
-/// starter's first step has no profile in a project without one named for it.
+/// A local project's new pipeline whose steps are not all ready cannot be created, and the bar says why; nothing is
+/// stored: the starter's steps have no profile or tool in a project without the ones named for them.
 #[test]
-fn pipelines_one_save_create_v1_is_refused_with_why_while_a_step_is_not_ready() {
+fn pipelines_one_save_create_v1_is_off_with_why_while_a_step_is_not_ready() {
   let mut editor = Editor::new();
   editor.go(ProjectPage::NewPipeline);
-  editor.until("New pipeline", |e| e.exists("pipeline-name"));
-  editor.set("pipeline-name", "Feature delivery");
-  editor.click("pipeline-create");
-  editor.until("the refusal", |e| e.exists("pipeline-create-error"));
-
-  assert!(
-    editor.text("pipeline-create-error").ends_with("has no agent profile"),
-    "{}",
-    editor.text("pipeline-create-error")
+  editor.until("New pipeline", |e| e.exists("pipeline-new-name"));
+  editor.set("pipeline-new-name", "Feature delivery");
+  assert_eq!(
+    editor.text("team-hub-actions-hint"),
+    "Make 6 steps ready · nothing is saved yet"
   );
+  editor.click("pipeline-new-create");
+  editor.arm();
+
   assert!(pipelines(&editor).is_empty(), "nothing is stored");
-  assert!(editor.exists("pipeline-name"), "the page stays");
+  assert!(editor.exists("pipeline-new-name"), "the panel stays");
 }
 
 /// An old link to New pipeline with the empty start opens on the starter: an empty pipeline can never be saved

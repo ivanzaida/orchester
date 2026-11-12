@@ -257,7 +257,7 @@ impl NewPipeline {
   }
 }
 
-pub(super) fn starter(ctx: &Ctx) -> StarterText {
+pub(in crate::screens) fn starter(ctx: &Ctx) -> StarterText {
   StarterText::new(|step| {
     let area = match step {
       StarterStep::Research => "research",

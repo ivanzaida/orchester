@@ -50,6 +50,7 @@ use orchester_core::{
   id::{ProjectId, ResourceId},
   resource::StepKey,
 };
+use orchester_workspace::pipelines::create::Start;
 
 use crate::{
   project::{ProjectState, Projects, ShownProject, TeamRead},
@@ -137,7 +138,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Pipelines => pipelines_or_hub(ctx, project, PipelinesView::default()),
     ProjectPage::PipelinesHub(view) => pipelines_or_hub(ctx, project, *view),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_) => {
-      pipelines::new_pipeline(ctx, project)
+      new_pipeline_or_hub(ctx, project, page)
     }
     ProjectPage::Pipeline(id, PipelineView::Step(key)) => pipeline_step(ctx, project, *id, key),
     ProjectPage::Pipeline(id, view) => pipelines::editor(ctx, project, *id, (view.clone(), None)),
@@ -252,6 +253,22 @@ fn pipelines_or_hub(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView) 
   match project.feed.team.get() {
     TeamRead::Read(None) => pipeline_hub::screen(ctx, project, view, None),
     TeamRead::Read(Some(_)) => pipelines::screen(ctx, project),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
+  }
+}
+
+/// New pipeline: in a local project the Pipelines hub makes it in its panel (`Pipelines · v2` P14, P14b), from where
+/// the route says it starts; a team project keeps the page of its own.
+fn new_pipeline_or_hub(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
+  let start = match page {
+    ProjectPage::NewEmptyPipeline => Start::Empty,
+    ProjectPage::CopyPipeline(id) => Start::Copy(*id),
+    _ => Start::Starter,
+  };
+  match project.feed.team.get() {
+    TeamRead::Read(None) => pipeline_hub::new_pipeline(ctx, project, start),
+    TeamRead::Read(Some(_)) => pipelines::new_pipeline(ctx, project),
     TeamRead::Unread => team_hub::unread::reading(ctx),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }

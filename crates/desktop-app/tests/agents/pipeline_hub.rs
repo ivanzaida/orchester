@@ -252,9 +252,7 @@ fn pipeline_hub_a_project_without_pipelines_says_so_and_offers_a_new_one() {
   assert_eq!(agents.text("pipeline-hub-empty-title"), "No pipelines yet");
   assert_eq!(agents.text("pipeline-hub-filter-all-count"), "0");
   agents.click("pipeline-hub-empty-new");
-  agents.until("New pipeline", |s| {
-    s.window.navigation().route_now() == Route::Project(project_id(), ProjectPage::NewPipeline)
-  });
+  agents.until("the new pipeline in the panel", |s| s.exists("pipeline-new-panel"));
 
   open(&mut agents, PipelinesFilter::Archived, None);
   assert_eq!(agents.text("pipeline-hub-empty-title"), "Nothing archived");
@@ -267,9 +265,7 @@ fn pipeline_hub_a_project_without_pipelines_says_so_and_offers_a_new_one() {
     "only a project with none offers one in its body"
   );
   agents.click("pipeline-hub-new");
-  agents.until("New pipeline from the head", |s| {
-    s.window.navigation().route_now() == Route::Project(project_id(), ProjectPage::NewPipeline)
-  });
+  agents.until("New pipeline from the head", |s| s.exists("pipeline-new-panel"));
 }
 
 #[test]
@@ -428,7 +424,7 @@ fn pipeline_hub_a_read_that_fails_says_so_with_its_reason_keeps_the_head_and_tri
   assert_eq!(agents.text("pipeline-hub-filter-all-count"), "3");
   agents.click("pipeline-hub-new");
   agents.until("New pipeline once the pipelines are read", |s| {
-    s.window.navigation().route_now() == Route::Project(project_id(), ProjectPage::NewPipeline)
+    s.exists("pipeline-new-panel")
   });
 }
 

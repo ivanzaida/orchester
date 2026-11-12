@@ -20,6 +20,8 @@ use crate::routes::{PipelinesFilter, PipelinesView};
 pub(super) struct Entry {
   pub id: ResourceId,
   pub name: Arc<str>,
+  /// What it is stored by, archived or not: a new pipeline's name may not give it again.
+  pub slug: Arc<str>,
   pub step_count: usize,
   pub used_by: usize,
   /// The latest published version; `None` only for an archived pipeline that never had one.
@@ -69,6 +71,7 @@ impl Listing {
       .map(|found| Entry {
         id: found.id,
         name: found.name.clone(),
+        slug: found.slug.clone(),
         step_count: found.step_count,
         used_by: found.used_by,
         number: Some(found.version),
@@ -86,6 +89,7 @@ impl Listing {
     entries.extend(hub.archived().iter().map(|found| Entry {
       id: found.id,
       name: found.name.clone(),
+      slug: found.slug.clone(),
       step_count: 0,
       used_by: 0,
       number: found.latest.map(|(number, _)| number),
@@ -138,6 +142,16 @@ impl Listing {
       .iter()
       .find(|entry| entry.id == id)
       .map(|entry| &*entry.name)
+  }
+
+  /// The entry, archived or not, whose slug is `slug`.
+  pub(super) fn with_slug(&self, slug: &str) -> Option<&Entry> {
+    self.entries.iter().find(|entry| &*entry.slug == slug)
+  }
+
+  /// The entry `id`, archived or not.
+  pub(super) fn entry(&self, id: ResourceId) -> Option<&Entry> {
+    self.entries.iter().find(|entry| entry.id == id)
   }
 
   /// Whether `filter` holds the entry `id`.

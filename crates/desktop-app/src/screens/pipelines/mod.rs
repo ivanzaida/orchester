@@ -16,7 +16,7 @@ mod leaving;
 mod library;
 mod library_row;
 mod load_editor;
-mod new_pipeline;
+pub(in crate::screens) mod new_pipeline;
 mod new_start;
 mod parts;
 mod publication;

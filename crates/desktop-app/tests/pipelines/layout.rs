@@ -57,27 +57,29 @@ fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_ty
 fn pipelines_new_starter_row_keeps_its_steps_across_creation_states() {
   let mut editor = Editor::new();
   editor.empty("Existing pipeline");
+  // A local project makes a new pipeline in the hub's panel (`Pipelines · v2` P14).
   editor.go(orchester_app::routes::ProjectPage::NewPipeline);
-  editor.until("new pipeline", |e| e.exists("pipeline-start-0"));
+  editor.until("new pipeline", |e| e.exists("pipeline-new-start-starter"));
   for state in ["default", "collision", "empty"] {
     if state == "collision" {
-      editor.set("pipeline-name", "Existing pipeline");
-      editor.until("name collision", |e| e.exists("pipeline-open-existing"));
+      editor.set("pipeline-new-name", "Existing pipeline");
+      editor.until("name collision", |e| e.exists("pipeline-new-slug-open"));
     } else if state == "empty" {
-      editor.set("pipeline-name", "");
-      editor.click("pipeline-start-1");
+      editor.set("pipeline-new-name", "");
     }
-    let chain = editor.text("pipeline-start-0-hint");
+    assert_eq!(
+      editor.text("pipeline-new-start-starter-line-0"),
+      "6 steps · 1 approval gate",
+      "{state}"
+    );
+    let chain = editor.text("pipeline-new-start-starter-line-1");
     assert!(chain.contains("Run checks ∥ Review"), "{state}: {chain}");
-    let bounds = editor
-      .window
-      .tree
-      .get_element_by_id_mut("pipeline-start-0")
-      .and_then(|element| element.bounds())
-      .expect("starter row laid out");
-    // `Pane` `DuHgB`: rows 720 wide at most.
-    assert!(bounds.width <= 720.5, "{state}: {bounds:?}");
   }
+  editor.click("pipeline-new-start-empty-pick");
+  assert!(
+    !editor.exists("pipeline-new-start-starter-line-1"),
+    "only the chosen start says what v1 gets"
+  );
 }
 
 #[test]

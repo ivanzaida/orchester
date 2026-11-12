@@ -3,14 +3,12 @@
 //! they ask first, as every way out does, and *Keep editing* keeps what was typed. `cargo test -p orchester-app --test
 //! agents pipeline_menu_edit`.
 
-use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::id::ResourceId;
 
 use super::{
   harness::Agents,
   pipeline_hub::project,
   pipeline_hub_menu::{archived, key, names, open_menu},
-  support::project_id,
 };
 
 const DISCARD: &str = "pipeline-hub-leave-discard";
@@ -101,9 +99,12 @@ fn pipeline_menu_edit_duplicate_asks_first_and_keep_editing_keeps_what_was_typed
   agents.click("pipeline-hub-menu-duplicate");
   agents.until("the question again", |s| s.exists(DISCARD));
   agents.click(DISCARD);
-  agents.until("the copy page", |s| {
-    s.window.navigation().route_now() == Route::Project(project_id(), ProjectPage::CopyPipeline(ready))
-  });
+  agents.until("the copy in the panel", |s| s.exists("pipeline-new-panel"));
+  assert_eq!(
+    agents.text("pipeline-new-start-copy-line-0"),
+    "Published version → v1",
+    "Copy a pipeline is chosen, copying {ready}"
+  );
 }
 
 #[test]

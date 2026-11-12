@@ -4,7 +4,8 @@
 //! and every other departure through the navigation's [`LeaveGuard`] (Back and Forward, a tab switched or closed, the
 //! sidebar, a link, *Edit steps*, a card, the ⋯ menu's *Duplicate*). The ⋯ menu's *Archive* asks it too, before the
 //! archive confirmation: an archived pipeline has no panel to keep the edit in. *Keep editing* leaves everything as it
-//! is; *Discard changes* drops the edit and goes where the person pressed.
+//! is; *Discard changes* drops the edit and goes where the person pressed. A pipeline being made ([`super::new`]) is
+//! asked about the same way while something is typed for it, in its own words: nothing of it is stored, so it is lost.
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -13,7 +14,7 @@ use lurq::{
 };
 use orchester_core::id::ResourceId;
 
-use super::model::Listing;
+use super::{model::Listing, new::NewPipeline};
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   routes::Route,
@@ -72,6 +73,8 @@ pub(super) struct Hosted {
   pub archive_waits: Signal<Option<Target>>,
   /// Whether the panel's save is under way: its changes are being stored, so they cannot be discarded.
   pub saving: Signal<bool>,
+  /// The pipeline being made, which the question names while its panel holds something typed.
+  pub new: NewPipeline,
 }
 
 impl PartialEq for Hosted {
@@ -147,49 +150,76 @@ pub(super) fn question(
   }
   let closing = route.is_none() && archiving.is_none() && closes_tab(navigation, guard);
   let unsaved = hosted.unsaved.get();
-  let name = listing.name_of(unsaved.pipeline()?)?.to_owned();
+  let id = unsaved.pipeline()?;
+  let (name, made) = match listing.name_of(id) {
+    Some(name) => (name.to_owned(), false),
+    None => (hosted.new.name_of(ctx, id)?, true),
+  };
   if hosted.saving.get() {
     return Some(saving_question(ctx, &name, open));
   }
+  let words = Words::of(made, closing, unsaved.save_off());
   let discard = {
     let (hosted, open, navigation, guard) = (hosted.clone(), open.clone(), navigation.clone(), guard.clone());
-    ActionButton::new(
-      "pipeline-hub-leave-discard",
-      ButtonKind::Danger,
-      ctx.t("pipeline_hub.leave.discard"),
-    )
-    .icon(Icon::X)
-    .on_click(move || {
-      hosted.unsaved.set(Unsaved(None));
-      match (&route, &archiving) {
-        (Some(route), _) => navigation.go(route.clone()),
-        (None, Some(target)) => hosted.archiving.ask(target.clone()),
-        (None, None) => guard.leave(&navigation),
-      }
-      open.set(false);
-    })
+    ActionButton::new("pipeline-hub-leave-discard", ButtonKind::Danger, ctx.t(words.discard))
+      .icon(Icon::X)
+      .on_click(move || {
+        hosted.unsaved.set(Unsaved(None));
+        match (&route, &archiving) {
+          (Some(route), _) => navigation.go(route.clone()),
+          (None, Some(target)) => hosted.archiving.ask(target.clone()),
+          (None, None) => guard.leave(&navigation),
+        }
+        open.set(false);
+      })
   };
   Some(
     Dialog::new(
       "pipeline-hub-leave",
       Icon::Pencil,
-      ctx.t_args("pipeline_hub.leave.title", [("name", name.clone())]),
+      ctx.t_args(words.title, [("name", name.clone())]),
       ctx.t("pipeline_hub.leave.keep"),
     )
     .tone(Tone::Neutral)
-    .what(ctx.t_args(what_key(closing, unsaved.save_off()), [("name", name)]))
+    .what(ctx.t_args(words.what, [("name", name)]))
     .action(discard)
     .render(ctx, open),
   )
 }
 
-/// What dropping the edit loses, and how to keep it: *press Save*, or, while *Save* is off for the edit (`save_off`),
-/// fix what it waits for; said for a press, or for the tab closing (`closing`).
-const fn what_key(closing: bool, save_off: bool) -> &'static str {
-  match (closing, save_off) {
-    (false, false) => "pipeline_hub.leave.what",
-    (true, false) => "pipeline_hub.leave.whatClose",
-    (false, true) => "pipeline_hub.leave.whatOff",
-    (true, true) => "pipeline_hub.leave.whatCloseOff",
+/// The question's words: its title, what dropping the edit loses and how to keep it, and its danger button.
+struct Words {
+  title: &'static str,
+  what: &'static str,
+  discard: &'static str,
+}
+
+impl Words {
+  /// For a pipeline being made (`made`), which is lost whole, or a stored one's edit; how to keep it is *press Save* (or
+  /// *Create v1*), or, while that is off (`save_off`), fix what it waits for; said for a press, or for the tab closing
+  /// (`closing`).
+  const fn of(made: bool, closing: bool, save_off: bool) -> Self {
+    if made {
+      return Self {
+        title: "pipeline_new.leave.title",
+        what: match (closing, save_off) {
+          (false, false) => "pipeline_new.leave.what",
+          (true, false) => "pipeline_new.leave.whatClose",
+          (false, true) => "pipeline_new.leave.whatOff",
+          (true, true) => "pipeline_new.leave.whatCloseOff",
+        },
+        discard: "pipeline_new.leave.discard",
+      };
+    }
+    Self {
+      title: "pipeline_hub.leave.title",
+      what: match (closing, save_off) {
+        (false, false) => "pipeline_hub.leave.what",
+        (true, false) => "pipeline_hub.leave.whatClose",
+        (false, true) => "pipeline_hub.leave.whatOff",
+        (true, true) => "pipeline_hub.leave.whatCloseOff",
+      },
+      discard: "pipeline_hub.leave.discard",
+    }
   }
 }

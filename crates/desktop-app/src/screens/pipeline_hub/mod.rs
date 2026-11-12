@@ -10,6 +10,9 @@
 //! *Rename* and *Make default* keep the edit the panel holds; *Duplicate* and *Archive* leave the panel, so they ask
 //! first while it has changes ([`leave`]).
 //!
+//! *New pipeline* (the head's, the empty state's) and the ⋯ menu's *Duplicate* make a pipeline in the panel, unsaved
+//! until *Create v1* ([`new`]): their routes are replaced by the hub's view of it.
+//!
 //! What the panel's body holds is [`steps`]: today the way into the editor the pipeline has; the flow, the settings and
 //! the Save bar are built on it.
 //!
@@ -28,6 +31,7 @@ mod leave;
 mod list;
 mod menu;
 mod model;
+mod new;
 mod panel;
 mod panel_head;
 mod pick;
@@ -63,7 +67,7 @@ use orchester_core::{
   resource::StepKey,
   time::Timestamp,
 };
-use orchester_workspace::messages::Message;
+use orchester_workspace::{messages::Message, pipelines::create::Start};
 
 use self::{
   leave::{Hosted, Unsaved, UnsavedSignal},
@@ -98,18 +102,40 @@ pub struct Props {
   pub view: PipelinesView,
   /// The step the panel shows open, which the route holds; none for the pipeline's own panel.
   pub step: Option<StepKey>,
+  /// The route begins a new pipeline from this start: the hub makes it and shows it instead ([`new`]).
+  pub begin: Option<Start>,
 }
 impl DevtoolsInspectable for Props {}
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView, step: Option<StepKey>) -> Element {
-  ctx.mount_keyed::<PipelineHubScreen>(
-    &format!("pipeline-hub-{}", project.open.project.id()),
+  mount(
+    ctx,
     Props {
       project: project.clone(),
       view,
       step,
+      begin: None,
     },
   )
+}
+
+/// The hub making a new pipeline that starts from `start` (`Pipelines · v2` P14, P14b).
+pub fn new_pipeline(ctx: &mut Ctx, project: &ShownProject, start: Start) -> Element {
+  mount(
+    ctx,
+    Props {
+      project: project.clone(),
+      view: PipelinesView::default(),
+      step: None,
+      begin: Some(start),
+    },
+  )
+}
+
+/// One screen per project, whichever route shows it, so a pipeline's edit and the one being made outlive a move
+/// between the hub, a step and *New pipeline*.
+fn mount(ctx: &mut Ctx, props: Props) -> Element {
+  ctx.mount_keyed::<PipelineHubScreen>(&format!("pipeline-hub-{}", props.project.open.project.id()), props)
 }
 
 struct PipelineHubScreen {
@@ -132,6 +158,8 @@ struct PipelineHubScreen {
   archive_waits: Signal<Option<Target>>,
   /// Whether the open panel's save is under way.
   saving: Signal<bool>,
+  /// The pipeline being made, if one is.
+  new: new::NewPipeline,
 }
 
 impl Component for PipelineHubScreen {
@@ -158,13 +186,19 @@ impl Component for PipelineHubScreen {
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
+      new: new::NewPipeline::new(ctx),
     };
     this.follow_question(ctx);
     this
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, view, step } = ctx.props::<Props>().clone();
+    let Props {
+      project,
+      view,
+      step,
+      begin,
+    } = ctx.props::<Props>().clone();
     let loaded = self.read(ctx, &project);
     let failed = self.failure.follow(&loaded);
     let unreadable = failed.is_some();
@@ -174,12 +208,20 @@ impl Component for PipelineHubScreen {
     let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
-    let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
     let id = project.open.project.id();
+    let making = listing
+      .as_ref()
+      .filter(|_| failed.is_none())
+      .and_then(|listing| self.new.follow(ctx, (begin, view), listing, (&navigation, id)));
+    let selected = listing
+      .as_ref()
+      .filter(|_| making.is_none())
+      .and_then(|listing| listing.selected(view))
+      .cloned();
     let body = match (failed, listing.as_ref()) {
       (Some((error, retrying)), _) => self.failure_page(ctx, &error, retrying),
       (None, Some(listing)) => {
-        if !reading {
+        if !reading && making.is_none() {
           keep_route_on_shown(id, view, selected.as_ref(), &navigation);
         }
         hub_body(
@@ -188,6 +230,7 @@ impl Component for PipelineHubScreen {
           (listing, view),
           (selected.as_ref(), &leave, reading),
           (default, self.hosted(), step),
+          making,
         )
       }
       (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
@@ -277,6 +320,7 @@ impl PipelineHubScreen {
       archiving: self.archiving.clone(),
       archive_waits: self.archive_waits.clone(),
       saving: self.saving.clone(),
+      new: self.new.clone(),
     }
   }
 
@@ -300,30 +344,48 @@ impl PipelineHubScreen {
   }
 }
 
-/// The list and the panel, or what stands in for them when the tab holds nothing. `reading`: they show the last answer
-/// while it is read again.
+/// The list and the panel, or what stands in for them when the tab holds nothing; the pipeline being made (`making`)
+/// stands first in the list and has the panel. `reading`: they show the last answer while it is read again.
 fn hub_body(
   ctx: &mut Ctx,
   project: &ShownProject,
   (listing, view): (&Listing, PipelinesView),
   (selected, leave, reading): (Option<&Entry>, &Leave, bool),
   (default, hosted, step): (Option<ResourceId>, Hosted, Option<StepKey>),
+  making: Option<new::Making>,
 ) -> Element {
   let id = project.open.project.id();
-  let Some(entry) = selected else {
-    return empty(ctx, view.filter, leave, id);
-  };
-  let now = Timestamp::now();
   let shown = list::Shown {
     project: id,
     filter: view.filter,
-    selected: Some(entry.id),
+    selected: selected.map(|entry| entry.id),
     leave,
     unsaved: hosted.unsaved.get(),
-    now,
+    now: Timestamp::now(),
     default,
   };
-  let list = list::list(ctx, listing, &shown);
+  if let Some(making) = making {
+    let first = new::section(ctx, &hosted.new, listing);
+    let list = list::list(ctx, listing, &shown, Some(first));
+    let panel = new::panel(
+      ctx,
+      new::Props {
+        project: project.clone(),
+        making,
+        new: hosted.new.clone(),
+        listing: listing.clone(),
+        leave: leave.clone(),
+        unsaved: hosted.unsaved.clone(),
+        saving: hosted.saving.clone(),
+        step,
+      },
+    );
+    return master_detail(ctx, reading, (list, panel));
+  }
+  let Some(entry) = selected else {
+    return empty(ctx, view.filter, leave, id);
+  };
+  let list = list::list(ctx, listing, &shown, None);
   let panel = panel::panel(
     ctx,
     panel::Props {
@@ -367,7 +429,7 @@ fn master_detail(ctx: &Ctx, reading: bool, (list, panel): (Element, Element)) ->
     .into()
 }
 
-/// *New pipeline*, which opens the page that makes one: the head's is the primary button, the empty body's the
+/// *New pipeline*, which makes one in the panel ([`new`]): the head's is the primary button, the empty body's the
 /// secondary.
 fn new_button(ctx: &Ctx, (id, kind): (&str, ButtonKind), leave: &Leave, project: ProjectId) -> Element {
   ActionButton::new(id.to_owned(), kind, ctx.t("pipeline_hub.new"))
