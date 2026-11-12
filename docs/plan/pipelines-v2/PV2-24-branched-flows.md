@@ -1,6 +1,6 @@
 # PV2-24 · Flows the hub cannot draw
 
-- **Status:** todo (needs a design first)
+- **Status:** done (batch C; D-048)
 - **Kind:** design + UI
 - **Depends on:** PV2-14's map (N-012)
 - **Branch:** —

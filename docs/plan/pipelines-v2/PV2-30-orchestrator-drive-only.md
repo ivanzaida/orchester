@@ -1,6 +1,6 @@
 # PV2-30 · Orchestrator chat: pipelines change only in drive mode
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** core + workspace + UI
 - **Depends on:** PV2-29
 - **Branch:** —

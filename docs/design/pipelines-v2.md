@@ -17,13 +17,13 @@ waits for the team server (D-043, D-047).
 - The flow: the steps in the order they run, steps that run together side by side, the Deliver step last; the order is
   changed in the flow (drag, the card's ⋯, keys), never inside a step. A step that waits for only part of the stage
   before it is drawn with its *Waits for* row and is saved (P16, D-048); steps with no order (a cycle, a missing step)
-  are refused, and the hub offers *Make it a line* (P16c) — PV2-24, in progress.
+  are refused, and the hub offers *Make it a line* (P16c) — PV2-24.
 - A step opens in the same panel, with its strip, *Step*, *Run*, *Gate and access* and Instructions; its *Agent* field
   opens the Agent picker.
 - The Deliver step opens in the same panel (P15): *Mode*, *Merge*, *Conflicts* and *Check*, and *Remove step*; a
   pipeline without one has *Add Deliver step* where its card would be (P15b) — PV2-23.
 - New pipeline and *Duplicate* are an unsaved panel in the hub (P14–P14c): a starter, an empty pipeline or a copy (named
-  *… copy*), shown as any pipeline; *Create v1* stores v1, and only when it can publish — PV2-22, in progress.
+  *… copy*), shown as any pipeline; *Create v1* stores v1, and only when it can publish — PV2-22.
 - The pipeline's settings: description, slug (P17, PV2-25), starts, when a step fails, sources for every step and what
   a run delivers. *Who can use it* was dropped.
 - Save makes the next version, Cancel puts the edit back; Versions lists them, a version opens read-only and *Restore*
@@ -100,16 +100,14 @@ Page
 - Below 1280 logical px the list is 260 wide (D-026).
 - The tab counts' bones are the app's shared 8×8 (D-013).
 - P9 mentions the log once (D-012).
-- A route the old page had opens the hub in a local project, under the hub's own route; only New pipeline and
-  Duplicate (until PV2-22) and *Edit steps* (until PV2-24) still lead to the old page (PV2-14).
+- Every route the old page had opens the hub in a local project, under the hub's own route (PV2-14); the old page is
+  a team project's alone.
 
 ## Open
 
 - N-010: under ~1000 logical px the panel gets narrower than ~440; it needs a design frame.
 - N-011: Tab never reaches the hubs' Save bars, *Add step* or their text fields; a shared fix for every hub.
 - D-028: a viewed version's step cards do not open (P2f's read-only step); opening them would be a new task.
-- PV2-22 (New pipeline and *Duplicate*) and PV2-24 (flows the hub cannot draw) are in progress: until they land, a local
-  project still reaches the old page's new-pipeline pages (`NewPipeline`, `NewEmptyPipeline`, `CopyPipeline`) and,
-  through *Edit steps*, its Steps tab (`Pipeline(_, Steps)`). Each task removes its own route; then a local project
-  reaches none of the old page, whose code stays for team projects.
+- N-013 left: the step name is read three times in the accessibility tree (lurq cannot hide decorative nodes); the old
+  page's summary labels clip; a refused Alt move in the open step's head is silent.
 - PV2-00: the person saves and commits the board.

@@ -1,6 +1,6 @@
 # PV2-23 · The Deliver step in the step panel
 
-- **Status:** todo (needs a design first)
+- **Status:** done (batch B)
 - **Kind:** design + UI
 - **Depends on:** PV2-14's map (N-012)
 - **Branch:** —

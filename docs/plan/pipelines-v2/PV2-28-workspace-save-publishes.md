@@ -1,6 +1,6 @@
 # PV2-28 · Workspace: saving a pipeline publishes it or refuses
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** workspace
 - **Depends on:** PV2-27
 - **Branch:** —

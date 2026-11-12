@@ -419,15 +419,6 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
-### PV2-22, PV2-24 · The last ways from a local project into the old Pipelines page (in progress)
-
-A local project's Pipelines page is the hub (`Pipelines · v2`, `docs/design/pipelines-v2.md`); every route of the old
-page it is asked for opens the hub (PV2-14), but two that the hub still sends to: New pipeline and *Duplicate*
-(`NewPipeline`, `NewEmptyPipeline`, `CopyPipeline`; PV2-22, `claude/pv2-22-new-duplicate`) and *Edit steps* for steps
-it cannot draw (`Pipeline(_, Steps)`; PV2-24, `claude/pv2-24-branched-flows`). Each task removes its route. **Done
-when** both have landed and a local project reaches no route of `crates/desktop-app/src/screens/pipelines/`, whose code
-stays for team projects; then move this entry to *Done*.
-
 ### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
 
 *Clone it here* on *Link a folder* (06 `go2aM`): *Clone into* with *Choose…*, what Git will do with that folder, and
@@ -1097,8 +1088,8 @@ Agents · v2 (`acFkz`) finished on master, 2026-11-11 (outside Orchester):
 Not built (no design): the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
 
 Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2`, in master since `e21081337`
-(tasks `docs/plan/pipelines-v2/`, decisions `docs/design/pipelines-v2.md`; PV2-02 and PV2-19 canceled; PV2-22 and
-PV2-24 open under *U · Screens*):
+(tasks `docs/plan/pipelines-v2/`, decisions `docs/design/pipelines-v2.md`; PV2-02 and PV2-19 canceled; every task is
+done):
 
 - PV2-01 · Core: move steps and run them in parallel · `claude/pv2-01-step-order` → `310ce4f39`.
 - PV2-03 · The compact *Runs on* picker as a shared component · `claude/pv2-03-runs-on-picker` → `c37c1caad`.
@@ -1126,6 +1117,11 @@ PV2-24 open under *U · Screens*):
   → `20dba64d2`.
 - PV2-23 · The Deliver step in the step panel (P15, P15b): *Mode*, *Merge*, *Conflicts*, *Check*, *Remove step* and *Add
   Deliver step* · `claude/pv2-23-deliver-step`, in batch B (`claude/pv2-batch-b`).
+- PV2-22 · New pipeline and *Duplicate* in the hub (P14–P14c): an unsaved panel that starts from the starter, a copy
+  (named *… copy*, selected) or nothing; *Create v1* stores v1 only when it can publish and opens it ·
+  `claude/pv2-22-new-duplicate`, in batch C (`claude/pv2-batch-c`).
+- PV2-24 · Flows the hub could not draw (P16–P16c): a step that waits for part of a stage is drawn with its *Waits for*
+  row and saved (D-048); steps with no order get *Make it a line* · `claude/pv2-24-branched-flows`, in batch C.
 - PV2-25 · The pipeline's slug in the hub's settings (P17); *Who can use it* dropped · `claude/pv2-25-slug`, in batch
   B → `881617d7b`.
 - PV2-26 · Map: where pipeline drafts live, and the split into PV2-27 … PV2-33 · research, no branch.
@@ -1145,8 +1141,15 @@ PV2-24 open under *U · Screens*):
 - Batch A (PV2-27 … PV2-34) into master with the module: `0f4c27ad6` → master `e21081337` (D-045, D-047).
 - PV2-14 · Retire the old Pipelines page of local projects: part 1 → `01168167b` (links from other pages open the hub,
   these docs and plan); the rest on `claude/pv2-14-retire` — every route of the old page a local project is asked for
-  opens the hub under the hub's own route, the docs say what the hub does; the routes PV2-22 and PV2-24 own move with
-  them (open under *U · Screens*).
+  opens the hub under the hub's own route, the docs say what the hub does; with PV2-22 and PV2-24 in, the Steps tab
+  and New pipeline do too, and a local project reaches no route of the old page, whose code stays for team projects
+  (batch C).
+- N-013 · Cleanup after the reviews: a link to an archived pipeline opens Archived; Alt ↑ / Alt ↓ at the line's ends
+  say why; 64 unused `pipelines.*` keys removed · `claude/pv2-n013`, in batch C. Left open: the step name is read three
+  times in the accessibility tree (lurq cannot hide decorative nodes), the old page's summary labels clip, and a
+  refused Alt move in the open step's head is silent.
+- Batch C into master: a member of a team reads its pipelines (no *Add step*), a pipeline the team server no longer
+  has is said in words, and the old page's tests run on a team project.
 
 ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 

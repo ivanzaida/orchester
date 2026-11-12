@@ -1,6 +1,6 @@
 # PV2-31 · The hub without drafts
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** design + UI
 - **Depends on:** PV2-28
 - **Branch:** —

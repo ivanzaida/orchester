@@ -1,6 +1,6 @@
 # PV2-19 · A draft is always saved; Save says what publishing would refuse, also while editing
 
-- **Status:** todo
+- **Status:** canceled (D-032)
 - **Kind:** UI + workspace
 - **Depends on:** PV2-17
 - **Branch:** —

@@ -1,6 +1,6 @@
 # PV2-22 · New pipeline and Duplicate in the hub
 
-- **Status:** todo (needs a design first)
+- **Status:** done (batch C)
 - **Kind:** design + UI
 - **Depends on:** PV2-14's map (N-012)
 - **Branch:** —

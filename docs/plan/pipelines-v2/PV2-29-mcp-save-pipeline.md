@@ -1,6 +1,6 @@
 # PV2-29 · MCP: save_pipeline replaces save_pipeline_draft and publish_pipeline
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** workspace (MCP)
 - **Depends on:** PV2-28
 - **Branch:** —

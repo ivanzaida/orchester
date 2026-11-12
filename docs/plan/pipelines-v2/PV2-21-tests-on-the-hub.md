@@ -1,6 +1,6 @@
 # PV2-21 · Tests that drove the old step editor of a local project run against the hub
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** tests
 - **Depends on:** PV2-07
 - **Branch:** —

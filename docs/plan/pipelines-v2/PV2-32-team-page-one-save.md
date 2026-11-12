@@ -1,6 +1,6 @@
 # PV2-32 · The team pipeline page: one Save that publishes
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** UI
 - **Depends on:** PV2-28
 - **Branch:** —

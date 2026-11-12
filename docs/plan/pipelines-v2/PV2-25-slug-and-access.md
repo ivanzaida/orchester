@@ -1,6 +1,6 @@
 # PV2-25 · Slug and who can use the pipeline
 
-- **Status:** todo (needs a design first)
+- **Status:** done (batch B; *Who can use it* dropped)
 - **Kind:** design + UI
 - **Depends on:** PV2-14's map (N-012)
 - **Branch:** —

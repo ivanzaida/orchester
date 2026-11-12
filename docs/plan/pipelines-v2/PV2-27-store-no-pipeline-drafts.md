@@ -1,6 +1,6 @@
 # PV2-27 · Store: a pipeline is created published; the migration deletes pipeline drafts
 
-- **Status:** todo
+- **Status:** done
 - **Kind:** store + core
 - **Depends on:** PV2-26
 - **Branch:** —

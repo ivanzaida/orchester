@@ -46,26 +46,27 @@ orchestration tool reported it; `—` until known.
 | [PV2-11](PV2-11-versions.md) | Versions list, a version read-only, Restore | UI | PV2-10 | done | `claude/pv2-11-versions` → `a3f14fb18` | 97.4M (out 261k) |
 | [PV2-12](PV2-12-menu-archive.md) | The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab | UI | PV2-04 | done | `claude/pv2-12-menu-archive` → `824561513` | 74.8M (out 239k) |
 | [PV2-13](PV2-13-page-states.md) | Loading, none yet, empty tabs, read failure | UI | PV2-04 | done | `claude/pv2-13-page-states` → `ba2db9eea` | 42.0M (out 136k) |
-| [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | blocked | — | — |
+| [PV2-14](PV2-14-retire-old-page.md) | Retire the old Pipelines page of local projects | UI | PV2-05 … PV2-13 | done | batch C | — |
 | [PV2-15](PV2-15-orchestrator-picker.md) | The orchestrator chat adopts the compact picker | UI | PV2-03, PV2-16 | done | `claude/pv2-15-orchestrator-picker` → `e0c34aa8a` | 108.2M (out 318k) |
 | [PV2-16](PV2-16-design-orchestrator-picker.md) | Design: the orchestrator's picker states with the compact picker | design | — | done | Pencil (unsaved) | 2.51M (out 27k) |
 | [PV2-17](PV2-17-readiness-polish.md) | Readiness and save polish: one story in chips, Ready?, cards and the bar | UI | PV2-09, PV2-10 | done | → `238b0c2e6`, `1f2dc0057` | 352.1M |
 | [PV2-18](PV2-18-step-panel-rest.md) | The rest of a step in the panel: rename, Permissions, base branch, Builder, unavailable tool | design + UI | PV2-07 | done | → `0b8c6f23b` | 184.0M |
-| [PV2-19](PV2-19-save-refusals.md) | A draft is always saved; Save says what publishing would refuse, also while editing | UI + workspace | PV2-17 | todo | — | — |
+| [PV2-19](PV2-19-save-refusals.md) | A draft is always saved; Save says what publishing would refuse, also while editing | UI + workspace | PV2-17 | canceled (D-032) | → `531f3d1ae`, `5b309b469` | — |
 | [PV2-20](PV2-20-step-head-menu.md) | The step head's ⋯ menu | UI | PV2-18 | done | → `a85e24fb5` | — |
-| [PV2-21](PV2-21-tests-on-the-hub.md) | Tests that drove the old step editor of a local project run against the hub | tests | PV2-07 | todo | — | — |
-| [PV2-22](PV2-22-new-and-duplicate.md) | New pipeline and Duplicate in the hub | design + UI | N-012 | todo (design first) | — | — |
-| [PV2-23](PV2-23-deliver-step.md) | The Deliver step in the step panel | design + UI | N-012 | todo (design first) | — | — |
-| [PV2-24](PV2-24-branched-flows.md) | Flows the hub cannot draw | design + UI | N-012 | todo (design first) | — | — |
-| [PV2-25](PV2-25-slug-and-access.md) | Slug and who can use the pipeline | design + UI | N-012 | todo (design first) | — | — |
+| [PV2-21](PV2-21-tests-on-the-hub.md) | Tests that drove the old step editor of a local project run against the hub | tests | PV2-07 | done | → `20dba64d2` | — |
+| [PV2-22](PV2-22-new-and-duplicate.md) | New pipeline and Duplicate in the hub | design + UI | N-012 | done | `claude/pv2-22-new-duplicate`, batch C | — |
+| [PV2-23](PV2-23-deliver-step.md) | The Deliver step in the step panel | design + UI | N-012 | done | `claude/pv2-23-deliver-step`, batch B | — |
+| [PV2-24](PV2-24-branched-flows.md) | Flows the hub cannot draw | design + UI | N-012 | done (D-048) | `claude/pv2-24-branched-flows`, batch C | — |
+| [PV2-25](PV2-25-slug-and-access.md) | Slug and who can use the pipeline | design + UI | N-012 | done | `claude/pv2-25-slug`, batch B | — |
 | [PV2-26](PV2-26-map-drafts.md) | Map: where pipeline drafts live | research | D-032 | done | — | — |
-| [PV2-27](PV2-27-store-no-pipeline-drafts.md) | Store: a pipeline is created published; drafts deleted | store + core | PV2-26 | todo | — | — |
-| [PV2-28](PV2-28-workspace-save-publishes.md) | Workspace: saving publishes or refuses | workspace | PV2-27 | todo | — | — |
-| [PV2-29](PV2-29-mcp-save-pipeline.md) | MCP: save_pipeline | workspace | PV2-28 | todo | — | — |
-| [PV2-30](PV2-30-orchestrator-drive-only.md) | Orchestrator: pipelines change only in drive mode | core + UI | PV2-29 | todo | — | — |
-| [PV2-31](PV2-31-hub-without-drafts.md) | The hub without drafts | design + UI | PV2-28 | todo | — | — |
-| [PV2-32](PV2-32-team-page-one-save.md) | Team pipeline page: one Save | UI | PV2-28 | todo | — | — |
+| [PV2-27](PV2-27-store-no-pipeline-drafts.md) | Store: a pipeline is created published; drafts deleted | store + core | PV2-26 | done | batch A → master `e21081337` | — |
+| [PV2-28](PV2-28-workspace-save-publishes.md) | Workspace: saving publishes or refuses | workspace | PV2-27 | done | batch A → master `e21081337` | — |
+| [PV2-29](PV2-29-mcp-save-pipeline.md) | MCP: save_pipeline | workspace | PV2-28 | done | batch A → master `e21081337` | — |
+| [PV2-30](PV2-30-orchestrator-drive-only.md) | Orchestrator: pipelines change only in drive mode | core + UI | PV2-29 | done | batch A → master `e21081337` | — |
+| [PV2-31](PV2-31-hub-without-drafts.md) | The hub without drafts | design + UI | PV2-28 | done | batch A → master `e21081337` | — |
+| [PV2-32](PV2-32-team-page-one-save.md) | Team pipeline page: one Save | UI | PV2-28 | done | batch A → master `e21081337` | — |
 | [PV2-33](PV2-33-hide-import.md) | Pipelines leave Import resources | UI + MCP | — | done | `claude/pv2-33-hide-import` | — |
+| PV2-34 | A team pipeline's save waits for the team server; rename through PATCH | workspace + UI | PV2-32 | done (D-042, D-043, D-047) | `claude/pv2-34-team-save-sync`, batch A → master `e21081337` | — |
 
 ## Order
 
