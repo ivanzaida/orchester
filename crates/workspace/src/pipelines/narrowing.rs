@@ -91,7 +91,6 @@ pub fn permissions(
   Ok(permissions)
 }
 
-/// Whether an assigned executor and its narrowing can still be used. Unassigned drafts stay editable.
 /// The words for a tool and for a profile a step names that has no published version here: not published yet, or gone.
 const TOOL_NOT_HERE: (&str, &str) = ("runs.preflight.toolNotPublished", "pipelines.problems.toolGone");
 const PROFILE_NOT_HERE: (&str, &str) = ("runs.preflight.profileNotPublished", "pipelines.problems.profileGone");
@@ -107,6 +106,7 @@ fn not_here(
   Message::new(key).with("step", step.name.to_string())
 }
 
+/// Whether an assigned executor and its narrowing can still be used. Unassigned drafts stay editable.
 pub fn check_step(
   step: &orchester_core::resource::Step,
   assignables: &super::data::Assignables,

@@ -305,7 +305,9 @@
           "returnsToIt": "{{step}} returns to it on failure.",
           "itReturnsTo": "it returns to {{target}} on failure.",
           "returnsTo": "{{step}} returns to {{target}} on failure.",
-          "waitsForIt": "{{step}} waits for it."
+          "waitsForIt": "{{step}} waits for it.",
+          "nothingBefore": "nothing runs before it.",
+          "nothingAfter": "nothing runs after it."
         }
       },
       "waits": {

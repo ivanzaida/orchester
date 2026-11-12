@@ -33,7 +33,7 @@ use super::{
   parts,
   rail::{self, Node},
   reorder::{Cards, Drive, keyed_move},
-  state::{Drag, Drop, Held, Refused, Reorder},
+  state::{Drag, Drop, Held, Refused, Reorder, Why},
   unordered::{self, Line},
   words,
 };
@@ -434,18 +434,18 @@ impl Draw<'_> {
       notes.push(landing::card_words(text, refused));
     }
     if let Some(Refused {
-      key: Some(key), error, ..
+      key: Some(key), why, ..
     }) = self.drive.reorder.refused.get().as_ref()
       && has(key)
     {
-      notes.push(self.refusal(ctx, key, error));
+      notes.push(self.refusal(ctx, key, why));
     }
-    if let Some(Refused { key: None, error, .. }) = self.drive.reorder.refused.get().as_ref()
+    if let Some(Refused { key: None, why, .. }) = self.drive.reorder.refused.get().as_ref()
       && last
     {
       let text = ctx.t_args(
         "pipeline_hub.flow.move.refusedAdd",
-        [("reason", self.cards.reason(ctx, error, None).to_string())],
+        [("reason", self.cards.why(ctx, why, None).to_string())],
       );
       notes.push(landing::card_words(&text, true));
     }
@@ -464,12 +464,12 @@ impl Draw<'_> {
     notes
   }
 
-  fn refusal(&self, ctx: &Ctx, key: &StepKey, error: &orchester_core::resource::MoveError) -> Element {
+  fn refusal(&self, ctx: &Ctx, key: &StepKey, why: &Why) -> Element {
     let text = ctx.t_args(
       "pipeline_hub.flow.move.refused",
       [
         ("name", self.cards.name(key).to_string()),
-        ("reason", self.cards.reason(ctx, error, Some(key)).to_string()),
+        ("reason", self.cards.why(ctx, why, Some(key)).to_string()),
       ],
     );
     landing::card_words(&text, true)

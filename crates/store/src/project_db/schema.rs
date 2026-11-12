@@ -155,6 +155,7 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::ApprovalModes => approval_modes::MIGRATION,
     super::ProjectMigration::DecisionReviewer => decision_reviewer::MIGRATION,
     super::ProjectMigration::TaskIdentities => task_identities::MIGRATION,
+    super::ProjectMigration::ReturnedAfterEnd => returned_after_end::MIGRATION,
     super::ProjectMigration::ArchiveStopsArchived => archive_stops::ARCHIVED_MIGRATION,
   }
 }

@@ -372,6 +372,8 @@ pub enum ProjectMigration {
   DecisionReviewer,
   /// Tasks' identities on a team server.
   TaskIdentities,
+  /// The attempts table rebuilt for a run returned to a step after it ended; the run resolutions table follows it.
+  ReturnedAfterEnd,
   /// What an archive stop names: the resource, its kind and who archived it.
   ArchiveStopsArchived,
 }

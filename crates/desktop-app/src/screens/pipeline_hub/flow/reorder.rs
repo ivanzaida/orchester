@@ -13,7 +13,7 @@ use orchester_core::{
 use orchester_workspace::pipelines::flow::{PipelineFlow, Stage};
 
 use super::{
-  state::{Lasts, Refused, Reorder},
+  state::{Lasts, Refused, Reorder, Why},
   words::number,
 };
 use crate::screens::pipeline_hub::edit::Edit;
@@ -53,14 +53,19 @@ impl Drive {
     if self.locked() {
       return;
     }
-    match make(&self.edit, &self.current, key, change) {
-      Ok(_) => self.reorder.refused.set(None),
-      Err(error) => self.reorder.refused.set(Some(Refused {
-        key: Some(key.clone()),
-        error,
-        lasts,
-      })),
-    }
+    // Alt ↑ and Alt ↓ at the end of the line change nothing, which is said as a refusal: the menu's rows for them are
+    // faded with the same words, and a key press that does nothing would leave the person guessing.
+    let why = match make(&self.edit, &self.current, key, change) {
+      Ok(false) if *change == Move::Up => Some(Why::NothingBefore),
+      Ok(false) if *change == Move::Down => Some(Why::NothingAfter),
+      Ok(_) => None,
+      Err(error) => Some(Why::Rule(error)),
+    };
+    self.reorder.refused.set(why.map(|why| Refused {
+      key: Some(key.clone()),
+      why,
+      lasts,
+    }));
   }
 
   /// Adds a step after `after`'s stage, or at the end, which `flow` says what follows; returns the step added.
@@ -114,7 +119,7 @@ impl Drive {
     match outcome {
       Err(error) => self.reorder.refused.set(Some(Refused {
         key: key.cloned(),
-        error,
+        why: Why::Rule(error),
         lasts: Lasts::OnCard,
       })),
       Ok(()) => self.reorder.refused.set(None),
@@ -302,6 +307,15 @@ impl Cards {
         [("head", head.join(", ")), ("last", last.clone())],
       ),
       (_, []) => Arc::from(""),
+    }
+  }
+
+  /// Why a move of step `moved` (none for a step added) was refused, as [`Self::reason`] says it.
+  pub(super) fn why(&self, ctx: &Ctx, why: &Why, moved: Option<&StepKey>) -> Arc<str> {
+    match why {
+      Why::Rule(error) => self.reason(ctx, error, moved),
+      Why::NothingBefore => ctx.t("pipeline_hub.flow.move.reason.nothingBefore"),
+      Why::NothingAfter => ctx.t("pipeline_hub.flow.move.reason.nothingAfter"),
     }
   }
 
