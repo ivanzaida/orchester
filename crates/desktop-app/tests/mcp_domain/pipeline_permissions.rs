@@ -1,15 +1,14 @@
 //! Pipeline setup gates use permission consent, independently of runtime approval answering. A local project's
 //! pipeline is edited in the Pipelines hub's panel, whose *Save* publishes the next version at once and asks *Allow*
 //! for what it widens: a step that stops waiting for a person's approval, or stops asking about its agent's tool calls.
-//! The panel turns the first off on the step; for the second it has no control yet, so the test restores a version that
-//! does not ask over one that does.
+//! Each is a switch of the step's panel.
 use std::{
   path::PathBuf,
   thread,
   time::{Duration, Instant},
 };
 
-use orchester_app::routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route};
+use orchester_app::routes::{PipelineView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   resource::{Pipeline, PipelineEdit, ResourceKind, StepKind},
@@ -30,7 +29,7 @@ use super::{
 enum Widens {
   /// The first step stops waiting for the person's approval: its switch in the step's panel.
   Wait,
-  /// The first step stops asking about its agent's tool calls: *Restore* of v2 over v3.
+  /// The first step stops asking about its agent's tool calls: its switch in the step's panel.
   Ask,
 }
 
@@ -45,16 +44,6 @@ struct Fixture {
   widens: Widens,
 }
 
-/// Publishes `body` as the pipeline's next version, as another editor would behind the app.
-fn publish(db: &mut ProjectDb, id: ResourceId, body: &Pipeline) {
-  let latest = db
-    .latest_version::<Pipeline>(id)
-    .expect("read version")
-    .expect("published fixture");
-  db.publish_pipeline_edit(id, body, latest.number(), None, Timestamp::now())
-    .expect("next version");
-}
-
 impl Fixture {
   fn new(widens: Widens) -> Self {
     let folder = tempfile::tempdir().expect("private fixture folder");
@@ -66,7 +55,7 @@ impl Fixture {
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("private seed");
-    let mut db = ProjectDb::open(&seeded.repo).expect("private database");
+    let db = ProjectDb::open(&seeded.repo).expect("private database");
     let id = db
       .resources(ResourceKind::Pipeline)
       .expect("resources")
@@ -74,43 +63,19 @@ impl Fixture {
       .find(|row| row.name().as_str() == "Narrowed permissions")
       .expect("narrowed fixture")
       .id();
-    let latest = |db: &ProjectDb| {
-      db.latest_version::<Pipeline>(id)
-        .expect("read version")
-        .expect("published fixture")
-        .body()
-        .clone()
-    };
-    if widens == Widens::Ask {
-      // v1 asks. v2 does not, and v3 asks again (and says so in its description, as a body must differ to be a
-      // version), so that restoring v2 over v3 is the widening.
-      let key = latest(&db).steps()[0].key.clone();
-      let mut edit = PipelineEdit::new(latest(&db));
-      edit.update(&key, |step| {
-        if let StepKind::Agent { permissions, .. } = &mut step.kind {
-          permissions.interactive_tool_approvals = false;
-        }
-      });
-      publish(&mut db, id, &edit.validate().expect("v2"));
-      let asking = latest(&db).with_description("asks again".into());
-      let mut edit = PipelineEdit::new(asking);
-      edit.update(&key, |step| {
-        if let StepKind::Agent { permissions, .. } = &mut step.kind {
-          permissions.interactive_tool_approvals = true;
-        }
-      });
-      publish(&mut db, id, &edit.validate().expect("v3"));
-    }
-    let before = latest(&db);
+    // Its one step waits for the person's approval and asks about its agent's tool calls.
+    let before = db
+      .latest_version::<Pipeline>(id)
+      .expect("read version")
+      .expect("published fixture")
+      .body()
+      .clone();
     let versions = db.versions::<Pipeline>(id).expect("versions").len();
     drop(db);
     let runner = folder.path().join("no-runner/orchester-runner");
     let mut window = Served::start_with(folder, &seeded.app_database, runner, true);
     window.until("navigation attached", |s| s.link.navigation().is_ok());
-    let page = match widens {
-      Widens::Wait => ProjectPage::Pipeline(id, PipelineView::Step(before.steps()[0].key.clone())),
-      Widens::Ask => ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(id))),
-    };
+    let page = ProjectPage::Pipeline(id, PipelineView::Step(before.steps()[0].key.clone()));
     window
       .link
       .navigation()
@@ -154,45 +119,33 @@ impl Fixture {
     );
   }
 
-  /// Version `number` of the pipeline as stored.
-  fn stored(&self, number: u32) -> Pipeline {
-    self
-      .db()
-      .versions::<Pipeline>(self.id)
-      .expect("versions")
-      .into_iter()
-      .find(|version| version.number().get() == number)
-      .expect("the version")
-      .body()
-      .clone()
-  }
-
   /// Holds the widening in the panel and presses *Save*, which asks. Returns the pipeline it stores once allowed.
   fn proposed(&mut self) -> Pipeline {
     let key = self.before.steps()[0].key.clone();
-    let edit = match self.widens {
+    let mut edit = PipelineEdit::new(self.before.clone());
+    match self.widens {
       Widens::Wait => {
-        let mut edit = PipelineEdit::new(self.before.clone());
         self
           .window
           .click_by_client("pipeline-hub-step-approval")
           .expect("approval proposal");
         edit.update(&key, |step| step.approval_gate = false);
-        edit
       }
       Widens::Ask => {
-        for id in [
-          "pipeline-hub-versions-button",
-          "pipeline-hub-version-2",
-          "pipeline-hub-version-restore",
-        ] {
-          self.window.until(id, |s| s.shows(id));
-          self.window.click_by_client(id).expect("restore v2");
-        }
-        // Restoring stores v2 as it was.
-        PipelineEdit::new(self.stored(2))
+        self
+          .window
+          .until("the ask switch", |s| s.shows("pipeline-hub-step-ask-tools"));
+        self
+          .window
+          .click_by_client("pipeline-hub-step-ask-tools")
+          .expect("ask proposal");
+        edit.update(&key, |step| {
+          if let StepKind::Agent { permissions, .. } = &mut step.kind {
+            permissions.interactive_tool_approvals = false;
+          }
+        });
       }
-    };
+    }
     self
       .window
       .until("the panel holds the change", |s| s.shows("pipeline-hub-save"));
