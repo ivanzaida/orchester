@@ -5,6 +5,9 @@
 //! the app: the hub never makes them and a version cannot hold them (core's `pipeline_waits` tests *Make it a line*).
 //! `cargo test -p orchester-app --test agents pipeline_waits`.
 
+use std::time::{Duration, Instant};
+
+use orchester_app::ui::tooltip::TOOLTIP_DELAY;
 use orchester_core::{
   id::ResourceId,
   resource::{Pipeline, PipelineEdit, RepositoryAccess, StepKey},
@@ -13,7 +16,7 @@ use orchester_core::{
 use super::{
   harness::Agents,
   pipeline_flow::{add, agent, fails_back_to, open, store},
-  pipeline_reorder::open_menu,
+  pipeline_reorder::{hover, open_menu},
   pipeline_step::{SAVE, open_step, save_until, stored},
 };
 
@@ -291,4 +294,33 @@ fn the_cross_of_a_step_a_failure_route_needs_changes_nothing() {
     "Review returns to Build on failure, so it keeps waiting for it"
   );
   assert!(!agents.exists(&chip(&lint)));
+}
+
+#[test]
+fn the_refused_cross_says_why_where_the_pointer_rests_on_it() {
+  let mut agents = Agents::new(true);
+  let builder = agents.profile(true);
+  let reads = || agent(Some(builder), RepositoryAccess::ReadOnly);
+  let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
+  let plan = add(&mut edit, "Plan", &[], reads());
+  let build = add(&mut edit, "Build", &[&plan], reads());
+  add(&mut edit, "Lint", &[&plan], reads());
+  let review = add(&mut edit, "Review", &[&build], reads());
+  fails_back_to(&mut edit, &review, &build);
+  let pipeline = store(&agents, "Guarded", &edit.validate().expect("a pipeline"));
+  open_step(&mut agents, pipeline, &review);
+
+  let cross = format!("{}-remove", chip(&build));
+  let tooltip = format!("{cross}-tooltip");
+  assert!(
+    !agents.exists(&tooltip),
+    "nothing is said before the pointer rests on it"
+  );
+  hover(&mut agents, &cross);
+  agents
+    .window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  agents.window.pass();
+  assert_eq!(agents.text(&tooltip), "04 Review returns to 02 Build on failure.");
 }

@@ -35,6 +35,7 @@ use crate::{
     menu::{MenuItem, menu, menu_panel, separator},
     pressable::{Focus, inert, pressable},
     toggle::check_mark,
+    tooltip::Tooltip,
   },
 };
 
@@ -145,10 +146,14 @@ impl Component for WaitsFor {
 impl WaitsFor {
   /// A step it names (`Chip · 04 Run checks` `erp8e`): its number in Geist Mono, its name and the × that stops waiting
   /// for it, faded with why when that would break a failure route.
-  fn chip(&self, ctx: &Ctx, props: &Props, choice: &WaitChoice) -> Element {
+  fn chip(&self, ctx: &mut Ctx, props: &Props, choice: &WaitChoice) -> Element {
     let card = card(props, &choice.key);
     let id = format!("{ID}-chip-{}", choice.key);
     let label = ctx.t_args("pipeline_hub.step.waitsFor.remove", [("name", card.name.as_ref())]);
+    let refusal = match &choice.offer {
+      MoveOffer::Refused(error) => Some(reason(ctx, props, error)),
+      MoveOffer::Available | MoveOffer::Unavailable => None,
+    };
     let cross = match (&choice.offer, props.locked) {
       (MoveOffer::Available, false) => {
         let change = self.change(props, &choice.key, false);
@@ -163,19 +168,18 @@ impl WaitsFor {
             change();
           })
       }
-      (offer, _) => {
-        let faded = inert(Button::empty())
-          .id(format!("{id}-remove"))
-          .opacity(DISABLED_OPACITY)
-          .describe("a11y_name", label)
-          .describe("state", "unavailable");
-        match offer {
-          MoveOffer::Refused(error) => faded.describe("reason", reason(ctx, props, error)),
-          MoveOffer::Available | MoveOffer::Unavailable => faded,
-        }
-      }
+      _ => inert(Button::empty())
+        .id(format!("{id}-remove"))
+        .opacity(DISABLED_OPACITY)
+        .describe("a11y_name", label)
+        .describe("state", "unavailable"),
     }
     .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted));
+    // A × that a failure route refuses says why where the pointer rests on it, as the hub's other refused controls do.
+    let cross: Element = match refusal {
+      Some(why) => Tooltip::new(format!("{id}-remove"), why.clone()).wrap(ctx, cross.describe("reason", why)),
+      None => cross.into(),
+    };
     Row::new()
       .id(id.clone())
       .height(Dimension::Px(ControlHeight::Sm.value()))
