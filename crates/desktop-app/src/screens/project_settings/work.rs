@@ -79,8 +79,6 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
     let (runners, changes) = (services.runners.clone(), services.changes.clone());
     async move {
       background::run(move || {
-        // The status bar's chip reads the mode with the project's tasks.
-        let tasks_too = matches!(change, Change::Mode { .. });
         let outside = match &change {
           Change::Limits { .. } => Outside::Limits,
           Change::Auto { .. } | Change::Mode { .. } | Change::Revoke(_) => Outside::AutoMode,
@@ -122,9 +120,6 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
         // Right after the write, whether or not the tab is still there to take the save: every screen that
         // shows the change reads it again, and so does the settings' query.
         changes.record(project, outside);
-        if tasks_too {
-          changes.record(project, Outside::Tasks);
-        }
         project_settings::load_in(&root)
           .map(Saved)
           .map_err(|e| messages::store_error(&e))

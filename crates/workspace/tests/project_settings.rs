@@ -199,11 +199,9 @@ fn project_settings_approval_mode_effective_approve_mode_moves_up_by_a_person_al
     db.allow_autopilot().expect("read").is_on(),
     "Dangerous auto-approve allows Autopilot"
   );
-  assert!(
-    orchester_workspace::tasks::data::ProjectTasks::read(&db, repo.path(), None)
-      .expect("tasks")
-      .dangerous_auto_approve,
-    "the status bar's read"
+  assert_eq!(
+    project_settings::approve_mode_in(repo.path()).expect("the status bar's read"),
+    DangerousAutoApprove
   );
   // Down is anyone's.
   for to in [Autopilot, Manual] {

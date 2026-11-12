@@ -186,6 +186,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
     undecided_runs: 0,
     limits: Vec::new(),
     browser_tabs: 0,
+    dangerous: false,
   }
 }
 

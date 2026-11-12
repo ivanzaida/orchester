@@ -3,6 +3,8 @@
 //! auto-approve* 11/500 in `danger` on `danger_muted`, round, 18 high, 8 at its sides and 5 apart. A press opens the
 //! project's Settings › Runs, where it is turned off. It never gives way when the bar is narrow.
 
+use std::path::PathBuf;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -12,7 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ProjectId;
+use orchester_core::{id::ProjectId, run::ApproveMode};
 
 use super::{
   facts::{Dispatch, go},
@@ -54,4 +56,27 @@ pub fn item(ctx: &Ctx, (project, on): (ProjectId, bool), dispatch: &Dispatch) ->
       .child(chip)
       .into(),
   )
+}
+
+/// Whether the open project at `project`'s folder is in Dangerous auto-approve, read when it shows and again whenever
+/// its Approve mode changes (its `revision`, the project's auto-mode changes); `false` without a project or while it is
+/// read. Its own read, not the tasks': the chip shows while they are read too.
+pub fn read(ctx: &mut Ctx, project: Option<(PathBuf, u64)>) -> bool {
+  ctx
+    .future(project, |project| async move {
+      let Some((root, _)) = project else {
+        return Ok(false);
+      };
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "approve mode");
+      orchester_workspace::background::run(move || {
+        orchester_workspace::project_settings::approve_mode_in(&root)
+          .map(ApproveMode::approves_everything)
+          .map_err(|error| orchester_workspace::messages::store_error(&error))
+      })
+      .await?
+    })
+    .state()
+    .get()
+    .data
+    .unwrap_or(false)
 }

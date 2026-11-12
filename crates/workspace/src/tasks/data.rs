@@ -108,9 +108,6 @@ pub struct ProjectTasks {
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
   /// one is ([`Self::without_runner`]).
   pub lost_to_runner: usize,
-  /// The project's *Dangerous auto-approve mode*: while it is on, every tool request of its agents is approved at
-  /// once.
-  pub dangerous_auto_approve: bool,
   /// The active runs that auto-approve their agents' requests, oldest task first.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
   /// Who works on the running runs, when the merged ones merged and the groups' order ([`super::at_work`]).
@@ -289,7 +286,6 @@ impl ProjectTasks {
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
-      dangerous_auto_approve: db.approve_mode()?.approves_everything(),
       run_facts: Arc::new(facts),
       answered: Arc::default(),
       waiting_once: WaitingOnce::default(),

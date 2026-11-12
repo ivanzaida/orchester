@@ -1,5 +1,6 @@
-//! While the project's *Dangerous auto-approve mode* is on, the bar's right begins with its chip (`Danger chip` `D3OhA`
-//! in `i0Aqq`), which opens the project's Settings › Runs; nothing shows while it is off.
+//! While the project is in Dangerous auto-approve, the bar's right begins with its chip (`Danger chip` `D3OhA` in
+//! `i0Aqq`), which opens the project's Settings › Runs; nothing shows while it is not. The chip follows the project's
+//! mode alone: it shows while the project's tasks are still read too.
 
 use orchester_app::routes::ProjectSettingsTab;
 
@@ -12,11 +13,10 @@ fn status_dangerous_chip_shows_while_on_and_opens_runs_settings() {
     ProjectTasks::default(),
   ))));
   assert!(off.texts("status-dangerous").is_none(), "nothing while it is off");
-  let tasks = ProjectTasks {
-    dangerous_auto_approve: true,
-    ..ProjectTasks::default()
-  };
-  let mut bar = Bar::of(facts(Some(kontur(runner(RunnerState::Online), tasks))));
+  let mut bar = Bar::of(facts(Some(ProjectFacts {
+    dangerous: true,
+    ..kontur(runner(RunnerState::Online), ProjectTasks::default())
+  })));
   assert_eq!(
     bar.texts("status-dangerous"),
     Some(vec!["Dangerous auto-approve".to_owned()])
@@ -31,5 +31,18 @@ fn status_dangerous_chip_shows_while_on_and_opens_runs_settings() {
       Route::Project(project_id(), ProjectPage::Settings(ProjectSettingsTab::Runs)),
       OpenIn::ActiveTab
     )]
+  );
+}
+
+#[test]
+fn status_dangerous_chip_shows_while_the_tasks_are_read() {
+  let mut bar = Bar::of(facts(Some(ProjectFacts {
+    dangerous: true,
+    tasks: None,
+    ..kontur(runner(RunnerState::Online), ProjectTasks::default())
+  })));
+  assert_eq!(
+    bar.texts("status-dangerous"),
+    Some(vec!["Dangerous auto-approve".to_owned()])
   );
 }
