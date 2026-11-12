@@ -57,7 +57,6 @@ pub(super) fn words(ctx: &Ctx, view: &View, git: &GitChange) -> Words {
       glyph: Icon::Terminal,
       kind: ButtonKind::Danger,
     }),
-    person_only: "orchestrator.change.personOnly.git",
   }
 }
 

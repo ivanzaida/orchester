@@ -87,14 +87,15 @@ pub struct TeamToolSheet {
   pub edit: Option<Latest<Tool>>,
 }
 
-/// A sheet for each team tool whose latest version is a tool this computer reads: in the team's form, or in the form
-/// before it.
+/// A sheet for each team tool of `tools` whose latest version is a tool this computer reads: in the team's form, or in
+/// the form before it.
 pub(super) fn sheets(
   config: &TeamConfig,
+  tools: &[&TeamResource],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Vec<(ResourceId, TeamToolSheet)> {
   let mut sheets = Vec::new();
-  for resource in config.resources(ResourceKind::Tool) {
+  for resource in tools.iter().copied() {
     let Some(read) = read(resource) else {
       continue;
     };

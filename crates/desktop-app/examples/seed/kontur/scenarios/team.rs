@@ -344,6 +344,17 @@ pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// computer's lists as the server's archive does. The task's Summary says which resource and who archived it, and
 /// Builder, which still names it, cannot run.
 pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  archived_as(kontur, State::TeamArchived)
+}
+
+/// [`archived`] for an Admin (`team-archived-admin`, A36 `qvMZD`, A37 `AFbIb`): the hub's *Archived* offers *Restore
+/// pencil-design*.
+pub fn archived_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
+  archived_as(kontur, State::TeamArchivedAdmin)
+}
+
+/// [`archived`], marked as `state`.
+fn archived_as(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
   with_runs(
@@ -379,7 +390,7 @@ pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
       by: Some("dana-k".to_owned()),
     }),
   })?;
-  write_marker(kontur, State::TeamArchived)
+  write_marker(kontur, state)
 }
 
 /// KON-12 moved from the catalogue's pipeline, which a team project does not offer, to the team's Team delivery

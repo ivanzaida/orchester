@@ -320,12 +320,12 @@ fn join_team_only_a_person_joins() {
   let join = format!("{}-join", team_row());
   shows(&mut window, &join);
   with_synthetic_input(|| window.press(&join));
-  shows(&mut window, &format!("{join}-person-only"));
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert_eq!(server.cloud_joins(), 0);
 
   let accept = format!("{}-accept", invite_row());
   with_synthetic_input(|| window.press(&accept));
-  shows(&mut window, &format!("{accept}-person-only"));
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert_eq!(window.data.cloud.tokens_for(INVITE), 0);
 
   window.navigation().go(Route::JoinTeam(JoinWay::Code));
@@ -333,7 +333,7 @@ fn join_team_only_a_person_joins() {
   window.set("join-team-code-address", &server.url());
   window.set("join-team-code-code", CODE);
   with_synthetic_input(|| window.press("join-team-code-submit"));
-  shows(&mut window, "join-team-code-submit-person-only");
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(server.code_joins().is_empty());
   assert!(joined(&window).is_empty());
 }

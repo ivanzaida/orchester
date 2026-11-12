@@ -68,7 +68,6 @@ pub struct AddressRow {
   editing: Signal<bool>,
   /// The port the server listened on before *Use port* moved it.
   moved_from: Signal<Option<u16>>,
-  blocked: Signal<bool>,
 }
 
 impl Component for AddressRow {
@@ -81,7 +80,6 @@ impl Component for AddressRow {
       invalid: ctx.signal(false),
       editing: ctx.signal(false),
       moved_from: ctx.signal(None),
-      blocked: ctx.signal(false),
     }
   }
 
@@ -240,11 +238,10 @@ impl AddressRow {
     if props.server.is_none() || listening_here || action.state().get().is_pending() {
       use_port = use_port.disabled();
     } else {
-      let (typed, invalid, moved_from, blocked, editing) = (
+      let (typed, invalid, moved_from, editing) = (
         self.typed.clone(),
         self.invalid.clone(),
         self.moved_from.clone(),
-        self.blocked.clone(),
         self.editing.clone(),
       );
       let listening = match props.state {
@@ -252,7 +249,7 @@ impl AddressRow {
         _ => None,
       };
       use_port = use_port.on_click(move || {
-        if refused(&blocked) {
+        if refused() {
           return;
         }
         let Ok(chosen) = McpPort::parse(&typed.get()) else {
@@ -302,15 +299,6 @@ impl AddressRow {
   /// What came of *Use port*, or why it did not move the server, under the field.
   fn lines(&self, ctx: &Ctx, props: &Props, failed: Option<&Message>) -> Vec<Element> {
     let mut lines = Vec::new();
-    if self.blocked.get() {
-      lines.push(
-        field_error(
-          "settings-mcp-address-blocked",
-          &ctx.t("settings.automation.server.blocked"),
-        )
-        .into(),
-      );
-    }
     if self.invalid.get() {
       lines.push(
         field_error(

@@ -179,6 +179,11 @@ impl Agents {
   pub fn listed(&self) -> ProjectAgents {
     ProjectAgents::load_in(&self.root).expect("agents")
   }
+  /// The person-only press the window refused to synthetic input since this was last asked: the action an MCP
+  /// client's tool call would name in its error.
+  pub fn refused(&self) -> Option<&'static str> {
+    self.window.refused_press()
+  }
 }
 pub fn changed(profile: &AgentProfile) -> AgentProfile {
   AgentProfile::new(

@@ -63,7 +63,7 @@ fn waits_for_message(screen: &Orchestrator, key: &str) -> bool {
 
 /// Opens a new conversation that watches everything in the project, as the person's *Everything in* the project
 /// would: only subscriptions bring a run's waits and its end into a conversation (ORC-895).
-fn watching_everything(screen: &mut Orchestrator) {
+pub(super) fn watching_everything(screen: &mut Orchestrator) {
   let mut db = screen.db();
   let now = Timestamp::now();
   let chat = Chat::named(ChatId::generate(), "Everything", now);

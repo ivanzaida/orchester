@@ -9,6 +9,7 @@
 
 mod acts;
 pub mod approval;
+mod approval_turn;
 pub mod auto_merge;
 mod blocked;
 mod change;
@@ -23,6 +24,7 @@ pub mod git;
 mod guard;
 mod keep;
 mod leads;
+mod led_start;
 mod mcp_servers;
 mod merge_conflicts;
 mod own_project;
@@ -32,6 +34,7 @@ pub mod queue;
 pub mod recover;
 pub mod report;
 pub mod repository;
+pub mod requests;
 pub mod rewind;
 mod run_ends;
 pub mod runs_on;

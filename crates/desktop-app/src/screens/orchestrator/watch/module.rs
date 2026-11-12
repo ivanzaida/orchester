@@ -51,9 +51,6 @@ pub(in crate::screens::orchestrator) const MODULE: &str = "watch-module";
 /// The keys of the picker's two rows that are no module.
 const WITHOUT_MODULE: &str = "without-module";
 const PROJECT: &str = "project";
-/// The app's key for a /watch synthetic input asked for, which only a person applies.
-const PERSON_ONLY: &str = "orchestrator.watch.personOnly";
-
 /// A /watch to apply: in the project at `root`, conversation `chat` (`new` when the command starts it) watches
 /// `targets` following `order`.
 #[derive(Clone)]
@@ -207,15 +204,12 @@ fn named_module(choice: &Choice) -> Option<NamedTarget> {
 /// starts is kept as the message's send keeps it, with the new conversation's *Plan only* switch, so whichever of the
 /// two writes it first, it plans as the person set it. Only a person's keys apply it: the order is kept as the
 /// person's own words, which the agent follows, and no subscription records who asked for it, so synthetic input (an
-/// MCP client's) is refused with a notice outside a QA copy (`mcp::qa_person`), and the badge and the message stay.
+/// MCP client's) is refused to it outside a QA copy (`mcp::qa_person`), and the badge and the message stay.
 pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
   let (of, action) = (view.of.clone(), view.watching.clone());
   let (plan_only, qa_person) = (view.plan_only.clone(), view.qa_person.clone());
   Arc::new(move |applied: Applied| {
-    if qa_person.refuses_input() {
-      tracing::warn!("synthetic input asked to watch; not taken");
-      let refused = Message::new(PERSON_ONLY);
-      action.state().set(FutureState::rejected(refused, None));
+    if qa_person.refuses("watch a module or a task from the Orchestrator's composer") {
       return false;
     }
     let targets: Vec<NamedTarget> = applied.choices.iter().filter_map(named).collect();
@@ -267,16 +261,11 @@ pub(super) fn target_of(key: &str) -> Option<WatchTarget> {
   }
 }
 
-/// A /watch that applied nothing: why, until the person dismisses it or applies one again. The refusal of synthetic
-/// input is the app's own words; the rest are `watch_in`'s.
+/// A /watch that applied nothing: why, in `watch_in`'s words, until the person dismisses it or applies one again.
 pub(in crate::screens::orchestrator) fn problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
   let state = view.watching.state();
   let error = state.get().error?;
-  let why = if error.key == PERSON_ONLY {
-    ctx.t(PERSON_ONLY)
-  } else {
-    message_text(ctx, &error)
-  };
+  let why = message_text(ctx, &error);
   let dismiss = ActionButton::new(
     "orchestrator-watch-dismiss",
     ButtonKind::Secondary,

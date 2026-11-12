@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   limits::ProjectLimits,
-  run::{Answerer, ProjectRuleId, review::AutoModeSettings},
+  run::{Answerer, ApproveMode, ProjectRuleId, review::AutoModeSettings},
 };
 use orchester_workspace::{
   background, code_index,
@@ -54,9 +54,10 @@ pub enum Change {
     confirmed: bool,
     decision: Option<Box<orchester_core::connection::DecisionConnection>>,
   },
-  /// *Allow Autopilot for agents in this project*, turned on by a person, or off by anyone.
-  Autopilot {
-    on: bool,
+  /// The project's *Approve mode*, moved up by a person (to Dangerous auto-approve through its confirmation), or
+  /// down by anyone.
+  Mode {
+    to: ApproveMode,
     by: Answerer,
   },
   UseAccount(ConnectionId),
@@ -80,7 +81,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
       background::run(move || {
         let outside = match &change {
           Change::Limits { .. } => Outside::Limits,
-          Change::Auto { .. } | Change::Autopilot { .. } | Change::Revoke(_) => Outside::AutoMode,
+          Change::Auto { .. } | Change::Mode { .. } | Change::Revoke(_) => Outside::AutoMode,
           Change::Index(_) => Outside::CodeIndex,
           Change::Files(_) | Change::BaseNotices(_) => Outside::ProjectSettings,
           Change::UseAccount(_) => Outside::Connections,
@@ -110,7 +111,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
             confirmed,
             decision,
           } => project_settings::save_auto_mode_in(&root, &base, &asked, confirmed, decision.as_deref())?,
-          Change::Autopilot { on, by } => project_settings::save_allow_autopilot_in(&root, on, by).map(|_| ())?,
+          Change::Mode { to, by } => project_settings::save_approve_mode_in(&root, to, by).map(|_| ())?,
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
           Change::Revoke(rule) => {
             project_settings::revoke_project_rule_in(&root, rule).map_err(|e| messages::store_error(&e))?

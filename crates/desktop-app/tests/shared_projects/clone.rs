@@ -275,6 +275,6 @@ fn shared_projects_clone_only_a_person_opens_the_console() {
   let destination = code(&window).join("kontur");
   clone_into(&mut window, &destination);
   with_synthetic_input(|| window.press(START));
-  shows(&mut window, &format!("{START}-person-only"));
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(stand_ins.consoles().is_empty(), "no console opened");
 }

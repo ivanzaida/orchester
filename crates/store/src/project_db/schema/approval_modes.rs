@@ -26,3 +26,12 @@ pub(super) const SWITCH_MIGRATION: &str = r"
 ALTER TABLE runs ADD COLUMN manual_at INTEGER;
 ALTER TABLE runs ADD COLUMN manual_by TEXT CHECK (manual_by IN ('person', 'automation'));
 ";
+
+/// The project's *Approve mode* (`orchester_core::run::ApproveMode`, the person's decision of 2026-11-11): Manual
+/// without a row or with `allow_autopilot` off, Autopilot with it on, Dangerous auto-approve with this column on as
+/// well, which allows Autopilot too, so no row holds a pair that contradicts itself. Every project keeps the mode it
+/// had: Manual or Autopilot.
+pub(super) const DANGEROUS_MIGRATION: &str = r"
+ALTER TABLE project_approvals ADD COLUMN dangerous_auto_approve INTEGER NOT NULL DEFAULT 0
+  CHECK (dangerous_auto_approve IN (0, 1) AND (dangerous_auto_approve = 0 OR allow_autopilot = 1));
+";

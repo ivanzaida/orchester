@@ -267,3 +267,37 @@ fn run_permissions_only_approving_everything_widens() {
     Ok(RunPermissionChange::ApproveEverything)
   );
 }
+
+/// While the project is in Dangerous auto-approve the chip says so and the menu offers no way, whatever the run chose;
+/// the run's own switch to Manual is kept and comes back once the project leaves it.
+#[test]
+fn run_permissions_dangerous_auto_approve_offers_no_way_and_keeps_the_runs_choice() {
+  use orchester_core::run::{ApproveMode, ApprovedBecause};
+  for everything in [false, true] {
+    let shown = menu(
+      EffectiveMode::DangerousAutoApprove(ApprovedBecause::Project),
+      everything,
+    );
+    assert_eq!(shown.chip, ChipMode::Dangerous, "everything {everything}");
+    for offer in [shown.manual, shown.autopilot, shown.everything] {
+      assert_eq!(offer, Offer::Hidden);
+    }
+    assert_eq!(shown.nothing_wider, None);
+  }
+  let mut fixture = Fixture::new();
+  let run = run_in(&mut fixture, ApprovalMode::Autopilot, true);
+  change(&fixture, &run, RunPermissionChange::ManualForRun, Answerer::Person).expect("switched");
+  fixture
+    .db
+    .save_approve_mode(ApproveMode::DangerousAutoApprove)
+    .expect("a person chooses it");
+  let read = approvals(&fixture, &run);
+  assert_eq!(read.mode, EffectiveMode::DangerousAutoApprove(ApprovedBecause::Project));
+  assert!(!read.may_switch_to_manual(&run), "nothing to switch");
+  fixture.db.save_approve_mode(ApproveMode::Autopilot).expect("down");
+  assert_eq!(
+    approvals(&fixture, &run).mode,
+    EffectiveMode::Manual(ManualBecause::Run),
+    "the run's own choice comes back"
+  );
+}

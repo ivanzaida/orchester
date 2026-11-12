@@ -144,15 +144,15 @@ pub(super) fn row(ctx: &mut Ctx, connects: &Connects, (address, server): &(Serve
     ActionButton::new(button, ButtonKind::Secondary, ctx.t("cloud.list.browser.connecting")).loading()
   } else {
     let (run, pressed, person) = (connects.run.clone(), connects.pressed.clone(), connects.person.clone());
-    let (pressed_id, server) = (button.clone(), server.clone());
+    let server = server.clone();
     ActionButton::new(button, ButtonKind::Secondary, ctx.t("cloud.list.browser.connect"))
       .icon(Icon::LogIn)
       .on_click(move || {
         if run.state().get_untracked().is_pending() {
           return;
         }
-        pressed.set(Pressed(Some(server.id)));
-        if person.allows(&pressed_id) {
+        if person.allows("connect this computer to a team server the account joined") {
+          pressed.set(Pressed(Some(server.id)));
           run.run(server.clone());
         }
       })
@@ -164,16 +164,9 @@ pub(super) fn row(ctx: &mut Ctx, connects: &Connects, (address, server): &(Serve
     .render(ctx)
 }
 
-/// Under the group: why synthetic input did nothing, and what the last *Connect* came to once it ended.
+/// Under the group: what the last *Connect* came to once it ended.
 pub(super) fn answers(ctx: &mut Ctx, connects: &Connects) -> Vec<Element> {
   let mut parts = Vec::new();
-  if let Pressed(Some(server)) = connects.pressed.get() {
-    parts.extend(
-      connects
-        .person
-        .reason(ctx, &format!("orchester-joined-{server}-connect")),
-    );
-  }
   let state = connects.run.state().get();
   if state.is_pending() {
     return parts;

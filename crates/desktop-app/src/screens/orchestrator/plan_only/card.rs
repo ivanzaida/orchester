@@ -6,9 +6,9 @@
 //! apart: the number in Geist Mono 11 `text_muted`, a 13 icon of the kind (`play`, `file-plus`, `sliders-horizontal`),
 //! what will happen in 12.5 `text_primary` and its target in 12 `text_muted`; *Left out* and *Uses* as the decision
 //! card's facts; and *Approve and do it*, *Change it*, *Dismiss*, with a lock and *Only you can approve* at the end.
-//! Only a person approves it: lurq's synthetic input is refused, visibly. Decided, it folds into a line on the `hover`
-//! fill (`t5sBl`): approved, replaced by the next plan or dismissed, *by you*, when, and *Show plan*, which opens its
-//! steps under it.
+//! Only a person approves it: lurq's synthetic input is refused to the client that sent it. Decided, it folds into a
+//! line on the `hover` fill (`t5sBl`): approved, replaced by the next plan or dismissed, *by you*, when, and *Show
+//! plan*, which opens its steps under it.
 
 use std::sync::Arc;
 
@@ -44,7 +44,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::Press,
-    tinted_note::{person_only, tinted_note},
+    tinted_note::tinted_note,
   },
 };
 
@@ -95,8 +95,6 @@ impl DevtoolsInspectable for PlanProps {}
 pub(in crate::screens::orchestrator) struct PlanCard {
   approve: ApproveAction,
   dismiss: DismissAction,
-  /// Synthetic input tried *Approve and do it*.
-  refused: Signal<bool>,
   /// A folded plan's steps are open under its line.
   open: Signal<bool>,
   /// Whether *Approve and do it* takes synthetic input as the person's: in a QA copy only.
@@ -110,7 +108,6 @@ impl Component for PlanCard {
     Self {
       approve: approve_action(ctx),
       dismiss: dismiss_action(ctx),
-      refused: ctx.signal(false),
       open: ctx.signal(false),
       qa_person: QaPerson::of(ctx),
     }
@@ -145,10 +142,6 @@ impl PlanCard {
   /// The card of a plan that waits.
   fn card(&self, ctx: &mut Ctx, props: &PlanProps) -> Element {
     let id = props.id.as_str();
-    let refused = self
-      .refused
-      .get()
-      .then(|| person_only(format!("{id}-person-only"), &ctx.t("orchestrator.plan.personOnly")));
     let failed = self
       .approve
       .state()
@@ -171,7 +164,6 @@ impl PlanCard {
       .child(head(ctx, props))
       .child(steps(&format!("{id}-steps"), &props.plan))
       .with_children(facts(ctx, id, &props.plan))
-      .with_children(refused)
       .with_children(failed)
       .child(actions)
       .into()
@@ -242,7 +234,7 @@ impl PlanCard {
     props: &PlanProps,
     deciding: Deciding,
   ) -> [ActionButton; 3] {
-    let (action, refused, seq) = (self.approve.clone(), self.refused.clone(), props.seq);
+    let (action, seq) = (self.approve.clone(), props.seq);
     let qa_person = self.qa_person.clone();
     let approving = Approving {
       project: deciding.project.clone(),
@@ -251,12 +243,9 @@ impl PlanCard {
       by: Answerer::Person,
     };
     let approve = approve.on_click(move || {
-      if qa_person.refuses_input() {
-        tracing::warn!("synthetic input reached the approval of a plan of the Orchestrator; not taken");
-        refused.set(true);
-        return;
+      if !qa_person.refuses("approve a plan of the Orchestrator") {
+        action.run(approving.clone());
       }
-      action.run(approving.clone());
     });
     let changing = Changing {
       seq,

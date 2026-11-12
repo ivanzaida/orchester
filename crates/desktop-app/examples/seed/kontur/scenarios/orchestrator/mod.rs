@@ -22,6 +22,7 @@ pub mod events;
 pub mod leads;
 mod live;
 mod proposals;
+pub mod requests;
 pub mod waits_on;
 pub mod watch;
 

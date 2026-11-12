@@ -27,7 +27,7 @@ use super::super::{
   work::{self, Change, Read, Save},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, input_may_decide, refuse_press},
   queries::Kept,
   theme::ExtraTypography,
   ui::{
@@ -62,9 +62,9 @@ pub(super) struct Limits {
   /// A save asked for while another ran, with whether every input that asked for it may raise the daily budget.
   queued: Signal<Option<bool>>,
   gate: Option<InputGate>,
-  /// Window input raised or removed the daily budget while the person does not let automation decide for them.
-  person_only: Signal<bool>,
 }
+/// What a raise or removal of the daily budget is, as an MCP client refused reads it.
+const DAILY_RAISE: &str = "raise or remove a project's daily budget";
 #[derive(Clone, PartialEq)]
 struct Submitted(Option<LimitsText>);
 impl DevtoolsInspectable for Submitted {}
@@ -178,7 +178,6 @@ impl Component for Limits {
       submitted: ctx.signal(Submitted(None)),
       queued: ctx.signal(None),
       gate: ctx.use_context::<InputGate>(),
-      person_only: ctx.signal(false),
     };
     let save = tab.save.clone();
     work::follow(ctx, &save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
@@ -199,6 +198,10 @@ impl Component for Limits {
         }
       }
     });
+    // The daily budget's field changes while lurq delivers the input that changed it, so a client's raise is refused
+    // to the call that typed or set it, and the field takes back what it held.
+    let (guard, before) = (tab.clone(), Arc::new(parking_lot::Mutex::new(String::new())));
+    ctx.watch(&tab.daily, move |typed: &String| guard.guard_daily(typed, &before));
     tab
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -272,9 +275,6 @@ impl Component for Limits {
     if let Some(error) = loaded.state.error {
       group = group.after(field_error("settings-limits-read-error", &message_text(ctx, &error)));
     }
-    if let Some(refused) = self.person_only_line(ctx, changed) {
-      group = group.after(refused);
-    }
     if outside && changed {
       group = group.after(self.outside(ctx, data));
     }
@@ -282,19 +282,6 @@ impl Component for Limits {
   }
 }
 impl Limits {
-  /// Why a client's raise of the daily budget was not saved, while the fields still hold it.
-  fn person_only_line(&self, ctx: &Ctx, changed: bool) -> Option<Element> {
-    if !changed && self.person_only.get_untracked() {
-      self.person_only.set(false);
-    }
-    self.person_only.get().then(|| {
-      field_error(
-        "settings-limits-person-only",
-        &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
-      )
-      .into()
-    })
-  }
   fn text(&self) -> LimitsText {
     LimitsText {
       default: self.default.get(),
@@ -332,6 +319,36 @@ impl Limits {
     }
     self.submitted.set(Submitted(None));
   }
+  /// Takes `typed` into the daily budget's field, or, when it raises or removes the budget and the input delivering it
+  /// may not, refuses it to that input's client and puts back what the field held (`before`).
+  fn guard_daily(&self, typed: &String, before: &parking_lot::Mutex<String>) {
+    let back = {
+      let mut before = before.lock();
+      if *typed == *before {
+        return;
+      }
+      if !self.raises_daily(typed) || input_may_decide(self.gate.as_ref(), Guarded::Decision(DecisionKind::Limit)) {
+        typed.clone_into(&mut before);
+        return;
+      }
+      before.clone()
+    };
+    refuse_press(self.gate.as_ref(), Guarded::Decision(DecisionKind::Limit), DAILY_RAISE);
+    self.daily.set(back);
+  }
+  /// Whether the daily budget `typed`, with the other limits as stored, raises or removes the stored budget.
+  fn raises_daily(&self, typed: &str) -> bool {
+    let Some(base) = self.stored.get_untracked() else {
+      return false;
+    };
+    let text = LimitsText {
+      daily: typed.to_owned(),
+      ..LimitsText::of(base.0.limits, &self.separator)
+    };
+    text
+      .limits(base.0.limits, &self.separator)
+      .is_ok_and(|asked| base.0.limits.raises_daily_budget(asked))
+  }
   fn commit(&self, props: &TabProps, save: &Save) -> Arc<dyn Fn() + Send + Sync> {
     let (tab, save, root) = (self.clone(), save.clone(), props.project.open.repo_root.clone());
     Arc::new(move || {
@@ -362,11 +379,11 @@ impl Limits {
       return;
     };
     if base.0.limits.raises_daily_budget(asked) && !may_raise {
-      tracing::warn!("synthetic input raised the daily budget without consent; not saved");
-      self.person_only.set(true);
+      // A raise a person typed, saved by a client's leaving the field: refused to that call, and the field keeps what
+      // the person typed. A client's own raise never lands in the field ([`Self::guard_daily`]).
+      refuse_press(self.gate.as_ref(), Guarded::Decision(DecisionKind::Limit), DAILY_RAISE);
       return;
     }
-    self.person_only.set(false);
     if asked != base.0.limits {
       self.submitted.set(Submitted(Some(text)));
       save.run((

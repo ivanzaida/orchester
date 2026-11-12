@@ -189,7 +189,7 @@ impl Component for Question {
     } else {
       let (action, person, project, to) = (action.clone(), self.person.clone(), props.project.clone(), props.to);
       confirm.on_click(move || {
-        if person.allows(CONFIRM) {
+        if person.allows("move a project between this computer and the account") {
           action.run(Target(project.clone(), to));
         }
       })
@@ -214,7 +214,6 @@ impl Component for Question {
           .width(Dimension::Pct(100.0)),
       )
       .with_children(failed)
-      .with_children(self.person.reason(ctx, CONFIRM))
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)

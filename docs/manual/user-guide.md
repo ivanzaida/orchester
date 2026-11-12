@@ -302,7 +302,7 @@ Connections and secrets are never copied; importing never grants access.
 
 ### Project settings
 
-**General** (project, GitHub, base branch, base-moved notices), **Runs** (approvals: Allow Autopilot and the reviewer,
+**General** (project, GitHub, base branch, base-moved notices), **Runs** (approvals: the Approve mode and the reviewer,
 approved-for-every-run rules, story-point estimates, limits), **Orchestrator** (what the chat may do on its own, and
 *Watching*: the default order and *A run without progress for*),
 **Context** (sources, repository agent files, code index, memory), **Connections**, **Environment** (variables and

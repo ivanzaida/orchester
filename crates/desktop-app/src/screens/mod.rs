@@ -225,21 +225,10 @@ fn new_mcp_server(ctx: &mut Ctx, project: &ShownProject) -> Element {
 
 /// The Agents hub is master–detail (`Agents · v2`) in a team project ([`team_hub`]) and in a local one ([`local_hub`]).
 /// Whether the project is shared is read from its database with the feed, so the page waits for that read, and says so
-/// when it failed, rather than show the local hub for a team project. A team's hub has no *Archived* filter: a route
-/// that names it shows All.
+/// when it failed, rather than show the local hub for a team project.
 fn agents_or_hub(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
   match project.feed.team.get() {
-    TeamRead::Read(Some(team)) => {
-      let view = HubView {
-        filter: if view.filter == HubFilter::Archived {
-          HubFilter::All
-        } else {
-          view.filter
-        },
-        ..view
-      };
-      team_hub::screen(ctx, project, team, view)
-    }
+    TeamRead::Read(Some(team)) => team_hub::screen(ctx, project, team, view),
     TeamRead::Read(None) => local_hub::screen(ctx, project, view),
     TeamRead::Unread => team_hub::unread::reading(ctx),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),

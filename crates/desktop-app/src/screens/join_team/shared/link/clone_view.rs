@@ -276,11 +276,10 @@ fn left(ctx: &Ctx, folder: &Path) -> Element {
 }
 
 /// The actions row of the panel: the button and, under it, why a press of synthetic input did nothing.
-pub(super) fn actions(button: ActionButton, person_only: Option<Element>) -> Element {
+pub(super) fn actions(button: ActionButton) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(StartupSpacing::Row.role())
     .child(Row::new().align_items(Alignment::Center).child(button.large().roomy()))
-    .with_children(person_only)
     .into()
 }

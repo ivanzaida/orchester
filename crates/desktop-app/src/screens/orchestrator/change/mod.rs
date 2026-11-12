@@ -4,9 +4,10 @@
 //! [`super::decision`]): its question, what it is about, its facts (the first three, the rest behind *Show details*)
 //! and, while it waits, the diff of the text it publishes, its git commands or the `.gitignore` a first commit
 //! honours; a warning strip for what is risky in it; and its actions. Only a person applies it: lurq's synthetic input
-//! is refused in the handler, visibly; *Dismiss* changes nothing and stays open to automation. Decided, being carried
-//! out, done by the chat itself or refused, it folds into its event line ([`folded`]). The facts are read when the card
-//! shows ([`orchester_workspace::orchestrator::facts`]); a repository's are the ones its proposal keeps.
+//! is refused in the handler, to the client that sent it; *Dismiss* changes nothing and stays open to automation.
+//! Decided, being carried out, done by the chat itself or refused, it folds into its event line ([`folded`]). The facts
+//! are read when the card shows ([`orchester_workspace::orchestrator::facts`]); a repository's are the ones its
+//! proposal keeps.
 
 pub(in crate::screens) mod answer;
 mod continuation;
@@ -54,13 +55,7 @@ use crate::{
   navigation::Navigation,
   services::Services,
   theme::SKELETON_DELAY,
-  ui::{
-    button::ActionButton,
-    icon::Icon,
-    message::message_text,
-    tinted_note::{person_only, tinted_note},
-    tooltip::Tooltip,
-  },
+  ui::{button::ActionButton, icon::Icon, message::message_text, tinted_note::tinted_note, tooltip::Tooltip},
 };
 
 #[derive(Clone, PartialEq)]
@@ -98,8 +93,6 @@ impl DevtoolsInspectable for Read {}
 
 pub(super) struct ChangeCard {
   decide: DecideAction,
-  /// Synthetic input tried the person's action.
-  refused: Signal<bool>,
   /// The facts after the first three are shown.
   details: Signal<bool>,
   /// The facts' reading took [`SKELETON_DELAY`]: their bones show.
@@ -119,7 +112,6 @@ impl Component for ChangeCard {
     let delay = ctx.create_timeout(SKELETON_DELAY, move || show.set(true));
     Self {
       decide: card::decide_action(ctx),
-      refused: ctx.signal(false),
       details: ctx.signal(false),
       slow,
       delay,
@@ -185,7 +177,7 @@ impl ChangeCard {
       (None, Some(Some(read::Facts::Run(_)) | None)) => Some(Vec::new()),
       _ => None,
     };
-    let notes = self.notes(ctx, (id, view, words.person_only), unread);
+    let notes = self.notes(ctx, (id, view), unread);
     let actions = self.actions(ctx, props, (words.accept, opens), shown);
     let time = orchester_workspace::display::clock(view.at);
     let (below, tip) = answer::shown(ctx, id, view, &words.effect);
@@ -227,13 +219,9 @@ impl ChangeCard {
     }
   }
 
-  /// The notes over the actions: that the person approved it in the chat, a refused click of automation, why reading
-  /// or deciding failed.
-  fn notes(&self, ctx: &Ctx, (id, view, person): (&str, &View, &'static str), unread: &Option<Message>) -> Vec<Row> {
+  /// The notes over the actions: that the person approved it in the chat, why reading or deciding failed.
+  fn notes(&self, ctx: &Ctx, (id, view): (&str, &View), unread: &Option<Message>) -> Vec<Row> {
     let mut notes: Vec<Row> = card::approved_in_chat(ctx, id, view.action).into_iter().collect();
-    if self.refused.get() {
-      notes.push(person_only(format!("{id}-person-only"), &ctx.t(person)));
-    }
     if let Some(error) = self.decide.state().get().error.or_else(|| unread.clone()) {
       notes.push(tinted_note(
         format!("{id}-error"),
@@ -267,19 +255,15 @@ impl ChangeCard {
       (true, _) => (start.disabled(), dismiss.disabled()),
       (false, None) => (start.disabled(), self.dismiss(dismiss, deciding(Decision::Dismiss))),
       (false, Some(widens)) => {
-        let (decide, refused, accepting, qa_person) = (
+        let (decide, accepting, qa_person) = (
           self.decide.clone(),
-          self.refused.clone(),
           deciding(Decision::Accept { widens }),
           self.qa_person.clone(),
         );
         let start = start.on_click(move || {
-          if qa_person.refuses_input() {
-            tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
-            refused.set(true);
-            return;
+          if !qa_person.refuses("apply a change the Orchestrator proposed") {
+            decide.run(accepting.clone());
           }
-          decide.run(accepting.clone());
         });
         (start, self.dismiss(dismiss, deciding(Decision::Dismiss)))
       }

@@ -12,6 +12,7 @@ use orchester_workspace::tasks::local_integration::LocalOrigin;
 
 use super::{Action, Inspector, Mode, Props, action_panel, button, guard_note, mode_button};
 use crate::{
+  mcp::input_gate::Guarded,
   theme::LocalText,
   ui::{
     button::ButtonKind,
@@ -195,7 +196,7 @@ impl Inspector {
         .settled(),
       );
     }
-    let (checked, refused) = (self.agree.clone(), self.refused.clone());
+    let checked = self.agree.clone();
     let gate = self.gate.clone().unwrap_or_default();
     panel = panel.child(
       Toggle::new(
@@ -207,22 +208,15 @@ impl Inspector {
       .label_style(LocalText::Explanation.role())
       .wrap_label()
       .on_change(move |on| {
-        // The acknowledgement is the person's in every decision: window automation never ticks it, and is told so.
+        // The acknowledgement is the person's in every decision: window automation never ticks it, and is refused.
         let input = gate.local_input(input_source());
-        let native = input.origin() == LocalOrigin::Native && input.allowed();
-        if native {
+        if input.origin() == LocalOrigin::Native && input.allowed() {
           checked.set(on);
+        } else {
+          gate.refuse_press("acknowledge what a local integration decision does", Guarded::Person);
         }
-        refused.set(!native);
       }),
     );
-    if self.refused.get() {
-      panel = panel.child(
-        Text::new(&ctx.t("local_integration.error.acknowledgement"))
-          .id("local-confirm-scope-refused")
-          .variant(LocalText::Explanation.role()),
-      );
-    }
     let stale = matches!(decision.action, Action::Merge { .. }) && !props.view.checked_current;
     let unresolved =
       matches!(decision.action, Action::Continue | Action::FinishRestore) && !props.view.conflicts.is_empty();

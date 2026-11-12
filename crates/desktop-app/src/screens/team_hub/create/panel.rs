@@ -41,7 +41,7 @@ use super::{
   work::{self, Failed, Press, Work},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   navigation::Navigation,
   queries::{self, Session, hub},
   routes::{HubView, ProjectPage, Route},
@@ -286,11 +286,22 @@ impl NewPanel {
     } else {
       let (work, tried, gate, make) = (self.work.clone(), self.tried.clone(), self.gate.clone(), make.clone());
       create.on_click(move || {
+        // What adds to what agents may do is a person's press, or automation's where they let it change agent
+        // permissions; refused, the form stays as it was.
+        let refused = make.as_ref().is_some_and(|make| {
+          make.needs_a_person()
+            && !may_press(
+              gate.as_ref(),
+              Guarded::PermissionWidening,
+              "create what adds to what agents may do",
+            )
+        });
+        if refused {
+          return;
+        }
         tried.set(true);
         if let Some(make) = make.clone() {
-          // A person's press, or automation's where they let it change what agents may do.
-          let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
-          work.run(Press { make, decided });
+          work.run(Press { make });
         }
       })
     };

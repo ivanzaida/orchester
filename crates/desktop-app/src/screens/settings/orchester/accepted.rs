@@ -108,8 +108,6 @@ fn needs_two_factor(ctx: &mut Ctx, invite: &AcceptedInvite, (need, answers): (Ne
           .width(Dimension::Pct(100.0)),
       ),
     )
-    .with_children(answers.person.reason(ctx, &format!("{id}-sign-in-again")))
-    .with_children(answers.person.reason(ctx, &format!("{id}-turn-on")))
     .into()
 }
 
@@ -204,7 +202,6 @@ fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
       .action(first)
       .action(put_off),
     )
-    .with_children(answers.person.reason(ctx, &again))
     .into()
 }
 
@@ -219,8 +216,8 @@ fn try_again(ctx: &Ctx, id: &str, invite: &AcceptedInvite, answers: &Answers) ->
   if answers.finish.state().get().is_pending() {
     button.loading()
   } else {
-    let (answers, kept, id) = (answers.clone(), invite.clone(), id.to_owned());
-    button.on_click(move || answers.try_again(&id, &kept))
+    let (answers, kept) = (answers.clone(), invite.clone());
+    button.on_click(move || answers.try_again(&kept))
   }
 }
 

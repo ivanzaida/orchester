@@ -87,11 +87,6 @@ pub(in crate::screens::orchestrator) fn dialog(ctx: &mut Ctx, view: &View, proje
   .tone(Tone::Warning)
   .width(WIDTH)
   .part(what(ctx, &asked, (&time, count)));
-  let dialog = if state.refused.get() {
-    dialog.person_only(ctx.t("orchestrator.rewind.personOnly"))
-  } else {
-    dialog
-  };
   Some(
     dialog
       .on_enter(enter, confirm)

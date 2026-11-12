@@ -75,7 +75,6 @@ struct Words {
   description: &'static str,
   unreadable: &'static str,
   not_saved: &'static str,
-  blocked: &'static str,
 }
 
 impl Consent {
@@ -97,7 +96,6 @@ impl Consent {
         description: "settings.automation.windowControl.description",
         unreadable: "settings.automation.windowControl.unreadable",
         not_saved: "settings.automation.windowControl.notSaved",
-        blocked: "settings.automation.windowControl.blocked",
       },
       Self::AnswerApprovals => Words {
         title: "settings.automation.answerApprovals.title",
@@ -105,7 +103,6 @@ impl Consent {
         description: "settings.automation.answerApprovals.description",
         unreadable: "settings.automation.answerApprovals.unreadable",
         not_saved: "settings.automation.answerApprovals.notSaved",
-        blocked: "settings.automation.answerApprovals.blocked",
       },
       Self::ChangePermissions => Words {
         title: "settings.automation.changePermissions.title",
@@ -113,7 +110,6 @@ impl Consent {
         description: "settings.automation.changePermissions.description",
         unreadable: "settings.automation.changePermissions.unreadable",
         not_saved: "settings.automation.changePermissions.notSaved",
-        blocked: "settings.automation.changePermissions.blocked",
       },
     }
   }
@@ -181,8 +177,6 @@ type SaveAction = FutureAction<bool, bool, Message>;
 pub struct ConsentRow {
   /// The setting as the person last chose it; `None` until they do.
   saved: Signal<Option<bool>>,
-  /// A change the row did not take because an MCP client's input brought it.
-  blocked: Signal<bool>,
   /// While the row is mounted, the MCP server refuses window input.
   _protected: Protected,
 }
@@ -196,7 +190,6 @@ impl Component for ConsentRow {
       .expect("the session's window provides the MCP input gate");
     Self {
       saved: ctx.signal(None),
-      blocked: ctx.signal(false),
       _protected: gate.protect(Guarded::PermissionsSetting),
     }
   }
@@ -235,19 +228,11 @@ impl Component for ConsentRow {
     } else {
       switch
     };
-    let blocked = self
-      .blocked
-      .get()
-      .then(|| field_error(&format!("{id}-blocked"), &ctx.t(words.blocked)).into());
     if let Some(saves) = SaveState::of(ctx) {
       saves.report(id, Outcome::of(&state));
     }
-    // What the switch it shows means, then why it cannot be read, was not saved or did not take a change, under the
-    // row (`Blocked` `aYFot` in `shpsk`).
-    let below = said(ctx, consent, shown)
-      .into_iter()
-      .chain(problem.map(Element::from))
-      .chain(blocked);
+    // What the switch it shows means, then why it cannot be read or was not saved, under the row.
+    let below = said(ctx, consent, shown).into_iter().chain(problem.map(Element::from));
     // Window control's one line says what this run has and when a change applies (its eight variants,
     // `window_rows::window_control_hint`), once the stored choice is known.
     let hint = match (consent, shown) {
@@ -288,20 +273,18 @@ fn said(ctx: &Ctx, consent: Consent, shown: Option<bool>) -> Option<Element> {
 }
 
 impl ConsentRow {
-  /// `switch`, saving what a person chooses. Synthetic input never changes this human-only control; its source remains
-  /// known even after the caller stops waiting.
+  /// `switch`, saving what a person chooses. Synthetic input never changes this human-only control: the gate refuses it
+  /// while the row is mounted, and what reaches the switch all the same is only logged.
   fn listen(&self, switch: Toggle, save: SaveAction, (workspace, consent): (Workspace, Consent)) -> Toggle {
-    let (saved, blocked) = (self.saved.clone(), self.blocked.clone());
+    let saved = self.saved.clone();
     switch.on_change(move |chosen| {
       if input_source() == InputSource::Synthetic {
         tracing::warn!(
           setting = consent.logged(),
           "synthetic input reached a person's setting; not taken"
         );
-        blocked.set(true);
         return;
       }
-      blocked.set(false);
       if !chosen {
         // Off holds from the person's click, before the save runs and if it fails.
         match consent {

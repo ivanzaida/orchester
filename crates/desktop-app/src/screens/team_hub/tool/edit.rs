@@ -19,7 +19,7 @@ use lurq::{
 use orchester_core::{resource::TeamTool, secret::SecretName};
 use orchester_workspace::agents::team_tool::{ToolSecret, calling_pipelines};
 
-use super::{ADD_VALUE, Props, chip, computer, from_team};
+use super::{Props, chip, computer, from_team};
 use crate::{
   screens::{
     hub::forms::{Form, Ids, ToolFields},
@@ -28,7 +28,7 @@ use crate::{
       actions::Actions,
       archive,
       edit::{Edit, View},
-      panel, secret, words,
+      panel, rows, secret, words,
     },
   },
   services::Services,
@@ -145,15 +145,13 @@ impl Component for ToolEditor {
       .child(head)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
       .with_children(parts.notice)
-      .child(from_team::section_of(ctx, drawn.rows))
+      .child(rows::from_team(ctx, rows::FromTeam::Shared, drawn.rows))
       .with_children(drawn.sections)
-      .child(computer::section(ctx, (entry, sheet), missing, ask))
-      .with_children(self.person.reason(ctx, ADD_VALUE));
+      .child(computer::section(ctx, (entry, sheet), missing, ask));
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      self.person.reason(ctx, secret::SAVE),
     );
     panel::frame(entry, body, Some(parts.bar)).with_children(dialog).into()
   }
@@ -170,7 +168,7 @@ impl ToolEditor {
   fn ask(&self, name: &SecretName) -> Press {
     let (entry, name, person) = (self.secret.clone(), name.clone(), self.person.clone());
     Press::run(move || {
-      if person.allows(ADD_VALUE) {
+      if person.allows("fix what a team tool needs on this computer") {
         entry.ask(&name);
       }
     })

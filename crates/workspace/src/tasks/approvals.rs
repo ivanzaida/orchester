@@ -14,11 +14,11 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, EngineVendor},
   id::{StepExecutionId, TaskId},
   integration::WORKTREES_DIR,
-  permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
+  permission::{CommandPermission, LaunchPermissions, RepositoryAccess, category::CommandScope},
   resource::{AgentProfile, ModelId, VersionNumber},
   run::{
-    CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor,
-    review::{Review, ReviewHold},
+    ApprovalSubject, CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor,
+    review::{HoldRules, PushFacts, Review, ReviewHold, review_hold},
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
   task::Task,
@@ -178,18 +178,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
     .as_ref()
     .is_some_and(|launch| launch.permissions().repository() == RepositoryAccess::ReadOnly);
   let provider = connection.as_ref().map(AgentConnection::provider);
-  // The folders the agent may write to besides its worktree, as the runner classifies its commands.
-  let writable: Vec<PathBuf> = launch
-    .as_ref()
-    .and_then(|launch| launch.permissions().granted_folders())
-    .map(|folders| {
-      folders
-        .entries()
-        .iter()
-        .map(|folder| folder.lexical_path(repo_root))
-        .collect()
-    })
-    .unwrap_or_default();
+  let writable = writable_folders(launch.as_ref(), repo_root);
   let choices = ApprovalChoices::read(
     db,
     &approval,
@@ -231,6 +220,62 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
     auto_approving,
     approval,
   }
+}
+
+/// The hard rule of auto mode that holds `approval` for the person whatever a reviewer would say
+/// (`orchester_core::run::review::hold`): as recorded when auto mode held it, else as Orchester reads it now from the
+/// request, its run and the step's recorded permissions, in the worktree the asking agent works in under the project
+/// at `repo_root`. What cannot be read counts as the stricter: permissions not recorded hold the request, the
+/// worktree's branch is not known (any push holds unless the rule lets it without), no build output folder is known as
+/// ignored, and a command of an agent whose CLI is not known counts as a Codex escalation. `None` when no hard rule
+/// holds it.
+pub fn hard_hold(db: &ProjectDb, repo_root: &Path, approval: &PendingToolApproval) -> Option<ReviewHold> {
+  // `.ok()`: an unreadable review is read again below, from the request itself.
+  if let Some(Review::Held { hold }) = db.tool_approval_review(approval.run, &approval.id).ok().flatten() {
+    return Some(hold);
+  }
+  // `.ok()`: an unreadable run loses its branch and worktree, which only makes the rules stricter.
+  let run = db.run(approval.run).ok().flatten();
+  let launch = launched(db, approval);
+  let writable = writable_folders(launch.as_ref(), repo_root);
+  let worktree = agent_worktree(repo_root, run.as_ref(), approval);
+  let scope = CommandScope::on_host(&worktree, &writable).with_main_checkout(repo_root);
+  let subject = ApprovalSubject::of(approval, &scope);
+  let provider = run
+    .as_ref()
+    .and_then(|run| step_of(run, approval))
+    .and_then(|step| {
+      db.version::<AgentProfile>(step.profile.resource, step.profile.number)
+        .ok()
+        .flatten()
+    })
+    .and_then(|version| connection(db, version.body()))
+    .map(|connection| connection.provider());
+  let rules = HoldRules {
+    permissions: launch.as_ref().map(LaunchPermissions::permissions),
+    push: PushFacts {
+      branch: run.as_ref().map(|run| run.branch().as_str()),
+      head: None,
+      origin_kept: false,
+    },
+    escalation: approval.command && provider.is_none_or(|provider| provider == AgentProvider::CodexCli),
+    build_output: &[],
+  };
+  review_hold(&subject, &rules)
+}
+
+/// The folders the agent may write to besides its worktree, as the runner classifies its commands.
+fn writable_folders(launch: Option<&LaunchPermissions>, repo_root: &Path) -> Vec<PathBuf> {
+  launch
+    .and_then(|launch| launch.permissions().granted_folders())
+    .map(|folders| {
+      folders
+        .entries()
+        .iter()
+        .map(|folder| folder.lexical_path(repo_root))
+        .collect()
+    })
+    .unwrap_or_default()
 }
 
 /// The worktree the asking agent works in, as the runner picks it (`execution::workspace`): the

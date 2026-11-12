@@ -91,6 +91,10 @@ fn cached_resources(root: &Path) -> Option<Vec<TeamResource>> {
         name: Name::new(&name).expect("a name"),
         archived,
         revision: TaskRevision::try_from(u64::try_from(revision).expect("a positive revision")).expect("a revision"),
+        updated: orchester_workspace::team_config::Changed {
+          by: "Alice Moreau".to_owned(),
+          at: orchester_core::time::Timestamp::from_unix_millis(0),
+        },
         latest: latest(&connection, id),
       }
     })

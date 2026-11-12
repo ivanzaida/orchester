@@ -1,6 +1,7 @@
 //! The foot of the stopped card in a team project (`Restore` in `Run state · Stopped · archived` of A22 `pUu78`):
-//! restoring a team resource is the admins' (`docs/design/team-configuration.md`, rule 7), and this app has no restore
-//! of its own, so a member's card says who the admins are, and an admin's says where it is restored.
+//! restoring a team resource is the admins' (`docs/design/team-configuration.md`, rule 7), in the hub's *Archived*
+//! that the resource row's *Open →* opens, so a member's card says who the admins are, and an admin's says it is
+//! restored on the team server.
 
 use lurq::{
   app::{

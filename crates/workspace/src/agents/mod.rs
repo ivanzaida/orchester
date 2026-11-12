@@ -13,6 +13,7 @@ pub mod permissions;
 pub mod prompts;
 pub mod role;
 pub mod servers;
+pub mod team_archived;
 pub mod team_body_edit;
 pub mod team_hub;
 pub mod team_mcp;

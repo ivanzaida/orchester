@@ -6,13 +6,13 @@
 
 use std::path::Path;
 
-use orchester_api::{Event, SharedResource};
+use orchester_api::{Delta, Event, SharedResource};
 use orchester_core::{name::Name, resource::VersionNumber, time::Timestamp};
 
 use super::stream::Source;
 use crate::{
   sharing::SharingError,
-  team_config::{TeamConfig, TeamResource, TeamVersion, Unreached},
+  team_config::{Changed, TeamConfig, TeamResource, TeamVersion, Unreached},
 };
 
 /// Reads the project's whole configuration from the server and keeps it for `root`. Fails, keeping what was read
@@ -56,10 +56,12 @@ pub(super) async fn follow(source: &impl Source, root: &Path, event: &Event) -> 
       }
     }
     Event::ResourceArchived(delta) => configs.update(root, |config| {
-      config.mark_archived(delta.change.resource, delta.change.archived)
+      config.mark_archived(delta.change.resource, delta.change.archived, changed(delta))
     }),
     Event::ResourceRenamed(delta) => match Name::new(&delta.change.name) {
-      Ok(name) => configs.update(root, |config| config.rename(delta.change.resource, name)),
+      Ok(name) => configs.update(root, |config| {
+        config.rename(delta.change.resource, name, changed(delta))
+      }),
       Err(_) => {
         tracing::warn!(resource = %delta.change.resource, "the server renamed a resource to a name this computer cannot take");
         false
@@ -67,6 +69,14 @@ pub(super) async fn follow(source: &impl Source, root: &Path, event: &Event) -> 
     },
     _ => false,
   })
+}
+
+/// Who made the change `delta` tells, and when.
+fn changed<T>(delta: &Delta<T>) -> Changed {
+  Changed {
+    by: delta.by.display_name.clone(),
+    at: Timestamp::from_unix_millis(delta.at),
+  }
 }
 
 /// The latest version of `resource`, read alone: the page after the version before it.

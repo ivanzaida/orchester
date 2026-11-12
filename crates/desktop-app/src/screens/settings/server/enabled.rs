@@ -7,7 +7,6 @@ use lurq::{
     ctx::Ctx,
     events::{InputSource, input_source},
   },
-  core::Signal,
   node::Element,
 };
 use orchester_workspace::messages::Message;
@@ -41,18 +40,13 @@ impl PartialEq for Props {
 
 impl DevtoolsInspectable for Props {}
 
-pub struct EnabledRow {
-  /// A change the row did not take because an MCP client's input brought it.
-  blocked: Signal<bool>,
-}
+pub struct EnabledRow;
 
 impl Component for EnabledRow {
   type Props = Props;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      blocked: ctx.signal(false),
-    }
+  fn create(_: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -67,9 +61,8 @@ impl Component for EnabledRow {
     let mut switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, !off, title.clone()).hide_label();
     // While a change runs, and in a window without a server, the switch stays as it is.
     if props.server.is_some() && !pending.is_pending() {
-      let blocked = self.blocked.clone();
       switch = switch.on_change(move |on| {
-        if refused(&blocked) {
+        if refused() {
           return;
         }
         switch_action.run(on);
@@ -86,7 +79,7 @@ impl Component for EnabledRow {
         "settings.automation.server.enabled.description",
       )
     };
-    let problems = problems(ctx, self.blocked.get(), pending.error.as_ref());
+    let problems = problems(ctx, pending.error.as_ref());
     SettingRow::new("settings-mcp-enabled", title)
       .hint(ctx.t(hint))
       .info(ctx.t(info))
@@ -96,28 +89,19 @@ impl Component for EnabledRow {
   }
 }
 
-/// Whether synthetic input brought the change: it is not taken, and the row says so.
-pub fn refused(blocked: &Signal<bool>) -> bool {
+/// Whether synthetic input brought the change: it is not taken. The gate refuses an MCP client's input while the
+/// server's settings show (`Guarded::McpServer`), so what reaches a control all the same is only logged.
+pub fn refused() -> bool {
   let synthetic = input_source() == InputSource::Synthetic;
   if synthetic {
     tracing::warn!("synthetic input reached a control of the MCP server's settings; not taken");
   }
-  blocked.set(synthetic);
   synthetic
 }
 
-/// Why a change was not taken or not made, under the row.
-fn problems(ctx: &Ctx, blocked: bool, failed: Option<&Message>) -> Vec<Element> {
+/// Why a change was not made, under the row.
+fn problems(ctx: &Ctx, failed: Option<&Message>) -> Vec<Element> {
   let mut problems = Vec::new();
-  if blocked {
-    problems.push(
-      field_error(
-        "settings-mcp-enabled-blocked",
-        &ctx.t("settings.automation.server.blocked"),
-      )
-      .into(),
-    );
-  }
   if let Some(reason) = failed {
     let reason = message_text(ctx, reason);
     problems.push(

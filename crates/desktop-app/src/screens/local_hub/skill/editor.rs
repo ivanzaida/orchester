@@ -32,7 +32,7 @@ use orchester_workspace::{
 
 use super::{PREFIX, Props, UnsavedSignal};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   screens::{
     hub::forms::{Form, Ids, Naming, SkillFields},
     local_hub::{
@@ -253,7 +253,11 @@ impl Editor {
       body,
     };
     Save::Ready(Press::run(move || {
-      if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+      if may_press(
+        gate.as_ref(),
+        Guarded::PermissionWidening,
+        "publish a skill, which reaches agents' prompts",
+      ) {
         save.run(saving.clone());
       }
     }))

@@ -74,10 +74,17 @@ fn domain_window_input_cannot_accept_an_unverified_step() {
   served
     .click_by_client("task-retry-decision-title")
     .expect("window input is not refused while Accept shows");
-  served
+  let refused = served
     .click_by_client("task-accept-step")
-    .expect("the press reaches the button, whose handler refuses it");
-  served.until("the refusal", |served| served.shows("task-decision-person-only"));
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("decide how a waiting run goes on"),
+    "it names the action: {refused}"
+  );
+  assert!(
+    !served.shows("task-decision-person-only"),
+    "the card says nothing of it"
+  );
   let shown = served.ok("get_run", &json!({ "project": "Kontur", "run": run }));
   assert_eq!(
     shown["status"]["reason"],

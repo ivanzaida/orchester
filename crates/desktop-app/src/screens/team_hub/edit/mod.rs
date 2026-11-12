@@ -36,7 +36,7 @@ use parking_lot::Mutex;
 
 pub(super) use self::view::{Parts, View, hint};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   services::Services,
 };
 
@@ -44,6 +44,8 @@ use crate::{
 pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
   /// The screens that show what Save changes.
   const OUTSIDE: Outside;
+  /// What Save does, as an MCP client refused it reads it after "Only a person can".
+  const SAVE: &'static str;
 
   /// Whether `after` widens what agents may do over `before`, which only a person (or automation they let change
   /// that) saves.
@@ -61,9 +63,10 @@ pub(super) trait Body: Clone + PartialEq + Debug + Send + Sync + 'static {
 }
 
 macro_rules! team_body {
-  ($body:ty, $outside:expr, $widens:expr, $save:path) => {
+  ($body:ty, $outside:expr, $refused:literal, $widens:expr, $publish:path) => {
     impl Body for $body {
       const OUTSIDE: Outside = $outside;
+      const SAVE: &'static str = $refused;
 
       fn widens(before: &Self, after: &Self) -> bool {
         $widens(before, after)
@@ -79,7 +82,7 @@ macro_rules! team_body {
         target: (ResourceId, VersionNumber),
         body: Self,
       ) -> Result<VersionNumber, EditRefused> {
-        $save(&servers, &root, target, &body).await
+        $publish(&servers, &root, target, &body).await
       }
     }
   };
@@ -89,12 +92,14 @@ macro_rules! team_body {
 team_body!(
   Instruction,
   Outside::Instructions,
+  "publish a new version of a team instruction",
   |_: &Instruction, _: &Instruction| false,
   team_body_edit::save
 );
 team_body!(
   Skill,
   Outside::Skills,
+  "publish a new version of a team skill",
   |_: &Skill, _: &Skill| false,
   team_body_edit::save
 );
@@ -102,12 +107,14 @@ team_body!(
 team_body!(
   TeamTool,
   Outside::Tools,
+  "publish a team tool's version that widens what agents may do",
   |before: &TeamTool, after: &TeamTool| !widens(Some(before), after).is_empty(),
   team_body_edit::save_team_tool
 );
 team_body!(
   TeamAgentProfile,
   Outside::Profiles,
+  "publish a team profile's version that widens what agents may do",
   profile_widens,
   team_body_edit::save
 );
@@ -127,13 +134,11 @@ fn profile_widens(before: &TeamAgentProfile, after: &TeamAgentProfile) -> bool {
 /// What the fields take when they are put back or reloaded: every field takes the body's value.
 pub(super) type Load<B> = Arc<dyn Fn(&B) + Send + Sync>;
 
-/// A press of Save: the body the fields make, the version it is made on, and whether a person (or automation they let
-/// change what agents may do) pressed.
+/// A press of Save: the body the fields make and the version it is made on.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Asked<B> {
   body: B,
   base: VersionNumber,
-  decided: bool,
 }
 impl<B> DevtoolsInspectable for Asked<B> {}
 
@@ -242,10 +247,13 @@ impl<B: Body> Edit<B> {
   }
 
   /// Save sends `body`, made on `base`: what widens what agents may do over `base` only on a person's press (or
-  /// automation's where they let it change that); anything else on any press.
+  /// automation's where they let it change that), refused to automation otherwise and the panel left as it was;
+  /// anything else on any press.
   fn press_save(&self, body: B, (base, was): (VersionNumber, &B)) {
-    let decided = !B::widens(was, &body) || input_may_decide(self.gate.as_ref(), Guarded::PermissionWidening);
-    self.save.run(Asked { body, base, decided });
+    if B::widens(was, &body) && !may_press(self.gate.as_ref(), Guarded::PermissionWidening, B::SAVE) {
+      return;
+    }
+    self.save.run(Asked { body, base });
   }
 }
 
@@ -253,13 +261,10 @@ impl<B: Body> Edit<B> {
 /// someone published first comes back to reload the fields from.
 fn save<B: Body>(ctx: &mut Ctx, (root, project, id): Target) -> Save<B> {
   let services = Services::of(ctx);
-  ctx.future_action(move |Asked { body, base, decided }: Asked<B>| {
+  ctx.future_action(move |Asked { body, base }: Asked<B>| {
     let (services, root) = (services.clone(), root.clone());
     async move {
       let refused = |refused| NotSaved { refused, reload: None };
-      if !decided {
-        return Err(refused(EditRefused::person_only()));
-      }
       if services.workspace.team_read(&root).config().is_none() {
         return Err(refused(EditRefused::Failed(Message::new("teamConfig.reading"))));
       }

@@ -37,7 +37,7 @@ use zeroize::Zeroize;
 
 pub(super) use self::fields::{environment_key, off_provider_notice};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   ui::message::message_text,
 };
 
@@ -88,8 +88,6 @@ pub(super) struct ProviderForm {
   model_error: Signal<Option<ModelProblem>>,
   /// Whether the fields were filled from the stored connection yet (Edit connection).
   seeded: Signal<bool>,
-  /// Whether automation's input tried to save the connection on a provider where only a person may.
-  refused: Signal<bool>,
   /// The fields of a native connection rather than of a CLI's API provider.
   native: bool,
 }
@@ -107,7 +105,6 @@ impl ProviderForm {
       model: ctx.signal(String::new()),
       model_error: ctx.signal(None),
       seeded: ctx.signal(false),
-      refused: ctx.signal(false),
       native: false,
     }
   }
@@ -219,7 +216,6 @@ impl ProviderForm {
   pub(super) fn save_guard(&self) -> SaveGuard {
     SaveGuard {
       value: self.value.clone(),
-      refused: self.refused.clone(),
     }
   }
 
@@ -231,12 +227,6 @@ impl ProviderForm {
     }
     let (base_url, key, models) = self.native_parts(listed)?;
     (!models.is_empty()).then_some(RunsOn::Provider(ProviderDraft { base_url, key, models }))
-  }
-
-  /// That automation's input tried to save the connection on a provider where only a person may; Save stays for the
-  /// person.
-  pub(super) fn refusal(&self, ctx: &Ctx) -> Option<Arc<str>> {
-    (self.on() && self.refused.get()).then(|| ctx.t("connections.apiProvider.personOnly"))
   }
 
   /// The first reason the provider cannot be saved, in field order, as the action bar says it (*Save unavailable: …*,
@@ -325,7 +315,6 @@ fn active(listed: &ProjectConnections, id: SecretId) -> Option<&Secret> {
 #[derive(Clone)]
 pub(super) struct SaveGuard {
   value: Signal<String>,
-  refused: Signal<bool>,
 }
 
 impl SaveGuard {
@@ -334,8 +323,8 @@ impl SaveGuard {
     self.value.with(|value| SecretValue::new(value.clone()).ok())
   }
   /// What saving `runs_on` takes along, or `None` when it is not saved: running a connection on an API provider
-  /// widens what its agents send where, so automation's input saves one only where a person lets it, and the page
-  /// says so. The key typed for a new secret comes along when it creates one.
+  /// widens what its agents send where, so automation's input saves one only where a person lets it, and is refused
+  /// to it otherwise. The key typed for a new secret comes along when it creates one.
   pub(super) fn admit(&self, runs_on: &RunsOn, gate: Option<&InputGate>) -> Option<Option<SecretValue>> {
     let RunsOn::Provider(draft) = runs_on else {
       return Some(None);
@@ -347,12 +336,13 @@ impl SaveGuard {
   /// reached with a key gets what its agents send, so only a person saves one ([`Self::admit`]). The key typed for a
   /// new secret comes along when it creates one.
   pub(super) fn admit_key(&self, key: &KeySecret, gate: Option<&InputGate>) -> Option<Option<SecretValue>> {
-    if !input_may_decide(gate, Guarded::PermissionWidening) {
-      tracing::warn!("synthetic input saved a connection on an API key; not taken");
-      self.refused.set(true);
+    if !may_press(
+      gate,
+      Guarded::PermissionWidening,
+      "save a connection that reaches a model API with a key",
+    ) {
       return None;
     }
-    self.refused.set(false);
     if !matches!(key, KeySecret::New(_)) {
       return Some(None);
     }

@@ -98,11 +98,12 @@ fn summary_only_the_person_drops_the_wait() {
   let mut page = Page::seeded("orchestrator-waits-on");
   page.open_titled("Delivery dashboard");
   with_synthetic_input(|| page.click("task-wait-drop"));
-  page.wait("the refusal", |window| window.texts("task-wait-error").is_some());
   assert_eq!(
-    page.text("task-wait-error"),
-    "Only you can drop a run's wait: a press made by automation was not taken. Nothing was changed."
+    page.window.refused_press(),
+    Some("drop a run's wait"),
+    "refused to the client"
   );
+  assert!(!page.has("task-wait-error"), "the page says nothing of it");
   assert!(page.has("task-wait"), "the wait still holds the run");
 
   page.click("task-wait-drop");

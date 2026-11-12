@@ -77,8 +77,8 @@ fn connections_api_provider_is_chosen_in_edit_connection_and_shown_in_the_inspec
   assert!(!seeded.exists(Seeded::REASON), "nothing keeps it from saving");
   lurq::app::events::with_synthetic_input(|| seeded.click("connection-edit-save"));
   assert!(
-    seeded.text(Seeded::REASON).contains("Only a person"),
-    "an MCP client's click is refused, and the page says so"
+    seeded.window.refused_press().is_some(),
+    "an MCP client's click is refused to it"
   );
   assert!(claude(&seeded).api_provider().is_none(), "nothing was saved");
   seeded.click("connection-edit-save");

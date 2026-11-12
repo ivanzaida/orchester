@@ -109,18 +109,16 @@ impl Make {
   }
 }
 
-/// A press of Create: what to make, and whether a person (or automation they let decide) pressed it.
+/// A press of Create: what to make. What [`Make::needs_a_person`] is pressed by a person, or by automation they let
+/// change agent permissions; any other press of it was refused to the automation that made it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Press {
   pub make: Make,
-  pub decided: bool,
 }
 
 /// Why nothing was made.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Failed {
-  /// It adds to what agents may do, which only a person decides, and a person did not press Create.
-  PersonOnly,
   /// The team server, or this computer, which knows the team cannot take it, refused it, with the name it was made
   /// under.
   Refused(Refusal, String),
@@ -170,9 +168,6 @@ pub(super) fn work(ctx: &mut Ctx, (root, project, mode): (PathBuf, ProjectId, Mo
 /// The new team resource `request` makes, in the team's form: nothing of it is kept here. Refused while the team's
 /// configuration was not read this session, which a team MCP server's name is checked against.
 fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<NewTeamResource, Failed> {
-  if request.make.needs_a_person() && !request.decided {
-    return Err(Failed::PersonOnly);
-  }
   let name = request.make.name();
   let refused = |error: EditRefused| match error {
     EditRefused::Refused(refusal) => Failed::Refused(refusal, name.clone()),
@@ -230,9 +225,6 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
 
 /// Makes the resource as its first version in a local project.
 fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Archivable, Failed> {
-  if request.make.needs_a_person() && !request.decided {
-    return Err(Failed::PersonOnly);
-  }
   let said = Failed::Said;
   let resource = match request.make {
     // The person's press is what the new server's widening asks for.
@@ -242,7 +234,8 @@ fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Archi
         .map(Archivable::McpServer)
         .map_err(|error| said(error.message()));
     }
-    Make::Profile(profile) => create_decided(root, *profile, request.decided).map_err(said),
+    // Create was pressed by a person, or by automation they let change agent permissions ([`Press`]).
+    Make::Profile(profile) => create_decided(root, *profile, true).map_err(said),
     // A team MCP server and a team profile are the team's alone: a local project's form makes local ones.
     Make::McpServer(_) | Make::TeamProfile(_) | Make::TeamTool(..) => {
       return Err(said(Message::new("team_new.teamOnly")));

@@ -174,7 +174,7 @@ fn form(ctx: &mut Ctx, advanced: &Advanced) -> Element {
       button.disabled()
     } else {
       button.on_click(move || {
-        if person.allows(RESET) {
+        if person.allows("set Orchester Cloud's address back to the default") {
           set.run(None);
         }
       })
@@ -197,8 +197,6 @@ fn form(ctx: &mut Ctx, advanced: &Advanced) -> Element {
         .map(|reason| field_error("orchester-advanced-error", &reason.text(ctx))),
     )
     .child(Row::new().spacing(SpacingSize::Sm).child(use_it).child(reset))
-    .with_children(advanced.person.reason(ctx, USE))
-    .with_children(advanced.person.reason(ctx, RESET))
     .into()
 }
 
@@ -227,7 +225,7 @@ fn use_address(advanced: &Advanced) -> impl Fn() + Send + Sync + 'static {
   let (set, person) = (advanced.set.clone(), advanced.person.clone());
   let (address, api) = (advanced.address.clone(), advanced.api.clone());
   move || {
-    if !set.state().get_untracked().is_pending() && person.allows(USE) {
+    if !set.state().get_untracked().is_pending() && person.allows("change Orchester Cloud's address") {
       set.run(Some((address.get_untracked(), api.get_untracked())));
     }
   }

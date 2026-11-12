@@ -76,7 +76,13 @@ fn domain_window_input_cannot_choose_a_connections_account() {
     .expect("a client opens the menu");
   served.until("the menu", |served| served.shows("connection-account-option-0"));
   let choice = option(&mut served, "Client");
-  served.click_by_client(&choice).expect("the click is delivered");
+  let refused = served
+    .click_by_client(&choice)
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("choose the account a connection runs on"),
+    "it names the action: {refused}"
+  );
   for _ in 0..10 {
     served.pass();
   }

@@ -46,7 +46,7 @@ pub(super) fn view_routes() -> Vec<Route> {
     }
   }
   all.extend(SkillsFilter::ALL.map(|filter| at(ProjectPage::Skills(filter))));
-  all.extend(HubFilter::LOCAL.map(|filter| at(ProjectPage::hub(HubView::new(filter, None)))));
+  all.extend(HubFilter::ALL.map(|filter| at(ProjectPage::hub(HubView::new(filter, None)))));
   all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::McpServers, server))));
   all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::Archived, server))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::All, Some(id)))));

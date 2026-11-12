@@ -22,7 +22,7 @@ use orchester_core::{
   project::TaskKey,
   run::side_question::SideQuestion,
 };
-use orchester_workspace::{background, messages, tasks::side_question};
+use orchester_workspace::{background, decisions::DecisionKind, messages, tasks::side_question};
 
 use super::{SideQuestions, thread};
 use crate::{
@@ -46,7 +46,8 @@ const CLOSE_SIZE: f32 = 24.0;
 const MAX_LINES: usize = 6;
 
 /// What the pane shows: the run it asks about, of task `key` of `project`, and whose agent it is; whether a message
-/// still reaches that agent (`sendable`), and whether the run runs (its transcript grows).
+/// still reaches that agent (`sendable`), the decision sending the answer takes (`decision`), and whether the run runs
+/// (its transcript grows).
 #[derive(Clone, PartialEq)]
 pub(in crate::screens::task::conversation) struct PaneProps {
   pub(in crate::screens::task::conversation) project: ShownProject,
@@ -56,6 +57,7 @@ pub(in crate::screens::task::conversation) struct PaneProps {
   pub(in crate::screens::task::conversation) number: u32,
   pub(in crate::screens::task::conversation) agent: Arc<str>,
   pub(in crate::screens::task::conversation) sendable: bool,
+  pub(in crate::screens::task::conversation) decision: Option<DecisionKind>,
   pub(in crate::screens::task::conversation) running: bool,
   pub(in crate::screens::task::conversation) not_shared: bool,
 }

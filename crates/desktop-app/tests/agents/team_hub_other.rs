@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::{
   routes::{HubFilter, HubView},
   theme::HubSpacing,
@@ -400,6 +401,15 @@ fn team_hub_other_m6_a_tool_names_its_secret_by_name_and_a_value_is_added_here()
   assert_eq!(agents.text("team-hub-fix-add-value-label"), "Add value");
   assert!(!agents.exists("team-hub-tool-republish") && !agents.exists("team-hub-action-edit"));
   assert!(agents.exists("team-hub-member-lock"), "a member reads the lock line");
+  // Only a person adds a value: automation's press is refused to it, and opens no dialog.
+  with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
+  agents.window.pass();
+  assert!(!agents.exists("team-hub-secret-value"), "automation opened no dialog");
+  assert!(
+    !agents.exists("team-hub-fix-person-only"),
+    "and the panel says nothing of it"
+  );
   agents.press_until("team-hub-fix-add-value", "the value's dialog", |s| {
     s.exists("team-hub-secret-value")
   });
@@ -425,6 +435,15 @@ fn team_hub_other_a33_an_admin_edits_a_tool_by_name_and_adds_its_value_here() {
   assert!(agents.exists("team-hub-access"), "its access is edited too");
   assert!(!agents.exists("team-hub-fix-add-value"), "the bar is Save's");
   assert_eq!(agents.text("team-hub-value-SENTRY_TOKEN-words"), "No value here");
+  // Only a person adds a value: automation's press is refused to it, and opens no dialog.
+  with_synthetic_input(|| agents.click("team-hub-value-SENTRY_TOKEN-value"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
+  agents.window.pass();
+  assert!(!agents.exists("team-hub-secret-value"), "automation opened no dialog");
+  assert!(
+    !agents.exists("team-hub-fix-person-only"),
+    "and the panel says nothing of it"
+  );
   agents.press_until("team-hub-value-SENTRY_TOKEN-value", "the value's dialog", |s| {
     s.exists("team-hub-secret-value")
   });

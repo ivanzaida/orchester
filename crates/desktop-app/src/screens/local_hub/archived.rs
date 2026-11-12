@@ -45,10 +45,11 @@ use crate::{
 };
 
 /// The panel while nothing archived is picked (`Nothing picked` `gd374` in L13): a 20 glyph, the title and the line
-/// under it, centered in the panel with no tile of their own.
-pub(super) fn nothing_picked(ctx: &Ctx) -> Element {
+/// under it, centered in the panel with no tile of their own. `id` names it, `<id>-title` and `<id>-line` its words,
+/// whose keys are `title` and `detail`; a team project's hub says it in its own words (A36 `qvMZD`).
+pub(in crate::screens) fn nothing_picked(ctx: &Ctx, id: &str, (title, detail): (&str, &str)) -> Element {
   Column::new()
-    .id("local-hub-archived-none")
+    .id(id.to_owned())
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .height(Dimension::Pct(100.0))
@@ -58,14 +59,14 @@ pub(super) fn nothing_picked(ctx: &Ctx) -> Element {
     .justify(Justify::Center)
     .child(icon(Icon::Archive, IconSize::Panel, PaletteColor::TextMuted))
     .child(
-      Text::new(&ctx.t("local_hub.archived.nothingTitle"))
-        .id("local-hub-archived-none-title")
+      Text::new(&ctx.t(title))
+        .id(format!("{id}-title"))
         .variant(HubText::RowName.role())
         .color(PaletteColor::TextSecondary),
     )
     .child(
-      Text::new(&ctx.t("local_hub.archived.nothingDetail"))
-        .id("local-hub-archived-none-line")
+      Text::new(&ctx.t(detail))
+        .id(format!("{id}-line"))
         .variant(HubText::ListNote.role())
         .width(Dimension::Pct(100.0))
         .text_align(TextAlign::Center),

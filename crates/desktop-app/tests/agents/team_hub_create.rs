@@ -232,7 +232,7 @@ fn team_hub_create_what_adds_to_what_agents_may_do_is_a_persons_press() {
   agents.set("team-new-mcp-program", "npx");
   let before = held(&agents, ResourceKind::McpServer);
   with_synthetic_input(|| agents.click("team-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(
     held(&agents, ResourceKind::McpServer),
     before,

@@ -5,12 +5,16 @@
 //! waiting task starts until the person resumes, and that it was checked as *Pause scheduling* in the queue, is its
 //! tooltip.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    events::is_synthetic_input,
     theme::{PaletteColor, RadiusSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
@@ -23,6 +27,7 @@ use orchester_core::{
   task_group::{HoldActor, HoldScope},
   time::Timestamp,
 };
+use orchester_store::ProjectDb;
 use orchester_workspace::{
   background, display,
   messages::Message,
@@ -30,6 +35,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::input_gate::InputGate,
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
@@ -70,6 +76,7 @@ impl DevtoolsInspectable for Resuming {}
 
 pub(super) struct HeldCard {
   resume: FutureAction<Resuming, (), Message>,
+  gate: Option<InputGate>,
 }
 
 impl Component for HeldCard {
@@ -87,7 +94,10 @@ impl Component for HeldCard {
         Ok(())
       }
     });
-    Self { resume }
+    Self {
+      resume,
+      gate: ctx.use_context::<InputGate>(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -181,15 +191,31 @@ impl HeldCard {
     if self.resume.state().get().is_pending() {
       return resume.loading();
     }
-    let (action, root) = (self.resume.clone(), props.root.clone());
+    let (action, root, gate) = (self.resume.clone(), props.root.clone(), self.gate.clone());
     let scope = props.held.group.map_or(HoldScope::Project, HoldScope::Group);
     resume.on_click(move || {
-      action.run(Resuming {
-        root: root.clone(),
-        scope,
-        actor: crate::screens::tasks::actor_now(),
-      });
+      // The line is the chat's, which keeps no word of who holds the scope now: an MCP client's press reads it.
+      let by_person = is_synthetic_input() && held_by_person(&root, scope);
+      if let Some(actor) = crate::screens::tasks::hold_actor(gate.as_ref(), false, by_person) {
+        action.run(Resuming {
+          root: root.clone(),
+          scope,
+          actor,
+        });
+      }
     })
+  }
+}
+
+/// Whether a person set the hold on `scope` in the project at `root`, as stored now. Read in the handler of an MCP
+/// client's press only, a single query; a read that fails says no, and the workspace refuses the release itself.
+fn held_by_person(root: &Path, scope: HoldScope) -> bool {
+  match ProjectDb::open(root).and_then(|db| db.queue_holds()) {
+    Ok(holds) => holds.by_person.contains(&scope),
+    Err(error) => {
+      tracing::warn!(%error, "who holds new starts could not be read");
+      false
+    }
   }
 }
 

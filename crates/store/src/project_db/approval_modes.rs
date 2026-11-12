@@ -1,11 +1,11 @@
-//! Approval modes (`orchester_core::run::EffectiveMode`): the project's *Allow Autopilot for agents in this project*
-//! and each run's switch to Manual, which the runner reads at each request with its step's profile mode, with when and
-//! by whom it was switched for its Conversation.
+//! Approval modes (`orchester_core::run::EffectiveMode`): the project's *Approve mode*
+//! (`orchester_core::run::ApproveMode`) and each run's switch to Manual, which the runner reads at each request with
+//! its step's profile mode, with when and by whom it was switched for its Conversation.
 
 use orchester_core::{
   id::RunId,
   permission::ApprovalMode,
-  run::{AllowAutopilot, EffectiveMode, ManualSwitch},
+  run::{AllowAutopilot, ApproveMode, EffectiveMode, ManualSwitch},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -18,30 +18,63 @@ use super::{
 use crate::{StoreError, rows::corrupt};
 
 impl ProjectDb {
-  /// *Allow Autopilot for agents in this project*; off until a person turns it on.
-  pub fn allow_autopilot(&self) -> Result<AllowAutopilot, StoreError> {
-    let on: Option<bool> = self
+  /// The project's *Approve mode*; Manual until a person moves it. The runner reads it again at each request.
+  pub fn approve_mode(&self) -> Result<ApproveMode, StoreError> {
+    let stored: Option<(bool, bool)> = self
       .connection
       .query_row(
-        "SELECT allow_autopilot FROM project_approvals WHERE id = 1",
+        "SELECT allow_autopilot, dangerous_auto_approve FROM project_approvals WHERE id = 1",
         [],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
       )
       .optional()?;
-    Ok(if on.unwrap_or(false) {
-      AllowAutopilot::ON
-    } else {
-      AllowAutopilot::OFF
+    Ok(match stored {
+      Some((_, true)) => ApproveMode::DangerousAutoApprove,
+      Some((true, false)) => ApproveMode::Autopilot,
+      Some((false, false)) | None => ApproveMode::Manual,
     })
   }
 
-  pub fn save_allow_autopilot(&mut self, setting: AllowAutopilot) -> Result<(), StoreError> {
+  pub fn save_approve_mode(&mut self, mode: ApproveMode) -> Result<(), StoreError> {
     self.connection.execute(
-      "INSERT INTO project_approvals (id, allow_autopilot) VALUES (1, ?1) \
-       ON CONFLICT (id) DO UPDATE SET allow_autopilot = excluded.allow_autopilot",
-      [setting.is_on()],
+      "INSERT INTO project_approvals (id, allow_autopilot, dangerous_auto_approve) VALUES (1, ?1, ?2) \
+       ON CONFLICT (id) DO UPDATE SET allow_autopilot = excluded.allow_autopilot, \
+       dangerous_auto_approve = excluded.dangerous_auto_approve",
+      [mode.allows_autopilot().is_on(), mode.approves_everything()],
     )?;
     Ok(())
+  }
+
+  /// Moves the Approve mode from `current` to `mode` in one write, only if it is still `current`: a move decided on a
+  /// mode someone changed meanwhile is not made. Whether it was.
+  pub fn save_approve_mode_if(&mut self, current: ApproveMode, mode: ApproveMode) -> Result<bool, StoreError> {
+    self.connection.execute(
+      "INSERT OR IGNORE INTO project_approvals (id, allow_autopilot, dangerous_auto_approve) VALUES (1, 0, 0)",
+      [],
+    )?;
+    let changed = self.connection.execute(
+      "UPDATE project_approvals SET allow_autopilot = ?1, dangerous_auto_approve = ?2 \
+       WHERE id = 1 AND allow_autopilot = ?3 AND dangerous_auto_approve = ?4",
+      [
+        mode.allows_autopilot().is_on(),
+        mode.approves_everything(),
+        current.allows_autopilot().is_on(),
+        current.approves_everything(),
+      ],
+    )?;
+    Ok(changed == 1)
+  }
+
+  /// Whether the project allows Autopilot: in its Autopilot and Dangerous auto-approve modes.
+  pub fn allow_autopilot(&self) -> Result<AllowAutopilot, StoreError> {
+    Ok(self.approve_mode()?.allows_autopilot())
+  }
+
+  /// The former *Allow Autopilot* switch's write ([`ApproveMode::with_autopilot`]): off is Manual, on Autopilot, and
+  /// on leaves Dangerous auto-approve as it is.
+  pub fn save_allow_autopilot(&mut self, setting: AllowAutopilot) -> Result<(), StoreError> {
+    let mode = self.approve_mode()?.with_autopilot(setting.is_on());
+    self.save_approve_mode(mode)
   }
 
   /// Whether `run` was switched to Manual for itself.
@@ -96,7 +129,7 @@ impl ProjectDb {
   pub fn approval_mode(&self, run: RunId, profile: ApprovalMode) -> Result<EffectiveMode, StoreError> {
     Ok(EffectiveMode::of(
       profile,
-      self.allow_autopilot()?,
+      self.approve_mode()?,
       self.run_switched_to_manual(run)?,
     ))
   }

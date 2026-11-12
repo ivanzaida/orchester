@@ -96,7 +96,7 @@ fn join_team_browser_joined_only_a_person_connects() {
   shows(&mut window, &connect());
   with_synthetic_input(|| window.press(&connect()));
 
-  shows(&mut window, &format!("{}-person-only", connect()));
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert_eq!(server.cloud_joins(), 0);
   assert!(joined(&window).is_empty());
 }

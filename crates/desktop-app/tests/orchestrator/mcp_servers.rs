@@ -92,10 +92,10 @@ fn orchestrator_mcp_server_card_is_applied_only_by_a_person() {
   );
 
   // Pressed until the card takes presses: its button waits while the card reads.
-  let (start, person_only) = (format!("{card}-start"), format!("{card}-person-only"));
+  let start = format!("{card}-start");
   screen.until("the refusal", |screen| {
     with_synthetic_input(|| screen.click(&start));
-    screen.exists(&person_only)
+    screen.window.refused_press().is_some()
   });
   assert_eq!(
     outcomes(&screen)[0],

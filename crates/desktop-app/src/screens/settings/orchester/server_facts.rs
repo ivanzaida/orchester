@@ -123,7 +123,6 @@ pub(super) fn computers(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry)
   let row = SettingRow::new("orchester-server-computers-row", ctx.t("cloud.server.computers.add"))
     .info(text)
     .control(add)
-    .below_all(panel.person.reason(ctx, ADD_COMPUTER))
     .render(ctx);
   SettingGroup::new("orchester-server-computers", ctx.t("cloud.server.computers.title"))
     .row(row)
@@ -142,7 +141,7 @@ fn pairing_button(ctx: &Ctx, panel: &ServerPanel, (id, purpose): (&'static str, 
   } else {
     // A pairing code signs a computer or a browser in as this person: only a person asks for one (review 1, B2).
     button.on_click(move || {
-      if person.allows(id) {
+      if person.allows("ask for a pairing code") {
         showing.set(true);
         pairing.run(purpose);
       }
@@ -173,7 +172,6 @@ pub(super) fn admin(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> 
     .hint(ctx.t("cloud.server.admin.hint"))
     .info(text)
     .control(sign_in)
-    .below_all(panel.person.reason(ctx, ADMIN_SIGN_IN))
     .render(ctx);
   SettingGroup::new("orchester-server-admin", ctx.t("cloud.server.admin.title"))
     .row(row)

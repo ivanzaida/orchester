@@ -22,11 +22,13 @@ use lurq::{
 use orchester_core::{
   id::RunId,
   pull_request::ci::fix::{AutoFix, FixLimit, RunFixes},
+  run::Answerer,
 };
 use parking_lot::Mutex;
 
-use super::actions::{AutoRequest, CiActions, pressed_by};
+use super::actions::{AutoRequest, CiActions};
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   theme::DISABLED_OPACITY,
   ui::{
     chip::{BadgeTone, badge},
@@ -37,6 +39,9 @@ use crate::{
 
 /// The limit's select (`IL2Ph` in `WvQKS`).
 const LIMIT_WIDTH: f32 = 112.0;
+/// What the switch and the limit set, as an MCP client refused reads it: a change restarts the run's count, so it is a
+/// person's alone.
+const AUTO_FIX: &str = "change how a run's CI is fixed automatically";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AutoProps {
@@ -69,8 +74,9 @@ impl Component for AutoRow {
       stored: Arc::new(Mutex::new(Some((props.run, props.fixes.auto)))),
     };
     let (stored, actions, root) = (row.stored.clone(), CiActions::of(ctx), props.root);
-    // Signals change while lurq delivers the input that changed them, so a client's choice is told from a person's.
-    let auto_action = actions.auto.clone();
+    // Signals change while lurq delivers the input that changed them, so a client's choice is told from a person's:
+    // only a person sets it (`set_auto_fix_in`), and a client's is refused to it; the next render puts the select back.
+    let (auto_action, gate) = (actions.auto.clone(), ctx.use_context::<InputGate>());
     ctx.watch(&row.limit, move |count: &u32| {
       let Some(limit) = FixLimit::of(*count) else {
         return;
@@ -78,12 +84,12 @@ impl Component for AutoRow {
       let Some((run, auto)) = *stored.lock() else {
         return;
       };
-      if auto.limit != limit {
+      if auto.limit != limit && persons_press(gate.as_ref(), AUTO_FIX) {
         auto_action.run(AutoRequest {
           root: root.clone(),
           run,
           auto: AutoFix { limit, ..auto },
-          by: pressed_by(),
+          by: Answerer::Person,
         });
       }
     });
@@ -121,14 +127,16 @@ impl Component for AutoRow {
     )
     .label_style(TypographyStyle::Description);
     let switch = if props.readable {
-      let (root, run) = (props.root.clone(), props.run);
+      let (root, run, gate) = (props.root.clone(), props.run, ctx.use_context::<InputGate>());
       switch.on_change(move |on| {
-        actions.auto.run(AutoRequest {
-          root: root.clone(),
-          run,
-          auto: AutoFix { on, ..auto },
-          by: pressed_by(),
-        });
+        if persons_press(gate.as_ref(), AUTO_FIX) {
+          actions.auto.run(AutoRequest {
+            root: root.clone(),
+            run,
+            auto: AutoFix { on, ..auto },
+            by: Answerer::Person,
+          });
+        }
       })
     } else {
       switch.settled()

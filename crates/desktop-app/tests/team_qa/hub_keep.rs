@@ -68,12 +68,12 @@ fn view(window: &Window) -> HubView {
 }
 
 /// The window's hold of the hub's reads: held, the hub's read that follows a change waits.
-fn reads(window: &Window) -> ReadHold {
+pub(super) fn reads(window: &Window) -> ReadHold {
   window.launch.services().expect("the session started").hold.clone()
 }
 
 /// Whether the button `id` shows its loader: what it sent is under way.
-fn loading(window: &mut Window, id: &str) -> bool {
+pub(super) fn loading(window: &mut Window, id: &str) -> bool {
   let loader = Icon::LoaderCircle.glyph().to_string();
   window.tree.get_element_by_id(id).is_some_and(|button| {
     let mut glyphs = Vec::new();
