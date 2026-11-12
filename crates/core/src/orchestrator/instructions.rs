@@ -58,8 +58,12 @@ const AGENTS_WAIT: &str = "Agents that wait:\n\
   and a message may also follow a run up, continue it, resume it or run its task again; while it is off they are \
   proposed to the person, who applies or dismisses them. Each answer says which happened.\n\
   - Approving tool requests (decide_approval) and deciding plans (decide_plan) follow those tools' rules: when \
-  one refuses, the person does it in the app. You never widen what agents may do beyond what a tool lets you, read \
-  secret values or delete work.";
+  one refuses, the person does it in the app. While Let the Orchestrator drive is on, a tool request of what you lead \
+  starts a turn of yours: approve it once only when it plainly serves the task and is safe, deny it with a reason for \
+  the agent only when it is plainly wrong, and otherwise leave it to the person with your recommendation. In a turn \
+  Orchester started, decide_approval decides only the request that started it (not_this_request); while you drive, \
+  that switch is what lets you answer it, whatever Let automation answer approvals says. You never widen \
+  what agents may do beyond what a tool lets you, read secret values or delete work.";
 
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).
 const REPOSITORY: &str = "- When the project's folder is not a git repository yet, or its repository has no commit, \
@@ -197,9 +201,12 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      review`). The chat shows such a list as labelled links.\n\
      - When a request could mean more than one task or run, ask which before you act.\n\
      - Creating a task makes a draft; nothing runs until a run is started. While Let the Orchestrator drive is on, \
-     run_task starts the run. While it is off, run_task proposes a run: the person starts or dismisses it in the \
-     conversation, so tell them it waits for them, unless the project allows Autopilot (get_approvals): then it \
-     starts the run and its answer says so. A task marked Blocked is never started by you.\n\
+     run_task starts the run; in a turn Orchester started by itself, start a task only where that turn's message \
+     says you may (the turn of a run's success you merged, when the order that applies asks to start work as it \
+     becomes ready), and only a task this conversation leads: run_task refuses another there (not_led). While it is \
+     off, run_task proposes a run: the person starts or dismisses it in the conversation, so tell them it waits for \
+     them, unless the project allows Autopilot (get_approvals): then it starts the run and its answer says so. A task \
+     marked Blocked is never started by you.\n\
      - Saving a draft reaches no agent. While Let the Orchestrator drive is on, publishing it (publish_pipeline, \
      publish_profile, publish_instruction, publish_skill, publish_tool), cancel_run and merge_run are done at once, \
      by the tool's rules (what widens what agents may do is refused person_only unless a person turned on Let \
@@ -245,9 +252,24 @@ const MERGING_RULES: &str = "- While Let the Orchestrator drive is on, merge a r
   automatically, is marked Blocked or is blocked by unfinished tasks, or whose group is held, is left to the person \
   (left_to_person). While the switch is off, merge_run only proposes the merge.";
 
+/// What the turn of a run's success does once it merged the run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AfterMerge {
+  /// It stops: nobody asked for more.
+  Stops,
+  /// An order applies to the turn ([`super::Leads::event_prompt`]): it does what the order asks of the work of what
+  /// the conversation leads that can start now, such as the tasks the merge unblocked.
+  StartsAsOrdered,
+}
+
 /// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it. An
 /// event's turn here is one no conversation's order leads ([`event_prompt`] with no order).
 pub fn wait_prompt(wait: &AgentWait) -> String {
+  wait_prompt_after(wait, AfterMerge::Stops)
+}
+
+/// [`wait_prompt`], whose turn of a run's success does `after` once it merged the run.
+pub(super) fn wait_prompt_after(wait: &AgentWait, after: AfterMerge) -> String {
   let who = match (&wait.agent, &wait.step) {
     (Some(agent), Some(step)) => format!("The agent {agent} at the step {step}"),
     (Some(agent), None) => format!("The agent {agent}"),
@@ -258,9 +280,8 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
     WaitKind::Question => "asks a question with suggested answers",
     WaitKind::Message => "waits for a message: the answer to what it wrote",
     WaitKind::Plan => "proposed a plan that waits for a decision",
-    // Not asked for: a tool request starts no turn ([`WaitKind::starts_turns`]).
-    WaitKind::Approval => "waits for the person's decision on a tool request",
-    WaitKind::Ended(end) => return end_prompt(wait, end),
+    WaitKind::Approval => return approval_prompt(&who, wait),
+    WaitKind::Ended(end) => return end_prompt(wait, end, after),
     WaitKind::Event(event) => return event_prompt(wait, event, None),
   };
   format!(
@@ -277,12 +298,50 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
   )
 }
 
+/// The prompt of the Orchestrator turn a tool request of `who` (`wait`) started by itself: read the request and decide
+/// that one request when it is plainly right or plainly wrong; otherwise leave it to the person with a recommendation.
+fn approval_prompt(who: &str, wait: &AgentWait) -> String {
+  format!(
+    "[Orchester] {who} waits for a decision on a tool request in run #{number} of {task} ({title}); its card: \
+     {link}.\n\
+     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator drive is on. Read the \
+     request first: list_approvals for this run gives the tool or command, its arguments, the working folder and the \
+     step; get_run and get_conversation what the agent was doing; get_task the task's brief. Approve it once with \
+     decide_approval (approve_once) only when it plainly serves the task and is safe: it works inside the run's \
+     worktree, destroys or deletes nothing that cannot be undone, reaches no other system or person (no push, \
+     publish, send, deploy or network call that changes something), touches no secret, and fits the brief and the \
+     order of what you lead. Deny it (deny, with a message that tells the agent why and what to do instead) only when \
+     it is plainly wrong for the task. A hold (list_approvals' hold: a hard rule of auto mode that would send the \
+     request to a person, such as a push, rewriting history, deleting outside the worktree, touching credentials, \
+     writing outside the step's folders or a Codex command outside its sandbox) is a reason to look harder, not a \
+     refusal: reading outside the folders is normally fine; a push, rewriting history, deleting outside the worktree \
+     or touching credentials only when the task plainly needs it, otherwise deny it or leave it to the person. For \
+     a command, the runner still lets only a person approve what auto-approval leaves to a person: a command it could \
+     not read to the end, rewriting history (a git push counts), deleting outside the temporary folder, writing \
+     outside the worktree, reading credentials, installing software, or reaching the network. approve_once on such a \
+     command is refused (person_only), so leave it to the person with your recommendation, or deny it. Every other \
+     hold you may allow (a Codex command outside its sandbox, a write in a step that only reads, network turned off \
+     for the step, a project program, the browser, a command too long to read, permissions not recorded), and so is \
+     every MCP tool request: nothing stops your approve_once there, so judge an MCP tool that acts outside the \
+     worktree (publishes, sends, deploys, changes another system) as carefully as a push. Give decide_approval your \
+     reason in one sentence (reason): the conversation shows it under the request. When you are not sure, decide nothing: write \"Not sure: \" and why you hesitate, \
+     then \"Recommends \" and what you recommend; the request waits for the person on its card, shown here under \
+     your words. Decide only this request, once: approve_once covers it alone, and you never allow a tool or command \
+     for good or widen what agents may do; allowing similar, all of a run or the project's is the person's, on the \
+     card. Start, resume, cancel, continue or merge nothing.",
+    number = wait.number,
+    task = wait.task,
+    title = wait.title,
+    link = wait.link,
+  )
+}
+
 /// The prompt of the Orchestrator turn the end of `wait`'s run (`end`) started by itself: how it ended and what to do.
 /// A run that succeeded is merged once or told as left to the person and why ([`Merging`]); a run that waits for a
 /// decision, stopped at a limit or failed is read and decided on with `continue_run`; an interruption the chat may
 /// continue is continued once, unless it came again soon; any other end is read and explained with the choices the
 /// person has.
-fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
+fn end_prompt(wait: &AgentWait, end: RunEnd, after: AfterMerge) -> String {
   let at = wait
     .step
     .as_deref()
@@ -306,7 +365,7 @@ fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   };
   let todo = match (end, wait.continuing, &wait.merging) {
     (RunEnd::Interrupted, Some(continuing), _) => continuing_todo(continuing),
-    (RunEnd::Succeeded, _, Some(merging)) => merging_todo(merging, wait.number),
+    (RunEnd::Succeeded, _, Some(merging)) => merging_todo(merging, wait.number, after),
     _ => end_todo(end).to_owned(),
   };
   format!(
@@ -346,21 +405,43 @@ fn continuing_todo(continuing: Continuing) -> String {
   }
 }
 
-/// What the turn of run `#number`'s success does: merge it once, or tell the person why it is left to them.
-fn merging_todo(merging: &Merging, number: u32) -> String {
+/// What the turn of run `#number`'s success does: merge it once, or tell the person why it is left to them; once
+/// merged, `after` says whether it goes on as the order that applies asks.
+fn merging_todo(merging: &Merging, number: u32, after: AfterMerge) -> String {
   match merging {
     Merging::Merges => format!(
       "Merge this run once with merge_run (run #{number}), then tell the person you merged it on your own, with the \
        revision and the link. If merge_run refuses with merge_failed naming conflicting files, call continue_run with \
        resolve_conflicts for this run, naming the files; do not call merge_run again. For any other refusal (such as \
        needs_decision or scoped_integration_required), tell the person why in its words and leave the merge to them. \
-       Start, resume, cancel or continue nothing else."
+       {}",
+      after_merge_todo(after)
     ),
     Merging::Left { why } => format!(
       "This run is left to the person: {}. Do not merge it. Tell the person it is ready to merge and why it was not \
        merged on its own, with the link. Start, resume, cancel, continue or merge nothing.",
       left_words(why)
     ),
+  }
+}
+
+/// What the turn of a run's success does once merge_run merged the run.
+const fn after_merge_todo(after: AfterMerge) -> &'static str {
+  match after {
+    AfterMerge::Stops => "Start, resume, cancel or continue nothing else.",
+    AfterMerge::StartsAsOrdered => {
+      "Once merge_run has merged it, and only then, do what the order that applies to this turn (below) asks of work \
+       that can start now: when it asks you to start tasks as they become ready, read the tasks of what this \
+       conversation leads (list_tasks) and start with run_task each one the order asks for that has no run yet and \
+       can start now (not marked Blocked, no unfinished task blocking it: held_by_blocking_tasks is false); a task \
+       that has run already is the person's to run again (already_ran). This merge \
+       may have unblocked some, and a task whose start an agent slot refused before may start now. Call run_task once \
+       per task in this turn: when it refuses (such as no_agent_slot, task_blocked or not_led), tell the person what \
+       was not started and why, in its words, and do not call it again for that task in this turn; the turn of the \
+       next run of what you lead that succeeds and is merged comes back to it. Start nothing the order does not ask \
+       for and nothing outside what this conversation leads, and tell the person what you started, with the links. \
+       When the merge was refused, start nothing. Resume, cancel or continue nothing else."
+    }
   }
 }
 

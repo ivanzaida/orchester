@@ -74,7 +74,7 @@ only a person may do is `person_only`, as for an outside client.
 |---|---|---|---|---|
 | Reads | direct | direct | direct | direct |
 | `create_task`, `update_task`, `create_module`, `update_module`, `save_*_draft` | direct | direct | direct | refused `report_turn` |
-| `run_task` | direct (refused `task_blocked` for a task marked Blocked) | direct | proposal; direct while the project allows Autopilot in a person's turn | refused `report_turn` |
+| `run_task` | direct (refused `task_blocked` for a task marked Blocked) | direct for a task this conversation leads, refused `not_led` for another | proposal; direct while the project allows Autopilot in a person's turn | refused `report_turn` |
 | `pause_run`, `release_queue` | direct | direct | direct in a person's turn; proposal in a turn it started itself | refused `report_turn` |
 | `resume_run` | direct for a paused run and for an interrupted one; stopped at a limit → `use_continue_run` (decide it with `continue_run`), canceled or failed → `person_only` | direct for a paused run; for an interrupted one only the run whose interruption started the turn, once, not within 10 minutes of the time before (`interrupted_again`) and not while more than 3 runs stopped on a busy database (`storage_contention`) | direct for a paused run; an interrupted one `person_only` | refused `report_turn` |
 | `hold_queue` | direct | direct | direct | refused |
@@ -99,7 +99,8 @@ runs* and *write with git* — and a project that had *answer agents* on starts 
   started the run** and whatever raised it (the chat's own answer included); there is no per-run or per-step limit on
   its turns. A turn starts only while no other turn of its conversation thinks and the project's runner attached.
 - The turn a run's success starts **merges** it once if the rule passes — latest run, every step passed (a person's
-  accept counts, automation's does not), task not Blocked or blocked, new starts not held, task not *Don't merge
+  accept counts, and so does the Orchestrator's own since 2026-11-11: it then says which step it accepted unverified
+  and what was left unverified), task not Blocked or blocked, new starts not held, task not *Don't merge
   automatically*, the main checkout needs no local integration — one at a time, in end order; conflicts → it calls
   `continue_run` `resolve_conflicts`. A task's own *Don't merge automatically* still keeps its runs from being merged
   on their own.
@@ -250,8 +251,26 @@ the order that applies (see [Orders](#orders)).
   decision, the conversation gets an entry linking to the card. The turn answers only what follows plainly from the
   brief, criteria, docs, AGENTS.md or the person's words, otherwise tells the person the question with options and a
   recommendation.
+- **Tool requests** (since 2026-11-11) — a tool request that came to the person gets an entry too, and with *Let the
+  Orchestrator drive* on starts one turn, once: the turn reads the request (`list_approvals`, the run, the brief) and
+  approves it once with `decide_approval` only when it plainly serves the task and is safe (inside the run's
+  worktree, nothing irreversible, nothing that reaches another system or person, no secret), denies it with a
+  `message` that tells the agent why only when it is plainly wrong, and otherwise decides nothing and tells the person
+  what is asked, why it hesitates (*Not sure: …*) and what it recommends (*Recommends …*). In that turn
+  `decide_approval` decides only that request (`not_this_request` for another), takes the chat's own `reason` (one
+  sentence, required) and never allows a tool for good; allowing similar, all of a run or the project's stays the
+  person's, on the card. While the chat drives, *Let the Orchestrator drive* is its consent to answer: *Let automation
+  answer approvals* is not needed for the chat (the person's decision of 2026-11-11), and other MCP clients still need
+  it. The request's line in the conversation says where it stands: *Orchestrator is reading*; *Allowed by the
+  Orchestrator* or *Denied by the Orchestrator*, with what was asked and its reason, or the words it told the agent,
+  nested under it; *Waits for you*, with the Orchestrator's words and, under them, the request's card from the task's
+  Conversation, answered here exactly as there; and, once the person answered, how (*Allowed once by you*, *Denied by
+  you*, …). Requests that arrive together get a turn each, one at a time per conversation.
 - **Run ends** — a task's latest run that succeeds, fails, stops for a decision, stops at a limit or is interrupted
-  gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person); a
+  gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person), and
+  once merged, where an order applies (see [Orders](#orders)), does what it asks of the work it leads that can start
+  now, such as starting with `run_task`, once each, the tasks the merge unblocked or a slot refused before (a refusal
+  such as `no_agent_slot` is told, not retried; the next merged success comes back to it); a
   decision wait or a limit → decides with `continue_run`; failure → may return the work to a step with `continue_run`
   and explains; an interruption → continues it (see the switch) or explains the person's choices.
 - **No progress** — a run an agent works on that made no progress (no run event such as a step change, no transcript
@@ -328,7 +347,10 @@ the default order as it is when an event comes. Watching a target the conversati
 renews its order.
 
 An order is quoted to the agent as data and **can only narrow** what the person-only switch allows: whether it acts
-at once or only proposes stays as the switch and the tables above say, whatever the order's text says.
+at once or only proposes stays as the switch and the tables above say, whatever the order's text says. While the
+switch is on, an order such as *start tasks as they become ready* is carried out in the turn of a run's success the
+Orchestrator merged: it starts the tasks of what the conversation leads that can start now, once each. A start an
+agent slot refused waits for the next merged success of what it leads; no other event brings it back.
 
 ### Already led elsewhere
 

@@ -326,6 +326,7 @@ impl NeedsYouPanel {
         waiting: waiting.clone(),
         gone: (!shown.waits).then(|| need.clone()),
         conversation,
+        framed: false,
       },
     );
     if !shown.waits {

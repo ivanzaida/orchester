@@ -22,6 +22,7 @@ use orchester_core::{
 };
 use orchester_workspace::orchestrator::{
   chat::{ChatView, EndMoved, EventFacts},
+  requests::ChatRequest,
   waits_on::view::RunWaitView,
 };
 
@@ -98,6 +99,8 @@ pub(super) struct Turn {
   pub(super) moved: Option<EndMoved>,
   /// What the line of an event of the wait's run names beside the wait.
   pub(super) event: Option<EventFacts>,
+  /// The tool request a wait of one is, and how it went (2026-11-11).
+  pub(super) request: Option<ChatRequest>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
@@ -149,6 +152,7 @@ impl Turn {
       stands: false,
       moved: None,
       event: None,
+      request: None,
       report: None,
       watch_ended: None,
       compaction: None,
@@ -200,6 +204,7 @@ impl Turn {
       stands: false,
       moved: None,
       event: None,
+      request: None,
       report: None,
       watch_ended: None,
       compaction: None,
@@ -346,6 +351,7 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       stands: shown.standing.contains(&entry.seq),
       moved: shown.moved_of(entry.seq),
       event: shown.event_of(entry.seq).cloned(),
+      request: shown.requests.get(&entry.seq).cloned(),
       ..Turn::opened(entry, turn.as_ref())
     },
     EntryKind::Report { report, turn } => Turn {
@@ -442,6 +448,7 @@ fn person(
     stands: false,
     moved: None,
     event: None,
+    request: None,
     report: None,
     watch_ended: None,
     compaction: None,

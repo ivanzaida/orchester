@@ -413,8 +413,12 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
           (line, super::answer::answer(ctx, row))
         }
         _ => {
-          let status = Status::of(wait, row.turn.stands, row.turn.state.as_ref(), &row.turn.answer);
+          let standing = (row.turn.stands, row.turn.request.as_ref());
+          let status = Status::of(wait, standing, row.turn.state.as_ref(), &row.turn.answer);
           let line = super::wait::line(ctx, &id, (wait, row.turn.at, turned), (status, row.env.project));
+          if wait.kind == WaitKind::Approval {
+            return super::wait::approval::opening(ctx, row, (&id, line), status);
+          }
           (line, super::answer::nested(ctx, row))
         }
       }

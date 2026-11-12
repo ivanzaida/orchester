@@ -70,6 +70,8 @@ pub(super) enum ChipTone {
   Neutral,
   /// As neutral, with the turning loader before its words.
   Working,
+  /// `danger_muted` with `danger` words.
+  Danger,
 }
 
 /// A chip after a line's target, with what its tooltip says.
@@ -389,6 +391,7 @@ pub(super) fn chip_element(ctx: &mut Ctx, id: &str, chip: &Chip) -> Element {
   let (fill, color) = match chip.tone {
     ChipTone::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
     ChipTone::Success => (PaletteColor::SuccessMuted, PaletteColor::Success),
+    ChipTone::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger),
     ChipTone::Neutral | ChipTone::Working => (PaletteColor::AccentMuted, PaletteColor::TextSecondary),
   };
   let pill = Row::new()
