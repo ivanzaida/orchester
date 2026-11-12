@@ -96,14 +96,14 @@ impl NewPipeline {
 
   /// Follows the route: one that begins a pipeline (`begin`) makes it and is replaced by the hub's view of it; a view
   /// that no longer shows it drops it; once the pipeline *Create v1* stored is listed, the route opens it. Gives the
-  /// pipeline being made while the route shows it.
+  /// pipeline being made while the route shows it, or the stored pipeline the route was just made to open.
   pub(super) fn follow(
     &self,
     ctx: &Ctx,
     (begin, view): (Option<Start>, PipelinesView),
     listing: &Listing,
     (navigation, project): (&Navigation, orchester_core::id::ProjectId),
-  ) -> Option<Making> {
+  ) -> Followed {
     match begin {
       Some(start) if !self.begun.get() => {
         self.begun.set(true);
@@ -113,20 +113,22 @@ impl NewPipeline {
       Some(_) => {}
       None => self.begun.set(false),
     }
-    let making = self.making.get()?;
+    let Some(making) = self.making.get() else {
+      return Followed::Nothing;
+    };
     if let Some(created) = making
       .created
       .filter(|created| listing.holds(PipelinesFilter::All, *created))
     {
       self.forget();
       navigation.replace(shows(project, created));
-      return None;
+      return Followed::Created(created);
     }
     if begin.is_none() && view.item != Some(making.id) {
       self.forget();
-      return None;
+      return Followed::Nothing;
     }
-    Some(making)
+    Followed::Making(making)
   }
 
   /// Makes a pipeline that starts from `start`: a copy is named after what it copies, *… copy*.
@@ -187,6 +189,16 @@ impl NewPipeline {
       }
     });
   }
+}
+
+/// What the hub's route came to for the pipeline being made ([`NewPipeline::follow`]).
+pub(super) enum Followed {
+  /// No pipeline is being made.
+  Nothing,
+  /// The route shows the pipeline being made.
+  Making(Making),
+  /// *Create v1* stored it and it is listed: the route was replaced by the stored pipeline's, which the hub shows.
+  Created(ResourceId),
 }
 
 /// The hub's view of pipeline `id`.

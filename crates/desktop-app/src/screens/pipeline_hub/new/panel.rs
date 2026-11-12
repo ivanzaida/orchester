@@ -104,7 +104,8 @@ struct NewPanel {
   /// The name has had the keys once, as the panel opened.
   focused_once: Ref<bool>,
   focused: Signal<bool>,
-  select: Signal<bool>,
+  /// The prefilled name of a copy waits to be selected once the field has the keys.
+  select: Ref<bool>,
   faulty: step::Faulty,
   reset: Signal<u64>,
   pick_agent: Signal<bool>,
@@ -129,7 +130,7 @@ impl Component for NewPanel {
       input: TextInputController::new(),
       focused_once: ctx.create_ref(false),
       focused: ctx.signal(false),
-      select: ctx.signal(!props.making.first_name.is_empty()),
+      select: ctx.create_ref(!props.making.first_name.is_empty()),
       faulty: ctx.signal(Vec::new()),
       reset: ctx.signal(0),
       pick_agent: ctx.signal(false),
@@ -151,6 +152,7 @@ impl Component for NewPanel {
     let busy = self.create.state().get().is_pending() || props.making.created.is_some();
     mark(&self.saving, self.create.state().get().is_pending());
     self.tell_hub(&props, &made, &state);
+    self.select_name(ctx, &props);
     let body = match self.open_step(ctx, &props, &made) {
       Some(OpenStep::Step(key)) => self.step_body(ctx, &props, (&made, busy), &key),
       Some(OpenStep::Deliver) => self.deliver_body(ctx, &props, (&made, busy)),
@@ -337,6 +339,18 @@ impl NewPanel {
     None
   }
 
+  /// Selects a copy's prefilled name once the field has the keys, so typing replaces it (P14b). The field answers its
+  /// controller only after the pass that gave it the keys, so the selection is made in the render a later tick brings.
+  fn select_name(&self, ctx: &mut Ctx, props: &Props) {
+    let settled = ctx.future(self.focused.get(), |focused| async move { Ok::<bool, String>(focused) });
+    if self.select.get() && settled.state().get().data == Some(true) {
+      let end = props.new.name.get_untracked().len();
+      if self.input.select(0, end).is_ok() {
+        self.select.set(false);
+      }
+    }
+  }
+
   /// The pipeline's own body: the head, *Start from*, the flow of a starter or an empty pipeline, and *Pipeline*.
   fn pipeline_body(&self, ctx: &mut Ctx, props: &Props, (made, state, busy): (&Made, &State, bool)) -> Column {
     if !self.focused_once.get() {
@@ -350,7 +364,6 @@ impl NewPanel {
         name: &props.new.name,
         input: &self.input,
         focused: &self.focused,
-        select: &self.select,
         taken: state.named == Named::Taken,
         locked: busy,
       },

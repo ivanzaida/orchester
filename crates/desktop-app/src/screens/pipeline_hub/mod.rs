@@ -234,10 +234,21 @@ impl Component for PipelineHubScreen {
       _ => named,
     };
     let id = project.open.project.id();
-    let making = listing
+    let followed = listing
       .as_ref()
       .filter(|_| failed.is_none())
-      .and_then(|listing| self.new.follow(ctx, (begin, view), listing, (&navigation, id)));
+      .map_or(new::Followed::Nothing, |listing| {
+        self.new.follow(ctx, (begin, view), listing, (&navigation, id))
+      });
+    // The route *Create v1* just replaced is not the one this render was given: the hub shows the stored pipeline.
+    let (making, named, view) = match followed {
+      new::Followed::Making(making) => (Some(making), named, view),
+      new::Followed::Created(created) => {
+        let stored = PipelinesView::new(PipelinesFilter::All, Some(created));
+        (None, stored, stored)
+      }
+      new::Followed::Nothing => (None, named, view),
+    };
     let selected = listing
       .as_ref()
       .filter(|_| making.is_none())

@@ -29,8 +29,6 @@ pub(super) struct Head<'a> {
   pub input: &'a TextInputController,
   /// Whether the field has the keys, which its ring says.
   pub focused: &'a Signal<bool>,
-  /// The prefilled name waits to be selected once the field has the keys.
-  pub select: &'a Signal<bool>,
   /// The name's slug is taken.
   pub taken: bool,
   pub locked: bool,
@@ -71,13 +69,7 @@ fn field(ctx: &Ctx, head: &Head<'_>) -> Element {
     }
     .resolve(&theme.typography(), &theme.palette())
   };
-  let (gained, lost, select, input, name) = (
-    head.focused.clone(),
-    head.focused.clone(),
-    head.select.clone(),
-    head.input.clone(),
-    head.name.clone(),
-  );
+  let (gained, lost) = (head.focused.clone(), head.focused.clone());
   let mut typed = TextInput::styled(head.name.clone(), resolve(PaletteColor::TextPrimary))
     .placeholder_style(resolve(PaletteColor::TextMuted))
     .placeholder(&ctx.t("pipeline_new.namePlaceholder"))
@@ -88,17 +80,7 @@ fn field(ctx: &Ctx, head: &Head<'_>) -> Element {
     .caret_color(PaletteColor::TextPrimary)
     .controller(head.input.clone())
     .single_line()
-    .on_focus(move || {
-      gained.set(true);
-      // The copy's name is selected once, so typing replaces it (P14b).
-      if select.get_untracked() {
-        select.set(false);
-        let end = name.get_untracked().len();
-        if let Err(error) = input.select(0, end) {
-          tracing::debug!(?error, "the new pipeline's name could not be selected");
-        }
-      }
-    })
+    .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false));
   if head.locked {
     typed = typed
