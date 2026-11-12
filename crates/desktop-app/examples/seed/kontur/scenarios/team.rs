@@ -314,6 +314,15 @@ pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
   write_marker(kontur, State::TeamEditVariables)
 }
 
+/// As [`edit`], `orders-report` in the team's form, naming the team secret `ORDERS_DB` (`team-tools`): an admin edits
+/// a team HTTP tool (`sentry-issues`, A33 `t2RMXK`) and database query (`orders-report`, A35 `YBG4T`) in place, and
+/// *New tool* makes either (A32 `gLLEv`, A34 `WUuEj`).
+pub fn tools(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources_by_name(kontur)?;
+  team_computer::forms_computer(kontur)?;
+  write_marker(kontur, State::TeamEdit)
+}
+
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
   team_computer::forms_computer(kontur)?;

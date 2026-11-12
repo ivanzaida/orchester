@@ -14,7 +14,7 @@ use lurq::app::{
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
-  resource::{AgentProfile, Instruction, ResourceKind, Skill, TeamAgentProfile, Tool},
+  resource::{AgentProfile, Instruction, ResourceKind, Skill, TeamAgentProfile, TeamTool, Tool},
   secret::SecretVault,
   time::Timestamp,
 };
@@ -66,6 +66,8 @@ pub(super) enum Make {
   Instruction(Name, Box<Instruction>),
   Skill(String, Box<Skill>),
   Tool(Name, Box<Tool>),
+  /// A team project's tool, as the team holds it: its secret by name.
+  TeamTool(Name, Box<TeamTool>),
 }
 
 impl Make {
@@ -76,7 +78,7 @@ impl Make {
       Self::TeamProfile(profile) => profile.role().as_str().to_owned(),
       Self::McpServer(input) => input.name.clone(),
       Self::LocalMcpServer(local) => local.draft.name.as_str().to_owned(),
-      Self::Instruction(name, _) | Self::Tool(name, _) => name.as_str().to_owned(),
+      Self::Instruction(name, _) | Self::Tool(name, _) | Self::TeamTool(name, _) => name.as_str().to_owned(),
       Self::Skill(name, _) => name.clone(),
     }
   }
@@ -88,7 +90,7 @@ impl Make {
       Self::McpServer(_) | Self::LocalMcpServer(_) => Outside::Connections,
       Self::Instruction(..) => Outside::Instructions,
       Self::Skill(..) => Outside::Skills,
-      Self::Tool(..) => Outside::Tools,
+      Self::Tool(..) | Self::TeamTool(..) => Outside::Tools,
     }
   }
 
@@ -97,7 +99,12 @@ impl Make {
   pub(super) const fn needs_a_person(&self) -> bool {
     matches!(
       self,
-      Self::Profile(_) | Self::TeamProfile(_) | Self::McpServer(_) | Self::LocalMcpServer(_) | Self::Tool(..)
+      Self::Profile(_)
+        | Self::TeamProfile(_)
+        | Self::McpServer(_)
+        | Self::LocalMcpServer(_)
+        | Self::Tool(..)
+        | Self::TeamTool(..)
     )
   }
 }
@@ -203,13 +210,15 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
       Name::new(&name).map_err(|error| Failed::Said(name_error(&error)))?,
       Publication::of_body(root, id, &*body).map_err(refused)?,
     ),
-    Make::Tool(name, tool) => (
+    Make::TeamTool(name, tool) => (
       ResourceKind::Tool,
       name,
-      Publication::of_tool(root, id, &tool).map_err(refused)?,
+      Publication::of_team_tool(&tool).map_err(refused)?,
     ),
-    // A team project's form makes the team's form of a profile.
-    Make::LocalMcpServer(_) | Make::Profile(_) => return Err(Failed::Said(Message::new("team_new.localOnly"))),
+    // A team project's form makes the team's form of a profile and a tool.
+    Make::LocalMcpServer(_) | Make::Profile(_) | Make::Tool(..) => {
+      return Err(Failed::Said(Message::new("team_new.localOnly")));
+    }
   };
   Ok(NewTeamResource {
     id,
@@ -235,7 +244,9 @@ fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Archi
     }
     Make::Profile(profile) => create_decided(root, *profile, request.decided).map_err(said),
     // A team MCP server and a team profile are the team's alone: a local project's form makes local ones.
-    Make::McpServer(_) | Make::TeamProfile(_) => return Err(said(Message::new("team_new.teamOnly"))),
+    Make::McpServer(_) | Make::TeamProfile(_) | Make::TeamTool(..) => {
+      return Err(said(Message::new("team_new.teamOnly")));
+    }
     Make::Instruction(name, body) => instructions::create_in(root, name, &body)
       .map(|entry| entry.id)
       .map_err(|error| said(error.message())),

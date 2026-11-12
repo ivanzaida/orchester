@@ -22,7 +22,8 @@ use lurq::{
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
-  resource::{Instruction, Skill, TeamAgentProfile, Tool, VersionNumber},
+  resource::{Instruction, Skill, TeamAgentProfile, TeamTool, VersionNumber},
+  sharing::widens,
 };
 use orchester_workspace::{
   agents::team_body_edit::{self, Latest},
@@ -30,7 +31,6 @@ use orchester_workspace::{
   sharing::{Servers, team_edit::EditRefused},
   tasks::outside::Outside,
   team_config::TeamConfig,
-  tools::widening::changes,
 };
 use parking_lot::Mutex;
 
@@ -98,12 +98,12 @@ team_body!(
   |_: &Skill, _: &Skill| false,
   team_body_edit::save
 );
-// A tool goes in the team's form, its secret by name, so Save also publishes again one that named it by id.
+// A tool is edited in the team's form, its secret by name; it widens as a teammate's version of it would.
 team_body!(
-  Tool,
+  TeamTool,
   Outside::Tools,
-  |before: &Tool, after: &Tool| !changes(Some(before), after, FIRST).is_empty(),
-  team_body_edit::save_tool
+  |before: &TeamTool, after: &TeamTool| !widens(Some(before), after).is_empty(),
+  team_body_edit::save_team_tool
 );
 team_body!(
   TeamAgentProfile,
@@ -111,9 +111,6 @@ team_body!(
   profile_widens,
   team_body_edit::save
 );
-
-/// The key [`changes`] says a tool that was no command became one with: it widens too.
-const FIRST: &str = "appMcp.projectTools.widens.firstVersion";
 
 /// A profile widens what its agents may do when its role's prompts change (what they are told to do first), its
 /// permissions grow, or it gives them an MCP server or a tool it did not.

@@ -8,7 +8,10 @@
 //! resource's own fields and nothing to send: Create makes v1 on this computer, or for an MCP server, which has no
 //! versions, the server itself.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -23,6 +26,7 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
+  agents::team_tool::{CallingPipeline, calling_pipelines},
   connections::data::ProjectConnections,
   local_archive::Archivable,
   sharing::{team::TeamConfiguration, team_edit::Refusal},
@@ -190,6 +194,7 @@ impl Component for NewPanel {
     let refused_name = taken_by_server(refused.as_ref());
     let offer = self.offer(ctx, (kind, mode), &repo_root);
     let connections = self.connections(ctx, (kind, mode), &repo_root);
+    let pipelines = pipelines(ctx, (kind, mode), &repo_root);
     let shown = Shown {
       mode,
       taken: &taken,
@@ -197,6 +202,7 @@ impl Component for NewPanel {
       locked: pending,
       offer: &offer,
       connections: connections.as_ref(),
+      pipelines: &pipelines,
       first: &self.first,
       refused_name: refused_name.as_deref(),
       published: None,
@@ -247,9 +253,10 @@ impl NewPanel {
     Offer::read(read.as_ref(), config.as_ref().map(|config| config.as_deref()))
   }
 
-  /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from.
+  /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from,
+  /// and a local tool's form the secret it sends or connects with.
   fn connections(&self, ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Option<ProjectConnections> {
-    if (kind, mode) != (Kind::McpServer, Mode::Local) {
+    if mode != Mode::Local || !matches!(kind, Kind::McpServer | Kind::Tool) {
       return None;
     }
     queries::state(&data::load(ctx, root.to_path_buf())).data
@@ -309,6 +316,18 @@ impl NewPanel {
   }
 }
 
+/// The team's pipelines, which a team tool's form lets call it; none for another form.
+fn pipelines(ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Vec<CallingPipeline> {
+  if (kind, mode) != (Kind::Tool, Mode::Team) {
+    return Vec::new();
+  }
+  Services::of(ctx)
+    .workspace
+    .team_read(root)
+    .config()
+    .map_or_else(Vec::new, |config| calling_pipelines(config))
+}
+
 /// The form gives way to what it `made` once the hub's list holds it (`listed`): the route goes to it in place, so the
 /// list and the panel show it chosen at once. Before that the list's last answer does not hold it, and going to it
 /// would show another resource, or the kind's empty tab.
@@ -348,7 +367,7 @@ fn sections(
   ctx: &Ctx,
   (kind, mode): (Kind, Mode),
   (rows, after): (Vec<Row>, Vec<Element>),
-  computer_note: Option<&str>,
+  computer_note: Option<Arc<str>>,
 ) -> Vec<Element> {
   let first: Element = match mode {
     Mode::Team => for_team(ctx, rows).into(),
@@ -356,7 +375,7 @@ fn sections(
   };
   let note = computer_note
     .filter(|_| mode == Mode::Team)
-    .map(|note| computer(ctx, note).into());
+    .map(|note| computer(&note).into());
   std::iter::once(first).chain(after).chain(note).collect()
 }
 
@@ -389,7 +408,7 @@ fn head(ctx: &Ctx, kind: Kind, mode: Mode) -> Row {
 }
 
 /// What each computer fills in afterwards, apart from the team's rows (`Computer` note in A7).
-fn computer(ctx: &Ctx, key: &str) -> Row {
+fn computer(words: &str) -> Row {
   Row::new()
     .id("team-new-computer")
     .width(Dimension::Pct(100.0))
@@ -400,7 +419,7 @@ fn computer(ctx: &Ctx, key: &str) -> Row {
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
     .child(
-      Text::new(&ctx.t(key))
+      Text::new(words)
         .id("team-new-computer-text")
         .variant(HubText::Value.role())
         .color(PaletteColor::TextSecondary)

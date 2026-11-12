@@ -56,7 +56,7 @@ pub(super) fn section(ctx: &Ctx, view: &View<'_>) -> Column {
   let mut rows = Vec::new();
   rows.extend(path_row(ctx, view));
   for name in &view.sheet.secrets {
-    rows.push(fill::secret_row(ctx, name, fill::value_of(view.missing, name)));
+    rows.push(fill::secret_row(ctx, name, fill::value_of(view.missing, name), None));
   }
   rows.push(here_row(ctx, view));
   rows::on_this_computer(ctx, rows, Some(note(ctx, view).into()))

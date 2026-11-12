@@ -9,7 +9,7 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText};
 use orchester_workspace::{agents::form::prompt_error, instructions::publication};
 
-use super::{Drawn, Form, Line, Look, Section};
+use super::{Drawn, Form, Line, Look, Need, Section};
 use crate::{screens::team_hub::rows, ui::message::message_text};
 
 const NAME: Line = Line {
@@ -18,7 +18,7 @@ const NAME: Line = Line {
   sub: Some("team_new.instruction.nameSub"),
   placeholder: Some("team_new.instruction.namePlaceholder"),
   look: Look::Plain,
-  required: true,
+  required: Need::ToMake,
 };
 
 /// The text is at least 180 high (`Input` `sTxOp` in A10 `hGdGu`).
@@ -69,6 +69,7 @@ impl InstructionFields {
     let was = form.base.map(|base| base.text().as_str());
     let section = form.section(ctx, &TEXT, &self.text, (was, error));
     Drawn {
+      marked: false,
       name,
       rows: vec![format],
       sections: vec![section],

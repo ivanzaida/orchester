@@ -1,9 +1,10 @@
-//! An admin's panel of a team command tool, edited in place (`A29 · Agents · Tool · admin · editing` `FrraS`): the
-//! head, the chips with *Unsaved changes* while it differs from the version it is made on, *From the team* with the
-//! form that makes one ([`ToolFields`]: its kind, description, program, arguments one per line and how long it may
-//! run), *On this computer* as the plain panel has it, and the fixed Save/Cancel bar ([`super::super::edit`]). Its exit
-//! codes, output limit and environment stay as the version has them. An HTTP request or a database query is read
-//! here as values and not edited (A6 `u9Hcc`): its panel stays the plain one.
+//! An admin's panel of a team tool, edited in place (`A29 · Agents · Tool · admin · editing` `FrraS` for a command,
+//! A33 `t2RMXK` for an HTTP request, A35 `YBG4T` for a database query): the head, the chips with *Unsaved changes*
+//! while it differs from the version it is made on, *From the team* with the form that makes one ([`ToolFields`]: its
+//! kind, description, and what it runs or calls), an HTTP or database tool's *Access*, *On this computer* as the plain
+//! panel has it, and the fixed Save/Cancel bar ([`super::super::edit`]). A command's exit codes, output limit and
+//! environment stay as the version has them. The value of the secret a tool names is given here by pressing its box,
+//! since the bar is Save's: it is the person's, as the plain panel's *Add value* is (A6 `u9Hcc`).
 
 use std::sync::Arc;
 
@@ -15,23 +16,27 @@ use lurq::{
   components::Row,
   node::Element,
 };
-use orchester_core::resource::Tool;
+use orchester_core::{resource::TeamTool, secret::SecretName};
+use orchester_workspace::agents::team_tool::{ToolSecret, calling_pipelines};
 
-use super::{Props, chip, computer, from_team};
+use super::{ADD_VALUE, Props, chip, computer, from_team};
 use crate::{
   screens::{
     hub::forms::{Form, Ids, ToolFields},
+    settings::orchester::PersonOnly,
     team_hub::{
+      actions::Actions,
       archive,
       edit::{Edit, View},
-      panel, words,
+      panel, secret, words,
     },
   },
   services::Services,
+  ui::pressable::Press,
 };
 
 /// The ids of the edit's parts, which tests and automation address: `team-hub-from-team-program-input`,
-/// `team-hub-from-team-arguments-input`, …
+/// `team-hub-from-team-url-input`, `team-hub-from-team-environment-value-production`, …
 const IDS: Ids = Ids {
   rows: "team-hub-from-team",
   sections: "team-hub",
@@ -45,7 +50,10 @@ impl DevtoolsInspectable for EditorProps {}
 
 pub(super) struct ToolEditor {
   fields: ToolFields,
-  edit: Edit<Tool>,
+  edit: Edit<TeamTool>,
+  actions: Actions,
+  secret: secret::Entry,
+  person: PersonOnly,
 }
 
 impl Component for ToolEditor {
@@ -56,15 +64,23 @@ impl Component for ToolEditor {
     let fields = ToolFields::new(ctx);
     let load = {
       let fields = fields.clone();
-      Arc::new(move |tool: &Tool| fields.load(tool))
+      Arc::new(move |tool: &TeamTool| fields.load_team(tool))
     };
     let edit = Edit::new(
       ctx,
       (props.repo_root.clone(), props.project, props.entry.id),
-      props.sheet.edit.as_ref(),
+      props.sheet.latest.as_ref(),
       load,
     );
-    Self { fields, edit }
+    let editor = Self {
+      fields,
+      edit,
+      actions: Actions::new(ctx, &props.repo_root),
+      secret: secret::Entry::new(ctx),
+      person: PersonOnly::new(ctx),
+    };
+    editor.secret.follow_save(ctx, &editor.actions.add_value);
+    editor
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -72,7 +88,12 @@ impl Component for ToolEditor {
     let Some(base) = self.edit.base() else {
       return Element::from(Row::new());
     };
-    let drawn = self.fields.draw(
+    let pipelines = Services::of(ctx)
+      .workspace
+      .team_read(&props.repo_root)
+      .config()
+      .map_or_else(Vec::new, |config| calling_pipelines(config));
+    let drawn = self.fields.draw_team(
       ctx,
       &Form {
         ids: IDS,
@@ -81,9 +102,10 @@ impl Component for ToolEditor {
         tried: true,
         locked: false,
       },
+      &pipelines,
     );
     self.edit.keep_up(
-      props.sheet.edit.as_ref(),
+      props.sheet.latest.as_ref(),
       drawn.made.as_ref().map_or(true, |tool| *tool != base.body),
     );
     let sheet = &props.sheet;
@@ -114,12 +136,43 @@ impl Component for ToolEditor {
       .into_iter()
       .chain([chip(ctx, &props.listing, entry)])
       .collect();
+    let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
+    let ask = match &sheet.secret {
+      ToolSecret::Named(name) => Some(self.ask(name)),
+      ToolSecret::ById | ToolSecret::None => None,
+    };
     let body = panel::body()
       .child(head)
       .child(panel::chips_of(ctx, entry, badges, panel::used_by(ctx, &sheet.used_by)))
       .with_children(parts.notice)
       .child(from_team::section_of(ctx, drawn.rows))
-      .child(computer::section(ctx, entry, sheet, &[]));
-    panel::frame(entry, body, Some(parts.bar)).into()
+      .with_children(drawn.sections)
+      .child(computer::section(ctx, (entry, sheet), missing, ask))
+      .with_children(self.person.reason(ctx, ADD_VALUE));
+    let dialog = self.secret.dialog(
+      ctx,
+      secret::Entry::save_by(&self.actions.add_value, &self.person),
+      self.actions.add_value.state().get().is_pending(),
+      self.person.reason(ctx, secret::SAVE),
+    );
+    panel::frame(entry, body, Some(parts.bar)).with_children(dialog).into()
+  }
+}
+
+impl Drop for ToolEditor {
+  fn drop(&mut self) {
+    self.secret.wipe();
+  }
+}
+
+impl ToolEditor {
+  /// A press on the box of the value of `name`: the dialog that takes it opens, on a person's press alone.
+  fn ask(&self, name: &SecretName) -> Press {
+    let (entry, name, person) = (self.secret.clone(), name.clone(), self.person.clone());
+    Press::run(move || {
+      if person.allows(ADD_VALUE) {
+        entry.ask(&name);
+      }
+    })
   }
 }

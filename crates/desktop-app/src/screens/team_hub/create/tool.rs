@@ -1,17 +1,21 @@
-//! The form of a new tool (`Agents · New tool` A12 `T4rWil`, L7 `q5aX9`): the tool's fields as its edit has them
-//! ([`ToolFields`]: its name, kind and what a command runs), empty. A tool is the team's whole except the values of
-//! the secrets it names, which each computer adds. A command is what this form makes; an HTTP request and a database
-//! query are shown as not available, and Create stays off for them.
+//! The form of a new tool (`Agents · New tool` A12 `T4rWil`, L7 `q5aX9`; A32 `gLLEv`, A34 `WUuEj`, L20 `Kb6Vk`, L23
+//! `cZGTp`): the tool's fields as its edit has them ([`ToolFields`]: its name, kind, and what it runs or calls, with an
+//! HTTP request's or a database query's *Access*), empty. A team's tool is the team's whole except the values of the
+//! secrets it names, which each computer adds; a local one picks its secret from the project's.
 
-use lurq::app::ctx::Ctx;
+use std::sync::Arc;
+
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
+use orchester_core::name::Name;
 use orchester_workspace::tools::form::tool_name;
 
 use super::{
   fields::{self, Body, Shown, name_error},
+  mode::Mode,
   work::Make,
 };
 use crate::{
-  screens::hub::forms::{Form, Ids, Naming, ToolFields},
+  screens::hub::forms::{Drawn, Form, Ids, Naming, ToolFields},
   ui::message::message_text,
 };
 
@@ -46,37 +50,64 @@ impl Fields {
           .filter(|_| shown.tried && !name.trim().is_empty())
           .map(|message| message_text(ctx, message))
       });
-    let drawn = self.fields.draw(
-      ctx,
-      &Form {
-        ids: IDS,
-        base: None,
-        name: Some(Naming {
-          said,
-          first: Some(shown.first),
-        }),
-        tried: shown.tried,
-        locked: shown.locked,
-      },
-    );
-    // A kind this form cannot make says so at the bar's end, before the name does.
-    let kind_off = drawn.made.is_err() && !self.fields.is_command();
-    let make = match (named, drawn.made) {
-      (Ok(name), Ok(tool)) => Some(Make::Tool(name, Box::new(tool))),
-      _ => None,
+    let named = named.ok();
+    let made = match shown.mode {
+      Mode::Team => Made::of(
+        self.fields.draw_team(ctx, &form(said, shown), shown.pipelines),
+        named,
+        Make::TeamTool,
+      ),
+      Mode::Local => {
+        let secrets = shown.connections.map(|connections| &connections.secrets[..]);
+        Made::of(self.fields.draw(ctx, &form(said, shown), secrets), named, Make::Tool)
+      }
     };
     Body {
       lead: None,
-      rows: drawn.name.into_iter().chain(drawn.rows).collect(),
-      after: drawn.sections,
-      computer: Some("team_new.computer.tool"),
-      make,
-      off: if kind_off {
-        Some("team_new.tool.kindOff")
+      rows: made.rows,
+      after: made.sections,
+      computer: Some(self.fields.fills_in(ctx)),
+      make: made.make,
+      // What was typed in a field that cannot be used says so at the bar's end, before the name does (L22 `Xp89k`).
+      off: if made.marked {
+        Some("team_new.bar.fixFields")
       } else {
         fields::off(shown, &name)
       },
       overlay: None,
+    }
+  }
+}
+
+/// The form as `shown` has it, its name saying `said`.
+fn form<'a, B>(said: Option<Arc<str>>, shown: &Shown<'a>) -> Form<'a, B> {
+  Form {
+    ids: IDS,
+    base: None,
+    name: Some(Naming {
+      said,
+      first: Some(shown.first),
+    }),
+    tried: shown.tried,
+    locked: shown.locked,
+  }
+}
+
+/// What the form draws, and what Create makes of it, once the name and every field are valid.
+struct Made {
+  rows: Vec<Row>,
+  sections: Vec<Element>,
+  marked: bool,
+  make: Option<Make>,
+}
+
+impl Made {
+  fn of<B>(drawn: Drawn<B>, name: Option<Name>, make: fn(Name, Box<B>) -> Make) -> Self {
+    Self {
+      rows: drawn.name.into_iter().chain(drawn.rows).collect(),
+      sections: drawn.sections,
+      marked: drawn.marked,
+      make: name.zip(drawn.made.ok()).map(|(name, body)| make(name, Box::new(body))),
     }
   }
 }

@@ -1,12 +1,12 @@
-//! The panel of a local command tool (`Detail` in L1, `docs/design/team-configuration.md` rule 11), edited in place as
-//! a team admin edits one (A29 `FrraS`): the head with *Versions* and the … menu, the chips, *Tool* (the profiles that
-//! give it to their agents, then the form that makes one, [`crate::screens::hub::forms::ToolFields`]: its kind, its
-//! description, program, arguments one per line and how long it may run), *Ready?* and the pinned *Save* and *Cancel*
+//! The panel of a local tool (`Detail` in L1, `docs/design/team-configuration.md` rule 11), edited in place as a team
+//! admin edits one (A29 `FrraS`; L21 `ldRQO`, L24 `OSniP`): the head with *Versions* and the … menu, the chips, *Tool*
+//! (the profiles that give it to their agents, then the form that makes one,
+//! [`crate::screens::hub::forms::ToolFields`]: its kind, its description, and what it runs or calls), an HTTP or
+//! database tool's *Access*, *Ready?* and the pinned *Save* and *Cancel*
 //! ([`super::save_bar`]). What is typed is only the panel's until *Save*, which publishes it as the next version at
 //! once ([`orchester_workspace::tools::local_edit`]); a change that widens what agents may run asks first, and only a
 //! person answers. *Cancel* puts back what is published. Its name was fixed when it was made; its exit codes, output
-//! limit and environment stay as the version has them. An HTTP request or a database query has no form yet: its panel
-//! is the plain one ([`super::editing`]).
+//! limit and environment stay as the version has them.
 //!
 //! The project's tools are read once for every tool the panel shows, through their query (`queries::hub::tools`), kept
 //! for the session, and again when the tools change (the panel's own *Save* records such a change). Only the first read
@@ -26,11 +26,9 @@ use lurq::{
   node::Element,
 };
 use orchester_core::id::ResourceId;
-use orchester_workspace::tools::form::CommandText;
 
 use self::editor::EditorProps;
 use super::{
-  editing,
   mcp::UnsavedSignal,
   model::Entry,
   panel::{Bone, BoneRow, bones},
@@ -105,7 +103,7 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<Loader>("local-hub-tool-reader", props)
 }
 
-/// Reads the project's tools and shows the editor of a command over them, or the plain panel of another kind.
+/// Reads the project's tools and shows the editor of one over them.
 struct Loader {
   /// The tool whose editor shows: it keeps what it typed and saved itself while the tools are read again.
   shown: Ref<Option<ResourceId>>,
@@ -149,9 +147,6 @@ impl Component for Loader {
       .into_iter()
       .find_map(|(id, body)| (id == props.id).then_some(body))
       .unwrap_or_else(|| entry.tool.clone());
-    if CommandText::of(&published).is_none() {
-      return editing::panel(ctx, &props.project, &props.entry);
-    }
     self.shown.set(Some(props.id));
     let key = format!("local-hub-tool-edit-{}", props.id);
     ctx.mount_keyed::<editor::Editor>(&key, EditorProps { props, published })

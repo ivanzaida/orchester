@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 194] = [
+const NAMES: [&str; 196] = [
   "reviewer-row",
   "reviewer-row-local",
   "reviewer-row-unavailable",
@@ -175,6 +175,7 @@ const NAMES: [&str; 194] = [
   "team-not-ready",
   "team-not-ready-ended",
   "team-edit",
+  "team-tools",
   "team-edit-demoted",
   "team-edit-offline",
   "team-edit-rejects",
@@ -192,6 +193,7 @@ const NAMES: [&str; 194] = [
   "local-hub-secret",
   "local-hub-secret-refused",
   "local-hub-archived",
+  "local-hub-tools",
   "team-archive",
   "team-archived",
   "modules-base-branch",

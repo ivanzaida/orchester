@@ -56,7 +56,7 @@ impl Fields {
       lead: None,
       rows: drawn.name.into_iter().chain(drawn.rows).collect(),
       after: drawn.sections,
-      computer: Some("team_new.computer.skill"),
+      computer: Some(ctx.t("team_new.computer.skill")),
       make,
       off: fields::off(shown, &name),
       overlay: None,
