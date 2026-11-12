@@ -7,7 +7,10 @@
 
 use orchester_core::{
   id::ChatId,
-  orchestrator::{ActionOutcome, ChatEntry, EntryKind, Merging, RunEnd, WaitKind},
+  orchestrator::{
+    ActionOutcome, ChatEntry, EntryKind, Merging, RunEnd, WaitKind,
+    change::{Change, ProposedChange},
+  },
   store::RunStore,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -58,8 +61,8 @@ pub(super) async fn led_here(scope: &ChatScope, key: Option<&str>) -> Result<(),
   }
 }
 
-/// Whether the turn thinking in `chat` (its `entries`) is the one a run's success started, whose run it merged with
-/// `merge_run` in this turn, and to which an order of the conversation applied when its wait was kept.
+/// Whether the turn thinking in `chat` (its `entries`) is the one a run's success started, which merged that very run
+/// with `merge_run` in this turn, and to which an order of the conversation applied when its wait was kept.
 fn merged_under_order(db: &ProjectDb, chat: ChatId, entries: &[ChatEntry]) -> Result<bool, StoreError> {
   let thinking = entries.iter().rev().find_map(|entry| match &entry.kind {
     EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some((entry.seq, entry.at, wait)),
@@ -71,9 +74,13 @@ fn merged_under_order(db: &ProjectDb, chat: ChatId, entries: &[ChatEntry]) -> Re
   if wait.kind != WaitKind::Ended(RunEnd::Succeeded) || wait.merging != Some(Merging::Merges) {
     return Ok(false);
   }
+  // Only the merge of the run whose success started the turn opens its starts: another run's merge does not.
   let merged = entries.iter().filter(|entry| entry.seq > seq).any(|entry| {
     matches!(&entry.kind, EntryKind::Action(action)
-      if action.tool == MERGE_RUN && action.outcome == ActionOutcome::Done)
+      if action.tool == MERGE_RUN
+        && action.outcome == ActionOutcome::Done
+        && matches!(action.change.as_deref(), Some(ProposedChange { change: Change::Merge { run, .. }, .. })
+          if *run == wait.run))
   });
   if !merged {
     return Ok(false);

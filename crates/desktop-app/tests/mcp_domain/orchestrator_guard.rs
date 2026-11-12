@@ -7,7 +7,10 @@
 
 use orchester_core::{
   id::IdempotencyKey,
-  orchestrator::{ActionOutcome, Subscription, WatchTarget},
+  orchestrator::{
+    ActionOutcome, ChatAction, Subscription, WatchTarget,
+    change::{Change, ProposedChange},
+  },
   resource::Pipeline,
   run::{AllowAutopilot, InterruptCause, RunLimit},
   store::{MergeStore, ResourceStore, RunStore, TaskStore},
@@ -68,6 +71,22 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
   watch(&mut db, &scope, draft.id(), order);
   let early = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not merged yet");
   assert_eq!(refusal(&early), "not_merge_turn");
+  // Another run's merge in the same turn does not open its starts: only the merge of the run whose success started it.
+  let (other_task, other) = task_run(&db, "Sync contacts with HubSpot");
+  let mut elsewhere = ChatAction::new("merge_run", Some(other_task.key().to_string()), ActionOutcome::Done);
+  elsewhere.change = Some(Box::new(ProposedChange {
+    subject: other_task.details().title.as_str().to_owned(),
+    change: Change::Merge {
+      run: other.id(),
+      number: other.number().get(),
+      checkpoint: None,
+      into: None,
+    },
+  }));
+  db.add_chat_action(scope.chat, &elsewhere, Timestamp::now())
+    .expect("kept");
+  let other_merged = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not this turn's run");
+  assert_eq!(refusal(&other_merged), "not_merge_turn");
   let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
   let told = chat_call(&mut served, &scope, "merge_run", merge).expect("merged");
   assert_eq!(told.get("waits_for_person"), None, "{told}");
