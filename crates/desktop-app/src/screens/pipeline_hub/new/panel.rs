@@ -33,13 +33,14 @@ use super::{
   Choice, Making, NewPipeline, bar,
   bar::Creating,
   create::{self, Ask, Create},
-  details, head, start,
-  words::{self, Lacks, Named},
+  details, head,
+  reason::{self, Lacks, Named, Reason},
+  start, words,
 };
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
+  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
   screens::{
     local_hub::leave::Leave,
     pipeline_hub::{
@@ -167,7 +168,15 @@ impl Component for NewPanel {
       props.project.open.project.id(),
       ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, None)),
     ));
-    frame(body, refused, bar::bar(ctx, creating, cancel))
+    let navigation = Navigation::of(ctx);
+    let (project, pipeline) = (props.project.open.project.id(), props.making.id);
+    let opens = move |key: &StepKey| {
+      Press::Open(navigation.to(Route::Project(
+        project,
+        ProjectPage::Pipeline(pipeline, PipelineView::Step(key.clone())),
+      )))
+    };
+    frame(body, refused, bar::bar(ctx, (creating, cancel), &opens))
   }
 }
 
@@ -190,7 +199,7 @@ struct State {
   taken_by: Option<Entry>,
   named: Named,
   /// Why *Create v1* is off; `None` once it can create.
-  off: Option<Arc<str>>,
+  off: Option<Reason>,
   typed: bool,
 }
 
@@ -278,8 +287,8 @@ impl NewPanel {
       (Some(_), None) => None,
     };
     let off = step::fix_words(ctx, &self.faulty, &made.current)
-      .map(Arc::from)
-      .or_else(|| words::off(ctx, named, lacks));
+      .map(Reason::plain)
+      .or_else(|| reason::off(ctx, named, lacks));
     let description = self.description.get();
     let typed = name != props.making.first_name
       || self.based.get().is_some_and(|based| based.description != description)
@@ -311,7 +320,7 @@ impl NewPanel {
   }
 
   /// The step or the Deliver step the route holds open, when the pipeline has it (a copy's too, whose steps are not
-  /// drawn); a route that names one it has not (any more, as after another start) shows
+  /// drawn but open from the bar's reason); a route that names one it has not (any more, as after another start) shows
   /// the pipeline and is corrected to say so.
   fn open_step(&self, ctx: &mut Ctx, props: &Props, made: &Made) -> Option<OpenStep> {
     let named = props.step.clone()?;
@@ -449,7 +458,7 @@ impl NewPanel {
       return Creating::Off(why);
     }
     let Some(edit) = made.edit.clone() else {
-      return Creating::Off(ctx.t("pipeline_new.bar.copy"));
+      return Creating::Off(Reason::plain(ctx.t("pipeline_new.bar.copy").to_string()));
     };
     let (create, name, description) = (self.create.clone(), props.new.name.clone(), self.description.clone());
     Creating::Ready(

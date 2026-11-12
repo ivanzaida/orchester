@@ -43,6 +43,11 @@ fn stored(agents: &Agents) -> usize {
     .len()
 }
 
+/// What the bar's reason says, its pieces' words one space apart.
+fn said(agents: &mut Agents) -> String {
+  agents.text(HINT).split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[test]
 fn pipeline_new_opens_unsaved_in_the_panel_with_the_starters_flow() {
   let (mut agents, quick) = making();
@@ -86,15 +91,23 @@ fn pipeline_new_opens_unsaved_in_the_panel_with_the_starters_flow() {
     "Implement runs Builder"
   );
   assert_eq!(
-    agents.text(HINT),
-    "Name it and make 5 steps ready · nothing is saved yet"
+    said(&mut agents),
+    "Name it and make 01 Research , 02 Plan and 3 more ready · nothing is saved yet"
+  );
+  assert_eq!(
+    agents.text("pipeline-new-reason-plan"),
+    "02 Plan",
+    "a step named is a link"
   );
 
   agents.set(NAME, "Dependency updates");
   agents.until("the row named", |s| {
     s.text("pipeline-hub-row-new").contains("Dependency updates")
   });
-  assert_eq!(agents.text(HINT), "Make 5 steps ready · nothing is saved yet");
+  assert_eq!(
+    said(&mut agents),
+    "Make 01 Research , 02 Plan and 3 more ready · nothing is saved yet"
+  );
   assert_eq!(agents.text("pipeline-new-slug"), "dependency-updates");
   agents.click("pipeline-new-create");
   assert_eq!(stored(&agents), 1, "Create v1 is off: nothing is stored");

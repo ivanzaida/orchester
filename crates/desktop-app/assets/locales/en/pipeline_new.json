@@ -63,7 +63,7 @@
     "steps": {
       "one": "{{number}} {{step}}",
       "two": "{{first}} and {{second}}",
-      "many": "{{count}} steps"
+      "more": "{{first}}, {{second}} and {{count}} more"
     },
     "line": {
       "starter": "Starter · {{steps}} steps · nothing saved",

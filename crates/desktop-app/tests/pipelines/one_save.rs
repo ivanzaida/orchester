@@ -216,8 +216,12 @@ fn pipelines_one_save_create_v1_is_off_with_why_while_a_step_is_not_ready() {
   editor.until("New pipeline", |e| e.exists("pipeline-new-name"));
   editor.set("pipeline-new-name", "Feature delivery");
   assert_eq!(
-    editor.text("team-hub-actions-hint"),
-    "Make 6 steps ready · nothing is saved yet"
+    editor
+      .text("team-hub-actions-hint")
+      .split_whitespace()
+      .collect::<Vec<_>>()
+      .join(" "),
+    "Make 01 Research , 02 Plan and 4 more ready · nothing is saved yet"
   );
   editor.click("pipeline-new-create");
   editor.arm();
