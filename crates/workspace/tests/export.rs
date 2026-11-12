@@ -123,6 +123,7 @@ fn conversation() -> ChatView {
     standing: Default::default(),
     moved: Default::default(),
     events: Default::default(),
+    requests: Default::default(),
     waits_on: Default::default(),
     context: None,
   }

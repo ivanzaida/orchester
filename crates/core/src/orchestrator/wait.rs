@@ -4,7 +4,8 @@
 //! the wait's task by a subscription keeps one entry per wait, linking to its card ([`super::Subscriptions::leading`]);
 //! a task no conversation leads keeps its waits out of every conversation. With *Let the Orchestrator drive* on, a
 //! kept wait also starts one Orchestrator turn by itself, whoever started the run and whatever raised the wait
-//! (ORC-909), except a tool request, which is the person's ([`WaitKind::starts_turns`]).
+//! (ORC-909), a tool request too (decided by the person on 2026-11-11): its turn decides that one request or leaves it
+//! to the person.
 
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +25,8 @@ pub enum WaitKind {
   Message,
   /// A decision on its plan.
   Plan,
-  /// A person's decision on a tool request of its, which came to the person (ORC-894).
+  /// A decision on a tool request of its, which came to the person (ORC-894): the Orchestrator's, once, while it
+  /// drives and is sure, else the person's.
   Approval,
   /// Its task's latest run ended or stopped so: the person decides what comes next.
   Ended(RunEnd),
@@ -47,13 +49,6 @@ impl WaitKind {
       Self::Event(event) => Some(event),
       Self::Question | Self::Message | Self::Plan | Self::Approval | Self::Ended(_) => None,
     }
-  }
-
-  /// Whether a wait of this kind may start an Orchestrator turn by itself under *Let the Orchestrator drive*.
-  /// A tool request is the person's to decide (decide_approval works only while a person lets automation answer): it is
-  /// kept in the conversation and waits for the person whatever the switch.
-  pub const fn starts_turns(self) -> bool {
-    !matches!(self, Self::Approval)
   }
 }
 

@@ -1,10 +1,10 @@
 //! The Orchestrator merges a finished run on its own behind the person's switch (ORC-69, `docs/design/
 //! orchestrator-toolset.md`, decision 5): the chat's rule (`orchestrator::auto_merge`) merges only a task's latest run
-//! that succeeded with every step passed (a step automation accepted does not count), of a task not marked Blocked,
-//! not blocked by unfinished tasks, not held and not saying *Don't merge automatically*; the follower keeps whether the
-//! turn of a run's success merges it or why it is left to the person, only with *merge finished runs*, *merge runs*
-//! and *answer agents* on; and such turns start one at a time in the order the runs ended, across conversations.
-//! `cargo test -p orchester-workspace --test orchestrator_auto_merge auto_merge`.
+//! that succeeded with every step passed (a step accepted as it was counts, whoever accepted it), of a task not marked
+//! Blocked, not blocked by unfinished tasks, not held and not saying *Don't merge automatically*; the follower keeps
+//! whether the turn of a run's success merges it or why it is left to the person, only with *merge finished runs*,
+//! *merge runs* and *answer agents* on; and such turns start one at a time in the order the runs ended, across
+//! conversations. `cargo test -p orchester-workspace --test orchestrator_auto_merge auto_merge`.
 
 mod support;
 
@@ -23,8 +23,8 @@ use orchester_core::{
   },
   resource::ModelId,
   revision::Revision,
-  run::{Answerer, Run, StepFailure, StuckDecision},
-  store::ConnectionStore,
+  run::{Answerer, Run, StepFailure, StepOutcome, StepOutput, StuckDecision, UnverifiedCheck},
+  store::{ActivityStore, ConnectionStore},
   task::organization::{BlockingTask, ChangeActor, DependencyGate, TaskOrganization},
   task_group::{HoldActor, HoldScope},
   time::Timestamp,
@@ -204,6 +204,20 @@ fn accepted(fixture: &mut Fixture, by: Answerer) -> Run {
   let task = fixture.task("Check the import", at(40));
   let mut run = fixture.started_run(task, at(50));
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let step = run.execution(execution).expect("its execution").step().clone();
+  let unverified = StepOutput {
+    run: run.id(),
+    execution,
+    step,
+    outcome: Some(StepOutcome::Unverified),
+    text: "The importer runs; the live feed could not be reached.".to_owned(),
+    unverified: vec![UnverifiedCheck {
+      check: "Imports the live feed".to_owned(),
+      reason: "the feed is not reachable from the worktree".to_owned(),
+    }],
+    created_at: Timestamp::now(),
+  };
+  fixture.db.save_step_output(&unverified).expect("its result");
   let revision = Revision::new(&"b".repeat(40)).expect("revision");
   let events = run
     .fail_judged(execution, (StepFailure::Unverified, Some(revision)), Timestamp::now())
@@ -220,19 +234,45 @@ fn accepted(fixture: &mut Fixture, by: Answerer) -> Run {
   run
 }
 
+/// The person's decision of 2026-11-11 (full autonomy while the chat drives): a step automation accepted as it was
+/// counts as passed, as a person's acceptance does.
 #[test]
-fn auto_merge_counts_a_step_a_person_accepted_and_not_one_automation_accepted() {
-  let mut fixture = Fixture::new();
-  let person = accepted(&mut fixture, Answerer::Person);
-  assert_eq!(rule(&fixture, &person), Merging::Merges);
-  let mut fixture = Fixture::new();
-  let automation = accepted(&mut fixture, Answerer::Automation);
-  assert_eq!(
-    rule(&fixture, &automation),
-    left(MergeLeft::AcceptedByAutomation {
-      step: "Implement".to_owned()
-    })
-  );
+fn auto_merge_counts_a_step_accepted_as_it_was_whoever_accepted_it() {
+  for by in [Answerer::Person, Answerer::Automation] {
+    let mut fixture = Fixture::new();
+    let run = accepted(&mut fixture, by);
+    assert_eq!(rule(&fixture, &run), Merging::Merges, "accepted by {by:?}");
+  }
+}
+
+/// The turn that merges a run whose step automation accepted as it was is told which step and what it left
+/// unverified, read from the run (2026-11-11); a step a person accepted is not the Orchestrator's to report.
+#[test]
+fn auto_merge_turn_names_the_step_automation_accepted_and_what_it_left_unverified() {
+  for (by, told) in [(Answerer::Automation, true), (Answerer::Person, false)] {
+    let mut fixture = Fixture::new();
+    ready(&mut fixture);
+    fixture.everything(at(5));
+    accepted(&mut fixture, by);
+    let followed = follow(&fixture, MERGING);
+    let prompt = fixture
+      .db
+      .chat_turn(followed.turn.expect("a turn").message)
+      .expect("read")
+      .expect("the turn")
+      .text;
+    let prompt = prompt.as_str();
+    for words in [
+      "Steps of this run passed only because you accepted them as they were, unverified.",
+      "- Implement:\n  - Imports the live feed (the feed is not reachable from the worktree)",
+    ] {
+      assert_eq!(
+        prompt.contains(words),
+        told,
+        "accepted by {by:?}: {words:?} in {prompt}"
+      );
+    }
+  }
 }
 
 #[test]
