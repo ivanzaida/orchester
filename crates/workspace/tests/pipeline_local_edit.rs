@@ -373,7 +373,20 @@ fn unpublishable_and_save_take_steps_that_wait_for_only_part_of_a_parallel_group
     none,
     "Save is offered"
   );
-  let saved = save(pipeline.folder.path(), pipeline.pipeline, &opened.body, &branching, &[]).expect("saving takes it");
+  // Two tool steps more is for a person to allow: the save asks, and takes the steps once they did.
+  let asked = save(pipeline.folder.path(), pipeline.pipeline, &opened.body, &branching, &[]).expect("saving asks");
+  let Saved::Confirm(reasons) = asked else {
+    panic!("the added steps are asked about: {asked:?}");
+  };
+  assert_eq!(pipeline.versions().len(), 1, "nothing is stored before the answer");
+  let saved = save(
+    pipeline.folder.path(),
+    pipeline.pipeline,
+    &opened.body,
+    &branching,
+    &reasons,
+  )
+  .expect("saving takes it");
   assert_eq!(saved, Saved::Published(VersionNumber::new(2.try_into().unwrap())));
   let versions = pipeline.versions();
   assert_eq!(versions.len(), 2, "the steps are stored as the next version");

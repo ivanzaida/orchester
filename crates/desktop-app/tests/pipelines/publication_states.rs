@@ -227,7 +227,7 @@ fn pipelines_publication_problems_fit_and_select_every_named_step() {
 
 #[test]
 fn pipelines_summary_long_slug_and_zero_gates_have_room_for_their_lines() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let (id, _) = problems(&editor);
   editor.open(id);
   assert_eq!(editor.text("pipeline-slug-value"), "publication-problems");

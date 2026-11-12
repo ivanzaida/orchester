@@ -4,7 +4,7 @@
 //! `cargo test -p orchester-app --test agents pipeline_hub`.
 
 use orchester_app::{
-  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
+  routes::{PipelinesFilter, PipelinesView, ProjectPage, Route},
   ui::icon::Icon,
 };
 use orchester_core::{
@@ -161,7 +161,7 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
 }
 
 #[test]
-fn pipeline_hub_a_tab_keeps_the_chosen_pipeline_when_it_holds_it_and_a_stale_route_is_corrected() {
+fn pipeline_hub_a_tab_keeps_the_chosen_pipeline_when_it_holds_it_and_a_route_lands_on_the_tab_that_does() {
   let (mut agents, [ready, _, stuck]) = setup();
   ProjectDb::open(&agents.root)
     .expect("database")
@@ -179,12 +179,12 @@ fn pipeline_hub_a_tab_keeps_the_chosen_pipeline_when_it_holds_it_and_a_stale_rou
     "the counts do not follow the tab"
   );
 
-  // A route that names a pipeline the tab does not hold shows the tab's first one and is corrected to it.
+  // A route that names a pipeline only the other tab holds opens that tab with it, and is corrected to it.
   open(&mut agents, PipelinesFilter::Archived, Some(ready));
   agents.until("the corrected route", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::Archived, Some(stuck))
+    s.window.navigation().route_now() == view(PipelinesFilter::All, Some(ready))
   });
-  assert_eq!(agents.text("team-hub-panel-title"), "Quick fix");
+  assert_eq!(agents.text("team-hub-panel-title"), "Feature delivery");
 }
 
 #[test]
@@ -214,35 +214,6 @@ fn pipeline_hub_lists_the_archived_pipelines_under_their_own_tab() {
     !agents.exists("pipeline-hub-edit-steps"),
     "an archived pipeline has no editor to open"
   );
-}
-
-#[test]
-fn pipeline_hub_the_editor_the_pipeline_has_still_opens_and_back_returns_to_the_hub() {
-  let (mut agents, [ready, ..]) = project();
-  open(&mut agents, PipelinesFilter::All, Some(ready));
-  assert!(
-    !agents.exists("pipeline-hub-edit-steps"),
-    "steps that draw as one line are edited in the flow, which has Add step"
-  );
-  agents.window.navigation().go(Route::Project(
-    project_id(),
-    ProjectPage::Pipeline(ready, PipelineView::default()),
-  ));
-  agents.until("the editor", |s| {
-    s.window.navigation().route_now()
-      == Route::Project(project_id(), ProjectPage::Pipeline(ready, PipelineView::default()))
-      && s.exists("pipeline-add-step")
-  });
-  agents.click("pipeline-parent");
-  agents.until("the hub", |s| {
-    s.exists("pipeline-hub-filter") && s.exists("pipeline-hub-master-detail")
-  });
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    view(PipelinesFilter::All, Some(ready)),
-    "back returns to the hub with the pipeline that was open chosen"
-  );
-  assert_eq!(agents.text("team-hub-panel-title"), "Feature delivery");
 }
 
 #[test]
@@ -443,26 +414,6 @@ fn pipeline_hub_a_tab_with_nothing_in_it_says_so_while_the_others_keep_their_pip
   );
   open(&mut agents, PipelinesFilter::All, None);
   assert!(!agents.exists("pipeline-hub-empty"), "the pipeline is still under All");
-}
-
-#[test]
-fn pipeline_hub_back_from_the_page_that_reads_a_pipeline_keeps_it_chosen() {
-  let (mut agents, [ready, ..]) = project();
-  agents.window.navigation().go(Route::Project(
-    project_id(),
-    ProjectPage::Pipeline(ready, PipelineView::default()),
-  ));
-  agents.window.pass();
-  assert!(
-    agents.exists("pipeline-parent") && !agents.exists("pipeline-add-step"),
-    "the page is still reading"
-  );
-  agents.click("pipeline-parent");
-  agents.until("the hub", |s| s.exists("pipeline-hub-master-detail"));
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    view(PipelinesFilter::All, Some(ready))
-  );
 }
 
 /// The icon glyph inside the element `id`, which `Agents::text` leaves out.

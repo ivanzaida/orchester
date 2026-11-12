@@ -47,7 +47,7 @@ fn type_and_save(editor: &mut Editor, field: &str, first: &str) {
 
 #[test]
 fn pipelines_leaving_with_unsaved_edits_requires_a_decision_and_keep_preserves_edits() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Pending");
   editor.go(ProjectPage::Pipelines);
   editor.open(id);
@@ -68,8 +68,10 @@ fn pipelines_leaving_with_unsaved_edits_requires_a_decision_and_keep_preserves_e
   editor.until("kept work saved", |e| {
     e.stored(id).description() == "Pending description"
   });
+  // The team server's answer is stored before the page settles: leaving waits until it says the version is saved.
+  editor.until("the page says saved", |e| e.exists("pipeline-header-history"));
   editor.click("pipeline-parent");
-  editor.until("hub", |e| e.exists(&format!("pipeline-hub-row-{id}")));
+  editor.until("the list", |e| e.exists(&format!("pipeline-row-{id}")));
   editor.open(id);
   assert_eq!(editor.value("pipeline-description"), "Pending description");
 }

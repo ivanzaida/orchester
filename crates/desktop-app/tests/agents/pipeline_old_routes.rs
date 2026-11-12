@@ -1,6 +1,6 @@
-//! A local project's routes to the old Pipelines page open the Pipelines hub (PV2-14): the old page's Settings and
-//! Versions tabs, its publish review and a published version show the pipeline's panel, a step's page opens the step
-//! in the panel, each under the hub's own route; the old page is never shown. `cargo test -p orchester-app --test
+//! A local project's routes to the old Pipelines page open the Pipelines hub (PV2-14): the old page's Steps, Settings
+//! and Versions tabs, its publish review and a published version show the pipeline's panel, a step's page opens the
+//! step in the panel, each under the hub's own route; the old page is never shown. `cargo test -p orchester-app --test
 //! agents pipeline_old_routes`.
 
 use orchester_app::routes::{PipelineView, ProjectPage, Route, StepPage};
@@ -19,6 +19,19 @@ fn lands(agents: &mut Agents, page: ProjectPage, shown: &Route, what: &str) {
   agents.window.navigation().go(Route::Project(project_id(), page));
   agents.until(what, |s| route(s) == *shown && s.exists("pipeline-hub-panel"));
   assert!(!agents.exists("screen-pipelines"), "{what}: never the old page");
+}
+
+#[test]
+fn pipeline_old_routes_the_steps_tab_opens_the_pipeline_s_panel() {
+  let (mut agents, [ready, ..]) = setup();
+  lands(
+    &mut agents,
+    ProjectPage::Pipeline(ready, PipelineView::Steps),
+    &pipeline_route(ready),
+    "the steps in the hub",
+  );
+  assert_eq!(agents.text("team-hub-panel-title"), "Feature delivery");
+  assert!(!agents.exists("pipeline-parent"), "the old editor is not shown");
 }
 
 #[test]

@@ -2,10 +2,11 @@
 //! (N-013): the words of the menu's faded *Move up* and *Move down*. `cargo test -p orchester-app --test agents
 //! pipeline_reorder_edges`.
 
+use orchester_core::resource::{Pipeline, PipelineEdit, RepositoryAccess};
+
 use super::{
   harness::Agents,
-  pipeline_flow::open,
-  pipeline_hub::pipeline,
+  pipeline_flow::{add, agent, open, store},
   pipeline_reorder::{alt, focus, stored},
 };
 
@@ -16,9 +17,17 @@ const REFUSAL: &str = "pipeline-hub-flow-landing-parallel";
 fn pipeline_reorder_edges_alt_up_on_the_first_step_and_alt_down_on_the_last_say_why() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
-  let id = pipeline(&agents, "Two steps", Some(profile));
+  // A line: Build waits for Plan.
+  let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
+  let plan = add(&mut edit, "Plan", &[], agent(Some(profile), RepositoryAccess::ReadOnly));
+  let build = add(
+    &mut edit,
+    "Build",
+    &[&plan],
+    agent(Some(profile), RepositoryAccess::ReadOnly),
+  );
+  let id = store(&agents, "Two steps", &edit.validate().expect("a pipeline"));
   let before = stored(&agents, id);
-  let [plan, build] = [0, 1].map(|index| before.steps()[index].key.clone());
   open(&mut agents, id);
 
   focus(&mut agents, &plan);

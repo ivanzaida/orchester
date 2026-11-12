@@ -28,7 +28,7 @@ fn rest(editor: &mut Editor) {
 
 #[test]
 fn pipelines_watch_save_after_many_renders_is_written_once() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Renders");
   editor.open(id);
   for text in ["One", "Two", "Three", "Four", "Five"] {

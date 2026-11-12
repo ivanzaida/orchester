@@ -40,21 +40,15 @@ impl Editor {
     editor.team = Some(team_link::share_on_stand_in(&editor.window, &editor.repo));
     editor
   }
-  /// The editor with the stand-in pickers, which hand over the folder a test chose.
+  /// The editor of a team project ([`Self::team`]) with the stand-in pickers, which hand over the folder a test chose.
   pub fn with_stand_ins() -> (Self, StandIns) {
     let data = Data::new();
     let launch = data.launch();
     data.add_kontur(launch.workspace().expect("the session started"));
     let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
     let repo = window.data.dir.path().join("repo-kontur");
-    (
-      Self {
-        window,
-        repo,
-        team: None,
-      },
-      stand_ins,
-    )
+    let team = Some(team_link::share_on_stand_in(&window, &repo));
+    (Self { window, repo, team }, stand_ins)
   }
   pub fn repo(&self) -> &std::path::Path {
     &self.repo

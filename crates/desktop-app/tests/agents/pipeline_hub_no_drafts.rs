@@ -112,7 +112,7 @@ fn pipeline_hub_no_drafts_the_filter_is_all_and_archived_and_a_drafts_route_open
 }
 
 #[test]
-fn pipeline_hub_no_drafts_a_tab_keeps_the_pipeline_it_holds_and_a_stale_route_is_corrected() {
+fn pipeline_hub_no_drafts_a_tab_keeps_the_pipeline_it_holds_and_a_route_lands_on_the_tab_that_does() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let kept = pipeline_of(&agents, "Feature delivery", [Some(builder), Some(builder)]);
@@ -130,14 +130,12 @@ fn pipeline_hub_no_drafts_a_tab_keeps_the_pipeline_it_holds_and_a_stale_route_is
   assert!(agents.exists(&format!("pipeline-hub-row-{gone}")));
   assert!(!agents.exists(&format!("pipeline-hub-row-{kept}")));
 
+  // A route from elsewhere that names a pipeline only All holds opens All with it.
   open(&mut agents, PipelinesFilter::Archived, Some(kept));
   agents.until("the corrected route", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::Archived, Some(gone))
+    s.window.navigation().route_now() == view(PipelinesFilter::All, Some(kept))
   });
-  agents.click("pipeline-hub-filter-all");
-  agents.until("All, with the first pipeline", |s| {
-    s.window.navigation().route_now() == view(PipelinesFilter::All, None)
-  });
+  assert!(agents.exists(&format!("pipeline-hub-row-{kept}")));
 }
 
 #[test]

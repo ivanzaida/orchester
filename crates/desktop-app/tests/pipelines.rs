@@ -87,18 +87,9 @@ fn pipelines_saving_a_weaker_version_asks_in_place_and_preserves_history() {
 }
 
 #[test]
-fn pipelines_slug_collision_and_stale_editor_keep_the_latest_version() {
-  let mut editor = Editor::new();
+fn pipelines_stale_editor_keeps_the_latest_version() {
+  let mut editor = Editor::team();
   let id = editor.empty("Checks");
-  // A local project makes a new pipeline in the hub's panel (`Pipelines · v2` P14a).
-  editor.go(ProjectPage::NewPipeline);
-  editor.until("the new pipeline's panel", |e| e.exists("pipeline-new-name"));
-  editor.set("pipeline-new-name", "Checks");
-  editor.until("collision", |e| e.exists("pipeline-new-slug-open"));
-  assert_eq!(editor.text("pipeline-new-slug-row-sub"), "Already used by Checks.");
-  assert_eq!(editor.text("team-hub-actions-hint"), "Choose a name with a free slug");
-  // With nothing typed the pipeline being made goes without a question.
-  editor.set("pipeline-new-name", "");
   editor.open(id);
   editor.set("pipeline-description", "Local");
   // Another editor publishes the next version behind the page.
@@ -111,7 +102,7 @@ fn pipelines_slug_collision_and_stale_editor_keep_the_latest_version() {
 }
 #[test]
 fn pipelines_valid_changes_save_and_published_history_is_read_only() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.set("pipeline-description", "Saved");

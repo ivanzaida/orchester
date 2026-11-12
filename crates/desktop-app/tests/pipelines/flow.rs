@@ -97,7 +97,7 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
 
 #[test]
 fn pipelines_viewed_version_reads_each_step() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-history");
@@ -123,7 +123,7 @@ fn pipelines_viewed_version_reads_each_step() {
 #[test]
 fn pipelines_instructions_error_shows_under_its_field_and_save_stays_unavailable() {
   // A local project: a team page has the team's head line in place of the version line.
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-step-step");

@@ -5,7 +5,7 @@ use crate::pipelines_support::Editor;
 
 #[test]
 fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_typed_text() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Pointer focus");
   editor.open(id);
   for (typed_count, (horizontal, vertical)) in [
@@ -119,7 +119,7 @@ fn pipelines_step_fields_fit_the_column_and_dependency_picker_stays_compact() {
 
 #[test]
 fn pipelines_settings_save_the_next_version_and_history_shows_the_selected_one() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   assert!(editor.text("tab-1").contains("Delivery"));
@@ -161,7 +161,7 @@ fn pipelines_settings_save_the_next_version_and_history_shows_the_selected_one()
 
 #[test]
 fn pipelines_settings_preserves_invalid_name_across_navigation() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-settings");

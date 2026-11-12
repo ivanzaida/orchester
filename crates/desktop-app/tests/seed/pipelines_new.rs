@@ -1,6 +1,6 @@
 //! The `pipelines-new` scenario (`Pipelines · v2` P14–P14c, PV2-22): P8's four pipelines, and of what the starter looks
-//! for only *Explorer*, *Builder*, *Run test suite* and *Create pull request*, so a new pipeline's starter has *Plan* and
-//! *Review* with no profile.
+//! for only *Explorer*, *Builder*, *Run test suite* and *Create pull request*, so a new pipeline's starter has *Plan*
+//! and *Review* with no profile.
 
 use orchester_core::{resource::ResourceKind, store::ResourceStore};
 use orchester_workspace::pipelines::data::Assignables;

@@ -4,7 +4,7 @@ use crate::pipelines_support::Editor;
 
 #[test]
 fn pipelines_step_name_of_a_viewed_version_has_no_pencil() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-history");

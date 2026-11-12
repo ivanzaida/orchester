@@ -11,17 +11,12 @@ use crate::pipelines_support::Editor;
 
 #[test]
 fn pipelines_failed_reload_preserves_local_editor_and_exposes_retry() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.set("pipeline-description", "Local unsaved");
   // Another editor saves the next version behind the page (a pipeline holds no draft, D-032).
-  let latest = editor.db().latest_version::<Pipeline>(id).unwrap().unwrap();
-  let external = latest.body().clone().with_description("External".into());
-  editor
-    .db()
-    .publish_pipeline_edit(id, &external, latest.number(), None, Timestamp::now())
-    .unwrap();
+  editor.publish_behind(id, "External");
   editor.click("pipeline-save");
   editor.until("conflict", |e| e.exists("pipeline-reload"));
   let path = editor
@@ -47,27 +42,15 @@ fn pipelines_failed_reload_preserves_local_editor_and_exposes_retry() {
 
 #[test]
 fn pipelines_history_keeps_each_versions_own_changes() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   let v1 = editor.db().latest_version::<Pipeline>(id).unwrap().unwrap();
   let mut changed = PipelineEdit::new(v1.body().clone());
   let key = changed.steps()[0].key.clone();
   changed.update(&key, |s| s.name = Name::new("Revised").unwrap());
   let v2_body = changed.validate().unwrap();
-  let v2 = editor
-    .db()
-    .publish_pipeline_edit(id, &v2_body, v1.number(), None, Timestamp::now())
-    .unwrap();
-  editor
-    .db()
-    .publish_pipeline_edit(
-      id,
-      &v2_body.with_description("Only introduced in v3".into()),
-      v2.number(),
-      None,
-      Timestamp::now(),
-    )
-    .unwrap();
+  editor.publish_next(id, v2_body.clone());
+  editor.publish_next(id, v2_body.with_description("Only introduced in v3".into()));
   let history = VersionHistory::load(&editor.db(), id).unwrap();
   let v2 = history.version(VersionNumber::FIRST.next().unwrap()).unwrap();
   assert!(

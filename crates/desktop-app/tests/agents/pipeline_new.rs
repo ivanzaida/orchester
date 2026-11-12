@@ -1,8 +1,8 @@
 //! New pipeline in the Pipelines hub of a local project (`Pipelines · v2` P14 `Rszkt`, P14a `d4f9Vi`, P14b `sVNK4`,
-//! P14c `g09dL`; PV2-22): *New pipeline* opens an unsaved pipeline in the panel, listed first under *New*, its name with
-//! the keys; *Start from* chooses the starter (its flow drawn, the steps with no profile amber), a copy or nothing;
-//! *Create v1* stays off with what to fix, and nothing is stored before it; a name whose slug is taken says whose;
-//! leaving asks first once something is typed. Creating a copy and *Duplicate* are in `pipelines::default` and
+//! P14c `g09dL`; PV2-22): *New pipeline* opens an unsaved pipeline in the panel, listed first under *New*, its name
+//! with the keys; *Start from* chooses the starter (its flow drawn, the steps with no profile amber), a copy or
+//! nothing; *Create v1* stays off with what to fix, and nothing is stored before it; a name whose slug is taken says
+//! whose; leaving asks first once something is typed. Creating a copy and *Duplicate* are in `pipelines::default` and
 //! `pipelines::one_save`. `cargo test -p orchester-app --test agents pipeline_new`.
 
 use orchester_app::routes::PipelinesFilter;
@@ -192,11 +192,8 @@ fn pipeline_new_an_empty_pipeline_draws_no_steps_and_waits_for_one() {
 
   agents.click("pipeline-hub-add-step");
   agents.until("a step", |s| !s.exists("pipeline-hub-flow-empty"));
-  assert!(
-    agents.text(HINT).starts_with("Choose a profile for 01 "),
-    "{}",
-    agents.text(HINT)
-  );
+  let reason = said(&mut agents);
+  assert!(reason.starts_with("Choose a profile for 01 "), "{reason}");
   assert_eq!(
     agents.text("pipeline-hub-row-new-line"),
     "Empty · 1 step · nothing saved"
@@ -215,7 +212,8 @@ fn pipeline_new_choosing_a_pipeline_to_copy_chooses_copy_and_says_what_v1_gets()
   agents.until("Copy chosen", |s| {
     s.text("pipeline-new-start-copy-line-0") == "Published version → v1"
   });
-  assert_eq!(agents.text("pipeline-new-start-copy-line-1"), "2 steps · Plan → Build");
+  // The fixture's two steps wait for nothing, so they run side by side.
+  assert_eq!(agents.text("pipeline-new-start-copy-line-1"), "2 steps · Plan ∥ Build");
   assert!(
     !agents.exists("pipeline-hub-flow-step-plan"),
     "a copy's steps are not drawn"

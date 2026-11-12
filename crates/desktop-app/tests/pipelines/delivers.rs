@@ -10,7 +10,7 @@ use crate::pipelines_support::Editor;
 
 #[test]
 fn pipelines_delivers_is_chosen_in_settings_and_saved_as_the_next_version() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-settings");

@@ -16,7 +16,7 @@ use orchester_core::{
 use super::{
   harness::Agents,
   pipeline_flow::{add, agent, fails_back_to, open, store},
-  pipeline_reorder::{hover, open_menu},
+  pipeline_reorder::{close_menu, hover, open_menu},
   pipeline_step::{SAVE, open_step, save_until, stored},
 };
 
@@ -238,11 +238,13 @@ fn the_cards_menu_offers_wait_for_some_steps_only_and_opens_the_step_with_its_ro
     !agents.exists("pipeline-hub-flow-menu-wait-some"),
     "nothing runs before the first stage"
   );
+  close_menu(&mut agents);
   open_menu(&mut agents, &flow.notes);
   assert!(
     !agents.exists("pipeline-hub-flow-menu-wait-some"),
     "a step that waits for part of the stage has its row already"
   );
+  close_menu(&mut agents);
   open_menu(&mut agents, &flow.review);
   assert!(
     agents

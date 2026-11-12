@@ -5,7 +5,7 @@
 //! the name was taken the page says so and keeps the steps to save.
 use std::time::Duration;
 
-use orchester_api::test_support::team_server::TeamServer;
+use orchester_api::test_support::team_server::{Standing, TeamServer};
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{resource::Pipeline, store::ResourceStore};
 
@@ -173,19 +173,20 @@ fn pipelines_team_save_says_when_only_the_new_name_was_saved() {
 fn pipelines_team_save_a_member_reads_the_pipeline_and_adds_no_step() {
   let mut editor = Editor::team();
   let id = editor.published();
-  // The person is a member from here on: a member cannot make a team pipeline, so the admin made it first.
-  editor
-    .db()
-    .record_sharing_state(Some(orchester_core::sharing::MemberRole::Member), None, None)
+  // The person is a member from here on, here and on the server: a member cannot make a team pipeline, so the admin
+  // made it first.
+  team(&editor).stand_as(Standing::Member);
+  let mut db = editor.db();
+  db.record_sharing_state(Some(orchester_core::sharing::MemberRole::Member), None, None)
     .expect("the role");
+  db.set_server_admin(false).expect("no server admin");
+  drop(db);
 
   editor.go(ProjectPage::Pipeline(id, Default::default()));
-  editor.until("the flow", |e| e.exists("pipeline-flow"));
-
-  assert!(
-    !editor.exists("pipeline-add-step"),
-    "a member's flow offers no step to add"
-  );
+  // The page follows the role once it is read again: a member's flow offers no step to add.
+  editor.until("a member's flow", |e| {
+    e.exists("pipeline-flow") && !e.exists("pipeline-add-step")
+  });
   assert!(!editor.exists("pipeline-save"));
   assert!(
     !editor.exists("pipeline-problem-strip"),

@@ -126,3 +126,13 @@ fn rename_of_a_team_pipeline_is_not_stored_here() {
   assert_eq!(&*after.name, "Checks", "the name stays");
   assert_eq!(after.version, before.version, "no version is published");
 }
+
+#[test]
+fn rename_or_save_of_a_pipeline_the_team_server_no_longer_has_is_said_in_words() {
+  use orchester_workspace::sharing::{NotTaken, team_edit::Refusal};
+
+  let gone = NotTaken::Refused(Refusal::of_code("not_found"));
+
+  assert_eq!(gone.message().key, "pipelines.problems.teamGone");
+  assert_eq!(gone.code(), "team_server_refused");
+}

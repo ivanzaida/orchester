@@ -3,7 +3,7 @@ use crate::pipelines_support::Editor;
 
 #[test]
 fn pipelines_rejected_save_after_success_keeps_local_values_and_error() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Repeated save");
   editor.open(id);
   editor.set("pipeline-description", "First");

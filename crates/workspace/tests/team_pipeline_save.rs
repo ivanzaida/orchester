@@ -597,11 +597,3 @@ fn team_pipeline_save_a_create_whose_name_the_team_has_says_an_earlier_create_ma
   assert_eq!(again.message().key, "pipelines.problems.teamNameTaken");
   assert_eq!(team.pipelines_here(), 1, "nothing more is kept");
 }
-
-#[test]
-fn team_pipeline_save_a_pipeline_the_server_no_longer_has_is_said_in_words() {
-  let gone = NotTaken::Refused(Refusal::of_code("not_found"));
-
-  assert_eq!(gone.message().key, "pipelines.problems.teamGone");
-  assert_eq!(gone.code(), "team_server_refused");
-}

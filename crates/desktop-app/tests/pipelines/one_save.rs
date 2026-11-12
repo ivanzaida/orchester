@@ -1,6 +1,6 @@
-//! The pipeline page has one *Save*, which publishes the next version (PV2-32, D-033): in a team project and in a
-//! local one; unavailable with why while the edit cannot be saved; no *Restore as draft* or *Compare*; a rename alone
-//! saves a local pipeline's name. A team pipeline's save waiting for the team server is [`super::team_save`].
+//! A team project's pipeline page has one *Save*, which publishes the next version (PV2-32, D-033): unavailable with
+//! why while the edit cannot be saved; no *Restore as draft* or *Compare*. Its save waiting for the team server is
+//! [`super::team_save`]. A local project's pipelines are made in the Pipelines hub (*Create v1*, PV2-22).
 use std::{
   num::NonZeroU32,
   time::{Duration, Instant},
@@ -83,18 +83,13 @@ fn one_save_publishes(editor: &mut Editor) {
 }
 
 #[test]
-fn pipelines_one_save_publishes_in_a_local_project() {
-  one_save_publishes(&mut Editor::new());
-}
-
-#[test]
 fn pipelines_one_save_publishes_in_a_team_project() {
   one_save_publishes(&mut Editor::team());
 }
 
 #[test]
 fn pipelines_one_save_is_unavailable_with_why_while_a_step_is_not_ready() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-add-step");
@@ -113,7 +108,7 @@ fn pipelines_one_save_is_unavailable_with_why_while_a_step_is_not_ready() {
 
 #[test]
 fn pipelines_one_save_a_viewed_version_has_no_restore_or_compare() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-history");
@@ -132,32 +127,6 @@ fn pipelines_one_save_a_viewed_version_has_no_restore_or_compare() {
   assert_eq!(editor.text("pipeline-back-draft"), "Back to editing");
   editor.click("pipeline-back-draft");
   editor.until("the edit", |e| !e.exists("pipeline-viewing-banner"));
-}
-
-#[test]
-fn pipelines_one_save_a_rename_alone_saves_a_local_pipelines_name() {
-  let mut editor = Editor::new();
-  let id = editor.published();
-  editor.open(id);
-
-  editor.set("pipeline-summary-name", "Gates");
-  editor.until("Save", |e| e.exists("pipeline-save"));
-  editor.click("pipeline-save");
-  editor.until("renamed", |e| {
-    e.db()
-      .resource(id)
-      .expect("read")
-      .expect("the pipeline")
-      .name()
-      .as_str()
-      == "Gates"
-  });
-  assert_eq!(
-    latest(&editor, id).0,
-    VersionNumber::FIRST,
-    "a rename alone publishes no version"
-  );
-  editor.until("saved", |e| e.exists("pipeline-header-history"));
 }
 
 /// Pipelines of the project, as stored.
