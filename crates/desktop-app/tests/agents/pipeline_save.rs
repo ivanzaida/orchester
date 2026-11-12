@@ -165,13 +165,15 @@ fn pipeline_save_refuses_a_change_that_cannot_be_published_and_stores_nothing() 
   open(&mut agents, PipelinesFilter::All, Some(update));
   agents.until("the panel", |s| s.exists(SAVE));
 
-  // Build runs a profile that is gone: a save is refused and stores nothing (a pipeline holds no draft, D-032).
+  // Build runs a profile that is gone: the change cannot be published, so Save is off and says why, and pressing it
+  // stores nothing (a pipeline holds no draft, D-032).
   describe(&mut agents, "Waiting for profiles");
+  agents.until("Save says why it is off", |s| {
+    s.text(HINT) == "Choose a profile for 02 Build to save"
+  });
   agents.click(SAVE);
-  agents.until("the refusal", |s| s.exists("pipeline-hub-refused"));
-  let said = agents.text("pipeline-hub-refused");
-  assert!(said.contains("Couldn't save Dependency update"), "{said}");
-  assert!(said.contains("Build"), "it names the step: {said}");
+  agents.window.pass();
+  assert!(!agents.exists("pipeline-hub-refused"), "a Save that is off asks nothing");
   let (versions, draft) = stored(&agents, update);
   assert_eq!(versions.len(), 1, "nothing was published");
   assert_eq!(draft, None, "nothing was stored as a draft");

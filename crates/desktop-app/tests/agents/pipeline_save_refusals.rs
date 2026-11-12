@@ -1,6 +1,7 @@
-//! A save that cannot publish is refused and stores nothing: a pipeline holds no draft (D-032). The refusal names the
-//! step whose profile is gone, or every step not ready; a pipeline at its last version number says so before the
-//! press. `cargo test -p orchester-app --test agents pipeline_save_refusals`.
+//! A change that cannot be published is not saved: a pipeline holds no draft (D-032). *Save* is off and says why
+//! before the press: the step whose profile is gone, by its number and name, how many steps are not ready, or that the
+//! pipeline has its last version number; a press stores nothing. `cargo test -p orchester-app --test agents
+//! pipeline_save_refusals`.
 
 use orchester_app::routes::PipelinesFilter;
 use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore, time::Timestamp};
@@ -26,19 +27,8 @@ fn stored(agents: &Agents, id: ResourceId) -> (usize, bool) {
   )
 }
 
-/// Presses Save, allowing what it widens when it asks, until `done`.
-fn save_until(agents: &mut Agents, what: &str, done: impl Fn(&mut Agents) -> bool) {
-  agents.click(SAVE);
-  agents.until(what, |s| {
-    if s.exists(CONFIRM) {
-      s.click(CONFIRM);
-    }
-    done(s)
-  });
-}
-
 #[test]
-fn pipeline_save_refusals_a_change_while_a_profile_is_gone_is_refused_and_names_the_step() {
+fn pipeline_save_refusals_a_change_while_a_profile_is_gone_cannot_be_saved_and_names_the_step() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let retired = agents.profile(true);
@@ -50,21 +40,16 @@ fn pipeline_save_refusals_a_change_while_a_profile_is_gone_is_refused_and_names_
   open(&mut agents, PipelinesFilter::All, Some(id));
   agents.until("the panel", |s| s.exists(SAVE));
 
+  // The change cannot be published (D-032): Save is off and names the step, by its number and name, never an id.
   agents.set(DESCRIPTION, "Changed");
-  agents.until("the bar", |s| s.text(HINT).starts_with("Unsaved changes"));
-  save_until(&mut agents, "the refusal", |s| s.exists(REFUSED));
-  let said = agents.text(REFUSED);
-  assert!(
-    said.contains("Step “Build” runs an agent profile that is no longer available. Choose another."),
-    "the step by its name: {said}"
-  );
-  assert!(!said.contains(&retired.to_string()), "no raw id: {said}");
+  agents.until("the bar", |s| s.text(HINT) == "Choose a profile for 02 Build to save");
+  pressed_off(&mut agents);
   assert_eq!(stored(&agents, id), (1, false), "nothing stored: no draft, no version");
   assert_eq!(agents.value(DESCRIPTION), "Changed", "what was typed stays");
 }
 
 #[test]
-fn pipeline_save_refusals_a_refused_save_names_every_step_not_ready() {
+fn pipeline_save_refusals_save_off_counts_every_step_not_ready() {
   let mut agents = Agents::new(true);
   let (planner, builder) = (agents.profile(true), agents.profile(true));
   let id = pipeline_of(&agents, "Dependency update", [Some(planner), Some(builder)]);
@@ -76,11 +61,17 @@ fn pipeline_save_refusals_a_refused_save_names_every_step_not_ready() {
   agents.until("the panel", |s| s.exists(SAVE));
 
   agents.set(DESCRIPTION, "Waiting for profiles");
-  agents.until("the bar", |s| s.text(HINT).starts_with("Unsaved changes"));
-  save_until(&mut agents, "the refusal", |s| s.exists(REFUSED));
-  let said = agents.text(REFUSED);
-  assert!(said.contains("2 steps aren't ready: Plan, Build"), "{said}");
+  agents.until("the bar", |s| s.text(HINT) == "Make 2 steps ready to save");
+  pressed_off(&mut agents);
   assert_eq!(stored(&agents, id), (1, false), "nothing stored");
+}
+
+/// Presses *Save* while it is off: nothing is asked or refused, as nothing is tried.
+fn pressed_off(agents: &mut Agents) {
+  agents.click(SAVE);
+  agents.window.pass();
+  assert!(!agents.exists(REFUSED), "a Save that is off tries nothing");
+  assert!(!agents.exists(CONFIRM), "and asks nothing");
 }
 
 #[test]

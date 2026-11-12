@@ -12,7 +12,6 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{Pipeline, PipelineEdit, RepositoryAccess, Slug, StepKey, StepKind},
-  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -175,16 +174,17 @@ fn a_step_another_returns_to_cannot_be_removed_and_the_row_says_why() {
   }
   edit.update(&second, |step| RouteChoice(Some(first.clone())).apply(step));
   let mut db = ProjectDb::open(&agents.root).expect("database");
+  // A pipeline is created as its first version (D-032).
   let id = db
-    .create_resource(
+    .create_published(
       Slug::from_name("Returns").expect("slug"),
       Name::new("Returns").expect("name"),
       &edit.validate().expect("a pipeline"),
       Timestamp::now(),
     )
     .expect("the pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
   open_step(&mut agents, id, &first);
   open_menu(&mut agents);
   assert!(
