@@ -2,7 +2,7 @@
 //! by side. A step's unit is its stage (one after the latest stage of the steps it depends on), so a flow can be read
 //! from any steps, and rearranging it rewrites only the dependencies the arrangement changes.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use thiserror::Error;
 
@@ -21,50 +21,13 @@ pub enum FlowError {
   /// The steps break a rule that leaves no flow, e.g. a cycle.
   #[error("the steps have no flow: {0}")]
   Broken(PipelineError),
-  /// A step waits for something other than the whole unit before it, which the flow would draw as if it did: an
-  /// independent branch that runs beside other steps, or a step that waits for only some of a parallel group.
-  #[error("step `{0}` waits for something other than the steps drawn right before it")]
-  Branches(StepKey),
 }
 
-/// The steps as the flow they run in, one entry per unit, a unit's steps side by side. Only for steps whose
-/// dependencies the flow draws as they are: every step waits for the whole unit before its own (steps listed
-/// besides, which that unit already waits for, change nothing), and the steps of the first unit wait for nothing.
+/// The steps as the flow they run in, one entry per unit, a unit's steps side by side. A step stands one unit below
+/// the latest step it waits for, so a step that waits for only some of the unit before it stands under that unit all
+/// the same, and says what it waits for ([`super::part_waits`]).
 pub fn units(steps: &[Step]) -> Result<Vec<Vec<StepKey>>, FlowError> {
-  let flow = Flow::of(steps).map_err(FlowError::Broken)?;
-  for step in steps {
-    let unit = flow
-      .unit_of(&step.key)
-      .expect("every step of the steps is in their flow");
-    let waited_for = flow.waited_for(unit);
-    if reduced(steps, &step.depends_on) != waited_for {
-      return Err(FlowError::Branches(step.key.clone()));
-    }
-  }
-  Ok(flow.units)
-}
-
-/// `dependencies` without those another of them already waits for, directly or through other steps.
-fn reduced(steps: &[Step], dependencies: &BTreeSet<StepKey>) -> BTreeSet<StepKey> {
-  let by_key: HashMap<&StepKey, &Step> = steps.iter().map(|step| (&step.key, step)).collect();
-  let mut implied = HashSet::new();
-  for dependency in dependencies {
-    let mut pending: Vec<&StepKey> = by_key
-      .get(dependency)
-      .into_iter()
-      .flat_map(|step| step.depends_on.iter())
-      .collect();
-    while let Some(current) = pending.pop() {
-      if implied.insert(current) {
-        pending.extend(by_key.get(current).into_iter().flat_map(|step| step.depends_on.iter()));
-      }
-    }
-  }
-  dependencies
-    .iter()
-    .filter(|dependency| !implied.contains(dependency))
-    .cloned()
-    .collect()
+  Flow::of(steps).map(|flow| flow.units).map_err(FlowError::Broken)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,6 +87,11 @@ impl Flow {
 
   pub(super) fn unit_of(&self, key: &StepKey) -> Option<usize> {
     self.units.iter().position(|unit| unit.contains(key))
+  }
+
+  /// The steps in flow order: unit by unit, a unit's steps in the order of the steps.
+  pub(super) fn order(&self) -> impl Iterator<Item = &StepKey> {
+    self.units.iter().flatten()
   }
 
   /// `key` trades places with the unit before it.

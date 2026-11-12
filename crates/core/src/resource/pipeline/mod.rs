@@ -30,7 +30,10 @@ pub use self::{
   changes::{DeliverChange, PipelineChange, StepChange, changes},
   deliver::{DeliverMode, DeliverStep, MergeMethod},
   delivers::{Deliverable, UnknownDeliverable, WithoutCommits},
-  edit::{EditProblem, FlowError, MoveError, MoveOffer, ParallelChoice, PipelineEdit, StepMoves, flow_units},
+  edit::{
+    EditProblem, FlowError, MoveError, MoveOffer, ParallelChoice, PartWait, PipelineEdit, StepMoves, WaitChoice,
+    Waited, flow_units, part_waits,
+  },
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
   strictness::{Weaker, weaker_than},

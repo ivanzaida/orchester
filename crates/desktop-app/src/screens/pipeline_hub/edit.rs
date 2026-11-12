@@ -7,7 +7,7 @@
 //! (PV2-07, PV2-08) and a restored version (PV2-11) do the same, and *Save*, *Cancel*, the leave guard and the list's
 //! *Unsaved changes* follow from the one edit with nothing more to wire.
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use lurq::{
   app::component::DevtoolsInspectable,
@@ -23,6 +23,9 @@ pub(super) struct Holding {
   pub held: Option<Held>,
   /// What was stored when a save ended: the panel shows what it saved until the hub lists another pipeline.
   pub saved_over: Option<Arc<Pipeline>>,
+  /// The steps whose *Waits for* row the person opened (*Wait for some steps only…*) or changed since the edit began:
+  /// the row stays for them though they wait for the whole stage before them (P16b `P1853`).
+  pub waits_shown: BTreeSet<StepKey>,
 }
 impl DevtoolsInspectable for Holding {}
 
@@ -136,6 +139,22 @@ impl Edit {
       || self.stored.description().to_owned(),
       |held| held.edit().description().to_owned(),
     )
+  }
+
+  /// Shows step `key`'s *Waits for* row until the edit is saved or dropped.
+  pub(super) fn show_waits(&self, key: &StepKey) {
+    if self.holding.get_untracked().waits_shown.contains(key) {
+      return;
+    }
+    self.holding.update(|holding| {
+      holding.waits_shown.insert(key.clone());
+    });
+  }
+
+  /// Whether the person opened or changed step `key`'s *Waits for* row. Reading it in a render subscribes the panel to
+  /// the edit.
+  pub(super) fn shows_waits(&self, key: &StepKey) -> bool {
+    self.holding.get().waits_shown.contains(key)
   }
 
   /// *Cancel*: drops the edit, so the panel shows what is stored again.

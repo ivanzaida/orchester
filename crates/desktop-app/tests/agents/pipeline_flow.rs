@@ -395,33 +395,30 @@ fn pipeline_flow_deliver_names_a_profile_that_is_not_published_and_warns_instead
 }
 
 #[test]
-fn pipeline_flow_steps_that_cannot_be_drawn_as_one_line_keep_the_start_and_end_and_say_so_between_them() {
+fn pipeline_flow_independent_chains_are_drawn_by_stage_and_no_notice_sends_them_to_the_old_editor() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
   let a = add(&mut edit, "A", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
-  add(&mut edit, "B", &[&a], agent(Some(builder), RepositoryAccess::ReadOnly));
+  let b = add(&mut edit, "B", &[&a], agent(Some(builder), RepositoryAccess::ReadOnly));
   let c = add(&mut edit, "C", &[], agent(Some(builder), RepositoryAccess::ReadOnly));
   add(&mut edit, "D", &[&c], agent(Some(builder), RepositoryAccess::ReadOnly));
   let id = store(&agents, "Chains", &edit.validate().expect("a pipeline"));
   open(&mut agents, id);
 
-  let start = rect(&mut agents, "pipeline-hub-flow-row-start").y;
-  let notice = rect(&mut agents, "pipeline-hub-flow-undrawable").y;
-  let end = rect(&mut agents, "pipeline-hub-flow-row-end").y;
   assert!(
-    start < notice && notice < end,
-    "the notice stands between the markers: {start} {notice} {end}"
+    !agents.exists("pipeline-hub-flow-undrawable") && !agents.exists("pipeline-hub-edit-steps"),
+    "the steps are drawn: no notice and no way to the old editor"
   );
+  assert!(agents.exists("pipeline-hub-add-step"), "the head offers Add step");
   assert!(
-    !agents.exists("pipeline-hub-edit-steps") && !agents.exists("pipeline-hub-add-step"),
-    "the notice has the one Edit steps; the head has no action"
+    agents.exists("pipeline-hub-flow-parallel-1"),
+    "A and C start the run side by side"
   );
-  agents.click("pipeline-hub-flow-undrawable-edit");
-  agents.until("the editor", |s| {
-    s.window.navigation().route_now()
-      == Route::Project(project_id(), ProjectPage::Pipeline(id, PipelineView::default()))
-  });
+  assert_eq!(
+    agents.text(&format!("pipeline-hub-flow-step-{b}-waits-words")),
+    "waits for 01 A only · starts before 02 C ends"
+  );
 }
 
 #[test]

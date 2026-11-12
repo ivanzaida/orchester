@@ -34,6 +34,7 @@ use super::{
   rail::{self, Node},
   reorder::{Cards, Drive, keyed_move},
   state::{Drag, Drop, Held, Refused, Reorder},
+  unordered::{self, Line},
   words,
 };
 use crate::{
@@ -193,7 +194,14 @@ impl FlowView {
         };
         rows.extend(draw.rows(ctx));
       }
-      Err(error) => rows.push(note_row(ctx, super::undrawable(ctx, opens, error))),
+      Err(error) => {
+        let line = Line {
+          edit: &props.edit,
+          current: &props.current,
+          locked: props.locked,
+        };
+        rows.push(note_row(ctx, unordered::notice(ctx, &props.read, error, Some(line))));
+      }
     }
     let (label, hint) = words::end(ctx, props.read.ending);
     rows.push(rail::row(
@@ -206,8 +214,8 @@ impl FlowView {
   }
 }
 
-/// *Add step*, which steps that draw as one line can be added to; faded while the flow is locked. Steps that cannot be
-/// drawn have no head action: their notice offers *Edit steps*.
+/// *Add step*, which steps that have an order to draw can be added to; faded while the flow is locked. Steps with no
+/// order have no head action: their notice offers *Make it a line*.
 fn head_action(ctx: &Ctx, drive: &Drive, flow: &PipelineFlow, locked: bool) -> Element {
   let (drive, flow, name) = (drive.clone(), flow.clone(), menu::new_step_name(ctx));
   let button = ActionButton::new(
@@ -444,6 +452,7 @@ impl Draw<'_> {
       flow: self.flow,
       cards: self.cards,
       opens: None,
+      to_step: Some(self.opens.to_step()),
     };
     if let Some(open) = self.drive.reorder.menu_for.get().0.filter(|_| !self.locked)
       && let Some(step) = stage.cards.iter().find(|card| card.key == open)

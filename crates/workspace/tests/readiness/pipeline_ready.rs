@@ -240,7 +240,7 @@ fn readiness_pipeline_ready_an_edit_with_no_steps_says_so() {
 }
 
 /// Three steps of `builder` (or none where `None`) whose second waits for only the first, though the third also
-/// starts the run: a branch one line cannot draw.
+/// starts the run: a branch, drawn by stage (P16).
 fn branching(builder: [Option<ResourceId>; 3]) -> Pipeline {
   let mut steps = pipeline(&builder, None).into_steps();
   let first = steps[0].key.clone();
@@ -249,19 +249,18 @@ fn branching(builder: [Option<ResourceId>; 3]) -> Pipeline {
 }
 
 #[test]
-fn readiness_pipeline_ready_a_pipeline_a_line_cannot_draw_says_so() {
+fn readiness_pipeline_ready_a_branching_pipeline_lacks_nothing() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
-  // A version an older build published; a save refuses such steps now (`pipelines.problems.branches`).
   let id = fixture.own("branching", &branching([Some(builder); 3]));
 
   let read = listed(&fixture, id);
-  assert_eq!(found(&read), [Problem::Whole(Whole::Branches)]);
+  assert_eq!(found(&read), []);
 }
 
 #[test]
-fn readiness_pipeline_ready_an_edit_a_line_cannot_draw_still_names_each_step_that_cannot_run() {
+fn readiness_pipeline_ready_a_branching_edit_names_each_step_that_cannot_run() {
   let fixture = Fixture::local();
   let connection = fixture.connection(CLAUDE, "work");
   let builder = fixture.own("builder", &profile_on(connection, &[]));
@@ -273,10 +272,10 @@ fn readiness_pipeline_ready_an_edit_a_line_cannot_draw_still_names_each_step_tha
   assert!(
     matches!(
       all.as_slice(),
-      [Problem::Whole(Whole::Branches), Problem::Step(step)]
-        if step.number == 2 && step.blocked == Blocked::NoProfile && &*step.name == "Step 1"
+      [Problem::Step(step)]
+        if step.number == 3 && step.blocked == Blocked::NoProfile && &*step.name == "Step 1"
     ),
-    "the layout, then the step the list line names, numbered in the order of the steps: {all:?}"
+    "only the step, numbered as the flow draws it, under Step 0 and Step 2: {all:?}"
   );
 }
 

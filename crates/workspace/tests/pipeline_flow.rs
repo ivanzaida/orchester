@@ -14,7 +14,7 @@ use orchester_core::{
 };
 use orchester_workspace::pipelines::{
   data::{Assignables, DraftProfileChoice, DraftToolChoice, ProfileChoice, ToolChoice},
-  flow::{Conflicts, Ending, PipelineFlow, Runs},
+  flow::{Conflicts, Ending, Named, PipelineFlow, Runs, Waits},
 };
 
 fn key(value: &str) -> StepKey {
@@ -368,7 +368,7 @@ fn a_tool_a_step_cannot_run_yet_needs_you() {
 }
 
 #[test]
-fn independent_chains_are_said_to_be_undrawable_rather_than_guessed() {
+fn independent_chains_are_drawn_by_stage_and_each_card_says_what_it_waits_for() {
   let (_, assignables) = feature();
   let tool_step = |name: &str, depends_on: &[&str]| step(name, StepKind::Tool { tool: None }, depends_on);
   let steps = vec![
@@ -378,10 +378,60 @@ fn independent_chains_are_said_to_be_undrawable_rather_than_guessed() {
     tool_step("d", &["c"]),
   ];
   let pipeline = Pipeline::new(steps).expect("valid steps");
+  let flow = PipelineFlow::of(&pipeline, &assignables).expect("chains are drawn");
+  let stages: Vec<Vec<(&str, usize)>> = flow
+    .stages
+    .iter()
+    .map(|stage| {
+      stage
+        .cards
+        .iter()
+        .map(|card| (card.key.as_str(), card.number))
+        .collect()
+    })
+    .collect();
+  assert_eq!(stages, [vec![("a", 1), ("c", 2)], vec![("b", 3), ("d", 4)]]);
+  let b = &flow.stages[1].cards[0];
   assert_eq!(
-    PipelineFlow::of(&pipeline, &assignables),
-    Err(FlowError::Branches(key("b")))
+    b.waits,
+    Some(Waits {
+      on: vec![Named {
+        number: 1,
+        name: "a".into()
+      }],
+      not_on: vec![Named {
+        number: 2,
+        name: "c".into()
+      }],
+    })
   );
+  assert!(flow.stages[0].cards.iter().all(|card| card.waits.is_none()));
+}
+
+#[test]
+fn a_step_that_waits_for_the_whole_stage_before_has_no_waits_line() {
+  let (pipeline, assignables) = feature();
+  let flow = PipelineFlow::of(&pipeline, &assignables).expect("the feature flow");
+  assert!(
+    flow
+      .stages
+      .iter()
+      .flat_map(|stage| &stage.cards)
+      .all(|card| card.waits.is_none())
+  );
+}
+
+#[test]
+fn steps_that_wait_for_each_other_have_no_flow() {
+  let (_, assignables) = feature();
+  let mut edit = orchester_core::resource::PipelineEdit::new(Pipeline::new(Vec::new()).expect("empty"));
+  let first = edit.add_step(Name::new("First").expect("name"), None);
+  let second = edit.add_step(Name::new("Second").expect("name"), Some(&first));
+  edit.set_dependency(&first, &second, true);
+  let read = orchester_workspace::pipelines::flow::FlowRead::of_edit(&edit, &assignables);
+  assert!(matches!(read.flow, Err(FlowError::Broken(_))));
+  let numbers: Vec<usize> = read.unplaced.iter().map(|card| card.number).collect();
+  assert_eq!(numbers, [1, 2], "the cards keep the order of the steps");
 }
 
 #[test]

@@ -1,7 +1,8 @@
 //! A pipeline as the Pipelines page draws its steps (`Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): the steps in the
 //! order they run in, the steps that run side by side in one stage, the approval gates on the line after their step,
 //! the failure routes by the numbers the cards carry, and the Deliver step numbered last. The layout is derived from
-//! the steps' `depends_on` ([`orchester_core::resource::flow_units`]); nothing of it is stored.
+//! the steps' `depends_on` ([`orchester_core::resource::flow_units`]), with what a step waits for when that is less
+//! than the stage drawn before it ([`orchester_core::resource::part_waits`], P16 `T9KJFP`); nothing of it is stored.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -9,7 +10,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{
     DeliverMode, DeliverStep, Deliverable, FlowError, MergeMethod, Pipeline, PipelineEdit, RepositoryAccess, Step,
-    StepKey, StepKind, flow_units,
+    StepKey, StepKind, flow_units, part_waits,
   },
   store::ResourceStore,
 };
@@ -69,6 +70,23 @@ pub struct ReturnsTo {
   pub name: Arc<str>,
 }
 
+/// Another step a card names, by its number and name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Named {
+  pub number: usize,
+  pub name: Arc<str>,
+}
+
+/// What a step waits for when that is less than the whole stage drawn before it (`Pipelines · v2` P16 `T9KJFP`), which
+/// its card says: *waits for 04 Run checks only · starts before 05 Review ends*.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Waits {
+  /// What it waits for, without what one of them already waits for, in flow order.
+  pub on: Vec<Named>,
+  /// The steps of the stage before it that it may start before, in flow order.
+  pub not_on: Vec<Named>,
+}
+
 /// One step's card.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StepCard {
@@ -80,6 +98,9 @@ pub struct StepCard {
   /// What an agent step may do to the repository; `None` for a tool step.
   pub access: Option<RepositoryAccess>,
   pub on_failure: Option<ReturnsTo>,
+  /// What the step waits for when it is less than the whole stage before it; `None` when it waits for all of it, for
+  /// a step of the first stage, and for a card of steps the flow cannot draw.
+  pub waits: Option<Waits>,
   /// The profile or tool `runs` says is not published is gone here (archived or removed), not only unpublished: there
   /// is nothing to publish, the step has to run something else.
   pub gone: bool,
@@ -153,9 +174,10 @@ impl Ending {
 }
 
 impl PipelineFlow {
-  /// The flow of `pipeline`, or why its steps cannot be drawn as one line.
+  /// The flow of `pipeline`, or why its steps have no order to draw.
   pub fn of(pipeline: &Pipeline, assignables: &Assignables) -> Result<Self, FlowError> {
     let units = flow_units(pipeline.steps())?;
+    let waits = part_waits(pipeline.steps())?;
     let steps: HashMap<&StepKey, &Step> = pipeline.steps().iter().map(|step| (&step.key, step)).collect();
     let numbers: HashMap<&StepKey, usize> = units
       .iter()
@@ -177,7 +199,12 @@ impl PipelineFlow {
       let mut gates = Vec::new();
       for key in unit {
         let step = steps[key];
-        cards.push(card(step, numbers[key], (&steps, &numbers), assignables));
+        let mut card = card(step, numbers[key], (&steps, &numbers), assignables);
+        card.waits = waits.get(key).map(|wait| Waits {
+          on: named(&wait.on, (&steps, &numbers)),
+          not_on: named(&wait.not_on, (&steps, &numbers)),
+        });
+        cards.push(card);
         if step.approval_gate {
           gates.push(Gate {
             step: step.name.as_str().into(),
@@ -229,7 +256,21 @@ fn card(
         name: steps.get(&route.return_to)?.name.as_str().into(),
       })
     }),
+    waits: None,
   }
+}
+
+/// `keys` by their numbers and names.
+fn named(keys: &[StepKey], (steps, numbers): (&HashMap<&StepKey, &Step>, &HashMap<&StepKey, usize>)) -> Vec<Named> {
+  keys
+    .iter()
+    .filter_map(|key| {
+      Some(Named {
+        number: *numbers.get(key)?,
+        name: steps.get(key)?.name.as_str().into(),
+      })
+    })
+    .collect()
 }
 
 fn runs(step: &Step, assignables: &Assignables) -> Runs {
@@ -290,7 +331,7 @@ fn deliver_card(pipeline: &Pipeline, deliver: &DeliverStep, number: usize, assig
 pub struct FlowRead {
   /// How the line ends, which is known even when the steps cannot be drawn.
   pub ending: Ending,
-  /// The flow, or why the steps cannot be drawn as one line.
+  /// The flow, or why the steps have no order to draw.
   pub flow: Result<PipelineFlow, FlowError>,
   /// The cards of steps the flow cannot draw, numbered in the order of the steps, so what each step lacks is still
   /// known; empty when the flow draws them.

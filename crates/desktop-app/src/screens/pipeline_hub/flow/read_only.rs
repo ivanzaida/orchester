@@ -1,6 +1,6 @@
 //! A published version's steps drawn read-only (a version viewed in `Pipelines · v2`, PV2-11): the line with its cards,
 //! gates, parallel frames and Deliver card, none of it a control. A card is not pressed, has no `›`, takes no hover and
-//! is not a Tab stop, and no handle, ⋯, key, *Add step* or *Edit steps* is drawn: the editable flow is [`super::view`].
+//! is not a Tab stop, and no handle, ⋯, key or *Add step* is drawn: the editable flow is [`super::view`].
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -25,7 +25,7 @@ pub(super) fn drawn(ctx: &Ctx, opens: &Opens<'_>, read: &FlowRead) -> Element {
   let mut rows: Vec<Element> = vec![start_row(ctx)];
   match &read.flow {
     Ok(flow) => rows.extend(drawing(ctx, opens, flow)),
-    Err(error) => rows.push(note_row(ctx, super::undrawable(ctx, opens, error))),
+    Err(error) => rows.push(note_row(ctx, super::unordered::notice(ctx, read, error, None))),
   }
   let (label, hint) = words::end(ctx, read.ending);
   rows.push(rail::row(

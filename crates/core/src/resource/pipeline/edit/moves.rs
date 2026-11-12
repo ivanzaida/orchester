@@ -22,6 +22,9 @@ pub enum MoveError {
   /// The move would put the step a failure route returns to after the step that returns to it.
   #[error("step `{step}` returns to `{target}` on failure, so `{target}` has to run before it")]
   RetryTargetNotUpstream { step: StepKey, target: StepKey },
+  /// The step cannot wait for `dependency`, which waits for it: the two would wait for each other.
+  #[error("`{dependency}` waits for `{step}`, so `{step}` cannot wait for it")]
+  WaitsForIt { step: StepKey, dependency: StepKey },
 }
 
 /// Whether a move is offered for a step, and if not, why.
@@ -39,7 +42,7 @@ impl MoveOffer {
     matches!(self, Self::Available)
   }
 
-  fn of(outcome: Result<Option<Vec<Step>>, MoveError>) -> Self {
+  pub(super) fn of(outcome: Result<Option<Vec<Step>>, MoveError>) -> Self {
     match outcome {
       Ok(Some(_)) => Self::Available,
       Ok(None) => Self::Unavailable,
@@ -199,7 +202,7 @@ impl PipelineEdit {
 }
 
 /// The failure routes (step, target) whose target is a step of the pipeline that does not run before the step.
-fn broken_routes(steps: &[Step]) -> Vec<(StepKey, StepKey)> {
+pub(super) fn broken_routes(steps: &[Step]) -> Vec<(StepKey, StepKey)> {
   let by_key: HashMap<&StepKey, &Step> = steps.iter().map(|step| (&step.key, step)).collect();
   steps
     .iter()

@@ -23,7 +23,7 @@ use super::{
 const PICKER: &str = "pipeline-hub-step-agent-picker";
 
 #[test]
-fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_list_line_names() {
+fn pipeline_hub_ready_fixes_branching_steps_name_only_the_step_that_cannot_run_by_its_number_in_the_flow() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   // Build runs a profile that is gone: a stored pipeline's steps all run something (D-032).
@@ -40,19 +40,16 @@ fn pipeline_hub_ready_fixes_steps_a_line_cannot_draw_still_name_the_step_the_lis
   let build = step_at(&agents, branching, 1);
   open(&mut agents, PipelinesFilter::All, Some(branching));
 
-  let line = agents.text(&format!("pipeline-hub-row-{branching}-line"));
-  assert_eq!(line, "2 things missing", "the layout and the step: {line}");
-  assert_eq!(agents.text("pipeline-hub-chip-1-label"), "2 things missing");
-  assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
-  assert_eq!(
-    agents.text("team-hub-ready-steps-words"),
-    "These steps can't be drawn as one line"
+  assert_eq!(agents.text("team-hub-readiness-count"), "1 missing", "only the step");
+  assert!(
+    !agents.exists("team-hub-ready-steps"),
+    "the steps are drawn by stage, so nothing is said about them as a whole"
   );
   let row = format!("team-hub-ready-step-{build}");
   assert_eq!(
     agents.text(&format!("{row}-label")),
-    "Step 02 Build",
-    "numbered as the line numbers it"
+    "Step 03 Build",
+    "numbered as the flow numbers it, under Plan and Third"
   );
   assert!(agents.exists(&format!("{row}-words")), "what the step lacks");
 }

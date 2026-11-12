@@ -60,6 +60,7 @@ mod pipeline_versions;
 mod pipeline_versions_held;
 mod pipeline_versions_states;
 mod pipeline_versions_views;
+mod pipeline_waits;
 mod project_sets;
 mod reads;
 mod regressions;

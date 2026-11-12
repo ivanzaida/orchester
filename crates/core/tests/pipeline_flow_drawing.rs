@@ -1,4 +1,4 @@
-//! The flow a pipeline's steps are drawn as, and the steps that cannot be drawn as one line.
+//! The flow a pipeline's steps are drawn as, stage by stage, and the steps that have no order to draw.
 
 use orchester_core::{
   id::ResourceId,
@@ -90,15 +90,15 @@ fn a_dependency_another_one_already_implies_is_not_a_branch() {
 }
 
 #[test]
-fn independent_chains_are_not_drawn_as_one_line() {
+fn independent_chains_are_drawn_by_stage() {
   let steps = [step("a", &[]), step("b", &["a"]), step("c", &[]), step("d", &["c"])];
-  assert_eq!(drawn(&steps), Err(FlowError::Branches(key("b"))));
+  assert_eq!(drawn(&steps), Ok(vec![vec!["a", "c"], vec!["b", "d"]]));
 }
 
 #[test]
-fn a_step_that_waits_for_only_some_of_a_group_is_not_drawn_after_all_of_it() {
+fn a_step_that_waits_for_only_some_of_a_group_stands_under_the_group() {
   let steps = [step("a", &[]), step("b", &["a"]), step("c", &["a"]), step("d", &["b"])];
-  assert_eq!(drawn(&steps), Err(FlowError::Branches(key("d"))));
+  assert_eq!(drawn(&steps), Ok(vec![vec!["a"], vec!["b", "c"], vec!["d"]]));
 }
 
 #[test]

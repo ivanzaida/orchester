@@ -343,10 +343,10 @@ fn unpublishable_says_what_keeps_an_edit_from_being_published() {
   assert_eq!(of(&empty), Some(Unpublishable::NoSteps));
 }
 
-/// A step that waits for only part of what starts the run with it cannot be drawn as one line: saving refuses it, so
-/// the page offers no *Save* for it either, by the same reason.
+/// A step that waits for only part of what starts the run with it is drawn as it is (P16): saving takes it, so the page
+/// offers *Save* for it.
 #[test]
-fn unpublishable_and_save_refuse_steps_that_wait_for_only_part_of_a_parallel_group() {
+fn unpublishable_and_save_take_steps_that_wait_for_only_part_of_a_parallel_group() {
   use orchester_workspace::pipelines::{
     flow::FlowRead,
     local_edit::{Unpublishable, unpublishable},
@@ -366,17 +366,18 @@ fn unpublishable_and_save_refuse_steps_that_wait_for_only_part_of_a_parallel_gro
   assert!(branching.problems().is_empty(), "the steps break no rule of their own");
 
   let read = FlowRead::of_edit(&branching, &opened.assignables);
-  assert!(
-    matches!(
-      unpublishable(&branching, &read, &opened.assignables),
-      Some(Unpublishable::Refused(why)) if why.key == "pipelines.problems.branches"
-    ),
-    "Save is off with the reason saving gives"
+  assert!(read.flow.is_ok(), "the steps are drawn");
+  let none: Option<Unpublishable> = None;
+  assert_eq!(
+    unpublishable(&branching, &read, &opened.assignables),
+    none,
+    "Save is offered"
   );
-  let refused =
-    save(pipeline.folder.path(), pipeline.pipeline, &opened.body, &branching, &[]).expect_err("saving refuses it");
-  assert_eq!(refused.key, "pipelines.problems.branches");
-  assert_eq!(pipeline.versions().len(), 1, "nothing is stored");
+  let saved = save(pipeline.folder.path(), pipeline.pipeline, &opened.body, &branching, &[]).expect("saving takes it");
+  assert_eq!(saved, Saved::Published(VersionNumber::new(2.try_into().unwrap())));
+  let versions = pipeline.versions();
+  assert_eq!(versions.len(), 2, "the steps are stored as the next version");
+  assert_eq!(versions[1].steps(), branching.steps(), "as they were edited");
 }
 
 #[test]

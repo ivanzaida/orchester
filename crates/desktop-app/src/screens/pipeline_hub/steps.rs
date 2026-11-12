@@ -4,8 +4,7 @@
 //!
 //! The head's *Add step* adds a step at the end of the line, and a card changes its place, is duplicated or removed
 //! through the same edit (PV2-06), unless the panel is locked while a save runs or its question is open; where the
-//! steps cannot be drawn as one line the flow's notice offers *Edit steps*, which opens the editor the pipeline has
-//! today, through its own route (the leave guard asks first while the edit has changes).
+//! steps have no order to draw the flow's notice offers *Make it a line* (P16c `YHAyx`).
 
 use std::sync::Arc;
 

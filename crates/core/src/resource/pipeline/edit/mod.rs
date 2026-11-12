@@ -7,10 +7,12 @@ use std::collections::BTreeSet;
 
 mod flow;
 mod moves;
+mod waits;
 
 pub use self::{
   flow::{FlowError, units as flow_units},
   moves::{MoveError, MoveOffer, ParallelChoice, StepMoves},
+  waits::{PartWait, WaitChoice, Waited, part_waits},
 };
 use super::{
   DeliverStep, Deliverable, Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind,
