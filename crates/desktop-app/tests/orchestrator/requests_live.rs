@@ -5,6 +5,8 @@
 //! the person's *Approve once* there answers the agent and folds the line to *Allowed once by you* (e). Another task's
 //! same request the Orchestrator denies with words for the agent (it may only deny what a hard rule holds): the agent
 //! is told them, the line says *Denied by the Orchestrator* with what it told, and the action keeps the chat's reason.
+//! Its approve_once of a push is refused (`person_only`: the runner lets only a person approve what auto-approval
+//! leaves to one), the card stays for the person, and the action is kept as refused.
 //! `cargo test -p orchester-app --test orchestrator requests_live`.
 
 use orchester_core::{
@@ -67,6 +69,28 @@ fn turn_ended(db: &ProjectDb, id: &str) -> bool {
   })
 }
 
+/// The refusal codes of the Orchestrator's `decide_approval` calls in the latest conversation, each kept without an
+/// answer of its own.
+fn refused_answers(db: &ProjectDb) -> Vec<String> {
+  let Some(chat) = db.latest_chat().expect("read") else {
+    return Vec::new();
+  };
+  db.chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Action(action) if action.tool == "decide_approval" => match action.outcome {
+        ActionOutcome::Refused { code, .. } => {
+          assert!(action.tool_answer.is_none(), "a refusal keeps no answer");
+          Some(code)
+        }
+        _ => None,
+      },
+      _ => None,
+    })
+    .collect()
+}
+
 /// Starts a new task of `pipeline` whose agent asks to push, from a person's message; its key and its request, once
 /// the request's own turn ended ([`asking`]).
 fn pushing(screen: &mut Orchestrator, pipeline: ResourceId, title: &str) -> (String, String) {
@@ -109,8 +133,26 @@ fn requests_live_wait_for_the_person_with_the_card_and_take_both_answers() {
     (Some(ToolApprovalDecision::Approved), Some(DecidedBy::Person))
   );
 
-  // The Orchestrator denies another, with words for the agent and its reason.
+  // The runner lets only a person approve a push (auto-approval leaves history to a person): the Orchestrator's
+  // approve_once is refused person_only, the card stays for the person, and its action is kept as refused, not as an
+  // approval.
   let (second_key, second) = pushing(&mut screen, pipeline, "Push the log");
+  let allow_push = format!(
+    r#"Call decide_approval {{"project":"Kontur","approval":"{second}","decision":"approve_once","reason":"The brief asks to push."}}"#
+  );
+  screen.send(&allow_push);
+  screen.until("the approval refused", |screen| {
+    refused_answers(&screen.db()).iter().any(|code| code == "person_only")
+  });
+  assert_eq!(
+    waiting(&screen.db(), &second_key),
+    vec![second.clone()],
+    "it still waits"
+  );
+  let second_card = format!("cards-approval-{second}");
+  screen.until("the card stays for the person", |screen| screen.exists(&second_card));
+
+  // The Orchestrator denies it, with words for the agent and its reason.
   let deny = format!(
     r#"Call decide_approval {{"project":"Kontur","approval":"{second}","decision":"deny","message":"Do not push from a run.","reason":"The brief leaves pushing to review."}}"#
   );
