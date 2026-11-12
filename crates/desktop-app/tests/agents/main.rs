@@ -45,6 +45,7 @@ mod pipeline_leaving;
 mod pipeline_menu_edit;
 mod pipeline_new;
 mod pipeline_new_steps;
+mod pipeline_old_routes;
 mod pipeline_reorder;
 mod pipeline_reorder_changes;
 mod pipeline_reorder_guards;

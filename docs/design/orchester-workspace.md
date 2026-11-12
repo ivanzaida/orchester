@@ -969,7 +969,20 @@ Versions): Steps is a vertical flow (*ON TASK START*, numbered cards, parallel s
 *Changes requested → 03 Implement* under a step that sends work back, the Deliver step numbered last or *No Deliver
 step*) beside the chosen step's column, whose Permissions, Sources and Instructions open as pages of the column
 (`?step=<key>&page=permissions`); the publish review replaces the column; a viewed version is a banner over the same
-flow, read-only. The rules above (draft, publish, approval of weaker versions, restore) are unchanged.
+flow, read-only. The rules above (publish, approval of weaker versions, restore) are unchanged; drafts are not: see
+the next paragraph.
+
+**Pipelines · v2 (2026-11, board `Pipelines · v2` `pCzIS`; decisions in `docs/design/pipelines-v2.md`).** A local
+project's Pipelines page is the hub (`screens/pipeline_hub/`), the Agents hub's master–detail page: *All* and *Archived*,
+the list grouped *Needs you* and *Ready*, and the chosen pipeline's panel edited in place — the flow of its steps
+(reordered by drag, the card's ⋯ and keys; steps run together side by side; a step that waits for only part of the
+stage before it has *Waits for*), a step or the Deliver step opened in the same panel, the pipeline's settings with its
+slug, *Ready?*, and *Save* / *Cancel*. New pipeline and *Duplicate* (a copy named *… copy*) are an unsaved panel there
+until *Create v1*. **Pipelines have no drafts** (D-032), in local and team projects alike: a pipeline is stored only as
+a published version and only when it can publish; *Draft v1*, *Save draft*, *Restore as draft* and the draft labels
+above do not apply to pipelines any more. A team project keeps the page above with one *Save* that publishes, sent to
+the team server before it is stored here (D-043). A route of that page that a local project is asked for opens the hub
+(PV2-14).
 
 **One Info notice look (ORC-272, 2026-10-28, in the new `orchester.pen`; decided in ORC-131).** Every Info notice,
 stroked and flat, is drawn on `info_muted` with an `info` icon, as the Agents frames (03c `byr8E`, 02c `HfwWH`) and the

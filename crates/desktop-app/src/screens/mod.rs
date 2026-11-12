@@ -46,10 +46,15 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::{ProjectId, ResourceId};
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  resource::VersionNumber,
+};
 use orchester_workspace::pipelines::create::Start;
 
+use self::pipeline_link::LocalPipeline;
 use crate::{
+  navigation::Navigation,
   project::{ProjectState, Projects, ShownProject, TeamRead},
   routes::{
     AgentTab, HubFilter, HubView, InstructionsView, NewConnection, PipelineView, PipelinesFilter, PipelinesView,
@@ -137,16 +142,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_) => {
       new_pipeline_or_hub(ctx, project, page)
     }
-    ProjectPage::Pipeline(id, PipelineView::Step(key)) => {
-      pipeline_step(ctx, project, *id, pipeline_hub::OpenStep::Step(key.clone()))
-    }
-    ProjectPage::Pipeline(id, PipelineView::Deliver) => {
-      pipeline_step(ctx, project, *id, pipeline_hub::OpenStep::Deliver)
-    }
-    ProjectPage::Pipeline(id, view) => pipelines::editor(ctx, project, *id, (view.clone(), None)),
-    ProjectPage::PipelineVersion(id, version, view) => {
-      pipelines::editor(ctx, project, *id, (view.clone(), Some(*version)))
-    }
+    ProjectPage::Pipeline(id, view) => pipeline_page(ctx, project, *id, (view, None)),
+    ProjectPage::PipelineVersion(id, version, view) => pipeline_page(ctx, project, *id, (view, Some(*version))),
     ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
     ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
     ProjectPage::NewAgent(tab) => new_agent(ctx, project, *tab),
@@ -276,18 +273,42 @@ fn new_pipeline_or_hub(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage
   }
 }
 
-/// A step of pipeline `id` (a card of the flow, a fix) or its Deliver step: in a local project it opens in the
-/// Pipelines hub's panel (`Pipelines · v2` P2, P15), which keeps the edit the pipeline's panel holds; a team project
-/// keeps the step's own page. While it is not yet read whether the project is shared the page the route had before
-/// stays, as the pipeline's own route does, so a team project's editor is not replaced by a placeholder for as long as
-/// that takes.
-fn pipeline_step(ctx: &mut Ctx, project: &ShownProject, id: ResourceId, open: pipeline_hub::OpenStep) -> Element {
+/// A route to pipeline `id`'s own page, of the edit or of published `version`: in a local project the Pipelines hub
+/// (`Pipelines · v2`), whose panel shows the step or the Deliver step the route names (P2, P15) and the pipeline itself
+/// for every other place of the old page (its Settings and Versions tabs, a published version, the publish review),
+/// with the route made the hub's own ([`pipeline_in_hub`]). Only the Steps tab of the edit still opens the old page in
+/// a local project: the hub's *Edit steps* opens it for steps it cannot draw (PV2-24 moves that). A team project keeps
+/// the old page. While it is not yet read whether the project is shared the page the route had before stays, so a team
+/// project's editor is not replaced by a placeholder for as long as that takes.
+fn pipeline_page(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  id: ResourceId,
+  (view, version): (&PipelineView, Option<VersionNumber>),
+) -> Element {
   match project.feed.team.get() {
-    TeamRead::Read(None) => {
-      let view = PipelinesView::new(PipelinesFilter::All, Some(id));
-      pipeline_hub::screen(ctx, project, view, Some(open))
-    }
-    TeamRead::Read(Some(_)) | TeamRead::Unread => pipelines::editor(ctx, project, id, (open.view(), None)),
+    TeamRead::Read(None) => match LocalPipeline::of(view, version) {
+      LocalPipeline::Hub(open) => pipeline_in_hub(ctx, project, id, open),
+      LocalPipeline::EditSteps => pipelines::editor(ctx, project, id, (view.clone(), None)),
+    },
+    TeamRead::Read(Some(_)) | TeamRead::Unread => pipelines::editor(ctx, project, id, (view.clone(), version)),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
+}
+
+/// The hub with pipeline `id`'s panel, `open` open in it. A route of the old page is replaced in place by the hub's
+/// own, so Back, a link copied and a reload land on what the page shows.
+fn pipeline_in_hub(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  id: ResourceId,
+  open: Option<pipeline_hub::OpenStep>,
+) -> Element {
+  let shown = Route::Project(project.open.project.id(), LocalPipeline::page(id, open.as_ref()));
+  let navigation = Navigation::of(ctx);
+  if navigation.route_now() != shown {
+    navigation.replace(shown);
+  }
+  let view = PipelinesView::new(PipelinesFilter::All, Some(id));
+  pipeline_hub::screen(ctx, project, view, open)
 }
