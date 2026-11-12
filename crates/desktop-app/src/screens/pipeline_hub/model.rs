@@ -126,6 +126,18 @@ impl Listing {
       .or_else(|| self.shown(view.filter).next())
   }
 
+  /// The view a route that comes from elsewhere lands on: a pipeline it names that only another tab holds (a link to
+  /// one archived since the link was made, or restored since) opens that tab with it.
+  pub(super) fn landing(&self, view: PipelinesView) -> PipelinesView {
+    match view.item {
+      Some(item) if !self.holds(view.filter, item) => PipelinesFilter::ALL
+        .into_iter()
+        .find(|filter| self.holds(*filter, item))
+        .map_or(view, |filter| PipelinesView::new(filter, Some(item))),
+      _ => view,
+    }
+  }
+
   /// What the steps of the pipelines can run.
   pub(super) const fn assignables(&self) -> &Arc<Assignables> {
     &self.assignables

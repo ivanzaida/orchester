@@ -55,7 +55,7 @@ use lurq::{
     theme::{BorderSize, Breakpoint, PaletteColor, RadiusSize},
   },
   components::{Column, Row},
-  core::Signal,
+  core::{Ref, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -132,6 +132,9 @@ struct PipelineHubScreen {
   archive_waits: Signal<Option<Target>>,
   /// Whether the open panel's save is under way.
   saving: Signal<bool>,
+  /// The pipeline the panel showed last: a route that still names it after it moved to the other tab (archived or
+  /// restored here) stays on its tab, where a route from elsewhere lands on the tab that holds it.
+  shown: Ref<Option<ResourceId>>,
 }
 
 impl Component for PipelineHubScreen {
@@ -158,13 +161,18 @@ impl Component for PipelineHubScreen {
       archiving: Asking::new(ctx),
       archive_waits: ctx.signal(None),
       saving: ctx.signal(false),
+      shown: ctx.create_ref(None),
     };
     this.follow_question(ctx);
     this
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, view, step } = ctx.props::<Props>().clone();
+    let Props {
+      project,
+      view: named,
+      step,
+    } = ctx.props::<Props>().clone();
     let loaded = self.read(ctx, &project);
     let failed = self.failure.follow(&loaded);
     let unreadable = failed.is_some();
@@ -174,13 +182,20 @@ impl Component for PipelineHubScreen {
     let default = hub.and_then(|read| read.default);
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
+    let view = match listing.as_ref() {
+      Some(listing) if named.item != self.shown.get() => listing.landing(named),
+      _ => named,
+    };
     let selected = listing.as_ref().and_then(|listing| listing.selected(view)).cloned();
+    if !reading && listing.is_some() {
+      self.shown.set(selected.as_ref().map(|entry| entry.id));
+    }
     let id = project.open.project.id();
     let body = match (failed, listing.as_ref()) {
       (Some((error, retrying)), _) => self.failure_page(ctx, &error, retrying),
       (None, Some(listing)) => {
         if !reading {
-          keep_route_on_shown(id, view, selected.as_ref(), &navigation);
+          keep_route_on_shown(id, (named, view.filter), selected.as_ref(), &navigation);
         }
         hub_body(
           ctx,
@@ -458,13 +473,19 @@ fn shows_edited(project: ProjectId, edits: UnsavedSignal) -> impl Fn(&Route) -> 
   }
 }
 
-/// A route that names a pipeline the tab does not hold (one archived, or one that is not) shows the one the page shows;
-/// the route is corrected to it, in place, so a link, Back and a reload land on what the page says.
-fn keep_route_on_shown(project: ProjectId, view: PipelinesView, shown: Option<&Entry>, navigation: &Navigation) {
-  if view.item.is_some() && view.item != shown.map(|entry| entry.id) {
+/// A route `named` that names a pipeline the tab does not hold (one archived, or one that is not) shows the one the
+/// page shows, on the tab `filter` it landed on ([`Listing::landing`]); the route is corrected to it, in place, so a
+/// link, Back and a reload land on what the page says.
+fn keep_route_on_shown(
+  project: ProjectId,
+  (named, filter): (PipelinesView, PipelinesFilter),
+  shown: Option<&Entry>,
+  navigation: &Navigation,
+) {
+  if named.item.is_some() && (named.item != shown.map(|entry| entry.id) || named.filter != filter) {
     let corrected = Route::Project(
       project,
-      ProjectPage::pipelines(PipelinesView::new(view.filter, shown.map(|entry| entry.id))),
+      ProjectPage::pipelines(PipelinesView::new(filter, shown.map(|entry| entry.id))),
     );
     navigation.replace(corrected);
   }

@@ -26,7 +26,8 @@ impl PipelineLinks {
     })
   }
 
-  /// The page a link to `pipeline` opens.
+  /// The page a link to `pipeline` opens. The link names it under *All*, as the link cannot know whether it was
+  /// archived since; the hub opens the tab that holds it (`pipeline_hub::model::Listing::landing`).
   pub(in crate::screens) fn page(self, pipeline: ResourceId) -> ProjectPage {
     match self {
       Self::Hub => ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline))),
