@@ -64,7 +64,7 @@ impl Component for Viewed {
       .as_ref()
       .and_then(|history| editing.viewing_version.and_then(|n| history.version(n)).cloned());
     let (_, busy) = props.locked;
-    let flow = super::flow::flow(ctx, &props.state, busy);
+    let flow = super::flow::flow(ctx, &props.state, (busy, false));
     let column = if editing.view.step().is_some() || editing.view == View::Deliver {
       super::column::column(ctx, &props.state, props.locked)
     } else {

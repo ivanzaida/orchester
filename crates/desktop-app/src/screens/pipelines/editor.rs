@@ -167,7 +167,10 @@ impl Editor {
     if self.confirm_save.get() && !super::actions::asks_in_column(&editing) {
       notices.push(writes.save_question(ctx));
     }
-    notices.extend(super::publication::problems(ctx, &self.state));
+    // What blocks saving is for the person who saves: a member of the team is not told to fix it.
+    if hub::team::may_change(hub::team::of(&props.project).as_ref()) {
+      notices.extend(super::publication::problems(ctx, &self.state));
+    }
     notices.extend(self.write_failure(ctx, props));
     notices.extend(errors(ctx, &editing));
     notices
@@ -235,6 +238,8 @@ impl Editor {
         },
       );
     }
+    // A member reads the team's pipeline: the flow offers them no step to add.
+    let reader = !hub::team::may_change(hub::team::of(&props.project).as_ref());
     let column = if editing.view == View::Publish {
       writes.publish_column(ctx)
     } else {
@@ -244,7 +249,7 @@ impl Editor {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Section)
       .align_items(Alignment::Start)
-      .child(super::flow::flow(ctx, &self.state, busy))
+      .child(super::flow::flow(ctx, &self.state, (busy, reader)))
       .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(column))
       .into()
   }

@@ -1368,6 +1368,7 @@
       "teamNoAnswer": "The team server didn't answer in time, so your changes may or may not have reached it. They stay here unsaved; once the team's changes are read, the pipeline shows what the server has.",
       "teamAlreadySaved": "The team server already has these changes as v{{version}}, most likely from your earlier save that got no answer. Nothing more was sent; they show here once the team's changes are read.",
       "teamNameTaken": "The team already has a pipeline with this name. If an earlier Create got no answer, it may have made this one: it shows here once the team's changes are read.",
+      "teamGone": "The team server no longer has this pipeline, so nothing was saved. Your changes are still here.",
       "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
       "unknownVariable": "{{name}} is not a variable in the catalog.",
       "invalidRetries": "Enter a whole number of retries, at least 1.",

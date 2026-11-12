@@ -49,6 +49,9 @@ pub enum NotTaken {
   Failed(Message),
 }
 
+/// The code the team server answers for a pipeline it no longer has.
+const GONE: &str = "not_found";
+
 impl NotTaken {
   /// Why, in words: what the page says where a save's refusal shows, and what a tool answers.
   pub fn message(&self) -> Message {
@@ -63,6 +66,8 @@ impl NotTaken {
       Self::Refused(Refusal::NotAdmin | Refusal::NotAdminHere) => Message::new("sharing.errors.notAdmin"),
       // A create that got no answer may have made the pipeline: the name is then taken by the person's own.
       Self::Refused(Refusal::NameTaken) => Message::new("pipelines.problems.teamNameTaken"),
+      // The server no longer has the pipeline (`404 not_found`): said in words, not by its code.
+      Self::Refused(Refusal::Other(code)) if code == GONE => Message::new("pipelines.problems.teamGone"),
       Self::Refused(refusal) => refusal.message(),
       Self::Unreached(reason) | Self::Failed(reason) => reason.clone(),
     }

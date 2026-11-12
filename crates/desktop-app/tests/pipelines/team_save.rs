@@ -168,3 +168,28 @@ fn pipelines_team_save_says_when_only_the_new_name_was_saved() {
     "the pipeline is kept"
   );
 }
+
+#[test]
+fn pipelines_team_save_a_member_reads_the_pipeline_and_adds_no_step() {
+  let mut editor = Editor::team();
+  let id = editor.published();
+  // The person is a member from here on: a member cannot make a team pipeline, so the admin made it first.
+  editor
+    .db()
+    .record_sharing_state(Some(orchester_core::sharing::MemberRole::Member), None, None)
+    .expect("the role");
+
+  editor.go(ProjectPage::Pipeline(id, Default::default()));
+  editor.until("the flow", |e| e.exists("pipeline-flow"));
+
+  assert!(
+    !editor.exists("pipeline-add-step"),
+    "a member's flow offers no step to add"
+  );
+  assert!(!editor.exists("pipeline-save"));
+  assert!(
+    !editor.exists("pipeline-problem-strip"),
+    "what blocks saving is not a member's to fix"
+  );
+  assert_eq!(latest(&editor, id), (1, String::new()));
+}

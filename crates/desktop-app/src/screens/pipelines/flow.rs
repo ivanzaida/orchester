@@ -32,8 +32,9 @@ pub const FLOW_WIDTH: f32 = 360.0;
 /// An edge between two cards (`Edge` `p9sTT`).
 const EDGE_HEIGHT: f32 = 12.0;
 
-/// The flow of what is shown, the draft or the version viewed; `busy` while a write or a reload runs.
-pub fn flow(ctx: &Ctx, state: &State, busy: bool) -> Element {
+/// The flow of what is shown, the edit or the version viewed; `busy` while a write or a reload runs, `reader` for a
+/// person who may not change the pipeline (a member of its team), whose flow offers no step to add.
+pub fn flow(ctx: &Ctx, state: &State, (busy, reader): (bool, bool)) -> Element {
   let editing = state.get();
   let shown = editing.shown();
   let views = editing.views.clone();
@@ -52,7 +53,7 @@ pub fn flow(ctx: &Ctx, state: &State, busy: bool) -> Element {
     .padding(Padding::new().top(ExtraSpacing::Tight.role()).bottom(SpacingSize::Xl))
     .child(start);
   if shown.steps().is_empty() {
-    return column.child(edge(ctx)).child(empty(ctx, state, busy)).into();
+    return column.child(edge(ctx)).child(empty(ctx, state, busy || reader)).into();
   }
   for level in levels(shown.steps()) {
     column = column.child(edge(ctx));
@@ -67,7 +68,7 @@ pub fn flow(ctx: &Ctx, state: &State, busy: bool) -> Element {
     };
   }
   column = column.child(edge(ctx)).child(flow_card::deliver(ctx, &editing));
-  if editing.viewing.is_some() {
+  if editing.viewing.is_some() || reader {
     return column.into();
   }
   let add = ActionButton::new("pipeline-add-step", ButtonKind::Ghost, ctx.t("pipelines.addStep"))
