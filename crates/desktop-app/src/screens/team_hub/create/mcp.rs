@@ -180,11 +180,11 @@ impl Fields {
       lead: None,
       after: Vec::new(),
       rows,
-      computer: Some(if program {
+      computer: Some(ctx.t(if program {
         "team_new.computer.mcpProgram"
       } else {
         "team_new.computer.mcpRemote"
-      }),
+      })),
       make: checked
         .ok()
         .filter(|_| !self.folder_missing())

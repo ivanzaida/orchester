@@ -27,6 +27,7 @@ mod lifecycle;
 mod live;
 mod loading_states;
 mod local_hub;
+mod local_tools;
 mod long_chats;
 mod memory;
 mod merge_attempts;
@@ -116,7 +117,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 198] = [
+pub const ALL: [Scenario; 200] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -291,6 +292,7 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("team-not-ready", team::not_ready_here),
   Scenario::of("team-not-ready-ended", team::not_ready_after_run),
   Scenario::of("team-edit", team::edit),
+  Scenario::of("team-tools", team::tools),
   Scenario::of("team-edit-demoted", team::edit_demoted),
   Scenario::of("team-edit-offline", team::edit_offline),
   Scenario::of("team-edit-rejects", team::edit_rejects),
@@ -308,6 +310,7 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("local-hub-secret", local_hub::secret),
   Scenario::of("local-hub-secret-refused", local_hub::secret_refused),
   Scenario::of("local-hub-archived", local_hub::archived),
+  Scenario::of("local-hub-tools", local_tools::seed),
   Scenario::of("team-archive", team::archive),
   Scenario::of("team-archived", team::archived),
   Scenario::of("team-archived-admin", team::archived_admin),

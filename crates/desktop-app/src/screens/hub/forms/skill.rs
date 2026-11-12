@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::resource::{InstructionScope, Skill};
 
-use super::{Drawn, Form, Line, Look, Section};
+use super::{Drawn, Form, Line, Look, Need, Section};
 use crate::screens::team_hub::rows;
 
 const NAME: Line = Line {
@@ -16,7 +16,7 @@ const NAME: Line = Line {
   sub: Some("team_new.skill.nameSub"),
   placeholder: Some("team_new.skill.namePlaceholder"),
   look: Look::Mono,
-  required: true,
+  required: Need::ToMake,
 };
 
 /// The description is at least 64 high (`Input` in A11 `p4aSf`).
@@ -26,7 +26,7 @@ const DESCRIPTION: Line = Line {
   sub: Some("team_hub.edit.descriptionSub"),
   placeholder: Some("team_new.skill.descriptionPlaceholder"),
   look: Look::Area(64.0),
-  required: true,
+  required: Need::ToMake,
 };
 
 /// SKILL.md is at least 180 high, as an instruction's text.
@@ -100,6 +100,7 @@ impl SkillFields {
     let was = form.base.map(Skill::body);
     let section = form.section(ctx, &DOCUMENT, &self.document, (was, document_error));
     Drawn {
+      marked: false,
       name,
       rows,
       sections: vec![section],

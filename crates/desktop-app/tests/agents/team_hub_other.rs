@@ -376,51 +376,77 @@ fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_so_without_the_id_a
 }
 
 #[test]
-fn team_hub_other_a6_m6_a_tool_names_its_secret_by_name_and_a_value_is_added_here() {
-  for member in [false, true] {
-    let mut agents = Agents::new(true);
-    let [skill, rules, ..] = team(&agents);
-    let sentry = sentry_by_name(&agents);
-    builder(&agents, [rules, skill, sentry]);
-    if member {
-      as_member(&agents);
-    }
-    show(&mut agents, HubFilter::Tools, (sentry, "sentry-issues"));
-    assert_eq!(
-      agents.text("team-hub-chip-here-label"),
-      "Secret SENTRY_TOKEN has no value here"
-    );
-    assert_eq!(
-      agents.text("team-hub-from-team-headers-value"),
-      "Authorization: Bearer ← secret SENTRY_TOKEN"
-    );
-    assert_eq!(agents.text("team-hub-from-team-secret-value-0-label"), "SENTRY_TOKEN");
-    assert_eq!(agents.text("team-hub-value-SENTRY_TOKEN-words"), "No value here");
-    assert_eq!(
-      agents.text("team-hub-tool-note-text"),
-      "Not ready here: SENTRY_TOKEN needs a value. Runs whose pipeline uses sentry-issues don't start on this \
-       computer until then."
-    );
-    assert_eq!(agents.text("team-hub-fix-add-value-label"), "Add value");
-    assert!(!agents.exists("team-hub-tool-republish") && !agents.exists("team-hub-action-edit"));
-    assert_eq!(
-      agents.exists("team-hub-member-lock"),
-      member,
-      "only a member reads the lock line"
-    );
-    // Only a person adds a value: automation's press is refused to it, and opens no dialog.
-    with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
-    assert!(agents.refused().is_some(), "refused to the client that pressed it");
-    agents.window.pass();
-    assert!(!agents.exists("team-hub-secret-value"), "automation opened no dialog");
-    assert!(
-      !agents.exists("team-hub-fix-person-only"),
-      "and the panel says nothing of it"
-    );
-    agents.press_until("team-hub-fix-add-value", "the value's dialog", |s| {
-      s.exists("team-hub-secret-value")
-    });
-  }
+fn team_hub_other_m6_a_tool_names_its_secret_by_name_and_a_value_is_added_here() {
+  let mut agents = Agents::new(true);
+  let [skill, rules, ..] = team(&agents);
+  let sentry = sentry_by_name(&agents);
+  builder(&agents, [rules, skill, sentry]);
+  as_member(&agents);
+  show(&mut agents, HubFilter::Tools, (sentry, "sentry-issues"));
+  assert_eq!(
+    agents.text("team-hub-chip-here-label"),
+    "Secret SENTRY_TOKEN has no value here"
+  );
+  assert_eq!(
+    agents.text("team-hub-from-team-headers-value"),
+    "Authorization: Bearer ← secret SENTRY_TOKEN"
+  );
+  assert_eq!(agents.text("team-hub-from-team-secret-value-0-label"), "SENTRY_TOKEN");
+  assert_eq!(agents.text("team-hub-value-SENTRY_TOKEN-words"), "No value here");
+  assert_eq!(
+    agents.text("team-hub-tool-note-text"),
+    "Not ready here: SENTRY_TOKEN needs a value. Runs whose pipeline uses sentry-issues don't start on this computer \
+     until then."
+  );
+  assert_eq!(agents.text("team-hub-fix-add-value-label"), "Add value");
+  assert!(!agents.exists("team-hub-tool-republish") && !agents.exists("team-hub-action-edit"));
+  assert!(agents.exists("team-hub-member-lock"), "a member reads the lock line");
+  // Only a person adds a value: automation's press is refused to it, and opens no dialog.
+  with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
+  agents.window.pass();
+  assert!(!agents.exists("team-hub-secret-value"), "automation opened no dialog");
+  assert!(
+    !agents.exists("team-hub-fix-person-only"),
+    "and the panel says nothing of it"
+  );
+  agents.press_until("team-hub-fix-add-value", "the value's dialog", |s| {
+    s.exists("team-hub-secret-value")
+  });
+}
+
+/// An admin edits a tool in the team's form in place (A33 `t2RMXK`): its fields hold the version, the secret by name,
+/// and *On this computer* takes the secret's value from a press on its box, as the plain panel's *Add value* does.
+#[test]
+fn team_hub_other_a33_an_admin_edits_a_tool_by_name_and_adds_its_value_here() {
+  let mut agents = Agents::new(true);
+  let [skill, rules, ..] = team(&agents);
+  let sentry = sentry_by_name(&agents);
+  builder(&agents, [rules, skill, sentry]);
+  open(&mut agents, HubView::new(HubFilter::Tools, Some(sentry)));
+  agents.until("the edit", |s| s.exists("team-hub-from-team-url-input"));
+  assert_eq!(
+    agents.value("team-hub-from-team-url-input"),
+    "https://sentry.io/api/0/issues/"
+  );
+  assert_eq!(agents.value("team-hub-from-team-secret-input"), "SENTRY_TOKEN");
+  assert_eq!(agents.value("team-hub-from-team-inputs-input"), "query → query query");
+  assert_eq!(agents.text("team-hub-from-team-kind-value"), "HTTP request");
+  assert!(agents.exists("team-hub-access"), "its access is edited too");
+  assert!(!agents.exists("team-hub-fix-add-value"), "the bar is Save's");
+  assert_eq!(agents.text("team-hub-value-SENTRY_TOKEN-words"), "No value here");
+  // Only a person adds a value: automation's press is refused to it, and opens no dialog.
+  with_synthetic_input(|| agents.click("team-hub-value-SENTRY_TOKEN-value"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
+  agents.window.pass();
+  assert!(!agents.exists("team-hub-secret-value"), "automation opened no dialog");
+  assert!(
+    !agents.exists("team-hub-fix-person-only"),
+    "and the panel says nothing of it"
+  );
+  agents.press_until("team-hub-value-SENTRY_TOKEN-value", "the value's dialog", |s| {
+    s.exists("team-hub-secret-value")
+  });
 }
 
 #[test]

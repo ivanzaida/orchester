@@ -1,8 +1,8 @@
 //! The panel of a team tool (`Agents · Tools` `u9Hcc` A6, `yTVeE` M6; `docs/design/team-configuration.md`, "What a
 //! computer fills in"): its head and chips, *From the team* (what it runs or calls, its arguments, who may call it
 //! without asking and the secret it needs by name, the same on every computer), *On this computer* (the value of that
-//! secret here, and how the tool stands) and, pinned at the bottom, *Add value* while the secret has none here, or the
-//! admin's *Edit* of a command.
+//! secret here, and how the tool stands) and, pinned at the bottom, *Add value* while the secret has none here. An
+//! admin edits a version in the team's form in place ([`edit`]).
 //!
 //! A secret's value is a person's alone to set, as an MCP server's is: a press automation made is refused to the
 //! client that sent it, and the panel stays as it was. A latest version published before the team's form names its
@@ -29,7 +29,6 @@ use orchester_workspace::{
   messages::Message,
   readiness::{ReadinessStanding, Undecided},
   sharing::team::TeamConfiguration,
-  tools::form::CommandText,
 };
 
 use self::republish::Republish;
@@ -56,7 +55,7 @@ use crate::{
 pub(super) struct Props {
   pub repo_root: PathBuf,
   pub project: ProjectId,
-  /// The person is an admin of the team, reachable or not: they edit a command tool in place, and what they typed
+  /// The person is an admin of the team, reachable or not: they edit a tool in place, and what they typed
   /// stays while the server is lost.
   pub admin: bool,
   /// Why the team server cannot be reached now; Save waits for it.
@@ -71,12 +70,7 @@ impl DevtoolsInspectable for Props {}
 
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   let key = format!("team-hub-tool-{}", props.entry.id);
-  let command = props
-    .sheet
-    .edit
-    .as_ref()
-    .is_some_and(|latest| CommandText::of(&latest.body).is_some());
-  if props.admin && command {
+  if props.admin && props.sheet.latest.is_some() {
     return ctx.mount_keyed::<edit::ToolEditor>(&key, edit::EditorProps { props });
   }
   ctx.mount_keyed::<ToolPanel>(&key, props)
@@ -135,7 +129,7 @@ impl Component for ToolPanel {
       .child(chips)
       .with_children(member::lock_line(ctx, team))
       .child(from_team::section(ctx, sheet, super::rows::FromTeam::Shared))
-      .child(computer::section(ctx, entry, sheet, missing))
+      .child(computer::section(ctx, (entry, sheet), missing, None))
       .with_children(self.failure(ctx));
     let dialog = self.secret.dialog(
       ctx,

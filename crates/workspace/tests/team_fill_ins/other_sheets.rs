@@ -110,7 +110,14 @@ fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_needs_by_name() 
   assert_eq!(sheet.secret, ToolSecret::Named(secret_name("SENTRY_TOKEN")));
   assert!(
     sheet.edit.is_none(),
-    "an HTTP tool in the team's form is not edited here"
+    "an HTTP tool in the team's form is not published again by name"
+  );
+  assert!(
+    sheet
+      .latest
+      .as_ref()
+      .is_some_and(|latest| latest.body.secret() == Some(&secret_name("SENTRY_TOKEN"))),
+    "an admin edits it in the team's form"
   );
   assert_eq!(sheet.approval, Some(ApprovalMode::Never));
   let ToolRuns::Http { method, url, arguments } = &sheet.runs else {
@@ -167,6 +174,7 @@ fn team_fill_ins_other_a_tool_published_before_the_team_form_names_its_secret_by
     Some(&tool),
     "an admin publishes it again from the version it holds"
   );
+  assert!(sheet.latest.is_none(), "it is not in the team's form");
 }
 
 fn secret_name(text: &str) -> SecretName {

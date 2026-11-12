@@ -24,7 +24,11 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-pub(in crate::screens) use self::{instruction::InstructionFields, skill::SkillFields, tool::ToolFields};
+pub(in crate::screens) use self::{
+  instruction::InstructionFields,
+  skill::SkillFields,
+  tool::{LocalSecrets, ToolFields},
+};
 use crate::{
   screens::team_hub::rows::{self, Sub},
   theme::HubText,
@@ -66,6 +70,8 @@ pub(in crate::screens) struct Drawn<B> {
   pub rows: Vec<Row>,
   pub sections: Vec<Element>,
   pub made: Result<B, Arc<str>>,
+  /// A field says why it is wrong before Create was pressed: what was typed in it cannot be used (L22 `Xp89k`).
+  pub marked: bool,
 }
 
 /// How a field looks.
@@ -80,14 +86,24 @@ enum Look {
   MonoArea(f32),
 }
 
-/// One field's row: its part of the ids, the keys of its words, how it looks and whether a new resource needs it.
+/// Whether a field must be filled in, which its label says with *· required*.
+#[derive(Clone, Copy, PartialEq)]
+enum Need {
+  No,
+  /// A new resource needs it; an edit's label does not say so.
+  ToMake,
+  /// Its label says so in an edit too (A33 `t2RMXK`, L24 `OSniP`).
+  Always,
+}
+
+/// One field's row: its part of the ids, the keys of its words, how it looks and whether it must be filled in.
 struct Line {
   part: &'static str,
   label: &'static str,
   sub: Option<&'static str>,
   placeholder: Option<&'static str>,
   look: Look,
-  required: bool,
+  required: Need,
 }
 
 /// A section of text an agent reads (an instruction's *Text*, a skill's *SKILL.md*): its part of the ids, the keys of
@@ -105,9 +121,14 @@ impl<B> Form<'_, B> {
     self.base.is_none()
   }
 
-  /// `label` with *· required* after it while the resource is made and the field is required.
-  fn label(&self, ctx: &Ctx, label: &'static str, required: bool) -> Arc<str> {
-    if required && self.creates() {
+  /// `label` with *· required* after it when the field must be filled in and the label says so now.
+  fn label(&self, ctx: &Ctx, label: &'static str, required: Need) -> Arc<str> {
+    let marked = match required {
+      Need::No => false,
+      Need::ToMake => self.creates(),
+      Need::Always => true,
+    };
+    if marked {
       ctx.t_args("team_new.required", [("label", &*ctx.t(label))])
     } else {
       ctx.t(label)
@@ -186,7 +207,7 @@ impl<B> Form<'_, B> {
     (was, error): (Option<&str>, Option<Arc<str>>),
   ) -> Element {
     let id = format!("{}-{}", self.ids.sections, section.part);
-    let label = self.label(ctx, section.label, true);
+    let label = self.label(ctx, section.label, Need::ToMake);
     let mut input = FieldInput::new(format!("{id}-input"), ctx.t(section.label), value.clone())
       .placeholder(ctx.t(section.placeholder))
       .width(Dimension::Pct(100.0))
@@ -228,5 +249,11 @@ impl<B> Form<'_, B> {
   /// `error` once it is to be said: once Create was pressed, and always in an edit.
   fn said(&self, error: Option<Arc<str>>) -> Option<Arc<str>> {
     error.filter(|_| self.tried)
+  }
+
+  /// `error` of a field holding `typed`: what was typed says at once why it cannot be used; an empty field says it
+  /// must be filled in once Create was pressed, and always in an edit.
+  fn said_of(&self, typed: &str, error: Option<Arc<str>>) -> Option<Arc<str>> {
+    error.filter(|_| self.tried || !typed.trim().is_empty())
   }
 }

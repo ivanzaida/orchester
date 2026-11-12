@@ -98,6 +98,7 @@ impl Fields {
       locked: view.locked,
       offer: &Offer::default(),
       connections: None,
+      pipelines: &[],
       first: &first,
       refused_name: None,
       published: Some(view.published),

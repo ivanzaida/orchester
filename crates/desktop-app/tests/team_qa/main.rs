@@ -15,6 +15,7 @@ mod hub_forms;
 mod hub_keep;
 mod hub_profile_form;
 mod hub_states;
+mod hub_tools;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 #[allow(

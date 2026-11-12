@@ -8,7 +8,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, Tool, VersionNumber},
+  resource::{AgentProfile, TeamTool, Tool, VersionNumber},
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -85,5 +85,18 @@ pub async fn save_tool(
   let publication = background::run(move || Publication::of_tool(&local, id, &owned))
     .await
     .map_err(EditRefused::Failed)??;
+  servers.publish_team(root, id, (Some(base), publication)).await
+}
+
+/// Publishes `tool`, in the team's form, as the next version of team tool `id` of the project at `root`, made on
+/// version `base` ([`Publication::of_team_tool`]): the secret it names goes by the name typed, which each computer
+/// fills in.
+pub async fn save_team_tool(
+  servers: &Servers,
+  root: &Path,
+  (id, base): (ResourceId, VersionNumber),
+  tool: &TeamTool,
+) -> Result<VersionNumber, EditRefused> {
+  let publication = Publication::of_team_tool(tool)?;
   servers.publish_team(root, id, (Some(base), publication)).await
 }

@@ -122,7 +122,13 @@ pub fn member_picked(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// `team-hub-member-no-skills`: [`member`] where the team has published no skill, so the Skills filter holds the one
 /// empty state that says an admin adds them (M5 `ITxzr`).
 pub fn member_no_skills(kontur: &mut Kontur) -> Result<(), SeedError> {
-  member_with(kontur, Kinds { skills: false })
+  member_with(
+    kontur,
+    Kinds {
+      skills: false,
+      ..Kinds::ALL
+    },
+  )
 }
 
 /// A second Claude Code connection, `Claude · Home`.
@@ -202,16 +208,30 @@ pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'sta
 #[derive(Clone, Copy)]
 struct Kinds {
   skills: bool,
+  /// `orders-report` is in the team's form, naming `ORDERS_DB`, rather than by the id of a secret (A35 `YBG4T`).
+  database_by_name: bool,
 }
 
 impl Kinds {
-  const ALL: Self = Self { skills: true };
+  const ALL: Self = Self {
+    skills: true,
+    database_by_name: false,
+  };
 }
 
 /// The team's servers, profiles, tools, instructions and skills of [`seed`], without the link to a team server and its
 /// members, which a QA copy that joins a stand-in server makes itself.
 pub(super) fn resources(kontur: &mut Kontur) -> Result<(), SeedError> {
   resources_with(kontur, &Mcp::default(), Kinds::ALL).map(|_| ())
+}
+
+/// [`resources`] with `orders-report` in the team's form, naming the team secret `ORDERS_DB` (A35 `YBG4T`).
+pub(super) fn resources_by_name(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let kinds = Kinds {
+    database_by_name: true,
+    ..Kinds::ALL
+  };
+  resources_with(kontur, &Mcp::default(), kinds).map(|_| ())
 }
 
 /// [`resources`] with the MCP servers' differences `mcp`.
@@ -302,22 +322,41 @@ fn plain_resources(kontur: &mut Kontur, kinds: Kinds) -> Result<Plain, SeedError
     &Tool::command("Runs cargo check on the worktree.", command),
   )?;
   sentry_issues(kontur)?;
+  orders_report(kontur, kinds)?;
+  Ok(Plain { rules, review, cargo })
+}
+
+/// `orders-report`, a database query: by the id of a secret, as published before the team's form, or in the team's
+/// form naming `ORDERS_DB`, whose values are Staging's and whose access lasts 15 minutes.
+fn orders_report(kontur: &mut Kontur, kinds: Kinds) -> Result<ResourceId, SeedError> {
   let database = DatabaseQuery::new(
     SecretId::generate(),
     "select status, count(*) from orders group by status".into(),
   )
   .map_err(invalid)?;
+  let (environment, approval, window) = if kinds.database_by_name {
+    (
+      "Staging",
+      ApprovalMode::OncePerRun,
+      AccessWindow::Minutes(15.try_into().map_err(invalid)?),
+    )
+  } else {
+    ("Production", ApprovalMode::Never, AccessWindow::UntilStepEnds)
+  };
   let policy = AccessPolicy::new(
     BTreeMap::new(),
-    Name::new("Production").map_err(invalid)?,
-    ApprovalMode::Never,
-    AccessWindow::UntilStepEnds,
+    Name::new(environment).map_err(invalid)?,
+    approval,
+    window,
     DeniedBehavior::FailStep,
   )
   .map_err(invalid)?;
   let report = Tool::new("Orders per status.", ToolAction::DatabaseQuery(database), Some(policy)).map_err(invalid)?;
-  team_resource(kontur, "orders-report", &report)?;
-  Ok(Plain { rules, review, cargo })
+  if kinds.database_by_name {
+    team_tool(kontur, "orders-report", &report, "ORDERS_DB")
+  } else {
+    team_resource(kontur, "orders-report", &report)
+  }
 }
 
 /// The skill `review-diff`, which has a reference file.

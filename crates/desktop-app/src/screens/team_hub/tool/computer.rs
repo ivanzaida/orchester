@@ -17,12 +17,18 @@ use crate::{
     rows::{self, Sub},
   },
   theme::HubText,
-  ui::icon::Icon,
+  ui::{icon::Icon, pressable::Press},
 };
 
-pub(super) fn section(ctx: &Ctx, entry: &Entry, sheet: &TeamToolSheet, missing: &[Missing]) -> Column {
+/// The section; `ask` gives a value missing here when its box is pressed (an admin's edit), else the bar does.
+pub(super) fn section(
+  ctx: &Ctx,
+  (entry, sheet): (&Entry, &TeamToolSheet),
+  missing: &[Missing],
+  ask: Option<Press>,
+) -> Column {
   let rows = match &sheet.secret {
-    ToolSecret::Named(name) => vec![fill::secret_row(ctx, name, fill::value_of(missing, name))],
+    ToolSecret::Named(name) => vec![fill::secret_row(ctx, name, fill::value_of(missing, name), ask)],
     ToolSecret::ById => vec![by_id_row(ctx)],
     ToolSecret::None => vec![fill::nothing_here(
       "team-hub-nothing",

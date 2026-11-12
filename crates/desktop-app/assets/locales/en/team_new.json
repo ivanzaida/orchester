@@ -25,6 +25,7 @@
       "cancel": "Cancel",
       "hint": "Create publishes v1 for the team once the server accepts it",
       "fixName": "Fix the name to create it",
+      "fixFields": "Fix the marked fields to create it",
       "changeName": "Change the name, then Create again"
     },
     "computer": {
@@ -33,7 +34,8 @@
       "mcpRemote": "Each computer then gives the value of the secret its header names.",
       "instruction": "Nothing to fill in on a computer: an instruction is the same everywhere.",
       "skill": "Nothing to fill in on a computer: a skill is the same everywhere.",
-      "tool": "Each computer then adds the value of each secret the tool names."
+      "tool": "Each computer then adds the value of each secret the tool names.",
+      "toolSecret": "Each computer then adds the value of {{secret}} in {{environment}}."
     },
     "profile": {
       "nameTaken": "The team already has an agent profile named {{name}} · pick another name",
@@ -101,9 +103,77 @@
       "nameTaken": "The team already has a tool named {{name}} · pick another name",
       "programPlaceholder": "e.g. cargo",
       "descriptionPlaceholder": "What the tool does",
-      "unavailable": "Not available yet",
-      "unavailableValue": "An HTTP request and a database query name secrets by name, which a new tool cannot yet. Create a command.",
-      "kindOff": "Choose Command to create it"
+      "method": "Method",
+      "url": "URL",
+      "urlSub": "Fixed: agents never change it",
+      "urlPlaceholder": "e.g. https://api.example.com/v1/items",
+      "host": "Allowed host",
+      "hostSub": "The only host it may call",
+      "hostPlaceholder": "e.g. api.example.com",
+      "auth": {
+        "label": "Authorization",
+        "sub": "sent as Authorization: Bearer",
+        "none": "None",
+        "bearer": "Bearer token"
+      },
+      "token": "Token secret",
+      "namedSub": "A team secret, by name",
+      "tokenPlaceholder": "e.g. API_TOKEN",
+      "credentials": "Credentials secret",
+      "credentialsSub": "A team secret, by name · what it connects with",
+      "credentialsPlaceholder": "e.g. DATABASE_URL",
+      "pickedSub": "This project's secret, in the environment below",
+      "noValueHere": "No value on this computer · add it in Project settings › Environment",
+      "chooseSecret": "Choose a secret",
+      "noSecrets": "No secret in this environment yet",
+      "inputs": "Inputs",
+      "inputsSub": "What the agent gives · one per line: name → query, header or body",
+      "inputsPlaceholder": "e.g. title → body title",
+      "outputs": "Outputs",
+      "outputsSub": "What it gets back · one per line: name ← status, header or body",
+      "outputsPlaceholder": "e.g. link ← body html_url",
+      "query": "Query",
+      "querySub": "Run as written · read-only only if the database account is",
+      "queryPlaceholder": "e.g. select id, status from orders",
+      "lineFirst": "Line {{line}}: {{error}}",
+      "lineNext": "{{before}} · line {{line}}: {{error}}",
+      "access": {
+        "title": "Access",
+        "teamHint": "· who may call it, and how",
+        "everyComputer": "· the same on every computer",
+        "localHint": "· how a call gets its secret",
+        "callers": "Pipelines that call it",
+        "callersSub": "Team runs call it only from these steps",
+        "allSteps": "{{pipeline}} · all steps",
+        "step": "{{pipeline}} · {{number}} {{step}}",
+        "environment": {
+          "label": "Environment",
+          "development": "Development",
+          "staging": "Staging",
+          "production": "Production"
+        },
+        "environmentSub": "whose secret values it uses",
+        "approval": {
+          "label": "Run without asking",
+          "sub": "a person approves before the secret is used",
+          "every": "No · each call",
+          "once": "No · once per run",
+          "never": "Yes"
+        },
+        "window": {
+          "label": "Access lasts",
+          "sub": "never past the step that asked",
+          "step": "Until the step ends",
+          "minutes": "Minutes",
+          "minutesField": "Minutes access lasts"
+        },
+        "denied": {
+          "label": "When a call is denied",
+          "sub": "the step's work is kept",
+          "wait": "The step waits for a new plan",
+          "fail": "The step fails"
+        }
+      }
     },
     "refused": {
       "nameTaken": {
