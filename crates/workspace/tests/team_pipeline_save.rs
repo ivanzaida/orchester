@@ -45,6 +45,7 @@ use orchester_workspace::{
     team_join::JoinOutcome,
   },
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
+  team_config::{TeamConfig, TeamResource},
 };
 use support::Desk;
 
@@ -170,6 +171,16 @@ impl Team {
         let name = resource["name"].as_str().unwrap_or_default().to_owned();
         (versions.len(), name)
       })
+  }
+
+  /// What the team's configuration in memory holds of `id`.
+  fn held(&self, id: ResourceId) -> Option<TeamResource> {
+    self
+      .desk
+      .workspace
+      .team_read(&self.root)
+      .config()
+      .and_then(|config| config.resource(id).cloned())
   }
 
   /// The app MCP's answer to `tool` with `args`, as a person who lets automation change agent permissions calls it;
@@ -387,6 +398,27 @@ fn team_pipeline_save_a_rename_goes_to_the_server() {
   assert_eq!(team.latest(id).0, 1, "a rename publishes no version");
   team.rename(id, "Gates again").expect("renamed on the revision it kept");
   assert_eq!(team.on_server(id).map(|(_, name)| name).as_deref(), Some("Gates again"));
+}
+
+/// Memory, which the hub and readiness read, holds what the server took at once, before the stream brings it.
+#[test]
+fn team_pipeline_save_memory_holds_what_the_server_took_at_once() {
+  let team = Team::owner();
+  // The team's configuration as a read at the stream's open left it; no stream runs, so only the saves change it.
+  team
+    .desk
+    .workspace
+    .keep_team_config_for_test(&team.root, TeamConfig::new([]));
+  let id = team.created();
+  let made = team.held(id).expect("memory holds the new pipeline");
+  assert_eq!((made.kind, made.number()), (ResourceKind::Pipeline, Some(number(1))));
+
+  team.publish(id, 1, "Changed.").expect("published");
+  team.rename(id, "Gates").expect("renamed");
+
+  let changed = team.held(id).expect("memory holds it");
+  assert_eq!(changed.number(), Some(number(2)), "the published version");
+  assert_eq!(changed.name.as_str(), "Gates", "the new name");
 }
 
 #[test]

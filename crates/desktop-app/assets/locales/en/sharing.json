@@ -613,7 +613,8 @@
         "deliver": "deliver step",
         "delivers": "what it delivers"
       },
-      "pipelinesOnServer": "The team's pipelines are read from the team server and changed there, not on this computer.",
+      "pipelinesSaved": "Shared with {{team}}. A pipeline you save here goes to the team server at once, as the version everyone's runs use.",
+      "pipelinesSavedNoServer": "Shared with your team. A pipeline you save here goes to the team server at once, as the version everyone's runs use.",
       "today": "today {{time}}",
       "day": "{{month}} {{day}}",
       "here": "Published here"

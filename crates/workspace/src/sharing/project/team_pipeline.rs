@@ -28,6 +28,7 @@ use crate::{
     team::said,
     team_edit::{Local, Refusal, recorded},
   },
+  team_config::TeamResource,
 };
 
 /// Why a team pipeline's change was not taken; nothing of it was stored here.
@@ -111,8 +112,14 @@ impl Servers {
         None => taken(error),
       })?;
     keep_pipeline_version(&mut db, None, &version, body).map_err(|error| failed(&error))?;
+    let number = version.number;
+    self
+      .inner
+      .workspace
+      .team
+      .update(repo_root, |config| config.published(resource, version.into()));
     self.shared_changed();
-    Ok(version.number)
+    Ok(number)
   }
 
   /// Creates the team pipeline `name`, under `slug`, with `body` as its first version in the project at `repo_root`,
@@ -138,6 +145,12 @@ impl Servers {
     };
     let created = runtime()?.block_on(server.create_resource(create)).map_err(taken)?;
     keep_pipeline_version(&mut db, Some(&created.resource), &created.version, body).map_err(|error| failed(&error))?;
+    if let Some(kept) = TeamResource::of(&created.resource, Some(created.version.into())) {
+      self.inner.workspace.team.update(repo_root, |config| {
+        config.keep(kept);
+        true
+      });
+    }
     self.shared_changed();
     Ok(id)
   }
@@ -165,6 +178,12 @@ impl Servers {
         }))
         .map_err(|error| not_taken(error, Some(&address)))?;
     keep_resource(&mut db, &renamed).map_err(|error| failed(&error))?;
+    let name = name.clone();
+    self
+      .inner
+      .workspace
+      .team
+      .update(repo_root, |config| config.rename(resource, name));
     self.shared_changed();
     Ok(())
   }
