@@ -54,9 +54,9 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
     ..scope
   };
   // The turn of the run's success, in a conversation that leads its task with an order to start what becomes ready.
-  turn_of_success(&mut db, &scope, (&seeded, &run));
   let order = "Start tasks as they become ready";
   watch(&mut db, &scope, ready_task.id(), order);
+  turn_of_success(&mut db, &scope, (&seeded, &run));
   let draft = db
     .tasks()
     .expect("tasks")

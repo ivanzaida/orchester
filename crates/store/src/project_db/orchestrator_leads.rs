@@ -13,6 +13,7 @@ use orchester_core::{
   },
   store::{ActivityStore, RunStore, TaskStore},
   task::Task,
+  time::Timestamp,
 };
 use rusqlite::OptionalExtension;
 
@@ -64,6 +65,28 @@ impl ProjectDb {
     Ok(AcceptedUnverified::note(&AcceptedUnverified::of_run(
       &run, &events, &outputs,
     )))
+  }
+
+  /// Whether an order of `chat` applied to the turn `wait` started, kept at `at`: the subscription its event came
+  /// through among those that led then (one that ended since, its task merged and done, still counts), with its own
+  /// order or the project's default.
+  pub fn ordered_when(&self, chat: ChatId, wait: &AgentWait, at: Timestamp) -> Result<bool, StoreError> {
+    let Some(task) = self.run_task(wait.run)? else {
+      return Ok(false);
+    };
+    let then: Vec<Subscription> = self
+      .chat_subscription_history(chat)?
+      .into_iter()
+      .filter(|kept| kept.subscription.since() <= at && kept.ended.as_ref().is_none_or(|(ended, _)| *ended > at))
+      .map(|kept| kept.subscription)
+      .collect();
+    let own = Subscriptions::new(then.clone()).map_err(|error| corrupt("orchestrator subscriptions", error))?;
+    let through = event_subscription(&own, chat, task.id(), task.module()).map(Subscription::target);
+    let leads = Leads::new(
+      then.iter().map(|subscription| Lead::new(subscription, String::new())),
+      &self.orchestrator_watch()?,
+    );
+    Ok(leads.ordered_through(through))
   }
 
   /// The target of the subscription of `chat` an event of `run`'s task comes through ([`Self::task_came_through`]);

@@ -59,13 +59,13 @@ pub(super) async fn led_here(scope: &ChatScope, key: Option<&str>) -> Result<(),
 }
 
 /// Whether the turn thinking in `chat` (its `entries`) is the one a run's success started, whose run it merged with
-/// `merge_run` in this turn, and to which an order of the conversation applies.
+/// `merge_run` in this turn, and to which an order of the conversation applied when its wait was kept.
 fn merged_under_order(db: &ProjectDb, chat: ChatId, entries: &[ChatEntry]) -> Result<bool, StoreError> {
   let thinking = entries.iter().rev().find_map(|entry| match &entry.kind {
-    EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some((entry.seq, wait)),
+    EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some((entry.seq, entry.at, wait)),
     _ => None,
   });
-  let Some((seq, wait)) = thinking else {
+  let Some((seq, at, wait)) = thinking else {
     return Ok(false);
   };
   if wait.kind != WaitKind::Ended(RunEnd::Succeeded) || wait.merging != Some(Merging::Merges) {
@@ -78,5 +78,7 @@ fn merged_under_order(db: &ProjectDb, chat: ChatId, entries: &[ChatEntry]) -> Re
   if !merged {
     return Ok(false);
   }
-  Ok(db.chat_leads(chat)?.ordered_through(db.came_through(chat, wait.run)?))
+  // Whether an order applied is read as it stood when the wait was kept: a subscription that ended since (its task
+  // merged and done) does not take it back.
+  db.ordered_when(chat, wait, at)
 }
