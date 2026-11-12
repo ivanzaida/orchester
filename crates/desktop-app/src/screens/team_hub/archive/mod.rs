@@ -245,6 +245,7 @@ impl ArchiveMenu {
         name: props.name.clone(),
         blocks_profiles: props.blocks_profiles,
         local: false,
+        versioned: true,
       },
       dialog::State {
         read,

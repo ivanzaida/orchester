@@ -8,6 +8,7 @@ mod archive;
 mod closed;
 pub mod drive;
 mod edit;
+mod hub;
 mod member;
 mod recorded_start;
 mod state;
@@ -131,14 +132,10 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamEditRejects
     | State::TeamEditPublished
     | State::TeamEditRefusedAdmin
-    | State::TeamEditWaiting
-    | State::TeamEditRejected
     | State::TeamEditVariables
-    | State::TeamCreateNameTaken
-    | State::TeamEditNewer
-    | State::TeamEditConflicting
-    | State::TeamEditConflictClean
-    | State::TeamEditArchived
+    | State::TeamHub
+    | State::TeamHubMember
+    | State::TeamHubDown
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure
@@ -152,6 +149,15 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
 fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Handle) -> Result<(), Box<dyn Error>> {
   let ids = task_ids(services)?;
   let role = member::serve_as(server, state, (&ids, &team_pipelines(services, state)?));
+  // What the team holds is on the server before the join: the read once the project's stream opens holds it. The
+  // hub of `team-hub-down` never reads it: its stream finds nothing until the server stops answering.
+  if state != State::TeamHubDown {
+    server.open_event_streams();
+  }
+  let repo = kontur(services)?;
+  edit::hold(state, server, &repo)?;
+  archive::hold(state, (server, &repo))?;
+  hub::hold_cached(server, &repo)?;
   let (kontur, id) = join_linked_as(server, (services, runtime), (TasksAnswer::Serve, role))?;
   match state {
     State::StartFailed => server.authority_newer_bundles(),
@@ -160,11 +166,15 @@ fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Hand
       server.authority_bundle_fault_after(BundleFault::Newer, state::START_ANSWERS_AFTER);
     }
     State::StartWaiting => server.authority_bundle_fault(BundleFault::Unavailable),
+    State::TeamHubDown => server.set_down(true),
     _ => {}
   }
   work::after_join(state, (server, id), (services, runtime), (&kontur, &ids))?;
   edit::prepare(state, (services, runtime), (server, &kontur))?;
   archive::prepare(state, (server, &kontur))?;
+  if state.serves_hub() {
+    hub::read(services, &kontur)?;
+  }
   Ok(())
 }
 
@@ -274,14 +284,18 @@ fn join_linked_as(
   server.answer_tasks(tasks);
   let kontur = kontur(services)?;
   let (address, id) = add(server, services, runtime)?;
-  link(&kontur, server, (id, role))?;
+  link((&kontur, services), server, (id, role))?;
   join(&address, services, runtime)?;
   Ok((kontur, id))
 }
 
 /// Links the project at `repo` to the team's Kontur on `server` with `id`, the person's role there `role`, with nothing
 /// of it cached yet.
-fn link(repo: &Path, server: &TeamServer, (id, role): (ServerId, Option<MemberRole>)) -> Result<(), Box<dyn Error>> {
+fn link(
+  (repo, services): (&Path, &Services),
+  server: &TeamServer,
+  (id, role): (ServerId, Option<MemberRole>),
+) -> Result<(), Box<dyn Error>> {
   let link = SharingLink {
     server: id,
     project: server.project(SLUG).ok_or("the team shares Kontur")?,
@@ -293,7 +307,11 @@ fn link(repo: &Path, server: &TeamServer, (id, role): (ServerId, Option<MemberRo
     removed_at: None,
     address: Some(format!("{}/{SLUG}", server.url())),
   };
-  ProjectDb::open(repo)?.start_sharing(&link, &[], (&[], &Default::default()))?;
+  let mut db = ProjectDb::open(repo)?;
+  if db.sharing()?.is_some() {
+    return hub::move_link((repo, services), &link);
+  }
+  db.start_sharing(&link, &[], (&[], &Default::default()))?;
   Ok(())
 }
 

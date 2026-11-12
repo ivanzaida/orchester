@@ -29,7 +29,7 @@ use orchester_core::{
 use orchester_store::{ArchiveStop, Archived};
 use orchester_workspace::{display, readiness::archive_blocks_profiles};
 
-use super::{TaskContext, not_ready::rows_box, summary::team_run};
+use super::{TaskContext, archived_foot, not_ready::rows_box, summary::team_run};
 use crate::{
   navigation::{Navigation, link::Open},
   routes::{HubFilter, HubView, ProjectPage, Route},
@@ -111,7 +111,7 @@ struct ArchivedCard;
 impl Component for ArchivedCard {
   type Props = Props;
 
-  fn create(_ctx: &mut Ctx) -> Self {
+  fn create(_: &mut Ctx) -> Self {
     Self
   }
 
@@ -178,6 +178,7 @@ impl Component for ArchivedCard {
           .variant(ExtraTypography::Lead.role()),
       )
       .child(rows_box(rows))
+      .with_children(archived_foot::foot(ctx, &task))
   }
 }
 

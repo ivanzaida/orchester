@@ -16,7 +16,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  created::{settle, with_waiting},
   instructions::{AppliesIn, pipeline_named, role_named, step_named},
   profiles::no_draft,
   skills::{InSkill, skill_json, skill_named},
@@ -80,7 +79,7 @@ pub struct SkillFileText {
 
 pub async fn save_skill_draft(services: &Services, args: SaveSkillDraft) -> Result<Value, ToolError> {
   let blocked = services.clone();
-  let (open, saved, created) = blocking(move || {
+  let (open, saved) = blocking(move || {
     let open = blocked.project(&args.project)?;
     let root = open.repo_root.clone();
     let skills = ProjectSkills::load_in(&root)?;
@@ -113,24 +112,17 @@ pub async fn save_skill_draft(services: &Services, args: SaveSkillDraft) -> Resu
     let now = Timestamp::now();
     let saved = editor::save_checked_in(&root, (before, name, &body), now).map_err(|error| write_error(&error))?;
     editor::mark_automation_in(&root, &saved, now).map_err(|error| write_error(&error))?;
-    Ok((open, saved, before.is_none()))
+    Ok((open, saved))
   })
   .await?;
-  let waiting = if created {
-    settle(services, open.repo_root.clone(), saved.id).await
-  } else {
-    Ok(None)
-  };
-  // After a refused creation took the skill back, so a screen that reads on this does not see it.
   services.changes.record(open.project.id(), Outside::Skills);
-  let waiting = waiting?;
   let skill = blocking(move || {
     let mut skill = skill_json(&open.repo_root, saved.id, open.project.id())?;
     skill["draft_kept"] = json!(saved.state.has_draft());
     Ok(skill)
   })
   .await?;
-  Ok(with_waiting(json!({ "skill": skill }), "skill", waiting))
+  Ok(json!({ "skill": skill }))
 }
 
 pub async fn publish_skill(services: &Services, args: InSkill) -> Result<Value, ToolError> {

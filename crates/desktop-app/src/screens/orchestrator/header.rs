@@ -1,10 +1,10 @@
 //! The Orchestrator's header (`Header` `s9sEw6` in `01 Conversation` `wRSL4`): one 52-high line over a `border` line,
 //! 24 in at its start and 16 at its end, 8 apart: the conversation's title (14/600) and, in 12 `text_muted`, when it
-//! started (*· today 16:02*); for a kept conversation that leads something, its *Leads* chips (`X93D8T`, the header
-//! `Zbwg0` of 04 `OKtX2`, `super::leads`) after the room left; at its end *New* (a ghost with `square-pen`), the
-//! History toggle (a `panel-right` icon button, on the `pressed` fill while History is open) and, for a kept
-//! conversation, its … with Copy and Export (07c `ovxpJ`, `super::export`). Orchestrator settings open from the
-//! composer's runs-on chip and its picker.
+//! started (*· today 16:02*); for a kept conversation that leads something, what it leads right after that (an `eye`
+//! and its chips, `X93D8T`, screen A `gTvFf`, `super::leads`); then the free room, and at its end only actions: *New*
+//! (a ghost with `square-pen`), the History toggle (a `panel-right` icon button, on the `pressed` fill while History is
+//! open) and, for a kept conversation, its … with Copy and Export (07c `ovxpJ`, `super::export`). Orchestrator settings
+//! open from the composer's runs-on chip and its picker.
 
 use lurq::{
   app::{
@@ -69,17 +69,21 @@ pub(super) fn header(
   if view.history.get() {
     toggle = toggle.active();
   }
-  // The room after the meta: a kept conversation's Leads take it, as far as they fit.
-  let room = match chat {
+  // After the meta, a kept conversation's Leads, as many chips as the free room after them leaves.
+  let leads = match chat {
     Named::Chat(chat, _) => {
       let saves = project.feed.saves.get();
-      leads::leads(ctx, (&project.open.repo_root, saves), chat, &view.head)
+      Some(leads::leads(ctx, (&project.open.repo_root, saves), chat, &view.head))
     }
-    Named::New | Named::Opening(_) => Row::new().flex(1.0).into(),
+    Named::New | Named::Opening(_) => None,
   };
+  let room = Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .ref_element(view.head.room.clone());
   Row::new()
     .id("orchestrator-header")
-    .ref_element(view.head.clone())
+    .ref_element(view.head.line.clone())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEIGHT))
     .flex_shrink(0.0)
@@ -105,6 +109,7 @@ pub(super) fn header(
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
     )
+    .with_children(leads)
     .child(room)
     .child(new_conversation(ctx, project, chat))
     .child(toggle.render(ctx))

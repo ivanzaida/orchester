@@ -373,3 +373,17 @@ fn team_qa_hub_archive_a_profile_that_names_an_archived_server_says_so_in_the_hu
     "not the 'cannot tell yet' of an undecided resource"
   );
 }
+
+/// A member reads the stopped card as A22 draws it: restoring is the admins', and this app has no restore, so its
+/// foot only says who the admins are, with no button.
+#[test]
+fn team_qa_hub_archive_a_members_stopped_card_names_the_admins_without_a_button() {
+  let (mut window, _server, _) = on_task(("team-archived", State::TeamArchived), "KON-12");
+  window.until("the card's foot", |window| window.texts("task-archived-foot").is_some());
+  assert!(
+    window.texts("task-archived-ask").is_none(),
+    "the foot has no restore request button"
+  );
+  let hint = window.text("task-archived-foot-hint");
+  assert!(hint.starts_with("Restore is admins only · "), "{hint}");
+}

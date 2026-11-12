@@ -17,6 +17,7 @@
 
 pub(in crate::screens) mod archive;
 mod archived;
+mod archived_profile;
 mod editing;
 pub(in crate::screens) mod head;
 mod instruction;
@@ -29,6 +30,7 @@ pub(in crate::screens) mod profile;
 mod row;
 pub(in crate::screens) mod save_bar;
 mod skill;
+mod tool;
 pub(in crate::screens) mod words;
 
 use std::sync::Arc;
@@ -46,7 +48,9 @@ use orchester_core::{
   resource::ResourceKind,
   time::Timestamp,
 };
-use orchester_workspace::{agents::local_hub::LocalHub, local_archive::Archivable, messages::Message};
+use orchester_workspace::{
+  agents::local_hub::LocalHub, local_archive::Archivable, memory::listing::Filters, messages::Message,
+};
 
 pub(in crate::screens) use self::model::view_of;
 use self::{
@@ -62,9 +66,11 @@ use crate::{
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::{
     hub::{
-      agents, agents_bones,
+      agents::{self, TabCount},
+      agents_bones,
       new_button::{made_under, new_button, new_words},
     },
+    memory::{hub as memory_hub, state::Made},
     team_hub::{create, model::Kind, unread},
   },
   ui::{
@@ -108,12 +114,15 @@ struct LocalHubScreen {
   archiving: Asking,
   /// Holds every other departure (Back, a tab, the sidebar) while a panel's edits are not saved.
   guard: LeaveGuard,
+  /// What the Memory filter keeps while the hub shows: its search, and what is open in place of a record.
+  memory: Made,
 }
 
 impl Component for LocalHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let feed = ctx.props::<Props>().project.feed.clone();
     let unsaved: UnsavedSignal = ctx.signal(None);
     let edits = unsaved.clone();
     let archiving = Asking::new(ctx);
@@ -127,6 +136,7 @@ impl Component for LocalHubScreen {
       asking: ctx.signal(false),
       archiving,
       guard: Navigation::of(ctx).guard(move || edits.get_untracked().is_some()),
+      memory: Made::new(ctx, Filters::default(), &feed),
     };
     // The question follows what waits for an answer, and what waits follows the question closing; each writes only
     // when it differs, or they would write each other for ever.
@@ -164,6 +174,10 @@ impl Component for LocalHubScreen {
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
     let listing = hub.map(Listing::of);
+    let memory_count = memory_hub::active_count(ctx, &project);
+    if view.filter == HubFilter::Memory {
+      return self.memory_page(ctx, &project, view, (listing.as_ref(), memory_count));
+    }
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().is_some());
     let selected = listing.as_ref().and_then(|listing| listing.selected(&view)).cloned();
@@ -173,7 +187,7 @@ impl Component for LocalHubScreen {
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
         if !reading && !view.adding {
-          keep_route_on_shown(&project, &view, selected.as_ref(), &navigation);
+          keep_route_on_shown(&project, (&view, listing), selected.as_ref(), &navigation);
         }
         let shown = list::Shown {
           project: id,
@@ -212,7 +226,12 @@ impl Component for LocalHubScreen {
       )
     });
     let status = head::status(ctx);
-    let tabs = tabs(id, listing.as_ref(), selected.as_ref().map(|entry| entry.what), &leave);
+    let tabs = tabs(
+      id,
+      (listing.as_ref(), memory_count),
+      selected.as_ref().map(|entry| entry.what),
+      &leave,
+    );
     let over: Vec<Element> = leaving.into_iter().chain(self.archiving.question(ctx)).collect();
     agents::frame(
       ctx,
@@ -231,11 +250,11 @@ impl Component for LocalHubScreen {
   }
 }
 
-/// A tab per kind and *Archived* with its count (none while the hub is read), each keeping the chosen entry when it
-/// holds it.
+/// A tab per kind, *Memory* with its active records, and *Archived* with its count (none while the hub is read), each
+/// keeping the chosen entry when it holds it.
 fn tabs(
   project: ProjectId,
-  listing: Option<&Listing>,
+  (listing, memory): (Option<&Listing>, TabCount),
   selected: Option<Archivable>,
   leave: &Leave,
 ) -> Vec<agents::Tab> {
@@ -247,11 +266,49 @@ fn tabs(
       let leave = leave.clone();
       agents::Tab::of(
         choice,
-        agents::TabCount::of(listing.map(|listing| listing.count(choice))),
+        if choice == HubFilter::Memory {
+          memory
+        } else {
+          TabCount::of(listing.map(|listing| listing.count(choice)))
+        },
         Arc::new(move || leave.go(route.clone())),
       )
     })
     .collect()
+}
+
+impl LocalHubScreen {
+  /// The hub on its Memory filter (Y1–Y4, Y6): the memory's sub-filter, list and panel under the hub's head and
+  /// filter, with *New record* in the head.
+  fn memory_page(
+    &self,
+    ctx: &mut Ctx,
+    project: &ShownProject,
+    view: HubView,
+    (listing, memory): (Option<&Listing>, TabCount),
+  ) -> Element {
+    let state = self.memory.state(ctx, project, None);
+    ctx.provide(state.clone());
+    let leave = Leave::new(&Navigation::of(ctx), &self.leaving, false);
+    let tabs = tabs(project.open.project.id(), (listing, memory), None, &leave);
+    let status = head::status(ctx);
+    let new = memory_hub::new_record(ctx, &state, view.memory);
+    let body = memory_hub::body(ctx, project, view.memory, false);
+    agents::frame(
+      ctx,
+      agents::Frame {
+        prefix: "local-hub",
+        title: "hub.title",
+        current: HubFilter::Memory.name(),
+        status,
+        new: Some(new),
+        tabs,
+        notices: Vec::new(),
+        body,
+        over: Vec::new(),
+      },
+    )
+  }
 }
 
 impl LocalHubScreen {
@@ -307,6 +364,7 @@ impl LocalHubScreen {
         mode: create::Mode::Local,
         taken: listing.names_of(kind.core()),
         team: None,
+        listed: listing.shown(kind.filter()).map(|entry| entry.what).collect(),
       },
     )
   }
@@ -328,6 +386,7 @@ impl LocalHubScreen {
           entry: entry.clone(),
           stopped,
           details: found.and_then(|found| found.details.clone()),
+          profile: found.and_then(|found| found.profile.clone()),
           now: Timestamp::now(),
         },
       );
@@ -361,7 +420,7 @@ impl LocalHubScreen {
 }
 
 impl LocalHubScreen {
-  /// The panel of a resource other than a profile: an instruction and a skill are edited in it, a tool is shown.
+  /// The panel of a resource other than a profile: an instruction, a skill and a command tool are edited in it.
   fn resource_panel(&self, ctx: &mut Ctx, project: &ShownProject, entry: &Entry, id: ResourceId) -> Element {
     match entry.kind {
       ResourceKind::Instruction => instruction::panel(
@@ -376,6 +435,15 @@ impl LocalHubScreen {
       ResourceKind::Skill => skill::panel(
         ctx,
         skill::Props {
+          project: project.clone(),
+          entry: entry.clone(),
+          id,
+          unsaved: self.unsaved.clone(),
+        },
+      ),
+      ResourceKind::Tool => tool::panel(
+        ctx,
+        tool::Props {
           project: project.clone(),
           entry: entry.clone(),
           id,
@@ -432,10 +500,18 @@ pub(in crate::screens) fn form_or(
 }
 
 /// A route that names an entry the filter does not hold (one archived, or of another kind) shows the one the page
-/// shows; the route is corrected to it, in place, so a link, Back and a reload land on what the page says.
-fn keep_route_on_shown(project: &ShownProject, view: &HubView, shown: Option<&Entry>, navigation: &Navigation) {
+/// shows; the route is corrected to it, in place, so a link, Back and a reload land on what the page says. An entry
+/// the hub has not read yet is waited for, not corrected away, and is shown once the hub reads it again (a form that
+/// made one goes to it only once the hub's list holds it).
+fn keep_route_on_shown(
+  project: &ShownProject,
+  (view, listing): (&HubView, &Listing),
+  shown: Option<&Entry>,
+  navigation: &Navigation,
+) {
   let named = chosen(view);
-  if named.is_some() && named != shown.map(|entry| entry.what) {
+  let known = named.is_some_and(|what| listing.name_of(what).is_some());
+  if known && named != shown.map(|entry| entry.what) {
     let corrected = Route::Project(
       project.open.project.id(),
       ProjectPage::hub(view_of(view.filter, shown.map(|entry| entry.what))),

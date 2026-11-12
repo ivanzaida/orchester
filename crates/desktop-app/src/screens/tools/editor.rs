@@ -13,13 +13,10 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_store::SharedStanding;
 pub(super) use orchester_workspace::tools::editor::next_version;
 use orchester_workspace::{
   agents::data::VersionState,
   messages::Message,
-  sharing::team::TeamConfiguration,
-  tasks::outside::Outside,
   tools::{
     data::ToolEntry,
     editor::{Edit, EditorData},
@@ -178,58 +175,28 @@ impl Component for ToolEditor {
     let outside = baseline != p.entry;
     let busy = self.busy.get();
     let read_only = baseline.as_ref().is_some_and(|e| CommandText::of(&e.tool).is_none());
-    let team = hub::team::of(&p.project);
-    // A member of a shared project reads the team's tool: nothing of it is saved or removed here.
-    let may_change = hub::team::may_change(team.as_ref());
     let widening = match &checked {
-      Ok(edit) if baseline.is_some() && !unchanged && !checking && !outside && !read_only && may_change => {
-        self.autosave(&p, edit)
-      }
+      Ok(edit) if baseline.is_some() && !unchanged && !checking && !outside && !read_only => self.autosave(&p, edit),
       _ => None,
     };
     let errors = checked.as_ref().err().cloned().unwrap_or_default();
     let title = baseline.as_ref().map_or(ctx.t("tools.newTitle"), |e| e.name.clone());
-    let more = baseline.as_ref().filter(|_| may_change).map(|_| self.more_menu());
-    let standing = team
-      .as_ref()
-      .zip(baseline.as_ref())
-      .and_then(|(team, e)| Some((team, team.standing(e.id)?, e)));
-    let shared = standing.map(|(team, standing, e)| {
-      hub::team::head_line(ctx, "tool-team-state", team, standing, hub::team::draft_on(e.state))
-    });
-    let versions = baseline
-      .as_ref()
-      .and_then(|e| hub::team::member_versions(ctx, "tool", (&p.project, team.as_ref()), e.id));
+    let more = baseline.as_ref().map(|_| self.more_menu());
     let mut pane = Column::new()
       .id("tool-editor")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(head::crumb(ctx, &p))
-      .child(head::head(
-        ctx,
-        &p,
-        (baseline.as_ref(), &title),
-        more,
-        (shared, versions),
-      ))
+      .child(head::head(ctx, &p, (baseline.as_ref(), &title), more))
       .with_children(self.archive_question(ctx, &p, baseline.as_ref()));
     pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
-      _ if !may_change => pane.with_children(team.as_ref().map(|team| hub::team::line(ctx, "tool-team-line", team))),
       (Some(question), _) => pane.child(question),
       (None, Some(edit)) => pane.child(self.confirm(ctx, &p, edit)),
-      (None, None) => match waiting(ctx, &p, standing.map(|(team, standing, _)| (team, standing))) {
-        Some(waiting) => pane.child(waiting),
-        None => {
-          let status = words::editor_state(ctx, baseline.as_ref(), unchanged, busy).0;
-          let actions = self.bar_actions(ctx, &p, (&checked, checking), (unchanged, outside));
-          pane.child(head::bar(
-            ctx,
-            (baseline.as_ref(), team.is_some()),
-            (status, unchanged),
-            actions,
-          ))
-        }
-      },
+      (None, None) => {
+        let status = words::editor_state(ctx, baseline.as_ref(), unchanged, busy).0;
+        let actions = self.bar_actions(ctx, &p, (&checked, checking), (unchanged, outside));
+        pane.child(head::bar(ctx, baseline.as_ref(), (status, unchanged), actions))
+      }
     };
     pane = pane
       .with_children(self.failure(ctx))
@@ -238,19 +205,11 @@ impl Component for ToolEditor {
         ctx,
         &p,
         &errors,
-        (busy || self.asking.get().0.is_some() || !may_change, read_only),
+        (busy || self.asking.get().0.is_some(), read_only),
         widening,
       ));
     hub::item_body("tool-page", pane, Some(inspector::inspector(ctx, &p).into()))
   }
-}
-
-/// In a shared project, a version of the tool published here that waits, in the draft bar's place (02b, 02c); after
-/// *Open my draft on vN* the editor reads the saved tool again.
-fn waiting(ctx: &mut Ctx, p: &EditorProps, standing: Option<(&TeamConfiguration, &SharedStanding)>) -> Option<Element> {
-  let reload = p.reload.clone();
-  let reread: hub::team::Reread = Arc::new(move || reload.run());
-  hub::team::waiting_bar(ctx, &p.project, standing?, ("tool", Outside::Tools), reread)
 }
 
 impl ToolEditor {

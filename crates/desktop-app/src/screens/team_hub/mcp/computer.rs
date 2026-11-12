@@ -91,6 +91,8 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
       )),
       Row::new()
         .id(format!("{id}-value"))
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(icon(Icon::CircleCheck, IconSize::Base, PaletteColor::Success))
@@ -99,7 +101,8 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
             .id(format!("{id}-value-text"))
             .variant(HubText::Value.role())
             .nowrap()
-            .min_width(Dimension::Px(0.0))
+            .width(Dimension::Px(0.0))
+            .flex(1.0)
             .text_overflow(TextOverflow::Elipsis),
         ),
     ),

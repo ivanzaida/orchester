@@ -13,12 +13,12 @@ use orchester_core::{
   connection::mcp::McpServerSelection,
   id::{OperationId, ResourceId, RunId},
   integration::base::RunBaseSource,
-  resource::{AgentProfile, StepKind, Tool, Version},
+  resource::{AgentProfile, StepKind, TeamTool, Version},
   revision::Revision,
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, RunStatus,
     inputs::{InputsOrigin, RunInputs},
-    preflight,
+    preflight_team,
   },
   store::{ConnectionStore, McpServerStore, RunStore, SecretStore},
   time::Timestamp,
@@ -103,7 +103,7 @@ fn check(db: &ProjectDb, root: &Path, accepted: &AcceptedInputs) -> Result<NewRu
 }
 
 /// What keeps `inputs` from running on this computer: core's preflight of the accepted pipeline, its profiles on their
-/// bound connections and MCP servers and its tools, with each tool's secret looked up as the bindings bind it.
+/// bound connections and MCP servers and its tools, with the team secret each tool names looked up here by its name.
 fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightProblem>, StoreError> {
   let canonical = inputs.bundle().inputs();
   let connections = db.connections()?;
@@ -119,7 +119,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
       Some((pin.resource, Version::new(pin.version, pin.number, body, now)))
     })
     .collect();
-  let tools: BTreeMap<ResourceId, Version<Tool>> = canonical
+  let tools: BTreeMap<ResourceId, Version<TeamTool>> = canonical
     .tools()
     .iter()
     .map(|pinned| {
@@ -131,17 +131,14 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     })
     .collect();
   let secrets = db.secrets()?;
-  let mut problems: Vec<PreflightProblem> = preflight(PreflightInput {
+  let mut problems: Vec<PreflightProblem> = preflight_team(PreflightInput {
     pipeline: Some(canonical.pipeline().body()),
     profiles: &profiles,
     tools: &tools,
     connections: &connections,
     mcp_servers: &db.mcp_servers()?,
     secrets: &secrets,
-  })
-  .into_iter()
-  .filter(|problem| !matches!(problem, PreflightProblem::SecretMissing { .. }))
-  .collect();
+  });
   for step in canonical.pipeline().body().steps() {
     if let StepKind::Agent {
       profile: Some(profile), ..
@@ -163,7 +160,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     };
     let named = tools.get(tool).and_then(|version| version.body().secret());
     if let Some(named) = named
-      && !secrets.iter().any(|secret| secret.id() == named)
+      && !db.has_team_secret_value(named)?
     {
       problems.push(PreflightProblem::SecretMissing { step: step.key.clone() });
     }

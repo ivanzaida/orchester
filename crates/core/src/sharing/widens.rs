@@ -14,8 +14,8 @@ use crate::{
     widening::{CommandWidening, Widening, changed_variables},
   },
   resource::{
-    AgentProfile, CommandEnvironment, HttpRequest, Instruction, Pipeline, RequestTarget, Skill, TeamAgentProfile, Tool,
-    ToolAction,
+    AgentProfile, CommandAction, CommandEnvironment, HttpRequest, Instruction, Pipeline, RequestTarget, Skill,
+    TeamAgentProfile, TeamTool, TeamToolAction, Tool, ToolAction,
   },
   secret::tool_uses,
 };
@@ -183,16 +183,55 @@ fn changed<const N: usize>(checks: [(bool, VersionWidening); N]) -> Vec<VersionW
 /// or querying its database.
 fn granted(action: &ToolAction) -> Vec<VersionWidening> {
   match action {
-    ToolAction::Command(command) => std::iter::once(CommandWidening::Program)
-      .chain(
-        changed_variables(&CommandEnvironment::default(), command.environment())
-          .into_iter()
-          .map(CommandWidening::Variable),
-      )
-      .map(VersionWidening::Command)
-      .collect(),
+    ToolAction::Command(command) => command_granted(command),
     ToolAction::Http(_) => vec![VersionWidening::Address],
     ToolAction::DatabaseQuery(_) => vec![VersionWidening::Database],
+  }
+}
+
+/// Running `command`'s program with its variables.
+fn command_granted(command: &CommandAction) -> Vec<VersionWidening> {
+  std::iter::once(CommandWidening::Program)
+    .chain(
+      changed_variables(&CommandEnvironment::default(), command.environment())
+        .into_iter()
+        .map(CommandWidening::Variable),
+    )
+    .map(VersionWidening::Command)
+    .collect()
+}
+
+/// A team tool widens as a local one does; its secrets are names, the same on every computer, so they are compared as
+/// they are.
+impl SharedBody for TeamTool {
+  fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
+    let mut widenings = match (previous.map(TeamTool::action), self.action()) {
+      (Some(TeamToolAction::Command(before)), TeamToolAction::Command(after)) => after
+        .widenings_from(before)
+        .into_iter()
+        .map(VersionWidening::Command)
+        .collect(),
+      (Some(TeamToolAction::Http(before)), TeamToolAction::Http(after)) => {
+        http(before.unauthenticated(), after.unauthenticated())
+      }
+      (Some(TeamToolAction::DatabaseQuery(before)), TeamToolAction::DatabaseQuery(after)) => changed([
+        (before.credentials() != after.credentials(), VersionWidening::Database),
+        (before.query() != after.query(), VersionWidening::Query),
+      ]),
+      (_, TeamToolAction::Command(command)) => command_granted(command),
+      (_, TeamToolAction::Http(_)) => vec![VersionWidening::Address],
+      (_, TeamToolAction::DatabaseQuery(_)) => vec![VersionWidening::Database],
+    };
+    if previous.is_some_and(|previous| previous.access() != self.access()) {
+      widenings.push(VersionWidening::Access);
+    }
+    if self
+      .secret()
+      .is_some_and(|secret| previous.and_then(TeamTool::secret) != Some(secret))
+    {
+      widenings.push(VersionWidening::Secret);
+    }
+    widenings
   }
 }
 

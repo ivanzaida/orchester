@@ -1,7 +1,7 @@
 //! Screens that show a project's runs read again when a run changes state, not on a transcript's lines; Skills
 //! not when tasks are saved; All projects only the project whose runner reported.
 
-use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
+use orchester_app::routes::{HubFilter, HubView, MemoryView, ProjectPage, Route};
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::outside::Outside;
 
@@ -180,7 +180,7 @@ fn reads_no_code_index_on_lines_while_a_run_runs() {
 fn reads_memory_again_when_a_run_changes_state_not_on_its_lines() {
   // KON-12 runs.
   let mut memory = Counted::open("conversation");
-  memory.show(ProjectPage::Memory(None), "screen-memory");
+  memory.show(ProjectPage::Memory(MemoryView::default()), "memory-body");
   for _ in 0..5 {
     memory.report(false);
     memory.window.tree.tick_futures();

@@ -14,7 +14,7 @@ use orchester_workspace::{
 
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, InstructionsView, JoinTarget, MERGE, MERGE_QUEUE,
-  MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat,
+  MERGES, MODULES, MemoryView, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat,
   OverviewTab, PULL_REQUESTS, PipelineView, PipelinesView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
   SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
@@ -86,8 +86,8 @@ pub enum ProjectPage {
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
   Instructions(InstructionsView),
-  /// The Memory page on its tab; `None` on the one it opens on.
-  Memory(Option<MemoryTab>),
+  /// The Agents hub's Memory filter on its status and record ([`MemoryView`]).
+  Memory(MemoryView),
   /// The Skills library with its filter.
   Skills(SkillsFilter),
   NewSkill,
@@ -159,7 +159,7 @@ impl ProjectPage {
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions(InstructionsView::default()),
-      Screen::Memory => Self::Memory(None),
+      Screen::Memory => Self::Memory(MemoryView::default()),
       Screen::Skills => Self::Skills(SkillsFilter::default()),
       Screen::Tools => Self::Tools,
       Screen::Secrets => Self::Secrets(SecretsView::default()),
@@ -179,9 +179,11 @@ impl ProjectPage {
     }
   }
 
-  /// The Agents hub on `view`: [`Self::Agents`] for the view it opens on.
+  /// The Agents hub on `view`: [`Self::Agents`] for the view it opens on, [`Self::Memory`] for its Memory filter.
   pub fn hub(view: HubView) -> Self {
-    if view == HubView::default() {
+    if view.filter == super::HubFilter::Memory {
+      Self::Memory(view.memory)
+    } else if view == HubView::default() {
       Self::Agents
     } else {
       Self::AgentsHub(view)
@@ -264,7 +266,7 @@ impl ProjectPage {
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
       Self::Secrets(view) => view.path(segment(Screen::Secrets)),
-      Self::Memory(tab) => with_query(segment(Screen::Memory), &[MemoryTab::param(*tab)]),
+      Self::Memory(view) => view.path(segment(Screen::Memory)),
       Self::Settings(tab) => with_query(segment(Screen::ProjectSettings), &[tab.param()]),
       Self::Usage(query) => super::usage::path(project_root, query),
       Self::Delivery(period) => delivery_path(project_root, *period),
@@ -346,7 +348,7 @@ impl ProjectPage {
       }
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
-      ["memory"] => MemoryTab::take(params),
+      ["memory"] => MemoryView::take(params),
       [SETTINGS] => settings(params),
       // The Pull requests page is gone (ORC-803); an address in a tab's history, whatever its query, opens the
       // Overview.

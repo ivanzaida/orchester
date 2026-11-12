@@ -7,10 +7,7 @@ use std::time::Duration;
 
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::{
-  resource::{Pipeline, ResourceKind},
-  store::ResourceStore,
-};
+use orchester_core::{resource::Pipeline, store::ResourceStore};
 
 use crate::{
   pipelines_support::Editor,
@@ -46,15 +43,6 @@ fn on_server(editor: &Editor, id: orchester_core::id::ResourceId) -> (usize, Str
     .expect("the team server holds the pipeline")
 }
 
-/// Nothing of a pipeline waits in the outbox.
-fn assert_nothing_waits(editor: &Editor) {
-  let waiting = editor.db().waiting_publishes().expect("the outbox");
-  assert!(
-    waiting.iter().all(|waiting| waiting.kind != ResourceKind::Pipeline),
-    "{waiting:?}"
-  );
-}
-
 #[test]
 fn pipelines_team_save_shows_saving_until_the_server_answers() {
   let (mut editor, id) = changed();
@@ -83,7 +71,6 @@ fn pipelines_team_save_shows_saving_until_the_server_answers() {
   editor.until("saved", |e| e.text("pipeline-save-status") == "Saved as v2");
   assert_eq!(latest(&editor, id).1, "Changed.");
   assert_eq!(on_server(&editor, id).0, 2);
-  assert_nothing_waits(&editor);
 }
 
 #[test]
@@ -105,7 +92,6 @@ fn pipelines_team_save_a_refusal_keeps_the_edit_with_why() {
   assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
   assert_eq!(latest(&editor, id), (1, String::new()), "nothing is stored");
   assert_eq!(on_server(&editor, id).0, 1);
-  assert_nothing_waits(&editor);
 }
 
 #[test]
@@ -124,7 +110,6 @@ fn pipelines_team_save_an_unreachable_server_keeps_the_edit_with_why() {
   assert_eq!(editor.value("pipeline-description"), "Changed.");
   assert!(editor.exists("pipeline-save"));
   assert_eq!(latest(&editor, id), (1, String::new()));
-  assert_nothing_waits(&editor);
 }
 
 #[test]

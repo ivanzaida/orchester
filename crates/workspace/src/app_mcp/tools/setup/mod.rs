@@ -9,7 +9,7 @@ mod api_providers;
 mod complete;
 mod connection_specs;
 mod connections;
-mod created;
+pub(super) mod created;
 mod decision_connections;
 mod given_by;
 mod instructions;
@@ -20,9 +20,7 @@ mod mcp_server_specs;
 mod mcp_server_text;
 mod mcp_servers;
 mod merge;
-pub use self::team_mcp_window::{
-  Header, Invalid, NewTeamMcpServer, Runs, create_team_mcp_server, team_mcp_names, team_mcp_server,
-};
+pub use self::team_mcp_window::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_names, team_mcp_server};
 pub(crate) use self::{
   mcp_preview::preview as preview_mcp,
   mcp_servers::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer},
@@ -392,6 +390,11 @@ pub async fn call(
   arguments: JsonObject,
 ) -> Option<Result<Value, ToolError>> {
   let named = |specs: &[Spec]| specs.iter().any(|spec| spec.name == name);
+  if created::DRAFT_TOOLS.contains(&name)
+    && let Err(refused) = created::refuse_team_drafts(services, &arguments).await
+  {
+    return Some(Err(refused));
+  }
   if named(project_tools::SPECS) {
     return Some(project_tools::call(services, translate, name, Value::Object(arguments)).await);
   }

@@ -512,3 +512,27 @@ fn team_hub_profile_fix_the_select_follows_a_pick_made_elsewhere() {
       .is_some_and(|pick| pick.connection == first)
   });
 }
+
+/// Choosing the connection a profile runs on here is open to automation (the person's decision of 2026-11-11): an MCP
+/// client's press on *Use* keeps the pick, as a person's does, while the fixes that widen stay a person's.
+#[test]
+fn team_hub_profile_fix_automation_uses_a_connection() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let first = claude(&agents.root, "Claude 2", "2.1.173");
+  claude(&agents.root, "Claude Home", "2.1.170");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(agents.text("team-hub-fix-use").contains("Use Claude 2 for Builder"));
+
+  with_synthetic_input(|| agents.click("team-hub-fix-use"));
+
+  agents.until("the pick is kept", |s| {
+    ProjectDb::open(&s.root)
+      .expect("database")
+      .connection_pick(profile)
+      .expect("pick")
+      .is_some_and(|pick| pick.connection == first)
+  });
+  agents.until("the bar moves on", |s| !s.exists("team-hub-fix-use"));
+}

@@ -12,7 +12,9 @@ use orchester_core::{
   id::{ResourceId, RunId, TaskId},
   name::Name,
   permission::AgentPermissions,
-  resource::{AgentProfile, Instruction, Skill, SkillFile, Slug, StepKey, Tool, VersionNumber},
+  resource::{
+    AgentProfile, CommandAction, Instruction, Skill, SkillFile, Slug, StepKey, Tool, ToolAction, VersionNumber,
+  },
   run::{GivenBy, PinnedVersion, Run, bundle::file_sha256, inputs::RunInputs},
   task::Task,
 };
@@ -117,12 +119,26 @@ impl RunResolver {
     })
   }
 
-  pub(in crate::execution) fn tool(
+  /// The command tool version `pinned` runs; `None` for an HTTP or database tool.
+  pub(in crate::execution) fn command(
     &self,
     link: &(impl ResourceLink + ?Sized),
     pinned: PinnedVersion,
-  ) -> Result<Tool, ResolveError> {
-    self.body(link, pinned, "tool", |inputs| inputs.tool(pinned).cloned())
+  ) -> Result<Option<CommandAction>, ResolveError> {
+    let missing = || ResolveError::VersionMissing {
+      what: "tool",
+      number: pinned.number,
+    };
+    match self {
+      Self::Inputs(inputs) => Ok(inputs.tool(pinned).ok_or_else(missing)?.command().cloned()),
+      Self::Published => {
+        let tool = pinned_version::<Tool>(link, &pinned)?.ok_or_else(missing)?;
+        Ok(match tool.action() {
+          ToolAction::Command(command) => Some(command.clone()),
+          ToolAction::Http(_) | ToolAction::DatabaseQuery(_) => None,
+        })
+      }
+    }
   }
 
   pub(in crate::execution) fn skill(

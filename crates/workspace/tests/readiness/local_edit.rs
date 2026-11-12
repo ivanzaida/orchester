@@ -1,6 +1,6 @@
 //! The select rows of a local profile's panel (`Agents · Profile` L1, ORC-842): the CLI, the model, the reasoning
 //! effort and the MCP servers are changed one at a time into the profile's draft by the editor's own rules, and
-//! publishing makes the draft the next version.
+//! publishing makes the draft the next version. The hub shows the published version, never the draft.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,8 +20,10 @@ use orchester_core::{
 };
 use orchester_workspace::agents::{
   editor::Outcome,
-  local_edit::{Edit, GivenKind, discard, edit, publish},
+  form::stored_effort,
+  local_edit::{Edit, GivenKind, edit, hold, publish, save},
   local_hub::LocalHub,
+  role::RoleText,
 };
 
 use crate::support::{Fixture, name};
@@ -114,14 +116,13 @@ fn readiness_local_edit_a_field_is_a_draft_and_publishing_makes_the_next_version
   let saved = edit(&fixture.root, builder, &Edit::Effort(Some("high".into())), &[]).expect("saved");
   assert_eq!(saved, Outcome::Saved(builder));
 
+  let draft = drafted(&fixture, builder).expect("the change is a draft, not a version");
+  assert_eq!(stored_effort(&draft).as_deref(), Some("high"));
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
-  assert!(sheet.draft, "the change is a draft, not a version");
-  assert!(sheet.draft_saved_at.is_some());
   assert_eq!(
-    sheet.effort.as_deref(),
-    Some("high"),
-    "the panel shows the draft's value"
+    sheet.effort, None,
+    "the panel shows the published version, never a draft"
   );
   assert_eq!(sheet.options.efforts, ["low", "high"]);
   assert_eq!(sheet.options.models, ["gpt-a", "gpt-b"]);
@@ -130,9 +131,9 @@ fn readiness_local_edit_a_field_is_a_draft_and_publishing_makes_the_next_version
     publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect("published"),
     Outcome::Saved(builder)
   );
+  assert!(drafted(&fixture, builder).is_none());
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
-  assert!(!sheet.draft);
   assert_eq!(sheet.effort.as_deref(), Some("high"));
   let found = read
     .readiness()
@@ -149,17 +150,20 @@ fn readiness_local_edit_a_model_resets_the_effort_and_one_the_connection_lacks_i
   edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("effort");
 
   edit(&fixture.root, builder, &Edit::Model("gpt-b".to_owned()), &[]).expect("model");
-  let read = hub(&fixture);
-  let sheet = read.profile(builder).expect("a sheet");
-  assert_eq!(sheet.model, "gpt-b");
-  assert_eq!(sheet.effort, None, "a new model starts at the CLI's default effort");
+  let draft = drafted(&fixture, builder).expect("a draft");
+  assert_eq!(draft.model().as_str(), "gpt-b");
+  assert_eq!(
+    stored_effort(&draft),
+    None,
+    "a new model starts at the CLI's default effort"
+  );
 
   let refused = edit(&fixture.root, builder, &Edit::Model("nope".to_owned()), &[]).expect_err("not offered");
   assert_eq!(refused.key, "agents.localEdit.modelNotOffered");
   let refused = edit(&fixture.root, builder, &Edit::Effort(Some("max".into())), &[]).expect_err("not offered");
   assert_eq!(refused.key, "agents.localEdit.effortNotOffered");
   assert_eq!(
-    hub(&fixture).profile(builder).expect("a sheet").model,
+    drafted(&fixture, builder).expect("a draft").model().as_str(),
     "gpt-b",
     "nothing else changed"
   );
@@ -175,18 +179,14 @@ fn readiness_local_edit_another_cli_runs_on_its_connection_and_first_model() {
   else {
     panic!("another CLI widens what the agents may do");
   };
-  assert_eq!(
-    hub(&fixture).profile(builder).expect("a sheet").cli,
-    Some(AgentProvider::CodexCli),
-    "nothing saved"
-  );
+  assert!(drafted(&fixture, builder).is_none(), "nothing saved");
   edit(&fixture.root, builder, &Edit::Cli(AgentProvider::ClaudeCodeCli), &asked).expect("allowed");
 
+  let draft = drafted(&fixture, builder).expect("a draft");
+  assert_eq!(draft.connection(), claude);
+  assert_eq!(draft.model().as_str(), "claude-opus-5-5");
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
-  assert_eq!(sheet.cli, Some(AgentProvider::ClaudeCodeCli));
-  assert_eq!(sheet.current, Some(claude));
-  assert_eq!(sheet.model, "claude-opus-5-5");
   assert!(
     sheet.options.clis.contains(&AgentProvider::CodexCli) && sheet.options.clis.contains(&AgentProvider::ClaudeCodeCli)
   );
@@ -213,30 +213,70 @@ fn readiness_local_edit_choosing_a_server_asks_first_and_an_archived_one_cannot_
   let Outcome::Confirm(asked) = edit(&fixture.root, builder, &Edit::AddServer(docs), &[]).expect("asks") else {
     panic!("choosing a server widens what its agents may do");
   };
-  assert!(
-    !hub(&fixture).profile(builder).expect("a sheet").draft,
-    "nothing was saved while it asks"
-  );
+  assert!(drafted(&fixture, builder).is_none(), "nothing was saved while it asks");
 
   edit(&fixture.root, builder, &Edit::AddServer(docs), &asked).expect("allowed");
+  publish(&fixture.root, builder, shown(&fixture, builder), &asked).expect("published");
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
   assert_eq!(sheet.mcp_servers, [(docs, "docs".to_owned())]);
   assert!(sheet.options.servers.is_empty());
 
   edit(&fixture.root, builder, &Edit::RemoveServer(docs), &[]).expect("a removal widens nothing");
-  assert!(hub(&fixture).profile(builder).expect("a sheet").mcp_servers.is_empty());
+  let draft = drafted(&fixture, builder).expect("a draft");
+  assert!(draft.mcp_servers().ids().is_empty());
 
   let refused = edit(&fixture.root, builder, &Edit::AddServer(old), &asked).expect_err("archived");
   assert_eq!(refused.key, "appMcp.errors.mcpServerMissing");
 }
 
-/// When the draft the panel would show now was saved.
+/// The stored draft of `profile`, which the hub's panel never shows; `None` without one.
+fn drafted(fixture: &Fixture, profile: ResourceId) -> Option<AgentProfile> {
+  fixture
+    .db()
+    .draft::<AgentProfile>(profile)
+    .expect("read")
+    .map(|draft| draft.body().clone())
+}
+
+/// When the stored draft of `profile` was saved, which a publish names.
 fn shown(fixture: &Fixture, profile: ResourceId) -> Timestamp {
-  hub(fixture)
-    .profile(profile)
-    .and_then(|sheet| sheet.draft_saved_at)
+  fixture
+    .db()
+    .draft::<AgentProfile>(profile)
+    .expect("read")
     .expect("a draft")
+    .updated_at()
+}
+
+/// The hub's panel has no drafts (decided by the person 2026-11-09): what it holds starts from the published version
+/// even when a draft is stored (an MCP client's), and its Save publishes what it holds over that draft.
+#[test]
+fn readiness_local_edit_the_panel_holds_the_published_version_and_its_save_replaces_a_draft() {
+  let (fixture, builder, _) = project();
+  edit(&fixture.root, builder, &Edit::Model("gpt-b".to_owned()), &[]).expect("a draft");
+
+  let held = hold(&fixture.root, builder, None, &Edit::Effort(Some("low".into()))).expect("held");
+  assert_eq!(
+    held.body.model().as_str(),
+    "gpt-a",
+    "the draft's model is not the panel's"
+  );
+  assert_eq!(stored_effort(&held.body).as_deref(), Some("low"));
+  assert!(held.changed);
+
+  assert_eq!(
+    save(&fixture.root, builder, &held.body, (&[], false)).expect("saved"),
+    Outcome::Saved(builder)
+  );
+  assert!(drafted(&fixture, builder).is_none(), "the draft is replaced");
+  let latest = fixture
+    .db()
+    .latest_version::<AgentProfile>(builder)
+    .expect("read")
+    .expect("published");
+  assert_eq!(latest.number().get(), 2);
+  assert_eq!(latest.body(), &held.body);
 }
 
 #[test]
@@ -257,7 +297,7 @@ fn readiness_local_edit_a_profile_without_a_draft_has_nothing_to_publish() {
 }
 
 #[test]
-fn readiness_local_edit_publish_and_discard_act_on_the_draft_the_panel_showed() {
+fn readiness_local_edit_publish_acts_on_the_draft_it_names() {
   let (fixture, builder, _) = project();
   edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("a draft");
   let showed = shown(&fixture, builder);
@@ -269,19 +309,9 @@ fn readiness_local_edit_publish_and_discard_act_on_the_draft_the_panel_showed() 
 
   let refused = publish(&fixture.root, builder, showed, &[]).expect_err("not the draft shown");
   assert_eq!(refused.key, "errors.draftChanged");
-  let refused = discard(&fixture.root, builder, showed).expect_err("not the draft shown");
-  assert_eq!(refused.key, "errors.draftChanged");
-  let read = hub(&fixture);
-  let sheet = read.profile(builder).expect("a sheet");
-  assert!(sheet.draft, "nothing was published or lost");
-  assert_eq!(sheet.effort.as_deref(), Some("high"));
-
-  let number = discard(&fixture.root, builder, shown(&fixture, builder)).expect("the shown draft goes");
-  assert_eq!(number.get(), 1, "the published version is the profile again");
-  let read = hub(&fixture);
-  let sheet = read.profile(builder).expect("a sheet");
-  assert!(!sheet.draft);
-  assert_eq!(sheet.effort, None);
+  let draft = drafted(&fixture, builder).expect("nothing was published or lost");
+  assert_eq!(stored_effort(&draft).as_deref(), Some("high"));
+  assert_eq!(hub(&fixture).profile(builder).expect("a sheet").effort, None);
 }
 
 #[test]
@@ -300,10 +330,7 @@ fn readiness_local_edit_a_draft_that_changes_the_prompts_is_published_in_the_edi
 
   let refused = publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect_err("the panel shows no prompt");
   assert_eq!(refused.key, "agents.localEdit.promptsInEditor");
-  assert!(
-    hub(&fixture).profile(builder).expect("a sheet").draft,
-    "the draft is kept for the editor"
-  );
+  assert!(drafted(&fixture, builder).is_some(), "the draft is kept for the editor");
 
   // A change of a field the panel draws, on top of that draft, does not make the prompts the panel's to publish.
   edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("saved into the draft");
@@ -367,6 +394,7 @@ fn readiness_local_edit_gives_and_takes_back_instructions_skills_and_tools() {
       panic!("giving {kind:?} asks nothing");
     };
   }
+  publish(&fixture.root, builder, shown(&fixture, builder), &[]).expect("published");
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
   assert_eq!(sheet.given.instructions, [(brief, "brief".to_owned())]);
@@ -376,7 +404,7 @@ fn readiness_local_edit_gives_and_takes_back_instructions_skills_and_tools() {
   assert_eq!(read.profiles_giving(ship), ["builder"]);
 
   edit(&fixture.root, builder, &Edit::TakeBack(GivenKind::Skill, ship), &[]).expect("taken back");
-  assert!(hub(&fixture).profile(builder).expect("a sheet").given.skills.is_empty());
+  assert!(drafted(&fixture, builder).expect("a draft").skills().is_empty());
 
   let refused = edit(&fixture.root, builder, &Edit::Give(GivenKind::Instruction, old), &[]).expect_err("archived");
   assert_eq!(refused.key, "agents.localEdit.givenGone");
@@ -384,4 +412,29 @@ fn readiness_local_edit_gives_and_takes_back_instructions_skills_and_tools() {
   assert_eq!(wrong.key, "agents.localEdit.givenGone");
   let uncallable = edit(&fixture.root, builder, &Edit::Give(GivenKind::Tool, plain), &[]).expect_err("no check");
   assert_eq!(uncallable.key, "agents.localEdit.givenGone");
+}
+
+#[test]
+fn readiness_local_edit_the_role_is_edited_while_the_connection_is_gone() {
+  let fixture = Fixture::local();
+  let gone = ConnectionId::generate();
+  let builder = fixture.own("builder", &builder_on(gone, "gpt-a"));
+  let role = RoleText {
+    role: "Reviewer".into(),
+    responsibilities: "Reviews the change.".into(),
+    instructions: "Review the diff.".into(),
+  };
+  let held = hold(&fixture.root, builder, None, &Edit::Role(role)).expect("held without a connection");
+  assert!(held.changed);
+  assert_eq!(held.body.role().as_str(), "Reviewer");
+  assert_eq!(held.body.responsibilities(), "Reviews the change.");
+  assert_eq!(held.body.instructions().as_str(), "Review the diff.");
+  assert_eq!(held.body.connection(), gone, "the gone connection is kept, not chosen");
+  assert_eq!(held.body.model().as_str(), "gpt-a");
+  let blank = RoleText {
+    role: "  ".into(),
+    ..RoleText::default()
+  };
+  let refused = hold(&fixture.root, builder, None, &Edit::Role(blank)).expect_err("a blank role");
+  assert_eq!(refused.key, "errors.roleRequired");
 }

@@ -22,7 +22,7 @@ pub(super) fn sections(ctx: &lurq::app::ctx::Ctx, sheet: &TeamSkillSheet) -> Vec
   if !matches!(sheet.added, Added::Project) {
     rows.push(added_row(ctx, &sheet.added));
   }
-  rows.push(used_by_row(ctx, &sheet.used_by));
+  rows.push(used_by_row(ctx, &sheet.used_by, None));
   vec![from_team(ctx, rows).into()]
 }
 

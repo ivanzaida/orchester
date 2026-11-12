@@ -1084,6 +1084,14 @@ manual Blocked is set and cleared by the claim's holder or an Admin. Work in `mo
 
 ## Done
 
+Agents · v2 (`acFkz`) finished on master, 2026-11-11 (outside Orchester):
+- **Team tool secrets by name.** A team tool names its secret by `SecretName`, never by a computer's id (`TeamTool`, `89c31e17e`). Publishing converts the id to its name, each computer fills the value in by name (person-only), and the runner checks it by name. An old by-id body reads honestly, and an admin publishes it again by name. The team server reads the form from 0.11.2 (`orchester-platform` `f47328a`, tag `server-v0.11.2`; desktops from 0.6.0).
+- **Memory in the hub.** Memory is a filter of the Agents hub after Tools (Section Y `Xxl1u`, Y1–Y6): status sub-filter, list and panel, and the old Memory page's shell gone (`claude/memory-hub`, last `63efe46b2`). Scenarios `memory`, `tasks` and `team-memory-member`.
+- **A22.** The stopped card has no *Ask an admin to restore it* (`41ac7da69`).
+- **Choosing a profile's connection** is open to the person, external MCP clients and the driving Orchestrator, and out of reach of run agents; tests pin it (`0b9bd86ca`).
+
+Not built (no design): HTTP and database tool forms; *Open →* on an archived team resource; the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
+
 Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2` (tasks `docs/plan/pipelines-v2/`,
 decisions `docs/design/pipelines-v2.md`; PV2-02 canceled, PV2-14 open under *U · Screens*):
 

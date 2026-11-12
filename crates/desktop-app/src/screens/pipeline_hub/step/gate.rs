@@ -21,8 +21,10 @@ use orchester_workspace::pipelines::{fields::AccessChoice, narrowing, sources::L
 use super::{Open, permissions};
 use crate::{
   screens::{
-    local_hub::profile::pick::{self, Pick},
-    pipeline_hub::sources::{self, Props as SourcesProps},
+    pipeline_hub::{
+      pick::{self, Pick},
+      sources::{self, Props as SourcesProps},
+    },
     team_hub::rows::{self, Sub},
   },
   theme::{ExtraSpacing, HubText, IconSize},

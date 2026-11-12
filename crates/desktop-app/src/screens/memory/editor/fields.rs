@@ -36,7 +36,22 @@ const SAVE_TO_WIDTH: f32 = 260.0;
 const TEXT_HEIGHT: f32 = 64.0;
 
 impl RecordEditor {
+  /// The fields in the task's editor, with the facts under them.
   pub(super) fn fields(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Element {
+    let mut fields = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+      .spacing(ExtraSpacing::Inset.role())
+      .with_children(self.field_list(ctx, state, props, id));
+    if !props.facts.is_empty() {
+      fields = fields.child(facts(ctx, state, props, id));
+    }
+    fields.into()
+  }
+
+  /// The fields, in their order: the type, key and importance on one line, the text, the tags, where a new record of
+  /// a task's tab is saved, what approving replaces, and *Pinned* unless a proposal is reviewed.
+  pub(super) fn field_list(&self, ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> Vec<Element> {
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
@@ -44,35 +59,38 @@ impl RecordEditor {
       .child(self.key_field(ctx, id))
       .child(self.importance_field(ctx, id));
     let text = FieldInput::new(format!("{id}-text"), ctx.t("memory.editor.text"), self.text.clone())
+      .element(self.text_input.clone())
       .text_area()
       .area_height(TEXT_HEIGHT);
-    let mut fields = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-      .spacing(ExtraSpacing::Inset.role())
-      .child(line)
-      .child(field(
+    // The hub's panel draws the tags' field as high as its other fields with a label over them (`zHzVw` in Y3).
+    let tags = if state.task.is_none() {
+      ControlHeight::Lg
+    } else {
+      ControlHeight::Md
+    };
+    let mut fields: Vec<Element> = vec![
+      line.into(),
+      field(
         &format!("{id}-text-field"),
         Some(&ctx.t("memory.editor.text")),
         text.render(ctx),
         None,
-      ))
-      .child(self.tags_field(ctx, id, true));
+      )
+      .into(),
+      self.tags_field(ctx, id, tags),
+    ];
     if props.mode == EditorMode::New && state.task.is_some() {
-      fields = fields.child(self.save_to_field(ctx, state, id));
+      fields.push(self.save_to_field(ctx, state, id));
     }
     if let Some(replaced) = &props.replaced {
       let page = state.task.is_none();
-      fields = fields.child(self.replaces(ctx, (replaced, props.memory.as_ref()), (id, page)));
+      fields.push(self.replaces(ctx, (replaced, props.memory.as_ref()), (id, page)));
     }
     if props.mode != EditorMode::Review {
       let of_task = state.task.is_some() && self.save_to.get().0 == SaveTo::Task;
-      fields = fields.child(self.pin_field(ctx, id, of_task));
+      fields.push(self.pin_field(ctx, id, of_task));
     }
-    if !props.facts.is_empty() {
-      fields = fields.child(facts(ctx, state, props, id));
-    }
-    fields.into()
+    fields
   }
 
   fn kind_field(&self, ctx: &Ctx, id: &str) -> Element {
@@ -121,14 +139,13 @@ impl RecordEditor {
   }
 
   /// *Tags*: the record's tags as removable chips in a field-like box, and *Add a tag…*, where a space, a comma or
-  /// leaving the field makes what was typed a tag (`B0ra2`); under its `labelled` label, or under the row's on the
-  /// record's page.
-  pub(super) fn tags_field(&self, ctx: &Ctx, id: &str, labelled: bool) -> Element {
+  /// leaving the field makes what was typed a tag (`B0ra2`); under its label, the box `height` high at least.
+  fn tags_field(&self, ctx: &Ctx, id: &str, height: ControlHeight) -> Element {
     let label = ctx.t("memory.editor.tags");
     let mut chips = Row::new()
       .id(format!("{id}-tags"))
       .width(Dimension::Pct(100.0))
-      .min_height(Dimension::Px(ControlHeight::Md.value()))
+      .min_height(Dimension::Px(height.value()))
       .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
@@ -146,7 +163,7 @@ impl RecordEditor {
       .id(format!("{id}-tags-field"))
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
-      .with_children(labelled.then(|| Text::new(&label).variant(TypographyStyle::FieldLabel)))
+      .child(Text::new(&label).variant(TypographyStyle::FieldLabel))
       .child(chips.child(self.tag_input(ctx, id)));
     if let Some(problem) = self.tag_problem.get() {
       column = column.child(field_error(&format!("{id}-tag-error"), &message_text(ctx, &problem)));
@@ -259,9 +276,14 @@ impl RecordEditor {
       .child(
         Column::new()
           .flex(1.0)
+          .min_width(Dimension::Px(0.0))
           .spacing(ExtraSpacing::Tight.role())
           .child(Text::new(&title).variant(TypographyStyle::Label))
-          .child(Text::new(&hint).variant(TypographyStyle::Caption)),
+          .child(
+            Text::new(&hint)
+              .variant(TypographyStyle::Caption)
+              .width(Dimension::Pct(100.0)),
+          ),
       )
       .into()
   }

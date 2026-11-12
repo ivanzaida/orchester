@@ -9,7 +9,7 @@
 //! the copy while the project is the team's.
 
 use orchester_core::{
-  resource::{Pipeline, Resource, ResourceKind},
+  resource::{Pipeline, Resource, ResourceKind, TeamPipelineError},
   store::ResourceStore,
 };
 use orchester_store::{ProjectDb, ResourceSharing, StoreError};
@@ -22,8 +22,9 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  sharing::sync::{non_team_name, team_executors},
+  sharing::sync::pipeline_executors,
   tasks::outside::Outside,
+  team_config::TeamConfig,
 };
 
 pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Value, ToolError> {
@@ -44,7 +45,8 @@ pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Val
     let version = db
       .latest_version::<Pipeline>(local.id())?
       .ok_or(StoreError::NotPublished(local.id()))?;
-    refuse_local_executors(&db, version.body())?;
+    let config = shared.workspace.team_read(&open.repo_root).config().cloned();
+    refuse_local_executors(&db, config.as_deref(), version.body())?;
     let widens = Message::new("appMcp.widens.teamPipeline").with("pipeline", local.name().as_str().to_owned());
     widening::allowed(&shared, vec![widens])?;
     let id = shared
@@ -91,10 +93,22 @@ fn own_pipeline(db: &ProjectDb, named: &str) -> Result<Resource, ToolError> {
 }
 
 /// Refused, naming the first, when `pipeline` runs an agent profile or tool, or merges with an integrator, that is not
-/// the team's (a resource the server has, or the Admin's new one waiting to be sent).
-fn refuse_local_executors(db: &ProjectDb, pipeline: &Pipeline) -> Result<(), ToolError> {
-  let Some(name) = non_team_name(db, pipeline, &team_executors(db)?)? else {
-    return Ok(());
+/// the team's: one the project's copy of the team's configuration holds, or `config`, the team's configuration read
+/// this session ([`pipeline_executors`]).
+fn refuse_local_executors(db: &ProjectDb, config: Option<&TeamConfig>, pipeline: &Pipeline) -> Result<(), ToolError> {
+  let named = match pipeline.check_team(&pipeline_executors(db, config)?) {
+    Ok(()) => return Ok(()),
+    Err(
+      TeamPipelineError::Profile { profile: id, .. }
+      | TeamPipelineError::Tool { tool: id, .. }
+      | TeamPipelineError::Integrator { profile: id },
+    ) => id,
+  };
+  let name = match db.resource(named)? {
+    Some(found) => found.name().as_str().to_owned(),
+    None => config
+      .and_then(|config| config.name(named))
+      .map_or_else(|| named.to_string(), str::to_owned),
   };
   Err(ToolError::refused(
     "team_resources_required",

@@ -8,13 +8,12 @@
 
 mod first_download;
 mod hub_archive;
-mod hub_conflict;
-mod hub_created;
 mod hub_edit;
-mod hub_edit_race;
+mod hub_edit_kinds;
+mod hub_forms;
+mod hub_keep;
 mod hub_profile_form;
-mod hub_unsent;
-mod hub_unsent_publish;
+mod hub_states;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 #[allow(

@@ -64,6 +64,7 @@ impl Component for Library {
       .get();
     let id = project.open.project.id();
     let team = team::of(&project);
+    // An admin's new team pipeline is created on the team server (D-043); a member makes none.
     let page = parts::page().child(header(ctx, id, team::may_change(team.as_ref())));
     let pending = loaded.is_pending();
     let body = match (loaded.data, loaded.error) {

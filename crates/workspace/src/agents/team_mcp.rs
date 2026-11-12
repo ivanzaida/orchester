@@ -10,7 +10,6 @@ use orchester_core::{
   id::ResourceId,
   resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer},
   secret::SecretName,
-  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{McpServerProgram, ProjectDb, StoreError};
@@ -20,7 +19,7 @@ use super::{
   team_profile::TeamProfileSheet,
   team_sheets,
 };
-use crate::team_config::{TeamConfig, TeamResource};
+use crate::team_config::TeamConfig;
 
 /// Who published the version this computer uses, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,28 +80,16 @@ pub struct TeamMcpSheet {
   pub edit: Option<McpEdit>,
 }
 
-/// The team's MCP servers a sheet is made for: those it has not archived, and each archived one that keeps a draft
-/// here.
-pub(super) fn listed<'a>(db: &ProjectDb, config: &'a TeamConfig) -> Result<Vec<&'a TeamResource>, StoreError> {
-  let mut resources = config.resources(ResourceKind::McpServer);
-  // An archived server whose draft is kept here is shown too: the draft stays to copy, discard or publish once the
-  // server is restored.
-  for (kept, _) in db.archived_with_draft(ResourceKind::McpServer)? {
-    resources.extend(config.archived(kept.id()));
-  }
-  Ok(resources)
-}
-
-/// A sheet for each team MCP server whose latest version is one this computer reads ([`listed`]). `profiles` are the
-/// team's profile sheets by resource, which say who uses it; `programs` the paths this computer set for the team
-/// server.
+/// A sheet for each team MCP server the team has not archived whose latest version is one this computer reads.
+/// `profiles` are the team's profile sheets by resource, which say who uses it; `programs` the paths this computer set
+/// for the team server.
 pub(super) fn sheets(
   (db, config): (&ProjectDb, &TeamConfig),
   programs: &[McpServerProgram],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Result<Vec<(ResourceId, TeamMcpSheet)>, StoreError> {
   let mut sheets = Vec::new();
-  for resource in listed(db, config)? {
+  for resource in config.resources(ResourceKind::McpServer) {
     let (Some(number), Some(Ok(body))) = (resource.number(), resource.body::<TeamMcpServer>()) else {
       continue;
     };
@@ -132,24 +119,11 @@ pub(super) fn sheets(
           }),
         switch: db.team_mcp_switch(resource)?,
         published: config.resource(resource).and_then(team_sheets::published),
-        edit: edit(db, resource, (number, body))?,
+        edit: team_mcp_edit::of_latest((number, body)),
       },
     ));
   }
   Ok(sheets)
-}
-
-/// What an admin's edit of `resource` starts from: with the draft kept here while the project's database still holds
-/// the resource and its versions, else from its `latest` version alone.
-fn edit(
-  db: &ProjectDb,
-  resource: ResourceId,
-  latest: (orchester_core::resource::VersionNumber, &TeamMcpServer),
-) -> Result<Option<McpEdit>, StoreError> {
-  if db.resource(resource)?.is_some() && db.latest_version::<TeamMcpServer>(resource)?.is_some() {
-    return team_mcp_edit::of(db, resource);
-  }
-  Ok(team_mcp_edit::of_latest(latest))
 }
 
 pub(super) fn runs(launch: &TeamMcpLaunch) -> McpRuns {

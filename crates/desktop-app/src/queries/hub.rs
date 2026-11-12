@@ -1,22 +1,28 @@
 //! What the Agents hub shows, one query per read, keyed by the project's folder and read through the workspace off the
 //! UI thread once reads are released (`ReadHold`): the hub of a team project and of a local one, which are live (a
 //! tool's or a server's secret is looked up in the keychain, a program on this computer), and what a local
-//! instruction's, a local skill's and a new profile's panel edit over, which are stored.
+//! instruction's, a local skill's, a local tool's and a new profile's panel edit over, which are stored.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::ResourceId,
-  resource::{Instruction, ResourceBody, Skill},
+  resource::{Instruction, ResourceBody, Skill, Tool},
 };
 use orchester_workspace::{
-  agents::{data::ProjectAgents, local_hub::LocalHub, team_hub::TeamHubRead},
+  agents::{
+    data::ProjectAgents,
+    local_given::{GivenLists, offered_in},
+    local_hub::LocalHub,
+    team_hub::TeamHubRead,
+  },
   background,
   instructions::data::ProjectInstructions,
   messages::{self, Message},
   pipelines::{default::default_in, hub::PipelineHub},
   removal,
   skills::editor::EditorData,
+  tools::data::ProjectTools,
 };
 
 use super::Session;
@@ -87,7 +93,7 @@ pub async fn pipeline_hub(session: Session, root: PathBuf) -> Result<PipelineHub
 }
 
 /// The project's instructions with the profiles and pipelines they can name, and the published version of each that
-/// has a draft, which a local instruction's panel compares with.
+/// has a draft, which a local instruction's panel starts from and compares with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstructionsRead {
   pub data: ProjectInstructions,
@@ -107,7 +113,7 @@ pub async fn instructions(session: Session, root: PathBuf) -> Result<Instruction
 }
 
 /// What the Skills editor checks a write against (the project's skills, the scopes they can take), and the published
-/// version of each skill that has a draft, which a local skill's panel compares with.
+/// version of each skill that has a draft, which a local skill's panel starts from and compares with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillsRead {
   pub data: EditorData,
@@ -126,6 +132,26 @@ pub async fn skills(session: Session, root: PathBuf) -> Result<SkillsRead, Messa
   .await
 }
 
+/// The project's tools, and the published version of each that has a draft, which a local tool's panel starts from and
+/// compares with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolsRead {
+  pub listed: ProjectTools,
+  pub published: Vec<(ResourceId, Tool)>,
+}
+
+/// What a local tool's panel edits over: one read for every tool of the project.
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn tools(session: Session, root: PathBuf) -> Result<ToolsRead, Message> {
+  read(session, move |_| {
+    let listed = ProjectTools::load_in(&root).map_err(|error| messages::store_error(&error))?;
+    let drafted = listed.tools.iter().filter(|entry| entry.state.has_draft());
+    let published = published_of(&root, drafted.map(|entry| entry.id))?;
+    Ok(ToolsRead { listed, published })
+  })
+  .await
+}
+
 /// The published body of each of `drafted` that has one.
 fn published_of<T: ResourceBody + Clone>(
   root: &Path,
@@ -140,9 +166,22 @@ fn published_of<T: ResourceBody + Clone>(
   Ok(published)
 }
 
-/// The project's agent connections, which the form that makes a profile takes its CLI and model choices from. Not held
-/// with the hub's reads: the form shows its fields before they are read.
+/// What the form that makes a profile chooses from: the project's agent connections (its CLI and model choices) and
+/// MCP servers, and the project's instructions, skills and tools it can give its agents.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileOffer {
+  pub agents: ProjectAgents,
+  pub given: GivenLists,
+}
+
+/// [`ProfileOffer`] of the project at `root`. Not held with the hub's reads: the form shows its fields before they are
+/// read.
 #[lurq::query(stale_time = "24h", gc_time = "24h")]
-pub async fn profile_form(_session: Session, root: PathBuf) -> Result<ProjectAgents, Message> {
-  background::run(move || ProjectAgents::load_in(&root).map_err(|error| messages::store_error(&error))).await?
+pub async fn profile_form(_session: Session, root: PathBuf) -> Result<ProfileOffer, Message> {
+  background::run(move || {
+    let agents = ProjectAgents::load_in(&root).map_err(|error| messages::store_error(&error))?;
+    let given = offered_in(&root).map_err(|error| messages::store_error(&error))?;
+    Ok(ProfileOffer { agents, given })
+  })
+  .await?
 }

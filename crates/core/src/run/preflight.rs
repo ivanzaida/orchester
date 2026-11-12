@@ -22,7 +22,7 @@ use crate::{
     CommandPermission, StepCommands,
     capability::{PermissionOption, PermissionProblem},
   },
-  resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
+  resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, TeamTool, Tool, ToolKind, Version},
   secret::Secret,
 };
 
@@ -90,15 +90,15 @@ pub enum PreflightProblem {
   BaseCommitMissing { commit: crate::revision::Revision },
 }
 
-/// The configuration a task's run would use.
-#[derive(Clone, Copy, Debug)]
-pub struct PreflightInput<'a> {
+/// The configuration a task's run would use: a local project's tools, or a team run's ([`TeamTool`]).
+#[derive(Debug)]
+pub struct PreflightInput<'a, T = Tool> {
   /// The selected or pinned published version of the task's pipeline, if any.
   pub pipeline: Option<&'a Pipeline>,
   /// Latest published version of each agent profile.
   pub profiles: &'a BTreeMap<ResourceId, Version<AgentProfile>>,
   /// Latest published version of each tool.
-  pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
+  pub tools: &'a BTreeMap<ResourceId, Version<T>>,
   pub connections: &'a [Connection],
   pub mcp_servers: &'a [McpServer],
   /// The secrets that are not archived.
@@ -108,6 +108,16 @@ pub struct PreflightInput<'a> {
 /// Every configuration problem that keeps the run from starting, in step order. Repository
 /// problems are found by the runner, which owns the git checkout.
 pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
+  checked(input)
+}
+
+/// [`preflight`] of a team run, whose tools are the team's ([`TeamTool`]): the team secret a tool names is checked by
+/// the runner that accepts the run, by name.
+pub fn preflight_team(input: PreflightInput<'_, TeamTool>) -> Vec<PreflightProblem> {
+  checked(input)
+}
+
+fn checked<T: PreflightTool>(input: PreflightInput<'_, T>) -> Vec<PreflightProblem> {
   let Some(pipeline) = input.pipeline else {
     return vec![PreflightProblem::PipelineNotPublished];
   };
@@ -128,10 +138,7 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
           problems.push(PreflightProblem::ApprovalGate { step: key() });
         }
         let tool = tool.and_then(|tool| input.tools.get(&tool)).map(Version::body);
-        if tool
-          .and_then(Tool::secret)
-          .is_some_and(|secret| !has_secret(input.secrets, secret))
-        {
+        if tool.is_some_and(|tool| tool.lacks_secret(input.secrets)) {
           problems.push(PreflightProblem::SecretMissing { step: key() });
         }
         problems.extend(tool_problem(tool, key()));
@@ -162,7 +169,7 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
 }
 
 /// Why a tool step cannot run `tool` (its tool's latest published version), if it cannot.
-fn tool_problem(tool: Option<&Tool>, step: StepKey) -> Option<PreflightProblem> {
+fn tool_problem(tool: Option<&impl PreflightTool>, step: StepKey) -> Option<PreflightProblem> {
   let Some(tool) = tool else {
     return Some(PreflightProblem::ToolNotPublished { step });
   };
@@ -172,7 +179,56 @@ fn tool_problem(tool: Option<&Tool>, step: StepKey) -> Option<PreflightProblem> 
       kind: tool.kind(),
     });
   }
-  tool.access().map(|_| PreflightProblem::ToolAccessRules { step })
+  tool
+    .has_access_rules()
+    .then_some(PreflightProblem::ToolAccessRules { step })
+}
+
+impl<T> Clone for PreflightInput<'_, T> {
+  fn clone(&self) -> Self {
+    *self
+  }
+}
+
+impl<T> Copy for PreflightInput<'_, T> {}
+
+/// What the preflight reads of the tool a step runs.
+trait PreflightTool {
+  fn kind(&self) -> ToolKind;
+  /// Whether it has access rules, which a tool step cannot run yet.
+  fn has_access_rules(&self) -> bool;
+  /// Whether the project secret it uses is not among `secrets`, the project's.
+  fn lacks_secret(&self, secrets: &[Secret]) -> bool;
+}
+
+impl PreflightTool for Tool {
+  fn kind(&self) -> ToolKind {
+    Self::kind(self)
+  }
+
+  fn has_access_rules(&self) -> bool {
+    self.access().is_some()
+  }
+
+  fn lacks_secret(&self, secrets: &[Secret]) -> bool {
+    self.secret().is_some_and(|secret| !has_secret(secrets, secret))
+  }
+}
+
+/// A team run's tool names a team secret, which this computer keeps by name apart from the project's secrets: the
+/// runner that accepts the run checks it by name, so it is never one of `secrets`.
+impl PreflightTool for TeamTool {
+  fn kind(&self) -> ToolKind {
+    Self::kind(self)
+  }
+
+  fn has_access_rules(&self) -> bool {
+    self.access().is_some()
+  }
+
+  fn lacks_secret(&self, _secrets: &[Secret]) -> bool {
+    false
+  }
 }
 
 fn has_secret(secrets: &[Secret], id: SecretId) -> bool {

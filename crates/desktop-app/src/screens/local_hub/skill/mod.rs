@@ -1,17 +1,20 @@
 //! The panel of a local skill (`Detail` in L1, `docs/design/team-configuration.md` rule 11), edited in place: the head
 //! with *Versions* and the … menu, the chips, *Skill* (its name, the profiles that give it to their agents, its
-//! description, its SKILL.md and its files), *Ready?* and the pinned *Save* and *Cancel* ([`super::save_bar`]). What is
-//! typed is only the panel's until *Save*, which publishes it as the next version at once through the Skills editor's
-//! checks ([`orchester_workspace::skills::editor`]); *Cancel* puts back what is stored. Its reference files are listed
-//! but not changed here. Who gets it is not chosen here: a profile chooses the skills its agents are offered
+//! description and its files), *SKILL.md*, *Ready?* and the pinned *Save* and *Cancel* ([`super::save_bar`]). What is
+//! typed is only the panel's until *Save*, which publishes it as the next version at once; the fields and their checks
+//! are the form's that makes one ([`crate::screens::hub::forms`]), with the Skills editor's for its name
+//! ([`orchester_workspace::skills::editor`]); *Cancel* puts back what is published. Its reference files are
+//! listed but not changed here. Who gets it is not chosen here: a profile chooses the skills its agents are offered
 //! (`docs/design/team-configuration.md`, "Decided 2026-11-09"); the scope it was made with is kept as it is, and
 //! decides nothing for a local run.
 //!
 //! What the Skills editor checks a write against is read once for every skill the panel shows, through its query
 //! (`queries::hub::skills`), kept for the session, and again when the skills, the profiles or the pipelines change (the
-//! panel's own *Save* and *Cancel* record such a change): going from one skill to another, or coming back to the hub,
-//! shows it at once. Only the first read of one shows the panel in bones. A draft stored before (by the Skills page)
-//! opens as the panel's changes over the published version: *Save* publishes it, *Cancel* throws it away.
+//! panel's own *Save* records such a change): going from one skill to another, or coming back to the hub, shows it at
+//! once. Only the first read of one shows the panel in bones. The panel has no drafts (decided by the person
+//! 2026-11-09): a skill that has a published version opens on it, unchanged, even when a draft of it is stored (an MCP
+//! client's), which *Save* replaces with what it publishes and *Cancel* leaves alone. A skill that has only a draft so
+//! far opens on it, as a change to publish.
 
 mod editor;
 
@@ -52,8 +55,8 @@ const BODY_AREA: f32 = 180.0;
 /// The editor's rows in bones, with the labels and the words under them it has.
 const BONES: [BoneRow; 5] = [
   BoneRow {
-    label: "local_hub.skill.name",
-    sub: Some("local_hub.skill.nameSub"),
+    label: "team_new.skill.name",
+    sub: Some("team_new.skill.nameSub"),
     bone: Bone::Field,
   },
   BoneRow {
@@ -62,19 +65,19 @@ const BONES: [BoneRow; 5] = [
     bone: Bone::Words,
   },
   BoneRow {
-    label: "local_hub.skill.description",
-    sub: Some("local_hub.skill.descriptionSub"),
+    label: "team_hub.plain.description",
+    sub: Some("team_hub.edit.descriptionSub"),
     bone: Bone::Area(DESCRIPTION_AREA),
   },
   BoneRow {
-    label: "local_hub.skill.body",
-    sub: Some("local_hub.skill.bodySub"),
-    bone: Bone::Area(BODY_AREA),
+    label: "team_hub.plain.files",
+    sub: Some("team_hub.edit.filesSub"),
+    bone: Bone::Words,
   },
   BoneRow {
-    label: "local_hub.skill.files",
-    sub: Some("local_hub.skill.filesSub"),
-    bone: Bone::Words,
+    label: "team_hub.edit.skillDocument",
+    sub: None,
+    bone: Bone::Area(BODY_AREA),
   },
 ];
 
@@ -121,7 +124,7 @@ impl Component for Loader {
     let query = ctx.query(hub::skills(session, props.project.open.repo_root.clone()));
     let read = queries::reading(&query);
     let (pending, rejected) = (read.is_pending(), read.is_rejected());
-    // A skill opened while the read is under way again waits for it: the last answer may hold an older draft.
+    // A skill opened while the read is under way again waits for it: the last answer may hold an older version.
     let fresh = !pending || self.shown.get() == Some(props.id);
     let Some(SkillsRead { data, published }) = read.data.filter(|_| fresh) else {
       return match read.error.filter(|_| rejected) {

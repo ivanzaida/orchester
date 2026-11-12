@@ -24,7 +24,7 @@ use crate::{
   messages::{self, Message},
   sharing::{
     Servers, SharingError,
-    sync::{ConfigServer, keep_pipeline_version, keep_resource, pipeline_content},
+    sync::{ConfigServer, keep_pipeline_version, keep_resource, pipeline_content, pipeline_executors},
     team::said,
     team_edit::{Local, Refusal, recorded},
   },
@@ -95,7 +95,8 @@ impl Servers {
     let (server, mut db) = open(self, repo_root)?;
     let address = server.entry().address.clone();
     let taken = |error: SharingError| not_taken(error, Some(&address));
-    let content = pipeline_content(&db, resource, body).map_err(taken)?;
+    let team = self.pipeline_executors(repo_root, &db)?;
+    let content = pipeline_content(&db, &team, resource, body).map_err(taken)?;
     let sent = content.body.clone();
     let publish = VersionPublish {
       idempotency_key: IdempotencyKey::generate(),
@@ -126,13 +127,14 @@ impl Servers {
     let address = server.entry().address.clone();
     let taken = |error: SharingError| not_taken(error, Some(&address));
     let id = ResourceId::generate();
+    let team = self.pipeline_executors(repo_root, &db)?;
     let create = ResourceCreate {
       idempotency_key: IdempotencyKey::generate(),
       id,
       kind: SharedResourceKind::Pipeline,
       slug: slug.as_str().to_owned(),
       name: name.as_str().to_owned(),
-      version: pipeline_content(&db, id, body).map_err(taken)?,
+      version: pipeline_content(&db, &team, id, body).map_err(taken)?,
     };
     let created = runtime()?.block_on(server.create_resource(create)).map_err(taken)?;
     keep_pipeline_version(&mut db, Some(&created.resource), &created.version, body).map_err(|error| failed(&error))?;
@@ -165,6 +167,17 @@ impl Servers {
     keep_resource(&mut db, &renamed).map_err(|error| failed(&error))?;
     self.shared_changed();
     Ok(())
+  }
+
+  /// The team's profiles and tools a pipeline of the project at `root` may run, as `db` keeps them and as this session
+  /// read the team's configuration ([`pipeline_executors`]).
+  fn pipeline_executors(
+    &self,
+    root: &Path,
+    db: &ProjectDb,
+  ) -> Result<orchester_core::resource::TeamExecutors, NotTaken> {
+    let read = self.inner.workspace.team.read(root);
+    pipeline_executors(db, read.config().map(AsRef::as_ref)).map_err(|error| failed(&error.into()))
   }
 }
 

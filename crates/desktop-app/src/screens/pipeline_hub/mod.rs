@@ -30,6 +30,7 @@ mod menu;
 mod model;
 mod panel;
 mod panel_head;
+mod pick;
 mod ready;
 mod rename;
 mod row;
@@ -427,6 +428,7 @@ fn tabs(
         label: label_key(choice),
         count: agents::TabCount::of(listing.map(|listing| listing.count(choice))),
         open: Arc::new(move || leave.go(route.clone())),
+        apart: false,
       }
     })
     .collect()

@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use orchester_api::{Event, SharedResource, SharedVersion};
+use orchester_api::{Event, SharedResource};
 use orchester_core::{name::Name, resource::VersionNumber, time::Timestamp};
 
 use super::stream::Source;
@@ -22,7 +22,7 @@ pub(super) async fn fill(source: &impl Source, root: &Path) -> Result<(), Sharin
   let mut resources = Vec::with_capacity(shared.len());
   for resource in &shared {
     let latest = latest(source, resource).await?;
-    resources.extend(team_resource(resource, latest));
+    resources.extend(TeamResource::of(resource, latest));
   }
   tracing::info!(resources = resources.len(), "the team's configuration was read");
   source.configs().fill(root, TeamConfig::new(resources));
@@ -47,7 +47,7 @@ pub(super) async fn follow(source: &impl Source, root: &Path, event: &Event) -> 
     Event::ResourcePublished(delta) => {
       let resource = &delta.change.resource;
       let latest = latest(source, resource).await?;
-      match team_resource(resource, latest) {
+      match TeamResource::of(resource, latest) {
         Some(kept) => configs.update(root, |config| {
           config.keep(kept);
           true
@@ -85,31 +85,6 @@ async fn latest(source: &impl Source, resource: &SharedResource) -> Result<Optio
       .versions
       .into_iter()
       .max_by_key(|version| version.number)
-      .map(version),
+      .map(TeamVersion::from),
   )
-}
-
-fn version(shared: SharedVersion) -> TeamVersion {
-  TeamVersion {
-    number: shared.number,
-    body: shared.body,
-    published_by: shared.published.by.display_name,
-    published_at: Timestamp::from_unix_millis(shared.published.at),
-  }
-}
-
-/// `shared` with its latest version; `None`, with a warning, for a name this computer cannot take.
-fn team_resource(shared: &SharedResource, latest: Option<TeamVersion>) -> Option<TeamResource> {
-  let Ok(name) = Name::new(&shared.name) else {
-    tracing::warn!(resource = %shared.id, "a team resource has a name this computer cannot take");
-    return None;
-  };
-  Some(TeamResource {
-    id: shared.id,
-    kind: shared.kind.core(),
-    name,
-    archived: shared.archived,
-    revision: shared.revision,
-    latest,
-  })
 }

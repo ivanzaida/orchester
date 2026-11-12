@@ -22,7 +22,7 @@ use super::{
 use crate::{
   project::ShownProject,
   screens::{
-    local_hub::profile::pick::{self, Pick},
+    pipeline_hub::pick::{self, Pick},
     team_hub::rows::{self, Sub},
   },
   ui::field::FieldInput,

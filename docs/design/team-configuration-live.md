@@ -65,6 +65,63 @@ Two copies of the truth cost more than they save.
 Tasks and runs of a team project, the claim authority and the execution bundle; a local project, which keeps its
 configuration in its database as today.
 
+## Where it stands (2026-11-10)
+
+- **Done**: the team's configuration is read into memory when the stream opens and kept current by its events
+  (`crates/workspace/src/team_config/`, `sharing/sync/live.rs`); the hub, readiness, fill-ins and team MCP tools read
+  it. An admin's change goes to the server at once (`sharing/team_edit/`: `Servers::publish_team`, made on the version
+  the edit was opened on, and `Servers::create_team`); a publish on an older version is refused (`Changed`) and memory
+  takes the server's latest. The team MCP server panel edits under the Save/Cancel bar with no draft; the hub's Create,
+  `add_mcp_server`, `update_mcp_server` and `share_pipeline` create or publish on the server. The outbox is gone:
+  waiting versions, *Use v<N> here*, conflict/rebase/merge, taken-back resources, drafts of team resources, A16–A21. The store migration
+  `team_outbox` drops `shared_publishes`, `waiting_versions`, the unsent versions no run or task uses and the drafts of
+  team resources, and keeps the overrides. A team project's profile, instruction, skill and tool pages are the hub's.
+  While the team server cannot be reached the hub shows what it read, offers no *Edit* or *New*, and an open form
+  keeps what was typed with *Save* unavailable and saying why.
+- **QA copies**: a QA copy joined to the stand-in team server (`orchester-api`'s `test_support::team_server`) reads
+  the team's configuration from it as from a real server: the stand-in answers a project's event stream once asked to
+  (`open_event_streams`; open, no events), so the read at the stream's open fills memory. Every joined state holds on
+  the stand-in, before the join, each team resource the seed cached; `team-hub` and `team-hub-member` wait for that
+  read; the `team-edit*` states set their switch (down, demoted, rejecting) after it, and `team-archived` archives
+  `pencil-design` on the stand-in. `team-hub-down` joins with the stream not answering and then stops the stand-in, so
+  nothing was read this session and the hub says it cannot reach the team server (A25 `Zhcif`).
+- **Not done yet**: the stream still keeps the copy of the team's resources and versions in the project database
+  (`sharing/sync/config`), because these readers still read it: the Pipelines page and editor, the task form's and the
+  tools' pipelines (`tasks::data::published_pipelines`, `TeamPipelines`), `sharing::compare`, `team_reads::listed`.
+  Until they read memory the copy stays and the migration keeps `resources`/`resource_versions`/
+  `shared_version_bodies`/`shared_version_references` of shared projects. A team pipeline is changed by an admin on
+  the pipeline page (D-043 in Pipelines v2): Save, *Create v1* and Duplicate send it to the team server at once
+  (`sharing/project/team_pipeline.rs`, `pipelines/team_write.rs`) and the page shows it saving until the answer; it is
+  kept in the database's copy (and memory) only once the server took it, and a refusal or a server that cannot be
+  reached keeps the edit as typed with why. A rename goes first, as the resource's PATCH on the revision this computer
+  has, then the steps; when only the name was taken the page says the steps were not saved. A member reads it only.
+  The MCP tools `save_pipeline`, `create_pipeline`, `duplicate_pipeline` and `share_pipeline` wait for the server the
+  same way. The tools that draft or publish a profile, instruction, skill or tool refuse a team project
+  (`team_no_drafts`). An admin edits a team profile, instruction, skill and command tool in place in the
+  hub's panel (`A26`–`A31` in `acFkz`, `screens/team_hub/edit/`, `agents::team_body_edit`): Save publishes the next
+  version at once, a newer version refuses it and reloads the panel, and while the server cannot be reached what was
+  typed stays with Save unavailable. A profile is made and edited with one form (`screens/hub/profile_form/`):
+  the create form and the admin's edit have the same *Role*, Agent CLI, model and effort selects and lists with *Add*.
+  An instruction, a skill and a command tool are made and edited with one form each too (`screens/hub/forms/`): the
+  new one's form, the admin's edit of a team one and a local one's panel draw the same fields (an instruction's format
+  and *Text*, a skill's description, files and *SKILL.md*, a tool's kind, description, program, arguments and time
+  limit) with the same checks; a local instruction's panel no longer chooses *When* (it keeps its version's), and a new
+  skill's SKILL.md is typed rather than made from its name.
+  Not edited there yet: a skill's files, an HTTP or database tool, and the leave guard of an unsaved team edit.
+- A team tool names the secret it sends or connects with by **name** (core's `TeamTool`, `docs/cloud-api.md` "Team
+  tool body"; 2026-11-11): publishing a local tool to the team (Share, an admin's Save or *Create*) turns the
+  publisher's secret id into that secret's name, archived or not, and a tool whose secret the project has no row for
+  is refused before anything is sent (`ToolSecretGone`). The id stays a row key of each computer: it never goes into a
+  team body and is never shown. The tool's panel (A6 `u9Hcc`, M6 `yTVeE`, `screens/team_hub/tool/`) reads *Headers*
+  `Authorization: Bearer ← secret NAME`, *Secrets it needs* by name and, *On this computer*, that name's value set or
+  not, with *Add value* pinned while it has none: the same fill-in and person-only rule as a team MCP server's secret
+  (`set_team_secret_value`). Readiness needs that value by name, and the runner that accepts a team run checks it
+  under the same name (`PreflightProblem::SecretMissing`). A version published before this form still holds the
+  publisher's id: the panel says so in words without the id (`team_tool_secret_by_id`, *undecided*), and an admin
+  whose project has that secret publishes it again by name (*Publish again by name*). The sync keeps a local copy of
+  a command tool and of an older version only; an HTTP or database tool in the team's form is read from the live
+  configuration.
+
 ## Open questions
 
 - Members and the project's owners/admins: read with the configuration (in memory) or kept as today.

@@ -17,6 +17,7 @@ mod skill;
 mod team_agent_profile;
 mod team_mcp_server;
 mod team_reviewer;
+mod team_tool;
 mod test_suite;
 mod tool;
 mod variable;
@@ -48,6 +49,7 @@ pub use self::{
     TeamMcpServerError,
   },
   team_reviewer::{ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer},
+  team_tool::{TeamDatabaseQuery, TeamHttpRequest, TeamTool, TeamToolAction, TeamToolError},
   test_suite::{
     ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,
     TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,

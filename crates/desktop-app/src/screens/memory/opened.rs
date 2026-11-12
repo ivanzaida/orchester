@@ -35,18 +35,26 @@ pub fn editor(ctx: &Ctx, memory: &Memory, mode: EditorMode, among: Among<'_>) ->
       proposer: among.origins.written(memory).and_then(|place| place.agent),
       given: among.project.and_then(|project| project.given_count(old.id())),
     });
+  // The hub's panel says where an edited record came from too (`Record` `lThsB` in Y3); a task's tab does not.
+  let in_hub = among.project.is_some();
   let facts = match mode {
-    EditorMode::Review => review_facts(ctx, memory, among.origins),
+    EditorMode::Review => review_facts(ctx, memory, (among.origins, in_hub)),
+    EditorMode::Edit if in_hub => [
+      review_facts(ctx, memory, (among.origins, in_hub)),
+      edit_facts(ctx, memory, among),
+    ]
+    .concat(),
     EditorMode::Edit => edit_facts(ctx, memory, among),
     EditorMode::New => Vec::new(),
   };
+  let linked = mode == EditorMode::Review || (in_hub && mode == EditorMode::Edit);
   EditorProps {
     mode,
     memory: Some(memory.clone()),
     subtitle: subtitle(ctx, memory, mode, among.origins),
     replaced,
     facts: facts.into(),
-    source_task: source_task(memory, among.origins).filter(|_| mode == EditorMode::Review),
+    source_task: source_task(memory, among.origins).filter(|_| linked),
   }
 }
 
@@ -67,6 +75,7 @@ pub fn delete(memory: &Memory, among: Among<'_>) -> DeleteProps {
   DeleteProps {
     memory: memory.clone(),
     earlier: listing::earlier_versions(memory, among.records).len(),
+    modal: among.project.is_some(),
   }
 }
 
@@ -95,8 +104,9 @@ fn subtitle(ctx: &Ctx, memory: &Memory, mode: EditorMode, origins: &Origins) -> 
 }
 
 /// *Source* and *Agent's confidence* of a proposal.
-fn review_facts(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Vec<(Arc<str>, Arc<str>)> {
-  let Some(ReviewSource { source, confidence, .. }) = review_source(ctx, memory, origins) else {
+/// `in_hub`: the Agents hub's panel says the agent's confidence in lower case, as its read panel does (Y1, Y3).
+fn review_facts(ctx: &Ctx, memory: &Memory, (origins, in_hub): (&Origins, bool)) -> Vec<(Arc<str>, Arc<str>)> {
+  let Some(ReviewSource { source, confidence }) = review_source(ctx, memory, (origins, in_hub)) else {
     return Vec::new();
   };
   vec![
@@ -106,17 +116,15 @@ fn review_facts(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Vec<(Arc<str>,
 }
 
 /// Where a proposal was written and what an agent said of it, as the review page's *Source* says it (`H2OVV` in 05e).
-pub struct ReviewSource {
-  /// *Written in 03 Implement*.
-  pub written: Arc<str>,
+struct ReviewSource {
   /// *1 event in 03 Implement*.
-  pub source: Arc<str>,
+  source: Arc<str>,
   /// *high · set by Builder; people don't change it*.
-  pub confidence: Arc<str>,
+  confidence: Arc<str>,
 }
 
 /// The [`ReviewSource`] of `memory`; `None` when no agent wrote it.
-pub fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<ReviewSource> {
+fn review_source(ctx: &Ctx, memory: &Memory, (origins, in_hub): (&Origins, bool)) -> Option<ReviewSource> {
   let place = origins.written(memory)?;
   let step = place
     .step
@@ -125,7 +133,7 @@ pub fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<Re
     .unwrap_or_default();
   let written = ctx.t_args("memory.editor.sourceStep", [("step", &*step)]);
   let source = match memory.sources().len() {
-    0 => written.clone(),
+    0 => written,
     1 => ctx.t_args("memory.editor.sourceEvent", [("step", &*step)]),
     count => ctx.t_args(
       "memory.editor.sourceEvents",
@@ -136,15 +144,18 @@ pub fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<Re
   let confidence = ctx.t_args(
     "memory.editor.confidenceValue",
     [
-      ("confidence", &*words::confidence_title(ctx, memory.confidence())),
+      (
+        "confidence",
+        &*if in_hub {
+          words::confidence(ctx, memory.confidence())
+        } else {
+          words::confidence_title(ctx, memory.confidence())
+        },
+      ),
       ("agent", &*agent),
     ],
   );
-  Some(ReviewSource {
-    written,
-    source,
-    confidence,
-  })
+  Some(ReviewSource { source, confidence })
 }
 
 /// *Author* and *Versions* of a record being edited.

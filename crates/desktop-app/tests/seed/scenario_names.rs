@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 206] = [
+const NAMES: [&str; 199] = [
   "reviewer-row",
   "reviewer-row-local",
   "reviewer-row-unavailable",
@@ -111,6 +111,7 @@ const NAMES: [&str; 206] = [
   "team-hub",
   "team-hub-pick",
   "team-hub-no-connection",
+  "team-hub-down",
   "team-hub-member",
   "team-hub-member-pick",
   "team-hub-member-picked",
@@ -118,7 +119,6 @@ const NAMES: [&str; 206] = [
   "team-hub-mcp-path-gone",
   "team-hub-mcp-secret",
   "team-hub-mcp-ready",
-  "team-hub-waiting",
   "picker-readiness",
   "picker-readiness-team",
   "pipelines",
@@ -185,14 +185,7 @@ const NAMES: [&str; 206] = [
   "team-edit-rejects",
   "team-edit-published",
   "team-edit-refused-admin",
-  "team-edit-waiting",
-  "team-edit-rejected",
   "team-edit-variables",
-  "team-edit-newer",
-  "team-edit-conflicting",
-  "team-edit-conflict-clean",
-  "team-edit-archived",
-  "team-create-name-taken",
   "team-start-failed",
   "team-start-recovered",
   "team-start-waiting",

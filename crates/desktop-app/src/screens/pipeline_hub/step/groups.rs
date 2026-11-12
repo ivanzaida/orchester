@@ -20,8 +20,10 @@ use super::{
 };
 use crate::{
   screens::{
-    local_hub::profile::pick::{self, Pick},
-    pipeline_hub::flow::number,
+    pipeline_hub::{
+      flow::number,
+      pick::{self, Pick},
+    },
     team_hub::rows::{self, Sub},
   },
   theme::{ExtraSpacing, HubText},

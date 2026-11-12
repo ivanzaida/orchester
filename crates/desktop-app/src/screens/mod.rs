@@ -54,7 +54,8 @@ use orchester_core::{
 use crate::{
   project::{ProjectState, Projects, ShownProject, TeamRead},
   routes::{
-    AgentTab, HubFilter, HubView, NewConnection, PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route,
+    AgentTab, HubFilter, HubView, InstructionsView, NewConnection, PipelineView, PipelinesFilter, PipelinesView,
+    ProjectPage, Route,
   },
 };
 
@@ -118,7 +119,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::Review => review::list(ctx, project),
     ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
-    ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
+    // Memory is a filter of the Agents hub (`Section Y · Memory` `Xxl1u`), a team project's too.
+    ProjectPage::Memory(memory) => agents_or_hub(ctx, project, HubView::memory(*memory)),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
     ProjectPage::NewTaskInModule(module) => task_form::new_task(ctx, project, Some(*module)),
@@ -145,10 +147,14 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
     ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
     ProjectPage::NewAgent(tab) => new_agent(ctx, project, *tab),
-    ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
-    ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
-    ProjectPage::Skills(_) | ProjectPage::NewSkill | ProjectPage::Skill(_) => skills::screen(ctx, project, page),
-    ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
+    ProjectPage::Agent(..)
+    | ProjectPage::Instructions(_)
+    | ProjectPage::Skills(_)
+    | ProjectPage::NewSkill
+    | ProjectPage::Skill(_)
+    | ProjectPage::Tools
+    | ProjectPage::NewTool
+    | ProjectPage::Tool(..) => library_or_hub(ctx, project, page),
     ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
     ProjectPage::Connections(view) => {
       project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))
@@ -169,11 +175,51 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
   }
 }
 
-/// New profile: the hub's form in a local project (`Agents · v2` L3), else the page of its own.
+/// New profile: the hub's form (`Agents · v2` L3 in a local project, A7 in a team project), else the page of its own.
 fn new_agent(ctx: &mut Ctx, project: &ShownProject, tab: AgentTab) -> Element {
-  local_hub::form_or(ctx, project, HubFilter::Profiles, |ctx| {
-    agents::screen(ctx, project, agents::Shown::New(tab))
+  team_or(ctx, project, HubView::adding(HubFilter::Profiles), |ctx| {
+    local_hub::form_or(ctx, project, HubFilter::Profiles, |ctx| {
+      agents::screen(ctx, project, agents::Shown::New(tab))
+    })
   })
+}
+
+/// A profile's, an instruction's, a skill's or a tool's own page: a team project's resources are the Agents hub's alone
+/// (`docs/design/team-configuration-live.md`), read from the team server and kept on no page of this computer, so a
+/// link to one lands on the hub at it.
+fn library_or_hub(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
+  team_or(ctx, project, hub_view_of(page), |ctx| match page {
+    ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
+    ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
+    ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
+    _ => skills::screen(ctx, project, page),
+  })
+}
+
+/// The hub's view of what a library's page names.
+fn hub_view_of(page: &ProjectPage) -> HubView {
+  match page {
+    ProjectPage::Agent(id, _) => HubView::new(HubFilter::Profiles, Some(*id)),
+    ProjectPage::Instructions(InstructionsView::Rule(_, rule, _)) => HubView::new(HubFilter::Instructions, *rule),
+    ProjectPage::Instructions(InstructionsView::New(..)) => HubView::adding(HubFilter::Instructions),
+    ProjectPage::NewSkill => HubView::adding(HubFilter::Skills),
+    ProjectPage::Skill(id) => HubView::new(HubFilter::Skills, Some(*id)),
+    ProjectPage::NewTool => HubView::adding(HubFilter::Tools),
+    ProjectPage::Tool(id, _) => HubView::new(HubFilter::Tools, Some(*id)),
+    ProjectPage::Tools => HubView::new(HubFilter::Tools, None),
+    _ => HubView::new(HubFilter::Skills, None),
+  }
+}
+
+/// The team hub at `view` in a team project, else `local`'s page. Whether the project is shared is read with its feed,
+/// so the page waits for that read, and says so when it failed.
+fn team_or(ctx: &mut Ctx, project: &ShownProject, view: HubView, local: impl FnOnce(&mut Ctx) -> Element) -> Element {
+  match project.feed.team.get() {
+    TeamRead::Read(Some(team)) => team_hub::screen(ctx, project, team, view),
+    TeamRead::Read(None) => local(ctx),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
+  }
 }
 
 /// New MCP server: the hub's form in a local project (L4), else the connections' page of its own.

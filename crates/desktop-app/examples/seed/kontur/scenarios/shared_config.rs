@@ -1,11 +1,10 @@
 //! `shared-config` and `shared-config-member`: the `connections` catalogue as the team's configuration of a project
 //! shared on `Acme team` at `orchester.acme.dev/kontur` (`Shared configuration · redesign` `UC5xk`). Every resource is
 //! the team's, each version published by dana-k (the owner) or olha (a member and the server's admin). In
-//! `shared-config` the person is dana-k: Builder has her draft on its latest version (02 `Sflw7`), Planner a version
-//! published here that waits for the server (02b `iLwm9`), and Reviewer a version that met v2, which olha published
-//! from the same base (02c `JZFlA`). In `shared-config-member` the person is ivan, a member, who reads them all (01b
-//! `P8tXS`, 03 `pjEjf`). No server answers: the server is in Settings › Orchester, signed in, with no token in any
-//! keychain.
+//! `shared-config` the person is dana-k, an admin; in `shared-config-member` ivan, a member, who reads them all (01b
+//! `P8tXS`, 03 `pjEjf`). Nothing of the team's waits on this computer: a change is sent to the team server at once
+//! (`docs/design/team-configuration-live.md`). No server answers: the server is in Settings › Orchester, signed in,
+//! with no token in any keychain.
 
 use std::collections::HashMap;
 
@@ -13,10 +12,7 @@ use orchester_core::{
   blob::ContentHash,
   id::{ProjectId, ServerId, UserId},
   project::ProjectKey,
-  resource::{
-    AgentProfile, Draft, Instruction, Pipeline, PromptText, Removal, ResourceBody, ResourceKind, Skill, Tool,
-    VersionNumber,
-  },
+  resource::{AgentProfile, Instruction, Pipeline, Removal, ResourceBody, Skill, Tool, VersionNumber},
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
 };
@@ -36,27 +32,37 @@ struct Team {
   ivan: SharedPerson,
 }
 
-/// As dana-k, the project's owner: her draft, a version waiting for the server and one that met olha's.
+/// As dana-k, the project's owner.
 pub fn admin(kontur: &mut Kontur) -> Result<(), SeedError> {
   let team = shared(kontur, (MemberRole::Owner, Person::Dana))?;
-  admin_states(kontur, &team)
+  share_catalogue(kontur, &team)
+}
+
+/// As dana-k, the project's owner, on a team that holds none of the catalogue: its resources stay this computer's, so
+/// the team holds only what the caller adds (`team-hub`, whose hub lists the team's own resources alone).
+pub fn admin_alone(kontur: &mut Kontur) -> Result<(), SeedError> {
+  shared(kontur, (MemberRole::Owner, Person::Dana)).map(|_| ())
 }
 
 /// As ivan, a member, who reads every resource of the team.
 pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
-  shared(kontur, (MemberRole::Member, Person::Ivan)).map(|_| ())
+  let team = shared(kontur, (MemberRole::Member, Person::Ivan))?;
+  share_catalogue(kontur, &team)
 }
 
-/// As dana-k, the owner, with the catalogue linked to the team server but none of it the team's: what a scenario makes
-/// the team's afterwards is all the team has (`team-hub`).
-pub fn owner_linked(kontur: &mut Kontur) -> Result<(), SeedError> {
-  linked(kontur, (MemberRole::Owner, Person::Dana)).map(|_| ())
-}
-
-/// As ivan, a member, over what `resources` makes of the team's configuration: a member cannot make a team resource,
-/// so it is made while the project is still linked in the owner's role, which is dropped for ivan's afterwards. None of
-/// the catalogue is the team's.
+/// As ivan, a member, over what `resources` makes of the team's configuration, which holds none of the catalogue (as
+/// [`admin_alone`]): a member cannot make a team resource, so it is made while the project is still linked in the
+/// owner's role, which is dropped for ivan's afterwards.
 pub fn member_over(
+  kontur: &mut Kontur,
+  resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
+) -> Result<(), SeedError> {
+  connections::seed(kontur)?;
+  member_over_project(kontur, resources)
+}
+
+/// [`member_over`] on the project as another scenario already seeded it, with its own catalogue and connections.
+pub fn member_over_project(
   kontur: &mut Kontur,
   resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
 ) -> Result<(), SeedError> {
@@ -73,22 +79,15 @@ enum Person {
   Ivan,
 }
 
-/// The catalogue, linked to the team server's project with the person in `role`, every resource the team's.
+/// The catalogue, linked to the team server's project with the person in `role`, none of it the team's yet. Ivan's
+/// computer has no drafts of the team's: the catalogue's are dropped, and a resource never published with them.
 fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
-  let team = linked(kontur, (role, who))?;
-  share::<AgentProfile>(kontur, &team)?;
-  share::<Pipeline>(kontur, &team)?;
-  share::<Instruction>(kontur, &team)?;
-  share::<Skill>(kontur, &team)?;
-  share::<Tool>(kontur, &team)?;
-  Ok(team)
+  connections::seed(kontur)?;
+  linked(kontur, (role, who))
 }
 
-/// The catalogue, linked to the team server's project with the person in `role`, its members and its admin, none of it
-/// the team's yet. Ivan's computer has no drafts of the team's: the catalogue's are dropped, and a resource never
-/// published with them.
+/// The project as it is, linked to the team server's project with the person in `role`.
 fn linked(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
-  connections::seed(kontur)?;
   if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
     drop_drafts::<Instruction>(kontur)?;
@@ -137,6 +136,15 @@ fn linked(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team
   Ok(team)
 }
 
+/// Makes every published resource of the catalogue the team's.
+fn share_catalogue(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
+  share::<AgentProfile>(kontur, team)?;
+  share::<Pipeline>(kontur, team)?;
+  share::<Instruction>(kontur, team)?;
+  share::<Skill>(kontur, team)?;
+  share::<Tool>(kontur, team)
+}
+
 /// `Acme team` in Settings › Orchester, signed in as `me` (dana-k is not the server's admin: the owner changes the
 /// configuration by her role in the project).
 fn server(kontur: &mut Kontur, me: &SharedPerson) -> Result<ServerId, SeedError> {
@@ -162,7 +170,7 @@ fn server(kontur: &mut Kontur, me: &SharedPerson) -> Result<ServerId, SeedError>
 }
 
 /// Marks every resource of `B`'s kind the team's, each version as the server confirmed it, published by dana-k or olha
-/// in turn. Every kept resource: a linked project offers only what is the team's already, which none of them is yet.
+/// in turn.
 fn share<B: ResourceBody + Clone>(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
   let revision = TaskRevision::try_from(1_u64).map_err(invalid)?;
   for (index, resource) in kontur.db.kept_resources(B::KIND)?.into_iter().enumerate() {
@@ -204,70 +212,6 @@ fn drop_drafts<B: ResourceBody + PartialEq>(kontur: &mut Kontur) -> Result<(), S
   Ok(())
 }
 
-/// dana-k's draft on Builder, Planner published here and waiting, and Reviewer's version that met olha's v2.
-fn admin_states(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
-  for resource in kontur.db.resources(ResourceKind::AgentProfile)? {
-    let Some(latest) = kontur.db.latest_version::<AgentProfile>(resource.id())? else {
-      continue;
-    };
-    let id = resource.id();
-    let edited = |text: &str| -> Result<AgentProfile, SeedError> {
-      let body = latest.body();
-      Ok(
-        AgentProfile::new(
-          body.role().clone(),
-          body.responsibilities().to_owned(),
-          PromptText::new(text).map_err(invalid)?,
-          body.connection(),
-          body.model().clone(),
-          body.settings().clone(),
-        )
-        .with_permissions(body.permissions().clone())
-        .with_mcp_servers(body.mcp_servers().clone()),
-      )
-    };
-    match latest.body().role().as_str() {
-      "Builder" => {
-        let draft = Draft::new(
-          edited("Work only inside the task worktree. Keep each commit small.")?,
-          Some(latest.number()),
-          kontur.today_ago(20),
-        );
-        kontur.db.save_draft(id, &draft)?;
-      }
-      "Planner" => {
-        let draft = Draft::new(
-          edited("Plan the change in small steps.")?,
-          Some(latest.number()),
-          kontur.today_ago(40),
-        );
-        kontur.db.save_draft(id, &draft)?;
-        kontur.db.publish_draft::<AgentProfile>(id, kontur.today_ago(30))?;
-      }
-      "Reviewer" => {
-        let draft = Draft::new(
-          edited("Check the change against every criterion.")?,
-          Some(latest.number()),
-          kontur.today_ago(50),
-        );
-        kontur.db.save_draft(id, &draft)?;
-        let mine = kontur.db.publish_draft::<AgentProfile>(id, kontur.today_ago(45))?;
-        let next = VersionNumber::new(latest.number().get().saturating_add(1).try_into().map_err(invalid)?);
-        let theirs = cached(
-          edited("Review the diff, then the criteria.")?,
-          next,
-          &team.olha,
-          kontur.today_ago(48),
-        )?;
-        kontur.db.cache_shared_version(id, &theirs)?;
-        kontur.db.record_publish_conflict(mine.id(), next)?;
-      }
-      _ => {}
-    }
-  }
-  Ok(())
-}
-
 /// `body` as the server confirmed it as version `number`, published by `publisher` at `at`, naming nothing.
 fn cached<B: ResourceBody>(
   body: B,
@@ -283,7 +227,6 @@ fn cached<B: ResourceBody>(
     hash: ContentHash::new(HASH).map_err(invalid)?,
     references: Vec::new(),
     local_body: body,
-    waits_here: false,
   })
 }
 

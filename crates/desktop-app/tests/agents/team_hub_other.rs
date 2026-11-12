@@ -18,8 +18,9 @@ use orchester_core::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
     DatabaseQuery, DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction,
     InstructionScope, ModelId, PromptText, ProviderSettings, RequestTarget, Skill, SkillFile, SkillFilePath,
-    TeamAgentProfile, Tool, ToolAction,
+    TeamAgentProfile, TeamTool, Tool, ToolAction,
   },
+  secret::SecretName,
 };
 use orchester_store::ProjectDb;
 use serde_json::json;
@@ -46,8 +47,8 @@ fn tool(agents: &Agents, name: &str, tool: &Tool) -> ResourceId {
   cached(&mut db, (name, name), serde_json::to_value(tool).expect("json"), tool)
 }
 
-/// An HTTP tool that holds a project secret by id, as every team tool does until it has a team form.
-fn sentry(agents: &Agents) -> ResourceId {
+/// An HTTP tool `sentry-issues` that sends a secret as its bearer token, its publisher's: by an id of their computer.
+fn sentry_tool() -> Tool {
   let request = HttpRequest::new(
     HttpMethod::Get,
     "https://sentry.io/api/0/issues/".into(),
@@ -62,13 +63,30 @@ fn sentry(agents: &Agents) -> ResourceId {
     BTreeMap::new(),
   )
   .expect("request");
-  let body = Tool::new(
+  Tool::new(
     "Issues of the project",
     ToolAction::Http(request),
     Some(policy(ApprovalMode::Never)),
   )
-  .expect("tool");
-  tool(agents, "sentry-issues", &body)
+  .expect("tool")
+}
+
+/// `sentry-issues` published before the team's form: it holds its secret by id.
+fn sentry(agents: &Agents) -> ResourceId {
+  tool(agents, "sentry-issues", &sentry_tool())
+}
+
+/// `sentry-issues` in the team's form, sending the team secret `SENTRY_TOKEN`.
+fn sentry_by_name(agents: &Agents) -> ResourceId {
+  let local = sentry_tool();
+  let team = TeamTool::from_local(&local, |_| Some(SecretName::new("SENTRY_TOKEN").expect("name"))).expect("team");
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  cached(
+    &mut db,
+    ("sentry-issues", "sentry-issues"),
+    serde_json::to_value(&team).expect("json"),
+    &local,
+  )
 }
 
 fn command(agents: &Agents) -> ResourceId {
@@ -143,6 +161,8 @@ fn team_hub_other_a4_an_instruction_shows_its_text_where_it_is_added_and_who_use
   let [skill, rules, ..] = team(&agents);
   let cargo = command(&agents);
   builder(&agents, [rules, skill, cargo]);
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Instructions, (rules, "Project rules"));
   assert_eq!(agents.text("team-hub-panel-title"), "Project rules");
   assert_eq!(agents.text("team-hub-panel-kind"), "Instruction");
@@ -168,8 +188,8 @@ fn team_hub_other_a4_an_instruction_shows_its_text_where_it_is_added_and_who_use
     agents.text("team-hub-nothing-text"),
     "Nothing to fill in on this computer: an instruction is the same everywhere."
   );
-  // The admin changes it from the hub, not on the old editor's page: the head has only the … menu.
-  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  // A member reads it: nothing in the head and no bar.
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu");
   assert!(
     !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
     "no link to the editor's page and nothing pinned"
@@ -202,6 +222,8 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
       cached(&mut db, ("handoff", "Handoff"), json!(handoff), &handoff),
     )
   };
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Instructions, (style, "Rust style"));
   assert_eq!(agents.text("team-hub-from-team-reaches-label"), "Roles");
   assert_eq!(agents.text("team-hub-from-team-reaches-value-0-label"), "Builder");
@@ -224,7 +246,7 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
     !agents.exists("team-hub-chips-end"),
     "nobody uses it and it is not every run's"
   );
-  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu");
   assert!(
     !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
     "no link to the editor's page and nothing pinned"
@@ -251,6 +273,8 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
     cached(&mut db, ("write-tests", "write-tests"), json!(with_file), &with_file)
   };
   builder(&agents, [rules, tests, command(&agents)]);
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Skills, (tests, "write-tests"));
   assert_eq!(agents.text("team-hub-panel-kind"), "Skill");
   assert_eq!(
@@ -283,7 +307,7 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
     agents.text("team-hub-from-team-used-by-value"),
     "No profile uses it yet"
   );
-  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu");
   assert!(
     !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
     "no link to the editor's page and nothing pinned"
@@ -291,7 +315,7 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
 }
 
 #[test]
-fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_it_cannot_be_filled_in_yet() {
+fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_so_without_the_id_and_an_admin_publishes_it_again() {
   let mut agents = Agents::new(true);
   let [skill, rules, ..] = team(&agents);
   let sentry = sentry(&agents);
@@ -314,17 +338,19 @@ fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_it_cannot_be_filled
     agents.text("team-hub-from-team-request-value"),
     "GET https://sentry.io/api/0/issues/"
   );
-  assert!(
-    agents
-      .text("team-hub-from-team-headers-value")
-      .starts_with("Authorization: Bearer ← secret ")
+  assert_eq!(
+    agents.text("team-hub-from-team-headers-value"),
+    "Authorization: Bearer ← a secret named by id"
   );
   assert_eq!(
     agents.text("team-hub-from-team-arguments-value-0-label"),
     "query · query"
   );
   assert_eq!(agents.text("team-hub-from-team-approval-value"), "Yes");
-  assert!(!agents.text("team-hub-from-team-secret-value").is_empty());
+  assert_eq!(
+    agents.text("team-hub-from-team-secret-value"),
+    "Named by id, which this computer can't read"
+  );
   // A long value that has no place to break stays inside its box.
   let (rows, rows_width, _) = bounds(&mut agents, "team-hub-from-team-rows");
   let (headers, headers_width, _) = bounds(&mut agents, "team-hub-from-team-headers-value");
@@ -343,8 +369,48 @@ fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_it_cannot_be_filled
       .starts_with("This tool names its secret by id; it can't be filled in here yet.")
   );
   assert!(!agents.exists("team-hub-fix-add-value") && !agents.exists("team-hub-secret-dialog"));
-  // Nothing it can fix here, and no Edit: no bar.
-  assert!(!agents.exists("team-hub-actions") && !agents.exists("team-hub-action-edit"));
+  // Nothing to fill in here and no Edit; an admin publishes it again by name.
+  assert!(!agents.exists("team-hub-action-edit"));
+  assert_eq!(agents.text("team-hub-tool-republish-label"), "Publish again by name");
+}
+
+#[test]
+fn team_hub_other_a6_m6_a_tool_names_its_secret_by_name_and_a_value_is_added_here() {
+  for member in [false, true] {
+    let mut agents = Agents::new(true);
+    let [skill, rules, ..] = team(&agents);
+    let sentry = sentry_by_name(&agents);
+    builder(&agents, [rules, skill, sentry]);
+    if member {
+      as_member(&agents);
+    }
+    show(&mut agents, HubFilter::Tools, (sentry, "sentry-issues"));
+    assert_eq!(
+      agents.text("team-hub-chip-here-label"),
+      "Secret SENTRY_TOKEN has no value here"
+    );
+    assert_eq!(
+      agents.text("team-hub-from-team-headers-value"),
+      "Authorization: Bearer ← secret SENTRY_TOKEN"
+    );
+    assert_eq!(agents.text("team-hub-from-team-secret-value-0-label"), "SENTRY_TOKEN");
+    assert_eq!(agents.text("team-hub-value-SENTRY_TOKEN-words"), "No value here");
+    assert_eq!(
+      agents.text("team-hub-tool-note-text"),
+      "Not ready here: SENTRY_TOKEN needs a value. Runs whose pipeline uses sentry-issues don't start on this \
+       computer until then."
+    );
+    assert_eq!(agents.text("team-hub-fix-add-value-label"), "Add value");
+    assert!(!agents.exists("team-hub-tool-republish") && !agents.exists("team-hub-action-edit"));
+    assert_eq!(
+      agents.exists("team-hub-member-lock"),
+      member,
+      "only a member reads the lock line"
+    );
+    agents.press_until("team-hub-fix-add-value", "the value's dialog", |s| {
+      s.exists("team-hub-secret-value")
+    });
+  }
 }
 
 #[test]
@@ -374,6 +440,8 @@ fn team_hub_other_a_command_tool_needs_nothing_here() {
   let mut agents = Agents::new(true);
   team(&agents);
   let cargo = command(&agents);
+  // An admin edits it in place (A27–A29); the panel as it reads is a member's.
+  as_member(&agents);
   show(&mut agents, HubFilter::Tools, (cargo, "cargo-check"));
   assert_eq!(agents.text("team-hub-panel-kind"), "Tool · Command");
   assert_eq!(agents.text("team-hub-chip-here-label"), "Ready here");
@@ -418,21 +486,23 @@ fn team_hub_other_a_member_reads_the_panels_with_no_edit_and_no_bar() {
   );
 }
 
-/// Only a panel with something to do here pins a bar, at the bar's height; an instruction's, a skill's and a ready
-/// tool's pin none.
+/// Only a panel with something to do here pins a bar, at the bar's height: an admin's instruction and skill pin Save's
+/// (A27, A28), and a tool that is not a command no Save: an admin's that names its secret by id pins *Publish again by
+/// name*.
 #[test]
 fn team_hub_other_only_a_panel_with_a_fix_pins_its_bar_at_its_height() {
   let mut agents = Agents::new(true);
   let [skill, rules, github, _] = team(&agents);
   let sentry = sentry(&agents);
-  for (filter, resource) in [
-    (HubFilter::Instructions, rules),
-    (HubFilter::Skills, skill),
-    (HubFilter::Tools, sentry),
+  for (filter, resource, saves) in [
+    (HubFilter::Instructions, rules, true),
+    (HubFilter::Skills, skill, true),
+    (HubFilter::Tools, sentry, false),
   ] {
     open(&mut agents, HubView::new(filter, Some(resource)));
     agents.until("the panel", |s| s.exists("team-hub-panel-title"));
-    assert!(!agents.exists("team-hub-actions"), "{filter:?}: nothing pinned");
+    assert!(agents.exists("team-hub-actions"), "{filter:?}");
+    assert_eq!(agents.exists("team-hub-edit-save"), saves, "{filter:?}");
   }
   // Nobody has decided on `github` here: its bar is the fix that switches it on.
   open(&mut agents, HubView::new(HubFilter::McpServers, Some(github)));
@@ -469,4 +539,12 @@ fn team_hub_other_a_tools_keys_are_170_wide_from_the_team_and_on_this_computer()
     (team_key - computer_key).abs() < 0.5,
     "{team_key} against {computer_key}"
   );
+}
+
+/// The person is no longer an admin: they read the team's resources as a member does.
+pub(super) fn as_member(agents: &Agents) {
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .record_sharing_state(None, None, None)
+    .expect("the role");
 }

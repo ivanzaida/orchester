@@ -92,54 +92,38 @@ pub enum State {
   /// of this computer: a start builds its bundle in a schema this computer does not read, so a start fails for good,
   /// releases the claim and the task page says why (ORC-885).
   StartFailed,
+  /// The Agents hub of `team-hub` and its variants as an Admin: the stand-in team server holds every resource of the
+  /// team the seed cached, at the version it cached, so the window reads the team's configuration from it and shows the
+  /// hub's normal states (`docs/design/team-configuration-live.md`).
+  TeamHub,
+  /// As [`Self::TeamHub`], for a member who is not an admin (`team-hub-member` and its variants).
+  TeamHubMember,
+  /// As [`Self::TeamHub`], the team server not answering since the join, so this computer never read the team's
+  /// configuration: the hub says it cannot reach the team server, with *Try again* (`A25` `Zhcif`).
+  TeamHubDown,
   /// An Admin on the Agents hub's team MCP servers, which the stand-in team server holds too (`Agents · MCP server ·
-  /// admin · draft` A13 `WMtxm`, ORC-836): *Edit* a server, type, *Publish for the team* makes its next version. The
+  /// admin · draft` A13 `WMtxm`, ORC-836): *Edit* a server, type, *Save* publishes its next version at once. The
   /// server also holds an MCP server named `figma-local` that this computer has not read, so *New MCP server* with
   /// that name is refused as taken (A15 `dLqHC`).
   TeamEdit,
-  /// As [`Self::TeamEdit`], the server no longer taking this person's writes: *Publish for the team* is refused as
-  /// no longer an admin, and the page turns read-only with the draft kept (A14 `gTLx6`).
+  /// As [`Self::TeamEdit`], the server no longer taking this person's writes: *Save* is refused as no longer an admin,
+  /// in place, and what was typed is kept.
   TeamEditDemoted,
-  /// As [`Self::TeamEdit`], the server not answering: *Publish for the team* waits in the outbox (A16 `x3ywL`).
+  /// As [`Self::TeamEdit`], the server not answering once this computer read it: the hub shows what it read and says it
+  /// cannot reach the team, *Edit* is not offered, and nothing waits to be sent.
   TeamEditOffline,
-  /// As [`Self::TeamEdit`], the server rejecting the content of every version sent: *Publish for the team* says why and
-  /// keeps the draft (A17 `rJbPm`).
+  /// As [`Self::TeamEdit`], the server rejecting the content of every version sent: *Save* says why and keeps what was
+  /// typed (A17 `rJbPm`).
   TeamEditRejects,
-  /// As [`Self::TeamEdit`], after the press of *Publish for the team* the server accepted: v2 is the team's, the draft
-  /// became the version (A13 `WMtxm`'s result). Made without a press.
+  /// As [`Self::TeamEdit`], after a *Save* the server accepted: v2 is the team's (A13 `WMtxm`'s result). Made without a
+  /// press.
   TeamEditPublished,
-  /// As [`Self::TeamEdit`], after a *Publish for the team* the server refused as no longer an admin, and the next read
-  /// made the person a member: the page is read-only with the draft kept (A14 `gTLx6`). Made without a press.
+  /// As [`Self::TeamEdit`], after a *Save* the server refused as no longer an admin, and the next read made the person
+  /// a member: the page is a member's. Made without a press.
   TeamEditRefusedAdmin,
-  /// As [`Self::TeamEdit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the
-  /// outbox with *Cancel sending*, the server still not answering (A16 `x3ywL`). Made without a press.
-  TeamEditWaiting,
-  /// As [`Self::TeamEdit`], after a version that waited for the server and was sent once it answered, and that it
-  /// rejected as not a valid content: the outbox holds it refused, and the panel says why and how to take it back as a
-  /// draft (A17 `rJbPm`, as it stands once the person left the panel). Made without a press.
-  TeamEditRejected,
   /// As [`Self::TeamEdit`], the server `pencil-design` needing a variable, `PENCIL_TOKEN`: the edit form has its
   /// *Variables it needs* row, and the panel the secret to fill in (A13 `WMtxm`).
   TeamEditVariables,
-  /// As [`Self::TeamEdit`], after a new MCP server named `figma-local` that waited for the server and was refused as
-  /// the name being taken once it answered: taken back whole, and the hub says what and why (A15 `dLqHC`, as it stands
-  /// once the person left the form). Made without a press.
-  TeamCreateNameTaken,
-  /// As [`Self::TeamEdit`], with a draft of `pencil-design` kept on v1 and olha's v2 published meanwhile and read here
-  /// (`team-edit-newer`, A18 `bk4i9`): one quiet line says so, with *View changes*. Made without a press.
-  TeamEditNewer,
-  /// As [`Self::TeamEditNewer`], after a *Publish for the team* that the server answered with the conflict (olha's v2
-  /// was there first): the outbox holds the version that met v2, and the page compares v1, v2 and the draft, with the
-  /// arguments both changed (`team-edit-conflicting`, A19 `DV8OI`, and A20 `CAPhQ` once *Discard my draft* is pressed).
-  /// Made without a press.
-  TeamEditConflicting,
-  /// As [`Self::TeamEditConflicting`], with no field both changed, so *Rebase* needs no pick
-  /// (`team-edit-conflict-clean`).
-  TeamEditConflictClean,
-  /// As [`Self::TeamEdit`], olha archived `pencil-design` while the draft was kept, and the *Publish for the team*
-  /// that followed was refused: the draft stays and *Restore* is the way back (`team-edit-archived`, A21 `yqYj9`).
-  /// Made without a press.
-  TeamEditArchived,
   /// As [`Self::StartFailed`], with the server not answering a Run's `work.start` for [`START_ANSWERS_AFTER`] after the
   /// window opens, and then answering as a server a release ahead: the start waits, the project's recovery carries it
   /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
@@ -170,7 +154,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 52] = [
+  pub const ALL: [Self; 48] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -209,14 +193,10 @@ impl State {
     Self::TeamEditRejects,
     Self::TeamEditPublished,
     Self::TeamEditRefusedAdmin,
-    Self::TeamEditWaiting,
-    Self::TeamEditRejected,
     Self::TeamEditVariables,
-    Self::TeamCreateNameTaken,
-    Self::TeamEditNewer,
-    Self::TeamEditConflicting,
-    Self::TeamEditConflictClean,
-    Self::TeamEditArchived,
+    Self::TeamHub,
+    Self::TeamHubMember,
+    Self::TeamHubDown,
     Self::StartRecovered,
     Self::StartWaiting,
     Self::StartRunnerRefused,
@@ -266,14 +246,10 @@ impl State {
       Self::TeamEditRejects => "team-edit-rejects",
       Self::TeamEditPublished => "team-edit-published",
       Self::TeamEditRefusedAdmin => "team-edit-refused-admin",
-      Self::TeamEditWaiting => "team-edit-waiting",
-      Self::TeamEditRejected => "team-edit-rejected",
       Self::TeamEditVariables => "team-edit-variables",
-      Self::TeamCreateNameTaken => "team-create-name-taken",
-      Self::TeamEditNewer => "team-edit-newer",
-      Self::TeamEditConflicting => "team-edit-conflicting",
-      Self::TeamEditConflictClean => "team-edit-conflict-clean",
-      Self::TeamEditArchived => "team-edit-archived",
+      Self::TeamHub => "team-hub",
+      Self::TeamHubMember => "team-hub-member",
+      Self::TeamHubDown => "team-hub-down",
       Self::StartRecovered => "team-start-recovered",
       Self::StartWaiting => "team-start-waiting",
       Self::StartRunnerRefused => "team-start-runner-refused",
@@ -312,30 +288,18 @@ impl State {
         | Self::TeamEditRejects
         | Self::TeamEditPublished
         | Self::TeamEditRefusedAdmin
-        | Self::TeamEditWaiting
-        | Self::TeamEditRejected
         | Self::TeamEditVariables
-        | Self::TeamCreateNameTaken
-        | Self::TeamEditNewer
-        | Self::TeamEditConflicting
-        | Self::TeamEditConflictClean
-        | Self::TeamEditArchived
     )
   }
 
-  /// Whether the person set the program path of `pencil-design` on this computer before the state: its row then says
-  /// only what the outbox says, as the design's rows of A14 `gTLx6`, A16 `x3ywL` and A17 `rJbPm` do.
+  /// Whether the stand-in team server holds every team resource the seed cached, for the hub to read.
+  pub const fn serves_hub(self) -> bool {
+    matches!(self, Self::TeamHub | Self::TeamHubMember)
+  }
+
+  /// Whether the person set the program path of `pencil-design` on this computer before the state.
   pub const fn program_set(self) -> bool {
-    matches!(
-      self,
-      Self::TeamEditRefusedAdmin
-        | Self::TeamEditWaiting
-        | Self::TeamEditRejected
-        | Self::TeamEditNewer
-        | Self::TeamEditConflicting
-        | Self::TeamEditConflictClean
-        | Self::TeamEditArchived
-    )
+    matches!(self, Self::TeamEditRefusedAdmin)
   }
 
   /// Whether the QA copy presses in the window before it shows: *Join with the code* and *Clone repository…* are a

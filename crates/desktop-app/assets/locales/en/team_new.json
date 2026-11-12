@@ -27,11 +27,6 @@
       "fixName": "Fix the name to create it",
       "changeName": "Change the name, then Create again"
     },
-    "waiting": {
-      "title": "Waiting to send · retries when the server is back",
-      "body": "The team server has not answered. This computer keeps the new resource, which the list shows as waiting to send, and sends it when the server answers; until then nothing is published. Cancel closes this form and keeps it waiting.",
-      "cancel": "Cancel sending"
-    },
     "computer": {
       "profile": "Each computer then picks the connection that runs it, asked only when it has several of its CLI kind.",
       "mcpProgram": "Each computer then sets the program's path and the values of its variables. A remote URL needs only the values of its secret headers.",
@@ -41,22 +36,10 @@
       "tool": "Each computer then adds the value of each secret the tool names."
     },
     "profile": {
-      "name": "Name",
-      "nameSub": "Shown in pipelines, runs and approvals",
-      "namePlaceholder": "e.g. Builder",
       "nameTaken": "The team already has an agent profile named {{name}} · pick another name",
-      "responsibility": "Responsibility",
-      "responsibilityPlaceholder": "One line on what this agent is for",
-      "cli": "Agent CLI",
-      "cliSub": "A kind, e.g. Claude Code or Codex; never a connection",
       "cliPlaceholder": "Choose from the catalog",
-      "model": "Model",
       "modelPlaceholder": "From the CLI's list",
-      "effort": "Reasoning effort",
-      "effortDefault": "CLI default",
-      "lists": "Instructions, MCP servers, tools, skills",
-      "listsSub": "Picked from the team's lists",
-      "listsValue": "Not available here yet: a new profile starts with none of them."
+      "effortDefault": "CLI default"
     },
     "mcp": {
       "name": "Name",
@@ -102,11 +85,6 @@
       "nameSub": "Shown where profiles pick instructions",
       "namePlaceholder": "e.g. Project rules",
       "nameTaken": "The team already has an instruction named {{name}} · pick another name",
-      "addedTo": "Added to",
-      "addedToSub": "Every run is the only choice for now: a profile cannot pick instructions yet",
-      "everyRun": "Every run",
-      "text": "Text",
-      "textSub": "Added to the agent's prompt as written",
       "textPlaceholder": "Write the instruction in Markdown…"
     },
     "skill": {
@@ -114,27 +92,14 @@
       "nameSub": "Lowercase with dashes; agents load it by this name",
       "namePlaceholder": "e.g. review-diff",
       "nameTaken": "The team already has a skill named {{name}} · pick another name",
-      "description": "Description",
-      "descriptionPlaceholder": "When agents should use it, in one or two sentences",
-      "files": "Files",
-      "filesSub": "SKILL.md is made from the description. Adding files, importing a folder and choosing the CLIs that load it are not in this form yet"
+      "descriptionPlaceholder": "When agents should use it, in one or two sentences"
     },
     "tool": {
       "name": "Name",
       "nameSub": "Agents call it by this name",
       "namePlaceholder": "e.g. cargo-check",
       "nameTaken": "The team already has a tool named {{name}} · pick another name",
-      "kind": "Kind",
-      "command": "Command",
-      "http": "HTTP request",
-      "database": "Database query",
-      "program": "Program",
-      "programSub": "Found on this computer when you create it",
       "programPlaceholder": "e.g. cargo",
-      "arguments": "Arguments",
-      "argumentsSub": "One per line",
-      "argumentsPlaceholder": "e.g. check",
-      "description": "Description",
       "descriptionPlaceholder": "What the tool does",
       "unavailable": "Not available yet",
       "unavailableValue": "An HTTP request and a database query name secrets by name, which a new tool cannot yet. Create a command.",
@@ -157,6 +122,8 @@
       "failed": {
         "title": "Nothing was created"
       }
-    }
+    },
+    "teamOnly": "A team MCP server is made in a team's project.",
+    "localOnly": "A local MCP server is made in a local project."
   }
 }

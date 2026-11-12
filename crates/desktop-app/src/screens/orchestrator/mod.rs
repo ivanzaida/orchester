@@ -183,8 +183,8 @@ struct View {
   watching: watch::WatchAction,
   /// `/watching` and *Stop watching* in its answer (ORC-775).
   what_i_watch: watching::WhatIWatch,
-  /// The header, which a Leads chip's tooltip hangs under (`leads`).
-  head: ElementRef,
+  /// The header and its free room, which the Leads fit and hang their tooltips and list under (`leads`).
+  head: leads::HeadRefs,
   /// Whether the screen's person-only actions take synthetic input as the person's: in a QA copy only.
   qa_person: QaPerson,
   /// A stall of a run stands in the conversation shown, as it was last read (`data::read`, ORC-894).
@@ -235,7 +235,7 @@ impl Component for OrchestratorScreen {
       export: export::ChatExport::new(ctx),
       watching: watch::watch_action(ctx),
       what_i_watch: watching::WhatIWatch::new(ctx),
-      head: ElementRef::new(),
+      head: leads::HeadRefs::new(),
       qa_person: QaPerson::of(ctx),
       stalled: ctx.signal(false),
     };

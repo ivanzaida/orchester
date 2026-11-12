@@ -54,7 +54,6 @@ fn cached<B>(local_body: B, references: Vec<ReferenceTarget>) -> CachedVersion<B
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references,
     local_body,
-    waits_here: false,
   }
 }
 
@@ -291,58 +290,6 @@ fn shared_configuration_a_team_resource_keeps_its_slug_beside_a_local_one() {
     db.keep_shared_resource(&other, revision(1)),
     Err(StoreError::DuplicateSlug { .. })
   ));
-}
-
-#[test]
-fn shared_configuration_a_waiting_version_is_left_out_of_the_latest_until_it_is_used() {
-  let (_repo, mut db, _run, _execution) = started_run();
-  let id = db
-    .create_resource(
-      Slug::new("review-rules").expect("slug"),
-      name("Review rules"),
-      &instruction("Draft."),
-      at(10),
-    )
-    .expect("create")
-    .id();
-  let number = |value: u32| VersionNumber::new(std::num::NonZeroU32::new(value).expect("above zero"));
-  let version = |value: u32, text: &str, waits_here: bool| CachedVersion {
-    number: number(value),
-    waits_here,
-    ..cached(instruction(text), Vec::new())
-  };
-  let latest = |db: &ProjectDb| {
-    db.latest_version::<Instruction>(id)
-      .expect("latest")
-      .map(|version| version.number().get())
-  };
-  db.cache_shared_version(id, &version(1, "One.", false)).expect("v1");
-  db.cache_shared_version(id, &version(2, "Two.", true)).expect("v2");
-  assert_eq!(latest(&db), Some(1), "runs keep v1 while v2 waits");
-  assert_eq!(db.waiting_version(id).expect("waiting"), Some(number(2)));
-  assert!(
-    db.cached_version::<Instruction>(id, number(2))
-      .expect("read")
-      .expect("cached")
-      .waits_here
-  );
-  assert_eq!(
-    db.versions::<Instruction>(id).expect("versions").len(),
-    2,
-    "both are kept"
-  );
-  assert!(!db.use_shared_version(id, number(1)).expect("v1 did not wait"));
-
-  assert!(db.use_shared_version(id, number(2)).expect("used"));
-  assert_eq!(latest(&db), Some(2));
-  assert_eq!(db.waiting_version(id).expect("waiting"), None);
-  assert!(!db.use_shared_version(id, number(2)).expect("used already"));
-
-  // A later version that applies at once supersedes one that waited.
-  db.cache_shared_version(id, &version(3, "Three.", true)).expect("v3");
-  db.cache_shared_version(id, &version(4, "Four.", false)).expect("v4");
-  assert_eq!(latest(&db), Some(4));
-  assert_eq!(db.waiting_version(id).expect("waiting"), None);
 }
 
 #[test]

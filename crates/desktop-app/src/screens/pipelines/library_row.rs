@@ -45,7 +45,7 @@ pub struct RowProps {
   /// The project's repository, where *Make default* stores the default.
   pub root: std::path::PathBuf,
   pub entry: LibraryEntry,
-  /// The team's configuration while the project is shared: the row shows its publisher (01 `cHvkL`).
+  /// The team's configuration while the project is shared: only an admin changes its pipelines.
   pub team: Option<TeamConfiguration>,
 }
 impl DevtoolsInspectable for RowProps {}
@@ -82,21 +82,12 @@ impl Component for LibraryRow {
     if let Some(error) = make_default.state().get().error {
       row = row.toned_hint(message_text(ctx, &error), HintTone::Danger);
     }
-    // A member of a shared project duplicates none of the team's pipelines.
+    // A member of a shared project duplicates none of the team's pipelines; an admin's Duplicate goes to the team
+    // server.
     if team::may_change(props.team.as_ref()) {
       row = row.end(self.menu(ctx, &props, &make_default));
     }
-    let row = match props
-      .team
-      .as_ref()
-      .and_then(|team| Some((team, team.standing(entry.id)?)))
-    {
-      // A pipeline holds no draft (D-032).
-      Some((team, standing)) => row
-        .end(team::publisher(ctx, &format!("{id}-publisher"), team, standing))
-        .end(team::row_state(ctx, &format!("{id}-state"), standing, None)),
-      None => row.end(state(ctx, entry, &id)),
-    };
+    let row = row.end(state(ctx, entry, &id));
     row.end(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
   }
 }

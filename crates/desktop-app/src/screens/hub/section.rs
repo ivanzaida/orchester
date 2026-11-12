@@ -19,22 +19,32 @@ const SECTION_HEIGHT: f32 = 32.0;
 /// The title row of the group `name` (in element ids, which start with `prefix`), its words' key and the color of its
 /// count.
 pub(crate) fn section(ctx: &Ctx, prefix: &str, (name, key, color): (&str, &str, PaletteColor), count: usize) -> Row {
+  section_row(
+    &format!("{prefix}-section-{name}"),
+    &ctx.t(key),
+    (&count.to_string(), color),
+  )
+}
+
+/// A group's title row in a hub's list (`Section · Waiting` `pODwY` in Y1): `label` in 12/600 `text_secondary` and
+/// `count` in 12 `color`, 8 apart, 32 high and 16 in; `id` names it, `<id>-title` and `<id>-count` its words.
+pub(crate) fn section_row(id: &str, label: &str, (count, color): (&str, PaletteColor)) -> Row {
   Row::new()
-    .id(format!("{prefix}-section-{name}"))
+    .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(SECTION_HEIGHT))
     .padding(Padding::horizontal(SpacingSize::Lg))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
-      Text::new(&ctx.t(key))
-        .id(format!("{prefix}-section-{name}-title"))
+      Text::new(label)
+        .id(format!("{id}-title"))
         .variant(HubText::GroupTitle.role())
         .nowrap(),
     )
     .child(
-      Text::new(&count.to_string())
-        .id(format!("{prefix}-section-{name}-count"))
+      Text::new(count)
+        .id(format!("{id}-count"))
         .variant(HubText::Hint.role())
         .color(color)
         .nowrap(),

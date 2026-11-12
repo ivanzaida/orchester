@@ -23,7 +23,7 @@ use orchester_core::{
   resource::{
     AgentProfile, AgentTargets, CommandAction, CommandArg, CommandProgram, Deliverable, InjectionEvent, Instruction,
     InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Skill, SkillFile,
-    SkillFilePath, Slug, Step, StepKey, StepKind, Tool, Version, VersionNumber,
+    SkillFilePath, Slug, Step, StepKey, StepKind, TeamTool, Tool, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
@@ -127,7 +127,7 @@ fn fixture() -> Fixture {
       .map(|version| (version.id(), ExecutionProfile::of(version.body())))
       .collect::<Vec<_>>(),
     instructions: &instructions.into_values().collect::<Vec<_>>(),
-    tools: &tools.into_values().collect::<Vec<_>>(),
+    tools: &tools.values().map(team_tool).collect::<Vec<_>>(),
     skills: &skills.into_values().collect::<Vec<_>>(),
     mcp_servers: &[],
     labels: &labels,
@@ -501,4 +501,10 @@ fn execution_bundle_wire_shape_checks_a_read_file_and_needs_every_binding() {
     ExecutionBundle::new(start(), inputs, &[]),
     Err(ExecutionBundleError::MissingBinding(builder))
   );
+}
+
+/// `version`, a command of this computer, as the team holds it: a command names no secret, so it is the same tool.
+fn team_tool(version: &Version<Tool>) -> Version<TeamTool> {
+  let team = TeamTool::from_local(version.body(), |_| None).expect("a command names no secret");
+  Version::new(version.id(), version.number(), team, version.published_at())
 }

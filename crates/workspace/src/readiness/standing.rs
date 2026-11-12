@@ -33,9 +33,11 @@ pub enum Undecided {
   ChoosesArchivedLocalMcpServer(ConnectionId, String),
   /// A local profile runs on a connection that is not an agent connection of the project.
   ConnectionGone(ConnectionId),
-  /// A tool of a team project holds a project secret by id. A team names its secrets, so nobody can say whether the
-  /// secret this id stands for has a value on the teammates' computers (ORC-830 puts the tool in the team's form).
-  TeamToolSecretById(SecretId),
+  /// A tool of a team project whose latest version was published before the team's form holds a project secret by
+  /// the id it had on the publisher's computer. A team names its secrets, so nobody can say whether that secret has a
+  /// value on the teammates' computers until an admin publishes the tool again by name. The id is not kept: it is never
+  /// shown or sent.
+  TeamToolSecretById,
   /// A tool of a local project uses a secret the project does not have, or has archived: no value can be set for it.
   SecretGone(SecretId),
   /// The keychain refused to say whether a tool's secret has a value here, or this platform has none.

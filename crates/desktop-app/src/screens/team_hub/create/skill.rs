@@ -1,97 +1,65 @@
-//! The form of a new skill (`Agents · New skill` A11 `p4aSf`): its name, its description and its files. A skill is the
-//! team's whole: nothing is filled in on a computer afterwards. Its SKILL.md is made from the description (the front
-//! matter) over a title; the other files and which CLIs load it are not in this form yet, and it says so rather than
-//! offering what it cannot make.
+//! The form of a new skill (`Agents · New skill` A11 `p4aSf`, L6 `CGdgI`): the skill's fields as its edit has them
+//! ([`SkillFields`]: its name, description, files and SKILL.md), empty. A skill is the team's whole: nothing is filled
+//! in on a computer afterwards. Its reference files and which CLIs load it are not in this form yet.
 
-use lurq::{app::ctx::Ctx, core::Signal};
-use orchester_core::resource::{InstructionScope, Skill};
+use lurq::app::ctx::Ctx;
 
 use super::{
-  fields::{self, Body, Error, Look, Shown, Spec, name_error},
+  fields::{self, Body, Shown, name_error},
   work::Make,
 };
-use crate::screens::team_hub::rows;
+use crate::screens::hub::forms::{Form, Ids, Naming, SkillFields};
 
-const NAME: Spec = Spec::new("skill-name", "team_new.skill.name")
-  .sub("team_new.skill.nameSub")
-  .required();
-const DESCRIPTION: Spec = Spec::new("skill-description", "team_new.skill.description").required();
-const FILES: Spec = Spec::new("skill-files", "team_new.skill.files").sub("team_new.skill.filesSub");
-
-/// The description field is at least 64 high (`Input` in A11 `p4aSf`).
-const DESCRIPTION_AREA: f32 = 64.0;
+/// The ids of the form's parts, which tests and automation address: `team-new-skill-name-input`,
+/// `team-new-skill-description-input`, `team-new-skill-skill-md-input`, …
+const IDS: Ids = Ids {
+  rows: "team-new-skill",
+  sections: "team-new-skill",
+};
 
 pub(super) struct Fields {
-  name: Signal<String>,
-  description: Signal<String>,
+  fields: SkillFields,
 }
 
 impl Fields {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     Self {
-      name: ctx.signal(String::new()),
-      description: ctx.signal(String::new()),
+      fields: SkillFields::new(ctx),
     }
   }
 
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
-    let (name, description) = (self.name.get(), self.description.get());
-    let name_says = name_error(
+    let name = self.fields.name();
+    let taken_key = shown
+      .mode
+      .words("team_new.skill.nameTaken", "local_new.nameTaken.skill");
+    let said = name_error(ctx, shown, &name, taken_key).map(|error| error.words(ctx));
+    let drawn = self.fields.draw(
       ctx,
-      shown,
-      &name,
-      shown
-        .mode
-        .words("team_new.skill.nameTaken", "local_new.nameTaken.skill"),
+      &Form {
+        ids: IDS,
+        base: None,
+        name: Some(Naming {
+          said,
+          first: Some(shown.first),
+        }),
+        tried: shown.tried,
+        locked: shown.locked,
+      },
     );
-    let description_says = (shown.tried && description.trim().is_empty()).then_some(Error::Required);
-    let rows = vec![
-      fields::name_row(
-        ctx,
-        shown,
-        &NAME,
-        name_says.as_ref(),
-        (&self.name, "team_new.skill.namePlaceholder"),
-        Look::Mono,
-      ),
-      fields::text_row(
-        ctx,
-        &DESCRIPTION,
-        description_says.as_ref(),
-        (&self.description, "team_new.skill.descriptionPlaceholder"),
-        (Look::Area(DESCRIPTION_AREA), shown.locked),
-      ),
-      fields::row(
-        ctx,
-        &FILES,
-        None,
-        rows::tags("team-new-skill-files-value", ["SKILL.md".to_owned()]),
-      ),
-    ];
+    let make = drawn
+      .made
+      .ok()
+      .filter(|_| !name.trim().is_empty())
+      .map(|skill| Make::Skill(name.trim().to_owned(), Box::new(skill)));
     Body {
-      rows,
+      lead: None,
+      rows: drawn.name.into_iter().chain(drawn.rows).collect(),
+      after: drawn.sections,
       computer: Some("team_new.computer.skill"),
-      make: made(&name, &description),
+      make,
       off: fields::off(shown, &name),
       overlay: None,
     }
   }
-}
-
-/// The skill the fields make: the description is the skill's own and goes to the front matter of its SKILL.md, whose
-/// Markdown starts as a title over the skill's name (a skill cannot be published with a blank one), and it has no
-/// other file.
-fn made(name: &str, description: &str) -> Option<Make> {
-  if name.trim().is_empty() || description.trim().is_empty() {
-    return None;
-  }
-  let skill = Skill::new(
-    description.trim().to_owned(),
-    format!("# {}\n", name.trim()),
-    Vec::new(),
-    InstructionScope::Project,
-  )
-  // With no files, the only way a skill is refused (a file listed twice) cannot happen.
-  .ok()?;
-  Some(Make::Skill(name.trim().to_owned(), Box::new(skill)))
 }

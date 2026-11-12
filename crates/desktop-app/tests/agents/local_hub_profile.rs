@@ -1,10 +1,12 @@
-//! A local profile's panel edits in place (`Agents · Profile` L1, ORC-842): the CLI, the model, the reasoning effort
-//! and the MCP servers are selects, each choice saves the profile's draft, and the panel then says so, publishes it or
-//! discards it. `cargo test -p orchester-app --test agents local_hub_profile`.
+//! A local profile's panel edits in place (`Agents · Profile` L1, ORC-842): the CLI, the connection, the model, the
+//! reasoning effort and the MCP servers are chosen in the panel, each choice changes only what the panel holds, *Save*
+//! publishes it as the next version at once (asking first, of a person only, when it widens what its agents may do)
+//! and *Cancel* puts the published version back. The panel has no drafts: a draft stored of the profile is neither
+//! shown nor touched until *Save* replaces it. `cargo test -p orchester-app --test agents local_hub_profile`.
 
 use std::{thread, time::Duration};
 
-use lurq::app::events::{MouseButton, with_synthetic_input};
+use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{HubFilter, HubView};
 use orchester_core::{
   connection::{
@@ -27,45 +29,66 @@ use orchester_workspace::agents::{
 use super::{
   harness::{Agents, changed},
   local_hub::{builder_without_connection, open, server},
-  support::link_press::{Presser, press_control},
+  local_hub_create::choose,
 };
+
+const SAVE: &str = "local-hub-profile-save";
+const CANCEL: &str = "local-hub-profile-cancel";
+/// The question a save that widens asks, and its answers.
+const ALLOW: &str = "local-hub-profile-confirm-confirm";
+const KEEP: &str = "local-hub-profile-confirm-keep";
 
 /// Opens the hub on Profiles with `profile` in the panel.
 fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-effort-pick"));
+  agents.until("the panel", |s| s.exists("local-hub-profile-effort"));
 }
 
-/// Chooses the option `label` of the select `id`, as a person's press on it would.
-fn choose(agents: &mut Agents, id: &str, label: &str) {
-  let mut select = agents
-    .window
-    .tree
-    .get_element_by_id_mut(id)
-    .and_then(|element| element.as_select())
-    .unwrap_or_else(|| panic!("{id} is a select"));
-  let index = select
-    .labels()
-    .iter()
-    .position(|option| &**option == label)
-    .unwrap_or_else(|| panic!("an option {label}"));
-  select.commit(index);
-  agents.window.pass();
+/// Whether the hub's row of `profile` says the panel holds a change.
+fn holds_a_change(agents: &mut Agents, profile: ResourceId) -> bool {
+  agents
+    .text(&format!("local-hub-row-{profile}-line"))
+    .contains("Unsaved")
+}
+
+fn stored(agents: &Agents, profile: ResourceId) -> (AgentProfile, VersionState) {
+  let entry = agents.listed().profile(profile).expect("profile").clone();
+  (entry.profile, entry.state)
 }
 
 fn effort(agents: &Agents, profile: ResourceId) -> Option<String> {
-  stored_effort(&agents.listed().profile(profile).expect("profile").profile)
+  stored_effort(&stored(agents, profile).0)
+}
+
+fn v2() -> VersionState {
+  VersionState::Published(VersionNumber::FIRST.next().expect("v2"))
+}
+
+/// Presses *Save* once, as a person does, and waits until `done`: another press while a question is asked would ask
+/// it again.
+fn save(agents: &mut Agents, what: &str, done: impl FnMut(&mut Agents) -> bool) {
+  agents.click(SAVE);
+  agents.until(what, done);
+}
+
+/// Lets the window run a while, as it does between a person's presses.
+fn passes(agents: &mut Agents) {
+  for _ in 0..20 {
+    agents.until("a pass", |_| true);
+    thread::sleep(Duration::from_millis(5));
+  }
 }
 
 #[test]
-fn local_hub_profile_a_changed_field_is_a_draft_that_publishes_as_the_next_version() {
+fn local_hub_profile_a_changed_field_is_held_until_save_publishes_it_as_the_next_version() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
   for part in [
-    "local-hub-profile-cli-pick",
-    "local-hub-profile-model-pick",
-    "local-hub-profile-effort-pick",
+    "local-hub-profile-cli",
+    "local-hub-profile-connection",
+    "local-hub-profile-model",
+    "local-hub-profile-effort",
   ] {
     assert!(agents.exists(part), "{part} is in the panel");
   }
@@ -75,115 +98,107 @@ fn local_hub_profile_a_changed_field_is_a_draft_that_publishes_as_the_next_versi
       "{link}: no link to the editor's page, the fields are in place"
     );
   }
-  assert!(!agents.exists("local-hub-profile-draft"), "no draft before a change");
 
-  choose(&mut agents, "local-hub-profile-effort-pick", "High");
+  choose(&mut agents, "local-hub-profile-effort", "High");
 
-  agents.until("the draft", |s| s.exists("local-hub-profile-draft"));
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
+  assert_eq!(effort(&agents, profile), None, "nothing is stored before Save");
+  assert!(!stored(&agents, profile).1.has_draft(), "and no draft is made");
+  assert!(agents.text("team-hub-actions-hint").contains("Save makes v2"));
+  save(&mut agents, "published", |s| stored(s, profile).1 == v2());
   assert_eq!(effort(&agents, profile).as_deref(), Some("high"));
-  assert!(agents.listed().profile(profile).expect("profile").state.has_draft());
-  assert!(agents.text("local-hub-profile-draft-status").contains("Draft on v1"));
-  assert_eq!(agents.text("local-hub-profile-publish"), "Publish v2");
-  assert!(agents.exists("local-hub-profile-discard"));
-
-  agents.click("local-hub-profile-publish");
-  agents.until("published", |s| {
-    s.listed().profile(profile).expect("profile").state
-      == VersionState::Published(VersionNumber::FIRST.next().expect("v2"))
-  });
-  agents.until("no draft", |s| !s.exists("local-hub-profile-draft"));
-  assert_eq!(effort(&agents, profile).as_deref(), Some("high"));
+  agents.until("nothing is held", |s| !holds_a_change(s, profile));
 }
 
 #[test]
-fn local_hub_profile_discarding_the_draft_asks_first_and_puts_the_version_back() {
+fn local_hub_profile_cancel_puts_the_published_version_back_and_stores_nothing() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
-  agents.until("the draft", |s| s.exists("local-hub-profile-discard"));
+  choose(&mut agents, "local-hub-profile-effort", "Low");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
 
-  agents.click("local-hub-profile-discard");
-  agents.until("the question", |s| s.exists("hub-discard-confirm"));
-  assert_eq!(
-    effort(&agents, profile).as_deref(),
-    Some("low"),
-    "nothing is lost while it asks"
-  );
-  agents.click("hub-discard-confirm");
+  agents.click(CANCEL);
 
-  agents.until("the version again", |s| {
-    !s.exists("local-hub-profile-draft") && !s.exists("hub-discard-confirm")
-  });
+  agents.until("the version again", |s| !holds_a_change(s, profile));
   assert_eq!(effort(&agents, profile), None);
-  assert!(!agents.listed().profile(profile).expect("profile").state.has_draft());
+  assert_eq!(
+    stored(&agents, profile).1,
+    VersionState::Published(VersionNumber::FIRST)
+  );
+  assert!(!stored(&agents, profile).1.has_draft());
+}
+
+/// Holds `docs` among the MCP servers `profile` chooses, as a person's choice in *Add* would.
+fn add_server(agents: &mut Agents, profile: ResourceId, docs: ConnectionId) {
+  // The menu opens under a pointer's press, as a person's.
+  // The row is under *Role*: the window is tall enough to show it, so the pointer's press lands on its *Add*.
+  agents.window.tree.resize(1440, 2400);
+  agents.until("a pass", |_| true);
+  agents.window.press("local-hub-profile-add-server-button");
+  let item = format!("local-hub-profile-server-{docs}");
+  agents.until("the menu", |s| s.exists(&item));
+  agents.window.press(&item);
+  agents.until("the panel holds it", |s| {
+    holds_a_change(s, profile) && s.exists("local-hub-profile-mcp-value-0")
+  });
+}
+
+fn chooses(agents: &Agents, profile: ResourceId, docs: ConnectionId) -> bool {
+  stored(agents, profile).0.mcp_servers().contains(docs)
 }
 
 #[test]
-fn local_hub_profile_choosing_a_server_asks_first_and_only_a_press_allows_it() {
+fn local_hub_profile_saving_a_chosen_server_asks_first_and_only_a_press_allows_it() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   let docs = server(&agents, "docs");
   show(&mut agents, profile);
-  agents.click("local-hub-profile-add-server-button");
-  agents.until("the menu", |s| s.exists(&format!("local-hub-profile-server-{docs}")));
-
-  agents.click(&format!("local-hub-profile-server-{docs}"));
-
-  agents.until("the question", |s| s.exists("local-hub-profile-confirm-confirm"));
-  assert!(
-    agents
-      .listed()
-      .profile(profile)
-      .expect("profile")
-      .profile
-      .mcp_servers()
-      .is_empty(),
-    "nothing saved before the answer"
-  );
-  assert!(!agents.exists("local-hub-profile-draft"));
-  // Its confirm takes no press before the question has been drawn once.
-  agents.press_until("local-hub-profile-confirm-confirm", "the draft chooses it", |s| {
-    s.listed()
-      .profile(profile)
-      .expect("profile")
-      .profile
-      .mcp_servers()
-      .contains(docs)
-  });
-  agents.until("the panel says so", |s| s.exists("local-hub-profile-draft"));
+  add_server(&mut agents, profile, docs);
   assert!(agents.text("local-hub-profile-mcp-value-0").contains("docs"));
+  assert!(!agents.exists(ALLOW), "a choice asks nothing: Save does");
+
+  save(&mut agents, "the question", |s| s.exists(ALLOW));
+
+  assert!(!chooses(&agents, profile, docs), "nothing saved before the answer");
+  // Its confirm takes no press before the question has been drawn once.
+  agents.press_until(ALLOW, "published", |s| stored(s, profile).1 == v2());
+  assert!(chooses(&agents, profile, docs), "v2 chooses it");
 }
 
 #[test]
-fn local_hub_profile_a_draft_replaces_the_pinned_fix_with_publish_and_discard() {
+fn local_hub_profile_keep_editing_leaves_the_change_held_and_stores_nothing() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
+  let docs = server(&agents, "docs");
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "High");
-  agents.until("the draft", |s| s.exists("local-hub-profile-draft"));
+  add_server(&mut agents, profile, docs);
+  save(&mut agents, "the question", |s| s.exists(KEEP));
 
-  assert!(
-    !agents.exists("local-hub-fix-use"),
-    "the pinned bar is the draft's: Publish and Discard"
-  );
-  assert!(agents.exists("local-hub-profile-publish"));
+  agents.press_until(KEEP, "the question is gone", |s| !s.exists(KEEP));
+
+  assert!(!chooses(&agents, profile, docs), "nothing stored");
+  assert!(holds_a_change(&mut agents, profile), "the change is still the panel's");
+  assert!(agents.text("local-hub-profile-mcp-value-0").contains("docs"));
+  save(&mut agents, "Save asks again", |s| s.exists(ALLOW));
 }
 
 #[test]
-fn local_hub_profile_a_list_row_ends_in_its_version_under_a_kinds_filter_only() {
+fn local_hub_profile_a_held_change_replaces_the_pinned_fix_with_save_and_cancel() {
   let mut agents = Agents::new(true);
-  let profile = agents.profile(true);
-  show(&mut agents, profile);
-  let version = format!("local-hub-row-{profile}-version");
-  assert_eq!(agents.text(&version), "v1");
+  let (profile, [_, home]) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
+  assert!(!agents.exists(SAVE), "while nothing is changed the bar is the fix's");
 
-  open(&mut agents, HubView::new(HubFilter::All, Some(profile)));
-  agents.until("the row", |s| s.exists(&format!("local-hub-row-{profile}")));
-  assert!(
-    !agents.exists(&version),
-    "under All the row ends in its kind's tag instead"
-  );
+  choose(&mut agents, "local-hub-profile-connection", "Claude Code · Home");
+
+  agents.until("the bar is Save's and Cancel's", |s| {
+    !s.exists("local-hub-fix-use") && s.exists(SAVE) && s.exists(CANCEL)
+  });
+  assert_ne!(stored(&agents, profile).0.connection(), home, "a choice stores nothing");
+  agents.click(CANCEL);
+  agents.until("the fix again", |s| s.exists("local-hub-fix-use"));
 }
 
 /// Changes the stored draft as another window or the profile's editor would, after the panel showed it.
@@ -194,99 +209,63 @@ fn change_elsewhere(agents: &Agents, profile: ResourceId, effort: &str) {
 }
 
 #[test]
-fn local_hub_profile_discard_keep_editing_leaves_the_draft() {
+fn local_hub_profile_cancel_leaves_a_draft_stored_meanwhile_alone() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
-  agents.until("the draft", |s| s.exists("local-hub-profile-discard"));
-  agents.click("local-hub-profile-discard");
-  agents.until("the question", |s| s.exists("hub-discard-keep"));
-
-  agents.click("hub-discard-keep");
-
-  agents.until("the question is gone", |s| !s.exists("hub-discard-keep"));
-  assert_eq!(effort(&agents, profile).as_deref(), Some("low"));
-  assert!(
-    agents.exists("local-hub-profile-draft"),
-    "the draft is still the panel's"
-  );
-}
-
-#[test]
-fn local_hub_profile_discard_refuses_a_draft_that_is_not_the_one_it_showed() {
-  let mut agents = Agents::new(true);
-  let profile = agents.profile(true);
-  show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
-  agents.until("the draft", |s| s.exists("local-hub-profile-discard"));
-  agents.click("local-hub-profile-discard");
-  agents.until("the question", |s| s.exists("hub-discard-confirm"));
-
+  choose(&mut agents, "local-hub-profile-effort", "Low");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
   change_elsewhere(&agents, profile, "high");
-  agents.click("hub-discard-confirm");
 
-  agents.until("it says why", |s| s.exists("hub-discard-failure"));
-  assert!(agents.text("hub-discard-failure").contains("changed since it was read"));
+  agents.click(CANCEL);
+
+  agents.until("the version again", |s| !holds_a_change(s, profile));
+  passes(&mut agents);
   assert_eq!(
     effort(&agents, profile).as_deref(),
     Some("high"),
-    "the draft that moved is kept"
+    "the draft stored elsewhere is kept"
   );
-  assert!(agents.listed().profile(profile).expect("profile").state.has_draft());
+  assert!(stored(&agents, profile).1.has_draft());
 }
 
 #[test]
-fn local_hub_profile_publish_refuses_a_draft_that_is_not_the_one_it_showed() {
+fn local_hub_profile_save_publishes_what_the_panel_holds_over_a_draft_stored_meanwhile() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "Low");
-  agents.until("the draft", |s| s.exists("local-hub-profile-publish"));
-
+  choose(&mut agents, "local-hub-profile-effort", "Low");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
   change_elsewhere(&agents, profile, "high");
-  agents.click("local-hub-profile-publish");
 
-  agents.until("it says why", |s| s.exists("local-hub-profile-error"));
-  assert!(
-    agents
-      .text("local-hub-profile-error")
-      .contains("changed since it was read")
-  );
-  let stored = agents.listed().profile(profile).expect("profile").clone();
-  assert!(
-    matches!(stored.state, VersionState::Draft { .. }),
-    "nothing was published: {:?}",
-    stored.state
-  );
+  save(&mut agents, "published", |s| stored(s, profile).1 == v2());
+
+  assert_eq!(effort(&agents, profile).as_deref(), Some("low"), "what the panel held");
+  assert!(!stored(&agents, profile).1.has_draft(), "Save replaces the draft");
 }
 
 #[test]
-fn local_hub_profile_publish_of_a_draft_that_changes_the_prompts_is_left_to_the_editor() {
+fn local_hub_profile_save_never_publishes_the_prompts_of_a_draft_it_did_not_show() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
-  let body = changed(&agents.listed().profile(profile).expect("profile").profile);
+  let published = stored(&agents, profile).0;
+  let body = changed(&published);
   let mut db = ProjectDb::open(&agents.root).expect("database");
   data::save_draft(&mut db, profile, body, Timestamp::now()).expect("a draft that tells its agents more");
+  drop(db);
   show(&mut agents, profile);
-  agents.until("the draft", |s| s.exists("local-hub-profile-publish"));
+  choose(&mut agents, "local-hub-profile-effort", "High");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
 
-  agents.click("local-hub-profile-publish");
+  save(&mut agents, "published", |s| stored(s, profile).1 == v2());
 
-  agents.until("it says where to publish", |s| s.exists("local-hub-profile-error"));
-  assert!(
-    agents.text("local-hub-profile-error").contains("More settings"),
-    "{}",
-    agents.text("local-hub-profile-error")
+  let (now, _) = stored(&agents, profile);
+  assert_eq!(
+    now.instructions(),
+    published.instructions(),
+    "the draft's prompts are not published"
   );
-  assert!(
-    matches!(
-      agents.listed().profile(profile).expect("profile").state,
-      VersionState::Draft { .. }
-    ),
-    "the press published nothing"
-  );
-  assert!(agents.exists("local-hub-profile-publish"), "the draft is still there");
+  assert_eq!(stored_effort(&now).as_deref(), Some("high"));
 }
 
 /// A Claude Code connection whose last check found `claude-a` (with two efforts) and `claude-b`.
@@ -352,24 +331,22 @@ fn builder_on_claude(agents: &Agents, connection: ConnectionId) -> ResourceId {
 }
 
 #[test]
-fn local_hub_profile_the_model_select_changes_the_draft_and_starts_at_the_default_effort() {
+fn local_hub_profile_another_model_starts_at_the_default_effort() {
   let mut agents = Agents::new(true);
   let profile = builder_on_claude(&agents, claude(&agents));
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort-pick", "High");
-  agents.until("the draft", |s| s.exists("local-hub-profile-draft"));
+  choose(&mut agents, "local-hub-profile-effort", "High");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
 
-  choose(&mut agents, "local-hub-profile-model-pick", "claude-b");
+  choose(&mut agents, "local-hub-profile-model", "claude-b");
+  save(&mut agents, "published", |s| stored(s, profile).1 == v2());
 
-  agents.until("the model is the draft's", |s| {
-    s.listed().profile(profile).expect("profile").profile.model().as_str() == "claude-b"
-  });
+  assert_eq!(stored(&agents, profile).0.model().as_str(), "claude-b");
   assert_eq!(
     effort(&agents, profile),
     None,
     "a new model starts at the CLI's default"
   );
-  assert_eq!(agents.text("local-hub-profile-publish"), "Publish v2");
 }
 
 #[test]
@@ -378,159 +355,149 @@ fn local_hub_profile_the_cli_select_runs_it_on_the_other_clis_connection() {
   let connection = claude(&agents);
   let profile = builder_on_claude(&agents, connection);
   show(&mut agents, profile);
-  agents.until("two CLIs to choose", |s| s.exists("local-hub-profile-cli-pick"));
 
-  choose(&mut agents, "local-hub-profile-cli-pick", "Codex");
-  // What Codex can enforce differs from Claude Code's, so the change may ask before it is saved: only a press answers.
-  agents.until("the draft or its question", |s| {
-    s.exists("local-hub-profile-draft") || s.exists("local-hub-profile-confirm-confirm")
+  choose(&mut agents, "local-hub-profile-cli", "Codex");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
+  // What Codex can enforce differs from Claude Code's, so the save may ask first: only a press answers.
+  save(&mut agents, "published or its question", |s| {
+    stored(s, profile).1 == v2() || s.exists(ALLOW)
   });
-  if agents.exists("local-hub-profile-confirm-confirm") {
-    agents.press_until("local-hub-profile-confirm-confirm", "the draft", |s| {
-      s.exists("local-hub-profile-draft")
-    });
+  if agents.exists(ALLOW) {
+    agents.press_until(ALLOW, "published", |s| stored(s, profile).1 == v2());
   }
 
-  let stored = agents.listed().profile(profile).expect("profile").profile.clone();
-  assert_ne!(stored.connection(), connection, "it runs on the Codex connection now");
-  assert_eq!(
-    stored.model().as_str(),
-    "test-model",
-    "on that connection's first model"
-  );
+  let (body, _) = stored(&agents, profile);
+  assert_ne!(body.connection(), connection, "it runs on the Codex connection now");
+  assert_eq!(body.model().as_str(), "test-model", "on that connection's first model");
 }
 
 #[test]
-fn local_hub_profile_the_connection_select_says_to_publish_or_discard_first_while_a_draft_exists() {
+fn local_hub_profile_the_connection_row_offers_each_of_its_kind_with_add() {
   let mut agents = Agents::new(true);
   let (profile, _) = builder_without_connection(&agents);
-  let body = changed(&agents.listed().profile(profile).expect("profile").profile);
-  let mut db = ProjectDb::open(&agents.root).expect("database");
-  data::save_draft(&mut db, profile, body, Timestamp::now()).expect("a draft");
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-pick"));
+  agents.until("the panel", |s| s.exists("local-hub-profile-connection"));
 
   assert!(
     agents
-      .text("local-hub-profile-connection")
-      .contains("Publish or discard"),
+      .text("local-hub-profile-connection-row")
+      .contains("2 of its kind on this computer"),
     "{}",
-    agents.text("local-hub-profile-connection")
+    agents.text("local-hub-profile-connection-row")
   );
-  assert!(
-    !agents.exists("local-hub-fix-use"),
-    "the draft's bar replaces the connection fix"
-  );
+  let options: Vec<String> = agents
+    .window
+    .tree
+    .get_element_by_id_mut("local-hub-profile-connection")
+    .and_then(|element| element.as_select())
+    .expect("a select")
+    .labels()
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+  assert_eq!(options, ["Claude Code · Claude 2", "Claude Code · Home"]);
+  assert!(agents.exists("local-hub-profile-add-connection"));
 }
 
 #[test]
-fn local_hub_profile_automation_cannot_answer_allow_or_take_an_account_for_a_profile() {
+fn local_hub_profile_automation_cannot_answer_allow_for_a_profile() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   let docs = server(&agents, "docs");
   show(&mut agents, profile);
-  agents.click("local-hub-profile-add-server-button");
-  agents.until("the menu", |s| s.exists(&format!("local-hub-profile-server-{docs}")));
-  agents.click(&format!("local-hub-profile-server-{docs}"));
-  agents.until("the question", |s| s.exists("local-hub-profile-confirm-confirm"));
+  add_server(&mut agents, profile, docs);
+  save(&mut agents, "the question", |s| s.exists(ALLOW));
   // The confirm takes no press before the question lived through a pass: press it as a client would, until it answers.
   agents.until("the refusal", |s| {
-    with_synthetic_input(|| s.click("local-hub-profile-confirm-confirm"));
+    with_synthetic_input(|| s.click(ALLOW));
     s.exists("local-hub-profile-confirm-person-only")
   });
-  for _ in 0..20 {
-    agents.until("a pass", |_| true);
-    thread::sleep(Duration::from_millis(5));
-  }
+  passes(&mut agents);
 
-  assert!(
-    agents
-      .listed()
-      .profile(profile)
-      .expect("profile")
-      .profile
-      .mcp_servers()
-      .is_empty(),
-    "automation allowed nothing"
-  );
-  assert!(agents.exists("local-hub-profile-confirm-confirm"), "it still asks");
+  assert!(!chooses(&agents, profile, docs), "automation allowed nothing");
+  assert!(agents.exists(ALLOW), "it still asks");
   assert!(
     agents
       .text("local-hub-profile-confirm-person-only")
       .starts_with("Only a person does this here"),
     "the refusal is said under the question"
   );
-  agents.press_until("local-hub-profile-confirm-confirm", "a person allows it", |s| {
-    s.listed()
-      .profile(profile)
-      .expect("profile")
-      .profile
-      .mcp_servers()
-      .contains(docs)
-  });
+  agents.press_until(ALLOW, "a person allows it", |s| chooses(s, profile, docs));
 }
 
 #[test]
-fn local_hub_profile_automation_cannot_take_an_account_for_a_profile_that_lost_its_own() {
+fn local_hub_profile_use_holds_the_connection_and_only_save_stores_it() {
   let mut agents = Agents::new(true);
   let (profile, [claude_2, home]) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
+  assert!(
+    agents.text("local-hub-fix-use").contains("Claude 2"),
+    "the first of its kind"
+  );
+
+  with_synthetic_input(|| agents.click("local-hub-fix-use"));
+
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
+  let connection = stored(&agents, profile).0.connection();
+  assert!(connection != claude_2 && connection != home, "Use stores nothing");
+  save(&mut agents, "published on Claude 2", |s| {
+    stored(s, profile).0.connection() == claude_2
+  });
+}
+
+/// Choosing the connection a profile runs on is open to automation (the person's decision of 2026-11-11): an MCP
+/// client's *Use* and *Save* publish it, as a person's do, when it moves to no other account.
+#[test]
+fn local_hub_profile_automation_uses_and_saves_a_connection() {
+  let mut agents = Agents::new(true);
+  let (profile, [claude_2, _]) = builder_without_connection(&agents);
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   agents.until("the fix", |s| s.exists("local-hub-fix-use"));
 
   with_synthetic_input(|| agents.click("local-hub-fix-use"));
-  for _ in 0..20 {
-    agents.until("a pass", |_| true);
-    thread::sleep(Duration::from_millis(5));
-  }
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
+  with_synthetic_input(|| agents.click(SAVE));
 
-  let connection = agents.listed().profile(profile).expect("profile").profile.connection();
-  assert!(
-    connection != claude_2 && connection != home,
-    "automation chose no account for it"
-  );
-  assert!(
-    agents
-      .text("local-hub-fix-use-person-only")
-      .starts_with("Only a person does this here"),
-    "the refused press says why in the panel"
-  );
-  agents.press_until("local-hub-fix-use", "a person's press takes it", |s| {
-    s.listed()
-      .profile(profile)
-      .is_some_and(|entry| entry.profile.connection() == claude_2)
+  agents.until("published on Claude 2", |s| {
+    stored(s, profile).0.connection() == claude_2
+  });
+  assert!(!agents.exists(ALLOW), "nothing to ask: no other account");
+}
+
+#[test]
+fn local_hub_profile_choosing_a_connection_in_the_select_and_saving_runs_it_there() {
+  let mut agents = Agents::new(true);
+  let (profile, [_, home]) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
+
+  choose(&mut agents, "local-hub-profile-connection", "Claude Code · Home");
+  agents.until("the panel holds it", |s| holds_a_change(s, profile));
+  assert_ne!(stored(&agents, profile).0.connection(), home, "a choice stores nothing");
+
+  save(&mut agents, "published on Home", |s| {
+    stored(s, profile).0.connection() == home
+  });
+  agents.until("ready on it", |s| {
+    !s.exists("local-hub-fix-use") && !holds_a_change(s, profile)
   });
 }
 
 #[test]
-fn local_hub_profile_a_persons_pointer_press_takes_the_account_and_choosing_in_the_select_changes_nothing() {
+fn local_hub_profile_a_list_row_ends_in_its_version_under_a_kinds_filter_only() {
   let mut agents = Agents::new(true);
-  let (profile, [claude_2, home]) = builder_without_connection(&agents);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
+  let profile = agents.profile(true);
+  show(&mut agents, profile);
+  let version = format!("local-hub-row-{profile}-version");
+  assert_eq!(agents.text(&version), "v1");
 
-  choose(&mut agents, "local-hub-profile-pick", "Claude Code · Home");
-  agents.until("the bar names the choice", |s| {
-    s.text("local-hub-fix-use").contains("Home")
-  });
-  let stored = agents.listed().profile(profile).expect("profile").profile.connection();
+  open(&mut agents, HubView::new(HubFilter::All, Some(profile)));
+  agents.until("the row", |s| s.exists(&format!("local-hub-row-{profile}")));
   assert!(
-    stored != claude_2 && stored != home,
-    "a choice in the select stores nothing"
+    !agents.exists(&version),
+    "under All the row ends in its kind's tag instead"
   );
-  assert!(!agents.exists("local-hub-fix-use-person-only"));
-
-  press_control(
-    &mut agents.window,
-    "local-hub-fix-use",
-    (Presser::Person, MouseButton::Left),
-    (false, false),
-  );
-  agents.until("a person's pointer takes it", |s| {
-    s.listed()
-      .profile(profile)
-      .is_some_and(|entry| entry.profile.connection() == home)
-  });
-  assert!(!agents.exists("local-hub-fix-use-person-only"));
 }
 
 /// A profile on a connection whose CLI is signed out is not ready (ORC-848 D11): *Ready?* says so and the pinned fix is

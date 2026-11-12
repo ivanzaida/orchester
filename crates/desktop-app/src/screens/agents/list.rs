@@ -1,23 +1,20 @@
 //! The hub head of a profile's page: New agent at its right. The project's profiles are listed by the
 //! Agents page (`screens::local_hub`).
 use lurq::app::ctx::Ctx;
-use orchester_workspace::{agents::data::ProjectAgents, sharing::team::TeamConfiguration};
+use orchester_workspace::agents::data::ProjectAgents;
 
 use super::{AgentsNav, Shown};
 use crate::{
   routes::AgentTab,
-  screens::hub::{Head, team},
+  screens::hub::Head,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
   },
 };
 
-/// New agent, at the hub head's right; none for a member of a shared project.
-pub(super) fn head(ctx: &Ctx, (listed, team): (&ProjectAgents, Option<&TeamConfiguration>), nav: &AgentsNav) -> Head {
-  if !team::may_change(team) {
-    return Head::default();
-  }
+/// New agent, at the hub head's right.
+pub(super) fn head(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Head {
   Head::actions([new_button(ctx, "agents-new", ButtonKind::Primary, listed, nav).into()])
 }
 

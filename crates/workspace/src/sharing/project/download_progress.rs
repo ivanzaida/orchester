@@ -156,11 +156,10 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::ProjectChanged
       | SharingError::AccountProject
       | SharingError::NotAdmin
-      | SharingError::VersionConflict { .. }
-      | SharingError::PersonOnly
       | SharingError::LocalEntitiesNamed { .. }
       | SharingError::PipelineNamesNonTeam { .. }
       | SharingError::WritableFoldersStay { .. }
+      | SharingError::ToolSecretGone { .. }
       | SharingError::ShareRefused { .. }
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }

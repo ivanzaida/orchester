@@ -1,31 +1,17 @@
-//! The team's configuration as a shared project's five libraries and their editors show it
+//! The team's configuration as a shared project's screens show who stands where in it
 //! (`docs/design/shared-configuration.md`, decisions 1–5): the team server it is shared on, whether the person may
-//! change it (an admin: the project's owner or the server's admin, row 72) and who the admins are, and how each of the
-//! team's resources stands here. And what an admin's editor does with a version published here: send it now (*Publish
-//! for the team*, *Try again*), and after one someone published meanwhile, publish it anyway as the next version or
-//! take it back as a draft on that one.
+//! change it (an admin: the project's owner or the server's admin, row 72) and who the admins are. The resources
+//! themselves are read from the team server and held in memory (`crate::team_config`); a change of one is sent to the
+//! server at once (`crate::sharing::team_edit`), so nothing of the person's waits on this computer.
 
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use orchester_api::client::ServerAddress;
-use orchester_core::{
-  id::{ResourceId, VersionId},
-  resource::{AgentProfile, Instruction, ResourceKind, Skill, Tool},
-  sharing::MemberRole,
-  time::Timestamp,
-};
-use orchester_store::{ProjectDb, SharedStanding, StoreError};
+use orchester_core::sharing::MemberRole;
+use orchester_store::ProjectDb;
 
-use super::{
-  Servers, SharingError, TakenBack,
-  project::ProjectServer,
-  send_lane::{between_sends, send_turn},
-  sync::RemoteResourceStore,
-};
-use crate::{
-  background,
-  messages::{self, Message},
-};
+use super::{Servers, SharingError, project::ProjectServer};
+use crate::messages::{self, Message};
 
 /// A shared project's configuration as its libraries show it; a local project has none.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,19 +26,8 @@ pub struct TeamConfiguration {
   /// The server's admins who are not among the owners, by their username there, as the members list last named them;
   /// none from a server that does not name them.
   pub admins: Arc<[Arc<str>]>,
-  /// The person's own username there, as the members were last read: who published a version that waits here.
+  /// The person's own username there, as the members were last read.
   pub me: Option<Arc<str>>,
-  /// How each of the team's resources stands here.
-  pub standings: Arc<BTreeMap<ResourceId, SharedStanding>>,
-  /// The new resources the team server refused after they were sent later, taken back; told until dismissed.
-  pub taken_back: Arc<[TakenBack]>,
-}
-
-impl TeamConfiguration {
-  /// How `resource` stands; `None` for a resource that is not the team's.
-  pub fn standing(&self, resource: ResourceId) -> Option<&SharedStanding> {
-    self.standings.get(&resource)
-  }
 }
 
 impl Servers {
@@ -92,127 +67,18 @@ impl Servers {
       .iter()
       .map(|member| name_of(member.username.as_str(), member.display_name.as_str()))
       .collect();
-    let standings = db
-      .shared_standings()?
-      .into_iter()
-      .map(|standing| (standing.resource, standing))
-      .collect();
     Ok(Some(TeamConfiguration {
       server,
       may_change: db.may_change_configuration()?,
       owners,
       admins,
       me,
-      standings: Arc::new(standings),
-      taken_back: self.taken_back(repo_root).into(),
     }))
-  }
-
-  /// Sends the versions of the team's configuration published here at `repo_root` that wait, now: after *Publish for
-  /// the team* and on *Try again*; a local project has none. A version the server cannot take yet waits, and one that
-  /// met a version someone published from the same base waits for the admin's decision; both show on its editor, so
-  /// neither fails here. Fails with what to tell the person.
-  pub async fn send_published(&self, repo_root: &Path) -> Result<(), Message> {
-    self.sending(repo_root, |store, taken| store.send_waiting(taken)).await
-  }
-
-  /// *Publish mine as vN*: `version`, published here at `repo_root` and met by a version someone published from the
-  /// same base, is sent again as the next version after it. Fails with what to tell the person.
-  pub async fn publish_again(&self, repo_root: &Path, version: VersionId) -> Result<(), Message> {
-    self
-      .sending(repo_root, move |store, _| store.publish_again(version))
-      .await
-  }
-
-  /// *Open my draft on vN*: `version` of a resource of `kind`, published here at `repo_root` and met by a version
-  /// someone published from the same base, is taken back, and the resource's draft is edited from that version
-  /// ([`ProjectDb::reopen_draft`]). Nothing is sent. A pipeline holds no draft (D-032): it is refused. Fails with what
-  /// to tell the person.
-  pub async fn reopen_draft(&self, repo_root: &Path, kind: ResourceKind, version: VersionId) -> Result<(), Message> {
-    self
-      .between_sends(repo_root, move |db| {
-        let now = Timestamp::now();
-        match kind {
-          ResourceKind::AgentProfile => db.reopen_draft::<AgentProfile>(version, now),
-          ResourceKind::Pipeline => Err(StoreError::NoDrafts(kind)),
-          ResourceKind::Instruction => db.reopen_draft::<Instruction>(version, now),
-          ResourceKind::Skill => db.reopen_draft::<Skill>(version, now),
-          ResourceKind::Tool => db.reopen_draft::<Tool>(version, now),
-          ResourceKind::TeamReviewer => db.reopen_draft::<orchester_core::resource::TeamReviewer>(version, now),
-          ResourceKind::McpServer => db.reopen_draft::<orchester_core::resource::TeamMcpServer>(version, now),
-          // Agent testing's kinds are never the team's, so none of their versions waits for the server.
-          ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
-        }
-      })
-      .await
-  }
-
-  /// *Discard it* for a pipeline (D-044): `version`, which an older build published here at `repo_root` and the server
-  /// never numbered, is deleted with the versions published here after it ([`ProjectDb::discard_unsent_pipeline`]).
-  /// Nothing is sent. Fails with what to tell the person.
-  pub async fn discard_pipeline_version(&self, repo_root: &Path, version: VersionId) -> Result<(), Message> {
-    self
-      .between_sends(repo_root, move |db| db.discard_unsent_pipeline(version))
-      .await
-  }
-
-  /// Runs `change` on the project database at `repo_root` on a worker, between two sends of its versions.
-  async fn between_sends<T: Send + 'static>(
-    &self,
-    repo_root: &Path,
-    change: impl FnOnce(&mut ProjectDb) -> Result<T, StoreError> + Send + 'static,
-  ) -> Result<T, Message> {
-    let (servers, root) = (self.clone(), repo_root.to_owned());
-    let changed = background::run(move || {
-      let lane = servers.send_lane(&root);
-      let _between = between_sends(&lane)?;
-      let mut db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
-      change(&mut db).map_err(|error| messages::store_error(&error))
-    })
-    .await??;
-    self.shared_changed();
-    Ok(changed)
-  }
-
-  /// Runs `send` with the store of the project at `repo_root` on a worker; nothing for a local project.
-  async fn sending(
-    &self,
-    repo_root: &Path,
-    send: impl FnOnce(&mut RemoteResourceStore<ProjectServer>, &mut Vec<TakenBack>) -> Result<(), SharingError>
-    + Send
-    + 'static,
-  ) -> Result<(), Message> {
-    let (servers, root) = (self.clone(), repo_root.to_owned());
-    let sent = background::run(move || {
-      let lane = servers.send_lane(&root);
-      let _sending = send_turn(&lane);
-      let server = match ProjectServer::open(&servers, &root) {
-        Ok(Some(server)) => server,
-        Ok(None) => return Ok(()),
-        Err(error) => return Err(said(&error, None)),
-      };
-      let address = server.entry().address.clone();
-      let store = ProjectDb::open(&root)
-        .map_err(SharingError::from)
-        .and_then(|db| RemoteResourceStore::new(db, server));
-      // What the pass took back is told also when it stopped early.
-      let mut taken = Vec::new();
-      let sent = store.and_then(|mut store| send(&mut store, &mut taken));
-      servers.note_taken_back(&root, taken);
-      match sent {
-        Ok(()) => Ok(()),
-        Err(SharingError::Offline | SharingError::VersionConflict { .. }) => Ok(()),
-        Err(error) => Err(said(&error, Some(&address))),
-      }
-    })
-    .await?;
-    self.shared_changed();
-    sent
   }
 }
 
 /// What to tell the person about `error`, from the server at `address` when it was opened.
-pub(super) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Message {
+pub(crate) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Message {
   match (error, address) {
     (_, Some(address)) => error.message(address),
     (SharingError::Store(error), None) => messages::store_error(error),

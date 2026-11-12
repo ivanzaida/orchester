@@ -7,10 +7,7 @@ use std::{collections::BTreeSet, path::Path};
 
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
-  connection::{
-    AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
-    mcp::McpServerSelection,
-  },
+  connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
   id::{ConnectionId, ResourceId},
   name::Name,
   permission::{AgentPermissions, StepPermissions},
@@ -18,14 +15,11 @@ use orchester_core::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, ResourceKind, Step,
     StepKey, StepKind, TeamAgentProfile, Version, VersionNumber,
   },
-  run::{Answerer, PreflightProblem},
   secret::SecretName,
   store::{ConnectionStore, ResourceStore},
-  task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget};
-use orchester_workspace::{sharing::sync::use_here, tasks::run::check};
 use serde_json::Value;
 
 use super::{ALICE, Member, SETTLED, TeamServer, Workspace, seen_within};
@@ -67,32 +61,6 @@ pub(super) fn codex(db: &mut ProjectDb, root: &Path, called: &str) -> Connection
   connection.id()
 }
 
-/// The publisher's Builder profile, on their connection `connection`, with their MCP servers `servers` and
-/// `permissions`.
-pub(super) fn profile(
-  connection: ConnectionId,
-  servers: &[ConnectionId],
-  permissions: AgentPermissions,
-) -> AgentProfile {
-  AgentProfile::new(
-    name("Builder"),
-    String::new(),
-    PromptText::new("Build.").expect("prompt"),
-    connection,
-    ModelId::new("gpt-5.5").expect("valid model"),
-    ProviderSettings::default(),
-  )
-  .with_mcp_servers(McpServerSelection::new(servers.to_vec()).expect("servers"))
-  .with_permissions(permissions)
-}
-
-/// [`profile`] with a profile's first permissions — read-only, any command in the worktree, network off — as the
-/// server keeps it. As a teammate's first version it waits for the person: it runs commands.
-pub(super) fn builder(connection: ConnectionId, servers: &[ConnectionId]) -> Value {
-  serde_json::to_value(profile(connection, servers, AgentPermissions::before_permissions()))
-    .expect("a profile serializes")
-}
-
 /// The team's Builder profile: it runs with Codex, uses the team MCP servers `servers` and has `permissions`.
 pub(super) fn team_profile(servers: &[ResourceId], permissions: AgentPermissions) -> TeamAgentProfile {
   TeamAgentProfile::new(
@@ -110,8 +78,7 @@ pub(super) fn team_profile(servers: &[ResourceId], permissions: AgentPermissions
   .expect("no writable folders, distinct servers")
 }
 
-/// [`team_profile`] with a profile's first permissions, as the server keeps it: as a teammate's first version it
-/// waits for the person, because it runs commands.
+/// [`team_profile`] with a profile's first permissions, as the server keeps it.
 pub(super) fn team_builder(servers: &[ResourceId]) -> Value {
   serde_json::to_value(team_profile(servers, AgentPermissions::before_permissions())).expect("a profile serializes")
 }
@@ -121,14 +88,12 @@ pub(super) fn team_references(servers: &[ResourceId]) -> Vec<ReferenceTarget> {
   ReferenceTarget::of_profile(&team_profile(servers, AgentPermissions::before_permissions()))
 }
 
-/// The person's *Use v1 here* of `resource`, once the stream cached it.
-pub(super) async fn use_first(workspace: &Workspace, resource: ResourceId) {
-  seen_within(SETTLED, "v1 waiting for the person", || {
-    workspace.db().waiting_version(resource).ok().flatten() == Some(VersionNumber::FIRST)
+/// Waits until the stream cached v1 of the profile `resource`, which this computer uses at once.
+async fn cached_first(workspace: &Workspace, resource: ResourceId) {
+  seen_within(SETTLED, "v1 cached", || {
+    latest::<AgentProfile>(workspace, resource).is_some()
   })
   .await;
-  let used = use_here(&workspace.root, resource, VersionNumber::FIRST, Answerer::Person);
-  assert!(used.expect("used"), "v1 waited for the person");
 }
 
 pub(super) fn step(step: &str, kind: StepKind) -> Step {
@@ -162,18 +127,6 @@ pub(super) fn latest<B: ResourceBody>(workspace: &Workspace, resource: ResourceI
   workspace.db().latest_version::<B>(resource).ok().flatten()
 }
 
-/// What preflight says of a run of `delivery`'s v1 here.
-pub(super) fn problems(workspace: &Workspace, delivery: ResourceId) -> Vec<PreflightProblem> {
-  let details = TaskDetails {
-    title: name("Search"),
-    brief: String::new(),
-    acceptance_criteria: Vec::new(),
-    pipeline: Some(delivery),
-    limits: TaskLimits::NONE,
-  };
-  check(&workspace.db(), &details, VersionNumber::FIRST).expect("checked")
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_references_and_binds_nothing() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
@@ -200,7 +153,7 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
     latest::<Pipeline>(&workspace, delivery).is_some()
   })
   .await;
-  use_first(&workspace, profile).await;
+  cached_first(&workspace, profile).await;
 
   let kept = workspace
     .db()

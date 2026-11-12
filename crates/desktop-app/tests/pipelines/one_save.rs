@@ -1,34 +1,22 @@
 //! The pipeline page has one *Save*, which publishes the next version (PV2-32, D-033): in a team project and in a
 //! local one; unavailable with why while the edit cannot be saved; no *Restore as draft* or *Compare*; a rename alone
-//! saves a local pipeline's name; a team profile's conflict still offers *Open my draft on vN*; and a pipeline version
-//! an older build left waiting has *Try again* and *Discard it* (D-044). A team pipeline's save waiting for the team
-//! server is [`super::team_save`].
+//! saves a local pipeline's name. A team pipeline's save waiting for the team server is [`super::team_save`].
 use std::{
   num::NonZeroU32,
   time::{Duration, Instant},
 };
 
 use orchester_app::{
-  routes::{AgentTab, ProjectPage, Route},
+  routes::{ProjectPage, Route},
   ui::tooltip::TOOLTIP_DELAY,
 };
 use orchester_core::{
-  blob::ContentHash,
-  id::{ConnectionId, ResourceId, UserId, VersionId},
-  name::Name,
-  resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, ResourceBody, ResourceKind,
-    VersionNumber,
-  },
-  sharing::SharedPerson,
+  id::ResourceId,
+  resource::{Pipeline, ResourceKind, VersionNumber},
   store::ResourceStore,
-  time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb};
 
 use crate::{pipelines_support::Editor, support::project_id};
-
-const HASH: &str = "5f1d6b0f0e2b9a8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c";
 
 fn latest(editor: &Editor, id: ResourceId) -> (VersionNumber, Pipeline) {
   let version = editor
@@ -172,85 +160,6 @@ fn pipelines_one_save_a_rename_alone_saves_a_local_pipelines_name() {
   editor.until("saved", |e| e.exists("pipeline-header-history"));
 }
 
-/// `body` as the server numbered it `number`, published by olha.
-fn cached<B: ResourceBody + Clone>(number: VersionNumber, body: &B) -> CachedVersion<B> {
-  CachedVersion {
-    number,
-    published_at: Timestamp::now(),
-    publisher: SharedPerson {
-      id: UserId::generate(),
-      name: "olha".to_owned(),
-    },
-    server_body: serde_json::to_value(body).expect("a body"),
-    hash: ContentHash::new(HASH).expect("hash"),
-    references: Vec::new(),
-    local_body: body.clone(),
-    waits_here: false,
-  }
-}
-
-/// The server numbers the first version of `id` as v1, then `mine`, published here from v1, meets olha's v2 `theirs`.
-fn meets_a_teammate<B: ResourceBody + Clone>(db: &mut ProjectDb, id: ResourceId, mine: VersionId, theirs: &B) {
-  db.cache_shared_version::<B>(id, &cached(two(), theirs))
-    .expect("cached");
-  db.record_publish_conflict(mine, two()).expect("recorded");
-}
-
-fn first_numbered<B: ResourceBody + Clone>(db: &mut ProjectDb, id: ResourceId) -> B {
-  let first = db.latest_version::<B>(id).expect("read").expect("a version");
-  let body = first.body().clone();
-  db.confirm_publish::<B>(first.id(), &cached(VersionNumber::FIRST, &body))
-    .expect("numbered");
-  body
-}
-
-/// A profile whose role is `name`.
-fn role(name: &str) -> AgentProfile {
-  AgentProfile::new(
-    Name::new(name).expect("a name"),
-    String::new(),
-    PromptText::new("").expect("a prompt"),
-    ConnectionId::generate(),
-    ModelId::new("test-model").expect("a model"),
-    ProviderSettings::default(),
-  )
-}
-
-#[test]
-fn pipelines_one_save_a_team_profiles_conflict_still_opens_its_draft() {
-  // No server answers: the versions made here wait in the outbox, as this conflict needs.
-  let editor = Editor::team_without_server();
-  editor.profile();
-  let mut db = editor.db();
-  let profile = db
-    .resources(ResourceKind::AgentProfile)
-    .expect("read")
-    .into_iter()
-    .find(|resource| resource.slug().as_str() == "reviewer")
-    .expect("the profile")
-    .id();
-  first_numbered::<AgentProfile>(&mut db, profile);
-  db.save_draft(
-    profile,
-    &Draft::new(role("Mine"), Some(VersionNumber::FIRST), Timestamp::now()),
-  )
-  .expect("a draft");
-  let mine = db
-    .publish_draft::<AgentProfile>(profile, Timestamp::now())
-    .expect("published here");
-  let theirs = role("Theirs");
-  meets_a_teammate(&mut db, profile, mine.id(), &theirs);
-  let mut editor = editor;
-  editor.window.navigation().go(Route::Project(
-    project_id(),
-    ProjectPage::Agent(profile, AgentTab::Profile),
-  ));
-  editor.until("the conflict", |e| e.exists("agent-conflict"));
-
-  assert!(editor.exists("agent-open-draft"), "a profile keeps Open my draft on vN");
-  assert!(!editor.exists("agent-take-back"));
-}
-
 /// Pipelines of the project, as stored.
 fn pipelines(editor: &Editor) -> Vec<orchester_core::resource::Resource> {
   editor.db().resources(ResourceKind::Pipeline).expect("read")
@@ -324,82 +233,4 @@ fn pipelines_one_save_the_empty_start_is_not_offered() {
   editor.until("the empty list", |e| e.exists("pipelines-start"));
   assert!(!editor.exists("pipeline-empty-blank"), "no Empty pipeline row");
   assert!(!editor.exists("pipeline-empty-start"), "no Start empty");
-}
-
-/// How many versions of `id` wait for the team server here: the fixture's tool waits too, never numbered.
-fn waiting(editor: &Editor, id: ResourceId) -> usize {
-  editor
-    .db()
-    .waiting_publishes()
-    .expect("outbox")
-    .iter()
-    .filter(|publish| publish.resource == id)
-    .count()
-}
-
-/// A team pipeline whose v2 *Mine.*, published here from v1 by an older build, still waits for a server that does not
-/// answer, open with its waiting bar (D-044): the pipeline and its v1 steps.
-fn left_waiting(editor: &mut Editor) -> (ResourceId, Pipeline) {
-  let id = editor.published();
-  let mut db = editor.db();
-  let ours = first_numbered::<Pipeline>(&mut db, id);
-  let mut edit = PipelineEdit::new(ours.clone());
-  edit.set_description("Mine.");
-  db.publish_pipeline_edit(
-    id,
-    &edit.validate().expect("a valid pipeline"),
-    VersionNumber::FIRST,
-    None,
-    Timestamp::now(),
-  )
-  .expect("published here");
-  editor.open(id);
-  editor.until("the waiting bar", |e| e.exists("pipeline-not-sent"));
-  (id, ours)
-}
-
-/// A version an older build left waiting shows its bar with *Try again* and *Discard it* (D-044): discarding deletes
-/// it, and the page shows the version the team has again.
-#[test]
-fn pipelines_one_save_a_version_an_older_build_left_waiting_can_be_discarded() {
-  let mut editor = Editor::team_without_server();
-  let (id, ours) = left_waiting(&mut editor);
-  assert_eq!(editor.text("pipeline-try-again"), "Try again");
-  assert_eq!(editor.text("pipeline-discard"), "Discard it");
-  assert!(
-    !editor.exists("pipeline-take-back"),
-    "a pipeline has no draft to take it back to"
-  );
-
-  editor.click("pipeline-discard");
-  editor.until("discarded", |e| !e.exists("pipeline-not-sent"));
-
-  assert_eq!(waiting(&editor, id), 0);
-  assert_eq!(latest(&editor, id), (VersionNumber::FIRST, ours));
-  editor.until("the team's version shows", |e| e.exists("pipeline-header-history"));
-  assert_ne!(
-    editor.value("pipeline-description"),
-    "Mine.",
-    "the page reads the team's v1 again, which has no description"
-  );
-}
-
-/// *Discard it* reads the pipeline again, which would replace an edit not saved: while there is one it is unavailable
-/// and says why, and nothing is discarded or lost.
-#[test]
-fn pipelines_one_save_a_waiting_version_is_not_discarded_over_an_edit_not_saved() {
-  let mut editor = Editor::team_without_server();
-  let (id, _) = left_waiting(&mut editor);
-  editor.set("pipeline-description", "Not saved yet.");
-  editor.until("the edit", |e| e.exists("pipeline-save"));
-
-  let why = tooltip(&mut editor, "pipeline-discard", "pipeline-discard-why-tooltip");
-  assert!(why.starts_with("Save or undo your changes first"), "{why}");
-  editor.click("pipeline-discard");
-  editor.arm();
-
-  assert!(editor.exists("pipeline-not-sent"), "nothing was discarded");
-  assert_eq!(editor.value("pipeline-description"), "Not saved yet.", "the edit stays");
-  assert_eq!(waiting(&editor, id), 1);
-  assert_eq!(latest(&editor, id).0, two(), "the waiting version stays");
 }

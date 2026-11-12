@@ -3,6 +3,8 @@
 //! keeps choosing until a person takes it back, and the project's others its *Add* menus offer. A tool is offered only
 //! when an agent can call it, as a check ([`Tool::is_check`]): a profile that gave another would give nothing.
 
+use std::path::Path;
+
 use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, Tool},
@@ -98,6 +100,11 @@ impl GivenNames {
     })
   }
 
+  /// The project's instructions, skills and tools that are not archived, which a new profile can give.
+  fn all_offered(&self) -> GivenLists {
+    GivenLists::by(|kind| self.offered[position(kind)].clone())
+  }
+
   /// The project's instructions, skills and tools that are not archived and that `profile` does not give yet.
   pub(super) fn offered(&self, profile: &AgentProfile) -> GivenLists {
     GivenLists::by(|kind| {
@@ -108,6 +115,13 @@ impl GivenNames {
         .collect()
     })
   }
+}
+
+/// The instructions, skills and tools of the project at `root` that a new profile can give its agents (a form that
+/// makes one offers them), each in name order. Blocking: it reads the project's database.
+pub fn offered_in(root: &Path) -> Result<GivenLists, StoreError> {
+  let db = ProjectDb::open(root)?;
+  Ok(GivenNames::read(&db)?.all_offered())
 }
 
 /// Whether the tool `id`'s latest published version is a check an agent can call; one never published is not.

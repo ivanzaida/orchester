@@ -121,7 +121,7 @@ pub fn prepare_in(root: &Path, tool: &Tool) -> Result<Tool, Message> {
   })
 }
 
-enum EditorError {
+pub(super) enum EditorError {
   Store(StoreError),
   Message(Message),
 }
@@ -131,7 +131,12 @@ impl From<StoreError> for EditorError {
   }
 }
 
-fn apply(db: &mut ProjectDb, root: &Path, mut edit: Edit, allowed: &Allowed) -> Result<ResourceId, EditorError> {
+pub(super) fn apply(
+  db: &mut ProjectDb,
+  root: &Path,
+  mut edit: Edit,
+  allowed: &Allowed,
+) -> Result<ResourceId, EditorError> {
   if let Edit::Save { tool, .. } = &mut edit {
     **tool = fixed_tool(db, root, tool)?;
   }
@@ -194,7 +199,7 @@ fn apply_existing(db: &mut ProjectDb, edit: &Edit, allowed: &Allowed) -> Result<
   Ok(id)
 }
 
-fn fixed_tool(db: &ProjectDb, root: &Path, tool: &Tool) -> Result<Tool, EditorError> {
+pub(super) fn fixed_tool(db: &ProjectDb, root: &Path, tool: &Tool) -> Result<Tool, EditorError> {
   let ToolAction::Command(command) = tool.action() else {
     return Err(EditorError::Message(Message::new("tools.errors.programRequired")));
   };

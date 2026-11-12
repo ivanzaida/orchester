@@ -57,7 +57,7 @@ fn until_made(agents: &mut Agents) {
 /// that scheme asks for.
 fn remote_form(agents: &mut Agents, name: &str, scheme: &str, extra: Option<(&str, &str)>) {
   show_form(agents, HubFilter::McpServers);
-  agents.set("team-new-mcp-name", name);
+  agents.set("local-hub-mcp-name", name);
   choose(agents, "local-hub-mcp-runs-as", REMOTE);
   agents.until("the endpoint", |s| s.exists("connection-mcp-url"));
   agents.set("connection-mcp-url", "https://mcp.example.dev/mcp");
@@ -211,11 +211,11 @@ fn local_hub_create_authorization_fields_say_why_they_cannot_be_used() {
 fn local_hub_create_an_mcp_server_keeps_its_arguments_and_the_tools_that_run_without_asking() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::McpServers);
-  agents.set("team-new-mcp-name", "Pencil Design");
+  agents.set("local-hub-mcp-name", "Pencil Design");
   agents.until("the name says why", |s| {
-    s.text("team-new-mcp-name-row-sub").contains("small letters, digits")
+    s.text("local-hub-mcp-row-name-sub").contains("small letters, digits")
   });
-  agents.set("team-new-mcp-name", "pencil-design");
+  agents.set("local-hub-mcp-name", "pencil-design");
   // A program outside the project's repository: this test's own.
   let program = std::env::current_exe().expect("the test program");
   agents.set("connection-mcp-program", &program.to_string_lossy());
@@ -245,7 +245,7 @@ fn local_hub_create_a_value_typed_for_a_variable_that_is_gone_is_not_stored() {
   let mut agents = Agents::new(true);
   let token = figma_token(&agents);
   show_form(&mut agents, HubFilter::McpServers);
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
     &std::env::current_exe().expect("a program").to_string_lossy(),
@@ -273,7 +273,7 @@ fn local_hub_create_a_value_typed_before_switching_to_a_remote_server_is_not_sto
   let mut agents = Agents::new(true);
   let token = figma_token(&agents);
   show_form(&mut agents, HubFilter::McpServers);
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
     &std::env::current_exe().expect("a program").to_string_lossy(),

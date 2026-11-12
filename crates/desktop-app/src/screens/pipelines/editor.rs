@@ -18,7 +18,6 @@ use orchester_core::resource::{EditProblem, VersionNumber};
 use orchester_workspace::{
   background, messages,
   pipelines::{data::OpenedPipeline, history::VersionHistory, problems::problem_view, write::needs_reload},
-  sharing::team::TeamConfiguration,
 };
 
 use super::{
@@ -110,6 +109,7 @@ impl Component for Editor {
     let locked = self.confirm_save.get() || props.loading || reading_version;
     let busy = writing || locked;
     let team = hub::team::of(&props.project);
+    // A team's pipeline is saved by an admin, straight to the team server (D-043); a member reads it.
     let may_change = hub::team::may_change(team.as_ref());
     let writes = Writes {
       state: self.state.clone(),
@@ -118,21 +118,19 @@ impl Component for Editor {
       asking: self.confirm_save.clone(),
     };
     ctx.provide(super::actions::ColumnWrites(writes.clone()));
-    let shared = team.as_ref().and_then(|team| {
-      let standing = team.standing(editing.opened.id)?;
-      // A pipeline holds no draft (D-032).
-      Some(hub::team::head_line(ctx, "pipeline-team-state", team, standing, None))
-    });
-    // A member of a shared project does not save the team's pipeline (03).
+    // A member of a shared project does not save the team's pipeline (03); an admin's save goes to the team server.
     let save = may_change.then(|| writes.save_button(ctx, &editing, busy));
     let head = super::header::header(
       ctx,
       &self.state,
       save,
       // While the save question waits, nothing is being saved: the status says the changes are unsaved.
-      (writing || props.loading || reading_version, shared),
+      writing || props.loading || reading_version,
     );
-    let mut notices: Vec<Element> = self.team_notice(ctx, &props, team.as_ref()).into_iter().collect();
+    let mut notices: Vec<Element> = team
+      .iter()
+      .map(|team| hub::team::line(ctx, "pipeline-team-line", team).into())
+      .collect();
     notices.extend(self.notices(ctx, &props, (&writes, writing)));
     // A member's page is locked as one being saved is: its fields take no edit.
     let content = self.content(ctx, &props, (&writes, (locked || !may_change, busy)));
@@ -146,22 +144,6 @@ impl Component for Editor {
   }
 }
 impl Editor {
-  /// In a shared project, under the header: who may change the pipeline, for a member (03). An admin's save waits for
-  /// the team server's answer (D-043), so it leaves no version waiting; one an older build left shows its bar, with
-  /// *Try again* and *Discard it* (D-044), after which the page reads the pipeline again.
-  fn team_notice(&self, ctx: &mut Ctx, props: &EditorProps, team: Option<&TeamConfiguration>) -> Option<Element> {
-    let team = team?;
-    if !team.may_change {
-      return Some(hub::team::line(ctx, "pipeline-team-line", team).into());
-    }
-    let standing = team.standing(props.opened.id)?;
-    let reload = props.reload.clone();
-    let reread: hub::team::Reread = std::sync::Arc::new(move || reload.update(|n| *n += 1));
-    // Reading the pipeline again would replace an edit not saved: the bar does not discard while there is one.
-    let holds_edit = self.state.get().unsaved();
-    hub::team::pipeline_waiting_bar(ctx, &props.project, (team, standing), (reread, holds_edit))
-  }
-
   /// What sits in place under the header: what an import did, leaving, the save question, problems and failures.
   fn notices(&self, ctx: &mut Ctx, props: &EditorProps, (writes, writing): (&Writes, bool)) -> Vec<Element> {
     let editing = self.state.get();

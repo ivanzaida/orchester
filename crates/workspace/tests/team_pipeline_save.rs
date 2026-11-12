@@ -1,7 +1,7 @@
 //! A team pipeline's save waits for the team server (PV2-34, D-042, D-043), against the stand-in team server: a new
 //! pipeline, the next version and a rename are sent at once and kept here only once the server took them; a refusal, a
-//! version someone published first, an old revision or a server that cannot be reached store nothing and say why; and
-//! nothing of a pipeline waits in the outbox. The editor's save renames first and says when only the name was saved.
+//! version someone published first, an old revision or a server that cannot be reached store nothing and say why. The
+//! editor's save renames first and says when only the name was saved.
 //!
 //! `cargo test -p orchester-workspace --test team_pipeline_save team_pipeline_save`
 
@@ -175,15 +175,6 @@ impl Team {
   fn pipelines_here(&self) -> usize {
     self.db().resources(ResourceKind::Pipeline).expect("read").len()
   }
-
-  /// Nothing of a pipeline waits in the outbox.
-  fn assert_no_pipeline_waits(&self) {
-    let waiting = self.db().waiting_publishes().expect("the outbox");
-    assert!(
-      waiting.iter().all(|waiting| waiting.kind != ResourceKind::Pipeline),
-      "{waiting:?}"
-    );
-  }
 }
 
 /// Joins `server` with its code; the server's id here.
@@ -274,7 +265,6 @@ fn team_pipeline_save_create_keeps_v1_only_once_the_server_made_it() {
   ));
   assert_eq!(team.latest(id), (1, "Ours.".to_owned()));
   assert_eq!(team.on_server(id), Some((1, "Checks".to_owned())));
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -287,7 +277,6 @@ fn team_pipeline_save_publish_keeps_the_version_the_server_numbered() {
   assert_eq!(published, Ok(number(2)));
   assert_eq!(team.latest(id), (2, "Changed.".to_owned()));
   assert_eq!(team.on_server(id).map(|(versions, _)| versions), Some(2));
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -306,7 +295,6 @@ fn team_pipeline_save_a_refusal_stores_nothing_and_says_why() {
   let new = team.create(team.tool, "Another.");
   assert!(matches!(new, Err(NotTaken::Refused(_))), "{new:?}");
   assert_eq!(team.pipelines_here(), 1, "a refused new pipeline is not kept");
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -325,7 +313,6 @@ fn team_pipeline_save_an_unreachable_server_stores_nothing() {
   }
   assert_eq!(team.latest(id), (1, "Ours.".to_owned()));
   assert_eq!(team.pipelines_here(), 1);
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -347,7 +334,6 @@ fn team_pipeline_save_a_version_someone_published_first_is_refused_naming_it() {
   assert_eq!(message.key, "pipelines.problems.teamChanged");
   assert_eq!(refused.code(), "version_changed");
   assert_eq!(team.latest(id), (1, "Ours.".to_owned()), "mine is not stored");
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -387,7 +373,6 @@ fn team_pipeline_save_the_editor_saves_the_name_and_the_steps() {
   assert_eq!(stored.steps_not_saved, None);
   assert_eq!((&*stored.opened.name, stored.opened.version), ("Gates", number(2)));
   assert_eq!(team.on_server(id), Some((2, "Gates".to_owned())));
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -405,7 +390,6 @@ fn team_pipeline_save_the_editor_says_when_only_the_name_was_saved() {
   );
   assert_eq!((&*stored.opened.name, stored.opened.version), ("Gates", number(1)));
   assert_eq!(team.latest(id), (1, "Ours.".to_owned()), "the steps are not stored");
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -419,7 +403,6 @@ fn team_pipeline_save_the_editors_refusal_keeps_everything_as_it_was() {
   assert_eq!(refused.message().key, "pipelines.problems.teamUnreached");
   assert_eq!(team.latest(id), (1, "Ours.".to_owned()));
   assert_eq!(team.name_here(id), "Checks");
-  team.assert_no_pipeline_waits();
 }
 
 #[test]
@@ -503,7 +486,6 @@ fn team_pipeline_save_share_pipeline_makes_the_team_copy_beside_the_hidden_local
   assert_eq!(kept.slug().as_str(), "delivery", "it keeps its slug");
   assert_eq!(team.latest(copy), (1, "Ours.".to_owned()));
   assert_eq!(team.on_server(copy), Some((1, "Delivery".to_owned())));
-  team.assert_no_pipeline_waits();
 }
 
 /// A save sent again after its answer was lost meets its own version on the server: it says the changes are there
@@ -527,7 +509,6 @@ fn team_pipeline_save_a_retry_that_meets_its_own_earlier_send_says_it_reached_th
     "no third version"
   );
   assert_eq!(team.latest(id), (1, "Ours.".to_owned()), "the stream brings v2");
-  team.assert_no_pipeline_waits();
 }
 
 /// A new pipeline whose name the team has already says an earlier *Create* that got no answer may have made it: the

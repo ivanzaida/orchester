@@ -41,6 +41,8 @@ pub(in crate::screens) struct DialogProps {
   pub blocks_profiles: bool,
   /// A local project's confirmation: its own words, no admins and no other people's runs.
   pub local: bool,
+  /// Whether the resource has versions, which stay readable once it is archived; a local MCP server has none.
+  pub versioned: bool,
 }
 
 /// What *Archive and stop N runs* does.
@@ -85,10 +87,10 @@ pub(in crate::screens) fn dialog(
     )
     .child(
       Text::new(&ctx.t_args(
-        if props.local {
-          "local_archive.body"
-        } else {
-          "team_archive.body"
+        match (props.local, props.versioned) {
+          (false, _) => "team_archive.body",
+          (true, true) => "local_archive.body",
+          (true, false) => "local_archive.bodyUnversioned",
         },
         [("name", name)],
       ))

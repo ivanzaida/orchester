@@ -20,11 +20,7 @@ use crate::{
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, line, tag_chip},
   theme::IconSize,
-  ui::{
-    agent_mark::AgentMark,
-    icon::{Icon, icon},
-    pressable::opening,
-  },
+  ui::{agent_mark::AgentMark, icon::icon, pressable::opening},
 };
 
 pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>) -> Element {
@@ -38,10 +34,10 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
     id: &id,
     chosen: shown.selected.is_some_and(|selected| selected.id == entry.id),
     open: opening(shown.navigation.to(route)),
-    group: entry.group,
+    group: Some(entry.group),
     kind: entry.kind.name().to_owned(),
     mark: mark(ctx, entry),
-    name: &entry.name,
+    name: (&entry.name, PaletteColor::TextPrimary),
     line: line(&id, &said.text, said.color).into(),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),
@@ -50,24 +46,16 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
 
 /// The glyph at a row's start: a profile's CLI's own mark, else the glyph of what the resource is.
 fn mark(ctx: &Ctx, entry: &Entry) -> Element {
-  if entry.archived.is_some() {
-    return icon(Icon::Archive, IconSize::Lg, PaletteColor::Danger).into();
-  }
   match entry.cli {
     Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Lg),
     None => icon(entry.glyph(), IconSize::Lg, glyph_color(entry)).into(),
   }
 }
 
-/// What a row's glyph says: in what the person has to decide about a version of theirs (waiting, refused), the color
-/// its first words have (A14 `gTLx6`, A16 `x3ywL`, A17 `rJbPm`), else how the resource stands here.
+/// What a row's glyph says: how the resource stands here, in the color of its line.
 fn glyph_color(entry: &Entry) -> PaletteColor {
-  if entry.group == Group::NeedsYouHere
-    && let Some(tone) = words::lead_tone(entry)
-  {
-    return tone;
-  }
   match (entry.group, entry.kind) {
+    (Group::NeedsYouHere, _) if words::said_in_danger(entry) => PaletteColor::Danger,
     (Group::NeedsYouHere, _) => PaletteColor::Warning,
     (Group::OffHere, _) => PaletteColor::TextMuted,
     (Group::Ready, Kind::Instruction | Kind::Skill | Kind::Profile) => PaletteColor::TextSecondary,

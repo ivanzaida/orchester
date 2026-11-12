@@ -3,7 +3,7 @@
 //! ([`ProjectDb::create_published`]).
 
 use orchester_core::{
-  id::{ResourceId, VersionId},
+  id::ResourceId,
   name::Name,
   resource::{Draft, Pipeline, Version, VersionNumber},
   time::Timestamp,
@@ -24,7 +24,9 @@ impl ProjectDb {
   /// refused, as is an edit made from a version that is no longer the one used here
   /// ([`orchester_core::resource::PublishError::StaleDraft`]) and a rename whose name changed meanwhile
   /// ([`StoreError::DraftChanged`]) and a body equal to the latest version ([`StoreError::Unchanged`]); nothing is
-  /// changed then. In a team project the person must be an admin, and the version waits for the server.
+  /// changed then. A team pipeline is refused: its edit goes to the team server, and is kept here only as the server's
+  /// answer ([`ProjectDb::cache_shared_version`]) — a member's as [`StoreError::NotAdmin`], an admin's as
+  /// [`StoreError::SharedProject`].
   pub fn publish_pipeline_edit(
     &mut self,
     resource: ResourceId,
@@ -38,6 +40,9 @@ impl ProjectDb {
       .transaction_with_behavior(TransactionBehavior::Immediate)?;
     check_kind::<Pipeline>(&transaction, resource)?;
     shared_publishes::ensure_may_change(&transaction, resource)?;
+    if shared_publishes::team_resource(&transaction, resource)? {
+      return Err(StoreError::SharedProject);
+    }
     if let Some((before, after)) = names {
       let changed = transaction.execute(
         "UPDATE resources SET name = ?1 WHERE id = ?2 AND name = ?3",
@@ -58,21 +63,6 @@ impl ProjectDb {
     Ok(version)
   }
 
-  /// *Discard it* (D-044): `version` of a team pipeline, which an older build published here and the server never
-  /// numbered (still waiting, refused, or met by a version someone published from the same base), is deleted with the
-  /// versions of the pipeline published here after it; the version the server numbered last is the latest again. A
-  /// team pipeline's save no longer leaves such a version (D-043). A version a run or a task here uses stays
-  /// ([`StoreError::VersionInUse`]); nothing is changed then.
-  pub fn discard_unsent_pipeline(&mut self, version: VersionId) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
-    // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
-    transaction.pragma_update(None, "defer_foreign_keys", true)?;
-    let (_, taken) = shared_publishes::unsent::<Pipeline>(&transaction, version)?;
-    shared_publishes::drop_unsent(&transaction, &taken)?;
-    transaction.commit()?;
-    Ok(())
-  }
-
   /// A published pipeline in one call, for a test: [`ProjectDb::create_published`] with a slug and a name given as
   /// text, which must be valid.
   #[cfg(feature = "test-support")]
@@ -90,8 +80,8 @@ impl ProjectDb {
   }
 
   /// A pipeline of this computer's own in a team project, for a test: one kept *Not shared* when the project joined,
-  /// at v1, waiting for no server. There [`ProjectDb::create_published`] makes a team pipeline, whose v1 waits for the
-  /// server. The slug and the name given as text must be valid.
+  /// at v1. There [`ProjectDb::create_published`] would make the team's pipeline, which only the team server makes.
+  /// The slug and the name given as text must be valid.
   #[cfg(feature = "test-support")]
   pub fn kept_pipeline_for_test(
     &mut self,

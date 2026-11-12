@@ -39,13 +39,6 @@ impl Editor {
     editor.team = Some(team_link::share_on_stand_in(&editor.window, &editor.repo));
     editor
   }
-  /// The editor of a project shared with a team no server answers for: what is published here waits in the outbox,
-  /// as a version an older build left there (pipelines no longer make one, D-043).
-  pub fn team_without_server() -> Self {
-    let editor = Self::new();
-    team_link::share_as_owner(&editor.window, &editor.repo);
-    editor
-  }
   /// The editor with the stand-in pickers, which hand over the folder a test chose.
   pub fn with_stand_ins() -> (Self, StandIns) {
     let data = Data::new();

@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 
+use orchester_api::{SharedResource, SharedVersion};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -83,6 +84,18 @@ impl TeamConfig {
     }
   }
 
+  /// Keeps `version` as the latest version of its resource, unless this configuration holds a newer one or none of the
+  /// resource; whether it changed.
+  pub(crate) fn published(&mut self, resource: ResourceId, version: TeamVersion) -> bool {
+    match self.resources.get_mut(&resource) {
+      Some(kept) if kept.number() < Some(version.number) => {
+        kept.latest = Some(version);
+        true
+      }
+      _ => false,
+    }
+  }
+
   /// Renames `id`; whether it changed.
   pub(crate) fn rename(&mut self, id: ResourceId, name: Name) -> bool {
     match self.resources.get_mut(&id) {
@@ -109,6 +122,22 @@ pub struct TeamResource {
 }
 
 impl TeamResource {
+  /// `shared` with its latest version; `None`, with a warning, for a name this computer cannot take.
+  pub(crate) fn of(shared: &SharedResource, latest: Option<TeamVersion>) -> Option<Self> {
+    let Ok(name) = Name::new(&shared.name) else {
+      tracing::warn!(resource = %shared.id, "a team resource has a name this computer cannot take");
+      return None;
+    };
+    Some(Self {
+      id: shared.id,
+      kind: shared.kind.core(),
+      name,
+      archived: shared.archived,
+      revision: shared.revision,
+      latest,
+    })
+  }
+
   /// The latest version's body read as `B`, its kind's team form: `None` without a version, `Some(Err)` for a body that
   /// is not in that form (e.g. one published before the team's form), which is logged.
   pub fn body<B: DeserializeOwned>(&self) -> Option<Result<B, NotTeamForm>> {
@@ -137,4 +166,15 @@ pub struct TeamVersion {
   /// Who published it, by the name the server gives them.
   pub published_by: String,
   pub published_at: Timestamp,
+}
+
+impl From<SharedVersion> for TeamVersion {
+  fn from(shared: SharedVersion) -> Self {
+    Self {
+      number: shared.number,
+      body: shared.body,
+      published_by: shared.published.by.display_name,
+      published_at: Timestamp::from_unix_millis(shared.published.at),
+    }
+  }
 }

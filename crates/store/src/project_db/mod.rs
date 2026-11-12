@@ -108,7 +108,6 @@ mod shared_events;
 mod shared_members;
 mod shared_modules;
 mod shared_publishes;
-mod shared_standing;
 mod shared_tasks;
 mod shared_versions;
 mod sharing;
@@ -125,7 +124,6 @@ mod task_groups;
 mod task_identities;
 mod task_snapshots;
 mod tasks;
-mod team_copies;
 mod team_deliveries;
 mod team_fill_ins;
 mod team_leaving;
@@ -136,6 +134,7 @@ mod todo_lists;
 mod tool_approvals;
 mod usage;
 mod used_versions;
+mod version_publishers;
 mod workspace_records;
 mod workspaces;
 mod worktree_removals;
@@ -181,7 +180,6 @@ pub use self::{
   question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
   removal_records::RemovalRecord,
-  removals::DraftChange,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
@@ -191,8 +189,6 @@ pub use self::{
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
   shared_modules::{CachedModule, CachedModuleChange},
-  shared_publishes::{PublishState, WaitingPublish},
-  shared_standing::{ConfirmedVersion, SharedStanding, WaitingVersion},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   shared_versions::{CachedVersion, ReferenceTarget, ResourceSharing},
   sharing::SharingLink,
@@ -354,6 +350,10 @@ pub enum ProjectMigration {
   TeamPipelineIds,
   /// Local profiles choosing what reached their agents before.
   ProfileGiven,
+  /// The outbox of the team's configuration dropped.
+  TeamOutbox,
+  /// A local project's drafts of its published profiles, instructions, skills and tools dropped.
+  LocalDrafts,
   /// Pipeline drafts deleted, and every pipeline with no version with what names it.
   PipelineDrafts,
   /// The `permissions` rebuild of tool approvals: a request permissions decided.

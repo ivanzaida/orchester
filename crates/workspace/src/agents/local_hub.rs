@@ -7,11 +7,11 @@ use std::path::Path;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT,
+    AgentConnection, AgentProvider, Connection, ConnectionKind, REASONING_EFFORT,
     mcp::{McpServer, McpTransport},
   },
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, Draft, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
+  resource::{AgentProfile, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
   secret::{SecretName, SecretVault},
   store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
   time::Timestamp,
@@ -22,6 +22,7 @@ use super::{
   form::{effort_options, model_options},
   local_edit::GivenKind,
   local_given::{GivenLists, GivenNames},
+  role::RoleText,
   team_hub::Form,
   team_profile::ConnectionChoice,
 };
@@ -47,6 +48,8 @@ pub struct LocalPlain {
 /// the MCP servers it chooses and the pipelines whose steps run it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalProfile {
+  /// Its role: the name, what it answers for and the role instructions.
+  pub role: RoleText,
   /// The CLI it runs with: its connection's, and while that is gone the one its model belongs to
   /// ([`AgentProvider::cli_of_model`]); `None` when the connection is no agent connection or the model names no CLI.
   pub cli: Option<AgentProvider>,
@@ -64,10 +67,6 @@ pub struct LocalProfile {
   pub current: Option<ConnectionId>,
   /// When its latest version was published.
   pub published_at: Timestamp,
-  /// Whether it has edits that are not published; what the fields above say is then the draft's.
-  pub draft: bool,
-  /// When its draft was last saved; `None` without one.
-  pub draft_saved_at: Option<Timestamp>,
   /// What the selects of its panel offer ([`ProfileOptions`]).
   pub options: ProfileOptions,
   /// The project secrets the MCP servers it chooses take their values from, by name.
@@ -105,6 +104,9 @@ pub struct LocalArchived {
   pub stopped: Vec<StoppedRun>,
   /// An MCP server's fields as its panel reads them, which it keeps showing read-only.
   pub details: Option<McpServerText>,
+  /// A profile's latest version as its panel reads it, which it keeps showing read-only; `None` for the other kinds
+  /// and for a profile that was never published.
+  pub profile: Option<Box<LocalProfile>>,
 }
 
 /// A run an archive stopped, by its task.
@@ -263,10 +265,9 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
     let Some(version) = db.latest_version::<AgentProfile>(resource.id())? else {
       continue;
     };
-    let draft = db.draft::<AgentProfile>(resource.id())?;
-    // What the panel shows is the profile as it is now: its draft when it has one.
-    let body = draft.as_ref().map_or_else(|| version.body(), |draft| draft.body());
-    let shown = around.shown(db, resource.id(), (version.published_at(), body, draft.as_ref()))?;
+    // What the panel shows is the latest published version, what runs: a local profile is edited in place, with no
+    // drafts (decided by the person 2026-11-09), so a draft stored of it (an MCP client's) is not the panel's.
+    let shown = around.shown(db, resource.id(), (version.published_at(), version.body()))?;
     profiles.push((resource.id(), shown));
   }
   Ok(profiles)
@@ -283,7 +284,7 @@ pub(crate) fn profile_as(
     return Ok(None);
   };
   Around::read(db)?
-    .shown(db, id, (version.published_at(), body, None))
+    .shown(db, id, (version.published_at(), body))
     .map(Some)
 }
 
@@ -308,12 +309,12 @@ impl Around {
     })
   }
 
-  /// The profile `id` as it holds `body`, published at `published_at`, with its stored draft.
+  /// The profile `id` as it holds `body`, published at `published_at`.
   fn shown(
     &self,
     db: &ProjectDb,
     id: ResourceId,
-    (published_at, body, draft): (Timestamp, &AgentProfile, Option<&Draft<AgentProfile>>),
+    (published_at, body): (Timestamp, &AgentProfile),
   ) -> Result<LocalProfile, StoreError> {
     let connection = self.connections.iter().find(|found| found.id() == body.connection());
     let cli = match connection.map(orchester_core::connection::Connection::kind) {
@@ -338,14 +339,10 @@ impl Around {
       .connections
       .iter()
       .filter(|found| matches!(found.kind(), ConnectionKind::Agent(provider) if Some(*provider) == cli))
-      .map(|found| ConnectionChoice {
-        id: found.id(),
-        name: found.name().to_string(),
-        version: found.version().map(str::to_owned),
-        signed_out: found.status() == ConnectionStatus::SignInRequired,
-      })
+      .map(ConnectionChoice::of)
       .collect();
     Ok(LocalProfile {
+      role: RoleText::of(body),
       cli,
       connection: connection.map(|connection| connection.name().to_string()),
       mcp_servers: chosen
@@ -364,8 +361,6 @@ impl Around {
         .map(|choice| choice.id),
       connections: of_kind,
       published_at,
-      draft: draft.is_some(),
-      draft_saved_at: draft.map(Draft::updated_at),
       options: ProfileOptions {
         given: self.given.offered(body),
         ..options(&self.connections, &self.available, (cli, body))
@@ -468,6 +463,7 @@ fn tool_forms(db: &ProjectDb) -> Result<Vec<(ResourceId, Form)>, StoreError> {
 }
 
 fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
+  let around = Around::read(db)?;
   let mut archived = Vec::new();
   for kind in [
     ResourceKind::AgentProfile,
@@ -483,6 +479,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         at,
         stopped: stopped(db, &db.archive_stops_of_resource(resource.id())?)?,
         details: None,
+        profile: archived_profile(db, &around, (kind, resource.id()))?,
       });
     }
   }
@@ -497,11 +494,29 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         at,
         stopped: stopped(db, &db.archive_stops_of_mcp_server(id)?)?,
         details: Some(McpServerText::of(server, &secrets)),
+        profile: None,
       });
     }
   }
   archived.sort_by(|a, b| b.at.cmp(&a.at).then_with(|| a.name.cmp(&b.name)));
   Ok(archived)
+}
+
+/// The latest version of the archived resource `id` of `kind` when it is a profile, as its panel reads it.
+fn archived_profile(
+  db: &ProjectDb,
+  around: &Around,
+  (kind, id): (ResourceKind, ResourceId),
+) -> Result<Option<Box<LocalProfile>>, StoreError> {
+  if kind != ResourceKind::AgentProfile {
+    return Ok(None);
+  }
+  let Some(version) = db.latest_version::<AgentProfile>(id)? else {
+    return Ok(None);
+  };
+  around
+    .shown(db, id, (version.published_at(), version.body()))
+    .map(|shown| Some(Box::new(shown)))
 }
 
 /// The tasks of the runs `stops` names; a task the project no longer has is left out.

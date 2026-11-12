@@ -22,6 +22,7 @@ use serde_json::json;
 use super::{
   harness::Agents,
   team_hub::{cached, open, team},
+  team_hub_other,
 };
 
 /// A Claude Code connection `name` whose last check found `version`.
@@ -110,7 +111,7 @@ pub(super) fn builder_using(agents: &Agents, with_program: bool) -> ((ResourceId
 
 pub(super) fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the profile panel", |s| s.exists("team-hub-from-team-cli-value"));
+  agents.until("the profile panel", |s| s.exists("team-hub-from-team-cli"));
 }
 
 #[test]
@@ -119,6 +120,8 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   team(&agents);
   claude(&agents.root, "Claude 2", "2.1.173");
   let (profile, _) = builder(&agents);
+  // An admin edits what the team holds in place (A26); the panel as it reads is a member's.
+  team_hub_other::as_member(&agents);
   show(&mut agents, profile);
   // What the team holds: the kind, never a connection, the model, the effort, the servers and the secrets by name.
   assert_eq!(agents.text("team-hub-from-team-cli-value"), "Claude Code");
@@ -126,9 +129,10 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   assert_eq!(agents.text("team-hub-from-team-effort-value"), "High");
   assert_eq!(agents.text("team-hub-from-team-mcp-value-0-label"), "gh");
   assert_eq!(agents.text("team-hub-from-team-secrets-value-0-label"), "GITHUB_TOKEN");
-  assert!(
-    !agents.exists("team-hub-from-team-tools"),
-    "a profile with no tool has no Tools row"
+  assert_eq!(
+    agents.text("team-hub-from-team-tools-value"),
+    "None",
+    "a profile with no tool says so as a value"
   );
   // On this computer: the only connection of its kind, chosen without asking.
   assert_eq!(agents.text("team-hub-runs-on-name"), "Claude Code · Claude 2");
@@ -159,8 +163,8 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   );
   assert!(agents.exists("team-hub-ready-secret-GITHUB_TOKEN-add-value"));
   assert!(
-    agents.exists("team-hub-more") && !agents.exists("team-hub-edit"),
-    "an admin has the … menu in the head and no Edit to the editor's page"
+    !agents.exists("team-hub-more") && !agents.exists("team-hub-edit"),
+    "a member has no … menu in the head and no Edit"
   );
 }
 
@@ -240,6 +244,8 @@ fn team_hub_profile_pins_the_fix_of_the_first_missing_part_and_nothing_when_noth
     .expect("database")
     .set_team_mcp_on_here(server, false)
     .expect("off here");
+  // An admin has Save's bar where nothing is to fix (A26); a member has none.
+  team_hub_other::as_member(&agents);
   show(&mut agents, profile);
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
   assert!(agents.text("team-hub-fix-switch-on").contains("Switch on gh"));

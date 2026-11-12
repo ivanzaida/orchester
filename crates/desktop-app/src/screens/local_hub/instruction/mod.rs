@@ -1,18 +1,20 @@
-//! The panel of a local instruction (`Detail` in L1, `docs/design/team-configuration.md` rule 11), edited in place:
-//! the head with *Versions* and the … menu, the chips, *Instruction* (the profiles that give it to their agents, when,
-//! and its text), *Ready?* and the pinned *Save* and *Cancel* ([`super::save_bar`]). What is typed is only the panel's
-//! until *Save*, which publishes it as the next version at once; *Cancel* puts back what is stored. The fields and
-//! their checks are the Instructions editor's ([`crate::screens::instructions`]). Its name was fixed when it was made.
+//! The panel of a local instruction (`Detail` in L1, `docs/design/team-configuration.md` rule 11), edited in place: the
+//! head with *Versions* and the … menu, the chips, *Instruction* (the profiles that give it to their agents and its
+//! format), *Text*, *Ready?* and the pinned *Save* and *Cancel* ([`super::save_bar`]). What is typed is only the
+//! panel's until *Save*, which publishes it as the next version at once; *Cancel* puts back what is published. The
+//! fields and their checks are the form's that makes one ([`crate::screens::hub::forms`]). Its name was fixed when it
+//! was made.
 //! Who gets it is not chosen here: a profile chooses the instructions its agents are given
-//! (`docs/design/team-configuration.md`, "Decided 2026-11-09"); the scope and targets it was made with are kept as
-//! they are, and decide nothing for a local run.
+//! (`docs/design/team-configuration.md`, "Decided 2026-11-09"); the scope, targets and events it was made with are kept
+//! as they are.
 //!
 //! The project's instructions are read once for every instruction the panel shows, through their query
 //! (`queries::hub::instructions`), kept for the session, and again when they, the profiles or the pipelines change (the
-//! panel's own *Save* and *Cancel* record such a change): going from one instruction to another, or coming back to the
-//! hub, shows it at once. Only the first read of one shows the panel in bones. A draft
-//! stored before (by the Instructions page) opens as the panel's changes over the published version: *Save* publishes
-//! it, *Cancel* throws it away.
+//! panel's own *Save* records such a change): going from one instruction to another, or coming back to the hub, shows
+//! it at once. Only the first read of one shows the panel in bones. The panel has no drafts (decided by the person
+//! 2026-11-09): an instruction that has a published version opens on it, unchanged, even when a draft of it is stored
+//! (an MCP client's), which *Save* replaces with what it publishes and *Cancel* leaves alone. An instruction that has
+//! only a draft so far opens on it, as a change to publish.
 
 mod editor;
 
@@ -46,7 +48,7 @@ use crate::{
 
 /// The ids of the panel's parts start with it.
 const PREFIX: &str = "local-hub-instruction";
-/// The text field is at least 180 high, as the form that makes one draws it (`Input` `sTxOp` in A10 `hGdGu`).
+/// The text is at least 180 high, as the form draws it (`Input` `sTxOp` in A10 `hGdGu`).
 const TEXT_AREA: f32 = 180.0;
 
 /// The editor's rows in bones, with the labels and the words under them it has.
@@ -57,13 +59,13 @@ const BONES: [BoneRow; 3] = [
     bone: Bone::Words,
   },
   BoneRow {
-    label: "local_hub.instruction.when",
+    label: "team_hub.plain.format",
     sub: None,
-    bone: Bone::Field,
+    bone: Bone::Words,
   },
   BoneRow {
-    label: "local_hub.instruction.text",
-    sub: Some("local_hub.instruction.textSub"),
+    label: "team_hub.plain.text",
+    sub: None,
     bone: Bone::Area(TEXT_AREA),
   },
 ];
@@ -111,7 +113,7 @@ impl Component for Loader {
     let query = ctx.query(hub::instructions(session, props.project.open.repo_root.clone()));
     let read = queries::reading(&query);
     let (pending, rejected) = (read.is_pending(), read.is_rejected());
-    // An instruction opened while the read is under way again waits for it: the last answer may hold an older draft.
+    // An instruction opened while the read is under way again waits for it: the last answer may hold an older version.
     let fresh = !pending || self.shown.get() == Some(props.id);
     let Some(InstructionsRead { data, published }) = read.data.filter(|_| fresh) else {
       return match read.error.filter(|_| rejected) {

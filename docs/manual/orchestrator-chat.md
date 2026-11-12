@@ -344,8 +344,9 @@ the line *… is now led in «…»*). Only a person chooses on the card: synthe
 
 ### Seeing and stopping
 
-- The conversation's header shows **Leads** with a chip per target (those without room fold into *+N*); × on a chip
-  stops that subscription.
+- The conversation's header shows what it leads right after its title, after an eye: a chip per target. Those
+  without room fold into *+N*, which opens the whole list with since when for each; × on a chip or on a row of that
+  list stops that subscription.
 - History shows *Leads …* on a conversation that leads something.
 - A module's Summary and a task's Summary properties show **Led in** with the leading conversation.
 - Stopping (×, *Stop watching*, or asking the Orchestrator in words) ends the subscription at once and **cancels or

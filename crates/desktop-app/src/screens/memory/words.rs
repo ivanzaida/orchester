@@ -210,7 +210,7 @@ pub fn meta(ctx: &Ctx, memory: &Memory, origins: &Origins, with_task: bool) -> A
 }
 
 /// What happened to `memory` after it was written, for its meta line.
-fn change(ctx: &Ctx, memory: &Memory) -> Vec<String> {
+pub fn change(ctx: &Ctx, memory: &Memory) -> Vec<String> {
   let since = when(ctx, memory.updated_at());
   let key = match memory.status() {
     MemoryStatus::Superseded => Some("memory.meta.superseded"),

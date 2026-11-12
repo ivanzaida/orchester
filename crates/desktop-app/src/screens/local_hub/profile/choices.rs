@@ -30,8 +30,8 @@ use parking_lot::Mutex;
 
 use super::edit::Holding;
 
-/// Choices checked together, made in order on `base` (what the panel held when they started; `None` for what is
-/// stored), and the count of *Cancel* they were made under.
+/// Choices checked together, made in order on `base` (what the panel held when they started; `None` for the published
+/// version), and the count of *Cancel* they were made under.
 struct Batch {
   epoch: u64,
   base: Option<AgentProfile>,
@@ -97,10 +97,15 @@ impl Choices {
     choices
   }
 
-  /// Makes `edit` on what the panel holds: now, or behind the batch that is checked.
+  /// Makes `edit` on what the panel holds: now, or behind the batch that is checked. The role as typed replaces the
+  /// one typed before it that still waits: it holds every field of the role, so only the last one is made.
   pub(super) fn make(&self, edit: Edit) {
     if self.action.state().get_untracked().is_pending() {
-      self.waiting.lock().push(edit);
+      let mut waiting = self.waiting.lock();
+      if matches!((waiting.last(), &edit), (Some(Edit::Role(_)), Edit::Role(_))) {
+        waiting.pop();
+      }
+      waiting.push(edit);
     } else {
       self.start(vec![edit]);
     }

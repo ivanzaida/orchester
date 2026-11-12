@@ -324,31 +324,26 @@ fn resources_pipeline_edit_of_another_kind_is_refused() {
 }
 
 #[test]
-fn resources_pipeline_edit_in_a_team_project_waits_for_the_server_and_needs_an_admin() {
+fn resources_pipeline_edit_of_a_team_pipeline_is_refused_here() {
   let (_repo, mut db) = team_repo();
   let id = delivery(&mut db);
 
-  let v2 = db
-    .publish_pipeline_edit(id, &pipeline(&["review"]), VersionNumber::FIRST, None, at(2))
-    .expect("an owner publishes");
-  let waiting = db.waiting_publishes().expect("the outbox");
-  let edit = waiting
-    .iter()
-    .find(|waiting| waiting.version == v2.id())
-    .expect("v2 waits for the server");
-  assert!(!edit.created, "an edit is not the version that created the pipeline");
+  // Only the team server takes a team pipeline's edit (D-043): nothing is published here.
+  let refused = db.publish_pipeline_edit(id, &pipeline(&["review"]), VersionNumber::FIRST, None, at(2));
+  assert!(matches!(refused, Err(StoreError::SharedProject)), "{refused:?}");
+  assert_eq!(versions(&db, id), 1);
 
   db.record_sharing_state(Some(MemberRole::Member), Some(at(3)), None)
     .expect("now a member");
   let refused = db.publish_pipeline_edit(
     id,
     &pipeline(&["plan"]),
-    v2.number(),
+    VersionNumber::FIRST,
     Some(("Delivery", &name("Release"))),
     at(4),
   );
 
   assert!(matches!(refused, Err(StoreError::NotAdmin)), "{refused:?}");
-  assert_eq!(versions(&db, id), 2);
+  assert_eq!(versions(&db, id), 1);
   assert_eq!(title(&db, id), "Delivery");
 }

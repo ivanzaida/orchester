@@ -28,13 +28,12 @@ mod server;
 mod share;
 mod share_fill_ins;
 mod share_team_form;
+mod share_tools;
 #[path = "../support/mod.rs"]
 mod support;
-mod team_copy;
-mod team_created;
+mod team_body_edit;
+mod team_edit;
 mod team_pipeline_echo;
-mod team_refused;
-mod widening;
 
 use std::{
   collections::HashMap,

@@ -144,6 +144,7 @@ pub(in crate::screens) fn row_one_line(id: &str, label: &str, value: impl Into<E
 fn keyed_in(key: Key, id: &str, label: impl Into<Element>, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let one_line = matches!(key, Key::OneLine);
   let key = Column::new()
+    .id(format!("{id}-key"))
     .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Tight.role())

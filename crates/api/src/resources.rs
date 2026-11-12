@@ -9,7 +9,7 @@ use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId},
-  resource::{ResourceKind, TeamAgentProfile, TeamReviewer, VersionNumber},
+  resource::{ResourceKind, TeamAgentProfile, TeamReviewer, TeamTool, VersionNumber},
   secret::SecretName,
   sharing::TaskRevision,
 };
@@ -122,6 +122,16 @@ impl ReferenceTarget {
   /// names no CLI kind, no team resource and no secret, so it has none. The body is the source, as for a profile.
   pub fn of_reviewer(reviewer: &TeamReviewer) -> Vec<Self> {
     reviewer.cli().map(|cli| Self::CliKind { cli }).into_iter().collect()
+  }
+
+  /// The references of a team tool's body: the secret it sends or connects with, by name, as a profile's; a command
+  /// tool names none. The body is the source, as for a profile.
+  pub fn of_tool(tool: &TeamTool) -> Vec<Self> {
+    tool
+      .secret()
+      .map(|name| Self::SecretName { name: name.clone() })
+      .into_iter()
+      .collect()
   }
 }
 

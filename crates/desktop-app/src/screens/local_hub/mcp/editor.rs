@@ -32,7 +32,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  Props, actions,
+  Props, actions, fix,
   form::Form,
   notes,
   rows::Look,
@@ -188,7 +188,8 @@ impl Component for Editor {
       program_refused: field == Some(Refusal::Program),
       creating: false,
     };
-    let mut rows = self.form.server_rows(ctx, &look);
+    let mut rows = vec![self.form.name_row(ctx, &look, None)];
+    rows.extend(self.form.server_rows(ctx, &look));
     rows.extend(self.after_rows(ctx, &look, server.enabled()));
     let used = notes::used_by(ctx, entry);
     let note = match (refused, &field) {
@@ -210,7 +211,10 @@ impl Component for Editor {
       ))
       .with_children(notes::not_ready(ctx, entry))
       .with_children(self.form.asking.dialog(ctx, false));
-    let bar = self.bar(ctx, (&props, &server), (&checked, changed), (field, &revision));
+    let pinned = (!changed && !saving.is_pending())
+      .then(|| fix::bar(ctx, entry, &self.form, &secrets))
+      .flatten();
+    let bar = pinned.unwrap_or_else(|| self.bar(ctx, (&props, &server), (&checked, changed), (field, &revision)));
     frame(what, body, Some(bar))
   }
 }
@@ -262,6 +266,7 @@ impl Editor {
         labels.push(ctx.t(key));
       }
     };
+    note(typed.name != saved.name, "team_new.mcp.name");
     note(typed.transport != saved.transport, "local_hub.mcp.runsAs");
     note(typed.program != saved.program, "connections.mcp.property.program");
     note(typed.arguments != saved.arguments, "connections.mcp.property.arguments");

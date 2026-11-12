@@ -72,6 +72,8 @@ impl Entry {
       HubFilter::Instructions => self.kind == ResourceKind::Instruction,
       HubFilter::Skills => self.kind == ResourceKind::Skill,
       HubFilter::Tools => self.kind == ResourceKind::Tool,
+      // Memory's records are no resources.
+      HubFilter::Memory => false,
     }
   }
 }
@@ -156,10 +158,12 @@ impl Listing {
       group: Group::Ready,
       standing: None,
       profile: None,
-      // What chose an archived server still names it, so the panel can say it was used.
-      used_by: match found.what {
-        Archivable::McpServer(server) => hub.profiles_choosing(server).into_iter().map(str::to_owned).collect(),
-        Archivable::Resource(id) => giving(hub, found.kind, id),
+      // What chose an archived server or ran an archived profile still names it, so the panel can say it was used.
+      used_by: match (found.what, &found.profile) {
+        (Archivable::McpServer(server), _) => hub.profiles_choosing(server).into_iter().map(str::to_owned).collect(),
+        // A profile is used by the pipelines whose steps run it.
+        (Archivable::Resource(_), Some(profile)) => profile.pipelines.clone(),
+        (Archivable::Resource(id), None) => giving(hub, found.kind, id),
       },
       archived: Some(found.at),
     }));

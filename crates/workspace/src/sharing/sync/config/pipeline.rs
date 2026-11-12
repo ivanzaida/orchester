@@ -5,25 +5,29 @@
 use orchester_api::{SharedResource, SharedVersion, VersionContent};
 use orchester_core::{
   id::ResourceId,
-  resource::Pipeline,
+  resource::{Pipeline, ResourceKind, TeamExecutors},
   sharing::LocalEntities,
   store::{ConnectionStore, McpServerStore, SecretStore},
   time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb, StoreError};
+use orchester_store::{CachedVersion, ProjectDb, ResourceSharing, StoreError};
 
 use super::{reference, resource, team_body};
-use crate::sharing::{SharingError, project::convert};
+use crate::{
+  sharing::{SharingError, project::convert},
+  team_config::TeamConfig,
+};
 
 /// `body`, the steps of the team pipeline `resource`, as the team server takes them. Fails with
-/// [`SharingError::PipelineNamesNonTeam`] when a step runs a profile or tool that is not the team's, and with
+/// [`SharingError::PipelineNamesNonTeam`] when a step runs a profile or tool that is not one of `team`'s, and with
 /// [`SharingError::LocalEntitiesNamed`] when it names what only this computer has; nothing is sent then.
 pub(crate) fn pipeline_content(
   db: &ProjectDb,
+  team: &TeamExecutors,
   resource: ResourceId,
   body: &Pipeline,
 ) -> Result<VersionContent, SharingError> {
-  team_body::check_pipeline(db, resource, body, &team_body::team_executors(db)?)?;
+  team_body::check_pipeline(db, resource, body, team)?;
   let value = serde_json::to_value(body).map_err(|error| StoreError::Corrupt {
     what: "resource body",
     detail: error.to_string(),
@@ -42,7 +46,7 @@ pub(crate) fn pipeline_content(
 }
 
 /// Keeps `version`, which the team server took of a pipeline with `body` as its steps, and `created`, the resource the
-/// server made when it was the pipeline's first. A version this computer published never waits for *Use v<N> here*.
+/// server made when it was the pipeline's first.
 pub(crate) fn keep_pipeline_version(
   db: &mut ProjectDb,
   created: Option<&SharedResource>,
@@ -60,7 +64,6 @@ pub(crate) fn keep_pipeline_version(
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
     local_body: body.clone(),
-    waits_here: false,
   };
   db.cache_shared_version(version.resource, &kept)?;
   Ok(())
@@ -70,4 +73,32 @@ pub(crate) fn keep_pipeline_version(
 pub(crate) fn keep_resource(db: &mut ProjectDb, shared: &SharedResource) -> Result<(), SharingError> {
   db.keep_shared_resource(&resource(shared)?, shared.revision)?;
   Ok(())
+}
+
+/// The team's agent profiles and tools a team pipeline may run: those the stream keeps in the project's database (the
+/// copy the pipelines read), and those of `config`, the team's configuration read this session, when it was read (an
+/// HTTP or database tool in the team's form is held there only).
+pub(crate) fn pipeline_executors(db: &ProjectDb, config: Option<&TeamConfig>) -> Result<TeamExecutors, StoreError> {
+  let ids = |kind| -> Result<Vec<ResourceId>, StoreError> {
+    let mut team = Vec::new();
+    for kept in db.kept_resources(kind)? {
+      if matches!(db.resource_sharing(kept.id())?, Some(ResourceSharing::Shared(_))) {
+        team.push(kept.id());
+      }
+    }
+    if let Some(config) = config {
+      let held: Vec<ResourceId> = config
+        .resources(kind)
+        .into_iter()
+        .map(|resource| resource.id)
+        .filter(|id| !team.contains(id))
+        .collect();
+      team.extend(held);
+    }
+    Ok(team)
+  };
+  Ok(TeamExecutors::new(
+    ids(ResourceKind::AgentProfile)?,
+    ids(ResourceKind::Tool)?,
+  ))
 }

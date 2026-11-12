@@ -27,12 +27,8 @@ use orchester_core::{
 };
 use orchester_store::{CachedVersion, ProjectDb, StoreError};
 
-use super::{
-  ConfigServer, blocking, body, reference, resource,
-  share_mcp::McpPlan,
-  team_body::{self, Publication},
-};
-use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, project::convert};
+use super::{ConfigServer, blocking, body, reference, resource, share_mcp::McpPlan, team_body};
+use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, project::convert, team_edit::Publication};
 
 /// The kinds Share uploads from the project's resources, those other resources name first: a tool before the profiles
 /// that use it, profiles before the pipelines whose steps run them. The team MCP servers go before all of them
@@ -195,7 +191,7 @@ fn versions_of(
     }
     SharedResourceKind::AgentProfile => profile_versions(db, kept, mcp),
     SharedResourceKind::Instruction => versions::<Instruction>(db, kept, entities),
-    SharedResourceKind::Tool => versions::<Tool>(db, kept, entities),
+    SharedResourceKind::Tool => tool_versions(db, kept),
     SharedResourceKind::TeamReviewer => reviewer_versions(db, kept),
     SharedResourceKind::McpServer => versions::<TeamMcpServer>(db, kept, entities),
     SharedResourceKind::Skill => {
@@ -250,6 +246,22 @@ fn profile_versions(db: &ProjectDb, resource: &Resource, mcp: &McpPlan) -> Resul
       let adjusted = mcp.adjusted(version.body(), index + 1 == versions.len());
       let publication = team_body::profile_naming(db, resource.id(), &adjusted, &team_servers)?;
       Ok(upload(version, publication))
+    })
+    .collect()
+}
+
+/// The published versions of the tool `resource`, oldest first, each in the team's form: its secret goes by the name it
+/// has in the project, archived or not ([`team_body::named_secrets`]), and an id of this computer never goes. A version
+/// whose secret the project has no row for is refused ([`SharingError::ToolSecretGone`]).
+fn tool_versions(db: &ProjectDb, resource: &Resource) -> Result<Vec<UploadVersion>, SharingError> {
+  let secrets = team_body::named_secrets(db)?;
+  db.versions::<Tool>(resource.id())?
+    .iter()
+    .map(|version| {
+      Ok(upload(
+        version,
+        team_body::tool(resource.id(), version.body(), &secrets)?,
+      ))
     })
     .collect()
 }
@@ -335,7 +347,5 @@ fn confirmed<B>(version: &SharedVersion, local_body: B) -> CachedVersion<B> {
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
     local_body,
-    // This computer published it, so it never waits for a *Use v<N> here*.
-    waits_here: false,
   }
 }

@@ -98,10 +98,6 @@ async fn live_updates_a_team_pipelines_save_coming_back_on_the_stream_is_kept_on
     "each version once"
   );
   assert_eq!(server.versions_of(id).len(), 2);
-  assert!(
-    db().waiting_publishes().expect("the outbox").is_empty(),
-    "nothing waits"
-  );
   assert_eq!(
     state(),
     Some(SyncState::Live),

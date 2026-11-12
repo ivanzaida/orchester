@@ -98,11 +98,9 @@ fn orchestrator_link_roles_follow_the_link_states() {
     "a link's words in `accent_text` 500"
   );
   let links = theme.markdown();
-  let ring = links.link_focus_ring.expect("a link's focus ring");
-  assert_eq!(
-    (ring.width, ring.color, ring.radius),
-    (2.0, Color::from_hex("#A3A3AB"), 3.0),
-    "keyboard focus draws 2 of `border_focus` around a link, radius 3"
+  assert!(
+    links.link_focus_ring.is_none(),
+    "a Markdown link takes no keyboard focus, so it draws no ring"
   );
   assert_eq!(
     (links.link_tooltip_box.background, links.link_tooltip_box.radius),
@@ -129,11 +127,6 @@ fn orchestrator_chat_link_looks_follow_the_link_states() {
       .offset
       .is_some_and(|offset| (offset + 1.0 - box_below_baseline).abs() < 0.001),
     "the underline ends where the line box, and a hovered link's fill, ends: {underline:?}"
-  );
-  assert_eq!(
-    looks.focused.underline_color,
-    Some(Color::from_hex("#00000000")),
-    "with keyboard focus the ring stands for the underline"
   );
   assert_eq!(
     (

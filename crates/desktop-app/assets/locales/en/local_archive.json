@@ -1,6 +1,7 @@
 {
   "local_archive": {
     "body": "{{name}} leaves every list and no new run can use it. Its versions stay readable, and you can restore it.",
+    "bodyUnversioned": "{{name}} leaves every list and no new run can use it. What it holds stays as it is, and you can restore it.",
     "runs": "YOUR RUNS THAT WILL STOP · {{count}}",
     "note": {
       "one": "{{names}} stays not ready until you remove {{name}} from it or restore it.",

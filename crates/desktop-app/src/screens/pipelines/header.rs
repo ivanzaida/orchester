@@ -30,9 +30,8 @@ use crate::{
 };
 
 /// The header of `state`'s page; `busy` while a write runs, the page reloads or a version is read. A member of a shared
-/// project has no `save` (03), and `shared`, the team's version and where it stands here, takes the version line's
-/// place (`Sub` `Du8OB` in 02).
-pub fn header(ctx: &mut Ctx, state: &State, save: Option<Element>, (busy, shared): (bool, Option<Row>)) -> Element {
+/// project has no `save` (03); an admin's sends the edit to the team server (D-043).
+pub fn header(ctx: &mut Ctx, state: &State, save: Option<Element>, busy: bool) -> Element {
   let editing = state.get();
   let nav = Navigation::of(ctx);
   let back = parts::back_link(
@@ -50,7 +49,7 @@ pub fn header(ctx: &mut Ctx, state: &State, save: Option<Element>, (busy, shared
   parts::header()
     .child(back)
     .child(title)
-    .child(shared.unwrap_or_else(|| version_line(ctx, &editing)))
+    .child(version_line(ctx, &editing))
     .child(tabs(ctx, &editing))
     .into()
 }

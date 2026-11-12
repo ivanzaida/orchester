@@ -10,7 +10,7 @@ use crate::{
   id::{ConnectionId, ResourceId, TaskId},
   permission::AgentPermissions,
   project::{ProjectKey, TaskKey},
-  resource::{AgentProfile, Instruction, StepKey, TeamMcpServer, Tool},
+  resource::{AgentProfile, Instruction, StepKey, TeamMcpServer, TeamTool},
   run::{PinnedVersion, bundle::PinnedBody},
   sharing::{ConnectionRole, TaskRevision},
   task::{Task, TaskDetails, TaskStatus, organization::TaskOrganization},
@@ -99,7 +99,7 @@ impl RunInputs {
     body(self.bundle.inputs().instructions(), pinned)
   }
 
-  pub fn tool(&self, pinned: PinnedVersion) -> Option<&Tool> {
+  pub fn tool(&self, pinned: PinnedVersion) -> Option<&TeamTool> {
     body(self.bundle.inputs().tools(), pinned)
   }
 

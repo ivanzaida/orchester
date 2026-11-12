@@ -5,9 +5,10 @@
 //! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
 //! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
 //! [`first_download`]; the reads of a team project straight from the server (`/api/v2`), and an Admin's writes of its
-//! tasks and releases, are in [`authority`], and a project's resources and their versions in [`resources`]. It answers
-//! a wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a cloud
-//! identity, it can refuse a link, and it can stop answering.
+//! tasks and releases, are in [`authority`], a project's resources and their versions in [`resources`], and its event
+//! stream, which opens once asked to and sends no event, in [`events`]. It answers a wrong code and an expired one
+//! alike, `invalid_code`, as a real server does; it can have no place for a cloud identity, it can refuse a link, and
+//! it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -21,6 +22,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 
 mod authority;
+mod events;
 mod first_download;
 mod resources;
 pub use authority::{
@@ -57,6 +59,8 @@ struct State {
   later_expired: bool,
   /// Connections are closed without an answer, as when the server cannot be reached.
   down: bool,
+  /// A project's event stream opens ([`TeamServer::open_event_streams`]); until then it is not found.
+  event_streams: bool,
   /// `POST /projects/{id}/link` answers `forbidden`.
   refuses_links: bool,
   /// Whether each code join carried an Orchester Cloud identity token.
@@ -96,6 +100,7 @@ impl TeamServer {
       approval: false,
       later_expired: false,
       down: false,
+      event_streams: false,
       refuses_links: false,
       code_joins: Vec::new(),
       cloud_joins: 0,
@@ -163,6 +168,12 @@ impl TeamServer {
     self.state.lock().down = down;
   }
 
+  /// A project's event stream opens from now on, so a desktop reads the team's configuration from the resource routes
+  /// once it connects; until then the stream is not found and the desktop never reads it.
+  pub fn open_event_streams(&self) {
+    self.state.lock().event_streams = true;
+  }
+
   /// A first link of a project is refused from now on, as a server that took the person's role away refuses it.
   pub fn refuse_links(&self) {
     self.state.lock().refuses_links = true;
@@ -209,6 +220,9 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>) {
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
+  if events::asked(&line, state) {
+    return events::serve(&mut stream, &headers, state);
+  }
   if line
     .split_whitespace()
     .nth(1)

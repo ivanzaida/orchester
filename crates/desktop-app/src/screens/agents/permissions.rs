@@ -89,7 +89,7 @@ pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Sect
     None => (None, None),
   };
   let mut take = |here: Section| if section == Some(here) { question.take() } else { None };
-  let offers_sandbox = sandbox::offered(context, provider);
+  let offers_sandbox = sandbox::offered(provider);
   let (sandbox_asked, elsewhere) = match take(Section::Sandbox) {
     asked if offers_sandbox => (asked, None),
     asked => (None, asked),

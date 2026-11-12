@@ -35,10 +35,10 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     id: &id,
     chosen: shown.selected == Some(entry.id),
     open: shown.leave.press(route).button(),
-    group: entry.group,
+    group: Some(entry.group),
     kind: "pipeline".to_owned(),
     mark: mark.into(),
-    name: &entry.name,
+    name: (&entry.name, PaletteColor::TextPrimary),
     line,
     tag: (shown.default == Some(entry.id) && entry.archived.is_none())
       .then(|| tag_chip(&format!("{id}-tag"), &ctx.t("pipeline_hub.row.default"))),
