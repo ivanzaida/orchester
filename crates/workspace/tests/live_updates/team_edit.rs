@@ -52,6 +52,10 @@ fn desktop(server: &TeamServer, (style, held): (ResourceId, u32), admin: bool) -
     name: Name::new("Style").expect("name"),
     archived: false,
     revision: TaskRevision::try_from(1).expect("a revision"),
+    updated: orchester_workspace::team_config::Changed {
+      by: "Alice Moreau".to_owned(),
+      at: orchester_core::time::Timestamp::from_unix_millis(0),
+    },
     latest: Some(TeamVersion {
       number: number(held),
       body: json("Use tabs."),

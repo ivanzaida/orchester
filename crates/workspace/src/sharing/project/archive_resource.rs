@@ -1,10 +1,12 @@
-//! An admin archives a team resource (`docs/design/team-configuration.md`, decision 11): the team server marks it
-//! archived (`PATCH …/resources/{resource}`, made on the revision this computer has) and every computer follows through
-//! its event stream, where the runs that pin the resource stop ([`crate::sharing::sync`]). The revision is the one the
-//! team's configuration in memory holds ([`crate::team_config`]). Nothing is marked here
-//! first: the stream's `resource.archived` is what stops the runs, and it stops them only for a mark that is new.
-//! While the server cannot be reached nothing is sent and the archive fails at once; it has no outbox. It stops work on
-//! every computer, so it is a person's alone: automation is refused before anything is sent.
+//! An admin archives a team resource (`docs/design/team-configuration.md`, decision 11) or restores one (`Agents ·
+//! Archived · admin · Restore` A36 `qvMZD`): the team server sets or clears its archived mark (`PATCH
+//! …/resources/{resource}`, made on the revision this computer has) and every computer follows through its event
+//! stream, where the runs that pin an archived resource stop ([`crate::sharing::sync`]). The revision is the one the
+//! team's configuration in memory holds ([`crate::team_config`]), which keeps the server's answer at once, so a restore
+//! made after this computer's own archive is made on the revision that archive left. The stream's `resource.archived`
+//! is what stops the runs, and it stops them only for a mark that is new. While the server cannot be reached nothing is
+//! sent and the change fails at once; it has no outbox. Archiving stops work on every computer, so it is a person's
+//! alone: automation is refused before anything is sent. Restoring loses nothing and stops nothing.
 
 use std::path::Path;
 
@@ -41,6 +43,40 @@ impl NotArchived {
   }
 }
 
+/// Why an archived team resource was not restored; nothing was changed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NotRestored {
+  /// The team server refused it with its error `code`: `not_admin`, or `revision_conflict` when the resource changed
+  /// since this computer read it.
+  Refused { code: String },
+  /// It could not be sent, e.g. the server cannot be reached.
+  Failed(Message),
+}
+
+impl From<NotMarked> for NotRestored {
+  fn from(not: NotMarked) -> Self {
+    match not {
+      NotMarked::Refused { code } => Self::Refused { code },
+      NotMarked::Failed(message) => Self::Failed(message),
+    }
+  }
+}
+
+impl From<NotMarked> for NotArchived {
+  fn from(not: NotMarked) -> Self {
+    match not {
+      NotMarked::Refused { code } => Self::Refused { code },
+      NotMarked::Failed(message) => Self::Failed(message),
+    }
+  }
+}
+
+/// Why the archived mark was not changed.
+enum NotMarked {
+  Refused { code: String },
+  Failed(Message),
+}
+
 impl Servers {
   /// Archives the team resource `resource` of the project at `repo_root` on the team server, as `by` asks: automation
   /// is refused ([`NotArchived::PersonOnly`]) without reading or sending anything.
@@ -53,31 +89,59 @@ impl Servers {
     if by == Answerer::Automation {
       return Err(NotArchived::PersonOnly);
     }
-    let (servers, root) = (self.clone(), repo_root.to_owned());
-    let prepared = background::run(move || prepare(&servers, &root, resource))
+    self
+      .mark_archived(repo_root, resource, true)
       .await
-      .map_err(NotArchived::Failed)?;
+      .map_err(NotArchived::from)
+  }
+
+  /// Restores the archived team resource `resource` of the project at `repo_root` on the team server: back in every
+  /// list and picker for the whole team, as it was. The runs its archive stopped stay stopped.
+  pub async fn restore_resource(&self, repo_root: &Path, resource: ResourceId) -> Result<(), NotRestored> {
+    self
+      .mark_archived(repo_root, resource, false)
+      .await
+      .map_err(NotRestored::from)
+  }
+
+  /// Sets the archived mark of `resource` to `archived` on the team server, and keeps its answer in the team's
+  /// configuration in memory.
+  async fn mark_archived(&self, repo_root: &Path, resource: ResourceId, archived: bool) -> Result<(), NotMarked> {
+    let (servers, root) = (self.clone(), repo_root.to_owned());
+    let prepared = background::run(move || prepare(&servers, &root, resource, archived))
+      .await
+      .map_err(NotMarked::Failed)?;
     let (server, patch) = prepared?;
     match server
       .call(|client, token, project| async move { client.update_resource(&token, project, resource, &patch).await })
       .await
     {
-      Ok(_) => Ok(()),
+      Ok(answer) => {
+        self
+          .inner
+          .workspace
+          .team
+          .update(repo_root, |config| config.changed(&answer));
+        self.shared_changed();
+        Ok(())
+      }
       Err(error) => Err(match error.code() {
-        Some(code) => NotArchived::Refused { code: code_text(code) },
-        None => NotArchived::Failed(said(&error, None)),
+        Some(code) => NotMarked::Refused { code: code_text(code) },
+        None => NotMarked::Failed(said(&error, None)),
       }),
     }
   }
 }
 
-/// The server of the project at `root` and the archive of `resource` on the revision this computer has of it.
+/// The server of the project at `root` and the change of `resource`'s archived mark to `archived` on the revision this
+/// computer has of it.
 fn prepare(
   servers: &Servers,
   root: &Path,
   resource: ResourceId,
-) -> Result<(ProjectServer, ResourcePatch), NotArchived> {
-  let failed = |error: &SharingError| NotArchived::Failed(said(error, None));
+  archived: bool,
+) -> Result<(ProjectServer, ResourcePatch), NotMarked> {
+  let failed = |error: &SharingError| NotMarked::Failed(said(error, None));
   let server = ProjectServer::open(servers, root)
     .map_err(|error| failed(&error))?
     .ok_or_else(|| failed(&SharingError::Store(StoreError::NotShared)))?;
@@ -94,7 +158,7 @@ fn prepare(
     idempotency_key: IdempotencyKey::generate(),
     revision,
     name: None,
-    archived: Some(true),
+    archived: Some(archived),
   };
   Ok((server, patch))
 }

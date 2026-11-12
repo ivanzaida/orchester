@@ -6,14 +6,14 @@
 use orchester_core::{
   connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
   id::{ConnectionId, ResourceId},
-  resource::{ResourceKind, TeamAgentProfile, TeamMcpServer},
+  resource::{TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
   store::ConnectionStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{team_body_edit::Latest, team_sheets};
-use crate::team_config::TeamConfig;
+use crate::team_config::{TeamConfig, TeamResource};
 
 /// A resource a profile uses.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,12 +87,15 @@ impl TeamProfileSheet {
   }
 }
 
-/// A sheet for each team profile whose latest version is in the team's form; one that is not has none, and its
-/// readiness says why. What this computer filled in (the pick) is read from `db`.
-pub(super) fn sheets(db: &ProjectDb, config: &TeamConfig) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
+/// A sheet for each team profile of `profiles` whose latest version is in the team's form; one that is not has none,
+/// and its readiness says why. What this computer filled in (the pick) is read from `db`.
+pub(super) fn sheets(
+  (db, config): (&ProjectDb, &TeamConfig),
+  profiles: &[&TeamResource],
+) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
   let connections = db.connections()?;
   let mut sheets = Vec::new();
-  for resource in config.resources(ResourceKind::AgentProfile) {
+  for resource in profiles.iter().copied() {
     let Some(Ok(team)) = resource.body::<TeamAgentProfile>() else {
       continue;
     };

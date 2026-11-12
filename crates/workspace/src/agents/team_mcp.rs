@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer},
+  resource::{TeamMcpLaunch, TeamMcpServer},
   secret::SecretName,
   time::Timestamp,
 };
@@ -19,7 +19,7 @@ use super::{
   team_profile::TeamProfileSheet,
   team_sheets,
 };
-use crate::team_config::TeamConfig;
+use crate::team_config::{TeamConfig, TeamResource};
 
 /// Who published the version this computer uses, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,16 +80,17 @@ pub struct TeamMcpSheet {
   pub edit: Option<McpEdit>,
 }
 
-/// A sheet for each team MCP server the team has not archived whose latest version is one this computer reads.
-/// `profiles` are the team's profile sheets by resource, which say who uses it; `programs` the paths this computer set
-/// for the team server.
+/// A sheet for each team MCP server of `servers` whose latest version is one this computer reads. `profiles` are the
+/// team's profile sheets by resource, which say who uses it; `programs` the paths this computer set for the team
+/// server.
 pub(super) fn sheets(
   (db, config): (&ProjectDb, &TeamConfig),
+  servers: &[&TeamResource],
   programs: &[McpServerProgram],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Result<Vec<(ResourceId, TeamMcpSheet)>, StoreError> {
   let mut sheets = Vec::new();
-  for resource in config.resources(ResourceKind::McpServer) {
+  for resource in servers.iter().copied() {
     let (Some(number), Some(Ok(body))) = (resource.number(), resource.body::<TeamMcpServer>()) else {
       continue;
     };

@@ -15,7 +15,7 @@ use std::{
 use orchester_core::time::Timestamp;
 use parking_lot::Mutex;
 
-pub use self::config::{NotTeamForm, TeamConfig, TeamResource, TeamVersion};
+pub use self::config::{Changed, NotTeamForm, TeamConfig, TeamResource, TeamVersion};
 use crate::messages::Message;
 
 /// How a team project's configuration stands this session.

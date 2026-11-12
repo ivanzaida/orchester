@@ -13,6 +13,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use super::{
+  team_archived::{self, TeamArchived},
   team_mcp::{self, TeamMcpSheet},
   team_profile::{self, TeamProfileSheet},
   team_text::{self, TeamInstructionSheet, TeamSkillSheet},
@@ -70,6 +71,7 @@ pub struct TeamHub {
   tools: Vec<(ResourceId, TeamToolSheet)>,
   instructions: Vec<(ResourceId, TeamInstructionSheet)>,
   skills: Vec<(ResourceId, TeamSkillSheet)>,
+  archived: Vec<TeamArchived>,
 }
 
 impl TeamHub {
@@ -115,6 +117,11 @@ impl TeamHub {
   /// computer cannot read.
   pub fn skill(&self, resource: ResourceId) -> Option<&TeamSkillSheet> {
     found(&self.skills, resource)
+  }
+
+  /// What the team archived, the latest archived first (`Agents · Archived · admin · Restore` A36 `qvMZD`).
+  pub fn archived(&self) -> &[TeamArchived] {
+    &self.archived
   }
 
   /// What the MCP server or tool `resource` is; `None` for any other resource.
@@ -179,7 +186,7 @@ impl Workspace {
     };
     let db = ProjectDb::open(repo_root)?;
     let readiness = self.readiness_in(&db, repo_root, vault)?;
-    let profiles = team_profile::sheets(&db, &config)?;
+    let profiles = team_profile::sheets((&db, &config), &config.resources(ResourceKind::AgentProfile))?;
     let programs = match db.sharing()? {
       Some(link) => self.db.lock().mcp_server_programs(link.server)?,
       None => Vec::new(),
@@ -189,10 +196,16 @@ impl Workspace {
       readiness,
       plain: plain(&config),
       forms: forms(&config),
-      mcp_servers: team_mcp::sheets((&db, &config), &programs, &profiles)?,
-      tools: team_tool::sheets(&config, &profiles),
-      instructions: team_text::instructions(&config, &profiles),
-      skills: team_text::skills(&config, &profiles),
+      mcp_servers: team_mcp::sheets(
+        (&db, &config),
+        &config.resources(ResourceKind::McpServer),
+        &programs,
+        &profiles,
+      )?,
+      tools: team_tool::sheets(&config, &config.resources(ResourceKind::Tool), &profiles),
+      instructions: team_text::instructions(&config, &config.resources(ResourceKind::Instruction), &profiles),
+      skills: team_text::skills(&config, &config.resources(ResourceKind::Skill), &profiles),
+      archived: team_archived::archived((&db, &config), &programs, &profiles)?,
       profiles,
     })))
   }

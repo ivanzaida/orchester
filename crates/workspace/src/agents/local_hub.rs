@@ -520,7 +520,7 @@ fn archived_profile(
 }
 
 /// The tasks of the runs `stops` names; a task the project no longer has is left out.
-fn stopped(db: &ProjectDb, stops: &[ArchiveStop]) -> Result<Vec<StoppedRun>, StoreError> {
+pub(super) fn stopped(db: &ProjectDb, stops: &[ArchiveStop]) -> Result<Vec<StoppedRun>, StoreError> {
   let mut runs = Vec::new();
   for stop in stops {
     if let Some(task) = db.task(stop.task)? {
