@@ -37,7 +37,7 @@ use crate::{
   },
   links::{Link, TaskPage},
   messages::Message,
-  project_settings::{decision_reviewer, person_only},
+  project_settings::{changed_meanwhile, decision_reviewer, person_only},
   tasks::{
     detail::run_store_error,
     outside::Outside,
@@ -219,7 +219,7 @@ fn moved(
     if !db.save_approve_mode_if(current, mode)? {
       return Err(ToolError::refused(
         "changed_outside",
-        vec![Message::new("projectSettings.changedOutside")],
+        vec![changed_meanwhile(db.approve_mode()?)],
       ));
     }
     services.changes.record(project, Outside::AutoMode);

@@ -268,3 +268,20 @@ fn project_settings_default_reviewer_keeps_model_and_effort_edits() {
   assert_eq!(choice.model.as_str(), "another-model");
   assert!(project_settings::reviewer(&settings, "", "gpt-5.5", "invalid").is_err());
 }
+
+/// A move of the Approve mode refused for a stale read says the mode changed meanwhile and what it is now, in words of
+/// its own.
+#[test]
+fn project_settings_approve_mode_changed_meanwhile_names_the_mode_now() {
+  use orchester_core::run::ApproveMode;
+  for (now, key) in [
+    (ApproveMode::Manual, "projectSettings.approveModeChanged.manual"),
+    (ApproveMode::Autopilot, "projectSettings.approveModeChanged.autopilot"),
+    (
+      ApproveMode::DangerousAutoApprove,
+      "projectSettings.approveModeChanged.dangerous",
+    ),
+  ] {
+    assert_eq!(project_settings::changed_meanwhile(now).key, key);
+  }
+}

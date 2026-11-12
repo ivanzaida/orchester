@@ -39,7 +39,12 @@
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
     "autopilotPersonOnly": "Only you can choose Autopilot as the Approve mode: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; moving it down to Manual is.",
-    "dangerousPersonOnly": "Only you can choose Dangerous auto-approve as the Approve mode: it approves every tool request of every agent in this project with nothing checked. Input from an MCP client is not taken; moving it down is."
+    "dangerousPersonOnly": "Only you can choose Dangerous auto-approve as the Approve mode: it approves every tool request of every agent in this project with nothing checked. Input from an MCP client is not taken; moving it down is.",
+    "approveModeChanged": {
+      "manual": "The Approve mode was changed meanwhile and is now Manual: nothing was moved. Look again and choose anew if you still want to.",
+      "autopilot": "The Approve mode was changed meanwhile and is now Autopilot: nothing was moved. Look again and choose anew if you still want to.",
+      "dangerous": "The Approve mode was changed meanwhile and is now Dangerous auto-approve: nothing was moved. Look again and choose anew if you still want to."
+    }
   },
   "projects": {
     "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",

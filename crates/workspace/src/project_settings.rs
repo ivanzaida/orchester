@@ -102,9 +102,20 @@ pub fn save_approve_mode_in(root: &Path, to: ApproveMode, by: Answerer) -> Resul
       .save_approve_mode_if(current, changed)
       .map_err(|error| messages::store_error(&error))?
   {
-    return Err(Message::new("projectSettings.changedOutside"));
+    return Err(changed_meanwhile(
+      db.approve_mode().map_err(|error| messages::store_error(&error))?,
+    ));
   }
   Ok(changed)
+}
+
+/// Why a move of the Approve mode decided on a mode someone changed meanwhile was not made, naming what it is `now`.
+pub fn changed_meanwhile(now: ApproveMode) -> Message {
+  Message::new(match now {
+    ApproveMode::Manual => "projectSettings.approveModeChanged.manual",
+    ApproveMode::Autopilot => "projectSettings.approveModeChanged.autopilot",
+    ApproveMode::DangerousAutoApprove => "projectSettings.approveModeChanged.dangerous",
+  })
 }
 
 /// The project's *Approve mode* at `root`, for the status bar's chip.
