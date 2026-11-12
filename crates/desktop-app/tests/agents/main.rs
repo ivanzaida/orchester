@@ -43,6 +43,7 @@ mod pipeline_hub_ready;
 mod pipeline_hub_ready_fixes;
 mod pipeline_leaving;
 mod pipeline_menu_edit;
+mod pipeline_old_routes;
 mod pipeline_reorder;
 mod pipeline_reorder_changes;
 mod pipeline_reorder_guards;

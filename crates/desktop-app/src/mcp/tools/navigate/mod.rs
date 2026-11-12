@@ -65,8 +65,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), `view` new for New module, or `module`: new for New module, a module's id \
   for its page on `tab` (summary or burndown), with `view` edit for Edit module (a `tab` or `view` that names nothing \
-  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list, from \
-  whose rows a pipeline's page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
+  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list: in \
+  a local project the Pipelines hub, whose rows open a pipeline's panel there; in a team project the list whose rows \
+  open a pipeline's page on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
   screen opens on. \
   Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
