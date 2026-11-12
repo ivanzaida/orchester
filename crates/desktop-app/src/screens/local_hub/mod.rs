@@ -362,6 +362,7 @@ impl LocalHubScreen {
         mode: create::Mode::Local,
         taken: listing.names_of(kind.core()),
         team: None,
+        listed: listing.shown(kind.filter()).map(|entry| entry.what).collect(),
       },
     )
   }
@@ -498,8 +499,8 @@ pub(in crate::screens) fn form_or(
 
 /// A route that names an entry the filter does not hold (one archived, or of another kind) shows the one the page
 /// shows; the route is corrected to it, in place, so a link, Back and a reload land on what the page says. An entry
-/// the hub has not read yet is waited for, not corrected away: one just made (the form goes to it as soon as it is
-/// made, before the hub reads it) is shown once the hub reads it again.
+/// the hub has not read yet is waited for, not corrected away, and is shown once the hub reads it again (a form that
+/// made one goes to it only once the hub's list holds it).
 fn keep_route_on_shown(
   project: &ShownProject,
   (view, listing): (&HubView, &Listing),

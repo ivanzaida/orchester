@@ -57,6 +57,7 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{
   agents::team_hub::{TeamHub, TeamHubRead},
+  local_archive::Archivable,
   memory::listing::Filters,
   messages::Message,
   sharing::team::TeamConfiguration,
@@ -279,8 +280,8 @@ fn again(services: &Services, root: &std::path::Path) {
   });
 }
 
-/// Whether the route names a resource the team's configuration holds that the hub's answer does not list yet: one just
-/// created, which the hub reads again behind. The route stays on it.
+/// Whether the route names a resource the team's configuration holds that the hub's answer does not list yet: one an
+/// admin just created, which the hub reads again behind. The route stays on it.
 fn read_behind(ctx: &mut Ctx, project: &ShownProject, view: HubView, listing: &Listing) -> bool {
   view
     .item
@@ -377,6 +378,10 @@ fn hub_body(
         mode: create::Mode::Team,
         taken: listing.shown(kind.filter()).map(|entry| entry.name.clone()).collect(),
         team: Some(team.clone()),
+        listed: listing
+          .shown(kind.filter())
+          .map(|entry| Archivable::Resource(entry.id))
+          .collect(),
       },
     ),
     (None, Some(selected)) => {
