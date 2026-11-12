@@ -235,33 +235,42 @@ loses its profile, a profile loses that skill).
 
 ### Pipelines (`/project/<id>/pipelines`)
 
-The list groups pipelines as **Published** and **Draft only**; each row shows its steps ("Research → Plan → …"), its
-version state and the tasks using it, and a **…** menu (*Open*, *Duplicate*, **Make default** — the pipeline New task
-starts with, marked *Default*). Header: **Import from project**, **New pipeline**.
+A pipeline has **no drafts**: it is stored only as a published version, and only when it can publish (every step has
+an agent that is ready, its steps have an order). A change that cannot publish stays on the screen, unsaved, until you
+fix it or *Cancel* it; leaving asks first.
 
-1. **New pipeline** (a page): *Name*, *Slug*, *Description* and *Start from* — **Starter · Feature delivery**, **Copy
-   a pipeline** or **Empty pipeline** → **Create draft v1**.
-2. The pipeline page has tabs **Steps · Settings · Versions** and, in the header, **Save draft**, **Publish vN** (or
-   *Version history* with no draft) and *Run* (always unavailable: "Create a task to run this pipeline.").
-3. **Steps** — a **vertical flow**: *On task start*, the step cards in dependency order, steps on the same level in a
-   *Run in parallel* bracket, the Deliver card last, and **Add step**. Selecting a step opens a column beside the
-   flow:
-   - **Step** — *Executor* (a published profile or a command tool), *Model for this step*, *Instructions* (a page of
-     its own);
-   - **Flow** — *Runs after*, *When changes are requested* (failure route), *Maximum retries*, *Step budget*, *When the
-     step fails* ("Restart once, then ask");
-   - **Gate and access** — *Wait for your approval*, *Repository access* (Read-only / Can write), *Merge the base branch
-     when it moves*, *Sources* and *Permissions* (pages that can only narrow the profile: a subset of its commands,
-     network off, ask when a tool needs approval).
-   Rename a step in place; *Duplicate step*, *Remove step*.
-4. The **Deliver step** (from its card): *Mode* (*Approve to merge*, *Auto-merge*; *Pull request* coming later),
-   *Merge method* (*Merge commit* / *Squash*), *Resolve conflicts with*, *Re-run Check on the merged result*.
-5. **Settings** — *General* (name, slug, description), *Runs* (starts on task start; when a step fails), *Sources for
-   every step*, *Delivery* (*What a run delivers*), *Deliver step*.
-6. **Save draft**, then **Publish vN**. The publish review shows *Published now* against *After publishing*; a weaker
-   version asks for your approval. A pipeline whose profile only has a draft can't publish.
-7. **Versions** — every published version; open one read-only, *Compare* it with the draft or the published version,
-   or *Restore vN as draft*.
+In a local project, Pipelines is a **hub**: tabs **All · Archived** with counts, the list grouped **Needs you** (what
+keeps a pipeline from running, e.g. "02 Review runs a profile that is no longer available") and **Ready**, and the
+chosen pipeline's **panel**, edited in place. Header: **New pipeline**.
+
+1. **New pipeline** opens an unsaved panel: start from the starter *Feature delivery*, an empty pipeline or a copy.
+   Its flow shows like any pipeline's; a step with no agent says *Choose profile*. **Create v1** stays off, naming the
+   steps to fix, until the pipeline can publish.
+2. The panel's head: the name, its version and *used by N tasks*, **Versions** and **…** (*Rename*, *Duplicate* — a
+   copy named "… copy" in an unsaved panel —, **Make default for New task**, *Archive*). Chips say whether it is
+   ready.
+3. **Steps** — a vertical **flow**: *On task start*, a card per step in the order they run, steps that run together
+   side by side under *Run in parallel*, approval gates on the line, the Deliver card last (or **Add Deliver step**),
+   and where the run ends. Drag a card by its handle, use its **…** (*Move up/down*, *Run in parallel with …*, *Add a
+   step after*, *Duplicate*, *Remove*) or Alt ↑ / Alt ↓ to change the order; **Add step** in the section's head. A step
+   that waits for only some of the steps before it shows *Waits for*.
+4. Pressing a card opens the **step in the panel**: ← back to the pipeline, the step's name (rename in place),
+   *Duplicate* and **…**, a strip of every step (← and → walk through them), then **Step** (*Agent* — a profile or a
+   tool, from the Agent picker — and *Instructions*), **Run** (*When changes are requested*, *Retries*, *Step budget*)
+   and **Gate and access** (*Wait for your approval*, *Repository access*, *Merge the base branch when it moves*,
+   *Sources*, and the step's permissions, which can only narrow the profile's).
+5. The **Deliver step** opens the same way: *Mode* (*Approve to merge*, *Auto-merge*; *Pull request* coming later),
+   *Merge method* (*Merge commit* / *Squash*), *Resolve conflicts with* and *Re-run Check on the merged result*, and
+   **Remove step**. **Add Deliver step** adds one (Approve to merge, Merge commit, re-check on).
+6. **Pipeline** — *Description*, *Slug*, *Starts*, *When a step fails*, *Sources for every step* and *A run delivers*;
+   then **Ready?**, what is missing and how to fix it.
+7. **Save** publishes the next version (*Save makes v4 · runs keep the version they started on*); a change that lets
+   runs go further without you asks *Allow these changes?* first. **Cancel** puts back what is stored.
+8. **Versions** lists every version; open one read-only, and **Restore** puts it in the edit.
+
+In a team project, Pipelines keeps its own page: grouped rows, and a pipeline's page with tabs **Steps · Settings ·
+Versions** and one **Save** that publishes. An admin's Save, *Create v1*, *Duplicate* and rename go to the team server
+first and are kept here only when it accepts them; a member reads them.
 
 ### Instructions, Skills, Tools, Memory (Agents hub tabs)
 
@@ -296,7 +305,8 @@ grouped by environment, each row with its name, what uses it and a masked value 
 
 ### Import resources (`/project/<id>/import`)
 
-Copy pipelines, agent profiles, instructions and tools from another project as **independent local drafts**:
+Copy agent profiles, instructions and tools from another project as **independent local drafts** (pipelines are not
+imported):
 *Select resources* → *Resolve dependencies* (new copy, rename, reuse a local one, leave unresolved) → *Create drafts*.
 Connections and secrets are never copied; importing never grants access.
 

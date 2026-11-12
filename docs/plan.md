@@ -419,16 +419,14 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
-### PV2-14 · Retire the old Pipelines page for local projects once the hub has New and Duplicate, the Deliver step and branched flows (waits for the person's decision)
+### PV2-22, PV2-24 · The last ways from a local project into the old Pipelines page (in progress)
 
-A local project's Pipelines page is the hub (`Pipelines · v2`, `docs/design/pipelines-v2.md`), and links to a pipeline
-from other pages open its panel. The old page (`crates/desktop-app/src/screens/pipelines/`) stays because a team
-project uses all of it, and because a local project still reaches it for what the hub lacks: New pipeline and
-*Duplicate* (`NewPipeline`, `CopyPipeline`), the Deliver step (the Deliver card), branched flows (*Edit steps*), and
-the slug and *who can use it* (its Settings tab). Each needs the person's decision and a design frame first. **Done
-when** the hub covers what is decided, a local project reaches none of the old page's routes (removed or opening the
-hub), the old page's code, routes and keys only a local project used are gone, team projects' pipelines are unchanged,
-and the tests that assert the old routes from the hub drive the hub; then move this entry to *Done*.
+A local project's Pipelines page is the hub (`Pipelines · v2`, `docs/design/pipelines-v2.md`); every route of the old
+page it is asked for opens the hub (PV2-14), but two that the hub still sends to: New pipeline and *Duplicate*
+(`NewPipeline`, `NewEmptyPipeline`, `CopyPipeline`; PV2-22, `claude/pv2-22-new-duplicate`) and *Edit steps* for steps
+it cannot draw (`Pipeline(_, Steps)`; PV2-24, `claude/pv2-24-branched-flows`). Each task removes its route. **Done
+when** both have landed and a local project reaches no route of `crates/desktop-app/src/screens/pipelines/`, whose code
+stays for team projects; then move this entry to *Done*.
 
 ### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
 
@@ -1098,8 +1096,9 @@ Agents · v2 (`acFkz`) finished on master, 2026-11-11 (outside Orchester):
 
 Not built (no design): the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
 
-Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2` (tasks `docs/plan/pipelines-v2/`,
-decisions `docs/design/pipelines-v2.md`; PV2-02 canceled, PV2-14 open under *U · Screens*):
+Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2`, in master since `e21081337`
+(tasks `docs/plan/pipelines-v2/`, decisions `docs/design/pipelines-v2.md`; PV2-02 and PV2-19 canceled; PV2-22 and
+PV2-24 open under *U · Screens*):
 
 - PV2-01 · Core: move steps and run them in parallel · `claude/pv2-01-step-order` → `310ce4f39`.
 - PV2-03 · The compact *Runs on* picker as a shared component · `claude/pv2-03-runs-on-picker` → `c37c1caad`.
@@ -1119,10 +1118,35 @@ decisions `docs/design/pipelines-v2.md`; PV2-02 canceled, PV2-14 open under *U �
 - PV2-17 · Readiness and save polish · `claude/pv2-17b-step-flow` → `238b0c2e6`, `claude/pv2-17a-ready-save` →
   `1f2dc0057`.
 - PV2-18 · The rest of a step in the panel · `claude/pv2-18-step-rest` → `0b8c6f23b`.
-- PV2-19 · A draft is always saved; Save says what publishing would refuse · `claude/pv2-19-save-refusals` →
-  `531f3d1ae`.
+- PV2-19 · A draft is always saved; Save says what publishing would refuse · canceled: merged as
+  `claude/pv2-19-save-refusals` → `531f3d1ae` with its follow-up `5b309b469` (the stale-narrowing test, one wording for
+  a gone profile), then reversed by D-032 (pipelines have no drafts) and replaced by PV2-27 … PV2-31.
+- PV2-20 · The step head's ⋯ menu · `claude/pv2-20-step-head-menu` → `a85e24fb5`.
 - PV2-21 · Tests that drove the old step editor of a local project run against the hub · `claude/pv2-21-tests-on-hub`
   → `20dba64d2`.
+- PV2-23 · The Deliver step in the step panel (P15, P15b): *Mode*, *Merge*, *Conflicts*, *Check*, *Remove step* and *Add
+  Deliver step* · `claude/pv2-23-deliver-step`, in batch B (`claude/pv2-batch-b`).
+- PV2-25 · The pipeline's slug in the hub's settings (P17); *Who can use it* dropped · `claude/pv2-25-slug`, in batch
+  B → `881617d7b`.
+- PV2-26 · Map: where pipeline drafts live, and the split into PV2-27 … PV2-33 · research, no branch.
+- PV2-27 · Store: a pipeline is created published; the migration deletes pipeline drafts · with PV2-28 →
+  `7fd9db19c`.
+- PV2-28 · Workspace: saving a pipeline publishes it or refuses with every reason · `claude/pv2-28-save-publishes` →
+  `7fd9db19c`, `claude/pv2-28-workspace-tests` → `c703fd068`.
+- PV2-29 · MCP: `save_pipeline` replaces `save_pipeline_draft` and `publish_pipeline` · and PV2-30 · the Orchestrator
+  changes pipelines only while it drives · `claude/pv2-29-30-mcp-chat` → `e7efc84d1`.
+- PV2-31 · The hub without drafts: no Drafts tab or draft words, Save off with why, the leave question for a
+  never-saved pipeline · `claude/pv2-31-hub-no-drafts` → `c20d0bcef`.
+- PV2-32 · The team pipeline page: one Save that publishes · `claude/pv2-32-team-one-save` → `c831895c2`,
+  `16c75837c`.
+- PV2-33 · Pipelines leave Import resources · `claude/pv2-33-hide-import` → `9f0f9af6a`.
+- PV2-34 · A team pipeline's Save, Create v1, Duplicate and rename wait for the team server; nothing is stored or lost
+  on a refusal (D-042, D-043, D-047) · `claude/pv2-34-team-save-sync` → `9c9de7600`.
+- Batch A (PV2-27 … PV2-34) into master with the module: `0f4c27ad6` → master `e21081337` (D-045, D-047).
+- PV2-14 · Retire the old Pipelines page of local projects: part 1 → `01168167b` (links from other pages open the hub,
+  these docs and plan); the rest on `claude/pv2-14-retire` — every route of the old page a local project is asked for
+  opens the hub under the hub's own route, the docs say what the hub does; the routes PV2-22 and PV2-24 own move with
+  them (open under *U · Screens*).
 
 ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 

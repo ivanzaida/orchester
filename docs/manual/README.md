@@ -34,7 +34,7 @@ This manual describes the current app (`crates/desktop-app`, binary `orchester`,
 3. **Add project**: choose the top folder of a git repository.
 4. **Project settings › Connections › Add provider**: a Claude Code or Codex CLI connection.
 5. **Agents › New agent**: create and publish profiles (e.g. Explorer, Planner, Builder, Reviewer).
-6. **Pipelines › New pipeline › Starter · Feature delivery**: assign the profiles and publish it.
+6. **Pipelines › New pipeline › Feature delivery**: choose each step's agent, then **Create v1**.
 7. **Tasks › New task**: a title, the outcome, acceptance criteria and the *Pipeline* chip → **Create & run**.
 8. Follow it in the task's **Conversation**; answer what waits for you (the **N need you** pill); merge from the
    **Summary** when it is ready.

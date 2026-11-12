@@ -115,8 +115,9 @@ turned off in Project settings.
 
 ## Pipelines
 
-**Pipeline.** The steps a task's run goes through, who runs each one, and where the run waits for a person. Versioned:
-tasks can only choose a **published** pipeline.
+**Pipeline.** The steps a task's run goes through, who runs each one, and where the run waits for a person. Versioned,
+with **no drafts**: a pipeline is stored only as a published version, and only when it can publish, so every pipeline
+a task can choose is published.
 
 **Step kinds.**
 
@@ -124,8 +125,9 @@ tasks can only choose a **published** pipeline.
   it. Effective permissions are profile ∩ step: a step can only narrow.
 - **Tool step** — calls a project **command tool**; its exit code decides the step.
 
-**Dependencies.** Each step's *Runs after* set; the first level hangs under *On task start*. Steps ready together run
-in parallel.
+**Dependencies.** The order of the steps in the flow: each step waits for the steps before it, steps side by side run
+in parallel, and the first hang under *On task start*. A step may wait for only some of the steps before it (*Waits
+for*). Steps that wait on each other have no order and are not saved.
 
 **Approval gate.** *Wait for your approval*: the step proposes its result as **plan vN** and the run waits.
 *Approve plan & continue* lets it go on; *Request changes* (with a note) resumes the step's agent, which writes plan
