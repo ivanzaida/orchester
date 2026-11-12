@@ -12,10 +12,7 @@ mod request;
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Row, core::Signal, node::Element};
-use orchester_core::{
-  resource::{TeamTool, Tool, ToolKind},
-  secret::Secret,
-};
+use orchester_core::resource::{TeamTool, Tool, ToolKind};
 use orchester_workspace::{
   agents::team_tool::CallingPipeline,
   tools::form::{CommandText, SecretToolErrors, SecretToolText},
@@ -27,6 +24,7 @@ use self::{
   command::CommandFields,
   request::{RequestFields, Secrets},
 };
+pub(in crate::screens) use self::request::LocalSecrets;
 use super::{Drawn, Form, Line, Look, Need};
 use crate::screens::team_hub::rows;
 
@@ -154,14 +152,8 @@ impl ToolFields {
     }
   }
 
-  /// The form of a local project's tool as `form` has it, its secret picked from `secrets`, the project's that are not
-  /// archived (`None` while they are read).
-  pub(in crate::screens) fn draw(
-    &self,
-    ctx: &mut Ctx,
-    form: &Form<'_, Tool>,
-    secrets: Option<&[Secret]>,
-  ) -> Drawn<Tool> {
+  /// The form of a local project's tool as `form` has it, its secret picked from `local`, the project's.
+  pub(in crate::screens) fn draw(&self, ctx: &mut Ctx, form: &Form<'_, Tool>, local: LocalSecrets<'_>) -> Drawn<Tool> {
     let (name, mut rows) = self.head(ctx, form);
     let kind = self.kind();
     if kind == ToolKind::Command {
@@ -174,9 +166,9 @@ impl ToolFields {
     }
     let environment = self.access.environment();
     let text = self.secret_text(kind);
-    let checked = text.tool(self.request.picked(secrets, environment));
+    let checked = text.tool(self.request.picked(local.listed, environment));
     let errors = errors_of(checked.as_ref().err().map(|errors| &**errors));
-    let picked = Secrets::Picked { secrets, environment };
+    let picked = Secrets::Picked { local, environment };
     let called = self.called(ctx, form, (kind, &errors, picked), None);
     self.drawn(ctx, (name, rows), called, checked)
   }
@@ -257,7 +249,13 @@ impl ToolFields {
   ) -> Called {
     let (rows, marked) = self.request.rows(ctx, form, (kind, errors, secrets));
     let access = self.access.section(ctx, form, (&errors.access, team));
-    Called { rows, access, marked }
+    // *Access* says its errors at once, as a typed field does: they are marked before Create is pressed too.
+    let access_marked = errors.access.environment.is_some() || errors.access.minutes.is_some();
+    Called {
+      rows,
+      access,
+      marked: marked || (access_marked && !form.tried),
+    }
   }
 
   /// What the form draws of an HTTP or database tool, which `checked` made or not.

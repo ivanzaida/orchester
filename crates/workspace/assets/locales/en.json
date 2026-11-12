@@ -1466,18 +1466,18 @@
       "minutes": "Enter whole minutes, from 1.",
       "noStepsSelected": "Choose at least one step of each pipeline that calls it.",
       "line": {
-        "inputShape": "Line {{line}}: write it as name → query, header or body and its key",
-        "outputShape": "Line {{line}}: write it as name ← status, header or body",
-        "name": "Line {{line}}: {{name}} is not a name",
-        "twice": "Line {{line}}: {{name}} is there twice",
-        "inputPlace": "Line {{line}}: {{place}} is not query, header or body",
-        "outputPlace": "Line {{line}}: {{place}} is not status, header or body",
-        "needsPath": "Line {{line}}: {{place}} needs a path",
-        "needsName": "Line {{line}}: {{place}} needs a name",
-        "invalidPath": "Line {{line}}: {{key}} is not a body path",
-        "invalidName": "Line {{line}}: {{key}} is not a {{place}} name",
-        "statusKey": "Line {{line}}: status takes nothing after it",
-        "reserved": "Line {{line}}: the Authorization header is the token's · pick another header"
+        "inputShape": "write it as name → query, header or body and its key",
+        "outputShape": "write it as name ← status, header or body",
+        "name": "{{name}} is not a name",
+        "twice": "{{name}} is there twice",
+        "inputPlace": "{{place}} is not query, header or body",
+        "outputPlace": "{{place}} is not status, header or body",
+        "needsPath": "{{place}} needs a path",
+        "needsName": "{{place}} needs a name",
+        "invalidPath": "{{key}} is not a body path",
+        "invalidName": "{{key}} is not a {{place}} name",
+        "statusKey": "status takes nothing after it",
+        "reserved": "the Authorization header is the token's · pick another header"
       }
     }
   },

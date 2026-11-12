@@ -123,6 +123,7 @@
       "credentialsSub": "A team secret, by name · what it connects with",
       "credentialsPlaceholder": "e.g. DATABASE_URL",
       "pickedSub": "This project's secret, in the environment below",
+      "noValueHere": "No value on this computer · add it in Project settings › Environment",
       "chooseSecret": "Choose a secret",
       "noSecrets": "No secret in this environment yet",
       "inputs": "Inputs",
@@ -134,7 +135,8 @@
       "query": "Query",
       "querySub": "Run as written · read-only only if the database account is",
       "queryPlaceholder": "e.g. select id, status from orders",
-      "lineErrors": "{{first}} · {{next}}",
+      "lineFirst": "Line {{line}}: {{error}}",
+      "lineNext": "{{before}} · line {{line}}: {{error}}",
       "access": {
         "title": "Access",
         "teamHint": "· who may call it, and how",

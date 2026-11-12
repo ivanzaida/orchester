@@ -15,6 +15,7 @@
 //! with what it publishes and *Cancel* leaves alone.
 
 mod editor;
+mod standing;
 
 use lurq::{
   app::{

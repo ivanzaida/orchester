@@ -15,7 +15,7 @@ use super::{
   work::Make,
 };
 use crate::{
-  screens::hub::forms::{Drawn, Form, Ids, Naming, ToolFields},
+  screens::hub::forms::{Drawn, Form, Ids, LocalSecrets, Naming, ToolFields},
   ui::message::message_text,
 };
 
@@ -58,8 +58,11 @@ impl Fields {
         Make::TeamTool,
       ),
       Mode::Local => {
-        let secrets = shown.connections.map(|connections| &connections.secrets[..]);
-        Made::of(self.fields.draw(ctx, &form(said, shown), secrets), named, Make::Tool)
+        let local = LocalSecrets {
+          listed: shown.connections.map(|connections| &connections.secrets[..]),
+          valueless: &[],
+        };
+        Made::of(self.fields.draw(ctx, &form(said, shown), local), named, Make::Tool)
       }
     };
     Body {

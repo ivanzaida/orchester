@@ -24,7 +24,11 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-pub(in crate::screens) use self::{instruction::InstructionFields, skill::SkillFields, tool::ToolFields};
+pub(in crate::screens) use self::{
+  instruction::InstructionFields,
+  skill::SkillFields,
+  tool::{LocalSecrets, ToolFields},
+};
 use crate::{
   screens::team_hub::rows::{self, Sub},
   theme::HubText,

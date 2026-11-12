@@ -32,7 +32,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::{PREFIX, Props, UnsavedSignal};
+use super::{PREFIX, Props, UnsavedSignal, standing};
 use crate::{
   mcp::input_gate::Guarded,
   queries,
@@ -41,11 +41,11 @@ use crate::{
       data,
       widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
     },
-    hub::forms::{Form, Ids, ToolFields},
+    hub::forms::{Form, Ids, LocalSecrets, ToolFields},
     local_hub::{
       leave::{clear_unsaved, mark_unsaved},
       model::Entry,
-      panel::{chips_of, frame, head_end, readiness, standing_chips, used_by},
+      panel::{chips_of, frame, head_end, readiness, used_by},
       save_bar::{self, Save},
       words::kind_where_key,
     },
@@ -144,7 +144,12 @@ impl Component for Editor {
     let saving = self.save.state().get();
     let busy = saving.is_pending();
     let connections = queries::state(&data::load(ctx, props.project.open.repo_root.clone())).data;
-    let secrets = connections.as_ref().map(|connections| &connections.secrets[..]);
+    let entry = &props.entry;
+    let valueless = standing::valueless(entry);
+    let local = LocalSecrets {
+      listed: connections.as_ref().map(|connections| &connections.secrets[..]),
+      valueless: &valueless,
+    };
     let drawn = self.fields.draw(
       ctx,
       &Form {
@@ -154,7 +159,7 @@ impl Component for Editor {
         tried: true,
         locked: busy,
       },
-      secrets,
+      local,
     );
     let changed = drawn.made.as_ref().map_or(true, |tool| *tool != stored);
     let refused = saving.error.clone().filter(|_| saving.is_rejected());
@@ -163,7 +168,6 @@ impl Component for Editor {
       self.what,
       (changed, refused.is_some() || drawn.made.is_err()),
     );
-    let entry = &props.entry;
     let head = head_named(
       &entry.name,
       (
@@ -176,7 +180,7 @@ impl Component for Editor {
     let rows = [used_by(ctx, PREFIX, entry)].into_iter().chain(drawn.rows).collect();
     let body = body()
       .child(head)
-      .child(chips_of(standing_chips(ctx, entry), None))
+      .child(chips_of(standing::chips(ctx, entry, changed), None))
       .with_children(widening)
       .child(rows::section(PREFIX, &ctx.t("local_hub.tool.title"), Vec::new(), rows))
       .with_children(drawn.sections)
@@ -184,7 +188,8 @@ impl Component for Editor {
         refused
           .map(|error| -> Element { field_error(&format!("{PREFIX}-refused"), &message_text(ctx, &error)).into() }),
       )
-      .with_children(readiness(ctx, entry));
+      // An HTTP or database tool's secret row says what its secret lacks here (L21 `ldRQO`).
+      .with_children(readiness(ctx, entry).filter(|_| stored.kind() == ToolKind::Command));
     let save = self.save_now((&stored, drawn.made), (changed, busy));
     let bar = save_bar::bar(
       ctx,

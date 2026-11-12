@@ -11,7 +11,9 @@ use orchester_core::{
   },
   secret::Environment,
 };
-use orchester_workspace::tools::form::{AccessText, ActionText, HttpText, SecretToolText, parse_inputs, parse_outputs};
+use orchester_workspace::tools::form::{
+  AccessText, ActionText, HttpText, LineError, SecretToolText, parse_inputs, parse_outputs,
+};
 
 fn http() -> HttpText {
   HttpText {
@@ -37,8 +39,8 @@ fn text(action: ActionText) -> SecretToolText {
   }
 }
 
-fn keys(messages: &[orchester_workspace::messages::Message]) -> Vec<&str> {
-  messages.iter().map(|message| message.key).collect()
+fn keys(errors: &[LineError]) -> Vec<&str> {
+  errors.iter().map(|error| error.reason.key).collect()
 }
 
 #[test]
@@ -108,7 +110,10 @@ fn tool_form_secret_says_every_wrong_field_at_once() {
     keys(&errors.http.outputs),
     ["tools.errors.line.name", "tools.errors.line.needsPath"]
   );
-  assert_eq!(errors.http.outputs[1].args[0], ("line", "2".into()));
+  assert_eq!(
+    errors.http.outputs.iter().map(|error| error.line).collect::<Vec<_>>(),
+    [1, 2]
+  );
   assert_eq!(errors.secret.map(|m| m.key), Some("tools.errors.secretRequired"));
 }
 

@@ -21,7 +21,7 @@ use orchester_core::{
 pub use self::{
   access::{AccessErrors, AccessText, environment_name, environment_of},
   http::{HttpErrors, HttpText, http_message},
-  lines::{inputs_text, outputs_text, parse_inputs, parse_outputs},
+  lines::{LineError, inputs_text, outputs_text, parse_inputs, parse_outputs},
   secret_tool::{ActionText, SecretToolErrors, SecretToolText, named_secret},
 };
 use crate::messages::{self, Message};

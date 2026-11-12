@@ -18,7 +18,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   messages::Message,
-  tools::form::{ActionText, HttpText, SecretToolErrors},
+  tools::form::{ActionText, HttpText, LineError, SecretToolErrors},
 };
 
 use super::{
@@ -100,15 +100,22 @@ const METHODS: [(&str, HttpMethod); 5] = [
 const NONE: &str = "none";
 const BEARER: &str = "bearer";
 
-/// Where the secret comes from: typed by name for the team, or picked from `secrets`, the project's that are not
-/// archived, in `environment`.
+/// Where the secret comes from: typed by name for the team, or picked from the project's in `environment`.
 pub(super) enum Secrets<'a> {
   Named,
   Picked {
-    /// `None` while they are read.
-    secrets: Option<&'a [Secret]>,
+    local: LocalSecrets<'a>,
     environment: Option<Environment>,
   },
+}
+
+/// A local project's secrets a tool picks from.
+#[derive(Clone, Copy, Default)]
+pub(in crate::screens) struct LocalSecrets<'a> {
+  /// The project's secrets that are not archived; `None` while they are read.
+  pub listed: Option<&'a [Secret]>,
+  /// Those of them that have no value on this computer, which the secret's row says (L21 `ldRQO`).
+  pub valueless: &'a [SecretId],
 }
 
 /// The fields. Cloning shares them.
@@ -259,13 +266,14 @@ impl RequestFields {
     (line, errors, secrets): (&Line, &SecretToolErrors, Secrets<'_>),
   ) -> (Row, bool) {
     let error = errors.secret.as_ref().map(|error| message_text(ctx, error));
-    let Secrets::Picked { secrets, environment } = secrets else {
+    let Secrets::Picked { local, environment } = secrets else {
       let error = form.said_of(&self.named.get(), error);
       let said = error.is_some();
       return (form.line(ctx, line, &self.named, (error, None)), said);
     };
     let error = form.said(error);
-    let options = secrets
+    let options = local
+      .listed
       .unwrap_or_default()
       .iter()
       .filter(|secret| Some(secret.environment()) == environment)
@@ -292,6 +300,10 @@ impl RequestFields {
           color: PaletteColor::Danger,
         }
       }
+      None if self.picked(local.listed, environment).is_some_and(|id| local.valueless.contains(&id)) => Sub {
+        words: ctx.t("team_new.tool.noValueHere"),
+        color: PaletteColor::Warning,
+      },
       None => Sub::quiet(ctx.t("team_new.tool.pickedSub")),
     };
     let label = form.label(ctx, line.label, line.required);
@@ -299,10 +311,25 @@ impl RequestFields {
   }
 }
 
-/// What the wrong lines of the inputs or the outputs say, one after the other.
-fn lines_said(ctx: &Ctx, errors: &[Message]) -> Option<Arc<str>> {
-  errors
-    .iter()
-    .map(|error| message_text(ctx, error))
-    .reduce(|first, next| ctx.t_args("team_new.tool.lineErrors", [("first", &*first), ("next", &*next)]))
+/// What the wrong lines of the inputs or the outputs say, one after the other: *Line 1: … · line 2: …* (L22 `Xp89k`).
+fn lines_said(ctx: &Ctx, errors: &[LineError]) -> Option<Arc<str>> {
+  let mut errors = errors.iter();
+  let first = errors.next()?;
+  let first = ctx.t_args(
+    "team_new.tool.lineFirst",
+    [
+      ("line", first.line.to_string()),
+      ("error", message_text(ctx, &first.reason).to_string()),
+    ],
+  );
+  Some(errors.fold(first, |before, next| {
+    ctx.t_args(
+      "team_new.tool.lineNext",
+      [
+        ("before", before.to_string()),
+        ("line", next.line.to_string()),
+        ("error", message_text(ctx, &next.reason).to_string()),
+      ],
+    )
+  }))
 }

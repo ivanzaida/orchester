@@ -13,7 +13,7 @@ use orchester_core::{
   secret::SecretName,
 };
 
-use super::lines::{inputs_text, outputs_text, parse_inputs, parse_outputs};
+use super::lines::{LineError, inputs_text, outputs_text, parse_inputs, parse_outputs};
 use crate::messages::Message;
 
 /// The request's fields as the user left them.
@@ -51,8 +51,8 @@ pub struct HttpErrors {
   pub url: Option<Message>,
   pub allowed_host: Option<Message>,
   /// Every wrong line, in order.
-  pub inputs: Vec<Message>,
-  pub outputs: Vec<Message>,
+  pub inputs: Vec<LineError>,
+  pub outputs: Vec<LineError>,
 }
 
 impl HttpErrors {
@@ -176,10 +176,10 @@ fn refused(error: &HttpError) -> Box<HttpErrors> {
       allowed_host: Some(message),
       ..HttpErrors::default()
     },
-    HttpError::InvalidLocation(_) | HttpError::ReservedHeader(_) => HttpErrors {
-      inputs: vec![message],
-      ..HttpErrors::default()
-    },
+    // Each line was checked as the request checks it (`RequestTarget::is_valid`, the reserved header) before it.
+    HttpError::InvalidLocation(_) | HttpError::ReservedHeader(_) => {
+      unreachable!("the lines were checked as the request checks them")
+    }
   })
 }
 

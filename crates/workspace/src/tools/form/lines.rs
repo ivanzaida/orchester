@@ -9,6 +9,20 @@ use orchester_core::resource::{FieldName, RequestTarget, ResponseSource};
 
 use crate::messages::Message;
 
+/// Why one line is wrong: its number among all lines, from 1, and the reason, which names no line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LineError {
+  pub line: usize,
+  pub reason: Message,
+}
+
+impl LineError {
+  fn with(mut self, name: &'static str, value: String) -> Self {
+    self.reason = self.reason.with(name, value);
+    self
+  }
+}
+
 const INPUT_ARROWS: [&str; 2] = ["→", "->"];
 const OUTPUT_ARROWS: [&str; 2] = ["←", "<-"];
 const QUERY: &str = "query";
@@ -17,12 +31,12 @@ const BODY: &str = "body";
 const STATUS: &str = "status";
 
 /// The inputs of `text`, or why each wrong line is wrong.
-pub fn parse_inputs(text: &str) -> Result<BTreeMap<FieldName, RequestTarget>, Vec<Message>> {
+pub fn parse_inputs(text: &str) -> Result<BTreeMap<FieldName, RequestTarget>, Vec<LineError>> {
   parse(text, &INPUT_ARROWS, input_target)
 }
 
 /// The outputs of `text`, or why each wrong line is wrong.
-pub fn parse_outputs(text: &str) -> Result<BTreeMap<FieldName, ResponseSource>, Vec<Message>> {
+pub fn parse_outputs(text: &str) -> Result<BTreeMap<FieldName, ResponseSource>, Vec<LineError>> {
   parse(text, &OUTPUT_ARROWS, output_source)
 }
 
@@ -56,9 +70,9 @@ pub fn outputs_text(outputs: &BTreeMap<FieldName, ResponseSource>) -> String {
 }
 
 /// Where one line puts or reads its value: its place and the key after it, already split; `line` numbers its message.
-type Place<T> = fn(line: usize, place: &str, key: &str) -> Result<T, Message>;
+type Place<T> = fn(line: usize, place: &str, key: &str) -> Result<T, LineError>;
 
-fn parse<T>(text: &str, arrows: &[&str], place: Place<T>) -> Result<BTreeMap<FieldName, T>, Vec<Message>> {
+fn parse<T>(text: &str, arrows: &[&str], place: Place<T>) -> Result<BTreeMap<FieldName, T>, Vec<LineError>> {
   let mut parsed = BTreeMap::new();
   let mut errors = Vec::new();
   let lines = text.lines().enumerate().filter(|(_, line)| !line.trim().is_empty());
@@ -77,7 +91,7 @@ fn parse<T>(text: &str, arrows: &[&str], place: Place<T>) -> Result<BTreeMap<Fie
   if errors.is_empty() { Ok(parsed) } else { Err(errors) }
 }
 
-fn parse_line<T>(number: usize, line: &str, arrows: &[&str], place: Place<T>) -> Result<(FieldName, T), Message> {
+fn parse_line<T>(number: usize, line: &str, arrows: &[&str], place: Place<T>) -> Result<(FieldName, T), LineError> {
   let shape = || {
     at(
       number,
@@ -102,7 +116,7 @@ fn parse_line<T>(number: usize, line: &str, arrows: &[&str], place: Place<T>) ->
   Ok((field, place(number, kind, key.trim())?))
 }
 
-fn input_target(number: usize, place: &str, key: &str) -> Result<RequestTarget, Message> {
+fn input_target(number: usize, place: &str, key: &str) -> Result<RequestTarget, LineError> {
   if key.is_empty() && [QUERY, HEADER, BODY].contains(&place) {
     return Err(needs_key(number, place));
   }
@@ -121,7 +135,7 @@ fn input_target(number: usize, place: &str, key: &str) -> Result<RequestTarget, 
   Ok(target)
 }
 
-fn output_source(number: usize, place: &str, key: &str) -> Result<ResponseSource, Message> {
+fn output_source(number: usize, place: &str, key: &str) -> Result<ResponseSource, LineError> {
   let source = match place {
     STATUS if key.is_empty() => return Ok(ResponseSource::Status),
     STATUS => return Err(at(number, "tools.errors.line.statusKey")),
@@ -138,7 +152,7 @@ fn output_source(number: usize, place: &str, key: &str) -> Result<ResponseSource
 }
 
 /// A body takes a path; a query or a header a name.
-fn needs_key(number: usize, place: &str) -> Message {
+fn needs_key(number: usize, place: &str) -> LineError {
   let key = if place == BODY {
     "tools.errors.line.needsPath"
   } else {
@@ -147,7 +161,7 @@ fn needs_key(number: usize, place: &str) -> Message {
   at(number, key).with("place", place.to_owned())
 }
 
-fn invalid_key(number: usize, place: &str, key: &str) -> Message {
+fn invalid_key(number: usize, place: &str, key: &str) -> LineError {
   let message = if place == BODY {
     "tools.errors.line.invalidPath"
   } else {
@@ -158,7 +172,10 @@ fn invalid_key(number: usize, place: &str, key: &str) -> Message {
     .with("key", key.to_owned())
 }
 
-/// The message `key`, one of `tools.errors.line.*`, about line `number`.
-fn at(number: usize, key: &'static str) -> Message {
-  Message::new(key).with("line", number.to_string())
+/// Line `number` is wrong for the reason `key`, one of `tools.errors.line.*`.
+fn at(number: usize, key: &'static str) -> LineError {
+  LineError {
+    line: number,
+    reason: Message::new(key),
+  }
 }

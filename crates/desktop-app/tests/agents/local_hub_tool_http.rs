@@ -136,7 +136,7 @@ fn local_hub_tool_http_what_the_request_refuses_is_said_at_each_field_and_create
   );
   assert_eq!(
     agents.text("team-new-tool-outputs-sub"),
-    "Line 1: Number is not a name · Line 2: body needs a path"
+    "Line 1: Number is not a name · line 2: body needs a path"
   );
   assert_eq!(
     agents.text("team-hub-actions-hint"),
@@ -203,4 +203,28 @@ fn local_hub_tool_http_a_request_is_edited_in_its_panel_and_saved_once_allowed()
   };
   assert_eq!(saved.url(), "https://sentry.io/api/0/events/");
   assert_eq!(saved.auth(), HttpAuth::Bearer { secret }, "the secret it picked stays");
+}
+
+/// L21 `ldRQO`: the panel's chips say *Unsaved changes* while the fields differ and *Needs a secret value*; the token's
+/// row says its secret has no value here and where it is added, and no *Ready?* section stands under *Access*.
+#[test]
+fn local_hub_tool_http_a_secret_with_no_value_is_said_at_its_row_and_changes_in_the_chips() {
+  let mut agents = Agents::new(true);
+  let secret = project_secret(&agents, "SENTRY_TOKEN").id();
+  let id = request(&agents, secret);
+  open(&mut agents, HubView::new(HubFilter::Tools, Some(id)));
+  agents.until("the secret's row to say it has no value", |s| {
+    s.exists("local-hub-tool-secret-sub")
+      && s.text("local-hub-tool-secret-sub") == "No value on this computer · add it in Project settings › Environment"
+  });
+  assert_eq!(agents.text("local-hub-chip-0"), "v1");
+  assert_eq!(agents.text("local-hub-chip-1"), "Needs a secret value");
+  assert!(!agents.exists("local-hub-readiness"), "no Ready? section under Access");
+  assert!(agents.exists("local-hub-tool-access"));
+
+  agents.set("local-hub-tool-url-input", "https://sentry.io/api/0/events/");
+  agents.until("the chips to say it is changed", |s| {
+    s.text("local-hub-chip-1") == "Unsaved changes"
+  });
+  assert_eq!(agents.text("local-hub-chip-2"), "Needs a secret value");
 }
