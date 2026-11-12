@@ -252,3 +252,73 @@ fn permissions_chip_says_dangerous_auto_approve_and_offers_no_way() {
     "Approve mode in Project settings"
   );
 }
+
+impl Page {
+  /// Moves the project's Approve mode to `to` as `by`, and tells the open page so, as Project settings' save and the
+  /// MCP tools do: the project's auto-mode change.
+  fn move_approve_mode(&mut self, to: orchester_core::run::ApproveMode, by: Answerer) {
+    orchester_workspace::project_settings::save_approve_mode_in(&self.repo, to, by).expect("moved");
+    let services = self.window.launch.services().expect("the session started").clone();
+    services
+      .changes
+      .record(self.project, orchester_workspace::tasks::outside::Outside::AutoMode);
+  }
+}
+
+/// With the task's Conversation open and its menu showing, a move of the Approve mode elsewhere reaches the chip and
+/// the open menu without leaving the page: down by automation, then up by a person.
+#[test]
+fn permissions_chip_and_open_menu_follow_the_approve_mode_on_an_open_page() {
+  use orchester_core::run::ApproveMode;
+  let mut page = Page::seeded("task-states");
+  let (key, _) = autopilot(&page);
+  page.move_approve_mode(ApproveMode::DangerousAutoApprove, Answerer::Person);
+  page.open(&key, TaskTab::Conversation, CHIP);
+  page.until_label("Dangerous auto-approve");
+  page.window.press(CHIP);
+  page.window.until("the menu", |window| window.texts(MENU).is_some());
+  assert!(page.has("conversation-permissions-dangerous-note"));
+  // Down by automation: the chip and the open menu say Autopilot and offer its ways again.
+  page.move_approve_mode(ApproveMode::Autopilot, Answerer::Automation);
+  page.until_label("Autopilot");
+  page.window.until("the menu's ways", |window| {
+    window.texts("conversation-permissions-manual").is_some()
+  });
+  assert!(!page.has("conversation-permissions-dangerous-note"));
+  // Up by a person: the open page says Dangerous auto-approve again.
+  page.move_approve_mode(ApproveMode::DangerousAutoApprove, Answerer::Person);
+  page.until_label("Dangerous auto-approve");
+  page.window.until("the menu's line", |window| {
+    window.texts("conversation-permissions-dangerous-note").is_some()
+  });
+}
+
+/// The task header's mode chip follows the Approve mode on an open Summary too, and in Dangerous auto-approve reads as
+/// the composer and the status bar do: a `triangle-alert` badge in `danger`.
+#[test]
+fn permissions_header_chip_follows_the_approve_mode_on_an_open_page() {
+  use orchester_core::run::ApproveMode;
+  let mut page = Page::seeded("task-states");
+  let (key, _) = autopilot(&page);
+  page.open(&key, TaskTab::Summary, "task-run-mode-label");
+  assert_eq!(page.text("task-run-mode-label"), "Autopilot");
+  page.move_approve_mode(ApproveMode::DangerousAutoApprove, Answerer::Person);
+  page.window.until("the header chip", |window| {
+    window.texts("task-run-mode-label") == Some(vec!["Dangerous auto-approve".to_owned()])
+  });
+  let glyph = orchester_app::ui::icon::Icon::TriangleAlert.glyph().to_string();
+  assert!(
+    page
+      .window
+      .tree
+      .get_element_by_id("task-run-mode-glyph")
+      .and_then(|element| element.text_content().map(str::to_owned))
+      .is_some_and(|shown| shown == glyph),
+    "the badge's triangle"
+  );
+  assert!(!page.has("task-run-mode-switch"), "nothing to switch");
+  page.move_approve_mode(ApproveMode::Manual, Answerer::Automation);
+  page.window.until("the header chip back", |window| {
+    window.texts("task-run-mode-label") == Some(vec!["Manual · project".to_owned()])
+  });
+}
