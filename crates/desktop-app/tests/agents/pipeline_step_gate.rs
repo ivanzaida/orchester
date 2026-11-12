@@ -367,7 +367,10 @@ fn a_command_the_profile_no_longer_allows_is_said_refused_and_taken_back() {
   agents.until("the bar says why", |s| s.text(HINT).contains("cargo build"));
   agents.click(SAVE);
   agents.window.pass();
-  assert!(!agents.exists("pipeline-hub-refused"), "a Save that is off tries nothing");
+  assert!(
+    !agents.exists("pipeline-hub-refused"),
+    "a Save that is off tries nothing"
+  );
   let db = ProjectDb::open(&agents.root).expect("database");
   assert!(db.draft::<Pipeline>(id).expect("read").is_none(), "no draft is stored");
   assert_eq!(db.versions::<Pipeline>(id).expect("read").len(), 1, "nothing published");

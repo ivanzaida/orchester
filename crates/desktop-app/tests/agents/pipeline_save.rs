@@ -173,7 +173,10 @@ fn pipeline_save_refuses_a_change_that_cannot_be_published_and_stores_nothing() 
   });
   agents.click(SAVE);
   agents.window.pass();
-  assert!(!agents.exists("pipeline-hub-refused"), "a Save that is off asks nothing");
+  assert!(
+    !agents.exists("pipeline-hub-refused"),
+    "a Save that is off asks nothing"
+  );
   let (versions, draft) = stored(&agents, update);
   assert_eq!(versions.len(), 1, "nothing was published");
   assert_eq!(draft, None, "nothing was stored as a draft");
