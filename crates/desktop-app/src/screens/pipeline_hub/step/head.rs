@@ -8,13 +8,16 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::Step;
+use orchester_core::{id::ProjectId, resource::Step};
 
 use super::{Open, more, name};
 use crate::{
   navigation::Navigation,
   routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
-  screens::pipeline_hub::flow::{copy_name, copy_of, number},
+  screens::pipeline_hub::{
+    flow::{copy_name, copy_of, number},
+    model::Entry,
+  },
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -27,44 +30,7 @@ use crate::{
 pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, usize)) -> Element {
   let navigation = Navigation::of(ctx);
   let project = open.project.open.project.id();
-  let back = Route::Project(
-    project,
-    ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(open.entry.id))),
-  );
-  let pipeline = open.entry.name.clone();
-  let back = Focus::Keyboard
-    .apply(Press::Open(navigation.to(back)).button())
-    .id("pipeline-hub-step-back")
-    .describe(
-      "a11y_name",
-      ctx.t_args("pipeline_hub.step.back", [("name", &*pipeline)]),
-    )
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(icon(
-      Icon::ArrowLeft,
-      IconSize::Sm,
-      lurq::app::theme::PaletteColor::TextSecondary,
-    ))
-    .child(
-      Text::new(&pipeline)
-        .id("pipeline-hub-step-back-name")
-        .variant(HubText::PanelWhere.role())
-        .nowrap(),
-    );
-  let where_ = Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(back)
-    .child(
-      Text::new(&ctx.t_args(
-        "pipeline_hub.step.position",
-        [("number", number(place.0)), ("total", place.1.to_string())],
-      ))
-      .id("pipeline-hub-step-position")
-      .variant(HubText::PanelHint.role())
-      .nowrap(),
-    );
+  let where_ = where_line(ctx, (project, open.entry), place);
   // The name's box stands 8 to the start of the name (D-022), past the head's start: neither the head nor its column
   // cuts what stands past them, so its ring and hover fill draw whole.
   Row::new()
@@ -106,6 +72,50 @@ pub(super) fn head(ctx: &mut Ctx, open: &Open<'_>, step: &Step, place: (usize, u
       },
     ))
     .into()
+}
+
+/// The line over an open step's name: ← and the pipeline's name, which return to the pipeline's panel, and *step 03 of
+/// 6* for the step at `place`.
+pub(super) fn where_line(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry), place: (usize, usize)) -> Row {
+  let navigation = Navigation::of(ctx);
+  let back = Route::Project(
+    project,
+    ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(entry.id))),
+  );
+  let pipeline = entry.name.clone();
+  let back = Focus::Keyboard
+    .apply(Press::Open(navigation.to(back)).button())
+    .id("pipeline-hub-step-back")
+    .describe(
+      "a11y_name",
+      ctx.t_args("pipeline_hub.step.back", [("name", &*pipeline)]),
+    )
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(
+      Icon::ArrowLeft,
+      IconSize::Sm,
+      lurq::app::theme::PaletteColor::TextSecondary,
+    ))
+    .child(
+      Text::new(&pipeline)
+        .id("pipeline-hub-step-back-name")
+        .variant(HubText::PanelWhere.role())
+        .nowrap(),
+    );
+  Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(back)
+    .child(
+      Text::new(&ctx.t_args(
+        "pipeline_hub.step.position",
+        [("number", number(place.0)), ("total", place.1.to_string())],
+      ))
+      .id("pipeline-hub-step-position")
+      .variant(HubText::PanelHint.role())
+      .nowrap(),
+    )
 }
 
 /// *Duplicate*: a copy of the step right after it, opened at once; the edit holds it until *Save*.
