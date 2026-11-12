@@ -11,6 +11,7 @@ mod hub_archive;
 mod hub_edit;
 mod hub_edit_kinds;
 mod hub_forms;
+mod hub_keep;
 mod hub_profile_form;
 mod hub_states;
 #[path = "../../examples/seed/kontur/mod.rs"]

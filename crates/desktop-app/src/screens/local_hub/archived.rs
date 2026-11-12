@@ -160,7 +160,8 @@ impl Component for Restore {
     )
     .icon(Icon::ArchiveRestore)
     .pinned();
-    let restore = if state.is_pending() {
+    // Restored, the entry leaves *Archived* once the hub reads it again; until then Restore stays pending, as it was.
+    let restore = if state.is_pending() || state.is_fulfilled() {
       restore.loading()
     } else {
       // A second press while the first restore is in flight leaves it to finish.

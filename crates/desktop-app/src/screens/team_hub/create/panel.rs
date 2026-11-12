@@ -2,7 +2,8 @@
 //! kind and *not created yet · Create publishes v1* over the new resource's title, *For the team* (what the team holds,
 //! the same on every computer) as rows, a note on what each computer fills in afterwards, and pinned at the bottom
 //! Create and Cancel. No draft: Create makes v1 and sends it to the team server; it shows as created only once the
-//! server has taken it ([`super::work`]), a refusal is said in place and nothing is made, and Cancel leaves nothing.
+//! server has taken it ([`super::work`]) and the hub has read its list again with it, the form staying as it was sent
+//! with Create pending meanwhile; a refusal is said in place and nothing is made, and Cancel leaves nothing.
 //! In a local project (`Agents · New agent profile` … `New tool`, L3–L7) the same form has one section of the
 //! resource's own fields and nothing to send: Create makes v1 on this computer, or for an MCP server, which has no
 //! versions, the server itself.
@@ -23,6 +24,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
   connections::data::ProjectConnections,
+  local_archive::Archivable,
   sharing::{team::TeamConfiguration, team_edit::Refusal},
 };
 
@@ -64,6 +66,8 @@ pub(in crate::screens) struct Props {
   pub taken: Vec<String>,
   /// A team project's configuration: who the admins are, which a refusal for a role that changed says.
   pub team: Option<TeamConfiguration>,
+  /// What the hub's list holds of the kind now: the form gives way to what it made only once the list holds it.
+  pub listed: Vec<Archivable>,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -125,6 +129,8 @@ struct NewPanel {
   /// Create was pressed: a required field that is empty says so.
   tried: Signal<bool>,
   work: Work,
+  /// What Create made, while the hub's list does not hold it yet: the form stays, Create pending, until it does.
+  made: Signal<Option<Archivable>>,
   gate: Option<InputGate>,
   /// The name field, which has the focus when the form opens (the design draws it focused).
   first: ElementRef,
@@ -138,19 +144,20 @@ impl Component for NewPanel {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let work = work::work(ctx, (props.repo_root.clone(), props.project, props.mode));
-    let navigation = Navigation::of(ctx);
-    let (project, filter) = (props.project, props.kind.filter());
-    // Created, and taken by the team server: the hub shows it, and its form is gone with the route.
+    // Created, and taken by the team server: the hub reads its list again, and the form waits for it (`give_way`),
+    // so the panel never shows the list's last answer without it.
+    let made = ctx.signal(None);
+    let kept = made.clone();
     ctx.watch(&work.state(), move |state| {
       if let Some(made) = state.data.filter(|_| state.is_fulfilled()) {
-        let shown = Route::Project(project, ProjectPage::hub(view_of(filter, Some(made))));
-        navigation.replace(shown);
+        kept.set(Some(made));
       }
     });
     Self {
       form: Form::new(ctx, props.kind, props.mode),
       tried: ctx.signal(false),
       work,
+      made,
       gate: ctx.use_context::<InputGate>(),
       first: ElementRef::default(),
       focus_first: ctx.signal(true),
@@ -165,13 +172,20 @@ impl Component for NewPanel {
       mode,
       taken,
       team,
+      listed,
     } = ctx.props::<Props>().clone();
     if self.focus_first.get() {
       ctx.focus(&self.first);
       self.focus_first.set(false);
     }
+    let made = self.made.get();
+    let navigation = Navigation::of(ctx);
+    give_way(made, &listed, (project, kind), &navigation);
     let state = self.work.state().get();
-    let pending = state.is_pending();
+    // Made and not listed yet is still Create's: the form stays as it was sent.
+    let pending = state.is_pending() || made.is_some();
+    // The list that holds what was made holds its name too, which the form does not take for a clash with itself.
+    let taken = if made.is_some() { Vec::new() } else { taken };
     let refused = state.error.filter(|_| !pending);
     let refused_name = taken_by_server(refused.as_ref());
     let offer = self.offer(ctx, (kind, mode), &repo_root);
@@ -188,7 +202,6 @@ impl Component for NewPanel {
       published: None,
     };
     let body = self.form.body(ctx, &shown);
-    let navigation = Navigation::of(ctx);
     let prefix = mode.prefix();
     let content = Column::new()
       .id(format!("{prefix}-new-form"))
@@ -259,9 +272,9 @@ impl NewPanel {
     )
     .icon(Icon::Plus)
     .pinned();
-    let create = if busy && self.work.state().get().is_pending() {
+    let create = if busy {
       create.loading()
-    } else if busy || off.is_some() {
+    } else if off.is_some() {
       create.disabled()
     } else {
       let (work, tried, gate, make) = (self.work.clone(), self.tried.clone(), self.gate.clone(), make.clone());
@@ -280,7 +293,7 @@ impl NewPanel {
       ctx.t("team_new.bar.cancel"),
     )
     .pinned();
-    let cancel = if self.work.state().get().is_pending() {
+    let cancel = if busy {
       cancel.disabled()
     } else {
       cancel.opens(navigation.to(Route::Project(
@@ -293,6 +306,21 @@ impl NewPanel {
       None => (ctx.t(mode.bar_hint(kind)).to_string(), PaletteColor::TextMuted),
     };
     bar::bar_saying(vec![create.into(), cancel.into()], Some(hint))
+  }
+}
+
+/// The form gives way to what it `made` once the hub's list holds it (`listed`): the route goes to it in place, so the
+/// list and the panel show it chosen at once. Before that the list's last answer does not hold it, and going to it
+/// would show another resource, or the kind's empty tab.
+fn give_way(
+  made: Option<Archivable>,
+  listed: &[Archivable],
+  (project, kind): (ProjectId, Kind),
+  navigation: &Navigation,
+) {
+  if let Some(made) = made.filter(|made| listed.contains(made)) {
+    let shown = Route::Project(project, ProjectPage::hub(view_of(kind.filter(), Some(made))));
+    navigation.replace(shown);
   }
 }
 
