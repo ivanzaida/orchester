@@ -131,8 +131,9 @@ impl Component for MemoryHub {
         return self.failure_page(ctx, &project, error, retrying);
       }
       Read::Reading => {
-        // Until the first reading the statuses keep the order they would have while proposals wait.
-        let order = self.order.get().copied().unwrap_or(Order::of(1));
+        // Until the first reading the statuses keep the order they have while nothing waits, *Active* first and
+        // current, as most reads find it: the pills and the current one do not move when the records arrive.
+        let order = self.order.get().copied().unwrap_or(Order::of(0));
         let tab = view.tab.unwrap_or(order.opening());
         let strip = filter::sub_filter(ctx, &state, (None, order), tab);
         let bones = agents_bones::body(ctx, "memory-loading", ctx.t("memory.reading"));

@@ -171,3 +171,40 @@ fn local_hub_keep_a_new_memory_record_keeps_the_editor_until_the_list_holds_it()
     !s.exists("memory-editor-new") && s.exists("memory-list")
   });
 }
+
+fn left(agents: &mut Agents, id: &str) -> f32 {
+  agents
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+    .x
+}
+
+/// While the Memory filter reads the memory the first time, its statuses stand as they stay once it is read with
+/// nothing waiting: *Active* first, where it stays.
+#[test]
+fn local_hub_keep_memory_statuses_do_not_move_when_the_memory_is_read() {
+  let mut agents = Agents::new(true);
+  open(&mut agents, HubView::default());
+  let hold = reads(&agents);
+  hold.set(true);
+  agents
+    .window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Memory(MemoryView::default())));
+  agents.until("the memory read", |s| s.exists("memory-loading"));
+  let reading = left(&mut agents, "memory-tab-active");
+  assert!(
+    reading < left(&mut agents, "memory-tab-waiting"),
+    "Active comes first while the memory is read"
+  );
+  hold.set(false);
+  agents.until("the memory read", |s| !s.exists("memory-loading"));
+  let read = left(&mut agents, "memory-tab-active");
+  assert!(
+    (read - reading).abs() < 0.5,
+    "Active stays where it stood: {read} vs {reading}"
+  );
+}
