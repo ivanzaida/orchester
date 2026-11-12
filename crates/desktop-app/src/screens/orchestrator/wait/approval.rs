@@ -13,7 +13,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::SpacingSize,
   },
   components::{Column, Text},
   node::{Element, dimension::Dimension, padding::Padding},
@@ -38,7 +38,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::task::cards::Decisions,
   shell::needs_you::in_place::{InPlaceCard, InPlaceProps},
-  theme::{CardsText, OrchestratorSpacing},
+  theme::{OrchestratorSpacing, OrchestratorText},
 };
 
 /// The tool whose action is the Orchestrator's answer to a request.
@@ -87,19 +87,57 @@ pub(super) fn quote(ctx: &Ctx, id: &str, answer: &ToolAnswer, agent: &str) -> Co
     .child(
       Text::new(&answer.asked)
         .id(format!("{id}-asked"))
-        .variant(CardsText::Command.role())
+        .variant(OrchestratorText::RequestAsked.role())
         .selectable(true)
         .width(Dimension::Pct(100.0)),
     )
     .child(
       Text::new(&said)
         .id(format!("{id}-said"))
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary)
+        .variant(OrchestratorText::RequestSaid.role())
         .selectable(true)
         .width(Dimension::Pct(100.0)),
     )
 }
+
+/// The words the Orchestrator's turn wrote as it left the request to the person (`answer`), as its quote under the
+/// line (d, `KSJlQ`): each paragraph that says why it is not sure (its prompt's *Not sure:*) in the quiet face of an
+/// answered wait's question, every other one, its recommendation, as its reason; `id` names it. `None` when the turn
+/// did more than write, whose answer shows as any wait's does.
+fn unsure(id: &str, answer: &[Part]) -> Option<Column> {
+  let mut paragraphs = Vec::new();
+  for part in answer {
+    let Part::Reply { text, .. } = part else {
+      return None;
+    };
+    paragraphs.extend(text.split('\n').map(str::trim).filter(|line| !line.is_empty()));
+  }
+  if paragraphs.is_empty() {
+    return None;
+  }
+  Some(
+    Column::new()
+      .id(id.to_owned())
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Xs)
+      .with_children(paragraphs.into_iter().enumerate().map(|(index, words)| {
+        let doubt = words.trim_start_matches(['*', '_']).starts_with(UNSURE);
+        let role = if doubt {
+          OrchestratorText::RequestDoubt
+        } else {
+          OrchestratorText::RequestSaid
+        };
+        Text::new(words)
+          .id(format!("{id}-{index}"))
+          .variant(role.role())
+          .selectable(true)
+          .width(Dimension::Pct(100.0))
+      })),
+  )
+}
+
+/// How the Orchestrator's prompt has it open why it is not sure of a request (`approval_prompt`, in core).
+const UNSURE: &str = "Not sure";
 
 /// What the card of a request that waits for the person reads: the conversation's key for it, its project and task.
 #[derive(Clone, Debug, PartialEq)]
@@ -198,7 +236,9 @@ pub(in crate::screens::orchestrator) fn opening(
     }
     Status::ByYou(_) | Status::Gone => (line, None),
     Status::Waits => {
-      let said = super::super::answer::nested(ctx, row);
+      let said = unsure(&format!("{id}-unsure"), &row.turn.answer)
+        .map(|unsure| nested(&format!("{id}-answer"), unsure))
+        .or_else(|| super::super::answer::nested(ctx, row));
       let card = row.turn.request.as_ref().map(|request| {
         let card = format!("{id}-request");
         let props = RequestCardProps {

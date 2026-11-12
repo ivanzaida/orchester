@@ -363,7 +363,13 @@ fn orchestrator_task_events_tool_requests_show_how_they_were_answered() {
   let words = "Do not push; go on with the tests.";
   let denied = answered_itself(&mut db, (chat.id(), denied), (&runs[1], &denied_id), Some(words)).to_string();
   let (unsure, unsure_id) = request_wait(&mut db, &chat, &runs[2]);
-  let unsure = turned(&mut db, (chat.id(), unsure), "Not sure: it uses the network.").to_string();
+  let unsure = turned(
+    &mut db,
+    (chat.id(), unsure),
+    "Not sure: it uses the network.
+Recommends Deny: the brief names no download.",
+  )
+  .to_string();
   drop(db);
   screen.go(OrchestratorChat::Chat(chat.id()));
   let line = |key: &str| format!("orchestrator-wait-{key}");
@@ -401,8 +407,12 @@ fn orchestrator_task_events_tool_requests_show_how_they_were_answered() {
     !screen.exists(&format!("orchestrator-answer-{yours}")),
     "the Orchestrator's words go once the person answered"
   );
-  assert!(
-    screen.exists(&format!("orchestrator-answer-{unsure}")),
-    "its words stay while it waits"
+  // Its words stay while it waits, nested as its quote (`KSJlQ`): why it is not sure quiet, its recommendation as a
+  // reason is.
+  let quote = format!("{}-unsure", line(&unsure));
+  assert_eq!(screen.text(&format!("{quote}-0")), "Not sure: it uses the network.");
+  assert_eq!(
+    screen.text(&format!("{quote}-1")),
+    "Recommends Deny: the brief names no download."
   );
 }

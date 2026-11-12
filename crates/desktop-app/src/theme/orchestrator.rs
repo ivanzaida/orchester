@@ -98,13 +98,22 @@ pub enum OrchestratorText {
   LeadsTipOrder,
   /// 11 `text_inverse`, 1.3: the hint at a Leads chip's tooltip's foot (`j1E7E`), at [`LEADS_HINT_OPACITY`].
   LeadsTipHint,
+  /// Mono 12 `text_muted`, 1.5: what a tool request asked, in the Orchestrator's answer under its line (`TBozG`,
+  /// `XZVR6` in `ICzi3`).
+  RequestAsked,
+  /// 12 `text_muted`, 1.5: why the Orchestrator is not sure of a request (`JIvk5` in `ICzi3`), as an answered wait's
+  /// question (`qqssz` in `Jzqle`).
+  RequestDoubt,
+  /// 12.5 `text_secondary`, 1.5: the Orchestrator's reason, the words it told the agent or its recommendation, under a
+  /// tool request's line (`nAFS9`, `O8p4u6`, `GESeJ` in `ICzi3`).
+  RequestSaid,
 }
 
 /// The hint at a Leads chip's tooltip's foot, *× stops watching* (`j1E7E` in `X93D8T`).
 pub const LEADS_HINT_OPACITY: f32 = 0.7;
 
 impl OrchestratorText {
-  pub const ALL: [Self; 35] = [
+  pub const ALL: [Self; 38] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -140,6 +149,9 @@ impl OrchestratorText {
     Self::LeadsTipTitle,
     Self::LeadsTipOrder,
     Self::LeadsTipHint,
+    Self::RequestAsked,
+    Self::RequestDoubt,
+    Self::RequestSaid,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -183,6 +195,9 @@ impl OrchestratorText {
       Self::LeadsTipTitle => "orchestrator_leads_tip_title",
       Self::LeadsTipOrder => "orchestrator_leads_tip_order",
       Self::LeadsTipHint => "orchestrator_leads_tip_hint",
+      Self::RequestAsked => "orchestrator_request_asked",
+      Self::RequestDoubt => "orchestrator_request_doubt",
+      Self::RequestSaid => "orchestrator_request_said",
     }
   }
 
@@ -229,6 +244,9 @@ impl OrchestratorText {
       Self::LeadsTipTitle => style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_inverse),
       Self::LeadsTipOrder => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_inverse),
       Self::LeadsTipHint => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_inverse),
+      Self::RequestAsked => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted)),
+      Self::RequestDoubt => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
+      Self::RequestSaid => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
     }
   }
 }
