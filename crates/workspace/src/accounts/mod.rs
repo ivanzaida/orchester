@@ -4,6 +4,7 @@
 //! Recycle Bin / Trash). Opening the CLI's own login is [`sign_in`]. Everything here blocks on SQLite, the file
 //! system or a CLI; the UI calls it off the UI thread.
 
+mod api;
 mod error;
 pub(crate) mod folders;
 pub mod sign_in;
@@ -102,6 +103,7 @@ impl Workspace {
   /// Adds an account, creating its folder or taking the person's, not checked yet: *Add account* checks a brought
   /// folder at once and a new one after the sign-in.
   pub fn add_agent_account(&self, new: NewAccount) -> Result<AgentAccount, AccountsError> {
+    self.not_an_api_account_name(new.cli, &new.name)?;
     let folder = match new.folder {
       NewFolder::Create => {
         let folder = self
@@ -151,6 +153,8 @@ impl Workspace {
 
   /// Renames the account; everything holding it shows the new name, as they hold its id.
   pub fn rename_agent_account(&self, id: AgentAccountId, name: Name) -> Result<AgentAccount, AccountsError> {
+    let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
+    self.not_an_api_account_name(account.cli(), &name)?;
     let mut db = self.db.lock();
     let mut account = db.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     account.rename(name);
@@ -158,6 +162,14 @@ impl Workspace {
     drop(db);
     self.accounts_changed();
     Ok(account)
+  }
+
+  /// Refused when an API account of `cli` goes by `name`: a profile is offered both side by side.
+  fn not_an_api_account_name(&self, cli: AccountCli, name: &Name) -> Result<(), AccountsError> {
+    if self.api_account_named(cli, name)? {
+      return Err(StoreError::DuplicateAccountName(name.as_str().to_owned()).into());
+    }
+    Ok(())
   }
 
   /// Asks the account's CLI who is signed in to its folder and records the answer. The CLI runs from the `PATH`,

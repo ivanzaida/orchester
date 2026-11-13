@@ -2,8 +2,8 @@ use std::{io, path::PathBuf, time::Duration};
 
 use orchester_core::{
   id::{
-    AgentAccountId, ConnectionId, InvocationId, MemoryId, OperationId, ProjectId, ResourceId, RunId, SecretId,
-    ServerId, TaskId,
+    AgentAccountId, ApiAccountId, ConnectionId, InvocationId, MemoryId, OperationId, ProjectId, ResourceId, RunId,
+    SecretId, ServerId, TaskId,
   },
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError, RunnerFailure},
@@ -210,6 +210,9 @@ pub enum StoreError {
   /// Another account has the folder already.
   #[error("another account uses the folder already")]
   AccountFolderTaken,
+  /// The application database has no API account with this id, or only a removed one.
+  #[error("API account {0} is not in the list")]
+  ApiAccountNotFound(ApiAccountId),
   /// The application database has no shared server with this id.
   #[error("server {0} is not in the list")]
   ServerNotFound(ServerId),

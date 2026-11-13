@@ -81,6 +81,11 @@ define_id!(
   AgentAccountId
 );
 define_id!(
+  /// An API account on this computer (`docs/design/agent-accounts.md`, "Agents run on accounts"): a model API and
+  /// its key, shared by every project. The key is kept in the OS keychain under this id.
+  ApiAccountId
+);
+define_id!(
   /// A versioned configuration resource (agent profile, instruction, pipeline, tool).
   ResourceId
 );

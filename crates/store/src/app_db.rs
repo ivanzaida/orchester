@@ -3,9 +3,12 @@
 //! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
 //! is ([`server_owners`]), the application's own settings ([`settings`], Settings › Browser's in [`browser`]), among
 //! them the Usage dashboard's warning threshold, and its updates' ([`updates`]), the person's agent CLI accounts
-//! ([`accounts`]) and the plan limits read of them outside runs ([`plan_reads`]).
+//! ([`accounts`]) and the plan limits read of them outside runs ([`plan_reads`]), the API accounts ([`api_accounts`])
+//! and the program of each agent CLI ([`agent_programs`]).
 
 mod accounts;
+mod agent_programs;
+mod api_accounts;
 mod browser;
 mod cloud;
 mod cloud_ended;
@@ -94,6 +97,8 @@ CREATE TABLE ui_state (
   settings::BROWSER_WINDOW_MIGRATION,
   browser::MIGRATION,
   mcp_programs::MIGRATION,
+  api_accounts::MIGRATION,
+  agent_programs::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

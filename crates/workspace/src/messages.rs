@@ -139,6 +139,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::Keychain(_)
     | StoreError::ServerNotFound(_)
     | StoreError::AgentAccountNotFound(_)
+    | StoreError::ApiAccountNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)
     | StoreError::MemoryConflict(_)

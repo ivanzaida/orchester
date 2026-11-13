@@ -3,8 +3,9 @@
 //! settings and sessions; Orchester starts the CLI with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set to it. Each CLI has a
 //! fixed Default account, the CLI's own folder, which leaves the variable as the environment has it. Orchester never
 //! reads, stores or shows a credential: it runs only the CLI's status command and opens its login in a terminal the
-//! person sees.
+//! person sees. The model APIs reached with a key are app-wide too ([`ApiAccount`]).
 
+mod api;
 mod check;
 mod folder;
 mod removal;
@@ -17,6 +18,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub use self::{
+  api::{ApiAccount, ApiAccountError, ApiSetup},
   check::{
     AccountCheck, AccountCheckResult, AccountIdentity, AccountState, CheckedProgram, SignInMethod,
     parse_claude_identity,

@@ -1,9 +1,10 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  account::{AccountError, FolderProblem, RemovalError},
+  account::{AccountError, ApiAccountError, FolderProblem, RemovalError},
   connection::{ConnectionError, invocation::InvocationError},
   name::Name,
+  secret::VaultError,
 };
 use orchester_store::{RunStoreError, StoreError};
 use thiserror::Error;
@@ -49,6 +50,13 @@ pub enum AccountsError {
   Connection(ConnectionError),
   #[error(transparent)]
   Invocation(InvocationError),
+  #[error(transparent)]
+  ApiAccount(ApiAccountError),
+  /// The OS keychain did not keep or give an API account's key; the message never carries the key.
+  #[error(transparent)]
+  Keychain(VaultError),
+  #[error("the program path `{0}` is not absolute")]
+  RelativeProgram(PathBuf),
 }
 
 impl AccountsError {
@@ -87,7 +95,18 @@ impl AccountsError {
         Message::new("accounts.errors.folderMissing").with("folder", folder.display().to_string())
       }
       Self::Terminal(_) => Message::new("accounts.errors.terminal"),
-      Self::Runs(_) | Self::Account(_) | Self::Connection(_) | Self::Invocation(_) => Message::new("errors.storage"),
+      Self::ApiAccount(ApiAccountError::NoModels) => Message::new("connections.provider.noModels"),
+      Self::ApiAccount(ApiAccountError::PresetNotOffered) => Message::new("connections.native.preset.notOffered"),
+      Self::ApiAccount(ApiAccountError::FallbackNotOffered) => Message::new("connections.native.fallback.notOffered"),
+      Self::Keychain(error) => messages::vault_error(error),
+      Self::RelativeProgram(_) => Message::new("errors.executableNotAbsolute"),
+      Self::ApiAccount(
+        ApiAccountError::NotNative(_) | ApiAccountError::AnotherAgent | ApiAccountError::CheckNotTaken,
+      )
+      | Self::Runs(_)
+      | Self::Account(_)
+      | Self::Connection(_)
+      | Self::Invocation(_) => Message::new("errors.storage"),
     }
   }
 }
