@@ -135,7 +135,10 @@ drive*, and says what changed.**
      `docs/design/local-and-team-parity.md`): into the branch it started from, its module's, never the base; its
      module's delivery to the base is not asked for by that merge. The run of a team task in no module lands on the
      base branch itself, which this computer may do only as an Admin's, or while the team's Automatic merge is on
-     (`admin_required` otherwise). `team_delivery` stays readable in entries kept before. A team run created with team inputs whose team record was never written (its start did not finish recording) is left to the person too (`merging` says `team_unrecorded`): it can be neither merged nor delivered from here. A run of the old sharing stream has neither record nor inputs and is judged as a local run. One automatic merge attempt per run end: the turn merges only the run whose
+     (`admin_required` otherwise). A team task's *Blocked* mark is the server's and this computer's records do not
+     hold it, so before a merge nobody asked for the chat asks the server and leaves a blocked task's run to the
+     person (`left_to_person`); a server that cannot be read refuses the merge. The kept entry's `merging` cannot
+     tell either refusal and says `merges`. `team_delivery` stays readable in entries kept before. A team run created with team inputs whose team record was never written (its start did not finish recording) is left to the person too (`merging` says `team_unrecorded`): it can be neither merged nor delivered from here. A run of the old sharing stream has neither record nor inputs and is judged as a local run. One automatic merge attempt per run end: the turn merges only the run whose
      success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_run` of that run that
      was carried out or refused counts as the attempt, and so does one refused before it named a run (an unknown run,
      say): it errs towards leaving the run to the person. A `merge_failed` at conflicts

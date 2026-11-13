@@ -74,6 +74,21 @@ pub fn is_team(db: &ProjectDb, id: TaskId) -> Result<bool, StoreError> {
   ))
 }
 
+/// The id the team server names team task `id` by; `None` for a local task.
+pub fn server_task_of(db: &ProjectDb, id: TaskId) -> Result<Option<TaskId>, StoreError> {
+  Ok(match db.task_identity(id)? {
+    Some(TaskIdentity {
+      owner: TaskOwner::Team { task, .. },
+      ..
+    }) => Some(task.task),
+    Some(TaskIdentity {
+      owner: TaskOwner::Local,
+      ..
+    })
+    | None => None,
+  })
+}
+
 /// Where a run's work goes: told by the run itself, not by whether its project is linked to a team server and not by
 /// its task: a task the old sharing stream cached has the team's identity too, and its runs are local ones.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -129,8 +144,8 @@ fn recorded(db: &ProjectDb, id: TaskId, runs: &[ListedRun<RunStoreError>]) -> Re
       limits: bundle.limits(),
     };
     let key = TaskKey::new(db.project().key().clone(), bundle.task_number());
-    // The module is the server's too: the run kept the one its task was in when it started, on whose branch it runs.
-    // A task in no module started on no module's branch.
+    // The module is the server's too: a team run's base source is the module the server accepted its start in
+    // (`TeamAcceptance::module`, as the runner makes the run), and a task in no module started on no module's branch.
     let module = match run.base_source() {
       RunBaseSource::Module { module } => Some(module),
       RunBaseSource::Task | RunBaseSource::CheckedOut | RunBaseSource::Project => None,

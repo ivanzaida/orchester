@@ -24,7 +24,7 @@ pub use self::team_mcp_window::{Header, Invalid, NewTeamMcpServer, Runs, team_mc
 pub(crate) use self::{
   mcp_preview::preview as preview_mcp,
   mcp_servers::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer},
-  merge::merge_proposed,
+  merge::{merge_proposed, team_blocked_reason},
 };
 mod pipeline_steps;
 pub(super) mod pipelines;

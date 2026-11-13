@@ -1,8 +1,8 @@
 //! A team task's run, which this computer keeps no definition of, where the app and the Orchestrator chat read a run's
 //! task: it is under way for the sidebar and Stop auto-approving, its task is told by the key its inputs kept, the
-//! chat merges it on its own by the rule of a local run, and the local merge takes it into its module's branch, never
-//! the base. Its
-//! task is in the module its run started in, so a conversation that watches the module leads its events (OA-28).
+//! chat merges it on its own by the rule of a local run, unless the team server holds its task blocked, and the local
+//! merge takes it into its module's branch, never the base. Its task is in the module its run started in, so a
+//! conversation that watches the module leads its events (OA-28).
 
 use std::collections::HashSet;
 
@@ -22,7 +22,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   orchestrator::{
-    auto_merge::{completes_in, left_message, merging_in},
+    auto_merge::{completes_in, left_message, left_on_server, merging_in},
     waits::{Switches, check_merges_in, follow_in},
     watch::{StopBy, StopWhat, stop_in, watch_in},
   },
@@ -81,6 +81,35 @@ fn team_mcp_the_chat_merges_a_succeeded_team_run_by_the_rule_of_a_local_one() {
   assert!(
     !completes_in(&db, team.run).expect("rule"),
     "a run with nothing to merge is not completed from here: the server closes its task on the run's report"
+  );
+}
+
+#[test]
+fn team_mcp_the_chat_leaves_a_team_run_whose_task_the_server_holds_blocked() {
+  let team = started();
+  team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
+  let run = team.run.to_string();
+  let asked = || {
+    crate::team_cache::keep_cached_team(&team.checkout.workspace, team.checkout.root());
+    team
+      .checkout
+      .runtime
+      .block_on(left_on_server(&team.checkout.services, ("Kontur", &run)))
+      .unwrap_or_else(|error| panic!("{}", error.to_json(|message| message.key.to_owned())))
+  };
+  assert_eq!(asked(), None, "the server does not hold the task back");
+
+  // The rule read from this computer's records still says it merges: only the server knows the mark.
+  team.seen.lock().task_fields = serde_json::json!({"blocked_reason": "Waiting for the staging key"});
+  assert_eq!(
+    merging_in(&team.checkout.db(), team.run).expect("rule"),
+    Merging::Merges
+  );
+  assert_eq!(
+    asked(),
+    Some(MergeLeft::MarkedBlocked {
+      reason: "Waiting for the staging key".to_owned()
+    })
   );
 }
 

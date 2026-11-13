@@ -198,7 +198,7 @@ async fn applied(
 /// ([`change::apply`]).
 async fn merge(deps: (&Services, &Translate), scope: &ChatScope, arguments: &JsonObject) -> Result<Acted, ToolError> {
   if scope.on_its_own {
-    auto_merge::check(scope, arguments).await?;
+    auto_merge::check(deps.0, scope, arguments).await?;
   }
   let mut acted = applied(deps, scope, MERGE_RUN, arguments).await?;
   acted.kept.on_its_own = scope.on_its_own;

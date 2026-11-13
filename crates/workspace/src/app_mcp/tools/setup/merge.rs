@@ -241,6 +241,18 @@ pub(crate) async fn merge_proposed(
   merge_at(services, (InRun { project, run }, Some(expected), runs), translate).await
 }
 
+/// The reason the team server holds the task of run `run` of `project` blocked now ([`team::blocked_reason`]); `None`
+/// while it does not, and for a local run, whose task this computer keeps.
+pub(crate) async fn team_blocked_reason(
+  services: &Services,
+  (project, run): (&str, &str),
+) -> Result<Option<String>, ToolError> {
+  match team::of_run(services, (project, run)).await? {
+    Some(team) => team::blocked_reason(services, &team, run).await,
+    None => Ok(None),
+  }
+}
+
 async fn merge_at(
   services: &Services,
   (args, expected, runs): (InRun, Option<Revision>, Runs),

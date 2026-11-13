@@ -5,7 +5,8 @@
 //! 2026-11-11); the task does not say
 //! *Don't merge automatically*, is not marked Blocked and no unfinished task blocks it; and new starts are not held for
 //! its reviewed group or the whole project. `merge_run`'s own rules (the main checkout needs no local integration) hold
-//! on top. In a turn nobody asked for, `merge_run` merges only a run this rule lets it ([`check`]). A run that
+//! on top. In a turn nobody asked for, `merge_run` merges only a run this rule lets it ([`check`]), and a team task's
+//! run only while the team server does not hold its task blocked ([`left_on_server`]). A run that
 //! committed nothing and whose result is its report is completed by the same rule, with no turn (ORC-93,
 //! [`completes_in`]).
 
@@ -22,7 +23,7 @@ use serde_json::Value;
 
 use super::tools::ChatScope;
 use crate::{
-  app_mcp::{ToolError, blocking, find_run},
+  app_mcp::{Services, ToolError, blocking, find_run, setup::team_blocked_reason},
   messages::Message,
   tasks::{
     detail::run_store_error,
@@ -54,8 +55,8 @@ pub fn completes_in(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
   let Some(found) = db.run(run).map_err(run_store_error)? else {
     return Ok(false);
   };
-  // A team task's run (told by the run itself) goes into its module's branch and is delivered with the module, never
-  // completed from here.
+  // A team task's run (told by the run itself) is never completed from here: the team server closes its task on the
+  // run's report.
   let route = route_of_run(db, &found)?;
   if route != RunRoute::Local {
     return Ok(false);
@@ -142,28 +143,45 @@ fn latest_succeeded(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
   Ok(!later)
 }
 
+/// Why the chat leaves run `run` of project `project` to the person as the team server reads its task now: the task
+/// is marked Blocked there. `None` for a team task the server does not hold back, and for a local run. This computer's
+/// records of a team task hold what its run started with ([`recorded`]), never that mark, so the rule above cannot
+/// read it: [`check`] asks the server before a merge nobody asked for. A server that cannot be read refuses, and
+/// nothing is merged unseen.
+pub async fn left_on_server(services: &Services, (project, run): (&str, &str)) -> Result<Option<MergeLeft>, ToolError> {
+  let reason = team_blocked_reason(services, (project, run)).await?;
+  Ok(reason.map(|reason| MergeLeft::MarkedBlocked { reason }))
+}
+
 /// Checks `merge_run` with `arguments` in `scope`'s turn, which nobody asked for, against the rule: a run the rule
-/// leaves to the person now is refused (`left_to_person`), with why.
-pub(super) async fn check(scope: &ChatScope, arguments: &JsonObject) -> Result<(), ToolError> {
+/// leaves to the person now is refused (`left_to_person`), with why; so is a team task's run whose task the team
+/// server holds blocked ([`left_on_server`]).
+pub(super) async fn check(services: &Services, scope: &ChatScope, arguments: &JsonObject) -> Result<(), ToolError> {
   let named = arguments
     .get("run")
     .and_then(Value::as_str)
     .ok_or_else(|| ToolError::InvalidArguments("run: required".to_owned()))?
     .to_owned();
-  let root = scope.root.clone();
-  blocking(move || {
+  let (root, local) = (scope.root.clone(), named.clone());
+  let number = blocking(move || {
     let db = ProjectDb::open(&root)?;
-    let run = find_run(&db, &named)?;
+    let run = find_run(&db, &local)?;
     let route = route_of_run(&db, &run)?;
     match left(&db, &run, route, Merge::Branch)? {
-      None => Ok(()),
-      Some(why) => Err(ToolError::refused(
-        "left_to_person",
-        vec![left_message(&why, run.number().get())],
-      )),
+      None => Ok(run.number().get()),
+      Some(why) => Err(left_to_person(&why, run.number().get())),
     }
   })
-  .await
+  .await?;
+  match left_on_server(services, (&scope.project.to_string(), &named)).await? {
+    None => Ok(()),
+    Some(why) => Err(left_to_person(&why, number)),
+  }
+}
+
+/// The refusal of a merge of run `#number` the chat leaves to the person, with why.
+fn left_to_person(why: &MergeLeft, number: u32) -> ToolError {
+  ToolError::refused("left_to_person", vec![left_message(why, number)])
 }
 
 /// Why run `#number` is left to the person, in the words the chat's agent and the person read.

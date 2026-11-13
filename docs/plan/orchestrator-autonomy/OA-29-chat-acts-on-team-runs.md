@@ -51,5 +51,16 @@ started from, its module's, without asking for the module's delivery. The run of
 the base branch itself and is merged only as `team::may_merge_on_base` allows (an Admin, or the team's Automatic
 merge). `MergeLeft::TeamDelivery` stays for entries kept before.
 
+A team task's *Blocked* mark is the server's, and the task as this computer records it never holds it: before a
+merge nobody asked for, the chat asks the server (`auto_merge::left_on_server`) and leaves a blocked task's run to the
+person; a server that cannot be read refuses the merge.
+
+**Review (2026-11-13, independent):** found that the rule read a team task's Blocked mark from records that never
+hold it (fixed as above); that the kept entry says `merges` for a blocked task and for a Member's run in no module,
+which only the server can tell (a row of the parity table, OA-35); and that nothing runs the merge itself for a team
+run in a test (still open: the test binary has no harness for the chat's own calls on a team project). Its doubt
+about the module read from the run's base source does not hold: the runner makes a team run's base source from the
+module the server accepted (`crates/runner/src/execution/coordinator/accepted.rs`).
+
 **Left:** starts of team tasks in a turn Orchester started (`led_start` reads stored tasks), `continue_run`,
 `resume_run` and a continuing message for a team run, `run_proposed`.
