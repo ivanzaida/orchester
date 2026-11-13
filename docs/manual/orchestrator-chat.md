@@ -338,6 +338,14 @@ also gets events of the target as a whole, each once per state:
 A subscription that only follows gets neither, and starts tasks only as before: in the turn of a success it merged
 under an order.
 
+In every turn an event of a task led to the end starts, the Orchestrator is also told that nobody is there: it reads
+where the target stands, decides what is the task's to decide (by what the design shows, then what the app already
+does, then what surprises you least, then the smaller change), parks what is yours, and never ends a turn by asking
+you something. A **run without progress** is raised again each further period it stays stalled, three times at
+most; for a task led to the end the first turn writes to its agents, the second stops the run and continues it
+from its last checkpoint, and the third parks the task. A **tool request only you may allow** is denied when the
+task plainly does not need it, and otherwise the task is parked for you, with the request's card still yours.
+
 ### Its own decisions, with reasons
 
 In a turn it started itself, the Orchestrator gives a one-sentence **reason** with every judgement: how a stopped run

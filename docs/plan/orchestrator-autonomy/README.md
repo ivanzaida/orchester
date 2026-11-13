@@ -146,7 +146,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-03](OA-03-budget-and-plan-limit-hold.md) | A used budget and a plan limit hold turns until the reset | core + runner + workspace + UI | OA-01 | done; what is seen waits for frames (A) |
 | [OA-04](OA-04-second-connection.md) | A second connection for the Orchestrator | design + UI + runner | OA-03 | later (person, 2026-11-13) |
 | [OA-05](OA-05-compaction-before-a-turn.md) | The conversation is compacted before a turn that would not fit | workspace + runner | — | done |
-| [OA-06](OA-06-stall-again.md) | A run that stays stalled is raised again, and its turn may act | core + workspace | OA-09, OA-15 | todo |
+| [OA-06](OA-06-stall-again.md) | A run that stays stalled is raised again, and its turn may act | core + workspace | OA-09, OA-15 | done but for the long tool call |
 | [OA-07](OA-07-events-together.md) | Events that wait in one conversation are taken in one turn | core + workspace | OA-01 | todo |
 | [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | todo |
 | **B** | **What the chat may do on its own** | | | |
@@ -160,11 +160,11 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | done; what is seen waits for frames (OA-23) |
 | [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | done |
 | [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | todo |
-| [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | todo |
+| [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | done; not run with a real model |
 | **D** | **Quality without a person** | | | |
 | [OA-19](OA-19-before-you-leave.md) | Before you leave: is what the conversation leads ready | design + workspace + UI | OA-09, frames for its UI | todo |
 | [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | todo |
-| [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | todo |
+| [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | done as instructions |
 | **E** | **The record for the person** | | | |
 | [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | done; its screen is OA-23 |
 | [OA-23](OA-23-while-you-were-away.md) | *While you were away*: decisions to review and what needs you | design + UI | OA-15, OA-22, frames | blocked (frames) |

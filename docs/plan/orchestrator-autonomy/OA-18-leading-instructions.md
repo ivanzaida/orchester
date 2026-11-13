@@ -1,6 +1,6 @@
 # OA-18 · The instructions of a leading turn
 
-- **Status:** todo
+- **Status:** done (2026-11-14); a run with a real model was not made
 - **Kind:** core
 - **Depends on:** OA-12, OA-13, OA-14, OA-15 (and OA-22 for the reasons)
 - **Branch:** —
@@ -57,3 +57,26 @@ The prompts of a *Follow* subscription, and of a conversation that leads nothing
 - OA-26 passes with these prompts and the scripted agent; a run with a real model is listed as not run unless the
   person asks for one.
 - `tools/check.ps1` passes.
+
+## As built (2026-11-14)
+
+A turn an event started by itself is given the leading note beside its prompt when the subscription the event came
+through leads its task to the end (`ProjectDb::wait_turn_prompt`;
+`orchester_core::orchestrator::instructions::leading`). The note says: nobody is at the computer; read where the
+target stands first (`get_standing`); decide what is the task's to decide, in the stated order of precedence; park
+what is not, and where the conversation's order asks to be asked first; accept a step as it is only when what it
+could not check cannot be checked at all; do not run tasks that change the same files side by side; never wait in
+words; give a reason with every judgement. Beside it, what to do about a request only the person may allow (OA-21),
+a failure (OA-14) and a stall, by its period (OA-06). The prompts of a subscription that only follows, and an event's
+own prompt, are unchanged. The events of the whole target have prompts of their own (`instructions/standing.rs`).
+
+Differs from the task file:
+
+- Where the target stands is not put at the head of the prompt: the turn is told to read `get_standing` first. The
+  prompt is built by the store, where the runner reads it, and the standing is read by the workspace.
+- An event of a team task this computer keeps only as an identity names no subscription in its prompt (the store
+  resolves it from a stored task row), so it gets no leading note: a row of the parity table.
+- Not run with a real model. OA-26 is the scripted proof.
+
+Tests: `orchester-core --test orchestrator_instructions leading`, `orchester-store --test
+orchestrator_leading_prompt`.

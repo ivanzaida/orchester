@@ -71,3 +71,19 @@ pub fn raised_stall(entries: &[ChatEntry], run: RunId) -> Option<Timestamp> {
     _ => None,
   })
 }
+
+/// How many times one stall is raised at most: once per further period without progress
+/// (`docs/plan/orchestrator-autonomy/OA-06-…`).
+pub const STALL_RAISES: u32 = 3;
+
+/// How many periods of `minutes` a run whose last progress was at `last` made none for at `now`, [`STALL_RAISES`] at
+/// most: the stall is raised once for each, and progress again starts the count anew. Zero while the setting is off
+/// (`None`) or the first period is not over.
+pub fn stall_periods(last: Timestamp, now: Timestamp, minutes: Option<u32>) -> u32 {
+  let Some(minutes) = minutes.and_then(NonZeroU32::new) else {
+    return 0;
+  };
+  let waited = now.unix_millis().saturating_sub(last.unix_millis()).max(0);
+  let periods = waited / (i64::from(minutes.get()) * 60_000);
+  u32::try_from(periods).unwrap_or(STALL_RAISES).min(STALL_RAISES)
+}

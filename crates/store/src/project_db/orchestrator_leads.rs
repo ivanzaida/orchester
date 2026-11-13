@@ -8,8 +8,10 @@
 use orchester_core::{
   id::{ChatId, RunId, TaskId},
   orchestrator::{
-    AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, WatchTarget,
-    instructions::wait_prompt, watch::event_subscription,
+    AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, TaskEvent, TaskEventKind,
+    WatchTarget,
+    instructions::{leading_note, wait_prompt},
+    watch::event_subscription,
   },
   store::{ActivityStore, RunStore, TaskStore},
   task::Task,
@@ -44,10 +46,47 @@ impl ProjectDb {
     } else {
       leads.event_prompt(wait, self.came_through(chat, wait.run)?)
     };
-    Ok(match self.accepted_note(wait)? {
+    let prompt = match self.accepted_note(wait)? {
       Some(note) => format!("{prompt}\n\n{note}"),
       None => prompt,
+    };
+    Ok(if self.leads_to_the_end(chat, wait)? {
+      format!("{prompt}\n\n{}", leading_note(wait, self.stall_step(wait)?))
+    } else {
+      prompt
     })
+  }
+
+  /// Whether the subscription of `chat` the event `wait` came through leads its task to the end.
+  fn leads_to_the_end(&self, chat: ChatId, wait: &AgentWait) -> Result<bool, StoreError> {
+    let Some(through) = self.came_through(chat, wait.run)? else {
+      return Ok(false);
+    };
+    Ok(
+      self
+        .chat_subscriptions(chat)?
+        .iter()
+        .any(|subscription| subscription.target() == through && subscription.mode().ceilings().is_some()),
+    )
+  }
+
+  /// For a run that makes no progress, which period of its stall `wait` was raised for, from 1: its minutes over the
+  /// project's *A run without progress for*. `None` for any other wait, and while the setting is off.
+  fn stall_step(&self, wait: &AgentWait) -> Result<Option<u32>, StoreError> {
+    let Some(TaskEvent {
+      kind: TaskEventKind::NoProgress { minutes, .. },
+      ..
+    }) = wait.kind.event()
+    else {
+      return Ok(None);
+    };
+    Ok(
+      self
+        .orchestrator_watch()?
+        .no_progress_minutes()
+        .filter(|period| *period > 0)
+        .map(|period| (minutes / period).max(1)),
+    )
   }
 
   /// For the turn of a run's success that merges it, the steps of the run automation accepted as they were and what

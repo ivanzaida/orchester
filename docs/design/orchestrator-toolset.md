@@ -747,6 +747,14 @@ project with none of its own; the application-wide values are no longer shown or
   run). `park_task` leaves a task the chat cannot move to the person with what they are to do: it reads as parked,
   nothing starts it (`parked`), the events of its run are tried no more, and it ends when its run moves or the
   person gives it back.
+- **A leading turn is told to move the work, not to report** (2026-11-14, OA-18, OA-21, OA-06). The prompt of a turn
+  an event started carries a leading note when the subscription the event came through leads its task to the end:
+  read where the target stands, decide what is the task's to decide in a stated order of precedence, park what is
+  not, never wait in words, give a reason. It says what to do about a request only the person may allow (deny it
+  when the task plainly does not need it, else park the task as an approval), about a failure (return the run, or
+  run the task again within its ceiling, else park) and about a stall. A run that stays stalled raises its event
+  again each further period, three times at most; for a task led to the end the turns go in steps: write to the
+  agents, then stop the run and continue it from its checkpoint, then park.
 - **What the chat decides on its own carries its reason** (2026-11-14, OA-22). In a turn Orchester started by
   itself, `continue_run` (every choice but `resume`), `answer_question` and `decide_plan` take a one-sentence
   `reason` and are refused `reason_required` without one, before anything else is asked; `decide_approval` had its

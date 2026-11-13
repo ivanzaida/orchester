@@ -1,6 +1,6 @@
 # OA-06 · A run that stays stalled is raised again, and its turn may act
 
-- **Status:** todo
+- **Status:** done but for the long tool call (2026-11-14)
 - **Kind:** core + workspace
 - **Depends on:** OA-09, OA-15
 - **Branch:** —
@@ -40,3 +40,27 @@ raised again. The stall turn's prompt tells it to start, resume, cancel and merg
 - Workspace tests (`--test orchestrator_stalls again`): the three raises, the re-arm, the tool call under way, each
   step of a led task.
 - `tools/check.ps1` passes. The manual's *No progress* paragraph and the watch design's decision 5 say the new rule.
+
+## As built (2026-11-14)
+
+- **Raised again.** A run that stays stalled raises its *no progress* event once for each further period of *A run
+  without progress for*, three times at most per stall (`orchester_core::orchestrator::task_event::stall_periods`,
+  `STALL_RAISES`; `orchestrator/stalls.rs`). Each period is an entry of its own (*no progress for 20 minutes*, then
+  *40*, then *60*), kept by the run, the time of its last progress and the period; progress re-arms it, as before.
+  The app follows again at the next period. A subscription that only follows gets the same turns as before, three
+  times.
+- **A task led to the end acts in steps**, told by the leading note of its turn
+  (`orchester_core::orchestrator::instructions::leading_note`, by the stall's period): the first writes to the
+  agents, the second stops the run with `pause_run` and continues it from its last checkpoint with `resume_run`
+  (both are the chat's tools already, so nothing was added to the runner), the third parks the task.
+
+Differs from the task file:
+
+- The steps are told by the prompt, not held by the tools: nothing refuses a second message in the second period.
+- **A long tool call is not handled.** What counts as progress (`run_progressed_at`) was not changed, so a tool call
+  of forty minutes that writes no transcript event still reads as a stall. To do: read the call under way and its
+  timeout there.
+
+Tests: `orchester-core --test orchestrator_task_events` (the periods), `orchester-workspace --test
+orchestrator_stalls` (three raises, the re-arm, when to follow again), `orchester-core --test
+orchestrator_instructions` (the steps).

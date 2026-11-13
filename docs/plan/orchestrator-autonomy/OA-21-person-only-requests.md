@@ -1,6 +1,6 @@
 # OA-21 · A person-only request in a led run parks its task
 
-- **Status:** todo
+- **Status:** done as instructions (2026-11-14)
 - **Kind:** workspace
 - **Depends on:** OA-15
 - **Branch:** —
@@ -41,3 +41,16 @@ The categories stay person-only. This task adds no way for the chat to allow the
 - Workspace tests (`--test orchestrator_tools person_only_request`): the denial, the parking, the end of the parking
   when the person answers, the second request.
 - `tools/check.ps1` passes; the manual's *Tool requests* paragraph says what a leading subscription does.
+
+## As built (2026-11-14)
+
+The turn of a tool request of a task led to the end is told, in its leading note, what to do when `approve_once` is
+refused `person_only`: deny it with words for the agent when the task plainly does not need it; otherwise park the
+task as *an approval* (`park_task`, `needs: approval`) with what is asked, why it is held and what it recommends, and
+decide nothing; and park rather than deny again when it already denied a request like it for that agent. The
+categories stay person-only, and nothing new lets the chat allow them. The parking ends when the person answers the
+request's card: the run moves, which the follower sees (`parking::end_moved`).
+
+It is the chat's judgement, told by the prompt: no tool parks by itself when a request is person-only. Tested as the
+prompt (`orchester-core --test orchestrator_instructions`), and the parking and its end in
+`orchester-app --test mcp_domain orchestrator_parking` and `orchester-store --test orchestrator_parking`.
