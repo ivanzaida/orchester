@@ -17,6 +17,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   ceilings,
+  team_status::module_now,
   tools::{ChatScope, MERGE_RUN},
 };
 use crate::{
@@ -43,7 +44,7 @@ pub(super) async fn led_here(scope: &ChatScope, key: Option<&str>) -> Result<(),
         Message::new("orchestrator.start.notMergeTurn"),
       )));
     }
-    if db.active_subscriptions()?.leading(task.id(), task.module()) != Some(chat) {
+    if db.active_subscriptions()?.leading(task.id(), module_now(&db, &task)) != Some(chat) {
       return Ok(Some((
         "not_led",
         Message::new("orchestrator.start.notLed").with("task", key),

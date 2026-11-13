@@ -8,6 +8,7 @@ use std::time::Duration;
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ModuleId, ProjectId, TaskId},
+  integration::base::RunBaseSource,
   module::{Module, ModuleDetails, ModuleState},
   name::Name,
   orchestrator::{
@@ -112,6 +113,36 @@ fn cannot_read(checkout: &Checkout, chat: ChatId) -> Option<&'static str> {
 
 fn server_says(team: &Started, workflow: &str) {
   team.seen.lock().task_fields = json!({ "workflow": workflow });
+}
+
+/// How many waits and run ends `chat` keeps.
+fn waits_kept(checkout: &Checkout, chat: ChatId) -> usize {
+  let entries = checkout.db().chat_entries(chat).expect("entries");
+  entries
+    .iter()
+    .filter(|entry| matches!(entry.kind, EntryKind::Wait { .. }))
+    .count()
+}
+
+#[test]
+fn team_mcp_a_team_task_the_server_moved_is_led_by_the_module_it_is_in_now() {
+  let team = started();
+  let run = team.checkout.db().run(team.run).expect("read").expect("run");
+  let RunBaseSource::Module { module: ran_in } = run.base_source() else {
+    panic!("the team run started on its module's branch: {:?}", run.base_source());
+  };
+  let moved_to = ModuleId::generate();
+  let (old, project) = watching(&team.checkout, |_| WatchTarget::Module(ran_in));
+  let (new, _) = watching(&team.checkout, |_| WatchTarget::Module(moved_to));
+
+  // The server moved the task since its run started; the next reading of the watched modules sees it there.
+  team.seen.lock().task_fields = json!({ "module": moved_to.to_string() });
+  refreshed(&team.checkout);
+  team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
+
+  assert!(follow(&team.checkout, project).kept, "the run's end is kept");
+  assert_eq!(waits_kept(&team.checkout, new), 1, "by the module the task is in now");
+  assert_eq!(waits_kept(&team.checkout, old), 0, "not by the one its run started in");
 }
 
 #[test]

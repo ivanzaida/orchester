@@ -22,7 +22,7 @@ use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::Value;
 
-use super::tools::ChatScope;
+use super::{team_status::module_now, tools::ChatScope};
 use crate::{
   app_mcp::{ContinueChoice, ContinueRun, ToolError, blocking, find_run},
   messages::Message,
@@ -158,7 +158,7 @@ impl Led {
   /// The leading of `task`; `None` while no subscription leads it to the end.
   fn of_task(db: &ProjectDb, task: &Task) -> Result<Option<Self>, StoreError> {
     let subscriptions = db.active_subscriptions()?;
-    let Some(leading) = subscriptions.leader_of(task.id(), task.module()).cloned() else {
+    let Some(leading) = subscriptions.leader_of(task.id(), module_now(db, task)).cloned() else {
       return Ok(None);
     };
     Ok(leading.mode().ceilings().map(|ceilings| Self {
@@ -194,7 +194,7 @@ impl Led {
 pub fn spent(db: &ProjectDb, subscriptions: &Subscriptions, leading: &Subscription) -> Result<TokensUsed, StoreError> {
   let mut used = db.chat_tokens_since(leading.chat(), leading.since())?;
   for (task, runs) in recorded::all_with_runs(db)? {
-    if subscriptions.leader_of(task.id(), task.module()) != Some(leading) {
+    if subscriptions.leader_of(task.id(), module_now(db, &task)) != Some(leading) {
       continue;
     }
     for run in runs.into_iter().flatten() {

@@ -3,7 +3,8 @@
 //! server owns for a team task: this computer keeps the task's identity and its runs, and no copy of its status it may
 //! trust. So the status, and the module the server puts the task in, are read from the server in the background
 //! ([`refresh`]) for as long as such a subscription exists, and the ending rule ([`super::watch_ends`]) reads that
-//! reading, never a stored row of a team task.
+//! reading, never a stored row of a team task. Who leads a task reads the same reading for the module the task is in
+//! now ([`module_now`]), so a task the server moved is led by where it is, not by where its last run started.
 //!
 //! Nothing pushes into the workspace (the team server's invalidations reach the app's own team reads only), so the
 //! app asks again every [`POLL`] while [`Refreshed::polling`] says a subscription needs it. A reading that cannot be
@@ -26,10 +27,10 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ModuleId, TaskId},
+  id::{ModuleId, ProjectId, TaskId},
   orchestrator::{Subscription, WatchTarget},
   project::TaskKey,
-  task::organization::WorkflowStatus,
+  task::{Task, organization::WorkflowStatus},
 };
 use orchester_store::{ProjectDb, SharingLink, StoreError};
 use parking_lot::Mutex;
@@ -84,6 +85,8 @@ struct Wants {
 static READINGS: LazyLock<Mutex<HashMap<PathBuf, Kept>>> = LazyLock::new(Default::default);
 
 struct Kept {
+  /// The project the reading is of, by which a reader that holds its database finds it.
+  project: ProjectId,
   reading: TeamReading,
   wanted: Wants,
   /// When the reading began: one that began earlier never replaces one that began later.
@@ -108,6 +111,17 @@ impl TeamReading {
     self.tasks.values()
   }
 
+  /// The module `task` is in now, for who leads it: where the team server put it, when this reading saw the task; the
+  /// module its records name otherwise (a local task's own; a team task's, the one its newest run started in). A team
+  /// task the server moved out of every watched module is in no reading, and stays where its records put it until it
+  /// runs again.
+  pub(super) fn module_of(&self, task: &Task) -> Option<ModuleId> {
+    self
+      .tasks
+      .get(&task.id())
+      .map_or_else(|| task.module(), |seen| seen.module)
+  }
+
   /// Whether the team tasks in `module` are all known, given the project's team tasks `team` now: the project has
   /// none, or the server listed the module in a reading made when every one of them was recorded.
   pub(super) fn knows_module(&self, module: ModuleId, team: &HashSet<TaskId>) -> bool {
@@ -122,6 +136,16 @@ impl TeamReading {
       WatchTarget::Module(id) => self.unreadable_modules.contains(&id),
       WatchTarget::WithoutModule | WatchTarget::Project => false,
     }
+  }
+}
+
+/// The module `task` is in now, for who leads it, by the last reading of `db`'s project ([`TeamReading::module_of`]);
+/// the module its records name while the project has no reading.
+pub(super) fn module_now(db: &ProjectDb, task: &Task) -> Option<ModuleId> {
+  let project = db.project().id();
+  match READINGS.lock().values().find(|kept| kept.project == project) {
+    Some(kept) => kept.reading.module_of(task),
+    None => task.module(),
   }
 }
 
@@ -142,7 +166,7 @@ pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Resul
   let wanted = background::run(move || wanted_in(&folder))
     .await?
     .map_err(|error| messages::store_error(&error))?;
-  let Some((link, wants)) = wanted else {
+  let Some((project, link, wants)) = wanted else {
     let dropped = READINGS.lock().remove(root);
     return Ok(Refreshed {
       changed: dropped.is_some_and(|kept| kept.reading != TeamReading::default()),
@@ -172,6 +196,7 @@ pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Resul
   let before = readings.insert(
     root.to_owned(),
     Kept {
+      project,
       reading: reading.clone(),
       wanted: wants,
       began,
@@ -190,8 +215,8 @@ pub fn forget(root: &Path) {
 
 /// The server project the project at `root` is linked to and what its subscriptions need of its team tasks: those a
 /// task subscription names, and the modules a module subscription names (the server says which module each team task
-/// is in). `None` when no subscription needs any, or the project has no team task recorded.
-fn wanted_in(root: &Path) -> Result<Option<(SharingLink, Wants)>, StoreError> {
+/// is in), with the project's id. `None` when no subscription needs any, or the project has no team task recorded.
+fn wanted_in(root: &Path) -> Result<Option<(ProjectId, SharingLink, Wants)>, StoreError> {
   let db = ProjectDb::open(root)?;
   let Some(link) = db.sharing()? else {
     return Ok(None);
@@ -210,5 +235,5 @@ fn wanted_in(root: &Path) -> Result<Option<(SharingLink, Wants)>, StoreError> {
     }
   }
   wants.team = team;
-  Ok((!wants.tasks.is_empty() || !wants.modules.is_empty()).then_some((link, wants)))
+  Ok((!wants.tasks.is_empty() || !wants.modules.is_empty()).then_some((db.project().id(), link, wants)))
 }

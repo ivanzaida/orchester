@@ -48,7 +48,7 @@ use super::{
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
-  team_status::TeamReading,
+  team_status::{TeamReading, module_now},
   turns::{Started, settled, start_next},
   waits_on::follow as waits_on,
   watch_ends,
@@ -265,7 +265,8 @@ fn keep_new(
 
 /// The conversation that leads the task of `wait`'s run as the project's active `subscriptions` tell, now
 /// ([`Subscriptions::leading`]: the task's own, then its module's or that of the tasks without a module, then the
-/// whole project's); `None` while none covers it, or its run or task is gone.
+/// whole project's), its module being the one it is in now ([`module_now`]); `None` while none covers it, or its run or
+/// task is gone.
 fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Result<Option<ChatId>, StoreError> {
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
     return Ok(None);
@@ -273,7 +274,7 @@ fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Re
   let Some(task) = task_of(db, run.task())? else {
     return Ok(None);
   };
-  Ok(subscriptions.leading(task.id(), task.module()))
+  Ok(subscriptions.leading(task.id(), module_now(db, &task)))
 }
 
 /// What the turn `wait` starts does about its run while the chat drives:

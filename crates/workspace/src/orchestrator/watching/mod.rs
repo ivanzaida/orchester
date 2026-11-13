@@ -96,7 +96,7 @@ impl WatchReads {
 
   /// The subscription an event of `task` goes to: the most specific one that covers it.
   fn leading(&self, task: &Task) -> Option<&Subscription> {
-    WatchTarget::of_task(task.id(), task.module())
+    WatchTarget::of_task(task.id(), self.team.module_of(task))
       .into_iter()
       .find_map(|target| self.subscriptions.of(target))
   }

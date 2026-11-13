@@ -15,9 +15,12 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::tasks::{
-  detail::run_store_error,
-  recorded::{self, task_of},
+use crate::{
+  orchestrator::team_status::module_now,
+  tasks::{
+    detail::run_store_error,
+    recorded::{self, task_of},
+  },
 };
 
 /// A target that still exists, named as people read it now, with the module of a task target (`None`: it has none,
@@ -34,7 +37,9 @@ pub(super) fn find(db: &ProjectDb, target: WatchTarget) -> Result<Option<Found>,
     module,
   };
   Ok(match target {
-    WatchTarget::Task(task) => task_of(db, task)?.map(|task| found(Some(task.key().to_string()), task.module())),
+    WatchTarget::Task(task) => {
+      task_of(db, task)?.map(|task| found(Some(task.key().to_string()), module_now(db, &task)))
+    }
     WatchTarget::Module(module) => db
       .module(module)?
       .filter(|module| module.details().state() == ModuleState::Open)
@@ -65,7 +70,7 @@ pub(super) fn left_open(
   let mut keys = HashMap::new();
   let mut phases = Vec::new();
   for task in recorded::all(db)? {
-    let (id, module) = (task.id(), task.module());
+    let (id, module) = (task.id(), module_now(db, &task));
     if set.leading(id, module) != Some(chat) || !targets.iter().any(|target| target.covers(id, module)) {
       continue;
     }

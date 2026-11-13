@@ -46,6 +46,22 @@ keeps the task's waits and run ends in the conversation that watches the module.
 the person's own project database: all its tasks are team tasks, its modules are stored on this computer with the
 ids its runs name, and it has a module subscription that led nothing because of this.
 
-**Left:** a team task that never ran here (no run to read its module from) and one the server moved to another
-module since its last run: both need the server's reading of the task's module, where `team_status` already asks it.
-`get_watches` and `/watching` for a team project. `settle_closed_in` for a team task.
+A task the server moved since its last run is led by where it is now: who leads a task reads its module from the
+last reading of the watched team tasks (`orchestrator::team_status::module_now`, the reading the ending rule already
+uses), and from the task's records only while no reading saw it. The follower, the ceilings, the start rule, a
+created task's watch, the watch tool and `/watching`'s routing all read it there, so they agree on the leader.
+
+Found while doing it: ending a watch on a team task's status (`watch_ends`, with `team_status`) was already done on
+master, and a team task that never ran here raises no wait or run end on this computer, so the follower has nothing
+of it to route.
+
+**Left:**
+
+- A task the server moved out of every watched module is in no reading (a reading lists the watched modules and the
+  tasks watched by themselves), so it stays led by the module its run started in until it runs again. To close it,
+  the pass reads by itself each team task whose runs started in a watched module and that the module's list no
+  longer holds.
+- `get_watches` for a team project, and what `/watching` lists under a module: both read the project's tasks from
+  this computer's rows (`ProjectTasks`), which for a team task are the old stream's copy or nothing. They need the
+  tasks of the watched modules as the reading holds them.
+- A team task that never ran here in a start the chat makes by itself (`led_start` finds stored tasks): OA-29.

@@ -11,7 +11,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, WatchStart};
 use serde_json::{Value, json};
 
-use super::{guard::thinking_wait, tools::ChatScope};
+use super::{guard::thinking_wait, team_status::module_now, tools::ChatScope};
 use crate::app_mcp::{ToolError, blocking, find_task};
 
 /// The tool whose task comes back to the conversation that created it.
@@ -56,12 +56,13 @@ fn watch(
   } else {
     None
   };
-  let turn_of = event_task.and_then(|event| event_subscription(&subscriptions, chat, event.id(), event.module()));
+  let turn_of =
+    event_task.and_then(|event| event_subscription(&subscriptions, chat, event.id(), module_now(db, &event)));
   let created = created_task(
     &subscriptions,
     chat,
     turn_of,
-    (task.id(), task.module()),
+    (task.id(), module_now(db, &task)),
     Timestamp::now(),
   );
   match created {
