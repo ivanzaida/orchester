@@ -386,10 +386,28 @@ tools speak of accounts only.
   agent, as a new session. A team run keeps the connection its inputs bound when the server accepted it. The check
   before a run (`preflight`) looks at the connection the profile runs on here.
 
-### Screens (proposed 2026-11-13, not drawn yet)
+### Screens (drawn 2026-11-13, not approved yet)
 
-Proposed by Claude from the decisions above and the boards that exist; not approved and not in `orchester.pen`.
-Frame ids are the boards these change or start from. Every name and number in them stays fixture data.
+Drawn by Claude in `crates/desktop-app/design/orchester.pen`, board **Agents on accounts** (`PChvX`, right of
+*Remote runners*), from the decisions above and the boards that exist; the person has not approved it and had not
+saved the document when this was written. Its frames:
+
+| Frame | Id |
+|---|---|
+| A1 · Settings › Accounts: each CLI's program, its sign-ins and API providers, Model APIs | `aOR4w` |
+| A2 · *Add account* open: *Sign in to another account*, *Add an API provider* | `It53u` |
+| A3 · a CLI's program not found | `t2YD7` |
+| B1 · an API provider's page | `gZTuX` |
+| B2 · Add an API provider | `OfUhN` |
+| C1 · local profile · the Account select | `RwzH2` |
+| C2 · local profile · an account with other models, held with the model | `mp4EM` |
+| C3 · team profile · member · the account picker with a provider that serves other models | `OTVQt` |
+| D1 · Project settings › General, no Connections tab | `E6kvpm` |
+| What the design decides (9 rules) and States · words (7) | `U19l6`, `xoeo3` |
+
+Where the board and the text below differ, the board is newer: GitHub is not a group of its own, since *General*
+already has the repository's GitHub rows, and its *GitHub account* row opens the GitHub page. The frame ids in the
+text are the boards these change or start from. Every name and number in them stays fixture data.
 
 **Settings › Accounts** (`t8i6m`; the tab keeps its name, since a sign-in and an API provider are both what agents
 run as).
