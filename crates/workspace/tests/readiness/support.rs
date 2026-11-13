@@ -239,9 +239,9 @@ impl Fixture {
     made.id()
   }
 
-  /// A file a person could choose as a program.
+  /// A file a person could choose as a program ([`program_name`]).
   pub fn program_file(&self, file: &str) -> PathBuf {
-    let path = self.root.join(file);
+    let path = self.root.join(program_name(file));
     fs::write(&path, "#!/bin/sh\n").expect("a program");
     path
   }
@@ -251,9 +251,10 @@ impl Fixture {
     self.dir.path()
   }
 
-  /// A file a person could choose as a program, outside the repository as a run requires of a fixed file.
+  /// A file a person could choose as a program ([`program_name`]), outside the repository as a run requires of a
+  /// fixed file.
   pub fn program_outside(&self, file: &str) -> PathBuf {
-    let path = self.dir.path().join(file);
+    let path = self.dir.path().join(program_name(file));
     fs::write(&path, "#!/bin/sh\n").expect("a program");
     path
   }
@@ -493,4 +494,14 @@ pub fn pipeline(profiles: &[Option<ResourceId>], integrator: Option<ResourceId>)
     .collect();
   let deliver = integrator.map(|id| DeliverStep::new(DeliverMode::AutoMerge, MergeMethod::Squash, Some(id), true));
   Pipeline::new(steps).expect("a valid pipeline").with_deliver(deliver)
+}
+
+/// The name of the file that is program `file` on this platform: Windows starts a file by its extension (`exe`, `cmd`,
+/// `bat`, `com`) and looks a name without one up with each, so a script there is a `.cmd`.
+pub fn program_name(file: &str) -> String {
+  if cfg!(windows) {
+    format!("{file}.cmd")
+  } else {
+    file.to_owned()
+  }
 }
