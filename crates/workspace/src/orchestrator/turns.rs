@@ -4,7 +4,9 @@
 //! `docs/plan/orchestrator-autonomy/OA-01-failed-turn-keeps-event.md`). A wait whose turn failed stays open: its next
 //! turn starts in the same entry once its time came, three times at most, and only while the wait still stands; after
 //! that, or after a failure only the person can lift, no turn starts by itself and the wait is the person's, where it
-//! shows outside the chat. A turn the person stopped did not fail and is not tried again.
+//! shows outside the chat. A turn the person stopped did not fail and is not tried again. While the project's daily
+//! budget is used or the Orchestrator's account is at its plan limit ([`super::held`]) nothing starts by itself: the
+//! entries wait for the reset.
 
 use std::{collections::HashSet, path::Path};
 
@@ -15,7 +17,7 @@ use orchester_core::{
 };
 use orchester_store::{FailedWait, ProjectDb, StoreError};
 
-use super::waits::WaitTurn;
+use super::{held::held, waits::WaitTurn};
 use crate::messages::{self, Message};
 
 /// An entry whose turn starts by itself: its conversation and `seq`, whether its turn merges a run on its own, and
@@ -67,7 +69,7 @@ pub(super) fn start_next(
   (attached, now): (bool, Timestamp),
 ) -> Result<Started, StoreError> {
   let next = next_turns(db, waiting, now)?;
-  if next.iter().all(|next| next.turn == Turn::Later) {
+  if next.iter().all(|next| next.turn == Turn::Later) || held(db, now)?.is_some() {
     return Ok(Started::Nothing);
   }
   if !attached {
@@ -85,15 +87,25 @@ pub(super) enum Started {
   Turn(WaitTurn),
 }
 
-/// The soonest time after `now` the failed turn of a wait of the project at `root` is due again; `None` while none
-/// is. The app's follower wakes then ([`super::waits::follow_in`]). Blocks on SQLite.
-pub fn next_retry_in(root: &Path, now: Timestamp) -> Result<Option<Timestamp>, Message> {
+/// The soonest time after `now` a turn of the project at `root` may start by the clock alone: the end of what holds
+/// the turns that wait ([`super::held`]), else the soonest time a failed turn is due again; `None` while neither is.
+/// The app's follower wakes then ([`super::waits::follow_in`]). Blocks on SQLite.
+pub fn next_due_in(root: &Path, now: Timestamp) -> Result<Option<Timestamp>, Message> {
   let read = || {
     let db = ProjectDb::open_read_only(root)?;
+    let failed = db.automatic_waits_failed()?;
+    let tries: Vec<NextTry> = failed.iter().map(next_try).collect();
+    let waiting = tries.iter().any(|next| *next != NextTry::LeftToPerson)
+      || !db.automatic_waits_without_turn()?.is_empty()
+      || !db.automatic_reports_without_turn()?.is_empty();
+    // Read only while a turn waits: counting the day's tokens is not free.
+    if waiting && let Some(held) = held(&db, now)? {
+      return Ok(Some(held.until()));
+    }
     Ok::<_, StoreError>(
-      db.automatic_waits_failed()?
-        .iter()
-        .filter_map(|failed| match next_try(failed) {
+      tries
+        .into_iter()
+        .filter_map(|next| match next {
           NextTry::From(from) if from > now => Some(from),
           NextTry::From(_) | NextTry::LeftToPerson => None,
         })

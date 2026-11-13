@@ -1,6 +1,6 @@
 # OA-03 · A used budget and a plan limit hold turns until the reset
 
-- **Status:** todo
+- **Status:** done but for what is seen (2026-11-13; the held rows and the header line wait for the frames, `frames.md` A)
 - **Kind:** core + runner + workspace + UI
 - **Depends on:** OA-01 (and OA-02's frames for the held row)
 - **Branch:** —
@@ -46,3 +46,42 @@ itself, the events wait, and their turns start when the limit resets.
 - Runner test for the plan-limit kind with the fake CLIs (`crates/runner/tests/`), workspace tests for both holds and
   their ends (`--test orchestrator_waits held`).
 - Design verification of the held rows and the header. `tools/check.ps1` passes.
+
+## As built (2026-11-13)
+
+- **The hold is the follower's, in one place** (`orchester_workspace::orchestrator::held`, rule in
+  `orchester_core::orchestrator::hold`): before it starts any turn by itself it reads whether today's budget is used
+  and whether a plan limit is kept of the account the Orchestrator's published connection runs on. Read only when a
+  turn would start, since counting the day's tokens is not free. The follower's clock (`turns::next_due_in`, OA-01's)
+  wakes at the hold's end when a turn waits.
+- **The plan limit is kept by the runner** as the turn's CLI reports it (`chat/turn.rs`: `keep_plan_limits` for a
+  limits report that refuses turns, `keep_usage_limit` for Codex's named failure), in `orchestrator_plan_holds`, one
+  row per account; a turn that answers on the account forgets it.
+- **No new failure kind.** The turn that hit the limit ends `Failed` with what the CLI said, as before, so nothing
+  visible changes; it is tried again after the reset and counts as one of the event's four tries. The plan asked for
+  a kind of its own that would not count: left out, because a new kind is a new sentence in the conversation, which
+  waits for the frames with the held rows.
+- **A reset the CLI did not name** holds an hour from the report (`UNKNOWN_RESET`), then the next turn is tried; a
+  limit still there fails that turn and holds again. Four such hours spend the event's tries.
+- **The budget's refusal by the runner** (the budget ran out between the follower's reading and the runner's) takes
+  the turn back (`release_wait_turn`) instead of failing it.
+- **A saved limit wakes the follower** (`tasks::usage::update_limits`), so a raised budget ends the hold at once.
+- **A turn taken back** keeps the tries its event had and starts again as a first turn, without the wait a failed one
+  has: nothing failed.
+- **Not built here:** the held rows and the header line (frames A); telling the person *held until …* anywhere. Until
+  then a held event simply shows no turn.
+
+## Review (2026-11-13)
+
+An independent reviewer read the change. Fixed: the plan limit was forgotten on any usage report, which a turn that
+fails at the limit sends too, so the hold could vanish within the turn that set it; it is now forgotten only when a
+turn ends answered. Fixed: a saved limit did not wake the follower. Left: rows of accounts no longer used stay in
+`orchestrator_plan_holds` (one per account, read by none); the clock may wake once at the hold's end for an event
+that no longer stands.
+
+Tests run: `orchester-core --test orchestrator_hold hold`; `orchester-store --test orchestrator_waits waits`;
+`orchester-workspace --test orchestrator_held held`, `--test orchestrator_led_waits led_waits`, `--test
+orchestrator_auto_merge auto_merge`; `orchester-runner --features test-agent --test chat` (`a_turn`, `chat_`) and
+`--test chat_codex chat_codex`; `tools/check.ps1`: OK. Not run: Codex's `usageLimitExceeded` against a fake that
+names it (the chat's Codex fake has no such answer); the app's follower clock; a real CLI at its limit; macOS (no
+`cfg` code).

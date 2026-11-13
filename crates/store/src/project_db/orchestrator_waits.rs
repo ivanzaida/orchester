@@ -131,6 +131,18 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
+  /// Takes the turn under `message` back from the wait or daily report it was given to, which nothing answered and
+  /// nothing failed: the entry has no turn again and starts one later, as if it had not been given. Whether it was
+  /// taken back; not once the turn ended.
+  pub fn release_wait_turn(&mut self, message: ChatMessageId) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE orchestrator_entries SET message_id = NULL, turn = NULL
+       WHERE message_id = ?1 AND kind IN ('wait', 'report') AND turn = 'thinking'",
+      [message.to_string()],
+    )?;
+    Ok(changed == 1)
+  }
+
   /// The conversation whose last entry is the newest, of those History lists (not archived); `None` while the project
   /// has none.
   pub fn latest_chat(&self) -> Result<Option<ChatId>, StoreError> {

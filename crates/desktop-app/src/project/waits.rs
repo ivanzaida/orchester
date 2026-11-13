@@ -1,7 +1,7 @@
 //! The Orchestrator chat follows the agents of an open project (`orchester_workspace::orchestrator::waits`): whenever
 //! the project's runs change state, its tasks are saved or its conversations change, and at the soonest time one of
-//! its runs may stall (`orchester_workspace::orchestrator::stalls`) or the failed turn of a wait is due again
-//! (`orchester_workspace::orchestrator::turns`), its new waits are kept in the conversation, the
+//! its runs may stall (`orchester_workspace::orchestrator::stalls`), the failed turn of a wait is due again or what
+//! held its turns ends (`orchester_workspace::orchestrator::turns`), its new waits are kept in the conversation, the
 //! subscriptions whose tasks were all closed end (ORC-764), and a
 //! wait that starts an Orchestrator turn by itself gets its turn as a person's message does: the project's runner
 //! attached first, its tools served (`mcp::chat`) and the runner asked to answer it. Mounted with the project's feed,
@@ -258,12 +258,13 @@ fn stall_clock(ctx: &mut Ctx, deps: (PathBuf, u64)) -> u64 {
   ticks.state().get().data.unwrap_or(0)
 }
 
-/// How often the soonest time the failed turn of a wait of the project at the deps' folder is due again passed
-/// (`orchester_workspace::orchestrator::turns`): its next turn starts by the clock alone. One clock for the project,
-/// read again whenever its conversations (the deps' count) change, and idle while no failed turn is tried again.
+/// How often the soonest time a turn of the project at the deps' folder may start by the clock alone passed
+/// (`orchester_workspace::orchestrator::turns`): a failed turn is due again, or the daily budget or the plan limit
+/// that held the turns reset. One clock for the project, read again whenever its conversations (the deps' count)
+/// change, and idle while no turn waits for a time.
 fn retry_clock(ctx: &mut Ctx, deps: (PathBuf, u64)) -> u64 {
   let ticks = ctx.stream(deps, |(root, _), emitter: StreamEmitter<u64, ()>| {
-    tick_when_due(root, turns::next_retry_in, emitter)
+    tick_when_due(root, turns::next_due_in, emitter)
   });
   ticks.state().get().data.unwrap_or(0)
 }

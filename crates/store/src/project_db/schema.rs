@@ -56,6 +56,7 @@ mod optional_limits;
 mod orchestrator;
 mod orchestrator_accounts;
 mod orchestrator_archive;
+mod orchestrator_holds;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_run_ends;

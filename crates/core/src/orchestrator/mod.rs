@@ -11,6 +11,7 @@ pub mod chat;
 mod failure;
 pub mod fork;
 pub mod git;
+pub mod hold;
 pub mod instructions;
 pub mod leads;
 pub mod mcp;
@@ -34,6 +35,7 @@ pub use self::{
     CompactionState, EntryKind, HeldWork, Queued, SessionChange, ToolAnswer, TurnFailure, TurnState, WaitTurn,
     WaitsOnRow,
   },
+  hold::{Held, PlanHold, UNKNOWN_RESET},
   leads::{Lead, Leads},
   merging::{AcceptedUnverified, MergeLeft, Merging},
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},

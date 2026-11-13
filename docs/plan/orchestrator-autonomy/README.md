@@ -129,7 +129,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | **A** | **The loop holds** | | | |
 | [OA-01](OA-01-failed-turn-keeps-event.md) | A turn Orchester started that failed leaves its event open | core + store + workspace + app | — | done |
 | [OA-02](OA-02-retry-clock.md) | The event's line says what happens to a turn that failed | design + UI | OA-01, frames | blocked (frames) |
-| [OA-03](OA-03-budget-and-plan-limit-hold.md) | A used budget and a plan limit hold turns until the reset | core + runner + workspace + UI | OA-01 | todo |
+| [OA-03](OA-03-budget-and-plan-limit-hold.md) | A used budget and a plan limit hold turns until the reset | core + runner + workspace + UI | OA-01 | done; what is seen waits for frames (A) |
 | [OA-04](OA-04-second-connection.md) | A second connection for the Orchestrator | design + UI + runner | OA-03 | later (person, 2026-11-13) |
 | [OA-05](OA-05-compaction-before-a-turn.md) | The conversation is compacted before a turn that would not fit | workspace + runner | — | todo |
 | [OA-06](OA-06-stall-again.md) | A run that stays stalled is raised again, and its turn may act | core + workspace | OA-09, OA-15 | todo |

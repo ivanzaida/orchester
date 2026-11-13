@@ -34,7 +34,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::orchestrator::{
   chat::ChatView,
-  turns::next_retry_in,
+  turns::next_due_in,
   waits::{self, Followed, Switches, check_merges_in, follow_at, follow_in},
 };
 use support::{Fixture, at};
@@ -449,12 +449,12 @@ fn led_waits_whose_turn_failed_are_tried_again_after_one_five_and_fifteen_minute
       ended,
     );
     let due = ended + minutes * MINUTE;
-    assert_eq!(next_retry_in(&root, at(ended)).expect("read"), Some(at(due)));
+    assert_eq!(next_due_in(&root, at(ended)).expect("read"), Some(at(due)));
     assert_eq!(follow_then(&fixture, due - 1, true), Followed::default(), "not yet");
     let again = follow_then(&fixture, due, true).turn.expect("tried again");
     assert_eq!(again.chat, leading.id(), "in the same conversation");
     assert_ne!(again.message, turn.message, "a turn of its own");
-    assert_eq!(next_retry_in(&root, at(due)).expect("read"), None, "it thinks");
+    assert_eq!(next_due_in(&root, at(due)).expect("read"), None, "it thinks");
     let kept = waits_in(&fixture, &leading);
     assert_eq!(kept.len(), 1, "the same entry");
     assert_eq!(kept[0].1.as_ref().map(|started| started.message), Some(again.message));
@@ -467,7 +467,7 @@ fn led_waits_whose_turn_failed_are_tried_again_after_one_five_and_fifteen_minute
     ended,
   );
   assert_eq!(
-    next_retry_in(&root, at(ended)).expect("read"),
+    next_due_in(&root, at(ended)).expect("read"),
     None,
     "the tries are spent"
   );
@@ -488,7 +488,7 @@ fn led_waits_whose_turn_the_person_stopped_or_only_they_can_lift_are_not_tried_a
       .end_chat_turn(turn.message, &state, at(MINUTE))
       .expect("ended");
     assert_eq!(
-      next_retry_in(fixture.repo.path(), at(MINUTE)).expect("read"),
+      next_due_in(fixture.repo.path(), at(MINUTE)).expect("read"),
       None,
       "{state:?}"
     );

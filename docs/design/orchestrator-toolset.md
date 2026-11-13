@@ -704,6 +704,17 @@ project with none of its own; the application-wide values are no longer shown or
   where it shows outside the chat. A turn the person stopped did not fail and is not tried again. A daily report's
   turn and a watching's summary are not tried again (`orchester_core::orchestrator::retry`,
   `orchester_workspace::orchestrator::turns`; the app's follower wakes at the time a try is due).
+- **A used budget and a plan limit hold the turns Orchester starts** (2026-11-13, OA-03). While the project's daily
+  budget is used (counted as for a run: today starts at local midnight, and the chat's own turns count), or the
+  account the Orchestrator runs on is at its plan limit, no turn starts by itself: waits, run ends and reports are
+  kept and wait, and their turns start at the reset, when the app's follower wakes. The plan limit is what the turn's
+  CLI reported (Claude Code's `rate_limit_event`, Codex's `usageLimitExceeded`): the runner keeps it with the reset
+  the CLI named (`orchestrator_plan_holds`), and forgets it when a turn on that account answers; a limit whose reset
+  the CLI did not name holds for an hour from the report, then the next turn is tried. The turn that hit the limit
+  itself ends failed as before and is tried again after the reset (it counts as one of its event's tries). A turn the
+  runner refused because the budget was used in the meantime is taken back, not failed. A person's own message is
+  not held: it is refused or fails as before, with its reason (`orchester_core::orchestrator::hold`,
+  `orchester_workspace::orchestrator::held`).
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run

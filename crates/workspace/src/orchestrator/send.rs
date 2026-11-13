@@ -89,8 +89,9 @@ pub async fn send(
 }
 
 /// Asks `project`'s runner to answer the turn a wait of an agent started by itself, kept under `message`
-/// (`super::waits`), with the domain tools at `tools`. A turn the runner did not take ends failed and is never asked
-/// for again: a wait starts one turn at most, so a runner that cannot answer never makes the chat ask in a loop.
+/// (`super::waits`), with the domain tools at `tools`. A turn the runner did not take ends failed, and is tried again
+/// a few times (`super::turns`); one it refused because today's budget is used is taken back, for when the budget
+/// has room again.
 pub async fn answer_wait(
   runners: &Runners,
   project: &OpenProject,
@@ -107,8 +108,27 @@ pub async fn answer_wait(
   if matches!(error, RunRequestError::Request(RequestError::Lost)) {
     return Err(SendError::Unconfirmed(Message::new("orchestrator.send.lost")));
   }
-  end_wait_turn(runners, project, message, format!("{error:?}")).await;
+  if matches!(error, RunRequestError::Rejected(Rejection::DailyBudgetUsed { .. })) {
+    release_wait_turn(runners, project, message).await;
+  } else {
+    end_wait_turn(runners, project, message, format!("{error:?}")).await;
+  }
   Err(SendError::NotSent(not_sent(&error)))
+}
+
+/// Takes back the turn a wait started by itself under `message`, which the runner refused because today's budget was
+/// used in the meantime: nothing failed, so the wait starts its turn once the budget has room again
+/// ([`super::held`]) instead of spending a try.
+async fn release_wait_turn(runners: &Runners, project: &OpenProject, message: ChatMessageId) {
+  let root = project.repo_root.clone();
+  let released = background::run(move || ProjectDb::open(&root).and_then(|mut db| db.release_wait_turn(message))).await;
+  // A turn left thinking ends as interrupted once a runner attaches and does not answer it, and is tried again.
+  match released {
+    Ok(Ok(_)) => {}
+    Ok(Err(error)) => tracing::warn!(%error, "cannot take back a turn of the Orchestrator the budget refused"),
+    Err(error) => tracing::warn!(?error, "cannot take back a turn of the Orchestrator the budget refused"),
+  }
+  runners.chat_changed(&project.repo_root);
 }
 
 /// Ends the turn a wait started by itself under `message`, which no runner answers, as failed for `reason` (what the

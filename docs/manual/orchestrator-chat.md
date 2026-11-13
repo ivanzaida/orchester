@@ -257,7 +257,10 @@ not start, the CLI failed, Orchester or its runner closed under it, or it ran pa
 in the same entry after 1, 5 and 15 minutes, while the event still stands and the switch is on; the next turn is told
 how the earlier one ended. After the fourth failure, or at once when only you can lift it (not signed in, the
 connection or its account), nothing more starts by itself: the event stays where it shows outside the chat. A turn
-you stopped is not tried again. With the switch off the entry only
+you stopped is not tried again. While the project's **daily budget is used**, or the **account the Orchestrator runs
+on is at its plan limit**, no turn starts by itself at all: the events are kept and wait, and their turns start when
+the day turns or the limit resets (an hour after the limit was reported when its CLI did not say). Your own message is
+not held: it is refused or fails as before, and says why. With the switch off the entry only
 links to its card. Such a turn is
 marked `[Orchester]`; it is told the subscription the event came through and
 the order that applies (see [Orders](#orders)).

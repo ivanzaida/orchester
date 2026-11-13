@@ -54,6 +54,7 @@ mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
 mod orchestrator_fork;
+mod orchestrator_holds;
 mod orchestrator_leads;
 mod orchestrator_plans;
 mod orchestrator_queue;
