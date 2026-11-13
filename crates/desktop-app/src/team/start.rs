@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use orchester_api::v2::{AuthorityError, AuthorityErrorCode, AuthorityRef, ErrorDetails, Subject};
 use orchester_core::{
   id::{ClaimId, ModuleId, OperationId, ResourceId, RunId, TaskId},
+  run::{BranchName, CommitId},
   sharing::TaskRevision,
 };
 use orchester_exec::programs::Programs;
@@ -68,8 +69,10 @@ impl lurq::app::component::DevtoolsInspectable for Started {}
 pub enum Stop {
   /// The task's claim could not be taken.
   Claim(Acted),
-  /// The task is in no module, or names no pipeline this computer has.
+  /// The task names no pipeline this computer has.
   NotReady,
+  /// The task is in no module, and this computer has no branch checked out for its run to start on and merge into.
+  NoBranch,
   /// The server refused the start for good; what became of the claim when the refusal released it.
   Refused(AuthorityErrorCode, Option<ClaimEnd>),
   /// The module's branch is not in this checkout.
@@ -108,11 +111,13 @@ pub async fn start(
   (runners, programs): (Runners, Programs),
   request: StartTask,
 ) -> Started {
-  let (Some(pipeline), Some((module, module_read, branch))) = (request.pipeline, request.module.clone()) else {
+  let Some(pipeline) = request.pipeline else {
     return Started::Stopped(Stop::NotReady);
   };
   let root = source.root().to_owned();
-  let (base_commit, mcp_programs) = match checked(acting, (root.clone(), programs), (pipeline, &branch)).await {
+  let branch = request.module.as_ref().map(|(_, _, branch)| branch.clone());
+  let checked = checked(acting, (root.clone(), programs), (pipeline, branch)).await;
+  let ((base_commit, base_branch), mcp_programs) = match checked {
     Ok(checked) => checked,
     Err(stop) => return Started::Stopped(stop),
   };
@@ -143,12 +148,12 @@ pub async fn start(
     },
     base_commit,
     read,
-    module,
-    module_read,
+    module: request.module.map(|(module, read, _)| (module, read)),
   };
   let start = TeamStartRequest {
     operation: OperationId::generate(),
     work,
+    base_branch,
     programs: mcp_programs,
   };
   let runner = ProjectRunner::new(runners, root.clone(), request.project);
@@ -159,17 +164,32 @@ pub async fn start(
   started
 }
 
-/// The start's base, the module branch's tip here, and the program paths set for the team's MCP servers; or why the
-/// pipeline does not start on this computer.
+/// A start's base: the commit it starts from, and, for a task in no module, the branch that commit was read from.
+type Base = (CommitId, Option<BranchName>);
+
+/// The start's base and the program paths set for the team's MCP servers; or why the pipeline does not start on this
+/// computer. The base is the tip of the module's `branch` here, or, for a task in no module, the branch this computer
+/// has checked out with its tip.
 async fn checked(
   acting: &Acting,
   (root, programs): (PathBuf, Programs),
-  (pipeline, branch): (ResourceId, &str),
-) -> Result<(orchester_core::run::CommitId, McpPrograms), Stop> {
-  let (branch, workspace, vault) = (branch.to_owned(), acting.workspace.clone(), acting.vault.clone());
+  (pipeline, branch): (ResourceId, Option<String>),
+) -> Result<(Base, McpPrograms), Stop> {
+  let (workspace, vault) = (acting.workspace.clone(), acting.vault.clone());
   background::run(move || {
-    let commit = team_work::branch_tip(programs.runner(), &root, &branch)
-      .map_err(|BranchNotFound(branch)| Stop::BranchNotFound(branch))?;
+    let not_found = |BranchNotFound(branch)| Stop::BranchNotFound(branch);
+    let base = match &branch {
+      Some(branch) => (
+        team_work::branch_tip(programs.runner(), &root, branch).map_err(not_found)?,
+        None,
+      ),
+      None => {
+        let (branch, commit) = team_work::checked_out_tip(programs.runner(), &root)
+          .map_err(not_found)?
+          .ok_or(Stop::NoBranch)?;
+        (commit, Some(branch))
+      }
+    };
     let ready = workspace
       .team_start_readiness(&root, vault.get(), pipeline)
       .map_err(|error| {
@@ -177,7 +197,7 @@ async fn checked(
         Stop::Failed
       })?;
     match ready {
-      StartReadiness::Ready(programs) => Ok((commit, programs)),
+      StartReadiness::Ready(programs) => Ok((base, programs)),
       StartReadiness::NotReady(refusal) => Err(Stop::NotReadyHere(refusal)),
       StartReadiness::PipelineUnknown => Err(Stop::NotReady),
     }

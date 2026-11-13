@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 use orchester_core::{
   id::TaskId,
+  integration::base::RunBaseSource,
   project::TaskKey,
   run::{ListedRun, Run},
   store::{RunStore, TaskStore},
@@ -90,6 +91,14 @@ pub enum RunRoute {
 /// accepted and kept no record; a local run otherwise.
 pub fn route_of_run(db: &ProjectDb, run: &Run) -> Result<RunRoute, StoreError> {
   route_with_record(db, run, db.team_run(run.id())?.as_ref())
+}
+
+/// Whether merging `run` lands a team task's work on the base branch itself: a team run that did not start on a
+/// module's branch, the run of a task in no module. A run on its module's branch lands on that branch, and the
+/// module's delivery takes it to the base on an Admin's authorization or the team's Automatic merge; this one has no
+/// delivery, so the same rule is asked of its merge (an Admin, or a member while Automatic merge is on).
+pub fn team_run_on_base(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
+  Ok(route_of_run(db, run)? == RunRoute::Team && !matches!(run.base_source(), RunBaseSource::Module { .. }))
 }
 
 /// [`route_of_run`] for a caller that has read the team record `record` of `run` already.

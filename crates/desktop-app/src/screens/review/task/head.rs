@@ -36,6 +36,7 @@ use crate::{
   project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::task::merge::attempt::{head::title, lines::joined},
+  team::base_merge,
   theme::{ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -94,10 +95,15 @@ pub(super) fn approve_button(ctx: &Ctx) -> ActionButton {
   ActionButton::new("review-approve", ButtonKind::Primary, ctx.t("review_page.approve")).icon(Icon::Check)
 }
 
-/// Why *Approve and merge* cannot be pressed now.
-fn unavailable(ctx: &Ctx, env: &Env) -> Option<Arc<str>> {
+/// Why *Approve and merge* cannot be pressed now: Implement works on comments sent to it, or the run is a team
+/// task's in no module, which merges into the base branch itself, and the person is a member while the team's
+/// Automatic merge is off ([`base_merge`]).
+fn unavailable(ctx: &mut Ctx, env: &Env) -> Option<Arc<str>> {
   if env.page.review_in.is_none() {
     return Some(message_text(ctx, &ReviewRefusal::ImplementAtWork.message()));
+  }
+  if env.page.team_on_base && base_merge::member_waits_in(ctx, &env.project) {
+    return Some(ctx.t("task.merge.admin"));
   }
   None
 }

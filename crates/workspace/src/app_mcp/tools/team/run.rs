@@ -13,7 +13,7 @@ use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject, TeamCommandVa
 use orchester_core::{
   command::CommandRunner,
   id::{ClaimId, OperationId},
-  run::CommitId,
+  run::{BranchName, CommitId},
 };
 use serde_json::{Value, json};
 
@@ -50,40 +50,42 @@ pub(in crate::app_mcp::tools) async fn run_task(
 ) -> Result<Value, ToolError> {
   let project = team.reads(services).await?;
   let task = find(&project, key).await?;
-  let Some(module) = task.task.content.module else {
-    return Err(ToolError::refused(
-      "module_required",
-      vec![Message::new("appMcp.errors.teamModuleRequired")],
-    ));
-  };
   let Some(named) = task.task.content.pipeline.clone() else {
     return Err(ToolError::refused(
       "task_incomplete",
       vec![Message::new("appMcp.errors.teamNoPipeline")],
     ));
   };
-  let module_read = match read(&project, project.module(module)).await {
-    Ok(read) => read.into_value().module,
-    Err(TeamReadError::NotFound) => return Err(ToolError::not_found(Missing::Module, module.to_string())),
-    Err(error) => return Err(read_refused(&error)),
+  // The task's module as the server reads it now, with its revision and its branch; none for a task in no module,
+  // whose run starts on the branch this computer has checked out.
+  let module = match task.task.content.module {
+    Some(module) => match read(&project, project.module(module)).await {
+      Ok(read) => {
+        let read = read.into_value().module;
+        Some((module, read.module.revision, read.branch))
+      }
+      Err(TeamReadError::NotFound) => return Err(ToolError::not_found(Missing::Module, module.to_string())),
+      Err(error) => return Err(read_refused(&error)),
+    },
+    None => None,
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
   let (workspace, vault) = (services.workspace().clone(), services.vault.clone());
   let start_vault = vault.clone();
-  let branch = module_read.branch.clone();
+  let branch = module.as_ref().map(|(_, _, branch)| branch.clone());
   // Only the team's pipelines, as this session read them, run a team task: a person's own local pipeline never does,
   // even with the same id.
   let config = workspace.team_read(&root).loaded()?;
-  let (base_commit, programs) = blocking(move || {
+  let ((base_commit, base_branch), programs) = blocking(move || {
     let pipeline = TeamPipelines::of(&config)
       .id(&named)
       .ok_or_else(|| pipeline_missing(&named))?;
-    let commit = branch_tip(programs.runner(), &root, &branch)?;
+    let base = start_base(programs.runner(), &root, branch.as_deref())?;
     match workspace
       .team_start_readiness(&root, vault.get(), pipeline)
       .map_err(ToolError::from)?
     {
-      StartReadiness::Ready(programs) => Ok((commit, programs)),
+      StartReadiness::Ready(programs) => Ok((base, programs)),
       StartReadiness::NotReady(refusal) => Err(ToolError::NotReadyHere(refusal)),
       StartReadiness::PipelineUnknown => Err(pipeline_missing(&named)),
     }
@@ -96,7 +98,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
     team.open.project.name().as_str().to_owned(),
   );
   let (id, read) = (task.task.id, task.task.revision);
-  let module_read = module_read.module.revision;
+  let module = module.map(|(module, read, _)| (module, read));
   let outcome = on_worker(move || async move {
     // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
     // this one takes while its own start is not recorded yet.
@@ -111,11 +113,11 @@ pub(in crate::app_mcp::tools) async fn run_task(
       base_commit,
       read,
       module,
-      module_read,
     };
     let request = TeamStartRequest {
       operation: OperationId::generate(),
       work,
+      base_branch,
       programs,
     };
     TeamWork::new(dispatcher, runner)
@@ -125,6 +127,31 @@ pub(in crate::app_mcp::tools) async fn run_task(
   })
   .await?;
   started(team, outcome).await
+}
+
+/// The base a start takes at `root`: the tip of its module's `branch`, or, for a task in no module, the branch the
+/// checkout has checked out with its tip, which the run then merges into.
+fn start_base(
+  runner: &(dyn CommandRunner + Send + Sync),
+  root: &Path,
+  branch: Option<&str>,
+) -> Result<(CommitId, Option<BranchName>), ToolError> {
+  let Some(branch) = branch else {
+    let not_found = |BranchNotFound(branch)| {
+      ToolError::refused(
+        "branch_not_found",
+        vec![Message::new("appMcp.errors.branchNotFound").with("branch", branch)],
+      )
+    };
+    return match team_work::checked_out_tip(runner, root).map_err(not_found)? {
+      Some((branch, commit)) => Ok((commit, Some(branch))),
+      None => Err(ToolError::refused(
+        "no_base_branch",
+        vec![Message::new("appMcp.errors.teamStartNoBranch")],
+      )),
+    };
+  };
+  Ok((branch_tip(runner, root, branch)?, None))
 }
 
 /// The commit `branch` is at in the checkout at `root`: a module's branch is a start's base and a delivery's source.

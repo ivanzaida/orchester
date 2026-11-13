@@ -84,7 +84,7 @@ fn record_run(db: &mut ProjectDb, record: bool) -> RunId {
     base: Revision::new(acceptance.base_commit.as_str()).expect("revision"),
     base_branch: Some(acceptance.branch),
     base_source: RunBaseSource::Module {
-      module: acceptance.module,
+      module: acceptance.module.expect("the task's module"),
     },
     budget: None,
     max_duration: None,

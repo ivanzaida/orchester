@@ -242,8 +242,9 @@ fn not_merged_words(
   (title, Some(meta), attempt_line(ctx, attempt, branch))
 }
 
-/// The merge's action, *Review changes* or *Open in Review*, *Close without merging*, and *Review PR* once the run has
-/// pull request page `review`.
+/// The merge's action, *Merge and deliver* beside it for a team task's run on its module's branch
+/// ([`merge::deliver`]), *Review changes* or *Open in Review*, *Close without merging*, and *Review PR* once the run
+/// has pull request page `review`.
 fn buttons(
   ctx: &mut Ctx,
   task: &TaskContext,
@@ -270,11 +271,13 @@ fn buttons(
   let open = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label))
     .icon(glyph)
     .opens(navigation.to(Route::Project(project, page)));
+  let deliver = merge::deliver(ctx, task, shown.merge).map(|deliver| deliver.control.button());
   Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(action.control.button())
+    .with_children(deliver)
     .child(open)
     .child(close(ctx, task))
     .with_children(review.map(|url| review_pull_request(ctx, &url)))

@@ -162,7 +162,7 @@ fn make(canonical: &CanonicalExecutionInputs, bindings: LocalBindings) -> Result
     work: WorkId::generate(),
     claim: ClaimId::generate(),
     operation: OperationId::generate(),
-    module: ModuleId::generate(),
+    module: Some(ModuleId::generate()),
     branch: BranchName::new("orchester/module-x").expect("branch"),
     base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
     bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),

@@ -2,7 +2,7 @@
 //! reads the same every time: the receipt names a schema this computer does not read, or the bundle the server
 //! answered is of another schema or is not a bundle at all. A server that cannot be reached still only waits.
 
-use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
+use orchester_api::v2::{EXECUTION_BUNDLE_SCHEMA, MODULE_LESS_BUNDLE_SCHEMA};
 use orchester_store::TeamStartStage;
 use orchester_workspace::team_work::{StartFailure, StartOutcome, TeamStartRequest, TeamWork};
 use serde_json::{Value, json};
@@ -108,7 +108,7 @@ async fn team_work_bundle_schema_of_the_receipt_fails_the_start_before_the_bundl
     _generation: generation,
   };
   let expected = StartFailure::BundleSchema {
-    read: EXECUTION_BUNDLE_SCHEMA,
+    read: MODULE_LESS_BUNDLE_SCHEMA,
     built: OLDER,
   };
   assert_failed(&held, outcome, &expected).await;
@@ -125,7 +125,7 @@ async fn team_work_bundle_schema_of_the_answered_bundle_fails_the_start() {
     .await
     .expect("carried on");
   let expected = StartFailure::BundleSchema {
-    read: EXECUTION_BUNDLE_SCHEMA,
+    read: MODULE_LESS_BUNDLE_SCHEMA,
     built: OLDER,
   };
   assert_failed(&held, outcome, &expected).await;

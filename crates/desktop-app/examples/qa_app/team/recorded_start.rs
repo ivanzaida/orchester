@@ -7,7 +7,7 @@
 
 use std::{error::Error, path::Path};
 
-use orchester_api::v2::{EXECUTION_BUNDLE_SCHEMA, Subject};
+use orchester_api::v2::{MODULE_LESS_BUNDLE_SCHEMA, Subject};
 use orchester_core::{
   id::{ClaimId, ModuleId, OperationId, ProjectId, ServerId, WorkId},
   time::Timestamp,
@@ -81,7 +81,7 @@ fn request(task: &str) -> String {
 /// A bundle built in the schema one newer than this computer reads, and the claim released with the failure.
 fn failed() -> String {
   json!({
-    "failure": {"kind": "bundle_schema", "reason": {"read": EXECUTION_BUNDLE_SCHEMA, "built": EXECUTION_BUNDLE_SCHEMA + 1}},
+    "failure": {"kind": "bundle_schema", "reason": {"read": MODULE_LESS_BUNDLE_SCHEMA, "built": MODULE_LESS_BUNDLE_SCHEMA + 1}},
     "claim": "released",
   })
   .to_string()

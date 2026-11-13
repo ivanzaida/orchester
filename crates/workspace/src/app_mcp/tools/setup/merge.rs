@@ -16,7 +16,7 @@ use orchester_core::{
   },
   revision::Revision,
   run::{Run, RunStatus},
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
@@ -46,7 +46,7 @@ use crate::{
     local_integration::{CheckoutHolder, IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, checkout_holder},
     merge_attempts::{self, Asked},
     outside::Outside,
-    recorded::task_of,
+    recorded::{task_of, team_run_on_base},
   },
 };
 
@@ -154,8 +154,11 @@ pub struct MergeRun {
   pub authorization: Option<String>,
 }
 
-/// `merge_run`: a local run merged into its base branch (a local task's run in a team project too); a team task's run
-/// has its module's delivery requested instead ([`team::merge_run`]).
+/// `merge_run`: a run merged into the branch it started from. A local run's is its base branch (a local task's run in
+/// a team project too). A team task's run that succeeded merges into its module's branch, unless a merge of it is
+/// recorded already, and then its module's delivery to the base is requested ([`team::merge_run`]); the run of a team
+/// task in no module merges into the base branch itself, which an Admin's computer does, or a member's while the team's
+/// Automatic merge is on ([`team::may_merge_on_base`]).
 pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translate) -> Result<Value, ToolError> {
   let authorization = args
     .authorization
@@ -168,7 +171,29 @@ pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translat
       })
     })
     .transpose()?;
+  let named = InRun {
+    project: args.project.clone(),
+    run: args.run.clone(),
+  };
   if let Some(team) = team::of_run(services, (&args.project, &args.run)).await? {
+    let (root, run) = (team.open.repo_root.clone(), args.run.clone());
+    let (on_base, unmerged) = blocking(move || {
+      let db = ProjectDb::open(&root)?;
+      let run = find_run(&db, &run)?;
+      // A run that succeeded and has no merge recorded has work its branch still holds alone.
+      let unmerged = matches!(run.status(), RunStatus::Succeeded) && db.run_merge(run.id())?.is_none();
+      Ok((team_run_on_base(&db, &run)?, unmerged))
+    })
+    .await?;
+    if on_base {
+      team::may_merge_on_base(services, &team).await?;
+      return merge_at(services, (named, None, Runs::Team), translate).await;
+    }
+    // The module's delivery takes what its branch holds: a run still at work, or merged already, adds nothing to it
+    // now, and the delivery says so itself (`team_work_running`).
+    if unmerged {
+      merge_at(services, (named, None, Runs::Team), translate).await?;
+    }
     return team::merge_run(services, &team, (&args.run, authorization), translate).await;
   }
   if authorization.is_some() {
@@ -176,11 +201,15 @@ pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translat
       "`authorization` cites a team module delivery's authorization; a local run's merge_run takes none".to_owned(),
     ));
   }
-  let args = InRun {
-    project: args.project,
-    run: args.run,
-  };
-  merge_at(services, (args, None), translate).await
+  merge_at(services, (named, None, Runs::Local), translate).await
+}
+
+/// Which runs a merge takes: a proposal's and a local `merge_run`'s take local runs only; `merge_run` of a team
+/// task's run takes that run.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Runs {
+  Local,
+  Team,
 }
 
 /// `merge_run` of run `run` of `project`, only while the run's branch is at `expected`, the commit a person reviewed
@@ -191,18 +220,23 @@ pub(crate) async fn merge_proposed(
   (project, run): (String, String),
   expected: Revision,
 ) -> Result<Value, ToolError> {
-  merge_at(services, (InRun { project, run }, Some(expected)), translate).await
+  merge_at(
+    services,
+    (InRun { project, run }, Some(expected), Runs::Local),
+    translate,
+  )
+  .await
 }
 
 async fn merge_at(
   services: &Services,
-  (args, expected): (InRun, Option<Revision>),
+  (args, expected, runs): (InRun, Option<Revision>, Runs),
   translate: &Translate,
 ) -> Result<Value, ToolError> {
   let separator: Arc<str> = translate.text(&Message::new("common.listSeparator")).into();
   let started = {
     let services = services.clone();
-    blocking(move || start(&services, &args, (separator, expected))).await?
+    blocking(move || start(&services, &args, (separator, expected, runs))).await?
   };
   let (mut updates, run, root) = started;
   let ended = updates
@@ -246,14 +280,14 @@ type Started = (watch::Receiver<ProjectJobState>, RunId, PathBuf);
 fn start(
   services: &Services,
   args: &InRun,
-  (separator, expected): (Arc<str>, Option<Revision>),
+  (separator, expected, runs): (Arc<str>, Option<Revision>, Runs),
 ) -> Result<Started, ToolError> {
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
   let run = find_run(&db, &args.run)?;
-  // A team task's run (told by the run itself) goes into its module's branch, and only the module's delivery takes it
-  // to the base branch; a local task's run in a team project merges here.
-  if team::is_team_run(&db, &run)? {
+  // A merge a person approved in a proposal is of a local run's own commit: a team task's run (told by the run
+  // itself) is merged by `merge_run`, which also asks for its module's delivery.
+  if runs == Runs::Local && team::is_team_run(&db, &run)? {
     return Err(team::merge_refused());
   }
   ready(&db, &run, (&open.repo_root, &services.programs))?;
@@ -294,9 +328,8 @@ fn start(
   if busy {
     return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
   }
-  let task = db
-    .task(run.task())?
-    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  // A team task's as its runs recorded it: this computer keeps no definition of one.
+  let task = task_of(&db, run.task())?.ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
   let branch = run
     .base_branch()
     .ok_or_else(|| refused("no_base_branch", "appMcp.errors.noBaseBranch"))?

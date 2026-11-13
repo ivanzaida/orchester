@@ -2,7 +2,7 @@
 //! found is kept and read back until the runner answers otherwise; a refusal kept in the bare format reads as before;
 //! a start settled for good is told once, until it is marked seen, and not at all when its reason no longer holds.
 
-use orchester_api::v2::{AuthorityErrorCode, EXECUTION_BUNDLE_SCHEMA};
+use orchester_api::v2::{AuthorityErrorCode, EXECUTION_BUNDLE_SCHEMA, MODULE_LESS_BUNDLE_SCHEMA};
 use orchester_core::id::{OperationId, TaskId, WorkId};
 use orchester_ipc::Rejection;
 use orchester_store::TeamStartStage;
@@ -201,8 +201,8 @@ async fn team_work_notices_a_schema_failure_is_not_told_once_this_app_reads_that
 
   // The server built a schema a release ahead: still the reason.
   let ahead = StartFailure::BundleSchema {
-    read: EXECUTION_BUNDLE_SCHEMA,
-    built: EXECUTION_BUNDLE_SCHEMA + 1,
+    read: MODULE_LESS_BUNDLE_SCHEMA,
+    built: MODULE_LESS_BUNDLE_SCHEMA + 1,
   };
   assert!(ahead.holds());
   settle_failed(&checkout, &ahead);

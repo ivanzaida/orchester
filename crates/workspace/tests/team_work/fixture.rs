@@ -12,7 +12,7 @@ use std::{
 
 use orchester_api::{
   SharedLimits,
-  v2::{BundleStart, ExecutionBundle, Subject, TaskAtStart},
+  v2::{BundleModule, BundleStart, ExecutionBundle, Subject, TaskAtStart},
 };
 use orchester_core::{
   connection::AgentProvider,
@@ -138,20 +138,23 @@ impl Config {
     Self { cli, ..self }
   }
 
-  /// The bundle the server builds for `claim` on `module`'s branch from `base_commit`.
+  /// The bundle the server builds for `claim` on `module`'s branch from `base_commit`; without a module for a task in
+  /// none.
   pub fn bundle(
     &self,
     (project, task): (ProjectId, Subject),
     claim: ClaimId,
-    module: ModuleId,
+    module: Option<ModuleId>,
     base_commit: &str,
   ) -> ExecutionBundle {
     let start = BundleStart {
       project_id: project,
       subject: task,
       claim_id: claim,
-      module_id: module,
-      branch: BranchName::new("module/webhooks").expect("branch"),
+      module: module.map(|module_id| BundleModule {
+        module_id,
+        branch: BranchName::new("module/webhooks").expect("branch"),
+      }),
       base_commit: CommitId::new(base_commit).expect("commit"),
       definition_revision: TaskRevision::FIRST,
       task_number: NonZeroU32::new(TASK_NUMBER).expect("a number"),

@@ -67,12 +67,15 @@
     },
     "merge": {
       "label": "Merge",
+      "deliver": "Merge and deliver",
       "tryAgain": "Try again",
       "resolve": "Resolve",
       "recordMerge": "Record merge",
       "putFilesBack": "Put files back",
       "noBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
       "noBranchShort": "No branch to merge into",
+      "admin": "This team task is in no module, so its run merges into the base branch itself. A member merges it only while the team's Automatic merge is on; put the task in a module to deliver it on an Admin's authorization.",
+      "adminShort": "An Admin's, or Automatic merge",
       "waits": {
         "anotherMerge": "Merge waits until another run's merge in this project is done.",
         "pullRequest": "Merge waits until the run's pull request is created.",

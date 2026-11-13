@@ -1158,6 +1158,31 @@ done):
   stable): a version of a resource the database has no row of reads as none, not as an error, which had failed the
   task feed, the task page and `get_run` once a team run started; a step's agent, permissions and approvals take the
   profile the run pinned from the run's own inputs (`tasks::pinned_profile`).
+- A team task's run merges into its module's branch from the task page and Review (2026-11-13, the person's decision
+  after *Approve and merge* refused ORC-971's run): the local merge refused every team run, though only the base is
+  the module delivery's (`docs/architecture/server.md`, *Module delivery*), so no button took a finished team run
+  anywhere. It now takes a team run that started on its module's branch into that branch, as it takes a local run into
+  its base; the base stays the module's delivery, asked for on the module's page. A team run with no team record, or
+  one that started outside a module's branch, is still refused. The merge reads a team task from its runs' records.
+- Review's file list cuts a long file name with an ellipsis before the file's added and removed lines, which it ran
+  over.
+- *Merge and deliver* on the *Ready to merge* card of a team task's run on its module's branch (2026-11-13, the
+  person's decision): the merge, then the module's delivery asked for in the same press: the module's claim taken
+  here, the delivery requested, and, when it would wait for an Admin and a person who is one pressed it, authorized
+  and asked again (`team::deliver_next`); an MCP client's press never authorizes. What it came to is an operation in
+  the status bar. Verified on the stable with ORC-970: merged into `module/qa-checks`, the delivery waited for an
+  Admin, and *Authorize* on the module's page delivered it to `master`.
+- *Authorize* shows for an Admin on a team server that does not list `delivery.authorize` among a module's
+  capabilities (the real server did not; the stand-in server did, so the tests passed): while the command is not
+  listed, the person's role decides. The stand-in lists capabilities as the real server does.
+- A team task in no module (2026-11-13, the person's decision; the contract's part): the execution bundle of such a
+  task is schema 4, without `module_id` and `branch` (`docs/cloud-api.md`); the desktop and `run_task` start it on
+  the branch the checkout has checked out (`team_work::checked_out_tip`, `TeamStartRequest::base_branch`), the runner
+  makes its run on that branch (`RunBaseSource::CheckedOut`), and the local merge takes it into that branch. An Admin
+  merges it; a member only while the team's Automatic merge is on (the task page's *Merge*; the Review page's
+  *Approve and merge* does not ask yet). The team server's side is in the platform repository
+  (`claude/task-without-module`); until a server with it is deployed, a start of such a task is refused
+  `module_required`, which the page now says as the server's rule.
 
 ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 

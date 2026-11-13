@@ -171,9 +171,9 @@ fn request(server: &TeamServer, (claim, base): (ClaimId, &str)) -> TeamStartRequ
       },
       base_commit: CommitId::new(base).expect("commit"),
       read: TaskRevision::FIRST,
-      module: server.module,
-      module_read: TaskRevision::FIRST,
+      module: Some((server.module, TaskRevision::FIRST)),
     },
+    base_branch: None,
     programs: McpPrograms::default(),
   }
 }

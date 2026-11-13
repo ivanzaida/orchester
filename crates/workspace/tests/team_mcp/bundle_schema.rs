@@ -2,7 +2,7 @@
 //! (`appMcp.errors.teamBundleSchema*`, `teamBundleUnreadable`): nothing waits for a bundle that reads the same every
 //! time.
 
-use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
+use orchester_api::v2::{EXECUTION_BUNDLE_SCHEMA, MODULE_LESS_BUNDLE_SCHEMA};
 use orchester_core::connection::AgentProvider;
 use serde_json::{Value, json};
 
@@ -54,7 +54,7 @@ fn team_mcp_bundle_schema_older_than_this_app_names_the_server_as_the_one_to_upd
   assert_schema_refusal(
     &error,
     "appMcp.errors.teamBundleSchemaOlder",
-    (EXECUTION_BUNDLE_SCHEMA, older),
+    (MODULE_LESS_BUNDLE_SCHEMA, older),
   );
   assert!(
     error.to_string().contains("appMcp.errors.teamClaimReleased"),
@@ -65,14 +65,14 @@ fn team_mcp_bundle_schema_older_than_this_app_names_the_server_as_the_one_to_upd
 
 #[test]
 fn team_mcp_bundle_schema_newer_than_this_app_names_this_app_as_the_one_to_update() {
-  let newer = EXECUTION_BUNDLE_SCHEMA + 1;
+  let newer = MODULE_LESS_BUNDLE_SCHEMA + 1;
   let (_server, checkout) = started_with(|state| state.receipt_schema = Some(newer));
   let (code, error) = refusal(&checkout);
   assert_eq!(code, "team_bundle_schema_mismatch", "{error}");
   assert_schema_refusal(
     &error,
     "appMcp.errors.teamBundleSchemaNewer",
-    (EXECUTION_BUNDLE_SCHEMA, newer),
+    (MODULE_LESS_BUNDLE_SCHEMA, newer),
   );
 }
 

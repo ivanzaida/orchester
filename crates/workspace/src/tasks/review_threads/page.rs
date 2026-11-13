@@ -37,6 +37,7 @@ use crate::tasks::{
     merges::MergeRun,
     read::{ReviewIn, commits_after, reviewed_at, reviewed_head},
   },
+  recorded::team_run_on_base,
   return_work,
 };
 
@@ -83,6 +84,9 @@ pub struct ReviewPage {
   /// What the run's last step that reported said: the run's *Run summary* on its task page. `None` when no step
   /// reported anything, and when the run is not the task's latest, whose steps the page does not read.
   pub summary: Option<Arc<str>>,
+  /// The run is a team task's in no module: approving it merges into the base branch itself
+  /// ([`crate::tasks::recorded::team_run_on_base`]).
+  pub team_on_base: bool,
 }
 
 impl ReviewPage {
@@ -186,6 +190,7 @@ pub fn review_page(
   let reviewed = reviewed_head(&db, run.id(), in_queue)?;
   let reviewed_at = reviewed_at(&db, run.id(), in_queue)?;
   let agents = agents::published(&db)?;
+  let team_on_base = team_run_on_base(&db, &run)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
@@ -230,6 +235,7 @@ pub fn review_page(
     steps,
     conflicts,
     summary,
+    team_on_base,
   }))
 }
 

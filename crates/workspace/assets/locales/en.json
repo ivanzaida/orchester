@@ -29,7 +29,7 @@
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
     },
-    "teamRun": "This run belongs to a team task, so it is delivered with its module, not merged from here. Nothing was merged.",
+    "teamRun": "The start of this team task's run was never recorded on this computer, so the run has no work to merge. Nothing was merged.",
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it. Ask for the merge again in a minute; if it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",
@@ -1733,7 +1733,8 @@
       "teamStatusOnCreate": "A new team task starts in {{status}}. Create it, then change its status with update_task: the claim's holder or an Admin marks it Done, an Admin cancels it or moves it to Todo. Nothing was sent.",
       "teamActionFailed": "The change could not be carried out with the team server. Nothing was changed on this computer.",
       "teamFieldUnsupported": "A team task or module keeps no {{fields}} on its server in this version, so nothing was sent. Leave them out.",
-      "teamModuleRequired": "A team task starts only in a module. An Admin puts it in one first.",
+      "teamBaseMergeAdmin": "This team task is in no module, so its run merges into the base branch itself. An Admin's computer merges it, or a member's while the team's Automatic merge is on; in a module, its delivery takes an Admin's authorization instead. Nothing was merged.",
+      "teamStartNoBranch": "The task is in no module, and the checkout has no branch checked out for its run to start on and merge into. Nothing was started.",
       "teamNoPipeline": "This team task has no pipeline. Whoever may edit it chooses one of the team's pipelines first.",
       "teamPipelineRequired": "{{pipeline}} is not one of the team's pipelines. A team task runs only with a team pipeline, and the team's Admins create and save those; your own local pipelines are not used for team tasks. Nothing was sent.",
       "sharePipelineLocal": "Only a team project has team pipelines; in a local project every pipeline is the project's already.",
@@ -2040,6 +2041,23 @@
         "done": "Removed the worktrees of {{task}} run #{{run}}",
         "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
         "notDone": "Worktrees of {{task}} run #{{run}} not removed"
+      },
+      "moduleDelivery": {
+        "running": "Delivering module {{module}}",
+        "done": "Delivered module {{module}}",
+        "failed": "Could not deliver module {{module}}",
+        "waits": "Module {{module}}: its delivery waits for an Admin",
+        "why": {
+          "workRunning": "Team runs of the module still work on this computer; ask for its delivery on the module's page once they end.",
+          "noBase": "The checkout has no branch checked out to deliver onto, or has the module's own checked out.",
+          "branchNotFound": "The module's branch {{branch}} is not in this checkout.",
+          "signedOut": "This computer is not signed in to the team server.",
+          "unavailable": "The team server did not answer; the module's page shows where its delivery stands.",
+          "refused": "The team server refused it ({{code}}); the module's page says who may deliver it.",
+          "notMerged": "The delivery was authorized, but its merge did not land here; the module's page says why.",
+          "mergeWaits": "The delivery is authorized, and its merge waits for other work in this checkout; the module's page carries it on.",
+          "failed": "It could not be carried out on this computer."
+        }
       },
       "runPullRequest": {
         "running": "Opening a pull request for {{task}} run #{{run}}",
