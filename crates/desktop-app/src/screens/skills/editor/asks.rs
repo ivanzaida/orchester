@@ -132,6 +132,7 @@ impl Editor {
         what: Archivable::Resource(entry.id),
         kind: ResourceKind::Skill,
         name: entry.name.clone(),
+        local: true,
         on_keep: Arc::new(move || keep.set(Ask::Nothing)),
         on_archived: Arc::new(move || {
           dirty.set(false);

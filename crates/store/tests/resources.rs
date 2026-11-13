@@ -303,6 +303,22 @@ fn resources_reject_the_wrong_kind_and_unknown_ids() {
   ));
 }
 
+/// A team project's database keeps no copy of the team's resources, so a run's step may pin a profile it does not
+/// hold: reading its versions answers that there are none, where a write of it is refused.
+#[test]
+fn resources_reading_one_the_database_does_not_hold_answers_none() {
+  let (_repo, db) = project_repo();
+  let unknown = ResourceId::generate();
+  assert!(db.latest_version::<Tool>(unknown).expect("read").is_none());
+  assert!(
+    db.version::<Tool>(unknown, VersionNumber::FIRST)
+      .expect("read")
+      .is_none()
+  );
+  assert!(db.versions::<Tool>(unknown).expect("read").is_empty());
+  assert!(db.draft::<Tool>(unknown).expect("read").is_none());
+}
+
 #[test]
 fn resources_persist_across_reopen() {
   let (repo, mut db) = project_repo();

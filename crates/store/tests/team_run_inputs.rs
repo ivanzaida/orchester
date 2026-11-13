@@ -216,7 +216,7 @@ fn accepted(task: TeamTaskRef, operation: OperationId) -> InputsOrigin {
     work: WorkId::generate(),
     claim: ClaimId::generate(),
     operation,
-    module: ModuleId::generate(),
+    module: Some(ModuleId::generate()),
     branch: BranchName::new("orchester/module-greetings").expect("branch"),
     base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
     bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),

@@ -21,7 +21,7 @@ use orchester_workspace::{
   background,
   local_archive::Archivable,
   messages::Message,
-  pipelines::{library::make_default_in, rename::rename_in},
+  pipelines::{hub::TeamPipelines, library::make_default_in, rename::rename_in},
   tasks::outside::Outside,
 };
 
@@ -61,6 +61,8 @@ pub(super) struct Props {
   pub holds_changes: bool,
   /// The version the panel shows read-only, which a row of the *Versions* list sets.
   pub viewing: ViewedSignal,
+  /// `Some` in a team project: no default pipeline is kept for it, and a member who is not its admin has no ⋯ menu.
+  pub team: Option<TeamPipelines>,
 }
 
 /// The props are equal when the head shows the same: `viewing` is the panel's own signal, which only its press sets.
@@ -73,6 +75,7 @@ impl PartialEq for Props {
       self.now,
       &self.hosted,
       self.holds_changes,
+      self.team,
     ) == (
       &other.project,
       &other.entry,
@@ -80,6 +83,7 @@ impl PartialEq for Props {
       other.now,
       &other.hosted,
       other.holds_changes,
+      other.team,
     )
   }
 }
@@ -109,7 +113,8 @@ impl Component for Head {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
-    let changes = Services::of(ctx).changes;
+    let services = Services::of(ctx);
+    let (changes, servers) = (services.changes, services.servers);
     let (root, project, id) = (
       props.project.open.repo_root.clone(),
       props.project.open.project.id(),
@@ -121,8 +126,10 @@ impl Component for Head {
     let shown = saved.clone();
     let rename = ctx.future_action(move |name: String| {
       let (root, stop, changes, remember) = (task_root.clone(), stop.clone(), record.clone(), saved.clone());
+      let servers = servers.clone();
       async move {
-        let saved = background::run(move || rename_in(&root, id, &name).map_err(|error| error.message())).await??;
+        let renamed = background::run(move || rename_in((&root, &servers), id, &name).map_err(|error| error.message()));
+        let saved = renamed.await??;
         let saved: Arc<str> = Arc::from(saved.as_str());
         remember.set(Some((stop.began(), saved.clone())));
         changes.record(project, Outside::Pipelines);
@@ -160,7 +167,7 @@ impl Component for Head {
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(self.versions(ctx, &props))
-      .child(self.more(ctx, &props));
+      .with_children(self.more(ctx, &props));
     let head = head_titled(
       title,
       (
@@ -245,8 +252,11 @@ impl Head {
       .into()
   }
 
-  /// The ⋯ button and, while it is open, its menu.
-  fn more(&self, ctx: &mut Ctx, props: &Props) -> Element {
+  /// The ⋯ button and, while it is open, its menu; none for a member of the team who only reads its pipelines.
+  fn more(&self, ctx: &mut Ctx, props: &Props) -> Option<Element> {
+    if props.team.is_some_and(|team| !team.may_change) {
+      return None;
+    }
     let entry = &props.entry;
     let toggle = self.menu.clone();
     let button = IconButton::new(
@@ -270,19 +280,15 @@ impl Head {
     let (hosted, holds) = (props.hosted.clone(), props.holds_changes);
     let actions = Actions {
       rename: Arc::new(move || editing.begin(&name)),
-      make_default: self.make_default.clone(),
+      make_default: props.team.is_none().then(|| self.make_default.clone()),
       archive: Arc::new(move || hosted.archive(target.clone(), holds)),
     };
     let project: ProjectId = props.project.open.project.id();
     let panel = menu::panel(ctx, (project, entry, props.default), &self.menu, &actions);
-    Column::new()
-      .child(button)
-      .child(
-        Popup::new(self.anchor.clone(), panel)
-          .open(self.menu.clone())
-          .placement(Placement::BottomEnd)
-          .offset(0.0, ctx.theme().spacing_value(SpacingSize::Xs).to_px()),
-      )
-      .into()
+    let menu = Popup::new(self.anchor.clone(), panel)
+      .open(self.menu.clone())
+      .placement(Placement::BottomEnd)
+      .offset(0.0, ctx.theme().spacing_value(SpacingSize::Xs).to_px());
+    Some(Column::new().child(button).child(menu).into())
   }
 }

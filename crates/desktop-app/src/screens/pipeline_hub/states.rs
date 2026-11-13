@@ -14,9 +14,12 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension},
 };
+use orchester_core::id::ProjectId;
 use orchester_workspace::messages::Message;
 
 use crate::{
+  routes::{PipelinesFilter, ProjectPage, Route},
+  screens::{hub::agents, local_hub::leave::Leave},
   theme::{ExtraRadius, ExtraSpacing, HubSpacing, HubText, IconSize, PipelinesText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -108,4 +111,47 @@ pub(super) fn new_unavailable(ctx: &Ctx) -> Element {
     .icon(Icon::Plus)
     .unavailable_with_icon(ctx.t("pipeline_hub.states.newUnavailable"))
     .into()
+}
+
+/// *New pipeline*, which makes one in the panel ([`new`]): the head's is the primary button, the empty body's the
+/// secondary.
+pub(super) fn new_button(ctx: &Ctx, (id, kind): (&str, ButtonKind), leave: &Leave, project: ProjectId) -> Element {
+  ActionButton::new(id.to_owned(), kind, ctx.t("pipeline_hub.new"))
+    .icon(Icon::Plus)
+    .press(leave.press(Route::Project(project, ProjectPage::NewPipeline)))
+    .into()
+}
+
+/// The open tab holds nothing: what a pipeline is, with *New pipeline* when the project has none and the person may
+/// make one (`leave`; a member of a team may not).
+pub(super) fn empty(ctx: &Ctx, filter: PipelinesFilter, leave: Option<&Leave>, project: ProjectId) -> Element {
+  let (glyph, title, detail) = match filter {
+    PipelinesFilter::All => (
+      Icon::Workflow,
+      "pipeline_hub.empty.all.title",
+      "pipeline_hub.empty.all.detail",
+    ),
+    PipelinesFilter::Archived => (
+      Icon::Archive,
+      "pipeline_hub.empty.archived.title",
+      "pipeline_hub.empty.archived.detail",
+    ),
+  };
+  let action = leave.filter(|_| filter == PipelinesFilter::All).map(|leave| {
+    [
+      // The design puts a gap between the line and the button (`Action gap` `BAEia` in P6), on top of the 10
+      // either side of it.
+      Row::new()
+        .id("pipeline-hub-empty-action-gap")
+        .height(Dimension::Px(HubSpacing::ActionGap.value()))
+        .into(),
+      new_button(ctx, ("pipeline-hub-empty-new", ButtonKind::Secondary), leave, project),
+    ]
+  });
+  agents::empty(
+    "pipeline-hub",
+    glyph,
+    (&ctx.t(title), &ctx.t(detail)),
+    action.into_iter().flatten().collect(),
+  )
 }

@@ -33,7 +33,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::Route,
-  screens::pipeline_link::PipelineLinks,
+  screens::pipeline_link,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     filter::filter_menu_panel,
@@ -207,7 +207,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: &ShownProject) -> Option<E
     ),
     None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::TextMuted),
   };
-  let route = Route::Project(project.open.project.id(), PipelineLinks::of(project).page(choice.id));
+  let route = Route::Project(project.open.project.id(), pipeline_link::page(choice.id));
   let view_pipeline = Focus::Link
     .apply(opening(Navigation::of(ctx).to(route)))
     .id("task-form-view-pipeline")

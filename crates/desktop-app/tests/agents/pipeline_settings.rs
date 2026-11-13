@@ -88,7 +88,8 @@ fn pipeline_settings_show_the_stored_slug_not_the_one_the_name_would_make() {
   let mut agents = Agents::new(true);
   let builder = agents.profile(true);
   let renamed = pipeline(&agents, "Legacy flow", Some(builder));
-  rename_in(&agents.root, renamed, "Release train").expect("renamed");
+  let servers = agents.window.launch.services().expect("the session").servers.clone();
+  rename_in((&agents.root, &servers), renamed, "Release train").expect("renamed");
   settings_of(&mut agents, renamed);
   assert_eq!(agents.text("team-hub-panel-title"), "Release train");
   assert_eq!(agents.text(SLUG), "legacy-flow");

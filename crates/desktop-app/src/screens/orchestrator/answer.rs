@@ -256,7 +256,6 @@ fn action_element(
         id: id.clone(),
         scope: row.env.scope.clone(),
         project: (row.env.project, Arc::from(row.env.name.as_ref())),
-        pipelines: row.env.pipelines,
         seq,
         action: action.clone(),
         at,

@@ -1,6 +1,6 @@
 //! A team task's run, which this computer keeps no definition of, where the app and the Orchestrator chat read a run's
 //! task: it is under way for the sidebar and Stop auto-approving, its task is told by the key its inputs kept, the
-//! chat leaves its delivery to the person, and no local merge takes it.
+//! chat leaves its delivery to the person, and the local merge takes it into its module's branch, never the base.
 
 use std::collections::HashSet;
 
@@ -13,7 +13,7 @@ use orchester_core::{
     watch::{NamedTarget, OpenTask, OpenWork},
   },
   run::RunStatus,
-  store::RunStore,
+  store::{MergeStore, RunStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -110,9 +110,48 @@ fn team_mcp_the_chat_judges_a_stream_era_run_as_a_local_run() {
     }
   );
 }
+/// The work was done on this computer and the module's branch is this checkout's: the task page's merge takes a team
+/// run into the branch it started from, as it takes a local run into its base, and the base itself is left to the
+/// module's delivery.
 #[test]
-fn team_mcp_no_local_merge_takes_a_team_run_and_none_records_an_attempt() {
+fn team_mcp_the_local_merge_takes_a_team_run_into_its_modules_branch_and_leaves_the_base() {
   let team = started();
+  let root = team.checkout.root();
+  let started = team.checkout.db().run(team.run).expect("read").expect("the run");
+  let module_branch = started.base_branch().expect("the module's branch").as_str().to_owned();
+  let module_branch = module_branch.as_str();
+  // The module's branch where the run started, and what the run's agent committed on the run's own branch.
+  crate::git(root, &["branch", module_branch, started.base().as_str()]);
+  crate::git(root, &["switch", "-c", started.branch().as_str(), module_branch]);
+  std::fs::write(root.join("retry.txt"), "retry\n").expect("the run's file");
+  crate::git(root, &["add", "retry.txt"]);
+  crate::git(root, &["commit", "-m", "KON-7: retry"]);
+  let work = crate::git(root, &["rev-parse", "HEAD"]);
+  crate::git(root, &["switch", "main"]);
+  let base = crate::git(root, &["rev-parse", "main"]);
+  team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
+  let programs = Programs::processes();
+  let worktrees = WorktreeRemover::here_for_test(root, programs.clone());
+
+  let merged = merge_in(&worktrees, &programs, (team.run, None)).map(|merged| merged.merge);
+  let merge = merged.as_ref().expect("merged into the module's branch");
+  assert_eq!(merge.run, team.run);
+  // The module's branch holds the run's work; the base and what the checkout has checked out are as they were.
+  crate::git(root, &["merge-base", "--is-ancestor", &work, module_branch]);
+  assert_eq!(crate::git(root, &["rev-parse", "main"]), base);
+  assert_eq!(crate::git(root, &["branch", "--show-current"]), "main");
+  assert!(!root.join("retry.txt").exists(), "the checkout's files are untouched");
+  assert!(
+    team.checkout.db().run_merge(team.run).expect("read").is_some(),
+    "recorded"
+  );
+}
+
+/// A team run whose start was never recorded has no claim or work it ran under, and its merge is not tried: no attempt
+/// is recorded for the press.
+#[test]
+fn team_mcp_no_local_merge_takes_a_team_run_with_no_team_record() {
+  let team = started_without_record();
   team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
   let programs = Programs::processes();
   let worktrees = WorktreeRemover::here_for_test(team.checkout.root(), programs.clone());
@@ -122,7 +161,6 @@ fn team_mcp_no_local_merge_takes_a_team_run_and_none_records_an_attempt() {
     matches!(&refused, Err(IntegrationProblem::Store(message)) if message.key == "localIntegration.teamRun"),
     "{refused:?}"
   );
-  // It was never a merge to try: no attempt was recorded, stopped or open, for the press.
   let db = team.checkout.db();
   assert!(db.merge_attempts(team.run).expect("attempts").is_empty());
   assert!(db.open_merge_attempts().expect("open").is_empty());

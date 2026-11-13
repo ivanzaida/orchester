@@ -6,18 +6,21 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::RunId,
-  resource::{AgentProfile, StepKey},
+  resource::StepKey,
   run::{
     InterruptCause, ListedRun, Run, RunFailure, RunNumber, RunStatus, RunnerFailure, StepExecutor, StepStatus,
     TaskPhase, attempt_starts,
   },
-  store::{ActivityStore, ResourceStore, RunStore, WorktreeStore},
+  store::{ActivityStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::{changes::run_work_present, detail::run_store_error, latest_runs::latest_run, unreadable::Unreadable};
+use super::{
+  changes::run_work_present, detail::run_store_error, latest_runs::latest_run, pinned_profile::pinned_profile,
+  unreadable::Unreadable,
+};
 use crate::messages::Message;
 
 /// One run of the task, as its row shows it.
@@ -210,9 +213,9 @@ fn at_work(db: &ProjectDb, run: &Run) -> Result<Message, StoreError> {
   };
   let step = step_name(run, execution.step());
   let role = match run.snapshot().step(execution.step()).map(|pinned| pinned.executor()) {
-    Some(StepExecutor::Agent { profile, .. }) => db
-      .version::<AgentProfile>(profile.resource, profile.number)?
-      .map(|version| version.body().role().as_str().to_owned()),
+    Some(StepExecutor::Agent { profile, .. }) => {
+      pinned_profile(db, run.id(), *profile)?.map(|body| body.role().as_str().to_owned())
+    }
     _ => None,
   };
   if let Some(resolving) = resolving(db, run)? {

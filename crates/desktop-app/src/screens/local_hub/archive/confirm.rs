@@ -30,6 +30,7 @@ use orchester_workspace::{
   messages::Message,
   pipelines::task_use::{TaskUse, tasks_using},
   readiness::archive_blocks_profiles,
+  sharing::project::NotArchived,
   used_by::{self, RunLine, UsedByError},
 };
 
@@ -54,6 +55,9 @@ pub(in crate::screens) struct Props {
   pub what: Archivable,
   pub kind: ResourceKind,
   pub name: Arc<str>,
+  /// Whether the project is local: its own runs stop here. `false` for a team's pipeline, whose runs stop on every
+  /// computer.
+  pub local: bool,
   /// The confirmation was left without archiving.
   pub on_keep: Handler,
   /// It was archived; the changes are recorded already.
@@ -61,8 +65,15 @@ pub(in crate::screens) struct Props {
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    (&self.root, self.project, self.what, self.kind, &self.name)
-      == (&other.root, other.project, other.what, other.kind, &other.name)
+    (&self.root, self.project, self.what, self.kind, &self.name, self.local)
+      == (
+        &other.root,
+        other.project,
+        other.what,
+        other.kind,
+        &other.name,
+        other.local,
+      )
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -87,6 +98,27 @@ struct Confirmation {
   /// person when some of the runs could not be stopped.
   archive: FutureAction<Vec<UsedByRun>, Option<Message>, Failed>,
   person: PersonOnly,
+}
+
+/// Archives what `props` names: a pipeline where its project keeps it (the team server for a team project,
+/// [`orchester_workspace::sharing::Servers::archive_pipeline`]), anything else in the local project it is of. What it
+/// answers is what to tell the person when some of the runs could not be stopped.
+async fn archive(services: &Services, props: &Props) -> Result<Option<Message>, Failed> {
+  if let (ResourceKind::Pipeline, Archivable::Resource(pipeline)) = (props.kind, props.what) {
+    let archived = services
+      .servers
+      .archive_pipeline(&services.runners, &props.root, pipeline)
+      .await;
+    return archived.map_err(|refused| match refused {
+      NotArchived::Refused { code } => Failed::Refused(code),
+      NotArchived::Failed(message) => Failed::Said(message),
+      NotArchived::PersonOnly => Failed::Said(NotArchived::person_only_message()),
+    });
+  }
+  let archived = local_archive::archive(&services.runners, &props.root, props.what)
+    .await
+    .map_err(Failed::Said)?;
+  Ok(archived.left_running_message())
 }
 
 /// What uses `what` in the project at `root`.
@@ -119,10 +151,7 @@ impl Component for Confirmation {
           again.update(|count| *count += 1);
           return Err(Failed::RunsChanged);
         }
-        let archived = local_archive::archive(&services.runners, &props.root, props.what)
-          .await
-          .map_err(Failed::Said)?;
-        Ok(archived.left_running_message())
+        archive(&services, &props).await
       }
     });
     let open = ctx.signal(true);
@@ -225,7 +254,7 @@ impl Confirmation {
       &DialogProps {
         name: props.name.clone(),
         blocks_profiles: archive_blocks_profiles(props.kind),
-        local: true,
+        local: props.local,
         versioned: props.kind != ResourceKind::McpServer,
       },
       &State {

@@ -65,7 +65,7 @@ pub enum ProjectPage {
   Delivery(DeliveryPeriod),
   /// The Pipelines page on its first tab, with its first pipeline open.
   Pipelines,
-  /// The Pipelines hub of a local project on a tab or with a pipeline open, never the one [`Self::Pipelines`] is.
+  /// The Pipelines hub on a tab or with a pipeline open, never the one [`Self::Pipelines`] is.
   PipelinesHub(PipelinesView),
   /// New pipeline, starting from the starter.
   NewPipeline,

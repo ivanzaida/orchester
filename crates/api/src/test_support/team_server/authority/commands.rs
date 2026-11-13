@@ -331,9 +331,10 @@ fn capabilities(
     action("claim.release", release),
     action("assignment.set", admin),
   ]);
+  // As the team server lists them: a module's delivery commands are not among its capabilities there yet, so the
+  // desktop tells who may authorize a delivery by the caller's role.
   if module {
     actions.push(action("module.branch.set", admin));
-    actions.push(action("delivery.authorize", admin));
   }
   listed
 }

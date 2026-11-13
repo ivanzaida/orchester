@@ -33,8 +33,9 @@ pub struct TaskAtStart {
   pub criteria: Vec<String>,
 }
 
-/// `{task, definition_revision, work, claim, operation, module, branch, base_commit, bundle}`: what the team server
-/// accepted when it started the work the run carries out (S7 `work.start`, S8).
+/// `{task, definition_revision, work, claim, operation, module?, branch, base_commit, bundle}`: what the team server
+/// accepted when it started the work the run carries out (S7 `work.start`, S8). `module` is left out for a task in no
+/// module.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TeamAcceptance {
@@ -46,8 +47,11 @@ pub struct TeamAcceptance {
   pub claim: ClaimId,
   /// The accepted operation that started the work.
   pub operation: OperationId,
-  pub module: ModuleId,
-  /// The module's branch the run's work merges into.
+  /// The module the task was in; `None` for a task in no module.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub module: Option<ModuleId>,
+  /// The branch the run's work merges into: its module's, which the server assigned, or, for a task in no module, the
+  /// branch the computer had checked out when it asked for the start, which its base commit was read from.
   pub branch: BranchName,
   /// The commit of the base branch the work starts from.
   pub base_commit: CommitId,

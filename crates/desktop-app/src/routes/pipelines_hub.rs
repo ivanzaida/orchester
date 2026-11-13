@@ -1,4 +1,4 @@
-//! The Pipelines hub of a local project (`Pipelines · v2` `pCzIS`, P1): the tab it filters by and the pipeline its
+//! The Pipelines hub (`Pipelines · v2` `pCzIS`, P1): the tab it filters by and the pipeline its
 //! panel shows, kept in its route (`/project/<id>/pipelines?filter=archived&item=<id>`).
 
 use orchester_core::id::ResourceId;

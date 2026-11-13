@@ -151,3 +151,35 @@ fn team_mcp_resume_run_takes_no_old_claim_and_continues_nothing_locally() {
     "no claim of the old sharing stream cached the task here"
   );
 }
+
+/// A team's profile has no row in a shared project's database (`docs/design/team-configuration-live.md`): the step's
+/// agent is the profile the run's own inputs pinned.
+#[test]
+fn team_mcp_get_run_names_the_agent_of_a_profile_the_database_does_not_hold() {
+  let team = started();
+  let read = |team: &crate::team_runs::Started| {
+    let run = team
+      .checkout
+      .call("get_run", &json!({"project": "Kontur", "run": team.run.to_string()}))
+      .expect("the run");
+    run["steps"][0]["agent"].as_str().map(str::to_owned)
+  };
+  let cached = read(&team).expect("the agent of the cached profile");
+
+  let profile = team.server.state().config.profile.to_string();
+  let database = rusqlite::Connection::open(team.checkout.root().join(".orchester/orchester.db")).expect("open");
+  database
+    .execute_batch(&format!(
+      "DELETE FROM shared_version_references WHERE version_id IN
+         (SELECT id FROM resource_versions WHERE resource_id = '{profile}');
+       DELETE FROM shared_version_bodies WHERE version_id IN
+         (SELECT id FROM resource_versions WHERE resource_id = '{profile}');
+       DROP TRIGGER resource_versions_no_delete;
+       DELETE FROM resource_versions WHERE resource_id = '{profile}';
+       DELETE FROM resources WHERE id = '{profile}';"
+    ))
+    .expect("the profile leaves the database");
+  drop(database);
+
+  assert_eq!(read(&team), Some(cached));
+}

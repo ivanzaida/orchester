@@ -16,7 +16,7 @@ use orchester_core::{
   sharing::TaskRevision,
   store::ResourceStore,
 };
-use orchester_store::{ConnectionPick, ProjectDb, ProjectMigration, ResourceSharing, StoreError};
+use orchester_store::{ConnectionPick, ProjectDb, ProjectMigration, ResourceSharing};
 use rusqlite::Connection;
 use support::{at, copied_at_version, name};
 use tempfile::TempDir;
@@ -156,10 +156,8 @@ fn team_outbox_migration_drops_the_unsent_version_and_the_team_drafts_and_keeps_
   // The unsent version goes with the outbox, and the numbered one, which nothing here pins, with the team's cache
   // ().
   assert!(
-    matches!(
-      db.versions::<Instruction>(seeded.team),
-      Err(StoreError::ResourceNotFound(_))
-    ),
+    db.versions::<Instruction>(seeded.team).expect("read").is_empty()
+      && db.resource(seeded.team).expect("read").is_none(),
     "no version of the team's is kept here, nor the resource left with none"
   );
   assert!(
@@ -201,10 +199,8 @@ fn team_outbox_migration_applied_again_changes_nothing() {
   drop(connection);
 
   let db = ProjectDb::open(old.path()).expect("open");
-  assert!(matches!(
-    db.versions::<Instruction>(seeded.team),
-    Err(StoreError::ResourceNotFound(_))
-  ));
+  assert!(db.versions::<Instruction>(seeded.team).expect("read").is_empty());
+  assert!(db.resource(seeded.team).expect("read").is_none());
   assert!(db.draft::<Instruction>(seeded.own).expect("read").is_some());
   let tables = tables(&path);
   assert!(!tables.iter().any(|table| table == "shared_publishes"), "{tables:?}");

@@ -13,8 +13,10 @@
 //! change or the person asks again ([`TeamQueries::retry`]).
 
 pub mod act;
+pub mod base_merge;
 pub mod block_dialog;
 pub mod deliver;
+pub mod deliver_next;
 pub mod edit;
 pub mod invalidation;
 pub mod last_start;

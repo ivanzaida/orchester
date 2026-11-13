@@ -294,7 +294,7 @@ impl Team {
       work: WorkId::generate(),
       claim: ClaimId::generate(),
       operation,
-      module: ModuleId::generate(),
+      module: Some(ModuleId::generate()),
       branch: BranchName::new("main").expect("branch"),
       base_commit: CommitId::new(base).expect("commit"),
       bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),

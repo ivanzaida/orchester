@@ -329,8 +329,9 @@ const SPECS: &[Spec] = &[
                   (told by the run itself: its team record, or the team inputs it was created with whatever its \
                   task is; a run of the old sharing stream, which has neither, and a local task's run in a team \
                   project merge as above; a team run with no team record, whose start did not finish, is \
-                  refused with team_run_unrecorded) is never merged into the base branch itself: its work \
-                  is in its module's branch, and merge_run requests that module's delivery from the team server, \
+                  refused with team_run_unrecorded) merges into the branch it started from. On its module's branch, \
+                  a run that succeeded merges into that branch unless a merge of it is recorded, and merge_run then \
+                  requests that module's delivery from the team server, \
                   under the module's claim (taken when nobody holds it), from the module branch's tip onto the tip \
                   of the branch the checkout has checked out; an open delivery of the module is carried \
                   on instead. An Admin's authorization or the team's automatic merge decides it, never this tool: \
@@ -342,8 +343,10 @@ const SPECS: &[Spec] = &[
                   authorized), delivery_not_authorized (the cited authorization is not of this delivery), \
                   team_work_running (runs of the module still work here), team_delivery_waiting (waits for the \
                   server), team_delivery_merge_waiting (the checkout is busy), delivery_failed, \
-                  delivery_report_refused, module_branch_checked_out (the checkout is on the module's branch), or \
-                  module_required for a run outside a module. Call it again to carry a waiting delivery on.",
+                  delivery_report_refused or module_branch_checked_out (the checkout is on the module's branch). \
+                  Call it again to carry a waiting delivery on. The run of a team task in no module merges into the \
+                  base branch itself, as a local run does, with no delivery: on an Admin's computer, or a member's \
+                  while the team's Automatic merge is on (admin_required otherwise).",
     schema: schema_for_type::<merge::MergeRun>,
     read_only: false,
   },

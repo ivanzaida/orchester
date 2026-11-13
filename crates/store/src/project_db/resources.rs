@@ -264,7 +264,9 @@ impl ResourceStore for ProjectDb {
   }
 
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(None);
+    }
     load_draft(&self.connection, resource)
   }
 
@@ -275,12 +277,16 @@ impl ResourceStore for ProjectDb {
   /// The version this computer uses ([`used_here`]): a teammate's version that waits for the person's *Use v<N> here*
   /// is left out, so runs, preflight, editors and publishing keep the one before it.
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(None);
+    }
     used_here(&self.connection, resource)
   }
 
   fn versions<B: ResourceBody>(&self, resource: ResourceId) -> Result<Vec<Version<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(Vec::new());
+    }
     load_versions(
       &self.connection,
       "WHERE resource_id = ?1 ORDER BY number",
@@ -293,7 +299,9 @@ impl ResourceStore for ProjectDb {
     resource: ResourceId,
     number: VersionNumber,
   ) -> Result<Option<Version<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(None);
+    }
     let mut found = load_versions(
       &self.connection,
       "WHERE resource_id = ?1 AND number = ?2",
@@ -401,6 +409,19 @@ pub(super) fn save_draft<B: ResourceBody>(
     ],
   )?;
   Ok(DraftSaved::Stored)
+}
+
+/// Whether the database holds `resource`, for a read of its draft or versions: `false` for one it has no row of, which
+/// has none here. A team project's database keeps no copy of the team's resources
+/// (`docs/design/team-configuration-live.md`), so a run's step may pin a profile, and a task a pipeline, that it does
+/// not hold: reading its version answers that there is none, as for a version it does not have. Fails for a resource
+/// that holds bodies of another kind than `B`.
+fn holds<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<bool, StoreError> {
+  match check_kind::<B>(connection, resource) {
+    Ok(()) => Ok(true),
+    Err(StoreError::ResourceNotFound(_)) => Ok(false),
+    Err(error) => Err(error),
+  }
 }
 
 /// Fails unless `resource` exists and holds bodies of type `B`.

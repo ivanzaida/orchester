@@ -16,7 +16,7 @@ use crate::{
 
 /// How the team server stands, which the head says.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Reach {
+pub(in crate::screens) enum Reach {
   Answered,
   /// It did not answer the last read of the hub's other reads.
   Unanswered,
@@ -26,7 +26,7 @@ pub(super) enum Reach {
 
 /// *Team*, with *· member* for whoever is not an admin (`admin`, as the person's role was last read: an admin stays
 /// one while the team server cannot be reached); while it cannot be reached, the line says so in place of *Team*.
-pub(super) fn status(ctx: &Ctx, admin: bool, reach: Reach) -> Vec<Element> {
+pub(in crate::screens) fn status(ctx: &Ctx, admin: bool, reach: Reach) -> Vec<Element> {
   let (glyph, color, words) = match reach {
     Reach::Answered => (Icon::Users, PaletteColor::TextMuted, "team_hub.team"),
     Reach::Unanswered => (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached"),

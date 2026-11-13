@@ -12,10 +12,16 @@
 //! works in the checkout, another run of the project merges, a decision of Local integration waits or a merge waits in
 //! the run's worktree for the person to resolve it; and is unavailable with why when the run did not record the
 //! branch it started from.
+//!
+//! *Merge and deliver* ([`deliver`]) stands beside *Merge* for a team task's run that started on its module's branch:
+//! the same merge, then the module's delivery to its base asked for in the same press
+//! ([`crate::team::deliver_next`]).
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
+use orchester_core::{id::RunId, integration::base::RunBaseSource, store::MergeStore};
+use orchester_store::ProjectDb;
 use orchester_workspace::tasks::{
   detail::RunView,
   integration_jobs::{JobState, MergeArgs, ResolveStep},
@@ -31,11 +37,31 @@ use crate::{
     merge::attempt::{actions::Busy, standing::Standing},
   },
   services::Services,
+  team::{act::Acting, base_merge, deliver_next::Next},
   ui::{button::ButtonKind, icon::Icon, pressable::Press},
 };
 
 /// The action's element id on the top card; the header's is its own.
 const ID: &str = "task-merge";
+/// *Merge and deliver* on the top card.
+const DELIVER_ID: &str = "task-merge-deliver";
+
+/// What a merging action looks like, and the delivery it asks for once its merge landed.
+struct Merging {
+  look: (&'static str, &'static str, Icon),
+  kind: ButtonKind,
+  next: Option<Next>,
+}
+
+impl Merging {
+  const fn primary(label: &'static str, glyph: Icon) -> Self {
+    Self {
+      look: (ID, label, glyph),
+      kind: ButtonKind::Primary,
+      next: None,
+    }
+  }
+}
 
 /// The action, and why it waits for other work while it does.
 #[derive(Clone)]
@@ -74,10 +100,54 @@ pub fn action(ctx: &mut Ctx, task: &TaskContext, merge: Merge) -> Option<MergeAc
     Merge::NotMerged(_) if page.is_some_and(|page| page.queue_stopped) && !in_worktree => {
       work(ctx, task, run, Work::Requeue)
     }
-    Merge::NotMerged(_) => merging(ctx, task, run, ("task.merge.tryAgain", Icon::RotateCcw), in_worktree),
-    Merge::Ready => merging(ctx, task, run, ("task.merge.label", Icon::GitMerge), in_worktree),
+    Merge::NotMerged(_) => {
+      let how = Merging::primary("task.merge.tryAgain", Icon::RotateCcw);
+      merging(ctx, task, run, how, in_worktree)
+    }
+    Merge::Ready => {
+      let how = Merging::primary("task.merge.label", Icon::GitMerge);
+      merging(ctx, task, run, how, in_worktree)
+    }
   };
   Some(action)
+}
+
+/// *Merge and deliver* while a team task's run that started on its module's branch waits to be merged, and the team's
+/// read of that module is there: the merge *Merge* makes, then the module's delivery to its base. `None` for any
+/// other run: a local run has no module to deliver, and a merge that did not land is tried again on its own first.
+pub fn deliver(ctx: &mut Ctx, task: &TaskContext, merge: Merge) -> Option<MergeAction> {
+  if merge != Merge::Ready {
+    return None;
+  }
+  let run = task.detail.run.as_ref()?;
+  let team = task.team.as_ref()?;
+  let module = team.module.as_ref()?;
+  let RunBaseSource::Module { module: started_in } = run.run.base_source() else {
+    return None;
+  };
+  if started_in != module.module.id() {
+    return None;
+  }
+  let services = Services::of(ctx);
+  let next = Next {
+    acting: Acting::of(&services),
+    source: team.source.clone(),
+    programs: services.programs,
+    activity: services.activity,
+    open: task.project.open.clone(),
+    task: task.detail.task.id(),
+    module: started_in,
+    name: Arc::from(module.module.name().as_str()),
+    branch: run.run.base_branch()?.as_str().to_owned(),
+    // Told at the press, which knows whether a person made it.
+    person: false,
+  };
+  let how = Merging {
+    look: (DELIVER_ID, "task.merge.deliver", Icon::GitPullRequest),
+    kind: ButtonKind::Secondary,
+    next: Some(next),
+  };
+  Some(merging(ctx, task, run, how, task.merge_in_worktree()))
 }
 
 /// The conflicts of the last attempt were resolved by hand in the run's worktree, which merges now.
@@ -126,28 +196,31 @@ fn work(ctx: &mut Ctx, task: &TaskContext, run: &RunView, work: Work) -> MergeAc
   MergeAction::new(Control::new(ctx, look, ButtonKind::Primary, offer))
 }
 
-/// *Merge* or *Try again* (`label` and `glyph`), merging the run on the project's shared operations.
-fn merging(
-  ctx: &mut Ctx,
-  task: &TaskContext,
-  run: &RunView,
-  (label, glyph): (&str, Icon),
-  in_worktree: bool,
-) -> MergeAction {
-  let look = (ID, label, glyph);
+/// *Merge*, *Try again* or *Merge and deliver* as `how` looks, merging the run on the project's shared operations.
+fn merging(ctx: &mut Ctx, task: &TaskContext, run: &RunView, how: Merging, in_worktree: bool) -> MergeAction {
+  let Merging { look, kind, next } = how;
   let Some(branch) = run.run.base_branch() else {
     let reason = Reason {
       short: ctx.t("task.merge.noBranchShort"),
       full: ctx.t("task.merge.noBranch"),
     };
-    return MergeAction::new(Control::new(ctx, look, ButtonKind::Primary, Offer::Unavailable(reason)));
+    return MergeAction::new(Control::new(ctx, look, kind, Offer::Unavailable(reason)));
   };
+  if let Some(reason) = base_is_an_admins(ctx, task, run) {
+    return MergeAction::new(Control::new(ctx, look, kind, Offer::Unavailable(reason)));
+  }
   if task.jobs.run(run.id()).merge == JobState::Running {
-    return MergeAction::new(Control::new(ctx, look, ButtonKind::Primary, Offer::Pending));
+    // The one merge under way is told by *Merge*; the action beside it waits with it.
+    let offer = if next.is_some() {
+      Offer::Disabled
+    } else {
+      Offer::Pending
+    };
+    return MergeAction::new(Control::new(ctx, look, kind, offer));
   }
   if let Some(key) = waits(task, run, in_worktree) {
     return MergeAction {
-      control: Control::new(ctx, look, ButtonKind::Primary, Offer::Disabled),
+      control: Control::new(ctx, look, kind, Offer::Disabled),
       waits: Some(ctx.t(key)),
     };
   }
@@ -160,18 +233,56 @@ fn merging(
   // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which the card
   // shows, as it is.
   let start = move || {
-    if lurq::app::events::is_synthetic_input() {
-      jobs.start_synthetic_merge(args.clone(), vault.clone());
+    let synthetic = lurq::app::events::is_synthetic_input();
+    let mut args = args.clone();
+    if let Some(next) = &next {
+      let next = Next {
+        person: !synthetic,
+        ..next.clone()
+      };
+      args.changed = then_deliver(args.changed.clone(), next, args.run);
+    }
+    if synthetic {
+      jobs.start_synthetic_merge(args, vault.clone());
     } else {
-      jobs.start_merge(args.clone());
+      jobs.start_merge(args);
     }
   };
-  MergeAction::new(Control::new(
-    ctx,
-    look,
-    ButtonKind::Primary,
-    Offer::Ready(Press::run(start)),
-  ))
+  MergeAction::new(Control::new(ctx, look, kind, Offer::Ready(Press::run(start))))
+}
+
+/// Why this person does not merge `run`: a team task in no module merges into the base itself, which a module's
+/// delivery would take an Admin's authorization or the team's Automatic merge for, so a member merges it only while
+/// Automatic merge is on ([`base_merge`]). `None` for an Admin, for a run on its module's branch and for a local
+/// task's run. While the team's policy is not read, a member's merge waits for it.
+fn base_is_an_admins(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Option<Reason> {
+  let team = task.team.as_ref()?;
+  if matches!(run.run.base_source(), RunBaseSource::Module { .. }) {
+    return None;
+  }
+  if !base_merge::member_waits(ctx, &team.source, &team.standing) {
+    return None;
+  }
+  Some(Reason {
+    short: ctx.t("task.merge.adminShort"),
+    full: ctx.t("task.merge.admin"),
+  })
+}
+
+/// What a merge job does when it ends, for *Merge and deliver*: `changed`, then `next`'s delivery when the merge of
+/// `run` landed, as the project's database records it. The job calls it on its own thread, where the delivery may
+/// wait for the server and for git.
+fn then_deliver(changed: Arc<dyn Fn() + Send + Sync>, next: Next, run: RunId) -> Arc<dyn Fn() + Send + Sync> {
+  Arc::new(move || {
+    changed();
+    let merged = ProjectDb::open(&next.open.repo_root).and_then(|db| db.run_merge(run));
+    match merged {
+      Ok(Some(_)) => next.clone().deliver(),
+      // The merge did not land: there is nothing new to deliver, and the card says why.
+      Ok(None) => {}
+      Err(error) => tracing::warn!(%error, "cannot read whether the run merged; its module's delivery is not asked"),
+    }
+  })
 }
 
 /// Why a merge of `run` waits for other work now, as a key; `None` when it can begin.

@@ -14,14 +14,11 @@ use orchester_app::{
 };
 use orchester_core::{id::ResourceId, resource::Pipeline, store::ResourceStore, time::Timestamp};
 use orchester_store::ProjectDb;
-use orchester_workspace::pipelines::{
-  data::OpenedPipeline,
-  write::{Allowed, save_here_in},
-};
+use orchester_workspace::pipelines::data::OpenedPipeline;
 
 use super::{
   harness::Agents,
-  pipeline_hub::{open, pipeline_of, view},
+  pipeline_hub::{open, pipeline_of, save_behind, view},
   pipeline_reorder::open_menu,
   pipeline_step::keys,
   pipeline_versions::{BUTTON, open_list, publish_second},
@@ -247,8 +244,7 @@ fn pipeline_hub_no_drafts_a_refused_save_stores_nothing_and_keeps_the_edit() {
   // Another writer saves a version behind the page: the edit started from v1, so its save is refused.
   let before = OpenedPipeline::load_in(&agents.root, id).expect("pipeline");
   let theirs = before.body.clone().with_description("Theirs".into());
-  let name = orchester_core::name::Name::new(&before.name).expect("a stored name");
-  save_here_in(&agents.root, &before, &theirs, &name, &Allowed::default()).expect("their version");
+  save_behind(&agents, &before, &theirs);
   assert_eq!(versions(&agents, id), 2);
 
   agents.click(SAVE);
@@ -272,7 +268,7 @@ fn pipeline_hub_no_drafts_back_from_a_version_names_the_edit_or_the_latest_versi
   publish_second(&agents, id, "Plan, then build");
   open(&mut agents, PipelinesFilter::All, Some(id));
   agents.until("the panel with Versions", |s| s.exists(SAVE) && s.exists(BUTTON));
-  assert!(agents.text("team-hub-panel-version").starts_with("v2 · published "));
+  assert!(agents.text("team-hub-panel-version").starts_with("v2 · saved "));
 
   open_list(&mut agents);
   agents.click("pipeline-hub-version-1");

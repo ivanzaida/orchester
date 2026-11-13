@@ -53,7 +53,6 @@ use super::{
 use crate::{
   mcp::qa_person::QaPerson,
   navigation::Navigation,
-  screens::pipeline_link::PipelineLinks,
   services::Services,
   theme::SKELETON_DELAY,
   ui::{button::ActionButton, icon::Icon, message::message_text, tinted_note::tinted_note, tooltip::Tooltip},
@@ -66,8 +65,6 @@ pub(super) struct ChangeProps {
   pub(super) scope: Option<ChatScope>,
   /// The project, and its name as people read it.
   pub(super) project: (ProjectId, std::sync::Arc<str>),
-  /// Where a link to one of its pipelines opens.
-  pub(super) pipelines: PipelineLinks,
   /// The action's entry in the conversation.
   pub(super) seq: i64,
   pub(super) action: ChatAction,
@@ -133,7 +130,7 @@ impl Component for ChangeCard {
       project: &props.project.1,
     };
     let words = words::words(ctx, &view);
-    let opens = opens::opens(ctx, (props.project.0, props.pipelines), &view);
+    let opens = opens::opens(ctx, props.project.0, &view);
     let deciding = view.phase() == Phase::Waits && words.accept.is_some() && words.settled.is_none();
     if !deciding {
       let failed = self.decide.state().get().error.or_else(|| loaded.error.clone());
@@ -216,7 +213,7 @@ impl ChangeCard {
       // An MCP server's change shows the server as applying it leaves it, which its proposal keeps.
       Some(Change::Mcp(mcp)) => (mcp::rows(ctx, mcp), Vec::new()),
       _ => (
-        facts::rows(ctx, view, (props.project.0, props.pipelines)),
+        facts::rows(ctx, view, props.project.0),
         facts::diff(ctx, id, view).map(Into::into).into_iter().collect(),
       ),
     }

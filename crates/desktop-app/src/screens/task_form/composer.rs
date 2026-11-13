@@ -30,7 +30,7 @@ use super::{
   sources::{SourcesProps, sources_chip},
   state::View,
 };
-use crate::{screens::pipeline_link::PipelineLinks, services::Services, theme::TaskFormSpacing};
+use crate::{services::Services, theme::TaskFormSpacing};
 
 impl TaskForm {
   pub(super) fn composer(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {
@@ -76,7 +76,6 @@ impl TaskForm {
       repo_root: props.project.open.repo_root.clone(),
       project: props.project.open.project.id(),
       project_name: props.project.open.project.name().as_str().into(),
-      pipeline_links: PipelineLinks::of(&props.project),
       task: view.subject.task().map(|task| task.id()),
       pipeline: view.pipeline().map(|choice| (choice.id, choice.version)),
       drafted: self.sources.clone(),

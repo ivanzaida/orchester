@@ -75,9 +75,9 @@ pub struct PipelineHubRead {
   pub default: Option<ResourceId>,
 }
 
-/// A local project's Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer, and
-/// its default pipeline. Live, as [`team_hub`]: what a pipeline runs is ready on this computer or not as the keychain
-/// and the disk say.
+/// The Pipelines hub of a local or a team project: its pipelines, the tasks that use them and how each stands on this
+/// computer, and its default pipeline. Live, as [`team_hub`]: what a pipeline runs is ready on this computer or not as
+/// the keychain and the disk say.
 #[lurq::query(stale_time = "0s", gc_time = "24h")]
 pub async fn pipeline_hub(session: Session, root: PathBuf) -> Result<PipelineHubRead, Message> {
   tracing::trace!(target: crate::app_log::READ_LOG, read = "pipeline_hub");

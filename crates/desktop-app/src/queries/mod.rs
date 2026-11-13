@@ -14,7 +14,7 @@
 //! touched ([`changes`]): automation's recorded changes, the accounts', the update settings' and the runs'. A save
 //! invalidates its own query once its write ended.
 //!
-//! The Pipelines hub of a local project reads the same way ([`hub::pipeline_hub`]).
+//! The Pipelines hub reads the same way ([`hub::pipeline_hub`]).
 //!
 //! The Agents hub reads the same way ([`hub`]), keyed by the project's folder: a team project's hub and a local one's
 //! are live (`"0s"`: what this computer filled in is looked up in the keychain and on disk as they are read), so a

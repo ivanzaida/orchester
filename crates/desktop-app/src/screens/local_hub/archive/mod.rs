@@ -62,8 +62,14 @@ impl Asking {
     self.0.set(Some(target));
   }
 
-  /// The confirmation over the page while an entry asked for it; it ends with the archive or when it is left.
+  /// The confirmation over the page while an entry of a local project asked for it; it ends with the archive or when
+  /// it is left.
   pub(in crate::screens) fn question(&self, ctx: &mut Ctx) -> Option<Element> {
+    self.question_in(ctx, true)
+  }
+
+  /// [`Self::question`] for a project that is `local` or a team's.
+  pub(in crate::screens) fn question_in(&self, ctx: &mut Ctx, local: bool) -> Option<Element> {
     let target = self.0.get()?;
     let (keep, done) = (self.0.clone(), self.0.clone());
     Some(confirm::question(
@@ -74,6 +80,7 @@ impl Asking {
         what: target.what,
         kind: target.kind,
         name: target.name,
+        local,
         on_keep: Arc::new(move || keep.set(None)),
         on_archived: Arc::new(move || done.set(None)),
       },

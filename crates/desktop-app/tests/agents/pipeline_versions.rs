@@ -70,12 +70,12 @@ fn pipeline_versions_list_says_what_holds_each_version() {
   assert!(!agents.exists("pipeline-hub-version-1-check"));
   let current = agents.text("pipeline-hub-version-2-meta");
   assert!(
-    current.starts_with("Published ") && current.ends_with(" · used by 3 tasks"),
+    current.starts_with("Saved ") && current.ends_with(" · used by 3 tasks"),
     "{current}"
   );
   let older = agents.text("pipeline-hub-version-1-meta");
   assert!(
-    older.starts_with("Published ") && older.ends_with(" · no runs on it"),
+    older.starts_with("Saved ") && older.ends_with(" · no runs on it"),
     "{older}"
   );
   assert_eq!(

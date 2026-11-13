@@ -22,8 +22,7 @@ use lurq::{
 };
 use orchester_core::{id::ResourceId, resource::VersionNumber, time::Timestamp};
 use orchester_workspace::{
-  background,
-  messages::{self, Message},
+  messages::Message,
   pipelines::history::{PublishedVersion, Use, VersionHistory},
 };
 
@@ -31,6 +30,7 @@ use super::version_view::{Viewed, ViewedSignal};
 use crate::{
   project::ShownProject,
   screens::team_hub::words::date,
+  services::Services,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -100,12 +100,13 @@ impl Component for Versions {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let root = props.project.open.repo_root.clone();
+    let servers = Services::of(ctx).servers;
     let read = ctx
       .future(
         (root, props.pipeline, props.latest, self.retry.get()),
-        |(root, id, ..)| async move {
-          background::run(move || VersionHistory::load_in(&root, id).map_err(|error| messages::store_error(&error)))
-            .await?
+        move |(root, id, ..)| {
+          let servers = servers.clone();
+          async move { servers.pipeline_history(&root, id).await }
         },
       )
       .state()

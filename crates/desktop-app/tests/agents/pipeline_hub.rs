@@ -1,6 +1,7 @@
 //! The Pipelines hub of a local project (`Pipelines · v2` `pCzIS`, P1; Pipelines v2 PV2-04), the Agents hub's sibling:
 //! a filter (*All*, *Archived*) with counts over a list grouped by whether a pipeline can run as it is, the
-//! panel of the chosen one, and the route that keeps the tab and the pipeline. A team project keeps its page.
+//! panel of the chosen one, and the route that keeps the tab and the pipeline. A team project's hub is
+//! `pipeline_hub_team`.
 //! `cargo test -p orchester-app --test agents pipeline_hub`.
 
 use orchester_app::{
@@ -18,10 +19,23 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{harness::Agents, support::project_id, team_hub::team};
+use super::{harness::Agents, support::project_id};
 
 pub(super) fn view(filter: PipelinesFilter, item: Option<ResourceId>) -> Route {
   Route::Project(project_id(), ProjectPage::pipelines(PipelinesView::new(filter, item)))
+}
+
+/// Another editor saves `body` as the next version of the pipeline `before` was opened as, behind the page.
+pub(super) fn save_behind(
+  agents: &Agents,
+  before: &orchester_workspace::pipelines::data::OpenedPipeline,
+  body: &Pipeline,
+) {
+  let servers = agents.window.launch.services().expect("the session").servers.clone();
+  let name = Name::new(&before.name).expect("a stored name");
+  let allowed = orchester_workspace::pipelines::write::Allowed::default();
+  orchester_workspace::pipelines::write::save_named_in(&agents.root, &servers, before, body, &name, &allowed)
+    .expect("their version");
 }
 
 /// Opens the hub on `filter` with `item` named and waits until the list is read.
@@ -145,7 +159,7 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
       && s.text("team-hub-panel-title") == "Feature delivery"
   });
   assert_eq!(agents.text("team-hub-panel-kind"), "Pipeline");
-  assert!(agents.text("team-hub-panel-version").starts_with("v1 · published "));
+  assert!(agents.text("team-hub-panel-version").starts_with("v1 · saved "));
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "v1");
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), "Ready");
   assert_eq!(agents.text("pipeline-hub-chips-end"), "used by 3 tasks");
@@ -154,7 +168,7 @@ fn pipeline_hub_the_panel_follows_the_chosen_row_and_the_route_keeps_it() {
   agents.until("the other pipeline", |s| {
     s.text("team-hub-panel-title") == "Dependency update"
   });
-  assert!(agents.text("team-hub-panel-version").starts_with("v1 · published "));
+  assert!(agents.text("team-hub-panel-version").starts_with("v1 · saved "));
   assert_eq!(agents.text("pipeline-hub-chip-0-label"), "v1");
   assert!(agents.text("pipeline-hub-chip-1-label").starts_with("02 Build"));
   assert_eq!(agents.text("pipeline-hub-chips-end"), "not used yet");
@@ -237,18 +251,6 @@ fn pipeline_hub_a_project_without_pipelines_says_so_and_offers_a_new_one() {
   );
   agents.click("pipeline-hub-new");
   agents.until("New pipeline from the head", |s| s.exists("pipeline-new-panel"));
-}
-
-#[test]
-fn pipeline_hub_a_team_project_keeps_the_page_it_has() {
-  let mut agents = Agents::new(true);
-  team(&agents);
-  agents
-    .window
-    .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Pipelines));
-  agents.until("the team's pipelines page", |s| s.exists("screen-pipelines"));
-  assert!(!agents.exists("screen-pipeline-hub"));
 }
 
 #[derive(Clone, Copy, Debug)]

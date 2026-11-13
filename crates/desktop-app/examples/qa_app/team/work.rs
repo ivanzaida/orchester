@@ -297,8 +297,7 @@ fn start_here(
     },
     base_commit,
     read: TaskRevision::FIRST,
-    module: module_id(WEBHOOKS)?,
-    module_read: TaskRevision::FIRST,
+    module: Some((module_id(WEBHOOKS)?, TaskRevision::FIRST)),
   }));
   let outcome = runtime.block_on(dispatcher.dispatch(&intent))?;
   let ActionOutcome::Team(TeamOutcome::AcceptedPending { receipt, .. }) = outcome else {

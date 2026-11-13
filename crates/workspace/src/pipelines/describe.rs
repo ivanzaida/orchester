@@ -1,7 +1,7 @@
 //! What the pipeline screens say about a step, a version or a change, as messages.
 
 use orchester_core::{
-  resource::{DeliverChange, Deliverable, PipelineChange, RepositoryAccess, Step, StepChange, StepKind, VersionNumber},
+  resource::{DeliverChange, Deliverable, PipelineChange, Step, StepChange, StepKind},
   tokens::compact_tokens,
 };
 
@@ -37,64 +37,12 @@ pub fn executor_line(step: &Step, assignables: &Assignables) -> Message {
   }
 }
 
-/// Third line of a step card: what the step waits for or may do (`Dz9R9` in `ajikA`). A tool step
-/// passes or fails by its command's exit code; a tool it cannot run yet says so.
-pub fn outcome_line(step: &Step, assignables: &Assignables) -> Message {
-  match &step.kind {
-    StepKind::Agent { profile: None, .. } => Message::new("pipelines.step.chooseProfile"),
-    StepKind::Tool { tool: None } => Message::new("pipelines.step.chooseTool"),
-    _ if step.approval_gate => Message::new("pipelines.step.waitsForApproval"),
-    StepKind::Agent {
-      repository: RepositoryAccess::Write,
-      ..
-    } => Message::new("pipelines.step.changesFiles"),
-    StepKind::Agent {
-      repository: RepositoryAccess::ReadOnly,
-      ..
-    } => Message::new("pipelines.step.readsOnly"),
-    StepKind::Tool { tool: Some(id) } => match assignables.tool(*id) {
-      Some(tool) if !tool.runnable => Message::new("pipelines.step.toolUnavailable"),
-      _ => Message::new("pipelines.step.exitCodeDecides"),
-    },
-  }
-}
-
-pub fn repository_access(access: RepositoryAccess) -> Message {
-  match access {
-    RepositoryAccess::ReadOnly => Message::new("pipelines.inspector.readOnly"),
-    RepositoryAccess::Write => Message::new("pipelines.inspector.write"),
-  }
-}
-
-/// The version label of a library row (`gzZlq` in `hn8qO`): its latest version.
-pub fn version_label(version: VersionNumber) -> Message {
-  Message::new("pipelines.version.published").with("version", version.to_string())
-}
-
 /// "6 steps", "1 step".
 pub fn step_count(count: usize) -> Message {
   if count == 1 {
     Message::new("pipelines.count.step.one")
   } else {
     Message::new("pipelines.count.step.other").with("count", count.to_string())
-  }
-}
-
-/// "No tasks", "1 task", "6 tasks".
-pub fn task_count(count: usize) -> Message {
-  match count {
-    0 => Message::new("pipelines.count.task.none"),
-    1 => Message::new("pipelines.count.task.one"),
-    _ => Message::new("pipelines.count.task.other").with("count", count.to_string()),
-  }
-}
-
-/// "No changes", "1 change", "3 changes" between two versions.
-pub fn change_count(count: usize) -> Message {
-  match count {
-    0 => Message::new("pipelines.count.change.none"),
-    1 => Message::new("pipelines.count.change.one"),
-    _ => Message::new("pipelines.count.change.other").with("count", count.to_string()),
   }
 }
 

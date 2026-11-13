@@ -159,7 +159,7 @@ impl RunInputs {
     match self.bundle.origin() {
       InputsOrigin::Local => task.with_revision(TaskRevision::FIRST),
       InputsOrigin::Team(accepted) => task
-        .with_module(Some(accepted.module))
+        .with_module(accepted.module)
         .with_revision(accepted.definition_revision),
     }
   }

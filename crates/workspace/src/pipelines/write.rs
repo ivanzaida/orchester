@@ -109,24 +109,6 @@ pub fn save_named_in(
   })
 }
 
-/// Saves `body`, an edit of `before`, named `name`, as a pipeline of a local project, as [`save_named_in`] does; a team
-/// pipeline, which only the team server takes, is refused ([`StoreError::SharedProject`]) and nothing is stored. For
-/// the Pipelines hub, which shows a local project only.
-pub fn save_here_in(
-  root: &Path,
-  before: &OpenedPipeline,
-  body: &Pipeline,
-  name: &Name,
-  allowed: &Allowed,
-) -> Result<OpenedPipeline, WriteError> {
-  let mut db = ProjectDb::open(root)?;
-  let checked = check(OpenedPipeline::load(&db, before.id)?, before, body, name, allowed)?;
-  if checked.current.team {
-    return Err(StoreError::SharedProject.into());
-  }
-  store_here(&mut db, before, &checked)
-}
-
 /// Stores `checked`, a save of `before`, in `db`: its steps as the next version, renamed with them, or its name alone.
 fn store_here(db: &mut ProjectDb, before: &OpenedPipeline, checked: &Checked) -> Result<OpenedPipeline, WriteError> {
   if let Some(steps) = &checked.steps {

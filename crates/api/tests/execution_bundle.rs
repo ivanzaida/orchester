@@ -10,8 +10,8 @@ use std::{
 use orchester_api::{
   SharedLimits,
   v2::{
-    BundleFileError, BundleStart, EXECUTION_BUNDLE_SCHEMA, ExecutionBundle, ExecutionBundleError, ResourceLabel,
-    Subject, TaskAtStart,
+    BundleFileError, BundleModule, BundleStart, EXECUTION_BUNDLE_SCHEMA, ExecutionBundle, ExecutionBundleError,
+    MODULE_LESS_BUNDLE_SCHEMA, ResourceLabel, Subject, TaskAtStart,
   },
 };
 use orchester_core::{
@@ -21,9 +21,9 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{
-    AgentProfile, AgentTargets, CommandAction, CommandArg, CommandProgram, Deliverable, InjectionEvent, Instruction,
-    InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Skill, SkillFile,
-    SkillFilePath, Slug, Step, StepKey, StepKind, TeamTool, Tool, Version, VersionNumber,
+    AgentProfile, AgentTargets, ChosenResources, CommandAction, CommandArg, CommandProgram, Deliverable,
+    InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
+    Skill, SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamTool, Tool, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
@@ -58,8 +58,27 @@ struct Fixture {
   inputs: CanonicalExecutionInputs,
 }
 
+/// The Builder profile, which gives its agents instruction `rule` and skill `skill`: a run pins what its steps'
+/// profiles give, so they reach the bundle through the profile.
+fn builder_giving(rule: ResourceId, skill: ResourceId) -> AgentProfile {
+  AgentProfile::new(
+    Name::new("Builder").expect("valid role"),
+    "Builds.".into(),
+    PromptText::new("Work.").expect("valid prompt"),
+    ConnectionId::generate(),
+    ModelId::new("model-b").expect("valid model"),
+    ProviderSettings::default(),
+  )
+  .with_given(
+    ChosenResources::new(vec![rule]).expect("one instruction"),
+    ChosenResources::new(vec![skill]).expect("one skill"),
+    ChosenResources::EMPTY,
+  )
+}
+
 fn fixture() -> Fixture {
   let (pipeline, builder, tool) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
+  let (rule_id, skill_id) = (ResourceId::generate(), ResourceId::generate());
   let agent = StepKind::Agent {
     profile: Some(builder),
     repository: RepositoryAccess::Write,
@@ -71,14 +90,7 @@ fn fixture() -> Fixture {
     step("check", StepKind::Tool { tool: Some(tool) }),
   ];
   let pipeline_version = version(3, Pipeline::new(steps).expect("valid pipeline"));
-  let profile = AgentProfile::new(
-    Name::new("Builder").expect("valid role"),
-    "Builds.".into(),
-    PromptText::new("Work.").expect("valid prompt"),
-    ConnectionId::generate(),
-    ModelId::new("model-b").expect("valid model"),
-    ProviderSettings::default(),
-  );
+  let profile = builder_giving(rule_id, skill_id);
   let program = CommandProgram::new("cargo").expect("valid program");
   let check = Tool::command(
     "Checks.",
@@ -105,8 +117,8 @@ fn fixture() -> Fixture {
   .expect("skill");
   let profiles = BTreeMap::from([(builder, version(2, profile))]);
   let tools = BTreeMap::from([(tool, version(1, check))]);
-  let instructions = BTreeMap::from([(ResourceId::generate(), version(5, rule))]);
-  let skills = BTreeMap::from([(ResourceId::generate(), version(4, skill))]);
+  let instructions = BTreeMap::from([(rule_id, version(5, rule))]);
+  let skills = BTreeMap::from([(skill_id, version(4, skill))]);
   let published = PublishedVersions {
     profiles: &profiles,
     tools: &tools,
@@ -154,8 +166,10 @@ fn start() -> BundleStart {
     project_id: ProjectId::generate(),
     subject: Subject::Task { id: TaskId::generate() },
     claim_id: ClaimId::generate(),
-    module_id: ModuleId::generate(),
-    branch: BranchName::new("module/github-sign-in").expect("branch"),
+    module: Some(BundleModule {
+      module_id: ModuleId::generate(),
+      branch: BranchName::new("module/github-sign-in").expect("branch"),
+    }),
     base_commit: CommitId::new(BASE_COMMIT).expect("commit"),
     definition_revision: TaskRevision::try_from(7).expect("revision"),
     task_number: NonZeroU32::new(42).expect("a task number"),
@@ -222,7 +236,7 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
     "\"claim_id\":{},\"module_id\":{},\"branch\":\"module/github-sign-in\",\"base_commit\":\"{BASE_COMMIT}\",\
      \"definition_revision\":7,\"task_number\":42,\"task\":",
     serde_json::to_string(&bundle.start().claim_id).expect("an id serializes"),
-    serde_json::to_string(&bundle.start().module_id).expect("an id serializes"),
+    serde_json::to_string(&bundle.start().module.as_ref().expect("a module").module_id).expect("an id serializes"),
   );
   assert!(bytes.contains(&s7), "{bytes}");
 
@@ -336,6 +350,42 @@ fn execution_bundle_wire_shape_hashes_the_same_bundle_the_same() {
   }
 }
 
+/// A task in no module: its bundle is schema 4, schema 3 without `module_id` and `branch`, and each schema is read
+/// only in its own shape, so a desktop that reads only 3 refuses it as built in another schema.
+#[test]
+fn execution_bundle_wire_shape_of_a_task_in_no_module_is_schema_4_without_a_module() {
+  let Fixture { builder, inputs } = fixture();
+  let start = BundleStart {
+    module: None,
+    ..start()
+  };
+  let bundle = ExecutionBundle::new(start, inputs, &[(builder, AgentProvider::ClaudeCodeCli)]).expect("bundle");
+  assert_eq!(bundle.schema_version(), MODULE_LESS_BUNDLE_SCHEMA);
+  assert_eq!(bundle.bundle_ref().expect("a reference").schema_version, 4);
+  let value = serde_json::to_value(&bundle).expect("serializes");
+  assert_eq!(value["schema_version"], 4);
+  let fields = value.as_object().expect("an object");
+  assert!(
+    !fields.contains_key("module_id") && !fields.contains_key("branch"),
+    "{value}"
+  );
+  let read_back = read(value.clone()).expect("reads");
+  assert_eq!(read_back, bundle);
+  assert_eq!(read_back.sha256().expect("hashes"), bundle.sha256().expect("hashes"));
+  assert!(ExecutionBundle::reads(3) && ExecutionBundle::reads(4));
+  assert!(!ExecutionBundle::reads(2) && !ExecutionBundle::reads(5));
+
+  // Schema 3 names its module; schema 4 names none.
+  let mut as_three = value.clone();
+  as_three["schema_version"] = json!(3);
+  assert!(read(as_three).is_err(), "schema 3 without a module");
+  let (under_module, _) = self::bundle();
+  let mut as_four = serde_json::to_value(&under_module).expect("serializes");
+  assert_eq!(as_four["schema_version"], 3, "a bundle under a module stays schema 3");
+  as_four["schema_version"] = json!(4);
+  assert!(read(as_four).is_err(), "schema 4 with a module");
+}
+
 #[test]
 fn execution_bundle_wire_shape_refuses_unknown_fields() {
   let value = serde_json::to_value(bundle().0).expect("serializes");
@@ -367,9 +417,11 @@ fn execution_bundle_wire_shape_refuses_unknown_fields() {
 #[test]
 fn execution_bundle_wire_shape_refuses_fields_its_inputs_do_not_decide() {
   let value = serde_json::to_value(bundle().0).expect("serializes");
-  let changes: [(&str, Value, &str); 7] = [
-    ("/schema_version", json!(2), "schema 2 is not 3"),
-    ("/schema_version", json!(4), "schema 4 is not 3"),
+  let changes: [(&str, Value, &str); 8] = [
+    ("/schema_version", json!(2), "schema 2 is neither 3 nor 4"),
+    // Schema 4 is a bundle in no module: this one names its module.
+    ("/schema_version", json!(4), "`module_id`"),
+    ("/schema_version", json!(5), "schema 5 is neither 3 nor 4"),
     ("/pipeline/version", json!(4), "`pipeline`"),
     ("/profiles/0/role", json!("Reviewer"), "`profiles`"),
     ("/files", json!([]), "`files`"),
@@ -433,11 +485,16 @@ fn execution_bundle_wire_shape_refuses_an_invalid_branch_or_base_commit() {
     let refused = read(value).expect_err("refused").to_string();
     assert!(refused.contains(error), "{pointer}: {refused}");
   }
-  for field in ["module_id", "branch", "base_commit"] {
+  // A schema 3 bundle names its module and its branch; the base commit is there in every schema.
+  for (field, error) in [
+    ("module_id", "`module_id`"),
+    ("branch", "`module_id`"),
+    ("base_commit", "missing field"),
+  ] {
     let mut value = value.clone();
     value.as_object_mut().expect("an object").remove(field);
     let refused = read(value).expect_err("refused").to_string();
-    assert!(refused.contains("missing field"), "{field}: {refused}");
+    assert!(refused.contains(error), "{field}: {refused}");
   }
 }
 

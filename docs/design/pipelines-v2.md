@@ -1,10 +1,10 @@
 # Pipelines · v2
 
-The Pipelines page of a local project, rebuilt as the Agents hub's master–detail page: a filter, a list grouped by what
-needs the person, and the chosen pipeline's panel, edited in place. Design: board `Pipelines · v2` `pCzIS` in
-`crates/desktop-app/design/orchester.pen` (frames P1–P17, K1–K4). Tasks: `docs/plan/pipelines-v2/`. A team project keeps
-the old page (`crates/desktop-app/src/screens/pipelines/`) with one Save that publishes (PV2-32); a team pipeline's save
-waits for the team server (D-043, D-047).
+The Pipelines page, rebuilt as the Agents hub's master–detail page: a filter, a list grouped by what needs the person,
+and the chosen pipeline's panel, edited in place. Design: board `Pipelines · v2` `pCzIS` in
+`crates/desktop-app/design/orchester.pen` (frames P1–P17, K1–K4). Tasks: `docs/plan/pipelines-v2/`. A local project and
+a team project have the same page (since 2026-11-13; the page a team project had before is gone): a team's pipelines
+are read from the team's configuration in memory and every change waits for the team server (D-043, D-047, D-051).
 
 ## What was built
 
@@ -31,8 +31,8 @@ waits for the team server (D-043, D-047).
 - The pipeline's ⋯: *Rename*, *Duplicate*, *Make default for New task*, *Archive*; an archived pipeline has *Restore*.
 - The compact *Runs on* picker (K1), which the orchestrator chat uses.
 - Links to a pipeline from other pages (the task form, a tool's Access, a profile's *Used in pipelines*, the
-  Orchestrator's cards) open the hub's panel in a local project and the old page in a team one. A route of the old page
-  that a local project is still asked for (Back, a restored tab, an older link, the MCP) opens the hub: a step or its
+  Orchestrator's cards) open the hub's panel. A route of the page before the hub
+  that the app is still asked for (Back, a restored tab, an older link, the MCP) opens the hub: a step or its
   page opens the step in the panel, the Deliver step opens there, and the Settings and Versions tabs, a published
   version and the publish review open the pipeline's panel, each under the hub's own route (PV2-14).
 - Pipelines leave *Import resources* (PV2-33); the MCP tools save a pipeline only as a published version
@@ -90,8 +90,14 @@ Save and versions
 - The disabled Save says why in its tooltip, in every hub (D-026).
 - A version viewed read-only names itself, says what *Restore* does before it is pressed, and keeps unsaved changes
   (D-020).
-- A team pipeline's Save, *Create v1*, Duplicate and rename go to the team server at once and are stored here only
-  when it accepts them; a refusal or no server leaves the edit as it was (D-042, D-043, D-047).
+- A team pipeline's Save, *Create v1*, Duplicate and rename go to the team server at once and are kept (in memory, not
+  in the project database) only when it accepts them; a refusal or no server leaves the edit as it was (D-042, D-043,
+  D-047). The bar's *Save* waits for the answer.
+- In a team project the head says *Team* (with *· member* for whoever is not its admin), a line over the list says that
+  what is saved goes to the team server at once, *Archive* and *Restore* are the team server's, and *Versions* are read
+  from it. A member who is not an admin reads the pipelines: no *New pipeline*, no ⋯ and no Save bar, and nothing in
+  the panel changes. *Make default for New task* is not offered: the default is kept in the project database, which
+  holds no copy of a team's pipelines (D-051).
 
 Page
 
@@ -100,8 +106,8 @@ Page
 - Below 1280 logical px the list is 260 wide (D-026).
 - The tab counts' bones are the app's shared 8×8 (D-013).
 - P9 mentions the log once (D-012).
-- Every route the old page had opens the hub in a local project, under the hub's own route (PV2-14); the old page is
-  a team project's alone.
+- Every route the page before the hub had opens the hub, under the hub's own route (PV2-14); that page's code is
+  removed (D-051).
 
 ## Open
 

@@ -17,7 +17,7 @@ use crate::{
   routes::Route,
   screens::{
     hub::parts::{Entry, boxed, group, head, note, quiet},
-    pipeline_link::PipelineLinks,
+    pipeline_link,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -157,10 +157,7 @@ fn open_pipeline(
     Some(reason) => button.unavailable(ctx.t(reason)).into(),
     None => {
       let navigation = Navigation::of(ctx);
-      let route = Route::Project(
-        props.project.open.project.id(),
-        PipelineLinks::of(&props.project).page(step.pipeline),
-      );
+      let route = Route::Project(props.project.open.project.id(), pipeline_link::page(step.pipeline));
       button.opens(navigation.to(route)).into()
     }
   }

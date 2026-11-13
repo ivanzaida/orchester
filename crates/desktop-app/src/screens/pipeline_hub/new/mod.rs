@@ -18,6 +18,7 @@ mod panel;
 mod reason;
 mod row;
 mod start;
+mod starter;
 mod words;
 
 use lurq::{

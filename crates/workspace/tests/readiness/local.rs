@@ -7,7 +7,7 @@ use orchester_core::{
 };
 use orchester_workspace::readiness::{Group, ReadinessStanding, Undecided};
 
-use crate::support::{Fixture, pipeline, profile_on};
+use crate::support::{Fixture, pipeline, profile_on, program_name};
 
 const CLAUDE: AgentProvider = AgentProvider::ClaudeCodeCli;
 
@@ -46,7 +46,7 @@ fn readiness_a_local_profile_needs_the_program_of_each_server_it_chooses_to_be_a
   let own = fixture.connection(CLAUDE, "claude");
   let file = fixture.program_outside("knowledge.sh");
   let found = fixture.local_server("found", file.to_str().expect("utf-8"));
-  let missing = fixture.dir_path().join("missing.sh");
+  let missing = fixture.dir_path().join(program_name("missing.sh"));
   let gone = fixture.local_server("gone", missing.to_str().expect("utf-8"));
   let id = fixture.own("builder", &profile_on(own, &[found, gone]));
 
@@ -132,7 +132,7 @@ fn readiness_a_program_found_only_on_the_projects_path_is_ready() {
       .is_empty()
   );
 
-  std::fs::write(folder.join(name), "#!/bin/sh\n").expect("the program");
+  std::fs::write(folder.join(program_name(name)), "#!/bin/sh\n").expect("the program");
   fixture.project_path(&folder);
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),

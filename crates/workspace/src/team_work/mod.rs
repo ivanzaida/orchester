@@ -32,6 +32,7 @@
 //! A run's local status and its server acceptance (the work as the server last answered its reports) are kept apart
 //! ([`TeamRunState`]). The MCP tool `run_task` starts a team task's work through it (P7); the screens adopt it in P6.
 
+pub mod after_merge;
 mod branch;
 mod bundle;
 mod bundle_missing;
@@ -55,7 +56,7 @@ use orchester_core::{id::RunId, run::RunStatus, store::RunStore};
 use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
-  branch::{BranchNotFound, branch_tip},
+  branch::{BranchNotFound, branch_tip, checked_out_tip},
   bundle_missing::bundle_missing_message,
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,

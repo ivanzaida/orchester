@@ -58,12 +58,13 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
   `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
   every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
 - Grouped rows (`ui::row_group`: `RowGroup`, `GroupRow`, `tag`, `note`; roles `GroupText`) draw a titled group of rows
-  in one outline, as the redesigned Pipelines screens do (`Pipelines · redesign` `evQ4U` in the new `orchester.pen`):
-  a row's label and hint, and at its end its control, its value or a chevron to a page; a radio row leads with
-  `toggle::radio_mark`. Their notices are `ui::notice::Notice::flat` (no stroke, a 14 icon, actions under the words).
-  Pipelines' own values are `PipelinesText` / `PipelinesSpacing` (`theme/pipelines.rs`). A
-  pipeline's page is one route with its tab and what its Steps column shows (`routes::PipelineView`): the canvas,
-  the step inspector, the settings page and the history panel are gone.
+  in one outline (`Pipelines · redesign` `evQ4U` in the new `orchester.pen`, the Pipelines page before the hub, which
+  is gone; no screen draws them today): a row's label and hint, and at its end its control, its value or a chevron to a
+  page; a radio row leads with `toggle::radio_mark`. Their notices are `ui::notice::Notice::flat` (no stroke, a 14 icon,
+  actions under the words).
+  The Pipelines page is the hub (`screens/pipeline_hub/`, `Pipelines · v2` `pCzIS`), a local project's and a team
+  project's alike; its own values are `PipelinesText` (`theme/pipelines.rs`), the rest are the Agents hub's roles.
+  A route of the page before it (`routes::PipelineView`) opens the hub.
 
 ## Confirmations and approvals in a modal
 

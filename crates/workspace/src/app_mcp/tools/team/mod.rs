@@ -13,6 +13,7 @@ mod run;
 mod tasks;
 mod writes;
 
+use orchester_api::v2::CallerRole;
 use orchester_core::{
   id::{RunId, TaskId},
   run::Run,
@@ -246,9 +247,27 @@ pub(super) fn no_queue() -> ToolError {
   ToolError::refused("team_no_queue", vec![Message::new("appMcp.errors.teamNoQueue")])
 }
 
-/// A team task's run is never merged into the base branch from here: its work goes into its module's branch, and only
-/// the module's delivery takes it further, which `merge_run` requests ([`merge_run`]). A merge a person approved in a
-/// proposal is of the run's own commit, so on a team task's run it is refused.
+/// Refused unless this computer may merge the run of a team task in no module, which lands on the base branch itself:
+/// the person is an Admin of the team, or the team's Automatic merge is on, the rule a module's delivery follows
+/// (the person's decision of 2026-11-13). The role and the policy are read from the team server now.
+pub(super) async fn may_merge_on_base(services: &Services, team: &Team) -> Result<(), ToolError> {
+  let project = team.reads(services).await?;
+  let workspace = read(&project, project.metadata())
+    .await
+    .map_err(|error| read_refused(&error))?
+    .into_value();
+  if workspace.capabilities.role != CallerRole::Member || workspace.policy.automatic_merge {
+    return Ok(());
+  }
+  Err(ToolError::refused(
+    "admin_required",
+    vec![Message::new("appMcp.errors.teamBaseMergeAdmin")],
+  ))
+}
+
+/// A merge a person approved in a proposal is of a local run's own commit, so on a team task's run it is refused:
+/// `merge_run` merges a team task's run into the branch it started from and asks for its module's delivery
+/// ([`merge_run`]).
 pub(super) fn merge_refused() -> ToolError {
   ToolError::refused(
     "team_delivery_pending",

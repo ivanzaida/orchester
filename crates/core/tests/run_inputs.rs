@@ -113,7 +113,7 @@ fn team() -> InputsOrigin {
     work: WorkId::generate(),
     claim: ClaimId::generate(),
     operation: OperationId::generate(),
-    module: ModuleId::generate(),
+    module: Some(ModuleId::generate()),
     branch: BranchName::new("orchester/module-webhooks").expect("branch"),
     base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
     bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),
@@ -419,4 +419,24 @@ fn run_inputs_bind_a_local_mcp_server_by_its_id_in_the_bindings_or_a_profiles_se
     "the profile's selection alone binds it"
   );
   assert!(!bindings.binds_local_mcp(bound_for_run));
+}
+
+/// A team task in no module: what the server accepted names no module, and what was kept before the module became
+/// optional still reads.
+#[test]
+fn run_inputs_team_acceptance_of_a_task_in_no_module_leaves_the_module_out() {
+  let InputsOrigin::Team(mut acceptance) = team() else {
+    panic!("a team origin");
+  };
+  let with_module = serde_json::to_value(&acceptance).expect("serializes");
+  assert!(with_module["module"].is_string(), "{with_module}");
+  let read: TeamAcceptance = serde_json::from_value(with_module).expect("reads what was kept before");
+  assert_eq!(read, acceptance);
+
+  acceptance.module = None;
+  let without = serde_json::to_value(&acceptance).expect("serializes");
+  assert!(without.get("module").is_none(), "{without}");
+  let read: TeamAcceptance = serde_json::from_value(without).expect("reads");
+  assert_eq!(read.module, None);
+  assert_eq!(read.branch, acceptance.branch);
 }

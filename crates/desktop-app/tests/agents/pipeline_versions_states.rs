@@ -142,11 +142,11 @@ fn pipeline_versions_cancelling_the_question_before_restore_leaves_the_edit_as_i
 fn pipeline_versions_the_head_names_the_version_that_is_shown() {
   let (mut agents, _) = two_versions();
   let before = agents.text("team-hub-panel-version");
-  assert!(before.starts_with("v2 · published "), "{before}");
+  assert!(before.starts_with("v2 · saved "), "{before}");
 
   view_version(&mut agents, 1);
   let shown = agents.text("team-hub-panel-version");
-  assert!(shown.starts_with("Viewing v1 · published "), "{shown}");
+  assert!(shown.starts_with("Viewing v1 · saved "), "{shown}");
   assert_eq!(
     agents.text("pipeline-hub-version-viewing-title"),
     "Read-only",

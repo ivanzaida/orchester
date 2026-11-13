@@ -9,8 +9,9 @@
 use orchester_api::{
   Attribution, UserRef,
   v2::{
-    Action, Capabilities, ClaimRead, ClosedHow, ExecutionState, LifecycleAction, MAX_PAGE_LIMIT, ModuleListRequest,
-    ModuleSummary, PageRequest, PendingAuthorization, SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
+    Action, ActionCapability, CallerRole, Capabilities, ClaimRead, ClosedHow, ExecutionState, LifecycleAction,
+    MAX_PAGE_LIMIT, ModuleListRequest, ModuleSummary, PageRequest, PendingAuthorization, SearchText, Subject,
+    TaskFilters, TaskListRequest, TaskRead,
   },
 };
 use orchester_core::{
@@ -283,20 +284,30 @@ fn claim(read: &ClaimRead, who: &Who) -> TeamClaim {
 
 /// What `capabilities` allow on `subject`; an action listed for no subject is the workspace's, and holds for it too. A
 /// command's kind is named by its dotted words (`claim.acquire` is `["claim", "acquire"]`).
+///
+/// A team server that does not list a module's delivery commands among its capabilities yet (its `reads::caller` says
+/// so) still takes an Admin's `delivery.authorize`: while the command is not listed at all, the person's role decides,
+/// as the command itself checks it.
 fn abilities(capabilities: &Capabilities, subject: Subject) -> Abilities {
-  let allowed = |words: &[&str]| {
-    capabilities.actions.iter().any(|action| {
-      matches!(action.action(), Action::Command(command) if command.as_str().split('.').eq(words.iter().copied()))
-        && action.subject().is_none_or(|named| named == subject)
-        && action.is_allowed()
-    })
+  let names = |action: &ActionCapability, words: &[&str]| {
+    matches!(action.action(), Action::Command(command) if command.as_str().split('.').eq(words.iter().copied()))
+      && action.subject().is_none_or(|named| named == subject)
   };
+  let listed = |words: &[&str]| capabilities.actions.iter().any(|action| names(action, words));
+  let allowed = |words: &[&str]| {
+    capabilities
+      .actions
+      .iter()
+      .any(|action| names(action, words) && action.is_allowed())
+  };
+  let authorize = ["delivery", "authorize"];
+  let admin = matches!(capabilities.role, CallerRole::Admin | CallerRole::ServerAdmin);
   Abilities {
     acquire: allowed(&["claim", "acquire"]),
     take_over: allowed(&["claim", "take_over"]),
     release: allowed(&["claim", "release"]),
     branch: allowed(&["module", "branch", "set"]),
-    authorize: allowed(&["delivery", "authorize"]),
+    authorize: allowed(&authorize) || (admin && !listed(&authorize)),
     lifecycle: lifecycle(capabilities, subject),
   }
 }

@@ -50,7 +50,7 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
   let mut work = listing::work_read((&id, task.number), claim, "running");
   authority.reported.retain(|reported| *reported != id);
   match fault {
-    Some(BundleFault::Newer) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA + 1),
+    Some(BundleFault::Newer) => work["bundle"]["schema_version"] = json!(crate::v2::MODULE_LESS_BUNDLE_SCHEMA + 1),
     Some(BundleFault::Older) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA - 1),
     Some(BundleFault::Unreadable | BundleFault::Missing | BundleFault::Unavailable) | None => {}
   }
