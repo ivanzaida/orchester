@@ -419,6 +419,42 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
+### Agents run on accounts · a project without agent connections (decided 2026-11-13, design first)
+
+Decided by the person on 2026-11-13 (`docs/design/agent-accounts.md`, *Agents run on accounts*): a project holds no
+agent connections, a profile chooses one of the app's accounts or API providers as this computer's choice, API
+providers and their keys are app-wide, and the Connections tab of Project settings goes away. A module, in this
+order; each step after the first waits for the one before it.
+
+1. **Design (UI, in Pencil, the person's document).** Settings › Accounts with the CLI's program path and check, the
+   sign-ins and the API providers (add, edit, check, remove, *Used by* across projects); the profile's choice of an
+   account for local and team profiles alike, with its model select and *Missing on this computer*; Project settings
+   without Connections, GitHub in the repository's settings, MCP servers in the Agents hub; the data-location
+   acknowledgement, still per project. It also answers the note's *To settle in the design*.
+   **Done when:** the boards exist in `crates/desktop-app/design/orchester.pen` and the person approved them.
+2. **Providers and keys in the app (non-UI).** API providers, native API connections and the decision model's server
+   in `orchester.db`, keys in the OS secret store under an app key (Windows and macOS), never in a project secret.
+   Migration of every project's providers: merged when base URL and key value are the same, else kept apart and named
+   after the project; the project secret that held a key is archived only when nothing else names it.
+   **Done when:** a project made before the change runs the same agents after it without the person entering a key
+   again; no key value is in a log, an error, `Debug` output or the MCP tree; the store and workspace tests cover the
+   migration, both merge outcomes and a key missing from the secret store.
+3. **The profile's account as this computer's choice (non-UI).** A local profile version names the CLI kind and the
+   model, like a team profile; the account or provider it runs on here is kept beside it and changes without a new
+   version. The project's record of what a run ran on is made by Orchester on that choice. A run takes the program
+   path, folder, URL, models and key from the app at its start. Existing profile versions migrate with their
+   connection's account as the choice.
+   **Done when:** local and team projects pass the same tests for choosing, changing and missing an account; a run
+   started after a provider's URL changed in Settings uses the new URL; runs made before the change still name what
+   they ran on.
+4. **Screens (UI).** The boards of step 1 in `crates/desktop-app`; the Connections route and its add and edit forms
+   for agent connections are removed, not hidden.
+   **Done when:** an independent design verification reports no blocking or major mismatch for each board.
+5. **MCP tools and the manual (non-UI).** The tools that name agent connections are replaced by ones that name
+   accounts and providers, with the same person-only rules for what widens an agent's reach; `docs/manual/` follows.
+   **Done when:** a project can be set up over MCP from nothing without a connection being named, and
+   `docs/evidence/` holds the tool list checked against the app.
+
 ### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
 
 *Clone it here* on *Link a folder* (06 `go2aM`): *Clone into* with *Choose…*, what Git will do with that folder, and

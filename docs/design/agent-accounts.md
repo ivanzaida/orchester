@@ -13,6 +13,11 @@ of its own with its crumb back (`03b` `xN1Jy`; *Rename* and *Remove* in its *…
 account* is a page too (`03c` `XAm8i`), followed by the sign-in step. The states are on the sheet `poD7g`. The panels
 and frames named below describe the earlier list-beside-details layout; their words and rules still apply.
 
+**Changed 2026-11-13 (user).** A project no longer holds agent connections: a profile chooses an account directly,
+and API providers move to the app. See [Agents run on accounts](#agents-run-on-accounts-decided-2026-11-13) at the
+end; where it differs from the text below (*a project connection chooses one*, the connection's Account field), it
+wins. Not built yet.
+
 ## What exists today (checked in the code on 2026-10-12)
 
 - A project **connection** is a program on this computer (`crates/core/src/connection/mod.rs`, `Connection`): kind,
@@ -320,3 +325,54 @@ recommended; still open. 4, 9 and 10 not answered yet.
 9. **Same account twice.** Recommended: allow, with the plain note that limits are shared. Alternative: refuse.
 10. **macOS Claude accounts.** Decided: per-folder Keychain items were verified on a Mac (2026-10-29), so Claude
     accounts other than Default work on macOS as on Windows.
+
+## Agents run on accounts (decided 2026-11-13)
+
+Decided by the person on 2026-11-13, after asking why a project has Connections when the app has Accounts. Not
+designed in Pencil and not built yet; the work is `docs/plan.md`, *Agents run on accounts*.
+
+**Why.** A project's agent connection holds a program path, an account, a last check and a model list. The first is
+the computer's and the rest follow the account, so the project adds only a name and an id. Connections are older than
+accounts; the account became a field of the connection because profiles and runs already pinned a connection id. In
+a team project a person has to add a connection in every project before *Runs here use* can name their account.
+
+**The decisions.**
+
+1. **No agent connections in a project.** Nobody adds, names or sees one. There is no per-project list of allowed
+   accounts either: a profile chooses from every account of the app.
+2. **Settings › Accounts holds everything an agent can run on**: each CLI's program path and check (the computer's),
+   the sign-ins (*Claude Code · Work*), and the API providers.
+3. **API providers are app-wide.** This reverses decisions 1 and 2 of `api-providers.md`. A provider (base URL, key,
+   models) is added once and offered in every project; its key is in the OS secret store under an app key, not in a
+   project secret. Native API connections (Anthropic API, OpenAI API) and the decision model's server
+   (`decision-reviewer.md`) are the same kind of thing — a URL and a key — and move with them.
+4. **The account is the computer's choice, not part of the profile version**, in a local project as in a team one.
+   A profile version names the CLI kind and the model; which account it runs on here is chosen beside it and changes
+   without *Publish*. Local and team profiles then follow one rule (`shared-configuration.md`, decision 11), and
+   moving to another account at a plan limit needs no new version.
+5. **Sending a project's work to a provider is still agreed per project.** The data-location acknowledgement (04.H7
+   `M2ctRR`) asks once for each project, although the provider is shared.
+6. **Existing keys are merged on migration** when the base URL and the key's value are the same (compared in memory,
+   never logged or shown); the others become separate providers named after their project, for the person to merge.
+7. **The Connections tab of Project settings goes away.** GitHub moves to the repository's settings, MCP servers to
+   the Agents hub beside Tools.
+
+**What the project database keeps.** A run must still say what it ran on after the account is renamed or removed,
+and usage is counted by it. So the project keeps a record of each account or provider its agents ran on, made by
+Orchester when one is chosen and never shown as a thing to manage. Whether it stays the `connections` table behind
+`ConnectionId` (about 1,500 uses in 420 files, tests and the frozen `crates/desktop` included) is the
+implementation's choice; screens and MCP tools speak of accounts only.
+
+**To settle in the design.**
+
+- What a run reads at its start. Today the account's folder is copied into the connection row. A provider's URL,
+  models and key change in Settings, so a run must take them from the app at its start, not from a copy.
+- The model select of a profile: a provider's models are its own, so the offered models depend on the account
+  chosen here, while the profile version names one model. A team profile on a person's provider has the same
+  question.
+- A project opened on a computer that lacks the account: the state *Missing on this computer* of team projects
+  (06c, 07c) for local ones too.
+- Whether the tab keeps the name *Accounts* once it holds providers and program paths.
+- The MCP tools that name connections (`add_cli_connection`, `set_api_provider`, `check_connection`,
+  `list_connections`, `set_connection_account`, `pick_profile_connection`, the decision connection tools) and what
+  replaces each.
