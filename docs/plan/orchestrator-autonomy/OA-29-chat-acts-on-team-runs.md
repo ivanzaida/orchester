@@ -1,6 +1,6 @@
 # OA-29 · The chat merges, starts and continues team runs as it does local ones
 
-- **Status:** todo
+- **Status:** in progress (the chat's merge of a team run: done 2026-11-13; the rest below)
 - **Kind:** workspace
 - **Depends on:** OA-27, OA-28
 - **Branch:** —
@@ -42,3 +42,14 @@ and gets a stopped or interrupted run going again.
 
 - Workspace tests with the stand-in server for each call, in a person's turn and in a turn Orchester started.
 - Their rows leave the parity table. `tools/check.ps1` passes.
+
+## Done so far (2026-11-13)
+
+The chat's rule for merging a finished run on its own (`orchestrator/auto_merge.rs`) reads a team run as it reads a
+local one, and the merge the chat or a merge card carries out (`merge_proposed`) takes a team run into the branch it
+started from, its module's, without asking for the module's delivery. The run of a team task in no module lands on
+the base branch itself and is merged only as `team::may_merge_on_base` allows (an Admin, or the team's Automatic
+merge). `MergeLeft::TeamDelivery` stays for entries kept before.
+
+**Left:** starts of team tasks in a turn Orchester started (`led_start` reads stored tasks), `continue_run`,
+`resume_run` and a continuing message for a team run, `run_proposed`.

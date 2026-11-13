@@ -45,8 +45,7 @@ removes the difference.
 | A module has a branch of its own | no: its tasks merge into the base branch, by default the person's checkout | yes: `module/<slug>`, assigned by an Admin | built for the team server first | OA-17 |
 | The module's branch exists in the repository | — | nothing creates it; a start is refused `branch_not_found` until someone makes it by hand | the docs say the runner makes it; no code does | OA-33 |
 | A module reaches its base branch | — (no branch of its own) | `merge_run` of a team run merges it into its module's branch and then asks for the module's delivery; the task page has *Merge and deliver* | a local module has no branch of its own to deliver | OA-17, OA-32 |
-| The Orchestrator merges a finished run on its own | yes, by its rule | never: in a turn it started every team run is left to the person (`team_delivery`), though the run can be merged since `b4abf405d` | the rule was written when no team run could be merged | OA-29 |
-| The Orchestrator starts tasks in a turn it started | after a success it merged (and, with OA-13, whenever work can start) | never: the start rule needs a merge the chat made in that turn, which the row above keeps from it, and reads stored tasks only | follows from the row above | OA-29 |
+| The Orchestrator starts tasks in a turn it started | after a success it merged (and, with OA-13, whenever work can start) | only a team task this computer keeps a row of: the start rule reads stored tasks, and a team task that never ran here has none | the server's reading of the task is not used there | OA-29 (the rest) |
 | A module subscription leads its tasks' events | yes | yes once the task ran here: its module is the one its newest run started in. A team task that never ran here is led by no module subscription, and one moved to another module on the server is led by its old module until it runs again | the server's reading of a task's module is not used yet | OA-28 (the rest) |
 | `/watching` and `get_watches` | answer | refused `team_project_unsupported` | not built | OA-28 |
 | How a stopped run goes on (`continue_run`: retry, return, accept, resolve conflicts) | carried out | refused `team_project_unsupported` | not built | OA-29 |
@@ -71,6 +70,8 @@ removes the difference.
   no module the checked-out branch (`b4abf405d` on master, 2026-11-13). The merge queue, the task page, the Review
   page and `merge_run` take it.
 - The Pipelines page is one hub for both kinds (`847fe5672` on master).
+- The Orchestrator merges a finished run on its own by one rule: a team run into its module's branch, a local run
+  into its base branch (OA-29). A merge card the person applies takes a team run the same way.
 - Waits and run ends of a team task's runs are kept and start turns, when a subscription leads the task.
 - `list_tasks`, `get_task`, `list_modules` and `get_module` read a team project from its server.
 - A watch on a team task ends on the status the server reports (`docs/design/orchestrator-watch.md`, *Team tasks*).

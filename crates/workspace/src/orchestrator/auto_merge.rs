@@ -79,11 +79,11 @@ enum Merge {
 /// Why `run`, whose `route` the caller read, is left to the person; `None` when the chat merges (or completes) it on
 /// its own.
 fn left(db: &ProjectDb, run: &Run, route: RunRoute, merge: Merge) -> Result<Option<MergeLeft>, StoreError> {
-  // A team task's run is delivered with its module (`merge_run` requests that), which is not the chat's to do on its
-  // own: left to the person. One without a team record cannot be delivered at all.
+  // A team task's run merges into the branch it started from as a local run does, by the same rule (local and team
+  // projects behave the same: `docs/design/local-and-team-parity.md`); its module's delivery to the base is another
+  // matter, and not asked for here. One without a team record can be neither merged nor delivered.
   match route {
-    RunRoute::Local => {}
-    RunRoute::Team => return Ok(Some(MergeLeft::TeamDelivery)),
+    RunRoute::Local | RunRoute::Team => {}
     RunRoute::TeamUnrecorded => return Ok(Some(MergeLeft::TeamUnrecorded)),
   }
   let Some(task) = recorded::task_of(db, run.task())? else {

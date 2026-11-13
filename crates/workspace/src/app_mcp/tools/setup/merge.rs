@@ -204,28 +204,41 @@ pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translat
   merge_at(services, (named, None, Runs::Local), translate).await
 }
 
-/// Which runs a merge takes: a proposal's and a local `merge_run`'s take local runs only; `merge_run` of a team
-/// task's run takes that run.
+/// Which runs a merge takes: a local `merge_run`'s takes local runs only; one that found the run to be a team task's
+/// takes that run.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Runs {
   Local,
   Team,
 }
 
-/// `merge_run` of run `run` of `project`, only while the run's branch is at `expected`, the commit a person reviewed
-/// in a proposal of the Orchestrator chat: a branch that moved since is refused and nothing is merged.
+/// The merge of run `run` of `project` into the branch it started from, only while the run's branch is at `expected`,
+/// the commit a proposal of the Orchestrator chat showed or the chat itself checked: a branch that moved since is
+/// refused and nothing is merged. A team task's run merges as a local one does, into its module's branch, and its
+/// module's delivery is not asked for; the run of a team task in no module lands on the base branch itself, which
+/// this computer may do only as [`team::may_merge_on_base`] says.
 pub(crate) async fn merge_proposed(
   services: &Services,
   translate: &Translate,
   (project, run): (String, String),
   expected: Revision,
 ) -> Result<Value, ToolError> {
-  merge_at(
-    services,
-    (InRun { project, run }, Some(expected), Runs::Local),
-    translate,
-  )
-  .await
+  let runs = match team::of_run(services, (&project, &run)).await? {
+    Some(team) => {
+      let (root, named) = (team.open.repo_root.clone(), run.clone());
+      let on_base = blocking(move || {
+        let db = ProjectDb::open(&root)?;
+        Ok(team_run_on_base(&db, &find_run(&db, &named)?)?)
+      })
+      .await?;
+      if on_base {
+        team::may_merge_on_base(services, &team).await?;
+      }
+      Runs::Team
+    }
+    None => Runs::Local,
+  };
+  merge_at(services, (InRun { project, run }, Some(expected), runs), translate).await
 }
 
 async fn merge_at(
@@ -285,8 +298,7 @@ fn start(
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
   let run = find_run(&db, &args.run)?;
-  // A merge a person approved in a proposal is of a local run's own commit: a team task's run (told by the run
-  // itself) is merged by `merge_run`, which also asks for its module's delivery.
+  // A caller that took the run for a local one is refused when it is a team task's (told by the run itself).
   if runs == Runs::Local && team::is_team_run(&db, &run)? {
     return Err(team::merge_refused());
   }

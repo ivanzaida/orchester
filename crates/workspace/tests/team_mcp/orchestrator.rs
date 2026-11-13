@@ -1,6 +1,7 @@
 //! A team task's run, which this computer keeps no definition of, where the app and the Orchestrator chat read a run's
 //! task: it is under way for the sidebar and Stop auto-approving, its task is told by the key its inputs kept, the
-//! chat leaves its delivery to the person, and the local merge takes it into its module's branch, never the base. Its
+//! chat merges it on its own by the rule of a local run, and the local merge takes it into its module's branch, never
+//! the base. Its
 //! task is in the module its run started in, so a conversation that watches the module leads its events (OA-28).
 
 use std::collections::HashSet;
@@ -63,7 +64,7 @@ fn team_mcp_a_running_team_run_is_under_way_and_stops_with_auto_approving() {
 }
 
 #[test]
-fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
+fn team_mcp_the_chat_merges_a_succeeded_team_run_by_the_rule_of_a_local_one() {
   let team = started();
   team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
   let db = team.checkout.db();
@@ -74,11 +75,13 @@ fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
 
   assert_eq!(
     merging_in(&db, team.run).expect("rule"),
-    Merging::Left {
-      why: MergeLeft::TeamDelivery
-    }
+    Merging::Merges,
+    "into its module's branch, as a local run into its base"
   );
-  assert!(!completes_in(&db, team.run).expect("rule"), "no completion either");
+  assert!(
+    !completes_in(&db, team.run).expect("rule"),
+    "a run with nothing to merge is not completed from here: the server closes its task on the run's report"
+  );
 }
 
 #[test]

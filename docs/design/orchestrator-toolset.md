@@ -131,9 +131,11 @@ drive*, and says what changed.**
      `scoped_integration_required`).
      The rule is read when the end is kept (the entry says whether the turn merges the run or why it is left to the
      person, `merging`) and again when the turn calls `merge_run`: a run it leaves to the person by then is refused
-     (`left_to_person`), naming why. A team run (told by its team record) is always left to the person (`merging` says `team_delivery`): it goes into
-     its module's branch and reaches the base branch with the module's delivery, which the chat does not request on its
-     own. A team run created with team inputs whose team record was never written (its start did not finish recording) is left to the person too (`merging` says `team_unrecorded`): it can be neither merged nor delivered from here. A run of the old sharing stream has neither record nor inputs and is judged as a local run. One automatic merge attempt per run end: the turn merges only the run whose
+     (`left_to_person`), naming why. A team run (told by its team record) is merged by the same rule since 2026-11-13 (OA-29,
+     `docs/design/local-and-team-parity.md`): into the branch it started from, its module's, never the base; its
+     module's delivery to the base is not asked for by that merge. The run of a team task in no module lands on the
+     base branch itself, which this computer may do only as an Admin's, or while the team's Automatic merge is on
+     (`admin_required` otherwise). `team_delivery` stays readable in entries kept before. A team run created with team inputs whose team record was never written (its start did not finish recording) is left to the person too (`merging` says `team_unrecorded`): it can be neither merged nor delivered from here. A run of the old sharing stream has neither record nor inputs and is judged as a local run. One automatic merge attempt per run end: the turn merges only the run whose
      success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_run` of that run that
      was carried out or refused counts as the attempt, and so does one refused before it named a run (an unknown run,
      say): it errs towards leaving the run to the person. A `merge_failed` at conflicts
