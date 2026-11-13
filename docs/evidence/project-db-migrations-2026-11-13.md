@@ -226,4 +226,4 @@ All four temporary tables are dropped; no permanent table is added or dropped.
 ## Validation scope
 
 Read-only source investigation followed by this note only; no Rust or visual changes.
-Builds, tests, formatting and `tools/check.ps1` were not run, following ORC-970's specific “Do not run builds or tests” scope (the general gate runs build-based checks).
+Builds, tests, formatting and `tools/check.ps1` were not run. The person explicitly confirmed that this docs-only task must not run builds, tests or the gate and that AGENTS.md rule 18 does not apply to it.
