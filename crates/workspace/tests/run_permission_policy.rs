@@ -6,7 +6,7 @@ use orchester_core::{
   connection::{AgentProvider, invocation::Platform, stream::InvocationOutcome},
   permission::{AgentPermissions, CommandPermission, LaunchPermissions, NetworkAccess, OutsideCommands},
   resource::{AgentProfile, ModelId, StepKey},
-  run::{Invocation, PermissionsApply, Run},
+  run::{Invocation, PermissionsApply, PinnedVersion, Run},
   store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
@@ -74,7 +74,7 @@ fn view(fixture: &Fixture, run: &Run, invocations: &[Invocation]) -> RunPermissi
     &fixture.db,
     (run, invocations),
     &step,
-    (profile, &version),
+    (PinnedVersion::of(profile, &version), version.body()),
     Some(AgentProvider::CodexCli),
   )
   .expect("resolve")

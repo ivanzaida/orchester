@@ -20,13 +20,13 @@ use orchester_core::{
     ApprovalSubject, CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor,
     review::{HoldRules, PushFacts, Review, ReviewHold, review_hold},
   },
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
+  store::{ActivityStore, ConnectionStore, RunStore},
   task::Task,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
-use super::{changes::run_worktree, recorded::task_of};
+use super::{changes::run_worktree, pinned_profile::pinned_profile, recorded::task_of};
 use crate::messages::Message;
 
 /// What made a request ask, as the dialog names it beside its category (`Cv2MG` in `kpuQj`): the
@@ -157,20 +157,17 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
   let run = db.run(approval.run).ok().flatten();
   let step = run.as_ref().and_then(|run| step_of(run, &approval));
   // `.ok()`: an unreadable profile version only loses the provider-specific wording and the policy.
-  let version = step.as_ref().and_then(|step| {
-    db.version::<AgentProfile>(step.profile.resource, step.profile.number)
-      .ok()
-      .flatten()
-  });
-  let connection = version.as_ref().and_then(|version| connection(db, version.body()));
+  let pinned = step.as_ref().map(|step| step.profile);
+  let profile = pinned.and_then(|pinned| pinned_profile(db, approval.run, pinned).ok().flatten());
+  let connection = profile.as_ref().and_then(|profile| connection(db, profile));
   let model = step.as_ref().map(|step| step.model.clone());
   let launch = launched(db, &approval);
-  let asking = version.as_ref().map(|version| AskingPolicy {
+  let asking = profile.as_ref().zip(pinned).map(|(profile, pinned)| AskingPolicy {
     setting: launch
       .as_ref()
       .map(|launch| AskingSetting::of(launch.permissions().commands(), approval.command)),
-    profile: version.body().role().as_str().into(),
-    version: version.number(),
+    profile: profile.role().as_str().into(),
+    version: pinned.number,
   });
   // `.ok()`: an unreadable choice only shows Approve everything in this run as still to be chosen.
   let auto_approving = db.run_auto_approve(approval.run).ok().flatten() == Some(true);
@@ -244,12 +241,9 @@ pub fn hard_hold(db: &ProjectDb, repo_root: &Path, approval: &PendingToolApprova
   let provider = run
     .as_ref()
     .and_then(|run| step_of(run, approval))
-    .and_then(|step| {
-      db.version::<AgentProfile>(step.profile.resource, step.profile.number)
-        .ok()
-        .flatten()
-    })
-    .and_then(|version| connection(db, version.body()))
+    // `.ok()`: an unreadable profile version only makes the rules stricter, as an unreadable run does.
+    .and_then(|step| pinned_profile(db, approval.run, step.profile).ok().flatten())
+    .and_then(|profile| connection(db, &profile))
     .map(|connection| connection.provider());
   let rules = HoldRules {
     permissions: launch.as_ref().map(LaunchPermissions::permissions),

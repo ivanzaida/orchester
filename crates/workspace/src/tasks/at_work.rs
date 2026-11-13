@@ -12,13 +12,13 @@ use orchester_core::{
   connection::{AgentProvider, Connection, ConnectionKind},
   id::{AgentAccountId, ConnectionId, ResourceId, RunId, TaskId},
   resource::{AgentProfile, VersionNumber},
-  run::{Run, StepExecutor},
-  store::{ActivityStore, ConnectionStore, ResourceStore},
+  run::{PinnedVersion, Run, StepExecutor},
+  store::{ActivityStore, ConnectionStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::list::CurrentStep;
+use super::{list::CurrentStep, pinned_profile::pinned_profile};
 
 /// What a reading of the tasks keeps for the Overview besides their latest runs.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -107,7 +107,7 @@ pub(super) fn step_agent(
   else {
     return Ok(None);
   };
-  let Some(profile) = agents.profile(db, (profile.resource, profile.number))? else {
+  let Some(profile) = agents.profile(db, run.id(), *profile)? else {
     return Ok(None);
   };
   Ok(
@@ -136,18 +136,14 @@ pub(super) struct Agents {
 }
 
 impl Agents {
-  fn profile(
-    &mut self,
-    db: &ProjectDb,
-    (resource, number): (ResourceId, VersionNumber),
-  ) -> Result<Option<AgentProfile>, StoreError> {
-    if let Some(found) = self.profiles.get(&(resource, number)) {
+  /// The profile version `pinned` a step of run `run` runs on ([`pinned_profile`]).
+  fn profile(&mut self, db: &ProjectDb, run: RunId, pinned: PinnedVersion) -> Result<Option<AgentProfile>, StoreError> {
+    let key = (pinned.resource, pinned.number);
+    if let Some(found) = self.profiles.get(&key) {
       return Ok(found.clone());
     }
-    let found = db
-      .version::<AgentProfile>(resource, number)?
-      .map(|version| version.body().clone());
-    self.profiles.insert((resource, number), found.clone());
+    let found = pinned_profile(db, run, pinned)?;
+    self.profiles.insert(key, found.clone());
     Ok(found)
   }
 
