@@ -47,7 +47,7 @@ pub use self::{
   settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
   task_event::{TaskEvent, TaskEventKind},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
-  watch::{Claim, Subscription, Subscriptions, WatchTarget},
+  watch::{Ceilings, Claim, Subscription, Subscriptions, WatchMode, WatchTarget},
 };
 
 /// The agentic turns one answer on Claude Code may take at most (`--max-turns`): reading, searching and calling tools,

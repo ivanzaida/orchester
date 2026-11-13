@@ -15,7 +15,10 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::tools::{ChatScope, MERGE_RUN};
+use super::{
+  ceilings,
+  tools::{ChatScope, MERGE_RUN},
+};
 use crate::{
   app_mcp::{ToolError, blocking, find_task},
   messages::Message,
@@ -51,6 +54,9 @@ pub(super) async fn led_here(scope: &ChatScope, key: Option<&str>) -> Result<(),
         "already_ran",
         Message::new("orchestrator.start.alreadyRan").with("task", key),
       )));
+    }
+    if let Some(spent) = ceilings::start_refused(&db, &task)? {
+      return Ok(Some(("ceiling_reached", spent)));
     }
     Ok(None)
   })

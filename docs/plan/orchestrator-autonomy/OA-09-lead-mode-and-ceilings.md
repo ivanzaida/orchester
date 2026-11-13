@@ -1,6 +1,6 @@
 # OA-09 · Core: a subscription leads to the end, with ceilings
 
-- **Status:** todo
+- **Status:** review (implemented 2026-11-13)
 - **Kind:** core + store + workspace
 - **Depends on:** —
 - **Branch:** —
@@ -50,3 +50,27 @@ drives (`crates/workspace/src/app_mcp/tools/continue_run.rs`, `tasks/raise.rs`).
   (`--test orchestrator_ceilings`).
 - Store migration with a test that an existing subscription reads as *Follow*.
 - `tools/check.ps1` passes. Nothing visible yet; OA-10 draws it.
+
+## As built (2026-11-13)
+
+- **Core** (`orchestrator/watch/lead.rs`): `WatchMode` (`Follow`, `Lead { ceilings }`) on `Subscription`, `Ceilings`
+  with their bounds and the person's defaults (3 runs, 4 returns, 1 raise by 50 %, no budget), what each allows, and
+  the counts read from a run's events: automation's returns and retries, and every raise (the events do not say who
+  raised, so a person's raise counts too).
+- **Store:** `orchestrator_subscriptions.lead` holds the ceilings as JSON, NULL for one that follows; every stored
+  subscription reads as following. A take-over or a renewal keeps how the target was led.
+- **Workspace** (`orchestrator/ceilings.rs`), in a turn Orchester started: `continue_run` is refused
+  `ceiling_reached` past the returns or the raises, or for a raise beyond the share; a `send_message` that would
+  continue a run or follow it up counts as a return, and one that would run the task again is held by the runs of
+  the task; `run_task` and all of the above are refused once the subscription's work (`spent`: every turn of its
+  conversation and the runs of its tasks since it leads) used its budget.
+- **Not here:** `run_task` itself still refuses every second run (`already_ran`), which OA-14 replaces with the runs
+  ceiling. Choosing the mode and the ceilings, and the project's defaults, are OA-10's and wait for their frames:
+  until then only a test makes a leading subscription. A budget counts from when the subscription leads, so a
+  take-over starts it again.
+- **Known limits:** accepting a step (`continue_run` `accept`) and resuming are not counted; automation's returns
+  count whoever of automation made them; the turn under way is not in what was spent; a task followed by a
+  subscription of its own inside a module led to the end has no ceilings.
+- **Team projects:** the ceilings read the task's leading subscription, which for a team task is found only once
+  OA-28 reads its module; until then a team task led through its module has no ceilings, and none of the chat's
+  calls it would bound work for a team run anyway (OA-29).

@@ -720,6 +720,18 @@ project with none of its own; the application-wide values are no longer shown or
   (`chat/compact_first.rs`): the same compaction as the person's *Compact*, kept as the same event, in the turn's
   place in the conversation. Whatever it comes to, the turn runs after it. A person's own message is never compacted
   under, nor a session whose size nothing reported.
+- **A subscription that leads to the end has ceilings** (2026-11-13, OA-09; the person's defaults). A subscription
+  follows its target, as every subscription did, or leads it to the end, which only the person chooses (no window
+  offers it yet: OA-10). For a task led to the end, in a turn Orchester started by itself, the chat's tools hold:
+  `continue_run`'s `allow_retry`, `return_to` and `resolve_conflicts`, and a `send_message` that continues a run or
+  follows it up, while automation returned or retried the run fewer than 4 times; a `send_message` that runs the task
+  again while the task had fewer than 3 runs; `raise_limits` and `raise_step_budget` once per run (whoever raised
+  before counts), each to at most half more than the limit and never to none; and all of these, and `run_task`, only
+  while the subscription's work spent less than its budget, when it has one. Past a ceiling the call is refused
+  `ceiling_reached`, naming it, and the chat leaves the task to the person. Accepting a step and resuming are not
+  counted. A turn a person's message started is not bound, nor a task that is only followed
+  (`orchester_core::orchestrator::watch::Ceilings`, `orchester_workspace::orchestrator::ceilings`). A target led to
+  the end stays so when another conversation takes it over or its order is renewed.
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run

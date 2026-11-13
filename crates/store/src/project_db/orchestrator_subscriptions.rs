@@ -7,7 +7,7 @@
 use orchester_core::{
   id::ChatId,
   orchestrator::{
-    Chat, ChatEvent, Subscription, Subscriptions, WatchTarget,
+    Chat, ChatEvent, Subscription, Subscriptions, WatchMode, WatchTarget,
     watch::{EndReason, WatchEnd, WatchSummary},
   },
   time::Timestamp,
@@ -39,7 +39,7 @@ pub enum WatchStart {
 }
 
 const SELECT: &str = "SELECT chat_id, target_kind, target_id, order_text, since, ended_at, end_reason, taken_by,
-  module_done, module_canceled FROM orchestrator_subscriptions";
+  module_done, module_canceled, lead FROM orchestrator_subscriptions";
 
 /// The condition on a row that it names the target `?1` (kind), `?2` (its id, empty for none) and leads it.
 const LEADS: &str = "target_kind = ?1 AND IFNULL(target_id, '') = ?2 AND ended_at IS NULL";
@@ -81,11 +81,13 @@ impl ProjectDb {
 
   /// Makes `subscription` the leader of its target whoever led it ([`Subscriptions::take_over`]), in one transaction:
   /// the subscription that led it ends at `subscription`'s since, taken over, or renewed when it was its
-  /// conversation's own. Returns the subscription it ended, if one led the target.
+  /// conversation's own. A target that was led to the end stays so ([`Subscription::succeeding`]). Returns the
+  /// subscription it ended, if one led the target.
   pub fn take_over_subscription(&mut self, subscription: &Subscription) -> Result<Option<Subscription>, StoreError> {
     let target = subscription.target();
     let transaction = self.connection.transaction()?;
     let led = leader(&transaction, target)?;
+    let subscription = &subscription.clone().succeeding(led.as_ref());
     if let Some(led) = &led {
       let why = if led.chat() == subscription.chat() {
         WatchEnd::Renewed
@@ -229,14 +231,15 @@ fn leader(connection: &Connection, target: WatchTarget) -> Result<Option<Subscri
 fn insert(connection: &Connection, subscription: &Subscription) -> Result<(), StoreError> {
   let (kind, id) = target_columns(subscription.target());
   connection.execute(
-    "INSERT INTO orchestrator_subscriptions (chat_id, target_kind, target_id, order_text, since)
-     VALUES (?1, ?2, ?3, ?4, ?5)",
+    "INSERT INTO orchestrator_subscriptions (chat_id, target_kind, target_id, order_text, since, lead)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     params![
       subscription.chat().to_string(),
       kind,
       id,
       subscription.order().unwrap_or_default(),
-      subscription.since().unix_millis()
+      subscription.since().unix_millis(),
+      lead_column(subscription.mode())?
     ],
   )?;
   Ok(())
@@ -263,6 +266,23 @@ fn end_leader(connection: &Connection, target: WatchTarget, why: WatchEnd, at: T
     ],
   )?;
   Ok(())
+}
+
+/// The ceilings of a subscription that leads to the end, as kept; NULL for one that follows.
+fn lead_column(mode: WatchMode) -> Result<Option<String>, StoreError> {
+  mode
+    .ceilings()
+    .map(|ceilings| serde_json::to_string(&ceilings).map_err(|error| corrupt("watch ceilings", error)))
+    .transpose()
+}
+
+/// The mode a subscription's `lead` column holds.
+fn mode_of(lead: Option<&str>) -> Result<WatchMode, StoreError> {
+  let Some(lead) = lead else {
+    return Ok(WatchMode::Follow);
+  };
+  let ceilings = serde_json::from_str(lead).map_err(|error| corrupt("watch ceilings", error))?;
+  Ok(WatchMode::Lead { ceilings })
 }
 
 fn target_columns(target: WatchTarget) -> (&'static str, Option<String>) {
@@ -331,6 +351,7 @@ struct Columns {
   reason: Option<String>,
   taken_by: Option<String>,
   counts: (Option<i64>, Option<i64>),
+  lead: Option<String>,
 }
 
 impl Columns {
@@ -344,6 +365,7 @@ impl Columns {
       reason: row.get(6)?,
       taken_by: row.get(7)?,
       counts: (row.get(8)?, row.get(9)?),
+      lead: row.get(10)?,
     })
   }
 
@@ -354,7 +376,8 @@ impl Columns {
       target,
       self.order,
       Timestamp::from_unix_millis(self.since),
-    );
+    )
+    .in_mode(mode_of(self.lead.as_deref())?);
     let ended = match (self.ended_at, self.reason.as_deref()) {
       (None, None) => None,
       (Some(at), Some(reason)) => {

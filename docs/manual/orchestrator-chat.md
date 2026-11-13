@@ -372,6 +372,19 @@ switch is on, an order such as *start tasks as they become ready* is carried out
 Orchestrator merged: it starts the tasks of what the conversation leads that can start now, once each. A start an
 agent slot refused waits for the next merged success of what it leads; no other event brings it back.
 
+### Leading to the end, and its ceilings
+
+A subscription **follows** its target (everything above) or **leads it to the end**. Leading is the person's choice
+alone; no window offers it yet. For a task led to the end the Orchestrator's own doing, in the turns it starts
+itself, is bounded by the subscription's ceilings, held by its tools whichever of them moves the run
+(`continue_run`, a message that continues a run or runs its task again, `run_task`): 4 returns or retries of a run by
+automation, 1 raise of a run's limit by at most half (never to no limit; a raise of yours counts), 3 runs of a task,
+and an optional token budget for everything the subscription leads, after which nothing is started, returned or
+raised. Past one, the call is refused `ceiling_reached` and the task is left to you. What you ask for in a message is
+not bound. Taking a target over, or renewing its order, keeps it led to the end with its ceilings; stop watching it
+and watch it again to only follow it. A task you watch on its own inside a module led to the end is only followed:
+the more specific subscription decides.
+
 ### Already led elsewhere
 
 Choosing a target another conversation leads applies the rest of the command and shows a card under its line:

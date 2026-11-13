@@ -21,7 +21,7 @@ use serde_json::Value;
 
 use super::{
   approval_turn::{self, DECIDE_APPROVAL},
-  auto_merge, blocked,
+  auto_merge, blocked, ceilings,
   change::{
     self, continuation,
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
@@ -180,6 +180,7 @@ async fn applied(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   let (change, task) = change::subject((scope, services), name, arguments).await?;
+  ceilings::message_within(scope, &change.change).await?;
   let result = change::apply((services, translate), scope, &change, &[], Answerer::Automation).await;
   Ok(Acted {
     result,
@@ -233,6 +234,7 @@ async fn continuing(
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
+  ceilings::continue_within(scope, arguments).await?;
   if continuation::kept_as_change(arguments) {
     return applied(deps, scope, CONTINUE_RUN, arguments).await;
   }

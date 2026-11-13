@@ -6,3 +6,10 @@ pub(super) const MIGRATION: &str = r"
 -- The failed turns before the entry's own, oldest first, as a JSON array; NULL while there was none.
 ALTER TABLE orchestrator_entries ADD COLUMN tries TEXT;
 ";
+
+/// A subscription leads its target to the end (`orchester_core::orchestrator::watch::Ceilings`,
+/// `docs/plan/orchestrator-autonomy/OA-09-…`), or only follows it as every subscription did.
+pub(super) const LEAD_MIGRATION: &str = r"
+-- The ceilings of a subscription that leads its target to the end, as JSON; NULL for one that follows.
+ALTER TABLE orchestrator_subscriptions ADD COLUMN lead TEXT;
+";

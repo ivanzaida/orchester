@@ -12,6 +12,7 @@ pub mod approval;
 mod approval_turn;
 pub mod auto_merge;
 mod blocked;
+pub mod ceilings;
 mod change;
 pub mod chat;
 pub mod compact;

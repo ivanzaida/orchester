@@ -1,6 +1,7 @@
 //! ORC-758: what the project's Orchestrator conversations watch, kept in the project database: read per project and
 //! per conversation, one leader per target even when two conversations act at once, a take over and a stop or end in
-//! one change each, and the ended ones kept with when and why. Run with
+//! one change each, and the ended ones kept with when and why; a subscription that leads its target to the end is kept
+//! with its ceilings, and a target led to the end stays so when it is taken over or renewed (OA-09). Run with
 //! `cargo test -p orchester-store --test orchestrator_subscriptions subscriptions`.
 
 mod support;
@@ -11,7 +12,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ModuleId, ProjectId, TaskId},
   orchestrator::{
-    Chat, Subscription, TurnState, WatchTarget,
+    Ceilings, Chat, Subscription, TurnState, WatchMode, WatchTarget,
     watch::{EndReason, WatchEnd},
   },
   project::{Project, ProjectKey},
@@ -217,6 +218,47 @@ fn subscriptions_take_over_ends_the_leader_and_keeps_the_new_one_in_one_change()
     "nobody led it"
   );
   assert_eq!(db.active_subscriptions().expect("read").as_slice().len(), 2);
+}
+
+#[test]
+fn subscriptions_that_lead_to_the_end_keep_their_ceilings_through_a_take_over() {
+  let (repo, mut db) = project();
+  let (theirs, mine) = (ChatId::generate(), ChatId::generate());
+  let target = WatchTarget::Module(ModuleId::generate());
+  let ceilings = Ceilings::new((2, 1), (1, 25), None).expect("ceilings");
+  let leading = watch(theirs, target, "to the end", 1).in_mode(WatchMode::Lead { ceilings });
+  db.start_subscription(&leading).expect("kept");
+  let following = watch(theirs, WatchTarget::Project, "", 2);
+  db.start_subscription(&following).expect("kept");
+
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  let kept = reopened.active_subscriptions().expect("read");
+  assert_eq!(
+    kept.of(target).map(Subscription::mode),
+    Some(WatchMode::Lead { ceilings })
+  );
+  assert_eq!(
+    kept.of(WatchTarget::Project).map(Subscription::mode),
+    Some(WatchMode::Follow),
+    "one that only follows keeps no ceilings"
+  );
+
+  // The command that takes a target over says nothing of how it is led: it stays led to the end.
+  db.take_over_subscription(&watch(mine, target, "mine now", 5))
+    .expect("taken");
+  let taken = db.active_subscriptions().expect("read");
+  let now = taken.of(target).expect("led");
+  assert_eq!((now.chat(), now.mode()), (mine, WatchMode::Lead { ceilings }));
+  db.take_over_subscription(&watch(mine, WatchTarget::Project, "", 6))
+    .expect("taken");
+  assert_eq!(
+    db.active_subscriptions()
+      .expect("read")
+      .of(WatchTarget::Project)
+      .map(Subscription::mode),
+    Some(WatchMode::Follow),
+    "and one that followed still follows"
+  );
 }
 
 #[test]

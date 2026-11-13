@@ -102,6 +102,7 @@ impl Subscriptions {
           news: News::Loses { target, to: chat },
         }),
     };
+    let subscription = subscription.succeeding(self.of(target));
     let mut kept = self.without(target);
     kept.push(subscription);
     Taken {

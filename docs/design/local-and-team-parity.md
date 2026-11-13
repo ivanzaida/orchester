@@ -58,6 +58,7 @@ removes the difference.
 | Who may keep working on a task | — | the claim lasts 15 minutes without a heartbeat, and only a run at work renews it: a run that waits for a person, is in review or is merged does not, so the claim goes stale and anyone may take the task over | "human-wait renewal … not covered" (D1, D8) | OA-31 |
 | A run whose claim was lost | — | reports nothing more to the server, and keeps executing on this computer | the runner is not told | OA-31 |
 | Dependencies between tasks (`blocked_by`), tags, story points, *Don't merge automatically* | kept | refused: the server does not keep them | not in the server's contract | OA-35 |
+| The ceilings of a subscription that leads to the end (OA-09) | held for every task it leads | not found for a team task led through its module (the task reads as having no module), so nothing bounds the chat there; and none of the calls they bound work for a team run yet | follows from the module row above | OA-28, OA-29 |
 | Returning a task to draft | `return_to_draft` | refused `team_no_queue` | a team task has no queue on this computer | stays: the server's lifecycle has no draft |
 | Forecasts and delivery figures (`get_delivery`) | answer | refused `team_project_unsupported` | not built | OA-36 |
 | Tasks of every project in one reading (`list_tasks` without a project) | answer | a linked project is left out | reads the server per project | OA-36 |

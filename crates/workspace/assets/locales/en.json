@@ -2538,6 +2538,13 @@
       },
       "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
+    "ceilings": {
+      "runs": "This task had {{used}} runs, and what leads it to the end runs a task {{allowed}} times at most. Nothing started: leave the task to the person, with what failed each time.",
+      "returns": "You returned or retried this run {{used}} times, and what leads its task to the end allows {{allowed}}. Nothing was changed: leave the task to the person, with what you tried and what came of it.",
+      "raises": "This run's limits were raised {{used}} times, and what leads its task to the end allows {{allowed}}. Nothing was changed: leave the task to the person, with how far the run got.",
+      "raiseBy": "What leads this run's task to the end raises a limit to {{allowed}} at most, in the limit's own unit, and never removes one. Nothing was changed: raise it within that, or leave the task to the person.",
+      "budget": "The work this conversation leads to the end spent {{used}} tokens of the {{allowed}} its subscription allows. Nothing started: what runs may finish, and the rest is the person's."
+    },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",

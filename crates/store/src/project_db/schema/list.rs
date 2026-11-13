@@ -469,4 +469,5 @@ CREATE TABLE run_merges (
   super::team_cache::MIGRATION,
   super::orchestrator_tries::MIGRATION,
   super::orchestrator_holds::MIGRATION,
+  super::orchestrator_tries::LEAD_MIGRATION,
 ];

@@ -148,7 +148,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-07](OA-07-events-together.md) | Events that wait in one conversation are taken in one turn | core + workspace | OA-01 | todo |
 | [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | todo |
 | **B** | **What the chat may do on its own** | | | |
-| [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | todo |
+| [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | review |
 | [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | blocked (frames) |
 | [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | done; its settings row waits for frames (G) |
 | **C** | **A module to the end** | | | |
