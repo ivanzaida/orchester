@@ -215,6 +215,20 @@ fn chat_changes_the_daily_budget_when_a_person_asks_and_never_in_a_turn_nobody_a
   assert_eq!(refused["code"], "automation_not_allowed", "another client: {refused}");
 }
 
+#[test]
+fn chat_chooses_the_reviewer_while_it_drives_with_no_second_switch_and_another_client_does_not() {
+  let (mut served, seeded) = Served::seeded("empty");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  allow(&served, &seeded.repo);
+  let scope = chat(&served, &mut db);
+  let default = json!({ "project": "Kontur" });
+  // *Let automation answer approvals* is off: the drive switch covers who reviews requests too.
+  let kept = chat_call(&mut served, &scope, "set_reviewer", default.clone()).expect("the chat's consent is the switch");
+  assert_eq!(kept["approvals"]["allow_autopilot"], false, "{kept}");
+  let refused = served.refused("set_reviewer", &default);
+  assert_eq!(refused["code"], "automation_not_allowed", "another client: {refused}");
+}
+
 /// Holds the project's new starts as `actor`, as Tasks or the chat holds them.
 fn hold(db: &mut ProjectDb, actor: HoldActor) {
   db.set_queue_hold((HoldScope::Project, actor), true, Timestamp::now())

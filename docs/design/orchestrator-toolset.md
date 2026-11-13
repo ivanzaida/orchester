@@ -675,9 +675,9 @@ project with none of its own; the application-wide values are no longer shown or
   *Let automation answer approvals* is for outside MCP clients only (decided by the person on 2026-11-13, OA-11 of
   `docs/plan/orchestrator-autonomy/`): while it drives, the chat's `answer_question`, `send_message`, `decide_plan`,
   `decide_approval`, `continue_run`, `complete_run` and raising the daily budget are carried out without it
-  (`app_mcp::Services::require`). Standing policy still reads the setting, for the chat too: choosing the reviewer
-  (`set_reviewer`) and publishing a profile that approves by itself; whether the chat should need it there is the
-  person's to say. One limit stays its own: in a turn Orchester started by itself the chat
+  (`app_mcp::Services::require`). So are choosing the reviewer (`set_reviewer`) and publishing a profile that
+  approves by itself (decided by the person on 2026-11-13: the drive switch covers them too); what widens what agents
+  may do still needs *Let automation change agent permissions*. One limit stays its own: in a turn Orchester started by itself the chat
   does not change the project's daily budget (`update_project_limits` with `daily_budget` is refused `person_only`),
   since that budget bounds what is spent while nobody watches; in a turn a person's message started it raises it
   with no second switch. What can lose work in git stays `git_propose`, a click-only card.

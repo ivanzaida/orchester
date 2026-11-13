@@ -98,9 +98,9 @@ impl Services {
   /// Whether these calls may answer in the person's place: the calls of the Orchestrator chat while it drives, and
   /// any other client's while the person lets automation answer approvals. That setting is for outside clients only
   /// (the person's decision of 2026-11-13, `docs/plan/orchestrator-autonomy/OA-11-…`): *Let the Orchestrator drive*
-  /// is the chat's whole consent to answer an agent, decide a plan or a stopped run and raise a limit. It is not
-  /// its consent to standing policy (who reviews requests, a profile that approves by itself), which reads the setting
-  /// itself.
+  /// is the chat's whole consent: to answer an agent, decide a plan or a stopped run and raise a limit, and also to
+  /// choose who reviews requests and to publish a profile that approves by itself (the person, 2026-11-13). What
+  /// widens what agents may do still needs *Let automation change agent permissions*.
   pub(super) fn answers_allowed(&self) -> Result<bool, StoreError> {
     Ok(self.chat_drives || self.workspace.automation_answers_approvals()?)
   }

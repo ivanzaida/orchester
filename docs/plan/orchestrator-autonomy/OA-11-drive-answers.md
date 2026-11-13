@@ -32,10 +32,8 @@ The person: "remove the Orchestrator's dependence on the switch; that switch is 
   project's limits, `app_mcp/tools/limits.rs`) reads the drive switch for the chat instead. The task lists each place
   it found and what it does now.
 - While the chat does not drive nothing changes: its changes are cards the person applies.
-- **Standing policy keeps the setting**, to be confirmed by the person: choosing the reviewer (`set_reviewer`) and
-  publishing a profile that approves by itself (`setup/widening.rs`) still read *Let automation answer approvals* for
-  the chat too. They decide who answers every later request, not one answer, and the independent review asked for
-  the person's explicit word before the drive switch covers them.
+- **Standing policy too** (the person, 2026-11-13): choosing the reviewer (`set_reviewer`) and publishing a profile
+  that approves by itself (`setup/widening.rs`) need only the drive switch for the chat.
 - `complete_run` with `anyway` is the chat's own while it drives, as accepting a step is (`DecisionKind::Stuck`).
 - **The daily budget is the exception**, taken by the session and to be confirmed by the person: in a turn Orchester
   started by itself the chat does not change the project's daily budget (`person_only`), because that budget is what
@@ -62,12 +60,13 @@ tools' descriptions the chat reads now say the setting is not asked of it (`orch
 in `docs/design/approval-modes.md`, `settings.md`, `orchester-workspace.md` and `docs/manual/settings.md` were
 corrected; a test for `decide_plan`.
 
-**For the person:**
+**The person's answers (2026-11-13):**
 
-1. Should the drive switch also cover choosing the reviewer and publishing a profile that approves by itself? Built
-   as: no, they keep *Let automation answer approvals*.
-2. Is the daily budget rule right: never changed in a turn Orchester started by itself, raised with no second switch
-   when a person's message asks? A lowering is refused there too, for simplicity.
+1. The drive switch also covers choosing the reviewer and publishing a profile that approves by itself: both gates
+   read it now (`approval_settings.rs` `gate`, `setup/widening.rs`). *Let automation change agent permissions* still
+   stands for what widens.
+2. The daily budget rule stays: never changed in a turn Orchester started by itself, raised with no second switch
+   when a person's message asks.
 
 Tests run: `orchester-workspace --test orchestrator_tools orchestrator_tools`, `--test automation_consent consent`,
 `--test decision_policy decision`; `orchester-core --test orchestrator_waits orchestrator`, `--test orchestrator_leads

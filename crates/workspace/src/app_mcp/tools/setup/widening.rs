@@ -55,7 +55,7 @@ pub(super) fn check_profile(
   let reasons = crate::agents::widening::reasons(db, id, profile, provider)?;
   let auto = crate::agents::widening::answers_in_persons_place(&reasons);
   allowed(services, reasons)?;
-  if auto && services.person.is_none() && !services.workspace.automation_answers_approvals()? {
+  if auto && services.person.is_none() && !services.answers_allowed()? {
     return Err(ToolError::refused(
       "automation_not_allowed",
       vec![Message::new("appMcp.errors.autoApproveNeedsAnswers")],

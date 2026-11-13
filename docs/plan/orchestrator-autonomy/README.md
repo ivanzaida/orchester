@@ -108,6 +108,10 @@ Each line is what the code does today; the task that changes it is at its end.
   passed, when the person ticked *Deliver when accepted* for the module.
 - **OA-08 · Only keeping the computer awake** while agents work (a setting, Windows and macOS). Closing the window
   still stops the work; OA-19 warns.
+- **OA-11, more (asked again the same day):** the drive switch also covers choosing the reviewer and publishing a
+  profile that approves by itself. The daily budget is not the chat's in a turn nobody asked for: it changes it only
+  when a person's message asked.
+- **Block G is this session's**, in this branch, with `master` merged in as it moves.
 - **OA-04 · No second connection now.** The chat waits for its account's reset (OA-03).
 - **OA-24 · Nothing leaves the computer.** No webhook; OS notifications only.
 - **Ceilings of a leading subscription (OA-09):** 3 runs of a task, the first included; 4 returns or retries of the
@@ -121,9 +125,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 - **Retries (OA-01):** a failed turn Orchester started is tried again after 1, 5 and 15 minutes; after the fourth
   failure the event is left to the person and counts in *Needs you*. A turn the person stopped is not tried again.
 - **A used budget holds, it does not fail (OA-03).** No share of the budget is reserved for the Orchestrator.
-- **The daily budget is not the chat's in a turn nobody asked for (OA-11):** it changes it only when a person's
-  message asked. And standing policy (the reviewer, a profile that approves by itself) still reads *Let automation
-  answer approvals*. Both wait for the person's word.
+
 - **Compaction (OA-05)** runs before a turn Orchester starts once the session used 70 % of its window.
 - **A stall is raised again (OA-06)** each further period without progress, three times at most per stall: the first
   turn messages the agent, the second stops it and continues from the last checkpoint, the third parks the task.
