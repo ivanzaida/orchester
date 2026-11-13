@@ -1,6 +1,6 @@
 # OA-01 · A turn Orchester started that failed leaves its event open
 
-- **Status:** todo
+- **Status:** done (2026-11-13; independent review: one blocking and one major finding fixed, see *Review*)
 - **Kind:** core + store + workspace
 - **Depends on:** —
 - **Branch:** —
@@ -28,15 +28,17 @@ the person where they see it; it is never lost in silence.
   `TimeLimit`), held for a reason with its own end (OA-03 adds the budget and the plan limit), or the person's
   (`NotSignedIn`, `ConnectionGone`, `Account`). The schedule is a constant of the rule: after 1, 5 and 15 minutes,
   four turns in all.
-- **Store.** The turns an event had are kept (which message, how it ended, when), and the entry points at the latest.
-  The reading the follower starts turns from becomes *due*: no turn yet, or the latest failed in a way that is tried
-  again, its time passed and tries are left. One more reading gives the soonest time an event is due, for OA-02's
-  clock.
+- **Store.** The entry keeps how its earlier turns ended (a `tries` column; the entry itself holds the latest), and
+  a failed entry takes its next turn in place (`retry_wait_turn`, under the conditions a first turn starts under).
+  The follower starts turns from the entries without a turn and from the failed ones whose time came.
 - **Workspace.** `follow_in` (`crates/workspace/src/orchestrator/waits.rs`, 530 lines: split the turn-starting part
   out first) starts due events as it starts new ones, still only while the event stands and the chat drives. The
   prompt of a later try names the earlier one and how it ended, and tells the agent to read the state before it acts.
-- **After the last try** the entry reads as left to the person, counts in *Needs you* and raises the *Needs you*
-  notification once.
+- **The clock** is here, not in OA-02: without it a try would start only when something else woke the follower. The
+  app's follower sleeps until the soonest due time (`turns::next_retry_in`), as it does for stalls.
+- **After the last try** nothing more starts by itself. The wait behind the event is already on its task's page and in
+  *Needs you*, so nothing is added there; saying *left to you* on the entry, and **Try again**, are OA-02's.
+- Not tried again: a daily report's turn and the summary of a watching that ended.
 
 ## Edge cases
 
@@ -54,3 +56,17 @@ the person where they see it; it is never lost in silence.
   schedule, the cap, the person's stop, the switch going off, an event that stopped standing.
 - Store tests for the due reading and the soonest due time.
 - `tools/check.ps1` passes. Nothing visible changes here beyond what the entry already shows; OA-02 draws it.
+
+## Review (2026-11-13)
+
+An independent reviewer read the change. Fixed: a retry failed on a foreign key when the failed turn had kept a todo
+list (the list now goes with the failed turn, in the same transaction); a merging turn waiting to be tried again did
+not hold the merges after it. Left as it is: a wait whose next try cannot start (the chat stopped driving) still
+counts as open, so git is asked about its run on each follow, as for a wait that never had a turn. Noted, not
+changed: a turn cut short without a recorded end is due at once, so repeated crashes spend the four turns without
+the waits between them.
+
+Tests run: `orchester-core --test orchestrator_retry retry`; `orchester-store --test orchestrator_waits waits` and
+`--test todo_lists todo`; `orchester-workspace --test orchestrator_led_waits led_waits`, `--test orchestrator_auto_merge
+auto_merge` and `--test orchestrator_run_ends run_ends`; `tools/check.ps1`: OK. Not run: the app's own test binaries
+(the follower's clock has no test of its own), a turn in a running app, anything on macOS (no `cfg` code changed).

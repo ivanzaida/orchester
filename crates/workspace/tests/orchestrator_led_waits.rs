@@ -4,7 +4,8 @@
 //! with the task since; a task nobody leads, or whose subscription ended before its wait was kept, keeps its waits in
 //! no conversation, starts no turn and opens none (ORC-895). A tool request that came to the person is kept in the
 //! leading conversation too, whatever *Let the Orchestrator drive* says (ORC-894), and with it on starts one turn,
-//! once, which decides it or leaves it to the person (2026-11-11).
+//! once, which decides it or leaves it to the person (2026-11-11). A wait whose turn failed is tried again after one,
+//! five and fifteen minutes and then left to the person (`orchestrator::turns`).
 //! `cargo test -p orchester-workspace --test orchestrator_led_waits led_waits`.
 
 mod support;
@@ -20,8 +21,8 @@ use orchester_core::{
   module::{ModuleDetails, ModuleState},
   name::Name,
   orchestrator::{
-    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, OrchestratorSettings, RunEnd, Subscription, TurnState,
-    WaitKind, WaitTurn, WatchTarget,
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, OrchestratorSettings, RunEnd, Subscription, TurnFailure,
+    TurnState, WaitKind, WaitTurn, WatchTarget,
   },
   resource::ModelId,
   run::{DecidedBy, PendingToolApproval, Run, StepFailure, WaitReason},
@@ -33,7 +34,8 @@ use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::orchestrator::{
   chat::ChatView,
-  waits::{Followed, Switches, check_merges_in, follow_in},
+  turns::next_retry_in,
+  waits::{self, Followed, Switches, check_merges_in, follow_at, follow_in},
 };
 use support::{Fixture, at};
 
@@ -398,5 +400,146 @@ fn led_waits_whose_subscription_ended_before_they_were_kept_go_to_no_conversatio
   assert!(
     tasks_in(&fixture, &dealt).is_empty(),
     "nor does the conversation that last dealt with ORC-1"
+  );
+}
+
+const MINUTE: i64 = 60_000;
+
+/// Follows the waits at `at(now)`, the project's runner attached, the chat driving when `drives`.
+fn follow_then(fixture: &Fixture, now: i64, drives: bool) -> Followed {
+  let (root, programs) = (fixture.repo.path(), Programs::processes());
+  let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
+  let place = (root, fixture.db.project().id(), &programs);
+  follow_at(place, &checks, (Switches { drives }, true), at(now)).expect("followed")
+}
+
+/// A task a conversation leads whose agent asked, and the turn the question started by itself.
+fn asked_and_started(fixture: &mut Fixture) -> (Chat, waits::WaitTurn) {
+  ready(fixture);
+  let task = fixture.task("Add login", at(40));
+  let mut run = fixture.started_run(task, at(50));
+  let leading = talking(fixture, "Look after ORC-1", 10);
+  watch(fixture, &leading, WatchTarget::Task(task), 11);
+  ask(fixture, &mut run);
+  let turn = follow(fixture, true).turn.expect("the wait starts a turn by itself");
+  (leading, turn)
+}
+
+/// The turn under `message` failed as `failure` at `at(ended)`.
+fn failed(fixture: &mut Fixture, message: ChatMessageId, failure: TurnFailure, ended: i64) {
+  let ended_now = fixture
+    .db
+    .end_chat_turn(message, &TurnState::Failed(failure), at(ended))
+    .expect("ended");
+  assert!(ended_now, "the turn thought");
+}
+
+#[test]
+fn led_waits_whose_turn_failed_are_tried_again_after_one_five_and_fifteen_minutes_and_then_left_to_the_person() {
+  let mut fixture = Fixture::new();
+  let (leading, first) = asked_and_started(&mut fixture);
+  let root = fixture.repo.path().to_path_buf();
+  let mut turn = first;
+  let mut ended = 100 * MINUTE;
+  for minutes in [1, 5, 15] {
+    failed(
+      &mut fixture,
+      turn.message,
+      TurnFailure::TimeLimit { minutes: 10 },
+      ended,
+    );
+    let due = ended + minutes * MINUTE;
+    assert_eq!(next_retry_in(&root, at(ended)).expect("read"), Some(at(due)));
+    assert_eq!(follow_then(&fixture, due - 1, true), Followed::default(), "not yet");
+    let again = follow_then(&fixture, due, true).turn.expect("tried again");
+    assert_eq!(again.chat, leading.id(), "in the same conversation");
+    assert_ne!(again.message, turn.message, "a turn of its own");
+    assert_eq!(next_retry_in(&root, at(due)).expect("read"), None, "it thinks");
+    let kept = waits_in(&fixture, &leading);
+    assert_eq!(kept.len(), 1, "the same entry");
+    assert_eq!(kept[0].1.as_ref().map(|started| started.message), Some(again.message));
+    (turn, ended) = (again, due + MINUTE);
+  }
+  failed(
+    &mut fixture,
+    turn.message,
+    TurnFailure::TimeLimit { minutes: 10 },
+    ended,
+  );
+  assert_eq!(
+    next_retry_in(&root, at(ended)).expect("read"),
+    None,
+    "the tries are spent"
+  );
+  assert_eq!(
+    follow_then(&fixture, ended + 1_000 * MINUTE, true),
+    Followed::default(),
+    "the fourth failure is left to the person"
+  );
+}
+
+#[test]
+fn led_waits_whose_turn_the_person_stopped_or_only_they_can_lift_are_not_tried_again() {
+  for state in [TurnState::Stopped, TurnState::Failed(TurnFailure::NotSignedIn)] {
+    let mut fixture = Fixture::new();
+    let (_leading, turn) = asked_and_started(&mut fixture);
+    fixture
+      .db
+      .end_chat_turn(turn.message, &state, at(MINUTE))
+      .expect("ended");
+    assert_eq!(
+      next_retry_in(fixture.repo.path(), at(MINUTE)).expect("read"),
+      None,
+      "{state:?}"
+    );
+    assert_eq!(
+      follow_then(&fixture, 1_000 * MINUTE, true),
+      Followed::default(),
+      "{state:?}"
+    );
+  }
+}
+
+#[test]
+fn led_waits_whose_turn_failed_are_not_tried_again_once_they_no_longer_stand() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let task = fixture.task("Add login", at(40));
+  let mut run = fixture.started_run(task, at(50));
+  let leading = talking(&mut fixture, "Look after ORC-1", 10);
+  watch(&mut fixture, &leading, WatchTarget::Task(task), 11);
+  ask(&mut fixture, &mut run);
+  let asked = follow(&fixture, true).turn.expect("the question's turn");
+  failed(&mut fixture, asked.message, TurnFailure::Interrupted, MINUTE);
+  // The run fails before the question's turn is due again: nobody waits for that answer any more.
+  fail(&mut fixture, &mut run);
+  let ended = follow_then(&fixture, 10 * MINUTE, true).turn.expect("the end's turn");
+  let kept = waits_in(&fixture, &leading);
+  assert_eq!(kept.len(), 2, "the question and the run's end");
+  let turns: Vec<_> = kept
+    .iter()
+    .map(|(_, turn)| turn.as_ref().map(|turn| turn.message))
+    .collect();
+  assert_eq!(
+    turns,
+    [Some(asked.message), Some(ended.message)],
+    "the question keeps its failed turn, and the end got its own"
+  );
+  fixture
+    .db
+    .end_chat_turn(ended.message, &TurnState::Answered, at(11 * MINUTE))
+    .expect("ended");
+  assert_eq!(follow_then(&fixture, 1_000 * MINUTE, true), Followed::default());
+}
+
+#[test]
+fn led_waits_whose_turn_failed_are_not_tried_again_while_the_chat_does_not_drive() {
+  let mut fixture = Fixture::new();
+  let (_leading, turn) = asked_and_started(&mut fixture);
+  failed(&mut fixture, turn.message, TurnFailure::Interrupted, MINUTE);
+  assert_eq!(follow_then(&fixture, 10 * MINUTE, false), Followed::default());
+  assert!(
+    follow_then(&fixture, 10 * MINUTE, true).turn.is_some(),
+    "it drives again"
   );
 }

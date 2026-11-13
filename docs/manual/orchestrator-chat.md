@@ -247,7 +247,12 @@ subscription that starts later takes it into its conversation. To get every even
 A watched task's events never reach another conversation, whoever dealt with it before. With *Let the Orchestrator
 drive* on, each entry also starts **one** turn there by itself — never while another turn of that conversation thinks
 (it waits for that turn to end) and only while what it is about still stands; whoever started the run and whatever
-raised the event, the Orchestrator's own answer, message, merge or cancel included. With the switch off the entry only
+raised the event, the Orchestrator's own answer, message, merge or cancel included. A turn that **failed** (it could
+not start, the CLI failed, Orchester or its runner closed under it, or it ran past its 10 minutes) is **tried again**
+in the same entry after 1, 5 and 15 minutes, while the event still stands and the switch is on; the next turn is told
+how the earlier one ended. After the fourth failure, or at once when only you can lift it (not signed in, the
+connection or its account), nothing more starts by itself: the event stays where it shows outside the chat. A turn
+you stopped is not tried again. With the switch off the entry only
 links to its card. Such a turn is
 marked `[Orchester]`; it is told the subscription the event came through and
 the order that applies (see [Orders](#orders)).

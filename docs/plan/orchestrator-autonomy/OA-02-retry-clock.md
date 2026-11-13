@@ -1,4 +1,4 @@
-# OA-02 · The retry clock, and the event's line says what happens
+# OA-02 · The event's line says what happens to a turn that failed
 
 - **Status:** blocked (waits for the frames, `frames.md` A)
 - **Kind:** design + UI
@@ -8,8 +8,8 @@
 
 ## Goal
 
-The app wakes the follower when an event is due for its next try, and the conversation says what is happening to an
-event whose turn failed: when it is tried again, which try it is, and that it was left to the person.
+The conversation says what is happening to an event whose turn failed: when it is tried again, which try it is, and
+that it was left to the person. (The clock that starts the tries was built with OA-01.)
 
 ## Design first
 
@@ -19,9 +19,6 @@ Dark and light. No frame, no build.
 
 ## Change
 
-- A clock of the project's follower, as `stall_clock` is (`crates/desktop-app/src/project/waits.rs`, 358 lines; the
-  clock goes into a module of its own): it sleeps until the soonest due time OA-01's store reading gives, idle while
-  none.
 - The event rows of `crates/desktop-app/src/screens/orchestrator/` read the tries OA-01 keeps. **Try again** is the
   person's: it starts one more turn now, also after the cap, and synthetic input is refused.
 - Strings in `crates/desktop-app/assets/locales/*/orchestrator.json`, every locale.

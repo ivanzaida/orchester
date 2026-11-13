@@ -4,7 +4,8 @@
 //! Blocked, not blocked by unfinished tasks, not held and not saying *Don't merge automatically*; the follower keeps
 //! whether the turn of a run's success merges it or why it is left to the person, only with *merge finished runs*,
 //! *merge runs* and *answer agents* on; and such turns start one at a time in the order the runs ended, across
-//! conversations. `cargo test -p orchester-workspace --test orchestrator_auto_merge auto_merge`.
+//! conversations, a merging turn that failed and is tried again holding the ones after it.
+//! `cargo test -p orchester-workspace --test orchestrator_auto_merge auto_merge`.
 
 mod support;
 
@@ -19,7 +20,7 @@ use orchester_core::{
   name::Name,
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, OrchestratorSettings, RunEnd,
-    Subscription, TurnState, WaitKind, WaitTurn, WatchTarget,
+    Subscription, TurnFailure, TurnState, WaitKind, WaitTurn, WatchTarget,
   },
   resource::ModelId,
   revision::Revision,
@@ -389,6 +390,58 @@ fn auto_merge_turns_start_one_at_a_time_in_the_order_the_runs_ended() {
   let next = follow(&fixture, MERGING).turn.expect("the second end's turn");
   assert_eq!(next.chat, second_chat.id());
   assert_eq!(waits_in(&fixture, second_chat.id())[0].0.run, second.id());
+}
+
+#[test]
+fn auto_merge_turns_wait_for_an_earlier_merge_whose_failed_turn_is_tried_again() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let first_task = fixture.task("Add login", at(40));
+  let second_task = fixture.task("Add logout", at(41));
+  leading(&mut fixture, (first_task, "ORC-1"), 10);
+  let second_chat = leading(&mut fixture, (second_task, "ORC-2"), 20);
+  let mut first = fixture.started_run(first_task, at(50));
+  let mut second = fixture.started_run(second_task, at(51));
+  fixture.succeed(&mut first, Timestamp::now());
+  fixture.succeed(&mut second, Timestamp::now());
+  let started = follow(&fixture, MERGING).turn.expect("the first end's turn");
+  let cut_short = TurnState::Failed(TurnFailure::TimeLimit { minutes: 10 });
+  fixture
+    .db
+    .end_chat_turn(started.message, &cut_short, Timestamp::now())
+    .expect("the first turn failed");
+  assert_eq!(
+    follow(&fixture, MERGING).turn,
+    None,
+    "the first merge is tried again in a minute: the second still waits for it"
+  );
+  assert_eq!(turn_in(&fixture, &second_chat), None);
+}
+
+#[test]
+fn auto_merge_turns_do_not_wait_for_an_earlier_merge_left_to_the_person() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let first_task = fixture.task("Add login", at(40));
+  let second_task = fixture.task("Add logout", at(41));
+  leading(&mut fixture, (first_task, "ORC-1"), 10);
+  let second_chat = leading(&mut fixture, (second_task, "ORC-2"), 20);
+  let mut first = fixture.started_run(first_task, at(50));
+  let mut second = fixture.started_run(second_task, at(51));
+  fixture.succeed(&mut first, Timestamp::now());
+  fixture.succeed(&mut second, Timestamp::now());
+  let started = follow(&fixture, MERGING).turn.expect("the first end's turn");
+  let theirs = TurnState::Failed(TurnFailure::NotSignedIn);
+  fixture
+    .db
+    .end_chat_turn(started.message, &theirs, Timestamp::now())
+    .expect("the first turn failed");
+  let next = follow(&fixture, MERGING).turn.expect("the second end's turn");
+  assert_eq!(
+    next.chat,
+    second_chat.id(),
+    "only the person can lift the first: nothing waits for it"
+  );
 }
 
 #[test]

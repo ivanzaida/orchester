@@ -65,6 +65,7 @@ mod orchestrator_subscriptions;
 mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_todos;
+mod orchestrator_tries;
 mod orchestrator_waits;
 mod orchestrator_watch;
 mod organization;

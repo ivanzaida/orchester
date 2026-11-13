@@ -58,6 +58,7 @@ mod orchestrator_leads;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
+mod orchestrator_retries;
 mod orchestrator_rewind;
 mod orchestrator_sent;
 mod orchestrator_settings;
@@ -169,6 +170,7 @@ pub use self::{
   orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_retries::FailedWait,
   orchestrator_rewind::ChatRewind,
   orchestrator_subscriptions::{KeptSubscription, WatchStart},
   orchestrator_titles::ChatDeletion,

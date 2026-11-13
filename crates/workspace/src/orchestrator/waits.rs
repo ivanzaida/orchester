@@ -17,8 +17,9 @@
 //! the runs ended; a run that committed nothing and whose result is its report is completed by the same rule, without a
 //! turn (ORC-93). A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry
 //! first, and so does the summary of a subscription that ended by itself, which each follow looks for
-//! ([`super::watch_ends`], ORC-764). The app attaches the runner when [`follow_in`] says a turn is pending, and asks
-//! it for the turns [`follow_in`] gives, with the chat's tools served for them.
+//! ([`super::watch_ends`], ORC-764). A wait whose turn failed is tried again ([`super::turns`]). The app attaches the
+//! runner when [`follow_in`] says a turn is pending, and asks it for the turns [`follow_in`] gives, with the chat's
+//! tools served for them.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -29,7 +30,7 @@ use orchester_core::{
   connection::stream::InvocationOutcome,
   conversation::{Message as TaskMessage, Sender},
   id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
-  orchestrator::{AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind},
+  orchestrator::{AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, RunEnd, Subscriptions, WaitKind},
   question::AskedQuestions,
   run::{CompletedBy, PendingToolApproval, Plan},
   store::{ConversationStore, RunStore, WorktreeStore},
@@ -37,7 +38,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{KeptWait, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 
 pub use super::run_ends::{MergeChecks, SucceededAt};
 use super::{
@@ -48,6 +49,7 @@ use super::{
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
   team_status::TeamReading,
+  turns::{Started, settled, start_next},
   waits_on::follow as waits_on,
   watch_ends,
 };
@@ -145,17 +147,6 @@ pub fn check_merges_in(
   checked().map_err(|error| messages::store_error(&error))
 }
 
-/// The keys of the waits kept, and of those kept that start a turn still to come: a kept end that starts none needs no
-/// look again.
-fn settled(db: &ProjectDb) -> Result<(HashSet<String>, HashSet<String>), StoreError> {
-  let pending = db
-    .automatic_waits_without_turn()?
-    .into_iter()
-    .map(|kept| kept.key)
-    .collect();
-  Ok((db.kept_wait_keys()?, pending))
-}
-
 fn follow(
   reading: &Reading,
   (switches, ready): (Switches, bool),
@@ -185,18 +176,17 @@ fn follow(
     return Ok(followed);
   }
   let waiting: HashSet<&str> = now.iter().map(|(key, _)| key.as_str()).collect();
-  let next = next_turns(&db, &waiting)?;
-  if next.is_empty() {
-    return Ok(followed);
-  }
-  if !attached {
-    return Ok(Followed {
+  Ok(match start_next(&mut db, &waiting, (attached, at))? {
+    Started::Nothing => followed,
+    Started::Pending => Followed {
       pending: true,
       ..followed
-    });
-  }
-  let turn = start(&mut db, &next)?;
-  Ok(Followed { turn, ..followed })
+    },
+    Started::Turn(turn) => Followed {
+      turn: Some(turn),
+      ..followed
+    },
+  })
 }
 
 /// Completes, as the Orchestrator would merge them, the runs git found with nothing to merge (`reading.checks`) whose
@@ -305,53 +295,6 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
       ChatResume::Paused | ChatResume::PersonOnly(_) | ChatResume::Other => None,
     },
   )
-}
-
-/// An entry that starts a turn by itself and has none: its conversation, its `seq`, and whether its turn merges a
-/// run on its own.
-type NextTurn = (ChatId, i64, bool);
-
-/// The entries of every conversation that start a turn by themselves and have none, oldest first: the waits that
-/// still wait (their keys among `waiting`), the daily reports (`super::report`), whose turn adds a summary to what
-/// they tell, and the ends of subscriptions (`super::watch_ends`), whose turn writes their module's or task's summary.
-fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<NextTurn>, StoreError> {
-  let mut next: Vec<NextTurn> = db
-    .automatic_waits_without_turn()?
-    .into_iter()
-    .filter(|kept| waiting.contains(kept.key.as_str()))
-    .map(|kept: KeptWait| (kept.chat, kept.seq, merges(&kept.wait)))
-    .chain(
-      db.automatic_reports_without_turn()?
-        .into_iter()
-        .map(|kept| (kept.chat, kept.seq, false)),
-    )
-    .collect();
-  next.sort_by_key(|(_, seq, _)| *seq);
-  Ok(next)
-}
-
-/// Gives the oldest of `next` whose conversation has no turn thinking its turn, in that conversation; none while a
-/// turn thinks in each of theirs. Runs merge one at a time in the order they ended: a turn that merges its run on its
-/// own does not start while one that ended before, in any conversation, still waits for its turn or thinks.
-fn start(db: &mut ProjectDb, next: &[NextTurn]) -> Result<Option<WaitTurn>, StoreError> {
-  let mut merging_before = db.waits_thinking()?.iter().any(|kept| merges(&kept.wait));
-  for &(chat, seq, merging) in next {
-    if merging && merging_before {
-      continue;
-    }
-    let message = ChatMessageId::generate();
-    // Refused while another turn of its conversation thinks: the entry keeps no turn and starts once that one ended.
-    if db.start_wait_turn((chat, seq), message)? {
-      return Ok(Some(WaitTurn { chat, message }));
-    }
-    merging_before |= merging;
-  }
-  Ok(None)
-}
-
-/// Whether the turn of `wait` merges its run on its own.
-fn merges(wait: &AgentWait) -> bool {
-  wait.merging == Some(Merging::Merges)
 }
 
 /// Whether `execution`'s latest invocation ended because a person stopped its turn (*Stop turn*).

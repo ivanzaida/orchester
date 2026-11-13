@@ -17,6 +17,13 @@ use crate::{
   rows::{corrupt, parse},
 };
 
+/// No turn of conversation `?1` is under way or waits for one: none thinks, no compaction of its session runs and no
+/// message of the person's waits for a turn there (theirs go first).
+pub(super) const NO_TURN_UNDER_WAY: &str = "NOT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1
+  AND (turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken')
+    OR (kind = 'event' AND json_extract(body, '$.kind') = 'compaction'
+      AND json_extract(body, '$.state.state') = 'running')))";
+
 /// A wait kept without a turn, which starts one by itself, and the conversation it was kept in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeptWait {
@@ -115,12 +122,10 @@ impl ProjectDb {
   /// there (theirs go first). Whether it was given.
   pub fn start_wait_turn(&mut self, (chat, seq): (ChatId, i64), message: ChatMessageId) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
-      "UPDATE orchestrator_entries SET message_id = ?3, turn = 'thinking'
-       WHERE seq = ?2 AND chat_id = ?1 AND kind IN ('wait', 'report') AND message_id IS NULL
-         AND NOT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1
-           AND (turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken')
-             OR (kind = 'event' AND json_extract(body, '$.kind') = 'compaction'
-               AND json_extract(body, '$.state.state') = 'running')))",
+      &format!(
+        "UPDATE orchestrator_entries SET message_id = ?3, turn = 'thinking'
+         WHERE seq = ?2 AND chat_id = ?1 AND kind IN ('wait', 'report') AND message_id IS NULL AND {NO_TURN_UNDER_WAY}"
+      ),
       params![chat.to_string(), seq, message.to_string()],
     )?;
     Ok(changed == 1)

@@ -687,6 +687,16 @@ project with none of its own; the application-wide values are no longer shown or
   as `no_agent_slot` is told to the person and not retried in the turn, and the next merged success comes back to it
   (2026-11-11). Without such an order it merges and stops. In any turn Orchester started by itself, `run_task` starts
   only a task the turn's conversation leads (`not_led` otherwise); the other turns' prompts start nothing.
+- **A turn that failed is tried again** (2026-11-13, `docs/plan/orchestrator-autonomy/`, OA-01). "At most one turn per
+  wait" (decision 5) means one that completed: a turn Orchester started by itself that failed in a way that may pass
+  (it could not start, the CLI failed, the runner or the app closed under it, it ran past its time) leaves its wait
+  open, and its next turn starts in the same entry after 1, then 5, then 15 minutes, only while the wait still stands
+  and the chat drives. The next turn is told how the earlier one ended and to read the state before it acts; the
+  tools refuse what was already done. After the fourth failure, or at once for a failure only the person can lift
+  (not signed in, the connection gone, the account), no further turn starts by itself and the wait is the person's,
+  where it shows outside the chat. A turn the person stopped did not fail and is not tried again. A daily report's
+  turn and a watching's summary are not tried again (`orchester_core::orchestrator::retry`,
+  `orchester_workspace::orchestrator::turns`; the app's follower wakes at the time a try is due).
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run

@@ -152,7 +152,7 @@ impl ProjectDb {
       .ok_or_else(|| corrupt("chat message", "its conversation is gone"))?;
     let mode = TurnMode::of_word(mode.as_deref()).map_err(|error| corrupt("chat turn mode", error))?;
     let prompt = match (kind.as_str(), mode) {
-      ("wait", _) => self.wait_turn_prompt(chat.id(), &wait_of(&body)?)?,
+      ("wait", _) => self.retried(seq, self.wait_turn_prompt(chat.id(), &wait_of(&body)?)?)?,
       ("report", _) => match summary_of(&body)? {
         Some(summary) => watch_summary_prompt(&summary),
         None => report_prompt(&report_of(&body)?),

@@ -19,6 +19,7 @@ pub mod plan;
 pub mod proposal;
 pub mod report;
 pub mod resume;
+pub mod retry;
 pub mod rewind;
 pub mod run_git;
 pub mod sent;
@@ -38,6 +39,7 @@ pub use self::{
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
+  retry::{FailedTry, NextTry, RETRY_AFTER, retry_note},
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
