@@ -33,6 +33,7 @@ use orchester_ipc::{ChatTools, Event, Rejection};
 use super::{
   Running, Work,
   codex::turn_failure,
+  over,
   turn::{Prepared, Seen, Turn, cannot},
 };
 use crate::{
@@ -70,7 +71,9 @@ impl Scheduler {
       .map_err(|error| failed("cannot read the conversation's context", &error))?;
     let mut running = self.inner.chats.running.lock();
     running.retain(|_, work| !work.task.is_finished());
-    if running.contains_key(&chat) {
+    if let Some(under_way) = running.get(&chat)
+      && !over(&db, chat, under_way.work)?
+    {
       return Err(Rejection::ChatBusy);
     }
     let before = earlier.map(|reading| reading.used());
@@ -108,7 +111,7 @@ impl Scheduler {
 
 impl Turn {
   /// Compacts the session, its context holding `before` tokens, and records how compaction `seq` ended.
-  async fn compact(self, seq: i64, before: Option<u64>) {
+  pub(super) async fn compact(self, seq: i64, before: Option<u64>) {
     let (state, reading) = match self.prepare(true) {
       Ok(prepared) if prepared.resumed.is_none() => (
         CompactionState::Failed {

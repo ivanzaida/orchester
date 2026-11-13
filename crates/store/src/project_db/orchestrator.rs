@@ -54,6 +54,8 @@ pub struct ChatTurn {
   pub chat: Chat,
   pub text: MessageBody,
   pub turn: TurnState,
+  /// Orchester started it by itself, for a wait, a daily report or a watching that ended; not a person's message.
+  pub on_its_own: bool,
 }
 
 impl ProjectDb {
@@ -171,6 +173,7 @@ impl ProjectDb {
       chat,
       text: MessageBody::new(&prompt).map_err(|error| corrupt("chat message", error))?,
       turn,
+      on_its_own: matches!(kind.as_str(), "wait" | "report"),
     }))
   }
 

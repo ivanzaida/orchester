@@ -715,6 +715,11 @@ project with none of its own; the application-wide values are no longer shown or
   runner refused because the budget was used in the meantime is taken back, not failed. A person's own message is
   not held: it is refused or fails as before, with its reason (`orchester_core::orchestrator::hold`,
   `orchester_workspace::orchestrator::held`).
+- **A turn Orchester started compacts a nearly full session first** (2026-11-13, OA-05). When the conversation's
+  session filled 70 % of its window, as the context meter has it, the runner compacts it before the turn's CLI starts
+  (`chat/compact_first.rs`): the same compaction as the person's *Compact*, kept as the same event, in the turn's
+  place in the conversation. Whatever it comes to, the turn runs after it. A person's own message is never compacted
+  under, nor a session whose size nothing reported.
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run

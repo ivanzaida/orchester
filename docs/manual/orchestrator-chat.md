@@ -260,7 +260,9 @@ connection or its account), nothing more starts by itself: the event stays where
 you stopped is not tried again. While the project's **daily budget is used**, or the **account the Orchestrator runs
 on is at its plan limit**, no turn starts by itself at all: the events are kept and wait, and their turns start when
 the day turns or the limit resets (an hour after the limit was reported when its CLI did not say). Your own message is
-not held: it is refused or fails as before, and says why. With the switch off the entry only
+not held: it is refused or fails as before, and says why. A turn the Orchestrator started itself **compacts the
+conversation first** when its session filled 70 % of its window (the same compaction as *Compact*, shown as the same
+line), so a conversation that leads a module for days keeps answering; your own messages are never compacted under. With the switch off the entry only
 links to its card. Such a turn is
 marked `[Orchester]`; it is told the subscription the event came through and
 the order that applies (see [Orders](#orders)).

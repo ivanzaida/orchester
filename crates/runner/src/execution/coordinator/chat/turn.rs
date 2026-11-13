@@ -94,6 +94,9 @@ impl Turn {
     // An account whose turn answered is at no plan limit: what was kept of one is forgotten. Not on usage alone, which
     // a turn that fails at the limit reports too.
     let answered_on = account.filter(|_| state == TurnState::Answered);
+    steers.close();
+    self.release_steering();
+    // Kept last: once the end is kept the conversation is free, and its next turn may be asked for at once.
     self.record(|db| {
       db.end_chat_turn(self.message, &state, Timestamp::now())?;
       match answered_on {
@@ -101,8 +104,6 @@ impl Turn {
         None => Ok(()),
       }
     });
-    steers.close();
-    self.release_steering();
   }
 
   /// What the turn starts from, or why it cannot start. A session the turn cannot resume, on another connection or
