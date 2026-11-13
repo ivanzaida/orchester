@@ -1,6 +1,6 @@
 # OA-27 · A team task's run merges into its module's branch
 
-- **Status:** todo
+- **Status:** done on master, outside this plan (`b4abf405d`, merged here with `origin/master` on 2026-11-13)
 - **Kind:** core + workspace
 - **Depends on:** OA-16
 - **Branch:** —
@@ -43,3 +43,12 @@ the run's work. `merge_run` of a team run asks for the module's *delivery* inste
   branch by each path, the claim lost, conflicts.
 - The row *A run's work reaches its module's branch* leaves `docs/design/local-and-team-parity.md`.
 - `tools/check.ps1` passes.
+
+## Done on master (2026-11-13)
+
+`b4abf405d` *a team task's run merges on this computer, with or without a module* did this while the plan was being
+written: `refuse_team_run` lets a recorded team run through (`crates/workspace/src/tasks/integration.rs`), `merge_run`
+merges a team run into its branch and then asks for its module's delivery, the task page has *Merge and deliver*,
+and a team task in no module starts and lands on the checked-out branch. Not checked by this plan's author beyond
+reading that commit and `refuse_team_run`; what is left for the Orchestrator (its own merge in a turn it started,
+which `auto_merge` still leaves to the person) is OA-29's.

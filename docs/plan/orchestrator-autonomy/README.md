@@ -78,8 +78,8 @@ Each line is what the code does today; the task that changes it is at its end.
 
 **A team project is led even less.** (Added 2026-11-13; the table is in `docs/design/local-and-team-parity.md`.)
 
-- No path merges a team task's run into its module's branch, though the contract says it does; the chat can neither
-  merge nor start nor continue a team run in a turn it started. → OA-27, OA-29
+- A team task's run merges into its module's branch since `b4abf405d` on master (OA-27, done there); the chat still
+  can neither merge nor start nor continue a team run in a turn it started. → OA-29
 - A module subscription does not lead a team task's events: the task reads as having no module. → OA-28
 - A merged team task stays in Backlog until someone marks it Done, so its watch never ends. → OA-30
 - A claim goes stale 15 minutes after its run starts to wait or is in review, and a run that lost its claim keeps
@@ -148,7 +148,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-07](OA-07-events-together.md) | Events that wait in one conversation are taken in one turn | core + workspace | OA-01 | todo |
 | [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | todo |
 | **B** | **What the chat may do on its own** | | | |
-| [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | review |
+| [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | done; choosing it waits for frames (B) |
 | [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | blocked (frames) |
 | [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | done; its settings row waits for frames (G) |
 | **C** | **A module to the end** | | | |
@@ -169,7 +169,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-24](OA-24-outside-notification.md) | A notification that leaves the computer | design + app | — | canceled (person, 2026-11-13) |
 | [OA-25](OA-25-daily-report.md) | The daily report names reasons, what is parked and what is held | workspace | OA-03, OA-15, OA-22 | todo |
 | **G** | **The same in team projects** | | | |
-| [OA-27](OA-27-team-run-merges-into-its-module.md) | A team task's run merges into its module's branch | core + workspace | OA-16 | todo |
+| [OA-27](OA-27-team-run-merges-into-its-module.md) | A team task's run merges into its module's branch | core + workspace | OA-16 | done on master (`b4abf405d`) |
 | [OA-28](OA-28-subscriptions-lead-team-tasks.md) | Subscriptions lead team tasks by their module, and `/watching` answers | workspace | — | todo |
 | [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | todo |
 | [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | todo |
@@ -190,8 +190,8 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 3. **A flat module to the end (milestone 2):** OA-12, then OA-13 and OA-15, then OA-14, OA-06, OA-21 and OA-18;
    OA-10 and OA-19 beside them. *Flat* means its tasks merge as today, into the base branch.
 4. **The record (milestone 3):** OA-23 and OA-25 after OA-15 and OA-22.
-5. **The same in team projects (block G):** OA-28 and OA-33 at once (desktop only, no dependency); OA-27, then
-   OA-29 and OA-30; OA-36 beside them. OA-31, OA-34 and OA-35 change the server's contract: decided with the person,
+5. **The same in team projects (block G):** OA-28 and OA-33 at once (desktop only, no dependency); then OA-29 and
+   OA-30 (OA-27 came with master); OA-36 beside them. OA-31, OA-34 and OA-35 change the server's contract: decided with the person,
    changed here first, and the platform's side is theirs. OA-32 after OA-17 and OA-20.
 6. **Proof:** OA-26, in a local project and in a team project against the stand-in server, before anyone leaves a
    real module to it.
