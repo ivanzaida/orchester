@@ -12,7 +12,7 @@ use orchester_core::{
   orchestrator::{
     AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, Queued, TurnFailure, TurnMode,
     TurnState, WaitTurn,
-    instructions::{report_prompt, watch_summary_prompt},
+    instructions::{report_prompt, standing_prompt, watch_summary_prompt},
     plan::plan_prompt,
   },
   resource::ModelId,
@@ -26,6 +26,7 @@ use super::{
   attachments::{self, AttachmentOwner},
   orchestrator_plans::plan_of,
   orchestrator_reports::report_of,
+  orchestrator_standing::standing_of,
   orchestrator_watch_summaries::summary_of,
 };
 use crate::{
@@ -155,9 +156,10 @@ impl ProjectDb {
     let mode = TurnMode::of_word(mode.as_deref()).map_err(|error| corrupt("chat turn mode", error))?;
     let prompt = match (kind.as_str(), mode) {
       ("wait", _) => self.retried(seq, self.wait_turn_prompt(chat.id(), &wait_of(&body)?)?)?,
-      ("report", _) => match summary_of(&body)? {
-        Some(summary) => watch_summary_prompt(&summary),
-        None => report_prompt(&report_of(&body)?),
+      ("report", _) => match (summary_of(&body)?, standing_of(&body)?) {
+        (Some(summary), _) => watch_summary_prompt(&summary),
+        (None, Some(event)) => standing_prompt(&event),
+        (None, None) => report_prompt(&report_of(&body)?),
       },
       (_, TurnMode::Plans) => plan_prompt(&body),
       _ => body,
@@ -442,12 +444,16 @@ impl RawEntry {
       },
       ("report", message, turn, _) => {
         let turn = started_turn((message, turn), self.failure.as_deref(), self.ended)?;
-        match summary_of(&self.body)? {
-          Some(summary) => EntryKind::WatchEnded {
+        match (summary_of(&self.body)?, standing_of(&self.body)?) {
+          (Some(summary), _) => EntryKind::WatchEnded {
             summary: Box::new(summary),
             turn,
           },
-          None => EntryKind::Report {
+          (None, Some(event)) => EntryKind::Standing {
+            event: Box::new(event),
+            turn,
+          },
+          (None, None) => EntryKind::Report {
             turn,
             report: Box::new(report_of(&self.body)?),
           },

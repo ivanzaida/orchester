@@ -53,6 +53,7 @@ mod orchestrator_git;
 mod orchestrator_guard;
 mod orchestrator_interrupted;
 mod orchestrator_moves;
+mod orchestrator_parking;
 mod orchestrator_report_turn;
 mod orchestrator_resolve;
 mod orchestrator_sent;

@@ -4,9 +4,10 @@
 //! ([`report_prompt`]), or a subscription that ended by itself did ([`watch_summary_prompt`]).
 
 mod events;
+mod standing;
 mod summary;
 
-pub use self::{events::event_prompt, summary::watch_summary_prompt};
+pub use self::{events::event_prompt, standing::standing_prompt, summary::watch_summary_prompt};
 use super::{
   merging::{MergeLeft, Merging},
   report::DailyReport,

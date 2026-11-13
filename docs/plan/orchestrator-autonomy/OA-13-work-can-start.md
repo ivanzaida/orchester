@@ -1,6 +1,6 @@
 # OA-13 · The event *work can start*
 
-- **Status:** todo
+- **Status:** done (2026-11-14); its line in the conversation waits for a frame
 - **Kind:** core + workspace
 - **Depends on:** OA-09, OA-12
 - **Branch:** —
@@ -49,3 +49,28 @@ turn.
   a freed slot, a blocker merged outside the chat, a task added to the module, the held queue, two subscriptions.
 - `led_start`'s tests for the new turn kind and the refusals that stay.
 - `tools/check.ps1` passes; the manual's *Orders* and *Run ends* paragraphs and decision 14 say the new rule.
+
+## As built (2026-11-14)
+
+- **The event** is `orchester_core::orchestrator::standing::StandingEvent` with `Raised::CanStart { tasks }`, kept
+  as an entry of the leading conversation (`EntryKind::Standing`; stored as a `report` entry, as a subscription's end
+  is, so it gets its turn the same way, and unlike a report's its turn may act). The follower raises it
+  (`orchestrator::standing::raise`) when the target's standing says tasks can start and an agent is free, and only
+  when that state differs from the one last seen (`orchestrator_standings`): the same state is never raised twice,
+  and a state it comes back to after another is raised again.
+- **Starts.** A conversation that leads a task to the end starts it with `run_task` in any turn Orchester started,
+  the event's among them (`led_start`); one that only follows keeps the old rule (the turn of a success it merged
+  under an order). Wider than the task file asked ("in that turn"): a leading turn of any event may find work to
+  start, and the ceilings and the budget bound it either way.
+- A *Follow* subscription raises none. New starts held, or the budget used: nothing can start, so nothing is raised.
+
+Differs from the task file:
+
+- Two leading subscriptions and one free agent: both are raised; the second start is refused by the runner and is
+  raised again when an agent frees (its state went quiet in between).
+- A turn of this event that fails is not tried again: OA-01's retries are for waits. It is raised again when the
+  state changes.
+- Its line in the conversation is drawn as the lines about what a conversation watches are; its own frame is in
+  `frames.md` (H).
+
+Tests: `orchester-workspace --test orchestrator_standing` (raised once per state, and again after a change).

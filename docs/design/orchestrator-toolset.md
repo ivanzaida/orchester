@@ -737,6 +737,16 @@ project with none of its own; the application-wide values are no longer shown or
   counted. A turn a person's message started is not bound, nor a task that is only followed
   (`orchester_core::orchestrator::watch::Ceilings`, `orchester_workspace::orchestrator::ceilings`). A target led to
   the end stays so when another conversation takes it over or its order is renewed.
+- **A target led to the end is carried by its standing** (2026-11-14, OA-12 … OA-15). One rule says where a watched
+  target and each of its tasks stand (`orchester_core::orchestrator::standing`; `get_standing` tells it). For a
+  subscription that leads to the end the follower raises, once per state, *work can start* (tasks can start and an
+  agent is free) and *stuck* (nothing can start and nothing moves), each an entry of the leading conversation that
+  starts a turn by itself. A conversation that leads a task to the end starts it in any turn Orchester started, and
+  runs it again after a failure, with its reason, while its ceiling of runs allows (`ceiling_reached` past it); one
+  that only follows keeps the rule of decision 14 (the turn of a success it merged under an order, a task with no
+  run). `park_task` leaves a task the chat cannot move to the person with what they are to do: it reads as parked,
+  nothing starts it (`parked`), the events of its run are tried no more, and it ends when its run moves or the
+  person gives it back.
 - **What the chat decides on its own carries its reason** (2026-11-14, OA-22). In a turn Orchester started by
   itself, `continue_run` (every choice but `resume`), `answer_question` and `decide_plan` take a one-sentence
   `reason` and are refused `reason_required` without one, before anything else is asked; `decide_approval` had its

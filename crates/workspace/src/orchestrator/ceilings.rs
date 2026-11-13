@@ -192,12 +192,21 @@ impl Led {
 /// What the work `leading` leads spent since it leads it: the runs, started since, of the tasks whose events go to
 /// it, and every turn of its conversation since, whatever the turn was about. The turn under way is not in it yet.
 pub fn spent(db: &ProjectDb, subscriptions: &Subscriptions, leading: &Subscription) -> Result<TokensUsed, StoreError> {
+  spent_among(db, &recorded::all_with_runs(db)?, (subscriptions, leading))
+}
+
+/// [`spent`] for a caller that read the project's `tasks` with their runs already.
+pub(super) fn spent_among(
+  db: &ProjectDb,
+  tasks: &[recorded::WithRuns],
+  (subscriptions, leading): (&Subscriptions, &Subscription),
+) -> Result<TokensUsed, StoreError> {
   let mut used = db.chat_tokens_since(leading.chat(), leading.since())?;
-  for (task, runs) in recorded::all_with_runs(db)? {
-    if subscriptions.leader_of(task.id(), module_now(db, &task)) != Some(leading) {
+  for (task, runs) in tasks {
+    if subscriptions.leader_of(task.id(), module_now(db, task)) != Some(leading) {
       continue;
     }
-    for run in runs.into_iter().flatten() {
+    for run in runs.iter().flatten() {
       if run.created_at() >= leading.since() {
         used += run.used();
       }
@@ -208,6 +217,11 @@ pub fn spent(db: &ProjectDb, subscriptions: &Subscriptions, leading: &Subscripti
 
 fn refusal(reached: CeilingReached) -> ToolError {
   ToolError::refused("ceiling_reached", vec![message(reached)])
+}
+
+/// What the agent reads when a task that had `runs` runs may not run again under `ceilings`; `None` while it may.
+pub(super) fn again_refused(ceilings: Ceilings, runs: usize) -> Option<Message> {
+  ceilings.another_run(runs).err().map(message)
 }
 
 /// What the agent reads of a ceiling it reached: which, how much it allows, and that the task is now the person's.

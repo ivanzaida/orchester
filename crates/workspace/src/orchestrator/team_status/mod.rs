@@ -111,6 +111,11 @@ impl TeamReading {
     self.tasks.values()
   }
 
+  /// The workflow status the team server last gave team task `id`; `None` while no reading saw it.
+  pub(super) fn status_of(&self, id: TaskId) -> Option<WorkflowStatus> {
+    self.tasks.get(&id).map(|seen| seen.status)
+  }
+
   /// The module `task` is in now, for who leads it: where the team server put it, when this reading saw the task; the
   /// module its records name otherwise (a local task's own; a team task's, the one its newest run started in). A team
   /// task the server moved out of every watched module is in no reading, and stays where its records put it until it
@@ -142,11 +147,18 @@ impl TeamReading {
 /// The module `task` is in now, for who leads it, by the last reading of `db`'s project ([`TeamReading::module_of`]);
 /// the module its records name while the project has no reading.
 pub(super) fn module_now(db: &ProjectDb, task: &Task) -> Option<ModuleId> {
+  reading_of(db).module_of(task)
+}
+
+/// The last reading of `db`'s project; empty before the first, and while no subscription needs one.
+pub(super) fn reading_of(db: &ProjectDb) -> TeamReading {
   let project = db.project().id();
-  match READINGS.lock().values().find(|kept| kept.project == project) {
-    Some(kept) => kept.reading.module_of(task),
-    None => task.module(),
-  }
+  READINGS
+    .lock()
+    .values()
+    .find(|kept| kept.project == project)
+    .map(|kept| kept.reading.clone())
+    .unwrap_or_default()
 }
 
 /// What a [`refresh`] found.

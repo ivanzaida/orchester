@@ -20,6 +20,7 @@ mod module;
 pub(super) mod panel;
 mod picker;
 mod rows;
+mod standing;
 mod task;
 mod task_rows;
 
@@ -44,6 +45,7 @@ pub(super) use self::{
   ended::line as ended_line,
   facts::WatchFacts,
   module::{WatchAction, follow, module_command, problem, watch_action},
+  standing::line as standing_line,
   task::task_command,
 };
 use super::timeline::TurnEnv;

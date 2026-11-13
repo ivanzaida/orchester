@@ -71,6 +71,7 @@ mod orchestrator_tries;
 mod orchestrator_waits;
 mod orchestrator_watch;
 mod organization;
+mod parked_tasks;
 mod permission_events;
 mod permitted_decisions;
 mod pipeline_drafts;

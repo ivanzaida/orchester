@@ -154,10 +154,10 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | blocked (frames) |
 | [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | done; its settings row waits for frames (G) |
 | **C** | **A module to the end** | | | |
-| [OA-12](OA-12-standing.md) | Core: where a led target stands | core + workspace | OA-09 | todo |
-| [OA-13](OA-13-work-can-start.md) | The event *work can start* | core + workspace | OA-09, OA-12 | todo |
-| [OA-14](OA-14-run-again.md) | A failed task is run again within its ceiling | workspace | OA-09, OA-13 | todo |
-| [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | todo |
+| [OA-12](OA-12-standing.md) | Core: where a led target stands | core + workspace | OA-09 | done |
+| [OA-13](OA-13-work-can-start.md) | The event *work can start* | core + workspace | OA-09, OA-12 | done; its line waits for a frame |
+| [OA-14](OA-14-run-again.md) | A failed task is run again within its ceiling | workspace | OA-09, OA-13 | done |
+| [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | done; what is seen waits for frames (OA-23) |
 | [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | done |
 | [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | todo |
 | [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | todo |

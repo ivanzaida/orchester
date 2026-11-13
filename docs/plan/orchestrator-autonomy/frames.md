@@ -111,3 +111,16 @@ without it, and what ends the tab instead (the *Watching* section's foot, or not
 Settings › General (or where the frame puts it): one row, *Keep the computer awake while agents work*, a switch, with
 one line under it (*Only while an agent works or the Orchestrator answers; the screen may still turn off*), and its
 state on a platform where it cannot be held (*Not available on this system*).
+
+## H · Events of a target led to the end (added 2026-11-14)
+
+Built without a frame, drawn as the lines about what a conversation watches are (`Parts · Lines` `avDZO`), so that
+the conversation shows the entry at all:
+
+- The line *Work can start in Webhooks v2: KON-41, KON-42* (a `circle-play` icon in `text_muted`), with the turn it
+  started under it.
+- The line *Webhooks v2 is stuck: 3 left for you* (a `circle-alert` icon in `warning`), with the turn that tells
+  what each task waits for.
+- A parked task on its page and in *Needs you* (what is needed, why, what to do, *Give back*), and the list of the
+  Orchestrator's decisions with *Mark seen*: OA-23's frames.
+

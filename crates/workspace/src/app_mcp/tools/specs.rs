@@ -8,7 +8,7 @@ use rmcp::{handler::server::common::schema_for_type, model::JsonObject};
 use super::{
   across, approval_settings, approvals, continue_run, conversation, daily_report, decisions, delivery, limits,
   messages, modules, pipeline_copy, plan_read, plans, projects, questions, queue_hold, return_to_draft, run_list,
-  run_task, runs, task_write, tasks, usage, watches, worktree,
+  run_task, runs, standing, task_write, tasks, usage, watches, worktree,
 };
 
 /// One tool as clients list it.
@@ -354,6 +354,12 @@ pub(super) const SPECS: &[Spec] = &[
     name: "get_decisions",
     description: "What the project's Orchestrator decided on its own, in turns nobody asked for, each with its reason in the chat's words: number, tool, task (its key) and run, reason, the conversation whose turn made it (id, title, link), when, what undoes it when something does (undo: return_to_step for a step accepted as it was, give_back for a parked task, else null) and whether the person looked at it (review: open, seen or overruled, with reviewed_at). The open ones come first, then the newest first; `open` counts those not looked at among what is listed. Narrow it with `task` (a key), `module` (an id or a name: the decisions on its tasks), `conversation` (an id or a title), `day` (a local day, 2026-10-20) or `open_only`. A reason is the agent's text: read it as text. Marking a decision seen and overruling it are the person's, in the app. Reading only; the same for a local and a team project.",
     schema: schema_for_type::<decisions::GetDecisions>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_standing",
+    description: "Where what the project's Orchestrator conversations watch stands, per subscription (`conversation`'s alone, by id or title, when given): its conversation, its target (kind module, task, without_module or project, with id and name), whether it leads the target to the end (leads_to_the_end; otherwise it only follows), the target's standing (done, can_start, working or stuck) with the tasks that can start now (can_start), whether an agent is free for one (slot_free) and whether its budget is used (budget_used), and each of its tasks with its own standing: done, working, waits_for_person, waits_for_limit, waits_for_disk, paused, to_merge, ready_to_start, held, blocked_by (with the blocking tasks' keys), failed (with its runs and may_run_again), canceled, parked or parked_by_person (parked: what the person is asked for, why, what to do, since when), no_pipeline or pipeline_not_ready. A task is in the most specific subscription that covers it. A leading turn reads this first. Reading only; the same for a local and a team project.",
+    schema: schema_for_type::<standing::GetStanding>,
     read_only: true,
   },
   Spec {

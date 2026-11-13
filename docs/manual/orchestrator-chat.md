@@ -127,7 +127,7 @@ for outside MCP clients and does not concern the chat),
 *Daily report from the Orchestrator* (Settings › Notifications), *Let Orchester estimate story points* (Project settings
 › Runs › Estimates).
 
-## Chat-only tools (27)
+## Chat-only tools (28)
 
 ### `init_repository`
 
@@ -176,6 +176,17 @@ What ends the wait, read by the waits follower:
   waits for a message gets one telling it to go on; a plan waiting for a decision goes on once the person decides it.
   No agent turn starts.
 - **The waiting run ends** — the wait ends without a word.
+
+### `park_task`
+
+Leaves a task to you when the Orchestrator cannot move it itself: a decision that is yours, a request only you may
+allow, a sign-in, a tool that does not answer, or a ceiling of its leading that was reached. It says what kind of
+thing is needed, why it could not go on and what exactly you are to do. The task then reads as *parked* where its
+target stands (`get_standing`), nothing starts it, and the events of its run start no turn again; the Orchestrator
+goes on with the rest. It ends by itself when you act on the task's run, or when you give the task back. In a turn
+nobody asked for, the Orchestrator parks only a task its conversation leads, and the parking is one of its
+[decisions](#its-own-decisions-with-reasons) for you to review. Showing a parked task on its page and in *Needs you*
+is not built yet.
 
 ### `watch` and `unwatch`
 
@@ -311,6 +322,21 @@ the order that applies (see [Orders](#orders)).
   back). With *Let the Orchestrator drive* on, a turn adds a summary and recommendations and **changes nothing** (every change
   is refused `report_turn`). `get_daily_report` reads a day's report. The daily report is not
   an event of a task: the routing rule does not apply to it.
+
+### Events of a target led to the end
+
+A conversation that leads a target **to the end** (see [Leading to the end](#leading-to-the-end-and-its-ceilings))
+also gets events of the target as a whole, each once per state:
+
+- **Work can start**: tasks of the target can be started now and an agent is free. The turn starts them with
+  `run_task`, also a task whose run failed, with its reason, while its ceiling of runs allows another. This is what
+  starts the first tasks after you chose to have the target led, and the next when an agent frees or a blocker is
+  merged.
+- **Stuck**: nothing can start and nothing moves; everything left is parked, waits for you, or is past a ceiling.
+  The turn tells you once what each task waits for and what to do; you are told again only when that changes.
+
+A subscription that only follows gets neither, and starts tasks only as before: in the turn of a success it merged
+under an order.
 
 ### Its own decisions, with reasons
 

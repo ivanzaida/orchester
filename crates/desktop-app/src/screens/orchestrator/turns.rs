@@ -16,6 +16,7 @@ use orchester_core::{
   orchestrator::{
     AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
     WaitTurn,
+    standing::StandingEvent,
     watch::{WatchCommand, WatchSummary},
   },
   time::Timestamp,
@@ -105,6 +106,8 @@ pub(super) struct Turn {
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
   pub(super) watch_ended: Option<Box<WatchSummary>>,
+  /// An event of a target the conversation leads to the end, whose line opens the row instead of a person's message.
+  pub(super) standing: Option<Box<StandingEvent>>,
   /// An event that is the whole row: a compaction of the session (`super::compaction`), where a rewind went back to
   /// (`super::rewind::line`), a watch command or line (`super::watch`), or the person's `/watching`, answered from the
   /// live state (`super::watching`).
@@ -155,6 +158,7 @@ impl Turn {
       request: None,
       report: None,
       watch_ended: None,
+      standing: None,
       compaction: None,
       led: None,
       seq: None,
@@ -174,7 +178,7 @@ impl Turn {
   /// Whether its turn, if any, was one Orchester started by itself: a wait's, a report's or a subscription's end's,
   /// with no words of the person's to send again.
   pub(super) const fn on_its_own(&self) -> bool {
-    self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some()
+    self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some() || self.standing.is_some()
   }
 
   /// Whether the row is the person's `/watching`, which Orchester answers from the live state.
@@ -207,6 +211,7 @@ impl Turn {
       request: None,
       report: None,
       watch_ended: None,
+      standing: None,
       compaction: None,
       led: None,
       seq: Some(entry.seq),
@@ -285,7 +290,9 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         add_person((&mut turns, &mut waiting), entry, shown);
         continue;
       }
-      EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } => continue,
+      EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } | EntryKind::Standing { .. } => {
+        continue;
+      }
       EntryKind::Plan(plan) => {
         plans += 1;
         Part::Plan {
@@ -360,6 +367,10 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
     },
     EntryKind::WatchEnded { summary, turn } => Turn {
       watch_ended: Some(summary.clone()),
+      ..Turn::opened(entry, turn.as_ref())
+    },
+    EntryKind::Standing { event, turn } => Turn {
+      standing: Some(event.clone()),
       ..Turn::opened(entry, turn.as_ref())
     },
     EntryKind::Event(event) if super::led::is_choice(event) => return None,
@@ -451,6 +462,7 @@ fn person(
     request: None,
     report: None,
     watch_ended: None,
+    standing: None,
     compaction: None,
     led: None,
     seq: Some(entry.seq),

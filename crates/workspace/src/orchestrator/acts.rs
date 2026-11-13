@@ -60,7 +60,7 @@ pub(super) async fn act_and_keep(
   let arguments = &arguments;
   let acted = match decisions::refused(scope, name, arguments, reason.as_deref()) {
     Some(refused) => Acted::done(Err(refused)),
-    None => act((services, translate), scope, name, arguments).await,
+    None => act((services, translate), scope, name, (arguments, reason.is_some())).await,
   };
   let Acted { mut result, kept } = acted;
   let outcome = match (&result, kept.waits) {
@@ -131,12 +131,13 @@ struct Kept {
   tool_answer: Option<ToolAnswer>,
 }
 
-/// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person.
+/// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person; `reasoned`: the call
+/// gave the chat's reason.
 async fn act(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   name: &str,
-  arguments: &JsonObject,
+  (arguments, reasoned): (&JsonObject, bool),
 ) -> Acted {
   let drives = match drives(services, scope).await {
     Ok(drives) => drives,
@@ -161,7 +162,7 @@ async fn act(
     Err(error) => return Acted::done(Err(error)),
   };
   let acted = match name {
-    RUN_TASK => start(deps, scope, arguments, drives).await,
+    RUN_TASK => start(deps, scope, (arguments, reasoned), drives).await,
     DECIDE_APPROVAL => decide_approval(deps, scope, arguments).await,
     _ if proposes => propose_change(deps, scope, name, arguments).await,
     MERGE_RUN => merge(deps, scope, arguments).await,
@@ -265,12 +266,12 @@ async fn continuing(
 async fn start(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
-  arguments: &JsonObject,
+  (arguments, reasoned): (&JsonObject, bool),
   drives: bool,
 ) -> Result<Acted, ToolError> {
   blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
   if drives && scope.on_its_own {
-    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str)).await?;
+    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str), reasoned).await?;
   }
   // In a turn nobody asked for, a start is only proposed, unless the chat drives.
   if !drives && (scope.on_its_own || !allows_autopilot(scope).await?) {

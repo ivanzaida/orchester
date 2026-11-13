@@ -10,6 +10,7 @@ use super::{
   proposal::ProposedStart,
   report::DailyReport,
   rewind::RewoundTo,
+  standing::StandingEvent,
   wait::AgentWait,
   watch::{CreatedWatch, WatchCommand, WatchLine, WatchSummary},
 };
@@ -519,6 +520,12 @@ pub enum EntryKind {
     summary: Box<WatchSummary>,
     turn: Option<WaitTurn>,
   },
+  /// An event of a target the conversation leads to the end ([`StandingEvent`]: work can start, or the target is
+  /// stuck), and the turn it started by itself, once it started one.
+  Standing {
+    event: Box<StandingEvent>,
+    turn: Option<WaitTurn>,
+  },
   /// A plan the Orchestrator answered with in a turn that plans, and where it stands ([`super::plan`]).
   Plan(Box<ChatPlan>),
 }
@@ -546,6 +553,9 @@ impl EntryKind {
         turn: Some(started), ..
       }
       | Self::WatchEnded {
+        turn: Some(started), ..
+      }
+      | Self::Standing {
         turn: Some(started), ..
       } => Some((started.message, &started.state)),
       _ => None,

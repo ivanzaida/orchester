@@ -1,6 +1,6 @@
 # OA-15 · Parking a task for the person, and a led target that is stuck
 
-- **Status:** todo
+- **Status:** done (2026-11-14); what the task page and Needs you show waits for frames (OA-23)
 - **Kind:** core + store + workspace
 - **Depends on:** OA-12
 - **Branch:** —
@@ -47,3 +47,27 @@ event, and nothing tells the person that a module has stopped.
 - Core and store tests for the record and its ends; workspace tests for `park_task`, the settled events, the stuck
   event raised once and again only after a change (`--test orchestrator_parking`).
 - `tools/check.ps1` passes; the manual lists the tool and the event.
+
+## As built (2026-11-14)
+
+- **The record:** `orchester_core::orchestrator::parking::Parking` (the task, the run that waited, what is needed:
+  a decision, an approval, a sign-in, a tool, a ceiling or something else; why, and what to do, in the chat's words
+  of at most 600 characters each; who parked it and when), kept in `parked_tasks`, one per task.
+- **The chat's tool** `park_task`, in any turn but a report's or a subscription's end's. In a turn nobody asked for
+  it parks only a task its conversation leads (`not_led`), and the parking is a decision the person reviews, undone
+  by giving the task back. A parked task reads as `parked` where its target stands, `run_task` refuses it
+  (`parked`), and the waits and run ends kept of its run start no turn by themselves any more.
+- **It ends** when the task's run moves or the task gets another run (someone acted on it: the follower sees it,
+  `parking::end_moved`), or when the person gives it back (`parking::give_back_in`, which no tool calls).
+- **Stuck:** when a leading subscription's standing is stuck, the follower keeps one event in its conversation
+  (`Raised::Stuck`, with what is left and, for a parked task, what the person is to do), whose turn tells the
+  person; nothing more until the standing changes.
+
+Not here: the line the leading conversation gets when a parking ends, the *Needs you* notification of a stuck
+target, and what the task page shows of a parked task. They are visible and wait for OA-23's frames. Whether a run
+that waits for a person keeps an agent slot while its task is parked was not read from the scheduler: the standing
+counts only running runs against the slots.
+
+Tests: `orchester-core --test orchestrator_parking`, `orchester-store --test orchestrator_parking`,
+`orchester-workspace --test orchestrator_standing` (stuck, and work again once given back),
+`orchester-app --test mcp_domain orchestrator_parking`.

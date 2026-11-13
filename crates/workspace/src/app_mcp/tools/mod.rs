@@ -34,6 +34,7 @@ mod run_task;
 mod runs;
 pub mod setup;
 mod specs;
+mod standing;
 mod task_organization;
 mod task_write;
 mod tasks;
@@ -201,6 +202,7 @@ async fn dispatch_answers(
     "update_module" => modules::update_module(services, parse(arguments)?).await,
     "get_watches" => watches::get_watches(services, parse(arguments)?, translate).await,
     "get_decisions" => decisions::get_decisions(services, parse(arguments)?).await,
+    "get_standing" => standing::get_standing(services, parse(arguments)?).await,
     "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     "get_delivery" => delivery::get_delivery(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,

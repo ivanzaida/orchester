@@ -15,7 +15,10 @@ use orchester_store::{DecisionsRead, ProjectDb, StoreError};
 use rmcp::model::{JsonObject, Tool};
 use serde_json::{Value, json};
 
-use super::tools::{ANSWER_QUESTION, CONTINUE_RUN, ChatScope};
+use super::{
+  parking::PARK_TASK,
+  tools::{ANSWER_QUESTION, CONTINUE_RUN, ChatScope, RUN_TASK},
+};
 use crate::{
   app_mcp::{ToolError, find_run, find_task},
   messages::{self, Message},
@@ -29,9 +32,13 @@ const DECIDE_PLAN: &str = "decide_plan";
 /// acceptance, a return, a retry, a raise), an answer to an agent's question, and a decision on a plan.
 const JUDGED: [&str; 3] = [CONTINUE_RUN, ANSWER_QUESTION, DECIDE_PLAN];
 
-/// `tool`, given the chat's `reason` when it is one of [`JUDGED`].
+/// The tools that take a reason: the judgements, and `run_task`, whose reason is required only when it runs a task
+/// again ([`super::led_start`]).
+const REASONED: [&str; 4] = [CONTINUE_RUN, ANSWER_QUESTION, DECIDE_PLAN, RUN_TASK];
+
+/// `tool`, given the chat's `reason` when it is one of [`REASONED`].
 pub(super) fn with_reason(tool: &mut Tool) {
-  if !JUDGED.contains(&tool.name.as_ref()) {
+  if !REASONED.contains(&tool.name.as_ref()) {
     return;
   }
   let mut schema = (*tool.input_schema).clone();
@@ -51,7 +58,7 @@ pub(super) fn with_reason(tool: &mut Tool) {
 /// is. A reason that is no text is the call's error.
 pub(super) fn split(name: &str, arguments: &JsonObject) -> Result<(Option<String>, JsonObject), ToolError> {
   let mut rest = arguments.clone();
-  if !JUDGED.contains(&name) {
+  if !REASONED.contains(&name) {
     return Ok((None, rest));
   }
   match rest.remove(REASON) {
@@ -59,6 +66,14 @@ pub(super) fn split(name: &str, arguments: &JsonObject) -> Result<(Option<String
     Some(Value::String(reason)) => Ok((Some(reason), rest)),
     Some(_) => Err(ToolError::InvalidArguments(format!("{REASON}: one sentence of text"))),
   }
+}
+
+/// The refusal of a call of `name` that needs a reason and has none.
+pub(super) fn reason_required(name: &str) -> ToolError {
+  ToolError::refused(
+    "reason_required",
+    vec![Message::new("orchestrator.tools.reasonRequired").with("tool", name.to_owned())],
+  )
 }
 
 /// The refusal of the judgement `name` with `arguments` in a turn nobody asked for when `reason` is no reason
@@ -72,10 +87,7 @@ pub(super) fn refused(
   if !scope.on_its_own || !judged(name, arguments) || reason.and_then(Reason::new).is_some() {
     return None;
   }
-  Some(ToolError::refused(
-    "reason_required",
-    vec![Message::new("orchestrator.tools.reasonRequired").with("tool", name.to_owned())],
-  ))
+  Some(reason_required(name))
 }
 
 /// Whether the call is a judgement: resuming a paused run is not, it decides nothing.
@@ -101,7 +113,11 @@ pub(super) async fn keep(
   };
   let text = |name: &str| arguments.get(name).and_then(Value::as_str).map(str::to_owned);
   let (task, run) = (task.or_else(|| text("key")).or_else(|| text("task")), text("run"));
-  let undo = (name == CONTINUE_RUN && choice(arguments) == Some("accept")).then_some(Undo::ReturnToStep);
+  let undo = match name {
+    CONTINUE_RUN if choice(arguments) == Some("accept") => Some(Undo::ReturnToStep),
+    PARK_TASK => Some(Undo::GiveBack),
+    _ => None,
+  };
   let (root, chat, tool) = (scope.root.clone(), scope.chat, name.to_owned());
   let kept = tokio::task::spawn_blocking(move || {
     let mut db = ProjectDb::open(&root)?;

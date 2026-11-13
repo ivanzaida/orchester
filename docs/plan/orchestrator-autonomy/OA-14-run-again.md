@@ -1,6 +1,6 @@
 # OA-14 · A failed task is run again within its ceiling
 
-- **Status:** todo
+- **Status:** done (2026-11-14)
 - **Kind:** workspace
 - **Depends on:** OA-09, OA-13
 - **Branch:** —
@@ -44,3 +44,17 @@ A run the person canceled, or a task the person marked Blocked, is never run aga
 - Workspace tests (`--test orchestrator_tools run_again`): the return, the new run, both ceilings, the person's
   cancel, a failure that is a wait.
 - `tools/check.ps1` passes; `led_start.rs`'s head comment and the manual's table say the rule.
+
+## As built (2026-11-14)
+
+In a turn Orchester started, `run_task` of a task that has a run is allowed when its conversation leads it to the
+end, its latest run failed and its ceiling of runs allows another, and the call gives the chat's reason
+(`reason_required` without; kept as a decision, OA-22). Past the ceiling it is refused `ceiling_reached`; a task
+whose latest run did not fail (it was canceled, succeeded, waits) is still `already_ran`; a task marked Blocked or
+parked is not started at all. The standing says which failed tasks may run again (`may_run_again`), and such a task
+counts as work that can start (OA-13). Returning a run to a step stays `continue_run`'s, counted against the run's
+returns (OA-09). That the chat prefers a return when the work is worth keeping, and parks rather than repeat a note,
+is its instructions' (OA-18).
+
+Tests: `orchester-core --test orchestrator_standing` (a failed task within and past its ceiling),
+`orchester-app --test mcp_domain orchestrator_parking` (a run that did not fail is not run again).

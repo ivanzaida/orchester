@@ -759,3 +759,26 @@ Answers `decisions` (each: `number`, `tool`, `task`, `run`, `reason`, `conversat
 at. A reason is the agent's text: it is shown as text and nothing in it acts. Marking a decision seen and overruling
 it are yours, in the app; no tool does it.
 
+### `get_standing` — read-only
+
+Where what the project's Orchestrator conversations watch **stands**: for each subscription, its target as a whole
+and each of its tasks. A leading turn reads it first. The same for a local and a team project.
+
+Parameters: `project` (req.), `conversation` (an id or a title | null: every conversation that watches something).
+
+Answers `subscriptions`, each with `conversation` (`id`, `title`, `link`), `target` (`kind` `module` | `task` |
+`without_module` | `project`, `id`, `name`), `leads_to_the_end` (false: it only follows), and:
+
+- `standing`: `done` (every task is), `can_start` (tasks can be started now: `can_start` lists their keys and
+  `slot_free` says whether an agent is free), `working` (nothing can start, something still moves) or `stuck`
+  (nothing can start and nothing moves: what is left waits for you; `budget_used` when tasks could start but for the
+  subscription's budget).
+- `tasks`, each `task` (its key) with its `standing`: `done`, `working`, `waits_for_person`, `waits_for_limit`,
+  `waits_for_disk`, `paused`, `to_merge`, `ready_to_start`, `held` (new starts are held), `blocked_by` (with the
+  blocking tasks' keys), `failed` (with `runs` and `may_run_again`: its ceiling of runs allows another), `canceled`,
+  `parked` (the Orchestrator left it to you: `parked` gives `needs`, `why`, `to_do`, `since`), `parked_by_person`
+  (you marked it Blocked), `no_pipeline` or `pipeline_not_ready`.
+
+A task is in the most specific subscription that covers it. A team task is the one its runs on this computer
+recorded: one that never ran here is not listed.
+

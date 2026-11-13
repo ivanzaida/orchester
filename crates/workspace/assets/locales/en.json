@@ -2529,6 +2529,10 @@
       },
       "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
+    "standing": {
+      "canStart": "Work can start in {{target}}: {{tasks}}",
+      "stuck": "{{target}} is stuck: {{count}} left for you"
+    },
     "ceilings": {
       "runs": "This task had {{used}} runs, and what leads it to the end runs a task {{allowed}} times at most. Nothing started: leave the task to the person, with what failed each time.",
       "returns": "You returned or retried this run {{used}} times, and what leads its task to the end allows {{allowed}}. Nothing was changed: leave the task to the person, with what you tried and what came of it.",
@@ -2541,6 +2545,7 @@
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
       "notMergeTurn": "In a turn Orchester started by itself, the chat starts tasks only in the turn of a run's success it merged, where the order of what this conversation leads asks for it. Nothing started; the person can start it in the app.",
       "alreadyRan": "{{task}} has run already: running a task again is the person's, never a turn Orchester started by itself. Nothing started; the person can run it again in the app.",
+      "parked": "{{task}} is parked for the person: nothing starts it until they act on it or give it back. Go on with the rest.",
       "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {

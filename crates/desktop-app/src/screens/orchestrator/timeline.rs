@@ -397,6 +397,11 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
     let line = super::watch::ended_line(ctx, &id, summary, row.turn.at);
     return (line, super::answer::answer(ctx, row));
   }
+  if let Some(event) = &row.turn.standing {
+    let id = format!("orchestrator-standing-{key}");
+    let line = super::watch::standing_line(ctx, &id, event, row.turn.at);
+    return (line, super::answer::answer(ctx, row));
+  }
   match (&row.turn.wait, &row.turn.report) {
     (Some(wait), _) => {
       let id = format!("orchestrator-wait-{key}");
