@@ -20,9 +20,9 @@ use orchester_core::{
   name::Name,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
-    AgentProfile, Deliverable, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
-    Skill, SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Version,
-    VersionNumber,
+    AgentProfile, ChosenResources, Deliverable, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings,
+    RepositoryAccess, Skill, SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer,
+    Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
@@ -69,7 +69,7 @@ impl Config {
   /// [`Self::new`] whose profile names `servers`, each pinned at version 1 under a server id of its own.
   pub fn with_mcp_servers(instructions: &str, servers: Vec<TeamMcpServer>) -> Self {
     let (profile, pipeline, skill) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
-    let profile_version = builder();
+    let profile_version = builder_giving(skill);
     let pipeline_version = one_step(profile, instructions);
     let skill_version = checks();
     let profiles = BTreeMap::from([(profile, profile_version.clone())]);
@@ -185,6 +185,17 @@ pub fn builder() -> Version<AgentProfile> {
     CommandPermission::AnyInWorktree,
     NetworkAccess::Off,
   ));
+  Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
+}
+
+/// [`builder`] giving its agents `skill`: this stand-in for the server builds the snapshot as a local run's is built,
+/// which pins what the steps' profiles give, so the bundle pins the skill and its file.
+fn builder_giving(skill: ResourceId) -> Version<AgentProfile> {
+  let body = builder().body().clone().with_given(
+    ChosenResources::EMPTY,
+    ChosenResources::new(vec![skill]).expect("one skill"),
+    ChosenResources::EMPTY,
+  );
   Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
 }
 
