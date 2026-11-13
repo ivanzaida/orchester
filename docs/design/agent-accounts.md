@@ -386,14 +386,72 @@ tools speak of accounts only.
   agent, as a new session. A team run keeps the connection its inputs bound when the server accepted it. The check
   before a run (`preflight`) looks at the connection the profile runs on here.
 
-**To settle in the design.**
+### Screens (proposed 2026-11-13, not drawn yet)
 
-- The model select of a profile: a provider's models are its own, so the offered models depend on the account
-  chosen here, while the profile version names one model. A team profile on a person's provider has the same
-  question.
-- A project opened on a computer that lacks the account: the state *Missing on this computer* of team projects
-  (06c, 07c) for local ones too.
-- Whether the tab keeps the name *Accounts* once it holds providers and program paths.
-- The MCP tools that name connections (`add_cli_connection`, `set_api_provider`, `check_connection`,
-  `list_connections`, `set_connection_account`, `pick_profile_connection`, the decision connection tools) and what
-  replaces each.
+Proposed by Claude from the decisions above and the boards that exist; not approved and not in `orchester.pen`.
+Frame ids are the boards these change or start from. Every name and number in them stays fixture data.
+
+**Settings › Accounts** (`t8i6m`; the tab keeps its name, since a sign-in and an API provider are both what agents
+run as).
+
+- One group per agent CLI, as today, with two additions. Under the group's title, one quiet line for the program:
+  *claude 2.1.173 · C:\…\claude.exe* and *Change…*; when none is set and none is found, *Claude Code was not found on
+  this computer* in `danger` with *Choose program…*. The group's rows are its sign-ins, Default first, then its API
+  providers, each with a cloud mark where a sign-in has the CLI's: *DeepSeek* · *api.deepseek.com · 2 models* ·
+  *Key set*. *Add account* becomes a menu of two: *Sign in to another account* (today's page `XAm8i`) and *Add an
+  API provider*.
+- A third group, **Model APIs**, for the APIs Orchester's own agent talks to: *Anthropic API* · *api.anthropic.com ·
+  balance $12.40* · *Connected*. Shown only where the native agent is offered.
+- The note under the groups: *Accounts and API providers belong to you on this computer; every project can use
+  them. A key is kept in Windows Credential Manager* (macOS: *the login keychain*)*, never in a project.*
+- **An API provider's page** (from `xN1Jy`): name; *Used with* (Claude Code, read-only after adding); base URL;
+  *API key* — *Set · Oct 31* and *Replace…*, never the value; models (the token list of `hc1vS`); *Used by* (profiles
+  by project, as an account's); *Remove* in the *…* menu, refused while a profile runs on it, with the list.
+- **Add an API provider** (from `hc1vS`, as a page like `XAm8i`): *Used with* (Claude Code · Anthropic Messages,
+  Codex · OpenAI Responses), name, base URL, API key (a field for the value, typed once), models. Primary *Add
+  provider*. The data-location note of `hc1vS` stays, saying the acknowledgement is asked per project at the first
+  run.
+- States (sheet `poD7g`): key missing from this computer's keychain (*Key missing · Enter it again*); key rejected;
+  endpoint unreachable; the name taken by a sign-in or a provider of the same CLI.
+
+**The profile's account** (local `fFxoM`, team `sakAV` / `p779C` / `FO7Cq`, pickers `lCApz` `rjPcV` `Aj9AU`).
+
+- The field *Connection* of a local profile becomes *Account*, with the badge *This computer* and the hint *Kept on
+  this computer · changing it makes no new version*. The select lists every account of the profile's CLI: sign-ins
+  (*Claude Code · Work* — *Max plan*), then API providers (*Claude Code · DeepSeek* — *api.deepseek.com*), then a
+  separator and *Add an account…*, which opens Settings › Accounts. A team member's *Runs here use* (`sakAV`) is the
+  same select with the same list; its hint keeps *never sent to the team*.
+- An account that serves the profile's model applies at once: no *Save*, no *vN*. A sign-in is taken to serve what
+  its CLI lists; an API provider serves the models typed for it.
+- An account that does not serve the profile's model is still offered, with *other models* at the right. In a local
+  project choosing it holds the change in the panel: *Model* opens on that account's models, and *Save* publishes
+  the model as the next version and sets the account with it; *Cancel* leaves both. In a team project a member
+  cannot change the model, so such a row is disabled: *Doesn't serve claude-opus-5-5 · the team chose the model*.
+- *Ready?* speaks of accounts: *Two Claude Code accounts · choose one* (`fFxoM`), *No Claude Code account on this
+  computer* with *Add an account…* (`FO7Cq`; a local project gets the same row), *Not signed in · Work*, *DeepSeek's
+  key is missing on this computer*.
+- The compact *Runs on* picker (`lCApz`): the rail's marks are accounts of the app, not the project's connections;
+  nothing else moves.
+
+**Project settings** (`dk46o`): the tab *Connections* is gone and the tab row is *General · Runs · Context ·
+Secrets · Sharing*. *GitHub* becomes a group of *General* under the repository rows, with the page `KItiZ` behind
+it. MCP servers are the Agents hub's tab (`IpzZ7`, already drawn for a local project) and their pages (`Ptkxo`,
+`OyMrX`) open from there. The empty state `WYCDL` goes; the loading board `C2vSe` loses its row.
+
+**To settle with the drawing.**
+
+- Where the decision model's server lives once its key is the app's: a row of *Model APIs*, or its own group.
+- Whether *Runs on* in a task's run (`lCApz`) may name an account of another CLI than the profile's, as its rail
+  suggests today.
+
+### MCP tools (proposed 2026-11-13, not built)
+
+| Today | After |
+|---|---|
+| `list_accounts` | also lists API providers (id, name, what it is used with, host, models, whether its key is on this computer) and each CLI's program; never a key |
+| `add_cli_connection`, `set_connection_account`, `pick_profile_connection` | one tool, `set_profile_account` (`project`, `profile`, `account`): a local or team profile by id or role, an account or API provider of its CLI by id or name (`default` for the CLI's Default). Another account than the profile runs on now is `person_only` unless *Let automation change agent permissions* is on, as today |
+| `set_api_provider` | gone: an API provider is added by a person, since the tool takes no key. `list_accounts` shows them and `set_profile_account` chooses one |
+| `check_connection` | `check_account` (`account`): a sign-in's or an API provider's check, once for every project |
+| `list_connections` | lists GitHub and, as *runs on*, what each profile runs on here; no agent connection is named or taken as an argument |
+| `list_models` (`connection`) | takes `account` |
+| the decision connection tools | keep their shape; `key` names no project secret any more |

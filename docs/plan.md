@@ -426,6 +426,19 @@ agent connections, a profile chooses one of the app's accounts or API providers 
 providers and their keys are app-wide, and the Connections tab of Project settings goes away. A module, in this
 order; each step after the first waits for the one before it.
 
+Branch `module/agents-on-accounts` (2026-11-13). Built there, with no screen changed: the parts of steps 2 and 3 that
+the old screens do not stand on. Of step 2, API accounts and the agent CLIs' programs in the application database
+with the key in the OS keychain, and adding, renaming, changing and re-keying one (`Workspace::add_api_account` …);
+of step 3, the pick beside a local profile, what makes it (`Workspace::run_profile_on_account`, which also makes the
+project's connection on the account) and everything that reads it: the runner at each agent start, the check before
+a run, readiness, the hub's list and *Used by*. The note's *As built so far* says how. Left of step 2: connections
+take their key from an API account, existing keys move, rows follow the app's side, removal. Left of step 3: the
+hub's select makes a pick instead of a version. Both change what the old connection forms save, so they go in with
+step 4. Tests: `-p orchester-core --test api_accounts`, `--test agent_profile agent_profile_runs_on`,
+`-p orchester-store --test api_accounts`, `--test team_fill_ins fill_in_local`,
+`-p orchester-workspace --test api_accounts`, `--test runs_on`,
+`-p orchester-runner --features test-agent --test runs_on_here`.
+
 1. **Design (UI, in Pencil, the person's document).** Settings › Accounts with the CLI's program path and check, the
    sign-ins and the API providers (add, edit, check, remove, *Used by* across projects); the profile's choice of an
    account for local and team profiles alike, with its model select and *Missing on this computer*; Project settings
