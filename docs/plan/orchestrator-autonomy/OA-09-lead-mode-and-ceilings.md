@@ -1,6 +1,6 @@
 # OA-09 · Core: a subscription leads to the end, with ceilings
 
-- **Status:** review (implemented 2026-11-13)
+- **Status:** done but for choosing it (2026-11-13; OA-10 and its frames, `frames.md` B; independent review: one blocking finding fixed, see *Review*)
 - **Kind:** core + store + workspace
 - **Depends on:** —
 - **Branch:** —
@@ -74,3 +74,20 @@ drives (`crates/workspace/src/app_mcp/tools/continue_run.rs`, `tasks/raise.rs`).
 - **Team projects:** the ceilings read the task's leading subscription, which for a team task is found only once
   OA-28 reads its module; until then a team task led through its module has no ceilings, and none of the chat's
   calls it would bound work for a team run anyway (OA-29).
+
+## Review (2026-11-13)
+
+An independent reviewer read the change. Fixed: a `send_message` that moves a run (continues it, follows it up, runs
+its task again) passed no ceiling, so the chat could return a run or run a task again without end by another door;
+the budget did not stop continuations; the runs ceiling was held nowhere; a take-over left the set in memory
+following while the store kept leading (one rule now, `Subscription::succeeding`). Added to the parity table: a team
+task led through its module has no ceilings until OA-28.
+
+Tests run, on the branch after `origin/master` was merged: `orchester-core --test orchestrator_ceilings ceilings`;
+`orchester-store --test orchestrator_subscriptions subscriptions`; `orchester-workspace --test orchestrator_ceilings
+ceilings`, `--test orchestrator_led_waits led_waits`, `--test orchestrator_watch watch`, `--test
+orchestrator_auto_merge auto_merge`; `orchester-app --test mcp_domain` for `orchestrator_ceilings::`,
+`orchestrator_guard::`, `orchestrator_continue::`, `orchestrator_chat::`, `orchestrator_sent::` (30 passed);
+`tools/check.ps1`: OK. Not run: a raise past its share or its count against a run stopped at a limit (the seed has
+none; the rule is tested in core), the budget refusing a start through `run_task`, a message that runs a task again,
+macOS (no `cfg` code).
