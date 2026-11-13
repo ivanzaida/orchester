@@ -1,9 +1,13 @@
 Agent Instructions
 
 Orchester is a desktop application for orchestrating coding agents per project: tasks and runs, pipelines, agent
-profiles, instructions, tools, secrets and connections, all owned by a project. It is local-only today; a server will
-be added later, so domain logic must not depend on the desktop app.
+profiles, instructions, tools, secrets and connections, all owned by a project. A project lives on this computer only
+or is linked to a team server; domain logic must not depend on the desktop app.
 
+- Local and team projects behave the same (the person, 2026-11-13): `docs/design/local-and-team-parity.md` holds the
+  rule and the table of every difference that still exists. Build a feature for both kinds in the same change; one
+  that cannot be adds its row to that table with the task that closes it. Never scope a plan or a design to one kind,
+  and never leave a `team_project_unsupported` (or its like) without a row there.
 - Product and interaction design: `docs/design/orchester-workspace.md`. Open design issues:
   `docs/evidence/design-consistency-audit-2026-09-23.md`. All project data in the designs is illustrative fixture data;
   never ship it as real data or defaults.

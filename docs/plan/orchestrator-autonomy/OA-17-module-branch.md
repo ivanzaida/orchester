@@ -1,4 +1,4 @@
-# OA-17 · A local module's own branch and its delivery
+# OA-17 · A local module's own branch and its delivery, as a team module has
 
 - **Status:** todo (the person, 2026-11-13: the module has its branch, and the Orchestrator delivers it)
 - **Kind:** design + core + workspace + UI
@@ -49,3 +49,10 @@ The module form's choice, the module Summary with its branch, what is merged int
   delivery the checkout refuses left to the person, a module closed without delivery.
 - An independent design verification of the form's choice and the Summary's states. `tools/check.ps1` passes.
 - The exact list of what is reused and what is new comes from OA-16's map and is written here before the build.
+
+## The same in both kinds (2026-11-13)
+
+A team module already has what this task gives a local one: a branch of its own and a delivery
+(`docs/design/local-and-team-parity.md`). So this task does not invent a second model: the choice, the branch's
+making (OA-33), the merge of a run into it (OA-27 for team runs), acceptance (OA-20) and the delivery's rule (OA-32)
+are one design with two owners of the data, and the Summary's states are the team module's states.

@@ -162,8 +162,9 @@ nothing*; no form field for a task's own choice (MCP only).
 ## O · The Orchestrator leads tasks and modules with nobody at the computer
 
 What is missing for it and the tasks that close it are in `docs/plan/orchestrator-autonomy/` (its `README.md` is the
-tracker: findings, proposed decisions P-01 … P-13, tasks OA-01 … OA-26, their order, and the edge cases each settles).
-Written 2026-11-13; nothing is built, and the tasks marked **needs decision** wait for the person.
+tracker: findings, the person's decisions, tasks OA-01 … OA-36 with their status, their order, and the edge cases
+each settles). It holds for local and team projects alike: `docs/design/local-and-team-parity.md` is the rule and
+the table of what a team project still does differently, which the plan's block G closes.
 
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 

@@ -41,6 +41,13 @@ leading turn would call for each event. The test proves the app's side, not a mo
 - Every judgement is a decision with a reason; no ceiling was passed.
 - A second run of the scenario with the drive switch off changes nothing by itself.
 
+## In both kinds
+
+The scenario runs twice: in a local project, and in a team project against the stand-in server of `orchester-api`
+(`test-support`), with the same assertions, plus for the team run: the claim held through the waits (OA-31), the
+tasks Done on the server after their merge (OA-30), and the module's delivery asked for or parked for its Admin
+(OA-32). What the stand-in cannot show is listed as not run.
+
 ## Not covered, and said so
 
 A real model's judgement in these turns; the window closed (OA-08); a module with its own branch (OA-17). A run with

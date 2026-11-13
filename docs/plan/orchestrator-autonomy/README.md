@@ -11,8 +11,9 @@ is built yet.
 - **Goal.** A person subscribes a conversation to a module, says *lead it to the end*, and leaves. They come back to
   every task merged or left to them with what exactly they must do, a list of what the Orchestrator decided on its
   own with its reasons, and nothing lost on the way.
-- **Scope.** Local projects. A project linked to a team server keeps today's behaviour (`team_project_unsupported`,
-  `team_delivery`); its tasks, modules and delivery are the team server's and are not planned here.
+- **Scope.** Local and team projects alike (the person, 2026-11-13: `docs/design/local-and-team-parity.md`). Every
+  task here is built for both kinds; what a team project still does differently is in that document's table, and
+  block G closes it. The plan was first written for local projects only, which was a mistake of its author.
 - **Design.** Visible changes get frames on the desktop design's boards `Orchestrator watch · redesign` `QOPcg` and
   `Orchestrator WIP` `mPw5l` (`crates/desktop-app/design/orchester.pen`) before they are built; tasks of kind
   *design + UI* start with them.
@@ -74,6 +75,17 @@ Each line is what the code does today; the task that changes it is at its end.
   → OA-19, OA-20
 - A Verify step that reads the design needs Pencil open with the document saved; nothing tells the person before
   they leave. → OA-19
+
+**A team project is led even less.** (Added 2026-11-13; the table is in `docs/design/local-and-team-parity.md`.)
+
+- No path merges a team task's run into its module's branch, though the contract says it does; the chat can neither
+  merge nor start nor continue a team run in a turn it started. → OA-27, OA-29
+- A module subscription does not lead a team task's events: the task reads as having no module. → OA-28
+- A merged team task stays in Backlog until someone marks it Done, so its watch never ends. → OA-30
+- A claim goes stale 15 minutes after its run starts to wait or is in review, and a run that lost its claim keeps
+  executing. → OA-31
+- A team module's branch must be made by hand; its delivery cannot be asked for by the chat. → OA-33, OA-32
+- Limits, dependencies between tasks and forecasts are refused for team tasks. → OA-34, OA-35, OA-36
 
 **The person learns little afterwards.**
 
@@ -156,6 +168,17 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-23](OA-23-while-you-were-away.md) | *While you were away*: decisions to review and what needs you | design + UI | OA-15, OA-22, frames | blocked (frames) |
 | [OA-24](OA-24-outside-notification.md) | A notification that leaves the computer | design + app | — | canceled (person, 2026-11-13) |
 | [OA-25](OA-25-daily-report.md) | The daily report names reasons, what is parked and what is held | workspace | OA-03, OA-15, OA-22 | todo |
+| **G** | **The same in team projects** | | | |
+| [OA-27](OA-27-team-run-merges-into-its-module.md) | A team task's run merges into its module's branch | core + workspace | OA-16 | todo |
+| [OA-28](OA-28-subscriptions-lead-team-tasks.md) | Subscriptions lead team tasks by their module, and `/watching` answers | workspace | — | todo |
+| [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | todo |
+| [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | todo |
+| [OA-31](OA-31-claims-while-work-is-led.md) | A claim holds while its work is led, and a run that lost it stops | contract + workspace + runner | — | todo |
+| [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | todo |
+| [OA-33](OA-33-module-branch-is-made.md) | A module's branch is made when its first task starts, in both kinds | workspace + runner | OA-17 | todo |
+| [OA-34](OA-34-limits-of-team-runs.md) | A team run's limits are raised as a local run's are | contract + workspace | OA-29 | todo |
+| [OA-35](OA-35-team-task-organization.md) | Dependencies between team tasks, and the rest of a task's organization | contract + workspace | — | todo |
+| [OA-36](OA-36-team-reads.md) | Forecasts and cross-project readings answer for team projects | workspace | — | todo |
 | **F** | **Proof** | | | |
 | [OA-26](OA-26-unattended-proof.md) | An unattended module, end to end, with the fake agents | tests | OA-01 … OA-03, OA-06, OA-07, OA-09, OA-12 … OA-15, OA-18, OA-21, OA-22 | todo |
 
@@ -167,8 +190,12 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 3. **A flat module to the end (milestone 2):** OA-12, then OA-13 and OA-15, then OA-14, OA-06, OA-21 and OA-18;
    OA-10 and OA-19 beside them. *Flat* means its tasks merge as today, into the base branch.
 4. **The record (milestone 3):** OA-23 and OA-25 after OA-15 and OA-22.
-5. **Proof:** OA-26, before anyone leaves a real module to it.
-6. **Then:** OA-17 and OA-20 (the module's own branch, its acceptance and delivery) and OA-08 (awake). The visible
+5. **The same in team projects (block G):** OA-28 and OA-33 at once (desktop only, no dependency); OA-27, then
+   OA-29 and OA-30; OA-36 beside them. OA-31, OA-34 and OA-35 change the server's contract: decided with the person,
+   changed here first, and the platform's side is theirs. OA-32 after OA-17 and OA-20.
+6. **Proof:** OA-26, in a local project and in a team project against the stand-in server, before anyone leaves a
+   real module to it.
+7. **Then:** OA-17 and OA-20 (the module's own branch, its acceptance and delivery) and OA-08 (awake). The visible
    tasks follow their frames whenever those arrive.
 
 ## Edge cases and what settles them
@@ -205,7 +232,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 
 ## Not here
 
-- Team projects (see *Scope*), and the server that will run projects without a desktop.
+- The server that will run projects without a desktop.
 - A list of person-only command categories the chat may allow.
 - File ownership between running tasks as a mechanism of the app; the chat orders tasks instead (OA-18).
 - Reverting a merge automatically: the Deliver step's check of the merged result comes before the merge instead.
