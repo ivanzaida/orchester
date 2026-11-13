@@ -41,6 +41,7 @@ mod pipeline_hub_narrow;
 mod pipeline_hub_no_drafts;
 mod pipeline_hub_ready;
 mod pipeline_hub_ready_fixes;
+mod pipeline_hub_team;
 mod pipeline_leaving;
 mod pipeline_links;
 mod pipeline_menu_edit;

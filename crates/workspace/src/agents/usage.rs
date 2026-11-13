@@ -12,6 +12,8 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use crate::tasks::pinned_profile::pinned_profile;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineUse {
   pub profile: ResourceId,
@@ -143,9 +145,11 @@ fn executing(run: &Run, key: &StepKey) -> bool {
 fn active_uses(db: &ProjectDb, run: &Run) -> Result<Vec<ActiveUse>, StoreError> {
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   let pinned = run.snapshot().pipeline();
-  let resource = db
-    .resource(pinned.resource)?
-    .ok_or(StoreError::ResourceNotFound(pinned.resource))?;
+  // A team project's database keeps no copy of the team's pipelines, so it cannot name the one a team run pins: the
+  // run is listed with none of its steps here, where the team's hub reads what uses a team profile from its server.
+  let Some(resource) = db.resource(pinned.resource)? else {
+    return Ok(Vec::new());
+  };
   let started_at = db
     .events(run.id())
     .map_err(crate::tasks::detail::run_store_error)?
@@ -171,9 +175,7 @@ fn active_uses(db: &ProjectDb, run: &Run) -> Result<Vec<ActiveUse>, StoreError> 
     uses.push(ActiveUse {
       profile: profile.resource,
       version: profile.number,
-      profile_name: db
-        .version::<AgentProfile>(profile.resource, profile.number)?
-        .map(|version| version.body().role().as_str().into()),
+      profile_name: pinned_profile(db, run.id(), *profile)?.map(|body| body.role().as_str().into()),
       position: index + 1,
       started_at,
       task: task.key().clone(),

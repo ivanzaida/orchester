@@ -88,7 +88,7 @@ Hard requirements:
    an explicit, visible "not supported on this platform yet" state — never a silent gap). Do not add Windows-only
    dependencies without their macOS counterpart. The macOS side (Unix socket transport and peer check, process groups,
    program search path, Library data location, `.app` bundle) is checked on a Mac: by CI's macOS job (clippy and
-   tests, `.github/workflows/ci.yml`; it runs on a release or by hand) or by a person. Do not run `cargo check`/`clippy
+   tests, `.github/workflows/ci.yml`; it runs by hand only, never on a release) or by a person. Do not run `cargo check`/`clippy
    --target aarch64-apple-darwin` on Windows: the crates' C dependencies (ring, SQLite, zstd) cannot build there
    without the Apple SDK, so it proves nothing. Name the `cfg(target_os = "macos")` code you added or changed instead,
    and list the macOS check as not run. Known gaps today: a macOS process group does not

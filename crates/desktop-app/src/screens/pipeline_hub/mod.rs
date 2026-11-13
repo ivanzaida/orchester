@@ -1,8 +1,8 @@
-//! The Pipelines hub of a local project (`Pipelines · v2` `pCzIS`, P1): the same master–detail page as the Agents hub
-//! ([`super::local_hub`]): a filter (*All*, *Archived*) with counts, a list of the project's pipelines
-//! grouped by whether they can run as they are (*Needs you*, *Ready*), and the panel of the chosen one ([`panel`]). The
-//! tab and the chosen pipeline are the route's ([`PipelinesView`]). A team project keeps the page it has
-//! ([`super::pipelines`]).
+//! The Pipelines hub (`Pipelines · v2` `pCzIS`, P1), a local project's and a team project's alike: the same
+//! master–detail page as the Agents hub ([`super::local_hub`]): a filter (*All*, *Archived*) with counts, a list of the
+//! project's pipelines grouped by whether they can run as they are (*Needs you*, *Ready*), and the panel of the chosen
+//! one ([`panel`]). The tab and the chosen pipeline are the route's ([`PipelinesView`]). A team project's pipelines are
+//! the team's: what is saved goes to its team server at once, and a member who is not its admin reads them ([`whose`]).
 //!
 //! The panel's head holds the ⋯ menu ([`panel_head`], [`menu`]): *Rename* in place ([`rename`]), *Duplicate*, *Make
 //! default for New task* and *Archive*, whose confirmation the hub hosts so that it outlives the panel; an archived
@@ -48,6 +48,7 @@ mod steps;
 mod undecided;
 mod version_view;
 mod versions;
+mod whose;
 mod words;
 
 use std::sync::Arc;
@@ -72,7 +73,7 @@ use orchester_workspace::{messages::Message, pipelines::create::Start};
 use self::{
   leave::{Hosted, Unsaved, UnsavedSignal},
   model::{Entry, Listing},
-  states::Retry,
+  states::{Retry, empty, new_button},
 };
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
@@ -83,17 +84,12 @@ use crate::{
     hub::agents,
     local_hub::{
       archive::{Asking, Target},
-      head,
       leave::Leave,
     },
     team_hub::list::LIST_WIDTH,
   },
-  theme::{HubSpacing, PIPELINE_HUB_LIST_NARROW},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    failure::LastFailure,
-    icon::Icon,
-  },
+  theme::PIPELINE_HUB_LIST_NARROW,
+  ui::{button::ButtonKind, failure::LastFailure},
 };
 
 #[derive(Clone, PartialEq)]
@@ -230,6 +226,9 @@ impl Component for PipelineHubScreen {
     let navigation = Navigation::of(ctx);
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().0.is_some());
     let id = project.open.project.id();
+    // A member of the team reads its pipelines: they make none.
+    let read_only = listing.as_ref().is_some_and(Listing::read_only);
+    let begin = begin.filter(|_| !read_only);
     let (making, named, view) = self.landed(ctx, listing.as_ref(), (named, begin), (&navigation, id));
     let selected = listing
       .as_ref()
@@ -257,9 +256,9 @@ impl Component for PipelineHubScreen {
       (None, None) => bones::body(ctx, ctx.t("pipeline_hub.reading")),
     };
     let new = if unreadable {
-      states::new_unavailable(ctx)
+      Some(states::new_unavailable(ctx))
     } else {
-      new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &leave, id)
+      (!read_only).then(|| new_button(ctx, ("pipeline-hub-new", ButtonKind::Primary), &leave, id))
     };
     let leaving = listing.as_ref().and_then(|listing| {
       leave::question(
@@ -269,17 +268,19 @@ impl Component for PipelineHubScreen {
         (&navigation, &self.guard),
       )
     });
-    let over: Vec<Element> = leaving.into_iter().chain(self.archiving.question(ctx)).collect();
+    let local = listing.as_ref().is_none_or(|listing| listing.team().is_none());
+    let archiving = self.archiving.question_in(ctx, local);
+    let over: Vec<Element> = leaving.into_iter().chain(archiving).collect();
     agents::frame(
       ctx,
       agents::Frame {
         prefix: "pipeline-hub",
         title: "pipeline_hub.title",
         current: view.filter.name(),
-        status: head::status(ctx),
-        new: Some(new),
+        status: whose::status(ctx, listing.as_ref()),
+        new,
         tabs: tabs(id, listing.as_ref(), selected.as_ref().map(|entry| entry.id), &leave),
-        notices: Vec::new(),
+        notices: whose::notices(ctx, &project, listing.as_ref()),
         body,
         over,
       },
@@ -432,7 +433,7 @@ fn hub_body(
     return master_detail(ctx, reading, (list, panel));
   }
   let Some(entry) = selected else {
-    return empty(ctx, view.filter, leave, id);
+    return empty(ctx, view.filter, (!listing.read_only()).then_some(leave), id);
   };
   let list = list::list(ctx, listing, &shown, None);
   let panel = panel::panel(
@@ -444,6 +445,7 @@ fn hub_body(
       default: default == Some(entry.id),
       hosted,
       step,
+      team: listing.team(),
     },
   );
   master_detail(ctx, reading, (list, panel))
@@ -476,48 +478,6 @@ fn master_detail(ctx: &Ctx, reading: bool, (list, panel): (Element, Element)) ->
     )
     .child(panel)
     .into()
-}
-
-/// *New pipeline*, which makes one in the panel ([`new`]): the head's is the primary button, the empty body's the
-/// secondary.
-fn new_button(ctx: &Ctx, (id, kind): (&str, ButtonKind), leave: &Leave, project: ProjectId) -> Element {
-  ActionButton::new(id.to_owned(), kind, ctx.t("pipeline_hub.new"))
-    .icon(Icon::Plus)
-    .press(leave.press(Route::Project(project, ProjectPage::NewPipeline)))
-    .into()
-}
-
-/// The open tab holds nothing: what a pipeline is, with *New pipeline* when the project has none.
-fn empty(ctx: &Ctx, filter: PipelinesFilter, leave: &Leave, project: ProjectId) -> Element {
-  let (glyph, title, detail) = match filter {
-    PipelinesFilter::All => (
-      Icon::Workflow,
-      "pipeline_hub.empty.all.title",
-      "pipeline_hub.empty.all.detail",
-    ),
-    PipelinesFilter::Archived => (
-      Icon::Archive,
-      "pipeline_hub.empty.archived.title",
-      "pipeline_hub.empty.archived.detail",
-    ),
-  };
-  let action = (filter == PipelinesFilter::All).then(|| {
-    [
-      // The design puts a gap between the line and the button (`Action gap` `BAEia` in P6), on top of the 10
-      // either side of it.
-      Row::new()
-        .id("pipeline-hub-empty-action-gap")
-        .height(Dimension::Px(HubSpacing::ActionGap.value()))
-        .into(),
-      new_button(ctx, ("pipeline-hub-empty-new", ButtonKind::Secondary), leave, project),
-    ]
-  });
-  agents::empty(
-    "pipeline-hub",
-    glyph,
-    (&ctx.t(title), &ctx.t(detail)),
-    action.into_iter().flatten().collect(),
-  )
 }
 
 /// A tab per filter with its count (none while the pipelines are read), each keeping the chosen pipeline when it holds

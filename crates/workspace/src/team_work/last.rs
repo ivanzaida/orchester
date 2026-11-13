@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
+use orchester_api::v2::ExecutionBundle;
 use orchester_core::{
   id::{OperationId, TaskId},
   time::Timestamp,
@@ -115,6 +115,6 @@ impl StartFailure {
   /// Whether the reason this failure was kept for still holds on this computer: a bundle in a schema this app did not
   /// read stops being the reason once the app reads that schema, i.e. after the person updated it.
   pub fn holds(&self) -> bool {
-    !matches!(self, Self::BundleSchema { built, .. } if *built == EXECUTION_BUNDLE_SCHEMA)
+    !matches!(self, Self::BundleSchema { built, .. } if ExecutionBundle::reads(*built))
   }
 }

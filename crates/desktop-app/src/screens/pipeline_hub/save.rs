@@ -1,5 +1,6 @@
-//! What the bar of a pipeline's panel does: *Save* publishes the edit the panel holds as the next version
-//! ([`local_edit::save`]), or is refused and stores nothing (a pipeline holds no draft, D-032). A save that widens what
+//! What the bar of a pipeline's panel does: *Save* saves the edit the panel holds as the next version
+//! ([`local_edit::save`]: in the project's database, or on the team server for a team project, whose answer the bar
+//! waits for), or is refused and stores nothing (a pipeline holds no draft, D-032). A save that widens what
 //! the pipeline's agents may do asks first, in the panel, and only a person's press answers it; a refusal says why in
 //! place, and a save says which version it made ([`Notes`]). A save ends with the screens that read the pipelines
 //! reading them again.
@@ -149,13 +150,15 @@ impl Notes {
   }
 }
 
-/// Stores and publishes what the panel holds of the pipeline `id` in the project at `root`.
+/// Saves what the panel holds of the pipeline `id` in the project at `root` as its next version.
 pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
+  let servers = Services::of(ctx).servers;
   ctx.future_action(move |ask: Ask| {
-    let (root, asked) = (root.clone(), ask.clone());
+    let (root, servers, asked) = (root.clone(), servers.clone(), ask.clone());
     async move {
+      let held = asked.held;
       let saved =
-        background::run(move || local_edit::save(&root, id, asked.held.base(), asked.held.edit(), &asked.allowed))
+        background::run(move || local_edit::save((&root, &servers), id, held.base(), held.edit(), &asked.allowed))
           .await??;
       Ok(Done { ask, saved })
     }

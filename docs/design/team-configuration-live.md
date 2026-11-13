@@ -93,15 +93,18 @@ configuration in its database as today.
   from the server (`Servers::team_pipeline_history`, `GET …/resources/{id}/versions`). A shared task names its pipeline
   by id whether or not memory has it; which are missing is told from memory. The runs an archive stops are found
   through memory and the runs' own inputs (`sync::archive::pins`); when the stream opens, the runs that pin a resource
-  archived while this computer was not following are stopped. The stream writes no configuration to the database
+  archived while this computer was not following are stopped. A run's readers (the task feed and page, history,
+  approvals, `get_run`) take the profile a step pinned from the database when it holds that version, else from the
+  run's own inputs (`tasks::pinned_profile`): a version the database has no row of reads as none
+  (`ResourceStore::version` and its siblings), never as an error. The stream writes no configuration to the database
   (no `config::sync`, no cached versions or profiles, `apply` only moves the cursor for a resource's events); Share
   keeps nothing of what it uploaded, so the project's own resources stay as they were, hidden while it is shared and
   its own again when it is made local. The store migration `team_cache` drops the team's resources, versions, bodies
   and references of a shared project except a version a run or a task here pins, and keeps the overrides.
   `sharing::compare` keeps only a local project's history; its conflict types are gone. While the configuration is
   being read or cannot be read, these readers say so (`TeamNotRead`) instead of reading an older copy.
-- **Team pipelines are edited here**: a team pipeline is changed by an admin on
-  the pipeline page (D-043 in Pipelines v2): Save, *Create v1* and Duplicate send it to the team server at once
+- **Team pipelines are edited here**: a team pipeline is changed by an admin in
+  the Pipelines hub, the page a local project has too (D-043, D-051 in Pipelines v2): Save, *Create v1* and Duplicate send it to the team server at once
   (`sharing/project/team_pipeline.rs`, `pipelines/team_write.rs`) and the page shows it saving until the answer; memory
   takes what the server answered and nothing is written to the project database, and a refusal or a server that cannot
   be reached keeps the edit as typed with why. A rename goes first, as the resource's PATCH on the revision memory

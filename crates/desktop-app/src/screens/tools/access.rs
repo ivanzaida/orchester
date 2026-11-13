@@ -14,7 +14,7 @@ use crate::{
   routes::Route,
   screens::{
     hub::parts::{Entry, boxed, group, head, note},
-    pipeline_link::PipelineLinks,
+    pipeline_link,
   },
   theme::HubSpacing,
   ui::{
@@ -83,10 +83,7 @@ fn caller(ctx: &Ctx, (p, navigation): (&EditorProps, &Navigation), index: usize,
       ("step", step.to_string()),
     ],
   );
-  let route = Route::Project(
-    p.project.open.project.id(),
-    PipelineLinks::of(&p.project).page(used.pipeline),
-  );
+  let route = Route::Project(p.project.open.project.id(), pipeline_link::page(used.pipeline));
   let open = ActionButton::new(
     format!("tool-access-open-{index}"),
     ButtonKind::Ghost,

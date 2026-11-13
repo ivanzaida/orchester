@@ -622,7 +622,14 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   failed too, over MCP as `team_bundle_schema_mismatch` / `team_bundle_unreadable`. Only a failed call (no answer, a
   body that is not JSON, a refusal) waits. `module_id`, `branch`
   and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
-  branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
+  branch's commit the work starts from (`CommitId`).
+  **A task in no module (schema 4, `MODULE_LESS_BUNDLE_SCHEMA`; the person's decision of 2026-11-13).** Its bundle is
+  schema 3 without `module_id` and `branch`, and names its `schema_version` 4. A bundle under a module stays schema
+  3, byte for byte, with the same hash, so a desktop that reads only 3 still runs every task in a module and refuses
+  one in none as built in a schema it does not read; a side reads both (`ExecutionBundle::reads`), and refuses a
+  schema-3 bundle without its module or a schema-4 bundle with one. `work.start` of such a task is decided against
+  the task's revision alone. Its run starts on the branch the executing computer has checked out, at `base_commit`,
+  and merges into that branch on that computer; no delivery follows, as a delivery is a module's. `definition_revision` is the task's revision when the work
   started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its
   branch with the project's key); `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a
   `SharedLimits` (`{}` for none) and `delivery` what the run delivers (`changes`, `report`, `outside` or

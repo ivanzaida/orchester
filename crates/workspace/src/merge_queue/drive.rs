@@ -23,7 +23,7 @@ use orchester_core::{
   resource::{DeliverMode, DeliverStep},
   revision::Revision,
   run::{BranchName, Run, RunStatus},
-  store::{RunStore, TaskStore},
+  store::RunStore,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -45,7 +45,7 @@ use super::{
 };
 use crate::{
   messages::{self, Message},
-  tasks::{changes::GIT, detail::run_store_error, worktree_removal::WorktreeRemover},
+  tasks::{changes::GIT, detail::run_store_error, recorded::task_of, worktree_removal::WorktreeRemover},
 };
 
 /// What [`advance`] did.
@@ -388,7 +388,8 @@ impl Driver<'_> {
   }
 
   fn land(self, entry: QueueEntry, run: &Run, (deliver, mut events): (&DeliverStep, Vec<QueueEvent>)) -> Moved {
-    let Some(task) = self.db.task(run.task())? else {
+    // A team task's as its runs recorded it: this computer keeps no definition of one.
+    let Some(task) = task_of(self.db, run.task())? else {
       return self.leave(entry, stopped("the run's task cannot be read"), events);
     };
     match land(

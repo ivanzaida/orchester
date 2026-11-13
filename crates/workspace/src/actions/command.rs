@@ -146,8 +146,8 @@ pub(super) fn assignment(db: &ProjectDb, link: TeamLink, action: AssignmentActio
   Ok(TeamRequest::revised(command, &[(target, action.read)]))
 }
 
-/// `work.start` of a task, on the task's and its module's revisions, which the server needs both of. A module's own
-/// work waits for its execution bundle (D3).
+/// `work.start` of a task, on the task's revision and, when it is in a module, its module's, which the server then
+/// needs both of. A module's own work waits for its execution bundle (D3).
 pub(super) fn work(db: &ProjectDb, link: TeamLink, action: &WorkAction) -> Result<TeamRequest, ActionError> {
   let authority = team_authority(db, link, action.authority)?;
   let Subject::Task { id: task } = authority.subject else {
@@ -157,10 +157,8 @@ pub(super) fn work(db: &ProjectDb, link: TeamLink, action: &WorkAction) -> Resul
     authority,
     base_commit: action.base_commit.clone(),
   };
-  let read = [
-    (RevisionTarget::Task(task), action.read),
-    (RevisionTarget::Module(action.module), action.module_read),
-  ];
+  let mut read = vec![(RevisionTarget::Task(task), action.read)];
+  read.extend(action.module.map(|(module, at)| (RevisionTarget::Module(module), at)));
   Ok(TeamRequest::revised(command, &read))
 }
 

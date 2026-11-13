@@ -232,7 +232,11 @@ pub fn undecided_members(
   let Some(version) = db.latest_version::<Pipeline>(pipeline)? else {
     return Ok(Vec::new());
   };
-  let body = version.body();
+  Ok(undecided_in(version.body(), readiness))
+}
+
+/// Every profile or tool `body` runs (and its integrator) that `readiness` cannot tell, in the order of the steps.
+pub fn undecided_in(body: &Pipeline, readiness: &ProjectReadiness) -> Vec<UndecidedMember> {
   let integrator = body.deliver().and_then(|deliver| deliver.integrator());
   let mut members: Vec<UndecidedMember> = Vec::new();
   for id in body
@@ -256,5 +260,5 @@ pub fn undecided_members(
       });
     }
   }
-  Ok(members)
+  members
 }

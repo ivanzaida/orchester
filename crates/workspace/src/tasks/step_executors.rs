@@ -6,13 +6,16 @@ use std::sync::Arc;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, EngineVendor},
   id::ConnectionId,
-  resource::{AgentProfile, StepKey},
+  resource::StepKey,
   run::{Invocation, PinnedVersion, Run, StepExecutor},
   store::{ConnectionStore, ResourceStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::permissions::{RunPermissions, run_permissions};
+use super::{
+  permissions::{RunPermissions, run_permissions},
+  pinned_profile::pinned_profile,
+};
 
 /// Who executes a step (its agent role, or its tool's name), what it reaches, its model and its
 /// permissions in the run.
@@ -55,20 +58,20 @@ pub(super) struct Reached {
 /// An agent step's role, CLI and model API, and permissions.
 type AgentStep = (Option<Arc<str>>, Reached, Option<RunPermissions>);
 
-/// The agent role, the CLI and the permissions of agent step `step`, which runs on `profile`; none
-/// of them once the profile version is gone.
+/// The agent role, the CLI and the permissions of agent step `step`, which runs on `profile`
+/// ([`pinned_profile`]: a team run's is read from its inputs); none of them once the profile version is gone.
 fn agent_step(
   db: &ProjectDb,
   run: (&Run, &[Invocation]),
   step: &StepKey,
   profile: PinnedVersion,
 ) -> Result<AgentStep, StoreError> {
-  let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? else {
+  let Some(body) = pinned_profile(db, run.0.id(), profile)? else {
     return Ok((None, Reached::default(), None));
   };
-  let role = Arc::<str>::from(version.body().role().as_str());
-  let reached = reached(db, version.body().connection())?;
-  let permissions = run_permissions(db, run, step, (profile.resource, &version), reached.provider)?;
+  let role = Arc::<str>::from(body.role().as_str());
+  let reached = reached(db, body.connection())?;
+  let permissions = run_permissions(db, run, step, (profile, &body), reached.provider)?;
   Ok((Some(role), reached, permissions))
 }
 

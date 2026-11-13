@@ -33,7 +33,9 @@ use orchester_core::{
   resource::{Pipeline, PipelineEdit, StepKey, VersionNumber},
   time::Timestamp,
 };
-use orchester_workspace::pipelines::{data::Assignables, flow::FlowRead, local_edit::unpublishable};
+use orchester_workspace::pipelines::{
+  data::Assignables, flow::FlowRead, hub::TeamPipelines, local_edit::unpublishable,
+};
 
 use super::{
   OpenStep, archived, bar, chips,
@@ -72,6 +74,15 @@ pub(super) struct Props {
   pub hosted: Hosted,
   /// The step the route holds open: the panel shows it in place of the pipeline's own body.
   pub step: Option<OpenStep>,
+  /// `Some` in a team project. A member who is not its admin reads the pipeline: nothing in the panel changes, and it
+  /// has no Save bar.
+  pub team: Option<TeamPipelines>,
+}
+
+impl Props {
+  fn read_only(&self) -> bool {
+    self.team.is_some_and(|team| !team.may_change)
+  }
 }
 
 impl PartialEq for Props {
@@ -83,6 +94,7 @@ impl PartialEq for Props {
       self.default,
       &self.hosted,
       &self.step,
+      self.team,
     ) == (
       &other.project,
       &other.entry,
@@ -90,6 +102,7 @@ impl PartialEq for Props {
       other.default,
       &other.hosted,
       &other.step,
+      other.team,
     )
   }
 }
@@ -101,6 +114,7 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
     return archived::panel(
       ctx,
       archived::Props {
+        read_only: props.read_only(),
         project: props.project,
         entry: props.entry,
         now: Timestamp::now(),
@@ -198,6 +212,8 @@ impl Component for PipelinePanel {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<Props>().clone();
+    let (read_only, team) = (props.read_only(), props.team);
     let Props {
       project,
       entry,
@@ -205,7 +221,8 @@ impl Component for PipelinePanel {
       default,
       hosted,
       step,
-    } = ctx.props::<Props>().clone();
+      ..
+    } = props;
     // `panel` leaves the pipelines that have no steps to hold, the archived ones, to their own panel.
     let stored = entry
       .body
@@ -230,7 +247,7 @@ impl Component for PipelinePanel {
     let asked = self.pending.get();
     let saving = self.save.state().get().is_pending();
     mark_saving(&hosted.saving, saving);
-    let locked = saving || asked.is_some();
+    let locked = saving || asked.is_some() || read_only;
     let line = bar::Line {
       entry: &entry,
       unsaved,
@@ -256,6 +273,7 @@ impl Component for PipelinePanel {
       changed,
       edited: changed.then_some(steps_not_ready),
       save_off: save_off.is_some(),
+      team,
     };
     let (body, viewed) = self.views(ctx, &shown, hosted, step);
     let refused = self.notes.told().refused.is_some();
@@ -265,19 +283,14 @@ impl Component for PipelinePanel {
       asked.as_ref(),
       (ready::can_run(&entry, &read), viewed.is_some()),
     );
-    let bar = match &viewed {
-      // A version is read, not edited: the bar belongs to the edit, which waits behind it.
-      Some(viewed) => {
-        pinned.extend(self.replace_question(ctx, &edit, viewed));
-        None
-      }
-      // Cancel drops unsaved changes, and a refusal of a save that changed nothing, which stays until then.
-      None => Some(bar::bar(
-        ctx,
-        (save, ((unsaved || refused) && !saving).then(|| self.cancel_now(&edit))),
-        &line,
-      )),
-    };
+    if let Some(viewed) = &viewed {
+      pinned.extend(self.replace_question(ctx, &edit, viewed));
+    }
+    // A version is read, not edited: the bar belongs to the edit, which waits behind it. A member of the team reads
+    // its pipelines: there is nothing to save. Cancel drops unsaved changes, and a refusal of a save that changed
+    // nothing, which stays until then.
+    let cancel = ((unsaved || refused) && !saving).then(|| self.cancel_now(&edit));
+    let bar = (viewed.is_none() && !read_only).then(|| bar::bar(ctx, (save, cancel), &line));
     frame(&entry, body, pinned, bar)
   }
 }
@@ -300,6 +313,7 @@ struct Shown<'a> {
   edited: Option<usize>,
   /// *Save* is off: the edit cannot be published as it stands.
   save_off: bool,
+  team: Option<TeamPipelines>,
 }
 
 impl PipelinePanel {
@@ -404,6 +418,7 @@ impl PipelinePanel {
         hosted,
         holds_changes: shown.changed,
         viewing: self.viewing.clone(),
+        team: shown.team,
       },
     )
   }

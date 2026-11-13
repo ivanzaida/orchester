@@ -92,11 +92,12 @@ fn check(db: &ProjectDb, root: &Path, accepted: &AcceptedInputs) -> Result<NewRu
     snapshot,
     branch: BranchName::for_next_run(task.key(), earlier.len()),
     base,
-    // The branch the run merges into is its module's, which the server assigned.
+    // The branch the run merges into: its module's, which the server assigned, or, for a task in no module, the one
+    // this computer had checked out when it asked for the start.
     base_branch: Some(acceptance.branch.clone()),
-    base_source: RunBaseSource::Module {
-      module: acceptance.module,
-    },
+    base_source: acceptance
+      .module
+      .map_or(RunBaseSource::CheckedOut, |module| RunBaseSource::Module { module }),
     budget: limits.budget(),
     max_duration: limits.max_duration(),
   })

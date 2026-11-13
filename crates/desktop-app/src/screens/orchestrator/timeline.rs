@@ -41,7 +41,6 @@ use super::{
   watching::Live,
 };
 use crate::{
-  screens::pipeline_link::PipelineLinks,
   theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
   ui::{
     chat::{follow::Follow, names::ProjectNames},
@@ -55,8 +54,6 @@ use crate::{
 pub(super) struct TurnEnv {
   pub(super) project: ProjectId,
   pub(super) name: Arc<str>,
-  /// Where a link to one of the project's pipelines opens.
-  pub(super) pipelines: PipelineLinks,
   /// The project's folder, whose data keeps the files attached to the messages.
   pub(super) root: PathBuf,
   /// The name of the connection the Orchestrator runs on, when it has one.

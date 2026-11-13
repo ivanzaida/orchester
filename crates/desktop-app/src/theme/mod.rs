@@ -120,7 +120,7 @@ pub use self::{
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   permissions::{PermissionsSpacing, PermissionsText},
-  pipelines::{PIPELINE_HUB_LIST_NARROW, PIPELINES_BONE_FADE, PipelinesSpacing, PipelinesText},
+  pipelines::{PIPELINE_HUB_LIST_NARROW, PIPELINES_BONE_FADE, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText, UNUSED_ROWS_OPACITY},
   projects::{ProjectsSpacing, ProjectsText},
   review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
@@ -172,7 +172,6 @@ pub fn install(app: &mut App, mode: Mode) {
   let theme = app.theme();
   apply(theme, mode);
   metrics::install(theme);
-  pipelines::install(theme);
   step_strip::install(theme);
   agents::install(theme);
   instructions::install(theme);

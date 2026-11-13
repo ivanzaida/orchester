@@ -1,4 +1,4 @@
-use orchester_api::v2::{BundleFileError, EXECUTION_BUNDLE_SCHEMA};
+use orchester_api::v2::{BundleFileError, EXECUTION_BUNDLE_SCHEMA, MODULE_LESS_BUNDLE_SCHEMA};
 use orchester_core::{
   blob::ContentHash,
   id::{OperationId, RunId},
@@ -37,9 +37,16 @@ pub enum TeamWorkError {
     expected: ContentHash,
     reason: &'static str,
   },
-  /// The server built the start's bundle in another schema than this computer reads, so it can never be read here.
-  #[error("the bundle is built in schema {built}, and this computer reads schema {EXECUTION_BUNDLE_SCHEMA}")]
+  /// The server built the start's bundle in a schema this computer does not read, so it can never be read here.
+  #[error(
+    "the bundle is built in schema {built}, and this computer reads schemas {EXECUTION_BUNDLE_SCHEMA} and \
+     {MODULE_LESS_BUNDLE_SCHEMA}"
+  )]
   BundleSchema { built: u32 },
+  /// The bundle is of a task in no module, and the start kept no branch its run would start on and merge into: a
+  /// start recorded for a task that was in a module when it was asked.
+  #[error("the start {0} of a task in no module kept no branch for its run")]
+  NoBaseBranch(OperationId),
   /// The server answered JSON for the start's bundle that is not an execution bundle of the schema this computer reads.
   #[error("the bundle the server answered is not one this computer can read")]
   BundleUnreadable,

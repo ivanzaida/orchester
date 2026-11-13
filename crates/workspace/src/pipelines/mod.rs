@@ -22,6 +22,7 @@ pub mod rename;
 pub mod sources;
 pub mod task_use;
 mod team_assignables;
+mod team_hub;
 pub mod team_page;
 mod team_write;
 pub mod widening;

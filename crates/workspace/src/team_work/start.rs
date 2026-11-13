@@ -4,11 +4,12 @@
 //! answer or an outage makes no second work and no second run.
 
 use orchester_api::v2::{
-  AuthorityError, AuthorityErrorCode, AuthorityRef, EXECUTION_BUNDLE_SCHEMA, Subject, TeamCommandValue,
+  AuthorityError, AuthorityErrorCode, AuthorityRef, ExecutionBundle, MODULE_LESS_BUNDLE_SCHEMA, Subject,
+  TeamCommandValue,
 };
 use orchester_core::{
   id::{ModuleId, OperationId, RunId},
-  run::{CommitId, inputs::TeamAcceptance},
+  run::{BranchName, CommitId, inputs::TeamAcceptance},
   secret::SecretVault,
   sharing::TaskRevision,
   task::identity::TeamTaskRef,
@@ -38,6 +39,9 @@ use crate::{
 pub struct TeamStartRequest {
   pub operation: OperationId,
   pub work: WorkAction,
+  /// For a task in no module, the branch this computer has checked out, which `work.base_commit` was read from and
+  /// the run merges into; `None` under a module, whose branch the bundle names.
+  pub base_branch: Option<BranchName>,
   pub programs: McpPrograms,
 }
 
@@ -86,13 +90,14 @@ impl StartFailure {
   /// The failure `error` is when it lasts: the same bundle and choices fail the same way every time.
   fn lasting(error: &TeamWorkError) -> Option<Self> {
     match error {
+      // The newest schema this computer reads: one it does not read is newer than it, or older than every one.
       TeamWorkError::BundleSchema { built } => Some(Self::BundleSchema {
-        read: EXECUTION_BUNDLE_SCHEMA,
+        read: MODULE_LESS_BUNDLE_SCHEMA,
         built: *built,
       }),
       TeamWorkError::BundleUnreadable => Some(Self::BundleUnreadable),
       TeamWorkError::BundleMismatch { .. } | TeamWorkError::BundleFile(_) => Some(Self::Bundle(error.to_string())),
-      TeamWorkError::Inputs(_) => Some(Self::Inputs(error.to_string())),
+      TeamWorkError::Inputs(_) | TeamWorkError::NoBaseBranch(_) => Some(Self::Inputs(error.to_string())),
       TeamWorkError::NotReadyHere { pipeline, missing } => Some(Self::NotReadyHere {
         pipeline: pipeline.clone(),
         missing: missing.clone(),
@@ -119,8 +124,14 @@ pub(super) struct KeptStart {
   pub(super) authority: AuthorityRef,
   base_commit: CommitId,
   read: TaskRevision,
-  module: ModuleId,
-  module_read: TaskRevision,
+  /// The task's module and the revision it was read at; neither for a task in no module.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  module: Option<ModuleId>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  module_read: Option<TaskRevision>,
+  /// The branch a task in no module starts on and merges into ([`TeamStartRequest::base_branch`]).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  base_branch: Option<BranchName>,
   programs: McpPrograms,
 }
 
@@ -130,8 +141,7 @@ impl KeptStart {
       authority: self.authority,
       base_commit: self.base_commit.clone(),
       read: self.read,
-      module: self.module,
-      module_read: self.module_read,
+      module: self.module.zip(self.module_read),
     }
   }
 }
@@ -194,8 +204,9 @@ impl<R: TeamRunner> TeamWork<R> {
       },
       base_commit: request.work.base_commit,
       read: request.work.read,
-      module: request.work.module,
-      module_read: request.work.module_read,
+      module: request.work.module.map(|(module, _)| module),
+      module_read: request.work.module.map(|(_, read)| read),
+      base_branch: request.base_branch,
       programs: request.programs,
     };
     // The kept start's types serialize to JSON without fail: they hold no map with non-string keys.
@@ -257,7 +268,7 @@ impl<R: TeamRunner> TeamWork<R> {
       .db()?
       .accept_team_start(operation, (work.id, &bundle.sha256), Timestamp::now())?;
     // The receipt says the schema before the bundle is read: a bundle of another schema never decodes here.
-    if bundle.schema_version != EXECUTION_BUNDLE_SCHEMA {
+    if !ExecutionBundle::reads(bundle.schema_version) {
       let built = bundle.schema_version;
       return self
         .fail((operation, kept.authority), TeamWorkError::BundleSchema { built })
@@ -290,6 +301,12 @@ impl<R: TeamRunner> TeamWork<R> {
     };
     let team = bundle::task_subject(kept.authority.subject).ok_or(TeamWorkError::NotATask)?;
     let start = fetched.bundle.start();
+    // The branch the run merges into: the module's, as the bundle names it, or the one the start was asked on.
+    let (module, branch) = match (&start.module, &kept.base_branch) {
+      (Some(module), _) => (Some(module.module_id), module.branch.clone()),
+      (None, Some(branch)) => (None, branch.clone()),
+      (None, None) => return Err(TeamWorkError::NoBaseBranch(operation)),
+    };
     let acceptance = TeamAcceptance {
       task: TeamTaskRef {
         server: link.server,
@@ -300,8 +317,8 @@ impl<R: TeamRunner> TeamWork<R> {
       work,
       claim: kept.authority.claim_id,
       operation,
-      module: start.module_id,
-      branch: start.branch.clone(),
+      module,
+      branch,
       base_commit: start.base_commit.clone(),
       bundle: sha256,
     };

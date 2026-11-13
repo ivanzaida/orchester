@@ -246,10 +246,8 @@ fn sources_of_a_pipeline_draft_are_its_own_and_its_steps() {
   drafted::add(&mut edit, &Listing::Step(implement.clone()), source(guide.path()));
   assert_eq!(edit.sources().pipeline(), [source(tokens.path())]);
   assert_eq!(edit.sources().step(&implement), [source(guide.path())]);
-  let read_back = drafted::steps_read_back(&edit).expect("a step lists one");
-  assert_eq!(read_back.key, "sources.steps.oneOnStep");
   drafted::remove(&mut edit, &Listing::Step(implement.clone()), &source(guide.path()));
-  assert!(drafted::steps_read_back(&edit).is_none());
+  assert!(edit.sources().step(&implement).is_empty());
   edit.remove_step(&implement);
   let body = edit.validate().expect("valid");
   assert_eq!(

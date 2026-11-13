@@ -102,7 +102,7 @@ fn pipeline_menu_edit_duplicate_asks_first_and_keep_editing_keeps_what_was_typed
   agents.until("the copy in the panel", |s| s.exists("pipeline-new-panel"));
   assert_eq!(
     agents.text("pipeline-new-start-copy-line-0"),
-    "Published version → v1",
+    "Latest version → v1",
     "Copy a pipeline is chosen, copying {ready}"
   );
 }

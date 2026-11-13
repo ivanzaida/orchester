@@ -3,6 +3,13 @@
 //! D-032), says why, asks for what a person decides, and leaves what runs started on alone; *Cancel* drops the edit
 //! and stores nothing.
 //! `cargo test -p orchester-workspace --test pipeline_local_edit _`.
+#[path = "startup_join/support.rs"]
+#[allow(
+  dead_code,
+  reason = "the joins' desktop, of which these tests use the session's servers"
+)]
+mod support;
+
 use std::sync::Arc;
 
 use orchester_core::{
@@ -25,6 +32,8 @@ use orchester_workspace::{
 };
 
 struct Fixture {
+  /// The session's servers, which a local project's save reaches no team server through.
+  desk: support::Desk,
   folder: tempfile::TempDir,
   db: ProjectDb,
   pipeline: ResourceId,
@@ -74,6 +83,7 @@ fn fixture() -> Fixture {
     )
     .expect("the fixture is valid");
   Fixture {
+    desk: support::Desk::new(),
     folder,
     db,
     pipeline,
@@ -82,6 +92,11 @@ fn fixture() -> Fixture {
 }
 
 impl Fixture {
+  /// The project and the session's servers, as a save takes them.
+  fn at(&self) -> (&std::path::Path, &orchester_workspace::sharing::Servers) {
+    (self.folder.path(), &self.desk.servers)
+  }
+
   fn opened(&self) -> OpenedPipeline {
     OpenedPipeline::load(&self.db, self.pipeline).expect("the fixture is valid")
   }
@@ -90,7 +105,13 @@ impl Fixture {
   fn save(&self, change: impl FnOnce(&mut PipelineEdit), allowed: &[Message]) -> Result<Saved, Message> {
     let mut held = Held::start(Arc::new(self.opened().body));
     held.change(change);
-    save(self.folder.path(), self.pipeline, held.base(), held.edit(), allowed)
+    save(
+      (self.folder.path(), &self.desk.servers),
+      self.pipeline,
+      held.base(),
+      held.edit(),
+      allowed,
+    )
   }
 
   fn versions(&self) -> Vec<Pipeline> {
@@ -166,7 +187,7 @@ fn save_of_an_edit_started_before_the_pipeline_changed_is_refused() {
     .save(|edit| edit.set_description("Another editor's"), &[])
     .unwrap();
 
-  let refused = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap_err();
+  let refused = save(pipeline.at(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap_err();
   assert_eq!(refused.key, "errors.draftChanged");
   assert_eq!(pipeline.versions().len(), 2);
 }
@@ -280,7 +301,7 @@ fn restore_puts_an_older_version_into_the_edit_and_save_makes_it_the_next_versio
   assert!(held.is_changed(), "the first version differs from the latest");
   assert_eq!(held.edit().validate().unwrap(), first);
 
-  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
+  let saved = save(pipeline.at(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
   assert_eq!(saved, Saved::Published(VersionNumber::new(3.try_into().unwrap())));
   let versions = pipeline.versions();
   assert_eq!(
@@ -315,7 +336,7 @@ fn restoring_the_current_version_is_no_change_and_save_writes_nothing() {
   held.restore(&second);
   assert!(!held.is_changed(), "the current version is what the edit started from");
 
-  let saved = save(pipeline.folder.path(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
+  let saved = save(pipeline.at(), pipeline.pipeline, held.base(), held.edit(), &[]).unwrap();
   assert_eq!(saved, Saved::Unchanged);
   assert_eq!(pipeline.versions().len(), 2);
 }
@@ -374,19 +395,12 @@ fn unpublishable_and_save_take_steps_that_wait_for_only_part_of_a_parallel_group
     "Save is offered"
   );
   // Two tool steps more is for a person to allow: the save asks, and takes the steps once they did.
-  let asked = save(pipeline.folder.path(), pipeline.pipeline, &opened.body, &branching, &[]).expect("saving asks");
+  let asked = save(pipeline.at(), pipeline.pipeline, &opened.body, &branching, &[]).expect("saving asks");
   let Saved::Confirm(reasons) = asked else {
     panic!("the added steps are asked about: {asked:?}");
   };
   assert_eq!(pipeline.versions().len(), 1, "nothing is stored before the answer");
-  let saved = save(
-    pipeline.folder.path(),
-    pipeline.pipeline,
-    &opened.body,
-    &branching,
-    &reasons,
-  )
-  .expect("saving takes it");
+  let saved = save(pipeline.at(), pipeline.pipeline, &opened.body, &branching, &reasons).expect("saving takes it");
   assert_eq!(saved, Saved::Published(VersionNumber::new(2.try_into().unwrap())));
   let versions = pipeline.versions();
   assert_eq!(versions.len(), 2, "the steps are stored as the next version");

@@ -105,13 +105,28 @@ pub fn team_library(config: &TeamConfig, tasks: &[Task]) -> Vec<LibraryEntry> {
 
 /// The latest version of team pipeline `resource`; `None` without one, or while its body is not a pipeline this
 /// computer can read (which [`TeamResource::body`] logs).
-fn published(resource: &TeamResource) -> Option<(VersionNumber, Timestamp, Pipeline)> {
+pub(super) fn published(resource: &TeamResource) -> Option<(VersionNumber, Timestamp, Pipeline)> {
   let latest = resource.latest.as_ref()?;
   let body = resource.body::<Pipeline>()?.ok()?;
   Some((latest.number, latest.published_at, body))
 }
 
 impl Servers {
+  /// The versions of pipeline `pipeline` of the project at `root`, newest first: a team project's as its team server
+  /// has them ([`Self::team_pipeline_history`]), a local project's as its database keeps them.
+  pub async fn pipeline_history(&self, root: &Path, pipeline: ResourceId) -> Result<VersionHistory, Message> {
+    let opened = root.to_owned();
+    let shared = background::run(move || Ok::<_, StoreError>(ProjectDb::open(&opened)?.sharing()?.is_some()))
+      .await?
+      .map_err(|error| messages::store_error(&error))?;
+    if shared {
+      return self.team_pipeline_history(root, pipeline).await;
+    }
+    let opened = root.to_owned();
+    background::run(move || VersionHistory::load_in(&opened, pipeline).map_err(|error| messages::store_error(&error)))
+      .await?
+  }
+
   /// Every published version of the team's pipeline `pipeline` of the project at `root`, as the team server has them,
   /// newest first. A version whose body this computer cannot read as a pipeline is left out, and logged. Runs on this
   /// computer pin a team version through its execution bundle, not through these, so none is listed beside them. Why

@@ -29,7 +29,7 @@
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
     },
-    "teamRun": "This run belongs to a team task, so it is delivered with its module, not merged from here. Nothing was merged.",
+    "teamRun": "The start of this team task's run was never recorded on this computer, so the run has no work to merge. Nothing was merged.",
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it. Ask for the merge again in a minute; if it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",
@@ -205,8 +205,8 @@
         "none": "No published profile yet"
       },
       "pipeline": {
-        "title": "Publish a pipeline",
-        "none": "No published pipeline yet"
+        "title": "Create a pipeline",
+        "none": "No pipeline yet"
       },
       "task": {
         "title": "Create the first task",
@@ -285,9 +285,9 @@
       },
       "pipeline": {
         "label": "Pipeline",
-        "one": "{{pipeline}} v{{version}} published",
-        "several": "{{count}} pipelines published",
-        "none": "No pipeline is published yet"
+        "one": "{{pipeline}} v{{version}} saved",
+        "several": "{{count}} pipelines saved",
+        "none": "No pipeline yet"
       },
       "connection": {
         "label": "Connection",
@@ -514,7 +514,7 @@
     "pipeline": {
       "notChosen": "No pipeline",
       "published": "{{name}} · {{version}}",
-      "unavailable": "Pipeline not published",
+      "unavailable": "Pipeline not available",
       "missing": "{{slug}} · not on this computer"
     },
     "footer": {
@@ -542,7 +542,7 @@
       "unconfirmedDescription": "The task is saved, but the runner has not confirmed whether its run started. Check Tasks or retry the same request. The task details are locked.",
       "limitsBlockSave": "Correct the run budget and time limit to save the task.",
       "noLongerDraft": "This task was queued meanwhile, so it was not saved as a draft.",
-      "pipelineChanged": "Version {{latest}} of the task’s pipeline was published while the run was being started on version {{chosen}}, so nothing was saved or queued. Check its steps, then run it again.",
+      "pipelineChanged": "Version {{latest}} of the task’s pipeline was saved while the run was being started on version {{chosen}}, so nothing was saved or queued. Check its steps, then run it again.",
       "savedDetailsDiffer": "The task was saved, but what is stored differs from the form. Open it again to check it."
     },
     "edit": {
@@ -764,13 +764,13 @@
     "runAgain": {
       "unavailable": {
         "runActive": "Run again is unavailable: run #{{run}} of this task is active. A task has one active run at a time; Run again returns when it ends.",
-        "pipelineNotPublished": "Run again is unavailable: {{pipeline}} has no published version any more. Publish it again in Pipelines to run this task again.",
+        "pipelineNotPublished": "Run again is unavailable: {{pipeline}} is no longer among this project's pipelines. Restore it in Pipelines, or choose another pipeline for the task, to run it again.",
         "dailyBudgetUsed": "Run again is unavailable: the daily token budget is used ({{used}} of {{budget}} today). New runs wait until tomorrow, or raise it in Project settings › Runs › Limits.",
         "notEnded": "Run again is unavailable: the task’s latest run changed. Its page shows it now."
       }
     },
     "preflight": {
-      "pipelineNotPublished": "The task’s pipeline has no published version.",
+      "pipelineNotPublished": "The task’s pipeline is not among this project's pipelines.",
       "pipelineVersionNotPinned": "This queued task has no saved pipeline version. It cannot start safely; create a new task with the same details.",
       "noSteps": "The pipeline has no steps.",
       "toolNotPublished": "Step “{{step}}” calls a tool without a published version.",
@@ -1294,7 +1294,7 @@
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
     "neverPublished": "It was never published, so its draft is all it has. Remove it instead.",
     "noFirstVersion": "A new resource has no draft: create it, which publishes v1, and edit it after that.",
-    "noDrafts": "A pipeline is saved only as a published version, never as a draft. Save the change when it can be published.",
+    "noDrafts": "A pipeline has no drafts: every save is its next version. Save the change when every step is ready.",
     "unchanged": "Nothing changed since the latest version, so there is nothing to save.",
     "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
     "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
@@ -1316,25 +1316,13 @@
         "one": "1 step",
         "other": "{{count}} steps"
       },
-      "task": {
-        "none": "No tasks",
-        "one": "1 task",
-        "other": "{{count}} tasks"
-      },
-      "change": {
-        "none": "No changes",
-        "one": "1 change",
-        "other": "{{count}} changes"
-      },
       "run": {
         "none": "No runs",
         "one": "1 run",
         "other": "{{count}} runs"
       }
     },
-    "version": {
-      "published": "Published {{version}}"
-    },
+    "version": {},
     "create": {
       "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
       "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
@@ -1345,7 +1333,7 @@
       "taken": "{{name}} is too close to the pipeline {{pipeline}}. Choose another name."
     },
     "default": {
-      "notPublished": "Publish this pipeline before making it the default: New task lists only published pipelines."
+      "notPublished": "This pipeline has no saved version, so it can't be the default: New task lists only pipelines that have one."
     },
     "problems": {
       "missing": "This pipeline no longer exists.",
@@ -1362,7 +1350,7 @@
       "notPublishable": "This pipeline has problems that keep it from being saved.",
       "versionLimit": "This pipeline has reached the highest version number.",
       "unchanged": "Nothing changed since {{version}}, so there is nothing to save.",
-      "teamChanged": "Someone published v{{version}} of this pipeline for the team first, so nothing was saved. Your changes are still here.",
+      "teamChanged": "Someone saved v{{version}} of this pipeline for the team first, so nothing was saved. Your changes are still here.",
       "teamRenameChanged": "The pipeline changed on the team server since this computer read it, so it was not renamed. Your changes are still here: save again in a moment.",
       "teamUnreached": "The team server can't be reached, so nothing was saved. Your changes are still here: save again once it answers.",
       "teamNoAnswer": "The team server didn't answer in time, so your changes may or may not have reached it. They stay here unsaved; once the team's changes are read, the pipeline shows what the server has.",
@@ -1379,23 +1367,13 @@
     "step": {
       "noProfile": "No agent profile",
       "noTool": "No tool",
-      "chooseProfile": "Choose a profile before publishing",
-      "chooseTool": "Choose a tool before publishing",
       "profileModel": "{{profile}} · {{model}}",
       "tool": "Tool · {{tool}}",
       "unpublishedProfile": "Profile not published",
       "unpublishedTool": "Tool not published",
-      "waitsForApproval": "Waits for your approval",
-      "changesFiles": "Can change files",
-      "readsOnly": "Reads the repository",
-      "exitCodeDecides": "Its exit code decides the step",
-      "toolUnavailable": "This tool can’t run in this version yet",
       "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
     },
-    "inspector": {
-      "readOnly": "Read-only",
-      "write": "Can write"
-    },
+    "inspector": {},
     "changes": {
       "description": "Pipeline · description edited",
       "added": "{{step}} · added",
@@ -1602,11 +1580,6 @@
     "origin": {
       "pipeline": "{{pipeline}} v{{version}}",
       "step": "{{step}} in {{pipeline}} v{{version}}"
-    },
-    "steps": {
-      "oneOnStep": "{{step}} adds 1 more on its step",
-      "manyOnStep": "{{step}} adds {{count}} more on its step",
-      "onSteps": "{{steps}} steps add {{count}} more on their own"
     }
   },
   "appMcp": {
@@ -1760,9 +1733,10 @@
       "teamStatusOnCreate": "A new team task starts in {{status}}. Create it, then change its status with update_task: the claim's holder or an Admin marks it Done, an Admin cancels it or moves it to Todo. Nothing was sent.",
       "teamActionFailed": "The change could not be carried out with the team server. Nothing was changed on this computer.",
       "teamFieldUnsupported": "A team task or module keeps no {{fields}} on its server in this version, so nothing was sent. Leave them out.",
-      "teamModuleRequired": "A team task starts only in a module. An Admin puts it in one first.",
+      "teamBaseMergeAdmin": "This team task is in no module, so its run merges into the base branch itself. An Admin's computer merges it, or a member's while the team's Automatic merge is on; in a module, its delivery takes an Admin's authorization instead. Nothing was merged.",
+      "teamStartNoBranch": "The task is in no module, and the checkout has no branch checked out for its run to start on and merge into. Nothing was started.",
       "teamNoPipeline": "This team task has no pipeline. Whoever may edit it chooses one of the team's pipelines first.",
-      "teamPipelineRequired": "{{pipeline}} is not one of the team's pipelines. A team task runs only with a team pipeline, and the team's Admins create and publish those; your own local pipelines are not used for team tasks. Nothing was sent.",
+      "teamPipelineRequired": "{{pipeline}} is not one of the team's pipelines. A team task runs only with a team pipeline, and the team's Admins create and save those; your own local pipelines are not used for team tasks. Nothing was sent.",
       "sharePipelineLocal": "Only a team project has team pipelines; in a local project every pipeline is the project's already.",
       "sharePipelineLocalExecutors": "It uses {{resource}} in a step or to resolve conflicts, which is not the team's, so the team's copy would name what the team server does not have. Publish them for the team first, or choose team profiles and tools in its steps. Nothing was sent.",
       "teamPipelineNotFound": "The team server has no pipeline of this team project with that id, so nothing was changed. Choose one of the team's pipelines.",
@@ -1777,7 +1751,7 @@
       "teamClaimKept": "Your claim on the task is kept, because another run here still needs it.",
       "teamClaimHeld": "The team server refused to release your claim on the task, so it may still be held.",
       "teamBundleMissing": "The team server could not build this run's bundle and did not say why. Ask a team Admin to check the task's pipeline and the agent profiles it uses; nothing was started.",
-      "teamBundleMissingPipeline": "The team server could not build this run's bundle: it has no usable version of the pipeline {{pipeline}}. Ask a team Admin to publish it; nothing was started.",
+      "teamBundleMissingPipeline": "The team server could not build this run's bundle: it has no usable version of the pipeline {{pipeline}}. Ask a team Admin to save it again; nothing was started.",
       "teamBundleMissingProfile": "Publish agent profile {{profile}} again as a team profile: the team server cannot read the version it holds, so it cannot build this run's bundle. Ask a team Admin if you cannot publish. Nothing was started.",
       "teamBundleMissingMcpArchived": "An agent profile of this run still uses the MCP server {{server}}, which is archived. Take it out of the profile and publish the profile again, or ask a team Admin to restore the server; nothing was started.",
       "teamBundleMissingFile": "A file that a version of {{resource}} pins is gone from the team server, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
@@ -1853,13 +1827,13 @@
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
       "approvalGate": "Step {{step}} would no longer wait for a person's approval.",
       "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
-      "firstPipelineVersion": "A pipeline's first version has nothing to be compared with, so a person publishes it.",
-      "pipelineSteps": "The steps differ from the latest published version: some were added or removed.",
-      "pipelineStopsWaiting": "Step {{step}} would no longer wait for {{waited}}, which it waited for in the latest published version: a step that asks for approval or runs a tool.",
-      "pipelineStep": "Step {{step}} is not provably as strict as in the latest published version: the same profile or tool, instructions, approval, failure route, retries, budget and narrowing, or stricter.",
+      "firstPipelineVersion": "A pipeline's first version has nothing to be compared with, so a person saves it.",
+      "pipelineSteps": "The steps differ from the latest version: some were added or removed.",
+      "pipelineStopsWaiting": "Step {{step}} would no longer wait for {{waited}}, which it waited for in the latest version: a step that asks for approval or runs a tool.",
+      "pipelineStep": "Step {{step}} is not provably as strict as in the latest version: the same profile or tool, instructions, approval, failure route, retries, budget and narrowing, or stricter.",
       "taskPipeline": "A person changes a task's pipeline: another pipeline runs it with other steps, profiles and approvals.",
       "teamPipeline": "Sharing {{pipeline}} for the team lets every member's agents run it, so a person decides it.",
-      "pipelineSources": "The sources the pipeline or its steps list differ from the latest published version.",
+      "pipelineSources": "The sources the pipeline or its steps list differ from the latest version.",
       "mcpServerAdded": "A new MCP server, {{server}}, would run a program or reach an endpoint of automation's choosing for the agents of profiles that choose it.",
       "mcpServerEnabled": "{{server}} would be turned on: the profiles that choose it would give it to their agents again.",
       "mcpProgram": "The server would start {{program}}, a program the agents of profiles that choose it would run.",
@@ -1899,9 +1873,9 @@
         "failed": "Could not save draft · {{name}}"
       },
       "pipelinePublish": {
-        "running": "Publishing {{name}} v{{version}}",
-        "done": "Published {{name}} v{{version}}",
-        "failed": "Could not publish {{name}} v{{version}}"
+        "running": "Saving {{name}} v{{version}}",
+        "done": "Saved {{name}} v{{version}}",
+        "failed": "Could not save {{name}} v{{version}}"
       },
       "pipelineCreate": {
         "running": "Creating pipeline {{name}}",
@@ -2067,6 +2041,23 @@
         "done": "Removed the worktrees of {{task}} run #{{run}}",
         "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
         "notDone": "Worktrees of {{task}} run #{{run}} not removed"
+      },
+      "moduleDelivery": {
+        "running": "Delivering module {{module}}",
+        "done": "Delivered module {{module}}",
+        "failed": "Could not deliver module {{module}}",
+        "waits": "Module {{module}}: its delivery waits for an Admin",
+        "why": {
+          "workRunning": "Team runs of the module still work on this computer; ask for its delivery on the module's page once they end.",
+          "noBase": "The checkout has no branch checked out to deliver onto, or has the module's own checked out.",
+          "branchNotFound": "The module's branch {{branch}} is not in this checkout.",
+          "signedOut": "This computer is not signed in to the team server.",
+          "unavailable": "The team server did not answer; the module's page shows where its delivery stands.",
+          "refused": "The team server refused it ({{code}}); the module's page says who may deliver it.",
+          "notMerged": "The delivery was authorized, but its merge did not land here; the module's page says why.",
+          "mergeWaits": "The delivery is authorized, and its merge waits for other work in this checkout; the module's page carries it on.",
+          "failed": "It could not be carried out on this computer."
+        }
       },
       "runPullRequest": {
         "running": "Opening a pull request for {{task}} run #{{run}}",
@@ -2514,7 +2505,7 @@
       "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "draftChangedAt": "The draft changed at {{time}}, after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
-      "pipelineNoDraft": "Pipelines have no drafts any more, so this proposal to publish {{name}} has nothing to publish. Nothing was published: save the pipeline in Pipelines, or turn on Let the Orchestrator drive and ask it again.",
+      "pipelineNoDraft": "Pipelines have no drafts any more, so this proposal for {{name}} has nothing to save. Nothing was saved: save the pipeline in Pipelines, or turn on Let the Orchestrator drive and ask it again.",
       "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
       "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
@@ -2557,7 +2548,7 @@
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
-      "pipelinesDriveOnly": "While Let the Orchestrator drive is off, the Orchestrator changes no pipeline: a pipeline is always a published version, so there is no draft to propose. Nothing was changed: tell the person what to change and that they save it in Pipelines, or that they can turn on Let the Orchestrator drive.",
+      "pipelinesDriveOnly": "While Let the Orchestrator drive is off, the Orchestrator changes no pipeline: a pipeline has only saved versions, so there is no draft to propose. Nothing was changed: tell the person what to change and that they save it in Pipelines, or that they can turn on Let the Orchestrator drive.",
       "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",
       "cancelWaits": "Run #{{run}} goes on: canceling it waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to cancel.",
       "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge.",

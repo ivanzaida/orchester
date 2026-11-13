@@ -417,8 +417,6 @@ fn import_review_imported_copy_shows_where_it_came_from_and_what_came_with_it() 
     (2, 1, 1),
     "the tool and Builder; Codex; the secret"
   );
-  assert!(shown.shows_result(false), "shown until it is published");
-  assert!(!shown.shows_result(true));
   assert!(shown.needs_setup(), "a secret is left unresolved");
   assert_eq!(
     imported::view(&record, &written, ResourceId::generate()),

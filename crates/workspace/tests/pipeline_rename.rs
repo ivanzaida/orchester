@@ -1,5 +1,12 @@
 //! Renaming a pipeline changes its name alone, and the project's default is read back. `cargo test -p
 //! orchester-workspace --test pipeline_rename`.
+#[path = "startup_join/support.rs"]
+#[allow(
+  dead_code,
+  reason = "the joins' desktop, of which these tests use the session's servers"
+)]
+mod support;
+
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
@@ -50,6 +57,12 @@ fn pipeline(db: &mut ProjectDb, name: &str) -> ResourceId {
   .id()
 }
 
+/// [`rename_in`] in a local project, which reaches no team server.
+fn renamed(folder: &std::path::Path, id: ResourceId, name: &str) -> Result<Name, RenameError> {
+  let desk = support::Desk::new();
+  rename_in((folder, &desk.servers), id, name)
+}
+
 fn name_of(db: &ProjectDb, id: ResourceId) -> String {
   db.resource(id)
     .expect("a valid fixture")
@@ -63,7 +76,7 @@ fn name_of(db: &ProjectDb, id: ResourceId) -> String {
 fn rename_changes_the_name_and_keeps_the_slug_and_the_version() {
   let (folder, mut db) = project();
   let id = pipeline(&mut db, "Feature delivery");
-  let saved = rename_in(folder.path(), id, "  Feature flow  ").expect("a valid fixture");
+  let saved = renamed(folder.path(), id, "  Feature flow  ").expect("a valid fixture");
   assert_eq!(
     saved.as_str(),
     "Feature flow",
@@ -84,7 +97,7 @@ fn rename_changes_the_name_and_keeps_the_slug_and_the_version() {
 fn rename_may_change_only_the_case_of_its_own_name() {
   let (folder, mut db) = project();
   let id = pipeline(&mut db, "Feature delivery");
-  rename_in(folder.path(), id, "FEATURE DELIVERY").expect("a valid fixture");
+  renamed(folder.path(), id, "FEATURE DELIVERY").expect("a valid fixture");
   assert_eq!(
     name_of(&ProjectDb::open(folder.path()).expect("a valid fixture"), id),
     "FEATURE DELIVERY"
@@ -100,7 +113,7 @@ fn rename_refuses_another_pipelines_name_even_an_archived_ones() {
   db.archive_local_resource(archived, Timestamp::now())
     .expect("a valid fixture");
   for taken in ["quick fix", "Quick-Fix", "old flow"] {
-    let error = rename_in(folder.path(), id, taken).expect_err(taken);
+    let error = renamed(folder.path(), id, taken).expect_err(taken);
     assert!(matches!(error, RenameError::Taken { .. }), "{taken}: {error:?}");
     assert_eq!(error.message().key, "pipelines.rename.taken");
   }
@@ -113,9 +126,9 @@ fn rename_refuses_another_pipelines_name_even_an_archived_ones() {
 fn rename_refuses_a_blank_or_too_long_name() {
   let (folder, mut db) = project();
   let id = pipeline(&mut db, "Feature delivery");
-  let blank = rename_in(folder.path(), id, "   ").expect_err("refused");
+  let blank = renamed(folder.path(), id, "   ").expect_err("refused");
   assert_eq!(blank.message().key, "pipelines.rename.blank");
-  let long = rename_in(folder.path(), id, &"a".repeat(Name::MAX_CHARS + 1)).expect_err("refused");
+  let long = renamed(folder.path(), id, &"a".repeat(Name::MAX_CHARS + 1)).expect_err("refused");
   assert_eq!(long.message().key, "pipelines.rename.tooLong");
 }
 

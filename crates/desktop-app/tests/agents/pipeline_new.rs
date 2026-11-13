@@ -210,7 +210,7 @@ fn pipeline_new_choosing_a_pipeline_to_copy_chooses_copy_and_says_what_v1_gets()
   agents.set(NAME, "Quick fix again");
   choose(&mut agents, "pipeline-new-copy", "Quick fix · v1");
   agents.until("Copy chosen", |s| {
-    s.text("pipeline-new-start-copy-line-0") == "Published version → v1"
+    s.text("pipeline-new-start-copy-line-0") == "Latest version → v1"
   });
   // The fixture's two steps wait for nothing, so they run side by side.
   assert_eq!(agents.text("pipeline-new-start-copy-line-1"), "2 steps · Plan ∥ Build");

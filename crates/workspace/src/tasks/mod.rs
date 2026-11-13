@@ -51,6 +51,7 @@ pub mod outside;
 pub mod overview;
 pub mod pause_wait;
 pub mod permissions;
+pub(crate) mod pinned_profile;
 pub mod plan;
 pub mod plan_limit;
 mod preflight_messages;

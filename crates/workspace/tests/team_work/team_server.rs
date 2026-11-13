@@ -115,6 +115,8 @@ pub struct State {
   pub bundle_body: Option<Value>,
   /// The `details` every work start is refused `bundle_missing` with, when set: `{}` or `{reason:{…}}`.
   pub bundle_missing: Option<Value>,
+  /// The task is in no module: its start names the task's revision alone, and its bundle no module.
+  pub in_no_module: bool,
   /// Whether the work waits for a person: the heartbeat answers `decision_required [D1]`.
   pub waits_for_person: bool,
   pub works_made: usize,
@@ -163,6 +165,7 @@ impl TeamServer {
       receipt_schema: None,
       bundle_body: None,
       bundle_missing: None,
+      in_no_module: false,
       waits_for_person: false,
       works_made: 0,
       heartbeats: 0,
@@ -199,6 +202,11 @@ impl TeamServer {
   /// The next write is carried out and its connection closed without an answer.
   pub fn lose_next_response(&self) {
     self.state.lock().lose_next = true;
+  }
+
+  /// The task is in no module from now on.
+  pub fn task_in_no_module(&self) {
+    self.state.lock().in_no_module = true;
   }
 
   /// The next bundle file read is closed without an answer.
@@ -357,9 +365,10 @@ fn heartbeat(state: &mut State, request: &Request) -> (u16, Value) {
 /// The bundle of work started under `claim` from `base_commit`, kept by its hash.
 pub fn build_bundle(state: &mut State, claim: ClaimId, base_commit: &str) -> Value {
   let subject = Subject::Task { id: state.task };
+  let module = (!state.in_no_module).then_some(state.module);
   let bundle = state
     .config
-    .bundle((state.project, subject), claim, state.module, base_commit);
+    .bundle((state.project, subject), claim, module, base_commit);
   let mut reference = bundle.bundle_ref().expect("a hash");
   if let Some(schema) = state.receipt_schema.take() {
     reference.schema_version = schema;

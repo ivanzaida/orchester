@@ -1,7 +1,7 @@
-//! What the Pipelines hub of a local project lists (`Pipelines · v2` `pCzIS`, P1): each pipeline with its steps, the
-//! tasks that use it, its version and whether it can run as it is, and what was archived. A pipeline needs the person
-//! when a profile or tool its steps run is not ready on this computer
-//! ([`crate::readiness`]).
+//! What the Pipelines hub lists (`Pipelines · v2` `pCzIS`, P1): each pipeline with its steps, the tasks that use it,
+//! its version and whether it can run as it is, and what was archived. A local project's are read from its database, a
+//! team project's from the team's configuration as this session read it ([`super::team_hub`]). A pipeline needs the
+//! person when a profile or tool its steps run is not ready on this computer ([`crate::readiness`]).
 
 use std::{path::Path, sync::Arc};
 
@@ -100,15 +100,43 @@ pub struct ArchivedPipeline {
   pub latest: Option<(VersionNumber, Timestamp)>,
 }
 
-/// The pipelines of a local project, and the archived ones.
+/// Whose the pipelines of a team project are: the team's, which only its admins change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TeamPipelines {
+  /// Whether the person here may change them: the project's owner or the server's admin.
+  pub may_change: bool,
+}
+
+/// The pipelines of a project, and the archived ones.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PipelineHub {
   pipelines: Vec<HubPipeline>,
   archived: Vec<ArchivedPipeline>,
   assignables: Arc<Assignables>,
+  team: Option<TeamPipelines>,
 }
 
 impl PipelineHub {
+  /// The hub of a team project's pipelines, which the person here may change or not (`team`).
+  pub(super) fn of_team(
+    pipelines: Vec<HubPipeline>,
+    archived: Vec<ArchivedPipeline>,
+    assignables: Assignables,
+    team: TeamPipelines,
+  ) -> Self {
+    Self {
+      pipelines,
+      archived,
+      assignables: Arc::new(assignables),
+      team: Some(team),
+    }
+  }
+
+  /// `Some` for a team project: its pipelines are the team's, saved on its team server.
+  pub const fn team(&self) -> Option<TeamPipelines> {
+    self.team
+  }
+
   /// The pipelines by slug.
   pub fn pipelines(&self) -> &[HubPipeline] {
     &self.pipelines
@@ -126,12 +154,17 @@ impl PipelineHub {
 }
 
 impl Workspace {
-  /// The pipelines hub of the local project at `repo_root`. Reads the database and the keychain's list of what it has,
-  /// so it blocks: run it on the background pool, on an explicit change and never on a timer
-  /// ([`Workspace::project_readiness`]).
+  /// The pipelines hub of the project at `repo_root`: a team project's from the team's configuration read this
+  /// session (refused while it is being read or could not be read, as its readiness is), a local project's from its
+  /// database. Reads the database and the keychain's list of what it has, so it blocks: run it on the background pool,
+  /// on an explicit change and never on a timer ([`Workspace::project_readiness`]).
   pub fn pipeline_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<PipelineHub, HubError> {
     let db = ProjectDb::open(repo_root)?;
     let readiness = self.readiness_in(&db, repo_root, vault)?;
+    if db.sharing()?.is_some() {
+      let config = self.team_config(repo_root)?;
+      return Ok(super::team_hub::hub(&db, &config, &readiness)?);
+    }
     let mut assignables = Assignables::load(&db)?;
     assignables.standings = readiness
       .resources()
@@ -152,6 +185,7 @@ impl Workspace {
       pipelines,
       archived: archived(&db)?,
       assignables: Arc::new(assignables),
+      team: None,
     })
   }
 }

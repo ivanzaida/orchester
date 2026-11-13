@@ -387,8 +387,7 @@ async fn actions_a_work_start_stays_pending_and_classes_follow_the_owner() {
     },
     base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
     read: revision(1),
-    module: ModuleId::generate(),
-    module_read: revision(1),
+    module: Some((ModuleId::generate(), revision(1))),
   });
   assert_eq!(
     dispatcher.classify(&start).expect("class"),

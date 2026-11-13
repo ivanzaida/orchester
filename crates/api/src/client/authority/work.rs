@@ -10,7 +10,7 @@ use thiserror::Error;
 use super::{Authority, AuthorityCallError, answered};
 use crate::{
   client::ClientError,
-  v2::{EXECUTION_BUNDLE_SCHEMA, ExactHeartbeat, ExecutionBundle, Renewed},
+  v2::{EXECUTION_BUNDLE_SCHEMA, ExactHeartbeat, ExecutionBundle, MODULE_LESS_BUNDLE_SCHEMA, Renewed},
 };
 
 /// Why [`Authority::bundle`] gave no bundle. A bundle this client cannot read is told apart from a call that failed:
@@ -20,8 +20,11 @@ pub enum BundleReadError {
   /// The call failed or was refused, before any bundle was read.
   #[error(transparent)]
   Call(#[from] AuthorityCallError),
-  /// The server built the bundle in another schema than [`EXECUTION_BUNDLE_SCHEMA`], the one this client reads.
-  #[error("the bundle is built in schema {built}, and this client reads schema {EXECUTION_BUNDLE_SCHEMA}")]
+  /// The server built the bundle in a schema this client does not read ([`ExecutionBundle::reads`]).
+  #[error(
+    "the bundle is built in schema {built}, and this client reads schemas {EXECUTION_BUNDLE_SCHEMA} and \
+     {MODULE_LESS_BUNDLE_SCHEMA}"
+  )]
   Schema { built: u32 },
   /// The server answered JSON that is not an execution bundle of the schema this client reads.
   #[error("the server's answer is not an execution bundle (HTTP {status})")]
@@ -40,7 +43,7 @@ impl Authority<'_> {
         .as_u64()
         .and_then(|built| u32::try_from(built).ok())
       {
-        Some(built) if built != EXECUTION_BUNDLE_SCHEMA => BundleReadError::Schema { built },
+        Some(built) if !ExecutionBundle::reads(built) => BundleReadError::Schema { built },
         _ => BundleReadError::Unreadable { status },
       },
       Err(_) => BundleReadError::Call(ClientError::NotOrchester { status }.into()),

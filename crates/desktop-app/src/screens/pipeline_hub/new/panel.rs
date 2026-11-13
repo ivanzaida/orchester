@@ -35,7 +35,9 @@ use super::{
   create::{self, Ask, Create},
   details, head,
   reason::{self, Lacks, Named, Reason},
-  start, words,
+  start,
+  starter::starter,
+  words,
 };
 use crate::{
   navigation::Navigation,
@@ -51,7 +53,6 @@ use crate::{
       model::{Entry, Listing},
       step,
     },
-    pipelines::new_pipeline::starter,
     team_hub::panel::body,
   },
   theme::ExtraSpacing,

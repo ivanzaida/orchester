@@ -326,7 +326,7 @@ fn form_a_task_that_ran_has_no_create_and_run() {
 fn form_without_published_pipelines_still_creates_a_draft() {
   let mut form = Form::bare();
   form.new_task();
-  assert_eq!(form.text("task-form-pipeline-value"), "None published");
+  assert_eq!(form.text("task-form-pipeline-value"), "None yet");
   form.open("task-form-pipeline");
   assert!(form.exists("task-form-pipeline-none"));
   assert!(form.exists("task-form-manage-pipelines"));
@@ -335,7 +335,7 @@ fn form_without_published_pipelines_still_creates_a_draft() {
   let reasons = form.reasons();
   assert_eq!(reasons.len(), 1, "{reasons:?}");
   assert!(
-    reasons[0].contains("no published pipeline in this project"),
+    reasons[0].contains("create a pipeline first: this project has none"),
     "{reasons:?}"
   );
   form.click("task-form-create");

@@ -1,10 +1,11 @@
-//! Saving the edit the Pipelines page of a local project holds (`Pipelines · v2` P1's bar): the page keeps every change
-//! to the pipeline and its steps in one [`PipelineEdit`] and stores nothing until *Save*, which publishes it as the
-//! next version; runs already started keep the version they started on. A pipeline is stored only as published
-//! versions (D-032), so an edit that cannot be published is refused and nothing is stored: it stays in the page,
-//! unsaved, and the refusal names every step that keeps it. [`unpublishable`] tells the page beforehand, so *Save* is
-//! not offered for it. The rules are the editor's: [`super::write`] saves, and [`super::widening`] decides what a
-//! person has to allow.
+//! Saving the edit the Pipelines hub holds (`Pipelines · v2` P1's bar): the page keeps every change to the pipeline and
+//! its steps in one [`PipelineEdit`] and stores nothing until *Save*, which saves it as the next version; runs already
+//! started keep the version they started on. A local project's is stored in its database; a team project's goes to the
+//! team server at once and is kept only once the server took it (D-043, [`super::write::save_named_in`]). A pipeline is
+//! stored only as versions (D-032), so an edit that cannot be saved is refused and nothing is stored: it stays in the
+//! page, unsaved, and the refusal names every step that keeps it. [`unpublishable`] tells the page beforehand, so
+//! *Save* is not offered for it. The rules are the editor's: [`super::write`] saves, and [`super::widening`] decides
+//! what a person has to allow.
 
 use std::sync::Arc;
 
@@ -14,14 +15,14 @@ use orchester_core::{
 };
 
 use super::{
-  data::{Assignables, OpenedPipeline},
+  data::Assignables,
   flow::FlowRead,
   problems::rule_message,
   ready::{Blocked, StepProblem, step_problems},
   widening::save_reasons,
   write::{self, Allowed, WriteError, save_refusals},
 };
-use crate::messages::Message;
+use crate::{messages::Message, sharing::Servers};
 
 /// What a save did.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,18 +36,19 @@ pub enum Saved {
   Confirm(Vec<Message>),
 }
 
-/// Saves `edit` of pipeline `id` in the project at `root` as its next version. `started_from` is the steps the edit was
-/// made on; the pipeline having changed since is refused (`errors.draftChanged`), as is an edit that cannot be
-/// published (every step that keeps it named, else the first reason), and nothing is stored. `allowed` is what the
-/// person already allowed to widen.
+/// Saves `edit` of pipeline `id` in the project at `root` as its next version; a team project's goes to its team server
+/// through `servers`, and this blocks on its answer. `started_from` is the steps the edit was made on; the pipeline
+/// having changed since is refused (`errors.draftChanged`), as is an edit that cannot be saved (every step that keeps
+/// it named, else the first reason), and nothing is stored. `allowed` is what the person already allowed to widen.
 pub fn save(
-  root: &std::path::Path,
+  (root, servers): (&std::path::Path, &Servers),
   id: ResourceId,
   started_from: &Pipeline,
   edit: &PipelineEdit,
   allowed: &[Message],
 ) -> Result<Saved, Message> {
-  let current = OpenedPipeline::load_in(root, id).map_err(|error| WriteError::from(error).message())?;
+  let opened = servers.workspace().open_pipeline(root, id);
+  let current = opened.map_err(|error| WriteError::from(error).message())?;
   if &current.body != started_from {
     return Err(Message::new("errors.draftChanged"));
   }
@@ -63,9 +65,9 @@ pub fn save(
     return Ok(Saved::Confirm(reasons));
   }
   let name = orchester_core::name::Name::new(&current.name).expect("stored resource names are valid");
-  let stored =
-    write::save_here_in(root, &current, &body, &name, &Allowed(allowed.to_vec())).map_err(|error| error.message())?;
-  Ok(Saved::Published(stored.version))
+  let stored = write::save_named_in(root, servers, &current, &body, &name, &Allowed(allowed.to_vec()))
+    .map_err(|error| error.message())?;
+  Ok(Saved::Published(stored.opened.version))
 }
 
 /// What keeps an edit from being published as it stands, so that *Save* is not offered for it.
