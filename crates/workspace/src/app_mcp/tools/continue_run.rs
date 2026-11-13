@@ -148,8 +148,8 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
       Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => Some(DecisionKind::Limit),
       Choice::Resume => None,
     };
-    if let Some(decision) = decision.filter(|_| by == Answerer::Automation && !reading.chat_drives()) {
-      decision.require(&reading.workspace)?;
+    if let Some(decision) = decision.filter(|_| by == Answerer::Automation) {
+      reading.require(decision)?;
     }
     let project = reading.project(&args.project)?;
     let run = refuse_team_run(&project.repo_root, &args)?;

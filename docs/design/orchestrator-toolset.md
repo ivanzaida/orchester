@@ -76,7 +76,7 @@ drive*, and says what changed.**
      leaves it to the person with its recommendation; `decide_approval` there decides only that request,
      `not_this_request` for another, and keeps its own rules: Allow once or Deny with words only). While the chat
      drives, the drive switch is its consent to answer, not *Let automation answer approvals* (the person's decision of
-     2026-11-11: that setting is to be removed later; other MCP clients still need it). The chat may allow a
+     2026-11-11; since 2026-11-13 the same holds for its every answer and decision, decision 14; other MCP clients still need it). The chat may allow a
      request a hard rule of auto mode holds (the person's decision of 2026-11-11): the hold
      (`orchester_workspace::tasks::approvals::hard_hold`: a push, a destructive change, a write outside the worktree and
      the step's folders, a secret, a Codex escalation, permissions not recorded; read the stricter where a fact cannot
@@ -671,9 +671,16 @@ project with none of its own; the application-wide values are no longer shown or
   `init_repository`, the git writes and the `mcp_*` tools are carried out at once and kept in the conversation as the
   chat's own actions, recorded as automation's. What a person's *Let automation …* switch allows another client the
   chat's switch allows for the stopped run's decisions (`continue_run`) and for what a publication changes in agents'
-  prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*,
-  and `decide_approval`, `decide_plan`, `answer_question` and `send_message` still need *Let automation answer
-  approvals*, as for any client. What can lose work in git stays `git_propose`, a click-only card.
+  prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*.
+  *Let automation answer approvals* is for outside MCP clients only (decided by the person on 2026-11-13, OA-11 of
+  `docs/plan/orchestrator-autonomy/`): while it drives, the chat's `answer_question`, `send_message`, `decide_plan`,
+  `decide_approval`, `continue_run`, `complete_run` and raising the daily budget are carried out without it
+  (`app_mcp::Services::require`). Standing policy still reads the setting, for the chat too: choosing the reviewer
+  (`set_reviewer`) and publishing a profile that approves by itself; whether the chat should need it there is the
+  person's to say. One limit stays its own: in a turn Orchester started by itself the chat
+  does not change the project's daily budget (`update_project_limits` with `daily_budget` is refused `person_only`),
+  since that budget bounds what is spent while nobody watches; in a turn a person's message started it raises it
+  with no second switch. What can lose work in git stays `git_propose`, a click-only card.
 - **It is woken for everything.** A wait of an agent (a tool request too, since 2026-11-11), a run's stop (a limit, a step waiting for a decision), end or
   success, a stall, a merge conflict and a waited task's merge or close start an Orchestrator turn by themselves, whoever
   started the run and whatever raised them — the rule that the chat's own answer, message, decision, resume or start

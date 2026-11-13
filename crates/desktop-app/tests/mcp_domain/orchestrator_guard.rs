@@ -3,7 +3,8 @@
 //! `run_task` only propose, even with Autopilot allowed, and while it drives they are carried out; `resume_run`
 //! refuses a run stopped at a limit or interrupted while it does not drive; and a hold or a release of new starts that
 //! would change nothing is refused. While it drives, a turn nobody asked for starts only a task its conversation leads
-//! (`not_led`).
+//! (`not_led`). The project's daily budget it changes when a person's message asked, with no second switch, and never
+//! in a turn nobody asked for; another client still needs *Let automation answer approvals* to raise it (OA-11).
 
 use orchester_core::{
   id::IdempotencyKey,
@@ -28,7 +29,7 @@ use serde_json::json;
 use super::{
   Served,
   orchestrator_auto_merge::turn_of_success,
-  orchestrator_chat::{actions, chat, chat_call, task_run},
+  orchestrator_chat::{actions, allow, chat, chat_call, task_run},
 };
 
 /// What the seed's run that succeeded and waits to be merged belongs to.
@@ -187,6 +188,31 @@ fn chat_resumes_no_run_stopped_at_a_limit_or_interrupted() {
       .all(|action| matches!(&action.outcome, ActionOutcome::Refused { code, .. } if code == "person_only")),
     "each refusal is kept"
   );
+}
+
+#[test]
+fn chat_changes_the_daily_budget_when_a_person_asks_and_never_in_a_turn_nobody_asked_for() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  allow(&served, &seeded.repo);
+  let asked = chat(&served, &mut db);
+  let budget = |tokens: u64| json!({ "project": "Kontur", "daily_budget": tokens });
+  chat_call(&mut served, &asked, "update_project_limits", budget(1_000_000)).expect("set");
+  // *Let automation answer approvals* is off: the drive switch is the chat's whole consent.
+  chat_call(&mut served, &asked, "update_project_limits", budget(2_000_000)).expect("raised, as the person asked");
+  let on_its_own = ChatScope {
+    on_its_own: true,
+    ..asked.clone()
+  };
+  for tokens in [3_000_000, 500_000] {
+    let refused = chat_call(&mut served, &on_its_own, "update_project_limits", budget(tokens))
+      .expect_err("the daily budget is the person's in a turn nobody asked for");
+    assert_eq!(refusal(&refused), "person_only", "{tokens}");
+  }
+  let other = json!({ "project": "Kontur", "agent_slots": 3 });
+  chat_call(&mut served, &on_its_own, "update_project_limits", other).expect("the other limits are not the budget");
+  let refused = served.refused("update_project_limits", &budget(4_000_000));
+  assert_eq!(refused["code"], "automation_not_allowed", "another client: {refused}");
 }
 
 /// Holds the project's new starts as `actor`, as Tasks or the chat holds them.

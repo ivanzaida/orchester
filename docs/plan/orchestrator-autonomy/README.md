@@ -108,8 +108,10 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 
 - **Retries (OA-01):** a failed turn Orchester started is tried again after 1, 5 and 15 minutes; after the fourth
   failure the event is left to the person and counts in *Needs you*. A turn the person stopped is not tried again.
-- **A used budget holds, it does not fail (OA-03).** The Orchestrator never raises the daily budget on its own in a
-  turn nobody asked for, and no share of the budget is reserved for it.
+- **A used budget holds, it does not fail (OA-03).** No share of the budget is reserved for the Orchestrator.
+- **The daily budget is not the chat's in a turn nobody asked for (OA-11):** it changes it only when a person's
+  message asked. And standing policy (the reviewer, a profile that approves by itself) still reads *Let automation
+  answer approvals*. Both wait for the person's word.
 - **Compaction (OA-05)** runs before a turn Orchester starts once the session used 70 % of its window.
 - **A stall is raised again (OA-06)** each further period without progress, three times at most per stall: the first
   turn messages the agent, the second stops it and continues from the last checkpoint, the third parks the task.
@@ -136,13 +138,13 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | **B** | **What the chat may do on its own** | | | |
 | [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | todo |
 | [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | blocked (frames) |
-| [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | todo |
+| [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | done; its settings row waits for frames (G) |
 | **C** | **A module to the end** | | | |
 | [OA-12](OA-12-standing.md) | Core: where a led target stands | core + workspace | OA-09 | todo |
 | [OA-13](OA-13-work-can-start.md) | The event *work can start* | core + workspace | OA-09, OA-12 | todo |
 | [OA-14](OA-14-run-again.md) | A failed task is run again within its ceiling | workspace | OA-09, OA-13 | todo |
 | [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | todo |
-| [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | todo |
+| [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | done |
 | [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | todo |
 | [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | todo |
 | **D** | **Quality without a person** | | | |

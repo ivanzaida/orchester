@@ -38,7 +38,7 @@ pub async fn complete_run(services: &Services, args: CompleteRun) -> Result<Valu
   let services = services.clone();
   blocking(move || {
     if args.anyway {
-      DecisionKind::Stuck.require(&services.workspace)?;
+      services.require(DecisionKind::Stuck)?;
     }
     let open = services.project(&args.project)?;
     let run = find_run(&ProjectDb::open(&open.repo_root)?, &args.run)?.id();

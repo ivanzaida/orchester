@@ -144,7 +144,7 @@ pub async fn send_message(
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
-        kind.require(&reading.workspace)?;
+        reading.require(kind)?;
       }
     }
     Ok((project, prepared, reach))
@@ -156,9 +156,9 @@ pub async fn send_message(
     if let SentBy::Orchestrator(_) = by {
       return Err(plan_person_only());
     }
-    let workspace = services.workspace.clone();
+    let consenting = services.clone();
     if !matches!(by, SentBy::Person(_)) {
-      blocking(move || crate::decisions::DecisionKind::Plan.require(&workspace)).await?;
+      blocking(move || consenting.require(crate::decisions::DecisionKind::Plan)).await?;
     }
     let (root, text, answerer) = (project.repo_root.clone(), args.text.clone(), by.answerer());
     let command = blocking(move || plan_changes(&root, &prepared, &text, (answerer, None)).map_err(refusal)).await?;

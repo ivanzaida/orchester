@@ -39,6 +39,9 @@ use crate::{
   tasks::changes::run_work_present,
 };
 
+/// The app's tool that changes the project's limits, the daily budget among them.
+pub(super) const UPDATE_PROJECT_LIMITS: &str = "update_project_limits";
+
 /// Whether the chat's call of `name` in `scope` is only proposed as a change because nobody asked for anything in its
 /// turn, while it does not `drive`; a start is then proposed as a start ([`super::tools`]), and a resume as
 /// [`resume_as`] tells. In a turn a day's report started, every change a card carries is proposed (not while it
@@ -70,6 +73,18 @@ pub(super) fn pipeline_refused(name: &str, drives: bool) -> Option<ToolError> {
     ToolError::refused(
       "drive_only",
       vec![Message::new("orchestrator.tools.pipelinesDriveOnly")],
+    )
+  })
+}
+
+/// The refusal of the chat's change of the project's daily budget in a turn nobody asked for (`person_only`): the
+/// daily budget bounds what is spent while nobody watches, so the chat changes it only when a person's message asked
+/// (the drive switch is its consent then, `docs/plan/orchestrator-autonomy/OA-11-…`). `None` for any other call.
+pub(super) fn budget_refused(scope: &ChatScope, name: &str, arguments: &JsonObject) -> Option<ToolError> {
+  (scope.on_its_own && name == UPDATE_PROJECT_LIMITS && arguments.contains_key("daily_budget")).then(|| {
+    ToolError::refused(
+      "person_only",
+      vec![Message::new("orchestrator.tools.dailyBudgetPersonOnly")],
     )
   })
 }

@@ -8,6 +8,7 @@ use rmcp::model::Tool;
 use super::{
   approval_turn::DECIDE_APPROVAL,
   change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
+  guard::UPDATE_PROJECT_LIMITS,
   tools::{
     ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, DUPLICATE_PIPELINE, MERGE_RUN, PIPELINE_CHANGES, RUN_TASK, SEND_MESSAGE,
   },
@@ -45,10 +46,28 @@ fn driving(name: &str, own: &str) -> Option<String> {
     MERGE_RUN => DRIVE_MERGE,
     RESUME_RUN => DRIVE_RESUME,
     DECIDE_APPROVAL => DRIVE_APPROVAL,
+    ANSWER_QUESTION | SEND_MESSAGE | CONTINUE_RUN | DECIDE_PLAN | COMPLETE_RUN => DRIVE_CONSENT,
+    UPDATE_PROJECT_LIMITS => DRIVE_LIMITS,
     _ => return None,
   };
   Some(format!("{first} {own}"))
 }
+
+/// The app's tools whose descriptions name *Let automation answer approvals*, which the chat's list has no name for.
+const DECIDE_PLAN: &str = "decide_plan";
+const COMPLETE_RUN: &str = "complete_run";
+
+/// What the agent reads first of a tool that asks another client for *Let automation answer approvals*, while the chat
+/// drives (`docs/plan/orchestrator-autonomy/OA-11-…`).
+const DRIVE_CONSENT: &str = "While you drive, this is carried out at once and needs no Let automation answer \
+  approvals: where the text below says it is refused as automation_not_allowed without that setting, that is for \
+  other clients.";
+
+/// What the agent reads first of `update_project_limits` while the chat drives.
+const DRIVE_LIMITS: &str = "While you drive, raising or removing the daily budget needs no Let automation answer \
+  approvals when a person's message asked for it; in a turn Orchester started by itself (its message begins with \
+  [Orchester]) a call that names daily_budget is refused (person_only): the daily budget bounds what is spent while \
+  nobody watches.";
 
 /// What the agent reads first of `run_task` while the chat drives.
 const DRIVE_RUN: &str = "Starts the run at once, through the same checks as for any client. A task marked Blocked \

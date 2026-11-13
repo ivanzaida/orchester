@@ -124,7 +124,8 @@ async fn act(
     Ok(drives) => drives,
     Err(error) => return Acted::done(Err(error)),
   };
-  if let Some(refused) = guard::pipeline_refused(name, drives) {
+  if let Some(refused) = guard::pipeline_refused(name, drives).or_else(|| guard::budget_refused(scope, name, arguments))
+  {
     return Acted::done(Err(refused));
   }
   // While driving, the tools are called as the chat's own: what only a person's switch allowed a client (accepting a

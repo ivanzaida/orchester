@@ -35,10 +35,11 @@ describes how the chat works, which tools its agent has and what it does directl
 3. **While it drives, the chat is a client of the app** — every change is made at once by the tool's own rules, and a
    refusal is the tool's. Publishing, starting, canceling, pausing, resuming, continuing (accepting a step, raising
    limits and budgets and resuming after the daily budget included), merging, answering agents and messaging their
-   runs, making the folder a git repository and writing with git all happen directly. Whatever only *Let automation …*
-   allows another client stays refused: what widens what agents may do is `person_only` without *Let automation change
-   agent permissions*; answering agents' questions and messages needs *Let automation answer approvals*, as for any
-   client.
+   runs, making the folder a git repository and writing with git all happen directly. What widens what agents may do
+   stays `person_only` without *Let automation change agent permissions*. *Let automation answer approvals* is for
+   outside MCP clients only: while it drives, the chat answers questions and messages, decides plans and tool requests
+   and raises limits without it. One exception is its own: in a turn the Orchestrator started itself it does not change
+   the project's daily budget (`person_only`); ask it in a message and it does.
 4. **While it does not drive, changes are cards** — publishing, starting a run (unless the project allows Autopilot),
    canceling, merging, answering agents and continuing a stopped run are proposal cards, and no turn starts by itself.
    Pipelines are the exception: there is no card for them, the chat changes none. A card to publish a pipeline kept
@@ -56,8 +57,9 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 approvals (`answer_question`, `send_message`, `decide_plan`, `decide_approval`), queue holds, creating, saving and
 duplicating pipelines, the profile, instruction, skill, tool, service and stack drafts and their publication,
 connections and accounts, the project's settings the app lets automation change (Autopilot, reviewer, environment,
-limits, code index, repository agent files). Each keeps its own rules: `decide_approval` and `decide_plan` need *Let
-automation answer approvals*, and what only a person may do is `person_only`, as for an outside client.
+limits, code index, repository agent files). Each keeps its own rules, and what only a person may do is
+`person_only`, as for an outside client; what asks an outside client for *Let automation answer approvals* does not
+ask the driving chat for it.
 
 **While it does not drive**, it has these: `list_projects`, `get_project`, `list_tasks`, `get_task`, `create_task`,
 `update_task`, `list_modules`, `get_module`, `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`,
@@ -86,7 +88,9 @@ refused as `drive_only`), `list_profiles`, `get_profile`, `save_profile_draft`, 
 | `cancel_run` | direct | direct | proposal | refused `report_turn` |
 | `continue_run` | direct, every choice | direct, every choice | proposal: only `allow_retry`, `return_to`, `resolve_conflicts`; the other choices `person_only` | refused `report_turn` |
 | `merge_run` | direct | direct for a run the rule lets it (`left_to_person` otherwise; see auto-merge) | proposal | refused `report_turn` |
-| `answer_question`, `send_message` | direct (deciding a waiting plan is refused `plan_decision_person_only`) | direct | proposal | refused `report_turn` |
+| `answer_question`, `send_message` | direct (a message that would decide a waiting plan is refused `plan_decision_person_only`: use `decide_plan`) | direct | proposal | refused `report_turn` |
+| `decide_plan`, `complete_run` | direct | direct | not among its tools | refused `report_turn` |
+| `update_project_limits` | direct, the daily budget too | direct, but the daily budget (`person_only`) | not among its tools | refused `report_turn` |
 | `publish_*` | direct, unless the draft widens agents' permissions while *Let automation change agent permissions* is off (`person_only`) | same | proposal | refused `report_turn` |
 | `init_repository`, `git_*` writes, `mcp_*` | direct (`git_*` that can lose work stay `git_propose` cards; `mcp_*` that widen need *Let automation change agent permissions*) | same | cards; git writes `write_off` | refused `report_turn` |
 
@@ -118,7 +122,8 @@ runs* and *write with git* — and a project that had *answer agents* on starts 
   tells the person to press a button its tools can press.
 - A day's report and the summary of a watching that ended by itself start a turn that changes nothing (`report_turn`).
 
-Related: *Let automation answer approvals* and *Let automation change agent permissions* (Settings › Automation),
+Related: *Let automation change agent permissions* (Settings › Automation; *Let automation answer approvals* there is
+for outside MCP clients and does not concern the chat),
 *Daily report from the Orchestrator* (Settings › Notifications), *Let Orchester estimate story points* (Project settings
 › Runs › Estimates).
 

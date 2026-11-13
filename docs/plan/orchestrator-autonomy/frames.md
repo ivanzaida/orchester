@@ -99,6 +99,13 @@ The *Needs you* page, the task page (`Task page · redesign`) and the leading co
    are parked and 3 wait on them* with its turn.
 6. **States**: nothing parked; nothing to review; loading; cannot be read; light theme.
 
+## G · Project settings › Orchestrator without *Also needed* (OA-11)
+
+The tab's last section, *Also needed · set for this computer* (`PVOJl` in `S03`), shows *Let automation answer
+approvals* with the hint *Answering agents' questions and messages acts only while this is on too*. Since OA-11 that
+setting is for outside MCP clients only and the chat does not depend on it, so the section goes: the frame of the tab
+without it, and what ends the tab instead (the *Watching* section's foot, or nothing).
+
 ## F · Keep the computer awake (OA-08)
 
 Settings › General (or where the frame puts it): one row, *Keep the computer awake while agents work*, a switch, with

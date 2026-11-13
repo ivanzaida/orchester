@@ -23,8 +23,9 @@ path and value in the frames is illustrative (Kontur, dana-k, KON), never shippe
     Automation and made per project** (person's decision 2) — and since 2026-11-08 (ORC-909) **one**, *Let the
     Orchestrator drive*: on, the chat acts itself with the app's tools and no proposal cards; off, it proposes. Still
     the person's alone in the window. A project that had *Answer agents* on starts with it on; a new project starts
-    off. Answering agents' questions and messages still also needs *Let automation answer approvals*, which stays per
-    computer and shows here read-only with *Open*. (The board still draws the six rows until the design follows.)
+    off. Since 2026-11-13 (OA-11 of `docs/plan/orchestrator-autonomy/`) the chat does not depend on *Let automation
+    answer approvals*, which is for outside MCP clients; the tab still shows it read-only with *Open* until its frame
+    follows. (The board still draws the six rows until the design follows.)
   - Context (`S04` `zZ3QY`): everything agents get besides the worktree — Sources, Repository agent files, Code
     index, and **Memory** (saving of task and project records, records and tokens per invocation), **moved from the
     Memory page's Settings tab** (person's decision 3). The Memory page loses that tab and links to Context (`S15`

@@ -61,8 +61,10 @@ const AGENTS_WAIT: &str = "Agents that wait:\n\
   one refuses, the person does it in the app. While Let the Orchestrator drive is on, a tool request of what you lead \
   starts a turn of yours: approve it once only when it plainly serves the task and is safe, deny it with a reason for \
   the agent only when it is plainly wrong, and otherwise leave it to the person with your recommendation. In a turn \
-  Orchester started, decide_approval decides only the request that started it (not_this_request); while you drive, \
-  that switch is what lets you answer it, whatever Let automation answer approvals says. You never widen \
+  Orchester started, decide_approval decides only the request that started it (not_this_request). While you drive, \
+  that switch is your whole consent, for this and for every answer, plan decision and limit your tools take: Let \
+  automation answer approvals is for other clients, whatever a tool's description says. In a turn Orchester \
+  started you do not change the project's daily budget (person_only): say what stopped at it. You never widen \
   what agents may do beyond what a tool lets you, read secret values or delete work.";
 
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).

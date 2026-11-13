@@ -133,7 +133,8 @@ pub struct SetReviewer {
 #[schemars(crate = "rmcp::schemars")]
 pub struct Retired {}
 
-/// Refused unless a person lets automation answer approvals.
+/// Refused unless a person lets automation answer approvals. The Orchestrator chat needs it here too while it drives:
+/// who judges requests in the person's place is standing policy, not an answer the drive switch covers.
 fn gate(services: &Services) -> Result<(), ToolError> {
   if services.workspace.automation_answers_approvals()? {
     return Ok(());

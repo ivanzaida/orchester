@@ -211,7 +211,7 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
   } = args;
   let (project, asked) = blocking(move || {
     if !matches!(by, SentBy::Person(_)) {
-      crate::decisions::DecisionKind::Question.require(&reading.workspace)?;
+      reading.require(crate::decisions::DecisionKind::Question)?;
     }
     let project = reading.project(&project)?;
     let db = ProjectDb::open(&project.repo_root)?;

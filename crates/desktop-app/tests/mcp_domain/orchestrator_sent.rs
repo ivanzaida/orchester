@@ -115,12 +115,6 @@ fn sent_directly_names_the_orchestrator_and_how_it_went_out() {
   let (task, run) = task_run(&db, ASKING);
   let scope = chat(&served, &mut db);
   allow(&served, &seeded.repo);
-  // The message answers the agent's question: automation decides it only with the person's consent.
-  served
-    .services()
-    .workspace
-    .set_automation_answers_approvals(true)
-    .expect("decision consent");
   let message = json!({ "project": "Kontur", "run": run.id().to_string(), "text": TEXT });
   chat_call(&mut served, &scope, "send_message", message).expect("sent at once");
   let stored = sent(&db, task.id(), TEXT).expect("the message");
