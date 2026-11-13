@@ -1,10 +1,10 @@
-//! Values of the Pipelines screens (`Pipelines · redesign` `evQ4U`): the page's sides and top (`Header` `Jf1Gu`,
-//! `Body` `mifhW`), the flow's words (`On task start` `xXtB2`, `Run in parallel` `kgGb2`) and the step heading's
-//! number (`o06df`).
+//! Values of the Pipelines hub (`Pipelines · v2` `pCzIS`) that are its own: why the pipelines could not be read, a
+//! pipeline's slug, the fade of the bones and the list's width in a narrow window. The rest of the hub is drawn with
+//! the Agents hub's roles (`HubText`, `HubSpacing`).
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
+  app::theme::{ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
 };
 
@@ -16,14 +16,6 @@ pub const PIPELINES_BONE_FADE: [f32; 4] = [1.0, 1.0, 0.7, 0.45];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipelinesText {
-  /// Geist Mono 10.5 `text_muted`: *ON TASK START* and *RUN IN PARALLEL* in the flow (`zPT6x`, `zOhok`).
-  FlowLabel,
-  /// Geist Mono 11.5 `text_muted`: a step card's number (`V1JR5`).
-  CardNumber,
-  /// Geist Mono 13 `text_muted`: the chosen step's number beside its name (`o06df`).
-  StepNumber,
-  /// 12/500 `text_secondary`: the version on the header's status line (`J4YQR`).
-  Status,
   /// 12 `text_secondary`: the store's own words for why the pipelines couldn't be read (`Reason` `v3szq` in P9
   /// `H4fLj`, `Pipelines · v2`).
   ReadReason,
@@ -33,14 +25,7 @@ pub enum PipelinesText {
 }
 
 impl PipelinesText {
-  pub const ALL: [Self; 6] = [
-    Self::FlowLabel,
-    Self::CardNumber,
-    Self::StepNumber,
-    Self::Status,
-    Self::ReadReason,
-    Self::Slug,
-  ];
+  pub const ALL: [Self; 2] = [Self::ReadReason, Self::Slug];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -48,10 +33,6 @@ impl PipelinesText {
 
   const fn name(self) -> &'static str {
     match self {
-      Self::FlowLabel => "pipelines_flow_label",
-      Self::CardNumber => "pipelines_card_number",
-      Self::StepNumber => "pipelines_step_number",
-      Self::Status => "pipelines_status",
       Self::ReadReason => "pipelines_read_reason",
       Self::Slug => "pipelines_slug",
     }
@@ -59,10 +40,6 @@ impl PipelinesText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::FlowLabel => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::CardNumber => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::StepNumber => mono(style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::Status => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::ReadReason => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Slug => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
     }
@@ -73,42 +50,6 @@ impl PipelinesText {
 /// the panel too narrow for its rows, cards and bar: the list gives way first (PV2-17; no design frame below the 1440
 /// board; the list's rows cut their lines with an ellipsis).
 pub const PIPELINE_HUB_LIST_NARROW: f32 = 260.0;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PipelinesSpacing {
-  /// 20: above the header and the body (`Jf1Gu`, `mifhW`).
-  PageTop,
-  /// 21: a flow edge's line in from the cards' start, under their numbers (`p9sTT`).
-  EdgeIndent,
-}
-
-impl PipelinesSpacing {
-  pub const ALL: [Self; 2] = [Self::PageTop, Self::EdgeIndent];
-
-  pub fn role(self) -> SpacingSize {
-    SpacingSize::extra(self.name())
-  }
-
-  const fn name(self) -> &'static str {
-    match self {
-      Self::PageTop => "pipelines_page_top",
-      Self::EdgeIndent => "pipelines_edge_indent",
-    }
-  }
-
-  pub const fn value(self) -> f32 {
-    match self {
-      Self::PageTop => 20.0,
-      Self::EdgeIndent => 21.0,
-    }
-  }
-}
-
-pub fn install(theme: &Theme) {
-  for spacing in PipelinesSpacing::ALL {
-    theme.set_spacing_value(spacing.role(), spacing.value());
-  }
-}
 
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   PipelinesText::ALL

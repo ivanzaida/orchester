@@ -60,11 +60,6 @@ pub struct Imported {
 }
 
 impl Imported {
-  /// Whether the copy shows the import's result over it: until it is published, nothing of it runs.
-  pub const fn shows_result(&self, published: bool) -> bool {
-    !published
-  }
-
   /// Whether something was left unresolved, which the project's tools are where to resolve.
   pub const fn needs_setup(&self) -> bool {
     self.unresolved > 0

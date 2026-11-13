@@ -13,10 +13,7 @@ use lurq::{
 };
 use orchester_core::{id::ProjectId, resource::ResourceKind, time::Timestamp};
 use orchester_workspace::{
-  agents::local_hub::StoppedRun,
-  local_archive::{self, Archivable},
-  messages::Message,
-  pipelines::task_use::stopped_by_archive,
+  agents::local_hub::StoppedRun, local_archive::Archivable, messages::Message, pipelines::task_use::stopped_by_archive,
 };
 
 use super::{chips::chips, model::Entry, words};
@@ -41,6 +38,8 @@ pub(super) struct Props {
   pub project: ShownProject,
   pub entry: Entry,
   pub now: Timestamp,
+  /// The person only reads the team's pipelines: an admin restores one.
+  pub read_only: bool,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -59,15 +58,16 @@ impl Component for Restore {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
-    let changes = Services::of(ctx).changes;
+    let services = Services::of(ctx);
+    let (changes, servers) = (services.changes, services.servers);
     let root = props.project.open.repo_root.clone();
     let project: ProjectId = props.project.open.project.id();
     let what = Archivable::Resource(props.entry.id);
     Self {
       restore: ctx.future_action(move |(): ()| {
-        let (root, changes) = (root.clone(), changes.clone());
+        let (root, changes, servers) = (root.clone(), changes.clone(), servers.clone());
         async move {
-          local_archive::restore(&root, what).await?;
+          servers.restore_pipeline(&root, props.entry.id).await?;
           for change in what.changes(Some(ResourceKind::Pipeline)) {
             changes.record(project, *change);
           }
@@ -78,7 +78,9 @@ impl Component for Restore {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { entry, now, .. } = ctx.props::<Props>().clone();
+    let Props {
+      entry, now, read_only, ..
+    } = ctx.props::<Props>().clone();
     let state = self.restore.state().get();
     let head = head_named(
       &entry.name,
@@ -120,31 +122,8 @@ impl Component for Restore {
       .child(notice)
       .with_children(unread)
       .with_children(failed);
-    let action = self.restore.clone();
-    let restore = ActionButton::new(
-      "pipeline-hub-restore",
-      ButtonKind::Primary,
-      ctx.t_args("pipeline_hub.archived.restore", [("name", &*entry.name)]),
-    )
-    .icon(Icon::ArchiveRestore)
-    .pinned();
-    let restore = if state.is_pending() {
-      restore.loading()
-    } else {
-      restore.on_click(move || action.run(()))
-    };
-    let bar = bar(
-      vec![restore.into()],
-      Some(
-        ctx
-          .t(if stopped.is_empty() {
-            "pipeline_hub.archived.restoreHint"
-          } else {
-            "pipeline_hub.archived.restoreHintStopped"
-          })
-          .to_string(),
-      ),
-    );
+    // A member of the team reads its pipelines: an admin restores one.
+    let bar = (!read_only).then(|| self.restore_bar(ctx, &entry.name, (state.is_pending(), stopped.is_empty())));
     let scroll = ScrollVertical::new(body)
       .id("pipeline-hub-panel-scroll")
       .width(Dimension::Pct(100.0))
@@ -157,7 +136,7 @@ impl Component for Restore {
       .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
       .child(scroll)
-      .child(bar)
+      .with_children(bar)
   }
 }
 
@@ -175,6 +154,30 @@ enum Known {
 }
 
 impl Restore {
+  /// The pinned bar: *Restore*, loading while it is under way (`restoring`), and what it does; the runs archiving
+  /// stopped stay stopped (`none_stopped` when it stopped none).
+  fn restore_bar(&self, ctx: &Ctx, name: &str, (restoring, none_stopped): (bool, bool)) -> Element {
+    let action = self.restore.clone();
+    let restore = ActionButton::new(
+      "pipeline-hub-restore",
+      ButtonKind::Primary,
+      ctx.t_args("pipeline_hub.archived.restore", [("name", name)]),
+    )
+    .icon(Icon::ArchiveRestore)
+    .pinned();
+    let restore = if restoring {
+      restore.loading()
+    } else {
+      restore.on_click(move || action.run(()))
+    };
+    let hint = if none_stopped {
+      "pipeline_hub.archived.restoreHint"
+    } else {
+      "pipeline_hub.archived.restoreHintStopped"
+    };
+    bar(vec![restore.into()], Some(ctx.t(hint).to_string()))
+  }
+
   /// The tasks of the runs that archiving `entry` stopped, as the project's database has them.
   fn stopped(&self, ctx: &mut Ctx, entry: &Entry) -> Known {
     let root = ctx.props::<Props>().project.open.repo_root.clone();

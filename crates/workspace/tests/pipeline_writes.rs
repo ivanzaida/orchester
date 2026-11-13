@@ -1,6 +1,13 @@
 //! The editor and automation share the permission checks in workspace, and a pipeline is stored only as published
 //! versions (D-032): a save publishes the next version or is refused with every reason, and nothing is stored then.
 //! `cargo test -p orchester-workspace --test pipeline_writes pipeline_writes`.
+#[path = "startup_join/support.rs"]
+#[allow(
+  dead_code,
+  reason = "the joins' desktop, of which these tests use the session's servers"
+)]
+mod support;
+
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
@@ -14,9 +21,21 @@ use orchester_workspace::pipelines::{
   data::OpenedPipeline,
   library::{CreateError, create_here},
   widening::save_reasons,
-  write::{self, Allowed, WriteError},
+  write::{Allowed, WriteError, save_named_in},
 };
 use tempfile::TempDir;
+
+/// Saves `body`, an edit of `before`, named `name`, in the local project at `root`, which reaches no team server.
+fn save_here_in(
+  root: &std::path::Path,
+  before: &OpenedPipeline,
+  body: &Pipeline,
+  name: &Name,
+  allowed: &Allowed,
+) -> Result<OpenedPipeline, WriteError> {
+  let desk = support::Desk::new();
+  save_named_in(root, &desk.servers, before, body, name, allowed).map(|stored| stored.opened)
+}
 
 fn project() -> (TempDir, ProjectDb) {
   let folder = tempfile::tempdir().expect("a temporary folder");
@@ -76,12 +95,12 @@ fn pipeline_writes_publish_the_next_version_and_need_a_person_to_drop_a_gate() {
   assert_eq!(first.version.get(), 1, "created as v1");
   let weaker = checks(tool, false);
   assert!(matches!(
-    write::save_here_in(folder.path(), &first, &weaker, &named(&first), &Allowed::default()),
+    save_here_in(folder.path(), &first, &weaker, &named(&first), &Allowed::default()),
     Err(WriteError::PersonOnly)
   ));
   assert_eq!(db.versions::<Pipeline>(id).unwrap().len(), 1, "nothing stored");
   let reasons = save_reasons(Some(&first.body), &weaker, &first.assignables);
-  let saved = write::save_here_in(folder.path(), &first, &weaker, &named(&first), &Allowed(reasons)).unwrap();
+  let saved = save_here_in(folder.path(), &first, &weaker, &named(&first), &Allowed(reasons)).unwrap();
   assert_eq!(saved.version.get(), 2);
   assert_eq!(saved.body, weaker);
   assert_eq!(db.versions::<Pipeline>(id).unwrap()[0].body(), &body);
@@ -134,7 +153,7 @@ fn pipeline_writes_refuse_an_unpublishable_pipeline_with_every_reason_and_store_
   )
   .unwrap();
   let opened = OpenedPipeline::load(&db, id).unwrap();
-  let refused = write::save_here_in(folder.path(), &opened, &starter, &named(&opened), &Allowed::default());
+  let refused = save_here_in(folder.path(), &opened, &starter, &named(&opened), &Allowed::default());
   assert!(
     matches!(&refused, Err(WriteError::NotSaved(reasons)) if reasons.len() == starter.steps().len()),
     "{refused:?}"
@@ -150,12 +169,12 @@ fn pipeline_writes_refuse_an_unchanged_save_and_one_made_from_an_older_version()
   let body = checks(tool, false);
   let id = create_here(&mut db, Name::new("Pipeline").unwrap(), &body, Timestamp::now()).unwrap();
   let opened = OpenedPipeline::load(&db, id).unwrap();
-  let unchanged = write::save_here_in(folder.path(), &opened, &body, &named(&opened), &Allowed::default());
+  let unchanged = save_here_in(folder.path(), &opened, &body, &named(&opened), &Allowed::default());
   assert!(
     matches!(&unchanged, Err(WriteError::NotSaved(reasons)) if reasons[0].key == "pipelines.problems.unchanged"),
     "{unchanged:?}"
   );
-  write::save_here_in(
+  save_here_in(
     folder.path(),
     &opened,
     &body.clone().with_description("First editor".into()),
@@ -163,7 +182,7 @@ fn pipeline_writes_refuse_an_unchanged_save_and_one_made_from_an_older_version()
     &Allowed::default(),
   )
   .unwrap();
-  let stale = write::save_here_in(
+  let stale = save_here_in(
     folder.path(),
     &opened,
     &body.clone().with_description("Second editor".into()),
@@ -186,7 +205,7 @@ fn pipeline_writes_rename_preserves_slug_and_rejects_stale_names_atomically() {
   let body = checks(tool, false);
   let id = create_here(&mut db, Name::new("Pipeline").unwrap(), &body, Timestamp::now()).unwrap();
   let before = OpenedPipeline::load(&db, id).unwrap();
-  let after = write::save_here_in(
+  let after = save_here_in(
     folder.path(),
     &before,
     &body,
@@ -198,7 +217,7 @@ fn pipeline_writes_rename_preserves_slug_and_rejects_stale_names_atomically() {
   assert_eq!(&*after.slug, "pipeline");
   assert_eq!(after.version.get(), 1, "a rename alone publishes no version");
   assert!(matches!(
-    write::save_here_in(
+    save_here_in(
       folder.path(),
       &before,
       &body.clone().with_description("stale edit".into()),

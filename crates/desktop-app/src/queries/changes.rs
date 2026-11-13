@@ -34,7 +34,7 @@ pub enum ProjectRead {
   TeamHub,
   /// A local project's Agents hub: its resources, what uses them and how they stand.
   LocalHub,
-  /// A local project's Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer.
+  /// The Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer.
   PipelineHub,
   /// What a local instruction's panel edits over: the instructions, the profiles and pipelines they name.
   HubInstructions,

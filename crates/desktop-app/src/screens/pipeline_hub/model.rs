@@ -9,7 +9,12 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  pipelines::{data::Assignables, flow::FlowRead, hub::PipelineHub, ready::UndecidedMember},
+  pipelines::{
+    data::Assignables,
+    flow::FlowRead,
+    hub::{PipelineHub, TeamPipelines},
+    ready::UndecidedMember,
+  },
   readiness::{Group, ReadinessStanding},
 };
 
@@ -61,6 +66,8 @@ pub(super) struct Listing {
   entries: Vec<Entry>,
   /// What the steps of the pipelines can run, which the flow of an edit is drawn with.
   assignables: Arc<Assignables>,
+  /// `Some` in a team project, whose pipelines are the team's.
+  team: Option<TeamPipelines>,
 }
 
 impl Listing {
@@ -106,7 +113,18 @@ impl Listing {
     Self {
       entries,
       assignables: hub.assignables(),
+      team: hub.team(),
     }
+  }
+
+  /// `Some` in a team project: its pipelines are the team's, saved on its team server.
+  pub(super) const fn team(&self) -> Option<TeamPipelines> {
+    self.team
+  }
+
+  /// Whether the person only reads the pipelines: a member of the team who is not its admin.
+  pub(super) fn read_only(&self) -> bool {
+    self.team.is_some_and(|team| !team.may_change)
   }
 
   /// How many entries `filter` holds.

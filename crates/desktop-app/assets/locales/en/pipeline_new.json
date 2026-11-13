@@ -19,7 +19,7 @@
       "starterSummaryNoGate": "{{steps}} steps",
       "copy": "Copy a pipeline",
       "copySub": "Its latest version becomes v1.",
-      "copyChosen": "Published version → v1",
+      "copyChosen": "Latest version → v1",
       "copySteps": "{{steps}} steps · {{chain}}",
       "copyOption": "{{name}} · {{version}}",
       "choosePipeline": "Choose a pipeline",

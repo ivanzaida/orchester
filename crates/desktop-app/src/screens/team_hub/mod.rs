@@ -29,7 +29,7 @@ pub(in crate::screens) mod bar;
 pub(in crate::screens) mod create;
 mod edit;
 mod fill;
-mod head;
+pub(in crate::screens) mod head;
 pub(in crate::screens) mod list;
 mod mcp;
 mod member;

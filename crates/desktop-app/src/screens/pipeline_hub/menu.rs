@@ -30,7 +30,8 @@ const MENU_WIDTH: f32 = 230.0;
 /// What the rows do.
 pub(super) struct Actions {
   pub rename: Arc<dyn Fn() + Send + Sync>,
-  pub make_default: FutureAction<(), (), Message>,
+  /// None in a team project: the default pipeline is kept on this computer, which keeps no copy of the team's.
+  pub make_default: Option<FutureAction<(), (), Message>>,
   pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -50,7 +51,10 @@ pub(super) fn panel(
   .icon(Icon::Pencil)
   .render(ctx, open);
   let duplicate = duplicate(ctx, (project, entry)).render(ctx, open);
-  let make_default = make_default(ctx, default, actions).render(ctx, open);
+  let make_default = actions
+    .make_default
+    .clone()
+    .map(|action| make_default(ctx, default, action).render(ctx, open));
   let archive = actions.archive.clone();
   let used = match entry.used_by {
     0 => None,
@@ -73,7 +77,7 @@ pub(super) fn panel(
     .width(Dimension::Px(MENU_WIDTH))
     .child(rename)
     .child(duplicate)
-    .child(make_default)
+    .with_children(make_default)
     .child(separator)
     .child(archive)
 }
@@ -85,12 +89,11 @@ fn duplicate(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry)) -> MenuItem {
   MenuItem::opens(id, label, Navigation::of(ctx).to(copy)).icon(Icon::Copy)
 }
 
-fn make_default(ctx: &Ctx, default: bool, actions: &Actions) -> MenuItem {
+fn make_default(ctx: &Ctx, default: bool, action: FutureAction<(), (), Message>) -> MenuItem {
   let id = "pipeline-hub-menu-default";
   let item = if default {
     MenuItem::new(id, ctx.t("pipeline_hub.menu.isDefault"), || {}).chosen(true)
   } else {
-    let action = actions.make_default.clone();
     MenuItem::new(id, ctx.t("pipeline_hub.menu.makeDefault"), move || action.run(()))
   };
   item.icon(Icon::Star)

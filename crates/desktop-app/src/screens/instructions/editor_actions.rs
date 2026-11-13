@@ -194,6 +194,7 @@ pub(super) fn archive_question(
       what: Archivable::Resource(entry.id),
       kind: ResourceKind::Instruction,
       name: entry.name.clone(),
+      local: true,
       on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
       on_archived: std::sync::Arc::new(move || {
         selection.removed.update(|removed| removed.0.push((part, name.clone())));

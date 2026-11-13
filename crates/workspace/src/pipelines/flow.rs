@@ -361,8 +361,8 @@ impl FlowRead {
     }))
   }
 
-  /// The flow of a published version's `body`.
-  fn of_body(body: &Pipeline, assignables: &Assignables) -> Self {
+  /// The flow of a saved version's `body`.
+  pub(super) fn of_body(body: &Pipeline, assignables: &Assignables) -> Self {
     let flow = PipelineFlow::of(body, assignables);
     Self {
       ending: Ending::of(body),

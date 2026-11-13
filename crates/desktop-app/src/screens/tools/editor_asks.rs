@@ -285,6 +285,7 @@ impl ToolEditor {
         what: Archivable::Resource(entry.id),
         kind: ResourceKind::Tool,
         name: entry.name.clone(),
+        local: true,
         on_keep: Arc::new(move || keep.set(Ask::Nothing)),
         on_archived: Arc::new(move || navigation.replace(Route::Project(project, ProjectPage::Tools))),
       },

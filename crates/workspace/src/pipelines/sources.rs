@@ -10,7 +10,7 @@ use orchester_core::{
   source::SourcePath,
 };
 
-use crate::{messages::Message, sources::check::Place};
+use crate::sources::check::Place;
 
 /// Which list of the draft a source is on.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,22 +72,4 @@ pub fn step_counts(edit: &PipelineEdit) -> Vec<(String, usize)> {
     .map(|step| (step.name.as_str().to_owned(), edit.sources().step(&step.key).len()))
     .filter(|(_, count)| *count > 0)
     .collect()
-}
-
-/// What the steps add, under the pipeline's sources; `None` when no step lists any.
-pub fn steps_read_back(edit: &PipelineEdit) -> Option<Message> {
-  match step_counts(edit).as_slice() {
-    [] => None,
-    [(step, 1)] => Some(Message::new("sources.steps.oneOnStep").with("step", step.clone())),
-    [(step, count)] => Some(
-      Message::new("sources.steps.manyOnStep")
-        .with("step", step.clone())
-        .with("count", count.to_string()),
-    ),
-    steps => Some(
-      Message::new("sources.steps.onSteps")
-        .with("steps", steps.len().to_string())
-        .with("count", steps.iter().map(|(_, count)| count).sum::<usize>().to_string()),
-    ),
-  }
 }

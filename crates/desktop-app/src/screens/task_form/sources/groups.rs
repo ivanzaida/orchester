@@ -101,7 +101,7 @@ pub(super) fn inherited(ctx: &mut Ctx, props: &SourcesProps, inherited: &Inherit
   let Some((pipeline, _)) = props.pipeline else {
     return groups;
   };
-  let route = Route::Project(props.project, props.pipeline_links.page(pipeline));
+  let route = Route::Project(props.project, crate::screens::pipeline_link::page(pipeline));
   let view = link(
     ctx,
     "task-form-sources-pipeline-link",

@@ -236,7 +236,7 @@
       "runAgainBlocked": "Blocked by unfinished tasks",
       "runAgainChanged": "The latest run changed",
       "runAgainActive": "Run #{{run}} is active",
-      "runAgainUnpublished": "{{pipeline}} isn't published",
+      "runAgainUnpublished": "{{pipeline}} isn't available",
       "runAgainDailyBudget": "Today's token budget is used"
     },
     "formerKey": "was {{key}}",

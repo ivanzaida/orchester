@@ -51,6 +51,7 @@ impl Editor {
         what: Archivable::Resource(entry.id),
         kind: ResourceKind::AgentProfile,
         name: entry.profile.role().as_str().into(),
+        local: true,
         on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
         on_archived: std::sync::Arc::new(move || nav.archived()),
       },

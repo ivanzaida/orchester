@@ -1,4 +1,4 @@
-//! *Start from* in a new pipeline's panel (`Start from` `eZG0q` in P14 `Rszkt`), which replaces the old page's radio
+//! *Start from* in a new pipeline's panel (`Start from` `eZG0q` in P14 `Rszkt`), which replaces the radio
 //! rows: *Starter · Feature delivery* with its steps and approval gates, *Copy a pipeline* with a select of the
 //! pipelines (as *name · version*; its latest version becomes v1) and *Empty pipeline*. The chosen row says what v1
 //! gets: the starter's chain, or the copy's steps (P14b `sVNK4`). Choosing a pipeline in the select chooses the row.
