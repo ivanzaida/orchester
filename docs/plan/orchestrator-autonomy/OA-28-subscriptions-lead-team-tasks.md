@@ -1,6 +1,6 @@
 # OA-28 · Subscriptions lead team tasks by their module, and `/watching` answers
 
-- **Status:** todo
+- **Status:** in progress (the module of a team task that ran here: done 2026-11-13; the rest below)
 - **Kind:** workspace
 - **Depends on:** —
 - **Branch:** —
@@ -37,3 +37,15 @@ the events go to *Tasks without a module*, or to nobody. The module is in the ru
 
 - Workspace tests: a module subscription leads a team task's wait and run end; `get_watches` for a team project.
 - Its two rows leave the parity table. `tools/check.ps1` passes.
+
+## Done so far (2026-11-13)
+
+A team task as its runs recorded it is in the module its newest run started in (`RunBaseSource::Module`, kept with
+every team run; `tasks::recorded`), so `Subscriptions::leading` finds the module's subscription and the follower
+keeps the task's waits and run ends in the conversation that watches the module. Checked against a read-only copy of
+the person's own project database: all its tasks are team tasks, its modules are stored on this computer with the
+ids its runs name, and it has a module subscription that led nothing because of this.
+
+**Left:** a team task that never ran here (no run to read its module from) and one the server moved to another
+module since its last run: both need the server's reading of the task's module, where `team_status` already asks it.
+`get_watches` and `/watching` for a team project. `settle_closed_in` for a team task.

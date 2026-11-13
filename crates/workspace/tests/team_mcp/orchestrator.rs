@@ -1,12 +1,14 @@
 //! A team task's run, which this computer keeps no definition of, where the app and the Orchestrator chat read a run's
 //! task: it is under way for the sidebar and Stop auto-approving, its task is told by the key its inputs kept, the
-//! chat leaves its delivery to the person, and the local merge takes it into its module's branch, never the base.
+//! chat leaves its delivery to the person, and the local merge takes it into its module's branch, never the base. Its
+//! task is in the module its run started in, so a conversation that watches the module leads its events (OA-28).
 
 use std::collections::HashSet;
 
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
+  integration::base::RunBaseSource,
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, RunEnd, Subscription, TurnState,
     WaitKind, WatchTarget,
@@ -208,6 +210,66 @@ fn team_mcp_the_chat_keeps_the_end_of_a_team_run_in_the_conversation_that_leads_
   assert_eq!(waits[0].task, "KON-7");
   assert_eq!(waits[0].run, team.run);
   assert_eq!(waits[0].kind, WaitKind::Ended(RunEnd::Succeeded));
+}
+
+/// The waits `chat` keeps.
+fn waits_of(team: &crate::team_runs::Started, chat: &Chat) -> Vec<AgentWait> {
+  let entries = team.checkout.db().chat_entries(chat.id()).expect("entries");
+  entries
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Wait { wait, .. } => Some(wait),
+      _ => None,
+    })
+    .collect()
+}
+
+#[test]
+fn team_mcp_a_module_subscription_leads_the_events_of_a_team_task_in_that_module() {
+  let team = started();
+  let mut db = team.checkout.db();
+  let run = db.run(team.run).expect("read").expect("run");
+  let RunBaseSource::Module { module } = run.base_source() else {
+    panic!("the team run started on its module's branch: {:?}", run.base_source());
+  };
+  let task = recorded::task_of(&db, run.task())
+    .expect("read")
+    .expect("recorded by its run");
+  assert_eq!(
+    task.module(),
+    Some(module),
+    "the task is in the module its run started in"
+  );
+
+  // One conversation watches the module, another the tasks without a module.
+  let leading = Chat::named(ChatId::generate(), "Webhooks v2", at(10));
+  let elsewhere = Chat::named(ChatId::generate(), "The rest", at(10));
+  for (chat, target) in [
+    (&leading, WatchTarget::Module(module)),
+    (&elsewhere, WatchTarget::WithoutModule),
+  ] {
+    let person = ChatMessageId::generate();
+    let text = MessageBody::new("Look after it").expect("text");
+    db.keep_chat_message(chat, (person, &text), at(10)).expect("kept");
+    db.end_chat_turn(person, &TurnState::Answered, at(11)).expect("ended");
+    db.start_subscription(&Subscription::new(chat.id(), target, "", at(12)))
+      .expect("watching");
+  }
+  let project = db.project().id();
+  drop(db);
+  team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
+
+  let (root, programs) = (team.checkout.root(), Programs::processes());
+  let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
+  follow_in((root, project, &programs), &checks, (Switches { drives: false }, true)).expect("followed");
+
+  let led = waits_of(&team, &leading);
+  assert_eq!(led.len(), 1, "the module's conversation keeps the run's end: {led:?}");
+  assert_eq!((led[0].task.as_str(), led[0].run), ("KON-7", team.run));
+  assert!(
+    waits_of(&team, &elsewhere).is_empty(),
+    "a task in a module is no task without a module"
+  );
 }
 
 #[test]

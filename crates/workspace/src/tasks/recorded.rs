@@ -1,7 +1,8 @@
 //! A team task as its runs recorded it. The team server owns a team task's definition and this computer keeps none it
 //! may trust: the copy the old sharing stream wrote is missing before the first sync and when signed out, and may be
-//! stale. What a team task's records need — its key, its title, its brief — they get from the inputs its newest run
-//! started with (`RunInputs`), which never change. A local task's definition is its stored row.
+//! stale. What a team task's records need — its key, its title, its brief, the module it was in — they get from its
+//! newest run that kept inputs (`RunInputs`, and the module's branch the run started on), which never change. A local
+//! task's definition is its stored row.
 
 use std::collections::HashSet;
 
@@ -128,7 +129,15 @@ fn recorded(db: &ProjectDb, id: TaskId, runs: &[ListedRun<RunStoreError>]) -> Re
       limits: bundle.limits(),
     };
     let key = TaskKey::new(db.project().key().clone(), bundle.task_number());
-    return Ok(Some(Task::draft(id, key, details, run.created_at())));
+    // The module is the server's too: the run kept the one its task was in when it started, on whose branch it runs.
+    // A task in no module started on no module's branch.
+    let module = match run.base_source() {
+      RunBaseSource::Module { module } => Some(module),
+      RunBaseSource::Task | RunBaseSource::CheckedOut | RunBaseSource::Project => None,
+    };
+    return Ok(Some(
+      Task::draft(id, key, details, run.created_at()).with_module(module),
+    ));
   }
   Ok(None)
 }

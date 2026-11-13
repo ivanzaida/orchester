@@ -47,7 +47,7 @@ removes the difference.
 | A module reaches its base branch | — (no branch of its own) | `merge_run` of a team run merges it into its module's branch and then asks for the module's delivery; the task page has *Merge and deliver* | a local module has no branch of its own to deliver | OA-17, OA-32 |
 | The Orchestrator merges a finished run on its own | yes, by its rule | never: in a turn it started every team run is left to the person (`team_delivery`), though the run can be merged since `b4abf405d` | the rule was written when no team run could be merged | OA-29 |
 | The Orchestrator starts tasks in a turn it started | after a success it merged (and, with OA-13, whenever work can start) | never: the start rule needs a merge the chat made in that turn, which the row above keeps from it, and reads stored tasks only | follows from the row above | OA-29 |
-| A module subscription leads its tasks' events | yes | no: a team task reads as having no module, so its events go to *Tasks without a module* or to nobody | the module is in the run's team inputs and is not read | OA-28 |
+| A module subscription leads its tasks' events | yes | yes once the task ran here: its module is the one its newest run started in. A team task that never ran here is led by no module subscription, and one moved to another module on the server is led by its old module until it runs again | the server's reading of a task's module is not used yet | OA-28 (the rest) |
 | `/watching` and `get_watches` | answer | refused `team_project_unsupported` | not built | OA-28 |
 | How a stopped run goes on (`continue_run`: retry, return, accept, resolve conflicts) | carried out | refused `team_project_unsupported` | not built | OA-29 |
 | Continuing an interrupted run (`resume_run`, a message that continues) | carried out | refused | not built | OA-29 |
@@ -57,7 +57,7 @@ removes the difference.
 | Who may keep working on a task | — | the claim lasts 15 minutes without a heartbeat, and only a run at work renews it: a run that waits for a person, is in review or is merged does not, so the claim goes stale and anyone may take the task over | "human-wait renewal … not covered" (D1, D8) | OA-31 |
 | A run whose claim was lost | — | reports nothing more to the server, and keeps executing on this computer | the runner is not told | OA-31 |
 | Dependencies between tasks (`blocked_by`), tags, story points, *Don't merge automatically* | kept | refused: the server does not keep them | not in the server's contract | OA-35 |
-| The ceilings of a subscription that leads to the end (OA-09) | held for every task it leads | not found for a team task led through its module (the task reads as having no module), so nothing bounds the chat there; and none of the calls they bound work for a team run yet | follows from the module row above | OA-28, OA-29 |
+| The ceilings of a subscription that leads to the end (OA-09) | held for every task it leads | found for a team task that ran here; none of the calls they bound work for a team run yet | follows from the rows below | OA-29 |
 | Returning a task to draft | `return_to_draft` | refused `team_no_queue` | a team task has no queue on this computer | stays: the server's lifecycle has no draft |
 | Forecasts and delivery figures (`get_delivery`) | answer | refused `team_project_unsupported` | not built | OA-36 |
 | Tasks of every project in one reading (`list_tasks` without a project) | answer | a linked project is left out | reads the server per project | OA-36 |
