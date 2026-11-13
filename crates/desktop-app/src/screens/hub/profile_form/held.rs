@@ -1,113 +1,265 @@
-//! The fields of what a local profile runs with in its panel (L1 `fFxoM`), where the panel holds the profile and the
-//! workspace makes each choice on it ([`local_edit::hold`]): a choice in a select is an [`Edit`] handed to the panel,
-//! and the selects show what the panel holds once no choice is being checked, so a choice that was refused, or that
-//! *Cancel* dropped, is put back.
+//! What a local profile runs with in its panel (`Agents on accounts` C1 `RwzH2`, C2 `t7s3I`): one field, *Runs on*,
+//! which says *Claude Code · Work · claude-opus-5-5 · High* and opens the compact *Runs on* picker under it
+//! (`ui::runs_on_picker`): this computer's accounts along the rail ([`picker`]), the models of the one shown and the
+//! efforts of the chosen model. The picker applies nothing itself; what a choice does depends on what it changes:
 //!
-//! [`local_edit::hold`]: orchester_workspace::agents::local_edit::hold
+//! - another account of the profile's CLI that serves its model is this computer's choice, made at once with no new
+//!   version ([`OnHere`]), while the panel holds no change; held with the rest once it holds one;
+//! - a model, or an effort, is the profile's: the panel holds it ([`OnEdit`]) and *Save* publishes it;
+//! - an account that does not serve the profile's model is only shown: choosing one of its models holds the account
+//!   with the model, and *Save* publishes both.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
+  app::{ctx::Ctx, theme::PaletteColor},
   components::Row,
-  core::{Ref, Signal},
 };
-use orchester_core::{connection::AgentProvider, id::ConnectionId};
+use orchester_core::{
+  connection::AgentProvider,
+  id::{AgentAccountId, ConnectionId},
+};
 use orchester_workspace::agents::{local_edit::Edit, local_hub::LocalProfile};
 
-use super::{Form, ProfileFields, runs::cli_value};
+use super::{
+  Connect,
+  runs::{
+    field::{Field, Menu},
+    picker::{self, Held, Item, OnAccount, Target},
+  },
+};
+use crate::{
+  mcp::input_gate::{Guarded, InputGate, may_press},
+  screens::team_hub::rows::Sub,
+  services::{accounts, plan_limits},
+  ui::{
+    icon::Icon,
+    message::message_text,
+    runs_on_picker::{Notice, NoticeTone, Pick, RunsOnPicker},
+  },
+};
 
 /// What a choice does: the panel makes the edit on what it holds.
 pub(in crate::screens) type OnEdit = Arc<dyn Fn(Edit) + Send + Sync>;
 
-/// What the panel holds, as the selects hold values.
-#[derive(Clone, Debug, Default)]
-struct Values {
-  clis: Vec<AgentProvider>,
-  cli: String,
-  connection: String,
-  model: String,
-  effort: String,
+/// Where the profile runs from now on, as this computer's choice: on a connection the project has, or on an account
+/// of the person's, whose connection the project gets when it has none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::screens) enum Here {
+  Connection(ConnectionId),
+  Account(AgentAccountId),
 }
 
-impl Values {
-  fn of(profile: &LocalProfile) -> Self {
-    Self {
-      clis: profile.options.clis.clone(),
-      cli: profile.cli.map(cli_value).unwrap_or_default(),
-      connection: profile.current.map(|id| id.to_string()).unwrap_or_default(),
-      model: profile.model.clone(),
-      effort: profile.effort.clone().unwrap_or_default(),
-    }
-  }
+/// What choosing where the profile runs as it is does: this computer's choice, made at once.
+pub(in crate::screens) type OnHere = Arc<dyn Fn(Here) + Send + Sync>;
+
+/// How the panel stands when the field is drawn.
+#[derive(Clone, Copy)]
+pub(in crate::screens) struct Standing {
+  /// The ids of the field's parts start with it.
+  pub ids: &'static str,
+  /// A save is under way: nothing is chosen now.
+  pub locked: bool,
+  /// The panel holds a change: an account chosen now is held with it.
+  pub changed: bool,
 }
 
-/// The fields of a local profile's panel. Cloning shares them.
+/// The field of a local profile's panel. Cloning shares it.
 #[derive(Clone)]
 pub(in crate::screens) struct HeldFields {
-  fields: ProfileFields,
-  /// What the panel holds, as the selects last heard it: a value other than it is the person's choice.
-  held: Ref<Values>,
+  menu: Menu,
+  on_edit: OnEdit,
+  on_here: OnHere,
+  connect: Connect,
+  gate: Option<InputGate>,
 }
 
 impl HeldFields {
-  /// The fields, each choice in them made by `on_edit`.
-  pub(in crate::screens) fn new(ctx: &mut Ctx, on_edit: &OnEdit) -> Self {
-    let fields = ProfileFields::new(ctx);
-    let held: Ref<Values> = ctx.create_ref(Values::default());
-    let follow = |ctx: &mut Ctx, signal: &Signal<String>, edit: fn(&Values, &str) -> Option<Edit>| {
-      let (held, on_edit) = (held.clone(), on_edit.clone());
-      ctx.watch(signal, move |value: &String| {
-        let now = held.get();
-        if let Some(edit) = edit(&now, value) {
-          on_edit(edit);
-        }
-      });
-    };
-    follow(ctx, &fields.cli, |held, value| {
-      (value != held.cli)
-        .then(|| held.clis.iter().find(|cli| cli_value(**cli) == value))
-        .flatten()
-        .map(|cli| Edit::Cli(*cli))
-    });
-    follow(ctx, &fields.connection, |held, value| {
-      (value != held.connection)
-        .then(|| value.parse::<ConnectionId>().ok())
-        .flatten()
-        .map(Edit::Connection)
-    });
-    follow(ctx, &fields.model, |held, value| {
-      (value != held.model && !value.is_empty()).then(|| Edit::Model(value.to_owned()))
-    });
-    follow(ctx, &fields.effort, |held, value| {
-      (value != held.effort).then(|| Edit::Effort(Some(value.to_owned()).filter(|effort| !effort.is_empty())))
-    });
-    Self { fields, held }
+  /// The field, a choice in it made by `on_edit` or, when it is this computer's alone, by `on_here`; an account of
+  /// another CLI that the project has no connection on gets one through `connect` when it is looked at.
+  pub(in crate::screens) fn new(ctx: &mut Ctx, (on_edit, on_here): (&OnEdit, &OnHere), connect: Connect) -> Self {
+    Self {
+      menu: Menu::new(ctx),
+      on_edit: on_edit.clone(),
+      on_here: on_here.clone(),
+      connect,
+      gate: ctx.use_context::<InputGate>(),
+    }
   }
 
-  /// The selects follow `shown`, what the panel holds, unless a choice is being checked (`choosing`): they keep
-  /// showing what the person chose until the panel holds it.
-  pub(in crate::screens) fn keep(&self, shown: &LocalProfile, choosing: bool) {
-    let values = Values::of(shown);
-    self.held.set(values.clone());
-    if choosing {
+  /// The row *Runs on* of `shown`, what the panel holds.
+  pub(in crate::screens) fn rows(&self, ctx: &mut Ctx, standing: Standing, shown: &LocalProfile) -> Vec<Row> {
+    let accounts = accounts::listed(ctx);
+    let readings = plan_limits::account_readings(ctx);
+    let who = picker::Who {
+      accounts: &accounts,
+      readings: &readings,
+      connecting: self.connect.connecting(),
+    };
+    let items = picker::items(&shown.runs_on, shown.current, &who);
+    let held = Held {
+      on: items.iter().find(|item| item.is(shown.current)),
+      model: Some(shown.model.as_str()),
+      effort: shown.effort.as_deref(),
+      team: false,
+    };
+    let said = picker::label(ctx, held, &who);
+    let sub = (!said.chosen).then(|| Sub {
+      words: ctx.t("local_hub.runsOn.choose"),
+      color: PaletteColor::Warning,
+    });
+    let field = Field {
+      ids: standing.ids,
+      label: ctx.t("local_hub.runsOn.label"),
+      sub,
+      said,
+      add: true,
+      locked: standing.locked,
+    };
+    let id = field.menu_id();
+    let chooser = Chooser {
+      items: items.clone().into(),
+      cli: shown.cli,
+      current: shown.current,
+      model: shown.model.as_str().into(),
+      changed: standing.changed,
+      on_edit: self.on_edit.clone(),
+      on_here: self.on_here.clone(),
+      connect: self.connect.clone(),
+      gate: self.gate.clone(),
+    };
+    if let (true, None, Some(account)) = (
+      self.menu.open.get() && !standing.locked,
+      held.on,
+      picker::opens_unconnected(&items),
+    ) {
+      self.connect.look(account);
+    }
+    let refused = self.connect.refused();
+    let close = self.menu.closer();
+    vec![field.row(ctx, &self.menu, |ctx| {
+      let rail = picker::connections(ctx, &items, &who);
+      let notes = refused
+        .map(|refused| Notice {
+          icon: Icon::CircleX,
+          tone: NoticeTone::Danger,
+          text: message_text(ctx, &refused),
+        })
+        .into_iter()
+        .collect();
+      RunsOnPicker::new(id, (rail, picker::chosen(held)), move |pick| chooser.take(pick), close).notes(notes)
+    })]
+  }
+}
+
+/// What a pick of the picker does, by what it changes.
+struct Chooser {
+  items: Arc<[Item]>,
+  cli: Option<AgentProvider>,
+  current: Option<ConnectionId>,
+  model: Arc<str>,
+  changed: bool,
+  on_edit: OnEdit,
+  on_here: OnHere,
+  connect: Connect,
+  gate: Option<InputGate>,
+}
+
+impl Chooser {
+  fn take(&self, pick: Pick) {
+    match pick {
+      Pick::Connection(id) => {
+        let Some(item) = self.item(&id) else {
+          return;
+        };
+        if self.runs_as_it_is(item) {
+          self.run_on(item);
+        } else if let Target::Account(OnAccount {
+          id, connection: None, ..
+        }) = &item.target
+        {
+          // An account of another CLI is only looked at: the project gets its connection on it, whose models the
+          // picker then lists.
+          self.connect.run(*id);
+        }
+      }
+      Pick::Model { connection, model } => {
+        let Some(item) = self.item(&connection) else {
+          return;
+        };
+        if item.is(self.current) {
+          (self.on_edit)(Edit::Model(model.to_string()));
+        } else if *model == *self.model && self.runs_as_it_is(item) {
+          self.run_on(item);
+        } else if let Some(choice) = item.target.connection() {
+          (self.on_edit)(Edit::RunsOn {
+            connection: choice.id,
+            model: model.to_string(),
+          });
+        }
+      }
+      Pick::Effort(effort) => (self.on_edit)(Edit::Effort(effort.map(|effort| effort.to_string()))),
+    }
+  }
+
+  fn item(&self, id: &str) -> Option<&Item> {
+    self.items.iter().find(|item| *item.id == *id)
+  }
+
+  /// Whether the profile runs on `item` with the CLI and the model it has. An account the project has no connection
+  /// on yet, or one whose connection lists nothing, is taken to serve what its CLI does.
+  fn runs_as_it_is(&self, item: &Item) -> bool {
+    Some(item.target.cli()) == self.cli
+      && item
+        .target
+        .connection()
+        .is_none_or(|choice| choice.models.is_empty() || choice.serves(&self.model))
+  }
+
+  /// Another item the profile runs on as it is: this computer's choice at once, or held with what the panel already
+  /// holds.
+  fn run_on(&self, item: &Item) {
+    if item.is(self.current) {
       return;
     }
-    let fields = &self.fields;
-    for (signal, value) in [
-      (&fields.cli, values.cli),
-      (&fields.connection, values.connection),
-      (&fields.model, values.model),
-      (&fields.effort, values.effort),
-    ] {
-      if signal.get_untracked() != value {
-        signal.set(value);
-      }
+    let connection = item.target.connection().map(|choice| choice.id);
+    if let (true, Some(connection)) = (self.changed, connection) {
+      (self.on_edit)(Edit::Connection(connection));
+      return;
+    }
+    // Work that goes to another account or host is a person's to send there, or automation's where they let it
+    // change agent permissions: this choice has no *Save* that would ask.
+    if self.moves_work(item)
+      && !may_press(
+        self.gate.as_ref(),
+        Guarded::PermissionWidening,
+        "run a profile on another account",
+      )
+    {
+      return;
+    }
+    match (connection, &item.target) {
+      (Some(connection), _) => (self.on_here)(Here::Connection(connection)),
+      (None, Target::Account(account)) => (self.on_here)(Here::Account(account.id)),
+      // Anything else on the rail is a connection.
+      (None, _) => {}
     }
   }
 
-  /// The rows of what it runs with, as `form` draws them; `form.held` is what the panel holds.
-  pub(in crate::screens) fn rows(&self, ctx: &mut Ctx, form: &Form<'_>) -> Vec<Row> {
-    self.fields.runs_rows(ctx, form)
+  /// Whether running on `item` sends the project's work somewhere it did not go (`RunsOnChoice::moves_work`); for
+  /// an account the project has no connection on yet, whether it is another account than the profile runs on.
+  fn moves_work(&self, item: &Item) -> bool {
+    let before = self
+      .items
+      .iter()
+      .find(|other| other.is(self.current))
+      .and_then(|other| other.target.connection());
+    match (item.target.connection(), &item.target) {
+      (Some(choice), _) => choice.moves_work(before),
+      (None, Target::Account(OnAccount { id, default, .. })) => {
+        before.is_some_and(|before| !default && before.account != Some(*id))
+      }
+      (None, _) => false,
+    }
   }
 }

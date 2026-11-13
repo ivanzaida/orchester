@@ -25,16 +25,13 @@ use super::{
   sources::{Entry, Sources, cli_name, tip},
 };
 use crate::{
-  services::accounts::plan_name,
+  services::{accounts::plan_name, plan_limits::five_hour_use},
   ui::{
     agent_mark::AgentMark,
     icon::Icon,
     runs_on_picker::{Chosen, Connection, Detail, Mark, Model, Notice, NoticeTone},
   },
 };
-
-/// The 5-hour window, in minutes.
-const FIVE_HOURS: u64 = 300;
 
 /// What the picker shows chosen: the connection, model and effort the Orchestrator runs on; nothing while none is.
 pub(super) fn chosen(settings: Option<&OrchestratorSettings>) -> Chosen {
@@ -128,17 +125,10 @@ fn sign_in(ctx: &mut Ctx, sources: &Sources<'_>, entry: &Entry, base: Connection
     (_, _, Some(plan)) => ctx.t_args("orchestrator.runsOn.who", [("cli", &*cli), ("plan", &plan_name(plan))]),
     _ => ctx.t_args("orchestrator.runsOn.whoNoPlan", [("cli", &*cli)]),
   };
-  let used = who.reading.and_then(|reading| {
-    reading
-      .limits
-      .windows
-      .iter()
-      .find(|window| window.minutes() == FIVE_HOURS && !window.expired(now))
-      .and_then(|window| window.percent())
-  });
+  let used = who.reading.and_then(|reading| five_hour_use(reading, now));
   Connection {
     caption,
-    five_hour: if reached { Some(100) } else { used.map(percent) },
+    five_hour: if reached { Some(100) } else { used },
     use_unread: !reached && used.is_none(),
     detail: reached.then(|| Detail {
       text: ctx.t("orchestrator.runsOn.limitReached"),
@@ -147,12 +137,6 @@ fn sign_in(ctx: &mut Ctx, sources: &Sources<'_>, entry: &Entry, base: Connection
     }),
     ..base
   }
-}
-
-/// A share of at most a hundred, whole.
-fn percent(used: f64) -> u8 {
-  // Clamped to 0..=100 first: the cast keeps every bit.
-  used.round().clamp(0.0, 100.0) as u8
 }
 
 /// An API provider: its CLI and host, its tokens today and no plan limit, what it takes of the person's own, and where

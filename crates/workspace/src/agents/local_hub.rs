@@ -23,11 +23,12 @@ use super::{
   local_edit::GivenKind,
   local_given::{GivenLists, GivenNames},
   role::RoleText,
+  runs_on::{self, RunsOnChoice},
   team_hub::Form,
   team_profile::ConnectionChoice,
 };
 use crate::{
-  connections::mcp::McpServerText,
+  connections::{data::agent_connections, mcp::McpServerText},
   local_archive::Archivable,
   readiness::{LocalMcpReadiness, ProjectReadiness, ReadinessError},
   workspace::Workspace,
@@ -65,6 +66,8 @@ pub struct LocalProfile {
   pub connections: Vec<ConnectionChoice>,
   /// The connection it names, while it is one of [`Self::connections`].
   pub current: Option<ConnectionId>,
+  /// Everything it could run on, of its CLI or another, as its *Runs on* picker offers it.
+  pub runs_on: Vec<RunsOnChoice>,
   /// When its latest version was published.
   pub published_at: Timestamp,
   /// What the selects of its panel offer ([`ProfileOptions`]).
@@ -362,6 +365,11 @@ impl Around {
         .find(|choice| choice.id == body.connection())
         .map(|choice| choice.id),
       connections: of_kind,
+      runs_on: runs_on::choices(
+        &agent_connections(self.connections.clone()),
+        Some(body.model()),
+        |connection| connection.id() == body.connection(),
+      ),
       published_at,
       options: ProfileOptions {
         given: self.given.offered(body),

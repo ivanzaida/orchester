@@ -288,3 +288,36 @@ fn runs_on_a_name_the_project_already_has_is_numbered() {
   let made = listed.iter().find(|found| found.id() == here).expect("made");
   assert_eq!(made.name().as_str(), "Claude Code · Work (2)");
 }
+
+/// A profile's form reads an account's models from the project's connection on it, so the connection is made before
+/// anything runs on it; what the profile runs on stays as it was.
+#[test]
+fn runs_on_connecting_an_account_makes_its_connection_once_and_moves_no_profile() {
+  let fixture = fixture();
+  let codex = account(&fixture.workspace, AccountCli::Codex, "Work");
+  let found = fixture.data.path().join("codex.exe");
+  let installed = |_: AccountCli| Some(found.clone());
+
+  let made = fixture
+    .workspace
+    .connect_account_with(fixture.repo.path(), codex, installed)
+    .expect("connected");
+
+  let listed = connections(fixture.repo.path());
+  assert_eq!(listed.len(), 2, "the profile's own and the one on Codex's Work");
+  let connection = listed.iter().find(|listed| listed.id() == made).expect("made");
+  assert_eq!(connection.provider(), AgentProvider::CodexCli);
+  assert!(matches!(connection.account(), ConnectionAccount::Account { id, .. } if *id == codex));
+  assert_eq!(
+    runs_on(&fixture),
+    (fixture.own, 1),
+    "the profile runs on what it ran on"
+  );
+
+  let again = fixture
+    .workspace
+    .connect_account_with(fixture.repo.path(), codex, nothing_installed)
+    .expect("there already");
+  assert_eq!(again, made);
+  assert_eq!(connections(fixture.repo.path()).len(), 2);
+}

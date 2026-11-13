@@ -63,7 +63,7 @@ use crate::{
   project::ShownProject,
   routes::{AccountsView, HubFilter, ProjectPage, Route},
   screens::{
-    hub::profile_form::{Form, HeldFields, Ids, Offer, OnEdit, Scope},
+    hub::profile_form::{Connect, HeldFields, Here, OnEdit, OnHere, Standing},
     team_hub::{
       actions::Busy,
       panel::{body, head_named},
@@ -75,12 +75,6 @@ use crate::{
 
 /// The ids of the panel's parts start with it.
 const PREFIX: &str = "local-hub-profile";
-
-/// The ids of the fields of what it runs with: `local-hub-profile-cli`, `local-hub-profile-connection-row`, …
-const IDS: Ids = Ids {
-  role: "local-hub-profile-role",
-  rows: PREFIX,
-};
 
 #[derive(Clone)]
 pub(super) struct Props {
@@ -109,8 +103,10 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
 }
 
 struct ProfilePanel {
-  /// The selects of what it runs with.
+  /// The field of what it runs with: *Runs on*.
   fields: HeldFields,
+  /// Runs it on another connection as it is, at once.
+  here: edit::HereAction,
   /// What changing a field does: makes the change on what the panel holds, dropping a question about a save.
   on_edit: OnEdit,
   /// What the panel holds: `None` while it is what is stored.
@@ -152,11 +148,20 @@ impl Component for ProfilePanel {
     edit::follow(ctx, &save, &followed, project);
     let decided = ctx.create_ref(false);
     let saving = (save.clone(), pending.clone(), held.clone(), decided.clone());
-    let choices = Choices::new(ctx, (root, props.id), &held, move || {
+    let choices = Choices::new(ctx, (root.clone(), props.id), &held, move || {
       if let Some(body) = saving.2.get_untracked().body() {
         publish(&saving.0, &saving.1, body, saving.3.get());
       }
     });
+    let connect = Connect::new(ctx, root.clone(), project);
+    let here = edit::here(ctx, root, (props.id, project));
+    let on_here: OnHere = {
+      let (here, pending) = (here.clone(), pending.clone());
+      Arc::new(move |choice| {
+        clear(&pending);
+        here.run(choice);
+      })
+    };
     let on_edit: OnEdit = {
       let (choices, pending) = (choices.clone(), pending.clone());
       Arc::new(move |change| {
@@ -165,7 +170,8 @@ impl Component for ProfilePanel {
       })
     };
     Self {
-      fields: HeldFields::new(ctx, &on_edit),
+      fields: HeldFields::new(ctx, (&on_edit, &on_here), connect),
+      here,
       on_edit,
       held,
       choices,
@@ -192,7 +198,6 @@ impl Component for ProfilePanel {
     let holding = self.holding(&listed);
     let shown = holding.0.as_ref().map_or(&listed, |held| &held.shown);
     let choosing = self.choices.checking();
-    self.fields.keep(shown, choosing);
     // A choice under way is a change already: *Save* and *Cancel* take it at once, *Save* once it is held.
     let role_refused = role::refused(&self.typed);
     let changed = choosing || role_refused.is_some() || holding.0.as_ref().is_some_and(|held| held.changed);
@@ -228,7 +233,7 @@ impl Component for ProfilePanel {
       ))
       .with_children(widening)
       .child(role::section(ctx, &self.typed, shown, (self.on_edit.clone(), locked)))
-      .child(self.profile_section(ctx, shown, (&listed, locked)))
+      .child(self.profile_section(ctx, shown, (&listed, locked, changed)))
       .child(section(
         ctx,
         (&ctx.t("local_hub.readiness.title"), &parts),
@@ -274,29 +279,23 @@ impl ProfilePanel {
     holding
   }
 
-  /// *Profile*: what `shown` runs with, as every profile form has it, and what it gives its agents; tags added since
-  /// `published` are marked. Nothing is changed while `locked`.
+  /// *Profile*: what `shown` runs on, in the one field *Runs on*, and what it gives its agents; tags added since
+  /// `published` are marked. Nothing is changed while `locked`; `changed` says the panel holds a change.
   fn profile_section(
     &self,
     ctx: &mut Ctx,
     shown: &LocalProfile,
-    (published, locked): (&LocalProfile, bool),
+    (published, locked, changed): (&LocalProfile, bool, bool),
   ) -> lurq::components::Column {
-    let form = Form {
-      scope: Scope::Local,
-      ids: IDS,
-      offer: &Offer::default(),
-      base: None,
-      tried: false,
+    let standing = Standing {
+      ids: PREFIX,
       locked,
-      name_said: None,
-      first: None,
-      held: Some(shown),
+      changed,
     };
     let rows = table::Rows {
       profile: shown,
       published,
-      runs: self.fields.rows(ctx, &form),
+      runs: self.fields.rows(ctx, standing, shown),
       on_edit: self.on_edit.clone(),
       busy: locked,
     };
@@ -305,7 +304,7 @@ impl ProfilePanel {
 
   /// A save is under way: nothing is changed meanwhile. A choice being checked locks nothing.
   fn busy(&self) -> Busy {
-    if self.save.state().get().is_pending() {
+    if self.save.state().get().is_pending() || self.here.state().get().is_pending() {
       Busy::Taking
     } else {
       Busy::Idle
@@ -395,16 +394,22 @@ impl ProfilePanel {
     )
   }
 
-  /// What a press on `fix` does: a connection to use (the first of its CLI: while the fix shows, the panel holds no
-  /// choice of another) is a change of what the panel holds; the others open where the missing part is set.
+  /// What a press on `fix` does: a connection to use (the first of its CLI) is this computer's choice, made at once
+  /// while the panel holds no change and held with the change otherwise; the others open where the missing part is
+  /// set.
   fn press(&self, fix: &Fix, (project, shown): (&ShownProject, &LocalProfile), navigation: &Navigation) -> Press {
     match fix {
       Fix::UseConnection => {
         let target = shown.connections.first().map(|choice| choice.id);
-        let choices = self.choices.clone();
+        let (choices, here, held) = (self.choices.clone(), self.here.clone(), self.held.clone());
         Press::run(move || {
-          if let Some(connection) = target {
+          let Some(connection) = target else {
+            return;
+          };
+          if held.get_untracked().0.is_some_and(|held| held.changed) {
             choices.make(Edit::Connection(connection));
+          } else {
+            here.run(Here::Connection(connection));
           }
         })
       }
@@ -418,11 +423,12 @@ impl ProfilePanel {
 
   /// Why the last choice or save did nothing, as the workspace said.
   fn refusal(&self) -> Option<Message> {
-    let save = self.save.state().get();
+    let (save, here) = (self.save.state().get(), self.here.state().get());
     self
       .choices
       .refusal()
       .or_else(|| save.error.clone().filter(|_| save.is_rejected()))
+      .or_else(|| here.error.clone().filter(|_| here.is_rejected()))
   }
 }
 

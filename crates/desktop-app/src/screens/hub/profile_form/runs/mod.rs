@@ -1,163 +1,63 @@
-//! What a profile runs with (`Agent CLI`, `Connection`, `Model`, `Reasoning effort` in A26, L1 and L17): the CLIs this
-//! computer has a connection of (and the one an edited profile has), a local profile's connection among those of its
-//! CLI, and the models and efforts that connection lists, with the profile's own kept when this computer does not list
-//! them. A form reads them from this computer's connections ([`Runs::of`]); a local profile's panel from what the hub
-//! says of the profile it holds ([`Runs::held`]), whose choices the workspace makes ([`super::held`]).
+//! What a profile runs with, in one field (`Agents on accounts` C1 `RwzH2`, C2 `t7s3I`, C4 `IgFWn`): a local
+//! profile's account, model and effort (*Runs on*), a team profile's CLI, model and effort (*CLI, model and effort*).
+//! The field ([`field`]) opens the compact *Runs on* picker over what the profile can run on ([`picker`]): this
+//! computer's accounts for a local profile, the CLIs for a team's. A form holds the choice in its fields
+//! ([`Runs::of`], [`form`]); a local profile's panel holds it on the profile ([`super::held`]).
 
-mod rows;
+pub(super) mod field;
+mod form;
+pub(super) mod picker;
 
-use orchester_core::{
-  connection::{AgentConnection, AgentProvider, REASONING_EFFORT},
-  id::ConnectionId,
-  resource::ModelId,
-};
-use orchester_workspace::agents::{
-  form::{effort_options, model_options},
-  local_hub::LocalProfile,
-  team_profile::ConnectionChoice,
-};
+use orchester_core::{connection::AgentProvider, id::ConnectionId, resource::ModelId};
+use orchester_workspace::agents::runs_on;
 
+use self::picker::{Item, Who};
 use super::{Form, ProfileFields, Scope};
 
-/// The value the CLI select holds for `cli`: an identifier, never shown.
-pub(super) fn cli_value(cli: AgentProvider) -> String {
-  format!("{cli:?}")
-}
-
-/// What the fields come to, with what each select offers.
+/// What the fields come to, with what the picker offers.
 pub(super) struct Runs {
-  clis: Vec<AgentProvider>,
+  /// What the rail offers, in its order.
+  items: Vec<Item>,
+  /// The place on the rail of the item chosen.
+  on: Option<usize>,
   pub cli: Option<AgentProvider>,
-  /// This computer's connections of the CLI chosen.
-  of_kind: Vec<ConnectionChoice>,
-  /// The connection whose lists the models and efforts are: a local profile's own, a team's the first of its kind.
+  /// The connection a local profile runs on: the project's on the account chosen.
   pub connection: Option<ConnectionId>,
-  models: Vec<String>,
   pub model: Option<ModelId>,
-  efforts: Vec<String>,
-  /// The effort chosen among those offered; `None` is the CLI's default.
+  /// The effort chosen among those the model offers; `None` is the CLI's default.
   pub effort: Option<String>,
 }
 
 impl Runs {
-  /// What the fields come to: from what a local profile's panel holds while the form has one, else from this
-  /// computer's connections as the fields choose among them.
-  pub(super) fn of(fields: &ProfileFields, form: &Form<'_>) -> Self {
-    match form.held {
-      Some(held) => Self::held(held),
-      None => Self::offered(fields, form),
-    }
-  }
-
-  fn offered(fields: &ProfileFields, form: &Form<'_>) -> Self {
-    let agents: Vec<&AgentConnection> = form
-      .offer
-      .connections
-      .iter()
-      .filter(|connection| connection.provider().runs_agents())
-      .collect();
-    let mut clis: Vec<AgentProvider> = Vec::new();
-    for provider in agents
-      .iter()
-      .map(|connection| connection.provider())
-      .chain(form.base.map(|base| base.cli()))
-    {
-      if !clis.contains(&provider) {
-        clis.push(provider);
-      }
-    }
-    let chosen = fields.cli.get();
-    let cli = clis.iter().copied().find(|cli| cli_value(*cli) == chosen);
-    let of_kind: Vec<&AgentConnection> = agents
-      .into_iter()
-      .filter(|connection| Some(connection.provider()) == cli)
-      .collect();
-    let connection = match (form.scope, of_kind.as_slice()) {
-      (Scope::Team, kind) => kind.first().copied(),
-      (Scope::Local, [only]) => Some(*only),
-      (Scope::Local, several) => {
-        let chosen = fields.connection.get();
-        several
-          .iter()
-          .find(|connection| connection.id().to_string() == chosen)
-          .copied()
-      }
-    };
-    let base = form.base.filter(|base| Some(base.cli()) == cli);
-    let mut models: Vec<String> = connection.map_or_else(Vec::new, |connection| {
-      model_options(connection, base.map(|base| base.model()))
-        .into_iter()
-        .map(|option| option.id.as_str().to_owned())
-        .collect()
+  /// What the fields come to among what this computer offers: a model the item chosen lists, and an effort that model
+  /// takes there.
+  pub(super) fn of(fields: &ProfileFields, form: &Form<'_>, who: &Who<'_>) -> Self {
+    let base = form.base;
+    let offered = runs_on::choices(&form.offer.connections, base.map(|base| base.model()), |connection| {
+      base.is_some_and(|base| base.cli() == connection.provider())
     });
-    keep(&mut models, base.map(|base| base.model().as_str().to_owned()));
-    let typed = fields.model.get();
-    let model = models
-      .iter()
-      .find(|model| **model == typed)
-      .and_then(|model| ModelId::new(model).ok());
-    let mut efforts = match (connection, &model) {
-      (Some(connection), Some(model)) => effort_options(connection, model),
-      _ => Vec::new(),
+    let items = match form.scope {
+      Scope::Local => picker::items(&offered, None, who),
+      Scope::Team => picker::kinds(&offered, base),
     };
-    let base_effort = base
-      .filter(|base| Some(base.model()) == model.as_ref())
-      .and_then(|base| {
-        base
-          .settings()
-          .iter()
-          .find(|(name, _)| *name == REASONING_EFFORT)
-          .map(|(_, value)| value.to_owned())
-      });
-    keep(&mut efforts, base_effort);
-    let typed = fields.effort.get();
-    let effort = efforts.iter().find(|effort| **effort == typed).cloned();
+    let chosen = fields.on.get();
+    let on = items.iter().position(|item| *item.id == *chosen);
+    let target = on.map(|at| &items[at].target);
+    let typed = fields.model.get();
+    let listed = target.and_then(|target| target.models().iter().find(|model| model.id == typed));
+    let effort = fields.effort.get();
+    let effort = listed
+      .filter(|model| {
+        !effort.is_empty() && (target.is_some_and(picker::Target::types_effort) || model.efforts.contains(&effort))
+      })
+      .map(|_| effort);
     Self {
-      clis,
-      cli,
-      connection: connection.map(|connection| connection.id()),
-      of_kind: of_kind
-        .into_iter()
-        .map(|connection| ConnectionChoice::of(connection))
-        .collect(),
-      models,
-      model,
-      efforts,
+      on,
+      cli: target.map(picker::Target::cli),
+      connection: target.and_then(picker::Target::connection).map(|choice| choice.id),
+      model: listed.and_then(|model| ModelId::new(&model.id).ok()),
       effort,
+      items,
     }
-  }
-
-  /// What the local profile `held` runs with, as the hub says of it: its CLI, its connection among those of its CLI,
-  /// and what its connection lists, its own model and effort kept.
-  fn held(held: &LocalProfile) -> Self {
-    let mut models = held.options.models.clone();
-    keep(&mut models, Some(held.model.clone()));
-    let mut efforts = held.options.efforts.clone();
-    keep(&mut efforts, held.effort.clone());
-    Self {
-      clis: held.options.clis.clone(),
-      cli: held.cli,
-      of_kind: held.connections.clone(),
-      connection: held.current,
-      models,
-      model: ModelId::new(&held.model).ok(),
-      efforts,
-      effort: held.effort.clone(),
-    }
-  }
-
-  /// The connection a local form's fields run on without asking: the only one of its CLI.
-  pub(super) fn chosen_for_it(&self) -> Option<ConnectionId> {
-    match self.of_kind.as_slice() {
-      [only] => Some(only.id),
-      _ => None,
-    }
-  }
-}
-
-/// Adds `value` to `list` when it is not in it: what a profile has, though this computer does not list it.
-fn keep(list: &mut Vec<String>, value: Option<String>) {
-  if let Some(value) = value.filter(|value| !list.contains(value)) {
-    list.push(value);
   }
 }

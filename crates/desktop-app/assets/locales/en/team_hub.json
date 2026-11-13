@@ -142,6 +142,14 @@
       "anthropicApi": "Anthropic API",
       "openaiApi": "OpenAI API"
     },
+    "runsOn": {
+      "label": "CLI, model and effort",
+      "sub": "The team's choice · each computer picks its account",
+      "value": "{{cli}} · {{model}}",
+      "valueEffort": "{{cli}} · {{model}} · {{effort}}",
+      "placeholder": "Choose a CLI and a model",
+      "caption": "models from its list"
+    },
     "profile": {
       "fromTeam": "From the team",
       "fromTeamNote": "· the same on every computer",

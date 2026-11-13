@@ -12,6 +12,7 @@ pub mod local_hub;
 pub mod permissions;
 pub mod prompts;
 pub mod role;
+pub mod runs_on;
 pub mod servers;
 pub mod team_archived;
 pub mod team_body_edit;

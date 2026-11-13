@@ -38,10 +38,7 @@
       "toolSecret": "Each computer then adds the value of {{secret}} in {{environment}}."
     },
     "profile": {
-      "nameTaken": "The team already has an agent profile named {{name}} · pick another name",
-      "cliPlaceholder": "Choose from the catalog",
-      "modelPlaceholder": "From the CLI's list",
-      "effortDefault": "CLI default"
+      "nameTaken": "The team already has an agent profile named {{name}} · pick another name"
     },
     "mcp": {
       "name": "Name",

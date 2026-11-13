@@ -8,7 +8,10 @@ use std::collections::BTreeMap;
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{HubFilter, HubView, NewConnection, ProjectPage, Route};
 use orchester_core::{
-  connection::mcp::{McpEnvValue, McpTransport},
+  connection::{
+    AgentProvider,
+    mcp::{McpEnvValue, McpTransport},
+  },
   id::SecretId,
   resource::{AgentProfile, Instruction, ResourceKind, Skill, Tool, VariableName},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
@@ -17,7 +20,12 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{harness::Agents, local_hub::open, support::project_id};
+use super::{
+  harness::Agents,
+  local_hub::open,
+  local_hub_create_profile::{RUNS_ON, run_on_codex},
+  support::project_id,
+};
 
 /// The kinds that have a form: their filter, the head's New, the form's title, the section and the row ids' name.
 const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
@@ -297,14 +305,20 @@ fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Profiles);
   agents.set("team-new-profile-role-name-input", "Reviewer");
-  choose(&mut agents, "team-new-profile-cli", "Codex");
-  assert!(
-    agents
-      .text("team-new-profile-connection-row-label")
-      .contains("Connection"),
-    "a local profile has a connection row"
+  assert_eq!(
+    agents.text("team-new-profile-runs-on-row-label"),
+    "Runs on",
+    "one field for the account, the model and the effort"
   );
-  choose(&mut agents, "team-new-profile-model", "test-model");
+  assert_eq!(agents.text(RUNS_ON), "Choose an account and a model");
+  for select in ["cli", "connection", "model", "effort"] {
+    assert!(
+      !agents.exists(&format!("team-new-profile-{select}")),
+      "no {select} select"
+    );
+  }
+  run_on_codex(&mut agents, "test-model");
+  assert_eq!(agents.text(RUNS_ON), "Codex · Default · test-model");
   agents.click("local-hub-new-create");
   agents.until("the new profile's panel", |s| {
     matches!(
@@ -318,11 +332,15 @@ fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
     .profiles
     .iter()
     .find(|entry| entry.profile.role().as_str() == "Reviewer");
-  let connection = listed.connections[0].id();
+  let codex = listed
+    .connections
+    .iter()
+    .find(|connection| connection.provider() == AgentProvider::CodexCli)
+    .map(|connection| connection.id());
   assert_eq!(
     made.map(|entry| entry.profile.connection()),
-    Some(connection),
-    "the profile runs on the connection of its CLI"
+    codex,
+    "the profile runs on the project's connection on the account chosen"
   );
 }
 
@@ -547,8 +565,7 @@ fn local_hub_create_a_profile_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Profiles);
   agents.set("team-new-profile-role-name-input", "Reviewer");
-  choose(&mut agents, "team-new-profile-cli", "Codex");
-  choose(&mut agents, "team-new-profile-model", "test-model");
+  run_on_codex(&mut agents, "test-model");
   with_synthetic_input(|| agents.click("local-hub-new-create"));
   assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(

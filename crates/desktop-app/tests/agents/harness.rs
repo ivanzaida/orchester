@@ -2,6 +2,7 @@ use std::{path::PathBuf, time::Duration};
 
 use orchester_app::routes::{AgentTab, HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{
+  account::AccountCli,
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
     invocation::Platform,
@@ -48,8 +49,16 @@ impl Agents {
     } else {
       data.launch()
     };
-    let project = data.add_kontur(launch.workspace().expect("workspace"));
+    let workspace = launch.workspace().expect("workspace");
+    let project = data.add_kontur(workspace);
     let root = project.repo_root;
+    // No test starts a real CLI: the program set for each is a file that is not there, so a connection the project
+    // gets on an account (the *Runs on* picker makes one when an account is looked at) is checked without one.
+    for cli in AccountCli::ALL {
+      workspace
+        .set_agent_program(cli, &root.join(format!("no-{}.exe", cli.product())))
+        .expect("set");
+    }
     if let Some(version) = codex_version {
       let mut db = ProjectDb::open(&root).expect("database");
       db.create_connection(&codex(&root, version)).expect("connection");

@@ -385,6 +385,22 @@ tools speak of accounts only.
 - *Runs.* A local run takes the pick at each agent start, so a change made while it waits applies to its next
   agent, as a new session. A team run keeps the connection its inputs bound when the server accepted it. The check
   before a run (`preflight`) looks at the connection the profile runs on here.
+- *The one field* (C1, C2, C4). Every form of a profile, and a local profile's panel, has one field for what it
+  runs with, which opens the compact *Runs on* picker (`ui::runs_on_picker`, 300 wide, the component the
+  Orchestrator's bar opens) under it. A local profile's is *Runs on*: the rail is this computer's accounts, one item
+  each (Claude Code's sign-ins, Codex's, then what runs on a key), whether the project has a connection on one or
+  not. A team profile's is *CLI, model and effort*: the rail is the CLIs, and no account is chosen there. The field
+  keeps saying what the profile runs on while another account is only looked at.
+  - In a local profile's panel, an account of the profile's CLI that serves its model is this computer's choice:
+    it applies at once with no new version (a pick), and only a person makes it when the work moves to another
+    account or another API's host. A model, an effort, or an account of another CLI with one of its models is the
+    profile's: the panel holds it and *Save* publishes it, after which the pick is cleared.
+  - In a form, a model is chosen with what lists it, so choosing one chooses the account (or the CLI) it is shown
+    under; an item of the rail is only looked at until then.
+  - An account the project has no connection on yet gets one when it is looked at
+    (`Workspace::connect_account`): the models an account serves are read from that connection, so its line says
+    *reading its models…* meanwhile, and a CLI whose program is not found says so under the picker. The picker
+    makes it for the account it opens on too, as in a project that has no connection yet.
 
 ### Screens (drawn 2026-11-13, not approved yet)
 

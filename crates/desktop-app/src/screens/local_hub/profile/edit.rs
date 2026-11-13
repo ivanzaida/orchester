@@ -20,6 +20,7 @@ use orchester_core::{
 use orchester_workspace::{
   agents::{
     editor::Outcome,
+    local_connection,
     local_edit::{self, Held},
     local_hub::LocalProfile,
     widening::answers_in_persons_place,
@@ -31,7 +32,10 @@ use orchester_workspace::{
 
 use crate::{
   mcp::input_gate::Guarded,
-  screens::connections::widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
+  screens::{
+    connections::widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
+    hub::profile_form::Here,
+  },
   services::Services,
   ui::{icon::Icon, message::message_text},
 };
@@ -179,4 +183,30 @@ pub(super) fn question(ctx: &mut Ctx, asked: &Asked, (save, pending): (&Save, &P
       confirm_icon: Icon::Check,
     },
   )
+}
+
+/// Runs the profile somewhere else as it is: this computer's choice, made at once.
+pub(super) type HereAction = FutureAction<Here, (), Message>;
+
+/// Makes a connection, or an account of the person's, what the profile `id` of the project at `root` runs on here
+/// ([`local_connection::run_here`], `Workspace::run_profile_on_account`, which makes the project's connection on the
+/// account when it has none); the screens that read the profiles then read them again.
+pub(super) fn here(ctx: &mut Ctx, root: PathBuf, (id, project): (ResourceId, ProjectId)) -> HereAction {
+  let services = Services::of(ctx);
+  ctx.future_action(move |here: Here| {
+    let (root, changes, workspace) = (root.clone(), services.changes.clone(), services.workspace.clone());
+    async move {
+      background::run(move || match here {
+        Here::Connection(connection) => local_connection::run_here(&root, id, connection),
+        Here::Account(account) => workspace
+          .run_profile_on_account(&root, id, account)
+          .map_err(|error| error.message()),
+      })
+      .await??;
+      for change in [Outside::Profiles, Outside::Connections] {
+        changes.record(project, change);
+      }
+      Ok(())
+    }
+  })
 }

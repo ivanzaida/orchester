@@ -1,8 +1,10 @@
-//! A local profile's panel edits in place (`Agents · Profile` L1, ORC-842): the CLI, the connection, the model, the
-//! reasoning effort and the MCP servers are chosen in the panel, each choice changes only what the panel holds, *Save*
-//! publishes it as the next version at once (asking first, of a person only, when it widens what its agents may do)
-//! and *Cancel* puts the published version back. The panel has no drafts: a draft stored of the profile is neither
-//! shown nor touched until *Save* replaces it. `cargo test -p orchester-app --test agents local_hub_profile`.
+//! A local profile's panel edits in place (`Agents · Profile` L1, ORC-842; `Agents on accounts` C1 `RwzH2`, C2
+//! `t7s3I`): what it runs on is one field, *Runs on*, which opens the compact *Runs on* picker; a model, an effort and
+//! the MCP servers chosen there change only what the panel holds, *Save* publishes it as the next version at once
+//! (asking first, of a person only, when it widens what its agents may do) and *Cancel* puts the published version
+//! back. Another connection the profile runs on as it is applies at once, with no version. The panel has no drafts: a
+//! draft stored of the profile is neither shown nor touched until *Save* replaces it.
+//! `cargo test -p orchester-app --test agents local_hub_profile`.
 
 use std::{thread, time::Duration};
 
@@ -29,29 +31,63 @@ use orchester_workspace::agents::{
 use super::{
   harness::{Agents, changed},
   local_hub::{builder_without_connection, open, server},
-  local_hub_create::choose,
 };
 
-const SAVE: &str = "local-hub-profile-save";
+pub(super) const SAVE: &str = "local-hub-profile-save";
 const CANCEL: &str = "local-hub-profile-cancel";
+/// The field of what the profile runs on, and the picker it opens.
+pub(super) const FIELD: &str = "local-hub-profile-runs-on";
+pub(super) const MENU: &str = "local-hub-profile-runs-on-menu";
+
+/// Opens the *Runs on* picker, where it is not open.
+pub(super) fn open_picker(agents: &mut Agents) {
+  if !agents.exists(MENU) {
+    agents.click(FIELD);
+    agents.until("the picker", |s| s.exists(MENU));
+  }
+}
+
+/// Chooses `part` of the picker, opening it first: `effort-high`, `model-1` (the second model listed), or a
+/// connection on the rail ([`on_rail`]).
+pub(super) fn pick(agents: &mut Agents, part: &str) {
+  open_picker(agents);
+  let id = format!("{MENU}-{part}");
+  agents.until("the part", |s| s.exists(&id));
+  agents.click(&id);
+  agents.until("a pass", |_| true);
+}
+
+/// The rail's item of `connection`.
+pub(super) fn on_rail(connection: ConnectionId) -> String {
+  format!("connection-{connection}")
+}
+
+/// The connection `profile` runs on on this computer.
+pub(super) fn runs_here(agents: &Agents, profile: ResourceId) -> ConnectionId {
+  let named = stored(agents, profile).0.connection();
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .connection_here(profile, named)
+    .expect("read")
+}
 /// The question a save that widens asks, and its answers.
-const ALLOW: &str = "local-hub-profile-confirm-confirm";
+pub(super) const ALLOW: &str = "local-hub-profile-confirm-confirm";
 const KEEP: &str = "local-hub-profile-confirm-keep";
 
 /// Opens the hub on Profiles with `profile` in the panel.
-fn show(agents: &mut Agents, profile: ResourceId) {
+pub(super) fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-effort"));
+  agents.until("the panel", |s| s.exists(FIELD));
 }
 
 /// Whether the hub's row of `profile` says the panel holds a change.
-fn holds_a_change(agents: &mut Agents, profile: ResourceId) -> bool {
+pub(super) fn holds_a_change(agents: &mut Agents, profile: ResourceId) -> bool {
   agents
     .text(&format!("local-hub-row-{profile}-line"))
     .contains("Unsaved")
 }
 
-fn stored(agents: &Agents, profile: ResourceId) -> (AgentProfile, VersionState) {
+pub(super) fn stored(agents: &Agents, profile: ResourceId) -> (AgentProfile, VersionState) {
   let entry = agents.listed().profile(profile).expect("profile").clone();
   (entry.profile, entry.state)
 }
@@ -60,19 +96,19 @@ fn effort(agents: &Agents, profile: ResourceId) -> Option<String> {
   stored_effort(&stored(agents, profile).0)
 }
 
-fn v2() -> VersionState {
+pub(super) fn v2() -> VersionState {
   VersionState::Published(VersionNumber::FIRST.next().expect("v2"))
 }
 
 /// Presses *Save* once, as a person does, and waits until `done`: another press while a question is asked would ask
 /// it again.
-fn save(agents: &mut Agents, what: &str, done: impl FnMut(&mut Agents) -> bool) {
+pub(super) fn save(agents: &mut Agents, what: &str, done: impl FnMut(&mut Agents) -> bool) {
   agents.click(SAVE);
   agents.until(what, done);
 }
 
 /// Lets the window run a while, as it does between a person's presses.
-fn passes(agents: &mut Agents) {
+pub(super) fn passes(agents: &mut Agents) {
   for _ in 0..20 {
     agents.until("a pass", |_| true);
     thread::sleep(Duration::from_millis(5));
@@ -84,13 +120,18 @@ fn local_hub_profile_a_changed_field_is_held_until_save_publishes_it_as_the_next
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  for part in [
+  assert!(
+    agents.text(FIELD).ends_with("· test-model"),
+    "one field says what it runs on: {}",
+    agents.text(FIELD)
+  );
+  for select in [
     "local-hub-profile-cli",
     "local-hub-profile-connection",
     "local-hub-profile-model",
     "local-hub-profile-effort",
   ] {
-    assert!(agents.exists(part), "{part} is in the panel");
+    assert!(!agents.exists(select), "{select}: the one field stands for it");
   }
   for link in ["local-hub-edit", "local-hub-profile-more-settings"] {
     assert!(
@@ -99,7 +140,7 @@ fn local_hub_profile_a_changed_field_is_held_until_save_publishes_it_as_the_next
     );
   }
 
-  choose(&mut agents, "local-hub-profile-effort", "High");
+  pick(&mut agents, "effort-high");
 
   agents.until("the panel holds it", |s| holds_a_change(s, profile));
   assert_eq!(effort(&agents, profile), None, "nothing is stored before Save");
@@ -115,7 +156,7 @@ fn local_hub_profile_cancel_puts_the_published_version_back_and_stores_nothing()
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort", "Low");
+  pick(&mut agents, "effort-low");
   agents.until("the panel holds it", |s| holds_a_change(s, profile));
 
   agents.click(CANCEL);
@@ -186,17 +227,17 @@ fn local_hub_profile_keep_editing_leaves_the_change_held_and_stores_nothing() {
 #[test]
 fn local_hub_profile_a_held_change_replaces_the_pinned_fix_with_save_and_cancel() {
   let mut agents = Agents::new(true);
-  let (profile, [_, home]) = builder_without_connection(&agents);
+  let (profile, _) = builder_without_connection(&agents);
+  let docs = server(&agents, "docs");
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   agents.until("the fix", |s| s.exists("local-hub-fix-use"));
   assert!(!agents.exists(SAVE), "while nothing is changed the bar is the fix's");
 
-  choose(&mut agents, "local-hub-profile-connection", "Claude Code · Home");
+  add_server(&mut agents, profile, docs);
 
   agents.until("the bar is Save's and Cancel's", |s| {
     !s.exists("local-hub-fix-use") && s.exists(SAVE) && s.exists(CANCEL)
   });
-  assert_ne!(stored(&agents, profile).0.connection(), home, "a choice stores nothing");
   agents.click(CANCEL);
   agents.until("the fix again", |s| s.exists("local-hub-fix-use"));
 }
@@ -213,7 +254,7 @@ fn local_hub_profile_cancel_leaves_a_draft_stored_meanwhile_alone() {
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort", "Low");
+  pick(&mut agents, "effort-low");
   agents.until("the panel holds it", |s| holds_a_change(s, profile));
   change_elsewhere(&agents, profile, "high");
 
@@ -234,7 +275,7 @@ fn local_hub_profile_save_publishes_what_the_panel_holds_over_a_draft_stored_mea
   let mut agents = Agents::new(true);
   let profile = agents.profile(true);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort", "Low");
+  pick(&mut agents, "effort-low");
   agents.until("the panel holds it", |s| holds_a_change(s, profile));
   change_elsewhere(&agents, profile, "high");
 
@@ -254,7 +295,7 @@ fn local_hub_profile_save_never_publishes_the_prompts_of_a_draft_it_did_not_show
   data::save_draft(&mut db, profile, body, Timestamp::now()).expect("a draft that tells its agents more");
   drop(db);
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort", "High");
+  pick(&mut agents, "effort-high");
   agents.until("the panel holds it", |s| holds_a_change(s, profile));
 
   save(&mut agents, "published", |s| stored(s, profile).1 == v2());
@@ -269,7 +310,7 @@ fn local_hub_profile_save_never_publishes_the_prompts_of_a_draft_it_did_not_show
 }
 
 /// A Claude Code connection whose last check found `claude-a` (with two efforts) and `claude-b`.
-fn claude(agents: &Agents) -> ConnectionId {
+pub(super) fn claude(agents: &Agents) -> ConnectionId {
   claude_signed(agents, SignIn::SignedIn)
 }
 
@@ -310,7 +351,7 @@ fn claude_signed(agents: &Agents, sign_in: SignIn) -> ConnectionId {
 }
 
 /// Builder on `connection`'s `claude-a`, published as v1, with what every CLI enforces so that nothing widens.
-fn builder_on_claude(agents: &Agents, connection: ConnectionId) -> ResourceId {
+pub(super) fn builder_on_claude(agents: &Agents, connection: ConnectionId) -> ResourceId {
   let profile = AgentProfile::new(
     Name::new("Builder").expect("name"),
     "Builds the change".into(),
@@ -335,10 +376,12 @@ fn local_hub_profile_another_model_starts_at_the_default_effort() {
   let mut agents = Agents::new(true);
   let profile = builder_on_claude(&agents, claude(&agents));
   show(&mut agents, profile);
-  choose(&mut agents, "local-hub-profile-effort", "High");
+  pick(&mut agents, "effort-high");
   agents.until("the panel holds it", |s| holds_a_change(s, profile));
 
-  choose(&mut agents, "local-hub-profile-model", "claude-b");
+  pick(&mut agents, "model-1");
+  // A choice is made off the UI thread: the field says it once the panel holds it.
+  agents.until("the panel holds the model", |s| s.text(FIELD).contains("claude-b"));
   save(&mut agents, "published", |s| stored(s, profile).1 == v2());
 
   assert_eq!(stored(&agents, profile).0.model().as_str(), "claude-b");
@@ -347,56 +390,6 @@ fn local_hub_profile_another_model_starts_at_the_default_effort() {
     None,
     "a new model starts at the CLI's default"
   );
-}
-
-#[test]
-fn local_hub_profile_the_cli_select_runs_it_on_the_other_clis_connection() {
-  let mut agents = Agents::new(true);
-  let connection = claude(&agents);
-  let profile = builder_on_claude(&agents, connection);
-  show(&mut agents, profile);
-
-  choose(&mut agents, "local-hub-profile-cli", "Codex");
-  agents.until("the panel holds it", |s| holds_a_change(s, profile));
-  // What Codex can enforce differs from Claude Code's, so the save may ask first: only a press answers.
-  save(&mut agents, "published or its question", |s| {
-    stored(s, profile).1 == v2() || s.exists(ALLOW)
-  });
-  if agents.exists(ALLOW) {
-    agents.press_until(ALLOW, "published", |s| stored(s, profile).1 == v2());
-  }
-
-  let (body, _) = stored(&agents, profile);
-  assert_ne!(body.connection(), connection, "it runs on the Codex connection now");
-  assert_eq!(body.model().as_str(), "test-model", "on that connection's first model");
-}
-
-#[test]
-fn local_hub_profile_the_connection_row_offers_each_of_its_kind_with_add() {
-  let mut agents = Agents::new(true);
-  let (profile, _) = builder_without_connection(&agents);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-connection"));
-
-  assert!(
-    agents
-      .text("local-hub-profile-connection-row")
-      .contains("2 of its kind on this computer"),
-    "{}",
-    agents.text("local-hub-profile-connection-row")
-  );
-  let options: Vec<String> = agents
-    .window
-    .tree
-    .get_element_by_id_mut("local-hub-profile-connection")
-    .and_then(|element| element.as_select())
-    .expect("a select")
-    .labels()
-    .iter()
-    .map(ToString::to_string)
-    .collect();
-  assert_eq!(options, ["Claude Code · Claude 2", "Claude Code · Home"]);
-  assert!(agents.exists("local-hub-profile-add-connection"));
 }
 
 #[test]
@@ -421,65 +414,6 @@ fn local_hub_profile_automation_cannot_answer_allow_for_a_profile() {
     "nothing in the window says it"
   );
   agents.press_until(ALLOW, "a person allows it", |s| chooses(s, profile, docs));
-}
-
-#[test]
-fn local_hub_profile_use_holds_the_connection_and_only_save_stores_it() {
-  let mut agents = Agents::new(true);
-  let (profile, [claude_2, home]) = builder_without_connection(&agents);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
-  assert!(
-    agents.text("local-hub-fix-use").contains("Claude 2"),
-    "the first of its kind"
-  );
-
-  with_synthetic_input(|| agents.click("local-hub-fix-use"));
-
-  agents.until("the panel holds it", |s| holds_a_change(s, profile));
-  let connection = stored(&agents, profile).0.connection();
-  assert!(connection != claude_2 && connection != home, "Use stores nothing");
-  save(&mut agents, "published on Claude 2", |s| {
-    stored(s, profile).0.connection() == claude_2
-  });
-}
-
-/// Choosing the connection a profile runs on is open to automation (the person's decision of 2026-11-11): an MCP
-/// client's *Use* and *Save* publish it, as a person's do, when it moves to no other account.
-#[test]
-fn local_hub_profile_automation_uses_and_saves_a_connection() {
-  let mut agents = Agents::new(true);
-  let (profile, [claude_2, _]) = builder_without_connection(&agents);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
-
-  with_synthetic_input(|| agents.click("local-hub-fix-use"));
-  agents.until("the panel holds it", |s| holds_a_change(s, profile));
-  with_synthetic_input(|| agents.click(SAVE));
-
-  agents.until("published on Claude 2", |s| {
-    stored(s, profile).0.connection() == claude_2
-  });
-  assert!(!agents.exists(ALLOW), "nothing to ask: no other account");
-}
-
-#[test]
-fn local_hub_profile_choosing_a_connection_in_the_select_and_saving_runs_it_there() {
-  let mut agents = Agents::new(true);
-  let (profile, [_, home]) = builder_without_connection(&agents);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
-
-  choose(&mut agents, "local-hub-profile-connection", "Claude Code · Home");
-  agents.until("the panel holds it", |s| holds_a_change(s, profile));
-  assert_ne!(stored(&agents, profile).0.connection(), home, "a choice stores nothing");
-
-  save(&mut agents, "published on Home", |s| {
-    stored(s, profile).0.connection() == home
-  });
-  agents.until("ready on it", |s| {
-    !s.exists("local-hub-fix-use") && !holds_a_change(s, profile)
-  });
 }
 
 #[test]

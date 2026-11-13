@@ -108,6 +108,35 @@ impl Workspace {
     Ok(())
   }
 
+  /// The project's connection on `account`, made now when it has none ([`Self::run_profile_on_account`] says how):
+  /// a profile's form reads the models the account serves from it before anything runs on it.
+  pub fn connect_account(&self, repo_root: &Path, account: AgentAccountId) -> Result<ConnectionId, RunsOnError> {
+    self.connect_account_with(repo_root, account, |cli| {
+      probe::detect_agent(cli.provider()).into_iter().next()
+    })
+  }
+
+  /// [`Self::connect_account`] where `installed` says which program of a CLI the search path has.
+  pub fn connect_account_with(
+    &self,
+    repo_root: &Path,
+    account: AgentAccountId,
+    installed: impl FnOnce(AccountCli) -> Option<PathBuf>,
+  ) -> Result<ConnectionId, RunsOnError> {
+    let account = self
+      .agent_accounts()?
+      .into_iter()
+      .find(|listed| listed.id() == account)
+      .ok_or(RunsOnError::AccountNotFound(account))?;
+    let mut db = ProjectDb::open(repo_root)?;
+    let had = db.connections()?.len();
+    let connection = self.connection_on(&mut db, &account, installed)?;
+    if db.connections()?.len() != had {
+      self.changes.record(db.project().id(), Outside::Connections);
+    }
+    Ok(connection)
+  }
+
   /// The connection of the project that runs `account`'s CLI on it, the oldest when it has several; made now when
   /// it has none: on the program set for the CLI on this computer, else the newest one on the search path, named
   /// after the CLI and the account, and checked on the account.
