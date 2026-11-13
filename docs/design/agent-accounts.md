@@ -399,15 +399,27 @@ saved the document when this was written. Its frames:
 | A3 · a CLI's program not found | `t2YD7` |
 | B1 · an API provider's page | `gZTuX` |
 | B2 · Add an API provider | `OfUhN` |
-| C1 · local profile · the Account select | `RwzH2` |
-| C2 · local profile · an account with other models, held with the model | `mp4EM` |
-| C3 · team profile · member · the account picker with a provider that serves other models | `OTVQt` |
+| C1 · local profile · the one field *Runs on*, its picker open | `RwzH2` |
+| C2 · local profile · an account with other models, held with the model | `t7s3I` |
+| C3 · team profile · member · *CLI, model and effort* read-only, the account dropdown open | `OTVQt` |
+| C4 · team profile · admin · *CLI, model and effort* open | `IgFWn` |
 | D1 · Project settings › General, no Connections tab | `E6kvpm` |
-| What the design decides (9 rules) and States · words (7) | `U19l6`, `xoeo3` |
+| What the design decides (10 rules) and States · words (7) | `U19l6`, `xoeo3` |
 
-Where the board and the text below differ, the board is newer: GitHub is not a group of its own, since *General*
-already has the repository's GitHub rows, and its *GitHub account* row opens the GitHub page. The frame ids in the
-text are the boards these change or start from. Every name and number in them stays fixture data.
+Where the board and the text below differ, the board is newer. The person's rulings on it, 2026-11-13:
+
+- **One field, one picker.** A local profile has no separate *Agent CLI*, *Account*, *Model* and *Reasoning effort*
+  rows: one field, *Runs on*, opens the *Runs on* picker the app already has (`ui::runs_on_picker`, the Pencil
+  component `ZcGGy`) — the rail of accounts by CLI, the models of the account chosen, the effort under them. A team
+  profile has the same field for what the team chooses, *CLI, model and effort* (the rail holds the CLIs), and
+  *Runs here use* beside it for the account. The existing component is made to look as drawn here and reused, not
+  rebuilt.
+- **A dropdown opens under its field**, never above it; the panel scrolls to make room.
+- GitHub is not a group of its own, since *General* already has the repository's GitHub rows; its *GitHub account*
+  row opens the GitHub page.
+
+The frame ids in the text below are the boards these change or start from. Every name and number in them stays
+fixture data.
 
 **Settings › Accounts** (`t8i6m`; the tab keeps its name, since a sign-in and an API provider are both what agents
 run as).
