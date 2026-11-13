@@ -22,6 +22,7 @@ mod activity;
 mod auto_approving;
 mod browser;
 mod cloud;
+mod dangerous;
 mod facts;
 mod health;
 mod item;
@@ -147,10 +148,17 @@ impl Component for StatusBar {
       shown.as_ref().map(|(facts, _)| facts.repo_root.clone()),
     );
     let update = update::update_facts(ctx, &services.updates);
+    let dangerous = dangerous::read(
+      ctx,
+      shown
+        .as_ref()
+        .map(|(facts, feed)| (facts.repo_root.clone(), feed.outside.get().of(Outside::AutoMode))),
+    );
     let facts = BarFacts {
       project: shown.map(|(mut facts, _)| {
         facts.limits = limits(&listed, &readings, &used);
         facts.browser_tabs = browser_tabs;
+        facts.dangerous = dangerous;
         facts
       }),
       log,
@@ -187,6 +195,7 @@ fn shown(projects: &Projects, project: ProjectId, recovery: &RecoveryState) -> O
     undecided_runs: recovery.undecided(project),
     limits: Vec::new(),
     browser_tabs: 0,
+    dangerous: false,
   };
   Some((facts, feed))
 }
@@ -342,6 +351,7 @@ impl Component for StatusBarView {
       }
     }
     // The right group in the design's order (`18 · Several at once` `y0SDOa`), the dot always last.
+    right.extend(project.and_then(|project| dangerous::item(ctx, (project.id, project.dangerous), &dispatch)));
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
       right.extend(auto_approving::auto_approving(
         ctx,

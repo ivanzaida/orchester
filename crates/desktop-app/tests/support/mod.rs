@@ -15,3 +15,4 @@ pub mod reads;
 pub mod runner_programs;
 #[path = "../../../workspace/tests/support/team_cache.rs"]
 pub mod team_cache;
+pub mod team_link;

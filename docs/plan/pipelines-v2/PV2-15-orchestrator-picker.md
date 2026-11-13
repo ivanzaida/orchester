@@ -1,18 +1,31 @@
 # PV2-15 · The orchestrator chat adopts the compact picker
 
-- **Status:** needs decision — do not start
+- **Status:** done (2026-11-10; review round 2 PASS, design verification round 2 PASS incl. K1/K2; merged `e0c34aa8a`)
 - **Kind:** UI
-- **Depends on:** PV2-03 and the person's decision
+- **Depends on:** PV2-03, PV2-16
+- **Branch:** `claude/pv2-15-orchestrator-picker` (`0e1f5024f` … `21d187321`)
+- **Tokens:** 108.2M — implementation 59.4M + 18.0M + 0.6M, review 4.9M + 2.9M, design verification 13.5M + 9.0M (output 318k)
 
-## Why it waits
+## Goal
 
-The compact picker (K1 `lCApz`) was designed for the step editor. Using it in the orchestrator chat's composer as well
-(one component for both, replacing the 640 × 320 panel of `screens/orchestrator/runs_on/`) changes the board
-`Orchestrator · redesign` (`Runs-on picker · states` `t7cdi`: *Codex at its limit*, *Searching*, *Many models*, *No
-connections*), which needs its own redesign first. The person decides whether to do it.
+The person preferred the compact picker (2026-11-10): the orchestrator chat's *Runs on* chip opens the shared compact
+picker of PV2-03 instead of today's 640 × 320 panel in `crates/desktop-app/src/screens/orchestrator/runs_on/`.
 
-## Scope once decided
+## Design
 
-Redesign those four states with the compact picker on `Orchestrator · redesign` (a design step), then make the
-composer's chip open the shared component, keep the chat's *Applies* choice if it is still wanted, and remove the old
-panel's code.
+`Orchestrator · redesign` `hujxu` as PV2-16 leaves it: `05 · Account and model` `v6mWp8`, `05b · On DeepSeek`
+`AZp3I` and `Runs-on picker · states` `t7cdi` (*Codex at its limit*, *Searching*, *Many models*, *No connections*),
+all drawn with the compact picker.
+
+## Scope
+
+- The chip opens the shared component over it (never under it), as today; choosing applies at once through today's
+  path (`picking.rs`).
+- What only the chat has (an API provider's typed model and effort, where its data goes, the account-switch note)
+  appears as PV2-16 draws it.
+- Remove the old panel's code that nothing uses any more.
+
+## Done when
+
+- Every state of PV2-16's frames works in a QA copy and is verified independently against its frame.
+- `tools/check.ps1` passes; the orchestrator's runs-on tests updated and named in the report.

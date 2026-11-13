@@ -6,7 +6,7 @@
 //! Needs you panel under it ([`panel`]), and a press again, Esc or a press outside closes it; while it is
 //! open the pill wears a `warning` stroke. A page can open the panel too ([`PanelOpen`]).
 
-mod in_place;
+pub(crate) mod in_place;
 mod item;
 mod note;
 mod panel;

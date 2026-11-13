@@ -43,7 +43,7 @@ pub use self::{
 };
 pub(crate) use self::{
   archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
-  config::team_body,
+  config::{pipeline_content, pipeline_executors, team_body},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
 use crate::{

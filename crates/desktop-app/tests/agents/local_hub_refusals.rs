@@ -1,5 +1,6 @@
-//! What a refused press says in the local hub: input an MCP client sent where only a person answers is said so in the
-//! panel, never dropped without a word (ORC-848 D1, D2). `cargo test -p orchester-app --test agents local_hub_refus`.
+//! A refused press in the local hub: input an MCP client sent where only a person answers is refused to the client,
+//! as its tool call's error, and the panel stays as it was (the person, 2026-11-10). `cargo test -p orchester-app
+//! --test agents local_hub_refus`.
 
 use super::{
   harness::Agents,
@@ -7,7 +8,7 @@ use super::{
 };
 
 #[test]
-fn local_hub_refusals_a_clients_press_on_the_save_question_is_said_to_need_a_person() {
+fn local_hub_refusals_a_clients_press_on_the_save_question_is_refused_to_it_and_changes_nothing() {
   let mut agents = Agents::new(true);
   let docs = server(&agents, "docs");
   show(&mut agents, docs);
@@ -15,30 +16,37 @@ fn local_hub_refusals_a_clients_press_on_the_save_question_is_said_to_need_a_per
   agents.until("saveable", |s| s.exists(SAVE));
   agents.click(SAVE);
   agents.until("the question", |s| s.exists("local-hub-mcp-confirm-save-confirm"));
-  assert!(
-    !agents.exists("local-hub-mcp-confirm-save-person-only"),
-    "nothing was refused yet"
-  );
+  assert_eq!(agents.refused(), None, "nothing was refused yet");
 
   // A press that reaches the confirm's handler as an MCP client's input; the confirm takes none before it lived
-  // through a pass, so it is pressed until it answers.
+  // through a pass, so it is pressed until it is refused.
   agents.until("the refusal", |s| {
     lurq::app::events::with_synthetic_input(|| s.click("local-hub-mcp-confirm-save-confirm"));
-    s.exists("local-hub-mcp-confirm-save-person-only")
+    s.refused().is_some()
   });
-  assert!(
-    agents
-      .text("local-hub-mcp-confirm-save-person-only")
-      .starts_with("Only a person does this here")
-  );
   assert!(
     agents.exists("local-hub-mcp-confirm-save-confirm"),
     "the question stays open"
   );
+  assert!(
+    !agents.exists("local-hub-mcp-confirm-save-person-only"),
+    "nothing in the window says it"
+  );
+  assert_eq!(
+    agents.value("connection-mcp-arguments"),
+    "--stdio",
+    "the field keeps what was typed"
+  );
+
+  // The person's own press answers it.
+  agents.press_until("local-hub-mcp-confirm-save-confirm", "the person's save", |s| {
+    !s.exists("local-hub-mcp-confirm-save-confirm")
+  });
+  assert_eq!(agents.refused(), None);
 }
 
 #[test]
-fn local_hub_refusals_input_the_gate_refuses_while_the_save_question_shows_is_said_in_the_window() {
+fn local_hub_refusals_input_the_gate_refuses_while_the_save_question_shows_leaves_the_window_as_it_was() {
   let mut agents = Agents::new(true);
   let docs = server(&agents, "docs");
   show(&mut agents, docs);
@@ -46,9 +54,12 @@ fn local_hub_refusals_input_the_gate_refuses_while_the_save_question_shows_is_sa
   agents.until("saveable", |s| s.exists(SAVE));
   agents.click(SAVE);
   agents.until("the question", |s| s.exists("local-hub-mcp-confirm-save-confirm"));
-  assert!(!agents.exists("local-hub-mcp-confirm-save-person-only"));
 
-  let said = agents.window.link.input_gate().refuse_input();
+  let gate = agents.window.link.input_gate();
+  assert!(gate.protecting(), "the question locks window input");
+  let said = gate.refusal();
   assert!(said.contains("A person answers this in the window"), "{said}");
-  agents.until("the refusal", |s| s.exists("local-hub-mcp-confirm-save-person-only"));
+  agents.window.pass();
+  assert!(!agents.exists("local-hub-mcp-confirm-save-person-only"));
+  assert!(agents.exists("local-hub-mcp-confirm-save-confirm"));
 }

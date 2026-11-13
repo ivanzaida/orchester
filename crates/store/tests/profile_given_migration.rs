@@ -39,13 +39,12 @@ fn project() -> (TempDir, ProjectDb) {
   (repo, db)
 }
 
-fn published<B: ResourceBody>(db: &mut ProjectDb, slug: &str, title: &str, body: &B) -> ResourceId {
-  let id = db
-    .create_resource(Slug::new(slug).expect("slug"), name(title), body, at(1))
+/// `body` created as the first version of a resource: a pipeline holds no draft (D-032), so none is created as one.
+fn published<B: ResourceBody + Clone>(db: &mut ProjectDb, slug: &str, title: &str, body: &B) -> ResourceId {
+  db.create_published(Slug::new(slug).expect("slug"), name(title), body, at(1))
     .expect("create")
-    .id();
-  db.publish_draft::<B>(id, at(2)).expect("publish");
-  id
+    .0
+    .id()
 }
 
 fn profile(role: &str) -> AgentProfile {

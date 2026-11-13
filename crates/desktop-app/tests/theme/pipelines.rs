@@ -1,5 +1,5 @@
 //! The redesigned Pipelines' type roles and spacing, and grouped rows' (`Pipelines · redesign` `evQ4U`).
-use orchester_app::theme::{GroupText, PipelinesSpacing, PipelinesText};
+use orchester_app::theme::{GroupText, PIPELINES_BONE_FADE, PipelinesSpacing, PipelinesText};
 
 use super::*;
 
@@ -21,6 +21,10 @@ fn theme_pipelines_and_grouped_rows_follow_the_design() {
     (PipelinesText::CardNumber.role(), 11.5, FontWeight::Normal, "Geist Mono"),
     (PipelinesText::StepNumber.role(), 13.0, FontWeight::Normal, "Geist Mono"),
     (PipelinesText::Status.role(), 12.0, FontWeight::Medium, "Geist"),
+    // Why the pipelines could not be read (`v3szq` in P9 `H4fLj`).
+    (PipelinesText::ReadReason.role(), 12.0, FontWeight::Normal, "Geist"),
+    // A pipeline's slug in its settings (`tb7tA` in P17 `LzGvn`).
+    (PipelinesText::Slug.role(), 12.0, FontWeight::Normal, "Geist Mono"),
   ] {
     let style = theme.typography_style(role);
     assert_eq!(
@@ -37,6 +41,16 @@ fn theme_pipelines_and_grouped_rows_follow_the_design() {
     theme.typography_style(GroupText::Tag.role()).color,
     theme.palette_color(ExtraColor::AccentText.role())
   );
+  assert_eq!(
+    theme.typography_style(PipelinesText::ReadReason.role()).color,
+    theme.palette_color(PaletteColor::TextSecondary)
+  );
+  assert_eq!(
+    theme.typography_style(PipelinesText::Slug.role()).color,
+    theme.palette_color(PaletteColor::TextPrimary)
+  );
+  // The bones of P5 `TF9O3`: the first two rows and cards whole, then fading (`vaAc2`, `FfeE8`).
+  assert_eq!(PIPELINES_BONE_FADE, [1.0, 1.0, 0.7, 0.45]);
   for (spacing, value) in [(PipelinesSpacing::PageTop, 20.0), (PipelinesSpacing::EdgeIndent, 21.0)] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

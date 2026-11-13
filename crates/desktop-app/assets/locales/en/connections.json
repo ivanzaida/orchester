@@ -621,7 +621,6 @@
         "models": "Enter at least one model the provider serves.",
         "unavailable": "Save unavailable: {{reason}}"
       },
-      "personOnly": "Only a person saves a connection on an API provider here: input from an MCP client is taken only while you let automation change agent permissions.",
       "model": "Model id",
       "addModel": "Add model",
       "removeModel": "Remove model",

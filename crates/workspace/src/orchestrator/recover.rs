@@ -91,6 +91,15 @@ fn carried_out(db: &ProjectDb, action: &ChatAction) -> Result<Option<ActionOutco
     (_, Some(Change::Cancel { run, .. })) => cancelled(db, *run)?,
     // A run that went on to a newer attempt than the one it stopped in was continued.
     (_, Some(Change::Continue { run, attempt, .. })) => went_on(db, *run, *attempt)?,
+    // Kept before pipelines lost their drafts (D-032): applying it publishes nothing, so a version published since
+    // is someone else's save, never this decision's.
+    (
+      _,
+      Some(Change::Publish {
+        of: Publishing::Pipeline,
+        ..
+      }),
+    ) => false,
     (
       _,
       Some(Change::Publish {

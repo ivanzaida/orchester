@@ -5,8 +5,7 @@
 use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::ResourceId,
-  resource::{Pipeline, Slug},
-  store::ResourceStore,
+  resource::Slug,
   task::{TaskLimits, organization::TaskOrganization},
   time::Timestamp,
   tokens::TokenBudget,
@@ -24,12 +23,10 @@ use crate::{
 fn pipeline(db: &mut ProjectDb, slug: &str) -> ResourceId {
   let now = Timestamp::now();
   let body = crate::fixture::one_step(ResourceId::generate(), "Sign in.");
-  let id = db
-    .create_resource(Slug::new(slug).expect("slug"), name(slug), body.body(), now)
+  db.create_published(Slug::new(slug).expect("slug"), name(slug), body.body(), now)
     .expect("a pipeline")
-    .id();
-  db.publish_draft::<Pipeline>(id, now).expect("published");
-  id
+    .0
+    .id()
 }
 
 /// A pipeline of the team's, `slug`, with its id and its body as the server keeps it.

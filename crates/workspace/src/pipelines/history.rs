@@ -27,6 +27,15 @@ pub struct PublishedVersion {
   pub runs: Vec<RunNumber>,
 }
 
+/// What still holds a version of a pipeline, as the list of versions says it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Use {
+  /// The current version: the tasks that use the pipeline.
+  Tasks(usize),
+  /// An older version: the runs that pinned it and so started on it.
+  Runs(usize),
+}
+
 /// What changed from an earlier version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChangesFrom {
@@ -87,6 +96,17 @@ impl VersionHistory {
 
   pub fn version(&self, number: VersionNumber) -> Option<&PublishedVersion> {
     self.versions.iter().find(|version| version.number == number)
+  }
+
+  /// What holds version `number`: the tasks that use the pipeline while it is the current (latest) version, the runs
+  /// that pinned it otherwise; `None` for a version that was never published.
+  pub fn use_of(&self, number: VersionNumber, tasks: usize) -> Option<Use> {
+    let version = self.version(number)?;
+    Some(if self.latest().is_some_and(|latest| latest.number == number) {
+      Use::Tasks(tasks)
+    } else {
+      Use::Runs(version.runs.len())
+    })
   }
 
   pub fn latest(&self) -> Option<&PublishedVersion> {

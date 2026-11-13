@@ -159,7 +159,7 @@ fn domain_a_command_step_with_a_failure_route_needs_a_person() {
   served.ok("save_tool_draft", &check(json!({})));
   served.ok(
     "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Change", "from": "empty" }),
+    &json!({ "project": "Kontur", "name": "Change", "from": "copy", "copy_of": "Quick fix" }),
   );
   served.let_automation_widen(false);
   let steps = |check_name: &str| {
@@ -174,32 +174,29 @@ fn domain_a_command_step_with_a_failure_route_needs_a_person() {
       },
     ] })
   };
-  let refused = served.refused("save_pipeline_draft", &steps("Check"));
+  let refused = served.refused("save_pipeline", &steps("Check"));
   assert_person_only(&refused);
   assert!(
     refused["message"].as_str().is_some_and(|text| text.contains("Check")),
     "{refused}"
   );
   served.let_automation_widen(true);
-  let saved = served.ok("save_pipeline_draft", &steps("Check"));
+  let saved = served.ok("save_pipeline", &steps("Check"));
   let step = &saved["pipeline"]["steps"][1];
   assert_eq!(step["tool"]["name"], "Check", "{saved}");
   assert_eq!(step["on_failure"], json!({ "return_to": "implement", "retries": 2 }));
   served.let_automation_widen(false);
-  served.ok("save_pipeline_draft", &steps("Run the checks"));
-  let publish = json!({ "project": "Kontur", "pipeline": "Change" });
-  assert_person_only(&served.refused("publish_pipeline", &publish));
-  served.let_automation_widen(true);
-  served.ok("publish_pipeline", &publish);
+  // Renaming the step widens nothing: saving publishes it as v3 (a pipeline holds no draft, D-032).
+  served.ok("save_pipeline", &steps("Run the checks"));
   let tool = served.ok("get_tool", &json!({ "project": "Kontur", "tool": "Check" }));
   assert_eq!(
     tool["tool"]["used_by_steps"],
-    json!([{ "pipeline": "Change", "version": 1, "step": "Run the checks" }])
+    json!([{ "pipeline": "Change", "version": 3, "step": "Run the checks" }])
   );
   served.let_automation_widen(false);
   let mut other_tool = steps("Run the checks");
   other_tool["steps"][1]["tool"] = json!("Run checks");
-  assert_person_only(&served.refused("save_pipeline_draft", &other_tool));
+  assert_person_only(&served.refused("save_pipeline", &other_tool));
 }
 
 #[test]

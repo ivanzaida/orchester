@@ -98,6 +98,9 @@ pub enum State {
   TeamHub,
   /// As [`Self::TeamHub`], for a member who is not an admin (`team-hub-member` and its variants).
   TeamHubMember,
+  /// As [`Self::TeamHub`], the team server not answering since the join, so this computer never read the team's
+  /// configuration: the hub says it cannot reach the team server, with *Try again* (`A25` `Zhcif`).
+  TeamHubDown,
   /// An Admin on the Agents hub's team MCP servers, which the stand-in team server holds too (`Agents · MCP server ·
   /// admin · draft` A13 `WMtxm`, ORC-836): *Edit* a server, type, *Save* publishes its next version at once. The
   /// server also holds an MCP server named `figma-local` that this computer has not read, so *New MCP server* with
@@ -142,8 +145,12 @@ pub enum State {
   TeamArchive,
   /// An Admin on KON-12 (run 8), which the team's archive of `pencil-design` stopped at Implement: the Summary says
   /// which resource and who archived it, and Builder, which still names it, cannot run (A22 `pUu78`, ORC-838). What
-  /// the press of *Archive and stop N runs* leaves behind, made without a press.
+  /// the press of *Archive and stop N runs* leaves behind, made without a press. The person is a member, as A22 and
+  /// M7 `Ml7HN` draw it: the hub's *Archived* lists `pencil-design` read-only, with no Restore.
   TeamArchived,
+  /// [`Self::TeamArchived`] for an Admin (A36 `qvMZD`, A37 `AFbIb`): the hub's *Archived* offers *Restore
+  /// pencil-design*, and Builder's *Ready here?* opens it there.
+  TeamArchivedAdmin,
 }
 
 /// How long after the window opens the server of [`State::StartRecovered`] answers a `work.start`; recovery then
@@ -151,7 +158,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 47] = [
+  pub const ALL: [Self; 49] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -193,12 +200,14 @@ impl State {
     Self::TeamEditVariables,
     Self::TeamHub,
     Self::TeamHubMember,
+    Self::TeamHubDown,
     Self::StartRecovered,
     Self::StartWaiting,
     Self::StartRunnerRefused,
     Self::StartPastFailure,
     Self::TeamArchive,
     Self::TeamArchived,
+    Self::TeamArchivedAdmin,
   ];
 
   /// The seed's scenario of this state.
@@ -245,12 +254,14 @@ impl State {
       Self::TeamEditVariables => "team-edit-variables",
       Self::TeamHub => "team-hub",
       Self::TeamHubMember => "team-hub-member",
+      Self::TeamHubDown => "team-hub-down",
       Self::StartRecovered => "team-start-recovered",
       Self::StartWaiting => "team-start-waiting",
       Self::StartRunnerRefused => "team-start-runner-refused",
       Self::StartPastFailure => "team-start-past-failure",
       Self::TeamArchive => "team-archive",
       Self::TeamArchived => "team-archived",
+      Self::TeamArchivedAdmin => "team-archived-admin",
     }
   }
 
@@ -265,12 +276,13 @@ impl State {
         | Self::TeamRunning
         | Self::NotReadyAfterRun
         | Self::TeamArchived
+        | Self::TeamArchivedAdmin
     )
   }
 
   /// Whether the state is of the archive of a team resource, whose server holds the resources that name it.
   pub const fn archives(self) -> bool {
-    matches!(self, Self::TeamArchive | Self::TeamArchived)
+    matches!(self, Self::TeamArchive | Self::TeamArchived | Self::TeamArchivedAdmin)
   }
 
   /// Whether the state is of the hub's edit of the team's resources, whose server holds them.

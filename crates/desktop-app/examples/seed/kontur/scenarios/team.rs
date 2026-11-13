@@ -314,6 +314,15 @@ pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
   write_marker(kontur, State::TeamEditVariables)
 }
 
+/// As [`edit`], `orders-report` in the team's form, naming the team secret `ORDERS_DB` (`team-tools`): an admin edits
+/// a team HTTP tool (`sentry-issues`, A33 `t2RMXK`) and database query (`orders-report`, A35 `YBG4T`) in place, and
+/// *New tool* makes either (A32 `gLLEv`, A34 `WUuEj`).
+pub fn tools(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources_by_name(kontur)?;
+  team_computer::forms_computer(kontur)?;
+  write_marker(kontur, State::TeamEdit)
+}
+
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
   team_computer::forms_computer(kontur)?;
@@ -335,6 +344,17 @@ pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// computer's lists as the server's archive does. The task's Summary says which resource and who archived it, and
 /// Builder, which still names it, cannot run.
 pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  archived_as(kontur, State::TeamArchived)
+}
+
+/// [`archived`] for an Admin (`team-archived-admin`, A36 `qvMZD`, A37 `AFbIb`): the hub's *Archived* offers *Restore
+/// pencil-design*.
+pub fn archived_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
+  archived_as(kontur, State::TeamArchivedAdmin)
+}
+
+/// [`archived`], marked as `state`.
+fn archived_as(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
   with_runs(
@@ -370,7 +390,7 @@ pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
       by: Some("dana-k".to_owned()),
     }),
   })?;
-  write_marker(kontur, State::TeamArchived)
+  write_marker(kontur, state)
 }
 
 /// KON-12 moved from the catalogue's pipeline, which a team project does not offer, to the team's Team delivery
@@ -512,6 +532,12 @@ pub(super) fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
 /// `member` (`team-hub`, `team-hub-member`).
 pub(super) fn served(kontur: &Kontur, member: bool) -> Result<(), SeedError> {
   write_marker(kontur, if member { State::TeamHubMember } else { State::TeamHub })
+}
+
+/// Leaves the marker by which the QA app joins the Agents hub's team on a stand-in team server that stops answering
+/// before this computer read anything of it (`team-hub-down`).
+pub(super) fn down(kontur: &Kontur) -> Result<(), SeedError> {
+  write_marker(kontur, State::TeamHubDown)
 }
 
 fn write_marker(kontur: &Kontur, state: State) -> Result<(), SeedError> {

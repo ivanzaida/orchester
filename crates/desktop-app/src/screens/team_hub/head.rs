@@ -7,7 +7,6 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
-use orchester_workspace::sharing::team::TeamConfiguration;
 
 use super::member;
 use crate::{
@@ -25,8 +24,9 @@ pub(super) enum Reach {
   Unreachable,
 }
 
-/// *Team*; while the team server cannot be reached, the line says so in place of *Team*.
-pub(super) fn status(ctx: &Ctx, team: &TeamConfiguration, reach: Reach) -> Vec<Element> {
+/// *Team*, with *· member* for whoever is not an admin (`admin`, as the person's role was last read: an admin stays
+/// one while the team server cannot be reached); while it cannot be reached, the line says so in place of *Team*.
+pub(super) fn status(ctx: &Ctx, admin: bool, reach: Reach) -> Vec<Element> {
   let (glyph, color, words) = match reach {
     Reach::Answered => (Icon::Users, PaletteColor::TextMuted, "team_hub.team"),
     Reach::Unanswered => (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached"),
@@ -46,6 +46,6 @@ pub(super) fn status(ctx: &Ctx, team: &TeamConfiguration, reach: Reach) -> Vec<E
         .color(if unreached { color } else { PaletteColor::TextMuted })
         .nowrap(),
     )
-    .with_children((!team.may_change).then(|| member::role(ctx)));
+    .with_children((!admin).then(|| member::role(ctx)));
   vec![line.into()]
 }

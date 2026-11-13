@@ -11,8 +11,11 @@ use orchester_workspace::tools::data::ToolUse;
 use super::editor::EditorProps;
 use crate::{
   navigation::Navigation,
-  routes::{PipelineView, ProjectPage, Route},
-  screens::hub::parts::{Entry, boxed, group, head, note},
+  routes::Route,
+  screens::{
+    hub::parts::{Entry, boxed, group, head, note},
+    pipeline_link::PipelineLinks,
+  },
   theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -82,7 +85,7 @@ fn caller(ctx: &Ctx, (p, navigation): (&EditorProps, &Navigation), index: usize,
   );
   let route = Route::Project(
     p.project.open.project.id(),
-    ProjectPage::Pipeline(used.pipeline, PipelineView::default()),
+    PipelineLinks::of(&p.project).page(used.pipeline),
   );
   let open = ActionButton::new(
     format!("tool-access-open-{index}"),

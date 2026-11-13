@@ -1,8 +1,8 @@
 //! Who runs on which model of an agent connection, for the rule that a listed model in use stays listed
 //! (core's [`ensure_used_kept`]): the latest published version and the draft of every profile, each on
 //! its own connection and model; the profile versions that unfinished runs pinned; and every step of a
-//! pipeline's latest published version or draft whose own model overrides its profile's, on each
-//! connection that profile's version or draft runs on.
+//! pipeline's latest published version whose own model overrides its profile's, on each connection that profile's
+//! version or draft runs on.
 
 use std::sync::Arc;
 
@@ -54,14 +54,9 @@ pub fn load(db: &ProjectDb) -> Result<Vec<ModelUse>, StoreError> {
   }
   pinned_uses(db, &mut uses)?;
   for resource in db.resources(ResourceKind::Pipeline)? {
+    // A pipeline holds no draft (D-032): its latest version is all its steps.
     let latest = db.latest_version::<Pipeline>(resource.id())?;
-    let draft = db.draft::<Pipeline>(resource.id())?;
-    let bodies = latest
-      .as_ref()
-      .map(|version| version.body())
-      .into_iter()
-      .chain(draft.as_ref().map(|draft| draft.body()));
-    for pipeline in bodies {
+    if let Some(pipeline) = latest.as_ref().map(|version| version.body()) {
       for step in pipeline.steps() {
         let StepKind::Agent {
           profile: Some(profile),

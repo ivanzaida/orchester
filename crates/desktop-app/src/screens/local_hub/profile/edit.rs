@@ -48,11 +48,13 @@ impl Holding {
   }
 }
 
-/// A save of what the panel holds and what the person already allowed it to widen.
+/// A save of what the panel holds, what the person already allowed it to widen, and whether the input that pressed
+/// Save may decide what it changes in the role's prompts ([`local_edit::save`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Ask {
   pub held: AgentProfile,
   pub allowed: Vec<Message>,
+  pub decided: bool,
 }
 
 /// A save that ended, and what the workspace said of it.
@@ -80,7 +82,8 @@ pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
   ctx.future_action(move |ask: Ask| {
     let (root, asked) = (root.clone(), ask.clone());
     async move {
-      let outcome = background::run(move || local_edit::save(&root, id, &asked.held, &asked.allowed)).await??;
+      let outcome =
+        background::run(move || local_edit::save(&root, id, &asked.held, (&asked.allowed, asked.decided))).await??;
       Ok(Done { ask, outcome })
     }
   })

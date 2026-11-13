@@ -73,11 +73,13 @@ pub fn to(
     | State::TeamEditVariables
     | State::TeamHub
     | State::TeamHubMember
+    | State::TeamHubDown
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure
     | State::TeamArchive
-    | State::TeamArchived => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::TeamArchived
+    | State::TeamArchivedAdmin => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

@@ -91,6 +91,21 @@ pub fn permissions(
   Ok(permissions)
 }
 
+/// The words for a tool and for a profile a step names that has no published version here: not published yet, or gone.
+const TOOL_NOT_HERE: (&str, &str) = ("runs.preflight.toolNotPublished", "pipelines.problems.toolGone");
+const PROFILE_NOT_HERE: (&str, &str) = ("runs.preflight.profileNotPublished", "pipelines.problems.profileGone");
+
+/// Why `step` cannot run `id`, which has no published version here: it is gone (archived or removed), or not published
+/// yet; the step by its name, never the id.
+fn not_here(
+  step: &orchester_core::resource::Step,
+  (id, assignables): (orchester_core::id::ResourceId, &super::data::Assignables),
+  (unpublished, gone): (&'static str, &'static str),
+) -> Message {
+  let key = if assignables.gone(id) { gone } else { unpublished };
+  Message::new(key).with("step", step.name.to_string())
+}
+
 /// Whether an assigned executor and its narrowing can still be used. Unassigned drafts stay editable.
 pub fn check_step(
   step: &orchester_core::resource::Step,
@@ -101,7 +116,7 @@ pub fn check_step(
     StepKind::Tool { tool: Some(id) } => {
       let choice = assignables
         .tool(*id)
-        .ok_or_else(|| Message::new("appMcp.errors.toolNotPublished").with("tool", id.to_string()))?;
+        .ok_or_else(|| not_here(step, (*id, assignables), TOOL_NOT_HERE))?;
       if !choice.runnable {
         return Err(Message::new("appMcp.errors.toolNotRunnable").with("tool", choice.name.to_string()));
       }
@@ -116,7 +131,7 @@ pub fn check_step(
         .map(|id| {
           assignables
             .profile(id)
-            .ok_or_else(|| Message::new("appMcp.errors.profileNotPublished").with("profile", id.to_string()))
+            .ok_or_else(|| not_here(step, (id, assignables), PROFILE_NOT_HERE))
         })
         .transpose()?;
       // An unassigned starter is an incomplete draft; publication rejects missing executors.

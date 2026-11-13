@@ -1,0 +1,164 @@
+//! What the flow says: what a card runs, where a failure goes, what a gate waits for, and what the end of the line
+//! delivers.
+
+use std::sync::Arc;
+
+use lurq::app::ctx::Ctx;
+use orchester_core::resource::{DeliverMode, Deliverable, MergeMethod, RepositoryAccess};
+use orchester_workspace::pipelines::flow::{
+  Conflicts, DeliverCard, Ending, Gate, Named, ReturnsTo, Runs, StepCard, Waits,
+};
+
+/// A card's number as the design writes it: `03`.
+pub(in crate::screens::pipeline_hub) fn number(number: usize) -> String {
+  format!("{number:02}")
+}
+
+/// The second line of a card: *Explorer · claude-sonnet-5-5*, *Tool · Checks*, or what is wrong with the step; a
+/// profile or tool that is gone in the words the step's Agent field uses for it.
+pub(super) fn runs(ctx: &Ctx, card: &StepCard) -> Arc<str> {
+  match &card.runs {
+    Runs::ProfileNotPublished { .. } if card.gone => ctx.t("pipeline_hub.stepFlow.profileGone"),
+    Runs::ToolNotPublished { .. } if card.gone => ctx.t("pipeline_hub.stepFlow.toolGone"),
+    Runs::Profile { name, model } => ctx.t_args(
+      "pipeline_hub.flow.profileModel",
+      [("profile", name.as_ref()), ("model", model.as_ref())],
+    ),
+    Runs::Tool { name } => ctx.t_args("pipeline_hub.flow.tool", [("tool", name.as_ref())]),
+    Runs::NoProfile => ctx.t("pipeline_hub.flow.noProfile"),
+    Runs::NoTool => ctx.t("pipeline_hub.flow.noTool"),
+    Runs::ProfileNotPublished { .. } => ctx.t("pipeline_hub.flow.profileNotPublished"),
+    Runs::ProfileConnectionGone { name, .. } => {
+      ctx.t_args("pipeline_hub.flow.profileConnectionGone", [("profile", name.as_ref())])
+    }
+    Runs::ToolNotPublished { .. } => ctx.t("pipeline_hub.flow.toolNotPublished"),
+    Runs::ToolNotRunnable { name, .. } => ctx.t_args("pipeline_hub.flow.toolNotRunnable", [("tool", name.as_ref())]),
+  }
+}
+
+/// What a card offers when its step has nothing to run: *Choose profile*, *Choose tool*, or *Choose another* when what
+/// it ran is gone. Pressing the card opens the step, whose Agent field chooses.
+pub(super) fn choose(ctx: &Ctx, card: &StepCard) -> Option<Arc<str>> {
+  match card.runs {
+    Runs::NoProfile => Some(ctx.t("pipeline_hub.flow.chooseProfile")),
+    Runs::NoTool => Some(ctx.t("pipeline_hub.flow.chooseTool")),
+    _ if card.gone => Some(ctx.t("pipeline_hub.stepFlow.chooseAnother")),
+    _ => None,
+  }
+}
+
+pub(super) fn access(ctx: &Ctx, access: RepositoryAccess) -> Arc<str> {
+  ctx.t(match access {
+    RepositoryAccess::ReadOnly => "pipeline_hub.flow.readOnly",
+    RepositoryAccess::Write => "pipeline_hub.flow.canWrite",
+  })
+}
+
+/// Where a failure sends the run: an agent step *changes requested → 03*, a tool step *fails → 03*.
+pub(super) fn failure(ctx: &Ctx, step: &StepCard, route: &ReturnsTo) -> Arc<str> {
+  ctx.t_args(
+    if step.is_tool() {
+      "pipeline_hub.flow.failureTool"
+    } else {
+      "pipeline_hub.flow.failure"
+    },
+    [("number", number(route.number))],
+  )
+}
+
+/// What a gate waits for: *you approve Plan before 03 starts*, or *before Deliver starts* when the Deliver step,
+/// numbered `deliver`, is what runs next: it has no node number, so it is named by word.
+pub(super) fn gate(ctx: &Ctx, gate: &Gate, deliver: Option<usize>) -> Arc<str> {
+  match gate.before {
+    Some(next) if deliver == Some(next) => {
+      ctx.t_args("pipeline_hub.flow.gateBeforeDeliver", [("step", gate.step.to_string())])
+    }
+    Some(next) => ctx.t_args(
+      "pipeline_hub.flow.gateBefore",
+      [("step", gate.step.to_string()), ("next", number(next))],
+    ),
+    None => ctx.t_args("pipeline_hub.flow.gateEnd", [("step", gate.step.to_string())]),
+  }
+}
+
+/// The Deliver card's second line: *Approve to merge · Squash · conflicts: Builder*.
+pub(super) fn deliver(ctx: &Ctx, deliver: &DeliverCard) -> Arc<str> {
+  let method = ctx.t(match deliver.method {
+    MergeMethod::MergeCommit => "pipeline_hub.flow.mergeCommit",
+    MergeMethod::Squash => "pipeline_hub.flow.squash",
+  });
+  let who = match &deliver.conflicts {
+    Conflicts::Profile(name) => name.clone(),
+    Conflicts::ProfileNotPublished(name) => {
+      ctx.t_args("pipeline_hub.flow.conflictsNotPublished", [("profile", name.as_ref())])
+    }
+    Conflicts::Person => ctx.t("pipeline_hub.flow.conflictsYou"),
+  };
+  ctx.t_args(
+    match deliver.mode {
+      DeliverMode::ApproveToMerge => "pipeline_hub.flow.deliverApprove",
+      DeliverMode::AutoMerge => "pipeline_hub.flow.deliverAuto",
+    },
+    [("method", method.to_string()), ("who", who.to_string())],
+  )
+}
+
+/// The end of the line and what it says after it: *MERGED INTO THE BASE BRANCH · the task is done*. A pipeline with a
+/// Deliver step ends in a merge; the others in what their runs deliver.
+pub(super) fn end(ctx: &Ctx, ending: Ending) -> (Arc<str>, Arc<str>) {
+  let (label, hint) = match ending {
+    Ending::Merged => ("pipeline_hub.flow.endMerged", "pipeline_hub.flow.endMergedHint"),
+    Ending::Delivers(Deliverable::Changes) => ("pipeline_hub.flow.endReview", "pipeline_hub.flow.endReviewHint"),
+    Ending::Delivers(Deliverable::ChangesOrReport) => (
+      "pipeline_hub.flow.endReview",
+      "pipeline_hub.flow.endChangesOrReportHint",
+    ),
+    Ending::Delivers(Deliverable::Report) => ("pipeline_hub.flow.endReport", "pipeline_hub.flow.endReportHint"),
+    Ending::Delivers(Deliverable::Outside) => ("pipeline_hub.flow.endOutside", "pipeline_hub.flow.endOutsideHint"),
+  };
+  (ctx.t(label), ctx.t(hint))
+}
+
+/// What a step that waits for only part of the stage before it waits for (P16 `T9KJFP`): *waits for 04 Run checks only
+/// · starts before 05 Review ends*.
+pub(super) fn waits(ctx: &Ctx, waits: &Waits) -> Arc<str> {
+  ctx.t_args(
+    if waits.not_on.len() == 1 {
+      "pipeline_hub.flow.waits.one"
+    } else {
+      "pipeline_hub.flow.waits.many"
+    },
+    [
+      ("on", listed(ctx, &waits.on).to_string()),
+      ("before", listed(ctx, &waits.not_on).to_string()),
+    ],
+  )
+}
+
+/// Steps by number and name: *04 Run checks*, *04 Run checks and 05 Review*, *03 Implement, 04 Run checks and 05
+/// Review*.
+fn listed(ctx: &Ctx, steps: &[Named]) -> Arc<str> {
+  let named: Vec<String> = steps
+    .iter()
+    .map(|step| {
+      ctx
+        .t_args(
+          "pipeline_hub.flow.move.step",
+          [("number", number(step.number)), ("name", step.name.to_string())],
+        )
+        .to_string()
+    })
+    .collect();
+  match named.as_slice() {
+    [only] => Arc::from(only.as_str()),
+    [first, second] => ctx.t_args(
+      "pipeline_hub.flow.move.two",
+      [("first", first.as_str()), ("second", second.as_str())],
+    ),
+    [head @ .., last] if !head.is_empty() => ctx.t_args(
+      "pipeline_hub.flow.move.several",
+      [("head", head.join(", ")), ("last", last.clone())],
+    ),
+    _ => Arc::from(""),
+  }
+}

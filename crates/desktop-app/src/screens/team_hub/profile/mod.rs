@@ -11,10 +11,12 @@
 
 mod bar;
 mod computer;
+mod edit;
 pub(in crate::screens) mod fix;
 pub(in crate::screens) mod from_team;
 pub(in crate::screens) mod parts;
 pub(in crate::screens) mod ready;
+mod role_read;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -27,9 +29,10 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::{ConnectionId, ResourceId};
+use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
 use orchester_workspace::{
   agents::team_profile::{ConnectionChoice, TeamProfileSheet},
+  messages::Message,
   sharing::team::TeamConfiguration,
 };
 
@@ -38,12 +41,13 @@ use super::{
   actions::Actions,
   archive, member,
   model::{Entry, Listing},
-  panel, secret,
+  panel, secret, words,
 };
 use crate::{
   navigation::Navigation,
-  routes::{AccountsView, Route},
+  routes::{AccountsView, HubFilter, HubView, ProjectPage, Route},
   screens::settings::orchester::PersonOnly,
+  services::Services,
   theme::HubSpacing,
   ui::{field::field_error, message::message_text, pressable::Press},
 };
@@ -51,6 +55,12 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub repo_root: PathBuf,
+  pub project: ProjectId,
+  /// The person is an admin of the team, reachable or not: they edit it in place, and what they typed stays while the
+  /// server is lost.
+  pub admin: bool,
+  /// Why the team server cannot be reached now; Save waits for it.
+  pub unreached: Option<Message>,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
@@ -60,9 +70,6 @@ pub(super) struct Props {
   pub sheet: TeamProfileSheet,
 }
 impl DevtoolsInspectable for Props {}
-
-/// The id the person-only check of a fix is made under.
-const FIX: &str = "team-hub-fix";
 
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<ProfilePanel>(&format!("team-hub-profile-{}", props.entry.id), props)
@@ -81,6 +88,8 @@ struct ProfilePanel {
   actions: Actions,
   secret: secret::Entry,
   person: PersonOnly,
+  /// An admin's edit of what the team holds of it.
+  edit: Option<edit::ProfileEdit>,
 }
 
 impl Component for ProfilePanel {
@@ -96,6 +105,13 @@ impl Component for ProfilePanel {
       actions: Actions::new(ctx, &props.repo_root),
       secret: secret::Entry::new(ctx),
       person: PersonOnly::new(ctx),
+      edit: (props.admin && props.sheet.edit.is_some()).then(|| {
+        edit::ProfileEdit::new(
+          ctx,
+          (props.repo_root.clone(), props.project, props.entry.id),
+          &props.sheet,
+        )
+      }),
     };
     panel.watch_pick(ctx, props.entry.id);
     panel.secret.follow_save(ctx, &panel.actions.add_value);
@@ -121,6 +137,7 @@ impl Component for ProfilePanel {
       connection: &connection,
     };
     let head_end = archive::menu(ctx, &props.repo_root, entry, props.team.may_change);
+    let team = self.team_part(ctx, &props);
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -129,14 +146,15 @@ impl Component for ProfilePanel {
       ))
       .spacing(HubSpacing::BodyTop.role())
       .child(panel::head(ctx, entry, head_end))
-      .child(panel::chips(ctx, listing, entry))
-      .with_children(member::lock_line(ctx, &props.team))
-      .child(from_team::section(ctx, sheet))
+      .child(team.chips)
+      .with_children(team.notice)
+      .with_children(member::lock_line(ctx, &props.team).filter(|_| self.edit.is_none()))
+      .with_children(team.sections)
       .child(computer::section(ctx, sheet, &self.chosen))
       .child(ready::section(
         ctx,
         (&ctx.t("team_hub.readiness.title"), &parts),
-        missing.len(),
+        missing.len() + usize::from(fix::archived_named(entry).is_some()),
         (&press, busy),
       ))
       .with_children(self.failure(ctx));
@@ -145,16 +163,13 @@ impl Component for ProfilePanel {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
-    let pinned = missing
-      .first()
-      .and_then(Fix::of)
-      .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy));
-    let under = self.person.reason(ctx, secret::SAVE);
+    let pinned = team
+      .bar
+      .or_else(|| fix::first(entry).map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy)));
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      under,
     );
     Column::new()
       .id("team-hub-panel")
@@ -184,6 +199,44 @@ fn chosen_connection<'a>(chosen: &str, connections: &'a [ConnectionChoice]) -> O
 }
 
 impl ProfilePanel {
+  /// What the team holds of it: an admin's edit (A26), else the plain *From the team*.
+  fn team_part(&self, ctx: &mut Ctx, props: &Props) -> TeamPart {
+    let config = Services::of(ctx)
+      .workspace
+      .team_read(&props.repo_root)
+      .config()
+      .cloned();
+    let drawn = self
+      .edit
+      .as_ref()
+      .and_then(|edit| edit.draw(ctx, (&props.sheet, config.as_deref()), props.unreached.as_ref()));
+    let Some(edit::Drawn { parts, sections }) = drawn else {
+      return TeamPart {
+        chips: panel::chips(ctx, &props.listing, &props.entry),
+        notice: None,
+        sections: role_read::section(ctx, &props.sheet)
+          .into_iter()
+          .chain([from_team::section(ctx, &props.sheet, super::rows::FromTeam::Shared).into()])
+          .collect(),
+        bar: None,
+      };
+    };
+    let badges = parts
+      .chip
+      .into_iter()
+      .chain([words::chip(ctx, &props.listing, &props.entry)])
+      .collect();
+    // The fix of what this computer lacks stays pinned while nothing is edited; Save's bar takes its place once
+    // something is.
+    let fix = fix::first(&props.entry);
+    TeamPart {
+      chips: panel::chips_of(ctx, &props.entry, badges, None),
+      notice: parts.notice,
+      sections,
+      bar: (parts.holds || fix.is_none()).then_some(parts.bar),
+    }
+  }
+
   /// Once a connection is kept, choosing another in the select keeps that one (as *Use* does, and as the MCP tool
   /// does for automation); before, the select only chooses and *Use* keeps it. A pick that failed puts the select
   /// back on the one kept.
@@ -232,13 +285,17 @@ impl ProfilePanel {
     let person = self.person.clone();
     let guarded = |action: Arc<dyn Fn() + Send + Sync>| {
       Press::run(move || {
-        if person.allows(FIX) {
+        if person.allows("fix what a team profile needs on this computer") {
           action();
         }
       })
     };
     match fix {
       Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
+      Fix::OpenArchived(resource) => Press::Open(navigation.to(Route::Project(
+        props.project,
+        ProjectPage::hub(HubView::new(HubFilter::Archived, Some(*resource))),
+      ))),
       Fix::UseConnection => {
         let (action, profile, chosen) = (self.actions.pick.clone(), props.entry.id, self.chosen.clone());
         let connections = props.sheet.connections.clone();
@@ -265,12 +322,20 @@ impl ProfilePanel {
     }
   }
 
-  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong
-  /// with a secret's value shows in its dialog.
+  /// Why the last fix did nothing: what the workspace refused with. What went wrong with a secret's value shows in its
+  /// dialog.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    if let Some(reason) = self.actions.refused() {
-      return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
-    }
-    self.person.reason(ctx, FIX)
+    let reason = self.actions.refused()?;
+    Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into())
   }
+}
+
+/// What the panel shows of what the team holds of the profile.
+struct TeamPart {
+  chips: lurq::components::Row,
+  /// What the last Save of an edit was answered, or that the team server cannot be reached while changes wait.
+  notice: Option<Element>,
+  sections: Vec<Element>,
+  /// An edit's Save/Cancel bar, pinned in the place of the fix.
+  bar: Option<Element>,
 }

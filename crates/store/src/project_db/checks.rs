@@ -26,7 +26,9 @@ impl ProjectDb {
     };
     let mut checks = Vec::new();
     for pinned in run.snapshot().tools() {
-      let tool = self.pinned_tool(inputs.as_ref(), *pinned)?;
+      let Some(tool) = self.pinned_tool(inputs.as_ref(), *pinned)? else {
+        continue;
+      };
       let (ToolAction::Command(action), Some(access)) = (tool.action(), tool.access()) else {
         continue;
       };
@@ -61,14 +63,15 @@ impl ProjectDb {
       .ok_or_else(|| corrupt("run check", "a profile the run pinned has no such version"))
   }
 
-  /// Tool version `pinned` as the run's inputs hold it, else as it was published.
-  fn pinned_tool(&self, inputs: Option<&RunInputs>, pinned: PinnedVersion) -> Result<Tool, StoreError> {
+  /// Tool version `pinned` as the run's inputs hold it, else as it was published; `None` for a team run's tool that
+  /// runs no command, which is no check.
+  fn pinned_tool(&self, inputs: Option<&RunInputs>, pinned: PinnedVersion) -> Result<Option<Tool>, StoreError> {
     let missing = || corrupt("run check", "a tool the run pinned has no such version");
     match inputs {
-      Some(inputs) => inputs.tool(pinned).cloned().ok_or_else(missing),
+      Some(inputs) => Ok(inputs.tool(pinned).ok_or_else(missing)?.command_tool()),
       None => self
         .version::<Tool>(pinned.resource, pinned.number)?
-        .map(|version| version.body().clone())
+        .map(|version| Some(version.body().clone()))
         .ok_or_else(missing),
     }
   }

@@ -104,7 +104,7 @@ impl CodeJoin {
       self.person.clone(),
     );
     move || {
-      if run.state().get_untracked().is_pending() || !person.allows(SUBMIT) {
+      if run.state().get_untracked().is_pending() || !person.allows("join a team server with a code") {
         return;
       }
       run.run_if_idle((address.get_untracked(), code.get_untracked()));

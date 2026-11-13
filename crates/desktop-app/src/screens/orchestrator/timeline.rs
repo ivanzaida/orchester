@@ -41,6 +41,7 @@ use super::{
   watching::Live,
 };
 use crate::{
+  screens::pipeline_link::PipelineLinks,
   theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
   ui::{
     chat::{follow::Follow, names::ProjectNames},
@@ -54,6 +55,8 @@ use crate::{
 pub(super) struct TurnEnv {
   pub(super) project: ProjectId,
   pub(super) name: Arc<str>,
+  /// Where a link to one of the project's pipelines opens.
+  pub(super) pipelines: PipelineLinks,
   /// The project's folder, whose data keeps the files attached to the messages.
   pub(super) root: PathBuf,
   /// The name of the connection the Orchestrator runs on, when it has one.
@@ -413,8 +416,12 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
           (line, super::answer::answer(ctx, row))
         }
         _ => {
-          let status = Status::of(wait, row.turn.stands, row.turn.state.as_ref(), &row.turn.answer);
+          let standing = (row.turn.stands, row.turn.request.as_ref());
+          let status = Status::of(wait, standing, row.turn.state.as_ref(), &row.turn.answer);
           let line = super::wait::line(ctx, &id, (wait, row.turn.at, turned), (status, row.env.project));
+          if wait.kind == WaitKind::Approval {
+            return super::wait::approval::opening(ctx, row, (&id, line), status);
+          }
           (line, super::answer::nested(ctx, row))
         }
       }

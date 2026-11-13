@@ -1,4 +1,5 @@
-//! Published and draft pipeline uses, and the versions active runs pinned.
+//! The pipeline steps that use a profile, in each pipeline's latest version (a pipeline holds no draft, D-032), and
+//! the versions active runs pinned.
 use std::sync::Arc;
 
 use orchester_core::{
@@ -17,7 +18,6 @@ pub struct PipelineUse {
   pub pipeline: ResourceId,
   pub name: Arc<str>,
   pub version: u32,
-  pub draft: bool,
   pub position: usize,
   pub step: Arc<str>,
   pub model: Option<ModelId>,
@@ -65,24 +65,14 @@ impl Usage {
       .collect();
     let mut usage = Self::default();
     for resource in db.resources(ResourceKind::Pipeline)? {
-      let latest = db.latest_version::<Pipeline>(resource.id())?;
-      if let Some(version) = &latest {
+      if let Some(version) = db.latest_version::<Pipeline>(resource.id())? {
         usage.steps.extend(pipeline_steps(
           db,
           &resource,
           version.number().get(),
-          false,
           version.body(),
           &running,
         )?);
-      }
-      if let Some(draft) = db.draft::<Pipeline>(resource.id())? {
-        let next = latest
-          .as_ref()
-          .map_or(1, |version| version.number().get().saturating_add(1));
-        usage
-          .steps
-          .extend(pipeline_steps(db, &resource, next, true, draft.body(), &running)?);
       }
     }
     for run in running {
@@ -96,7 +86,6 @@ fn pipeline_steps(
   db: &ProjectDb,
   resource: &Resource,
   version: u32,
-  draft: bool,
   body: &Pipeline,
   running: &[Run],
 ) -> Result<Vec<PipelineUse>, StoreError> {
@@ -114,29 +103,24 @@ fn pipeline_steps(
     };
     let published = db.latest_version::<AgentProfile>(*profile)?;
     let effective = published.as_ref().map(|v| v.body());
-    let count = if draft {
-      0
-    } else {
-      running
-        .iter()
-        .filter(|run| {
-          let pinned = run.snapshot().pipeline();
-          pinned.resource == id
-            && pinned.number.get() == version
-            && executing(run, &step.key)
-            && run
-              .snapshot()
-              .step(&step.key)
-              .is_some_and(|s| matches!(s.executor(),StepExecutor::Agent { profile: p, .. } if p.resource == *profile))
-        })
-        .count()
-    };
+    let count = running
+      .iter()
+      .filter(|run| {
+        let pinned = run.snapshot().pipeline();
+        pinned.resource == id
+          && pinned.number.get() == version
+          && executing(run, &step.key)
+          && run
+            .snapshot()
+            .step(&step.key)
+            .is_some_and(|s| matches!(s.executor(),StepExecutor::Agent { profile: p, .. } if p.resource == *profile))
+      })
+      .count();
     uses.push(PipelineUse {
       profile: *profile,
       pipeline: id,
       name: name.into(),
       version,
-      draft,
       position: index + 1,
       step: step.name.as_str().into(),
       model: model.clone().or_else(|| effective.map(|p| p.model().clone())),

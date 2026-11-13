@@ -17,14 +17,15 @@ use super::{
 };
 use crate::{
   routes::{ProjectPage, ProjectSettingsTab, Route, TaskTab},
+  screens::pipeline_link::PipelineLinks,
   ui::icon::Icon,
 };
 
 /// A place a card opens: its icon, its words and where it leads.
 pub(super) type Opens = (Icon, Arc<str>, Route);
 
-/// The places the card of `view` opens, in project `project`.
-pub(super) fn opens(ctx: &Ctx, (project, _name): (ProjectId, &str), view: &View) -> Vec<Opens> {
+/// The places the card of `view` opens, in project `project`; a pipeline opens as `pipelines` says.
+pub(super) fn opens(ctx: &Ctx, (project, pipelines): (ProjectId, PipelineLinks), view: &View) -> Vec<Opens> {
   let task = view.action.task.as_deref();
   let task_open = |tab| {
     task.and_then(|key| {
@@ -38,7 +39,7 @@ pub(super) fn opens(ctx: &Ctx, (project, _name): (ProjectId, &str), view: &View)
     })
   };
   match view.action.change.as_ref().map(|change| &change.change) {
-    Some(Change::Publish { of, resource, .. }) => publish_opens(ctx, (project, view), (*of, *resource)),
+    Some(Change::Publish { of, resource, .. }) => publish_opens(ctx, ((project, pipelines), view), (*of, *resource)),
     Some(Change::Merge { .. }) if view.phase().waits() => task
       .and_then(|key| facts::task_route(project, key, TaskTab::Changes))
       .map(|route| {
@@ -67,29 +68,38 @@ pub(super) fn opens(ctx: &Ctx, (project, _name): (ProjectId, &str), view: &View)
   }
 }
 
-fn publish_opens(ctx: &Ctx, (project, view): (ProjectId, &View), publication: (Publishing, ResourceId)) -> Vec<Opens> {
-  let route = facts::draft_route(project, publication);
+fn publish_opens(
+  ctx: &Ctx,
+  ((project, pipelines), view): ((ProjectId, PipelineLinks), &View),
+  publication: (Publishing, ResourceId),
+) -> Vec<Opens> {
+  let route = facts::draft_route((project, pipelines), publication);
+  let name = || {
+    view.facts.map_or_else(
+      || {
+        view
+          .action
+          .change
+          .as_ref()
+          .map(|change| change.subject.clone())
+          .unwrap_or_default()
+      },
+      |facts| match facts {
+        read::Facts::Publication(found) => found.name.clone(),
+        read::Facts::Run(_) => String::new(),
+      },
+    )
+  };
+  let open = |route| {
+    (
+      Icon::ArrowUpRight,
+      ctx.t_args("orchestrator.change.publish.open", [("name", name().as_str())]),
+      route,
+    )
+  };
   match view.phase() {
     Phase::Applied | Phase::Done => {
-      let name = view.facts.map_or_else(
-        || {
-          view
-            .action
-            .change
-            .as_ref()
-            .map(|change| change.subject.clone())
-            .unwrap_or_default()
-        },
-        |facts| match facts {
-          read::Facts::Publication(found) => found.name.clone(),
-          read::Facts::Run(_) => String::new(),
-        },
-      );
-      let mut opens = vec![(
-        Icon::ArrowUpRight,
-        ctx.t_args("orchestrator.change.publish.open", [("name", name.as_str())]),
-        route,
-      )];
+      let mut opens = vec![open(route)];
       if view.phase() == Phase::Done {
         opens.push((
           Icon::Settings,
@@ -98,6 +108,10 @@ fn publish_opens(ctx: &Ctx, (project, view): (ProjectId, &View), publication: (P
         ));
       }
       opens
+    }
+    // A pipeline has no draft (D-032): a publication of one kept from before opens the pipeline.
+    Phase::Waits | Phase::Applying | Phase::Dismissed | Phase::Refused(_) if publication.0 == Publishing::Pipeline => {
+      vec![open(route)]
     }
     Phase::Waits | Phase::Applying | Phase::Dismissed | Phase::Refused(_) => {
       vec![(

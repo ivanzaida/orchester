@@ -1,6 +1,6 @@
 ---
 name: work-outside-orchester
-description: How Claude drives any Orchester module to the end outside Orchester's pipelines — Orchester's MCP as the task tracker, at most five Sonnet children at a time (implementers, reviewers, design verifiers, design agents) in five pre-warmed build slots, small tasks verified in batches of four, a module branch, an acceptance gate that takes nothing untested and no unclear UX, and a per-module decisions file the person reviews later. Use when the person says to work a module, its tasks or a board "outside Orchester", to start, continue or resume such a module, or to orchestrate several tasks with child agents. Supersedes the module-specific parts of `team-module-orchestration`.
+description: How Claude drives any Orchester module to the end outside Orchester's pipelines — Orchester's MCP (or a docs tracker when it is down) as the task tracker, at most five children at a time (Opus implementers; Sonnet reviewers, design verifiers and design agents), at most three of them building, in five pre-warmed build slots, small tasks verified in batches of four, a module branch, an acceptance gate that takes nothing untested and no unclear UX, and a per-module decisions file the person reviews later. Use when the person says to work a module, its tasks or a board "outside Orchester", to start, continue or resume such a module, or to orchestrate several tasks with child agents. Supersedes the module-specific parts of `team-module-orchestration`.
 ---
 
 # Working a module outside Orchester
@@ -16,12 +16,16 @@ The non-negotiables:
 3. **No unclear or bad UX is accepted**, whoever proposes it: a child, a brief, or the design itself.
 4. **The person may be away.** You keep going, and every decision or deviation from the design you take yourself goes
    into the module's decisions file with screenshots, for the person to review.
-5. **Never more than five children at a time**, all Sonnet 5.5 with high reasoning.
+5. **Never more than five children at a time, and never more than three of them building.** Implementers of normal
+   tasks are Opus 5.5; reviewers, design verifiers, design agents, research and small tasks' implementers are Sonnet
+   5.5; all with high reasoning ([Spawning a child](#spawning-a-child)).
 6. **Builds start warm.** Children work in five pre-warmed slots whose `target/` is already built, through sccache,
    so a build compiles only what changed instead of taking twenty minutes.
 7. **Small tasks skip the per-task review**: they are verified in batches of four, then the batch goes through
    the implement–review–verify loop as one.
 8. **Finished workspaces are reset or removed.**
+9. **You only orchestrate.** Other work the person hands you meanwhile (a handoff, a fix elsewhere) goes to its own
+   session or its own child, never into this thread between reports: it slows both and competes for the machine.
 
 ## The module's files
 
@@ -37,6 +41,9 @@ Everything of yours lives in `.tmp/orchestrator/<module>/` (git-ignored; `<modul
 | `briefs/ORC-<n>-<role>-<round>.md` | Every brief you sent, verbatim, so a replacement child gets the same. |
 | `coverage.md` | The design-to-task map of [Starting a module](#starting-a-module). |
 | `tracker-pending.md` | Tracker writes waiting while the MCP is down. |
+| `briefs/_rules.md` | The rules every brief opens with ([The implementer's brief](#the-implementers-brief)), written once per module. |
+| `shots/design/` | Every frame of the module's boards, exported once ([Design (Pencil)](#design-pencil)). |
+| `scripts/` of this skill | `tokens.mjs` (a task's token totals) and `tracker.mjs` (the docs tracker's writer), run from here ([The tracker](#the-tracker)). |
 
 Git: the module branch `module/<module>`, your merge checkout `.tmp/worktrees/claude-module-<module>`, the warm slots
 `.tmp/worktrees/claude-slot-1` … `claude-slot-5`. Task branches `claude/orc-<n>-<short-name>`, batch branches
@@ -59,6 +66,19 @@ The database is in WAL mode: copying the `.db` file alone gives stale or torn da
 Refresh the snapshot at every session start. Queue every write you would make in `tracker-pending.md` (tool,
 arguments, why) and apply them in order once the MCP answers; until then the snapshot plus that file is the state.
 Never open `.orchester/orchester.db` for writing.
+
+**When the module has no tasks in Orchester** (the person asked for a docs tracker, or the MCP stays down for the
+whole module): the tracker is `docs/plan/<module>/` on the module branch — `README.md` with one table row per task
+(`| ID | Task | Kind | Depends on | Status | Branch | Tokens |`), the person's decisions and the design frames, and
+one file per task (`<ID>-<name>.md` with `Status:`, `Branch:`, `Tokens:` lines, the goal, the design, *Done when*).
+You keep it with `tracker.mjs` (reads a JSON list of `{id, status, branch, tokens, row}` and rewrites the row and the
+task file's lines) and commit it on the module branch with each merge. Follow-ups a review leaves become numbered items
+of a polish task or a new task file, never lost in a report.
+
+**Tokens per task.** The person wants each task's cost: after its merge, sum the usage of every child that worked on
+it (all rounds, reviews, verifications, merge rounds). `node .claude/skills/work-outside-orchester/scripts/tokens.mjs --skip <your session id> <brief file names…>` finds each child's session
+(`~/.claude*/projects/<repo>/*.jsonl`) by the brief its first message names and adds up input, cache and output
+tokens. Write both to the tracker: *total (out N)* — the total is mostly cache reads, the output is what was written.
 
 **Statuses follow the work:**
 
@@ -113,7 +133,10 @@ has not ended, do not take it; log it and ask the person. Never `run_task` a mod
 
 ## Scheduling
 
-- **Never more than five children at once.** This is a hard cap, not a target to round up. Every role counts:
+- **Never more than five children at once, and at most three building.** This is a hard cap, not a target to round
+  up. A child builds when it runs cargo: implementers, reviewers and design verifiers do; design agents and research
+  usually do not. More than three builds on this machine (16 cores, 32 threads) oversubscribe it: UI tests time out
+  under the load and each timeout costs a re-run. Every role counts:
   implementer, reviewer, design verifier, batch verifier, design agent, research. Before every `delegate_task`,
   count the running children in `STATE.md` and with `task_status`. A child you cancelled counts until the cancel is
   confirmed. Children start no children of their own: every brief forbids the Agent tool, `delegate_task` and
@@ -126,7 +149,7 @@ has not ended, do not take it; log it and ask the person. Never `run_task` a mod
   $env:RUSTC_WRAPPER = "C:\Users\lurkm\AppData\Local\Microsoft\WinGet\Packages\Mozilla.sccache_Microsoft.Winget.Source_8wekyb3d8bbwe\sccache-v0.18.0-x86_64-pc-windows-msvc\sccache.exe"
   $env:SCCACHE_DIR = "E:\sccache"
   $env:SCCACHE_CACHE_SIZE = "30G"
-  $env:CARGO_BUILD_JOBS = "6"    # 32 threads shared by five children
+  $env:CARGO_BUILD_JOBS = "8"    # 32 threads: at most three building children and your own module checks
   ```
 
   Take the values from the project's variables if they changed (`get_project`, or the snapshot's
@@ -136,11 +159,26 @@ has not ended, do not take it; log it and ask the person. Never `run_task` a mod
   clears `RUSTC_WRAPPER` only for processes cargo starts (nested cargo in tests), not for the build itself. If sccache
   fails (`sccache --show-stats` errors, "Access is denied"), the child says so and builds without it rather than
   stopping; you record it in `pipeline.md`.
-- **Disk**: before each new child and each warm-up, check free disk on `H:` and `E:`. Under 100 GB on either, clean
-  up first: finished workspaces, then `target/debug/incremental` of idle slots.
+- **Heavy UI suites run one at a time.** A suite that drives windows and takes minutes (`--test team_qa`, the full
+  `--test pipelines`, `--test agents` without a filter) runs under the machine-wide lock
+  `.tmp/orchestrator/heavy-test.lock`: a child creates the file with its task and pid before the suite and deletes it
+  after; while it exists, another waits. A test that times out is re-run alone before it counts as a failure.
+- **Test tiers.** While it works, an implementer runs only the filters of what it changed. Before its report it runs
+  the brief's suites once. A reviewer re-runs only what the report's claims rely on, plus the check. You run the
+  module's heavy suites once, after the merge. Nobody runs the same suite twice on the same commit.
+- **Disk**: before each new child and each warm-up, check free disk on `H:` and `E:` (`df -h`, never `du` on a
+  `target/`: it takes minutes). Under 100 GB on either, clean up first: finished workspaces, then
+  `target/debug/incremental` of idle slots. Do not wait for that: a slot's `target/` grows past 100 GB in a day of
+  fix rounds, so delete `target/debug/incremental` of a slot every time its task merges and the slot goes idle.
+  Deleting it under a running build only costs that build a retry; a full disk stops every child at once.
 - **Hot files.** Before spawning, list the files each brief will touch (its paths, plus a grep of the code it
-  names). Two live branches never edit the same file: the later task waits for the first to merge, or both go to one
-  child in one checkout. A file both need to split (600-line limit) is split by its own small task, merged first.
+  names), and write an ownership line in each brief ("you own …; do not edit …"). Two live branches never edit the
+  same file — not even "a few lines": the later task waits for the first to merge, or both go to one child in one
+  checkout. A shared file that several tasks must touch (a screen's `render`) is first split by its own small task
+  (one module per feature, e.g. `panel/versions.rs`) and merged, so each task then owns its own file. A locale file or
+  a test binary's `main.rs` module list is the exception: both sides append, and you resolve those conflicts yourself.
+- **The module moved.** After every merge, a live task branch that touches the merged task's area merges the module
+  at its next round (the implementer does it, as the round's first step), not at the end: conflicts stay small.
 - **Dependencies.** A task starts only when everything it depends on is merged into the module.
 - **Master moves.** At every session start, and before merging a task that touches files master changed since the
   module last took it, merge `origin/master` into the module (see [Merging](#merging)).
@@ -162,8 +200,11 @@ keep on the repository's drive. This departs from T3's default isolation on the 
   cargo build -p orchester-app --features perf_profile --example qa_app --example seed
   cargo build -p orchester-runner --features test-agent --bins
   cargo build -p orchester-runner --bin orchester-runner
-  cargo test --workspace --no-run
+  cargo test -p orchester-app --test agents --no-run   # and the other test binaries the module's briefs name
   ```
+
+  Never `cargo test --workspace --no-run`: it links every test binary of the workspace, fills the disk (well over
+  100 GB across five slots), and the module needs few of them.
 
   You run warm-ups yourself, with `run_in_background`, at most two at once. They are not children and do not count
   toward the five. Warm-ups go first at a module's start, and again for an idle slot after the module moved by several
@@ -180,7 +221,8 @@ keep on the repository's drive. This departs from T3's default isolation on the 
   4. `git switch --detach module/<module>`.
 
   Git rewrites only the files that differ, and the rest keep their times, so cargo rebuilds only what changed.
-- **Size**: a slot whose `target/` grows past about 60 GB loses `target/debug/incremental` and is warmed again.
+- **Size**: a slot loses `target/debug/incremental` when its task merges (see Disk above); it stays warm enough,
+  since sccache keeps the dependencies.
 - **No warm slot free** (all five hold tasks, one is broken or being warmed): the next task waits. Never start a
   child in a cold checkout just to fill a place.
 
@@ -189,8 +231,10 @@ keep on the repository's drive. This departs from T3's default isolation on the 
 `delegate_task` with:
 
 - `target: { providerInstanceId: <the Claude provider instance of the account the person runs now, from
-  orchestrator_capabilities>, model: "claude-sonnet-5-5", options: { effort: "high" } }` — never an id copied from an
-  old log;
+  orchestrator_capabilities>, model: <below>, options: { effort: "high" } }` — never an id copied from an old log. The
+  model: `claude-opus-5-5` for the implementer of a normal task (every round of it, and its merge rounds): a first
+  pass that holds saves a whole review–verify–fix round of two to three hours. `claude-sonnet-5-5` for reviewers,
+  design verifiers, design agents, research and small tasks' implementers;
 - `role`: `implementation`, `review`, `design`, `test` or `research`;
 - `isolation: "shared"`. The child starts in the main checkout and moves to its slot itself (below);
 - `title`: `ORC-<n> · <role> · <round> · slot <i>`.
@@ -209,7 +253,14 @@ Then its first git step:
 
 Save the brief to `briefs/` before sending. A child sees nothing of this thread. End the turn after spawning:
 completion wakes you; do not poll. `task_status` only for a child silent far longer than its task should take. Steer
-a running child with `t3_thread_send` `mode: "steer"`. Every review or re-check is a new child.
+a running child with `t3_thread_send` `mode: "steer"`. Every review or re-check is a new child. A fix round or a
+merge round goes to the task's own implementer (`t3_thread_send` to its thread, with a new brief file for the round):
+it knows its code.
+
+**Briefs are templated.** `briefs/_rules.md` holds the rules below once; an implementer's brief is the task's tracker
+text, your context (what is merged, file ownership, decisions, known failures) and those rules. A round-N brief names
+the task's round-1 brief and the rules, and lists only what changed: the findings to fix, the commits since, and what
+to re-check.
 
 ### The implementer's brief
 
@@ -223,7 +274,7 @@ a running child with `t3_thread_send` `mode: "steer"`. Every review or re-check 
    - work only in its slot; never push; never touch master, the main checkout, the installed app or its data;
    - start no agents of its own (no Agent tool, `delegate_task` or workflows);
    - read and follow `AGENTS.md` and the skills `rust-code-quality`, `lurq-ui` (with references), `orchester-ui`;
-   - commit with conventional messages ending in `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`;
+   - commit with conventional messages ending in the Co-Authored-By line of its own model (e.g. `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`);
      never change `version` in `crates/desktop-app/Cargo.toml`;
    - the build environment of [Scheduling](#scheduling), set before every cargo command; every `cargo test` with
      `-p <crate> --test <binary> <filter>`;
@@ -231,6 +282,13 @@ a running child with `t3_thread_send` `mode: "steer"`. Every review or re-check 
      `tools/check-tests-known-failures.txt`, so it reports only new ones;
    - its own screenshots only from a QA copy (`tools/qa-app.ps1 -Name orc-<n> …`), data under `.tmp/qa/orc-<n>/`;
      stops its own processes by pid;
+   - **before its report it runs every suite the brief names, once, and reports each result**: a suite it skipped is
+     a finding in review, and a red suite it did not run sends the task back (a skipped `--test pipelines` once cost
+     a whole round);
+   - **when a tool it needs is unavailable** (Pencil not connected, the app's MCP down), it uses the frames' exports
+     in `shots/design/` and says so; it never guesses a size or a colour;
+   - **the edge cases of its own feature**: for every action it adds, what happens with the neighbours (a step others
+     return to on failure, a member of a parallel group, a running save, an open question) — tested, not assumed;
    - no design verification of its own work;
    - **it tests every state and behaviour it builds. If it cannot test something, it says so plainly with the exact
      reason and what would make it testable — never leaves it out, never replaces the test with a guess;**
@@ -247,13 +305,22 @@ It edits nothing; re-runs the tests the claims rely on and the check; checks the
 AGENTS.md's hard requirements, and the UX gate below. It returns PASS or FAIL with findings ranked blocking, major or
 minor, each with file:line and a concrete failure scenario, and lists anything it could not verify.
 
+### Rounds after the first
+
+The first round of a normal task has a reviewer and a design verifier, as below. A later round has **one** child that
+does both, with one build and one QA copy, unless the round changed only what a person sees (then a design verifier
+alone) or only logic with no visible change (then a reviewer alone). A merge round (the module merged into the task's
+branch) needs no new review when both sides had passed and the implementer reports how each conflict was resolved
+with its suites green; your checks after the merge are its gate.
+
 ### The design verifier's brief
 
 `.claude/skills/design-verification/SKILL.md`, the URI and frame ids as above, how to reach each state (from the
 implementer's report), and: save the Pencil and app screenshots of every compared state as
 `<main checkout>/.tmp/orchestrator/<module>/shots/orc-<n>-<frame id>-{design,app}.png` (an absolute path, not the
 slot's `.tmp`); report every state it could not reach, with
-why; flag UX problems even where the app matches the design.
+why; flag UX problems even where the app matches the design. It hovers and focuses every interactive element it verifies and compares
+the bounds of what is beside it before and after: anything that moves is a major finding, design or not.
 
 ## Small tasks: batches of four
 
@@ -328,7 +395,9 @@ Send work back — or the design to a design agent — when any of these is true
 - jargon, internal ids, raw error codes or developer words in the UI;
 - a dead end (no way forward or back), a silent no-op, a control that looks active and does nothing;
 - a destructive or irreversible action without confirmation or undo; work lost on navigation;
-- layout that jumps or flickers on load, lost focus, a scroll reset, content hidden without a sign;
+- layout that jumps or flickers on load, on hover or on focus — a control that appears on hover takes space reserved
+  for it, it never pushes text aside, even when the design draws the shift; lost focus, a scroll reset, content hidden
+  without a sign;
 - the same thing done differently than elsewhere in the app (tabs, menus, dialogs, chips, empty states);
 - an error with no way out; loading without bones; an empty state that does not explain itself;
 - behaviour that differs from what its label promises.
@@ -419,7 +488,14 @@ edits.
 - The URI is always the main checkout's `crates/desktop-app/design/orchester.pen` as `file:///…`. The first
   `execute` of every design or verification child reads the board by id and stops if it is missing: Pencil answers
   silently from the active tab for a path it has not open, and board names repeat.
-- One design child on a document at a time; you do not edit while one works.
+- One design child on a document at a time; you do not edit while one works. **Check first whether the person is
+  working in Pencil** (`get_app_state`: the boards in view); while they are, ask before a design child edits the live
+  document.
+- **Export the module's frames once**, at its start, into `shots/design/<frame id>.png` with each frame's sizes (a
+  condensed `Get` of the frame to the depth a verifier needs, as JSON beside the PNG); again for a frame that changes.
+  A design verifier compares with the live document when Pencil answers and with these exports when it does not, and
+  says which it used. Children often find the Pencil MCP not connected (`transport not connected to app`) while yours
+  is.
 - `save` only when the person allowed it for this session. Otherwise the design child exports a PNG of every frame
   it changes into `shots/` and reports node ids; after a crash, check which ids survived and redraw from the exports.
 - Never revert the person's unsaved or uncommitted edits in the document; never commit the `.pen`.

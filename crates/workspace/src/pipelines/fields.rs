@@ -4,6 +4,7 @@
 use std::num::NonZeroU32;
 
 use orchester_core::{
+  connection::AgentProvider,
   id::ResourceId,
   name::Name,
   permission::StepPermissions,
@@ -67,6 +68,95 @@ impl Executor {
       (Self::Unset, StepKind::Tool { .. }) => StepKind::Tool { tool: None },
     };
   }
+
+  /// [`Self::apply`], keeping the step's model override only while the step runs on the CLI it was set for: a model
+  /// one CLI knows means nothing to another. `from` is the CLI of the profile that ran the step and `to` that of the
+  /// one that runs it now, each `None` when it is not known (no profile, or one not published here): an override is
+  /// not dropped on a guess. A tool runs no model, so the override goes with a tool too. Returns the override dropped.
+  pub fn apply_on(
+    self,
+    step: &mut Step,
+    (from, to): (Option<AgentProvider>, Option<AgentProvider>),
+  ) -> Option<ModelId> {
+    let before = ModelChoice::of(step).0;
+    self.apply(step);
+    let elsewhere = matches!(self, Self::Tool(_)) || matches!((from, to), (Some(from), Some(to)) if from != to);
+    let dropped = before.filter(|_| elsewhere)?;
+    ModelChoice(None).apply(step);
+    Some(dropped)
+  }
+
+  /// Runs the step of an edit with this executor, as the Agent picker's choice does, on CLI `to`: [`Self::apply_on`]
+  /// read against the CLI the step's override is for now, the last known CLI the edit passed through (`path`, which
+  /// starts from the CLI the step started on, `started`'s) or, before any, the one it started on; so a choice whose CLI
+  /// is not known (no connection) never lets the override reach another CLI after it, and an override set on another
+  /// CLI than the one the step started on is read against that CLI. Then [`take_back_override`]; then `path` takes
+  /// `to` when it is known. Returns the override dropped.
+  pub fn apply_through(
+    self,
+    step: &mut Step,
+    started: Option<&(Step, Option<AgentProvider>)>,
+    (path, to): (&mut KnownCli, Option<AgentProvider>),
+  ) -> Option<ModelId> {
+    let was_for = started.and_then(|(_, cli)| *cli);
+    let dropped = self.apply_on(step, (path.get().or(was_for), to));
+    if let Some((started, was_for)) = started {
+      take_back_override(step, started, (*was_for, to));
+    }
+    path.passed(to);
+    dropped
+  }
+}
+
+/// The last CLI a step ran on in an edit that is known, which its model override is read against when the CLI it
+/// started on is not known: a choice whose CLI is not known leaves it as it was.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KnownCli(Option<AgentProvider>);
+
+impl KnownCli {
+  pub const fn new(cli: Option<AgentProvider>) -> Self {
+    Self(cli)
+  }
+
+  pub const fn get(self) -> Option<AgentProvider> {
+    self.0
+  }
+
+  /// The edit passed through a choice on `cli`, which is remembered when it is known.
+  pub const fn passed(&mut self, cli: Option<AgentProvider>) {
+    if cli.is_some() {
+      self.0 = cli;
+    }
+  }
+}
+
+/// The model override the step had when the edit began (`started`) and `step` no longer has, now that it runs something
+/// else (a profile on another CLI or a tool, [`Executor::apply_on`]); `None` when it kept it, never had one, or still
+/// runs what it started with.
+pub fn dropped_override(started: &Step, step: &Step) -> Option<ModelId> {
+  if Executor::of(step) == Executor::of(started) || ModelChoice::of(step).0.is_some() {
+    return None;
+  }
+  ModelChoice::of(started).0
+}
+
+/// Puts the override the step started with (`started`) back on `step` when `step` runs on the CLI it was set for again
+/// (`runs_on` is `was_for`, both known) and has none of its own: choosing another CLI dropped it, choosing its CLI
+/// again takes it back, so a stored override is not lost by a choice taken back. Returns whether it did.
+pub fn take_back_override(
+  step: &mut Step,
+  started: &Step,
+  (was_for, runs_on): (Option<AgentProvider>, Option<AgentProvider>),
+) -> bool {
+  let own_cli = was_for.is_some() && was_for == runs_on;
+  let Some(model) = ModelChoice::of(started).0.filter(|_| own_cli) else {
+    return false;
+  };
+  if !matches!(step.kind, StepKind::Agent { model: None, .. }) {
+    return false;
+  }
+  ModelChoice(Some(model)).apply(step);
+  true
 }
 
 /// The step's model override, or none to use the profile's model.

@@ -1,8 +1,10 @@
 # PV2-11 · Versions list, a version read-only, Restore
 
-- **Status:** blocked (PV2-10)
+- **Status:** done (2026-11-11; review 2 PASS, design verification 2 no blocking/major against round-1 Pencil captures; merged with PV2-07 in `8c6213b96`, into the module `a3f14fb18`; follow-ups in PV2-17 items 20–23)
 - **Kind:** UI
 - **Depends on:** PV2-10
+- **Branch:** `claude/pv2-11-versions` (`0070c38c5` … `8c6213b96`)
+- **Tokens:** 97.4M (out 261k) across 2 implementation rounds and a merge, 2 reviews, 2 design verifications
 
 ## Goal
 

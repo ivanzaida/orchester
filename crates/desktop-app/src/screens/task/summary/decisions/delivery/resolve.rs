@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use lurq::{
   app::{
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
@@ -31,6 +30,7 @@ use super::{
   rows::{Look, Stage, check_row},
 };
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   services::Services,
   theme::{DeliverySpacing, DeliveryText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
@@ -357,10 +357,10 @@ fn actions(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>)
   let open_editor = match Services::of(ctx).editor {
     Some(editor) => {
       let (folder, files) = (worktree.to_path_buf(), conflicted(view));
+      let gate = ctx.use_context::<InputGate>();
       editor_button.on_click(move || {
-        // Window input from an MCP client starts only an editor a person named for this.
-        if is_synthetic_input() && !editor.named() {
-          tracing::warn!("synthetic input asked to open an editor no person named; not opened");
+        // Window input from an MCP client starts only an editor a person named for this; else it is refused to it.
+        if !editor.named() && !persons_press(gate.as_ref(), "open the system's default editor on a worktree") {
           return;
         }
         let (editor, files) = (editor.clone(), files.clone());

@@ -22,6 +22,7 @@ use orchester_workspace::{
 };
 
 use super::{
+  fill::{self, Tone},
   member,
   model::{Entry, Listing},
   words,
@@ -44,8 +45,29 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
     .child(head(ctx, entry, None))
     .child(chips(ctx, listing, entry))
     .with_children(member::lock_line(ctx, shown.team))
-    .with_children(readiness(ctx, listing, entry));
+    .with_children(readiness(ctx, listing, entry))
+    .with_children(undecided(ctx, entry));
   frame(entry, body, None).into()
+}
+
+/// *Ready here?* of a resource nobody can tell is ready here: why it cannot be told, so the panel never stands empty
+/// under its chips.
+fn undecided(ctx: &Ctx, entry: &Entry) -> Option<Column> {
+  let Some(ReadinessStanding::Undecided(why)) = &entry.standing else {
+    return None;
+  };
+  Some(
+    Column::new()
+      .id("team-hub-readiness")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .child(Text::new(&ctx.t("team_hub.readiness.title")).variant(HubText::PanelLabel.role()))
+      .child(fill::note(
+        "team-hub-undecided",
+        Tone::Warning,
+        &words::why_undecided(ctx, why),
+      )),
+  )
 }
 
 /// The column a panel's sections stand in, 24 from its sides and 20 apart.
@@ -100,6 +122,18 @@ pub(in crate::screens) fn head_named(
   (kind, version): (String, Option<String>),
   end: Option<Element>,
 ) -> Row {
+  let title = Text::new(name)
+    .id("team-hub-panel-title")
+    .variant(HubText::PanelTitle.role());
+  head_titled(title.into(), (kind, version), end)
+}
+
+/// [`head_named`] with `title` in the place of the name's text, for a head that lets the name be edited in place.
+pub(in crate::screens) fn head_titled(
+  title: Element,
+  (kind, version): (String, Option<String>),
+  end: Option<Element>,
+) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -126,28 +160,9 @@ pub(in crate::screens) fn head_named(
         .min_width(Dimension::Px(0.0))
         .spacing(SpacingSize::Xs)
         .child(where_)
-        .child(
-          Text::new(name)
-            .id("team-hub-panel-title")
-            .variant(HubText::PanelTitle.role()),
-        ),
+        .child(title),
     )
     .with_children(end)
-}
-
-/// What a head puts at its end: `edit`, then the … menu `more` an admin has, 8 apart.
-pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<Element> {
-  match (edit, more) {
-    (Some(edit), Some(more)) => Some(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(edit)
-        .child(more)
-        .into(),
-    ),
-    (edit, more) => edit.or(more),
-  }
 }
 
 pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
@@ -194,6 +209,16 @@ pub(super) fn chips_of(ctx: &Ctx, entry: &Entry, badges: Vec<(Arc<str>, BadgeTon
         .min_width(Dimension::Px(0.0))
         .text_overflow(TextOverflow::Elipsis)
     }))
+}
+
+/// *given by 5 profiles*: how many profiles give their agents an instruction (A4 `IaFyu`, A27 `N00xd`); nothing when no
+/// profile does. `one` and `other` are the keys of its words for one profile and for more.
+pub(in crate::screens) fn given_by(ctx: &Ctx, (one, other): (&str, &str), count: usize) -> Option<Arc<str>> {
+  match count {
+    0 => None,
+    1 => Some(ctx.t(one)),
+    _ => Some(ctx.t_args(other, [("count", count.to_string())])),
+  }
 }
 
 /// *used by Builder, Reviewer*: who uses the resource; nothing when no profile does.

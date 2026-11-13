@@ -303,10 +303,11 @@ fn orchestrator_unwatch_refuses_synthetic_enter_and_keeps_the_badge() {
   pick(&mut screen);
 
   with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
-  let problem = "orchestrator-watching-problem";
-  screen.until("the person-only notice", |screen| {
-    screen.exists(problem) && screen.text(problem).contains("Only a person stops watching")
-  });
+  assert!(screen.window.refused_press().is_some(), "refused to the client");
+  assert!(
+    !screen.exists("orchestrator-watching-problem"),
+    "the chat says nothing of it"
+  );
   assert_eq!(led(&screen, here).len(), 3, "synthetic input stops nothing");
   assert_eq!(
     badge_words(&mut screen, BADGE),

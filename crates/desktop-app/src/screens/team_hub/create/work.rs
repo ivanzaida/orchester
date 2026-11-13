@@ -14,7 +14,7 @@ use lurq::app::{
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
-  resource::{AgentProfile, Instruction, ResourceKind, Skill, Tool},
+  resource::{AgentProfile, Instruction, ResourceKind, Skill, TeamAgentProfile, TeamTool, Tool},
   secret::SecretVault,
   time::Timestamp,
 };
@@ -58,12 +58,16 @@ impl Eq for LocalMcp {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Make {
   Profile(Box<AgentProfile>),
+  /// A team project's profile, as the team holds it.
+  TeamProfile(Box<TeamAgentProfile>),
   McpServer(Box<NewTeamMcpServer>),
   /// The form of a local project's MCP server, which has no versions.
   LocalMcpServer(Box<LocalMcp>),
   Instruction(Name, Box<Instruction>),
   Skill(String, Box<Skill>),
   Tool(Name, Box<Tool>),
+  /// A team project's tool, as the team holds it: its secret by name.
+  TeamTool(Name, Box<TeamTool>),
 }
 
 impl Make {
@@ -71,9 +75,10 @@ impl Make {
   fn name(&self) -> String {
     match self {
       Self::Profile(profile) => profile.role().as_str().to_owned(),
+      Self::TeamProfile(profile) => profile.role().as_str().to_owned(),
       Self::McpServer(input) => input.name.clone(),
       Self::LocalMcpServer(local) => local.draft.name.as_str().to_owned(),
-      Self::Instruction(name, _) | Self::Tool(name, _) => name.as_str().to_owned(),
+      Self::Instruction(name, _) | Self::Tool(name, _) | Self::TeamTool(name, _) => name.as_str().to_owned(),
       Self::Skill(name, _) => name.clone(),
     }
   }
@@ -81,11 +86,11 @@ impl Make {
   /// The screens that show what it makes.
   const fn outside(&self) -> Outside {
     match self {
-      Self::Profile(_) => Outside::Profiles,
+      Self::Profile(_) | Self::TeamProfile(_) => Outside::Profiles,
       Self::McpServer(_) | Self::LocalMcpServer(_) => Outside::Connections,
       Self::Instruction(..) => Outside::Instructions,
       Self::Skill(..) => Outside::Skills,
-      Self::Tool(..) => Outside::Tools,
+      Self::Tool(..) | Self::TeamTool(..) => Outside::Tools,
     }
   }
 
@@ -94,23 +99,26 @@ impl Make {
   pub(super) const fn needs_a_person(&self) -> bool {
     matches!(
       self,
-      Self::Profile(_) | Self::McpServer(_) | Self::LocalMcpServer(_) | Self::Tool(..)
+      Self::Profile(_)
+        | Self::TeamProfile(_)
+        | Self::McpServer(_)
+        | Self::LocalMcpServer(_)
+        | Self::Tool(..)
+        | Self::TeamTool(..)
     )
   }
 }
 
-/// A press of Create: what to make, and whether a person (or automation they let decide) pressed it.
+/// A press of Create: what to make. What [`Make::needs_a_person`] is pressed by a person, or by automation they let
+/// change agent permissions; any other press of it was refused to the automation that made it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Press {
   pub make: Make,
-  pub decided: bool,
 }
 
 /// Why nothing was made.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Failed {
-  /// It adds to what agents may do, which only a person decides, and a person did not press Create.
-  PersonOnly,
   /// The team server, or this computer, which knows the team cannot take it, refused it, with the name it was made
   /// under.
   Refused(Refusal, String),
@@ -160,9 +168,6 @@ pub(super) fn work(ctx: &mut Ctx, (root, project, mode): (PathBuf, ProjectId, Mo
 /// The new team resource `request` makes, in the team's form: nothing of it is kept here. Refused while the team's
 /// configuration was not read this session, which a team MCP server's name is checked against.
 fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<NewTeamResource, Failed> {
-  if request.make.needs_a_person() && !request.decided {
-    return Err(Failed::PersonOnly);
-  }
   let name = request.make.name();
   let refused = |error: EditRefused| match error {
     EditRefused::Refused(refusal) => Failed::Refused(refusal, name.clone()),
@@ -175,10 +180,10 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
     .ok_or_else(|| Failed::Said(Message::new("teamConfig.reading")))?;
   let id = ResourceId::generate();
   let (kind, name, publication) = match request.make {
-    Make::Profile(profile) => (
+    Make::TeamProfile(profile) => (
       ResourceKind::AgentProfile,
       profile.role().clone(),
-      Publication::of_profile(root, id, &profile, &config).map_err(refused)?,
+      Publication::of_body(root, id, &*profile).map_err(refused)?,
     ),
     Make::McpServer(input) => {
       let server =
@@ -200,12 +205,15 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
       Name::new(&name).map_err(|error| Failed::Said(name_error(&error)))?,
       Publication::of_body(root, id, &*body).map_err(refused)?,
     ),
-    Make::Tool(name, tool) => (
+    Make::TeamTool(name, tool) => (
       ResourceKind::Tool,
       name,
-      Publication::of_body(root, id, &*tool).map_err(refused)?,
+      Publication::of_team_tool(&tool).map_err(refused)?,
     ),
-    Make::LocalMcpServer(_) => return Err(Failed::Said(Message::new("team_new.localOnly"))),
+    // A team project's form makes the team's form of a profile and a tool.
+    Make::LocalMcpServer(_) | Make::Profile(_) | Make::Tool(..) => {
+      return Err(Failed::Said(Message::new("team_new.localOnly")));
+    }
   };
   Ok(NewTeamResource {
     id,
@@ -217,9 +225,6 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
 
 /// Makes the resource as its first version in a local project.
 fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Archivable, Failed> {
-  if request.make.needs_a_person() && !request.decided {
-    return Err(Failed::PersonOnly);
-  }
   let said = Failed::Said;
   let resource = match request.make {
     // The person's press is what the new server's widening asks for.
@@ -229,9 +234,12 @@ fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Archi
         .map(Archivable::McpServer)
         .map_err(|error| said(error.message()));
     }
-    Make::Profile(profile) => create_decided(root, *profile, request.decided).map_err(said),
-    // A team MCP server is the team's alone: a local project's form makes a local one.
-    Make::McpServer(_) => return Err(said(Message::new("team_new.teamOnly"))),
+    // Create was pressed by a person, or by automation they let change agent permissions ([`Press`]).
+    Make::Profile(profile) => create_decided(root, *profile, true).map_err(said),
+    // A team MCP server and a team profile are the team's alone: a local project's form makes local ones.
+    Make::McpServer(_) | Make::TeamProfile(_) | Make::TeamTool(..) => {
+      return Err(said(Message::new("team_new.teamOnly")));
+    }
     Make::Instruction(name, body) => instructions::create_in(root, name, &body)
       .map(|entry| entry.id)
       .map_err(|error| said(error.message())),

@@ -158,8 +158,10 @@ pub async fn get_project(services: &Services, args: InProject) -> Result<Value, 
       "github": db.repository_link()?.map(|link| link.repo().to_string()),
       "connections": db.connections()?.len(),
       "profiles": resources(ResourceKind::AgentProfile)?,
-      // The pipelines the project offers: a team project's own local ones are hidden.
-      "pipelines": crate::pipelines::library::library(&db)?.len(),
+      // The pipelines the project offers: a team project's are the team's, read from memory, and its own local ones are
+      // hidden. While the team's configuration is being read or cannot be read the count is not known (null): the
+      // project is still described, so that error is not this tool's to fail with.
+      "pipelines": services.workspace().pipeline_library(&open.repo_root).ok().map(|listed| listed.len()),
       "instructions": resources(ResourceKind::Instruction)?,
     });
     if let (Value::Object(project), Value::Object(settings)) = (&mut project, settings) {

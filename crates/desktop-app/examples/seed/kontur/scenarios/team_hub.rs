@@ -3,14 +3,18 @@
 //! (`Agents · v2` `acFkz`, A1–A6, ORC-831). MCP servers: `pencil-design` is on here without a program path, `github`
 //! on here with its secret header `GITHUB_TOKEN` without a value, `figma` on here and ready, `playwright` switched off
 //! here and `linear` nobody decided on. Profiles: Builder chooses `github` and `pencil-design`, Reviewer nothing.
-//! Tools: `cargo-check`, a command, is ready; `sentry-issues`, an HTTP request with a project secret by id, cannot be
-//! told ready (A6 `u9Hcc`); `orders-report`, a database query, names its secret by id the same way. Builder uses
+//! Tools: `cargo-check`, a command, is ready; `sentry-issues`, an HTTP request in the team's form, sends the team
+//! secret `SENTRY_TOKEN`, which has no value here (A6 `u9Hcc`); `orders-report`, a database query published before the
+//! team's form, names its secret by an id of its publisher's computer, so it cannot be told ready. Builder uses
 //! `Project rules`, `review-diff` (which has a reference file) and `cargo-check`. Instructions and skills are always
 //! ready. The old catalogue's own resources are local, so the team project does not show them.
 //!
 //! The computer has one Claude Code connection (`Claude · Kontur`), so Builder runs on it without asking
 //! (`Agents · Profile` C1 `NDZXC`). `team-hub-pick` adds a second one, `Claude · Home`, so Builder asks which runs it
 //! (C2 `WPvZx`); `team-hub-no-connection` removes the Claude Code connection, so Builder says what to add (C3 `QOBF2`).
+//!
+//! `team-hub-down` is the team of `team-hub` whose server stops answering before this computer read anything of it, so
+//! the hub says it cannot reach the team server (`A25` `Zhcif`).
 //!
 //! `team-hub-member` is the same team for ivan, a member who is not an admin (`Agents · … · member` M1–M6, ORC-839).
 //! Reach the frames in the Agents hub: M1 `oPF2o` Profiles › Reviewer with `team-hub-member-pick` (two Claude Code
@@ -31,9 +35,9 @@ use orchester_core::{
   name::Name,
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    DatabaseQuery, DeniedBehavior, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope,
-    ModelId, PromptText, ProviderSettings, ResourceBody, ResourceKind, Skill, SkillFile, SkillFilePath, Slug,
-    TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VersionNumber,
+    DatabaseQuery, DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction,
+    InstructionScope, ModelId, PromptText, ProviderSettings, RequestTarget, ResourceBody, ResourceKind, Skill,
+    SkillFile, SkillFilePath, Slug, TeamAgentProfile, TeamMcpServer, TeamTool, Tool, ToolAction, VersionNumber,
   },
   secret::SecretName,
   sharing::{SharedPerson, TaskRevision},
@@ -68,6 +72,14 @@ pub fn pick(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// still his.
 pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
   member_with(kontur, Kinds::ALL)
+}
+
+/// [`member`] on the project as another scenario already seeded it (`team-memory-member`).
+pub fn member_on_project(kontur: &mut Kontur) -> Result<(), SeedError> {
+  shared_config::member_over_project(kontur, |kontur| {
+    resources_with(kontur, &Mcp::default(), Kinds::ALL).map(|_| ())
+  })?;
+  super::team::served(kontur, true)
 }
 
 fn member_with(kontur: &mut Kontur, kinds: Kinds) -> Result<(), SeedError> {
@@ -110,7 +122,13 @@ pub fn member_picked(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// `team-hub-member-no-skills`: [`member`] where the team has published no skill, so the Skills filter holds the one
 /// empty state that says an admin adds them (M5 `ITxzr`).
 pub fn member_no_skills(kontur: &mut Kontur) -> Result<(), SeedError> {
-  member_with(kontur, Kinds { skills: false })
+  member_with(
+    kontur,
+    Kinds {
+      skills: false,
+      ..Kinds::ALL
+    },
+  )
 }
 
 /// A second Claude Code connection, `Claude · Home`.
@@ -154,6 +172,21 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed_with(kontur, &Mcp::default()).map(|_| ())
 }
 
+/// `team-hub-down`: [`seed`], the QA app's team server not answering once Kontur joined it, before anything of the
+/// team's configuration was read this session (A25 `Zhcif`).
+pub fn down(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  super::team::down(kontur)
+}
+
+/// [`seed`] on a team that also holds the catalogue, made the team's before the team form: `picker-readiness-team`
+/// shows the catalogue's pipelines beside the team's, which this computer cannot tell are ready.
+pub(super) fn seed_beside_catalogue(kontur: &mut Kontur) -> Result<(), SeedError> {
+  shared_config::admin(kontur)?;
+  resources_with(kontur, &Mcp::default(), Kinds::ALL)?;
+  super::team::served(kontur, false)
+}
+
 /// How the program MCP servers of the scenario differ (`team-hub-mcp-*`, C4–C8 in `acFkz`): the variables of
 /// `pencil-design`, and whether `figma` runs a program (`npx`) instead of being reached at an address.
 #[derive(Default)]
@@ -164,7 +197,7 @@ pub(super) struct Mcp {
 
 /// [`seed`], which also names the id of each MCP server it made.
 pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
-  shared_config::admin(kontur)?;
+  shared_config::admin_alone(kontur)?;
   let made = resources_with(kontur, mcp, Kinds::ALL)?;
   // A QA copy reads the team's configuration from a stand-in team server that holds what was cached here.
   super::team::served(kontur, false)?;
@@ -175,16 +208,30 @@ pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'sta
 #[derive(Clone, Copy)]
 struct Kinds {
   skills: bool,
+  /// `orders-report` is in the team's form, naming `ORDERS_DB`, rather than by the id of a secret (A35 `YBG4T`).
+  database_by_name: bool,
 }
 
 impl Kinds {
-  const ALL: Self = Self { skills: true };
+  const ALL: Self = Self {
+    skills: true,
+    database_by_name: false,
+  };
 }
 
 /// The team's servers, profiles, tools, instructions and skills of [`seed`], without the link to a team server and its
 /// members, which a QA copy that joins a stand-in server makes itself.
 pub(super) fn resources(kontur: &mut Kontur) -> Result<(), SeedError> {
   resources_with(kontur, &Mcp::default(), Kinds::ALL).map(|_| ())
+}
+
+/// [`resources`] with `orders-report` in the team's form, naming the team secret `ORDERS_DB` (A35 `YBG4T`).
+pub(super) fn resources_by_name(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let kinds = Kinds {
+    database_by_name: true,
+    ..Kinds::ALL
+  };
+  resources_with(kontur, &Mcp::default(), kinds).map(|_| ())
 }
 
 /// [`resources`] with the MCP servers' differences `mcp`.
@@ -274,43 +321,42 @@ fn plain_resources(kontur: &mut Kontur, kinds: Kinds) -> Result<Plain, SeedError
     "cargo-check",
     &Tool::command("Runs cargo check on the worktree.", command),
   )?;
-  let request = HttpRequest::new(
-    HttpMethod::Post,
-    "https://sentry.example.test/api/issues".into(),
-    "sentry.example.test".into(),
-    HttpAuth::Bearer {
-      secret: SecretId::generate(),
-    },
-    BTreeMap::new(),
-    BTreeMap::new(),
-  )
-  .map_err(invalid)?;
-  let policy = AccessPolicy::new(
-    BTreeMap::new(),
-    Name::new("Production").map_err(invalid)?,
-    ApprovalMode::EveryCall,
-    AccessWindow::UntilStepEnds,
-    DeniedBehavior::AwaitChangedPlan,
-  )
-  .map_err(invalid)?;
-  let tool = Tool::new("", ToolAction::Http(request), Some(policy)).map_err(invalid)?;
-  team_resource(kontur, "sentry-issues", &tool)?;
+  sentry_issues(kontur)?;
+  orders_report(kontur, kinds)?;
+  Ok(Plain { rules, review, cargo })
+}
+
+/// `orders-report`, a database query: by the id of a secret, as published before the team's form, or in the team's
+/// form naming `ORDERS_DB`, whose values are Staging's and whose access lasts 15 minutes.
+fn orders_report(kontur: &mut Kontur, kinds: Kinds) -> Result<ResourceId, SeedError> {
   let database = DatabaseQuery::new(
     SecretId::generate(),
     "select status, count(*) from orders group by status".into(),
   )
   .map_err(invalid)?;
+  let (environment, approval, window) = if kinds.database_by_name {
+    (
+      "Staging",
+      ApprovalMode::OncePerRun,
+      AccessWindow::Minutes(15.try_into().map_err(invalid)?),
+    )
+  } else {
+    ("Production", ApprovalMode::Never, AccessWindow::UntilStepEnds)
+  };
   let policy = AccessPolicy::new(
     BTreeMap::new(),
-    Name::new("Production").map_err(invalid)?,
-    ApprovalMode::Never,
-    AccessWindow::UntilStepEnds,
+    Name::new(environment).map_err(invalid)?,
+    approval,
+    window,
     DeniedBehavior::FailStep,
   )
   .map_err(invalid)?;
   let report = Tool::new("Orders per status.", ToolAction::DatabaseQuery(database), Some(policy)).map_err(invalid)?;
-  team_resource(kontur, "orders-report", &report)?;
-  Ok(Plain { rules, review, cargo })
+  if kinds.database_by_name {
+    team_tool(kontur, "orders-report", &report, "ORDERS_DB")
+  } else {
+    team_resource(kontur, "orders-report", &report)
+  }
 }
 
 /// The skill `review-diff`, which has a reference file.
@@ -377,6 +423,21 @@ pub(super) fn team_resource<B: ResourceBody + Clone>(
   Ok(resource.id())
 }
 
+/// The team's tool `name` at v1 in the team's form, its secret named `secret`, as the server confirmed it; `local` is
+/// the tool its publisher had, which names that secret by an id of their computer.
+fn team_tool(kontur: &mut Kontur, name: &str, local: &Tool, secret: &str) -> Result<ResourceId, SeedError> {
+  let secret = SecretName::new(secret).map_err(invalid)?;
+  let team = TeamTool::from_local(local, |_| Some(secret)).map_err(invalid)?;
+  let resource = server_resource::<Tool>(kontur, name, name)?;
+  cache(
+    kontur,
+    &resource,
+    serde_json::to_value(&team).map_err(invalid)?,
+    local.clone(),
+  )?;
+  Ok(resource.id())
+}
+
 /// A resource of `B`'s kind as a computer that syncs the team's configuration first has it: with the server's id and no
 /// draft, which a resource made here has until it is published. `cache` then marks it the team's.
 fn server_resource<B: ResourceBody>(
@@ -440,4 +501,33 @@ fn team_server(kontur: &mut Kontur, name: &str, body: Value) -> Result<ResourceI
 
 fn invalid(error: impl std::fmt::Display) -> SeedError {
   SeedError::Invalid(error.to_string())
+}
+
+/// `sentry-issues`, an HTTP request that sends the team secret `SENTRY_TOKEN` as its bearer token and runs without
+/// asking (A6 `u9Hcc`, M6 `yTVeE`).
+fn sentry_issues(kontur: &mut Kontur) -> Result<ResourceId, SeedError> {
+  let request = HttpRequest::new(
+    HttpMethod::Get,
+    "https://sentry.example.test/api/0/projects/acme/kontur/issues/".into(),
+    "sentry.example.test".into(),
+    HttpAuth::Bearer {
+      secret: SecretId::generate(),
+    },
+    BTreeMap::from([(
+      FieldName::new("query").map_err(invalid)?,
+      RequestTarget::Query("query".into()),
+    )]),
+    BTreeMap::new(),
+  )
+  .map_err(invalid)?;
+  let policy = AccessPolicy::new(
+    BTreeMap::new(),
+    Name::new("Production").map_err(invalid)?,
+    ApprovalMode::Never,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::AwaitChangedPlan,
+  )
+  .map_err(invalid)?;
+  let tool = Tool::new("", ToolAction::Http(request), Some(policy)).map_err(invalid)?;
+  team_tool(kontur, "sentry-issues", &tool, "SENTRY_TOKEN")
 }

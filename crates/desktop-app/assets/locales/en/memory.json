@@ -38,6 +38,26 @@
         "rejectedBody": "Proposals you reject are kept here and never given to agents. So are proposals an agent replaced with a newer one before anyone decided."
       }
     },
+    "hub": {
+      "notShared": "This computer's memory of {{project}} · not shared with the team: it is never published, and teammates' agents don't get it.",
+      "thisComputer": "This computer",
+      "pinned": "Pinned",
+      "by": "by {{agent}}",
+      "byAgent": "by an agent",
+      "byYou": "by you",
+      "moreTags": "+{{count}}",
+      "deprecatedTitle": "Deprecated: no agent is given it",
+      "deprecatedBody": "A record you deprecate stops reaching agents and is kept here; you can restore it. Restore makes it active again, as it was.",
+      "source": {
+        "key": "Key",
+        "step": "Step",
+        "eventOne": "1 event",
+        "events": "{{count}} events",
+        "run": "Run",
+        "agent": "Agent profile",
+        "authorKept": "your edit keeps the author"
+      }
+    },
     "settings": {
       "taskMemory": "Task memory",
       "projectMemory": "Project memory",
@@ -48,8 +68,7 @@
       "records": "Records per invocation",
       "recordsUnit": "records",
       "tokens": "Tokens per invocation",
-      "tokensUnit": "tokens",
-      "personOnly": "Only a person changes these settings: input from an MCP client is refused, as they decide what reaches every later agent. Clients can still read this page."
+      "tokensUnit": "tokens"
     },
     "latestHandoff": "Latest · given to every agent",
     "separator": " · ",
@@ -167,7 +186,6 @@
     },
     "filters": {
       "chosen": "{{filter}} · {{value}}",
-      "name": "Filter",
       "type": {
         "name": "Type",
         "all": "All types"
@@ -189,10 +207,7 @@
         "agents": "Agents",
         "people": "People"
       },
-      "tag": {
-        "name": "Tag",
-        "any": "Any tag"
-      }
+      "tag": {}
     },
     "noMatch": {
       "search": "No records match “{{query}}”",
@@ -267,7 +282,6 @@
       "rejectNote": "Rejected proposals are kept and never given.",
       "rejectNoteShort": "Kept, never given or restored.",
       "approveNote": "Your edits are saved with the approval.",
-      "approveNotePage": "Your edits are saved with the approval. Rejected proposals are kept and never given.",
       "saveNote": "Changes reach agents from their next invocation.",
       "cancel": "Cancel",
       "save": "Save record",
@@ -275,9 +289,7 @@
       "record": "Record"
     },
     "page": {
-      "crumb": "Memory",
-      "titleKeyed": "{{kind}} · {{key}}",
-      "sub": "{{status}} · {{meta}}"
+      "titleKeyed": "{{kind}} · {{key}}"
     },
     "row": {
       "key": "key {{key}}",
@@ -309,46 +321,14 @@
       "taskMemory": "Task memory"
     },
     "inspector": {
-      "source": "Author and source",
-      "author": "Author",
-      "agent": "{{agent}} · agent",
-      "person": "You · person",
-      "transcript": "Transcript",
-      "entries": "{{count}} entries",
-      "confidence": "Confidence",
-      "confidenceValue": "{{confidence}} · set by {{agent}}",
-      "conversation": "Conversation",
-      "byYou": "By you · {{time}}",
-      "history": "History",
       "edited": "You edited it · {{time}}",
-      "editedTitle": "You edited it",
       "version": "v{{version}} · superseded {{time}} by this record",
-      "versionTitle": "v{{version}}",
-      "versionSuperseded": "superseded {{time}} by this record",
       "given": "Given to agents",
-      "givenReading": "Reading the invocations…",
-      "givenNone": "No invocation was given it yet.",
       "invocationsOne": "1 invocation",
       "invocations": "{{count}} invocations",
       "tokens": "≈ {{tokens}} tokens",
       "showAll": "Show all {{count}} invocations",
-      "showFewer": "Show the latest only",
-      "proposalSource": "Source",
-      "writtenIn": "Written in {{place}}",
-      "eventsOne": "1 event in {{place}}",
-      "eventsOther": "{{count}} events in {{place}}",
-      "agentConfidence": "Agent's confidence",
-      "confidenceKept": "{{confidence}} · set by {{agent}}; people don't change it",
-      "authorKept": "your edit keeps the author and adds edited by you",
-      "versions": "Versions",
-      "versionNewest": "v{{version}} · superseded {{time}}"
-    },
-    "reason": {
-      "handoff": "latest handoff",
-      "pinned": "pinned",
-      "decision": "decision",
-      "warning": "warning",
-      "match": "match"
+      "showFewer": "Show the latest only"
     },
     "next": {
       "title": "Next agent receives",

@@ -1,7 +1,7 @@
-//! A pipeline's page (`02 · Pipeline` `IsU5u`): the loaded draft under its header and tabs, the Steps tab's flow
-//! and column, the Settings tab, the Versions tab, or a viewed version over the flow; with the questions, problems
-//! and failures in place under the header (`05b` `eCrOM`). The draft saves itself once its fields rest.
-use std::path::PathBuf;
+//! A pipeline's page (`02 · Pipeline` `IsU5u`): the edit of its latest version under its header and tabs, the Steps
+//! tab's flow and column, the Settings tab, the Versions tab, or a viewed version over the flow; with the questions,
+//! problems and failures in place under the header (`05b` `eCrOM`). Nothing saves on its own: a pipeline holds no
+//! draft (D-032), so *Save* publishes the next version.
 
 use lurq::{
   app::{
@@ -14,23 +14,17 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::VersionNumber;
+use orchester_core::resource::{EditProblem, VersionNumber};
 use orchester_workspace::{
   messages,
-  pipelines::{
-    data::OpenedPipeline,
-    problems::problem_view,
-    widening::draft_reasons,
-    write::{Allowed, needs_reload},
-  },
+  pipelines::{data::OpenedPipeline, problems::problem_view, write::needs_reload},
 };
-use parking_lot::Mutex;
 
 use super::{
   actions::Writes,
   parts,
   state::{Editing, State, Tab, View, Views},
-  work::{self, Action, Work},
+  work::{self, Action},
 };
 use crate::{
   navigation::Navigation,
@@ -50,7 +44,7 @@ pub struct EditorProps {
   pub opened: OpenedPipeline,
   /// What the route shows.
   pub view: View,
-  /// The published version the route views, read-only; `None` for the draft.
+  /// The published version the route views, read-only; `None` for the edit.
   pub version: Option<VersionNumber>,
   pub reload: Signal<u64>,
   pub loading: bool,
@@ -65,18 +59,12 @@ impl PartialEq for EditorProps {
   }
 }
 impl DevtoolsInspectable for EditorProps {}
-/// What autosave writes once the fields rest: the body and name, into the project at the path.
-#[derive(Clone, PartialEq)]
-struct Snapshot(Option<(orchester_core::resource::Pipeline, orchester_core::name::Name, PathBuf)>);
-impl DevtoolsInspectable for Snapshot {}
 pub struct Editor {
   state: State,
   action: Action,
   confirm_save: Signal<bool>,
   writing: Signal<bool>,
   leave: crate::navigation::guard::LeaveGuard,
-  /// Whether autosave's rest is followed already; once per editor.
-  followed: Mutex<bool>,
 }
 impl Component for Editor {
   type Props = EditorProps;
@@ -84,7 +72,8 @@ impl Component for Editor {
     let props = ctx.props::<EditorProps>().clone();
     let navigation = Navigation::of(ctx);
     let views = Views::new(navigation.clone(), props.project.open.project.id(), props.opened.id);
-    let state = ctx.signal(Editing::new(props.opened, (views.clone(), props.view)));
+    let editing = Editing::new(props.opened, (views.clone(), props.view));
+    let state = ctx.signal(editing);
     let action = work::action(ctx, props.project.open.project.id());
     follow_writes(ctx, &action, &state);
     let writing = ctx.signal(false);
@@ -99,7 +88,6 @@ impl Component for Editor {
       writing,
       leave,
       confirm_save: ctx.signal(false),
-      followed: Mutex::new(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -114,8 +102,6 @@ impl Component for Editor {
     if self.state.get_untracked().view != props.view {
       self.state.update(|s| s.view = props.view.clone());
     }
-    // First: lurq keeps a component's futures by the order it asks for them.
-    self.autosave(ctx, &props, writing);
     let reading_version = self.follow_version(ctx, &props);
     let opened = self.state.get().opened;
     props.project.feed.pipeline_named(opened.id, &opened.name);
@@ -123,8 +109,8 @@ impl Component for Editor {
     let locked = self.confirm_save.get() || props.loading || reading_version;
     let busy = writing || locked;
     let team = hub::team::of(&props.project);
-    // A team's pipeline is read from the team server and changed there; nothing of it is saved or published here.
-    let may_change = team.is_none();
+    // A team's pipeline is saved by an admin, straight to the team server (D-043); a member reads it.
+    let may_change = hub::team::may_change(team.as_ref());
     let writes = Writes {
       state: self.state.clone(),
       action: self.action.clone(),
@@ -132,18 +118,12 @@ impl Component for Editor {
       asking: self.confirm_save.clone(),
     };
     ctx.provide(super::actions::ColumnWrites(writes.clone()));
-    let buttons = if may_change {
-      (
-        writes.save_button(ctx, &editing, busy),
-        Some(writes.publish_button(ctx, &editing, busy)),
-      )
-    } else {
-      (None, None)
-    };
+    // A member of a shared project does not save the team's pipeline (03); an admin's save goes to the team server.
+    let save = may_change.then(|| writes.save_button(ctx, &editing, busy));
     let head = super::header::header(
       ctx,
       &self.state,
-      buttons,
+      save,
       // While the save question waits, nothing is being saved: the status says the changes are unsaved.
       writing || props.loading || reading_version,
     );
@@ -152,7 +132,7 @@ impl Component for Editor {
       .map(|team| hub::team::line(ctx, "pipeline-team-line", team).into())
       .collect();
     notices.extend(self.notices(ctx, &props, (&writes, writing)));
-    // A team pipeline's page is locked as one being saved is: its fields take no edit.
+    // A member's page is locked as one being saved is: its fields take no edit.
     let content = self.content(ctx, &props, (&writes, (locked || !may_change, busy)));
     let body = Column::new()
       .width(Dimension::Pct(100.0))
@@ -173,7 +153,7 @@ impl Editor {
       .opened
       .imported
       .as_ref()
-      .filter(|imported| imported.shows_result(editing.opened.latest.is_some()))
+      .filter(|imported| imported.shows_result(true))
     {
       notices.push(super::imported::strip(ctx, props.project.open.project.id(), imported));
     }
@@ -187,15 +167,33 @@ impl Editor {
     if self.confirm_save.get() && !super::actions::asks_in_column(&editing) {
       notices.push(writes.save_question(ctx));
     }
-    notices.extend(super::publication::problems(ctx, &self.state));
+    // What blocks saving is for the person who saves: a member of the team is not told to fix it.
+    if hub::team::may_change(hub::team::of(&props.project).as_ref()) {
+      notices.extend(super::publication::problems(ctx, &self.state));
+    }
     notices.extend(self.write_failure(ctx, props));
     notices.extend(errors(ctx, &editing));
     notices
   }
 
-  /// A write that failed, and *Reload saved pipeline* when the saved one changed meanwhile.
+  /// A write that failed, and *Reload saved pipeline* when the saved one changed meanwhile; or a team pipeline's save
+  /// whose new name the team server took and whose steps it did not, which says so.
   fn write_failure(&self, ctx: &Ctx, props: &EditorProps) -> Option<Element> {
-    let error = self.action.state().get().error?;
+    let state = self.action.state().get();
+    let partly = state
+      .data
+      .as_ref()
+      .filter(|_| state.is_fulfilled())
+      .and_then(|stored| stored.steps_not_saved.clone());
+    if let Some(why) = partly {
+      let notice = Notice::new("pipeline-write-error", NoticeTone::Danger, ctx.t("pipelines.error"))
+        .stacked()
+        .flat()
+        .body(message_text(ctx, &why))
+        .part(parts::note(&ctx.t("pipelines.renamedOnly")));
+      return Some(notice.into());
+    }
+    let error = state.error?;
     let notice = Notice::new("pipeline-write-error", NoticeTone::Danger, ctx.t("pipelines.error"))
       .stacked()
       .flat()
@@ -240,8 +238,10 @@ impl Editor {
         },
       );
     }
+    // A member reads the team's pipeline: the flow offers them no step to add.
+    let reader = !hub::team::may_change(hub::team::of(&props.project).as_ref());
     let column = if editing.view == View::Publish {
-      writes.publish_column(ctx, busy)
+      writes.publish_column(ctx)
     } else {
       super::column::column(ctx, &self.state, (locked, busy))
     };
@@ -249,22 +249,22 @@ impl Editor {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Section)
       .align_items(Alignment::Start)
-      .child(super::flow::flow(ctx, &self.state, busy))
+      .child(super::flow::flow(ctx, &self.state, (busy, reader)))
       .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(column))
       .into()
   }
 
   fn with_publication_notice(&self, ctx: &mut Ctx, content: Element) -> Element {
     let editing = self.state.get();
-    if self.confirm_save.get() || self.leave.requested() || editing.view == View::Publish || editing.restore_requested {
+    if self.confirm_save.get() || self.leave.requested() || editing.view == View::Publish {
       return content;
     }
     super::publication::with_success(ctx, &self.state, content)
   }
 
-  /// The published version shown is the route's: Back or Forward to a place of the draft shows the draft again,
+  /// The published version shown is the route's: Back or Forward to a place of the edit shows the edit again,
   /// editable, and to a place of a version reads that version once more. `true` while it is read; the page waits
-  /// then. Second of the futures each render asks for.
+  /// then. The first of the futures each render asks for: lurq keeps a component's futures by that order.
   fn follow_version(&self, ctx: &mut Ctx, props: &EditorProps) -> bool {
     let shown = self.state.get_untracked().viewing_version;
     let wanted = props.version.filter(|version| shown != Some(*version));
@@ -292,8 +292,6 @@ impl Editor {
       None if shown.is_some() => self.state.update(|s| {
         s.viewing = None;
         s.viewing_version = None;
-        s.comparing = false;
-        s.restore_requested = false;
         s.epoch += 1;
       }),
       Some(version) if shown != Some(version) => {
@@ -301,13 +299,11 @@ impl Editor {
         let Some(found) = read.data.filter(|_| !pending && !failed) else {
           return !failed;
         };
-        // A version the history no longer has shows the draft.
+        // A version the history no longer has shows the edit.
         if let Some((number, body)) = found.filter(|(number, _)| *number == version) {
           self.state.update(|s| {
             s.viewing = Some(body);
             s.viewing_version = Some(number);
-            s.comparing = false;
-            s.restore_requested = false;
             s.epoch += 1;
           });
         }
@@ -316,75 +312,9 @@ impl Editor {
     }
     false
   }
-
-  /// Saves the fields once they rest valid and unchanged for a moment. The rest is the first future each render asks
-  /// for, so lurq keeps its state across renders and following it once follows every rest. No rest runs while a write
-  /// is `writing`: what was edited meanwhile rests once the write ends, so it is saved after it rather than skipped.
-  fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, writing: bool) {
-    let editing = self.state.get();
-    let root = props.project.open.repo_root.clone();
-    // A team's pipeline is saved nowhere here.
-    let may_change = crate::screens::hub::team::of(&props.project).is_none();
-    let body = (editing.dirty()
-      && may_change
-      && !writing
-      && editing.errors.is_empty()
-      && editing.viewing.is_none()
-      && !editing.restore_requested
-      && !props.loading
-      && !self.leave.requested())
-    .then(|| {
-      editing
-        .edit
-        .validate()
-        .ok()
-        .map(|body| (body, editing.name.clone(), root))
-    })
-    .flatten();
-    let ready = ctx
-      .future(body, |body| async move {
-        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
-        Ok::<_, orchester_workspace::messages::Message>(Snapshot(body))
-      })
-      .state();
-    let mut followed = self.followed.lock();
-    if *followed {
-      return;
-    }
-    *followed = true;
-    let (state, action, leave) = (self.state.clone(), self.action.clone(), self.leave.clone());
-    ctx.watch(&ready, move |ready| {
-      let Some(Snapshot(Some((body, name, root)))) = &ready.data else {
-        return;
-      };
-      let current = state.get();
-      let writing = action.state().get();
-      if ready.is_pending()
-        || leave.requested()
-        || writing.is_pending()
-        || writing.error.is_some()
-        || current.viewing.is_some()
-        || current.restore_requested
-        || !current.dirty()
-        || !current.errors.is_empty()
-        || current.edit.validate().as_ref() != Ok(body)
-        || &current.name != name
-        || !draft_reasons(&current.opened, body).is_empty()
-      {
-        return;
-      }
-      action.run(Work::Save {
-        root: root.clone(),
-        name: current.name,
-        before: current.opened,
-        body: body.clone(),
-        allowed: Allowed::default(),
-      });
-    });
-  }
 }
 
-/// The fields' errors and the rules the draft breaks that keep it from being saved.
+/// The fields' errors and the rules the edit breaks that keep it from being saved.
 fn errors(ctx: &Ctx, editing: &Editing) -> Vec<Element> {
   // A step's Instructions page shows its text's error under the field only (`02g` `PexNQ`).
   let instructions = match &editing.view {
@@ -404,7 +334,9 @@ fn errors(ctx: &Ctx, editing: &Editing) -> Vec<Element> {
     };
     errors.push(field_error("pipeline-field-error", &message).into());
   }
-  for problem in editing.edit.problems().iter().filter(|p| p.blocks_saving()) {
+  // The rules the steps break; a step without a profile or tool shows in the publish strip only.
+  let broken = |problem: &&EditProblem| matches!(problem, EditProblem::Cycle(_) | EditProblem::Rule(_));
+  for problem in editing.edit.problems().iter().filter(broken) {
     let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
     errors.push(field_error("pipeline-rule-error", &message_text(ctx, &view.message)).into());
   }
@@ -417,11 +349,12 @@ fn follow_writes(ctx: &mut Ctx, action: &Action, state: &State) {
   ctx.watch(&action.state(), move |result| {
     if !result.is_pending()
       && result.error.is_none()
-      && let Some(opened) = &result.data
+      && let Some(stored) = &result.data
     {
-      state.update(|state| state.saved(opened.clone()));
+      state.update(|state| state.saved(stored.opened.clone()));
       let editing = state.get_untracked();
-      if editing.view == View::Publish {
+      // Steps the team server did not take stay in the edit, with their review open.
+      if editing.view == View::Publish && stored.steps_not_saved.is_none() {
         editing.views.close();
       }
     }

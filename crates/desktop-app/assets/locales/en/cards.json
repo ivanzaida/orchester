@@ -16,9 +16,7 @@
     "refused": {
       "ended": "{{agent}} no longer waits for an answer: it ended without one.",
       "answered": "It was answered already.",
-      "superseded": "This plan no longer waits for a decision: a later version came, or the run went on.",
-      "personOnly": "Only a person answers this here: input from an MCP client answers only while you let automation answer approvals.",
-      "widerPersonOnly": "Only a person gives a wider answer: automation approves a request once or denies it."
+      "superseded": "This plan no longer waits for a decision: a later version came, or the run went on."
     },
     "question": {
       "asks": "{{agent}} asks you",
@@ -233,6 +231,7 @@
         "autopilot": "Approved by autopilot",
         "profile": "Allowed by the profile",
         "reviewer": "Approved by the reviewer",
+        "dangerous": "Approved by Dangerous auto-approve mode",
         "at": "· {{time}}",
         "listedAt": "· on the allowed list · {{time}}",
         "reasonAt": "· “{{reason}}” · {{time}}",

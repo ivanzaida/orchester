@@ -1,8 +1,10 @@
 # PV2-13 · Loading, none yet, empty tabs, read failure
 
-- **Status:** blocked (PV2-04)
+- **Status:** done (2026-11-10; review round 2 PASS, design verification round 2 PASS; merged `ba2db9eea`)
 - **Kind:** UI
 - **Depends on:** PV2-04
+- **Branch:** `claude/pv2-13-page-states` (`5c2f3fe17`, `3dea8e5`)
+- **Tokens:** 42.0M — implementation 25.4M + 4.5M, review 1.4M + 0.9M, design verification 5.5M + 4.3M (output 136k)
 
 ## Design
 

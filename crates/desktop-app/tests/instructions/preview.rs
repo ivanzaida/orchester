@@ -41,16 +41,15 @@ pub(super) fn seed_preview(screen: &Instructions) -> orchester_core::id::Resourc
   });
   let body = pipeline.validate().expect("valid instruction fixture");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("valid instruction fixture"),
       Name::new("Feature delivery").expect("valid instruction fixture"),
       &body,
       Timestamp::now(),
     )
     .expect("valid instruction fixture")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now())
-    .expect("valid instruction fixture");
   db.create_tasks(
     IdempotencyKey::generate(),
     vec![TaskDetails {
@@ -127,15 +126,15 @@ fn instructions_missing_run_variable_is_flagged_and_copy_is_disabled() {
 
 fn seed_unavailable_tasks(screen: &Instructions) {
   let mut db = orchester_store::ProjectDb::open(&screen.root).expect("preview database");
-  let unpublished = db
-    .create_resource(
-      Slug::new("unpublished-delivery").expect("slug"),
-      Name::new("Unpublished delivery").expect("name"),
-      &Pipeline::new(Vec::new()).expect("pipeline"),
-      Timestamp::now(),
+  // A pipeline with no version, as an older build left one (a pipeline is created as v1 now, D-032).
+  let unpublished = orchester_core::id::ResourceId::generate();
+  rusqlite::Connection::open(screen.root.join(".orchester/orchester.db"))
+    .expect("the database")
+    .execute(
+      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'unpublished-delivery', 'Unpublished delivery', 1)",
+      [unpublished.to_string()],
     )
-    .expect("resource")
-    .id();
+    .expect("a pipeline without a version");
   let mut pipeline = PipelineEdit::new(Pipeline::new(Vec::new()).expect("pipeline"));
   let key = pipeline.add_step(Name::new("Check").expect("name"), None);
   pipeline.update(&key, |step| {
@@ -144,15 +143,15 @@ fn seed_unavailable_tasks(screen: &Instructions) {
     };
   });
   let tools = db
-    .create_resource(
+    .create_published(
       Slug::new("tool-delivery").expect("slug"),
       Name::new("Tool delivery").expect("name"),
       &pipeline.validate().expect("pipeline"),
       Timestamp::now(),
     )
     .expect("resource")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(tools, Timestamp::now()).expect("publish");
   db.create_tasks(
     IdempotencyKey::generate(),
     [

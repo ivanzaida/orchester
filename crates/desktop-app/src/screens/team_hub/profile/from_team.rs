@@ -1,26 +1,20 @@
 //! *From the team* (`From the team` `o0zHCO` in `Agents · Profile` `NDZXC`): what the team holds of the profile, the
-//! same on every computer. Only what the profile has is a row: a profile that uses no tool has no *Tools* row.
+//! same on every computer, every row a value: *None* where the profile has nothing of a kind, *CLI default* for an
+//! effort it leaves to the CLI (M1 `oPF2o`).
 
-use lurq::{
-  app::ctx::Ctx,
-  components::{Row, Text},
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
 use orchester_workspace::agents::team_profile::{Listed, TeamProfileSheet};
 
-use crate::{
-  screens::team_hub::{
-    rows::{self, Sub},
-    words::cli_key,
-  },
-  theme::HubText,
+use crate::screens::team_hub::{
+  rows::{self, FromTeam, Sub},
+  words::cli_key,
 };
 
-pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet) -> lurq::components::Column {
-  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-    .id("team-hub-from-team-note")
-    .variant(HubText::PanelHint.role())
-    .nowrap();
+pub(in crate::screens::team_hub) fn section(
+  ctx: &Ctx,
+  sheet: &TeamProfileSheet,
+  note: FromTeam,
+) -> lurq::components::Column {
   let mut rows = vec![
     rows::row(
       "team-hub-from-team-cli",
@@ -35,14 +29,16 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet) -> lurq::components::
       rows::mono("team-hub-from-team-model-value", &sheet.model),
     ),
   ];
-  if let Some(effort) = &sheet.effort {
-    rows.push(rows::row(
-      "team-hub-from-team-effort",
-      &ctx.t("team_hub.profile.effort"),
-      None,
-      rows::words("team-hub-from-team-effort-value", &effort_words(ctx, effort)),
-    ));
-  }
+  let effort = sheet.effort.as_deref().map_or_else(
+    || ctx.t("team_hub.profile.effortDefault").to_string(),
+    |effort| effort_words(ctx, effort),
+  );
+  rows.push(rows::row(
+    "team-hub-from-team-effort",
+    &ctx.t("team_hub.profile.effort"),
+    None,
+    rows::words("team-hub-from-team-effort-value", &effort),
+  ));
   let lists = [
     (
       "instructions",
@@ -58,21 +54,12 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet) -> lurq::components::
     ("skills", "team_hub.profile.skills", names(&sheet.skills)),
   ];
   for (name, key, listed) in lists {
-    if !listed.is_empty() {
-      rows.push(listed_row(ctx, name, key, listed, None));
-    }
+    rows.push(listed_row(ctx, name, key, listed, None));
   }
-  if !sheet.secrets.is_empty() {
-    let secrets = sheet.secrets.iter().map(ToString::to_string).collect();
-    let sub = Some(Sub::quiet(ctx.t("team_hub.profile.secretsSub")));
-    rows.push(listed_row(ctx, "secrets", "team_hub.profile.secrets", secrets, sub));
-  }
-  rows::section(
-    "team-hub-from-team",
-    &ctx.t("team_hub.profile.fromTeam"),
-    vec![note.into()],
-    rows,
-  )
+  let secrets = sheet.secrets.iter().map(ToString::to_string).collect();
+  let sub = Some(Sub::quiet(ctx.t("team_hub.profile.secretsSub")));
+  rows.push(listed_row(ctx, "secrets", "team_hub.profile.secrets", secrets, sub));
+  rows::from_team(ctx, note, rows)
 }
 
 fn names(listed: &[Listed]) -> Vec<String> {
@@ -81,7 +68,11 @@ fn names(listed: &[Listed]) -> Vec<String> {
 
 fn listed_row(ctx: &Ctx, name: &str, key: &str, listed: Vec<String>, sub: Option<Sub>) -> Row {
   let id = format!("team-hub-from-team-{name}");
-  let value: Element = rows::tags(&format!("{id}-value"), listed).into();
+  let value: Element = if listed.is_empty() {
+    rows::words(&format!("{id}-value"), &ctx.t("team_hub.profile.none")).into()
+  } else {
+    rows::tags(&format!("{id}-value"), listed).into()
+  };
   rows::row(&id, &ctx.t(key), sub, value)
 }
 

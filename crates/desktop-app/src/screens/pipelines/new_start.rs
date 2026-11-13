@@ -1,15 +1,13 @@
 //! New pipeline's Start from (`Start from` `t0qET` in `uHPNu`): the starter with its steps and counts, a copy of a
-//! published pipeline chosen in a dropdown, or an empty pipeline, as radio rows under what the choice does.
+//! published pipeline chosen in a dropdown, as radio rows under what the choice does; no empty pipeline, which can
+//! never be saved (D-040).
 use lurq::{
   app::ctx::Ctx,
   components::SelectOption,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::pipelines::{
-  levels::levels,
-  library::{LibraryEntry, VersionState},
-};
+use orchester_workspace::pipelines::{levels::levels, library::LibraryEntry};
 
 use super::new_pipeline::{Begin, starter};
 use crate::ui::{
@@ -40,10 +38,7 @@ pub fn group(ctx: &mut Ctx, (start, copy): (&Signal<Begin>, &Signal<String>), co
     copies
       .iter()
       .map(|p| {
-        let version = match p.state {
-          VersionState::Published(v) | VersionState::PublishedWithDraft(v) => v.get().to_string(),
-          VersionState::DraftOnly => String::new(),
-        };
+        let version = p.version.get().to_string();
         SelectOption::new(
           p.id.to_string(),
           ctx.t_args(
@@ -66,12 +61,10 @@ pub fn group(ctx: &mut Ctx, (start, copy): (&Signal<Begin>, &Signal<String>), co
   let copy_row = row("pipeline-start-1", "pipelines.copy", Begin::Copy)
     .hint(ctx.t(copy_hint))
     .end(select);
-  let empty_row = row("pipeline-start-2", "pipelines.empty", Begin::Empty).hint(ctx.t("pipelines.emptyHint"));
   RowGroup::new("pipeline-start", ctx.t("pipelines.startFrom"))
     .lead(ctx.t("pipelines.startHint"))
     .row(starter_row)
     .row(copy_row)
-    .row(empty_row)
     .into()
 }
 

@@ -119,7 +119,7 @@ fn instructions_archive_refuses_an_mcp_clients_press() {
       });
     }
     s.window.pass();
-    s.exists("local-hub-archive-confirm-person-only")
+    s.window.refused_press().is_some()
   });
   assert!(screen.listed().entry(id).is_some(), "the rule stays");
   // The person's own press archives it.

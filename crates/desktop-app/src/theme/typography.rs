@@ -307,6 +307,10 @@ fn later_areas(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextSt
     .chain(super::ci::typography(palette))
     .chain(super::watching::typography(palette))
     .chain(super::team_state::typography(palette))
+    .chain(super::runs_on_picker::typography(palette))
+    .chain(super::flow::typography(palette))
+    .chain(super::step_strip::typography(palette))
+    .chain(super::agent_picker::typography(palette))
 }
 
 /// `sans` in Geist Mono without ligatures: a command, a key or a figure shows each character as typed

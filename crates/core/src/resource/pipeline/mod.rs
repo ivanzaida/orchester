@@ -30,7 +30,10 @@ pub use self::{
   changes::{DeliverChange, PipelineChange, StepChange, changes},
   deliver::{DeliverMode, DeliverStep, MergeMethod},
   delivers::{Deliverable, UnknownDeliverable, WithoutCommits},
-  edit::{EditProblem, PipelineEdit},
+  edit::{
+    EditProblem, FlowError, MoveError, MoveOffer, ParallelChoice, PartWait, PipelineEdit, StepMoves, WaitChoice,
+    Waited, flow_units, part_waits,
+  },
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
   strictness::{Weaker, weaker_than},
@@ -88,7 +91,7 @@ pub enum RepositoryAccess {
 pub enum StepKind {
   /// Runs an agent of the selected profile, with the profile's model unless `model`
   /// overrides it for this step, and the profile's permissions narrowed by `repository` and
-  /// `permissions`. A draft may leave the profile unset (`None`); publishing requires it, see
+  /// `permissions`. An edit may leave the profile unset (`None`); saving, which publishes, requires it, see
   /// [`Pipeline::unassigned_steps`].
   Agent {
     profile: Option<ResourceId>,
@@ -157,8 +160,8 @@ pub enum PipelineError {
   RetryTargetNotUpstream { step: StepKey, target: StepKey },
 }
 
-/// Ordered steps forming an acyclic dependency graph. A draft may have no steps yet;
-/// publishing requires at least one (see [`crate::resource::ResourceBody::check_publishable`]).
+/// Ordered steps forming an acyclic dependency graph. An edit may have no steps yet; saving it, which publishes,
+/// requires at least one (see [`crate::resource::ResourceBody::check_publishable`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "PipelineFields")]
 pub struct Pipeline {
@@ -286,8 +289,8 @@ impl Pipeline {
     self.steps.iter().find(|step| &step.key == key)
   }
 
-  /// Steps whose agent profile or tool is not chosen yet. Such a pipeline can be kept as a
-  /// draft but not published.
+  /// Steps whose agent profile or tool is not chosen yet. Such an edit cannot be saved: a pipeline is stored only as a
+  /// published version.
   pub fn unassigned_steps(&self) -> impl Iterator<Item = &StepKey> {
     unassigned(&self.steps)
   }
@@ -303,21 +306,6 @@ impl Pipeline {
       .iter()
       .enumerate()
       .filter(move |(_, step)| step.kind.executor() == Some(executor))
-  }
-
-  /// This pipeline with every step `executor` runs left without its profile or tool, as removing that resource
-  /// leaves it (`super::removal`); the steps keep everything else.
-  #[must_use]
-  pub fn without_executor(&self, executor: ResourceId) -> Self {
-    let mut pipeline = self.clone();
-    for step in &mut pipeline.steps {
-      match &mut step.kind {
-        StepKind::Agent { profile, .. } if *profile == Some(executor) => *profile = None,
-        StepKind::Tool { tool } if *tool == Some(executor) => *tool = None,
-        StepKind::Agent { .. } | StepKind::Tool { .. } => {}
-      }
-    }
-    pipeline
   }
 
   /// The steps in stages: a step's stage is one after the latest stage of the steps it depends

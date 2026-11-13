@@ -7,6 +7,7 @@
 //! it.
 
 pub mod browser_qa;
+pub mod pipeline_edit;
 pub mod signed_in;
 mod stand_in_console;
 pub mod stand_ins;
@@ -233,6 +234,16 @@ impl Window {
 
   pub fn navigation(&self) -> Navigation {
     self.link.navigation().expect("the window attached its navigation")
+  }
+
+  /// The person-only press the window refused to synthetic input since this was last asked: the action an MCP
+  /// client's tool call names in its error.
+  pub fn refused_press(&self) -> Option<&'static str> {
+    self
+      .link
+      .input_gate()
+      .take_refused_press()
+      .map(crate::mcp::input_gate::RefusedPress::action)
   }
 
   pub fn projects(&self) -> Projects {

@@ -5,15 +5,16 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, ResourceKind, Skill},
+  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, Skill},
 };
 
 use super::{
+  team_body_edit::Latest,
   team_mcp::Published,
   team_profile::{Listed, TeamProfileSheet, listed},
-  team_sheets,
+  team_sheets::{self, latest_of},
 };
-use crate::team_config::TeamConfig;
+use crate::team_config::{TeamConfig, TeamResource};
 
 /// Where an instruction or a skill is added.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,6 +49,8 @@ pub struct TeamInstructionSheet {
   pub used_by: Vec<String>,
   /// Who published its latest version.
   pub published: Option<Published>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<Instruction>>,
 }
 
 /// One team skill as the panel shows it.
@@ -59,6 +62,8 @@ pub struct TeamSkillSheet {
   pub added: Added,
   pub used_by: Vec<String>,
   pub published: Option<Published>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<Skill>>,
 }
 
 /// The skill's own document, which every skill has.
@@ -84,13 +89,14 @@ fn reaches(config: &TeamConfig, targets: &AgentTargets) -> Reaches {
   }
 }
 
-/// A sheet for each team instruction whose latest version is an instruction this computer reads.
+/// A sheet for each team instruction of `instructions` whose latest version is an instruction this computer reads.
 pub(super) fn instructions(
   config: &TeamConfig,
+  instructions: &[&TeamResource],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Vec<(ResourceId, TeamInstructionSheet)> {
   let mut sheets = Vec::new();
-  for resource in config.resources(ResourceKind::Instruction) {
+  for resource in instructions.iter().copied() {
     let Some(Ok(body)) = resource.body::<Instruction>() else {
       continue;
     };
@@ -105,19 +111,21 @@ pub(super) fn instructions(
           sheet.instructions.iter().any(|used| used.id == resource.id)
         }),
         published: team_sheets::published(resource),
+        edit: latest_of(resource, &body),
       },
     ));
   }
   sheets
 }
 
-/// A sheet for each team skill whose latest version is a skill this computer reads.
+/// A sheet for each team skill of `skills` whose latest version is a skill this computer reads.
 pub(super) fn skills(
   config: &TeamConfig,
+  skills: &[&TeamResource],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Vec<(ResourceId, TeamSkillSheet)> {
   let mut sheets = Vec::new();
-  for resource in config.resources(ResourceKind::Skill) {
+  for resource in skills.iter().copied() {
     let Some(Ok(body)) = resource.body::<Skill>() else {
       continue;
     };
@@ -134,6 +142,7 @@ pub(super) fn skills(
           sheet.skills.iter().any(|used| used.id == resource.id)
         }),
         published: team_sheets::published(resource),
+        edit: latest_of(resource, &body),
       },
     ));
   }

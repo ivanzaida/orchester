@@ -1073,6 +1073,84 @@ manual Blocked is set and cleared by the claim's holder or an Admin. Work in `mo
 
 ## Done
 
+Agents · v2 (`acFkz`) finished on master, 2026-11-11 (outside Orchester):
+- **Team tool secrets by name.** A team tool names its secret by `SecretName`, never by a computer's id (`TeamTool`, `89c31e17e`). Publishing converts the id to its name, each computer fills the value in by name (person-only), and the runner checks it by name. An old by-id body reads honestly, and an admin publishes it again by name. The team server reads the form from 0.11.2 (`orchester-platform` `f47328a`, tag `server-v0.11.2`; desktops from 0.6.0).
+- **Memory in the hub.** Memory is a filter of the Agents hub after Tools (Section Y `Xxl1u`, Y1–Y6): status sub-filter, list and panel, and the old Memory page's shell gone (`claude/memory-hub`, last `63efe46b2`). Scenarios `memory`, `tasks` and `team-memory-member`.
+- **A22.** The stopped card has no *Ask an admin to restore it* (`41ac7da69`).
+- **Choosing a profile's connection** is open to the person, external MCP clients and the driving Orchestrator, and out of reach of run agents; tests pin it (`0b9bd86ca`).
+- **The team hub's Archived** (A36 `qvMZD`, M7 `Ml7HN`, A37 `AFbIb`, A22, `claude/team-archived`, 2026-11-12): every team resource the team archived, read-only, with an admin's *Restore* (`Servers::restore_resource`, the `PATCH` with `archived: false`; pending until the hub reads it again, a refusal said in place); a member reads the lock line. *Open →* on a profile's *Ready here?* row, its pinned *Open <name>* and the stopped card's resource row open it there by route. The team's configuration keeps the answer of an archive or a restore, and follows the revision and who changed it from the stream. QA states `team-archived` (member) and `team-archived-admin`.
+- **HTTP and database tool forms** (A32–A35, L20–L24), branch `claude/tool-http-db`, implemented 2026-11-12 and
+  waiting for design verification: a new tool makes an HTTP request or a database query with its *Access*, in both
+  hubs; an admin and a local panel edit one in place; the team's form names its secret, the local one picks the
+  project's; an admin's edit fills the secret's value here from its box. QA states `team-tools` and `local-hub-tools`.
+  Orchester's MCP server still makes and changes only command tools and says so.
+
+Not built (no design): the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
+
+Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2`, in master since `e21081337`
+(tasks `docs/plan/pipelines-v2/`, decisions `docs/design/pipelines-v2.md`; PV2-02 and PV2-19 canceled; every task is
+done):
+
+- PV2-01 · Core: move steps and run them in parallel · `claude/pv2-01-step-order` → `310ce4f39`.
+- PV2-03 · The compact *Runs on* picker as a shared component · `claude/pv2-03-runs-on-picker` → `c37c1caad`.
+- PV2-04 · The page: filter, grouped list, panel, Save bar · `claude/pv2-04-page-shell` → `27cde7e2c`.
+- PV2-05 · Steps drawn as the flow they run in · `claude/pv2-05-steps-flow` → `1b2aa8df7`.
+- PV2-06 · Reorder steps in the flow: drag, ⋯ menu, keys · `claude/pv2-06-reorder` → `915de1fb7`.
+- PV2-07 · A step in the panel: strip, groups, Instructions · `claude/pv2-07-step-panel` → `c3419c6ec`.
+- PV2-08 · The step's *Agent* field and Agent picker · `claude/pv2-08-agent-field` → `a1f38d70e`.
+- PV2-09 · Pipeline settings, Ready? and Needs you · `claude/pv2-09-ready` → `75aa67e32`.
+- PV2-10 · Edit in place: Save makes vN, Cancel puts it back · `claude/pv2-10-save-and-cancel` → `cca2e89e9`.
+- PV2-11 · Versions list, a version read-only, Restore · `claude/pv2-11-versions` → `a3f14fb18`.
+- PV2-12 · The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab · `claude/pv2-12-menu-archive` →
+  `824561513`.
+- PV2-13 · Loading, none yet, empty tabs, read failure · `claude/pv2-13-page-states` → `ba2db9eea`.
+- PV2-15 · The orchestrator chat adopts the compact picker · `claude/pv2-15-orchestrator-picker` → `e0c34aa8a`.
+- PV2-16 · Design: the orchestrator's picker states with the compact picker · in Pencil (not saved yet, PV2-00).
+- PV2-17 · Readiness and save polish · `claude/pv2-17b-step-flow` → `238b0c2e6`, `claude/pv2-17a-ready-save` →
+  `1f2dc0057`.
+- PV2-18 · The rest of a step in the panel · `claude/pv2-18-step-rest` → `0b8c6f23b`.
+- PV2-19 · A draft is always saved; Save says what publishing would refuse · canceled: merged as
+  `claude/pv2-19-save-refusals` → `531f3d1ae` with its follow-up `5b309b469` (the stale-narrowing test, one wording for
+  a gone profile), then reversed by D-032 (pipelines have no drafts) and replaced by PV2-27 … PV2-31.
+- PV2-20 · The step head's ⋯ menu · `claude/pv2-20-step-head-menu` → `a85e24fb5`.
+- PV2-21 · Tests that drove the old step editor of a local project run against the hub · `claude/pv2-21-tests-on-hub`
+  → `20dba64d2`.
+- PV2-23 · The Deliver step in the step panel (P15, P15b): *Mode*, *Merge*, *Conflicts*, *Check*, *Remove step* and *Add
+  Deliver step* · `claude/pv2-23-deliver-step`, in batch B (`claude/pv2-batch-b`).
+- PV2-22 · New pipeline and *Duplicate* in the hub (P14–P14c): an unsaved panel that starts from the starter, a copy
+  (named *… copy*, selected) or nothing; *Create v1* stores v1 only when it can publish and opens it ·
+  `claude/pv2-22-new-duplicate`, in batch C (`claude/pv2-batch-c`).
+- PV2-24 · Flows the hub could not draw (P16–P16c): a step that waits for part of a stage is drawn with its *Waits for*
+  row and saved (D-048); steps with no order get *Make it a line* · `claude/pv2-24-branched-flows`, in batch C.
+- PV2-25 · The pipeline's slug in the hub's settings (P17); *Who can use it* dropped · `claude/pv2-25-slug`, in batch
+  B → `881617d7b`.
+- PV2-26 · Map: where pipeline drafts live, and the split into PV2-27 … PV2-33 · research, no branch.
+- PV2-27 · Store: a pipeline is created published; the migration deletes pipeline drafts · with PV2-28 →
+  `7fd9db19c`.
+- PV2-28 · Workspace: saving a pipeline publishes it or refuses with every reason · `claude/pv2-28-save-publishes` →
+  `7fd9db19c`, `claude/pv2-28-workspace-tests` → `c703fd068`.
+- PV2-29 · MCP: `save_pipeline` replaces `save_pipeline_draft` and `publish_pipeline` · and PV2-30 · the Orchestrator
+  changes pipelines only while it drives · `claude/pv2-29-30-mcp-chat` → `e7efc84d1`.
+- PV2-31 · The hub without drafts: no Drafts tab or draft words, Save off with why, the leave question for a
+  never-saved pipeline · `claude/pv2-31-hub-no-drafts` → `c20d0bcef`.
+- PV2-32 · The team pipeline page: one Save that publishes · `claude/pv2-32-team-one-save` → `c831895c2`,
+  `16c75837c`.
+- PV2-33 · Pipelines leave Import resources · `claude/pv2-33-hide-import` → `9f0f9af6a`.
+- PV2-34 · A team pipeline's Save, Create v1, Duplicate and rename wait for the team server; nothing is stored or lost
+  on a refusal (D-042, D-043, D-047) · `claude/pv2-34-team-save-sync` → `9c9de7600`.
+- Batch A (PV2-27 … PV2-34) into master with the module: `0f4c27ad6` → master `e21081337` (D-045, D-047).
+- PV2-14 · Retire the old Pipelines page of local projects: part 1 → `01168167b` (links from other pages open the hub,
+  these docs and plan); the rest on `claude/pv2-14-retire` — every route of the old page a local project is asked for
+  opens the hub under the hub's own route, the docs say what the hub does; with PV2-22 and PV2-24 in, the Steps tab
+  and New pipeline do too, and a local project reaches no route of the old page, whose code stays for team projects
+  (batch C).
+- N-013 · Cleanup after the reviews: a link to an archived pipeline opens Archived; Alt ↑ / Alt ↓ at the line's ends
+  say why; 64 unused `pipelines.*` keys removed · `claude/pv2-n013`, in batch C. Left open: the step name is read three
+  times in the accessibility tree (lurq cannot hide decorative nodes), the old page's summary labels clip, and a
+  refused Alt move in the open step's head is silent.
+- Batch C into master: a member of a team reads its pipelines (no *Add step*), a pipeline the team server no longer
+  has is said in words, and the old page's tests run on a team project.
+
 ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 
 ORC-625 · Team authority S2 public contract · branch `orchester/orc-625-run-1`: validated server claim threshold

@@ -15,13 +15,14 @@ use lurq::{
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{
-  agents::local_hub::StoppedRun,
+  agents::local_hub::{LocalProfile, StoppedRun},
   connections::mcp::{McpServerText, TransportChoice},
   local_archive,
   messages::Message,
 };
 
 use super::{
+  archived_profile,
   model::Entry,
   panel::{chips_of, frame},
   words::{archived_at, kind_where_key},
@@ -44,10 +45,11 @@ use crate::{
 };
 
 /// The panel while nothing archived is picked (`Nothing picked` `gd374` in L13): a 20 glyph, the title and the line
-/// under it, centered in the panel with no tile of their own.
-pub(super) fn nothing_picked(ctx: &Ctx) -> Element {
+/// under it, centered in the panel with no tile of their own. `id` names it, `<id>-title` and `<id>-line` its words,
+/// whose keys are `title` and `detail`; a team project's hub says it in its own words (A36 `qvMZD`).
+pub(in crate::screens) fn nothing_picked(ctx: &Ctx, id: &str, (title, detail): (&str, &str)) -> Element {
   Column::new()
-    .id("local-hub-archived-none")
+    .id(id.to_owned())
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .height(Dimension::Pct(100.0))
@@ -57,14 +59,14 @@ pub(super) fn nothing_picked(ctx: &Ctx) -> Element {
     .justify(Justify::Center)
     .child(icon(Icon::Archive, IconSize::Panel, PaletteColor::TextMuted))
     .child(
-      Text::new(&ctx.t("local_hub.archived.nothingTitle"))
-        .id("local-hub-archived-none-title")
+      Text::new(&ctx.t(title))
+        .id(format!("{id}-title"))
         .variant(HubText::RowName.role())
         .color(PaletteColor::TextSecondary),
     )
     .child(
-      Text::new(&ctx.t("local_hub.archived.nothingDetail"))
-        .id("local-hub-archived-none-line")
+      Text::new(&ctx.t(detail))
+        .id(format!("{id}-line"))
         .variant(HubText::ListNote.role())
         .width(Dimension::Pct(100.0))
         .text_align(TextAlign::Center),
@@ -83,6 +85,8 @@ pub(super) struct Props {
   pub stopped: Vec<StoppedRun>,
   /// An MCP server's fields, shown read-only.
   pub details: Option<McpServerText>,
+  /// A profile's values, shown read-only.
+  pub profile: Option<Box<LocalProfile>>,
   pub now: Timestamp,
 }
 impl DevtoolsInspectable for Props {}
@@ -137,6 +141,12 @@ impl Component for Restore {
       .child(notice(ctx, entry, &props.stopped))
       .with_children(props.details.as_ref().map(|details| read_only(ctx, details)))
       .with_children(
+        props
+          .profile
+          .as_ref()
+          .map(|profile| archived_profile::read_only(ctx, profile)),
+      )
+      .with_children(
         state
           .error
           .as_ref()
@@ -151,10 +161,14 @@ impl Component for Restore {
     )
     .icon(Icon::ArchiveRestore)
     .pinned();
-    let restore = if state.is_pending() {
+    // Restored, the entry leaves *Archived* once the hub reads it again; until then Restore stays pending, as it was.
+    let restore = if state.is_pending() || state.is_fulfilled() {
       restore.loading()
     } else {
-      restore.on_click(move || action.run(()))
+      // A second press while the first restore is in flight leaves it to finish.
+      restore.on_click(move || {
+        action.run_if_idle(());
+      })
     };
     frame(
       entry.what,
@@ -213,7 +227,7 @@ fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Element {
 }
 
 /// One row of the read-only table: its label and its value, in mono where it is a path or a name.
-fn read_row(id: &str, label: &str, value: &str, mono: bool) -> Row {
+pub(super) fn read_row(id: &str, label: &str, value: &str, mono: bool) -> Row {
   let id = format!("local-hub-archived-{id}");
   let shown = format!("{id}-value");
   let value = if mono {
@@ -277,7 +291,7 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
     rows.push(read_row(
       "variables",
       &ctx.t("connections.mcp.variables"),
-      &variables_read(ctx, &text.variables),
+      &super::mcp::variables::Notation::new(ctx).shown(&text.variables),
       true,
     ));
   }
@@ -293,27 +307,4 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
     ],
     rows,
   )
-}
-
-/// `FIGMA_API_KEY ← secret FIGMA_TOKEN` for a variable that takes a secret, `NAME=value` for the others.
-fn variables_read(ctx: &Ctx, variables: &str) -> String {
-  variables
-    .lines()
-    .map(|line| match line.split_once('=') {
-      Some((name, value)) => match value.strip_prefix("${secret:").and_then(|rest| rest.strip_suffix('}')) {
-        Some(secret) => ctx
-          .t_args(
-            "local_hub.archived.takesSecret",
-            [
-              ("name", name.to_owned()),
-              ("secret", secret.split('@').next().unwrap_or(secret).to_owned()),
-            ],
-          )
-          .to_string(),
-        None => line.to_owned(),
-      },
-      None => line.to_owned(),
-    })
-    .collect::<Vec<_>>()
-    .join("\n")
 }

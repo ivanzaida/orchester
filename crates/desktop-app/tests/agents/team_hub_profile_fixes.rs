@@ -126,7 +126,7 @@ fn team_hub_profile_fix_automation_cannot_set_a_path_or_save_a_value() {
   agents.stand_ins.choose(Some(program));
   let set_path = format!("team-hub-ready-mcp-{lint}-set-path");
   with_synthetic_input(|| agents.click(&set_path));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   for _ in 0..20 {
     agents.window.tree.tick_futures();
     agents.window.pass();
@@ -144,11 +144,10 @@ fn team_hub_profile_fix_automation_cannot_set_a_path_or_save_a_value() {
   });
   agents.set("team-hub-secret-value", VALUE);
   with_synthetic_input(|| agents.click("team-hub-secret-save"));
-  agents.until("the notice", |s| s.exists("team-hub-secret-save-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert!(agents.exists("team-hub-secret-dialog"), "the dialog stays");
+  assert_eq!(agents.value("team-hub-secret-value"), VALUE, "with what was typed");
   assert!(!kept(&agents), "automation kept no value");
-  let notice = agents.text("team-hub-secret-save-person-only");
-  assert!(!notice.contains(VALUE), "{notice}");
 }
 
 #[test]
@@ -164,7 +163,7 @@ fn team_hub_profile_fix_automation_cannot_switch_a_server_on() {
     .expect("off here");
   show(&mut agents, profile);
   with_synthetic_input(|| agents.click(&format!("team-hub-ready-mcp-{lint}-switch-on")));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   for _ in 0..20 {
     agents.window.tree.tick_futures();
     agents.window.pass();
@@ -511,4 +510,28 @@ fn team_hub_profile_fix_the_select_follows_a_pick_made_elsewhere() {
       .expect("pick")
       .is_some_and(|pick| pick.connection == first)
   });
+}
+
+/// Choosing the connection a profile runs on here is open to automation (the person's decision of 2026-11-11): an MCP
+/// client's press on *Use* keeps the pick, as a person's does, while the fixes that widen stay a person's.
+#[test]
+fn team_hub_profile_fix_automation_uses_a_connection() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let first = claude(&agents.root, "Claude 2", "2.1.173");
+  claude(&agents.root, "Claude Home", "2.1.170");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(agents.text("team-hub-fix-use").contains("Use Claude 2 for Builder"));
+
+  with_synthetic_input(|| agents.click("team-hub-fix-use"));
+
+  agents.until("the pick is kept", |s| {
+    ProjectDb::open(&s.root)
+      .expect("database")
+      .connection_pick(profile)
+      .expect("pick")
+      .is_some_and(|pick| pick.connection == first)
+  });
+  agents.until("the bar moves on", |s| !s.exists("team-hub-fix-use"));
 }

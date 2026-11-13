@@ -1,8 +1,9 @@
-//! A pipeline draft's sources: Pipeline settings › Sources (`Q10UQ`) beside the project's, *Add folder* checked in
-//! place, and publishing a version that reads more asked in place; the step inspector's own sources (`O6piA3`).
+//! A pipeline's sources: Pipeline settings › Sources (`Q10UQ`) beside the project's, *Add folder* checked in place,
+//! and saving a version that reads more asked in place (a save publishes, D-032); the step inspector's own sources
+//! (`O6piA3`).
 use std::path::Path;
 
-use orchester_core::{resource::Pipeline, source::SourcePath, store::ResourceStore};
+use orchester_core::source::SourcePath;
 
 use crate::pipelines_support::Editor;
 
@@ -18,16 +19,8 @@ fn folder(files: usize) -> tempfile::TempDir {
   folder
 }
 
-fn drafted(editor: &Editor, id: orchester_core::id::ResourceId) -> Option<Pipeline> {
-  editor
-    .db()
-    .draft::<Pipeline>(id)
-    .expect("the draft reads")
-    .map(|draft| draft.body().clone())
-}
-
 #[test]
-fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
+fn pipelines_sources_a_chosen_folder_joins_the_edit_and_saving_it_asks() {
   let (mut editor, stand_ins) = Editor::with_stand_ins();
   let id = editor.published();
   let (docs, tokens) = (folder(1), folder(2));
@@ -50,67 +43,22 @@ fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
   );
   stand_ins.choose(Some(tokens.path().to_path_buf()));
   editor.click("pipeline-sources-add-add");
-  editor.until("the draft lists it", |e| {
-    drafted(e, id).is_some_and(|body| body.sources().pipeline() == [source(tokens.path())])
-  });
-  assert!(editor.exists("pipeline-source-0"), "it can be removed");
+  editor.until("the edit lists it", |e| e.exists("pipeline-source-0"));
+  assert_eq!(editor.version(id), 1, "reading more waits for a person");
   assert!(!editor.exists("pipeline-sources-add-hint"));
   editor.click("pipeline-tab-steps");
-  editor.click("pipeline-publish");
-  editor.until("publish question", |e| e.exists("pipeline-publish-question-confirm"));
+  editor.click("pipeline-save");
+  editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
   editor.arm();
   assert!(editor.gated(), "reading more is a person's to publish");
   assert!(
     editor
-      .text("pipeline-publish-question")
+      .text("pipeline-save-question")
       .contains("The sources the pipeline or its steps list differ")
   );
-  editor.click("pipeline-publish-question-confirm");
-  editor.until("v2", |e| {
-    e.db().latest_version::<Pipeline>(id).unwrap().unwrap().number().get() == 2
-  });
-  let published = editor.db().latest_version::<Pipeline>(id).unwrap().unwrap();
-  assert_eq!(published.body().sources().pipeline(), [source(tokens.path())]);
-}
-
-#[test]
-fn pipelines_sources_a_step_lists_its_own_beside_what_it_inherits() {
-  let mut editor = Editor::new();
-  let id = editor.empty("Review");
-  let (docs, guide) = (folder(1), folder(1));
-  editor
-    .db()
-    .set_project_sources(&[source(docs.path())])
-    .expect("the project's");
-  editor.open(id);
-  editor.click("pipeline-add-step");
-  editor.click("step-open-sources");
-  editor.until("the step's sources", |e| e.exists("step-sources-add-path"));
-  editor.until("what it inherits", |e| e.exists("step-sources-project-0"));
-  assert_eq!(editor.text("step-sources-title-meta"), "0 own · 1 inherited");
-  editor.set("step-sources-add-path", &guide.path().to_string_lossy());
-  editor.until("the check", |e| {
-    e.exists("step-sources-add-hint-text") && e.text("step-sources-add-hint-text") == "Folder · 1 file · readable."
-  });
-  editor.click("step-sources-add-add");
-  editor.until("listed", |e| e.exists("step-source-0"));
-  assert_eq!(editor.text("step-source-0-hint"), "This step");
-  assert_eq!(editor.text("step-sources-title-meta"), "1 own · 1 inherited");
-  // The draft saves itself once the edits rest.
-  let listed = |body: &Pipeline| -> Vec<SourcePath> {
-    body
-      .steps()
-      .iter()
-      .flat_map(|step| body.sources().step(&step.key).to_vec())
-      .collect()
-  };
-  editor.until("the draft lists it", |e| {
-    drafted(e, id).is_some_and(|body| listed(&body) == [source(guide.path())])
-  });
-  editor.click("step-source-0-remove");
-  editor.until("taken off the draft", |e| {
-    drafted(e, id).is_some_and(|body| !body.steps().is_empty() && listed(&body).is_empty())
-  });
+  editor.click("pipeline-save-question-confirm");
+  editor.until("v2", |e| e.version(id) == 2);
+  assert_eq!(editor.stored(id).sources().pipeline(), [source(tokens.path())]);
 }
 
 /// Lists a relative path among the project's sources, which no read takes: the store calls it corrupt.
@@ -129,7 +77,7 @@ fn unreadable(editor: &Editor, broken: bool) {
 
 #[test]
 fn pipelines_sources_a_failed_read_of_the_projects_says_why_with_try_again_never_an_empty_list() {
-  let mut editor = Editor::new();
+  let mut editor = Editor::team();
   let id = editor.empty("Review");
   let docs = folder(1);
   editor

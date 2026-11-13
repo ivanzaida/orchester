@@ -20,7 +20,6 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorText::Line, 12.5, 1.3, FontWeight::Normal, "Geist"),
     (OrchestratorText::Question, 13.0, 1.3, FontWeight::SemiBold, "Geist"),
     // A plan's use in the runs-on picker (`qSIt9`).
-    (OrchestratorText::PlanUse, 10.5, 1.3, FontWeight::Normal, "Geist Mono"),
     (OrchestratorText::FactKey, 12.0, 1.3, FontWeight::Normal, "Geist"),
     // A History row's meta (`r9TeH`) and a result's matching line (`srL91`), the composer's message (`lB97V`).
     (OrchestratorText::HistoryMeta, 11.0, 1.3, FontWeight::Normal, "Geist"),
@@ -47,6 +46,16 @@ fn orchestrator_roles_follow_the_design() {
     ),
     (OrchestratorText::LeadsTipOrder, 11.0, 1.45, FontWeight::Normal, "Geist"),
     (OrchestratorText::LeadsTipHint, 11.0, 1.3, FontWeight::Normal, "Geist"),
+    // A tool request's answer under its line (`ICzi3`): what it asked, why the Orchestrator is not sure, what it said.
+    (
+      OrchestratorText::RequestAsked,
+      12.0,
+      1.5,
+      FontWeight::Normal,
+      "Geist Mono",
+    ),
+    (OrchestratorText::RequestDoubt, 12.0, 1.5, FontWeight::Normal, "Geist"),
+    (OrchestratorText::RequestSaid, 12.5, 1.5, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -99,11 +108,9 @@ fn orchestrator_link_roles_follow_the_link_states() {
     "a link's words in `accent_text` 500"
   );
   let links = theme.markdown();
-  let ring = links.link_focus_ring.expect("a link's focus ring");
-  assert_eq!(
-    (ring.width, ring.color, ring.radius),
-    (2.0, Color::from_hex("#A3A3AB"), 3.0),
-    "keyboard focus draws 2 of `border_focus` around a link, radius 3"
+  assert!(
+    links.link_focus_ring.is_none(),
+    "a Markdown link takes no keyboard focus, so it draws no ring"
   );
   assert_eq!(
     (links.link_tooltip_box.background, links.link_tooltip_box.radius),
@@ -130,11 +137,6 @@ fn orchestrator_chat_link_looks_follow_the_link_states() {
       .offset
       .is_some_and(|offset| (offset + 1.0 - box_below_baseline).abs() < 0.001),
     "the underline ends where the line box, and a hovered link's fill, ends: {underline:?}"
-  );
-  assert_eq!(
-    looks.focused.underline_color,
-    Some(Color::from_hex("#00000000")),
-    "with keyboard focus the ring stands for the underline"
   );
   assert_eq!(
     (

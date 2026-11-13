@@ -150,10 +150,7 @@ impl InvitesNotice {
       .spacing(ExtraSpacing::Section.role())
       .child(notice)
       .with_children(self.refused(ctx, &id, invite, need))
-      .with_children(note(ctx, &id, need))
-      .with_children(self.answers.person.reason(ctx, &format!("{id}-accept")))
-      .with_children(self.answers.person.reason(ctx, &format!("{id}-sign-in-again")))
-      .with_children(self.answers.person.reason(ctx, &format!("{id}-turn-on")));
+      .with_children(note(ctx, &id, need));
     if declining {
       column = column.child(invites::decline_question(ctx, &id, invite, &self.answers));
     }
@@ -210,8 +207,8 @@ impl InvitesNotice {
     let accept = if self.answers.connecting() {
       accept.loading()
     } else {
-      let (answers, invite, button) = (self.answers.clone(), invite.clone(), format!("{id}-accept"));
-      accept.on_click(move || answers.accept(&button, &invite))
+      let (answers, invite) = (self.answers.clone(), invite.clone());
+      accept.on_click(move || answers.accept(&invite))
     };
     row.child(accept)
   }

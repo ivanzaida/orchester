@@ -1,8 +1,10 @@
 # PV2-02 · Core: a step's connection and effort (*Runs on*)
 
-- **Status:** needs decision — do not start
+- **Status:** canceled — the person, 2026-11-10: a step chooses an agent, not a model (see PV2-08)
 - **Kind:** core
 - **Depends on:** the person's decision
+- **Branch:** —
+- **Tokens:** —
 
 ## Why it waits
 

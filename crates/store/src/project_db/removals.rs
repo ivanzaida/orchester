@@ -3,16 +3,14 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::{
-    Draft, Pipeline, Removal, RemoveMode, ResourceBody, ResourceKind, Version, VersionNumber, pipeline_step_users,
-  },
+  resource::{Pipeline, Removal, ResourceBody, ResourceKind, StepUser, Version, VersionNumber, pipeline_step_users},
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use super::{
   ProjectDb,
-  resources::{check_kind, kind_text, load_draft, load_resources, save_draft},
+  resources::{check_kind, kind_text, load_draft, load_resources},
   used_versions::used_here,
 };
 use crate::StoreError;
@@ -76,12 +74,7 @@ fn set_archived(connection: &Connection, id: ResourceId, archived: bool, now: Ti
   Ok(changed > 0)
 }
 
-pub(super) fn remove(
-  connection: &mut Connection,
-  id: ResourceId,
-  mode: &RemoveMode,
-  now: Timestamp,
-) -> Result<Removal, StoreError> {
+pub(super) fn remove(connection: &mut Connection, id: ResourceId, now: Timestamp) -> Result<Removal, StoreError> {
   let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let resource = load_resources(&transaction, "WHERE id = ?1", [id.to_string()])?
     .pop()
@@ -90,31 +83,13 @@ pub(super) fn remove(
   if removed_at(&transaction, id)?.is_some() {
     return Err(StoreError::ResourceNotFound(id));
   }
-  let mut users = Vec::new();
-  let mut running = Vec::new();
   // Only profiles and tools are named by pipeline steps; instructions and skills reach agents by their scope.
   if matches!(resource.kind(), ResourceKind::AgentProfile | ResourceKind::Tool) {
-    let pipelines = load_resources(
-      &transaction,
-      &format!("WHERE kind = ?1 AND {LIVE} ORDER BY slug"),
-      [kind_text(ResourceKind::Pipeline)],
-    )?;
-    for pipeline in pipelines {
-      let draft = load_draft::<Pipeline>(&transaction, pipeline.id())?;
-      let latest = latest::<Pipeline>(&transaction, pipeline.id())?;
-      let found = pipeline_step_users((pipeline.id(), pipeline.name()), (draft.as_ref(), latest.as_ref()), id);
-      if !found.is_empty() {
-        users.extend(found);
-        running.push((pipeline.id(), draft, latest));
-      }
+    let users = step_users(&transaction, id)?;
+    if !users.is_empty() {
+      // Dropping the transaction rolls it back: nothing changed, and the steps that run it now are named.
+      return Ok(Removal::InUse(users));
     }
-  }
-  if !mode.may_go_on(&users) {
-    // Dropping the transaction rolls it back: nothing changed, and the steps that run it now are asked about.
-    return Ok(Removal::InUse(users));
-  }
-  for (pipeline, draft, latest) in running {
-    reset(&transaction, pipeline, (draft, latest), (id, now))?;
   }
   transaction.execute(
     "INSERT INTO removed_resources (resource_id, removed_at) VALUES (?1, ?2)",
@@ -124,23 +99,23 @@ pub(super) fn remove(
   Ok(Removal::Removed)
 }
 
-/// Saves the pipeline's draft (started from its latest version when it has none) without `executor`.
-fn reset(
-  connection: &Connection,
-  pipeline: ResourceId,
-  (draft, latest): (Option<Draft<Pipeline>>, Option<Version<Pipeline>>),
-  (executor, now): (ResourceId, Timestamp),
-) -> Result<(), StoreError> {
-  let (body, based_on) = match (draft, latest) {
-    (Some(draft), _) => (draft.body().clone(), draft.based_on()),
-    (None, Some(latest)) => (latest.body().clone(), Some(latest.number())),
-    (None, None) => return Ok(()),
-  };
-  let cleared = body.without_executor(executor);
-  if cleared == body {
-    return Ok(());
+/// The steps of the latest versions of the project's live pipelines that run `executor`.
+fn step_users(connection: &Connection, executor: ResourceId) -> Result<Vec<StepUser>, StoreError> {
+  let pipelines = load_resources(
+    connection,
+    &format!("WHERE kind = ?1 AND {LIVE} ORDER BY slug"),
+    [kind_text(ResourceKind::Pipeline)],
+  )?;
+  let mut users = Vec::new();
+  for pipeline in pipelines {
+    let latest = latest::<Pipeline>(connection, pipeline.id())?;
+    users.extend(pipeline_step_users(
+      (pipeline.id(), pipeline.name()),
+      latest.as_ref(),
+      executor,
+    ));
   }
-  save_draft(connection, pipeline, &Draft::new(cleared, based_on, now)).map(|_| ())
+  Ok(users)
 }
 
 fn latest<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {

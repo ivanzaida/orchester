@@ -22,6 +22,8 @@ pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
 mod overview;
+mod pipeline_hub;
+mod pipeline_link;
 mod pipelines;
 mod placeholder;
 mod project_settings;
@@ -44,11 +46,20 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::ProjectId;
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  resource::VersionNumber,
+};
+use orchester_workspace::pipelines::create::Start;
 
+use self::pipeline_link::LocalPipeline;
 use crate::{
+  navigation::Navigation,
   project::{ProjectState, Projects, ShownProject, TeamRead},
-  routes::{AgentTab, HubFilter, HubView, InstructionsView, NewConnection, ProjectPage, Route},
+  routes::{
+    AgentTab, HubFilter, HubView, InstructionsView, NewConnection, PipelineView, PipelinesFilter, PipelinesView,
+    ProjectPage, Route,
+  },
 };
 
 /// The screen at the router's path.
@@ -111,7 +122,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::Review => review::list(ctx, project),
     ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
-    ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
+    // Memory is a filter of the Agents hub (`Section Y · Memory` `Xxl1u`), a team project's too.
+    ProjectPage::Memory(memory) => agents_or_hub(ctx, project, HubView::memory(*memory)),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
     ProjectPage::NewTaskInModule(module) => task_form::new_task(ctx, project, Some(*module)),
@@ -125,14 +137,13 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::TaskMerge(key, number) => task::merge::attempt::screen(ctx, project, key, *number),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
-    ProjectPage::Pipelines => pipelines::screen(ctx, project),
+    ProjectPage::Pipelines => pipelines_or_hub(ctx, project, PipelinesView::default()),
+    ProjectPage::PipelinesHub(view) => pipelines_or_hub(ctx, project, *view),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_) => {
-      pipelines::new_pipeline(ctx, project)
+      new_pipeline_or_hub(ctx, project, page)
     }
-    ProjectPage::Pipeline(id, view) => pipelines::editor(ctx, project, *id, (view.clone(), None)),
-    ProjectPage::PipelineVersion(id, version, view) => {
-      pipelines::editor(ctx, project, *id, (view.clone(), Some(*version)))
-    }
+    ProjectPage::Pipeline(id, view) => pipeline_page(ctx, project, *id, (view, None)),
+    ProjectPage::PipelineVersion(id, version, view) => pipeline_page(ctx, project, *id, (view, Some(*version))),
     ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
     ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
     ProjectPage::NewAgent(tab) => new_agent(ctx, project, *tab),
@@ -224,23 +235,76 @@ fn new_mcp_server(ctx: &mut Ctx, project: &ShownProject) -> Element {
 
 /// The Agents hub is master–detail (`Agents · v2`) in a team project ([`team_hub`]) and in a local one ([`local_hub`]).
 /// Whether the project is shared is read from its database with the feed, so the page waits for that read, and says so
-/// when it failed, rather than show the local hub for a team project. A team's hub has no *Archived* filter: a route
-/// that names it shows All.
+/// when it failed, rather than show the local hub for a team project.
 fn agents_or_hub(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
   match project.feed.team.get() {
-    TeamRead::Read(Some(team)) => {
-      let view = HubView {
-        filter: if view.filter == HubFilter::Archived {
-          HubFilter::All
-        } else {
-          view.filter
-        },
-        ..view
-      };
-      team_hub::screen(ctx, project, team, view)
-    }
+    TeamRead::Read(Some(team)) => team_hub::screen(ctx, project, team, view),
     TeamRead::Read(None) => local_hub::screen(ctx, project, view),
     TeamRead::Unread => team_hub::unread::reading(ctx),
     TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
+}
+
+/// The Pipelines page: the hub (`Pipelines · v2`) in a local project ([`pipeline_hub`]), the page it has in a team one.
+/// Whether the project is shared is read with the feed, as for the Agents hub ([`agents_or_hub`]), so the page waits
+/// for that read and says so when it failed.
+fn pipelines_or_hub(ctx: &mut Ctx, project: &ShownProject, view: PipelinesView) -> Element {
+  match project.feed.team.get() {
+    TeamRead::Read(None) => pipeline_hub::screen(ctx, project, view, None),
+    TeamRead::Read(Some(_)) => pipelines::screen(ctx, project),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
+  }
+}
+
+/// New pipeline: in a local project the Pipelines hub makes it in its panel (`Pipelines · v2` P14, P14b), from where
+/// the route says it starts; a team project keeps the page of its own.
+fn new_pipeline_or_hub(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
+  let start = match page {
+    ProjectPage::NewEmptyPipeline => Start::Empty,
+    ProjectPage::CopyPipeline(id) => Start::Copy(*id),
+    _ => Start::Starter,
+  };
+  match project.feed.team.get() {
+    TeamRead::Read(None) => pipeline_hub::new_pipeline(ctx, project, start),
+    TeamRead::Read(Some(_)) => pipelines::new_pipeline(ctx, project),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
+  }
+}
+
+/// A route to pipeline `id`'s own page, of the edit or of published `version`: in a local project the Pipelines hub
+/// (`Pipelines · v2`), whose panel shows the step or the Deliver step the route names (P2, P15) and the pipeline itself
+/// for every other place of the old page (its Settings and Versions tabs, a published version, the publish review),
+/// with the route made the hub's own ([`pipeline_in_hub`]). A team project keeps the old page. While it is not yet
+/// read whether the project is shared the page the route had before stays, so a team project's editor is not replaced
+/// by a placeholder for as long as that takes.
+fn pipeline_page(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  id: ResourceId,
+  (view, version): (&PipelineView, Option<VersionNumber>),
+) -> Element {
+  match project.feed.team.get() {
+    TeamRead::Read(None) => pipeline_in_hub(ctx, project, id, LocalPipeline::open(view, version)),
+    TeamRead::Read(Some(_)) | TeamRead::Unread => pipelines::editor(ctx, project, id, (view.clone(), version)),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
+  }
+}
+
+/// The hub with pipeline `id`'s panel, `open` open in it. A route of the old page is replaced in place by the hub's
+/// own, so Back, a link copied and a reload land on what the page shows.
+fn pipeline_in_hub(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  id: ResourceId,
+  open: Option<pipeline_hub::OpenStep>,
+) -> Element {
+  let shown = Route::Project(project.open.project.id(), LocalPipeline::page(id, open.as_ref()));
+  let navigation = Navigation::of(ctx);
+  if navigation.route_now() != shown {
+    navigation.replace(shown);
+  }
+  let view = PipelinesView::new(PipelinesFilter::All, Some(id));
+  pipeline_hub::screen(ctx, project, view, open)
 }

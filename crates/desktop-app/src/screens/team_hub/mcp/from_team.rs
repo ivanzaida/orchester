@@ -3,21 +3,14 @@
 
 use lurq::{
   app::ctx::Ctx,
-  components::{Column, Row, Text},
+  components::{Column, Row},
   node::Element,
 };
 use orchester_workspace::agents::team_mcp::{McpRuns, SecretHeader, TeamMcpSheet};
 
-use crate::{
-  screens::team_hub::rows::{self, Sub},
-  theme::HubText,
-};
+use crate::screens::team_hub::rows::{self, FromTeam, Sub};
 
-pub(super) fn section(ctx: &Ctx, sheet: &TeamMcpSheet) -> Column {
-  let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
-    .id("team-hub-from-team-note")
-    .variant(HubText::PanelHint.role())
-    .nowrap();
+pub(in crate::screens::team_hub) fn section(ctx: &Ctx, sheet: &TeamMcpSheet, note: FromTeam) -> Column {
   let mut rows = match &sheet.runs {
     McpRuns::Program {
       program,
@@ -35,12 +28,7 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamMcpSheet) -> Column {
       rows::mono("team-hub-from-team-exempt-value", &sheet.exempt_tools.join(", ")),
     ));
   }
-  rows::section(
-    "team-hub-from-team",
-    &ctx.t("team_hub.profile.fromTeam"),
-    vec![note.into()],
-    rows,
-  )
+  rows::from_team(ctx, note, rows)
 }
 
 fn program_rows(

@@ -341,6 +341,33 @@ pub fn page_tabs_with_note(
   tab_line(ctx, id, row)
 }
 
+/// [`page_tabs`] with `after` set apart by a rule (`Divider` `Fbmqe` before *Archived* in `Agents · v2` L13 `moPNo`):
+/// a line as wide as the tabs' stroke and [`TAB_DIVIDER_HEIGHT`] high in `border_strong`, centered on the tabs.
+pub fn page_tabs_divided(
+  ctx: &mut Ctx,
+  id: &str,
+  tabs: impl IntoIterator<Item = PageTab>,
+  after: Vec<PageTab>,
+) -> Stack {
+  let mut row: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
+  if !after.is_empty() {
+    let width = ctx.theme().border_size_value(BorderSize::Sm);
+    row.push(
+      Row::new()
+        .id(format!("{id}-divider"))
+        .width(Dimension::Px(width))
+        .height(Dimension::Px(TAB_DIVIDER_HEIGHT))
+        .background(PaletteColor::BorderStrong)
+        .into(),
+    );
+    row.extend(after.into_iter().map(|tab| tab.render(ctx)));
+  }
+  tab_line(ctx, id, row)
+}
+
+/// The height of the rule between groups of tabs (`Rule` `Y3Ixz4` in `Fbmqe`).
+const TAB_DIVIDER_HEIGHT: f32 = 14.0;
+
 fn tab_line(ctx: &Ctx, id: &str, tabs: Vec<Element>) -> Stack {
   let line = ctx.theme().border_size_value(BorderSize::Sm);
   Stack::new()
@@ -373,6 +400,9 @@ pub enum SegmentFace {
   Icon(Icon, Arc<str>),
   /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
   Labelled(Icon, Arc<str>),
+  /// A choice that warns: an 11 `triangle-alert` in `danger` before the label, 5 apart; chosen, on `danger_muted` with
+  /// its label in `danger` (`Segment · Dangerous auto-approve` `cky7h`, `vBuWb` in `v5d5r`).
+  Warned(Arc<str>),
 }
 
 pub struct Segment {
@@ -478,6 +508,7 @@ impl Segment {
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
       }
+      SegmentFace::Warned(label) => warned(button, (&label, label_id), typography, self.chosen),
       SegmentFace::Icon(face, label) => {
         let button = button
           .width(Dimension::Px(ICON_SEGMENT_WIDTH))
@@ -489,6 +520,25 @@ impl Segment {
     };
     button.into()
   }
+}
+
+/// A choice that warns ([`SegmentFace::Warned`]): its triangle always in `danger`; chosen, its label in `danger` on
+/// `danger_muted`, else `text_muted`.
+fn warned(button: Button, (label, label_id): (&Arc<str>, String), typography: TypographyStyle, chosen: bool) -> Button {
+  let color = if chosen {
+    PaletteColor::Danger
+  } else {
+    PaletteColor::TextMuted
+  };
+  let button = button
+    .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
+    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center)
+    .describe("a11y_name", label.clone())
+    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Danger))
+    .child(Text::new(label).id(label_id).variant(typography).color(color).nowrap());
+  chosen_fill(button, chosen, PaletteColor::DangerMuted)
 }
 
 fn chosen_fill(button: Button, chosen: bool, fill: PaletteColor) -> Button {

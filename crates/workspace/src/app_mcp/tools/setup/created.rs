@@ -13,11 +13,7 @@ use serde_json::Value;
 use crate::{
   app_mcp::{error::ToolError, services::Services, tools::team},
   messages::Message,
-  sharing::{
-    SharingError,
-    team::said,
-    team_edit::{EditRefused, Local, NewTeamResource, Refusal},
-  },
+  sharing::team_edit::{EditRefused, Local, NewTeamResource, Refusal},
 };
 
 /// Creates `new` on the team server of the project at `root`; its id.
@@ -50,29 +46,12 @@ pub(super) fn refused(error: &EditRefused) -> ToolError {
   ToolError::refused(code, vec![message])
 }
 
-/// A body this computer found the team cannot take, refused before anything is sent, with what it names.
-pub(super) fn not_team_form(error: SharingError) -> ToolError {
-  let code = match &error {
-    SharingError::LocalEntitiesNamed { .. } => "local_entities_named",
-    SharingError::PipelineNamesNonTeam { .. } => "pipeline_names_non_team",
-    SharingError::WritableFoldersStay { .. } => "writable_folders_stay",
-    SharingError::Store(_) => "storage",
-    _ => "team_server_not_reached",
-  };
-  match error {
-    SharingError::Store(error) => ToolError::from(error),
-    error => ToolError::refused(code, vec![said(&error, None)]),
-  }
-}
-
-/// The tools that save or publish a draft of a profile, pipeline, instruction, skill or tool, or make one as a draft.
-pub(crate) const DRAFT_TOOLS: [&str; 12] = [
+/// The tools that save or publish a draft of a profile, instruction, skill or tool. A team pipeline's tools
+/// (`save_pipeline`, `create_pipeline`, `duplicate_pipeline`) send it to the team server at once and wait for its
+/// answer instead (D-043), so they are not among them.
+pub(crate) const DRAFT_TOOLS: [&str; 8] = [
   "save_profile_draft",
   "publish_profile",
-  "create_pipeline",
-  "duplicate_pipeline",
-  "save_pipeline_draft",
-  "publish_pipeline",
   "save_instruction_draft",
   "publish_instruction",
   "save_tool_draft",

@@ -192,6 +192,10 @@ impl Fixture {
         slug: slug.to_owned(),
         archived: false,
         revision: TaskRevision::try_from(1).expect("revision"),
+        updated: orchester_workspace::team_config::Changed {
+          by: "Alice Moreau".to_owned(),
+          at: orchester_core::time::Timestamp::from_unix_millis(0),
+        },
         latest: Some(latest),
       }),
     }
@@ -284,17 +288,22 @@ impl Fixture {
   }
 
   /// A resource of this computer, published at v1: a local project's own, which no server knows.
-  pub fn own<B: ResourceBody>(&self, slug: &str, body: &B) -> ResourceId {
+  pub fn own<B: ResourceBody + Clone>(&self, slug: &str, body: &B) -> ResourceId {
     let mut db = self.db();
-    let id = self.create(&mut db, slug, body);
+    if B::KIND == ResourceKind::Pipeline {
+      // A pipeline is created as its first version (D-032).
+      return db
+        .create_published(Slug::new(slug).expect("slug"), name(slug), body, at(11))
+        .expect("published")
+        .0
+        .id();
+    }
+    let id = db
+      .create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
+      .expect("resource")
+      .id();
     db.publish_draft::<B>(id, at(11)).expect("published");
     id
-  }
-
-  fn create<B: ResourceBody>(&self, db: &mut ProjectDb, slug: &str, body: &B) -> ResourceId {
-    db.create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
-      .expect("resource")
-      .id()
   }
 
   /// A server of this computer that starts `program`.

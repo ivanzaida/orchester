@@ -14,7 +14,8 @@
     "group": {
       "needs": "Needs you here",
       "ready": "Ready here",
-      "off": "Off here"
+      "off": "Off here",
+      "archived": "Archived"
     },
     "kind": {
       "tag": {
@@ -56,28 +57,49 @@
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
       "programHere": "Set its program path on this computer",
+      "programGone": "Program missing here",
       "programOf": "Set the program path of {{server}}",
       "secret": "Secret {{name}} has no value here",
       "localProgram": "The program of {{server}} is not found here",
       "unsupportedHere": "Takes several secret headers, which this app can't send yet",
       "unsupportedOf": "{{server}} takes several secret headers, which this app can't send yet",
-      "secretUnreadable": "The keychain can't say whether secret {{name}} has a value here"
+      "secretUnreadable": "The keychain can't say whether secret {{name}} has a value here",
+      "archivedBy": "Archived by {{who}} · {{date}}, {{time}}"
     },
     "chip": {
       "team": "Team · {{version}}",
       "teamUnnumbered": "Team · not numbered yet",
       "ready": "Ready here",
       "off": "Off here",
-      "noConnection": "No {{cli}} connection here"
+      "noConnection": "No {{cli}} connection here",
+      "archivedMissing": "1 thing missing here"
     },
     "readiness": {
       "title": "Ready here?",
       "missing": "{{count}} missing",
-      "allSet": "all set"
+      "allSet": "all set",
+      "why": {
+        "notTeamForm": "Its latest version was published before the team's form of its kind, so Orchester can't read what it asks of this computer. An admin publishes it again from the team's form.",
+        "choosesMcpServer": "It chooses an MCP server the team does not offer here yet, so what it asks of this computer is not known.",
+        "choosesArchivedMcpServer": "It chooses {{name}}, an MCP server the team archived. It can't run until an admin restores {{name}} or it stops choosing it.",
+        "usesArchivedTool": "It names {{name}}, a tool the team archived. It can't run until an admin restores {{name}} or it stops naming it.",
+        "usesArchivedInstruction": "It names {{name}}, an instruction the team archived. It can't run until an admin restores {{name}} or it stops naming it.",
+        "runsUnknown": "It runs a profile or tool this computer has no version of.",
+        "runsArchived": "It runs {{name}}, which was archived.",
+        "choosesArchivedLocalMcpServer": "It chooses {{name}}, an MCP server that was archived.",
+        "connectionGone": "It runs on a connection the project no longer has.",
+        "teamToolSecretById": "It holds a project secret by id, and a team can't tell whether that secret has a value on this computer.",
+        "secretGone": "It uses a secret the project no longer has.",
+        "secretUnreadable": "The keychain did not say whether its secret has a value here."
+      }
     },
     "panel": {
       "edit": "Edit",
       "usedBy": "used by {{names}}",
+      "givenBy": {
+        "one": "given by 1 profile",
+        "other": "given by {{count}} profiles"
+      },
       "usedByNone": "No profile uses it yet"
     },
     "member": {
@@ -111,6 +133,9 @@
         }
       }
     },
+    "empty": {
+      "mcpServers": "Add a server the team's runs can use. Once published it is here for everyone; each computer sets its program path."
+    },
     "cli": {
       "claude": "Claude Code",
       "codex": "Codex",
@@ -127,6 +152,8 @@
       "agentCliSub": "the kind; never a connection",
       "model": "Model",
       "effort": "Reasoning effort",
+      "effortDefault": "CLI default",
+      "none": "None",
       "effortLevel": {
         "low": "Low",
         "medium": "Medium",
@@ -169,7 +196,8 @@
       "switchedOff": "Switched off on this computer",
       "valueSet": "Value set here",
       "noValue": "No value set here",
-      "ready": "Ready"
+      "ready": "Ready",
+      "archived": "The team archived it · {{profile}} can't run until an admin restores it or {{profile}} stops choosing it"
     },
     "fix": {
       "link": {
@@ -178,7 +206,8 @@
         "signIn": "Sign in →",
         "switchOn": "Switch on →",
         "setPath": "Set path →",
-        "addValue": "Add value →"
+        "addValue": "Add value →",
+        "openArchived": "Open →"
       },
       "programTitle": "Choose the MCP server's program",
       "action": {
@@ -187,14 +216,16 @@
         "signIn": "Sign in to {{cli}}",
         "switchOn": "Switch on {{server}}",
         "setPath": "Set {{server}}'s program path",
-        "addValue": "Add value for {{name}}"
+        "addValue": "Add value for {{name}}",
+        "openArchived": "Open {{name}}"
       },
       "hint": {
         "then": "Then {{what}}",
         "done": "{{profile}} runs here once nothing is missing",
         "use": "Asked once per profile · kept on this computer",
         "add": "Opens Settings › Accounts",
-        "signIn": "Opens Settings › Accounts"
+        "signIn": "Opens Settings › Accounts",
+        "openArchived": "In Archived · an admin restores it there"
       }
     },
     "secretDialog": {
@@ -214,8 +245,7 @@
         "otherYear": "{{month}} {{day}}, {{year}}"
       },
       "chip": {
-        "pathNotSet": "Needs the program path here",
-        "pathGone": "Program missing here"
+        "pathNotSet": "Needs the program path here"
       },
       "fromTeam": {
         "runsAs": "Runs as",
@@ -304,6 +334,10 @@
       "files": "Files"
     },
     "tool": {
+      "program": "Program",
+      "argumentsSub": "One per line",
+      "argumentsPlaceholder": "An argument on each line",
+      "timeoutField": "Time limit, seconds",
       "where": "Tool · {{kind}}",
       "kind": {
         "command": "Command",
@@ -318,6 +352,7 @@
       "request": "Request",
       "headers": "Headers",
       "bearer": "Authorization: Bearer ← secret {{secret}}",
+      "bearerById": "Authorization: Bearer ← a secret named by id",
       "arguments": "Arguments",
       "argument": "{{name}} · {{place}}",
       "place": {
@@ -330,8 +365,9 @@
       "approvalNever": "Yes",
       "approvalOnce": "No · a person approves once per run",
       "approvalEvery": "No · a person approves each call",
-      "secretLabel": "Secret it uses",
-      "secretSub": "by id, never a value",
+      "secretLabel": "Secrets it needs",
+      "secretSub": "names only, never values",
+      "byIdValue": "Named by id, which this computer can't read",
       "valueLabel": "Secret value",
       "cannotFill": "Can't be filled in here yet",
       "cannotFillSub": "named by id",
@@ -340,7 +376,15 @@
         "secretById": "Secret named by id"
       },
       "note": {
-        "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again."
+        "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again.",
+        "ready": "Ready here: {{secret}} has a value on this computer.",
+        "secret": "Not ready here: {{secret}} needs a value. Runs whose pipeline uses {{name}} don't start on this computer until then.",
+        "unreadable": "Not ready here: this computer's keychain can't say whether {{secret}} has a value."
+      },
+      "republish": {
+        "button": "Publish again by name",
+        "hint": "Names its secret by the name it has in this project, for the whole team",
+        "unreached": "Publishing needs the team server · it can't be reached now"
       }
     },
     "edit": {
@@ -359,11 +403,59 @@
       "failed": {
         "title": "Couldn't save {{version}}"
       },
-      "fromTeamEditing": "· editing · Save publishes it to every computer",
       "unreachable": {
         "title": "Can't reach the team · nothing was saved"
       },
-      "fixFields": "Fix the marked fields to save"
+      "fixFields": "Fix the marked fields to save",
+      "tooMany": "A profile lists at most {{max}} of each kind",
+      "add": "Add",
+      "changedMark": "· changed",
+      "textRequired": "Write the text to save",
+      "variablesMissing": "A variable it uses has no value when it is added",
+      "descriptionRequired": "Write a description to save",
+      "descriptionSub": "What an agent reads to decide whether to load it",
+      "filesSub": "Its reference files are not changed here",
+      "skillDocument": "SKILL.md",
+      "skillDocumentPlaceholder": "What an agent reads once it loads the skill, in Markdown",
+      "usedBySub": "Given by these profiles; changed in a profile",
+      "unsaved": "Unsaved changes",
+      "makes": "Save publishes {{version}} for the whole team · runs keep their version",
+      "makesUnchanged": "No changes · Save publishes {{version}} for the whole team",
+      "needsServer": "Save needs the team server · it can't be reached now",
+      "waiting": {
+        "title": "Can't reach the team server",
+        "body": "Your changes stay in the panel while it is open. Save publishes them once the team server answers again."
+      },
+      "newer": {
+        "title": "{{name}} published {{version}} while you edited",
+        "body": "The team keeps one latest version, so yours was not saved. The panel shows {{version}} now; make your changes again on it."
+      }
+    },
+    "archived": {
+      "nothingTitle": "Pick an archived resource",
+      "nothingDetail": "The team's archived resources are hidden from every list and picker, and the runs that pinned them were stopped. Pick one to see what archiving did; an admin restores it.",
+      "chip": "Archived",
+      "wasUsedBy": "was used by {{names}}",
+      "lock": "Only team admins restore it: {{admins}}.",
+      "title": "Archived: hidden from lists and pickers",
+      "run": "{{key}} · {{title}}",
+      "noVersion": "with no version yet",
+      "stoppedOne": "Archiving stopped the run that pinned it, {{runs}}. Restore puts {{name}} back for the whole team as it was, {{version}}; that run stays stopped, so run it again to use it.",
+      "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back for the whole team as it was, {{version}}; those runs stay stopped, so run them again to use it.",
+      "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back for the whole team as it was, {{version}}.",
+      "blocksMcpOne": "Until then {{names}}, which chooses it, is not ready on any computer.",
+      "blocksMcp": "Until then {{names}}, which choose it, are not ready on any computer.",
+      "blocksOne": "Until then {{names}}, which names it, is not ready on any computer.",
+      "blocks": "Until then {{names}}, which name it, are not ready on any computer.",
+      "sentences": "{{first}} {{then}}",
+      "readOnly": "· read-only until it is restored",
+      "restore": "Restore {{name}}",
+      "restoreHint": "Back for the whole team at once · stopped runs stay stopped",
+      "refused": {
+        "notAdmin": "Only team admins restore the team's resources: the team server refused it. Nothing was restored.",
+        "conflict": "{{name}} changed on the team server since this page read it. Nothing was restored; look at it again.",
+        "other": "The team server refused it ({{code}}). Nothing was restored."
+      }
     }
   }
 }

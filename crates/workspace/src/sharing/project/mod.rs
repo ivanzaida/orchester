@@ -30,6 +30,7 @@ pub mod share_task;
 pub mod state;
 pub mod store;
 mod sync;
+mod team_pipeline;
 mod team_reports;
 pub mod work;
 
@@ -43,7 +44,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
-  archive_resource::NotArchived,
+  archive_resource::{NotArchived, NotRestored},
   authority::TeamAdmins,
   claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},
@@ -53,6 +54,7 @@ pub use self::{
   make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
   members::{MemberChange, MembersRead, ProjectMembers},
   share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
+  team_pipeline::NotTaken,
 };
 use super::{Behalf, Connection, ServerEntry, Servers, SharingError};
 

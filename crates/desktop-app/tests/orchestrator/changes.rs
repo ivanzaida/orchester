@@ -72,7 +72,6 @@ fn with_instruction_draft(screen: &Orchestrator) -> orchester_core::id::Resource
 }
 
 const PUBLISH_INSTRUCTION: &str = r#"Call publish_instruction {"project":"Kontur","instruction":"Review checklist"}"#;
-const PUBLISH_PIPELINE: &str = r#"Call publish_pipeline {"project":"Kontur","pipeline":"Delivery"}"#;
 
 #[test]
 fn orchestrator_reads_another_project_and_changes_only_its_own() {
@@ -147,7 +146,7 @@ fn orchestrator_publication_waits_for_the_person_with_its_facts_and_diff() {
 
   let publish = format!("{card}-start");
   with_synthetic_input(|| screen.click(&publish));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert_eq!(
     actions(&screen)[0].outcome,
     ActionOutcome::Waits,
@@ -173,98 +172,40 @@ fn orchestrator_publication_waits_for_the_person_with_its_facts_and_diff() {
 }
 
 #[test]
-fn orchestrator_person_publishes_what_widens_and_dismisses() {
-  let mut screen = Orchestrator::new(Setup::Ready);
-  let builder = screen.builder();
-  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
-  // New instructions are not provably as strict: automation could not publish it, the person may.
-  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  screen.go(OrchestratorChat::New);
-  call(&mut screen, PUBLISH_PIPELINE, 1);
-  let card = proposal_card(&screen);
-  screen.until("the card's facts", |screen| {
-    screen.text(&format!("{card}-facts")).contains("Widens")
-  });
-  screen.click(&format!("{card}-start"));
-  screen.until("the publication", |screen| {
-    actions(screen)[0].outcome == ActionOutcome::Applied
-  });
-  assert_eq!(
-    screen.pipeline_version(delivery),
-    2,
-    "the person's Publish published what widens"
-  );
-
-  screen.pipeline_draft((delivery, builder), "Read README.md three times.");
-  call(&mut screen, PUBLISH_PIPELINE, 2);
-  let card = proposal_card(&screen);
-  screen.until("its buttons", |screen| screen.exists(&format!("{card}-dismiss")));
-  screen.click(&format!("{card}-dismiss"));
-  screen.until("the dismissal", |screen| {
-    actions(screen)[1].outcome == ActionOutcome::Dismissed
-  });
-  screen.until("the dismissed card", |screen| {
-    screen
-      .text(&format!("{card}-title"))
-      .contains("Publish Delivery v3 · dismissed")
-  });
-  assert_eq!(screen.pipeline_version(delivery), 2, "nothing was published");
-  assert!(
-    screen.exists(&format!("{card}-open")),
-    "the draft opens from the dismissed line"
-  );
-}
-
-#[test]
-fn orchestrator_widening_card_shows_what_it_widens_without_details() {
-  let mut screen = Orchestrator::new(Setup::Ready);
-  let builder = screen.builder();
-  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
-  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  // Let the Orchestrator publish drafts stays off: the card still warns that the draft widens.
-  screen.go(OrchestratorChat::New);
-  call(&mut screen, PUBLISH_PIPELINE, 1);
-  let card = proposal_card(&screen);
-  screen.until("the warning", |screen| screen.exists(&format!("{card}-widens")));
-  assert!(
-    screen
-      .text(&format!("{card}-widens"))
-      .contains("This draft widens what Delivery may do."),
-    "{}",
-    screen.text(&format!("{card}-widens"))
-  );
-  // Right under the draft's name, among the facts shown without Show details.
-  let fact = screen.text(&format!("{card}-fact-1"));
-  assert!(
-    fact.starts_with("Widens"),
-    "the second fact says what it widens: {fact}"
-  );
-}
-
-#[test]
 fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  let builder = screen.builder();
-  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
-  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
+  let instruction = with_instruction_draft(&screen);
+  let delivery = screen
+    .db()
+    .resources(orchester_core::resource::ResourceKind::Pipeline)
+    .expect("read")
+    .into_iter()
+    .find(|pipeline| pipeline.name().as_str() == "Delivery")
+    .expect("Delivery")
+    .id();
   screen.go(OrchestratorChat::New);
-  call(&mut screen, PUBLISH_PIPELINE, 1);
+  call(&mut screen, PUBLISH_INSTRUCTION, 1);
   let card = proposal_card(&screen);
   // The draft changes after the person was asked: Publish must not publish what they did not read.
-  screen.pipeline_draft((delivery, builder), "Delete the repository.");
+  screen.instruction_draft((instruction, delivery), "## Tests\n- Delete the repository.");
   screen.until("its button", |screen| screen.exists(&format!("{card}-start")));
   screen.click(&format!("{card}-start"));
   screen.until("the refusal", |screen| {
     matches!(&actions(screen)[0].outcome, ActionOutcome::Refused { code, .. } if code == "changed_since_proposed")
   });
-  assert_eq!(screen.pipeline_version(delivery), 1, "nothing was published");
+  let published = screen
+    .db()
+    .latest_version::<orchester_core::resource::Instruction>(instruction)
+    .expect("read")
+    .expect("v1");
+  assert_eq!(published.number().get(), 1, "nothing was published");
   screen.until("the refused line", |screen| {
     screen.text(&format!("{card}-title")).contains("· not done")
   });
   // When the draft changed, as the person reads it under the refused line.
   let saved = screen
     .db()
-    .draft::<orchester_core::resource::Pipeline>(delivery)
+    .draft::<orchester_core::resource::Instruction>(instruction)
     .expect("read")
     .expect("the draft")
     .updated_at();
@@ -309,23 +250,6 @@ fn orchestrator_publishes_itself_once_the_person_lets_it() {
   screen.until("Project settings › Orchestrator", |screen| {
     screen.route() == orchestrator
   });
-}
-
-#[test]
-fn orchestrator_is_refused_what_widens_while_it_drives_without_the_persons_permission() {
-  let mut screen = Orchestrator::new(Setup::Ready);
-  let builder = screen.builder();
-  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
-  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  screen.let_orchestrator_drive(true);
-  screen.go(OrchestratorChat::New);
-  call(&mut screen, PUBLISH_PIPELINE, 1);
-  assert!(
-    matches!(&actions(&screen)[0].outcome, ActionOutcome::Refused { code, .. } if code == "person_only"),
-    "what widens is the tool's to refuse, no card: {:?}",
-    actions(&screen)[0].outcome
-  );
-  assert_eq!(screen.pipeline_version(delivery), 1);
 }
 
 /// A draft of profile `builder` that turns its network on: it widens what its agents may do.

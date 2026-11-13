@@ -18,6 +18,7 @@ macro_rules! markers {
     impl $inspect for crate::agents::hub::HubCounts {}
     impl $inspect for crate::agents::team_hub::TeamHub {}
     impl $inspect for crate::agents::local_hub::LocalHub {}
+    impl $inspect for crate::agents::role::RoleText {}
     impl $inspect for crate::agents::team_mcp_edit::EditError {}
     impl $inspect for crate::app_mcp::setup::NewTeamMcpServer {}
     impl $inspect for crate::local_archive::Archivable {}
@@ -101,6 +102,7 @@ macro_rules! markers {
     impl $inspect for crate::pipelines::library::LibraryEntry {}
     impl $inspect for crate::pipelines::library::StartFrom {}
     impl $inspect for crate::pipelines::problems::ProblemView {}
+    impl $inspect for crate::pipelines::write::Stored {}
     impl $inspect for crate::readiness::ProjectReadiness {}
     impl $inspect for crate::plan_limits::Connections {}
     impl $inspect for crate::plan_limits::Readings {}
@@ -128,6 +130,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::cloud::Reach {}
     impl $inspect for crate::sharing::cloud::SignIn {}
     impl $inspect for crate::sharing::project::FirstDownload {}
+    impl $inspect for crate::sharing::project::NotRestored {}
     impl $inspect for crate::sharing::project::clone::CloneEnd {}
     impl $inspect for crate::sharing::project::clone::CloneRefusal {}
     impl $inspect for crate::sharing::project::clone::Destination {}

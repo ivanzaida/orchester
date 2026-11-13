@@ -6,13 +6,14 @@ use std::sync::Arc;
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
   connection::AgentProvider,
-  sharing::{ConnectionProblem, Missing},
+  sharing::{ConnectionProblem, Missing, ProgramProblem},
   time::Timestamp,
 };
 use orchester_workspace::{
   agents::{team_hub::Form, team_mcp::Published, team_text::Added},
   display,
   readiness::{Group, ReadinessStanding, Undecided},
+  team_config::Changed,
 };
 
 use super::model::{Entry, Kind, Listing, Reach};
@@ -27,8 +28,20 @@ pub(in crate::screens) const fn cli_key(cli: AgentProvider) -> &'static str {
   }
 }
 
-/// The CLI kind the resource has no connection of at all here, when that is the one thing it misses: nothing stands in
-/// for it, so it is said in `danger`.
+/// Whether what the resource misses here is said in `danger`: no connection of its CLI kind at all, or, for an MCP
+/// server, its program's file gone from the path set for it; nothing on this computer stands in for either.
+pub(super) fn said_in_danger(entry: &Entry) -> bool {
+  if has_no_connection(entry).is_some() {
+    return true;
+  }
+  matches!(
+    entry.standing.as_ref().map(ReadinessStanding::missing),
+    Some([Missing::McpProgram { server, problem: ProgramProblem::FileGone(_) }])
+      if *server == entry.id && entry.kind == Kind::McpServer
+  )
+}
+
+/// The CLI kind the resource has no connection of at all here, when that is the one thing it misses.
 fn has_no_connection(entry: &Entry) -> Option<AgentProvider> {
   match entry.standing.as_ref()?.missing() {
     [
@@ -42,6 +55,18 @@ fn has_no_connection(entry: &Entry) -> Option<AgentProvider> {
   }
 }
 
+/// *Archived by dana-k · Nov 12, 15:21*: who archived a resource of the team and when.
+pub(super) fn archived_by(ctx: &Ctx, changed: &Changed) -> Arc<str> {
+  ctx.t_args(
+    "team_hub.line.archivedBy",
+    [
+      ("who", changed.by.clone()),
+      ("date", date(ctx, Timestamp::now(), changed.at).to_string()),
+      ("time", display::clock(changed.at)),
+    ],
+  )
+}
+
 /// A line of words and the color it is said in.
 pub(super) struct Said {
   pub text: Arc<str>,
@@ -53,7 +78,7 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   match entry.group {
     Group::NeedsYouHere => Said {
       text: needs(ctx, listing, entry),
-      color: if has_no_connection(entry).is_some() {
+      color: if said_in_danger(entry) {
         PaletteColor::Danger
       } else {
         PaletteColor::Warning
@@ -134,9 +159,32 @@ fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
     | Undecided::ChoosesMcpServer(_)
     | Undecided::RunsUnknown(_)
     | Undecided::ConnectionGone(_)
-    | Undecided::TeamToolSecretById(_)
+    | Undecided::TeamToolSecretById
     | Undecided::SecretGone(_)
     | Undecided::SecretUnreadable(_) => ctx.t("team_hub.line.undecided"),
+  }
+}
+
+/// Why nobody can tell whether a resource is ready here, in the panel's sentence: what is not known and, for an
+/// archived resource it names, what moves it on.
+pub(super) fn why_undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
+  let named = |key: &str, name: &String| ctx.t_args(key, [("name", name.clone())]);
+  match why {
+    Undecided::NotTeamForm => ctx.t("team_hub.readiness.why.notTeamForm"),
+    Undecided::ChoosesMcpServer(_) => ctx.t("team_hub.readiness.why.choosesMcpServer"),
+    Undecided::ChoosesArchivedMcpServer(_, name) => named("team_hub.readiness.why.choosesArchivedMcpServer", name),
+    Undecided::UsesArchivedTool(_, name) => named("team_hub.readiness.why.usesArchivedTool", name),
+    Undecided::UsesArchivedInstruction(_, name) => named("team_hub.readiness.why.usesArchivedInstruction", name),
+    Undecided::RunsUnknown(_) => ctx.t("team_hub.readiness.why.runsUnknown"),
+    Undecided::RunsArchived(_, name) => named("team_hub.readiness.why.runsArchived", name),
+    Undecided::ChoosesArchivedLocalMcpServer(_, name) => {
+      named("team_hub.readiness.why.choosesArchivedLocalMcpServer", name)
+    }
+    Undecided::ConnectionGone(_) => ctx.t("team_hub.readiness.why.connectionGone"),
+    Undecided::TeamToolSecretById => ctx.t("team_hub.readiness.why.teamToolSecretById"),
+    Undecided::SecretGone(_) => ctx.t("team_hub.readiness.why.secretGone"),
+    Undecided::SecretUnreadable(_) => ctx.t("team_hub.readiness.why.secretUnreadable"),
+    Undecided::Member { why, .. } => why_undecided(ctx, why),
   }
 }
 
@@ -163,9 +211,10 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
       ctx.t("team_hub.line.mcpUndecided")
     }
     Missing::McpOff { server } => ctx.t_args("team_hub.line.mcpOff", [("server", server_name(*server))]),
-    Missing::McpProgram { server, .. } if *server == entry.id && entry.kind == Kind::McpServer => {
-      ctx.t("team_hub.line.programHere")
-    }
+    Missing::McpProgram { server, problem } if *server == entry.id && entry.kind == Kind::McpServer => match problem {
+      ProgramProblem::NotSet => ctx.t("team_hub.line.programHere"),
+      ProgramProblem::FileGone(_) => ctx.t("team_hub.line.programGone"),
+    },
     Missing::McpProgram { server, .. } => ctx.t_args("team_hub.line.programOf", [("server", server_name(*server))]),
     Missing::Secret { name } | Missing::LocalSecret { name, .. } => {
       ctx.t_args("team_hub.line.secret", [("name", name.to_string())])
@@ -184,12 +233,17 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
 /// The readiness chip of the panel: what it says and its tone.
 pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry) -> (Arc<str>, crate::ui::chip::BadgeTone) {
   use crate::ui::chip::BadgeTone;
+  // What it names that the team archived is the one thing it misses (`Chip` in A37 `AFbIb`).
+  if super::profile::fix::archived_named(entry).is_some() {
+    return (ctx.t("team_hub.chip.archivedMissing"), BadgeTone::Warning);
+  }
   match entry.group {
     Group::NeedsYouHere => match has_no_connection(entry) {
       Some(cli) => (
         ctx.t_args("team_hub.chip.noConnection", [("cli", &*ctx.t(cli_key(cli)))]),
         BadgeTone::Danger,
       ),
+      None if said_in_danger(entry) => (needs(ctx, listing, entry), BadgeTone::Danger),
       None => (needs(ctx, listing, entry), BadgeTone::Warning),
     },
     Group::Ready => (ctx.t("team_hub.chip.ready"), BadgeTone::Success),

@@ -1,7 +1,8 @@
 //! The Settings tab (`02d · settings` `A29iv`, `02h · settings · delivery` `Wq6tZ`): General (name, slug,
 //! description, who can use it), Runs (what starts them and what happens when a step fails, as plain values),
-//! Sources for every step, and Delivery with what a run delivers and the Deliver step. What the draft changed shows in
-//! its strip with *Undo change* and on its row (*Changed in draft vN*). The planned sections are gone.
+//! Sources for every step, and Delivery with what a run delivers and the Deliver step. What the edit changed and is not
+//! saved yet shows in its strip with *Undo change* and on its row (*Changed for vN*, the version *Save* publishes). The
+//! planned sections are gone.
 use lurq::{
   app::{
     component::Component,
@@ -113,10 +114,10 @@ impl Changed {
   }
 }
 fn changed(editing: &Editing) -> Changed {
-  let latest = editing.opened.latest.as_ref().filter(|_| editing.viewing.is_none());
+  let latest = Some(&editing.opened.body).filter(|_| editing.viewing.is_none());
   Changed {
-    description: latest.is_some_and(|v| v.body.description() != editing.edit.description()),
-    delivers: latest.is_some_and(|v| v.body.delivers() != editing.edit.delivers()),
+    description: latest.is_some_and(|body| body.description() != editing.edit.description()),
+    delivers: latest.is_some_and(|body| body.delivers() != editing.edit.delivers()),
   }
 }
 
@@ -151,13 +152,10 @@ impl Settings {
       .hint(ctx.t("pipelines.descriptionHelp"))
       .end(description);
     if changed {
-      description_row = description_row.tag(draft_tag(ctx, editing));
+      description_row = description_row.tag(change_tag(ctx, editing));
     }
-    let slug_hint = ctx.t(if editing.opened.latest.is_some() {
-      "pipelines.slugPublished"
-    } else {
-      "pipelines.slugFixed"
-    });
+    // A pipeline is stored only as published versions (D-032).
+    let slug_hint = ctx.t("pipelines.slugPublished");
     RowGroup::new("pipeline-settings-general", ctx.t("pipelines.general"))
       .row(GroupRow::new("pipeline-settings-name-row", ctx.t("pipelines.name")).end(name))
       .row(
@@ -170,8 +168,8 @@ impl Settings {
   }
 }
 
-/// *Changed in draft vN* on a changed setting's row (`xeLvf`).
-pub(super) fn draft_tag(ctx: &Ctx, editing: &Editing) -> Row {
+/// *Changed for vN* on a changed setting's row (`xeLvf`): the version *Save* publishes.
+pub(super) fn change_tag(ctx: &Ctx, editing: &Editing) -> Row {
   Row::new()
     .id("pipeline-settings-draft")
     .padding(Padding::symmetric(
@@ -181,7 +179,7 @@ pub(super) fn draft_tag(ctx: &Ctx, editing: &Editing) -> Row {
     .rounded(crate::theme::ExtraRadius::Full.role())
     .background(PaletteColor::InfoMuted)
     .child(
-      Text::new(&ctx.t_args("pipelines.changedDraft", [("version", next(editing))]))
+      Text::new(&ctx.t_args("pipelines.changedFor", [("version", next(editing))]))
         .variant(lurq::app::theme::TypographyStyle::Caption)
         .color(ExtraColor::AccentText.role()),
     )
@@ -209,7 +207,8 @@ fn deliver_step(ctx: &Ctx, editing: &Editing) -> RowGroup {
   )
 }
 
-/// The draft strip (`Draft strip` `uHJyF`): how many settings the draft changed, what that means, *Undo change*.
+/// The strip of what is not saved (`Draft strip` `uHJyF`): how many settings the edit changed for the version *Save*
+/// publishes, what that means, *Undo change*.
 fn strip(ctx: &Ctx, state: &State, (count, locked): (usize, bool)) -> Element {
   let editing = state.get();
   let undo = state.clone();
@@ -221,11 +220,10 @@ fn strip(ctx: &Ctx, state: &State, (count, locked): (usize, bool)) -> Element {
   .icon(Icon::Undo2)
   .on_click(move || {
     undo.update(|s| {
-      if let Some(latest) = s.opened.latest.clone() {
-        s.edit.set_description(latest.body.description());
-        s.edit.set_delivers(latest.body.delivers());
-        s.epoch += 1;
-      }
+      let latest = s.opened.body.clone();
+      s.edit.set_description(latest.description());
+      s.edit.set_delivers(latest.delivers());
+      s.epoch += 1;
     })
   });
   let title = if count == 1 {

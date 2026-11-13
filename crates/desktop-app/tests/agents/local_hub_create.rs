@@ -46,6 +46,25 @@ const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
   (HubFilter::Tools, "New tool", "New tool", "Tool", "tool"),
 ];
 
+/// The name field of the kind whose rows are named after `name`: a profile's is its *Role* section's, an MCP server's
+/// is its create form's own, and the others' are the form an edit has too.
+fn name_field(name: &str) -> String {
+  match name {
+    "profile" => "team-new-profile-role-name-input".to_owned(),
+    "mcp" => "local-hub-mcp-name".to_owned(),
+    _ => format!("team-new-{name}-name-input"),
+  }
+}
+
+/// What the name's row says under its label, of the kind whose rows are named after `name`.
+fn name_sub(name: &str) -> String {
+  match name {
+    "profile" => "team-new-profile-role-name-sub".to_owned(),
+    "mcp" => "local-hub-mcp-row-name-sub".to_owned(),
+    _ => format!("team-new-{name}-name-sub"),
+  }
+}
+
 pub(super) const TYPED: &str = "hunter2-typed-value";
 
 pub(super) fn form_route(filter: HubFilter) -> Route {
@@ -196,9 +215,9 @@ fn local_hub_create_new_opens_the_form_of_each_kind_with_only_create_and_cancel(
 #[test]
 fn local_hub_create_under_all_and_archived_new_opens_the_profile_form() {
   let mut agents = Agents::new(true);
-  for filter in [HubFilter::All, HubFilter::Archived] {
+  for (filter, words) in [(HubFilter::All, "New agent"), (HubFilter::Archived, "New")] {
     open(&mut agents, HubView::new(filter, None));
-    assert_eq!(agents.text("local-hub-new"), "New agent", "{}", filter.name());
+    assert_eq!(agents.text("local-hub-new"), words, "{}", filter.name());
     agents.click("local-hub-new");
     agents.until("the profile's form", |s| {
       s.window.navigation().route_now() == form_route(HubFilter::Profiles) && s.exists("local-hub-new-create")
@@ -216,9 +235,9 @@ fn local_hub_create_under_all_and_archived_new_opens_the_profile_form() {
 fn local_hub_create_an_instruction_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Instructions);
-  agents.set("team-new-instruction-name", "Handoff notes");
+  agents.set("team-new-instruction-name-input", "Handoff notes");
   agents.set(
-    "team-new-instruction-text",
+    "team-new-instruction-text-input",
     "Write a handoff note at the end of every run.",
   );
   agents.click("local-hub-new-create");
@@ -235,8 +254,15 @@ fn local_hub_create_an_instruction_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_skill_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Skills);
-  agents.set("team-new-skill-name", "review-diff");
-  agents.set("team-new-skill-description", "Review a diff for the project's rules.");
+  agents.set("team-new-skill-name-input", "review-diff");
+  agents.set(
+    "team-new-skill-description-input",
+    "Review a diff for the project's rules.",
+  );
+  agents.set(
+    "team-new-skill-skill-md-input",
+    "# review-diff\n\nRead the diff file by file.",
+  );
   agents.click("local-hub-new-create");
   agents.until("the new skill's panel", |s| {
     matches!(
@@ -251,9 +277,9 @@ fn local_hub_create_a_skill_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_command_tool_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Tools);
-  agents.set("team-new-tool-name", "cargo-check");
+  agents.set("team-new-tool-name-input", "cargo-check");
   agents.set(
-    "team-new-tool-program",
+    "team-new-tool-program-input",
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   agents.click("local-hub-new-create");
@@ -270,7 +296,7 @@ fn local_hub_create_a_command_tool_is_v1_at_once_with_no_draft() {
 fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Reviewer");
+  agents.set("team-new-profile-role-name-input", "Reviewer");
   choose(&mut agents, "team-new-profile-cli", "Codex");
   assert!(
     agents
@@ -307,7 +333,7 @@ fn local_hub_create_an_mcp_server_has_its_program_path_and_the_value_of_its_secr
   show_form(&mut agents, HubFilter::McpServers);
   agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
   let program = std::env::current_exe().expect("the test program");
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set("connection-mcp-program", &program.to_string_lossy());
   agents.set(
     "connection-mcp-variables",
@@ -377,7 +403,7 @@ fn local_hub_create_an_mcp_server_the_secret_store_refuses_is_not_created_and_sa
   figma_token(&agents);
   show_form(&mut agents, HubFilter::McpServers);
   agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
     &std::env::current_exe().expect("a program").to_string_lossy(),
@@ -425,7 +451,7 @@ fn local_hub_create_cancel_makes_nothing_and_goes_back_to_the_kind() {
     .collect();
   for (filter, _, _, _, name) in KINDS {
     show_form(&mut agents, filter);
-    agents.set(&format!("team-new-{name}-name"), "Whatever");
+    agents.set(&name_field(name), "Whatever");
     agents.click("local-hub-new-cancel");
     agents.until("the kind's list", |s| {
       s.window.navigation().route_now() == hub_route(filter) && !s.exists("local-hub-new-create")
@@ -447,8 +473,11 @@ fn local_hub_create_a_required_field_says_so_and_nothing_is_made() {
   let mut agents = Agents::new(true);
   for (filter, _, _, _, name) in KINDS {
     show_form(&mut agents, filter);
-    let sub = format!("team-new-{name}-name-row-sub");
-    assert!(!agents.text(&sub).starts_with("Required"), "{name}");
+    let sub = name_sub(name);
+    assert!(
+      !agents.exists(&sub) || !agents.text(&sub).starts_with("Required"),
+      "{name}"
+    );
     agents.click("local-hub-new-create");
     agents.until("the field says it is required", |s| {
       s.text(&sub).starts_with("Required")
@@ -464,13 +493,13 @@ fn local_hub_create_a_name_the_project_has_keeps_create_off_with_the_reason() {
   let mut agents = Agents::new(true);
   agents.profile(true);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Builder");
+  agents.set("team-new-profile-role-name-input", "Builder");
   agents.until("the name says why", |s| {
-    s.text("team-new-profile-name-row-sub")
+    s.text("team-new-profile-role-name-sub")
       == "This project already has an agent profile named Builder · pick another name"
   });
   assert_eq!(agents.text("team-hub-actions-hint"), "Fix the name to create it");
-  agents.set("team-new-profile-name", "Planner");
+  agents.set("team-new-profile-role-name-input", "Planner");
   agents.until("the reason is gone", |s| {
     s.text("team-hub-actions-hint") == "Create makes v1 on this computer"
   });
@@ -481,14 +510,15 @@ fn local_hub_create_what_adds_to_what_agents_may_do_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::McpServers);
   agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
-  agents.set("team-new-mcp-name", "figma");
+  agents.set("local-hub-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
     &std::env::current_exe().expect("a program").to_string_lossy(),
   );
   with_synthetic_input(|| agents.click("local-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(servers(&agents), 0, "an MCP client's press made nothing");
+  assert_eq!(agents.value("local-hub-mcp-name"), "figma", "the form stays as it was");
 }
 
 #[test]
@@ -516,11 +546,11 @@ fn local_hub_create_the_old_new_pages_of_a_profile_and_an_mcp_server_open_the_hu
 fn local_hub_create_a_profile_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Profiles);
-  agents.set("team-new-profile-name", "Reviewer");
+  agents.set("team-new-profile-role-name-input", "Reviewer");
   choose(&mut agents, "team-new-profile-cli", "Codex");
   choose(&mut agents, "team-new-profile-model", "test-model");
   with_synthetic_input(|| agents.click("local-hub-new-create"));
-  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert_eq!(
     held(&agents, ResourceKind::AgentProfile),
     0,

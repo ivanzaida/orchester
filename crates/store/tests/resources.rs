@@ -168,7 +168,7 @@ fn resources_slugs_are_unique_per_kind() {
       ..
     })
   ));
-  db.create_resource(slug("deploy"), name("Deploy"), &pipeline(), at(3))
+  db.create_published(slug("deploy"), name("Deploy"), &pipeline(), at(3))
     .unwrap();
 }
 
@@ -176,53 +176,43 @@ fn resources_slugs_are_unique_per_kind() {
 fn resources_publish_in_sequence_and_keep_old_versions() {
   let (_repo, mut db) = project_repo();
   let id = db
-    .create_resource(slug("feature-delivery"), name("Feature delivery"), &pipeline(), at(1))
+    .create_resource(slug("rules"), name("Rules"), &instruction("One."), at(1))
     .unwrap()
     .id();
-  let v1 = db.publish_draft::<Pipeline>(id, at(2)).unwrap();
+  let v1 = db.publish_draft::<Instruction>(id, at(2)).unwrap();
   assert_eq!(v1.number(), VersionNumber::FIRST);
-  assert_eq!(db.draft::<Pipeline>(id).unwrap(), None);
+  assert_eq!(db.draft::<Instruction>(id).unwrap(), None);
   assert!(matches!(
-    db.publish_draft::<Pipeline>(id, at(3)),
+    db.publish_draft::<Instruction>(id, at(3)),
     Err(StoreError::NoDraft(missing)) if missing == id
   ));
 
   let mut draft = v1.to_draft(at(4));
-  let single = Pipeline::new(pipeline().steps()[..1].to_vec()).unwrap();
-  draft.edit(single.clone(), at(5));
+  draft.edit(instruction("Two."), at(5));
   db.save_draft(id, &draft).unwrap();
-  assert_eq!(db.draft::<Pipeline>(id).unwrap(), Some(draft));
-  let v2 = db.publish_draft::<Pipeline>(id, at(6)).unwrap();
+  assert_eq!(db.draft::<Instruction>(id).unwrap(), Some(draft));
+  let v2 = db.publish_draft::<Instruction>(id, at(6)).unwrap();
 
   assert_eq!(v2.number().get(), 2);
-  assert_eq!(db.latest_version::<Pipeline>(id).unwrap(), Some(v2.clone()));
-  assert_eq!(db.version::<Pipeline>(id, VersionNumber::FIRST).unwrap(), Some(v1));
+  assert_eq!(db.latest_version::<Instruction>(id).unwrap(), Some(v2.clone()));
+  assert_eq!(db.version::<Instruction>(id, VersionNumber::FIRST).unwrap(), Some(v1));
   assert_eq!(
-    db.version::<Pipeline>(id, v2.number()).unwrap().unwrap().body(),
-    &single
+    db.version::<Instruction>(id, v2.number()).unwrap().unwrap().body(),
+    &instruction("Two.")
   );
 }
 
 #[test]
-fn resources_keep_a_pipeline_draft_with_unassigned_steps_but_do_not_publish_it() {
+fn resources_refuse_creating_a_pipeline_with_unassigned_steps() {
   let (_repo, mut db) = project_repo();
   let mut steps = pipeline().into_steps();
   steps[1].kind = StepKind::Tool { tool: None };
   let unassigned = Pipeline::new(steps).expect("valid pipeline");
-  let id = db
-    .create_resource(slug("feature-delivery"), name("Feature delivery"), &unassigned, at(1))
-    .unwrap()
-    .id();
-  assert_eq!(
-    db.draft::<Pipeline>(id).unwrap().map(|draft| draft.body().clone()),
-    Some(unassigned)
-  );
   assert!(matches!(
-    db.publish_draft::<Pipeline>(id, at(2)),
+    db.create_published(slug("feature-delivery"), name("Feature delivery"), &unassigned, at(1)),
     Err(StoreError::Publish(PublishError::UnassignedSteps(steps))) if steps == [StepKey::new("implement").unwrap()]
   ));
-  assert_eq!(db.latest_version::<Pipeline>(id).unwrap(), None);
-  assert!(db.draft::<Pipeline>(id).unwrap().is_some());
+  assert_eq!(db.resources(ResourceKind::Pipeline).unwrap(), []);
 }
 
 #[test]
@@ -303,7 +293,7 @@ fn resources_reject_the_wrong_kind_and_unknown_ids() {
     })
   ));
   assert!(matches!(
-    db.save_draft(id, &Draft::new(pipeline(), None, at(2))),
+    db.save_draft(id, &Draft::new(instruction("Rule."), None, at(2))),
     Err(StoreError::ResourceKindMismatch { .. })
   ));
   let unknown = ResourceId::generate();
@@ -334,12 +324,18 @@ fn resources_persist_across_reopen() {
 #[test]
 fn resources_revalidate_stored_bodies_on_read() {
   let (repo, mut db) = project_repo();
-  let id = db
-    .create_resource(slug("feature-delivery"), name("Feature delivery"), &pipeline(), at(1))
-    .unwrap()
-    .id();
+  let (id, _) = db
+    .published_pipeline_for_test("feature-delivery", "Feature delivery", &pipeline(), at(1))
+    .unwrap();
   let stored: String = raw(repo.path())
-    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
+    .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
+    .unwrap();
+  // A draft an older build left beside the version, which a read checks as it checks every stored body.
+  raw(repo.path())
+    .execute(
+      "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, 1, 1)",
+      [id.to_string(), stored.clone()],
+    )
     .unwrap();
   assert!(stored.contains(r#""schema":1"#), "{stored}");
 
@@ -455,19 +451,11 @@ fn resources_published_versions_are_immutable() {
 #[test]
 fn resources_list_every_published_version_oldest_first() {
   let (_repo, mut db) = project_repo();
-  let id = db
-    .create_resource(slug("feature-delivery"), name("Feature delivery"), &pipeline(), at(1))
-    .unwrap()
-    .id();
-  assert_eq!(db.versions::<Pipeline>(id).unwrap(), Vec::new());
-  let v1 = db.publish_draft::<Pipeline>(id, at(2)).unwrap();
+  let (id, v1) = db
+    .published_pipeline_for_test("feature-delivery", "Feature delivery", &pipeline(), at(1))
+    .unwrap();
   let single = Pipeline::new(pipeline().steps()[..1].to_vec()).unwrap();
-  db.save_draft(id, &Draft::new(single, Some(v1.number()), at(3)))
-    .unwrap();
-  let v2 = db.publish_draft::<Pipeline>(id, at(4)).unwrap();
-  // A draft is not a version.
-  db.save_draft(id, &Draft::new(pipeline(), Some(v2.number()), at(5)))
-    .unwrap();
+  let v2 = db.publish_pipeline_edit(id, &single, v1.number(), None, at(4)).unwrap();
 
   assert_eq!(db.versions::<Pipeline>(id).unwrap(), [v1, v2]);
   assert!(matches!(
@@ -476,31 +464,30 @@ fn resources_list_every_published_version_oldest_first() {
   ));
 }
 
-/// Restoring an old version as the draft, as the pipeline editor does: the draft holds the old
-/// body on top of the latest version, publishing it adds a version, and the versions already
-/// published stay as they were. Restoring the latest version leaves no draft.
+/// Restoring an old version, as the pipeline editor does: it is published as the next version, and the versions
+/// already published stay as they were. Restoring the latest version publishes nothing: a pipeline holds no draft
+/// (D-032), and an edit equal to its latest version is refused.
 #[test]
-fn resources_restore_an_old_version_as_a_draft_of_the_next_one() {
+fn resources_restore_an_old_pipeline_version_as_the_next_one() {
   let (_repo, mut db) = project_repo();
-  let id = db
-    .create_resource(slug("feature-delivery"), name("Feature delivery"), &pipeline(), at(1))
-    .unwrap()
-    .id();
-  let v1 = db.publish_draft::<Pipeline>(id, at(2)).unwrap();
-  let single = Pipeline::new(pipeline().steps()[..1].to_vec()).unwrap();
-  db.save_draft(id, &Draft::new(single, Some(v1.number()), at(3)))
+  let (id, v1) = db
+    .published_pipeline_for_test("feature-delivery", "Feature delivery", &pipeline(), at(1))
     .unwrap();
-  let v2 = db.publish_draft::<Pipeline>(id, at(4)).unwrap();
+  let single = Pipeline::new(pipeline().steps()[..1].to_vec()).unwrap();
+  let v2 = db.publish_pipeline_edit(id, &single, v1.number(), None, at(4)).unwrap();
 
-  let restored = Draft::new(v1.body().clone(), Some(v2.number()), at(5));
-  assert_eq!(db.save_draft(id, &restored).unwrap(), DraftSaved::Stored);
-  let v3 = db.publish_draft::<Pipeline>(id, at(6)).unwrap();
+  let v3 = db
+    .publish_pipeline_edit(id, v1.body(), v2.number(), None, at(6))
+    .unwrap();
   assert_eq!(v3.number().get(), 3);
   assert_eq!(v3.body(), v1.body());
   assert_eq!(db.versions::<Pipeline>(id).unwrap(), [v1, v2, v3.clone()]);
 
-  let latest = Draft::new(v3.body().clone(), Some(v3.number()), at(7));
-  assert_eq!(db.save_draft(id, &latest).unwrap(), DraftSaved::Discarded);
+  assert!(matches!(
+    db.publish_pipeline_edit(id, v3.body(), v3.number(), None, at(7)),
+    Err(StoreError::Unchanged(same)) if same == id
+  ));
+  assert_eq!(db.versions::<Pipeline>(id).unwrap().len(), 3);
   assert_eq!(db.draft::<Pipeline>(id).unwrap(), None);
 }
 

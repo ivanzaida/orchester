@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT,
+    AgentConnection, AgentProvider, Connection, ConnectionKind, REASONING_EFFORT,
     mcp::{McpServer, McpTransport},
   },
   id::{ConnectionId, ResourceId},
@@ -22,6 +22,7 @@ use super::{
   form::{effort_options, model_options},
   local_edit::GivenKind,
   local_given::{GivenLists, GivenNames},
+  role::RoleText,
   team_hub::Form,
   team_profile::ConnectionChoice,
 };
@@ -47,6 +48,8 @@ pub struct LocalPlain {
 /// the MCP servers it chooses and the pipelines whose steps run it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalProfile {
+  /// Its role: the name, what it answers for and the role instructions.
+  pub role: RoleText,
   /// The CLI it runs with: its connection's, and while that is gone the one its model belongs to
   /// ([`AgentProvider::cli_of_model`]); `None` when the connection is no agent connection or the model names no CLI.
   pub cli: Option<AgentProvider>,
@@ -101,6 +104,9 @@ pub struct LocalArchived {
   pub stopped: Vec<StoppedRun>,
   /// An MCP server's fields as its panel reads them, which it keeps showing read-only.
   pub details: Option<McpServerText>,
+  /// A profile's latest version as its panel reads it, which it keeps showing read-only; `None` for the other kinds
+  /// and for a profile that was never published.
+  pub profile: Option<Box<LocalProfile>>,
 }
 
 /// A run an archive stopped, by its task.
@@ -333,14 +339,10 @@ impl Around {
       .connections
       .iter()
       .filter(|found| matches!(found.kind(), ConnectionKind::Agent(provider) if Some(*provider) == cli))
-      .map(|found| ConnectionChoice {
-        id: found.id(),
-        name: found.name().to_string(),
-        version: found.version().map(str::to_owned),
-        signed_out: found.status() == ConnectionStatus::SignInRequired,
-      })
+      .map(ConnectionChoice::of)
       .collect();
     Ok(LocalProfile {
+      role: RoleText::of(body),
       cli,
       connection: connection.map(|connection| connection.name().to_string()),
       mcp_servers: chosen
@@ -461,6 +463,7 @@ fn tool_forms(db: &ProjectDb) -> Result<Vec<(ResourceId, Form)>, StoreError> {
 }
 
 fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
+  let around = Around::read(db)?;
   let mut archived = Vec::new();
   for kind in [
     ResourceKind::AgentProfile,
@@ -476,6 +479,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         at,
         stopped: stopped(db, &db.archive_stops_of_resource(resource.id())?)?,
         details: None,
+        profile: archived_profile(db, &around, (kind, resource.id()))?,
       });
     }
   }
@@ -490,6 +494,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         at,
         stopped: stopped(db, &db.archive_stops_of_mcp_server(id)?)?,
         details: Some(McpServerText::of(server, &secrets)),
+        profile: None,
       });
     }
   }
@@ -497,8 +502,25 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
   Ok(archived)
 }
 
+/// The latest version of the archived resource `id` of `kind` when it is a profile, as its panel reads it.
+fn archived_profile(
+  db: &ProjectDb,
+  around: &Around,
+  (kind, id): (ResourceKind, ResourceId),
+) -> Result<Option<Box<LocalProfile>>, StoreError> {
+  if kind != ResourceKind::AgentProfile {
+    return Ok(None);
+  }
+  let Some(version) = db.latest_version::<AgentProfile>(id)? else {
+    return Ok(None);
+  };
+  around
+    .shown(db, id, (version.published_at(), version.body()))
+    .map(|shown| Some(Box::new(shown)))
+}
+
 /// The tasks of the runs `stops` names; a task the project no longer has is left out.
-fn stopped(db: &ProjectDb, stops: &[ArchiveStop]) -> Result<Vec<StoppedRun>, StoreError> {
+pub(crate) fn stopped(db: &ProjectDb, stops: &[ArchiveStop]) -> Result<Vec<StoppedRun>, StoreError> {
   let mut runs = Vec::new();
   for stop in stops {
     if let Some(task) = db.task(stop.task)? {

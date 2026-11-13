@@ -1,7 +1,7 @@
 //! Presses on a link in a chat, and on every control that navigates (`navigation::link`), by a browser's rules
 //! (`navigation::press`): a plain click opens its place in the active tab; a middle click and Ctrl+click (Cmd+click
 //! on macOS) in a new tab right of the active one, which stays active; Ctrl+Shift+click in a new tab it switches to;
-//! Shift+click as a plain click; Enter on the focused link in the active tab. A person's pointer and lurq's synthetic
+//! Shift+click as a plain click; Tab never stops on a link of a chat. A person's pointer and lurq's synthetic
 //! input (an MCP client's `lurq_interact`, with `"button": "middle"` and modifiers) follow the same rules.
 
 use lurq::{
@@ -110,18 +110,13 @@ fn shown(window: &mut Window, words: &str) -> ElementRect {
   })
 }
 
-/// Moves the keyboard focus with Tab to the link `words`, then presses Enter.
-fn enter_on(window: &mut Window, words: &str) {
+/// How many times Tab is pressed to look for a stop on a link: more than the stops of a chat's page.
+const TABS: usize = 40;
+
+/// Tab never stops on the link `words`: a link of a Markdown is the pointer's only.
+fn tab_skips(window: &mut Window, words: &str) {
   shown(window, words);
-  let focused = |window: &mut Window| {
-    window
-      .tree
-      .focused_element()
-      .and_then(|element| element.text_content().map(str::to_owned))
-  };
-  let mut tabs = 0;
-  while focused(window).as_deref() != Some(words) {
-    assert!(tabs < 500, "Tab reaches the link {words}");
+  for _ in 0..TABS {
     window
       .tree
       .key_down("Tab".to_owned(), "Tab".to_owned(), false, false, false);
@@ -129,15 +124,12 @@ fn enter_on(window: &mut Window, words: &str) {
       .tree
       .key_up("Tab".to_owned(), "Tab".to_owned(), false, false, false);
     window.pass();
-    tabs += 1;
+    let focused = window
+      .tree
+      .focused_element()
+      .and_then(|element| element.text_content().map(str::to_owned));
+    assert_ne!(focused.as_deref(), Some(words), "Tab skips the link {words}");
   }
-  window
-    .tree
-    .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
-  window
-    .tree
-    .key_up("Enter".to_owned(), "Enter".to_owned(), false, false, false);
-  window.pass();
 }
 
 /// The place of each tab, in order.
@@ -217,14 +209,8 @@ pub fn opens_by_browser_rules(window: &mut Window, words: &str, place: &Route) {
     navigation.select(chat_tab);
   }
 
-  enter_on(window, words);
-  assert_eq!(
-    navigation.route_now(),
-    *place,
-    "Enter on the focused link opens the place in the active tab"
-  );
-  assert_eq!(navigation.tabs_now().tabs().len(), expected.len(), "and no tab");
-  navigation.back();
+  tab_skips(window, words);
+  assert_eq!(navigation.route_now(), chat, "and Enter has no link to open");
 
   press_link(window, words, (Presser::Synthetic, MouseButton::Left), (false, false));
   assert_eq!(

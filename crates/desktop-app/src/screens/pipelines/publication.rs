@@ -88,10 +88,7 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
 }
 
 pub fn run_button(ctx: &mut Ctx, editing: &Editing) -> Element {
-  let label = editing.opened.latest.as_ref().map_or_else(
-    || ctx.t("pipelines.runUnpublished"),
-    |v| ctx.t_args("pipelines.run", [("version", v.number.get().to_string())]),
-  );
+  let label = ctx.t_args("pipelines.run", [("version", editing.opened.version.get().to_string())]);
   let hint = ctx.t("pipelines.runHint");
   crate::ui::tooltip::Tooltip::new("pipeline-run-reason", hint.clone()).wrap(
     ctx,
@@ -103,9 +100,9 @@ pub fn run_button(ctx: &mut Ctx, editing: &Editing) -> Element {
 
 /// The review above its actions: its head, what publishing does, the versions, the changes and the pinned runs.
 pub fn review(ctx: &Ctx, editing: &Editing) -> Column {
-  let current = editing.opened.latest.as_ref().map_or_else(
-    || ctx.t("pipelines.never"),
-    |v| ctx.t_args("pipelines.version", [("version", v.number.get().to_string())]),
+  let current = ctx.t_args(
+    "pipelines.version",
+    [("version", editing.opened.version.get().to_string())],
   );
   let next = next_version(&editing.opened).map_or_else(
     || ctx.t("pipelines.never"),
@@ -150,20 +147,9 @@ pub fn review(ctx: &Ctx, editing: &Editing) -> Column {
 
 /// Published now and after publishing (`Versions` `P5PAd`).
 fn versions(ctx: &Ctx, editing: &Editing, (current, next): (&str, &str)) -> RowGroup {
-  let now = editing.opened.latest.as_ref().map_or_else(
-    || current.to_owned(),
-    |v| format!("{current} · {}", super::library::age(ctx, v.at)),
-  );
-  let after = editing.opened.draft_saved_at.map_or_else(
-    || format!("{next} · {}", ctx.t("pipelines.unsaved")),
-    |at| {
-      let saved = ctx.t_args(
-        "pipelines.draftSavedAt",
-        [("age", super::library::age(ctx, at).to_string())],
-      );
-      format!("{next} · {saved}")
-    },
-  );
+  let now = format!("{current} · {}", super::library::age(ctx, editing.opened.published_at));
+  // A pipeline holds no draft (D-032): the next version is the edit, not saved yet.
+  let after = format!("{next} · {}", ctx.t("pipelines.unsaved"));
   RowGroup::new("pipeline-publish-versions", ctx.t("pipelines.versions"))
     .row(GroupRow::new("pipeline-publish-now", ctx.t("pipelines.currentVersion")).value(&now))
     .row(GroupRow::new("pipeline-publish-after", ctx.t("pipelines.nextVersion")).primary_value(&after))
@@ -172,10 +158,9 @@ fn versions(ctx: &Ctx, editing: &Editing, (current, next): (&str, &str)) -> RowG
 /// The changes since the published version, each tagged on the flow too.
 fn changes(ctx: &Ctx, editing: &Editing, current: &str) -> RowGroup {
   let changes = editing
-    .opened
-    .latest
-    .as_ref()
-    .map(|v| orchester_core::resource::changes(&v.body, &editing.opened.body))
+    .edit
+    .validate()
+    .map(|edit| orchester_core::resource::changes(&editing.opened.body, &edit))
     .unwrap_or_default();
   let title = ctx.t_args(
     if changes.len() == 1 {
@@ -253,17 +238,3 @@ pub fn with_success(ctx: &mut Ctx, state: &State, content: Element) -> Element {
 
 /// The published notice's width.
 const NOTICE_WIDTH: f32 = 360.0;
-
-/// The review's actions: *Publish vN* and *Cancel* (`Footer` in `05b`).
-pub fn footer(ctx: &Ctx, state: &State, publish: ActionButton) -> Element {
-  let cancel = state.get_untracked().views;
-  Row::new()
-    .id("pipeline-publish-footer")
-    .spacing(SpacingSize::Sm)
-    .child(publish)
-    .child(
-      ActionButton::new("pipeline-publish-cancel", ButtonKind::Ghost, ctx.t("pipelines.cancel"))
-        .on_click(move || cancel.close()),
-    )
-    .into()
-}

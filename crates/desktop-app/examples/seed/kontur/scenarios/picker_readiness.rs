@@ -48,12 +48,10 @@ pub fn local(kontur: &mut Kontur) -> Result<(), SeedError> {
   let review = local_profile(kontur, "Review pass", seeded.codex, &servers[..1])?;
   let mut published = Vec::new();
   for (title, profile) in [("Design pass", design), ("Review pass", review)] {
-    let id = kontur
+    let (resource, _) = kontur
       .db
-      .create_resource(slug(title)?, name(title), &pipeline(&[profile])?, at)?
-      .id();
-    kontur.db.publish_draft::<Pipeline>(id, at)?;
-    published.push(id);
+      .create_published(slug(title)?, name(title), &pipeline(&[profile])?, at)?;
+    published.push(resource.id());
   }
   // Design pass, the first one published.
   let design_pass = published
@@ -96,7 +94,7 @@ fn draft_ready_to_run(kontur: &mut Kontur, pipeline: ResourceId) -> Result<(), S
 /// The team project of `team-hub` with the team's pipelines Team delivery (Builder, then Reviewer) and Team quick fix
 /// (Reviewer), beside the catalogue's, which this computer has no team form of.
 pub fn team(kontur: &mut Kontur) -> Result<(), SeedError> {
-  team_hub::seed(kontur)?;
+  team_hub::seed_beside_catalogue(kontur)?;
   team_pipelines(kontur)
 }
 

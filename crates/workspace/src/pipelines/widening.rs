@@ -2,7 +2,7 @@
 
 use orchester_core::resource::{Pipeline, Step, StepKey, StepKind, Weaker, weaker_than};
 
-use super::data::{Assignables, OpenedPipeline};
+use super::data::Assignables;
 use crate::messages::Message;
 
 /// What publishing permits beyond the previous version; the first version needs a person.
@@ -20,35 +20,34 @@ pub fn publish_reasons(latest: Option<&Pipeline>, new: &Pipeline) -> Vec<Message
         Weaker::Steps => Message::new("appMcp.widens.pipelineSteps"),
         Weaker::Sources => Message::new("appMcp.widens.pipelineSources"),
         Weaker::Step(key) => Message::new("appMcp.widens.pipelineStep").with("step", step_name(&key)),
+        Weaker::StopsWaiting { step, waited_for } => Message::new("appMcp.widens.pipelineStopsWaiting")
+          .with("step", step_name(&step))
+          .with(
+            "waited",
+            waited_for.iter().map(&step_name).collect::<Vec<_>>().join(", "),
+          ),
       })
       .collect(),
   }
 }
 
-/// What saving drops from the draft or published version, or newly permits a tool to run.
-pub fn draft_reasons(current: &OpenedPipeline, body: &Pipeline) -> Vec<Message> {
-  // Neither the published version's approvals nor those a person added to the draft since are dropped.
-  let mut dropped = weakened_gates(current.body.steps(), body.steps());
-  if let Some(latest) = &current.latest {
-    for reason in weakened_gates(latest.body.steps(), body.steps()) {
-      if !dropped.contains(&reason) {
-        dropped.push(reason);
-      }
+/// What saving `body` as the version after `latest` (`None` for a new pipeline's first) needs a person to allow: the
+/// approvals it drops, the tool steps it adds, and what it permits beyond `latest` ([`publish_reasons`]).
+pub fn save_reasons(latest: Option<&Pipeline>, body: &Pipeline, assignables: &Assignables) -> Vec<Message> {
+  let latest_steps = latest.map_or(&[][..], Pipeline::steps);
+  let mut reasons = weakened_gates(latest_steps, body.steps());
+  reasons.extend(added_tool_steps(latest_steps, body.steps(), assignables));
+  for reason in publish_reasons(latest, body) {
+    if !reasons.contains(&reason) {
+      reasons.push(reason);
     }
   }
-  let latest_steps = current.latest.as_ref().map_or(&[][..], |latest| latest.body.steps());
-  dropped.extend(added_tool_steps(
-    [current.body.steps(), latest_steps],
-    body.steps(),
-    &current.assignables,
-  ));
-
-  dropped
+  reasons
 }
 
-/// The approvals `steps` drop from `base`, the latest published version (or, before the first, the draft as
-/// it stands): a step that waits for a person's approval, or asks a person about its tool calls, and no
-/// longer does or is gone. Dropping one is a person's decision; other narrowing within the profile is not.
+/// The approvals `steps` drop from `base`, the latest published version: a step that waits for a person's approval,
+/// or asks a person about its tool calls, and no longer does or is gone. Dropping one is a person's decision; other
+/// narrowing within the profile is not.
 fn weakened_gates(base: &[Step], steps: &[Step]) -> Vec<Message> {
   let asks =
     |step: &Step| matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
@@ -66,10 +65,9 @@ fn weakened_gates(base: &[Step], steps: &[Step]) -> Vec<Message> {
   reasons
 }
 
-/// The steps of `steps` that call a tool where neither the draft as it stands nor the latest published
-/// version (`bases`) calls it under the same key: each runs a program on this computer, which a person
-/// decides.
-fn added_tool_steps(bases: [&[Step]; 2], steps: &[Step], assignables: &Assignables) -> Vec<Message> {
+/// The steps of `steps` that call a tool the latest published version (`base`) does not call under the same key: each
+/// runs a program on this computer, which a person decides.
+fn added_tool_steps(base: &[Step], steps: &[Step], assignables: &Assignables) -> Vec<Message> {
   let calls = |step: &Step| match step.kind {
     StepKind::Tool { tool } => tool,
     StepKind::Agent { .. } => None,
@@ -78,9 +76,8 @@ fn added_tool_steps(bases: [&[Step]; 2], steps: &[Step], assignables: &Assignabl
     .iter()
     .filter_map(|step| Some((step, calls(step)?)))
     .filter(|(step, tool)| {
-      !bases
+      !base
         .iter()
-        .flat_map(|base| base.iter())
         .any(|before| before.key == step.key && calls(before) == Some(*tool))
     })
     .map(|(step, tool)| {

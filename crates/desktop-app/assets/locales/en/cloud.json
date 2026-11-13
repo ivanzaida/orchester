@@ -331,7 +331,6 @@
       "certificateChanged": "The server presents a different certificate; nothing was sent to it.",
       "tooManyCodes": "The server holds as many open codes as it allows. Try again once one is used or expires."
     },
-    "personOnly": "Only a person does this here: input from an MCP client is refused. Clients can still read this page.",
     "notice": {
       "body": "{{role}} · {{address}} · expires {{expires}}",
       "toProject": "{{inviter}} invited you to {{project}} on {{server}}",

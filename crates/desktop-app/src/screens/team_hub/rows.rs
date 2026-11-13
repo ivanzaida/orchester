@@ -26,12 +26,14 @@ pub(in crate::screens) enum Key {
   Wide,
   /// The key of a create form's rows.
   Form,
+  /// [`Self::Wide`], whose label keeps one line and may run on into the gap before the value.
+  OneLine,
 }
 
 impl Key {
   fn width(self) -> f32 {
     match self {
-      Self::Wide => HubSpacing::Key.value(),
+      Self::Wide | Self::OneLine => HubSpacing::Key.value(),
       Self::Form => HubSpacing::KeyForm.value(),
     }
   }
@@ -50,6 +52,32 @@ impl Sub {
       color: PaletteColor::TextMuted,
     }
   }
+}
+
+/// What *From the team* says after its label.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::screens) enum FromTeam {
+  /// The same on every computer.
+  Shared,
+  /// Read-only until an admin restores it: the team archived it (`From the team` in A36 `qvMZD`).
+  Archived,
+}
+
+/// *From the team* over `rows`, with what `note` says after its label.
+pub(in crate::screens) fn from_team(ctx: &Ctx, note: FromTeam, rows: Vec<Row>) -> Column {
+  let note = Text::new(&ctx.t(match note {
+    FromTeam::Shared => "team_hub.profile.fromTeamNote",
+    FromTeam::Archived => "team_hub.archived.readOnly",
+  }))
+  .id("team-hub-from-team-note")
+  .variant(HubText::PanelHint.role())
+  .nowrap();
+  section(
+    "team-hub-from-team",
+    &ctx.t("team_hub.profile.fromTeam"),
+    vec![note.into()],
+    rows,
+  )
 }
 
 /// A section: its head (the label, then what follows it on the line) over its rows.
@@ -123,9 +151,26 @@ pub(in crate::screens) fn keyed(
   keyed_in(Key::Wide, id, label, sub, value)
 }
 
+/// [`row`] whose label keeps one line, running on past the key into the gap before the value where it is a little
+/// longer than the key (*Ask when a tool needs approval*, `Jnrie` in `Pipelines · v2` P2b `EGEos`).
+pub(in crate::screens) fn row_one_line(id: &str, label: &str, value: impl Into<Element>) -> Row {
+  keyed_in(
+    Key::OneLine,
+    id,
+    Text::new(label)
+      .id(format!("{id}-label"))
+      .variant(HubText::Status.role())
+      .nowrap(),
+    None,
+    value,
+  )
+}
+
 /// [`keyed`] whose key is `key` wide.
 fn keyed_in(key: Key, id: &str, label: impl Into<Element>, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+  let one_line = matches!(key, Key::OneLine);
   let key = Column::new()
+    .id(format!("{id}-key"))
     .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Tight.role())
@@ -136,6 +181,7 @@ fn keyed_in(key: Key, id: &str, label: impl Into<Element>, sub: Option<Sub>, val
         .variant(HubText::PanelSub.role())
         .color(sub.color)
     }));
+  let key = if one_line { key.overflow_visible() } else { key };
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))

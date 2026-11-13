@@ -10,6 +10,10 @@ use lurq::{
 
 use super::typography::{mono, style};
 
+/// The Pipelines page's list rows and step cards in bones: the first two whole, then fading (`Item bone` `vaAc2`, `Step
+/// bone` `FfeE8` in P5 `TF9O3`).
+pub const PIPELINES_BONE_FADE: [f32; 4] = [1.0, 1.0, 0.7, 0.45];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipelinesText {
   /// Geist Mono 10.5 `text_muted`: *ON TASK START* and *RUN IN PARALLEL* in the flow (`zPT6x`, `zOhok`).
@@ -20,10 +24,23 @@ pub enum PipelinesText {
   StepNumber,
   /// 12/500 `text_secondary`: the version on the header's status line (`J4YQR`).
   Status,
+  /// 12 `text_secondary`: the store's own words for why the pipelines couldn't be read (`Reason` `v3szq` in P9
+  /// `H4fLj`, `Pipelines · v2`).
+  ReadReason,
+  /// Geist Mono 12 `text_primary`, 1.3: a pipeline's slug in its settings (`Slug` `tb7tA` in P17 `LzGvn`,
+  /// `Pipelines · v2`).
+  Slug,
 }
 
 impl PipelinesText {
-  pub const ALL: [Self; 4] = [Self::FlowLabel, Self::CardNumber, Self::StepNumber, Self::Status];
+  pub const ALL: [Self; 6] = [
+    Self::FlowLabel,
+    Self::CardNumber,
+    Self::StepNumber,
+    Self::Status,
+    Self::ReadReason,
+    Self::Slug,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -35,6 +52,8 @@ impl PipelinesText {
       Self::CardNumber => "pipelines_card_number",
       Self::StepNumber => "pipelines_step_number",
       Self::Status => "pipelines_status",
+      Self::ReadReason => "pipelines_read_reason",
+      Self::Slug => "pipelines_slug",
     }
   }
 
@@ -44,9 +63,16 @@ impl PipelinesText {
       Self::CardNumber => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::StepNumber => mono(style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::Status => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
+      Self::ReadReason => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Slug => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
     }
   }
 }
+
+/// The Pipelines hub's list in a window under the `xl` breakpoint (1280 logical), where the board's 440 would leave
+/// the panel too narrow for its rows, cards and bar: the list gives way first (PV2-17; no design frame below the 1440
+/// board; the list's rows cut their lines with an ellipsis).
+pub const PIPELINE_HUB_LIST_NARROW: f32 = 260.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipelinesSpacing {

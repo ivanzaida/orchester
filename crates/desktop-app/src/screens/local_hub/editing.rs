@@ -1,8 +1,8 @@
-//! The panel of a tool, or of a profile that has only a draft, in a local project (`Detail` in L1;
-//! `docs/design/team-configuration.md` rule 11): the head with its … menu, the chips (the version, how it stands), a
-//! tool's *Used by* (the profiles that give it to their agents; its access rules no longer say which pipelines call it
-//! in a local project), and *Ready?*. The team hub's panel of a resource without a sheet is the same frame
-//! ([`crate::screens::team_hub::panel`]).
+//! The panel of a tool that is no command (an HTTP request, a database query), or of a profile that has only a draft,
+//! in a local project (`Detail` in L1; `docs/design/team-configuration.md` rule 11): the head with its … menu, the
+//! chips (the version, how it stands), a tool's *Used by* (the profiles that give it to their agents; its access rules
+//! no longer say which pipelines call it in a local project), and *Ready?*. The team hub's panel of a resource without
+//! a sheet is the same frame ([`crate::screens::team_hub::panel`]).
 
 use std::sync::Arc;
 

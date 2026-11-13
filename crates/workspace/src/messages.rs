@@ -37,6 +37,14 @@ pub fn name_error(error: &NameError) -> Message {
   }
 }
 
+/// [`name_error`] for a pipeline step's name, whose empty name asks for a step's name, not a project's.
+pub fn step_name_error(error: &NameError) -> Message {
+  match error {
+    NameError::Blank => Message::new("errors.stepNameRequired"),
+    NameError::TooLong { .. } => name_error(error),
+  }
+}
+
 /// The key of [`OrganizationError::StopRunFirst`](orchester_core::task::organization::OrganizationError):
 /// a form that saves Canceled asks for confirmation when it sees it.
 pub const CANCEL_CONFIRM_REQUIRED: &str = "tasks.cancel.confirmRequired";
@@ -106,9 +114,8 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared | StoreError::OtherServerProject => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
-    StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
-    StoreError::NotPublished(_) => Message::new("errors.neverPublished"),
-    StoreError::NoFirstVersion(_) => Message::new("errors.noFirstVersion"),
+    StoreError::DraftChanged(_) | StoreError::NotPublished(_) | StoreError::NoFirstVersion(_) => version_error(error),
+    StoreError::NoDrafts(_) | StoreError::Unchanged(_) => version_error(error),
     StoreError::Sqlite(_) if error.is_locked() => Message::new("errors.databaseLocked"),
     StoreError::Unavailable { .. } => Message::new("errors.databaseLocked"),
     StoreError::Sqlite(_)
@@ -151,6 +158,18 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Publish(error) => publish_error(error),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
   }
+}
+
+/// Why a resource's draft or versions were not changed: what [`store_error`] passes on.
+fn version_error(error: &StoreError) -> Message {
+  Message::new(match error {
+    StoreError::DraftChanged(_) => "errors.draftChanged",
+    StoreError::NotPublished(_) => "errors.neverPublished",
+    StoreError::NoFirstVersion(_) => "errors.noFirstVersion",
+    StoreError::NoDrafts(_) => "errors.noDrafts",
+    StoreError::Unchanged(_) => "errors.unchanged",
+    _ => "errors.storage",
+  })
 }
 
 /// Why a draft was not published.

@@ -56,7 +56,7 @@ pub(crate) use self::{
   continue_run::{Choice as ContinueChoice, ContinueRun, Offered as ContinueOffered, offered as continue_offered},
   messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
   modules::find_module,
-  pipeline_copy::duplicate_pipeline_draft,
+  pipeline_copy::duplicate_pipeline_in_chat,
   questions::{check_answer, waiting_request},
   queue_hold::not_in_group,
   tasks::find_task,
@@ -220,7 +220,12 @@ const SPECS: &[Spec] = &[
                   passed when unread), read_at, next_read_at (when to read again while a check is queued or running, \
                   else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, \
                   failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of \
-                  its failed steps' log, null when gh gave none). The run's link is its task's page; the waiting \
+                  its failed steps' log, null when gh gave none). approval_mode is the mode its agents' requests are \
+                  answered in now (dangerous_auto_approve with because project while its project approves every one at \
+                  once; switched_to_manual keeps the run's own choice), approve_mode the project's Approve mode, and \
+                  requests how each tool request was answered (answered.kind autopilot, \
+                  profile, reviewer, person or dangerous_auto_approve) and why one came to the person (came_to_you). \
+                  The run's link is its task's page; the waiting \
                   approvals, questions, messages and plans link to their cards on the task's Conversation. A team task's run \
                   is read from this computer's own records of it, without the task's definition: task is the key the run \
                   recorded when it started (a run that kept none, whose task has no copy here either, is refused as \
@@ -290,14 +295,20 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_approvals",
-    description: "A project's approvals: whether it allows Autopilot for its agents (allow_autopilot: Allow Autopilot for agents in this project), which connection, model and effort review Manual's requests (reviewer, or why it has none), and each run that has not ended (runs: id, number, task, link) with the approval mode it answers its agents' requests in now (approval_mode: mode autopilot, or manual with because profile, project or run). A step is in Autopilot only when its agent profile says Autopilot (get_profile's permissions.approval_mode), the project allows it and the run was not switched to Manual. The runs listed include a team task's runs, named by the key they recorded when they started.",
+    description: "A project's approvals: its Approve mode (approve_mode: manual, autopilot or dangerous_auto_approve; in dangerous_auto_approve every tool request of the project's agents is approved at once), whether it allows Autopilot for its agents (allow_autopilot: true in autopilot and dangerous_auto_approve), which connection, model and effort review Manual's requests (reviewer, or why it has none), and each run that has not ended (runs: id, number, task, link) with the approval mode it answers its agents' requests in now (approval_mode: mode autopilot, manual with because profile, project or run, or dangerous_auto_approve with because project while the project's Approve mode approves every request; switched_to_manual: whether the run switched itself to Manual, which applies again once the project leaves Dangerous auto-approve). A step is in Autopilot only when its agent profile says Autopilot (get_profile's permissions.approval_mode), the project allows it and the run was not switched to Manual. The runs listed include a team task's runs, named by the key they recorded when they started.",
     schema: schema_for_type::<approval_settings::GetApprovals>,
     read_only: true,
   },
   Spec {
     name: "set_allow_autopilot",
-    description: "Turns a project's Allow Autopilot for agents in this project on or off, as Project settings › Runs does. false stops allowing Autopilot, so every agent of the project runs as Manual, and is always taken. true is refused as person_only, whatever automation may do: only a person allows Autopilot, in the app (asking for it while it is on already changes nothing). Answers as get_approvals does.",
+    description: "The former Allow Autopilot switch, kept for existing clients: false moves the project's Approve mode to manual, so every agent of the project runs as Manual, and is always taken (from dangerous_auto_approve too). true asks for autopilot and is refused as person_only from manual, whatever automation may do: only a person allows Autopilot, in the app (asking for it while Autopilot is allowed already, in autopilot or dangerous_auto_approve, changes nothing). set_approve_mode moves the mode to any of its three values. Answers as get_approvals does.",
     schema: schema_for_type::<approval_settings::SetAllowAutopilot>,
+    read_only: false,
+  },
+  Spec {
+    name: "set_approve_mode",
+    description: "Moves a project's Approve mode, as Project settings › Runs › Approvals does: manual (every agent runs as Manual, whatever its profile says), autopilot (agents whose profile is set to Autopilot approve their own requests) or dangerous_auto_approve (every tool request of every agent of the project's runs is approved at once: no allowed list, hold rule, reviewer, person or Orchestrator is asked, and each answer is recorded as dangerous_auto_approve). Moving it down (or asking for what it is already) is always taken; moving it up is refused as person_only, whatever automation may do: only a person moves it up, in the app, and chooses dangerous_auto_approve only through its confirmation. Answers as get_approvals does.",
+    schema: schema_for_type::<approval_settings::SetApproveMode>,
     read_only: false,
   },
   Spec {
@@ -386,7 +397,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "duplicate_pipeline",
-    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. A copy that is not the same as its source (other profiles included) is refused as person_only unless a person turned on Let automation change agent permissions. Refusals name why.",
+    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. A copy that is not the same as its source (other profiles included) is refused as person_only unless a person turned on Let automation change agent permissions. In a team project the copy goes to the team server at once and is kept here only once the server made it; otherwise it is refused with why and nothing is stored (team_server_refused, team_server_not_reached). Refusals name why.",
     schema: schema_for_type::<pipeline_copy::DuplicatePipeline>,
     read_only: false,
   },
@@ -410,7 +421,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_pipelines",
-    description: "A project's pipelines that have a published version, which tasks run with: name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
+    description: "A project's pipelines, which tasks run with; each is always a published version (saving one publishes the next): name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
     schema: schema_for_type::<across::InProjects>,
     read_only: true,
   },
@@ -525,6 +536,7 @@ async fn dispatch_answers(
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
     "get_approvals" => approval_settings::get_approvals(services, parse(arguments)?).await,
     "set_allow_autopilot" => approval_settings::set_allow_autopilot(services, parse(arguments)?).await,
+    "set_approve_mode" => approval_settings::set_approve_mode(services, parse(arguments)?).await,
     "set_reviewer" => approval_settings::set_reviewer(services, parse(arguments)?).await,
     "set_run_manual" => approval_settings::set_run_manual(services, parse(arguments)?).await,
     "get_auto_mode" => Err(approval_settings::retired(name, "get_approvals")),

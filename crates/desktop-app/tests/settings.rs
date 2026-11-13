@@ -148,18 +148,20 @@ fn settings_synthetic_pointer_cannot_change_its_own_opt_in() {
     window.pass();
     window.navigation().go(Route::Settings);
     window.until("stored switch", |window| on(window) == chosen);
-    window.until("synthetic input rejected", |window| {
-      with_synthetic_input(|| click(window, SWITCH));
-      window.texts("settings-change-permissions-blocked").is_some()
-    });
+    assert!(
+      window.link.input_gate().protecting(),
+      "the gate refuses an MCP client's window input while the row shows"
+    );
+    // Synthetic input that reaches the switch all the same (a test's own) is only logged: nothing changes.
+    for _ in 0..5 {
+      with_synthetic_input(|| click(&mut window, SWITCH));
+      window.pass();
+    }
     assert_eq!(
       workspace.automation_changes_permissions().expect("actual setting"),
       chosen
     );
-    assert!(
-      window.texts("settings-change-permissions-blocked").is_some(),
-      "synthetic input is visibly rejected"
-    );
+    assert_eq!(on(&mut window), chosen, "the switch shows what is stored");
   }
 }
 
@@ -366,10 +368,15 @@ fn settings_window_control_shows_the_next_start_and_only_a_person_changes_it() {
     "Build default: off in release builds like this one"
   };
   assert!(window.text(&format!("{WINDOW_CONTROL}-hint")).starts_with(build));
-  window.until("synthetic input rejected", |window| {
-    with_synthetic_input(|| press_element(window, WINDOW_CONTROL));
-    window.texts(&format!("{WINDOW_CONTROL}-blocked")).is_some()
-  });
+  assert!(
+    window.link.input_gate().protecting(),
+    "the gate refuses an MCP client's window input while the row shows"
+  );
+  // Synthetic input that reaches the switch all the same (a test's own) is only logged: nothing changes.
+  for _ in 0..5 {
+    with_synthetic_input(|| press_element(&mut window, WINDOW_CONTROL));
+    window.pass();
+  }
   assert_eq!(workspace.mcp_window_control().expect("read"), None, "nothing stored");
   window.until("the person's choice to be saved", |window| {
     let stored = workspace.mcp_window_control().expect("read");
@@ -399,10 +406,15 @@ fn settings_only_a_person_lets_automation_answer_approvals_and_off_holds_from_th
     window.texts(&format!("{APPROVALS}-row")).is_some()
   });
   assert!(!switch_on(&mut window, APPROVALS), "off until turned on");
-  window.until("synthetic input rejected", |window| {
-    with_synthetic_input(|| press_element(window, APPROVALS));
-    window.texts(&format!("{APPROVALS}-blocked")).is_some()
-  });
+  assert!(
+    window.link.input_gate().protecting(),
+    "the gate refuses an MCP client's window input while the row shows"
+  );
+  // Synthetic input that reaches the switch all the same (a test's own) is only logged: nothing changes.
+  for _ in 0..5 {
+    with_synthetic_input(|| press_element(&mut window, APPROVALS));
+    window.pass();
+  }
   assert!(!workspace.automation_answers_approvals().expect("read"));
   window.until("the person's choice to be saved", |window| {
     let stored = workspace.automation_answers_approvals().expect("read");

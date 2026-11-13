@@ -6,6 +6,7 @@
 pub mod add_slot;
 pub mod add_source;
 pub mod agent_mark;
+pub mod agent_picker;
 pub mod attachments;
 pub mod avatar;
 pub mod breadcrumb;
@@ -61,6 +62,7 @@ pub mod reference_file;
 pub mod resolved_source;
 pub mod row_group;
 pub mod rule_item;
+pub mod runs_on_picker;
 pub mod setting_notice;
 pub mod setting_rows;
 pub mod settings_page;

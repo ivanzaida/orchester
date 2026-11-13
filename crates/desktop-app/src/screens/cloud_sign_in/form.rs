@@ -231,7 +231,7 @@ impl Form {
       self.person.clone(),
       self.focus.clone(),
     );
-    let (step, submit) = (self.step.clone(), self.submit);
+    let step = self.step.clone();
     move || {
       let state = action.state().get_untracked();
       let (typed, secret) = (email.get_untracked(), password.get_untracked());
@@ -247,7 +247,7 @@ impl Form {
         focus.set(Some(field));
         return;
       }
-      if person.allows(submit) {
+      if person.allows("sign in to Orchester Cloud") {
         step.set(Step::Password { timed_out: false });
         action.run_if_idle((typed, secret));
       }
@@ -302,7 +302,6 @@ pub(super) fn fields(ctx: &mut Ctx, form: &Form, (host, create): (&str, bool)) -
     .with_children(refusal.as_ref().map(|refusal| refusal_part(ctx, form, (refusal, host))))
     .child(submit_button(ctx, form).after(Icon::ArrowRight).large())
     .with_children(checking)
-    .with_children(form.person.reason(ctx, form.submit))
     .with_children(unopened(ctx, form))
     .with_children(created);
   let submit = form.submitter();

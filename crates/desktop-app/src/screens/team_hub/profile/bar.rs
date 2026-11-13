@@ -30,6 +30,7 @@ pub(super) struct Words<'a> {
 }
 
 impl Words<'_> {
+  /// The name of the resource `server` of the team, archived or not.
   fn server(&self, server: orchester_core::id::ResourceId) -> String {
     self
       .listing
@@ -64,6 +65,9 @@ impl Words<'_> {
       Fix::AddValue(name) => ctx
         .t_args("team_hub.fix.action.addValue", [("name", name.to_string())])
         .to_string(),
+      Fix::OpenArchived(resource) => ctx
+        .t_args("team_hub.fix.action.openArchived", [("name", self.server(*resource))])
+        .to_string(),
     }
   }
 
@@ -73,6 +77,7 @@ impl Words<'_> {
       Fix::UseConnection => return ctx.t("team_hub.fix.hint.use").to_string(),
       Fix::AddConnection => return ctx.t("team_hub.fix.hint.add").to_string(),
       Fix::SignIn => return ctx.t("team_hub.fix.hint.signIn").to_string(),
+      Fix::OpenArchived(_) => return ctx.t("team_hub.fix.hint.openArchived").to_string(),
       _ => {}
     }
     match missing.iter().skip(1).find_map(Fix::of) {

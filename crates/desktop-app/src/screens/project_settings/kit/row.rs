@@ -13,7 +13,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 
@@ -57,6 +57,10 @@ pub(crate) struct SettingRow {
   label_color: Option<PaletteColor>,
   cut_label: bool,
   info: Option<Arc<str>>,
+  /// The controls on the label's line, the hint under both ([`Self::on_label`]).
+  on_label: bool,
+  /// The row's fill, while its state calls for one.
+  fill: Option<PaletteColor>,
   hint: Option<(Arc<str>, Tone)>,
   hint_style: TypographyStyle,
   /// Lines under the hint, in the words' column.
@@ -80,6 +84,8 @@ impl SettingRow {
       label_color: None,
       cut_label: false,
       info: None,
+      on_label: false,
+      fill: None,
       hint: None,
       hint_style: ProjectSettingsText::Hint.role(),
       lines: Vec::new(),
@@ -138,6 +144,20 @@ impl SettingRow {
   /// What the hint line leaves out, in the (i) after the label.
   pub(crate) fn info(mut self, info: impl Into<Arc<str>>) -> Self {
     self.info = Some(info.into());
+    self
+  }
+
+  /// The controls sit at the end of the label's line, centred on it, and the hint runs the row's full width under both,
+  /// 6 apart (`Approve mode` `aHLLh`: `Top`, then `Hint`). Where the line cannot hold the label and the controls, the
+  /// controls take a line of their own under the label; neither shrinks.
+  pub(crate) fn on_label(mut self) -> Self {
+    self.on_label = true;
+    self
+  }
+
+  /// The row on `fill`, e.g. `danger_muted` while Dangerous auto-approve mode is on (`O2Ml3` in `i0Aqq`).
+  pub(crate) fn fill(mut self, fill: PaletteColor) -> Self {
+    self.fill = Some(fill);
     self
   }
 
@@ -241,10 +261,10 @@ impl SettingRow {
       .map(|width| skeleton::line(ctx, self.hint_style, width).into())
   }
 
-  pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
+  pub(crate) fn render(mut self, ctx: &mut Ctx) -> Element {
     let (label, hint) = (self.label(ctx), self.hint_line(ctx));
-    let id = self.id;
-    let info = self.info.map(|info| {
+    let id = self.id.clone();
+    let info = self.info.take().map(|info| {
       let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
     });
@@ -258,6 +278,68 @@ impl SettingRow {
     } else {
       heading
     };
+    let over = if self.item {
+      ExtraSpacing::Loose.role()
+    } else {
+      ProjectSettingsSpacing::RowY.role()
+    };
+    let (fill, open, under) = (self.fill.take(), self.open.take(), std::mem::take(&mut self.under));
+    let frame = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(over)
+          .bottom(over)
+          .left(ProjectSettingsSpacing::RowX.role())
+          .right(ProjectSettingsSpacing::RowX.role()),
+      )
+      .spacing(SpacingSize::Sm)
+      .child(self.line(heading, hint))
+      .with_children(under);
+    let frame = match fill {
+      Some(fill) => frame.background(fill),
+      None => frame,
+    };
+    match open {
+      Some(open) => opening(open)
+        .id(format!("{id}-row"))
+        .width(Dimension::Pct(100.0))
+        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+        .child(frame)
+        .into(),
+      None => frame.id(format!("{id}-row")).into(),
+    }
+  }
+
+  /// The row's words and its controls: beside the words, or on the label's line with the hint under both.
+  fn line(self, heading: Row, hint: Option<Element>) -> Element {
+    let controls = (!self.controls.is_empty()).then(|| {
+      Row::new()
+        .flex_shrink(0.0)
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(self.controls)
+    });
+    if self.on_label {
+      // The label and its (i) keep their width, the controls theirs: where the line cannot hold both, the controls go
+      // to a line of their own under the label, never over the row's edge.
+      let top = Row::new()
+        .id(format!("{}-top", self.id))
+        .width(Dimension::Pct(100.0))
+        .wrap()
+        .justify(Justify::SpaceBetween)
+        .spacing(SpacingSize::Lg)
+        .align_items(Alignment::Center)
+        .child(heading.flex_shrink(0.0))
+        .with_children(controls);
+      return Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .child(top)
+        .with_children(hint)
+        .with_children(self.lines)
+        .into();
+    }
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -269,45 +351,14 @@ impl SettingRow {
       .child(heading)
       .with_children(hint)
       .with_children(self.lines);
-    let line = Row::new()
+    Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(if self.item { SpacingSize::Md } else { SpacingSize::Lg })
       .align_items(Alignment::Center)
       .with_children(self.lead)
       .child(words)
-      .with_children((!self.controls.is_empty()).then(|| {
-        Row::new()
-          .flex_shrink(0.0)
-          .spacing(SpacingSize::Sm)
-          .align_items(Alignment::Center)
-          .with_children(self.controls)
-      }));
-    let over = if self.item {
-      ExtraSpacing::Loose.role()
-    } else {
-      ProjectSettingsSpacing::RowY.role()
-    };
-    let frame = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(over)
-          .bottom(over)
-          .left(ProjectSettingsSpacing::RowX.role())
-          .right(ProjectSettingsSpacing::RowX.role()),
-      )
-      .spacing(SpacingSize::Sm)
-      .child(line)
-      .with_children(self.under);
-    match self.open {
-      Some(open) => opening(open)
-        .id(format!("{id}-row"))
-        .width(Dimension::Pct(100.0))
-        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-        .child(frame)
-        .into(),
-      None => frame.id(format!("{id}-row")).into(),
-    }
+      .with_children(controls)
+      .into()
   }
 }
 

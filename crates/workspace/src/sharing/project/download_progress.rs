@@ -161,6 +161,7 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::LocalEntitiesNamed { .. }
       | SharingError::PipelineNamesNonTeam { .. }
       | SharingError::WritableFoldersStay { .. }
+      | SharingError::ToolSecretGone { .. }
       | SharingError::ShareRefused { .. }
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }

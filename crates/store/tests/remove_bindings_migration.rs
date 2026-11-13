@@ -130,14 +130,16 @@ fn remove_bindings_migration_drops_the_bindings_and_the_references_that_named_a_
 
 #[test]
 fn remove_bindings_migration_lets_a_team_resource_keep_its_slug_beside_a_local_one() {
-  let (repo, mut db, _run, _execution) = started_run();
-  db.create_resource(
-    Slug::new("review").expect("slug"),
-    name("Review"),
-    &orchester_core::resource::Pipeline::new(vec![]).expect("a pipeline"),
-    at(10),
-  )
-  .expect("a local pipeline");
+  let (repo, mut db, run, _execution) = started_run();
+  let body = db
+    .latest_version::<orchester_core::resource::Pipeline>(run.snapshot().pipeline().resource)
+    .expect("read")
+    .expect("the run's pipeline")
+    .body()
+    .clone();
+  // A pipeline is created as its first version (D-032).
+  db.published_pipeline_for_test("review", "Review", &body, at(10))
+    .expect("a local pipeline");
   drop(db);
 
   let old = old_database(repo.path());

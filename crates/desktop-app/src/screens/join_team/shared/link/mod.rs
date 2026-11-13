@@ -351,7 +351,6 @@ impl LinkFolder {
           .child(button.large())
           .child(back),
       )
-      .with_children(self.person.reason(ctx, SUBMIT))
       .with_children(failed)
       .into()
   }
@@ -368,7 +367,7 @@ impl LinkFolder {
       self.key.clone(),
     );
     move || {
-      if !person.allows(SUBMIT) {
+      if !person.allows("link a folder to a shared project") {
         return;
       }
       let text = folder.get_untracked();

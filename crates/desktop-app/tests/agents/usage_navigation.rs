@@ -1,7 +1,7 @@
 //! Cross-feature navigation uses the real row action and independent fixture databases.
 use std::collections::BTreeSet;
 
-use orchester_app::routes::{AgentTab, ProjectPage, Route};
+use orchester_app::routes::{AgentTab, PipelinesFilter, PipelinesView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -19,12 +19,11 @@ fn used_by(profile: ResourceId) -> Route {
   Route::Project(project_id(), ProjectPage::Agent(profile, AgentTab::default()))
 }
 
-fn used_profile() -> (Agents, ResourceId, ResourceId) {
-  let screen = Agents::new(true);
-  let profile = screen.profile(true);
-  let pipeline = Pipeline::new(vec![Step {
-    key: StepKey::new("implement").expect("a valid step key"),
-    name: Name::new("Implement").expect("a valid step name"),
+/// One step of the fixture pipeline, run by `profile`.
+fn step(key: &str, profile: ResourceId) -> Step {
+  Step {
+    key: StepKey::new(key).expect("a valid step key"),
+    name: Name::new(key).expect("a valid step name"),
     kind: StepKind::Agent {
       profile: Some(profile),
       repository: RepositoryAccess::ReadOnly,
@@ -36,59 +35,63 @@ fn used_profile() -> (Agents, ResourceId, ResourceId) {
     approval_gate: false,
     on_failure: None,
     budget: None,
-  }])
-  .expect("one assigned pipeline step");
+  }
+}
+
+/// A profile two steps of a pipeline use, so the profile lists two use rows; the pipeline's latest version (v2)
+/// differs from v1, so a link that opened a historical version would show.
+fn used_profile() -> (Agents, ResourceId, ResourceId) {
+  let screen = Agents::new(true);
+  let profile = screen.profile(true);
+  let pipeline =
+    Pipeline::new(vec![step("implement", profile), step("review", profile)]).expect("two assigned pipeline steps");
   let mut db = ProjectDb::open(&screen.root).expect("the isolated project opens");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new("linked-delivery").expect("valid slug"),
       Name::new("Linked delivery").expect("valid name"),
       &pipeline,
       Timestamp::now(),
     )
-    .expect("the fixture pipeline saves");
+    .expect("the fixture pipeline saves")
+    .0;
   let version = db
-    .publish_draft::<Pipeline>(resource.id(), Timestamp::now())
-    .expect("pipeline v1 publishes");
-  db.save_draft(
+    .latest_version::<Pipeline>(resource.id())
+    .expect("pipeline v1 publishes")
+    .expect("published");
+  db.publish_pipeline_edit(
     resource.id(),
-    &Draft::new(
-      pipeline.with_description("Current draft, not historical version".into()),
-      Some(version.number()),
-      Timestamp::now(),
-    ),
+    &pipeline.with_description("Current version, not historical version".into()),
+    version.number(),
+    None,
+    Timestamp::now(),
   )
-  .expect("a distinct current draft saves");
+  .expect("a distinct current version publishes");
   (screen, profile, resource.id())
 }
+/// In a local project a link to a pipeline opens the Pipelines hub with its panel.
+fn in_hub(pipeline: ResourceId) -> Route {
+  Route::Project(
+    project_id(),
+    ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline))),
+  )
+}
+
 fn current_pipeline(screen: &mut Agents, pipeline: ResourceId) {
-  assert_eq!(
-    screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipeline(pipeline, Default::default()))
-  );
-  screen.until("actual current pipeline page", |s| s.exists("pipeline-flow"));
-  assert!(screen.text("screen-pipelines").contains("Linked delivery"));
+  assert_eq!(screen.window.navigation().route_now(), in_hub(pipeline));
+  screen.until("the pipeline's panel in the hub", |s| s.exists("pipeline-hub-panel"));
+  assert!(screen.text("pipeline-hub-panel").contains("Linked delivery"));
   let db = ProjectDb::open(&screen.root).expect("fixture opens after navigation");
-  assert_eq!(
-    db.draft::<Pipeline>(pipeline)
-      .expect("draft reads")
-      .expect("draft retained")
-      .body()
-      .description(),
-    "Current draft, not historical version"
-  );
-  assert_eq!(
-    db.latest_version::<Pipeline>(pipeline)
-      .expect("version reads")
-      .expect("v1 retained")
-      .number()
-      .get(),
-    1
-  );
+  let latest = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("version reads")
+    .expect("v2 retained");
+  assert_eq!(latest.body().description(), "Current version, not historical version");
+  assert_eq!(latest.number().get(), 2);
 }
 
 #[test]
-fn agents_used_link_opens_exact_current_pipeline_from_published_and_draft_rows() {
+fn agents_used_link_opens_exact_current_pipeline_from_each_step_row() {
   for row in [0, 1] {
     let (mut screen, profile, pipeline) = used_profile();
     let original = screen
@@ -131,7 +134,7 @@ fn agents_used_link_waits_until_the_edit_is_saved() {
   screen.press_until("agent-use-open-1", "the pipeline opens", |s| {
     matches!(
       s.window.navigation().route_now(),
-      Route::Project(_, ProjectPage::Pipeline(..))
+      Route::Project(_, ProjectPage::PipelinesHub(..))
     )
   });
   current_pipeline(&mut screen, pipeline);

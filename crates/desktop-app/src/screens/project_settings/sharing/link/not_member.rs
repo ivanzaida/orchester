@@ -130,7 +130,7 @@ impl Link {
       Some(choice) => {
         let (resolve, person) = (self.resolve.clone(), self.person.clone());
         check.on_click(move || {
-          if person.allows(CHECK) {
+          if person.allows("check a team server for a project again") {
             resolve.run(choice.clone());
           }
         })
@@ -158,7 +158,6 @@ impl Link {
               .variant(ExtraTypography::Note.role()),
           ),
       )
-      .with_children(self.person.reason(ctx, CHECK))
       .into()
   }
 }

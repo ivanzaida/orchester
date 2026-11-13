@@ -38,7 +38,13 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
-    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is."
+    "autopilotPersonOnly": "Only you can choose Autopilot as the Approve mode: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; moving it down to Manual is.",
+    "dangerousPersonOnly": "Only you can choose Dangerous auto-approve as the Approve mode: it approves every tool request of every agent in this project with nothing checked. Input from an MCP client is not taken; moving it down is.",
+    "approveModeChanged": {
+      "manual": "The Approve mode was changed meanwhile and is now Manual: nothing was moved. Look again and choose anew if you still want to.",
+      "autopilot": "The Approve mode was changed meanwhile and is now Autopilot: nothing was moved. Look again and choose anew if you still want to.",
+      "dangerous": "The Approve mode was changed meanwhile and is now Dangerous auto-approve: nothing was moved. Look again and choose anew if you still want to."
+    }
   },
   "projects": {
     "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",
@@ -1225,6 +1231,7 @@
   },
   "errors": {
     "nameRequired": "Enter a project name.",
+    "stepNameRequired": "Enter a step name.",
     "nameTooLong": "Use at most {{max}} characters.",
     "notAGitRepository": "This folder is not the root of a git repository.",
     "alreadyInitialized": "This repository already contains an Orchester project.",
@@ -1287,6 +1294,8 @@
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
     "neverPublished": "It was never published, so its draft is all it has. Remove it instead.",
     "noFirstVersion": "A new resource has no draft: create it, which publishes v1, and edit it after that.",
+    "noDrafts": "A pipeline is saved only as a published version, never as a draft. Save the change when it can be published.",
+    "unchanged": "Nothing changed since the latest version, so there is nothing to save.",
     "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
     "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
     "effortOneWord": "A reasoning effort is one word, such as high.",
@@ -1299,7 +1308,8 @@
   },
   "pipelines": {
     "flow": {
-      "then": "→"
+      "then": "→",
+      "unreadable": "A pipeline in this list could not be read any more. Try again."
     },
     "count": {
       "step": {
@@ -1323,20 +1333,23 @@
       }
     },
     "version": {
-      "published": "Published {{version}}",
-      "publishedWithDraft": "{{version}} · Draft v{{draft}} saved",
-      "draftOnly": "Draft v1 · not published"
+      "published": "Published {{version}}"
     },
     "create": {
       "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
       "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
+    },
+    "rename": {
+      "blank": "A pipeline needs a name.",
+      "tooLong": "A name is at most {{count}} characters.",
+      "taken": "{{name}} is too close to the pipeline {{pipeline}}. Choose another name."
     },
     "default": {
       "notPublished": "Publish this pipeline before making it the default: New task lists only published pipelines."
     },
     "problems": {
       "missing": "This pipeline no longer exists.",
-      "noSteps": "Add a step before you can publish",
+      "noSteps": "Add a step before you can save",
       "noProfile": "{{step}} has no agent profile",
       "noTool": "{{step}} has no tool",
       "cycle": "Cycle: {{path}}",
@@ -1345,13 +1358,23 @@
       "unknownDependency": "{{step}} runs after a step that no longer exists",
       "unknownRetryTarget": "{{step}} returns to a step that no longer exists",
       "retryTargetNotUpstream": "{{step}} returns to {{target}}, which does not run before it",
-      "staleDraft": "This draft started from {{basedOn}}, but {{latest}} was published since. Publishing it would discard the changes in {{latest}}.",
-      "notPublishable": "The draft has problems that block publishing.",
+      "staleDraft": "This edit started from {{basedOn}}, but {{latest}} was saved since. Saving it would discard the changes in {{latest}}.",
+      "notPublishable": "This pipeline has problems that keep it from being saved.",
       "versionLimit": "This pipeline has reached the highest version number.",
-      "noDraft": "There is no saved draft to publish.",
+      "unchanged": "Nothing changed since {{version}}, so there is nothing to save.",
+      "teamChanged": "Someone published v{{version}} of this pipeline for the team first, so nothing was saved. Your changes are still here.",
+      "teamRenameChanged": "The pipeline changed on the team server since this computer read it, so it was not renamed. Your changes are still here: save again in a moment.",
+      "teamUnreached": "The team server can't be reached, so nothing was saved. Your changes are still here: save again once it answers.",
+      "teamNoAnswer": "The team server didn't answer in time, so your changes may or may not have reached it. They stay here unsaved; once the team's changes are read, the pipeline shows what the server has.",
+      "teamAlreadySaved": "The team server already has these changes as v{{version}}, most likely from your earlier save that got no answer. Nothing more was sent; they show here once the team's changes are read.",
+      "teamNameTaken": "The team already has a pipeline with this name. If an earlier Create got no answer, it may have made this one: it shows here once the team's changes are read.",
+      "teamGone": "The team server no longer has this pipeline, so nothing was saved. Your changes are still here.",
       "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
       "unknownVariable": "{{name}} is not a variable in the catalog.",
-      "invalidRetries": "Enter a whole number of retries, at least 1."
+      "invalidRetries": "Enter a whole number of retries, at least 1.",
+      "stepsNotReady": "{{count}} steps aren't ready: {{steps}}",
+      "profileGone": "Step “{{step}}” runs an agent profile that is no longer available. Choose another.",
+      "toolGone": "Step “{{step}}” calls a tool that is no longer available. Choose another."
     },
     "step": {
       "noProfile": "No agent profile",
@@ -1449,7 +1472,36 @@
       "variableLine": "Write each variable as NAME=value: {{line}}",
       "variableName": "{{name}} is not a variable name: a letter or underscore, then letters, digits or underscores.",
       "duplicateVariable": "{{name}} is set more than once.",
-      "variableValue": "The value of {{name}} contains a NUL character."
+      "variableValue": "The value of {{name}} contains a NUL character.",
+      "urlRequired": "Enter the URL it calls.",
+      "invalidUrl": "Enter an absolute http or https URL with a host, without a user name or password",
+      "insecureBearer": "A bearer token needs an https URL",
+      "hostRequired": "Enter the one host it may call.",
+      "hostNotAllowed": "The URL's host is {{host}}, not {{allowed}}",
+      "invalidLocation": "{{name}} is not put in or read from a valid place.",
+      "reservedHeader": "{{name}} is sent in the Authorization header, which is the token's · pick another header",
+      "secretRequired": "Choose the secret it uses.",
+      "secretNameRequired": "Enter the name of the team secret it uses.",
+      "secretNameTooLong": "A secret's name is at most {{max}} characters.",
+      "secretName": "A secret's name is in capitals, digits and underscores, e.g. API_TOKEN.",
+      "queryRequired": "Write the query it runs.",
+      "environmentRequired": "Choose the environment whose secret values it uses.",
+      "minutes": "Enter whole minutes, from 1.",
+      "noStepsSelected": "Choose at least one step of each pipeline that calls it.",
+      "line": {
+        "inputShape": "write it as name → query, header or body and its key",
+        "outputShape": "write it as name ← status, header or body",
+        "name": "{{name}} is not a name",
+        "twice": "{{name}} is there twice",
+        "inputPlace": "{{place}} is not query, header or body",
+        "outputPlace": "{{place}} is not status, header or body",
+        "needsPath": "{{place}} needs a path",
+        "needsName": "{{place}} needs a name",
+        "invalidPath": "{{key}} is not a body path",
+        "invalidName": "{{key}} is not a {{place}} name",
+        "statusKey": "status takes nothing after it",
+        "reserved": "the Authorization header is the token's · pick another header"
+      }
     }
   },
   "projectImport": {
@@ -1624,6 +1676,7 @@
       "toolNotCheck": "{{tool}} is not a check an agent can call: a profile gives its agents only command tools with access rules.",
       "copyOfRequired": "Copying needs the pipeline to copy (copy_of).",
       "copyOfNotTaken": "Only a copy names a pipeline to copy (copy_of).",
+      "stepsNotTaken": "Only a pipeline created empty takes its steps and description (steps, description): a starter or a copy brings its own.",
       "inStep": "Step {{step}}:",
       "stepKeyInvalid": "{{key}} is not a step key: use small letters, digits and -, starting with a letter or digit.",
       "profileOrTool": "A step runs an agent profile or a tool, not both.",
@@ -1742,7 +1795,7 @@
       "errors": {
         "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",
         "nameTaken": "Another tool is named {{name}}. Give the new tool a name of its own.",
-        "notACommandTool": "{{tool}} is not a command tool; only command tools are made and changed in this version.",
+        "notACommandTool": "{{tool}} is an HTTP or database tool, which this server does not change: a person makes and changes those in the Agents hub of the app.",
         "programInRepository": "{{program}} lies inside the project's repository, where a run's work can change it. A command tool's program is a fixed file outside it; run a script of the repository through its interpreter, e.g. program powershell (pwsh on macOS) with -File tools/check.ps1.",
         "programInWorktree": "A command tool's program is a fixed file: name it as found on the search path, or by its absolute path outside the repository. A script of the repository runs through its interpreter, e.g. program powershell (pwsh on macOS) with -File tools/check.ps1.",
         "programNotFound": "No program {{program}} was found on the search path or at that path.",
@@ -1754,7 +1807,14 @@
         "program": "The tool would run {{program}} where it ran {{before}}.",
         "arguments": "The tool's arguments would change, and with them what its program does.",
         "exitCodes": "Exit codes {{codes}} would pass, which did not.",
-        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
+        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that.",
+        "address": "The tool would send requests to {{url}} on agents' behalf.",
+        "method": "The tool would send {{method}} requests.",
+        "headers": "The headers the agents' inputs are sent in would change.",
+        "database": "The tool would query a database with the credentials of a secret.",
+        "query": "The tool's query would change, and with it what it reads or changes.",
+        "access": "Who may call the tool, and how a call is approved, would change.",
+        "secret": "The tool would release a secret's value to its calls, which it did not."
       }
     },
     "services": {
@@ -1795,7 +1855,8 @@
       "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
       "firstPipelineVersion": "A pipeline's first version has nothing to be compared with, so a person publishes it.",
       "pipelineSteps": "The steps differ from the latest published version: some were added or removed.",
-      "pipelineStep": "Step {{step}} is not provably as strict as in the latest published version: same wiring, profile or tool, approvals and narrowing, or stricter.",
+      "pipelineStopsWaiting": "Step {{step}} would no longer wait for {{waited}}, which it waited for in the latest published version: a step that asks for approval or runs a tool.",
+      "pipelineStep": "Step {{step}} is not provably as strict as in the latest published version: the same profile or tool, instructions, approval, failure route, retries, budget and narrowing, or stricter.",
       "taskPipeline": "A person changes a task's pipeline: another pipeline runs it with other steps, profiles and approvals.",
       "teamPipeline": "Sharing {{pipeline}} for the team lets every member's agents run it, so a person decides it.",
       "pipelineSources": "The sources the pipeline or its steps list differ from the latest published version.",
@@ -1816,8 +1877,7 @@
       "instruction": "Publishing the instruction adds its text to the prompts of every agent it applies to.",
       "skill": "Publishing the skill gives every agent it applies to its description in the prompt and its body and reference files to read.",
       "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
-      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
-      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
+      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt."
     }
   },
   "statusBar": {
@@ -2139,15 +2199,16 @@
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
       "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
       "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
-      "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
       "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",
+      "toolSecretGone": "The team can't take this tool: it uses a secret this project doesn't have, so its name can't be given to the team. Choose a secret the project has, then try again. Nothing was sent.",
       "shareRefused": "Nothing was shared: the team can't take {{resources}} as they are. Fix each one and share again.",
       "shareRefusal": {
         "localEntities": "{{resource}} names {{names}}, which belong to this computer only, and its kind has no form for the team yet. Remove them from it to share it.",
         "pipelineNamesNonTeam": "{{resource}} uses {{name}}, which isn't shared with the team. Use a profile or tool the team gets, or remove the step.",
         "writableFolders": "{{resource}} has writable folders ({{folders}}) that are folders of this computer, so they can't be shared. Remove them from the profile to share it.",
+        "toolSecretGone": "{{resource}} uses a secret this project doesn't have, so the team can't be told its name. Choose a secret the project has to share it.",
         "mcpProgramInWorktree": "The MCP server {{resource}} starts a program inside the worktree. The team names a program by its name on the search path, so use one that is installed on the computer.",
         "mcpProgramName": "The MCP server {{resource}} starts a program whose file name can't be looked up on the search path. Install it under a plain name.",
         "mcpFolder": "The MCP server {{resource}} starts in a folder of this computer. The team's folder is relative to the worktree, so change it to one.",
@@ -2453,6 +2514,7 @@
       "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "draftChangedAt": "The draft changed at {{time}}, after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "pipelineNoDraft": "Pipelines have no drafts any more, so this proposal to publish {{name}} has nothing to publish. Nothing was published: save the pipeline in Pipelines, or turn on Let the Orchestrator drive and ask it again.",
       "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
       "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
@@ -2478,7 +2540,10 @@
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
-      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
+      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
+      "notMergeTurn": "In a turn Orchester started by itself, the chat starts tasks only in the turn of a run's success it merged, where the order of what this conversation leads asks for it. Nothing started; the person can start it in the app.",
+      "alreadyRan": "{{task}} has run already: running a task again is the person's, never a turn Orchester started by itself. Nothing started; the person can run it again in the app.",
+      "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {
       "ownTask": "A run cannot wait on its own task. Nothing was changed.",
@@ -2492,6 +2557,7 @@
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
+      "pipelinesDriveOnly": "While Let the Orchestrator drive is off, the Orchestrator changes no pipeline: a pipeline is always a published version, so there is no draft to propose. Nothing was changed: tell the person what to change and that they save it in Pipelines, or that they can turn on Let the Orchestrator drive.",
       "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",
       "cancelWaits": "Run #{{run}} goes on: canceling it waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to cancel.",
       "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge.",
@@ -2524,6 +2590,8 @@
         "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's.",
         "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here. Nothing was merged."
       },
+      "approvalReviewerJudging": "Auto mode's reviewer is judging this request: wait for its answer, or leave it to the person. Nothing was decided.",
+      "approvalNotThisRequest": "This turn was started by another tool request, or by no tool request: in a turn Orchester started by itself, the chat decides only the request that started it. Nothing was decided; tell the person what you recommend instead.",
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
       "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",

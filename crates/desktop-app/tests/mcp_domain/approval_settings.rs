@@ -11,8 +11,9 @@ use serde_json::{Value, json};
 
 use super::{Served, connections_window::controlled};
 
-const SWITCH: &str = "settings-allow-autopilot";
-const REFUSAL: &str = "settings-allow-autopilot-person-only";
+const SWITCH: &str = "settings-approve-mode-autopilot";
+const MANUAL: &str = "settings-approve-mode-manual";
+const REFUSAL: &str = "settings-approve-mode-person-only";
 
 fn setting(repo: &std::path::Path) -> AllowAutopilot {
   ProjectDb::open(repo).expect("db").allow_autopilot().expect("setting")
@@ -41,17 +42,22 @@ fn approval_mode_effective_switch_allows_autopilot_by_a_persons_press_alone() {
   assert_eq!(setting(&repo), AllowAutopilot::OFF, "off by default");
   // Even with every switch of the person's on, a client's press is refused.
   lets_all(&s);
-  s.click_by_client(SWITCH).expect("the click is delivered");
-  s.until("the refusal", |s| s.shows(REFUSAL));
+  let refused = s
+    .click_by_client(SWITCH)
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("move a project's Approve mode up"),
+    "it names the action: {refused}"
+  );
+  assert!(!s.shows(REFUSAL), "the row says nothing of it");
   for _ in 0..5 {
     s.pass();
   }
   assert_eq!(setting(&repo), AllowAutopilot::OFF);
   s.click_by_person(SWITCH);
   s.until("on by the person", |_| setting(&repo) == AllowAutopilot::ON);
-  s.until("the refusal cleared", |s| !s.shows(REFUSAL));
-  // Turning it off is anyone's.
-  s.click_by_client(SWITCH).expect("the click is delivered");
+  // Moving it down to Manual is anyone's.
+  s.click_by_client(MANUAL).expect("the click is delivered");
   s.until("off by the client", |_| setting(&repo) == AllowAutopilot::OFF);
 }
 

@@ -1,8 +1,10 @@
 # PV2-00 · Save and commit the `Pipelines · v2` design
 
-- **Status:** todo
+- **Status:** needs the person
 - **Kind:** person
 - **Depends on:** —
+- **Branch:** —
+- **Tokens:** —
 
 ## Goal
 

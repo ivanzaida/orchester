@@ -5,7 +5,7 @@ mod task_merge;
 use lurq::mcp::{McpTool, Scope};
 use modules::{agent_page, module_page, new_task_page};
 use orchester_core::{
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, MemoryId, ProjectId},
   project::{TaskKey, TaskKeyError},
 };
 use orchester_workspace::{
@@ -65,8 +65,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), `view` new for New module, or `module`: new for New module, a module's id \
   for its page on `tab` (summary or burndown), with `view` edit for Edit module (a `tab` or `view` that names nothing \
-  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list, from \
-  whose rows a pipeline's page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
+  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list: in \
+  a local project the Pipelines hub, whose rows open a pipeline's panel there; in a team project the list whose rows \
+  open a pipeline's page on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
   screen opens on. \
   Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
@@ -131,8 +132,9 @@ fn schema() -> Value {
       "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
-      "filter": { "type": "string", "enum": HubFilter::LOCAL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills or tools, and archived in a local project (a team project shows all instead)." },
+      "filter": { "type": "string", "enum": HubFilter::ALL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills, tools or memory (the memory screen), and archived (what the project archived; a team project's is what the team archived)." },
       "item": { "type": "string", "description": "agents: the id of the resource the hub's panel shows; the first of the list when left out." },
+      "record": { "type": "string", "description": "memory: the id of the record the Agents hub's Memory filter shows in its panel; the first of the status's list when left out." },
       "server": { "type": "string", "description": "agents of a local project: the id of the local MCP server the hub's panel shows (its connection id), in place of `item`." },
       "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
       "query": {
@@ -257,7 +259,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::EditTask => &["project", "key"],
     Screen::Task => task_merge::PARAMS,
     Screen::Connections => &["project", "selected", "decision"],
-    Screen::Memory => &["project", "tab"],
+    Screen::Memory => &["project", "tab", "record"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
@@ -282,11 +284,18 @@ fn review_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   }
 }
 
-/// Memory on its tab, or on the one it chooses when left out; `settings`, the tab it had, opens Project settings ›
-/// Context.
+/// The Agents hub's Memory filter on its status, or on the one it chooses when left out, with `record` in its panel;
+/// `settings`, the tab the Memory page had, opens Project settings › Context.
 fn memory_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   let name = string(args, "tab")?;
-  MemoryTab::page(name).ok_or_else(|| ToolError::UnknownTab {
+  let record = match string(args, "record")? {
+    Some(record) => Some(record.parse::<MemoryId>().map_err(|error| ToolError::InvalidParam {
+      param: "record",
+      reason: error.to_string(),
+    })?),
+    None => None,
+  };
+  MemoryTab::page(name, record).ok_or_else(|| ToolError::UnknownTab {
     name: name.unwrap_or_default().to_owned(),
     known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
   })

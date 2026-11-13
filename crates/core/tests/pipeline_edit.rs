@@ -254,8 +254,6 @@ fn problems_name_the_cycle_and_every_step_without_a_profile() {
       EditProblem::Unassigned(key("review")),
     ]
   );
-  assert!(problems[0].blocks_saving());
-  assert!(!problems[1].blocks_saving());
 }
 
 #[test]

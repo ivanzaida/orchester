@@ -27,7 +27,7 @@ pub(crate) use self::{
   merge::merge_proposed,
 };
 mod pipeline_steps;
-mod pipelines;
+pub(super) mod pipelines;
 mod profile_input;
 mod profiles;
 mod project;
@@ -186,71 +186,74 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_pipeline",
-    description: "One pipeline as its editor shows it (its draft if it has one, otherwise its latest version): \
-                  description and steps (key, name, agent profile or tool, runs after, approval gate, failure route \
-                  with retries, step budget, repository access, model override and narrowed permissions, \
-                  instructions), what its runs deliver (`delivers`: changes, report, outside or changes_or_report), \
-                  where it stands, the problems that keep it from being published, and the published \
-                  profiles and tools its steps can use, and its link in the app (its editor).",
+    description: "One pipeline as its editor shows it, its latest version (a pipeline is always a published version: \
+                  saving publishes the next one): description and steps (key, name, agent profile or tool, runs after, \
+                  approval gate, failure route with retries, step budget, repository access, model override and \
+                  narrowed permissions, instructions), what its runs deliver (`delivers`: changes, report, outside or \
+                  changes_or_report), its version (`published_version`), the problems its steps have here, the \
+                  published profiles and tools its steps can use, and its link in the app (its editor).",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: true,
   },
   Spec {
     name: "create_pipeline",
-    description: "Makes a new pipeline as draft v1, as New pipeline does: `from` starter (Feature delivery: \
-                  Research, Plan with an approval gate, Implement, Run checks and Review returning to Implement, Create \
-                  pull request; steps get the published profiles and tools named Explorer, Planner, Builder, \
-                  Reviewer, Run test suite and Create pull request where exactly one has the name), empty, or copy \
-                  (`copy_of` names a pipeline whose draft or latest version is copied). The name must give a slug no \
-                  other pipeline has. `delivers` says what its runs deliver: changes (repository changes, merged; the \
-                  default), report (the last step's report; a run that committed nothing is completed instead of \
-                  merged), outside (work done through MCP tools outside the repository: the report and the tool calls \
-                  that changed something) or changes_or_report.",
+    description: "Makes a new pipeline and publishes it as v1, as New pipeline and Save do, or refuses it with every \
+                  reason and stores nothing: `from` starter (Feature delivery: Research, Plan with an approval gate, \
+                  Implement, Run checks and Review returning to Implement, Create pull request; steps get the \
+                  published profiles and tools named Explorer, Planner, Builder, Reviewer, Run test suite and Create \
+                  pull request where exactly one has the name), copy (`copy_of` names a pipeline whose latest version \
+                  is copied), or empty with the `steps` (and `description`) given, each step as save_pipeline takes \
+                  it (`steps` and `description` with starter or copy: steps_not_taken). A pipeline without steps, or \
+                  with a step that has no profile or tool or that cannot run here, is refused as not_publishable, so \
+                  empty without steps always is; steps that break a pipeline rule are invalid_pipeline. The name must \
+                  give a slug no other pipeline has. `delivers` says what its runs deliver: changes (repository \
+                  changes, merged; the default), report (the last step's report; a run that committed nothing is \
+                  completed instead of merged), outside (work done through MCP tools outside the repository: the \
+                  report and the tool calls that changed something) or changes_or_report. A first version widens what \
+                  agents may do, as there is nothing to compare it with, so it is refused as person_only unless a \
+                  person turned on Let automation change agent permissions. In a team project v1 goes to the \
+                  team server at once and is kept here only once the server made it; otherwise it is refused with \
+                  why and nothing is stored (team_server_refused, team_server_not_reached, not_admin).",
     schema: schema_for_type::<pipelines::CreatePipeline>,
     read_only: false,
   },
   Spec {
-    name: "save_pipeline_draft",
-    description: "Replaces a pipeline's draft with the steps given, as its editor saves it. Each step has a key \
-                  (small letters, digits and -), a name, and an agent profile or a tool (left out: unassigned, which \
-                  blocks publishing only). An agent step may set repository access (write only where its profile \
-                  writes), a model override, and narrow its profile's permissions: commands to some of the profile's \
-                  allowed list, network off, or asking about tool calls; never more than the profile allows. An agent \
-                  step may also say whether its agent merges the base branch when it moves (takes_base_moves); left \
-                  out, a step with write access does unless it reviews or verifies (review or verify in its key, or \
-                  a failure route back to a writing step). A step \
-                  runs after the steps it names (no cycles), may wait at an approval gate, may return to an earlier \
-                  step it runs after when it fails (1 or more retries), and may have a token budget (left out: no \
-                  step budget). Refused with the editor's reasons when the steps do not form a pipeline; nothing is \
-                  saved then. A command step names a published command tool (publish_tool) as `tool`, runs after \
-                  the steps it checks, and may return to one of them when the program fails, e.g. {\"key\": \
-                  \"check\", \"name\": \"Check\", \"tool\": \"Check\", \"runs_after\": [\"implement\"], \
-                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. Unless a person turned on Let \
-                  automation change agent permissions, these are refused as person_only: dropping an approval \
-                  gate, or asking about tool calls, that the latest published version (before the first: the \
-                  draft) has, a step removed with it included; and a step that calls a tool neither the draft nor \
-                  the latest version calls under its key, since it runs a program on this computer. `delivers` \
-                  changes what its runs deliver (changes, report, outside or changes_or_report); left out, it stays \
-                  as it is.",
-    schema: schema_for_type::<pipeline_steps::SavePipelineDraft>,
+    name: "save_pipeline",
+    description: "Publishes the steps given as a pipeline's next version, as its editor's Save does (a pipeline is \
+                  always a published version; there are no pipeline drafts), or refuses with every reason and stores \
+                  nothing. Each step has a key (small letters, digits and -), a name, and an agent profile or a tool. \
+                  An agent step may set repository access (write only where its profile writes), a model override, \
+                  and narrow its profile's permissions: commands to some of the profile's allowed list, network off, \
+                  or asking about tool calls; never more than the profile allows. An agent step may also say whether \
+                  its agent merges the base branch when it moves (takes_base_moves); left out, a step with write \
+                  access does unless it reviews or verifies (review or verify in its key, or a failure route back to \
+                  a writing step). A step runs after the steps it names (no cycles), may wait at an approval gate, may \
+                  return to an earlier step it runs after when it fails (1 or more retries), and may have a token \
+                  budget (left out: no step budget). A command step names a published command tool (publish_tool) as \
+                  `tool`, runs after the steps it checks, and may return to one of them when the program fails, e.g. \
+                  {\"key\": \"check\", \"name\": \"Check\", \"tool\": \"Check\", \"runs_after\": [\"implement\"], \
+                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. Refused as invalid_pipeline when the \
+                  steps do not form a pipeline, as not_publishable with every reason when it has no steps, a step has \
+                  no profile or tool or cannot run here, or the version \
+                  limit is reached, as unchanged when they equal the latest version, and as version_changed when a \
+                  version was published since it was read. Unless a person turned on Let automation change agent \
+                  permissions, a save that widens what agents may do is refused as person_only, with every reason: \
+                  dropping an approval gate, or asking about tool calls, that the latest version has (a step removed \
+                  with it included); a step that calls a tool the latest version does not call under its key, since \
+                  it runs a program on this computer; and anything not provably as strict as the latest version (the \
+                  same steps, wiring, failure routes, profiles and tools, each step's approval, asking about tool \
+                  calls, write access, commands and network the same or stricter). So every version a task can run is \
+                  one a person saved, allowed, or could not object to. `delivers` changes what its runs deliver \
+                  (changes, report, outside or changes_or_report); left out, it stays as it is. In a team project the \
+                  version goes to the team server at once and is kept here only once the server took it; otherwise \
+                  it is refused with why and nothing is stored (team_server_refused, team_server_not_reached, \
+                  version_changed when someone published first, not_admin).",
+    schema: schema_for_type::<pipeline_steps::SavePipeline>,
     read_only: false,
   },
   Spec {
     name: "share_pipeline",
-    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version is created on the team server at once as a new team                   pipeline's first version (names and roles of what it uses, never a secret's value), and team tasks                   can then name it by its new id. The agent profiles and tools its steps run must be the team's                   already (team_resources_required names those that are not). Refused in a local project                   (team_project_required), for a member (not_admin), and while the team server cannot be reached                   (team_unreachable: nothing is created); every member's agents may run it, so it is person_only                   unless a person turned on Let automation change agent permissions. The local pipeline stays as it                   is, hidden.",
-    schema: schema_for_type::<pipelines::InPipeline>,
-    read_only: false,
-  },
-  Spec {
-    name: "publish_pipeline",
-    description: "Publishes a pipeline's draft as its next version, as Publish does, so tasks can run it. Refused \
-                  while it has no steps or a step has no profile or tool, or when the draft was started from an older \
-                  version than the latest. Unless a person turned on Let automation change agent permissions, only a \
-                  draft provably no weaker than the latest published version is published (the same steps, wiring, \
-                  failure routes, profiles and tools, each step's approval, asking about tool calls, write access, \
-                  commands and network the same or stricter); a pipeline's first version, and anything else, is \
-                  refused as person_only. So every version a task can run is one a person published, allowed, or \
-                  could not object to.",
+    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version becomes a new team pipeline's first version, sent to                   the team server as Publish for the team sends one (names and roles of what it uses, never a                   secret's value), and team tasks can then name it by its new id. The agent profiles and tools its                   steps run must be the team's already (team_resources_required names those that are not). Refused                   in a local project (team_project_required) and for a member (not_admin); every member's agents may                   run it, so it is person_only unless a person turned on Let automation change agent permissions.                   The local pipeline stays as it is, hidden, under the slug <slug>-local. The copy is made on the                   team server at once and kept here only once the server made it (state team); a refusal                   (team_server_refused) or a server that cannot be reached (team_server_not_reached) stores nothing.",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: false,
   },
@@ -463,8 +466,7 @@ async fn configure(
     "publish_profile" => profiles::publish_profile(services, parse(arguments)?).await,
     "get_pipeline" => pipelines::get_pipeline(services, parse(arguments)?, translate).await,
     "create_pipeline" => pipelines::create_pipeline(services, parse(arguments)?, translate).await,
-    "save_pipeline_draft" => pipeline_steps::save_pipeline_draft(services, parse(arguments)?, translate).await,
-    "publish_pipeline" => pipelines::publish_pipeline(services, parse(arguments)?, translate).await,
+    "save_pipeline" => pipeline_steps::save_pipeline(services, parse(arguments)?, translate).await,
     "share_pipeline" => team_pipeline::share_pipeline(services, parse(arguments)?).await,
     "list_instructions" => instructions::list_instructions(services, parse(arguments)?, translate).await,
     "get_instruction" => instructions::get_instruction(services, parse(arguments)?).await,

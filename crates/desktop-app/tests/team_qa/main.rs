@@ -8,8 +8,14 @@
 
 mod first_download;
 mod hub_archive;
+mod hub_archived;
 mod hub_edit;
+mod hub_edit_kinds;
+mod hub_forms;
+mod hub_keep;
 mod hub_profile_form;
+mod hub_states;
+mod hub_tools;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 #[allow(
@@ -98,8 +104,7 @@ fn team_qa_join_opens_on_the_code_with_the_address_typed_and_takes_no_mcp_press(
   assert_eq!(value(&mut window, CODE_FIELD), "");
 
   with_synthetic_input(|| window.press(SUBMIT));
-  let refused = format!("{SUBMIT}-person-only");
-  window.until("the press to be refused", |window| window.texts(&refused).is_some());
+  window.until("the press to be refused", |window| window.refused_press().is_some());
   assert_eq!(server.code_joins(), Vec::<bool>::new());
 }
 

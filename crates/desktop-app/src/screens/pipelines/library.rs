@@ -13,10 +13,7 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
-  background,
-  pipelines::library::{LibraryEntry, VersionState},
-  sharing::team::TeamConfiguration,
-  tasks::outside::Outside,
+  background, pipelines::library::LibraryEntry, sharing::team::TeamConfiguration, tasks::outside::Outside,
 };
 
 use super::{
@@ -71,8 +68,8 @@ impl Component for Library {
       .get();
     let id = project.open.project.id();
     let team = team::of(&project);
-    // A team's pipelines are made on the team server, not here.
-    let page = parts::page().child(header(ctx, id, team.is_none()));
+    // An admin's new team pipeline is created on the team server (D-043); a member makes none.
+    let page = parts::page().child(header(ctx, id, team::may_change(team.as_ref())));
     let pending = loaded.is_pending();
     let body = match (loaded.data, loaded.error) {
       (_, Some(error)) if !pending => {
@@ -116,23 +113,14 @@ fn reading(ctx: &mut Ctx) -> Element {
     row(ctx, "pipelines-reading-1", (150.0, 250.0, 72.0)),
     row(ctx, "pipelines-reading-2", (50.0, 230.0, 84.0)),
   ];
-  let drafts = vec![row(ctx, "pipelines-reading-3", (98.0, 236.0, 120.0))];
-  let groups = fading(vec![
-    skeleton::group(
-      ctx,
-      "pipelines-reading-published",
-      (Words::Real(ctx.t("pipelines.groups.published")), true),
-      None,
-      published,
-    ),
-    skeleton::group(
-      ctx,
-      "pipelines-reading-drafts",
-      (Words::Real(ctx.t("pipelines.groups.draftOnly")), true),
-      None,
-      drafts,
-    ),
-  ]);
+  // A pipeline holds no draft (D-032): every pipeline is under Published.
+  let groups = fading(vec![skeleton::group(
+    ctx,
+    "pipelines-reading-published",
+    (Words::Real(ctx.t("pipelines.groups.published")), true),
+    None,
+    published,
+  )]);
   let foot = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -168,27 +156,21 @@ fn populated(
   (shown, team): (&ShownProject, Option<&TeamConfiguration>),
   entries: &[LibraryEntry],
 ) -> lurq::components::Column {
-  let (published, drafts): (Vec<_>, Vec<_>) = entries
-    .iter()
-    .partition(|entry| !matches!(entry.state, VersionState::DraftOnly));
+  // A pipeline is stored only as published versions (D-032): every entry is published.
+  let published: Vec<&LibraryEntry> = entries.iter().collect();
   let mut pane =
     parts::pane("pipelines-library").with_children(team.map(|team| team::line(ctx, "pipelines-team-line", team)));
-  for (id, title, group) in [
-    ("pipelines-published", "pipelines.groups.published", published.clone()),
-    ("pipelines-drafts", "pipelines.groups.draftOnly", drafts),
-  ] {
-    if group.is_empty() {
-      continue;
-    }
-    let rows: Vec<Element> = group
-      .into_iter()
+  if !published.is_empty() {
+    let (id, title) = ("pipelines-published", "pipelines.groups.published");
+    let rows: Vec<Element> = published
+      .iter()
       .map(|entry| {
         ctx.mount_keyed::<super::library_row::LibraryRow>(
           &format!("pipeline-row-{}", entry.id),
           RowProps {
             project: shown.open.project.id(),
             root: shown.open.repo_root.clone(),
-            entry: entry.clone(),
+            entry: (*entry).clone(),
             team: team.cloned(),
           },
         )
@@ -216,7 +198,8 @@ fn populated(
   )
 }
 
-/// No pipeline yet (`Pane` `O8C4Bn`): what a pipeline is, and starting from the starter or empty.
+/// No pipeline yet (`Pane` `O8C4Bn`): what a pipeline is, and starting from the starter. An empty pipeline is not
+/// offered: it has no steps, so it can never be saved (D-032, D-040).
 fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
   let nav = Navigation::of(ctx);
   let tile = |glyph| {
@@ -242,15 +225,6 @@ fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
       .icon(Icon::Sparkles)
       .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline))),
     );
-  let blank = GroupRow::new("pipeline-empty-blank", ctx.t("pipelines.empty"))
-    .tiled()
-    .leading(tile(Icon::CircleDashed))
-    .hint(ctx.t("pipelines.emptyRowHint"))
-    .end(
-      ActionButton::new("pipeline-empty-start", ButtonKind::Ghost, ctx.t("pipelines.startEmpty"))
-        .icon(Icon::Plus)
-        .opens(nav.to(Route::Project(project, ProjectPage::NewEmptyPipeline))),
-    );
   parts::pane("pipelines-empty")
     .child(
       lurq::components::Column::new()
@@ -263,11 +237,7 @@ fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
         )
         .child(parts::lead("pipelines-empty-lead", &ctx.t("pipelines.emptyDetail"))),
     )
-    .child(
-      RowGroup::new("pipelines-start", ctx.t("pipelines.startFrom"))
-        .row(starter)
-        .row(blank),
-    )
+    .child(RowGroup::new("pipelines-start", ctx.t("pipelines.startFrom")).row(starter))
     .child(note("pipelines-empty-note", &ctx.t("pipelines.emptyCreationHint")))
 }
 

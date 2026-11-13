@@ -17,10 +17,11 @@ use lurq::{
 use orchester_api::{SharedResourceKind, UsedBy, UsedByResource, UsedByRun};
 use orchester_workspace::{
   messages::Message,
+  pipelines::task_use::TaskUse,
   used_by::{RunLine, RunState},
 };
 
-use super::{Failed, ReadFailed, words};
+use super::{Failed, ReadFailed, tasks, words};
 use crate::{
   theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing, LOCAL_ARCHIVE_DIALOG_WIDTH},
   ui::{
@@ -40,6 +41,8 @@ pub(in crate::screens) struct DialogProps {
   pub blocks_profiles: bool,
   /// A local project's confirmation: its own words, no admins and no other people's runs.
   pub local: bool,
+  /// Whether the resource has versions, which stay readable once it is archived; a local MCP server has none.
+  pub versioned: bool,
 }
 
 /// What *Archive and stop N runs* does.
@@ -51,6 +54,8 @@ pub(in crate::screens) struct State {
   pub read: Option<Result<UsedBy, ReadFailed>>,
   /// How each run that will stop stands: only a local project's confirmation says it.
   pub lines: Vec<RunLine>,
+  /// The tasks that name the resource: only a local pipeline's confirmation lists them, in place of the resources.
+  pub tasks: Option<Vec<TaskUse>>,
   /// The archive was asked for and has not answered.
   pub archiving: bool,
   /// Why the archive did nothing.
@@ -58,8 +63,6 @@ pub(in crate::screens) struct State {
   /// A local archive happened, and these runs of it could not be stopped: the confirmation says so, in place of the
   /// question.
   pub stopped: Option<Message>,
-  /// Why a press by automation did nothing.
-  pub person_refused: Option<Element>,
 }
 
 /// The confirmation over the window while `open` holds. `retry` reads what uses the resource again; `confirm` asks for
@@ -67,7 +70,7 @@ pub(in crate::screens) struct State {
 pub(in crate::screens) fn dialog(
   ctx: &mut Ctx,
   props: &DialogProps,
-  state: State,
+  state: &State,
   (open, retry, confirm): (&Signal<bool>, &Signal<u64>, Confirm),
 ) -> Element {
   let name = props.name.as_ref();
@@ -82,10 +85,10 @@ pub(in crate::screens) fn dialog(
     )
     .child(
       Text::new(&ctx.t_args(
-        if props.local {
-          "local_archive.body"
-        } else {
-          "team_archive.body"
+        match (props.local, props.versioned) {
+          (false, _) => "team_archive.body",
+          (true, true) => "local_archive.body",
+          (true, false) => "local_archive.bodyUnversioned",
         },
         [("name", name)],
       ))
@@ -95,8 +98,13 @@ pub(in crate::screens) fn dialog(
     );
   let stops = match &state.read {
     Some(Ok(used)) => {
+      let named = match &state.tasks {
+        Some(using) => tasks::used_by(ctx, using),
+        None => used_by(ctx, &used.resources),
+      };
       dialog = dialog
-        .child(used_by(ctx, &used.resources))
+        .child(named)
+        .with_children(state.tasks.as_deref().and_then(|using| tasks::effect(ctx, name, using)))
         .child(runs(ctx, props.local, (&used.runs, &state.lines)))
         .with_children(
           props
@@ -118,7 +126,6 @@ pub(in crate::screens) fn dialog(
   let failure = state.failed.as_ref().map(|failed| failure(ctx, failed, name));
   let dialog = dialog
     .with_children(failure)
-    .with_children(state.person_refused)
     .child(buttons(ctx, stops, state.archiving, (open, confirm)));
   over_window("team-hub-archive-dialog", dialog, open, None)
 }
@@ -174,7 +181,7 @@ fn left_running(ctx: &Ctx, props: &DialogProps, message: &Message, open: &Signal
 }
 
 /// A list's heading over its rows in one outline (`Used by` `pC90U`, `Runs that stop` `SWl1b`).
-fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) -> Column {
+pub(super) fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) -> Column {
   let list = Column::new()
     .id(format!("{id}-list"))
     .width(Dimension::Pct(100.0))
@@ -204,7 +211,7 @@ fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) 
 }
 
 /// One row: what it names at its start and `detail` at its end (`Row` `y7PyW`).
-fn row(id: String, name: Text, detail: Option<Text>) -> Row {
+pub(super) fn row(id: String, name: Text, detail: Option<Text>) -> Row {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))

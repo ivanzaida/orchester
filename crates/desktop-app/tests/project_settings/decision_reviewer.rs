@@ -171,9 +171,7 @@ fn decision_reviewer_row_local_automation_requires_both_consents() {
     if approvals && permissions {
       page.until("authorized local reviewer", |p| p.reviewer_model() == "decision-model");
     } else {
-      page.until("unauthorized reviewer refused", |p| {
-        p.exists("settings-auto-person-only")
-      });
+      page.until("unauthorized reviewer refused", |p| p.window.refused_press().is_some());
       assert_eq!(page.db().auto_mode_settings().expect("unchanged"), before);
     }
   }
@@ -267,7 +265,7 @@ fn decision_reviewer_row_threshold_and_return_require_approvals_but_not_permissi
     .expect("approvals off");
   with_synthetic_input(|| page.choose("settings-reviewer-connection", "Claude Code"));
   page.until("return without approvals refused", |p| {
-    p.exists("settings-auto-person-only")
+    p.window.refused_press().is_some()
   });
   assert_eq!(page.reviewer_model(), "decision-model");
   workspace.set_automation_answers_approvals(true).expect("approvals on");

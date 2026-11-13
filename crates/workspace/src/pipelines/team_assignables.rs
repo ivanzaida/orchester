@@ -18,7 +18,7 @@ impl Assignables {
   /// one whose profile or tool is not published, as readiness says.
   pub fn of_team(db: &ProjectDb, config: &TeamConfig) -> Result<Self, StoreError> {
     let connections = db.connections()?;
-    let sheets = team_profile::sheets(db, config)?;
+    let sheets = team_profile::sheets((db, config), &config.resources(ResourceKind::AgentProfile))?;
     let mut profiles = Vec::new();
     for resource in config.resources(ResourceKind::AgentProfile) {
       let (Some(number), Some(Ok(team))) = (resource.number(), resource.body::<TeamAgentProfile>()) else {
@@ -47,9 +47,9 @@ impl Assignables {
       .collect();
     Ok(Self {
       profiles,
-      draft_profiles: Vec::new(),
       tools,
       mcp_servers: db.mcp_servers()?,
+      ..Self::default()
     })
   }
 }

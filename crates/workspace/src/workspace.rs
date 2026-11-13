@@ -209,6 +209,16 @@ impl Workspace {
     self.team.fill(repo_root, config);
   }
 
+  /// Adds `resource` to the configuration kept for the team project at `repo_root`, as the stream's event for it would:
+  /// for a test with no team server to publish it. Whether a configuration was there to add it to.
+  #[cfg(feature = "test-support")]
+  pub fn keep_team_resource_for_test(&self, repo_root: &Path, resource: crate::team_config::TeamResource) -> bool {
+    self.team.update(repo_root, |config| {
+      config.keep(resource);
+      true
+    })
+  }
+
   /// Says the team server of the project at `repo_root` cannot be reached for `reason`, as a failed read would: for a
   /// test with no team server to fail.
   #[cfg(feature = "test-support")]

@@ -1,4 +1,4 @@
-//! Reading, saving and publishing one pipeline through the project database, and what its steps
+//! Reading one pipeline through the project database, and what its steps
 //! can be assigned to. Every function blocks on SQLite; the UI calls them off the UI thread.
 
 use std::{path::Path, sync::Arc};
@@ -16,7 +16,10 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::import::imported::{Imported, imported};
+use crate::{
+  import::imported::{Imported, imported},
+  readiness::ReadinessStanding,
+};
 
 /// A published agent profile a step can run.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,6 +47,13 @@ pub struct DraftProfileChoice {
   pub id: ResourceId,
   pub name: Arc<str>,
   pub model: ModelId,
+}
+
+/// Display-only draft tool: one with no published version yet. It is never returned by the published-tool lookup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DraftToolChoice {
+  pub id: ResourceId,
+  pub name: Arc<str>,
 }
 
 /// A published tool a step can call.
@@ -112,8 +122,12 @@ pub struct Assignables {
   pub profiles: Vec<ProfileChoice>,
   pub draft_profiles: Vec<DraftProfileChoice>,
   pub tools: Vec<ToolChoice>,
+  pub draft_tools: Vec<DraftToolChoice>,
   /// The project's MCP servers, which say what the profiles' servers run without asking.
   pub mcp_servers: Vec<McpServer>,
+  /// How each published profile and tool stands on this computer, when the caller read the project's readiness
+  /// ([`crate::pipelines::hub`]); empty otherwise.
+  pub standings: Vec<(ResourceId, ReadinessStanding)>,
 }
 
 impl Assignables {
@@ -134,6 +148,7 @@ impl Assignables {
       }
     }
     let mut tools = Vec::new();
+    let mut draft_tools = Vec::new();
     for resource in store.resources(ResourceKind::Tool)? {
       if let Some(version) = store.latest_version::<Tool>(resource.id())? {
         tools.push(ToolChoice::of(
@@ -141,13 +156,20 @@ impl Assignables {
           version.number(),
           version.body(),
         ));
+      } else if store.draft::<Tool>(resource.id())?.is_some() {
+        draft_tools.push(DraftToolChoice {
+          id: resource.id(),
+          name: resource.name().as_str().into(),
+        });
       }
     }
     Ok(Self {
       profiles,
       draft_profiles,
       tools,
+      draft_tools,
       mcp_servers: store.mcp_servers()?,
+      standings: Vec::new(),
     })
   }
 
@@ -161,12 +183,30 @@ impl Assignables {
       .collect()
   }
 
+  /// How the profile or tool `id` stands on this computer; `None` when the readiness was not read, or it is unknown.
+  pub fn standing(&self, id: ResourceId) -> Option<&ReadinessStanding> {
+    self
+      .standings
+      .iter()
+      .find(|(known, _)| *known == id)
+      .map(|(_, standing)| standing)
+  }
+
   pub fn profile(&self, id: ResourceId) -> Option<&ProfileChoice> {
     self.profiles.iter().find(|profile| profile.id == id)
   }
 
   pub fn tool(&self, id: ResourceId) -> Option<&ToolChoice> {
     self.tools.iter().find(|tool| tool.id == id)
+  }
+
+  /// Whether the profile or tool `id` is gone here: neither published nor a draft, so it was archived or removed. A
+  /// step that names it has to run something else.
+  pub fn gone(&self, id: ResourceId) -> bool {
+    self.profile(id).is_none()
+      && self.tool(id).is_none()
+      && !self.draft_profiles.iter().any(|draft| draft.id == id)
+      && !self.draft_tools.iter().any(|draft| draft.id == id)
   }
 
   /// The published profile named `name` (ignoring case), if exactly one has that name.
@@ -188,39 +228,34 @@ fn single<'a>(mut named: impl Iterator<Item = (ResourceId, &'a str)>, name: &str
     .then_some(found.0)
 }
 
-/// The latest published version of a pipeline, as far as the editor shows it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Published {
-  pub number: VersionNumber,
-  pub at: Timestamp,
-  pub body: Pipeline,
-}
-
-/// A pipeline as the editor opens it: the draft if there is one, otherwise the latest
-/// published version, which editing turns into a new draft.
+/// A pipeline as the editor opens it: its latest version, which a save publishes the next one over
+/// ([`super::write::save_named_in`]). A pipeline is stored only as published versions (D-032).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OpenedPipeline {
   pub id: ResourceId,
   pub name: Arc<str>,
   pub slug: Arc<str>,
+  /// The latest version's steps.
   pub body: Pipeline,
-  /// When the draft was last saved; `None` without a draft.
-  pub draft_saved_at: Option<Timestamp>,
-  /// The version the draft is based on, or the one a new draft would start from.
-  pub based_on: Option<VersionNumber>,
-  pub latest: Option<Published>,
+  /// The latest version, which an edit is made from.
+  pub version: VersionNumber,
+  /// When it was published.
+  pub published_at: Timestamp,
   /// Tasks that use the pipeline.
   pub used_by: usize,
   pub assignables: Arc<Assignables>,
   /// The import that created the pipeline; `None` when it was not imported.
   pub imported: Option<Arc<Imported>>,
+  /// The team's pipeline in a shared project: a save goes to the team server and is kept only once it took it
+  /// ([`super::write::save_named_in`]).
+  pub team: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
   #[error(transparent)]
   Store(#[from] StoreError),
-  /// The pipeline was removed, or has neither a draft nor a version.
+  /// The pipeline was removed, or has no version used here.
   #[error("the pipeline does not exist")]
   Missing,
   /// A team project's configuration is being read, or could not be read this session; nothing older is opened.
@@ -231,31 +266,18 @@ pub enum OpenError {
 impl OpenedPipeline {
   pub fn load(db: &ProjectDb, id: ResourceId) -> Result<Self, OpenError> {
     let resource = db.resource(id)?.ok_or(OpenError::Missing)?;
-    let latest = db
-      .latest_version::<Pipeline>(id)?
-      .map(|version: Version<Pipeline>| Published {
-        number: version.number(),
-        at: version.published_at(),
-        body: version.body().clone(),
-      });
-    let (body, draft_saved_at, based_on) = match db.draft::<Pipeline>(id)? {
-      Some(draft) => (draft.body().clone(), Some(draft.updated_at()), draft.based_on()),
-      None => {
-        let version = latest.as_ref().ok_or(OpenError::Missing)?;
-        (version.body.clone(), None, Some(version.number))
-      }
-    };
+    let version: Version<Pipeline> = db.latest_version::<Pipeline>(id)?.ok_or(OpenError::Missing)?;
     Ok(Self {
       id,
       name: resource.name().as_str().into(),
       slug: resource.slug().as_str().into(),
-      body,
-      draft_saved_at,
-      based_on,
-      latest,
+      version: version.number(),
+      published_at: version.published_at(),
+      body: version.body().clone(),
       used_by: tasks_using(db, id)?,
       assignables: Arc::new(Assignables::load(db)?),
       imported: imported(db, id)?.map(Arc::new),
+      team: db.is_team_resource(id)?,
     })
   }
 
@@ -274,10 +296,4 @@ pub fn tasks_using<S: TaskStore>(store: &S, id: ResourceId) -> Result<usize, S::
       .filter(|task| task.details().pipeline == Some(id))
       .count(),
   )
-}
-
-/// Publishes the stored draft; the version it became.
-pub fn publish_in(repo_root: &Path, id: ResourceId) -> Result<(VersionNumber, Timestamp), StoreError> {
-  let version = ProjectDb::open(repo_root)?.publish_draft::<Pipeline>(id, Timestamp::now())?;
-  Ok((version.number(), version.published_at()))
 }

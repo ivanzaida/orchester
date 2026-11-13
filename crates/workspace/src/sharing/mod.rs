@@ -71,7 +71,7 @@ pub use self::{
   offer::OfferedProject,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   place::{Place, Places},
-  project::NotArchived,
+  project::{NotArchived, NotRestored, NotTaken},
   refusal::{ShareRefusal, ShareRefusalReason, TeamMcpProblem},
   share_outcome::{NotSet, ShareNote},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
@@ -190,6 +190,11 @@ impl Servers {
         told_starts: Mutex::new(HashSet::new()),
       }),
     }
+  }
+
+  /// The workspace these servers belong to, which reads a team project's configuration from memory.
+  pub(crate) fn workspace(&self) -> &Workspace {
+    &self.inner.workspace
   }
 
   /// How the configuration of the team project at `root` stands this session ([`Workspace::team_read`]).

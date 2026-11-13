@@ -7,8 +7,8 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
   resource::{
-    AgentProfile, DeliverMode, DeliverStep, MergeMethod, ModelId, Pipeline, PromptText, ProviderSettings, Resource,
-    ResourceKind, Slug,
+    AgentProfile, DeliverMode, DeliverStep, MergeMethod, ModelId, PromptText, ProviderSettings, Resource, ResourceKind,
+    Slug,
   },
   sharing::TaskRevision,
   store::ResourceStore,
@@ -23,17 +23,9 @@ use crate::{Checkout, Standing, fixture, tools::server};
 /// A pipeline of this computer's own, Delivery, published before the project was linked, its step run by `profile`.
 fn own_delivery(db: &mut ProjectDb, profile: ResourceId) -> ResourceId {
   let body = fixture::one_step(profile, "Say hello.");
-  let id = db
-    .create_resource(
-      Slug::new("delivery").expect("slug"),
-      Name::new("Delivery").expect("name"),
-      body.body(),
-      Timestamp::now(),
-    )
+  db.published_pipeline_for_test("delivery", "Delivery", body.body(), Timestamp::now())
     .expect("a pipeline")
-    .id();
-  db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
-  id
+    .0
 }
 
 /// An agent profile of the team's, as sync keeps it.
@@ -180,16 +172,8 @@ fn team_mcp_share_pipeline_is_refused_when_the_integrator_is_a_profile_of_this_c
       .body()
       .clone()
       .with_deliver(Some(deliver));
-    let id = db
-      .create_resource(
-        Slug::new("delivery").expect("slug"),
-        Name::new("Delivery").expect("name"),
-        &body,
-        Timestamp::now(),
-      )
-      .expect("a pipeline")
-      .id();
-    db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
+    db.published_pipeline_for_test("delivery", "Delivery", &body, Timestamp::now())
+      .expect("a pipeline");
   });
 
   let refused = checkout

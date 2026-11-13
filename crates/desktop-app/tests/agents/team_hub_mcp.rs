@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use super::{
   harness::Agents,
   team_hub::{cached, open, team},
-  team_hub_other::bounds,
+  team_hub_other::{as_member, bounds},
   team_hub_profile_fixes::Client,
 };
 
@@ -102,7 +102,7 @@ pub(super) fn program_file(agents: &Agents) -> std::path::PathBuf {
 pub(super) fn show(agents: &mut Agents, server: ResourceId) {
   open(agents, HubView::new(HubFilter::McpServers, Some(server)));
   agents.until("the server panel", |s| {
-    s.exists("team-hub-from-team-runs") || s.exists("team-hub-from-team-url")
+    s.exists("team-hub-from-team") && s.exists("team-hub-here")
   });
 }
 
@@ -127,6 +127,8 @@ fn team_hub_mcp_c4_a_program_without_a_path_asks_for_it_and_says_what_the_team_h
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
   give_value(&agents, "PENCIL_TOKEN");
+  // What the team holds, as values: a member's panel (an admin's is the form).
+  as_member(&agents);
   show(&mut agents, pencil);
   // From the team: how it runs, by names and never a path or a value.
   assert_eq!(agents.text("team-hub-panel-title"), "pencil-design");
@@ -178,6 +180,11 @@ fn team_hub_mcp_c5_a_path_whose_file_is_gone_stays_marked_until_another_is_chose
   set_path(&agents, pencil, &gone);
   show(&mut agents, pencil);
   assert_eq!(agents.text("team-hub-chip-here-label"), "Program missing here");
+  // The list's line says what the panel's chip says (`h2md5`).
+  assert_eq!(
+    agents.text(&format!("team-hub-row-{pencil}-line")),
+    "Program missing here"
+  );
   assert_eq!(agents.text("team-hub-path-sub"), "No file there");
   assert_eq!(agents.text("team-hub-path-value-text"), gone.display().to_string());
   let note = agents.text("team-hub-mcp-note-text");
@@ -240,6 +247,7 @@ fn team_hub_mcp_c7_a_remote_server_has_no_path_and_shows_its_header() {
   let mut agents = Agents::new(true);
   team(&agents);
   let github = server(&agents, ("copilot", remote_body()), Switch::On);
+  as_member(&agents);
   show(&mut agents, github);
   assert_eq!(
     agents.text("team-hub-from-team-url-value"),
@@ -276,10 +284,10 @@ fn team_hub_mcp_c8_a_ready_server_offers_to_change_its_path() {
   );
   assert_eq!(agents.text("team-hub-fix-set-path"), "Change path");
   assert_eq!(agents.text("team-hub-actions-hint"), "Nothing missing on this computer");
-  // A ready remote server has nothing to fix, so no bar.
+  // A ready remote server has nothing to fix: an admin's bar is Save and Cancel, with nothing to save yet.
   open(&mut agents, HubView::new(HubFilter::McpServers, Some(ready)));
-  agents.until("the remote panel", |s| s.exists("team-hub-from-team-url"));
-  assert!(!agents.exists("team-hub-actions"));
+  agents.until("the remote panel", |s| s.exists("team-hub-edit-save"));
+  assert!(!agents.exists("team-hub-fix-set-path"));
 }
 
 #[test]
@@ -319,7 +327,7 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   let program = program_file(&agents);
   agents.stand_ins.choose(Some(program));
   with_synthetic_input(|| agents.click("team-hub-choose-path"));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert!(
     AppDb::open(&agents.window.data.database())
@@ -332,9 +340,11 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   // The pinned fix of the first missing part is switching it on.
   assert_eq!(agents.text("team-hub-fix-switch-on"), "Turn on here");
   with_synthetic_input(|| agents.click("team-hub-fix-switch-on"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert_eq!(switch_of(&agents, pencil), None, "automation switched nothing on");
   with_synthetic_input(|| agents.click("team-hub-here-switch"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert_eq!(switch_of(&agents, pencil), None, "nor by the switch");
   // The person's own flip does.
@@ -349,14 +359,18 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   agents.until("said on", |s| {
     s.text("team-hub-here-switch") == "On: runs here may use it"
   });
-  // A secret without a value is the same: pressing Add value under automation opens no dialog, and says why.
+  // A secret without a value is the same: pressing Add value under automation opens no dialog, and is refused to it.
   show(&mut agents, github);
   agents.until("its panel", |s| s.text("team-hub-panel-title") == "copilot");
   assert_eq!(agents.text("team-hub-fix-add-value"), "Add value");
   with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   settle(&mut agents);
   assert!(!agents.exists("team-hub-secret-dialog"), "automation opened no dialog");
-  assert!(agents.exists("team-hub-fix-person-only"), "and the panel says why");
+  assert!(
+    !agents.exists("team-hub-fix-person-only"),
+    "and the panel says nothing of it"
+  );
   // The person's own press does.
   agents.click("team-hub-fix-add-value");
   agents.until("the dialog", |s| s.exists("team-hub-secret-dialog"));
@@ -367,6 +381,7 @@ fn team_hub_mcp_keys_are_170_wide_from_the_team_and_on_this_computer() {
   let mut agents = Agents::new(true);
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
+  as_member(&agents);
   show(&mut agents, pencil);
   let mut key = |row: &str| {
     let (value, ..) = bounds(&mut agents, &format!("{row}-value"));
@@ -399,6 +414,28 @@ fn team_hub_mcp_a_long_path_ends_in_an_ellipsis_inside_its_box() {
 }
 
 #[test]
+fn team_hub_mcp_a_long_found_path_ends_in_an_ellipsis_inside_its_row() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
+  let folder = agents.root.join("a".repeat(60)).join("b".repeat(60));
+  std::fs::create_dir_all(&folder).expect("a long folder");
+  let program = folder.join("pencil-mcp");
+  std::fs::write(&program, "#!/bin/sh\n").expect("a program");
+  set_path(&agents, pencil, &program);
+  show(&mut agents, pencil);
+  assert!(agents.text("team-hub-path-sub").starts_with("found · "));
+  let (x, width, _) = bounds(&mut agents, "team-hub-path-value-text");
+  let (row_x, row_width, _) = bounds(&mut agents, "team-hub-path");
+  assert!(
+    x + width <= row_x + row_width,
+    "the found path keeps to its row (C6 `LiS1F`, C8 `lSA4x`): ends at {}, the row at {}",
+    x + width,
+    row_x + row_width
+  );
+}
+
+#[test]
 fn team_hub_mcp_switching_off_is_allowed_to_automation_and_leaves_the_server_off_here() {
   let mut agents = Agents::new(true);
   team(&agents);
@@ -417,7 +454,7 @@ fn team_hub_mcp_switching_off_is_allowed_to_automation_and_leaves_the_server_off
   agents.until("said off", |s| {
     s.text("team-hub-here-switch") == "Off: runs here don't use it"
   });
-  assert!(!agents.exists("team-hub-fix-person-only"));
+  assert_eq!(agents.refused(), None, "switching off is automation's too");
   assert_eq!(
     agents.text("team-hub-mcp-note-text"),
     "Off here: runs on this computer don't use copilot."

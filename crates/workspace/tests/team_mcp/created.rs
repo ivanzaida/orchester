@@ -1,6 +1,7 @@
-//! A team project keeps no draft of the team's profiles, pipelines, instructions, skills or tools on this computer
+//! A team project keeps no draft of the team's profiles, instructions, skills or tools on this computer
 //! (`docs/design/team-configuration-live.md`, rule 6): the tools that make or publish one are refused `team_no_drafts`
-//! before anything is read, written or sent. The team's MCP servers are created and changed on the team server at once
+//! before anything is read, written or sent. A team pipeline's tools send it to the team server and wait for its answer
+//! instead (D-043, `team_pipeline_save`). The team's MCP servers are created and changed on the team server at once
 //! ([`super::mcp_servers`]).
 
 use std::sync::Arc;
@@ -82,7 +83,6 @@ fn team_mcp_the_draft_tools_are_refused_in_a_team_project_and_nothing_is_made_or
       "save_tool_draft",
       json!({ "project": "Kontur", "name": "Build", "program": program }),
     ),
-    ("create_pipeline", json!({ "project": "Kontur", "name": "Delivery" })),
   ];
   for (tool, args) in calls {
     let refused = checkout.call(tool, &args).expect_err("refused");
@@ -94,7 +94,6 @@ fn team_mcp_the_draft_tools_are_refused_in_a_team_project_and_nothing_is_made_or
     ResourceKind::AgentProfile,
     ResourceKind::Skill,
     ResourceKind::Tool,
-    ResourceKind::Pipeline,
   ] {
     assert!(checkout.db().resources(kind).expect("read").is_empty(), "{kind:?}");
   }

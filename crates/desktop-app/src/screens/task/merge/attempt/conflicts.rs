@@ -18,7 +18,6 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -45,7 +44,7 @@ use orchester_workspace::{
 
 use super::{facts::link, section_head};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, answerer},
+  mcp::input_gate::{Guarded, InputGate, press_answerer},
   navigation::link::Open,
   project::ShownProject,
   screens::review::task::{
@@ -239,8 +238,6 @@ pub(super) struct Conflicts<'a> {
   pub resolving: Option<&'a Resolving>,
   pub choice: &'a AgentChoice,
   pub ask: &'a AskAction,
-  /// Window input pressed *Ask the agent to resolve* while a person does not let automation decide for them.
-  pub person_only: &'a Signal<bool>,
 }
 
 impl Conflicts<'_> {
@@ -282,9 +279,6 @@ impl Conflicts<'_> {
   pub(super) fn failure(&self) -> Option<Message> {
     if let JobState::Failed(message) = &self.project.feed.job_state.get().run(self.run).resolve.state {
       return Some(message.clone());
-    }
-    if self.person_only.get() {
-      return Some(Message::new("appMcp.errors.automationNotAllowed"));
     }
     let asked = self.ask.state().get();
     let pending = asked.is_pending();
@@ -356,11 +350,7 @@ impl Conflicts<'_> {
     if self.project.feed.job_state.get().run(self.run).busy() {
       return button.disabled().into();
     }
-    let (ask, person_only, gate) = (
-      self.ask.clone(),
-      self.person_only.clone(),
-      ctx.use_context::<InputGate>(),
-    );
+    let (ask, gate) = (self.ask.clone(), ctx.use_context::<InputGate>());
     let (run, choice, review) = (self.run, self.choice.clone(), review.clone());
     button
       .on_click(move || {
@@ -370,12 +360,13 @@ impl Conflicts<'_> {
         }
         // Returning a run decides for the person, as `continue_run` does: an MCP client's press only while a person
         // lets automation answer, and it is recorded as automation's.
-        let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
-          tracing::warn!("synthetic input asked an agent to resolve without consent; not taken");
-          person_only.set(true);
+        let Some(by) = press_answerer(
+          gate.as_ref(),
+          Guarded::Decision(DecisionKind::Stuck),
+          "ask an agent to resolve a merge's conflicts",
+        ) else {
           return;
         };
-        person_only.set(false);
         ask.run((run, by, choice.profile(&review)));
       })
       .into()

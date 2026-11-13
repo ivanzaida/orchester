@@ -8,11 +8,12 @@
 use orchester_core::{
   id::{ChatId, RunId, TaskId},
   orchestrator::{
-    AgentWait, Lead, Leads, Subscription, Subscriptions, WatchTarget, instructions::wait_prompt,
-    watch::event_subscription,
+    AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, WatchTarget,
+    instructions::wait_prompt, watch::event_subscription,
   },
-  store::TaskStore,
+  store::{ActivityStore, RunStore, TaskStore},
   task::Task,
+  time::Timestamp,
 };
 use rusqlite::OptionalExtension;
 
@@ -38,10 +39,54 @@ impl ProjectDb {
   /// otherwise [`Leads::event_prompt`], with what it leads and the subscription the wait came through.
   pub fn wait_turn_prompt(&self, chat: ChatId, wait: &AgentWait) -> Result<String, StoreError> {
     let leads = self.chat_leads(chat)?;
-    if leads.is_empty() {
-      return Ok(wait_prompt(wait));
+    let prompt = if leads.is_empty() {
+      wait_prompt(wait)
+    } else {
+      leads.event_prompt(wait, self.came_through(chat, wait.run)?)
+    };
+    Ok(match self.accepted_note(wait)? {
+      Some(note) => format!("{prompt}\n\n{note}"),
+      None => prompt,
+    })
+  }
+
+  /// For the turn of a run's success that merges it, the steps of the run automation accepted as they were and what
+  /// they left unverified ([`AcceptedUnverified::note`]); `None` for any other turn, and for a run automation accepted
+  /// no step of.
+  fn accepted_note(&self, wait: &AgentWait) -> Result<Option<String>, StoreError> {
+    if wait.merging != Some(Merging::Merges) {
+      return Ok(None);
     }
-    Ok(leads.event_prompt(wait, self.came_through(chat, wait.run)?))
+    let Some(run) = self.run(wait.run).map_err(|error| corrupt("run", error))? else {
+      return Ok(None);
+    };
+    let events = self.events(wait.run).map_err(|error| corrupt("run events", error))?;
+    let outputs = self.step_outputs(wait.run)?;
+    Ok(AcceptedUnverified::note(&AcceptedUnverified::of_run(
+      &run, &events, &outputs,
+    )))
+  }
+
+  /// Whether an order of `chat` applied to the turn `wait` started, kept at `at`: the subscription its event came
+  /// through among those that led then (one that ended since, its task merged and done, still counts), with its own
+  /// order or the project's default.
+  pub fn ordered_when(&self, chat: ChatId, wait: &AgentWait, at: Timestamp) -> Result<bool, StoreError> {
+    let Some(task) = self.run_task(wait.run)? else {
+      return Ok(false);
+    };
+    let then: Vec<Subscription> = self
+      .chat_subscription_history(chat)?
+      .into_iter()
+      .filter(|kept| kept.subscription.since() <= at && kept.ended.as_ref().is_none_or(|(ended, _)| *ended > at))
+      .map(|kept| kept.subscription)
+      .collect();
+    let own = Subscriptions::new(then.clone()).map_err(|error| corrupt("orchestrator subscriptions", error))?;
+    let through = event_subscription(&own, chat, task.id(), task.module()).map(Subscription::target);
+    let leads = Leads::new(
+      then.iter().map(|subscription| Lead::new(subscription, String::new())),
+      &self.orchestrator_watch()?,
+    );
+    Ok(leads.ordered_through(through))
   }
 
   /// The target of the subscription of `chat` an event of `run`'s task comes through ([`Self::task_came_through`]);

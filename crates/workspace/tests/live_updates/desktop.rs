@@ -75,6 +75,16 @@ impl Desktop {
   /// The desktop of `token`'s member, whose project is linked to `team`'s and has `tasks` cached as the server has
   /// them; the project's own tasks and runs are made in [`Self::fixture`] before.
   pub fn signed_in(team: &TeamServer, token: &str, fixture: Fixture, tasks: &[SharedTask]) -> Self {
+    Self::signed_in_as(team, (token, MemberRole::Member), fixture, tasks)
+  }
+
+  /// [`Self::signed_in`], the person's role in the project `role`: an owner changes the team's configuration.
+  pub fn signed_in_as(
+    team: &TeamServer,
+    (token, role): (&str, MemberRole),
+    fixture: Fixture,
+    tasks: &[SharedTask],
+  ) -> Self {
     let data = tempfile::tempdir().expect("application data");
     let mut app = AppDb::open(&data.path().join("orchester.db")).expect("the application database");
     let member = team.member(token);
@@ -100,7 +110,7 @@ impl Desktop {
       server: stored.id,
       project: team.project,
       key: ProjectKey::new("ORC").expect("key"),
-      role: Some(MemberRole::Member),
+      role: Some(role),
       joined_at: Timestamp::from_unix_millis(1),
       cursor: 0,
       last_synced_at: Timestamp::from_unix_millis(1),

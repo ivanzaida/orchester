@@ -1,5 +1,7 @@
 //! Pipelines (`Pipelines · redesign` `evQ4U`): the list, New pipeline, and a pipeline's page with its Steps,
-//! Settings and Versions tabs.
+//! Settings and Versions tabs: a team project's Pipelines page. A local project's is the Pipelines hub
+//! ([`super::pipeline_hub`]), which every route here opens for it (`screens::pipeline_page`,
+//! `screens::new_pipeline_or_hub`).
 mod actions;
 mod column;
 mod command_picker;
@@ -7,7 +9,7 @@ mod deliver;
 mod delivers;
 mod dependencies;
 mod editor;
-mod executor_menu;
+pub(in crate::screens) mod executor_menu;
 mod flow;
 mod flow_card;
 mod header;
@@ -16,12 +18,11 @@ mod leaving;
 mod library;
 mod library_row;
 mod load_editor;
-mod new_pipeline;
+pub(in crate::screens) mod new_pipeline;
 mod new_start;
 mod parts;
 mod publication;
 mod reading;
-mod restore;
 mod settings;
 mod sources;
 mod state;

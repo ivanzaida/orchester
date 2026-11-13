@@ -134,9 +134,6 @@ pub struct RetryDecision {
   target: Signal<Target>,
   note: Signal<String>,
   asked: Signal<Option<Deciding>>,
-  /// Window input pressed *Accept … as it is*, which is a person's decision ([`Guarded::StepAccept`](
-  /// crate::mcp::input_gate::Guarded::StepAccept)), without their leave.
-  person_only: Signal<bool>,
   gate: Option<InputGate>,
   pointing: Pointing,
 }
@@ -149,7 +146,6 @@ impl Component for RetryDecision {
       target: ctx.signal(Target(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
-      person_only: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
       pointing: Pointing::new(ctx),
     }
@@ -175,7 +171,6 @@ impl Component for RetryDecision {
       target: &self.target,
       note: &self.note,
       asked: &self.asked,
-      person_only: &self.person_only,
       action: &action,
       gate: self.gate.as_ref(),
       offline: (!props.online).then(|| ctx.t("task.controls.offline")),

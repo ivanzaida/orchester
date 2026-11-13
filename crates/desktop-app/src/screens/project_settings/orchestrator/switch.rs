@@ -48,8 +48,6 @@ type SaveAction = FutureAction<bool, bool, Message>;
 pub(super) struct Switch {
   /// The setting as the person last chose it; `None` until they do.
   saved: Signal<Option<bool>>,
-  /// A change the row did not take because synthetic input brought it.
-  blocked: Signal<bool>,
   save: SaveAction,
   /// While the row is mounted, the MCP server refuses window input.
   _protected: Protected,
@@ -74,7 +72,6 @@ impl Component for Switch {
     });
     Self {
       saved: ctx.signal(None),
-      blocked: ctx.signal(false),
       save,
       _protected: gate.protect(Guarded::PermissionsSetting),
     }
@@ -133,14 +130,7 @@ impl Component for Switch {
         &ctx.t_args(key, [("reason", &*reason)]),
       ))
     });
-    let blocked = self.blocked.get().then(|| {
-      Element::from(field_error(
-        &format!("{ID}-blocked"),
-        &ctx.t("project_settings.orchestrator.blocked"),
-      ))
-    });
-    // What the Orchestrator does once it drives, then why the row cannot be read, was not saved or did not take a
-    // change.
+    // What the Orchestrator does once it drives, then why the row cannot be read or was not saved.
     let said = (shown == Some(true)).then(|| {
       Element::from(status_line(
         &format!("{ID}-on"),
@@ -154,25 +144,23 @@ impl Component for Switch {
       .control(control)
       .under_all(said)
       .under_all(problem)
-      .under_all(blocked)
       .render(ctx)
   }
 }
 
 impl Switch {
-  /// `switch`, saving what a person chooses for the project at `root`. Synthetic input never changes it.
+  /// `switch`, saving what a person chooses for the project at `root`. Synthetic input never changes it: the gate
+  /// refuses it while the row is mounted, and what reaches the switch all the same is only logged.
   fn listen(&self, switch: Toggle, (workspace, root): (Workspace, PathBuf)) -> Toggle {
-    let (saved, blocked, save) = (self.saved.clone(), self.blocked.clone(), self.save.clone());
+    let (saved, save) = (self.saved.clone(), self.save.clone());
     switch.on_change(move |chosen| {
       if input_source() == InputSource::Synthetic {
         tracing::warn!(
           setting = LOGGED,
           "synthetic input reached a person's setting; not taken"
         );
-        blocked.set(true);
         return;
       }
-      blocked.set(false);
       if !chosen {
         // Off holds from the person's click, before the save runs and if it fails.
         workspace.revoke_orchestrator_drive(&root);

@@ -15,6 +15,7 @@ use orchester_workspace::{
 
 pub(in crate::screens::team_hub) use self::edit::EditView;
 use super::{
+  super::rows::Key,
   fields::{self, Body, Error, Look, Shown, Spec, name_error},
   work::Make,
 };
@@ -161,6 +162,7 @@ impl Fields {
       self.name_row(ctx, shown, &name, invalid.as_ref()),
       fields::row(
         ctx,
+        shown.key(),
         &RUNS_AS,
         None,
         fields::choice(ctx, &RUNS_AS, &self.runs, &RUNS, shown.locked),
@@ -175,12 +177,14 @@ impl Fields {
       rows.push(self.exempt_row(ctx, shown));
     }
     Body {
+      lead: None,
+      after: Vec::new(),
       rows,
-      computer: Some(if program {
+      computer: Some(ctx.t(if program {
         "team_new.computer.mcpProgram"
       } else {
         "team_new.computer.mcpRemote"
-      }),
+      })),
       make: checked
         .ok()
         .filter(|_| !self.folder_missing())
@@ -242,6 +246,7 @@ impl Fields {
     let mut rows = vec![
       fields::text_row(
         ctx,
+        shown.key(),
         if shown.published.is_some() {
           &PROGRAM_EDIT
         } else {
@@ -253,16 +258,18 @@ impl Fields {
       ),
       fields::text_row(
         ctx,
+        shown.key(),
         &ARGUMENTS,
         marks.on(None, marks.arguments).as_ref(),
         (&self.arguments, "team_new.mcp.argumentsPlaceholder"),
         (Look::Lines, locked),
       ),
-      self.folder_row(ctx, locked),
+      self.folder_row(ctx, (shown.key(), locked)),
     ];
     if self.folder_choice.get() == INSIDE {
       rows.push(fields::text_row(
         ctx,
+        shown.key(),
         &FOLDER_PATH,
         marks.on(folder, marks.folder).as_ref(),
         (&self.folder, "team_new.mcp.folderPathPlaceholder"),
@@ -277,6 +284,7 @@ impl Fields {
     let marks = Marks::of(&self.input(), shown.published);
     fields::text_row(
       ctx,
+      shown.key(),
       if shown.published.is_some() {
         &VARIABLES_EDIT
       } else {
@@ -289,7 +297,7 @@ impl Fields {
   }
 
   /// Where the server starts: in the run's worktree, as the design's select says, or in a folder inside it.
-  fn folder_row(&self, ctx: &Ctx, locked: bool) -> Row {
+  fn folder_row(&self, ctx: &Ctx, (key, locked): (Key, bool)) -> Row {
     let options = vec![
       (WORKTREE.to_owned(), ctx.t("team_new.mcp.folderWorktree").to_string()),
       (INSIDE.to_owned(), ctx.t("team_new.mcp.folderInside").to_string()),
@@ -301,7 +309,7 @@ impl Fields {
       options,
       ("team_new.mcp.folderWorktree", false, locked),
     );
-    fields::row(ctx, &FOLDER, None, select)
+    fields::row(ctx, key, &FOLDER, None, select)
   }
 
   fn remote_rows(&self, ctx: &mut Ctx, shown: &Shown<'_>, invalid: Option<&Invalid>) -> Vec<Row> {
@@ -315,6 +323,7 @@ impl Fields {
     vec![
       fields::text_row(
         ctx,
+        shown.key(),
         &URL,
         marks.on(url, marks.url).as_ref(),
         (&self.url, "team_new.mcp.urlPlaceholder"),
@@ -322,6 +331,7 @@ impl Fields {
       ),
       fields::text_row(
         ctx,
+        shown.key(),
         &HEADER,
         marks.on(None, marks.header).as_ref(),
         (&self.header, "team_new.mcp.headerPlaceholder"),
@@ -329,6 +339,7 @@ impl Fields {
       ),
       fields::text_row(
         ctx,
+        shown.key(),
         &SECRET,
         marks.on(None, marks.secret).as_ref(),
         (&self.secret, "team_new.mcp.secretPlaceholder"),
@@ -336,6 +347,7 @@ impl Fields {
       ),
       fields::text_row(
         ctx,
+        shown.key(),
         &PREFIX,
         marks.on(None, marks.prefix).as_ref(),
         (&self.prefix, "team_new.mcp.prefixPlaceholder"),
@@ -348,10 +360,11 @@ impl Fields {
     let marks = Marks::of(&self.input(), shown.published);
     fields::text_row(
       ctx,
+      shown.key(),
       &EXEMPT,
       marks.on(None, marks.exempt).as_ref(),
       (&self.exempt, "team_new.mcp.exemptPlaceholder"),
-      (Look::Mono, shown.locked),
+      (Look::Names, shown.locked),
     )
   }
 }

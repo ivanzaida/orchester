@@ -63,10 +63,13 @@ fn skeletons_all_projects_shows_the_rows_bones_after_a_moment() {
 }
 
 #[test]
-fn skeletons_pipelines_shows_the_librarys_bones_after_a_moment() {
+fn skeletons_pipelines_wait_for_the_projects_team_read_then_show_the_hub_under_its_head() {
   let mut held = Held::new();
   held.page(ProjectPage::Pipelines);
-  held.skeleton("pipelines-loading");
+  held.until("team-hub-team-loading");
+  held.release("pipeline-hub-master-detail");
+  assert!(held.exists("pipeline-hub-title"), "the head stands over the hub");
+  assert!(held.exists("pipeline-hub-filter"), "the tabs stand where they will");
 }
 
 #[test]

@@ -21,10 +21,14 @@ use crate::{
   messages::{self, Message},
   runner::Runners,
   sharing::Servers,
-  tasks::conversation::{
-    composer::{ComposerMode, Then},
-    follow::{Readiness, RunnerOf, Sent, Stored, follow},
-    outgoing::{Context, OutgoingError, Way, prepare_in, store_answer_in},
+  tasks::{
+    conversation::{
+      Conversation,
+      composer::{ComposerMode, Then},
+      follow::{Readiness, RunnerOf, Sent, Stored, follow},
+      outgoing::{Context, OutgoingError, Way, decision_kind_of, offer, prepare_in, store_answer_in},
+    },
+    detail::TaskDetail,
   },
   workspace::OpenProject,
 };
@@ -48,6 +52,19 @@ pub const fn send_way(mode: &ComposerMode) -> Option<Way> {
     | ComposerMode::RunAgain
     | ComposerMode::Closed => None,
   }
+}
+
+/// The decision sending a side question's answer on `detail`'s latest run takes, read as [`send_on_as`] reads it when
+/// it sends (`conversation` is the run's conversation): `None` when it takes none or no agent reads a message. The
+/// window reads it as *Send to {agent}* is pressed, so a client's press is refused there; the send checks it again.
+pub fn send_decision(detail: &TaskDetail, conversation: &Conversation) -> Option<DecisionKind> {
+  let run = detail.run.as_ref();
+  let (mut mode, mut recipient) = offer(conversation, run, None);
+  if let Some(context) = Context::of(&mode) {
+    (mode, recipient) = offer(conversation, run, Some(context));
+  }
+  let way = send_way(&mode)?;
+  decision_kind_of(detail, (&mode, recipient), way)
 }
 
 /// A side question's answer stored as a message, and what follows it.

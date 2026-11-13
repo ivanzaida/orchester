@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use orchester_core::{
-  resource::{Draft, Pipeline, PipelineSources},
+  resource::{Pipeline, PipelineSources},
   source::SourcePath,
   store::ResourceStore,
 };
@@ -61,8 +61,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     .map_err(|error| SeedError::Invalid(error.to_string()))?;
   kontur
     .db
-    .save_draft(id, &Draft::new(body, Some(latest.number()), kontur.now))?;
-  kontur.db.publish_draft::<Pipeline>(id, kontur.now)?;
+    .publish_pipeline_edit(id, &body, latest.number(), None, kontur.now)?;
   let task = kontur.task(
     (
       "Retry failed webhook deliveries",

@@ -34,11 +34,15 @@ pub(crate) fn may_change(team: Option<&TeamConfiguration>) -> bool {
   team.is_none_or(|team| team.may_change)
 }
 
-/// The line over a team's pipelines (`Read-only line` `z8Triu` in 03): a member's says who may change them, an admin's
-/// that they are changed on the team server.
+/// The line over a team's pipelines (`Shared line` `t3ABe9` in 01, `Read-only line` `z8Triu` in 03): a member's says
+/// who may change them, an admin's that what they save goes to the team server at once (D-043).
 pub(crate) fn line(ctx: &Ctx, id: &str, team: &TeamConfiguration) -> Row {
   if team.may_change {
-    note_line(id, (Icon::Users, &ctx.t("sharing.config.pipelinesOnServer")))
+    let text = match &team.server {
+      Some((name, _)) => ctx.t_args("sharing.config.pipelinesSaved", [("team", name.to_string())]),
+      None => ctx.t("sharing.config.pipelinesSavedNoServer"),
+    };
+    note_line(id, (Icon::Users, &text))
   } else {
     note_line(
       id,

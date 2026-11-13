@@ -1,13 +1,15 @@
 # PV2-03 · The compact *Runs on* picker as a shared component
 
-- **Status:** blocked (PV2-00)
+- **Status:** done (2026-11-10; review round 2 PASS; merged `c37c1caad`; design verification of K1/K2 in PV2-15, D-008)
 - **Kind:** UI
-- **Depends on:** PV2-00
+- **Depends on:** — (the design is read from Pencil's open document until PV2-00)
+- **Branch:** `claude/pv2-03-runs-on-picker` (`cfd06b483` … `79dfc3c98`)
+- **Tokens:** 51.4M — implementation 29.0M + 16.4M (output 107k + 77k), review 3.7M + 2.2M (output 11k + 14k)
 
 ## Goal
 
 The compact picker of K1 `lCApz` and K2 `rjPcV` (component `Runs on picker` `ZcGGy`), 300 wide instead of today's
-640 × 320, as one component that the step editor opens (PV2-08) and the orchestrator chat may later adopt (PV2-15).
+640 × 320, as one component the orchestrator chat opens (PV2-15). (A step chooses an agent, not a model: PV2-08.)
 
 Today's picker lives in `crates/desktop-app/src/screens/orchestrator/runs_on/` (rail, header, models with Search,
 effort, foot, keys, picking). Reuse its data and keyboard handling; do not change the orchestrator's chip or picker in

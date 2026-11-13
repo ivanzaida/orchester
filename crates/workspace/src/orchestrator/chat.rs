@@ -20,7 +20,7 @@ use orchester_core::{
 };
 use orchester_store::{ChatDeletion, ChatListing, ProjectDb};
 
-use super::{waits_on::view::RunWaitView, watching::LeadCounts};
+use super::{requests::ChatRequest, waits_on::view::RunWaitView, watching::LeadCounts};
 use crate::messages::{self, Message};
 
 /// The project's conversations, archived ones too, the one with the latest entry first, with what those that lead
@@ -150,6 +150,8 @@ pub struct ChatView {
   pub events: HashMap<i64, EventFacts>,
   /// How the waits its *waits on* rows name stand now, by the waiting run (ORC-784).
   pub waits_on: HashMap<RunId, RunWaitView>,
+  /// The tool requests it keeps as waits, by entry (2026-11-11).
+  pub requests: HashMap<i64, ChatRequest>,
   /// How full the context of the session its turns continue is; `None` while no turn's CLI reported it (unknown, not
   /// empty).
   pub context: Option<ContextUse>,
@@ -241,6 +243,7 @@ impl ChatView {
     let events = super::events::event_facts(&db, &entries, &standing).map_err(|error| messages::store_error(&error))?;
     let waits_on = super::events::waits_on(&db, &entries).map_err(|error| messages::store_error(&error))?;
     let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
+    let requests = super::requests::chat_requests(&db, chat).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
       entries,
@@ -250,6 +253,7 @@ impl ChatView {
       moved,
       events,
       waits_on,
+      requests,
       context,
     }))
   }

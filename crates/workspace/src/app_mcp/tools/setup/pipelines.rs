@@ -1,25 +1,24 @@
-//! `get_pipeline`, `create_pipeline` and `publish_pipeline`: a pipeline as its editor opens it, a new
-//! one made as New pipeline makes it (from the starter, empty, or a copy of another pipeline), and its
-//! draft published as Publish does. The task form offers a pipeline once it is published.
+//! `get_pipeline` and `create_pipeline`: a pipeline as its editor opens it, its latest version (a pipeline is always a
+//! published version, D-032); and a new one made from the starter, a copy of another pipeline, or the steps given,
+//! published as v1 or refused with nothing stored.
+
+use std::path::Path;
 
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
   permission::{StepCommands, StepNetwork},
-  resource::{
-    Deliverable, Draft, Pipeline, PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind,
-    Version,
-  },
-  store::ResourceStore,
+  resource::{Pipeline, PipelineEdit, PromptText, StarterStep, StarterStepText, Step, StepKind},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
   super::{Translate, pipeline_copy::create_error, wire::Delivers},
+  pipeline_steps::{Kept, StepInput, body_of},
   widening,
 };
 use crate::{
@@ -31,8 +30,10 @@ use crate::{
   messages::{self, Message},
   pipelines::{
     data::{Assignables, OpenError, OpenedPipeline},
-    library::{self, NewPipeline, StartFrom, StarterText, create_with},
-    problems::{problem_view, publish_error},
+    library::{StarterText, create_with},
+    problems::problem_view,
+    widening::save_reasons,
+    write::save_refusals,
   },
   tasks::outside::Outside,
 };
@@ -47,7 +48,7 @@ pub struct InPipeline {
   pub pipeline: String,
 }
 
-/// What a new pipeline starts with.
+/// What a new pipeline starts with: the starter, a copy, or nothing but the steps given.
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[schemars(crate = "rmcp::schemars")]
@@ -68,6 +69,10 @@ pub struct CreatePipeline {
   pub from: Start,
   /// With `copy`: the pipeline to copy, by its id or name.
   pub copy_of: Option<String>,
+  /// With `empty`: every step, in the order the editor shows them, each as `save_pipeline` takes it.
+  pub steps: Option<Vec<StepInput>>,
+  /// With `empty`: what the pipeline is for.
+  pub description: Option<String>,
   /// What its runs deliver: changes (repository changes, merged), report (the last step's report), outside (work done
   /// through MCP tools outside the repository) or changes_or_report; left out, changes (a copy: as its source).
   pub delivers: Option<Delivers>,
@@ -76,9 +81,12 @@ pub struct CreatePipeline {
 pub async fn get_pipeline(services: &Services, args: InPipeline, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let (project, opened) = blocking(move || {
-    let (open, db) = services.read_project(&args.project)?;
-    let id = pipeline_named(&db, &args.pipeline)?;
-    Ok((open.project.id(), opened(&db, id, &args.pipeline)?))
+    let (open, _) = services.read_project(&args.project)?;
+    let id = pipeline_named(&services, &open.repo_root, &args.pipeline)?;
+    Ok((
+      open.project.id(),
+      opened(&services, &open.repo_root, id, &args.pipeline)?,
+    ))
   })
   .await?;
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
@@ -91,97 +99,82 @@ pub async fn create_pipeline(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let starter = starter_text(translate);
+  let then = translate.text(&Message::new("pipelines.flow.then"));
   let (project, opened) = blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-    let id = match (args.from, &args.copy_of) {
-      (Start::Copy, Some(named)) => {
-        let source = pipeline_named(&db, named)?;
-        let body = opened(&db, source, named)?.body;
-        create_with(&mut db, name, &body, Timestamp::now())
-      }
-      (Start::Copy, None) => {
-        return Err(refused(
-          "copy_of_required",
-          Message::new("appMcp.errors.copyOfRequired"),
-        ));
-      }
-      (_, Some(_)) => {
-        return Err(refused(
-          "copy_of_not_taken",
-          Message::new("appMcp.errors.copyOfNotTaken"),
-        ));
-      }
-      (start, None) => {
-        let start = if start == Start::Starter {
-          StartFrom::Starter
-        } else {
-          StartFrom::Empty
-        };
-        library::create(&mut db, NewPipeline { name, start, starter }, Timestamp::now())
-      }
-    }
-    .map_err(|error| create_error(&error))?;
+    let assignables = assignables(&services, &open.repo_root, &db)?;
+    let mut body = new_body((&services, &open.repo_root), &args, (&starter, &assignables, &then))?;
     if let Some(delivers) = args.delivers {
-      set_delivers(&mut db, (id, &args.name), delivers.into())?;
+      body = body.with_delivers(delivers.into());
     }
-    services.changes.record(open.project.id(), Outside::Pipelines);
-    Ok((open.project.id(), opened(&db, id, &args.name)?))
-  })
-  .await?;
-  Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
-}
-
-/// The draft of the new pipeline `id` (`named`), its runs delivering `delivers`.
-fn set_delivers(db: &mut ProjectDb, (id, named): (ResourceId, &str), delivers: Deliverable) -> Result<(), ToolError> {
-  let current = opened(db, id, named)?;
-  if current.body.delivers() == delivers {
-    return Ok(());
-  }
-  let draft = Draft::new(
-    current.body.clone().with_delivers(delivers),
-    current.based_on,
-    Timestamp::now(),
-  );
-  db.save_draft_matching(id, &current.body, current.latest.as_ref().map(|v| v.number), &draft)?;
-  Ok(())
-}
-
-pub async fn publish_pipeline(
-  services: &Services,
-  args: InPipeline,
-  translate: &Translate,
-) -> Result<Value, ToolError> {
-  let services = services.clone();
-  let (project, opened) = blocking(move || {
-    let open = services.project(&args.project)?;
-    let mut db = ProjectDb::open(&open.repo_root)?;
-    let id = pipeline_named(&db, &args.pipeline)?;
-    let draft = db.draft::<Pipeline>(id)?.ok_or(StoreError::NoDraft(id));
-    let draft = draft.map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
-    let latest = db.latest_version::<Pipeline>(id)?;
-    services.draft_decided::<Pipeline>(&db, id)?;
-    widening::check_pipeline(&services, latest.as_ref().map(Version::body), draft.body())?;
-    // Published only while the draft is the one just checked.
-    db.publish_draft_matching_version(id, draft.body(), latest.as_ref().map(Version::number), Timestamp::now())
-      .map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
+    // Creating publishes v1 (D-032): a body the save check refuses is refused first, whoever asks; then what a first
+    // version widens, as there is nothing to compare it with, and the tool steps it adds, need a person.
+    let refusals = save_refusals(&body, &assignables, None);
+    if !refusals.is_empty() {
+      return Err(ToolError::refused("not_publishable", refusals));
+    }
+    widening::allowed(&services, save_reasons(None, &body, &assignables))?;
+    let id = create_with(
+      &mut db,
+      (&open.repo_root, &services.servers),
+      name,
+      &body,
+      Timestamp::now(),
+    )
+    .map_err(|error| create_error(&error))?;
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
     services.changes.record(open.project.id(), Outside::Tasks);
-    Ok((
-      open.project.id(),
-      opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?,
-    ))
+    Ok((open.project.id(), opened(&services, &open.repo_root, id, &args.name)?))
   })
   .await?;
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
-/// The project's pipeline named by its id or, ignoring case, its name, whether published or not.
-pub(super) fn pipeline_named(db: &ProjectDb, named: &str) -> Result<ResourceId, ToolError> {
+/// The body `args` ask the new pipeline to start with: the starter's steps with what `assignables` offer, a copy of
+/// another pipeline's latest version, or the steps given (`empty`, no steps at all when left out).
+fn new_body(
+  (services, root): (&Services, &Path),
+  args: &CreatePipeline,
+  (starter, assignables, then): (&StarterText, &Assignables, &str),
+) -> Result<Pipeline, ToolError> {
+  if args.from != Start::Empty && (args.steps.is_some() || args.description.is_some()) {
+    return Err(refused("steps_not_taken", Message::new("appMcp.errors.stepsNotTaken")));
+  }
+  match (args.from, &args.copy_of) {
+    (Start::Copy, Some(named)) => {
+      let source = pipeline_named(services, root, named)?;
+      Ok(opened(services, root, source, named)?.body)
+    }
+    (Start::Copy, None) => Err(refused(
+      "copy_of_required",
+      Message::new("appMcp.errors.copyOfRequired"),
+    )),
+    (_, Some(_)) => Err(refused(
+      "copy_of_not_taken",
+      Message::new("appMcp.errors.copyOfNotTaken"),
+    )),
+    (Start::Starter, None) => Ok(starter.pipeline(assignables)),
+    (Start::Empty, None) => {
+      let empty = Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid body");
+      let kept = Kept {
+        description: args.description.as_deref().unwrap_or_default(),
+        sources: empty.sources().clone(),
+        deliver: None,
+        delivers: empty.delivers(),
+      };
+      body_of(args.steps.as_deref().unwrap_or_default(), kept, (assignables, then))
+    }
+  }
+}
+
+/// The pipeline of the project at `root` named by its id or, ignoring case, its name: a team project's among the
+/// team's, as this session read them, a local project's among its own.
+pub(crate) fn pipeline_named(services: &Services, root: &Path, named: &str) -> Result<ResourceId, ToolError> {
   let lowered = named.to_lowercase();
-  let library = library::library(db)?;
+  let library = services.workspace().pipeline_library(root)?;
   // An id names one pipeline for certain; a name could also be another pipeline's id.
   let by_id = library.iter().find(|entry| entry.id.to_string() == named);
   by_id
@@ -190,12 +183,32 @@ pub(super) fn pipeline_named(db: &ProjectDb, named: &str) -> Result<ResourceId, 
     .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
 }
 
-pub(super) fn opened(db: &ProjectDb, id: ResourceId, named: &str) -> Result<OpenedPipeline, ToolError> {
-  OpenedPipeline::load(db, id).map_err(|error| match error {
-    OpenError::Store(error) => ToolError::from(error),
-    OpenError::Missing => ToolError::not_found(Missing::Pipeline, named),
-    OpenError::TeamNotRead(unread) => ToolError::from(unread),
-  })
+/// Pipeline `id` of the project at `root` as the editor opens it: a team project's from the team's configuration this
+/// session read, a local project's from its database.
+pub(crate) fn opened(
+  services: &Services,
+  root: &Path,
+  id: ResourceId,
+  named: &str,
+) -> Result<OpenedPipeline, ToolError> {
+  services
+    .workspace()
+    .open_pipeline(root, id)
+    .map_err(|error| match error {
+      OpenError::Store(error) => ToolError::from(error),
+      OpenError::Missing => ToolError::not_found(Missing::Pipeline, named),
+      OpenError::TeamNotRead(unread) => ToolError::from(unread),
+    })
+}
+
+/// What the steps of a pipeline of the project at `root`, whose database is `db`, can run: a local project's published
+/// profiles and tools, a team project's from the team's configuration this session read.
+pub(crate) fn assignables(services: &Services, root: &Path, db: &ProjectDb) -> Result<Assignables, ToolError> {
+  if db.sharing()?.is_none() {
+    return Ok(Assignables::load(db)?);
+  }
+  let config = services.workspace().team_read(root).loaded()?;
+  Ok(Assignables::of_team(db, &config)?)
 }
 
 /// The starter's steps in the app's words, and the profiles and tools it looks for.
@@ -256,11 +269,6 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     .iter()
     .map(|problem| translate.text(&problem_view(&edit, problem, &then).message))
     .collect();
-  let state = match (opened.draft_saved_at, &opened.latest) {
-    (Some(_), None) => "draft_only",
-    (Some(_), Some(_)) => "published_with_draft",
-    (None, _) => "published",
-  };
   let steps: Vec<Value> = opened
     .body
     .steps()
@@ -280,8 +288,9 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     "id": opened.id.to_string(),
     "name": &*opened.name,
     "description": opened.body.description(),
-    "state": state,
-    "published_version": opened.latest.as_ref().map(|latest| latest.number.get()),
+    // A pipeline is stored only as published versions (D-032).
+    "state": "published",
+    "published_version": opened.version.get(),
     "steps": steps,
     "deliver": deliver,
     "delivers": Delivers::from(opened.body.delivers()),
@@ -357,18 +366,6 @@ fn assignable_json(assignables: &Assignables) -> Value {
     .map(|tool| json!({ "id": tool.id.to_string(), "name": &*tool.name, "runnable": tool.runnable }))
     .collect();
   json!({ "profiles": profiles, "tools": tools })
-}
-
-fn publish_code(error: &StoreError) -> &'static str {
-  match error {
-    StoreError::NoDraft(_) => "no_draft",
-    StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
-    StoreError::DraftChanged(_) => "draft_changed",
-    StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => "not_publishable",
-    StoreError::Publish(PublishError::VersionLimit) => "version_limit",
-    StoreError::NotAdmin => "not_admin",
-    _ => "project_data",
-  }
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {

@@ -144,7 +144,7 @@ fn local_hub_drafts_a_profile_opens_on_its_published_version_unchanged() {
   drop(db);
 
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
-  agents.until("the panel", |s| s.exists("local-hub-profile-effort-pick"));
+  agents.until("the panel", |s| s.exists("local-hub-profile-effort"));
   settle(&mut agents);
 
   assert!(!marked(&mut agents, id), "the panel opens unchanged");

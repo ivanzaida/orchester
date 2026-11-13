@@ -147,7 +147,6 @@
         "description": "Click and type in this window, resize it, change pages and the theme. Turn it on to let an agent test Orchester.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Window control could not be kept: {{reason}} This run keeps what it started with.",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
         "buildRelease": "Build default: off in release builds like this one; development builds start with it on. A change applies when Orchester starts again.",
         "buildDevelopment": "Build default: on in development builds like this one, so design checks can drive the window; release builds start with it off. A change applies when Orchester starts again.",
         "chosenOn": "Your choice: on for this run. A change applies when Orchester starts again.",
@@ -163,16 +162,14 @@
         "description": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
         "on": "Each answer reads approved by automation or denied by automation in the run, with the client's name.",
         "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+        "notSaved": "Not saved: {{reason}}"
       },
       "changePermissions": {
         "title": "Let automation change agent permissions",
         "hint": "Widen write access, network, commands, MCP servers",
         "description": "Lets tools connected to Orchester widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs and environment variables. Applies to setup tools and permission confirmations in the window; automatic approvals also need Let automation answer approvals. Secret replacement and stale-version decisions stay yours. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+        "notSaved": "Not saved: {{reason}}"
       },
       "server": {
         "section": "Orchester MCP server",
@@ -247,7 +244,6 @@
           "windows": "Windows Credential Manager",
           "macos": "your login keychain"
         },
-        "blocked": "A change brought by automation was not taken: only you change the MCP server's settings, here in the window.",
         "notChanged": "Not changed: {{reason}}",
         "unavailable": "The server did not start. The log says why.",
         "copy": {

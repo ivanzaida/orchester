@@ -27,6 +27,7 @@ mod lifecycle;
 mod live;
 mod loading_states;
 mod local_hub;
+mod local_tools;
 mod long_chats;
 mod memory;
 mod merge_attempts;
@@ -40,6 +41,9 @@ mod overview_states;
 mod ownership;
 mod picker_readiness;
 mod pipelines;
+mod pipelines_agents;
+mod pipelines_new;
+mod pipelines_not_ready;
 mod project_settings;
 pub mod qa_app_asks;
 mod review_approved;
@@ -116,7 +120,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 193] = [
+pub const ALL: [Scenario; 208] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -144,6 +148,7 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("tasks-memory", tasks_memory::seed),
   Scenario::of("memory-only", tasks_memory::alone),
   Scenario::of("memory", memory::seed),
+  Scenario::of("team-memory-member", memory::team_member),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("conversation-context-plenty", run_context::plenty),
@@ -161,10 +166,17 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
   Scenario::of("orchestrator-on-codex", orchestrator::on_codex),
   Scenario::of("orchestrator-codex-limit", orchestrator::codex_limit),
+  Scenario::of("orchestrator-another-account", orchestrator::another_account::seed),
+  Scenario::of("orchestrator-over-draft", orchestrator::picker_notes::over_draft),
+  Scenario::of(
+    "orchestrator-publish-refused",
+    orchestrator::picker_notes::publish_refused,
+  ),
   Scenario::of("orchestrator-events", orchestrator::events::seed),
   Scenario::of("orchestrator-waits-on", orchestrator::waits_on::seed),
   Scenario::of("orchestrator-watch", orchestrator::watch::seed),
   Scenario::of("orchestrator-leads", orchestrator::leads::seed),
+  Scenario::of("orchestrator-requests", orchestrator::requests::seed),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),
@@ -183,6 +195,7 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),
   Scenario::of("cards-approval-modes", approval_answers::seed),
+  Scenario::of("dangerous-auto-approve", approval_answers::dangerous),
   Scenario::of("approval-modes", approval_modes::seed),
   Scenario::of("approval-modes-project", approval_modes::project),
   Scenario::of("decisions", decisions::seed),
@@ -221,6 +234,7 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("team-hub", team_hub::seed),
   Scenario::of("team-hub-pick", team_hub::pick),
   Scenario::of("team-hub-no-connection", team_hub::no_connection),
+  Scenario::of("team-hub-down", team_hub::down),
   Scenario::of("team-hub-member", team_hub::member),
   Scenario::of("team-hub-member-pick", team_hub::member_pick),
   Scenario::of("team-hub-member-picked", team_hub::member_picked),
@@ -232,7 +246,12 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("picker-readiness-team", picker_readiness::team),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
-  Scenario::of("pipelines-publish", pipelines::publish),
+  Scenario::of("pipelines-flow", pipelines::flow),
+  Scenario::of("pipelines-branched", pipelines::branched),
+  Scenario::of("pipelines-unordered", pipelines::unordered),
+  Scenario::of("pipelines-agents", pipelines_agents::seed),
+  Scenario::of("pipelines-not-ready", pipelines_not_ready::seed),
+  Scenario::of("pipelines-new", pipelines_new::seed),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),
   Scenario::of("browser", browser::seed),
@@ -287,6 +306,7 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("team-not-ready", team::not_ready_here),
   Scenario::of("team-not-ready-ended", team::not_ready_after_run),
   Scenario::of("team-edit", team::edit),
+  Scenario::of("team-tools", team::tools),
   Scenario::of("team-edit-demoted", team::edit_demoted),
   Scenario::of("team-edit-offline", team::edit_offline),
   Scenario::of("team-edit-rejects", team::edit_rejects),
@@ -304,8 +324,10 @@ pub const ALL: [Scenario; 193] = [
   Scenario::of("local-hub-secret", local_hub::secret),
   Scenario::of("local-hub-secret-refused", local_hub::secret_refused),
   Scenario::of("local-hub-archived", local_hub::archived),
+  Scenario::of("local-hub-tools", local_tools::seed),
   Scenario::of("team-archive", team::archive),
   Scenario::of("team-archived", team::archived),
+  Scenario::of("team-archived-admin", team::archived_admin),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
   Scenario::of("storage-low-disk", storage::low_disk),

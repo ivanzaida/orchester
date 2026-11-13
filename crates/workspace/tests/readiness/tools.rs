@@ -2,6 +2,8 @@
 
 use orchester_core::{
   id::SecretId,
+  resource::TeamTool,
+  run::Answerer,
   secret::{SecretValue, SecretVault, VaultError, VaultKey, archive},
   sharing::Missing,
   time::Timestamp,
@@ -167,15 +169,43 @@ fn readiness_a_local_tool_asks_whether_the_secret_exists_and_never_reads_it() {
 }
 
 #[test]
-fn readiness_a_team_tool_holding_a_secret_by_id_is_undecided_not_ready() {
+fn readiness_a_team_tool_published_before_the_team_form_holding_a_secret_by_id_is_undecided() {
   let fixture = Fixture::team();
-  let token = SecretId::generate();
-  let tool = fixture.team_resource("deploy", &http_tool(token));
+  let tool = fixture.team_resource("deploy", &http_tool(SecretId::generate()));
 
   assert_eq!(
     fixture.read().resource(tool).expect("listed").standing(),
-    &ReadinessStanding::Undecided(Undecided::TeamToolSecretById(token))
+    &ReadinessStanding::Undecided(Undecided::TeamToolSecretById)
   );
+}
+
+#[test]
+fn readiness_a_team_tool_needs_a_value_here_for_the_secret_it_names_by_name() {
+  let fixture = Fixture::team();
+  let team = TeamTool::from_local(&http_tool(SecretId::generate()), |_| Some(secret("SENTRY_TOKEN"))).expect("team");
+  let tool = fixture.team_resource("sentry", &team);
+
+  let found = fixture.read();
+  let found = found.resource(tool).expect("listed");
+  assert_eq!(found.group(), Group::NeedsYouHere);
+  assert_eq!(
+    found.standing().missing(),
+    [Missing::Secret {
+      name: secret("SENTRY_TOKEN")
+    }]
+  );
+
+  fixture
+    .workspace
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("SENTRY_TOKEN"),
+      &SecretValue::new("token-value".to_owned()).expect("value"),
+      Answerer::Person,
+    )
+    .expect("a person sets it");
+  assert_eq!(fixture.read().resource(tool).expect("listed").group(), Group::Ready);
 }
 
 #[test]

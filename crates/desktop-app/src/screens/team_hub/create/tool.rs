@@ -1,159 +1,116 @@
-//! The form of a new tool (`Agents · New tool` A12 `T4rWil`): its name, what kind it is and what it runs. A tool is the
-//! team's whole except the values of the secrets it names, which each computer adds. A command is what this form
-//! makes; an HTTP request and a database query name secrets by name, which a new tool of this computer cannot yet, so
-//! they are shown as not available and Create stays off for them.
+//! The form of a new tool (`Agents · New tool` A12 `T4rWil`, L7 `q5aX9`; A32 `gLLEv`, A34 `WUuEj`, L20 `Kb6Vk`, L23
+//! `cZGTp`): the tool's fields as its edit has them ([`ToolFields`]: its name, kind, and what it runs or calls, with an
+//! HTTP request's or a database query's *Access*), empty. A team's tool is the team's whole except the values of the
+//! secrets it names, which each computer adds; a local one picks its secret from the project's.
 
-use lurq::{app::ctx::Ctx, core::Signal};
-use orchester_workspace::tools::form::{CommandErrors, CommandText, tool_name};
+use std::sync::Arc;
+
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
+use orchester_core::name::Name;
+use orchester_workspace::tools::form::tool_name;
 
 use super::{
-  fields::{self, Body, Error, Look, Shown, Spec, name_error},
+  fields::{self, Body, Shown, name_error},
+  mode::Mode,
   work::Make,
 };
-use crate::screens::team_hub::rows;
+use crate::{
+  screens::hub::forms::{Drawn, Form, Ids, LocalSecrets, Naming, ToolFields},
+  ui::message::message_text,
+};
 
-const NAME: Spec = Spec::new("tool-name", "team_new.tool.name")
-  .sub("team_new.tool.nameSub")
-  .required();
-const KIND: Spec = Spec::new("tool-kind", "team_new.tool.kind");
-const PROGRAM: Spec = Spec::new("tool-program", "team_new.tool.program")
-  .sub("team_new.tool.programSub")
-  .required();
-const ARGUMENTS: Spec = Spec::new("tool-arguments", "team_new.tool.arguments").sub("team_new.tool.argumentsSub");
-const DESCRIPTION: Spec = Spec::new("tool-description", "team_new.tool.description");
-
-const COMMAND: &str = "command";
-const KINDS: [(&str, &str); 3] = [
-  (COMMAND, "team_new.tool.command"),
-  ("http", "team_new.tool.http"),
-  ("database", "team_new.tool.database"),
-];
+/// The ids of the form's parts, which tests and automation address: `team-new-tool-name-input`,
+/// `team-new-tool-program-input`, `team-new-tool-kind-value-http`, …
+const IDS: Ids = Ids {
+  rows: "team-new-tool",
+  sections: "team-new-tool",
+};
 
 pub(super) struct Fields {
-  name: Signal<String>,
-  kind: Signal<String>,
-  program: Signal<String>,
-  arguments: Signal<String>,
-  description: Signal<String>,
+  fields: ToolFields,
 }
 
 impl Fields {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     Self {
-      name: ctx.signal(String::new()),
-      kind: ctx.signal(COMMAND.to_owned()),
-      program: ctx.signal(String::new()),
-      arguments: ctx.signal(String::new()),
-      description: ctx.signal(String::new()),
+      fields: ToolFields::new(ctx),
     }
   }
 
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
-    let name = self.name.get();
-    let command = self.kind.get() == COMMAND;
-    let name_says = name_error(
-      ctx,
-      shown,
-      &name,
-      shown.mode.words("team_new.tool.nameTaken", "local_new.nameTaken.tool"),
-    );
-    let mut rows = vec![
-      fields::name_row(
-        ctx,
-        shown,
-        &NAME,
-        name_says.as_ref(),
-        (&self.name, "team_new.tool.namePlaceholder"),
-        Look::Mono,
+    let name = self.fields.name();
+    let named = tool_name(&name);
+    let taken_key = shown.mode.words("team_new.tool.nameTaken", "local_new.nameTaken.tool");
+    let said = name_error(ctx, shown, &name, taken_key)
+      .map(|error| error.words(ctx))
+      .or_else(|| {
+        named
+          .as_ref()
+          .err()
+          .filter(|_| shown.tried && !name.trim().is_empty())
+          .map(|message| message_text(ctx, message))
+      });
+    let named = named.ok();
+    let made = match shown.mode {
+      Mode::Team => Made::of(
+        self.fields.draw_team(ctx, &form(said, shown), shown.pipelines),
+        named,
+        Make::TeamTool,
       ),
-      fields::row(
-        ctx,
-        &KIND,
-        None,
-        fields::choice(ctx, &KIND, &self.kind, &KINDS, shown.locked),
-      ),
-    ];
-    let mut make = None;
-    if command {
-      let (command_rows, made) = self.command(ctx, shown, &name);
-      rows.extend(command_rows);
-      make = made;
-    } else {
-      rows.push(fields::row(
-        ctx,
-        &Spec::new("tool-unavailable", "team_new.tool.unavailable"),
-        None,
-        rows::words(
-          "team-new-tool-unavailable-value",
-          &ctx.t("team_new.tool.unavailableValue"),
-        ),
-      ));
-    }
-    let off = if command {
-      fields::off(shown, &name)
-    } else {
-      Some("team_new.tool.kindOff")
+      Mode::Local => {
+        let local = LocalSecrets {
+          listed: shown.connections.map(|connections| &connections.secrets[..]),
+          valueless: &[],
+        };
+        Made::of(self.fields.draw(ctx, &form(said, shown), local), named, Make::Tool)
+      }
     };
     Body {
-      rows,
-      computer: Some("team_new.computer.tool"),
-      make,
-      off,
+      lead: None,
+      rows: made.rows,
+      after: made.sections,
+      computer: Some(self.fields.fills_in(ctx)),
+      make: made.make,
+      // What was typed in a field that cannot be used says so at the bar's end, before the name does (L22 `Xp89k`).
+      off: if made.marked {
+        Some("team_new.bar.fixFields")
+      } else {
+        fields::off(shown, &name)
+      },
       overlay: None,
     }
   }
+}
 
-  /// A command's rows, and the tool they make when they are valid.
-  fn command(&self, ctx: &mut Ctx, shown: &Shown<'_>, name: &str) -> (Vec<lurq::components::Row>, Option<Make>) {
-    let text = CommandText {
-      description: self.description.get().trim().to_owned(),
-      program: self.program.get(),
-      arguments: self.arguments.get(),
-      ..CommandText::new_tool()
-    };
-    let named = tool_name(name);
-    let checked = text.tool(None);
-    let errors: CommandErrors = match &checked {
-      Err(errors) => (**errors).clone(),
-      Ok(_) => CommandErrors::default(),
-    };
-    let program_says = if shown.tried && self.program.get().trim().is_empty() {
-      Some(Error::Required)
-    } else {
-      errors
-        .program
-        .clone()
-        .filter(|_| shown.tried)
-        .or_else(|| errors.arguments.clone().filter(|_| shown.tried))
-        .map(Error::Said)
-    };
-    let rows = vec![
-      fields::text_row(
-        ctx,
-        &PROGRAM,
-        program_says.as_ref(),
-        (&self.program, "team_new.tool.programPlaceholder"),
-        (Look::Mono, shown.locked),
-      ),
-      fields::text_row(
-        ctx,
-        &ARGUMENTS,
-        None,
-        (&self.arguments, "team_new.tool.argumentsPlaceholder"),
-        (Look::Lines, shown.locked),
-      ),
-      fields::text_row(
-        ctx,
-        &DESCRIPTION,
-        None,
-        (&self.description, "team_new.tool.descriptionPlaceholder"),
-        (Look::Plain, shown.locked),
-      ),
-    ];
-    let make = match (named, checked) {
-      (Ok(name), Ok(tool)) => Some(Make::Tool(name, Box::new(tool))),
-      _ => None,
-    };
-    (rows, make)
+/// The form as `shown` has it, its name saying `said`.
+fn form<'a, B>(said: Option<Arc<str>>, shown: &Shown<'a>) -> Form<'a, B> {
+  Form {
+    ids: IDS,
+    base: None,
+    name: Some(Naming {
+      said,
+      first: Some(shown.first),
+    }),
+    tried: shown.tried,
+    locked: shown.locked,
+  }
+}
+
+/// What the form draws, and what Create makes of it, once the name and every field are valid.
+struct Made {
+  rows: Vec<Row>,
+  sections: Vec<Element>,
+  marked: bool,
+  make: Option<Make>,
+}
+
+impl Made {
+  fn of<B>(drawn: Drawn<B>, name: Option<Name>, make: fn(Name, Box<B>) -> Make) -> Self {
+    Self {
+      rows: drawn.name.into_iter().chain(drawn.rows).collect(),
+      sections: drawn.sections,
+      marked: drawn.marked,
+      make: name.zip(drawn.made.ok()).map(|(name, body)| make(name, Box::new(body))),
+    }
   }
 }

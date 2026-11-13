@@ -42,13 +42,13 @@ pub struct ApprovalCard {
 }
 
 impl ApprovalCard {
-  /// How the run's approval mode approved it without the person — Autopilot, the profile or the reviewer — when it
-  /// did: its quiet row says so instead of a card.
+  /// How the run's approval mode approved it without the person — Autopilot, the profile, the reviewer or the
+  /// project's Dangerous auto-approve mode — when it did: its quiet row says so instead of a card.
   pub fn quiet(&self) -> Option<&RequestAnswer> {
     let answer = self.answer.as_ref()?;
     let quiet = matches!(
       answer.kind,
-      AnswerKind::Autopilot | AnswerKind::Profile | AnswerKind::Reviewer
+      AnswerKind::Autopilot | AnswerKind::Profile | AnswerKind::Reviewer | AnswerKind::DangerousAutoApprove
     );
     (quiet && self.decided == Some(Some(ToolApprovalDecision::Approved))).then_some(answer)
   }

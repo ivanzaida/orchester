@@ -40,6 +40,12 @@ impl ProjectDb {
   pub fn may_change_configuration(&self) -> Result<bool, StoreError> {
     Ok(configuring(&self.connection)?.unwrap_or(true))
   }
+
+  /// Whether `resource` is the team's in a shared project; `false` in a local project and for what this computer keeps
+  /// to itself (*Not shared*).
+  pub fn is_team_resource(&self, resource: ResourceId) -> Result<bool, StoreError> {
+    team_resource(&self.connection, resource)
+  }
 }
 
 /// Whether the person may change a shared project's team configuration; `None` while the project is local.
@@ -86,7 +92,7 @@ pub(super) fn ensure_may_change(connection: &Connection, resource: ResourceId) -
 }
 
 /// Whether `resource` is the team's: the project is shared, the kind is shared and it was not kept *Not shared*.
-fn team_resource(connection: &Connection, resource: ResourceId) -> Result<bool, StoreError> {
+pub(super) fn team_resource(connection: &Connection, resource: ResourceId) -> Result<bool, StoreError> {
   let shared: bool = connection.query_row("SELECT EXISTS(SELECT 1 FROM sharing)", [], |row| row.get(0))?;
   if !shared {
     return Ok(false);

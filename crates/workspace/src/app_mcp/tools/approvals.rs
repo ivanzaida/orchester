@@ -112,7 +112,11 @@ pub async fn decide_approval(services: &Services, args: DecideApproval) -> Resul
   let decided = decision_name(args.decision);
   let reading = services.clone();
   let (project, request) = blocking(move || {
-    crate::decisions::DecisionKind::Approval.require(&reading.workspace)?;
+    // The Orchestrator chat answers while the person lets it drive (the person's decision of 2026-11-11); any other
+    // client needs the person's consent to automation's answers.
+    if !reading.chat_drives() {
+      crate::decisions::DecisionKind::Approval.require(&reading.workspace)?;
+    }
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let request = db

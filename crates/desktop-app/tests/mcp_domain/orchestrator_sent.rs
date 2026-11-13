@@ -243,10 +243,17 @@ fn sent_proposal_refused_to_synthetic_input_and_dismissed_never_reads_as_sent() 
   open_conversation(&mut served, seeded.project, &key);
   let row = format!("conversation-proposal-{}-{seq}", scope.chat);
   served.until("the proposal's row", |served| served.shows(&format!("{row}-apply")));
-  served
+  let refused = served
     .click_by_client(&format!("{row}-apply"))
-    .expect("the press reaches the window");
-  served.until("the refusal", |served| served.shows(&format!("{row}-person-only")));
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("apply what the Orchestrator proposed"),
+    "it names the action: {refused}"
+  );
+  assert!(
+    !served.shows(&format!("{row}-person-only")),
+    "the row says nothing of it"
+  );
   assert!(sent(&db, task.id(), TEXT).is_none(), "synthetic input applies nothing");
   assert_eq!(actions(&db, &scope)[0].outcome, ActionOutcome::Waits);
 

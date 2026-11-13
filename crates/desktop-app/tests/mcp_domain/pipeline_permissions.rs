@@ -1,11 +1,14 @@
-//! Pipeline setup gates use permission consent, independently of runtime approval answering.
+//! Pipeline setup gates use permission consent, independently of runtime approval answering. A local project's
+//! pipeline is edited in the Pipelines hub's panel, whose *Save* publishes the next version at once and asks *Allow*
+//! for what it widens: a step that stops waiting for a person's approval, or stops asking about its agent's tool calls.
+//! Each is a switch of the step's panel.
 use std::{
   path::PathBuf,
   thread,
   time::{Duration, Instant},
 };
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{PipelineView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   resource::{Pipeline, PipelineEdit, ResourceKind, StepKind},
@@ -21,15 +24,28 @@ use super::{
   kontur::{self, SeedRequest, scenarios},
 };
 
+/// What the person's edit widens.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Widens {
+  /// The first step stops waiting for the person's approval: its switch in the step's panel.
+  Wait,
+  /// The first step stops asking about its agent's tool calls: its switch in the step's panel.
+  Ask,
+}
+
 struct Fixture {
   window: Served,
   repo: PathBuf,
   id: ResourceId,
+  /// The pipeline as stored when the app started: its latest version.
   before: Pipeline,
+  /// How many versions it has then.
+  versions: usize,
+  widens: Widens,
 }
 
 impl Fixture {
-  fn new() -> Self {
+  fn new(widens: Widens) -> Self {
     let folder = tempfile::tempdir().expect("private fixture folder");
     let request = SeedRequest {
       data_dir: folder.path().join("bin"),
@@ -47,20 +63,25 @@ impl Fixture {
       .find(|row| row.name().as_str() == "Narrowed permissions")
       .expect("narrowed fixture")
       .id();
+    // Its one step waits for the person's approval and asks about its agent's tool calls.
     let before = db
       .latest_version::<Pipeline>(id)
       .expect("read version")
       .expect("published fixture")
       .body()
       .clone();
+    let versions = db.versions::<Pipeline>(id).expect("versions").len();
+    drop(db);
     let runner = folder.path().join("no-runner/orchester-runner");
     let mut window = Served::start_with(folder, &seeded.app_database, runner, true);
     window.until("navigation attached", |s| s.link.navigation().is_ok());
-    window.link.navigation().expect("navigation").go(Route::Project(
-      seeded.project,
-      ProjectPage::Pipeline(id, Default::default()),
-    ));
-    window.until("pipeline editor", |s| s.shows("pipeline-add-step"));
+    let page = ProjectPage::Pipeline(id, PipelineView::Step(before.steps()[0].key.clone()));
+    window
+      .link
+      .navigation()
+      .expect("navigation")
+      .go(Route::Project(seeded.project, page));
+    window.until("the pipeline's panel", |s| s.shows("pipeline-hub-save"));
     assert!(
       !window
         .services()
@@ -73,6 +94,8 @@ impl Fixture {
       repo: seeded.repo,
       id,
       before,
+      versions,
+      widens,
     }
   }
 
@@ -80,136 +103,118 @@ impl Fixture {
     ProjectDb::open(&self.repo).expect("private database")
   }
 
+  /// Nothing was stored: no draft, no new version, the latest as it was.
   fn unchanged(&self) {
     let db = self.db();
+    assert!(db.draft::<Pipeline>(self.id).expect("draft read").is_none());
     let versions = db.versions::<Pipeline>(self.id).expect("versions");
-    assert_eq!(versions.len(), 1, "no unreviewed publication");
-    assert_eq!(versions[0].body(), &self.before, "immutable v1");
+    assert_eq!(versions.len(), self.versions, "no unreviewed publication");
+    assert_eq!(
+      db.latest_version::<Pipeline>(self.id)
+        .expect("latest")
+        .expect("a version")
+        .body(),
+      &self.before,
+      "immutable versions"
+    );
   }
 
-  fn proposed(&mut self, toggle: &str) -> Pipeline {
+  /// Holds the widening in the panel and presses *Save*, which asks. Returns the pipeline it stores once allowed.
+  fn proposed(&mut self) -> Pipeline {
     let key = self.before.steps()[0].key.clone();
-    self
-      .window
-      .click_by_client(&format!("pipeline-step-{key}"))
-      .expect("step selected");
-    if toggle == "step-ask-tools" {
-      // Asking about tool calls is set on the step's Permissions page.
-      self
-        .window
-        .click_by_client("step-open-permissions")
-        .expect("the step's permissions");
-    }
-    self.window.click_by_client(toggle).expect("permission proposal");
-    self
-      .window
-      .click_by_client("pipeline-save")
-      .expect("Save requests review");
-    self
-      .window
-      .until("save question", |s| s.shows("pipeline-save-question-confirm"));
     let mut edit = PipelineEdit::new(self.before.clone());
-    edit.update(&key, |step| {
-      if toggle == "step-gate" {
-        step.approval_gate = false;
-      } else if let StepKind::Agent { permissions, .. } = &mut step.kind {
-        permissions.interactive_tool_approvals = false;
+    match self.widens {
+      Widens::Wait => {
+        self
+          .window
+          .click_by_client("pipeline-hub-step-approval")
+          .expect("approval proposal");
+        edit.update(&key, |step| step.approval_gate = false);
       }
-    });
+      Widens::Ask => {
+        self
+          .window
+          .until("the ask switch", |s| s.shows("pipeline-hub-step-ask-tools"));
+        self
+          .window
+          .click_by_client("pipeline-hub-step-ask-tools")
+          .expect("ask proposal");
+        edit.update(&key, |step| {
+          if let StepKind::Agent { permissions, .. } = &mut step.kind {
+            permissions.interactive_tool_approvals = false;
+          }
+        });
+      }
+    }
+    self
+      .window
+      .until("the panel holds the change", |s| s.shows("pipeline-hub-save"));
+    self.window.click_by_client("pipeline-hub-save").expect("Save asks");
+    self
+      .window
+      .until("save question", |s| s.shows("pipeline-hub-confirm-confirm"));
+    let asked = super::tools_window::text(&mut self.window, "pipeline-hub-confirm");
+    let reason = match self.widens {
+      Widens::Wait => "no longer wait for a person's approval",
+      Widens::Ask => "no longer ask a person about its tool calls",
+    };
+    assert!(asked.contains(reason), "the question names what it widens: {asked}");
     edit.validate().expect("valid proposed pipeline")
   }
 }
 
-fn save_round_trip(f: &mut Fixture, expected: &Pipeline) {
+/// The hub's *Save* publishes at once, so one question covers what the old editor asked twice (Save, then Publish): a
+/// refused or revoked *Allow* stores nothing, *Keep editing* needs only the permissions consent, and an *Allow* with it
+/// publishes the next version and leaves no draft.
+fn round_trip(f: &mut Fixture, expected: &Pipeline) {
   assert_eq!(
     f.window
-      .click_by_client("pipeline-save-question-confirm")
+      .click_by_client("pipeline-hub-confirm-confirm")
       .expect_err("off refuses")["code"],
     "person_only"
   );
-  assert!(f.db().draft::<Pipeline>(f.id).expect("draft read").is_none());
   f.unchanged();
   f.window.let_automation_widen(true);
   f.window
-    .click_by_client("pipeline-save-question-keep")
+    .click_by_client("pipeline-hub-confirm-keep")
     .expect("consented cancel");
   f.window
-    .until("cancel unlocks editor", |s| !s.shows("pipeline-save-question-confirm"));
-  assert!(f.db().draft::<Pipeline>(f.id).expect("draft read").is_none());
-  f.window
-    .click_by_client("pipeline-save")
-    .expect("same proposal requests review");
-  f.window
-    .until("save question again", |s| s.shows("pipeline-save-question-confirm"));
-  f.window
-    .click_by_client("pipeline-save-question-confirm")
-    .expect("permissions consent permits Save");
-  let (db, id) = (f.db(), f.id);
-  f.window.until("saved exact candidate", |_| {
-    db.draft::<Pipeline>(id)
-      .expect("draft")
-      .is_some_and(|d| d.body() == expected)
-  });
-  f.window.until("save question dismissed", |s| {
-    !s.shows("pipeline-save-question-confirm")
-  });
-  f.unchanged();
-}
-
-fn publish_round_trip(f: &mut Fixture, expected: &Pipeline) {
-  f.window
-    .click_by_client("pipeline-publish")
-    .expect("publication review");
-  f.window
-    .until("publication question", |s| s.shows("pipeline-publish-question-confirm"));
-  f.window
-    .click_by_client("pipeline-publish-question-keep")
-    .expect("consented publication cancel");
-  f.window.until("publication cancel unlocks", |s| {
-    !s.shows("pipeline-publish-question-confirm")
-  });
-  assert_eq!(
-    f.db()
-      .draft::<Pipeline>(f.id)
-      .expect("draft")
-      .expect("saved draft")
-      .body(),
-    expected
-  );
+    .until("cancel unlocks the panel", |s| !s.shows("pipeline-hub-confirm-confirm"));
   f.unchanged();
   f.window
-    .click_by_client("pipeline-publish")
-    .expect("publication review again");
-  f.window.until("publication question again", |s| {
-    s.shows("pipeline-publish-question-confirm")
-  });
+    .click_by_client("pipeline-hub-save")
+    .expect("the held proposal asks again");
+  f.window
+    .until("the question again", |s| s.shows("pipeline-hub-confirm-confirm"));
   f.window.let_automation_widen(false);
   assert_eq!(
     f.window
-      .click_by_client("pipeline-publish-question-confirm")
-      .expect_err("revoked Publish refuses")["code"],
+      .click_by_client("pipeline-hub-confirm-confirm")
+      .expect_err("revoked Allow refuses")["code"],
     "person_only"
   );
   f.unchanged();
   f.window.let_automation_widen(true);
   f.window
-    .click_by_client("pipeline-publish-question-confirm")
-    .expect("permissions-only Publish");
-  let (db, id) = (f.db(), f.id);
-  f.window.until("actual v2", |_| {
+    .click_by_client("pipeline-hub-confirm-confirm")
+    .expect("permissions consent permits Allow");
+  let (db, id, next) = (f.db(), f.id, f.versions + 1);
+  f.window.until("the next version", |_| {
     db.latest_version::<Pipeline>(id)
       .expect("latest")
-      .is_some_and(|v| v.number().get() == 2)
+      .is_some_and(|v| v.number().get() as usize == next)
   });
-  f.window.until("published question gone", |s| {
-    !s.shows("pipeline-publish-question-confirm")
-  });
+  f.window
+    .until("question gone", |s| !s.shows("pipeline-hub-confirm-confirm"));
   let db = f.db();
   let versions = db.versions::<Pipeline>(f.id).expect("versions");
-  assert_eq!(versions.len(), 2);
-  assert!(versions.iter().any(|v| v.number().get() == 1 && v.body() == &f.before));
+  assert_eq!(versions.len(), next);
+  assert!(versions.iter().any(|v| v.body() == &f.before), "the old latest is kept");
   assert_eq!(
-    db.latest_version::<Pipeline>(f.id).expect("latest").expect("v2").body(),
+    db.latest_version::<Pipeline>(f.id)
+      .expect("latest")
+      .expect("new")
+      .body(),
     expected
   );
   assert!(db.draft::<Pipeline>(f.id).expect("draft").is_none());
@@ -224,23 +229,21 @@ fn publish_round_trip(f: &mut Fixture, expected: &Pipeline) {
 
 #[test]
 fn domain_pipeline_policy_wait_uses_permissions_only_for_cancel_save_and_publish() {
-  let mut f = Fixture::new();
-  let expected = f.proposed("step-gate");
-  save_round_trip(&mut f, &expected);
-  publish_round_trip(&mut f, &expected);
+  let mut f = Fixture::new(Widens::Wait);
+  let expected = f.proposed();
+  round_trip(&mut f, &expected);
 }
 
 #[test]
 fn domain_pipeline_policy_ask_uses_permissions_only_for_cancel_save_and_publish() {
-  let mut f = Fixture::new();
-  let expected = f.proposed("step-ask-tools");
-  save_round_trip(&mut f, &expected);
-  publish_round_trip(&mut f, &expected);
+  let mut f = Fixture::new(Widens::Ask);
+  let expected = f.proposed();
+  round_trip(&mut f, &expected);
 }
 
 fn queued_after_revoke(button: &str) {
-  let mut f = Fixture::new();
-  f.proposed("step-gate");
+  let mut f = Fixture::new(Widens::Wait);
+  f.proposed();
   f.window.let_automation_widen(true);
   let found = f.window.ok("lurq_find_by_id", &json!({"id":button}));
   let reference = found
@@ -267,19 +270,18 @@ fn queued_after_revoke(button: &str) {
   }
   request.join().expect("queued request completed");
   assert!(
-    f.window.shows("pipeline-save-question-confirm"),
+    f.window.shows("pipeline-hub-confirm-confirm"),
     "revoked input cannot accept or cancel"
   );
-  assert!(f.db().draft::<Pipeline>(f.id).expect("draft").is_none());
   f.unchanged();
 }
 
 #[test]
 fn domain_pipeline_policy_queued_save_cannot_execute_after_revocation() {
-  queued_after_revoke("pipeline-save-question-confirm");
+  queued_after_revoke("pipeline-hub-confirm-confirm");
 }
 
 #[test]
 fn domain_pipeline_policy_queued_keep_cannot_execute_after_revocation() {
-  queued_after_revoke("pipeline-save-question-keep");
+  queued_after_revoke("pipeline-hub-confirm-keep");
 }

@@ -25,6 +25,7 @@
       "cancel": "Cancel",
       "hint": "Create publishes v1 for the team once the server accepts it",
       "fixName": "Fix the name to create it",
+      "fixFields": "Fix the marked fields to create it",
       "changeName": "Change the name, then Create again"
     },
     "computer": {
@@ -33,25 +34,14 @@
       "mcpRemote": "Each computer then gives the value of the secret its header names.",
       "instruction": "Nothing to fill in on a computer: an instruction is the same everywhere.",
       "skill": "Nothing to fill in on a computer: a skill is the same everywhere.",
-      "tool": "Each computer then adds the value of each secret the tool names."
+      "tool": "Each computer then adds the value of each secret the tool names.",
+      "toolSecret": "Each computer then adds the value of {{secret}} in {{environment}}."
     },
     "profile": {
-      "name": "Name",
-      "nameSub": "Shown in pipelines, runs and approvals",
-      "namePlaceholder": "e.g. Builder",
       "nameTaken": "The team already has an agent profile named {{name}} · pick another name",
-      "responsibility": "Responsibility",
-      "responsibilityPlaceholder": "One line on what this agent is for",
-      "cli": "Agent CLI",
-      "cliSub": "A kind, e.g. Claude Code or Codex; never a connection",
       "cliPlaceholder": "Choose from the catalog",
-      "model": "Model",
       "modelPlaceholder": "From the CLI's list",
-      "effort": "Reasoning effort",
-      "effortDefault": "CLI default",
-      "lists": "Instructions, MCP servers, tools, skills",
-      "listsSub": "Picked from the team's lists",
-      "listsValue": "Not available here yet: a new profile starts with none of them."
+      "effortDefault": "CLI default"
     },
     "mcp": {
       "name": "Name",
@@ -97,11 +87,6 @@
       "nameSub": "Shown where profiles pick instructions",
       "namePlaceholder": "e.g. Project rules",
       "nameTaken": "The team already has an instruction named {{name}} · pick another name",
-      "addedTo": "Added to",
-      "addedToSub": "Every run is the only choice for now: a profile cannot pick instructions yet",
-      "everyRun": "Every run",
-      "text": "Text",
-      "textSub": "Added to the agent's prompt as written",
       "textPlaceholder": "Write the instruction in Markdown…"
     },
     "skill": {
@@ -109,33 +94,87 @@
       "nameSub": "Lowercase with dashes; agents load it by this name",
       "namePlaceholder": "e.g. review-diff",
       "nameTaken": "The team already has a skill named {{name}} · pick another name",
-      "description": "Description",
-      "descriptionPlaceholder": "When agents should use it, in one or two sentences",
-      "files": "Files",
-      "filesSub": "SKILL.md is made from the description. Adding files, importing a folder and choosing the CLIs that load it are not in this form yet"
+      "descriptionPlaceholder": "When agents should use it, in one or two sentences"
     },
     "tool": {
       "name": "Name",
       "nameSub": "Agents call it by this name",
       "namePlaceholder": "e.g. cargo-check",
       "nameTaken": "The team already has a tool named {{name}} · pick another name",
-      "kind": "Kind",
-      "command": "Command",
-      "http": "HTTP request",
-      "database": "Database query",
-      "program": "Program",
-      "programSub": "Found on this computer when you create it",
       "programPlaceholder": "e.g. cargo",
-      "arguments": "Arguments",
-      "argumentsSub": "One per line",
-      "argumentsPlaceholder": "e.g. check",
-      "description": "Description",
       "descriptionPlaceholder": "What the tool does",
-      "unavailable": "Not available yet",
-      "unavailableValue": "An HTTP request and a database query name secrets by name, which a new tool cannot yet. Create a command.",
-      "kindOff": "Choose Command to create it"
+      "method": "Method",
+      "url": "URL",
+      "urlSub": "Fixed: agents never change it",
+      "urlPlaceholder": "e.g. https://api.example.com/v1/items",
+      "host": "Allowed host",
+      "hostSub": "The only host it may call",
+      "hostPlaceholder": "e.g. api.example.com",
+      "auth": {
+        "label": "Authorization",
+        "sub": "sent as Authorization: Bearer",
+        "none": "None",
+        "bearer": "Bearer token"
+      },
+      "token": "Token secret",
+      "namedSub": "A team secret, by name",
+      "tokenPlaceholder": "e.g. API_TOKEN",
+      "credentials": "Credentials secret",
+      "credentialsSub": "A team secret, by name · what it connects with",
+      "credentialsPlaceholder": "e.g. DATABASE_URL",
+      "pickedSub": "This project's secret, in the environment below",
+      "noValueHere": "No value on this computer · add it in Project settings › Environment",
+      "chooseSecret": "Choose a secret",
+      "noSecrets": "No secret in this environment yet",
+      "inputs": "Inputs",
+      "inputsSub": "What the agent gives · one per line: name → query, header or body",
+      "inputsPlaceholder": "e.g. title → body title",
+      "outputs": "Outputs",
+      "outputsSub": "What it gets back · one per line: name ← status, header or body",
+      "outputsPlaceholder": "e.g. link ← body html_url",
+      "query": "Query",
+      "querySub": "Run as written · read-only only if the database account is",
+      "queryPlaceholder": "e.g. select id, status from orders",
+      "lineFirst": "Line {{line}}: {{error}}",
+      "lineNext": "{{before}} · line {{line}}: {{error}}",
+      "access": {
+        "title": "Access",
+        "teamHint": "· who may call it, and how",
+        "everyComputer": "· the same on every computer",
+        "localHint": "· how a call gets its secret",
+        "callers": "Pipelines that call it",
+        "callersSub": "Team runs call it only from these steps",
+        "allSteps": "{{pipeline}} · all steps",
+        "step": "{{pipeline}} · {{number}} {{step}}",
+        "environment": {
+          "label": "Environment",
+          "development": "Development",
+          "staging": "Staging",
+          "production": "Production"
+        },
+        "environmentSub": "whose secret values it uses",
+        "approval": {
+          "label": "Run without asking",
+          "sub": "a person approves before the secret is used",
+          "every": "No · each call",
+          "once": "No · once per run",
+          "never": "Yes"
+        },
+        "window": {
+          "label": "Access lasts",
+          "sub": "never past the step that asked",
+          "step": "Until the step ends",
+          "minutes": "Minutes",
+          "minutesField": "Minutes access lasts"
+        },
+        "denied": {
+          "label": "When a call is denied",
+          "sub": "the step's work is kept",
+          "wait": "The step waits for a new plan",
+          "fail": "The step fails"
+        }
+      }
     },
-    "personOnly": "Only a person creates this: it adds to what agents may do. Press Create yourself; input from an MCP client is refused unless a person lets automation change agent permissions.",
     "refused": {
       "nameTaken": {
         "title": "The team's server refused: the name {{name}} is taken",

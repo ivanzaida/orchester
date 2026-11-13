@@ -6,13 +6,14 @@
 use orchester_core::{
   connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
   id::{ConnectionId, ResourceId},
-  resource::{ResourceKind, TeamAgentProfile, TeamMcpServer},
+  resource::{TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
   store::ConnectionStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::team_config::TeamConfig;
+use super::{team_body_edit::Latest, team_sheets};
+use crate::team_config::{TeamConfig, TeamResource};
 
 /// A resource a profile uses.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,6 +42,18 @@ pub struct ConnectionChoice {
   pub signed_out: bool,
 }
 
+impl ConnectionChoice {
+  /// `connection` as its last check found it.
+  pub fn of(connection: &Connection) -> Self {
+    Self {
+      id: connection.id(),
+      name: connection.name().to_string(),
+      version: connection.version().map(str::to_owned),
+      signed_out: connection.status() == ConnectionStatus::SignInRequired,
+    }
+  }
+}
+
 /// One team profile as the panel shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamProfileSheet {
@@ -57,6 +70,8 @@ pub struct TeamProfileSheet {
   pub connections: Vec<ConnectionChoice>,
   /// The connection picked for it, while it is still one of [`Self::connections`].
   pub picked: Option<ConnectionId>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<TeamAgentProfile>>,
 }
 
 impl TeamProfileSheet {
@@ -72,12 +87,15 @@ impl TeamProfileSheet {
   }
 }
 
-/// A sheet for each team profile whose latest version is in the team's form; one that is not has none, and its
-/// readiness says why. What this computer filled in (the pick) is read from `db`.
-pub(crate) fn sheets(db: &ProjectDb, config: &TeamConfig) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
+/// A sheet for each team profile of `profiles` whose latest version is in the team's form; one that is not has none,
+/// and its readiness says why. What this computer filled in (the pick) is read from `db`.
+pub(crate) fn sheets(
+  (db, config): (&ProjectDb, &TeamConfig),
+  profiles: &[&TeamResource],
+) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
   let connections = db.connections()?;
   let mut sheets = Vec::new();
-  for resource in config.resources(ResourceKind::AgentProfile) {
+  for resource in profiles.iter().copied() {
     let Some(Ok(team)) = resource.body::<TeamAgentProfile>() else {
       continue;
     };
@@ -118,12 +136,7 @@ fn sheet(
   let of_kind: Vec<ConnectionChoice> = connections
     .iter()
     .filter(|connection| matches!(connection.kind(), ConnectionKind::Agent(provider) if *provider == team.cli()))
-    .map(|connection| ConnectionChoice {
-      id: connection.id(),
-      name: connection.name().to_string(),
-      version: connection.version().map(str::to_owned),
-      signed_out: connection.status() == ConnectionStatus::SignInRequired,
-    })
+    .map(ConnectionChoice::of)
     .collect();
   let picked = db
     .connection_pick(profile)?
@@ -143,6 +156,9 @@ fn sheet(
     secrets,
     connections: of_kind,
     picked,
+    edit: config
+      .resource(profile)
+      .and_then(|resource| team_sheets::latest_of(resource, team)),
   })
 }
 

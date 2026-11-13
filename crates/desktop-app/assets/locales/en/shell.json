@@ -137,6 +137,7 @@
       "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
     },
     "status": {
+      "dangerous": "Dangerous auto-approve",
       "runner": {
         "starting": "Runner starting",
         "online": "Runner online",

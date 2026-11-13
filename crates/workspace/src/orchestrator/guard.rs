@@ -31,7 +31,7 @@ use serde_json::Value;
 use super::{
   change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
   repository::INIT_REPOSITORY,
-  tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE},
+  tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, PIPELINE_CHANGES, RUN_TASK, SEND_MESSAGE},
 };
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
@@ -60,6 +60,18 @@ pub(super) async fn only_proposed(scope: &ChatScope, name: &str, drives: bool) -
     };
   }
   Ok(!drives && (matches!(name, MERGE_RUN | PAUSE_RUN | RELEASE_QUEUE) || Publishing::of_tool(name).is_some()))
+}
+
+/// The refusal of the chat's call of `name` that changes a pipeline while it does not `drive` (D-033): a pipeline is
+/// always a published version, so there is no draft to propose, and the chat tells the person what to change instead.
+/// `None` for any other call.
+pub(super) fn pipeline_refused(name: &str, drives: bool) -> Option<ToolError> {
+  (!drives && PIPELINE_CHANGES.contains(&name)).then(|| {
+    ToolError::refused(
+      "drive_only",
+      vec![Message::new("orchestrator.tools.pipelinesDriveOnly")],
+    )
+  })
 }
 
 /// Whether the turn under way in `scope`'s conversation is the one a day's report, or a subscription that ended by

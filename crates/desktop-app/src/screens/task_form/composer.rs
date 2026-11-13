@@ -30,7 +30,7 @@ use super::{
   sources::{SourcesProps, sources_chip},
   state::View,
 };
-use crate::{services::Services, theme::TaskFormSpacing};
+use crate::{screens::pipeline_link::PipelineLinks, services::Services, theme::TaskFormSpacing};
 
 impl TaskForm {
   pub(super) fn composer(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {
@@ -55,13 +55,12 @@ impl TaskForm {
       brief: &self.fields.brief,
       title_input: &self.title_input,
     };
-    let project = props.project.open.project.id();
     composer
       .child(title(ctx, view, &brief))
       .child(outcome(ctx, view, &brief))
       .child(criteria(ctx, view, &self.fields.criteria))
       .child(self.properties(ctx, props, view, separator))
-      .with_children(plan_line(ctx, view, project))
+      .with_children(plan_line(ctx, view, &props.project))
   }
 
   /// The chips in their two rows.
@@ -77,6 +76,7 @@ impl TaskForm {
       repo_root: props.project.open.repo_root.clone(),
       project: props.project.open.project.id(),
       project_name: props.project.open.project.name().as_str().into(),
+      pipeline_links: PipelineLinks::of(&props.project),
       task: view.subject.task().map(|task| task.id()),
       pipeline: view.pipeline().map(|choice| (choice.id, choice.version)),
       drafted: self.sources.clone(),

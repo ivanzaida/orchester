@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{
   routes::{HubFilter, ProjectPage, Route},
-  screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
+  screens::hub::agent_row::{AgentRow, agent_row, line, tag_chip},
   theme::IconSize,
   ui::{agent_mark::AgentMark, icon::icon},
 };
@@ -42,11 +42,11 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     chosen: shown.selected == Some(entry.what),
     // Opening another entry would drop unsaved edits: the hub asks first.
     open: shown.leave.press(route).button(),
-    group: entry.group,
+    group: Some(entry.group),
     kind: format!("{:?}", entry.kind),
     mark: mark(ctx, entry, unsaved),
-    name: &entry.name,
-    line: (&said.text, said.color),
+    name: (&entry.name, PaletteColor::TextPrimary),
+    line: line(&id, &said.text, said.color).into(),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),
   })

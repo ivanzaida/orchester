@@ -2,12 +2,16 @@
 //! kind and *not created yet · Create publishes v1* over the new resource's title, *For the team* (what the team holds,
 //! the same on every computer) as rows, a note on what each computer fills in afterwards, and pinned at the bottom
 //! Create and Cancel. No draft: Create makes v1 and sends it to the team server; it shows as created only once the
-//! server has taken it ([`super::work`]), a refusal is said in place and nothing is made, and Cancel leaves nothing.
+//! server has taken it ([`super::work`]) and the hub has read its list again with it, the form staying as it was sent
+//! with Create pending meanwhile; a refusal is said in place and nothing is made, and Cancel leaves nothing.
 //! In a local project (`Agents · New agent profile` … `New tool`, L3–L7) the same form has one section of the
 //! resource's own fields and nothing to send: Create makes v1 on this computer, or for an MCP server, which has no
 //! versions, the server itself.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -22,8 +26,9 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
-  agents::data::ProjectAgents,
+  agents::team_tool::{CallingPipeline, calling_pipelines},
   connections::data::ProjectConnections,
+  local_archive::Archivable,
   sharing::{team::TeamConfiguration, team_edit::Refusal},
 };
 
@@ -36,16 +41,17 @@ use super::{
   work::{self, Failed, Press, Work},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   navigation::Navigation,
   queries::{self, Session, hub},
   routes::{HubView, ProjectPage, Route},
   screens::{
     connections::data,
-    hub::team::admins,
+    hub::{profile_form::Offer, team::admins},
     local_hub::view_of,
     team_hub::{bar, model::Kind, panel as shared, rows},
   },
+  services::Services,
   theme::{HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -64,6 +70,8 @@ pub(in crate::screens) struct Props {
   pub taken: Vec<String>,
   /// A team project's configuration: who the admins are, which a refusal for a role that changed says.
   pub team: Option<TeamConfiguration>,
+  /// What the hub's list holds of the kind now: the form gives way to what it made only once the list holds it.
+  pub listed: Vec<Archivable>,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -125,6 +133,8 @@ struct NewPanel {
   /// Create was pressed: a required field that is empty says so.
   tried: Signal<bool>,
   work: Work,
+  /// What Create made, while the hub's list does not hold it yet: the form stays, Create pending, until it does.
+  made: Signal<Option<Archivable>>,
   gate: Option<InputGate>,
   /// The name field, which has the focus when the form opens (the design draws it focused).
   first: ElementRef,
@@ -138,19 +148,20 @@ impl Component for NewPanel {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let work = work::work(ctx, (props.repo_root.clone(), props.project, props.mode));
-    let navigation = Navigation::of(ctx);
-    let (project, filter) = (props.project, props.kind.filter());
-    // Created, and taken by the team server: the hub shows it, and its form is gone with the route.
+    // Created, and taken by the team server: the hub reads its list again, and the form waits for it (`give_way`),
+    // so the panel never shows the list's last answer without it.
+    let made = ctx.signal(None);
+    let kept = made.clone();
     ctx.watch(&work.state(), move |state| {
       if let Some(made) = state.data.filter(|_| state.is_fulfilled()) {
-        let shown = Route::Project(project, ProjectPage::hub(view_of(filter, Some(made))));
-        navigation.replace(shown);
+        kept.set(Some(made));
       }
     });
     Self {
       form: Form::new(ctx, props.kind, props.mode),
       tried: ctx.signal(false),
       work,
+      made,
       gate: ctx.use_context::<InputGate>(),
       first: ElementRef::default(),
       focus_first: ctx.signal(true),
@@ -165,30 +176,38 @@ impl Component for NewPanel {
       mode,
       taken,
       team,
+      listed,
     } = ctx.props::<Props>().clone();
     if self.focus_first.get() {
       ctx.focus(&self.first);
       self.focus_first.set(false);
     }
+    let made = self.made.get();
+    let navigation = Navigation::of(ctx);
+    give_way(made, &listed, (project, kind), &navigation);
     let state = self.work.state().get();
-    let pending = state.is_pending();
+    // Made and not listed yet is still Create's: the form stays as it was sent.
+    let pending = state.is_pending() || made.is_some();
+    // The list that holds what was made holds its name too, which the form does not take for a clash with itself.
+    let taken = if made.is_some() { Vec::new() } else { taken };
     let refused = state.error.filter(|_| !pending);
     let refused_name = taken_by_server(refused.as_ref());
-    let agents = self.agents(ctx, kind, &repo_root);
+    let offer = self.offer(ctx, (kind, mode), &repo_root);
     let connections = self.connections(ctx, (kind, mode), &repo_root);
+    let pipelines = pipelines(ctx, (kind, mode), &repo_root);
     let shown = Shown {
       mode,
       taken: &taken,
       tried: self.tried.get(),
       locked: pending,
-      agents: agents.as_ref(),
+      offer: &offer,
       connections: connections.as_ref(),
+      pipelines: &pipelines,
       first: &self.first,
       refused_name: refused_name.as_deref(),
       published: None,
     };
     let body = self.form.body(ctx, &shown);
-    let navigation = Navigation::of(ctx);
     let prefix = mode.prefix();
     let content = Column::new()
       .id(format!("{prefix}-new-form"))
@@ -200,7 +219,8 @@ impl Component for NewPanel {
       .spacing(HubSpacing::BodyTop.role())
       .child(head(ctx, kind, mode))
       .with_children(refusal(ctx, refused.as_ref(), team.as_ref()))
-      .with_children(sections(ctx, (kind, mode), body.rows, body.computer))
+      .with_children(body.lead)
+      .with_children(sections(ctx, (kind, mode), (body.rows, body.after), body.computer))
       .with_children(body.overlay);
     let scroll = ScrollVertical::new(content)
       .id(format!("{prefix}-hub-panel-scroll"))
@@ -221,18 +241,22 @@ impl Component for NewPanel {
 }
 
 impl NewPanel {
-  /// This computer's connections, which the profile form's CLI and model choices come from, from the session's cache.
-  fn agents(&self, ctx: &mut Ctx, kind: Kind, root: &Path) -> Option<ProjectAgents> {
+  /// What the profile form's fields offer: this computer's connections, which its CLI and model choices come from,
+  /// and the resources its lists give, the team's live ones or the project's.
+  fn offer(&self, ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Offer {
     if kind != Kind::Profile {
-      return None;
+      return Offer::default();
     }
     let session = Session::of(ctx);
-    queries::state(&ctx.query(hub::profile_form(session, root.to_path_buf()))).data
+    let read = queries::state(&ctx.query(hub::profile_form(session, root.to_path_buf()))).data;
+    let config = (mode == Mode::Team).then(|| Services::of(ctx).workspace.team_read(root).config().cloned());
+    Offer::read(read.as_ref(), config.as_ref().map(|config| config.as_deref()))
   }
 
-  /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from.
+  /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from,
+  /// and a local tool's form the secret it sends or connects with.
   fn connections(&self, ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Option<ProjectConnections> {
-    if (kind, mode) != (Kind::McpServer, Mode::Local) {
+    if mode != Mode::Local || !matches!(kind, Kind::McpServer | Kind::Tool) {
       return None;
     }
     queries::state(&data::load(ctx, root.to_path_buf())).data
@@ -255,18 +279,29 @@ impl NewPanel {
     )
     .icon(Icon::Plus)
     .pinned();
-    let create = if busy && self.work.state().get().is_pending() {
+    let create = if busy {
       create.loading()
-    } else if busy || off.is_some() {
+    } else if off.is_some() {
       create.disabled()
     } else {
       let (work, tried, gate, make) = (self.work.clone(), self.tried.clone(), self.gate.clone(), make.clone());
       create.on_click(move || {
+        // What adds to what agents may do is a person's press, or automation's where they let it change agent
+        // permissions; refused, the form stays as it was.
+        let refused = make.as_ref().is_some_and(|make| {
+          make.needs_a_person()
+            && !may_press(
+              gate.as_ref(),
+              Guarded::PermissionWidening,
+              "create what adds to what agents may do",
+            )
+        });
+        if refused {
+          return;
+        }
         tried.set(true);
         if let Some(make) = make.clone() {
-          // A person's press, or automation's where they let it change what agents may do.
-          let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
-          work.run(Press { make, decided });
+          work.run(Press { make });
         }
       })
     };
@@ -276,7 +311,7 @@ impl NewPanel {
       ctx.t("team_new.bar.cancel"),
     )
     .pinned();
-    let cancel = if self.work.state().get().is_pending() {
+    let cancel = if busy {
       cancel.disabled()
     } else {
       cancel.opens(navigation.to(Route::Project(
@@ -289,6 +324,33 @@ impl NewPanel {
       None => (ctx.t(mode.bar_hint(kind)).to_string(), PaletteColor::TextMuted),
     };
     bar::bar_saying(vec![create.into(), cancel.into()], Some(hint))
+  }
+}
+
+/// The team's pipelines, which a team tool's form lets call it; none for another form.
+fn pipelines(ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Vec<CallingPipeline> {
+  if (kind, mode) != (Kind::Tool, Mode::Team) {
+    return Vec::new();
+  }
+  Services::of(ctx)
+    .workspace
+    .team_read(root)
+    .config()
+    .map_or_else(Vec::new, |config| calling_pipelines(config))
+}
+
+/// The form gives way to what it `made` once the hub's list holds it (`listed`): the route goes to it in place, so the
+/// list and the panel show it chosen at once. Before that the list's last answer does not hold it, and going to it
+/// would show another resource, or the kind's empty tab.
+fn give_way(
+  made: Option<Archivable>,
+  listed: &[Archivable],
+  (project, kind): (ProjectId, Kind),
+  navigation: &Navigation,
+) {
+  if let Some(made) = made.filter(|made| listed.contains(made)) {
+    let shown = Route::Project(project, ProjectPage::hub(view_of(kind.filter(), Some(made))));
+    navigation.replace(shown);
   }
 }
 
@@ -309,15 +371,23 @@ fn taken_by_server(refused: Option<&Failed>) -> Option<String> {
   }
 }
 
-/// What the form holds: *For the team* and the note on what each computer fills in afterwards in a team's project, one
-/// section of the resource's own fields in a local one (`Profile`, `Server`, `Instruction`, `Skill`, `Tool` in L3–L7).
-fn sections(ctx: &Ctx, (kind, mode): (Kind, Mode), rows: Vec<Row>, computer_note: Option<&str>) -> Vec<Element> {
-  match mode {
-    Mode::Team => std::iter::once(for_team(ctx, rows).into())
-      .chain(computer_note.map(|note| computer(ctx, note).into()))
-      .collect(),
-    Mode::Local => vec![rows::section("local-new-section", &ctx.t(kinds::section_key(kind)), Vec::new(), rows).into()],
-  }
+/// What the form holds: *For the team*, the kind's own sections and the note on what each computer fills in afterwards
+/// in a team's project; one section of the resource's own fields and its own sections in a local one (`Profile`,
+/// `Server`, `Instruction`, `Skill`, `Tool` in L3–L7).
+fn sections(
+  ctx: &Ctx,
+  (kind, mode): (Kind, Mode),
+  (rows, after): (Vec<Row>, Vec<Element>),
+  computer_note: Option<Arc<str>>,
+) -> Vec<Element> {
+  let first: Element = match mode {
+    Mode::Team => for_team(ctx, rows).into(),
+    Mode::Local => rows::section("local-new-section", &ctx.t(kinds::section_key(kind)), Vec::new(), rows).into(),
+  };
+  let note = computer_note
+    .filter(|_| mode == Mode::Team)
+    .map(|note| computer(&note).into());
+  std::iter::once(first).chain(after).chain(note).collect()
 }
 
 /// *For the team*: what the team holds, the same on every computer, as the rows of the kind's form.
@@ -349,7 +419,7 @@ fn head(ctx: &Ctx, kind: Kind, mode: Mode) -> Row {
 }
 
 /// What each computer fills in afterwards, apart from the team's rows (`Computer` note in A7).
-fn computer(ctx: &Ctx, key: &str) -> Row {
+fn computer(words: &str) -> Row {
   Row::new()
     .id("team-new-computer")
     .width(Dimension::Pct(100.0))
@@ -360,7 +430,7 @@ fn computer(ctx: &Ctx, key: &str) -> Row {
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
     .child(
-      Text::new(&ctx.t(key))
+      Text::new(words)
         .id("team-new-computer-text")
         .variant(HubText::Value.role())
         .color(PaletteColor::TextSecondary)

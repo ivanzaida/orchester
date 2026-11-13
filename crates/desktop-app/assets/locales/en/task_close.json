@@ -56,7 +56,6 @@
         },
         "kept": "Left unticked, they stay in the repository."
       },
-      "personOnly": "Only a person deletes a task: input from an MCP client is not taken here.",
       "cancel": "Cancel",
       "confirm": "Delete task"
     }

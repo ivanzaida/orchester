@@ -13,5 +13,8 @@ mod in_place;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+#[path = "../files/mcp_client.rs"]
+mod mcp_client;
+mod pipelines;
 #[path = "../support/mod.rs"]
 mod support;

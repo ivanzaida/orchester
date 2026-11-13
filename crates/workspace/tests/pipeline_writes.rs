@@ -1,176 +1,219 @@
-//! The editor and automation share the permission checks in workspace.
+//! The editor and automation share the permission checks in workspace, and a pipeline is stored only as published
+//! versions (D-032): a save publishes the next version or is refused with every reason, and nothing is stored then.
+//! `cargo test -p orchester-workspace --test pipeline_writes pipeline_writes`.
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, ResourceId},
   name::Name,
   project::{Project, ProjectKey},
   resource::{CommandAction, CommandProgram, Pipeline, PipelineEdit, Slug, StepKind, Tool, ToolAction},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 use orchester_workspace::pipelines::{
   data::OpenedPipeline,
-  widening::{draft_reasons, publish_reasons},
+  library::{CreateError, create_here},
+  widening::save_reasons,
   write::{self, Allowed, WriteError},
 };
+use tempfile::TempDir;
 
-#[test]
-fn pipeline_writes_require_person_for_first_publish_and_removing_gates() {
-  let folder = tempfile::tempdir().unwrap();
-  std::fs::create_dir(folder.path().join(".git")).unwrap();
-  let mut db = ProjectDb::create(
+fn project() -> (TempDir, ProjectDb) {
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  std::fs::create_dir(folder.path().join(".git")).expect("a .git folder");
+  let db = ProjectDb::create(
     folder.path(),
     Project::new(
       ProjectId::generate(),
-      ProjectKey::new("TEST").unwrap(),
-      Name::new("Test").unwrap(),
+      ProjectKey::new("TEST").expect("key"),
+      Name::new("Test").expect("name"),
     ),
   )
-  .unwrap();
-  let now = Timestamp::now();
+  .expect("the project database");
+  (folder, db)
+}
+
+/// A published command tool a step can run.
+fn tool(db: &mut ProjectDb) -> ResourceId {
   let tool = Tool::new(
     "",
-    ToolAction::Command(CommandAction::new(CommandProgram::new("cargo").unwrap(), vec![])),
+    ToolAction::Command(CommandAction::new(
+      CommandProgram::new("cargo").expect("program"),
+      vec![],
+    )),
     None,
   )
-  .unwrap();
-  let tool_id = db
-    .create_resource(Slug::new("tool").unwrap(), Name::new("Tool").unwrap(), &tool, now)
-    .unwrap()
-    .id();
-  db.publish_draft::<Tool>(tool_id, now).unwrap();
-  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).unwrap());
-  let key = edit.add_step(Name::new("Check").unwrap(), None);
-  edit.update(&key, |step| {
-    step.kind = StepKind::Tool { tool: Some(tool_id) };
-    step.approval_gate = true;
-  });
-  let body = edit.validate().unwrap();
-  let id = db
-    .create_resource(
-      Slug::new("pipeline").unwrap(),
-      Name::new("Pipeline").unwrap(),
-      &body,
-      now,
-    )
-    .unwrap()
-    .id();
-  let before = OpenedPipeline::load(&db, id).unwrap();
-  assert!(matches!(
-    write::publish_in(folder.path(), &before, &Allowed::default()),
-    Err(WriteError::PersonOnly)
-  ));
-  let first = write::publish_in(folder.path(), &before, &Allowed(publish_reasons(None, &body))).unwrap();
-  edit.update(&key, |step| step.approval_gate = false);
-  let weaker = edit.validate().unwrap();
-  assert!(matches!(
-    write::save_in(folder.path(), &first, weaker.clone(), &Allowed::default()),
-    Err(WriteError::PersonOnly)
-  ));
-  let saved = write::save_in(
-    folder.path(),
-    &first,
-    weaker.clone(),
-    &Allowed(draft_reasons(&first, &weaker)),
+  .expect("a command tool");
+  db.create_published(
+    Slug::new("tool").expect("slug"),
+    Name::new("Tool").expect("name"),
+    &tool,
+    Timestamp::now(),
   )
-  .unwrap();
-  assert!(matches!(
-    write::publish_in(folder.path(), &saved, &Allowed::default()),
-    Err(WriteError::PersonOnly)
-  ));
-  let reasons = publish_reasons(saved.latest.as_ref().map(|v| &v.body), &weaker);
-  let published = write::publish_in(folder.path(), &saved, &Allowed(reasons)).unwrap();
-  assert_eq!(published.latest.unwrap().number.get(), 2);
-  assert_eq!(db.versions::<Pipeline>(id).unwrap()[0].body(), &body);
-  assert!(OpenedPipeline::load(&db, id).unwrap().draft_saved_at.is_none());
+  .expect("a published tool")
+  .0
+  .id()
+}
+
+/// One step that runs `tool`, waiting for approval when `gate`.
+fn checks(tool: ResourceId, gate: bool) -> Pipeline {
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("an empty pipeline"));
+  let key = edit.add_step(Name::new("Check").expect("name"), None);
+  edit.update(&key, |step| {
+    step.kind = StepKind::Tool { tool: Some(tool) };
+    step.approval_gate = gate;
+  });
+  edit.validate().expect("a valid pipeline")
 }
 
 #[test]
-fn pipeline_writes_keep_unassigned_starter_drafts_but_publication_stays_strict() {
+fn pipeline_writes_publish_the_next_version_and_need_a_person_to_drop_a_gate() {
+  let (folder, mut db) = project();
+  let tool = tool(&mut db);
+  let body = checks(tool, true);
+  let id = create_here(&mut db, Name::new("Pipeline").unwrap(), &body, Timestamp::now()).unwrap();
+  let first = OpenedPipeline::load(&db, id).unwrap();
+  assert_eq!(first.version.get(), 1, "created as v1");
+  let weaker = checks(tool, false);
+  assert!(matches!(
+    write::save_here_in(folder.path(), &first, &weaker, &named(&first), &Allowed::default()),
+    Err(WriteError::PersonOnly)
+  ));
+  assert_eq!(db.versions::<Pipeline>(id).unwrap().len(), 1, "nothing stored");
+  let reasons = save_reasons(Some(&first.body), &weaker, &first.assignables);
+  let saved = write::save_here_in(folder.path(), &first, &weaker, &named(&first), &Allowed(reasons)).unwrap();
+  assert_eq!(saved.version.get(), 2);
+  assert_eq!(saved.body, weaker);
+  assert_eq!(db.versions::<Pipeline>(id).unwrap()[0].body(), &body);
+  assert!(db.draft::<Pipeline>(id).unwrap().is_none(), "a pipeline holds no draft");
+}
+
+#[test]
+fn pipeline_writes_refuse_an_unpublishable_pipeline_with_every_reason_and_store_nothing() {
   use orchester_core::resource::{PromptText, StarterAssignments, StarterStepText, feature_delivery};
-  let folder = tempfile::tempdir().unwrap();
-  std::fs::create_dir(folder.path().join(".git")).unwrap();
-  let mut db = ProjectDb::create(
-    folder.path(),
-    Project::new(
-      ProjectId::generate(),
-      ProjectKey::new("TEST").unwrap(),
-      Name::new("Test").unwrap(),
-    ),
-  )
-  .unwrap();
-  let body = feature_delivery(
+  let (folder, mut db) = project();
+  let starter = feature_delivery(
     |step| StarterStepText {
       name: Name::new(step.key()).unwrap(),
       instructions: PromptText::new("").unwrap(),
     },
     StarterAssignments::default(),
   );
-  let id = db
-    .create_resource(
-      Slug::new("starter").unwrap(),
-      Name::new("Starter").unwrap(),
-      &body,
-      Timestamp::now(),
-    )
-    .unwrap()
-    .id();
-  let opened = OpenedPipeline::load(&db, id).unwrap();
-  let edited = body.with_description("Still choosing profiles".into());
-  let saved = write::save_in(folder.path(), &opened, edited.clone(), &Allowed::default()).unwrap();
-  assert_eq!(saved.body, edited);
-  assert!(matches!(
-    write::publish_in(folder.path(), &saved, &Allowed(publish_reasons(None, &edited))),
-    Err(WriteError::Store(_))
-  ));
-  assert!(db.latest_version::<Pipeline>(id).unwrap().is_none());
-  assert_eq!(db.draft::<Pipeline>(id).unwrap().unwrap().body(), &edited);
-}
-#[test]
-fn pipeline_writes_rename_preserves_slug_and_rejects_stale_names_atomically() {
-  let folder = tempfile::tempdir().unwrap();
-  std::fs::create_dir(folder.path().join(".git")).unwrap();
-  let mut db = ProjectDb::create(
-    folder.path(),
-    Project::new(
-      ProjectId::generate(),
-      ProjectKey::new("TEST").unwrap(),
-      Name::new("Test").unwrap(),
-    ),
+  let Err(CreateError::NotSaved(reasons)) =
+    create_here(&mut db, Name::new("Starter").unwrap(), &starter, Timestamp::now())
+  else {
+    panic!("a starter without profiles or tools is refused");
+  };
+  assert_eq!(
+    reasons.len(),
+    starter.steps().len(),
+    "every step without a profile or tool is named: {reasons:?}"
+  );
+  assert!(
+    db.resources(orchester_core::resource::ResourceKind::Pipeline)
+      .unwrap()
+      .is_empty()
+  );
+  let empty = create_here(
+    &mut db,
+    Name::new("Empty").unwrap(),
+    &Pipeline::new(vec![]).unwrap(),
+    Timestamp::now(),
+  );
+  assert!(
+    matches!(&empty, Err(CreateError::NotSaved(reasons)) if reasons[0].key == "pipelines.problems.noSteps"),
+    "{empty:?}"
+  );
+
+  let tool = tool(&mut db);
+  let id = create_here(
+    &mut db,
+    Name::new("Checks").unwrap(),
+    &checks(tool, false),
+    Timestamp::now(),
   )
   .unwrap();
-  let body = Pipeline::new(vec![]).unwrap();
-  let id = db
-    .create_resource(
-      Slug::new("pipeline").unwrap(),
-      Name::new("Pipeline").unwrap(),
-      &body,
-      Timestamp::now(),
-    )
-    .unwrap()
-    .id();
+  let opened = OpenedPipeline::load(&db, id).unwrap();
+  let refused = write::save_here_in(folder.path(), &opened, &starter, &named(&opened), &Allowed::default());
+  assert!(
+    matches!(&refused, Err(WriteError::NotSaved(reasons)) if reasons.len() == starter.steps().len()),
+    "{refused:?}"
+  );
+  assert_eq!(db.versions::<Pipeline>(id).unwrap().len(), 1, "nothing stored");
+  assert!(db.draft::<Pipeline>(id).unwrap().is_none());
+}
+
+#[test]
+fn pipeline_writes_refuse_an_unchanged_save_and_one_made_from_an_older_version() {
+  let (folder, mut db) = project();
+  let tool = tool(&mut db);
+  let body = checks(tool, false);
+  let id = create_here(&mut db, Name::new("Pipeline").unwrap(), &body, Timestamp::now()).unwrap();
+  let opened = OpenedPipeline::load(&db, id).unwrap();
+  let unchanged = write::save_here_in(folder.path(), &opened, &body, &named(&opened), &Allowed::default());
+  assert!(
+    matches!(&unchanged, Err(WriteError::NotSaved(reasons)) if reasons[0].key == "pipelines.problems.unchanged"),
+    "{unchanged:?}"
+  );
+  write::save_here_in(
+    folder.path(),
+    &opened,
+    &body.clone().with_description("First editor".into()),
+    &named(&opened),
+    &Allowed::default(),
+  )
+  .unwrap();
+  let stale = write::save_here_in(
+    folder.path(),
+    &opened,
+    &body.clone().with_description("Second editor".into()),
+    &named(&opened),
+    &Allowed::default(),
+  );
+  assert!(
+    matches!(&stale, Err(error) if error.message().key == "pipelines.problems.staleDraft"),
+    "{stale:?}"
+  );
+  let versions = db.versions::<Pipeline>(id).unwrap();
+  assert_eq!(versions.len(), 2);
+  assert_eq!(versions[1].body().description(), "First editor");
+}
+
+#[test]
+fn pipeline_writes_rename_preserves_slug_and_rejects_stale_names_atomically() {
+  let (folder, mut db) = project();
+  let tool = tool(&mut db);
+  let body = checks(tool, false);
+  let id = create_here(&mut db, Name::new("Pipeline").unwrap(), &body, Timestamp::now()).unwrap();
   let before = OpenedPipeline::load(&db, id).unwrap();
-  let after = write::save_named_in(
+  let after = write::save_here_in(
     folder.path(),
     &before,
-    body.clone(),
+    &body,
     &Name::new("Delivery").unwrap(),
     &Allowed::default(),
   )
   .unwrap();
   assert_eq!(&*after.name, "Delivery");
   assert_eq!(&*after.slug, "pipeline");
+  assert_eq!(after.version.get(), 1, "a rename alone publishes no version");
   assert!(matches!(
-    write::save_named_in(
+    write::save_here_in(
       folder.path(),
       &before,
-      body.with_description("stale edit".into()),
+      &body.clone().with_description("stale edit".into()),
       &Name::new("Old editor").unwrap(),
       &Allowed::default()
     ),
-    Err(WriteError::Store(orchester_store::StoreError::DraftChanged(_)))
+    Err(WriteError::Store(StoreError::DraftChanged(_)))
   ));
   let current = OpenedPipeline::load(&db, id).unwrap();
   assert_eq!(&*current.name, "Delivery");
   assert!(current.body.description().is_empty());
+  assert_eq!(current.version.get(), 1);
+}
+
+/// The name `opened` is stored under, which a save that does not rename keeps.
+fn named(opened: &OpenedPipeline) -> Name {
+  Name::new(&opened.name).expect("a stored name")
 }

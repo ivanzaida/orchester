@@ -1,6 +1,8 @@
 //! The theme's roles resolve to the variables and type roles of `data/orchester2.pen` (accent graphite),
 //! in dark and light mode, and the mode switches while the app runs.
 
+#[path = "theme/agent_picker.rs"]
+mod agent_picker;
 #[path = "theme/appearance.rs"]
 mod appearance;
 #[path = "theme/archive.rs"]
@@ -15,6 +17,8 @@ mod ci;
 mod decision_test;
 #[path = "theme/dialog.rs"]
 mod dialog;
+#[path = "theme/flow.rs"]
+mod flow;
 #[path = "theme/hub.rs"]
 mod hub;
 #[path = "theme/instructions.rs"]
@@ -31,12 +35,16 @@ mod orchestrator;
 mod pipelines;
 #[path = "theme/projects.rs"]
 mod projects;
+#[path = "theme/runs_on_picker.rs"]
+mod runs_on_picker;
 #[path = "theme/side_question.rs"]
 mod side_question;
 #[path = "theme/skills.rs"]
 mod skills;
 #[path = "theme/startup.rs"]
 mod startup;
+#[path = "theme/step_strip.rs"]
+mod step_strip;
 #[path = "theme/task_form.rs"]
 mod task_form;
 #[path = "theme/team_state.rs"]

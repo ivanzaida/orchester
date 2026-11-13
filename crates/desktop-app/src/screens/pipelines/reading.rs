@@ -17,7 +17,7 @@ use orchester_core::id::{ProjectId, ResourceId};
 use super::{flow::FLOW_WIDTH, parts, state::Tab};
 use crate::{
   navigation::Navigation,
-  routes::{PipelineView, ProjectPage, Route},
+  routes::{PipelineView, PipelinesFilter, PipelinesView, ProjectPage, Route},
   theme::{ExtraSpacing, IconSize, PipelinesText},
   ui::{
     icon::{Icon, icon},
@@ -48,7 +48,10 @@ pub fn page(ctx: &mut Ctx, (project, pipeline): (ProjectId, ResourceId), tab: Ta
   let back = parts::back_link(
     "pipeline-parent",
     &ctx.t("pipelines.title"),
-    Press::Open(nav.to(Route::Project(project, ProjectPage::Pipelines))),
+    Press::Open(nav.to(Route::Project(
+      project,
+      ProjectPage::pipelines(PipelinesView::new(PipelinesFilter::All, Some(pipeline))),
+    ))),
   );
   let title = Row::new()
     .width(Dimension::Pct(100.0))

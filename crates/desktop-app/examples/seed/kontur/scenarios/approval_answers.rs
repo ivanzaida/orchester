@@ -14,6 +14,9 @@
 //! - an MCP call of an Autopilot step the reviewer was not sure about, and one of a Manual step not on its allowed list
 //!   (ORC-586: only Manual's headline says "not on its allowed list").
 //!
+//! `dangerous-auto-approve`: Kontur with *Dangerous auto-approve mode* on and *Ship the retry release*, whose three
+//! requests it approved.
+//!
 //! Its runs are recorded, not executed, as `cards-auto-mode`'s are: a step with a request that came to the person is
 //! recorded waiting for them (`cards::hold`).
 
@@ -180,8 +183,6 @@ const TASKS: [(&str, &[Asked], &str); 11] = [
 const RESETS_IN_MINUTES: i64 = 2 * 24 * 60;
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let catalogue = kontur.catalogue()?;
-  let pipeline = &catalogue.feature_delivery;
   // The project's reviewer: a Claude Code connection on its CLI's Default account, recorded and never run.
   let program = kontur.repo.join(".orchester").join("recorded").join("claude");
   let published = kontur.ago(7 * 24 * 60);
@@ -190,8 +191,49 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     ("Claude · Claude 2", AgentProvider::ClaudeCodeCli, &program),
     published,
   )?;
-  for (index, (title, asked, state)) in TASKS.into_iter().enumerate() {
-    let minutes = i64::try_from(TASKS.len() - index).expect("a short list") * 30;
+  seed_tasks(kontur, &TASKS)
+}
+
+/// What Dangerous auto-approve mode approved in one run, each at once (`docs/design/approval-modes.md`): a force-push,
+/// a delete outside the worktree and a plain test.
+const DANGEROUS: [Asked; 3] = [
+  (
+    "git push --force origin main",
+    Answered::Approved(AnswerKind::DangerousAutoApprove, None),
+  ),
+  (
+    "rm -rf ../shared-cache",
+    Answered::Approved(AnswerKind::DangerousAutoApprove, None),
+  ),
+  (
+    "cargo test -p webhooks",
+    Answered::Approved(AnswerKind::DangerousAutoApprove, None),
+  ),
+];
+
+/// `dangerous-auto-approve`: Kontur with *Dangerous auto-approve mode* on, as a person turned it on (the status bar's
+/// chip and Project settings › Runs on), and a run at work whose requests it approved (*Ship the retry release*: its
+/// Conversation's rows *Approved by Dangerous auto-approve mode*).
+pub fn dangerous(kontur: &mut Kontur) -> Result<(), SeedError> {
+  kontur
+    .db
+    .save_approve_mode(orchester_core::run::ApproveMode::DangerousAutoApprove)?;
+  seed_tasks(
+    kontur,
+    &[(
+      "Ship the retry release",
+      &DANGEROUS,
+      "requests Dangerous auto-approve mode approved",
+    )],
+  )
+}
+
+/// A Feature delivery run at work for each of `tasks`, its requests answered as each says.
+fn seed_tasks(kontur: &mut Kontur, tasks: &[(&'static str, &'static [Asked], &'static str)]) -> Result<(), SeedError> {
+  let catalogue = kontur.catalogue()?;
+  let pipeline = &catalogue.feature_delivery;
+  for (index, (title, asked, state)) in tasks.iter().copied().enumerate() {
+    let minutes = i64::try_from(tasks.len() - index).expect("a short list") * 30;
     let (created, started) = (kontur.ago(minutes + 20), kontur.ago(minutes));
     let mut task = kontur.task((title, title, &CRITERIA), Some(pipeline), created)?;
     let (run, invocation) = at_work(kontur, &mut task, pipeline, started)?;
@@ -240,7 +282,7 @@ fn answer(kontur: &mut Kontur, request: &PendingToolApproval, answered: Answered
       let decided_by = match kind {
         AnswerKind::Profile => DecidedBy::Permissions,
         AnswerKind::Reviewer => DecidedBy::Reviewer,
-        AnswerKind::Autopilot | AnswerKind::Person => DecidedBy::AutoApproved,
+        AnswerKind::Autopilot | AnswerKind::Person | AnswerKind::DangerousAutoApprove => DecidedBy::AutoApproved,
       };
       let decided = Timestamp::from_unix_millis(request.requested_at.unix_millis() + 2_000);
       kontur.db.claim_tool_approval(run, &request.id, decided_by, decided)?;

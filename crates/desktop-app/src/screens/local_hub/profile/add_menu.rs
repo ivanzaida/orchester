@@ -19,7 +19,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    menu::{MenuItem, menu_at_end, menu_panel},
+    menu::{MenuItem, menu, menu_panel},
   },
 };
 
@@ -99,6 +99,8 @@ where
     .element_ref(self.anchor.clone());
     let button = if locked {
       button.disabled()
+    } else if items.is_empty() {
+      button.unavailable_with_icon(ctx.t("local_hub.profile.nothingToAdd"))
     } else {
       button.on_click(move || toggle.update(|open| *open = !*open))
     };
@@ -120,6 +122,6 @@ where
       .with_children(rows);
     Column::new()
       .child(button)
-      .child(menu_at_end(self.anchor.clone(), self.open.clone(), panel))
+      .child(menu(self.anchor.clone(), self.open.clone(), panel))
   }
 }

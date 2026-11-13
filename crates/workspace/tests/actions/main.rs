@@ -145,6 +145,10 @@ impl Checkout {
       slug: (*slug).to_owned(),
       archived: false,
       revision: revision(1),
+      updated: orchester_workspace::team_config::Changed {
+        by: "Alice Moreau".to_owned(),
+        at: orchester_core::time::Timestamp::from_unix_millis(0),
+      },
       latest: Some(TeamVersion {
         number: orchester_core::resource::VersionNumber::FIRST,
         body: body.clone(),

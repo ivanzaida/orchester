@@ -134,7 +134,7 @@ fn invite_landing_sign_in_again_is_a_persons() {
   shows(&mut window, SIGN_IN_AGAIN);
 
   with_synthetic_input(|| window.press(SIGN_IN_AGAIN));
-  shows(&mut window, &format!("{SIGN_IN_AGAIN}-person-only"));
+  window.until("refused to the client", |window| window.refused_press().is_some());
   let services = window.launch.services().expect("services").clone();
   assert!(services.cloud.is_signed_in(), "still signed in");
 }

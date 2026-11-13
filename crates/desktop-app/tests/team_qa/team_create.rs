@@ -23,8 +23,8 @@ fn filled(state: State) -> (Window, TeamServer) {
   let (mut window, server) = prepared(state);
   window.navigation().go(form());
   window.until("the form", |window| window.texts("team-hub-new-create").is_some());
-  window.set("team-new-instruction-name", "Release notes");
-  window.set("team-new-instruction-text", "Write them for customers.");
+  window.set("team-new-instruction-name-input", "Release notes");
+  window.set("team-new-instruction-text-input", "Write them for customers.");
   (window, server)
 }
 
@@ -116,8 +116,12 @@ fn team_qa_create_a_skill_a_tool_and_an_mcp_server_are_the_servers_at_v1() {
   let (_, server) = made(
     HubFilter::Skills,
     &[
-      ("team-new-skill-name", "review-diff"),
-      ("team-new-skill-description", "Review a diff before it merges."),
+      ("team-new-skill-name-input", "review-diff"),
+      ("team-new-skill-description-input", "Review a diff before it merges."),
+      (
+        "team-new-skill-skill-md-input",
+        "# review-diff\n\nRead the diff file by file.",
+      ),
     ],
     "review-diff",
   );
@@ -135,8 +139,8 @@ fn team_qa_create_a_skill_a_tool_and_an_mcp_server_are_the_servers_at_v1() {
   let (_, server) = made(
     HubFilter::Tools,
     &[
-      ("team-new-tool-name", "cargo-check"),
-      ("team-new-tool-program", &program),
+      ("team-new-tool-name-input", "cargo-check"),
+      ("team-new-tool-program-input", &program),
     ],
     "cargo-check",
   );

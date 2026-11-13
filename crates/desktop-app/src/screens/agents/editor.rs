@@ -12,17 +12,20 @@ use lurq::{
     theme::SpacingSize,
   },
   components::{Column, Row, Text},
-  core::{ElementRef, Signal},
+  core::{ElementRef, Ref, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::AgentProfile;
+use orchester_store::ProjectDb;
 use orchester_workspace::{
   agents::{
     data::{ProfileEntry, ProjectAgents, VersionState},
     editor::{Action, Request},
   },
-  messages::Message,
+  background,
+  messages::{self, Message},
+  prompt_changes,
 };
 
 use super::{
@@ -36,7 +39,7 @@ use super::{
   work::{self, Allowed, Asked, Follow, Pending, Saved, Work},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, input_may_decide, may_press},
   project::{ShownProject, own::OwnChanges},
   screens::hub::{self, Head},
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
@@ -97,6 +100,8 @@ pub struct Editor {
   tried: Signal<bool>,
   /// Who pressed Publish: what it changes in the role's prompts is a person's, or automation's under their consent.
   gate: Option<InputGate>,
+  /// Whether publishing the saved draft changes its agents' prompts, as last read; `None` until read.
+  reaches_prompts: Ref<Option<bool>>,
 }
 
 impl Component for Editor {
@@ -148,6 +153,7 @@ impl Component for Editor {
       anchor: ctx.element_ref(),
       tried: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
+      reaches_prompts: ctx.create_ref(None),
     }
   }
 
@@ -156,6 +162,9 @@ impl Component for Editor {
     self.autosave.held.set(props.reading || props.load_error.is_some());
     self.autosave.listed.set(Some(props.listed.clone()));
     let state = self.state(&props);
+    self
+      .reaches_prompts
+      .set(publish_reaches_prompts(ctx, &props.project, state.saved.as_ref()));
     let saved = self.saved_state(ctx, &state);
     let head: Head = list::head(ctx, &props.listed, &props.nav).saved(saved);
     let pane = self.pane(ctx, &props, &state);
@@ -315,6 +324,14 @@ impl Editor {
     );
     let candidate = state.checked.as_ref().ok().cloned();
     button.on_click(move || {
+      // A new profile's responsibilities and role instructions reach its agents' prompts (ORC-30): a person's to
+      // create, or automation's under their consent; refused, the page stays as it was.
+      let reaches_prompts = candidate
+        .as_ref()
+        .is_some_and(|profile| !prompt_changes::profile(None, profile).is_empty());
+      if reaches_prompts && !may_press(gate.as_ref(), Guarded::PermissionWidening, PROMPT_CHANGE) {
+        return;
+      }
       tried.set(true);
       if let Some(profile) = &candidate {
         work.run(Request {
@@ -354,7 +371,16 @@ impl Editor {
       self.allowed.clone(),
     );
     let (entry, stale) = (entry.clone(), matches!(entry.state, VersionState::StaleDraft { .. }));
+    let reaches_prompts = self.reaches_prompts.clone();
     publish.on_click(move || {
+      // What reaches the role's prompts (ORC-30), or what is not known yet to leave them, is a person's to publish, or
+      // automation's under their consent; refused, the page stays as it was. The workspace checks it again.
+      if !stale
+        && reaches_prompts.get() != Some(false)
+        && !may_press(gate.as_ref(), Guarded::PermissionWidening, PROMPT_CHANGE)
+      {
+        return;
+      }
       let request = Request {
         existing: Some(entry.clone()),
         profile: entry.profile.clone(),
@@ -447,4 +473,31 @@ impl Editor {
       None
     }
   }
+}
+
+/// What the Agents page's Create and Publish do where they reach agents' prompts, as an MCP client refused reads it.
+const PROMPT_CHANGE: &str = "create or publish a profile change that reaches agents' prompts";
+
+/// Whether publishing the draft of `entry` changes its agents' prompts over its latest published version, read off the
+/// UI thread whenever the draft changes; `None` until it is read, or when it could not be.
+fn publish_reaches_prompts(ctx: &mut Ctx, project: &ShownProject, entry: Option<&ProfileEntry>) -> Option<bool> {
+  let root = project.open.repo_root.clone();
+  let draft = entry.map(|entry| (entry.id, entry.profile.clone()));
+  let read = ctx
+    .future((root, draft), |(root, draft)| async move {
+      let Some((id, profile)) = draft else {
+        return Ok(false);
+      };
+      background::run(move || {
+        let db = ProjectDb::open(&root)?;
+        prompt_changes::profile_in(&db, id, &profile)
+      })
+      .await?
+      .map(|changes| !changes.is_empty())
+      .map_err(|error| messages::store_error(&error))
+    })
+    .state()
+    .get();
+  // What an earlier draft read is not this one's answer.
+  read.data.filter(|_| !read.is_pending())
 }

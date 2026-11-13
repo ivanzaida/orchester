@@ -1,8 +1,10 @@
 # PV2-06 · Reorder steps in the flow: drag, ⋯ menu, keys
 
-- **Status:** blocked (PV2-01, PV2-05)
+- **Status:** done (2026-11-11; check 3 (review + design, one child) PASS and no blocking/major; D-021 and D-022 built; merged `915de1fb7`; follow-ups in PV2-17 items 25, 29–33)
 - **Kind:** UI
 - **Depends on:** PV2-01, PV2-05
+- **Branch:** `claude/pv2-06-reorder` (`1f3788272` … `4162e1d73`)
+- **Tokens:** 280.3M (out 461k) across 4 implementation rounds and 3 merges, review 1, a cancelled verification, check 2, check 3 (one cancelled)
 
 ## Goal
 

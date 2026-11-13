@@ -127,15 +127,38 @@ impl Trigger {
     let Some(action) = action else {
       return button;
     };
+    let discards = matches!(action, Action::Discard(_));
     let request = self.request(action);
     let (work, gate) = (self.work.clone(), self.gate.clone());
     button.on_click(move || {
+      if !may_decide(&gate, discards) {
+        return;
+      }
       let mut request = request.clone();
       request.initiate(&gate);
       request.stop.store(false, Ordering::Release);
       work.run_if_idle(request);
     })
   }
+}
+
+/// Whether the press being delivered may decide a step (`discards`: discard files): a person's always; window
+/// automation's where the gate admits it, never a discard. Refused, it is refused to the client that sent it and the
+/// step stays as it was; the work checks it again when it runs ([`super::work`]).
+fn may_decide(gate: &InputGate, discards: bool) -> bool {
+  let input = gate.local_input(input_source());
+  if discards && input.origin() != LocalOrigin::Native {
+    gate.refuse_press("discard local changes", Guarded::Person);
+    return false;
+  }
+  if !input.allowed() {
+    gate.refuse_press(
+      "decide a step of a local integration",
+      Guarded::LocalIntegrationQuestion,
+    );
+    return false;
+  }
+  true
 }
 
 pub(super) fn inspector(
@@ -172,7 +195,6 @@ struct Inspector {
   gate: Option<InputGate>,
   protected: parking_lot::Mutex<Option<Protected>>,
   agree: Signal<bool>,
-  refused: Signal<bool>,
   identity: Arc<parking_lot::Mutex<Option<ReviewIdentity>>>,
 }
 impl Component for Inspector {
@@ -182,7 +204,6 @@ impl Component for Inspector {
       gate: ctx.use_context(),
       protected: parking_lot::Mutex::new(None),
       agree: ctx.props::<Props>().acknowledgement.agree.clone(),
-      refused: ctx.props::<Props>().acknowledgement.refused.clone(),
       identity: ctx.props::<Props>().acknowledgement.identity.clone(),
     }
   }
@@ -220,7 +241,6 @@ impl Component for Inspector {
     let mut prior = self.identity.lock();
     if prior.as_ref() != Some(&identity) {
       self.agree.set(false);
-      self.refused.set(false);
       *prior = Some(identity);
     }
     drop(prior);
@@ -390,15 +410,7 @@ fn mode_button(ctx: &Ctx, props: &Props, (id, kind): (&str, ButtonKind), label: 
   ActionButton::new(id, kind, ctx.t(label))
     .fill_width()
     .on_click(move || {
-      let input = gate.local_input(input_source());
-      if !input.allowed() || (chosen == Mode::Discard && input.origin() != LocalOrigin::Native) {
-        let mut refused = refusal.clone();
-        refused.action = if chosen == Mode::Discard {
-          Action::DiscardRefused
-        } else {
-          Action::AuthorityRefused
-        };
-        work.run_if_idle(refused);
+      if !may_decide(&gate, chosen == Mode::Discard) {
         return;
       }
       if chosen != Mode::Review {

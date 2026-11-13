@@ -171,12 +171,11 @@ pub(super) fn discovery(ctx: &mut Ctx, upload: &Upload, (write, person): (&Signa
           Toggle::new(DISCOVERY, ToggleKind::Switch, on, words)
             .ring_room()
             .on_change(move |on| {
-              if allows.allows(DISCOVERY) {
+              if allows.allows("change whether a link writes orchester.toml") {
                 set.set(on);
               }
             }),
         )
-        .with_children(person.reason(ctx, DISCOVERY))
         .into()
     }
     DiscoveryState::Names => page::note(

@@ -5,14 +5,16 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
   components::{Row, SelectOption},
   core::{ElementRef, Signal},
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{
-  agents::data::ProjectAgents, app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections,
+  agents::team_tool::CallingPipeline, app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections,
   messages::Message,
 };
 
@@ -21,11 +23,14 @@ use super::{
   mode::Mode,
   work::Make,
 };
-use crate::ui::{
-  field::{FieldInput, SelectField},
-  message::message_text,
-  pressable::Focus,
-  tabs::{Segment, SegmentFace, segmented},
+use crate::{
+  screens::hub::profile_form::Offer,
+  ui::{
+    field::{FieldInput, SelectField},
+    message::message_text,
+    pressable::Focus,
+    tabs::{Segment, SegmentFace, segmented},
+  },
 };
 
 /// What every form reads when it is drawn.
@@ -38,10 +43,13 @@ pub(super) struct Shown<'a> {
   pub tried: bool,
   /// Create is being taken, or has been: the fields are not changed meanwhile.
   pub locked: bool,
-  /// What this computer has to offer a profile (its connections); `None` while it is read.
-  pub agents: Option<&'a ProjectAgents>,
+  /// What a profile's fields offer: this computer's connections and the resources its lists give (empty while they
+  /// are read).
+  pub offer: &'a Offer,
   /// What this computer's MCP servers and secrets are, which a local MCP server's form reads; `None` while it is read.
   pub connections: Option<&'a ProjectConnections>,
+  /// The team's pipelines, which a team tool's form lets call it; empty for another form.
+  pub pipelines: &'a [CallingPipeline],
   /// The name field, which has the focus when the form opens (`Name` is focused in A7–A12).
   pub first: &'a ElementRef,
   /// The name the team server refused as taken, though the list had no resource of it.
@@ -51,11 +59,23 @@ pub(super) struct Shown<'a> {
   pub published: Option<&'a NewTeamMcpServer>,
 }
 
+impl Shown<'_> {
+  /// How wide its rows' keys are: a create form's (A8 `vPoTQ`), or a panel's when it edits a resource in place, as
+  /// every other row of the hub's panels is (170, `P60rze` in `NDZXC`).
+  pub(super) const fn key(&self) -> Key {
+    if self.published.is_some() { Key::Wide } else { Key::Form }
+  }
+}
+
 /// What a kind's form gives the panel.
 pub(super) struct Body {
+  /// A section of its own over the rows' (a profile's *Role*).
+  pub lead: Option<Element>,
   pub rows: Vec<Row>,
-  /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
-  pub computer: Option<&'static str>,
+  /// Sections of their own under the rows' (an instruction's *Text*, a skill's *SKILL.md*).
+  pub after: Vec<Element>,
+  /// What each computer fills in afterwards; a local project has no one else.
+  pub computer: Option<Arc<str>>,
   /// What Create makes, when every field is valid.
   pub make: Option<Make>,
   /// Why Create stays off before it is pressed, as a key said at the bar's end: the name is the team's already, or
@@ -110,7 +130,7 @@ pub(in crate::screens::team_hub) enum Error {
 }
 
 impl Error {
-  fn words(&self, ctx: &Ctx) -> Arc<str> {
+  pub(super) fn words(&self, ctx: &Ctx) -> Arc<str> {
     match self {
       Self::Required => ctx.t("team_new.errors.required"),
       Self::Said(message) => message_text(ctx, message),
@@ -134,7 +154,7 @@ impl Error {
 }
 
 /// The row of `spec` with `control` at its end, and under its label what `error` says, else its own line.
-pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl Into<Element>) -> Row {
+pub(super) fn row(ctx: &Ctx, key: Key, spec: &Spec, error: Option<&Error>, control: impl Into<Element>) -> Row {
   let label = if spec.required {
     ctx.t_args("team_new.required", [("label", &*ctx.t(spec.label))])
   } else {
@@ -148,7 +168,7 @@ pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl I
     (None, Some(sub)) => Some(Sub::quiet(ctx.t(sub))),
     (None, None) => None,
   };
-  rows::row_in(Key::Form, &format!("team-new-{}-row", spec.id), &label, sub, control)
+  rows::row_in(key, &format!("team-new-{}-row", spec.id), &label, sub, control)
 }
 
 /// How a text control looks.
@@ -159,9 +179,8 @@ pub(super) enum Look {
   Mono,
   /// Several lines in Geist Mono.
   Lines,
-  /// A paragraph of prose, at least this high (`Input` `sTxOp` is 180 in A10, 64 in A11): the row's key stays at the
-  /// top.
-  Area(f32),
+  /// Names in Geist Mono under a placeholder in words, as *Run without asking* (A8 `vPoTQ`, A9).
+  Names,
 }
 
 /// A text field of `spec` typing into `value`, with `placeholder` (a key) while it is empty; `first` is the form's
@@ -180,7 +199,7 @@ pub(super) fn text(
     Look::Plain => input,
     Look::Mono => input.mono(),
     Look::Lines => input.compact_text_area().mono(),
-    Look::Area(height) => input.text_area().area_height(height),
+    Look::Names => input.mono().placeholder_style(TypographyStyle::Description),
   };
   if let Some(first) = first {
     input = input.element(first.clone());
@@ -197,12 +216,13 @@ pub(super) fn text(
 /// The row of `spec` whose control is a text field: it turns `danger` with `error`.
 pub(super) fn text_row(
   ctx: &mut Ctx,
+  key: Key,
   spec: &Spec,
   error: Option<&Error>,
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked): (Look, bool),
 ) -> Row {
-  text_row_with(ctx, spec, error, (value, placeholder), (look, locked, None))
+  text_row_with(ctx, (key, spec), error, (value, placeholder), (look, locked, None))
 }
 
 /// [`text_row`] of the form's name field, which has the focus when the form opens.
@@ -216,7 +236,7 @@ pub(super) fn name_row(
 ) -> Row {
   text_row_with(
     ctx,
-    spec,
+    (shown.key(), spec),
     error,
     (value, placeholder),
     (look, shown.locked, Some(shown.first)),
@@ -225,7 +245,7 @@ pub(super) fn name_row(
 
 fn text_row_with(
   ctx: &mut Ctx,
-  spec: &Spec,
+  (key, spec): (Key, &Spec),
   error: Option<&Error>,
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked, first): (Look, bool, Option<&ElementRef>),
@@ -237,13 +257,7 @@ fn text_row_with(
     (look, error.is_some_and(Error::is_error), locked),
     first,
   );
-  let row = row(ctx, spec, error, control);
-  // A tall field has its key at the top, as the design draws it; the rest are centered.
-  if matches!(look, Look::Area(_)) {
-    row.align_items(Alignment::Start)
-  } else {
-    row
-  }
+  row(ctx, key, spec, error, control)
 }
 
 /// A segmented choice: `options` are (value, label key); choosing one sets `value` to it.

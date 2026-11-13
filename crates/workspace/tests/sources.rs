@@ -226,17 +226,15 @@ fn published_pipeline(
   edit.update(&key, |step| step.kind = StepKind::Tool { tool: Some(tool) });
   drafted::add(&mut edit, &Listing::Step(key), step_source.clone());
   let body = edit.validate().expect("valid");
-  let pipeline = db
-    .create_resource(
+  let (pipeline, version) = db
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Feature delivery").expect("name"),
       &body,
       now,
     )
-    .expect("pipeline")
-    .id();
-  let version = db.publish_draft::<Pipeline>(pipeline, now).expect("published").number();
-  (pipeline, version)
+    .expect("pipeline");
+  (pipeline.id(), version.number())
 }
 
 #[test]

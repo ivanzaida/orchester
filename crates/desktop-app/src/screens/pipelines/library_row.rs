@@ -19,7 +19,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background,
   messages::Message,
-  pipelines::library::{LibraryEntry, VersionState, make_default_in},
+  pipelines::library::{LibraryEntry, make_default_in},
   sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
@@ -27,6 +27,7 @@ use orchester_workspace::{
 use crate::{
   navigation::Navigation,
   routes::{PipelineView, ProjectPage, Route},
+  screens::hub::team,
   theme::{ExtraSpacing, GroupText, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -44,7 +45,7 @@ pub struct RowProps {
   /// The project's repository, where *Make default* stores the default.
   pub root: std::path::PathBuf,
   pub entry: LibraryEntry,
-  /// The team's configuration while the project is shared: its pipelines are not changed here.
+  /// The team's configuration while the project is shared: only an admin changes its pipelines.
   pub team: Option<TeamConfiguration>,
 }
 impl DevtoolsInspectable for RowProps {}
@@ -81,8 +82,9 @@ impl Component for LibraryRow {
     if let Some(error) = make_default.state().get().error {
       row = row.toned_hint(message_text(ctx, &error), HintTone::Danger);
     }
-    // A team's pipeline is duplicated or made the default nowhere here.
-    if !matches!(entry.state, VersionState::DraftOnly) && props.team.is_none() {
+    // A member of a shared project duplicates none of the team's pipelines; an admin's Duplicate goes to the team
+    // server.
+    if team::may_change(props.team.as_ref()) {
       row = row.end(self.menu(ctx, &props, &make_default));
     }
     let row = row.end(state(ctx, entry, &id));
@@ -188,34 +190,23 @@ fn chain(ctx: &Ctx, entry: &LibraryEntry) -> Arc<str> {
 
 /// The version state over its tasks and age, both at the row's end (`State` `T5CHp`).
 fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
-  let (words, glyph, color) = match entry.state {
-    VersionState::DraftOnly => (ctx.t("pipelines.draftOnly"), Icon::Pencil, PaletteColor::TextMuted),
-    VersionState::Published(v) => (
-      ctx.t_args("pipelines.published", [("version", v.get().to_string())]),
-      Icon::CircleCheck,
-      PaletteColor::Success,
-    ),
-    VersionState::PublishedWithDraft(v) => (
-      ctx.t_args("pipelines.withDraft", [("version", v.get().to_string())]),
-      Icon::CircleCheck,
-      PaletteColor::Success,
-    ),
-  };
+  let (words, glyph, color) = (
+    ctx.t_args("pipelines.published", [("version", entry.version.get().to_string())]),
+    Icon::CircleCheck,
+    PaletteColor::Success,
+  );
   let tasks = if entry.used_by == 0 {
     ctx.t("pipelines.notUsed")
   } else {
     ctx.t_args("pipelines.tasks", [("count", entry.used_by.to_string())])
   };
-  let meta = match entry.last_published {
-    Some(at) => ctx.t_args(
-      "pipelines.rowMeta",
-      [
-        ("tasks", tasks.to_string()),
-        ("age", super::library::age(ctx, at).to_string()),
-      ],
-    ),
-    None => tasks,
-  };
+  let meta = ctx.t_args(
+    "pipelines.rowMeta",
+    [
+      ("tasks", tasks.to_string()),
+      ("age", super::library::age(ctx, entry.last_published).to_string()),
+    ],
+  );
   Column::new()
     .id(format!("{id}-state"))
     .width(lurq::node::dimension::Dimension::Px(STATE_WIDTH))

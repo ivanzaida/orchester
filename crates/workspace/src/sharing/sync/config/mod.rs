@@ -5,12 +5,14 @@
 //! change goes to the server at once (`crate::sharing::team_edit`). Share uploads the project's own configuration
 //! ([`upload`]).
 
+mod pipeline;
 mod server;
 mod share_fill_ins;
 mod share_mcp;
 pub(crate) mod team_body;
 mod upload;
 
+pub(crate) use self::pipeline::{pipeline_content, pipeline_executors};
 pub use self::{
   server::ConfigServer,
   share_fill_ins::{FillInOutcome, ShareFillIns},

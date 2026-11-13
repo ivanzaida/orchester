@@ -15,7 +15,7 @@ mod computer;
 mod edit;
 mod edit_view;
 mod fix;
-mod from_team;
+pub(super) mod from_team;
 mod modes;
 mod words;
 
@@ -88,9 +88,6 @@ impl PartialEq for Props {
   }
 }
 
-/// The id the person-only check of a fix is made under.
-const FIX: &str = "team-hub-fix";
-
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<McpPanel>(&format!("team-hub-mcp-{}", props.entry.id), props)
 }
@@ -146,17 +143,11 @@ impl Component for McpPanel {
       switch: self.switch(entry.id),
     };
     let mode = self.mode(&props);
-    let parts = self
-      .parts(ctx, &props, mode)
-      .unwrap_or_else(|| self.plain_parts(ctx, &props, (busy, &press)));
+    let parts = self.parts(ctx, &props, (busy, &press));
     let chips = panel::chips_of(ctx, entry, parts.chips.badges, parts.chips.end);
     let computer = computer::section(ctx, &view);
     let (above, from_team, bar) = (parts.above, parts.from_team, parts.bar);
-    let edit_button = (mode == Mode::Plain).then(|| self.edit_button(ctx, &props)).flatten();
-    let more = (mode == Mode::Plain)
-      .then(|| archive::menu(ctx, &props.repo_root, entry, props.team.may_change))
-      .flatten();
-    let edit_button = panel::with_more(edit_button, more);
+    let more = archive::menu(ctx, &props.repo_root, entry, props.team.may_change);
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -168,7 +159,7 @@ impl Component for McpPanel {
         ctx,
         entry,
         words::head_line(ctx, now, entry, sheet),
-        edit_button,
+        more,
       ))
       .with_children(above)
       .child(chips)
@@ -185,7 +176,6 @@ impl Component for McpPanel {
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
-      self.person.reason(ctx, secret::SAVE),
     );
     Column::new()
       .id("team-hub-panel")
@@ -212,7 +202,7 @@ impl McpPanel {
     let person = self.person.clone();
     let guarded = |action: Arc<dyn Fn() + Send + Sync>| {
       Press::run(move || {
-        if person.allows(FIX) {
+        if person.allows("fix what a team MCP server needs on this computer") {
           action();
         }
       })
@@ -247,18 +237,16 @@ impl McpPanel {
     Arc::new(move |now| {
       if !now {
         off.run(server);
-      } else if person.allows(FIX) {
+      } else if person.allows("fix what a team MCP server needs on this computer") {
         on.run(server);
       }
     })
   }
 
-  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong
-  /// with a secret's value shows in its dialog.
+  /// Why the last fix did nothing: what the workspace refused with. What went wrong with a secret's value shows in its
+  /// dialog.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    if let Some(reason) = self.actions.refused() {
-      return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
-    }
-    self.person.reason(ctx, FIX)
+    let reason = self.actions.refused()?;
+    Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into())
   }
 }

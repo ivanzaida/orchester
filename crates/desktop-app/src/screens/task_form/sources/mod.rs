@@ -42,7 +42,10 @@ use super::{
 };
 use crate::{
   mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
+  screens::{
+    connections::widen::{WidenConfirm, WidenLook, WidenProps},
+    pipeline_link::PipelineLinks,
+  },
   theme::{ExtraSpacing, ExtraTypography, sources_scrollbar},
   ui::{
     add_source::{AddSource, AddSourceProps, Asked, Layout},
@@ -74,6 +77,8 @@ pub struct SourcesProps {
   pub project: orchester_core::id::ProjectId,
   /// Where the project's own sources are listed, in their rows (`Folder · Kontur`).
   pub project_name: Arc<str>,
+  /// Where *View pipeline* opens the pipeline.
+  pub pipeline_links: PipelineLinks,
   /// The stored task, whose sources are saved as they change; `None` for a new task.
   pub task: Option<TaskId>,
   /// The published pipeline version the task runs.
@@ -91,12 +96,14 @@ impl PartialEq for SourcesProps {
       &self.repo_root,
       self.task,
       self.pipeline,
+      self.pipeline_links,
       self.locked,
       self.drafted.id(),
     ) == (
       &other.repo_root,
       other.task,
       other.pipeline,
+      other.pipeline_links,
       other.locked,
       other.drafted.id(),
     )

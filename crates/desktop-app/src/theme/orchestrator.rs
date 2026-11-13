@@ -34,9 +34,6 @@ pub enum OrchestratorText {
   Line,
   /// 13/600 `text_primary`, 1.3: what a decision card asks (`Question` in `3 · Decisions` `bxJZp`).
   Question,
-  /// Geist Mono 10.5 `text_muted`, 1.3: a plan's use in the runs-on picker (`sP8cS` in `v6mWp8`), an API provider's
-  /// tokens and *no plan limit* (`AJwSk`, `xzvGo` in `AZp3I`), the model over its efforts (`NPHfB`).
-  PlanUse,
   /// 12 `text_muted`, 1.3: what a fact of a decision card is (`Key` in `bxJZp`).
   FactKey,
   /// 12 `text_secondary`, 1.3: a fact's value (`Value` in `bxJZp`).
@@ -98,13 +95,22 @@ pub enum OrchestratorText {
   LeadsTipOrder,
   /// 11 `text_inverse`, 1.3: the hint at a Leads chip's tooltip's foot (`j1E7E`), at [`LEADS_HINT_OPACITY`].
   LeadsTipHint,
+  /// Mono 12 `text_muted`, 1.5: what a tool request asked, in the Orchestrator's answer under its line (`TBozG`,
+  /// `XZVR6` in `ICzi3`).
+  RequestAsked,
+  /// 12 `text_muted`, 1.5: why the Orchestrator is not sure of a request (`JIvk5` in `ICzi3`), as an answered wait's
+  /// question (`qqssz` in `Jzqle`).
+  RequestDoubt,
+  /// 12.5 `text_secondary`, 1.5: the Orchestrator's reason, the words it told the agent or its recommendation, under a
+  /// tool request's line (`nAFS9`, `O8p4u6`, `GESeJ` in `ICzi3`).
+  RequestSaid,
 }
 
 /// The hint at a Leads chip's tooltip's foot, *× stops watching* (`j1E7E` in `X93D8T`).
 pub const LEADS_HINT_OPACITY: f32 = 0.7;
 
 impl OrchestratorText {
-  pub const ALL: [Self; 35] = [
+  pub const ALL: [Self; 37] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -112,7 +118,6 @@ impl OrchestratorText {
     Self::Suggestion,
     Self::Line,
     Self::Question,
-    Self::PlanUse,
     Self::FactKey,
     Self::FactValue,
     Self::FactLink,
@@ -140,6 +145,9 @@ impl OrchestratorText {
     Self::LeadsTipTitle,
     Self::LeadsTipOrder,
     Self::LeadsTipHint,
+    Self::RequestAsked,
+    Self::RequestDoubt,
+    Self::RequestSaid,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -155,7 +163,6 @@ impl OrchestratorText {
       Self::Suggestion => "orchestrator_suggestion",
       Self::Line => "orchestrator_line",
       Self::Question => "orchestrator_question",
-      Self::PlanUse => "orchestrator_plan_use",
       Self::FactKey => "orchestrator_fact_key",
       Self::FactValue => "orchestrator_fact_value",
       Self::FactLink => "orchestrator_fact_link",
@@ -183,6 +190,9 @@ impl OrchestratorText {
       Self::LeadsTipTitle => "orchestrator_leads_tip_title",
       Self::LeadsTipOrder => "orchestrator_leads_tip_order",
       Self::LeadsTipHint => "orchestrator_leads_tip_hint",
+      Self::RequestAsked => "orchestrator_request_asked",
+      Self::RequestDoubt => "orchestrator_request_doubt",
+      Self::RequestSaid => "orchestrator_request_said",
     }
   }
 
@@ -195,7 +205,6 @@ impl OrchestratorText {
       Self::Suggestion => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Line => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Question => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::PlanUse => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::FactKey => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::FactValue => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::FactLink => style(
@@ -229,6 +238,9 @@ impl OrchestratorText {
       Self::LeadsTipTitle => style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_inverse),
       Self::LeadsTipOrder => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_inverse),
       Self::LeadsTipHint => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_inverse),
+      Self::RequestAsked => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted)),
+      Self::RequestDoubt => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
+      Self::RequestSaid => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
     }
   }
 }
@@ -254,10 +266,12 @@ pub enum OrchestratorSpacing {
   StartComposer,
   /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`).
   LeftOpen,
+  /// 24: a tool request's card in from the chat column's start, under its wait (`ICzi3` d in `mPw5l`).
+  RequestCard,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 9] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
@@ -266,6 +280,7 @@ impl OrchestratorSpacing {
     Self::LinkColumns,
     Self::StartComposer,
     Self::LeftOpen,
+    Self::RequestCard,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -282,6 +297,7 @@ impl OrchestratorSpacing {
       Self::LinkColumns => "orchestrator_link_columns",
       Self::StartComposer => "orchestrator_start_composer",
       Self::LeftOpen => "orchestrator_left_open",
+      Self::RequestCard => "orchestrator_request_card",
     }
   }
 
@@ -295,6 +311,7 @@ impl OrchestratorSpacing {
       Self::LinkColumns => 12.0,
       Self::StartComposer => 28.0,
       Self::LeftOpen => 27.0,
+      Self::RequestCard => 24.0,
     }
   }
 }
@@ -312,24 +329,6 @@ pub fn chat_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
 /// the chat, as the composer's is, wherever the lane takes room.
 pub fn beside_chat_lane(scrollbar: &ScrollBarStyle) -> f32 {
   OrchestratorSpacing::PageSide.value() - (scrollbar.width + scrollbar.resolved_edge_inset() * 2.0)
-}
-
-/// The runs-on picker's models' scrollbar (`Scrollbar` `Px0Pz` in `GaA7N`): 3 wide, radius 2, at the list's end, 2
-/// from its top and bottom.
-const PICKER_SCROLLBAR_WIDTH: f32 = 3.0;
-const PICKER_SCROLLBAR_RADIUS: f32 = 2.0;
-const PICKER_SCROLLBAR_END: f32 = 2.0;
-
-/// `base`, the theme's scrollbar (its `border_strong` thumb), as the runs-on picker's models' list draws it.
-pub fn picker_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
-  ScrollBarStyle {
-    width: PICKER_SCROLLBAR_WIDTH,
-    thumb_radius: PICKER_SCROLLBAR_RADIUS,
-    track_radius: PICKER_SCROLLBAR_RADIUS,
-    edge_inset: Some(0.0),
-    end_inset: Some(PICKER_SCROLLBAR_END),
-    ..base.clone()
-  }
 }
 
 /// `base`, the theme's thin scrollbar (its 4 wide `border_strong` thumb, round), as a /watch picker's list draws it

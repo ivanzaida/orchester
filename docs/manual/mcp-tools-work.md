@@ -56,29 +56,46 @@ Each agent profile has an **approval mode** (`save_profile_draft`'s `permissions
 tool request at once, except work outside the run's worktree, its Sources and the agent's temp folders, pushes to a
 remote and refs other than the run's branch, which still come to the person; **Manual** runs the profile's allowed
 commands, asks the project's reviewer about the rest, and leaves what the reviewer denies or is unsure about to the
-person. A run's step is in Autopilot only when its profile says Autopilot, the project allows it (*Allow Autopilot for
-agents in this project*, Project settings › Runs) and the run was not switched to Manual. Decisions (questions, plans,
+person. A run's step is in Autopilot only when its profile says Autopilot, the project allows it (its *Approve mode*,
+Project settings › Runs, is not Manual) and the run was not switched to Manual. Decisions (questions, plans,
 limits, conflicts) always come to the person in both modes.
 
 ### `get_approvals` — read-only
 
 A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
-- `allow_autopilot` — *Allow Autopilot for agents in this project*.
+- `approve_mode` — the project's *Approve mode*: `manual`, `autopilot` or `dangerous_auto_approve` (every tool
+  request of the project's agents is approved at once).
+- `allow_autopilot` — whether Autopilot is allowed: `true` in `autopilot` and `dangerous_auto_approve`.
 - `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
   or `unavailable` with why the project has none.
 - `runs` — each run of the project that has not ended: `id`, `number`, `task`, `link`, and `approval_mode`: `{"mode":
   "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
-  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
+  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so; while the project is
+  in `dangerous_auto_approve`, `{"mode": "dangerous_auto_approve", "because": "project"}` for every run. Beside it,
+  `switched_to_manual`: whether the run switched itself to Manual, which applies again once the project leaves
+  Dangerous auto-approve.
 
 **Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
 
 ### `set_allow_autopilot` — changes data · person only to turn on
 
-Turns the project's *Allow Autopilot for agents in this project* on or off. `false` is always taken: every agent of
-the project then runs as Manual. `true` is refused as `person_only` whatever automation may do: only a person allows
-Autopilot, in Project settings › Runs (asking for it while it is on already changes nothing). Parameters: `project`,
+The former *Allow Autopilot* switch, kept for existing clients. `false` moves the project's Approve mode to `manual`
+(from `dangerous_auto_approve` too) and is always taken: every agent of the project then runs as Manual. `true` asks
+for `autopilot` and is refused as `person_only` from `manual` whatever automation may do: only a person allows
+Autopilot, in Project settings › Runs (asking for it while Autopilot is allowed already changes nothing). Parameters: `project`,
 `allow_autopilot` (boolean) — both required. Answers as `get_approvals`.
+
+### `set_approve_mode` — changes data · person only to move up
+
+Moves the project's *Approve mode*: `manual`, `autopilot` or `dangerous_auto_approve`. In `dangerous_auto_approve` every
+tool request of every agent of the project's runs is approved at once: no allowed list, hold rule, reviewer, person or
+Orchestrator is asked, and each answer is recorded as `dangerous_auto_approve` (`get_run`'s
+`requests[].answered.kind`). Moving it down, or asking for what it is already, is always taken; a move decided on a mode a person changed meanwhile is
+refused as `changed_outside`; moving it up is refused
+as `person_only` whatever automation may do: only a person moves it up, in Project settings › Runs (to
+`dangerous_auto_approve` through its confirmation). Parameters: `project`, `approve_mode` — both required. Answers as
+`get_approvals`.
 
 ### `set_reviewer` — changes data · gate AA, and AP for another reviewer
 
@@ -633,9 +650,9 @@ runs here recorded nothing of it is refused as `team_task_unrecorded`.
 
 ### `duplicate_pipeline` — changes data · gate AP unless identical
 
-Copies a pipeline's latest published version into a new pipeline and publishes it as v1, optionally giving agent
-steps other published profiles. A copy that is not identical to its source (other profiles included) is
-`person_only` unless AP is on.
+Copies a pipeline's latest version into a new pipeline and publishes it as v1, or stores nothing when it is refused,
+optionally giving agent steps other published profiles. A copy that is not identical to its source (other profiles
+included) is `person_only` unless AP is on.
 
 | Parameter       | Type                 | Req. | Description                                                                         |
 |-----------------|----------------------|------|-------------------------------------------------------------------------------------|

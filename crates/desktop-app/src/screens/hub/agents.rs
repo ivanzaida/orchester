@@ -23,18 +23,34 @@ use crate::{
   ui::{
     icon::Icon,
     state::glyph_tile,
-    tabs::{PageTab, page_tabs},
+    tabs::{PageTab, page_tabs, page_tabs_divided},
   },
 };
 
 /// The head's height (`Header` `NRqwv`).
 const HEAD_HEIGHT: f32 = 32.0;
 
-/// One tab of the hub: its kind, how many it holds, and what a press does.
+/// One tab of a hub: its name (in its element id and the route), its words' key, how many it holds, what a press does,
+/// and whether it is set apart from the tabs before it by a rule.
 pub(crate) struct Tab {
-  pub filter: HubFilter,
+  pub name: &'static str,
+  pub label: &'static str,
   pub count: TabCount,
   pub open: Arc<dyn Fn() + Send + Sync>,
+  pub apart: bool,
+}
+
+impl Tab {
+  /// The tab of the Agents hub's kind `filter`; *Archived* is set apart from the kinds (L13 `moPNo`).
+  pub(crate) fn of(filter: HubFilter, count: TabCount, open: Arc<dyn Fn() + Send + Sync>) -> Self {
+    Self {
+      name: filter.name(),
+      label: label_key(filter),
+      count,
+      open,
+      apart: filter == HubFilter::Archived,
+    }
+  }
 }
 
 /// What a tab says after its label.
@@ -54,10 +70,12 @@ impl TabCount {
   }
 }
 
-/// What fills the frame. `prefix` names its elements (`team-hub`, `local-hub`).
+/// What fills the frame. `prefix` names its elements (`team-hub`, `local-hub`, `pipeline-hub`); `title` is the key of
+/// the page's name and `current` the name of the open tab.
 pub(crate) struct Frame {
   pub prefix: &'static str,
-  pub filter: HubFilter,
+  pub title: &'static str,
+  pub current: &'static str,
   /// How the project stands, at the head's right: the team and its server, or that the project is local.
   pub status: Vec<Element>,
   /// *New <kind>* ([`super::new_button`]); none for a member of the team.
@@ -73,11 +91,11 @@ pub(crate) struct Frame {
 /// The hub's page.
 pub(crate) fn frame(ctx: &mut Ctx, frame: Frame) -> Element {
   let prefix = frame.prefix;
-  let head = head(ctx, prefix, (frame.status, frame.new));
-  let tabs = tabs(ctx, prefix, frame.filter, frame.tabs);
+  let head = head(ctx, (prefix, frame.title), (frame.status, frame.new));
+  let tabs = tabs(ctx, prefix, frame.current, frame.tabs);
   Column::new()
     .id(format!("screen-{prefix}"))
-    .describe("filter", frame.filter.name())
+    .describe("filter", frame.current)
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .padding(
@@ -103,8 +121,8 @@ pub(crate) fn frame(ctx: &mut Ctx, frame: Frame) -> Element {
     .into()
 }
 
-/// *Agents*, and at its right the status and *New*.
-fn head(ctx: &Ctx, prefix: &str, (status, new): (Vec<Element>, Option<Element>)) -> Row {
+/// The page's name, and at its right the status and *New*.
+fn head(ctx: &Ctx, (prefix, title): (&str, &str), (status, new): (Vec<Element>, Option<Element>)) -> Row {
   Row::new()
     .id(format!("{prefix}-head"))
     .width(Dimension::Pct(100.0))
@@ -112,7 +130,7 @@ fn head(ctx: &Ctx, prefix: &str, (status, new): (Vec<Element>, Option<Element>))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(
-      Text::new(&ctx.t("hub.title"))
+      Text::new(&ctx.t(title))
         .id(format!("{prefix}-title"))
         .variant(TypographyStyle::Heading)
         .flex(1.0),
@@ -128,26 +146,35 @@ fn head(ctx: &Ctx, prefix: &str, (status, new): (Vec<Element>, Option<Element>))
 
 /// The kinds as the app's page tabs (as on Tasks), nothing else on the line. A tab whose count is still read shows the
 /// count's bone, so the tabs keep their place when the counts arrive.
-fn tabs(ctx: &mut Ctx, prefix: &str, current: HubFilter, tabs: Vec<Tab>) -> Stack {
-  let tabs: Vec<PageTab> = tabs
-    .into_iter()
-    .map(|tab| {
-      let open = tab.open;
-      let page_tab = PageTab::new(
-        format!("{prefix}-filter-{}", tab.filter.name()),
-        ctx.t(label_key(tab.filter)),
-        tab.filter == current,
-        move || open(),
-      )
-      .compact();
-      match tab.count {
-        TabCount::Counted(count) => page_tab.count(count, false),
-        TabCount::Reading => page_tab.count_reading(),
-        TabCount::Unknown => page_tab,
-      }
-    })
-    .collect();
-  page_tabs(ctx, &format!("{prefix}-filter"), tabs)
+fn tabs(ctx: &mut Ctx, prefix: &str, current: &str, tabs: Vec<Tab>) -> Stack {
+  let (apart, kinds): (Vec<Tab>, Vec<Tab>) = tabs.into_iter().partition(|tab| tab.apart);
+  let shown = |ctx: &mut Ctx, tabs: Vec<Tab>| -> Vec<PageTab> {
+    tabs
+      .into_iter()
+      .map(|tab| {
+        let open = tab.open;
+        let page_tab = PageTab::new(
+          format!("{prefix}-filter-{}", tab.name),
+          ctx.t(tab.label),
+          tab.name == current,
+          move || open(),
+        )
+        .compact();
+        match tab.count {
+          TabCount::Counted(count) => page_tab.count(count, false),
+          TabCount::Reading => page_tab.count_reading(),
+          TabCount::Unknown => page_tab,
+        }
+      })
+      .collect()
+  };
+  let (kinds, apart) = (shown(ctx, kinds), shown(ctx, apart));
+  if apart.is_empty() {
+    page_tabs(ctx, &format!("{prefix}-filter"), kinds)
+  } else {
+    // Archived is set apart from the kinds by a rule (L13 `moPNo`).
+    page_tabs_divided(ctx, &format!("{prefix}-filter"), kinds, apart)
+  }
 }
 
 const fn label_key(filter: HubFilter) -> &'static str {
@@ -158,6 +185,7 @@ const fn label_key(filter: HubFilter) -> &'static str {
     HubFilter::Instructions => "hub.filter.instructions",
     HubFilter::Skills => "hub.filter.skills",
     HubFilter::Tools => "hub.filter.tools",
+    HubFilter::Memory => "hub.filter.memory",
     HubFilter::Archived => "hub.filter.archived",
   }
 }
@@ -193,6 +221,7 @@ pub(crate) const fn glyph_of(filter: HubFilter) -> Icon {
     HubFilter::Instructions => Icon::FileText,
     HubFilter::Skills => Icon::Sparkles,
     HubFilter::Tools => Icon::Wrench,
+    HubFilter::Memory => Icon::Brain,
     HubFilter::Archived => Icon::Archive,
   }
 }
@@ -206,6 +235,7 @@ pub(crate) const fn empty_words(filter: HubFilter) -> (&'static str, &'static st
     HubFilter::Instructions => ("hub.empty.instructions.title", "hub.empty.instructions.detail"),
     HubFilter::Skills => ("hub.empty.skills.title", "hub.empty.skills.detail"),
     HubFilter::Tools => ("hub.empty.tools.title", "hub.empty.tools.detail"),
+    HubFilter::Memory => ("memory.tabs.empty.activeTitle", "memory.tabs.empty.activeBody"),
     HubFilter::Archived => ("hub.empty.archived.title", "hub.empty.archived.detail"),
   }
 }

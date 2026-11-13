@@ -1,5 +1,5 @@
-//! New pipeline (`04 · New pipeline` `uHPNu`): a sub-page under `← Pipelines` with *Cancel* and *Create draft v1*
-//! in its header; the pipeline's name, slug and description, and where draft v1 starts from (`super::new_start`). A
+//! New pipeline (`04 · New pipeline` `uHPNu`): a sub-page under `← Pipelines` with *Cancel* and *Create v1* in its
+//! header; the pipeline's name, slug and description, and where v1 starts from (`super::new_start`). A
 //! name whose slug another pipeline has says so on the Slug row with *Open <name>* (`04b` `I49xek`); a library row's
 //! *Duplicate* opens it with *Copy a pipeline* chosen.
 use lurq::{
@@ -24,7 +24,7 @@ use orchester_workspace::{
   messages,
   pipelines::{
     create::{self, Start},
-    library::{LibraryEntry, StarterText, VersionState, library_in},
+    library::{LibraryEntry, StarterText},
   },
 };
 use parking_lot::Mutex;
@@ -53,12 +53,12 @@ const FIELD_WIDTH: f32 = 260.0;
 struct Created(ProjectId, ResourceId);
 impl DevtoolsInspectable for Created {}
 
-/// Where draft v1 starts from: the starter, a copy of a published pipeline, or no steps.
+/// Where v1 starts from: the starter or a copy of a published pipeline. No steps is not offered: it can never be
+/// saved (D-032, D-040).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Begin {
   Starter,
   Copy,
-  Empty,
 }
 impl DevtoolsInspectable for Begin {}
 
@@ -74,7 +74,6 @@ impl Component for NewPipeline {
   type Props = ShownProject;
   fn create(ctx: &mut Ctx) -> Self {
     let (start, copy) = match Navigation::of(ctx).route_now() {
-      Route::Project(_, ProjectPage::NewEmptyPipeline) => (Begin::Empty, String::new()),
       Route::Project(_, ProjectPage::CopyPipeline(id)) => (Begin::Copy, id.to_string()),
       _ => (Begin::Starter, String::new()),
     };
@@ -92,18 +91,18 @@ impl Component for NewPipeline {
     let save = create_action(ctx, &project);
     self.follow(ctx, &save);
     let id = project.open.project.id();
+    // A team project's pipelines to copy are the team's, as this session read them.
+    let workspace = crate::services::Services::of(ctx).workspace;
     let listed = ctx
-      .future(project.open.repo_root, |root| async move {
-        background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+      .future(project.open.repo_root, move |root| {
+        let workspace = workspace.clone();
+        async move { background::run(move || workspace.pipeline_library(&root).map_err(|e| e.message())).await? }
       })
       .state()
       .get();
     let entries = listed.data.clone().unwrap_or_default();
-    let copies: Vec<_> = entries
-      .iter()
-      .filter(|p| !matches!(p.state, VersionState::DraftOnly))
-      .cloned()
-      .collect();
+    // Every pipeline is published (D-032), so each can be copied.
+    let copies: Vec<_> = entries.clone();
     let collision = orchester_workspace::pipelines::library::matching_name(&entries, &self.name.get()).cloned();
     let head = self.header(ctx, id, &save, collision.is_some());
     let pipeline = self.pipeline_group(ctx, id, collision.as_ref());
@@ -154,11 +153,10 @@ impl NewPipeline {
     match self.start.get() {
       Begin::Starter => Some(Start::Starter),
       Begin::Copy => self.copy.get().parse().ok().map(Start::Copy),
-      Begin::Empty => Some(Start::Empty),
     }
   }
 
-  /// `← Pipelines`, the title with why it cannot be created yet, *Cancel* and *Create draft v1* (`Header` `Bh02q`).
+  /// `← Pipelines`, the title with why it cannot be created yet, *Cancel* and *Create v1* (`Header` `Bh02q`).
   fn header(&self, ctx: &mut Ctx, project: ProjectId, save: &CreateAction, collision: bool) -> Element {
     let nav = Navigation::of(ctx);
     let (name, description) = (self.name.get(), self.description.get());
@@ -262,7 +260,7 @@ impl NewPipeline {
   }
 }
 
-pub(super) fn starter(ctx: &Ctx) -> StarterText {
+pub(in crate::screens) fn starter(ctx: &Ctx) -> StarterText {
   StarterText::new(|step| {
     let area = match step {
       StarterStep::Research => "research",
@@ -286,13 +284,15 @@ type CreateAction = lurq::app::ctx::FutureAction<(String, String, Start), Create
 fn create_action(ctx: &mut Ctx, project: &ShownProject) -> CreateAction {
   let root = project.open.repo_root.clone();
   let project_id = project.open.project.id();
-  let changes = crate::services::Services::of(ctx).changes;
+  let services = crate::services::Services::of(ctx);
+  let (changes, servers) = (services.changes, services.servers);
   let starter = starter(ctx);
   ctx.future_action(move |(name, description, start): (String, String, Start)| {
-    let (root, starter, changes) = (root.clone(), starter.clone(), changes.clone());
+    let (root, starter, changes, servers) = (root.clone(), starter.clone(), changes.clone(), servers.clone());
     async move {
+      // In a team project the new pipeline waits for the team server's answer (D-043): the action is pending meanwhile.
       background::run(move || {
-        let id = create::create_in(&root, &name, &description, start, &starter)?;
+        let id = create::create_in((&root, &servers), &name, &description, start, &starter)?;
         changes.record(project_id, orchester_workspace::tasks::outside::Outside::Pipelines);
         Ok(Created(project_id, id))
       })

@@ -39,6 +39,7 @@ mod joining;
 mod limits;
 mod local_archive;
 mod local_integration;
+mod local_rename;
 mod mcp_servers;
 mod memory;
 mod merge_attempts;
@@ -70,6 +71,7 @@ mod organization;
 mod organized_drafts;
 mod owned_records;
 mod permission_events;
+mod pipeline_publishes;
 mod plan_limits;
 mod plans;
 mod project_rules;
@@ -351,6 +353,28 @@ pub enum ProjectMigration {
   TeamOutbox,
   /// A local project's drafts of its published profiles, instructions, skills and tools dropped.
   LocalDrafts,
+  /// Pipeline drafts deleted, and every pipeline with no version with what names it.
+  PipelineDrafts,
+  /// The `permissions` rebuild of tool approvals: a request permissions decided.
+  PermittedDecisions,
+  /// The automation rebuild of tool approvals, which follows the `permissions` one.
+  AutomationAnswers,
+  /// Auto mode's settings and the rebuild of tool approvals for its answers.
+  AutoMode,
+  /// The project's base branch moved to its tasks and modules.
+  BaseSources,
+  /// The disk guard: the free space a project keeps.
+  DiskGuard,
+  /// Approval modes, which replace auto mode's settings.
+  ApprovalModes,
+  /// The decision reviewer's JSON settings.
+  DecisionReviewer,
+  /// Tasks' identities on a team server.
+  TaskIdentities,
+  /// The attempts table rebuilt for a run returned to a step after it ended; the run resolutions table follows it.
+  ReturnedAfterEnd,
+  /// What an archive stop names: the resource, its kind and who archived it.
+  ArchiveStopsArchived,
   /// A shared project's copy of the team's configuration dropped.
   TeamCache,
 }

@@ -18,6 +18,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     pressable::Press,
+    tooltip::Tooltip,
   },
 };
 
@@ -34,9 +35,9 @@ pub(in crate::screens) enum Save {
 }
 
 /// The bar: *Save*, then *Cancel* (`None` while nothing differs, or a save is under way), and `hint` at its end. The
-/// buttons' ids start with `prefix`.
+/// buttons' ids start with `prefix`. A *Save* that waits says why in its tooltip, at the button.
 pub(in crate::screens) fn bar(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   prefix: &str,
   (save, cancel): (Save, Option<Press>),
   hint: (String, PaletteColor),
@@ -48,23 +49,25 @@ pub(in crate::screens) fn bar(
   )
   .icon(Icon::Save)
   .pinned();
-  let saving = match save {
-    Save::Unchanged => saving.disabled(),
-    Save::Waits(why) => saving.unavailable(why),
-    Save::Ready(press) => saving.press(press),
-    Save::Saving => saving.loading(),
+  let saving: Element = match save {
+    Save::Unchanged => saving.disabled().into(),
+    Save::Waits(why) => Tooltip::new(format!("{prefix}-save-why"), why.clone()).wrap(ctx, saving.unavailable(why)),
+    Save::Ready(press) => saving.press(press).into(),
+    Save::Saving => saving.loading().into(),
   };
   let cancelling = ActionButton::new(
     format!("{prefix}-cancel"),
     ButtonKind::Secondary,
     ctx.t("local_hub.mcp.cancel"),
   )
-  .icon(Icon::X);
+  .icon(Icon::X)
+  // As tall as *Save*: the bar draws both 30 (`Save` `aOTTS`, `Cancel` `sNCRP` in P1).
+  .pinned();
   let cancelling = match cancel {
     Some(press) => cancelling.press(press),
     None => cancelling.disabled(),
   };
-  bar_saying(vec![saving.into(), cancelling.into()], Some(hint))
+  bar_saying(vec![saving, cancelling.into()], Some(hint))
 }
 
 /// What the bar of a resource with versions says at its end: *Save* makes the version after `published`.

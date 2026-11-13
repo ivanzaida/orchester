@@ -42,7 +42,7 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
   for name in [
     "list_tasks",
     "run_task",
-    "publish_pipeline",
+    "save_pipeline",
     "merge_run",
     "save_tool_draft",
     "get_conversation",
@@ -113,6 +113,19 @@ fn orchestrator_tools_while_driving_are_every_domain_tool_of_the_app_but_a_few()
       driving.contains(name),
       !left_out.contains(&name.as_str()),
       "{name}: every domain tool of the app but the few"
+    );
+  }
+}
+
+/// Choosing the connection a profile runs on here is open to the Orchestrator (the person's decision of 2026-11-11):
+/// while it drives it picks a team profile's connection, and it drafts and publishes a local profile on another one.
+#[test]
+fn orchestrator_tools_while_driving_choose_a_profiles_connection() {
+  let driving: Vec<String> = listed(true).into_iter().map(|tool| tool.name.to_string()).collect();
+  for name in ["pick_profile_connection", "save_profile_draft", "publish_profile"] {
+    assert!(
+      driving.iter().any(|tool| tool == name),
+      "{name} is listed while driving"
     );
   }
 }
@@ -307,7 +320,8 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       assert!(told.contains(part), "{name} says {part}: {told}");
     }
   }
-  for kind in Publishing::ALL {
+  // A pipeline has no draft to publish (D-032): `publish_pipeline` is no tool any more.
+  for kind in Publishing::ALL.into_iter().filter(|kind| *kind != Publishing::Pipeline) {
     assert!(TOOLS.contains(&kind.tool()), "{} is named", kind.tool());
     assert_eq!(Publishing::of_tool(kind.tool()), Some(kind));
     if tools.iter().any(|tool| tool.name == kind.tool()) {
@@ -388,13 +402,19 @@ fn orchestrator_tools_judge_what_every_person_only_publication_widens() {
 }
 
 #[test]
-fn orchestrator_tools_say_a_duplicate_is_saved_as_a_draft() {
-  let told = listed(false)
-    .into_iter()
-    .find(|tool| tool.name == "duplicate_pipeline")
-    .and_then(|tool| tool.description.map(|description| description.to_string()))
-    .expect("duplicate_pipeline is listed");
-  assert!(told.contains("saves the copy as a draft"), "{told}");
+fn orchestrator_tools_say_a_duplicate_is_published_as_its_first_version() {
+  let told = |drives: bool| {
+    listed(drives)
+      .into_iter()
+      .find(|tool| tool.name == "duplicate_pipeline")
+      .and_then(|tool| tool.description.map(|description| description.to_string()))
+      .expect("duplicate_pipeline is listed")
+  };
+  let driving = told(true);
+  assert!(driving.contains("publishes the copy as its first version"), "{driving}");
+  // A pipeline changes only while the chat drives (D-033).
+  let resting = told(false);
+  assert!(resting.contains("drive_only"), "{resting}");
 }
 
 #[test]

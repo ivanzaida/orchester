@@ -132,10 +132,9 @@ impl AddAgent {
       (false, None) => button.disabled(),
     };
     let next = ctx.t("connections.native.nextStep");
-    let note = match (self.native.refusal(ctx), reason) {
-      (Some(refusal), _) => (refusal.to_string(), Tone::Warning),
-      (None, Some(reason)) => (reason.to_owned(), Tone::Muted),
-      (None, None) => (next.to_string(), Tone::Success),
+    let note = match reason {
+      Some(reason) => (reason.to_owned(), Tone::Muted),
+      None => (next.to_string(), Tone::Success),
     };
     action_bar_noted(vec![cancel.into(), button.into()], Some((note.0.as_str(), note.1)))
   }

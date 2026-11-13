@@ -77,12 +77,25 @@ fn files_copy_and_open_in_editor_refuse_synthetic_input() {
   let mut files = Files::new();
   files.open(Some("src/main.rs"), Version::Checkout);
   with_synthetic_input(|| files.window.press("files-copy"));
+  assert_eq!(
+    files.window.refused_press(),
+    Some("copy a file's text from the code viewer"),
+    "refused to the client"
+  );
   files.window.pass();
   assert!(files.stand_ins.copied.lock().is_empty(), "nothing was copied");
-  assert!(files.window.text("files-refusal").contains("Only a person"));
+  assert!(
+    files.window.texts("files-refusal").is_none(),
+    "the page says nothing of it"
+  );
   with_synthetic_input(|| files.window.press("files-open"));
+  assert_eq!(
+    files.window.refused_press(),
+    Some("open a file in its default program"),
+    "refused to the client"
+  );
   files.window.pass();
-  assert!(files.window.text("files-refusal").contains("Only a person"));
+  assert!(files.window.texts("files-refusal").is_none());
 }
 
 #[test]

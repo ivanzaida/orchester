@@ -144,10 +144,10 @@ impl TeamAgentProfile {
     Ok(self)
   }
 
-  /// `profile` as the team holds it: the CLI kind of its connection, and its MCP servers by the server id of the team
-  /// MCP server each is. The instructions, skills and tools a local profile gives its agents are not carried over (the
-  /// team profile lists none; a team run still goes by their scopes, as its execution bundle names no profile lists),
-  /// nor are secrets, which a local profile does not name. Fails when the connection is not an agent connection of this
+  /// `profile` as the team holds it: the CLI kind of its connection, its MCP servers by the server id of the team MCP
+  /// server each is, and the instructions, skills and tools it gives its agents by their ids, which are the team's (a
+  /// team run still goes by their scopes, as its execution bundle names no profile lists). Secrets are not carried
+  /// over: a local profile does not name them. Fails when the connection is not an agent connection of this
   /// computer, or the profile chooses an MCP server that is not a team one: the team never holds an id from a
   /// computer. A profile with extra writable folders is refused rather than stripped, so nobody believes the team's
   /// profile keeps them.
@@ -183,7 +183,11 @@ impl TeamAgentProfile {
       (cli, profile.model().clone(), profile.settings().clone()),
     )
     .with_permissions(profile.permissions().clone())?
-    .with_mcp_servers(servers)
+    .with_mcp_servers(servers)?
+    // The project's instructions, skills and tools it gives are the team's by the same ids.
+    .with_instruction_resources(profile.instruction_resources().ids().to_vec())?
+    .with_skills(profile.skills().ids().to_vec())?
+    .with_tools(profile.tools().ids().to_vec())
   }
 
   pub fn role(&self) -> &Name {

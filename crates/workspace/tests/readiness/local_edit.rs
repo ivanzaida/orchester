@@ -23,6 +23,7 @@ use orchester_workspace::agents::{
   form::stored_effort,
   local_edit::{Edit, GivenKind, edit, hold, publish, save},
   local_hub::LocalHub,
+  role::RoleText,
 };
 
 use crate::support::{Fixture, name};
@@ -265,7 +266,7 @@ fn readiness_local_edit_the_panel_holds_the_published_version_and_its_save_repla
   assert!(held.changed);
 
   assert_eq!(
-    save(&fixture.root, builder, &held.body, &[]).expect("saved"),
+    save(&fixture.root, builder, &held.body, (&[], false)).expect("saved"),
     Outcome::Saved(builder)
   );
   assert!(drafted(&fixture, builder).is_none(), "the draft is replaced");
@@ -411,4 +412,29 @@ fn readiness_local_edit_gives_and_takes_back_instructions_skills_and_tools() {
   assert_eq!(wrong.key, "agents.localEdit.givenGone");
   let uncallable = edit(&fixture.root, builder, &Edit::Give(GivenKind::Tool, plain), &[]).expect_err("no check");
   assert_eq!(uncallable.key, "agents.localEdit.givenGone");
+}
+
+#[test]
+fn readiness_local_edit_the_role_is_edited_while_the_connection_is_gone() {
+  let fixture = Fixture::local();
+  let gone = ConnectionId::generate();
+  let builder = fixture.own("builder", &builder_on(gone, "gpt-a"));
+  let role = RoleText {
+    role: "Reviewer".into(),
+    responsibilities: "Reviews the change.".into(),
+    instructions: "Review the diff.".into(),
+  };
+  let held = hold(&fixture.root, builder, None, &Edit::Role(role)).expect("held without a connection");
+  assert!(held.changed);
+  assert_eq!(held.body.role().as_str(), "Reviewer");
+  assert_eq!(held.body.responsibilities(), "Reviews the change.");
+  assert_eq!(held.body.instructions().as_str(), "Review the diff.");
+  assert_eq!(held.body.connection(), gone, "the gone connection is kept, not chosen");
+  assert_eq!(held.body.model().as_str(), "gpt-a");
+  let blank = RoleText {
+    role: "  ".into(),
+    ..RoleText::default()
+  };
+  let refused = hold(&fixture.root, builder, None, &Edit::Role(blank)).expect_err("a blank role");
+  assert_eq!(refused.key, "errors.roleRequired");
 }

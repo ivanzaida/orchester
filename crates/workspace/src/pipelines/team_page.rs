@@ -1,13 +1,13 @@
-//! A team project's pipelines as the Pipelines page shows them, read-only on this computer: the library and an opened
-//! pipeline from the team's configuration as this session read it, and a pipeline's versions from the team server
-//! (`docs/design/team-configuration-live.md`). Nothing of the team's is read from the project database; a local
-//! project's pipelines are read from it as before.
+//! A team project's pipelines as the Pipelines page shows them: the library and an opened pipeline from the team's
+//! configuration as this session read it, and a pipeline's versions from the team server
+//! (`docs/design/team-configuration-live.md`). An admin's save goes to the team server ([`super::team_write`]). Nothing
+//! of the team's is read from the project database; a local project's pipelines are read from it as before.
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
-  resource::{Pipeline, ResourceKind},
+  resource::{Pipeline, ResourceKind, VersionNumber},
   store::TaskStore,
   task::Task,
   time::Timestamp,
@@ -15,10 +15,10 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  data::{Assignables, OpenError, OpenedPipeline, Published},
+  data::{Assignables, OpenError, OpenedPipeline},
   history::VersionHistory,
   levels::levels,
-  library::{LibraryEntry, VersionState, library},
+  library::{LibraryEntry, library},
 };
 use crate::{
   background,
@@ -42,7 +42,7 @@ impl Workspace {
   }
 
   /// Pipeline `id` of the project at `repo_root` as the editor opens it: a team project's latest version from the
-  /// team's configuration read this session (it has no draft here), a local project's from its database. Blocks.
+  /// team's configuration read this session, a local project's from its database. Blocks.
   pub fn open_pipeline(&self, repo_root: &Path, id: ResourceId) -> Result<OpenedPipeline, OpenError> {
     let db = ProjectDb::open(repo_root)?;
     if db.sharing()?.is_none() {
@@ -50,22 +50,22 @@ impl Workspace {
     }
     let config = self.team_read(repo_root).loaded()?;
     let resource = config.live(id).ok_or(OpenError::Missing)?;
-    let latest = published(resource).ok_or(OpenError::Missing)?;
+    let (version, published_at, body) = published(resource).ok_or(OpenError::Missing)?;
     Ok(OpenedPipeline {
       id,
       name: resource.name.as_str().into(),
       slug: resource.slug.as_str().into(),
-      body: latest.body.clone(),
-      draft_saved_at: None,
-      based_on: Some(latest.number),
+      body,
+      version,
+      published_at,
       used_by: db
         .tasks()?
         .iter()
         .filter(|task| task.details().pipeline == Some(id))
         .count(),
       assignables: Arc::new(Assignables::of_team(&db, &config)?),
-      latest: Some(latest),
       imported: None,
+      team: true,
     })
   }
 }
@@ -76,8 +76,8 @@ pub fn team_library(config: &TeamConfig, tasks: &[Task]) -> Vec<LibraryEntry> {
     .resources(ResourceKind::Pipeline)
     .into_iter()
     .filter_map(|resource| {
-      let latest = published(resource)?;
-      let body = &latest.body;
+      let (version, published_at, body) = published(resource)?;
+      let body = &body;
       let names = |indexes: Vec<usize>| {
         indexes
           .into_iter()
@@ -90,12 +90,12 @@ pub fn team_library(config: &TeamConfig, tasks: &[Task]) -> Vec<LibraryEntry> {
         slug: resource.slug.as_str().into(),
         stages: levels(body.steps()).into_iter().map(names).collect(),
         step_count: body.steps().len(),
-        state: VersionState::Published(latest.number),
+        version,
         used_by: tasks
           .iter()
           .filter(|task| task.details().pipeline == Some(resource.id))
           .count(),
-        last_published: Some(latest.at),
+        last_published: published_at,
         // A team project's default pipeline is not kept on this computer.
         default: false,
       })
@@ -105,14 +105,10 @@ pub fn team_library(config: &TeamConfig, tasks: &[Task]) -> Vec<LibraryEntry> {
 
 /// The latest version of team pipeline `resource`; `None` without one, or while its body is not a pipeline this
 /// computer can read (which [`TeamResource::body`] logs).
-fn published(resource: &TeamResource) -> Option<Published> {
+fn published(resource: &TeamResource) -> Option<(VersionNumber, Timestamp, Pipeline)> {
   let latest = resource.latest.as_ref()?;
   let body = resource.body::<Pipeline>()?.ok()?;
-  Some(Published {
-    number: latest.number,
-    at: latest.published_at,
-    body,
-  })
+  Some((latest.number, latest.published_at, body))
 }
 
 impl Servers {

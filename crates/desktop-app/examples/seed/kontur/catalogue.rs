@@ -4,7 +4,9 @@
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
+  connection::{
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+  },
   id::{ConnectionId, ResourceId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
@@ -53,8 +55,9 @@ pub struct Catalogue {
 }
 
 /// The project's Codex connection, `Codex · Kontur`. With `fake_codex` it runs that program, checked and
-/// signed in as the runner's tests record it (the fake answers no `--version`); without, no connection is
-/// stored and the profiles name one that is missing, so nothing can run, as with the old app's test
+/// signed in as the runner's tests record it (the fake answers no `--version`), its catalogue the profiles' model so
+/// that the Orchestrator can be set to run on it too (the fake stands in for Codex's app server); without, no
+/// connection is stored and the profiles name one that is missing, so nothing can run, as with the old app's test
 /// fixture.
 pub fn codex(db: &mut ProjectDb, fake_codex: Option<&Path>, now: Timestamp) -> Result<ConnectionId, SeedError> {
   let Some(program) = fake_codex else {
@@ -72,7 +75,13 @@ pub fn codex(db: &mut ProjectDb, fake_codex: Option<&Path>, now: Timestamp) -> R
     result: CheckResult::Available {
       version: FAKE_CODEX_VERSION.to_owned(),
       sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      catalog: ModelCatalog::new(
+        CatalogSource::Provider,
+        vec![CatalogModel::new(
+          ModelId::new(MODEL).expect("a valid model id"),
+          Vec::new(),
+        )],
+      ),
     },
   })?;
   let connection = connection.into_connection();
@@ -169,7 +178,25 @@ fn publish<B: ResourceBody>(
   Ok((id, version))
 }
 
-fn command_tool(
+/// Creates pipeline `name` as its first of `bodies` and publishes each next one as an edit of the version before:
+/// version N is the Nth. A pipeline holds no draft (D-032).
+fn publish_pipeline(
+  db: &mut ProjectDb,
+  name_text: &str,
+  bodies: Vec<Pipeline>,
+  now: Timestamp,
+) -> Result<(ResourceId, Version<Pipeline>), SeedError> {
+  let slug = Slug::from_name(name_text).expect("the catalogue's names have letters");
+  let mut bodies = bodies.into_iter();
+  let first = bodies.next().expect("every pipeline has a first version");
+  let (resource, mut version) = db.create_published(slug, name(name_text), &first, now)?;
+  for body in bodies {
+    version = db.publish_pipeline_edit(resource.id(), &body, version.number(), None, now)?;
+  }
+  Ok((resource.id(), version))
+}
+
+pub(super) fn command_tool(
   db: &mut ProjectDb,
   title: &str,
   line: &[&str],
@@ -327,8 +354,8 @@ fn starter_catalogue(
       }
     })
     .collect();
-  let feature = publish(db, "Feature delivery", versions, now)?;
-  let quick_fix = publish(
+  let feature = publish_pipeline(db, "Feature delivery", versions, now)?;
+  let quick_fix = publish_pipeline(
     db,
     "Quick fix",
     vec![quick_fix(profiles, 1), quick_fix(profiles, 2)],
@@ -379,8 +406,8 @@ pub fn live(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Res
     &[],
   )])
   .expect("a one-step pipeline is valid");
-  let feature = publish(db, "Feature delivery", vec![feature], now)?;
-  let quick_fix = publish(db, "Quick fix", vec![quick], now)?;
+  let feature = publish_pipeline(db, "Feature delivery", vec![feature], now)?;
+  let quick_fix = publish_pipeline(db, "Quick fix", vec![quick], now)?;
   let tools = BTreeMap::new();
   Ok(Catalogue {
     feature_delivery: pinned(feature.0, &feature.1, &profiles, &tools)?,
@@ -402,10 +429,10 @@ pub fn slot_wait(
   let test = ("test", "Test", "Test the work. Keep working.");
   let tools = BTreeMap::new();
   let two = side_by_side(&profiles, &[review, verify]);
-  let (id, version) = publish(db, "Review and verify", vec![two], now)?;
+  let (id, version) = publish_pipeline(db, "Review and verify", vec![two], now)?;
   let one_waits = pinned(id, &version, &profiles, &tools)?;
   let three = side_by_side(&profiles, &[review, verify, test]);
-  let (id, version) = publish(db, "Review, verify and test", vec![three], now)?;
+  let (id, version) = publish_pipeline(db, "Review, verify and test", vec![three], now)?;
   Ok((one_waits, pinned(id, &version, &profiles, &tools)?))
 }
 

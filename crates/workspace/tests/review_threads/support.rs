@@ -255,10 +255,14 @@ fn snapshot(db: &mut ProjectDb) -> RunSnapshot {
   }])
   .expect("pipeline");
   let delivery = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(3))
+    .create_published(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(3))
     .expect("pipeline")
+    .0
     .id();
-  let version = db.publish_draft::<Pipeline>(delivery, at(4)).expect("publish");
+  let version = db
+    .latest_version::<Pipeline>(delivery)
+    .expect("publish")
+    .expect("published");
   let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
   RunSnapshot::build(
     delivery,

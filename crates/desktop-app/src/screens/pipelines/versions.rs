@@ -1,6 +1,6 @@
-//! The Versions tab (`02c · versions` `josCI`): the draft, when there is one, and the published versions, newest
-//! first with *Latest*; a press opens a version read-only over the flow (`super::viewing`). Reading them, a failure
-//! and none yet keep today's words (`05b` `eCrOM`). Published versions never change.
+//! The Versions tab (`02c · versions` `josCI`): the changes not saved yet, when there are some, and the published
+//! versions, newest first with *Latest*; a press opens a version read-only over the flow (`super::viewing`). Reading
+//! them, a failure and none yet keep today's words (`05b` `eCrOM`). Published versions never change.
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -54,10 +54,6 @@ pub struct Versions {
 impl Component for Versions {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    ctx.props::<Props>().state.update(|s| {
-      s.comparing = false;
-      s.restore_requested = false;
-    });
     Self { retry: ctx.signal(0) }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -67,9 +63,10 @@ impl Component for Versions {
     let mut pane = parts::pane("pipeline-versions");
     match loaded.data.filter(|_| loaded.error.is_none()) {
       Some(history) => {
-        if editing.has_draft() {
+        if editing.unsaved() {
           pane = pane.child(
-            RowGroup::new("pipeline-versions-draft", ctx.t("pipelines.draftLabel")).row(draft_row(ctx, &props.state)),
+            RowGroup::new("pipeline-versions-draft", ctx.t("pipelines.unsavedLabel"))
+              .row(unsaved_row(ctx, &props.state)),
           );
         }
         pane = pane.child(published(ctx, &props.state, &history));
@@ -105,16 +102,18 @@ pub fn read(
   retry: u64,
 ) -> lurq::app::ctx::FutureState<VersionHistory, messages::Message> {
   let (servers, team) = (Services::of(ctx).servers, team::of(project).is_some());
+  // Whether the project is the team's is part of the key: the versions are read again once the project's sharing is
+  // read, from the team server then.
   ctx
     .future(
       (
-        project.open.repo_root.clone(),
+        (project.open.repo_root.clone(), team),
         editing.opened.id,
         editing.epoch,
-        editing.opened.latest.as_ref().map(|v| v.number),
+        editing.opened.version,
         retry,
       ),
-      move |(root, id, ..)| history((servers.clone(), team), root, id),
+      move |((root, team), id, ..)| history((servers.clone(), team), root, id),
     )
     .state()
     .get()
@@ -171,8 +170,6 @@ fn version_row(ctx: &Ctx, state: &State, version: &PublishedVersion, latest: boo
     target.update(|s| {
       s.viewing = Some((*snapshot).clone());
       s.viewing_version = Some(number);
-      s.comparing = false;
-      s.restore_requested = false;
       s.epoch += 1;
     });
     target.get_untracked().views.view(number);
@@ -207,31 +204,17 @@ fn counted(ctx: &Ctx, count: usize, (one, many): (&str, &str)) -> String {
   }
 }
 
-/// The draft's row, which leads back to editing it; its title says the version, so its hint does not again.
-fn draft_row(ctx: &Ctx, state: &State) -> GroupRow {
+/// The row of the changes not saved yet, which leads back to editing them; its title says the version *Save*
+/// publishes, so its hint does not again. A pipeline holds no draft (D-032): they are only in this page.
+fn unsaved_row(ctx: &Ctx, state: &State) -> GroupRow {
   let editing = state.get();
   let version = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  let detail = super::summary::draft_detail(ctx, &editing);
-  let saved = editing.opened.draft_saved_at.map(|at| {
-    ctx.t_args(
-      "pipelines.draftSavedAt",
-      [("age", super::library::age(ctx, at).to_string())],
-    )
-  });
-  let hint = match (detail, saved) {
-    (Some(detail), Some(saved)) => ctx.t_args(
-      "pipelines.draftRowHint",
-      [("draft", detail.to_string()), ("saved", saved.to_string())],
-    ),
-    (None, Some(saved)) => saved,
-    (Some(detail), None) => detail,
-    (None, None) => super::summary::draft(ctx, &editing),
-  };
+  let hint = super::summary::unsaved_detail(ctx, &editing).unwrap_or_else(|| ctx.t("pipelines.unsaved"));
   let views = editing.views;
   GroupRow::new(
     "pipeline-history-draft",
-    ctx.t_args("pipelines.draftVersion", [("version", version)]),
+    ctx.t_args("pipelines.version", [("version", version)]),
   )
   .hint(hint)
   .press(Press::run(move || views.tab(View::Steps)))

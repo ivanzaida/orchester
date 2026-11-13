@@ -30,7 +30,7 @@ pub struct LoadProps {
   pub id: ResourceId,
   /// What the route shows.
   pub view: View,
-  /// The published version the route views; `None` for the draft.
+  /// The published version the route views; `None` for the edit.
   pub version: Option<VersionNumber>,
 }
 impl DevtoolsInspectable for LoadProps {}

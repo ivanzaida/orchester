@@ -4,7 +4,8 @@
 //! the panel of the chosen one, with the action that moves it on pinned at its bottom. The filter and the chosen
 //! resource are the route's ([`HubView`]), so links, Back and Forward land on them; a route that names none shows the
 //! first resource of the list. Instructions and skills need nothing of a computer and stand under *Ready here*. An
-//! admin has New in the head ([`create`]).
+//! admin has New in the head ([`create`]). *Archived* lists what the team archived, read-only, with an admin's
+//! *Restore* ([`archived`], A36 `qvMZD`, M7 `Ml7HN`); nothing is picked there until the person picks it.
 //!
 //! The readiness is read off the UI thread through its query (`queries::hub::team_hub`), kept for the session: a visit
 //! shows the last answer at once and reads it again behind it, as do a change of the project's resources or fill-ins
@@ -23,8 +24,10 @@
 
 pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
+mod archived;
 pub(in crate::screens) mod bar;
 pub(in crate::screens) mod create;
+mod edit;
 mod fill;
 mod head;
 pub(in crate::screens) mod list;
@@ -49,13 +52,14 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::Row,
   core::Signal,
   node::Element,
 };
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{
   agents::team_hub::{TeamHub, TeamHubRead},
+  local_archive::Archivable,
+  memory::listing::Filters,
   messages::Message,
   sharing::team::TeamConfiguration,
   team_config::Unreached,
@@ -67,10 +71,13 @@ use crate::{
   project::ShownProject,
   queries::{self, Again, Session, hub as hub_query},
   routes::{HubFilter, HubView, ProjectPage, Route},
-  screens::hub::{
-    agents::{self, TabCount},
-    agents_bones,
-    new_button::{made_under, new_button, new_words},
+  screens::{
+    hub::{
+      agents::{self, TabCount},
+      agents_bones,
+      new_button::{made_under, new_button, new_words},
+    },
+    memory::{hub as memory_hub, state::Made},
   },
   services::Services,
   team::reached::Reached,
@@ -108,16 +115,20 @@ struct TeamHubScreen {
   again: Again,
   /// Why the hub couldn't be read, kept while it is read again.
   failure: LastFailure,
+  /// What the Memory filter keeps while the hub shows: its search, and what is open in place of a record.
+  memory: Made,
 }
 
 impl Component for TeamHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let feed = ctx.props::<Props>().project.feed.clone();
     Self {
       retry: ctx.signal(0),
       again: Again::default(),
       failure: LastFailure::default(),
+      memory: Made::new(ctx, Filters::default(), &feed),
     }
   }
 
@@ -147,7 +158,15 @@ impl Component for TeamHubScreen {
       .filter(|_| !view.adding)
       .and_then(|listing| listing.selected(view.filter, view.item))
       .map(|entry| entry.id);
+    let memory_count = memory_hub::active_count(ctx, &project);
+    let memory = (view.filter == HubFilter::Memory).then(|| {
+      let state = self.memory.state(ctx, &project, None);
+      ctx.provide(state.clone());
+      state
+    });
     let body = match (failed, hub.zip(listing.as_ref())) {
+      // The memory is this computer's, whatever the team server answers (Y5 `Fnu7A`).
+      _ if memory.is_some() => memory_hub::body(ctx, &project, view.memory, true),
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
         if !reading && !read_behind(ctx, &project, view, listing) {
@@ -167,27 +186,31 @@ impl Component for TeamHubScreen {
       },
     };
     let id = project.open.project.id();
-    // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds.
-    let new = team.may_change.then(|| {
-      let form = Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))));
-      new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
-    });
-    let reach = if unreached.is_some() {
-      head::Reach::Unreachable
-    } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
-      head::Reach::Unanswered
-    } else {
-      head::Reach::Answered
+    // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds. Every person writes
+    // their own computer's memory: a member has *New record* too.
+    let new = match &memory {
+      Some(state) => Some(memory_hub::new_record(ctx, state, view.memory)),
+      None => team.may_change.then(|| {
+        let form = Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))));
+        new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
+      }),
     };
-    let status = head::status(ctx, &team, reach);
+    let reach = reach(ctx, &project, unreached.is_some());
+    let status = head::status(ctx, admin, reach);
     agents::frame(
       ctx,
       agents::Frame {
         prefix: "team-hub",
-        filter: view.filter,
+        title: "hub.title",
+        current: view.filter.name(),
         status,
         new,
-        tabs: tabs(id, (listing.as_ref(), nothing_read), selected, &navigation),
+        tabs: tabs(
+          id,
+          (listing.as_ref(), nothing_read, memory_count),
+          selected,
+          &navigation,
+        ),
         notices: Vec::new(),
         body,
         over: Vec::new(),
@@ -222,6 +245,17 @@ impl TeamHubScreen {
   }
 }
 
+/// How the team server stands for the head: cannot be reached (`unreached`), has not answered yet, or answered.
+fn reach(ctx: &mut Ctx, project: &ShownProject, unreached: bool) -> head::Reach {
+  if unreached {
+    head::Reach::Unreachable
+  } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
+    head::Reach::Unanswered
+  } else {
+    head::Reach::Answered
+  }
+}
+
 /// Whether the person is an admin of the team, reachable or not, and why its server cannot be reached now.
 type Admin<'a> = (bool, Option<&'a Unreached>);
 
@@ -248,8 +282,8 @@ fn again(services: &Services, root: &std::path::Path) {
   });
 }
 
-/// Whether the route names a resource the team's configuration holds that the hub's answer does not list yet: one just
-/// created, which the hub reads again behind. The route stays on it.
+/// Whether the route names a resource the team's configuration holds that the hub's answer does not list yet: one an
+/// admin just created, which the hub reads again behind. The route stays on it.
 fn read_behind(ctx: &mut Ctx, project: &ShownProject, view: HubView, listing: &Listing) -> bool {
   view
     .item
@@ -281,10 +315,10 @@ fn keep_route_on_shown(
 }
 
 /// A tab per kind with its count (its bone while the hub is read, none when nothing could be read), each keeping the
-/// chosen resource when it holds it.
+/// chosen resource when it holds it; *Memory* with its active records, which are this computer's.
 fn tabs(
   project: ProjectId,
-  (listing, nothing_read): (Option<&Listing>, bool),
+  (listing, nothing_read, memory): (Option<&Listing>, bool, TabCount),
   selected: Option<ResourceId>,
   navigation: &Navigation,
 ) -> Vec<agents::Tab> {
@@ -294,15 +328,17 @@ fn tabs(
       let item = selected.filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
       let route = Route::Project(project, ProjectPage::hub(HubView::new(choice, item)));
       let navigation = navigation.clone();
-      agents::Tab {
-        filter: choice,
-        count: if nothing_read {
+      agents::Tab::of(
+        choice,
+        if choice == HubFilter::Memory {
+          memory
+        } else if nothing_read {
           TabCount::Unknown
         } else {
           TabCount::of(listing.map(|listing| listing.count(choice)))
         },
-        open: Arc::new(move || navigation.go(route.clone())),
-      }
+        Arc::new(move || navigation.go(route.clone())),
+      )
     })
     .collect()
 }
@@ -320,7 +356,9 @@ fn hub_body(
   // Only an admin creates: a member who follows a link to a form sees the kind's list.
   let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
   let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
-  if selected.is_none() && adding.is_none() {
+  // Under Archived nothing is picked until the person picks it; the list stands beside what archived means.
+  let picking = view.filter == HubFilter::Archived && listing.count(view.filter) > 0;
+  if selected.is_none() && adding.is_none() && !picking {
     return empty(ctx, view.filter, team, navigation, id);
   }
   let list = list::list(
@@ -344,6 +382,10 @@ fn hub_body(
         mode: create::Mode::Team,
         taken: listing.shown(kind.filter()).map(|entry| entry.name.clone()).collect(),
         team: Some(team.clone()),
+        listed: listing
+          .shown(kind.filter())
+          .map(|entry| Archivable::Resource(entry.id))
+          .collect(),
       },
     ),
     (None, Some(selected)) => {
@@ -355,13 +397,14 @@ fn hub_body(
         (&shown, reading, retry),
       )
     }
-    (None, None) => return Element::from(Row::new()),
+    (None, None) => archived::nothing_picked(ctx),
   };
   agents::master_detail("team-hub", reading, (list, panel))
 }
 
 /// The open tab holds nothing: for an admin, what the kind is and *New <kind>*; for a member, that an admin adds it and
-/// who the admins are, with no action.
+/// who the admins are, with no action. *Archived* says what archiving does, with no action for anyone: archiving starts
+/// from a resource's … menu.
 fn empty(
   ctx: &Ctx,
   filter: HubFilter,
@@ -370,17 +413,30 @@ fn empty(
   project: ProjectId,
 ) -> Element {
   let glyph = agents::glyph_of(filter);
+  if filter == HubFilter::Archived {
+    let (title, detail) = agents::empty_words(filter);
+    return agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), Vec::new());
+  }
   if !team.may_change {
     let (title, detail) = member::empty_words(filter);
     let admins = member::admins_line(ctx, team);
     return agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![admins]);
   }
-  let (title, detail) = agents::empty_words(filter);
+  let (title, detail) = admin_empty_words(filter);
   let form = Route::Project(project, ProjectPage::hub(HubView::adding(made_under(filter))));
   let action = ActionButton::new("team-hub-empty-new", ButtonKind::Secondary, ctx.t(new_words(filter)))
     .icon(Icon::Plus)
     .opens(navigation.to(form));
   agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![action.into()])
+}
+
+/// The title and the line of an admin's empty tab: the hub's, but for MCP servers, which the team's runs use once
+/// published and each computer gives its program path (A24 `OZ056`).
+const fn admin_empty_words(filter: HubFilter) -> (&'static str, &'static str) {
+  match filter {
+    HubFilter::McpServers => ("hub.empty.mcpServers.title", "team_hub.empty.mcpServers"),
+    _ => agents::empty_words(filter),
+  }
 }
 
 /// The panel of `selected`: the one of its kind where the team holds what it shows, else the frame every kind has.
@@ -392,8 +448,21 @@ fn detail(
 ) -> Element {
   let id = project.open.project.id();
   let repo_root = project.open.repo_root.clone();
+  if let Some(found) = hub.archived().iter().find(|found| found.id == selected.id) {
+    let props = archived::Props {
+      root: repo_root,
+      entry: selected.clone(),
+      archived: found.clone(),
+      team: team.clone(),
+    };
+    return archived::panel(ctx, props);
+  }
+  let unreached = unreached.map(|unreached| unreached.reason.clone());
   let plain = |sheet| plain::Props {
     repo_root: repo_root.clone(),
+    project: id,
+    admin,
+    unreached: unreached.clone(),
     team: team.clone(),
     listing: listing.clone(),
     entry: selected.clone(),
@@ -405,6 +474,9 @@ fn detail(
         ctx,
         profile::Props {
           repo_root,
+          project: id,
+          admin,
+          unreached: unreached.clone(),
           team: team.clone(),
           reading,
           listing: listing.clone(),
@@ -421,7 +493,7 @@ fn detail(
           project: id,
           team: team.clone(),
           admin,
-          unreached: unreached.map(|unreached| unreached.reason.clone()),
+          unreached: unreached.clone(),
           reading,
           reread: retry.clone(),
           listing: listing.clone(),
@@ -435,6 +507,9 @@ fn detail(
         ctx,
         tool::Props {
           repo_root,
+          project: id,
+          admin,
+          unreached: unreached.clone(),
           team: team.clone(),
           listing: listing.clone(),
           entry: selected.clone(),

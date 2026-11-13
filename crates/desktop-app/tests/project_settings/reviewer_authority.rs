@@ -19,7 +19,7 @@ fn project_settings_reviewer_change_for_a_manual_run_is_a_persons() {
   ));
   // The window's own input from automation is put back too.
   lurq::app::events::with_synthetic_input(|| page.choose("settings-reviewer-model", "sonnet"));
-  page.until("the reviewer put back", |p| p.exists("settings-auto-person-only"));
+  page.until("the reviewer put back", |p| p.window.refused_press().is_some());
   assert_eq!(page.db().auto_mode_settings().expect("unchanged"), original);
   page.choose("settings-reviewer-model", "sonnet");
   page.until("a person's reviewer saved", |p| p.reviewer_model() == "sonnet");

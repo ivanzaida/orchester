@@ -130,6 +130,10 @@ fn team_resource_of(id: ResourceId, slug: &str, kind: ResourceKind, body: Value)
     slug: slug.to_owned(),
     archived: false,
     revision: TaskRevision::try_from(1).expect("revision"),
+    updated: orchester_workspace::team_config::Changed {
+      by: "Olena".to_owned(),
+      at: orchester_core::time::Timestamp::from_unix_millis(0),
+    },
     latest: Some(TeamVersion {
       number: VersionNumber::FIRST,
       body,

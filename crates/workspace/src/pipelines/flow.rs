@@ -1,0 +1,412 @@
+//! A pipeline as the Pipelines page draws its steps (`Pipelines · v2` P1 `s7LMyQ`, P8 `vujkk`): the steps in the
+//! order they run in, the steps that run side by side in one stage, the approval gates on the line after their step,
+//! the failure routes by the numbers the cards carry, and the Deliver step numbered last. The layout is derived from
+//! the steps' `depends_on` ([`orchester_core::resource::flow_units`]), with what a step waits for when that is less
+//! than the stage drawn before it ([`orchester_core::resource::part_waits`], P16 `T9KJFP`); nothing of it is stored.
+
+use std::{collections::HashMap, sync::Arc};
+
+use orchester_core::{
+  id::ResourceId,
+  resource::{
+    DeliverMode, DeliverStep, Deliverable, FlowError, MergeMethod, Pipeline, PipelineEdit, RepositoryAccess, Step,
+    StepKey, StepKind, flow_units, part_waits,
+  },
+  store::ResourceStore,
+};
+use orchester_store::{ProjectDb, StoreError};
+
+use super::{data::Assignables, deliver::integrating_step, write::refused_step};
+use crate::messages::Message;
+
+/// What a step runs, as its card's second line says it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Runs {
+  /// An agent profile with the model the step runs it on: its own, or the profile's.
+  Profile {
+    name: Arc<str>,
+    model: Arc<str>,
+  },
+  Tool {
+    name: Arc<str>,
+  },
+  NoProfile,
+  NoTool,
+  /// The step names a profile that has no published version (or none any more).
+  ProfileNotPublished {
+    id: ResourceId,
+  },
+  /// A published profile whose connection the project no longer has, so it cannot run.
+  ProfileConnectionGone {
+    id: ResourceId,
+    name: Arc<str>,
+  },
+  ToolNotPublished {
+    id: ResourceId,
+  },
+  /// A published tool a step cannot run in this version.
+  ToolNotRunnable {
+    id: ResourceId,
+    name: Arc<str>,
+  },
+}
+
+impl Runs {
+  /// Whether the step cannot run as it is, which its card shows in amber.
+  pub const fn needs_you(&self) -> bool {
+    !matches!(self, Self::Profile { .. } | Self::Tool { .. })
+  }
+
+  /// Whether nothing is chosen yet, so the card offers to choose.
+  pub const fn is_unassigned(&self) -> bool {
+    matches!(self, Self::NoProfile | Self::NoTool)
+  }
+}
+
+/// Where a step's failure sends the run: the card it returns to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReturnsTo {
+  pub number: usize,
+  pub name: Arc<str>,
+}
+
+/// Another step a card names, by its number and name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Named {
+  pub number: usize,
+  pub name: Arc<str>,
+}
+
+/// What a step waits for when that is less than the whole stage drawn before it (`Pipelines · v2` P16 `T9KJFP`), which
+/// its card says: *waits for 04 Run checks only · starts before 05 Review ends*.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Waits {
+  /// What it waits for, without what one of them already waits for, in flow order.
+  pub on: Vec<Named>,
+  /// The steps of the stage before it that it may start before, in flow order.
+  pub not_on: Vec<Named>,
+}
+
+/// One step's card.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepCard {
+  pub key: StepKey,
+  /// Its place in the flow, from 1: stage by stage, a stage's steps in the order of the pipeline's steps.
+  pub number: usize,
+  pub name: Arc<str>,
+  pub runs: Runs,
+  /// What an agent step may do to the repository; `None` for a tool step.
+  pub access: Option<RepositoryAccess>,
+  pub on_failure: Option<ReturnsTo>,
+  /// What the step waits for when it is less than the whole stage before it; `None` when it waits for all of it, for
+  /// a step of the first stage, and for a card of steps the flow cannot draw.
+  pub waits: Option<Waits>,
+  /// The profile or tool `runs` says is not published is gone here (archived or removed), not only unpublished: there
+  /// is nothing to publish, the step has to run something else.
+  pub gone: bool,
+}
+
+impl StepCard {
+  /// Whether the step runs a tool, not an agent.
+  pub const fn is_tool(&self) -> bool {
+    self.access.is_none()
+  }
+}
+
+/// An approval gate: the run waits for the person after `step`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Gate {
+  /// The gated step's name, which says what is approved.
+  pub step: Arc<str>,
+  /// The number of what runs after the gate; `None` when the run ends there.
+  pub before: Option<usize>,
+}
+
+/// Steps that wait for the same steps, drawn side by side, and the gates after them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stage {
+  pub cards: Vec<StepCard>,
+  pub gates: Vec<Gate>,
+}
+
+/// The Deliver step, numbered after the steps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeliverCard {
+  pub number: usize,
+  pub mode: DeliverMode,
+  pub method: MergeMethod,
+  pub conflicts: Conflicts,
+}
+
+/// Who resolves a merge conflict.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Conflicts {
+  /// A published profile, which the integrating step runs.
+  Profile(Arc<str>),
+  /// The profile the integrating step runs exists but has no published version, so it cannot resolve anything yet.
+  ProfileNotPublished(Arc<str>),
+  /// No step can, so conflicts go to the person.
+  Person,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PipelineFlow {
+  pub stages: Vec<Stage>,
+  pub deliver: Option<DeliverCard>,
+}
+
+/// How the line ends, which the end marker says: in a merge, or in what the run delivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ending {
+  /// The pipeline has a Deliver step, so the run ends in a merge.
+  Merged,
+  Delivers(Deliverable),
+}
+
+impl Ending {
+  pub fn of(pipeline: &Pipeline) -> Self {
+    if pipeline.deliver().is_some() {
+      Self::Merged
+    } else {
+      Self::Delivers(pipeline.delivers())
+    }
+  }
+}
+
+impl PipelineFlow {
+  /// The flow of `pipeline`, or why its steps have no order to draw.
+  pub fn of(pipeline: &Pipeline, assignables: &Assignables) -> Result<Self, FlowError> {
+    let units = flow_units(pipeline.steps())?;
+    let waits = part_waits(pipeline.steps())?;
+    let steps: HashMap<&StepKey, &Step> = pipeline.steps().iter().map(|step| (&step.key, step)).collect();
+    let numbers: HashMap<&StepKey, usize> = units
+      .iter()
+      .flatten()
+      .enumerate()
+      .map(|(index, key)| (key, index + 1))
+      .collect();
+    let total = numbers.len();
+    let after = |stage: usize| {
+      units
+        .get(stage + 1)
+        .and_then(|next| next.first())
+        .map(|key| numbers[key])
+    };
+    let mut stages = Vec::with_capacity(units.len());
+    for (index, unit) in units.iter().enumerate() {
+      let next = after(index).or_else(|| pipeline.deliver().map(|_| total + 1));
+      let mut cards = Vec::with_capacity(unit.len());
+      let mut gates = Vec::new();
+      for key in unit {
+        let step = steps[key];
+        let mut card = card(step, numbers[key], (&steps, &numbers), assignables);
+        card.waits = waits.get(key).map(|wait| Waits {
+          on: named(&wait.on, (&steps, &numbers)),
+          not_on: named(&wait.not_on, (&steps, &numbers)),
+        });
+        cards.push(card);
+        if step.approval_gate {
+          gates.push(Gate {
+            step: step.name.as_str().into(),
+            before: next,
+          });
+        }
+      }
+      stages.push(Stage { cards, gates });
+    }
+    Ok(Self {
+      stages,
+      deliver: pipeline
+        .deliver()
+        .map(|deliver| deliver_card(pipeline, deliver, total + 1, assignables)),
+    })
+  }
+
+  /// How many steps the flow has: the count every place that says *Steps N* gives. The Deliver card is numbered after
+  /// them but is not a step.
+  pub fn len(&self) -> usize {
+    self.stages.iter().map(|stage| stage.cards.len()).sum()
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.len() == 0
+  }
+}
+
+fn card(
+  step: &Step,
+  number: usize,
+  (steps, numbers): (&HashMap<&StepKey, &Step>, &HashMap<&StepKey, usize>),
+  assignables: &Assignables,
+) -> StepCard {
+  let access = match &step.kind {
+    StepKind::Agent { repository, .. } => Some(*repository),
+    StepKind::Tool { .. } => None,
+  };
+  StepCard {
+    key: step.key.clone(),
+    number,
+    name: step.name.as_str().into(),
+    gone: step.kind.executor().is_some_and(|id| assignables.gone(id)),
+    runs: runs(step, assignables),
+    access,
+    on_failure: step.on_failure.as_ref().and_then(|route| {
+      Some(ReturnsTo {
+        number: *numbers.get(&route.return_to)?,
+        name: steps.get(&route.return_to)?.name.as_str().into(),
+      })
+    }),
+    waits: None,
+  }
+}
+
+/// `keys` by their numbers and names.
+fn named(keys: &[StepKey], (steps, numbers): (&HashMap<&StepKey, &Step>, &HashMap<&StepKey, usize>)) -> Vec<Named> {
+  keys
+    .iter()
+    .filter_map(|key| {
+      Some(Named {
+        number: *numbers.get(key)?,
+        name: steps.get(key)?.name.as_str().into(),
+      })
+    })
+    .collect()
+}
+
+fn runs(step: &Step, assignables: &Assignables) -> Runs {
+  match &step.kind {
+    StepKind::Agent { profile: None, .. } => Runs::NoProfile,
+    StepKind::Tool { tool: None } => Runs::NoTool,
+    StepKind::Agent {
+      profile: Some(id),
+      model,
+      ..
+    } => match assignables.profile(*id) {
+      None => Runs::ProfileNotPublished { id: *id },
+      Some(profile) if profile.connection.is_none() => Runs::ProfileConnectionGone {
+        id: *id,
+        name: profile.name.clone(),
+      },
+      Some(profile) => Runs::Profile {
+        name: profile.name.clone(),
+        model: model.as_ref().unwrap_or(&profile.model).as_str().into(),
+      },
+    },
+    StepKind::Tool { tool: Some(id) } => match assignables.tool(*id) {
+      None => Runs::ToolNotPublished { id: *id },
+      Some(tool) if !tool.runnable => Runs::ToolNotRunnable {
+        id: *id,
+        name: tool.name.clone(),
+      },
+      Some(tool) => Runs::Tool {
+        name: tool.name.clone(),
+      },
+    },
+  }
+}
+
+fn deliver_card(pipeline: &Pipeline, deliver: &DeliverStep, number: usize, assignables: &Assignables) -> DeliverCard {
+  let conflicts = integrating_step(pipeline, deliver, |_| true)
+    .and_then(|step| step.kind.executor())
+    .map_or(Conflicts::Person, |id| match assignables.profile(id) {
+      Some(profile) => Conflicts::Profile(profile.name.clone()),
+      None => assignables
+        .draft_profiles
+        .iter()
+        .find(|draft| draft.id == id)
+        .map_or(Conflicts::Person, |draft| {
+          Conflicts::ProfileNotPublished(draft.name.clone())
+        }),
+    });
+  DeliverCard {
+    number,
+    mode: deliver.mode(),
+    method: deliver.method(),
+    conflicts,
+  }
+}
+
+/// A pipeline's flow as the page reads it: its latest version's, or the edit's the page holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FlowRead {
+  /// How the line ends, which is known even when the steps cannot be drawn.
+  pub ending: Ending,
+  /// The flow, or why the steps have no order to draw.
+  pub flow: Result<PipelineFlow, FlowError>,
+  /// The cards of steps the flow cannot draw, numbered in the order of the steps, so what each step lacks is still
+  /// known; empty when the flow draws them.
+  pub unplaced: Vec<StepCard>,
+  /// What saving these steps would refuse now ([`super::write::refused_step`]), which the page says before *Save*.
+  pub refused: Option<Message>,
+}
+
+/// A pipeline as it is stored, its latest version, read for the page: what it draws, and what an edit of the page
+/// starts from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stored {
+  pub read: FlowRead,
+  /// The latest version's steps, which the flow was read from.
+  pub body: Pipeline,
+}
+
+impl FlowRead {
+  /// Pipeline `id` as stored: its latest version; `None` when it has none used here.
+  pub fn of(db: &ProjectDb, id: ResourceId, assignables: &Assignables) -> Result<Option<Stored>, StoreError> {
+    Ok(db.latest_version::<Pipeline>(id)?.map(|version| {
+      let body = version.body().clone();
+      Stored {
+        read: Self::of_body(&body, assignables),
+        body,
+      }
+    }))
+  }
+
+  /// The flow of a published version's `body`.
+  fn of_body(body: &Pipeline, assignables: &Assignables) -> Self {
+    let flow = PipelineFlow::of(body, assignables);
+    Self {
+      ending: Ending::of(body),
+      unplaced: unplaced(&flow, body.steps(), assignables),
+      refused: refused_step(body.steps(), assignables),
+      flow,
+    }
+  }
+
+  /// The flow of `edit`, which the page draws while it holds the edit. Steps that break a rule leave no flow
+  /// ([`FlowError::Broken`]); how the line ends is known all the same.
+  pub fn of_edit(edit: &PipelineEdit, assignables: &Assignables) -> Self {
+    let (ending, flow) = match edit.validate() {
+      Ok(body) => (Ending::of(&body), PipelineFlow::of(&body, assignables)),
+      Err(error) => (
+        edit
+          .deliver()
+          .map_or(Ending::Delivers(edit.delivers()), |_| Ending::Merged),
+        Err(FlowError::Broken(error)),
+      ),
+    };
+    Self {
+      ending,
+      unplaced: unplaced(&flow, edit.steps(), assignables),
+      refused: refused_step(edit.steps(), assignables),
+      flow,
+    }
+  }
+}
+
+/// The cards of `steps` when `flow` cannot draw them, numbered in the order of the steps; none when it can.
+fn unplaced(flow: &Result<PipelineFlow, FlowError>, steps: &[Step], assignables: &Assignables) -> Vec<StepCard> {
+  if flow.is_ok() {
+    return Vec::new();
+  }
+  let by_key: HashMap<&StepKey, &Step> = steps.iter().map(|step| (&step.key, step)).collect();
+  let numbers: HashMap<&StepKey, usize> = steps
+    .iter()
+    .enumerate()
+    .map(|(index, step)| (&step.key, index + 1))
+    .collect();
+  steps
+    .iter()
+    .enumerate()
+    .map(|(index, step)| card(step, index + 1, (&by_key, &numbers), assignables))
+    .collect()
+}

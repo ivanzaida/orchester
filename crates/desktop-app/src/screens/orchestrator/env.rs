@@ -10,7 +10,7 @@ use orchester_workspace::orchestrator::tools::ChatScope;
 use super::{
   View, draft::Conversation, rewind::toolbar::RewindEnv, send::ChangeQueued, timeline::TurnEnv, watch::WatchFacts,
 };
-use crate::{project::ShownProject, ui::chat::names::ProjectNames};
+use crate::{project::ShownProject, screens::pipeline_link::PipelineLinks, ui::chat::names::ProjectNames};
 
 /// The rows' environment for conversation `chat` of `project`, on `connection` (its name) when the Orchestrator has
 /// one, `answering` while a turn of it thinks; `watches` when a line of it names what the conversation watches, which
@@ -50,6 +50,7 @@ pub(super) fn env(
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),
+    pipelines: PipelineLinks::of(project),
     root: open.repo_root.clone(),
     connection,
     scope,

@@ -32,12 +32,12 @@ impl Views {
     }
   }
   /// A place the person chose, as a new entry of the tab's history; of the published version viewed, if any, but
-  /// the publish review, which is the draft's.
+  /// the publish review, which is the edit's.
   pub fn choose(&self, view: View) {
     let viewed = self.viewed().filter(|_| view != View::Publish);
     self.navigation.go(self.route(view, viewed));
   }
-  /// A tab the person chose: the draft's, leaving the version viewed.
+  /// A tab the person chose: the edit's, leaving the version viewed.
   pub fn tab(&self, view: View) {
     self.navigation.go(self.route(view, None));
   }
@@ -45,7 +45,7 @@ impl Views {
   pub fn view(&self, version: VersionNumber) {
     self.navigation.go(self.route(View::Versions, Some(version)));
   }
-  /// *Cancel*, a removed step and a publish done: back to the summary of what is shown, the draft's or the
+  /// *Cancel*, a removed step and a publish done: back to the summary of what is shown, the edit's or the
   /// version's, leaving no entry for the place closed.
   pub fn close(&self) {
     let view = if self.viewed().is_some() {
@@ -55,8 +55,8 @@ impl Views {
     };
     self.navigation.close_panel(self.route(view, self.viewed()));
   }
-  /// *Back to editing* and a restore done: back to the draft's steps, leaving no entry for the version.
-  pub fn to_draft(&self) {
+  /// *Back to editing*: back to the edit's steps, leaving no entry for the version.
+  pub fn to_edit(&self) {
     self.navigation.close_panel(self.route(View::Steps, None));
   }
   /// The published version the route views, if it is this page's.
@@ -75,7 +75,7 @@ impl Views {
     matches!(route, Route::Project(project, ProjectPage::Pipeline(pipeline, _) | ProjectPage::PipelineVersion(pipeline, ..))
       if *project == self.project && *pipeline == self.pipeline)
   }
-  /// The route of `view` of the draft or, with `version`, of that published version.
+  /// The route of `view` of the edit or, with `version`, of that published version.
   pub fn route(&self, view: View, version: Option<VersionNumber>) -> Route {
     Route::Project(
       self.project,
@@ -117,8 +117,6 @@ pub struct Editing {
   pub viewing: Option<Pipeline>,
   pub viewing_version: Option<VersionNumber>,
   pub epoch: u64,
-  pub comparing: bool,
-  pub restore_requested: bool,
   pub published_notice: Option<orchester_core::resource::VersionNumber>,
 }
 impl DevtoolsInspectable for Editing {}
@@ -135,18 +133,13 @@ impl Editing {
       viewing: None,
       viewing_version: None,
       epoch: 0,
-      comparing: false,
-      restore_requested: false,
       published_notice: None,
     }
   }
-  /// Whether the draft or the name has errors or edits not saved yet.
+  /// Whether the edit or the name has errors or changes not saved yet. A pipeline holds no draft (D-032): what is
+  /// not saved is only in this page.
   pub fn unsaved(&self) -> bool {
     self.dirty() || !self.errors.is_empty()
-  }
-  /// Whether a draft exists beside the published version: saved, or edits not saved yet.
-  pub fn has_draft(&self) -> bool {
-    self.opened.draft_saved_at.is_some() || self.unsaved()
   }
   pub fn dirty(&self) -> bool {
     self.name.as_str() != self.opened.name.as_ref() || self.edit.validate().as_ref() != Ok(&self.opened.body)
@@ -172,22 +165,9 @@ impl Editing {
       }
     }
   }
-  /// Takes the version viewed into the draft; the caller then returns to the draft ([`Views::to_draft`]).
-  pub fn restore(&mut self) {
-    if let Some(body) = self.viewing.take() {
-      self.edit = PipelineEdit::new(body);
-      self.viewing_version = None;
-      self.comparing = false;
-      self.restore_requested = false;
-      self.epoch += 1;
-      self.errors.clear();
-      self.inputs.clear();
-    }
-  }
   pub fn saved(&mut self, opened: OpenedPipeline) {
-    let latest = opened.latest.as_ref().map(|v| v.number);
-    if latest != self.opened.latest.as_ref().map(|v| v.number) {
-      self.published_notice = latest;
+    if opened.version != self.opened.version {
+      self.published_notice = Some(opened.version);
     }
     self.opened = opened;
   }

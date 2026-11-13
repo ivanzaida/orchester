@@ -31,7 +31,13 @@ use orchester_workspace::{
 use crate::{
   project::ProjectFeed,
   screens::task::TaskContext,
-  ui::{chip::TagChip, field::field_error, message::message_text, pressable::pressable},
+  ui::{
+    chip::{BadgeTone, TagChip, state_badge},
+    field::field_error,
+    icon::Icon,
+    message::message_text,
+    pressable::pressable,
+  },
 };
 
 /// The mode chip of `task`'s latest run, and its switch while it may be switched; nothing once the run ended.
@@ -102,7 +108,19 @@ impl Component for RunMode {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ModeProps>().clone();
     let state = self.switch.state().get();
-    let chip = TagChip::new("task-run-mode", ctx.t(chip_key(props.mode)));
+    // Dangerous auto-approve reads as it does in the composer and the status bar: a `triangle-alert` and its words in
+    // `danger` on `danger_muted`.
+    let chip: Element = if let EffectiveMode::DangerousAutoApprove(_) = props.mode {
+      state_badge(
+        "task-run-mode",
+        BadgeTone::Danger,
+        Icon::TriangleAlert,
+        &ctx.t(chip_key(props.mode)),
+      )
+      .into()
+    } else {
+      TagChip::new("task-run-mode", ctx.t(chip_key(props.mode))).into()
+    };
     let switch = props.may_switch.then(|| {
       let words = Text::new(&ctx.t("task.run.mode.switchToManual"))
         .variant(TypographyStyle::Button)
@@ -143,12 +161,14 @@ fn answerer() -> Answerer {
   }
 }
 
-/// The chip's words for `mode` (04c): *Autopilot*, *Manual · profile*, *Manual · project*, *Manual · this run*.
+/// The chip's words for `mode` (04c): *Autopilot*, *Manual · profile*, *Manual · project*, *Manual · this run*, or
+/// *Dangerous auto-approve* while the project approves every request.
 const fn chip_key(mode: EffectiveMode) -> &'static str {
   match mode {
     EffectiveMode::Autopilot => "task.run.mode.autopilot",
     EffectiveMode::Manual(ManualBecause::Profile) => "task.run.mode.manualProfile",
     EffectiveMode::Manual(ManualBecause::Project) => "task.run.mode.manualProject",
     EffectiveMode::Manual(ManualBecause::Run) => "task.run.mode.manualRun",
+    EffectiveMode::DangerousAutoApprove(_) => "task.run.mode.dangerous",
   }
 }

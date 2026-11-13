@@ -1,8 +1,10 @@
 # PV2-14 · Retire the old Pipelines page of local projects
 
-- **Status:** blocked (PV2-05 … PV2-13)
+- **Status:** done (batch C)
 - **Kind:** UI
-- **Depends on:** PV2-05 to PV2-13
+- **Depends on:** PV2-05 to PV2-13, PV2-17 to PV2-33
+- **Branch:** —
+- **Tokens:** —
 
 ## Goal
 

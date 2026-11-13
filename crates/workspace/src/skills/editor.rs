@@ -138,17 +138,11 @@ impl EditorData {
       .resources(ResourceKind::Pipeline)
       .map_err(|e| messages::store_error(&e))?
     {
-      let draft = db
-        .draft::<Pipeline>(resource.id())
-        .map_err(|e| messages::store_error(&e))?;
+      // A pipeline holds no draft (D-032): its latest version is all its steps.
       let latest = db
         .latest_version::<Pipeline>(resource.id())
         .map_err(|e| messages::store_error(&e))?;
-      let Some(body) = draft
-        .as_ref()
-        .map(Draft::body)
-        .or_else(|| latest.as_ref().map(|v| v.body()))
-      else {
+      let Some(body) = latest.as_ref().map(|v| v.body()) else {
         continue;
       };
       let name: Arc<str> = resource.name().as_str().into();

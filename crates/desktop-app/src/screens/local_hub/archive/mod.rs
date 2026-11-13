@@ -44,7 +44,7 @@ impl DevtoolsInspectable for Target {}
 
 /// The entry whose archive confirmation the hub shows, which the hub provides to the panels below it.
 #[derive(Clone)]
-pub(super) struct Asking(Signal<Option<Target>>);
+pub(in crate::screens) struct Asking(Signal<Option<Target>>);
 
 impl PartialEq for Asking {
   fn eq(&self, other: &Self) -> bool {
@@ -53,12 +53,17 @@ impl PartialEq for Asking {
 }
 
 impl Asking {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
+  pub(in crate::screens) fn new(ctx: &mut Ctx) -> Self {
     Self(ctx.signal(None))
   }
 
+  /// Asks for the confirmation of archiving the entry `target` names.
+  pub(in crate::screens) fn ask(&self, target: Target) {
+    self.0.set(Some(target));
+  }
+
   /// The confirmation over the page while an entry asked for it; it ends with the archive or when it is left.
-  pub(super) fn question(&self, ctx: &mut Ctx) -> Option<Element> {
+  pub(in crate::screens) fn question(&self, ctx: &mut Ctx) -> Option<Element> {
     let target = self.0.get()?;
     let (keep, done) = (self.0.clone(), self.0.clone());
     Some(confirm::question(

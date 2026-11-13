@@ -12,7 +12,7 @@ use orchester_core::{
   blob::ContentHash,
   id::{ProjectId, ServerId, UserId},
   project::ProjectKey,
-  resource::{AgentProfile, Instruction, Pipeline, Removal, RemoveMode, ResourceBody, Skill, Tool, VersionNumber},
+  resource::{AgentProfile, Instruction, Pipeline, Removal, ResourceBody, Skill, Tool, VersionNumber},
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
 };
@@ -34,21 +34,39 @@ struct Team {
 
 /// As dana-k, the project's owner.
 pub fn admin(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let team = shared(kontur, (MemberRole::Owner, Person::Dana))?;
+  share_catalogue(kontur, &team)
+}
+
+/// As dana-k, the project's owner, on a team that holds none of the catalogue: its resources stay this computer's, so
+/// the team holds only what the caller adds (`team-hub`, whose hub lists the team's own resources alone).
+pub fn admin_alone(kontur: &mut Kontur) -> Result<(), SeedError> {
   shared(kontur, (MemberRole::Owner, Person::Dana)).map(|_| ())
 }
 
 /// As ivan, a member, who reads every resource of the team.
 pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
-  shared(kontur, (MemberRole::Member, Person::Ivan)).map(|_| ())
+  let team = shared(kontur, (MemberRole::Member, Person::Ivan))?;
+  share_catalogue(kontur, &team)
 }
 
-/// As ivan, a member, over what `resources` makes of the team's configuration: a member cannot make a team resource,
-/// so it is made while the project is still linked in the owner's role, which is dropped for ivan's afterwards.
+/// As ivan, a member, over what `resources` makes of the team's configuration, which holds none of the catalogue (as
+/// [`admin_alone`]): a member cannot make a team resource, so it is made while the project is still linked in the
+/// owner's role, which is dropped for ivan's afterwards.
 pub fn member_over(
   kontur: &mut Kontur,
   resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
 ) -> Result<(), SeedError> {
-  shared(kontur, (MemberRole::Owner, Person::Ivan))?;
+  connections::seed(kontur)?;
+  member_over_project(kontur, resources)
+}
+
+/// [`member_over`] on the project as another scenario already seeded it, with its own catalogue and connections.
+pub fn member_over_project(
+  kontur: &mut Kontur,
+  resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
+) -> Result<(), SeedError> {
+  linked(kontur, (MemberRole::Owner, Person::Ivan))?;
   resources(kontur)?;
   kontur.db.record_sharing_state(Some(MemberRole::Member), None, None)?;
   Ok(())
@@ -61,13 +79,17 @@ enum Person {
   Ivan,
 }
 
-/// The catalogue, linked to the team server's project with the person in `role`, every resource the team's. Ivan's
+/// The catalogue, linked to the team server's project with the person in `role`, none of it the team's yet. Ivan's
 /// computer has no drafts of the team's: the catalogue's are dropped, and a resource never published with them.
 fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
   connections::seed(kontur)?;
+  linked(kontur, (role, who))
+}
+
+/// The project as it is, linked to the team server's project with the person in `role`.
+fn linked(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
   if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
-    drop_drafts::<Pipeline>(kontur)?;
     drop_drafts::<Instruction>(kontur)?;
     drop_drafts::<Skill>(kontur)?;
     drop_drafts::<Tool>(kontur)?;
@@ -111,12 +133,16 @@ fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team
     username: team.olha.name.clone(),
   };
   kontur.db.record_server_admins(&[admin])?;
-  share::<AgentProfile>(kontur, &team)?;
-  share::<Pipeline>(kontur, &team)?;
-  share::<Instruction>(kontur, &team)?;
-  share::<Skill>(kontur, &team)?;
-  share::<Tool>(kontur, &team)?;
   Ok(team)
+}
+
+/// Makes every published resource of the catalogue the team's.
+fn share_catalogue(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
+  share::<AgentProfile>(kontur, team)?;
+  share::<Pipeline>(kontur, team)?;
+  share::<Instruction>(kontur, team)?;
+  share::<Skill>(kontur, team)?;
+  share::<Tool>(kontur, team)
 }
 
 /// `Acme team` in Settings › Orchester, signed in as `me` (dana-k is not the server's admin: the owner changes the
@@ -178,9 +204,7 @@ fn drop_drafts<B: ResourceBody + PartialEq>(kontur: &mut Kontur) -> Result<(), S
       kontur.db.discard_draft_matching(resource.id(), draft.body())?;
       continue;
     }
-    let removal = kontur
-      .db
-      .remove_resource(resource.id(), RemoveMode::Unused, kontur.now)?;
+    let removal = kontur.db.remove_resource(resource.id(), kontur.now)?;
     if let Removal::InUse(_) = removal {
       return Err(SeedError::Invalid(format!("{} is in use", resource.name().as_str())));
     }

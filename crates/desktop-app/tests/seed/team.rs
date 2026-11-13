@@ -45,7 +45,7 @@ fn seed_team_scenarios_leave_the_marker_of_their_state() {
     let tasks = seed.db().tasks().expect("tasks").len();
     let expected = match state {
       State::Claims => 6,
-      State::TeamRunning | State::NotReadyAfterRun | State::TeamArchived => 1,
+      State::TeamRunning | State::NotReadyAfterRun | State::TeamArchived | State::TeamArchivedAdmin => 1,
       state if state.runs_here() => 2,
       _ => 0,
     };

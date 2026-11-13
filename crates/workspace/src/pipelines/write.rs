@@ -1,19 +1,28 @@
-//! Editor writes: never overwrite another editor's draft or publish a body other than the one reviewed.
+//! Editor writes. A pipeline is stored only as a published version (D-032): saving an edit publishes it as the next
+//! version, or refuses it with every reason and stores nothing. A write never publishes over a version published since
+//! the edit started, nor a body other than the one reviewed. A team pipeline's save goes to the team server at once and
+//! is kept here only once the server took it (D-043, [`super::team_write`]); a local one is stored here.
 
 use std::path::Path;
 
 use orchester_core::{
-  resource::{Draft, Pipeline, VersionNumber},
+  name::Name,
+  resource::{Pipeline, PublishError, ResourceBody, Step, StepKind, VersionNumber},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  data::{OpenError, OpenedPipeline},
+  data::{Assignables, OpenError, OpenedPipeline},
+  local_edit::version_limit,
   problems::publish_error,
-  widening::{draft_reasons, publish_reasons},
+  team_write,
+  widening::save_reasons,
 };
-use crate::messages::Message;
+use crate::{
+  messages::Message,
+  sharing::{NotTaken, Servers},
+};
 
 /// Exact reasons the person approved; an empty list permits changes that need no approval.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -28,88 +37,202 @@ pub enum WriteError {
   Store(#[from] StoreError),
   #[error("the pipeline needs a person's decision")]
   PersonOnly,
-  #[error("a step's executor or narrowing is no longer available")]
-  InvalidStep(Message),
+  /// The body cannot be stored as a version ([`save_refusals`]), for every one of these reasons; nothing was stored.
+  #[error("the pipeline cannot be saved as it is")]
+  NotSaved(Vec<Message>),
+  /// The team server did not take the team pipeline's change; nothing of it was stored.
+  #[error("the team server did not take the pipeline's change")]
+  Team(NotTaken),
 }
 
 impl WriteError {
+  /// What a person reads: for a refused save, its first reason; [`Self::NotSaved`] holds every one.
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) | Self::Open(OpenError::Store(error)) => publish_error(error),
       Self::Open(OpenError::Missing) => Message::new("pipelines.problems.missing"),
       Self::Open(OpenError::TeamNotRead(unread)) => unread.message(),
-      Self::InvalidStep(reason) => reason.clone(),
+      Self::NotSaved(reasons) => reasons
+        .first()
+        .cloned()
+        .expect("a refused save has at least one reason"),
       Self::PersonOnly => Message::new("appMcp.errors.personOnly"),
+      Self::Team(refused) => refused.message(),
     }
   }
 }
 
-/// Saves the draft as reviewed, only if its previous body and latest published version still match.
-pub fn save_in(
-  root: &Path,
-  before: &OpenedPipeline,
-  body: Pipeline,
-  allowed: &Allowed,
-) -> Result<OpenedPipeline, WriteError> {
-  let name = orchester_core::name::Name::new(&before.name).expect("stored resource names are valid");
-  save_named_in(root, before, body, &name, allowed)
+/// What a save stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stored {
+  /// The pipeline as it is stored now.
+  pub opened: OpenedPipeline,
+  /// Why a team pipeline's steps were not saved when its new name was: the rename is sent first, so it is kept, and
+  /// only the steps are left to save again.
+  pub steps_not_saved: Option<Message>,
 }
 
-/// Saves the editable display name with the draft; the stable slug and all published bodies stay intact.
+/// A save that passed its checks: what it changes of `current`, the pipeline as stored now.
+pub(super) struct Checked {
+  pub current: OpenedPipeline,
+  /// The new name, when it differs.
+  pub renamed: Option<Name>,
+  /// The steps to publish as the next version, when they differ from the latest version.
+  pub steps: Option<Pipeline>,
+}
+
+/// Saves `body`, an edit of `before`, as the pipeline's next version, renamed to `name` when that differs; the stable
+/// slug and every published version stay intact. Refused, storing nothing: what [`refusals`] names, one that widens
+/// beyond `allowed` ([`save_reasons`]), one whose pipeline had a version published since `before` was read
+/// (`pipelines.problems.staleDraft`), and one that changes nothing (`pipelines.problems.unchanged`). Steps equal to the
+/// latest version publish nothing: a rename alone renames. A team pipeline's goes to the team server through `servers`
+/// ([`team_write::save`]); this blocks on its answer, so it runs on a worker of the application's runtime.
 pub fn save_named_in(
   root: &Path,
+  servers: &Servers,
   before: &OpenedPipeline,
-  body: Pipeline,
-  name: &orchester_core::name::Name,
+  body: &Pipeline,
+  name: &Name,
+  allowed: &Allowed,
+) -> Result<Stored, WriteError> {
+  // A team project's pipeline is opened from the team's configuration as this session read it, a local one from the
+  // project's database.
+  let current = servers.workspace().open_pipeline(root, before.id)?;
+  let checked = check(current, before, body, name, allowed)?;
+  if checked.current.team {
+    return team_write::save(servers, root, before, checked);
+  }
+  let mut db = ProjectDb::open(root)?;
+  Ok(Stored {
+    opened: store_here(&mut db, before, &checked)?,
+    steps_not_saved: None,
+  })
+}
+
+/// Saves `body`, an edit of `before`, named `name`, as a pipeline of a local project, as [`save_named_in`] does; a team
+/// pipeline, which only the team server takes, is refused ([`StoreError::SharedProject`]) and nothing is stored. For
+/// the Pipelines hub, which shows a local project only.
+pub fn save_here_in(
+  root: &Path,
+  before: &OpenedPipeline,
+  body: &Pipeline,
+  name: &Name,
   allowed: &Allowed,
 ) -> Result<OpenedPipeline, WriteError> {
   let mut db = ProjectDb::open(root)?;
-  let current = OpenedPipeline::load(&db, before.id)?;
-  for step in body.steps() {
-    super::narrowing::check_step(step, &current.assignables).map_err(WriteError::InvalidStep)?;
+  let checked = check(OpenedPipeline::load(&db, before.id)?, before, body, name, allowed)?;
+  if checked.current.team {
+    return Err(StoreError::SharedProject.into());
   }
-  if !draft_reasons(&current, &body)
+  store_here(&mut db, before, &checked)
+}
+
+/// Stores `checked`, a save of `before`, in `db`: its steps as the next version, renamed with them, or its name alone.
+fn store_here(db: &mut ProjectDb, before: &OpenedPipeline, checked: &Checked) -> Result<OpenedPipeline, WriteError> {
+  if let Some(steps) = &checked.steps {
+    let names = checked.renamed.as_ref().map(|name| (&*before.name, name));
+    db.publish_pipeline_edit(before.id, steps, before.version, names, Timestamp::now())?;
+  } else if let Some(name) = &checked.renamed {
+    db.rename_local_resource(before.id, name)?;
+  }
+  Ok(OpenedPipeline::load(db, before.id)?)
+}
+
+/// The checks of a save of `body` named `name` over `before`, against `current`, the pipeline as it is now: what it
+/// changes, or why it is refused.
+fn check(
+  current: OpenedPipeline,
+  before: &OpenedPipeline,
+  body: &Pipeline,
+  name: &Name,
+  allowed: &Allowed,
+) -> Result<Checked, WriteError> {
+  let refused = refusals(&current, body);
+  if !refused.is_empty() {
+    return Err(WriteError::NotSaved(refused));
+  }
+  let renamed = (name.as_str() != &*before.name).then(|| name.clone());
+  let steps = (*body != current.body).then(|| body.clone());
+  if renamed.is_none() && steps.is_none() {
+    let unchanged = Message::new("pipelines.problems.unchanged").with("version", current.version.to_string());
+    return Err(WriteError::NotSaved(vec![unchanged]));
+  }
+  if steps.is_some() {
+    let reasons = save_reasons(Some(&current.body), body, &current.assignables);
+    if !reasons.iter().all(|reason| allowed.0.contains(reason)) {
+      return Err(WriteError::PersonOnly);
+    }
+  }
+  Ok(Checked {
+    current,
+    renamed,
+    steps,
+  })
+}
+
+/// Every reason a save of `body` over `opened`, its pipeline as stored, is refused, in the order a person fixes them;
+/// empty when it is saved. Steps that differ from the latest version take the save check ([`save_refusals`]): a rename
+/// alone publishes no version, so it is not refused for the steps.
+pub fn refusals(opened: &OpenedPipeline, body: &Pipeline) -> Vec<Message> {
+  if *body == opened.body {
+    return Vec::new();
+  }
+  save_refusals(body, &opened.assignables, Some(opened.version))
+}
+
+/// The save check (D-032): every reason `body` cannot be stored as the version after `latest` (`None` for a new
+/// pipeline's first), in the order a person fixes them; empty when it can. A body without steps, a step without a
+/// profile or tool, a step whose executor or narrowing `assignables` cannot honour ([`refused_step`]), and the version
+/// limit. A step that waits for only part of what runs before it is drawn as it is (P16), so it is not refused.
+pub fn save_refusals(body: &Pipeline, assignables: &Assignables, latest: Option<VersionNumber>) -> Vec<Message> {
+  let mut refusals = Vec::new();
+  let mut add = |reason: Message| {
+    if !refusals.contains(&reason) {
+      refusals.push(reason);
+    }
+  };
+  if let Err(PublishError::NoSteps) = body.check_publishable() {
+    add(Message::new("pipelines.problems.noSteps"));
+  }
+  for step in body.steps() {
+    if let Some(unassigned) = unassigned(step) {
+      add(unassigned);
+    }
+    if let Err(refused) = super::narrowing::check_step(step, assignables) {
+      add(refused);
+    }
+  }
+  if let Some(limit) = version_limit(latest) {
+    add(limit);
+  }
+  refusals
+}
+
+/// Why `step` has nothing to run: no profile, or no tool; `None` when it names one.
+fn unassigned(step: &Step) -> Option<Message> {
+  let key = match step.kind {
+    StepKind::Agent { profile: None, .. } => "pipelines.problems.noProfile",
+    StepKind::Tool { tool: None } => "pipelines.problems.noTool",
+    StepKind::Agent { .. } | StepKind::Tool { .. } => return None,
+  };
+  Some(Message::new(key).with("step", step.name.as_str().to_owned()))
+}
+
+/// What saving `steps` refuses in one of them now, the first: an executor or a narrowing `assignables` cannot honour
+/// ([`super::narrowing::check_step`]). The page says it before *Save* ([`super::local_edit::unpublishable`]); the save
+/// check names every one ([`save_refusals`]).
+pub fn refused_step(steps: &[Step], assignables: &Assignables) -> Option<Message> {
+  steps
     .iter()
-    .all(|reason| allowed.0.contains(reason))
-  {
-    return Err(WriteError::PersonOnly);
-  }
-  let draft = Draft::new(body, before.based_on, Timestamp::now());
-  db.save_draft_and_name_matching(
-    before.id,
-    &before.body,
-    before.latest.as_ref().map(|v| v.number),
-    &draft,
-    Some((&before.name, name)),
-  )?;
-  Ok(OpenedPipeline::load(&db, before.id)?)
+    .find_map(|step| super::narrowing::check_step(step, assignables).err())
 }
 
-/// Publishes the exact saved draft reviewed by the person, checking the current comparison again.
-pub fn publish_in(root: &Path, before: &OpenedPipeline, allowed: &Allowed) -> Result<OpenedPipeline, WriteError> {
-  let mut db = ProjectDb::open(root)?;
-  let id = before.id;
-  let body = &before.body;
-  let current = OpenedPipeline::load(&db, id)?;
-  for step in body.steps() {
-    super::narrowing::check_step(step, &current.assignables).map_err(WriteError::InvalidStep)?;
-  }
-  let reasons = publish_reasons(current.latest.as_ref().map(|v| &v.body), body);
-  if !reasons.iter().all(|reason| allowed.0.contains(reason)) {
-    return Err(WriteError::PersonOnly);
-  }
-  db.publish_draft_matching_version(id, body, before.latest.as_ref().map(|v| v.number), Timestamp::now())?;
-  Ok(OpenedPipeline::load(&db, id)?)
-}
-
-/// The next draft's number, or none at the version limit.
+/// The number a save of `opened` would publish, or none at the version limit.
 pub fn next_version(opened: &OpenedPipeline) -> Option<VersionNumber> {
-  match opened.latest.as_ref() {
-    Some(version) => version.number.next(),
-    None => Some(VersionNumber::FIRST),
-  }
+  opened.version.next()
 }
-/// A failed write whose saved snapshot must be read again before retrying.
+
+/// A failed write whose stored pipeline must be read again before retrying.
 pub fn needs_reload(message: &Message) -> bool {
   matches!(message.key, "errors.draftChanged" | "pipelines.problems.staleDraft")
 }

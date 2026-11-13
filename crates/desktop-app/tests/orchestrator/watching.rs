@@ -148,15 +148,11 @@ fn active(screen: &Orchestrator, chat: ChatId) -> usize {
     .count()
 }
 
-/// Stopping stays the person's command: a click on `stop` of automation driving the window is refused, says so, and
-/// the subscription of `chat` goes on.
+/// Stopping stays the person's command: a click on `stop` of automation driving the window is refused to it, the chat
+/// says nothing of it, and the subscription of `chat` goes on.
 fn refuses_a_synthetic_stop(screen: &mut Orchestrator, chat: ChatId, stop: &str) {
   with_synthetic_input(|| screen.click(stop));
-  screen.until("the refusal", |screen| {
-    screen.exists("orchestrator-watching-problem")
-      && screen
-        .text("orchestrator-watching-problem")
-        .contains("Only a person stops watching")
-  });
+  assert!(screen.window.refused_press().is_some(), "refused to the client");
+  assert!(!screen.exists("orchestrator-watching-problem"));
   assert_eq!(active(screen, chat), 1, "a synthetic click stops nothing");
 }
