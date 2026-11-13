@@ -17,6 +17,7 @@ mod change;
 pub mod chat;
 pub mod compact;
 mod created;
+pub mod decisions;
 mod duplicate;
 mod events;
 pub mod facts;

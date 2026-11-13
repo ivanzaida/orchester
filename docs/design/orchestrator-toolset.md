@@ -737,6 +737,13 @@ project with none of its own; the application-wide values are no longer shown or
   counted. A turn a person's message started is not bound, nor a task that is only followed
   (`orchester_core::orchestrator::watch::Ceilings`, `orchester_workspace::orchestrator::ceilings`). A target led to
   the end stays so when another conversation takes it over or its order is renewed.
+- **What the chat decides on its own carries its reason** (2026-11-14, OA-22). In a turn Orchester started by
+  itself, `continue_run` (every choice but `resume`), `answer_question` and `decide_plan` take a one-sentence
+  `reason` and are refused `reason_required` without one, before anything else is asked; `decide_approval` had its
+  reason already. Done, the call is kept as a decision of the project beside its action (the tool, the task and run,
+  the reason, the conversation, and what undoes it where something does), open until the person marks it seen or
+  overrules it, which only they do. `get_decisions` lists them, the open ones first. A turn a person's message
+  started makes none (`orchester_core::orchestrator::decision`, `orchester_workspace::orchestrator::decisions`).
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run

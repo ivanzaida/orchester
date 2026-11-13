@@ -48,6 +48,7 @@ mod orchestrator_chat;
 mod orchestrator_contention;
 mod orchestrator_continue;
 mod orchestrator_continued;
+mod orchestrator_decisions;
 mod orchestrator_git;
 mod orchestrator_guard;
 mod orchestrator_interrupted;

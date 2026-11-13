@@ -312,6 +312,15 @@ the order that applies (see [Orders](#orders)).
   is refused `report_turn`). `get_daily_report` reads a day's report. The daily report is not
   an event of a task: the routing rule does not apply to it.
 
+### Its own decisions, with reasons
+
+In a turn it started itself, the Orchestrator gives a one-sentence **reason** with every judgement: how a stopped run
+goes on (accepting a step, a return, a retry, a raise), an answer to an agent's question, a decision on a plan, a
+tool request it allows or denies. Without one the call is refused (`reason_required`). What it did is kept as a
+**decision** of the project, with the task, the run, the reason and the conversation, and stays *open* until you mark
+it seen or overrule it. `get_decisions` lists them for any client and for the chat; the screen that shows them is not
+built yet. In a turn your own message started it needs no reason and makes no decision: you asked.
+
 ## Watching
 
 A conversation **leads** what the person tells it to watch: its subscriptions decide where the events of their tasks

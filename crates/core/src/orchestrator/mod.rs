@@ -8,6 +8,7 @@ use std::time::Duration;
 
 pub mod change;
 pub mod chat;
+pub mod decision;
 mod failure;
 pub mod fork;
 pub mod git;

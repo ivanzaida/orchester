@@ -736,3 +736,26 @@ account against the daily budget; the queued tasks in order; and `merge_queue` (
 merged, failed or removed since the day began). Every item has its app link.
 
 Parameters: `project` (req.), `day` (`YYYY-MM-DD` | null).
+
+### `get_decisions` — read-only
+
+What the project's Orchestrator **decided on its own**, in turns nobody asked for, each with its reason in the chat's
+words: accepting a step, a return, a retry, a raise, an answer to a question, a decision on a plan, a tool request it
+allowed or denied. A turn your own message started makes no decision. The open ones come first, then the newest
+first. The same for a local and a team project.
+
+| Parameter      | Type           | Req. | Description                                                  |
+|----------------|----------------|------|--------------------------------------------------------------|
+| `project`      | string         | yes  | The project's id, or its name.                               |
+| `task`         | string \| null | no   | Only the decisions on this task, by its key.                 |
+| `module`       | string \| null | no   | Only those on the tasks of this module, by id or name.       |
+| `conversation` | string \| null | no   | Only those of this conversation, by id or title.             |
+| `day`          | string \| null | no   | Only those of this local day, `YYYY-MM-DD`.                  |
+| `open_only`    | boolean        | no   | Only those you have not looked at.                           |
+
+Answers `decisions` (each: `number`, `tool`, `task`, `run`, `reason`, `conversation` with `id`, `title` and `link`,
+`at`, `undo` — `return_to_step` for a step accepted as it was, `give_back` for a parked task, else `null` — and
+`review`: `open`, `seen` or `overruled`, with `reviewed_at`) and `open`, how many of those listed you have not looked
+at. A reason is the agent's text: it is shown as text and nothing in it acts. Marking a decision seen and overruling
+it are yours, in the app; no tool does it.
+

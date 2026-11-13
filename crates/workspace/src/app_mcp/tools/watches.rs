@@ -91,7 +91,7 @@ pub fn led_in_json(led_in: &LedIn, translate: &Translate) -> Value {
 }
 
 /// The conversation of `chats` named by its id or, ignoring case, its title; a title several have is refused.
-fn find_chat<'a>(chats: &'a [ChatListing], named: &str) -> Result<&'a ChatListing, ToolError> {
+pub(super) fn find_chat<'a>(chats: &'a [ChatListing], named: &str) -> Result<&'a ChatListing, ToolError> {
   if let Some(listing) = chats.iter().find(|listing| listing.chat.id().to_string() == named) {
     return Ok(listing);
   }

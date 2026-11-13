@@ -2555,6 +2555,7 @@
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
+      "reasonRequired": "Nobody asked for this turn, so {{tool}} is your own decision: call it again with `reason`, one sentence on why, of at most 400 characters. It is kept for the person to review. Nothing was changed.",
       "dailyBudgetPersonOnly": "The project's daily budget bounds what is spent while nobody watches, so it is not changed in a turn nobody asked for. Nothing was changed: tell the person what stopped at it and what you recommend, and they change it or ask you to.",
       "pipelinesDriveOnly": "While Let the Orchestrator drive is off, the Orchestrator changes no pipeline: a pipeline has only saved versions, so there is no draft to propose. Nothing was changed: tell the person what to change and that they save it in Pipelines, or that they can turn on Let the Orchestrator drive.",
       "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",

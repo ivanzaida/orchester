@@ -21,7 +21,12 @@ use super::{
 const STUCK: &str = "Cache GitHub API responses";
 
 fn retry(run: &str) -> Value {
-  json!({ "project": "Kontur", "run": run, "choice": { "kind": "allow_retry" } })
+  json!({
+    "project": "Kontur",
+    "run": run,
+    "choice": { "kind": "allow_retry" },
+    "reason": "The review failed on a flaky check.",
+  })
 }
 
 /// `scope`'s conversation takes `target` as `mode` says, from now on.

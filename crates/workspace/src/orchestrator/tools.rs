@@ -23,7 +23,7 @@ use serde_json::Value;
 use super::{
   acts::{act_and_keep, drives},
   approval::{self, APPLY_PROPOSAL},
-  approval_turn, duplicate, git, guard, leads, mcp_servers,
+  approval_turn, decisions, duplicate, git, guard, leads, mcp_servers,
   own_project::{in_own_project, own_project_by_id},
   plan::{self, PROPOSE_PLAN},
   repository::{self, INIT_REPOSITORY},
@@ -43,7 +43,7 @@ use crate::{
 /// starting a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's
 /// agents a message and continuing a run that waits for a person's decision. While it drives, it has every other tool
 /// of the app too ([`listed`]). A name whose tool the app does not have (yet) is not listed.
-pub const TOOLS: [&str; 57] = [
+pub const TOOLS: [&str; 58] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -101,6 +101,7 @@ pub const TOOLS: [&str; 57] = [
   "get_delivery",
   "get_story_point_calibration",
   "get_daily_report",
+  "get_decisions",
 ];
 
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
@@ -180,6 +181,7 @@ pub fn listed(drives: bool) -> Vec<Tool> {
         tool.description = Some(told.into());
       }
       approval_turn::with_reason(&mut tool);
+      decisions::with_reason(&mut tool);
       tool
     })
     .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])

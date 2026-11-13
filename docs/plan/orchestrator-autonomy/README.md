@@ -166,7 +166,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | todo |
 | [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | todo |
 | **E** | **The record for the person** | | | |
-| [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | todo |
+| [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | done; its screen is OA-23 |
 | [OA-23](OA-23-while-you-were-away.md) | *While you were away*: decisions to review and what needs you | design + UI | OA-15, OA-22, frames | blocked (frames) |
 | [OA-24](OA-24-outside-notification.md) | A notification that leaves the computer | design + app | — | canceled (person, 2026-11-13) |
 | [OA-25](OA-25-daily-report.md) | The daily report names reasons, what is parked and what is held | workspace | OA-03, OA-15, OA-22 | todo |

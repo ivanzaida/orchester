@@ -1,6 +1,6 @@
 # OA-22 · The chat's own decisions with their reasons
 
-- **Status:** todo
+- **Status:** done (2026-11-14); its screen is OA-23
 - **Kind:** core + store + workspace
 - **Depends on:** —
 - **Branch:** —
@@ -48,3 +48,22 @@ A person's turn makes no decisions of this kind: they asked.
   for `get_decisions` (`--test orchestrator_decisions`).
 - `tools/check.ps1` passes; `docs/manual/mcp-tools-work.md` and the chat's manual list the tool and the argument.
   The list's screen is OA-23.
+
+## As built (2026-11-14)
+
+- **The record:** `orchester_core::orchestrator::decision` (`Reason`, one line of at most 400 characters; `Decision`;
+  `Review` open → seen → overruled, forward only; `Undo`), kept in `orchestrator_decisions` (migration 174).
+- **The reason is part of the call** for `continue_run` (but `resume`), `answer_question` and `decide_plan` in a turn
+  Orchester started (`orchestrator/decisions.rs`): refused `reason_required` before anything else is asked, taken off
+  the arguments before the app's tool is reached, and, when the call was done, kept as a decision. `decide_approval`
+  keeps its own required reason and is kept the same way. A person's turn drops a reason it was given.
+- **Read** with `get_decisions` (the app's tool, so every client and the chat have it): by task, module,
+  conversation, local day, open only. A team project answers as a local one.
+- **Reviewed** by `orchestrator::decisions::review_in`, which no tool calls: the person's screen is OA-23.
+
+Not here, with the task that brings each: running a task again (OA-14), parking (OA-15), and a merge of a run with a
+step accepted unverified (the acceptance itself is a decision already; the merge rule is the chat's, not a
+judgement, so it takes no second reason). `ReportAction`'s reason is OA-25.
+
+Tests: `orchester-core --test orchestrator_decision`, `orchester-store --test orchestrator_decisions`,
+`orchester-app --test mcp_domain orchestrator_decisions`.

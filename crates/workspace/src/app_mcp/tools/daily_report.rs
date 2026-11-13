@@ -57,7 +57,7 @@ pub async fn get_daily_report(services: &Services, args: GetDailyReport) -> Resu
 }
 
 /// When local day `day` starts.
-fn local_day_start(day: NaiveDate) -> Option<Timestamp> {
+pub(super) fn local_day_start(day: NaiveDate) -> Option<Timestamp> {
   let midnight = day.and_hms_opt(0, 0, 0)?;
   let local = midnight.and_local_timezone(chrono::Local).earliest()?;
   Some(Timestamp::from_unix_millis(local.timestamp_millis()))

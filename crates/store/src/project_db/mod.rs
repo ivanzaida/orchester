@@ -53,6 +53,7 @@ mod new_resources;
 mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
+mod orchestrator_decisions;
 mod orchestrator_fork;
 mod orchestrator_holds;
 mod orchestrator_leads;
@@ -167,6 +168,7 @@ pub use self::{
   message_records::MessageRecord,
   notice_records::NoticeRecord,
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_decisions::DecisionsRead,
   orchestrator_fork::ChatFork,
   orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,

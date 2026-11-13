@@ -27,7 +27,7 @@ use super::{
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
   created::{self, CREATE_TASK},
-  guard,
+  decisions, guard,
   keep::{self, HOLD_QUEUE, Named},
   led_start, proposal,
   repository::INIT_REPOSITORY,
@@ -52,13 +52,28 @@ pub(super) async fn act_and_keep(
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Value, ToolError> {
-  let acted = act((services, translate), scope, name, arguments).await;
+  // A judgement's reason is the chat's, not the app tool's: it is taken off before the tool is reached.
+  let (reason, arguments) = match decisions::split(name, arguments) {
+    Ok((reason, rest)) => (reason, rest),
+    Err(error) => return Err(error),
+  };
+  let arguments = &arguments;
+  let acted = match decisions::refused(scope, name, arguments, reason.as_deref()) {
+    Some(refused) => Acted::done(Err(refused)),
+    None => act((services, translate), scope, name, arguments).await,
+  };
   let Acted { mut result, kept } = acted;
   let outcome = match (&result, kept.waits) {
     (Ok(_), Some(waits)) => waits,
     (Ok(_), None) => ActionOutcome::Done,
     (Err(error), _) => keep::refusal(error, translate),
   };
+  // What the chat did on its own with a reason is a decision the person reviews: a judgement's, or its answer to a
+  // tool request.
+  let reason = reason.or_else(|| kept.tool_answer.as_ref().map(|answer| answer.reason.clone()));
+  let decided = (scope.on_its_own && outcome == ActionOutcome::Done)
+    .then(|| reason.map(|reason| (kept.task.clone(), reason)))
+    .flatten();
   let named = kept.task.map(Named::Task).or_else(|| keep::named_task(arguments));
   let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
   // A hold that held new starts keeps what it held, for its card.
@@ -79,6 +94,9 @@ pub(super) async fn act_and_keep(
     ..ChatAction::new(name, None, outcome)
   };
   keep::keep(scope, (named, held), action).await;
+  if let Some((task, reason)) = decided {
+    decisions::keep(scope, name, arguments, (task, &reason)).await;
+  }
   runners.chat_changed(&scope.root);
   result
 }
