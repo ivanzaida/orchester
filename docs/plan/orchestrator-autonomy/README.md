@@ -1,0 +1,213 @@
+# Orchestrator autonomy — task tracker
+
+What is missing for the Orchestrator to lead tasks and whole modules to the end while nobody is at the computer, and
+the tasks that close it. Written 2026-11-13 from a read-only analysis of the code on `master` `2ab1600da`; nothing here
+is built yet.
+
+- **Today.** With *Let the Orchestrator drive* on, the chat is woken by events of the tasks a conversation leads and
+  acts with the app's tools (`docs/design/orchestrator-toolset.md`, decision 14; `docs/design/orchestrator-watch.md`;
+  `docs/manual/orchestrator-chat.md`). It reacts; it does not carry work to the end, and the reaction is lost when
+  anything around the turn fails.
+- **Goal.** A person subscribes a conversation to a module, says *lead it to the end*, and leaves. They come back to
+  every task merged or left to them with what exactly they must do, a list of what the Orchestrator decided on its
+  own with its reasons, and nothing lost on the way.
+- **Scope.** Local projects. A project linked to a team server keeps today's behaviour (`team_project_unsupported`,
+  `team_delivery`); its tasks, modules and delivery are the team server's and are not planned here.
+- **Design.** Visible changes get frames on the desktop design's boards `Orchestrator watch · redesign` `QOPcg` and
+  `Orchestrator WIP` `mPw5l` (`crates/desktop-app/design/orchester.pen`) before they are built; tasks of kind
+  *design + UI* start with them.
+- **Docs.** A task that changes a rule changes it in `docs/design/orchestrator-toolset.md`,
+  `docs/design/orchestrator-watch.md` and `docs/manual/orchestrator-chat.md` in the same change.
+- **How to take a task:** as in `docs/plan.md` (*How to take a task*).
+- **Updating this file:** set a task's status, branch and tokens here and in its own file in the same change.
+
+Status: `todo` · `blocked` (waits for a task) · `needs decision` (waits for the person) · `in progress` · `review` ·
+`done` · `canceled`.
+
+## What was found
+
+Each line is what the code does today; the task that changes it is at its end.
+
+**The loop loses events.**
+
+- An event gets one turn. A turn that fails (the CLI crashed, the 10-minute limit, signed out, a plan limit, the
+  runner did not take it) ends failed and is never asked for again: `start_wait_turn` gives an entry its `message_id`
+  once (`crates/store/src/project_db/orchestrator_waits.rs`), and `send::answer_wait` says "a wait starts one turn at
+  most" (`crates/workspace/src/orchestrator/send.rs`). → OA-01, OA-02
+- The Orchestrator's turns count toward the daily budget, and a used budget refuses the turn; the event is still
+  spent. Nothing wakes the chat when the budget's day turns or when its account's plan limit resets: runs have reset
+  timers (`crates/runner/src/execution/coordinator/plan_limit/`), chat turns do not. → OA-03
+- One connection and one account, with no second one to go on with. → OA-04
+- A conversation is compacted only when a person presses *Compact*. → OA-05
+- A stall is raised once per stall, and its turn is told to start, resume and cancel nothing. → OA-06
+- Each event is a turn of its own, one at a time per conversation; the watch design says events that wait are taken
+  together. → OA-07
+- The follower lives in the app's process and the runners do not outlive the window; a sleeping computer stops
+  everything. → OA-08
+
+**Nothing carries a module to the end.**
+
+- In a turn Orchester started, `run_task` starts a task only in the turn of a success the chat merged itself, under an
+  order, for a task with no run yet (`crates/workspace/src/orchestrator/led_start.rs`: `not_merge_turn`, `not_led`,
+  `already_ran`). So a person starts the first wave, a task that failed is never run again, and a start an agent slot
+  refused comes back only with the next merged success: when the last working task fails, the module stops for good.
+  → OA-12, OA-13, OA-14
+- The chat cannot say "this one needs the person" and go on: a task it cannot move simply waits. → OA-15
+- A local module has no branch of its own and no delivery: its tasks merge into the base branch, which by default is
+  the person's checkout, and a checkout with local changes sends the merge to the Local integration page. → OA-16,
+  OA-17
+- What limits the chat's own doing is its prompt: `continue_run`'s raises and retries have no ceiling, and the rule
+  that its own doing starts no turn (`raised_by_own`) is gone since decision 14. → OA-09
+
+**A person is still needed in the middle.**
+
+- `answer_question`, a `send_message` that answers and `decide_plan` need *Let automation answer approvals* beside the
+  drive switch (`crates/workspace/src/app_mcp/tools/questions.rs`); the chat is woken for a question it may not answer.
+  → OA-11
+- Command requests in the person-only categories (a push, the network, an install, a write outside the worktree,
+  credentials, a command not read to the end) wait for the person with no end. → OA-21
+
+**Quality rests on the pipeline alone.**
+
+- A run is merged when every step passed, and a step the chat itself accepted unverified counts. Only a pipeline
+  that ends in a Deliver step checks the merged result (the merge queue); a `merge_run` merge is not checked.
+  → OA-19, OA-20
+- A Verify step that reads the design needs Pencil open with the document saved; nothing tells the person before
+  they leave. → OA-19
+
+**The person learns little afterwards.**
+
+- The chat's actions are kept in its conversation and counted in the daily report, without reasons; there is no list
+  of what it decided on its own to review, no list of what waits for the person with what to do, and no notification
+  that leaves the computer. → OA-22 … OA-25
+
+## Person's decisions (2026-11-13)
+
+- **How it is worked.** One session writes the code itself, task after task, in the worktree
+  `.tmp/worktrees/claude-orchestrator-autonomy` on `claude/orchestrator-autonomy-plan`: one commit per task, after the
+  check and an independent review; nothing is pushed, and `master` is the person's.
+- **Scope now:** every task but OA-04 (later) and OA-24 (canceled).
+- **Design:** the person draws the frames. Each visible task waits for its frames; what to draw is in
+  [frames.md](frames.md). Everything without a visible change is built first.
+- **OA-11 · The chat does not depend on *Let automation answer approvals*.** That setting is for outside MCP clients
+  only. While it drives, the chat answers questions and messages, decides plans and changes the limits its tools
+  change, with no second switch.
+- **OA-17, OA-20 · A local module may have its own branch, and the Orchestrator delivers it** after its acceptance
+  passed, when the person ticked *Deliver when accepted* for the module.
+- **OA-08 · Only keeping the computer awake** while agents work (a setting, Windows and macOS). Closing the window
+  still stops the work; OA-19 warns.
+- **OA-04 · No second connection now.** The chat waits for its account's reset (OA-03).
+- **OA-24 · Nothing leaves the computer.** No webhook; OS notifications only.
+- **Ceilings of a leading subscription (OA-09):** 3 runs of a task, the first included; 4 returns or retries of the
+  chat's own per run; 1 raise of a limit per run by at most 50 %; an optional token budget. Changed in Project
+  settings.
+
+## Assumed until the person says otherwise
+
+Not asked yet; the tasks are built on them and each is one constant or one sentence of a prompt to change.
+
+- **Retries (OA-01):** a failed turn Orchester started is tried again after 1, 5 and 15 minutes; after the fourth
+  failure the event is left to the person and counts in *Needs you*. A turn the person stopped is not tried again.
+- **A used budget holds, it does not fail (OA-03).** The Orchestrator never raises the daily budget on its own in a
+  turn nobody asked for, and no share of the budget is reserved for it.
+- **Compaction (OA-05)** runs before a turn Orchester starts once the session used 70 % of its window.
+- **A stall is raised again (OA-06)** each further period without progress, three times at most per stall: the first
+  turn messages the agent, the second stops it and continues from the last checkpoint, the third parks the task.
+- ***Lead to the end* is chosen only by the person (OA-09)** with the watch command (a click; not by the agent's
+  `watch` tool, not by synthetic input). *Follow*, today's behaviour, stays the default.
+- **Person-only requests stay person-only (OA-21).** A led task whose agent asks for one is parked.
+- **Unverified steps (OA-18).** While it leads, the chat accepts a step as it is only when what could not be checked
+  cannot be checked at all; a tool that did not answer is tried again and then parked. Every such acceptance is a
+  decision to review.
+
+## Tasks
+
+| ID | Task | Kind | Depends on | Status |
+| --- | --- | --- | --- | --- |
+| **A** | **The loop holds** | | | |
+| [OA-01](OA-01-failed-turn-keeps-event.md) | A turn Orchester started that failed leaves its event open | core + store + workspace | — | todo |
+| [OA-02](OA-02-retry-clock.md) | The retry clock, and the event's line says what happens | design + UI | OA-01, frames | blocked (frames) |
+| [OA-03](OA-03-budget-and-plan-limit-hold.md) | A used budget and a plan limit hold turns until the reset | core + runner + workspace + UI | OA-01 | todo |
+| [OA-04](OA-04-second-connection.md) | A second connection for the Orchestrator | design + UI + runner | OA-03 | later (person, 2026-11-13) |
+| [OA-05](OA-05-compaction-before-a-turn.md) | The conversation is compacted before a turn that would not fit | workspace + runner | — | todo |
+| [OA-06](OA-06-stall-again.md) | A run that stays stalled is raised again, and its turn may act | core + workspace | OA-09, OA-15 | todo |
+| [OA-07](OA-07-events-together.md) | Events that wait in one conversation are taken in one turn | core + workspace | OA-01 | todo |
+| [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | todo |
+| **B** | **What the chat may do on its own** | | | |
+| [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | todo |
+| [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | blocked (frames) |
+| [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | todo |
+| **C** | **A module to the end** | | | |
+| [OA-12](OA-12-standing.md) | Core: where a led target stands | core + workspace | OA-09 | todo |
+| [OA-13](OA-13-work-can-start.md) | The event *work can start* | core + workspace | OA-09, OA-12 | todo |
+| [OA-14](OA-14-run-again.md) | A failed task is run again within its ceiling | workspace | OA-09, OA-13 | todo |
+| [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | todo |
+| [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | todo |
+| [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | todo |
+| [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | todo |
+| **D** | **Quality without a person** | | | |
+| [OA-19](OA-19-before-you-leave.md) | Before you leave: is what the conversation leads ready | design + workspace + UI | OA-09, frames for its UI | todo |
+| [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | todo |
+| [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | todo |
+| **E** | **The record for the person** | | | |
+| [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | todo |
+| [OA-23](OA-23-while-you-were-away.md) | *While you were away*: decisions to review and what needs you | design + UI | OA-15, OA-22, frames | blocked (frames) |
+| [OA-24](OA-24-outside-notification.md) | A notification that leaves the computer | design + app | — | canceled (person, 2026-11-13) |
+| [OA-25](OA-25-daily-report.md) | The daily report names reasons, what is parked and what is held | workspace | OA-03, OA-15, OA-22 | todo |
+| **F** | **Proof** | | | |
+| [OA-26](OA-26-unattended-proof.md) | An unattended module, end to end, with the fake agents | tests | OA-01 … OA-03, OA-06, OA-07, OA-09, OA-12 … OA-15, OA-18, OA-21, OA-22 | todo |
+
+## Order
+
+1. **First:** OA-01, OA-05, OA-09, OA-16 (research), OA-22, OA-11; the person draws the frames of `frames.md`.
+2. **The loop holds (milestone 1):** OA-02, OA-03, OA-07 after OA-01. This alone makes today's *Follow* stop losing
+   events, and ships without the rest.
+3. **A flat module to the end (milestone 2):** OA-12, then OA-13 and OA-15, then OA-14, OA-06, OA-21 and OA-18;
+   OA-10 and OA-19 beside them. *Flat* means its tasks merge as today, into the base branch.
+4. **The record (milestone 3):** OA-23 and OA-25 after OA-15 and OA-22.
+5. **Proof:** OA-26, before anyone leaves a real module to it.
+6. **Then:** OA-17 and OA-20 (the module's own branch, its acceptance and delivery) and OA-08 (awake). The visible
+   tasks follow their frames whenever those arrive.
+
+## Edge cases and what settles them
+
+| Case | Today | Settled by |
+| --- | --- | --- |
+| The Orchestrator's turn fails or times out | the event is spent | OA-01: tried again 3 times, then left to the person |
+| A turn timed out after it merged or answered | — | OA-01: the next try is told how the last ended and reads the state first; the tools refuse what was done |
+| The daily budget is used at 23:00 | every event until the reset is spent | OA-03: events wait, turns start at the reset |
+| The Orchestrator's account is at its plan limit | turns fail | OA-03 holds until the reset; OA-04 goes on elsewhere |
+| A run and the Orchestrator share the account at its limit | the run waits for the reset, the chat fails | OA-03: both wait for the same reset |
+| 300 event turns in one conversation | the CLI's own compaction, or a failure | OA-05 |
+| A run stays stalled for hours | one turn, which may only write | OA-06: raised again, acts, then parks |
+| A long build inside one tool call reads as no progress | a stall turn | OA-06: a tool call under way is not a stall before its own timeout |
+| Twelve events arrive while one turn thinks | twelve turns, one after another | OA-07 |
+| The window is closed, or the computer sleeps | everything stops | OA-08; until then OA-19 warns |
+| Nobody started the module's first tasks | nothing starts | OA-13 |
+| Every agent slot is taken | told, never tried again | OA-13: raised again when a slot frees |
+| A task failed and others wait for it | the module stops | OA-14 runs it again; past its ceiling OA-15 parks it and the stuck event tells the person |
+| The chat returns a run, it fails, it returns it again | until the daily budget is used | OA-09: `ceiling_reached` |
+| The chat raises a limit again and again | no ceiling | OA-09 |
+| A question that the brief does not answer | told to the person, the run waits | OA-18: decided by the stated precedence and recorded (OA-22), or parked when it is irreversible or outward |
+| An agent asks to push or to use the network | waits for the person | OA-21: parked, the rest goes on |
+| A plan waits for a decision | the person's, or a second switch | OA-11 |
+| Verify could not reach Pencil | accepted as unreachable, or waits | OA-18: tried again, then parked |
+| The person's checkout has local changes | the merge goes to Local integration | OA-17: a module's own branch; without it OA-19 warns and OA-15 parks |
+| Two running tasks change the same file | a conflict after the fact, resolved by an agent | OA-18: the chat orders them with `blocked_by` when it plans; base-moved notices and `resolve_conflicts` stay the net |
+| A merge broke the base branch | nobody notices | OA-19 requires a Deliver step for a leading subscription or warns; OA-20 for a module's delivery |
+| Two conversations act on one run | only `run_task` checks who leads | OA-09: the ceilings count per run, whoever acted; no further change planned |
+| The person takes a task over while the chat leads it | both act | OA-15: a person's action on a parked or led run settles the chat's event for it |
+| The person turns the drive switch off mid-way | no new turn starts | OA-01, OA-13: no retry and no new event while it is off; what waited starts nothing when it is on again unless it still stands |
+| The low-disk pause | runs pause and go on by themselves; no event | OA-12: the standing says *held: low disk*; the stuck event names it |
+| A led task has no pipeline, or its pipeline is not ready | the start is refused | OA-19 before leaving; OA-15 parks it |
+
+## Not here
+
+- Team projects (see *Scope*), and the server that will run projects without a desktop.
+- A list of person-only command categories the chat may allow.
+- File ownership between running tasks as a mechanism of the app; the chat orders tasks instead (OA-18).
+- Reverting a merge automatically: the Deliver step's check of the merged result comes before the merge instead.
+- The watch design's second wave other than the budget of a subscription: pipelines, profiles and runners as
+  targets, watch-only subscriptions, digests.
+- Planning a module from its design (the coverage audit of `.claude/skills/work-outside-orchester`): the chat leads
+  the tasks a module has.
