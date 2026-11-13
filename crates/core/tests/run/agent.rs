@@ -82,6 +82,7 @@ fn problems_with_servers(
     profiles: &config.profiles,
     tools: &BTreeMap::new(),
     connections: std::slice::from_ref(connection),
+    chosen_here: &BTreeMap::new(),
     mcp_servers: servers,
     secrets: &[],
   })
@@ -251,6 +252,7 @@ fn preflight_reports_steps_whose_permissions_codex_cannot_enforce() {
     profiles: &profiles,
     tools: &BTreeMap::new(),
     connections: std::slice::from_ref(&codex),
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &[],
     secrets: &[],
   });
@@ -302,6 +304,7 @@ fn preflight_refuses_a_command_list_on_a_profile_that_asks() {
       profiles: &profiles,
       tools: &BTreeMap::new(),
       connections: std::slice::from_ref(&claude),
+      chosen_here: &BTreeMap::new(),
       mcp_servers: &[],
       secrets: &[],
     })
@@ -329,6 +332,7 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
     profiles: &BTreeMap::new(),
     tools: &BTreeMap::new(),
     connections: &[],
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &[],
     secrets: &[],
   });
@@ -342,6 +346,7 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
     profiles: &config.profiles,
     tools: &BTreeMap::new(),
     connections: &[],
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &[],
     secrets: &[],
   });
@@ -370,6 +375,7 @@ fn preflight_asks_for_a_pick_on_a_team_profile_with_no_connection_here() {
     profiles: &config.profiles,
     tools: &BTreeMap::new(),
     connections: &[],
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &[],
     secrets: &[],
   });

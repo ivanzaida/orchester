@@ -200,7 +200,9 @@ impl RunTask {
 
   /// The pinned profile version, as the run's inputs bind it or the coordinator link reads it, and the agent connection
   /// `step` runs it on, as the computer the run executes on has it: the one a person chose for this run when the step
-  /// stopped at its account's plan limit, else the profile's own.
+  /// stopped at its account's plan limit, else the one that computer runs the profile on. A run made from inputs
+  /// keeps the connection its inputs bound; any other follows the computer's choice for the profile, which may have
+  /// changed since the run began.
   pub(in super::super) fn profile_and_connection(
     &self,
     profile: &PinnedVersion,
@@ -214,9 +216,16 @@ impl RunTask {
       .db
       .step_connection(self.run.id(), step)
       .map_err(|error| problem(error.to_string()))?;
+    let runs_on = match chosen {
+      Some(chosen) => chosen,
+      None => self
+        .resolver
+        .runs_on(&*self.computer, profile, &body)
+        .map_err(|error| problem(error.to_string()))?,
+    };
     let (connection, here) = self
       .computer
-      .connection(chosen.unwrap_or(body.connection()))
+      .connection(runs_on)
       .map_err(|error| problem(error.to_string()))?
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?
       .into_parts();

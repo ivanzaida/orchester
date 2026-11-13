@@ -138,7 +138,8 @@ impl Assignables {
     for resource in store.resources(ResourceKind::AgentProfile)? {
       if let Some(version) = store.latest_version::<AgentProfile>(resource.id())? {
         let named = (resource.id(), resource.name().as_str());
-        profiles.push(ProfileChoice::of(named, version.number(), version.body(), &connections));
+        let here = store.profile_here(resource.id(), version.body().clone())?;
+        profiles.push(ProfileChoice::of(named, version.number(), &here, &connections));
       } else if let Some(draft) = store.draft::<AgentProfile>(resource.id())? {
         draft_profiles.push(DraftProfileChoice {
           id: resource.id(),

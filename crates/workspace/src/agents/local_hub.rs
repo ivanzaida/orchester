@@ -267,7 +267,9 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
     };
     // What the panel shows is the latest published version, what runs: a local profile is edited in place, with no
     // drafts (decided by the person 2026-11-09), so a draft stored of it (an MCP client's) is not the panel's.
-    let shown = around.shown(db, resource.id(), (version.published_at(), version.body()))?;
+    // On what this computer chose for it: that is what a run starts it on.
+    let here = db.profile_here(resource.id(), version.body().clone())?;
+    let shown = around.shown(db, resource.id(), (version.published_at(), &here))?;
     profiles.push((resource.id(), shown));
   }
   Ok(profiles)

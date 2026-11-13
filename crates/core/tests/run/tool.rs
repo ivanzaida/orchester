@@ -74,6 +74,7 @@ fn problems_of(tool: Option<Tool>, gate: bool) -> Vec<PreflightProblem> {
     profiles: &config.profiles,
     tools: &tools,
     connections: &[],
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &[],
     secrets: &[],
   })

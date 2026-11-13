@@ -58,6 +58,15 @@ impl AccountCli {
     }
   }
 
+  /// The CLI's own name as its maker writes it, the same in every language: what a project's connection on one of
+  /// its accounts is named after.
+  pub const fn product(self) -> &'static str {
+    match self {
+      Self::ClaudeCode => "Claude Code",
+      Self::Codex => "Codex",
+    }
+  }
+
   /// The program's name on the `PATH`.
   pub const fn program(self) -> &'static str {
     match self {

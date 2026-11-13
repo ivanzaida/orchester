@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use super::{chosen::ChosenResources, prompt::PromptText};
 use crate::{
-  connection::mcp::McpServerSelection,
+  connection::{Connection, ConnectionKind, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId},
   name::Name,
   permission::AgentPermissions,
@@ -163,6 +163,32 @@ impl AgentProfile {
   pub const fn with_connection(mut self, connection: ConnectionId) -> Self {
     self.connection = connection;
     self
+  }
+
+  /// The profile as it runs on this computer (`docs/design/agent-accounts.md`, "Agents run on accounts", decision 4):
+  /// on `chosen`, the connection picked here for it, when that runs the kind of agent the profile's own connection
+  /// (`own`) runs, or its own is gone. The published version stays as it is: the choice is this computer's and
+  /// needs no new version. A choice of another kind of agent is not taken, since the profile's model, settings and
+  /// permissions were made for the kind it names.
+  #[must_use]
+  pub fn chosen_here(self, own: Option<&Connection>, chosen: Option<&Connection>) -> Self {
+    let connection = Self::connection_here(self.connection, own, chosen);
+    self.with_connection(connection)
+  }
+
+  /// The connection a profile whose version names `named` runs on here by the rule of [`Self::chosen_here`], where
+  /// `own` is that connection if it still exists.
+  pub fn connection_here(named: ConnectionId, own: Option<&Connection>, chosen: Option<&Connection>) -> ConnectionId {
+    let Some(chosen) = chosen else {
+      return named;
+    };
+    let ConnectionKind::Agent(kind) = chosen.kind() else {
+      return named;
+    };
+    match own.map(Connection::kind) {
+      Some(ConnectionKind::Agent(own_kind)) if own_kind != kind => named,
+      _ => chosen.id(),
+    }
   }
 
   #[must_use]

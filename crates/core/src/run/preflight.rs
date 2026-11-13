@@ -100,6 +100,9 @@ pub struct PreflightInput<'a, T = Tool> {
   /// Latest published version of each tool.
   pub tools: &'a BTreeMap<ResourceId, Version<T>>,
   pub connections: &'a [Connection],
+  /// The connection picked on this computer for a profile, where one was: the step is checked on the connection
+  /// the profile runs on here ([`AgentProfile::connection_here`]). Empty for a run whose inputs bound them.
+  pub chosen_here: &'a BTreeMap<ResourceId, ConnectionId>,
   pub mcp_servers: &'a [McpServer],
   /// The secrets that are not archived.
   pub secrets: &'a [Secret],
@@ -156,7 +159,10 @@ fn checked<T: PreflightTool>(input: PreflightInput<'_, T>) -> Vec<PreflightProbl
     if profile.body().awaits_connection_pick(profile_id) {
       problems.push(PreflightProblem::ConnectionNotPicked { step: key() });
     } else {
-      match usable_provider(&connections, profile.body().connection(), key()) {
+      let named = profile.body().connection();
+      let chosen = input.chosen_here.get(&profile_id).and_then(|id| connections.get(id));
+      let runs_on = AgentProfile::connection_here(named, connections.get(&named).copied(), chosen.copied());
+      match usable_provider(&connections, runs_on, key()) {
         Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
         Err(problem) => problems.push(problem),
       }

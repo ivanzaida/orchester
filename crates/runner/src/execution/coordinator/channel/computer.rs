@@ -1,14 +1,14 @@
-//! The computer's resources over the channel: its connections, home folder and environment cross as JSON to a thread
-//! that answers with the computer the scheduler had (the local one), and back. Its secrets, their values and its MCP
-//! servers and its decision model connections are answered by that computer on the executor's side (see the module
-//! above).
+//! The computer's resources over the channel: its connections, what a profile runs on there, its home folder and
+//! environment cross as JSON to a thread that answers with the computer the scheduler had (the local one), and back.
+//! Its secrets, their values and its MCP servers and its decision model connections are answered by that computer on
+//! the executor's side (see the module above).
 
 use std::{path::PathBuf, sync::Arc};
 
 use orchester_core::{
   computer::{ComputerConnection, ComputerError},
   connection::{DecisionConnection, mcp::McpServer},
-  id::{ConnectionId, DecisionConnectionId, ProjectId, SecretId},
+  id::{ConnectionId, DecisionConnectionId, ProjectId, ResourceId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
   secret::{Secret, SecretName, SecretValue, VaultError},
@@ -43,6 +43,10 @@ fn serve(computer: &mut Backend, method: &str, text: &str) -> Reply {
       received::<()>(text);
       whole(&computer.connections())
     }
+    "profile_connection" => {
+      let (profile, named) = received(text);
+      whole(&computer.profile_connection(profile, named))
+    }
     "home_folder" => {
       received::<()>(text);
       whole(&computer.home_folder())
@@ -59,6 +63,10 @@ impl ComputerResources for ChannelComputer {
 
   fn connections(&self) -> Result<Vec<ComputerConnection>, ComputerError> {
     crossed_whole(self.wire.ask("connections", &()))
+  }
+
+  fn profile_connection(&self, profile: ResourceId, named: ConnectionId) -> Result<ConnectionId, ComputerError> {
+    crossed_whole(self.wire.ask("profile_connection", &(profile, named)))
   }
 
   fn home_folder(&self) -> Option<PathBuf> {

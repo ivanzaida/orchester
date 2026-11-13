@@ -20,7 +20,7 @@ use std::{
 use orchester_core::{
   computer::{CliHomes, ComputerConnection, ComputerError},
   connection::{DecisionConnection, mcp::McpServer},
-  id::{ConnectionId, DecisionConnectionId, ProjectId, SecretId},
+  id::{ConnectionId, DecisionConnectionId, ProjectId, ResourceId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
   secret::{Secret, SecretName, SecretValue, SecretVault, VaultError},
@@ -35,6 +35,11 @@ pub(crate) trait ComputerResources: Send + Sync {
 
   /// Every connection this computer has, by name.
   fn connections(&self) -> Result<Vec<ComputerConnection>, ComputerError>;
+
+  /// The connection this computer runs the project's agent profile `profile` on when its version names `named`: the
+  /// one picked on this computer for it when it can run on that one, else `named`
+  /// (`docs/design/agent-accounts.md`, "Agents run on accounts", decision 4).
+  fn profile_connection(&self, profile: ResourceId, named: ConnectionId) -> Result<ConnectionId, ComputerError>;
 
   /// Decision model connection `id` as this computer has it; `None` when it has none by that id.
   fn decision_connection(&self, id: DecisionConnectionId) -> Result<Option<DecisionConnection>, ComputerError>;
@@ -115,6 +120,10 @@ impl ComputerResources for LocalComputer {
         .map(|connection| ComputerConnection::read(connection, Path::is_dir, &homes))
         .collect(),
     )
+  }
+
+  fn profile_connection(&self, profile: ResourceId, named: ConnectionId) -> Result<ConnectionId, ComputerError> {
+    self.read(|db| db.connection_here(profile, named))
   }
 
   fn home_folder(&self) -> Option<PathBuf> {

@@ -7,6 +7,7 @@
 mod api;
 mod error;
 pub(crate) mod folders;
+mod runs_on;
 pub mod sign_in;
 pub mod trash;
 mod uses;
@@ -33,6 +34,7 @@ use orchester_store::StoreError;
 pub use self::{
   error::AccountsError,
   folders::own_folder,
+  runs_on::RunsOnError,
   uses::{AccountUses, ConnectionUse, RunUse},
 };
 use crate::{connections::probe, workspace::Workspace};

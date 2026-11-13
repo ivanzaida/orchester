@@ -110,6 +110,7 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
     profiles: &published.profiles,
     tools: &published.tools,
     connections: &connections,
+    chosen_here: &db.connection_picks().map_err(store)?,
     mcp_servers: &mcp_servers,
     secrets: &secrets,
   });

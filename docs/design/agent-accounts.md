@@ -359,14 +359,35 @@ a team project a person has to add a connection in every project before *Runs he
 
 **What the project database keeps.** A run must still say what it ran on after the account is renamed or removed,
 and usage is counted by it. So the project keeps a record of each account or provider its agents ran on, made by
-Orchester when one is chosen and never shown as a thing to manage. Whether it stays the `connections` table behind
-`ConnectionId` (about 1,500 uses in 420 files, tests and the frozen `crates/desktop` included) is the
-implementation's choice; screens and MCP tools speak of accounts only.
+Orchester when one is chosen and never shown as a thing to manage: it stays the `connections` table behind
+`ConnectionId` (about 1,500 uses in 420 files, tests and the frozen `crates/desktop` included). Screens and MCP
+tools speak of accounts only.
+
+**As built so far** (branch `module/agents-on-accounts`; the screens and the move of existing keys are not built):
+
+- *The app is the source of truth, the project's row a copy.* The runner never opens the application database, so
+  what a run needs is in the project's connection row, as an account's folder already is, and Orchester keeps the
+  rows in step when the app's side changes (`Workspace::follow_accounts`). A run therefore reads current values at
+  its start without a path of its own to the app.
+- *API accounts* (`orchester_core::account::ApiAccount`, table `api_accounts` in `orchester.db`): a name, the kind
+  of agent (`claude_code_cli`, `codex_cli`, `anthropic_api`, `openai_api`), the model API and its models. The key is
+  in the OS keychain under `orchester-api-account:<account id>` / `key`; the account's id is the key's id. The
+  window calls one an API provider. A sign-in and an API account of the same CLI never share a name, since a profile
+  is offered both as *Claude Code · Work*.
+- *The CLI's program* is one path per CLI for the computer (table `agent_programs`); a CLI without one is looked up
+  on the search path, newest copy first, when a connection is made.
+- *What a profile runs on here* is a pick beside the profile (`team_connection_picks`, the table team profiles
+  use; `ProjectDb::profile_here`). Published versions are immutable and keep naming a connection: that is where the
+  profile runs until a pick is made. A pick is taken when it runs the same kind of agent as that connection, or when
+  that connection is gone. `Workspace::run_profile_on_account` makes the pick and, when the project has no
+  connection on the account yet, the connection: named after the CLI and the account (*Claude Code · Work*) and
+  checked there.
+- *Runs.* A local run takes the pick at each agent start, so a change made while it waits applies to its next
+  agent, as a new session. A team run keeps the connection its inputs bound when the server accepted it. The check
+  before a run (`preflight`) looks at the connection the profile runs on here.
 
 **To settle in the design.**
 
-- What a run reads at its start. Today the account's folder is copied into the connection row. A provider's URL,
-  models and key change in Settings, so a run must take them from the app at its start, not from a copy.
 - The model select of a profile: a provider's models are its own, so the offered models depend on the account
   chosen here, while the profile version names one model. A team profile on a person's provider has the same
   question.

@@ -37,7 +37,7 @@ pub struct ModelUse {
 /// Every model use in the project, each listed once.
 pub fn load(db: &ProjectDb) -> Result<Vec<ModelUse>, StoreError> {
   let mut uses = Vec::new();
-  // The connections each profile runs on, in its published version and in its draft.
+  // The connections each profile runs on here, as its published version and as its draft.
   let mut on: Vec<(ResourceId, ConnectionId)> = Vec::new();
   for resource in db.resources(ResourceKind::AgentProfile)? {
     let latest = db.latest_version::<AgentProfile>(resource.id())?;
@@ -48,8 +48,9 @@ pub fn load(db: &ProjectDb) -> Result<Vec<ModelUse>, StoreError> {
       .into_iter()
       .chain(draft.as_ref().map(|draft| draft.body()));
     for profile in bodies {
-      on.push((resource.id(), profile.connection()));
-      push(&mut uses, profile_use(profile, profile.model().clone()));
+      let here = db.connection_here(resource.id(), profile.connection())?;
+      on.push((resource.id(), here));
+      push(&mut uses, profile_use(here, profile, profile.model().clone()));
     }
   }
   pinned_uses(db, &mut uses)?;
@@ -105,7 +106,8 @@ fn pinned_uses(db: &ProjectDb, uses: &mut Vec<ModelUse>) -> Result<(), StoreErro
           continue;
         };
         if let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? {
-          push(uses, profile_use(version.body(), model.clone()));
+          let here = db.connection_here(profile.resource, version.body().connection())?;
+          push(uses, profile_use(here, version.body(), model.clone()));
         }
       }
     }
@@ -113,9 +115,10 @@ fn pinned_uses(db: &ProjectDb, uses: &mut Vec<ModelUse>) -> Result<(), StoreErro
   Ok(())
 }
 
-fn profile_use(profile: &AgentProfile, model: ModelId) -> ModelUse {
+/// `profile` using `model` on `connection`, the one it runs on here.
+fn profile_use(connection: ConnectionId, profile: &AgentProfile, model: ModelId) -> ModelUse {
   ModelUse {
-    connection: profile.connection(),
+    connection,
     user: ModelUser::Profile(profile.role().as_str().into()),
     model,
   }

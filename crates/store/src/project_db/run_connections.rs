@@ -29,8 +29,9 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// The agent connection `step` of `run` runs on now: one a person chose for this run, else its profile's as the
-  /// run pinned it (for a run created with execution inputs, the connection its bindings name, team authority §7);
+  /// The agent connection `step` of `run` runs on now: one a person chose for this run, else the one its profile
+  /// runs on here ([`Self::connection_here`]; for a run created with execution inputs, the connection its bindings
+  /// name, team authority §7);
   /// `None` when the step runs no agent, or the connection is gone or no agent CLI's.
   pub fn step_agent_connection(&self, run: &Run, step: &StepKey) -> Result<Option<AgentConnection>, StoreError> {
     let id = match self.step_connection(run.id(), step)? {
@@ -40,15 +41,16 @@ impl ProjectDb {
           return Ok(None);
         };
         let pinned = match self.run_inputs(run.id())? {
-          Some(inputs) => inputs.profile(*profile),
+          Some(inputs) => inputs.profile(*profile).map(|bound| bound.connection()),
           None => self
             .version::<AgentProfile>(profile.resource, profile.number)?
-            .map(|version| version.body().clone()),
+            .map(|version| self.connection_here(profile.resource, version.body().connection()))
+            .transpose()?,
         };
         let Some(pinned) = pinned else {
           return Ok(None);
         };
-        pinned.connection()
+        pinned
       }
     };
     Ok(

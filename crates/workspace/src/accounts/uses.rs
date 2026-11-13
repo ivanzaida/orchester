@@ -92,21 +92,24 @@ fn project_uses(
     .into_iter()
     .filter(|connection| runs_on(connection, account))
     .collect();
-  let profiles = if connections.is_empty() {
-    Vec::new()
-  } else {
-    profiles(&db)?
-  };
+  // Each profile's role with the connection it runs on here, which a person may have chosen beside its version.
+  let mut profiles_here: Vec<(Arc<str>, ConnectionId)> = Vec::new();
+  if !connections.is_empty() {
+    for entry in profiles(&db)? {
+      let here = db.connection_here(entry.id, entry.profile.connection())?;
+      profiles_here.push((Arc::from(entry.profile.role().as_str()), here));
+    }
+  }
   for connection in &connections {
     found.connections.push(ConnectionUse {
       project: project.id,
       project_name: project.name.clone(),
       connection: connection.id(),
       connection_name: connection.name().clone(),
-      profiles: profiles
+      profiles: profiles_here
         .iter()
-        .filter(|entry| entry.profile.connection() == connection.id())
-        .map(|entry| Arc::from(entry.profile.role().as_str()))
+        .filter(|(_, here)| *here == connection.id())
+        .map(|(role, _)| role.clone())
         .collect(),
     });
   }
@@ -131,7 +134,7 @@ fn project_uses(
 
 /// Whether `run`, which has not ended, is on `account`: an agent of it started on the account (its session is kept
 /// in the account's folder), or a step runs on a connection on it (`connections`): one a person chose for this run,
-/// else its profile's as the run pinned it.
+/// else the one its profile runs on here.
 fn run_on_account(
   db: &ProjectDb,
   run: &orchester_core::run::Run,
@@ -153,7 +156,8 @@ fn run_on_account(
       Some(chosen) => Some(chosen),
       None => db
         .version::<AgentProfile>(profile.resource, profile.number)?
-        .map(|version| version.body().connection()),
+        .map(|version| db.connection_here(profile.resource, version.body().connection()))
+        .transpose()?,
     };
     if connection.is_some_and(|connection| connections.contains(&connection)) {
       return Ok(true);
