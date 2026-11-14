@@ -49,7 +49,7 @@ pub fn group(
   let busy = save.state().get().is_pending();
   let mode = super::approve_mode::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() && options.decisions.is_empty() {
-    unavailable_reviewer(ctx, props)
+    unavailable_reviewer(ctx)
   } else {
     let busy = busy || tab.check.state().get().is_pending();
     reviewer_row(ctx, (tab, props), (options, cannot_run), busy)
@@ -84,7 +84,7 @@ pub fn group(
     None => group,
   }
 }
-fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
+fn unavailable_reviewer(ctx: &mut Ctx) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);
   let open = ActionButton::new(
     "settings-auto-open-connections",

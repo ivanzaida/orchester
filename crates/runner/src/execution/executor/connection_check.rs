@@ -49,8 +49,8 @@ impl Scheduler {
   }
 }
 
-/// The API key `key` names, a native connection's or an API provider's, read through `computer`'s keychain: the
-/// secret of `project` by that id, and, when the project has none, the key of the person's API account by that id
+/// The API key `key` names, a native connection's or an API provider's, read through `computer`'s keychain: the key
+/// of the person's API account by that id where the app keeps one, else the secret of `project` by that id
 /// (a connection on an API account keeps the account's id as its key's: `docs/design/agent-accounts.md`, "Agents
 /// run on accounts"). An archived secret, or a key the keychain does not give, is refused, named, never with its
 /// value.
@@ -60,18 +60,22 @@ pub(in crate::execution) fn api_key(
   key: SecretId,
 ) -> Result<Arc<SecretValue>, String> {
   const MISSING: &str = "the connection's API key secret is missing or archived";
+  // The app's key first: an API account that took over a project's secret has the secret's id, and a key replaced in
+  // Settings is the one to use.
+  let account = ApiAccountId::from_uuid(key.as_uuid());
+  let of_account = computer.api_account_key(account);
+  if let Ok(value) = of_account {
+    return Ok(Arc::new(value));
+  }
   let Some(secret) = computer.secret(key).map_err(|error| error.to_string())? else {
-    let account = ApiAccountId::from_uuid(key.as_uuid());
-    return computer
-      .api_account_key(account)
-      .map(Arc::new)
-      .map_err(|error| match error {
-        VaultError::NotFound => MISSING.to_owned(),
-        error => {
-          tracing::warn!(%account, %error, "the keychain did not give an API account's key");
-          "the keychain did not give the key of the connection's API account".to_owned()
-        }
-      });
+    return Err(match of_account {
+      Err(VaultError::NotFound) => MISSING.to_owned(),
+      Err(error) => {
+        tracing::warn!(%account, %error, "the keychain did not give an API account's key");
+        "the keychain did not give the key of the connection's API account".to_owned()
+      }
+      Ok(_) => MISSING.to_owned(),
+    });
   };
   if secret.is_archived() {
     return Err(MISSING.to_owned());

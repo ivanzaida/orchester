@@ -4,6 +4,7 @@
 //! Recycle Bin / Trash). Opening the CLI's own login is [`sign_in`]. Everything here blocks on SQLite, the file
 //! system or a CLI; the UI calls it off the UI thread.
 
+mod adopt;
 mod api;
 mod api_runs_on;
 mod decision;

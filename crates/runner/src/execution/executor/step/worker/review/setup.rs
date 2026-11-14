@@ -527,6 +527,10 @@ fn native(
 /// The native reviewer's API key, read on the review's computer: the value of the project secret `id`, or of the
 /// person's API account by that id when the project holds no such secret; why not is logged, never the value.
 fn api_key(keys: &ReviewerSources, id: SecretId) -> Option<SecretValue> {
+  // The app's key first, where there is one by the id (`connection_check::api_key`).
+  if let Ok(value) = keys.computer.api_account_key(ApiAccountId::from_uuid(id.as_uuid())) {
+    return Some(value);
+  }
   let secret = match keys.computer.secret(id) {
     Ok(Some(secret)) if !secret.is_archived() => secret,
     // No secret of the project by this id: the connection is the project's copy of an API account of the person's,
