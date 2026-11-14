@@ -1677,6 +1677,7 @@
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
       "mcpExemptTool": "A tool name is empty or holds a line break: {{value}}",
       "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory, environment and variable_names, a remote server authorization and secret_headers.",
+      "profileNoCli": "This profile names no agent CLI to choose an account of: its connection is gone and its model names none. Choose what it runs on in its panel first.",
       "accountChoice": "Choosing the account a connection runs on: it decides whose sign-in, and which organisation's provider, gets the project's work.",
       "teamMcpOnPersonOnly": "Turning on one of the team's MCP servers lets the team's agents use it on this computer, which only a person decides, in Orchester's window; Let automation change agent permissions does not lift this. Nothing was changed.",
       "teamMcpNameNotEditable": "A team MCP server keeps the name it was made with; leave the name out or give the same one. Nothing was changed.",

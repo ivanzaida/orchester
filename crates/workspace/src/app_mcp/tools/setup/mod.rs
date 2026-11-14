@@ -446,6 +446,7 @@ async fn dispatch(
     "list_models" => connections::list_models(services, parse(arguments)?).await,
     "set_api_provider" => api_providers::set_api_provider(services, parse(arguments)?).await,
     "list_accounts" => accounts::list_accounts(services, parse(arguments)?).await,
+    "set_profile_account" => accounts::set_profile_account(services, parse(arguments)?).await,
     "set_connection_account" => accounts::set_connection_account(services, parse(arguments)?).await,
     "add_mcp_server" => mcp_servers::add_mcp_server(services, parse(arguments)?).await,
     "update_mcp_server" => mcp_servers::update_mcp_server(services, parse(arguments)?).await,

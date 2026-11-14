@@ -88,9 +88,24 @@ pub(super) const SPECS: &[Spec] = &[
                   reset_since_reading (true when its reset has passed since: its use now is unknown, never \
                   estimated). Codex accounts are read on their own; Claude Code accounts only by a turn or the \
                   person's Check now. Adding, renaming and removing accounts \
-                  and signing them in are done by a person in the window.",
+                  and signing them in are done by a person in the window. api_providers are the person's API \
+                  providers (Settings › Accounts): id, name, used_with (claude_code, codex, or orchester_agent for \
+                  Orchester's own agent), host and models; decision_servers are their decision model servers: id, \
+                  name, host, takes_key, models and whether a check listed them. No key is listed.",
     schema: schema_for_type::<accounts::NoArguments>,
     read_only: true,
+  },
+  Spec {
+    name: "set_profile_account",
+    description: "Runs an agent profile on one of the person's accounts on this computer, as choosing the account \
+                  in the profile's Runs on does: `profile` is a profile of the project by id or role (a team's in a \
+                  team project), `account` a sign-in of the profile's CLI by id or name (list_accounts), `default` \
+                  its Default. The project gets its connection on the account when it has none, and the profile's \
+                  version stays as it is. Moving a profile that already runs on an account to another one that is \
+                  not the CLI's Default is refused as person_only unless a person turned on Let automation change \
+                  agent permissions. Returns the profile and the account.",
+    schema: schema_for_type::<accounts::SetProfileAccount>,
+    read_only: false,
   },
   Spec {
     name: "set_connection_account",
