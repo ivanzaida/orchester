@@ -222,6 +222,28 @@ In the installed app (`E:\Orchester`, the debug build of this head): the real pr
 from schema 173 to 176, the runner attached, nothing was kept or started, and the log has no error of this work. Its
 Orchestrator is not signed in, so no turn could be seen there.
 
+## Second QA round (2026-11-14, head `4882fe039`)
+
+In a QA copy (`tools/qa-app.ps1 -Name autonomy -Scenario orchestrator-watch -FakeAgents`), through its MCP server.
+The installed app was not used: another copy of the app was at work on the person's own project, whose database this
+head would have migrated from schema 176 to 178.
+
+- **A module's own branch.** `update_module` with `own_branch: true` gave *Webhooks v2* `module/webhooks-v2`;
+  `get_module` showed it with `waits_for`. `run_task` of one of its tasks made the branch in the repository at
+  `main`'s tip, and the run recorded it as its base (`source: module`), the checkout staying on `main`.
+- **Delivery.** `deliver_module` answered `nothing_to_deliver` before any work, `runs_at_work` while that run had not
+  ended, and, with a commit on the module's branch, merged it into `main` with a merge commit that reached the
+  checkout; `get_module` showed the delivery, and a second call answered `nothing_to_deliver`. `start_acceptance`
+  answered `no_acceptance_pipeline`.
+- **Before you leave.** `get_standing` gave, for the conversation leading the module to the end, `ready: false` with
+  `drive_off`, `no_deliver_step` (its three tasks), `may_sleep` and `stops_with_window`, and what is not checked.
+- **Keep the computer awake.** The row shows in Settings › General under *Work*; its switch turned on through the
+  window and the setting was stored.
+- **Not reached there:** a run that works to its end (the QA copy's fake agent program did not start, so the run
+  stopped at its first step: nothing held the computer awake, no success was merged into the module's branch by a
+  run, and no acceptance ran); a turn of the Orchestrator, so neither events taken together (OA-07) nor the turns of
+  *accept* and *deliver* were seen live; a team project. These are covered by the automated tests only.
+
 ## Edge cases and what settles them
 
 | Case | Today | Settled by |
