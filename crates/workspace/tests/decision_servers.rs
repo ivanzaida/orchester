@@ -112,7 +112,10 @@ fn decision_servers_a_server_is_added_once_and_every_project_gets_its_copy() {
 
   let server = laya(&fixture);
 
-  assert_eq!(fixture.workspace.decision_servers().expect("read"), [server.clone()]);
+  assert_eq!(
+    fixture.workspace.decision_servers().expect("read"),
+    std::slice::from_ref(&server)
+  );
   assert_eq!(server.key(), Some(SecretId::from_uuid(server.id().as_uuid())));
   assert_eq!(
     fixture.vault.read(&entry(server.id())).expect("kept").expose(),
@@ -120,7 +123,11 @@ fn decision_servers_a_server_is_added_once_and_every_project_gets_its_copy() {
     "the key is the app's"
   );
   let listed = copies(&fixture);
-  assert_eq!(listed, [server.clone()], "the project's copy is the server");
+  assert_eq!(
+    listed,
+    std::slice::from_ref(&server),
+    "the project's copy is the server"
+  );
   let db = ProjectDb::open(fixture.repo.path()).expect("database");
   assert!(
     db.secrets().expect("read").is_empty(),
@@ -164,7 +171,7 @@ fn decision_servers_a_copy_follows_its_server() {
     )
     .expect("changed");
 
-  assert_eq!(copies(&fixture), [changed.clone()]);
+  assert_eq!(copies(&fixture), std::slice::from_ref(&changed));
   assert_eq!(changed.name().as_str(), "Laya EU");
   assert_eq!(changed.key(), server.key(), "the key stays");
 

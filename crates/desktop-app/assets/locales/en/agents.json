@@ -178,7 +178,7 @@
     "mcp": "MCP servers",
     "mcpNone": "This project has no MCP servers yet. Agents work without them.",
     "mcpHint": "The server keeps its own access to files and network.",
-    "mcpDisabled": "Turned off in Connections",
+    "mcpDisabled": "Turned off in the Agents hub",
     "addMcp": "Add an MCP server",
     "approvals": "Approvals",
     "permissions": {
@@ -240,7 +240,7 @@
     },
     "whenAsked": "When the agent asks",
     "toolCalls": "MCP approvals",
-    "toolCallsHint": "Requests that require approval wait in Needs you. Tools allowed without asking in Connections keep their exemption.",
+    "toolCallsHint": "Requests that require approval wait in Needs you. Tools allowed without asking in the server's panel keep their exemption.",
     "askTools": "Ask before MCP actions that require approval",
     "unavailable": "Unavailable on this connection.",
     "nativeUnavailable": "This connection does not offer approval switches or MCP servers.",

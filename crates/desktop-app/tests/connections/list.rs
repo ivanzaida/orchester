@@ -77,8 +77,8 @@ fn connections_row_opens_the_connections_page_with_a_crumb_back() {
     assert!(page.contains(words), "{words} in {page}");
   }
   assert!(
-    seeded.exists("settings-tab-connections"),
-    "the page is under Project settings' tabs"
+    seeded.exists("settings-tab-general") && !seeded.exists("settings-tab-connections"),
+    "the page is under Project settings' tabs, of which Connections is none"
   );
   seeded.click("connection-more");
   for item in ["connection-rename", "connection-edit"] {

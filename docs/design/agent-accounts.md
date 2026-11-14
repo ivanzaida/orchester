@@ -363,7 +363,7 @@ Orchester when one is chosen and never shown as a thing to manage: it stays the 
 `ConnectionId` (about 1,500 uses in 420 files, tests and the frozen `crates/desktop` included). Screens and MCP
 tools speak of accounts only.
 
-**As built so far** (branch `module/agents-on-accounts`; the screens and the move of existing keys are not built):
+**As built so far** (branch `module/agents-on-accounts`):
 
 - *The app is the source of truth, the project's row a copy.* The runner never opens the application database, so
   what a run needs is in the project's connection row, as an account's folder already is, and Orchester keeps the
@@ -447,6 +447,29 @@ tools speak of accounts only.
   The fix names the account, never a connection.
 - Not built yet: the drawing has *Runs here use* and *CLI, model and effort* in one section, *Agent CLI & model*;
   the app keeps its sections *From the team* and *On this computer*, and the row there is still called *Runs on*.
+
+- *Built on 2026-11-14 and 15, after the person's answers* (accounts are unique by the signed-in email; native API
+  connections and the decision model's server go to Settings as *Model APIs*; the picker closes once a model is
+  chosen; a QA copy's MCP client is the person for the whole window):
+  - *The picker.* A sign-in stands once for every folder one email is signed in to, its line says the email, and
+    the picker closes once a model is chosen, also the one chosen already. The Orchestrator's composer lists this
+    computer's accounts the same way; an account the project has no connection on gets one when it is chosen.
+  - *Use for all N* beside *Use … for …*, in the local and the team hub, for the profiles of one CLI that run on
+    nothing here.
+  - *Model APIs.* *Add an API provider* offers Orchester's own agent and a decision model's server beside the two
+    CLIs. An account of Orchester's own agent is copied into a project as a native connection; a decision model's
+    server (`decision_servers` in `orchester.db`, its key under the server's id) is copied into every project by
+    its own id. An API provider's row replaces its key and removes it; a decision server's row checks and removes
+    it. Not built: renaming, another base URL or other models, testing an account, a provider's own page.
+  - *Existing keys.* When a project opens, a connection on a key of its own becomes the copy of an API account with
+    the key secret's id (the same API and key in two projects is one account), and a decision connection a server
+    of the app by its own id. Nothing of the project's is removed; a run reads the app's key first.
+  - *Project settings.* The tab row has no Connections and nothing in the app leads there for agents: those links
+    open Settings › Accounts. The pages the tab had (a connection made before accounts, a decision model's test,
+    GitHub's page) still open by their own routes, under no tab; they are not removed yet, and GitHub's rows are
+    the ones General already had.
+  - *MCP.* `list_accounts` also lists API providers and decision servers, never a key; `set_profile_account` runs
+    a profile on a sign-in. The other tools of the table below are as they were.
 
 ### Screens (drawn 2026-11-13, not approved yet)
 

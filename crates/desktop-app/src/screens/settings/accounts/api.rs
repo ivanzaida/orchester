@@ -171,6 +171,8 @@ impl Draft {
     self.own.clear(OWN);
     self.decision_key.clear();
     self.name.set(String::new());
+    // The page starts over whole: what the last provider was used with is not the next one's.
+    self.used.set(UsedWith::ALL[0]);
   }
 
   /// What reaches the model API, once the fields of an API account say it; `None` for a decision model's server.

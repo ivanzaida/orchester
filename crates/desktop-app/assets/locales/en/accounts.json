@@ -57,6 +57,7 @@
       "lineOne": "API provider · {{host}} · {{count}} model",
       "keySet": "Key set",
       "replaceKey": "Replace key…",
+      "replaceConfirm": "Replace key",
       "newKey": "New API key",
       "replaceTitle": "Replace the key of {{name}}",
       "replaceBody": "The new key takes the place of the one kept in the system keychain. Every project that runs a profile on this account uses it from its next run.",
@@ -253,7 +254,7 @@
     "rename": {
       "save": "Save",
       "cancel": "Cancel",
-      "note": "Connections, runs and plan limits show the new name at once: they hold the account, not its name. The folder keeps its path."
+      "note": "Profiles, runs and plan limits show the new name at once: they hold the account, not its name. The folder keeps its path."
     },
     "remove": {
       "title": "Remove {{account}} from Orchester?",
@@ -272,7 +273,7 @@
       "running": "Run {{run}} is running on {{account}}. A run keeps its account to the end: its agents' sessions live in {{account}}'s folder.",
       "runningReason": "Remove after {{run}} ends, or stop that run first",
       "unreadableReason": "{{projects}} can't be read, so a run there may be on this account. Remove it once they open",
-      "defaultReason": "Default is {{program}}'s own folder, {{folder}}, which every {{program}} you start yourself uses. Orchester can't remove it; to stop runs using it, choose other accounts in your connections."
+      "defaultReason": "Default is {{program}}'s own folder, {{folder}}, which every {{program}} you start yourself uses. Orchester can't remove it; to stop runs using it, choose other accounts for your profiles."
     },
     "usedBy": {
       "title": "Connections",
@@ -284,7 +285,7 @@
       "open": "Open",
       "profiles": "{{project}} · {{connection}} → {{profiles}}",
       "noProfile": "{{project}} · {{connection}} → no agent profile yet",
-      "empty": "No connection uses this account yet. Choose it as a connection's account in a project's Connections.",
+      "empty": "No project runs a profile on this account yet. Choose it in a profile's Runs on.",
       "unreadable": "{{projects}} could not be read; their connections are not counted."
     },
     "time": {

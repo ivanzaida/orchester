@@ -111,7 +111,7 @@
     "githubAccountDetail": "Pull requests are created only while gh is signed in as this account. Orchester never switches gh accounts.",
     "checkAgain": "Check again",
     "useAccount": "Use signed-in account",
-    "githubUnavailable": "Linking a repository is not built in this app yet. Manage GitHub in Connections.",
+    "githubUnavailable": "Linking a repository is not built in this app yet.",
     "agentFilesSection": "Agents and the repository",
     "agentFiles": "Repository agent files",
     "agentFilesDetail": "Whether agents may read the repository's own AGENTS.md, CLAUDE.md and skills folders besides Orchester's instructions and skills. A change applies to agents that start after it.",

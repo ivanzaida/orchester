@@ -787,7 +787,7 @@
       "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
       "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
-      "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
+      "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check its account in Settings › Accounts.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "networkHostsNotEnforceable": {
         "codex": "Step “{{step}}” limits network access to a host list, which Codex can’t enforce on this computer: its sandbox can’t keep commands off the network here. Choose network off or on, or a connection that can enforce the list.",
@@ -802,7 +802,7 @@
       "baseCommitMissing": "Can't start: the commit {{commit}} the team run starts from is not in this repository. Fetch it, then start the run again.",
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
-        "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
+        "none": "Step “{{step}}” runs on a connection that has no account. Choose an account in its profile's Runs on.",
         "folderMissing": "Step “{{step}}” runs on an account whose folder {{folder}} no longer exists. Remove the account or choose another one for the connection."
       }
     },
@@ -887,7 +887,7 @@
         "noConnection": "Auto mode needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
         "connectionGone": "The reviewer connection chosen in Project settings is gone. Choose another there.",
         "unsupported": "The reviewer connection chosen in Project settings cannot review yet (the OpenAI API). Choose another there.",
-        "noModel": "The reviewer connection lists no model. Check it under Connections, or choose a model in Project settings."
+        "noModel": "The reviewer's account lists no model. Check it in Settings › Accounts, or choose a model in Project settings."
       }
     }
   },
@@ -1641,7 +1641,7 @@
       "codexSandboxNotCodex": "Only a Codex connection has a sandbox to turn off: leave codex_sandbox out, or on.",
       "codexSandboxShared": "A shared project's profiles keep the Codex sandbox on in this version: leave codex_sandbox out, or on.",
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
-      "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
+      "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in the Agents hub before adding it to this profile.",
       "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
       "givenTwice": "Name each instruction, skill and tool once.",
       "toolNotCheck": "{{tool}} is not a check an agent can call: a profile gives its agents only command tools with access rules.",
@@ -2285,9 +2285,9 @@
     "refusedAfterStart": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. Your claim on the task was released. Fix each of these before you start it again.",
     "refusedAfterStartKept": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. Your claim on the task is kept, because another run here still needs it. Fix each of these before you start it again.",
     "refusedAfterStartHeld": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. The team server refused to release your claim on the task, so it may still be held. Fix each of these before you start it again.",
-    "connectionNoneOfKind": "Add a {{cli}} connection in Connections: {{profile}} runs on one, and this computer has none.",
-    "connectionSignIn": "Sign in to {{cli}} in Connections: {{profile}} runs on it, and it is signed out on this computer.",
-    "decisionConnectionNoneOfKind": "Add a decision connection in Connections: the reviewer {{reviewer}} runs on one, and this computer has none.",
+    "connectionNoneOfKind": "Add a {{cli}} account in Settings › Accounts: {{profile}} runs on one, and this computer has none.",
+    "connectionSignIn": "Sign in to {{cli}} in Settings › Accounts: {{profile}} runs on it, and it is signed out on this computer.",
+    "decisionConnectionNoneOfKind": "Add a decision model's server in Settings › Accounts: the reviewer {{reviewer}} runs on one, and this computer has none.",
     "connectionPickNeeded": "Pick the {{cli}} connection {{profile}} runs on: this computer has several, and none is picked for it.",
     "decisionConnectionPickNeeded": "Pick the decision connection the reviewer {{reviewer}} runs on: this computer has several, and none is picked for it.",
     "mcpOff": "Switch on the MCP server {{server}} for this computer: the profiles of the pipeline give it to their agents.",
@@ -2296,8 +2296,8 @@
     "mcpMoreThanOneSecretHeader": "The MCP server {{server}} takes more than one secret header, and this app can't send several yet, so the agents could not use it. Ask a team Admin to change it to one.",
     "secret": "Set a value for the secret {{secret}} on this computer: an MCP server or tool of the pipeline is given it.",
     "secretUnreadable": "The keychain did not say whether this computer has a value for the secret {{secret}}, which an MCP server of the pipeline is given. Unlock the keychain and run it again.",
-    "localMcpProgramNotFound": "The program of the MCP server {{server}} was not found on the PATH or in the project. Install it, or choose its program again in Connections.",
-    "localMcpProgramMoved": "The program of the MCP server {{server}} now leads into the project's repository or off this computer, so a run would not start it. Choose its program again in Connections.",
+    "localMcpProgramNotFound": "The program of the MCP server {{server}} was not found on the PATH or in the project. Install it, or choose its program again in the server's panel, in the Agents hub.",
+    "localMcpProgramMoved": "The program of the MCP server {{server}} now leads into the project's repository or off this computer, so a run would not start it. Choose its program again in the server's panel, in the Agents hub.",
     "localSecret": "Set a value for the secret {{secret}} on this computer: a tool of the pipeline uses it.",
     "undecidedNotTeamForm": "{{resource}} is not in the team's form on this computer yet, so it is not known what it needs: ask a team Admin to publish it again.",
     "undecidedChoosesMcpServer": "{{resource}} chooses the MCP server {{server}}, which this computer has not synced from the team yet, so it is not known what it needs.",

@@ -192,7 +192,7 @@
         "under": "under {{threshold}} ·",
         "noRisk": "under {{threshold}} · no risk above 0.5",
         "reviewer": "The reviewer",
-        "settings": "· Project settings › Connections",
+        "settings": "· Settings › Accounts",
         "risk": {
           "outside": "may write outside the worktree",
           "network": "may reach the network",

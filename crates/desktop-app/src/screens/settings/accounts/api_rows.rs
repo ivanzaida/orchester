@@ -176,7 +176,7 @@ impl ApiRows {
     let confirm = ActionButton::new(
       "api-replace-confirm",
       ButtonKind::Primary,
-      t(ctx, "accounts.api.replaceKey"),
+      t(ctx, "accounts.api.replaceConfirm"),
     );
     let confirm = if typed.is_some() {
       confirm.on_click(move || {

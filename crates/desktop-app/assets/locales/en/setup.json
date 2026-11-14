@@ -47,7 +47,7 @@
       "checkAgain": "Check again",
       "changeAccount": "Change GitHub account or access",
       "addConnection": "Add GitHub connection",
-      "addConnectionUnavailable": "Add the GitHub connection once the project exists, in its Connections.",
+      "addConnectionUnavailable": "Add the GitHub connection once the project exists.",
       "chooseProgram": "Choose program…",
       "chooseProgramTitle": "Choose the GitHub CLI (gh)",
       "useAccount": "Use this account ({{account}})",

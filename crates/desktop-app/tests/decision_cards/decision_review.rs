@@ -47,7 +47,7 @@ fn card_decision_review_failure_names_the_model_and_reason_without_figures() {
   );
   assert_eq!(
     text(&mut window, &format!("{card}-review-settings")),
-    "· Project settings › Connections"
+    "· Settings › Accounts"
   );
   assert!(
     window
