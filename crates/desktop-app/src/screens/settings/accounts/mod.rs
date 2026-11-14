@@ -7,6 +7,7 @@
 
 mod add;
 mod api;
+mod api_rows;
 mod decision;
 mod details;
 mod facts;
@@ -131,6 +132,8 @@ struct Work {
   pub api: api::Draft,
   /// The decision model servers: the base URL typed for a new one, and what their rows do.
   pub servers: decision::Servers,
+  /// What an API provider's row does: *Replace key…* and *Remove*.
+  pub api_rows: api_rows::ApiRows,
   pub rename: Signal<String>,
   pub removal: remove::Choice,
   /// The account page's *…* menu: whether it is open, and the button it opens at.
@@ -225,6 +228,7 @@ impl Component for AccountsTab {
       draft: add::Draft::new(ctx),
       api: api::Draft::new(ctx),
       servers: decision::Servers::new(ctx),
+      api_rows: api_rows::ApiRows::new(ctx),
       rename: ctx.signal(String::new()),
       removal: remove::Choice::new(ctx),
       more: (ctx.signal(false), ElementRef::default()),
@@ -278,7 +282,10 @@ impl Component for AccountsTab {
         "settings-account-scroll",
         details::page(ctx, &parts, &self.work, (uses.as_ref(), reading)),
       ),
-      (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts, &self.work.servers)),
+      (_, None) => (
+        "settings-accounts-scroll",
+        list::page(ctx, &parts, (&self.work.servers, &self.work.api_rows)),
+      ),
     };
     frame::column(scroll, pane)
   }

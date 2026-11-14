@@ -12,6 +12,7 @@ use orchester_core::account::{AccountCli, AccountState, AgentAccount};
 
 use super::{
   Parts, api,
+  api_rows::ApiRows,
   decision::Servers,
   words::{Shown, cli_key, identity, look, name, t, ta},
 };
@@ -30,7 +31,7 @@ use crate::{
 };
 
 /// The list page's column.
-pub(super) fn page(ctx: &mut Ctx, parts: &Parts, servers: &Servers) -> Column {
+pub(super) fn page(ctx: &mut Ctx, parts: &Parts, (servers, api_rows): (&Servers, &ApiRows)) -> Column {
   let navigation = Navigation::of(ctx);
   let api = accounts::api_listed(ctx);
   let decision = accounts::decision_listed(ctx);
@@ -56,7 +57,7 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, servers: &Servers) -> Column {
       .into_iter()
       .map(|account| row(ctx, parts, account, &navigation))
       .collect();
-    rows.extend(api::rows(ctx, &api.0, cli));
+    rows.extend(api::rows(ctx, &api.0, cli, api_rows));
     let mut group = SettingGroup::new(format!("accounts-group-{}", cli.as_str()), t(ctx, cli_key(cli)))
       .meta(count)
       .rows(rows);
@@ -82,8 +83,9 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, servers: &Servers) -> Column {
     pane = pane.child(group);
   }
   pane
-    .with_children(api::model_apis(ctx, &api.0, (servers, &decision.0)))
+    .with_children(api::model_apis(ctx, &api.0, (servers, &decision.0), api_rows))
     .with_children(servers.question(ctx, &decision.0))
+    .with_children(api_rows.questions(ctx, &api.0))
     .child(group_note("accounts-note", &t(ctx, "accounts.note")))
 }
 

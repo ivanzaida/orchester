@@ -89,6 +89,18 @@ impl Workspace {
     Ok(account)
   }
 
+  /// Removes the API account and its key: it leaves the list and its name is free again. A project's connection on
+  /// it stays, as the record of what ran on it, and says its key is missing; runs that used it still name it.
+  pub fn remove_api_account(&self, vault: &dyn SecretVault, id: ApiAccountId) -> Result<(), AccountsError> {
+    self.db.lock().remove_api_account(id, Timestamp::now())?;
+    match vault.delete(&VaultKey::api_account(id)) {
+      Ok(()) | Err(VaultError::NotFound) => {}
+      Err(error) => return Err(AccountsError::Keychain(error)),
+    }
+    self.accounts_changed();
+    Ok(())
+  }
+
   /// Whether the keychain of this computer holds the API account's key, without reading it.
   pub fn api_account_has_key(&self, vault: &dyn SecretVault, id: ApiAccountId) -> Result<bool, VaultError> {
     vault.exists(&VaultKey::api_account(id))

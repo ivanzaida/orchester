@@ -8,7 +8,9 @@
 //!
 //! A decision model's server is added here too, and stands under *Model APIs* ([`super::decision`]).
 //!
-//! Not here yet: an account's own page (rename, replace the key, test, remove).
+//! A row's own actions, *Replace key…* and *Remove*, are [`super::api_rows`].
+//!
+//! Not here yet: renaming an account, another base URL or other models for it, and testing it.
 
 use std::sync::Arc;
 
@@ -34,6 +36,7 @@ use orchester_workspace::{background, connections::api_provider::base_url, messa
 
 use super::{
   Work,
+  api_rows::ApiRows,
   decision::{NewServer, Servers},
   words::{cli_key, t, ta},
 };
@@ -53,7 +56,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::Focus,
-    setting_rows::{SettingGroup, SettingRow, row_tile, status},
+    setting_rows::{SettingGroup, SettingRow},
     tabs::{Segment, SegmentFace, segmented},
   },
 };
@@ -393,7 +396,7 @@ pub(super) fn count(ctx: &Ctx, api: &[ApiAccount], cli: AccountCli) -> Option<St
 
 /// The rows of `cli`'s API providers, under its sign-ins: the name, *API provider*, its host and how many models it
 /// serves, and that its key is kept.
-pub(super) fn rows(ctx: &mut Ctx, api: &[ApiAccount], cli: AccountCli) -> Vec<Element> {
+pub(super) fn rows(ctx: &mut Ctx, api: &[ApiAccount], cli: AccountCli, actions: &ApiRows) -> Vec<Element> {
   of_cli(api, cli)
     .map(|account| {
       let models = match account.setup() {
@@ -412,7 +415,7 @@ pub(super) fn rows(ctx: &mut Ctx, api: &[ApiAccount], cli: AccountCli) -> Vec<El
           ("count", models.to_string()),
         ],
       );
-      row(ctx, account, line)
+      actions.row(ctx, account, line)
     })
     .collect()
 }
@@ -423,6 +426,7 @@ pub(super) fn model_apis(
   ctx: &mut Ctx,
   api: &[ApiAccount],
   (servers, decision): (&Servers, &[DecisionConnection]),
+  actions: &ApiRows,
 ) -> Option<Element> {
   let mut rows: Vec<Element> = api
     .iter()
@@ -453,7 +457,7 @@ pub(super) fn model_apis(
           ("count", count.to_string()),
         ],
       );
-      Some(row(ctx, account, line))
+      Some(actions.row(ctx, account, line))
     })
     .collect();
   rows.extend(servers.rows(ctx, decision));
@@ -470,21 +474,6 @@ pub(super) fn model_apis(
       .rows(rows)
       .into(),
   )
-}
-
-/// One API account's row: a cloud mark, its name over `line`, and that its key is kept.
-fn row(ctx: &mut Ctx, account: &ApiAccount, line: String) -> Element {
-  let id = format!("api-row-{}", account.id());
-  let state = status(
-    &format!("{id}-state"),
-    (PaletteColor::Success, PaletteColor::TextSecondary),
-    &t(ctx, "accounts.api.keySet"),
-  );
-  SettingRow::new(id, account.name().as_str().to_owned())
-    .lead(row_tile(icon(Icon::Cloud, IconSize::Md, PaletteColor::TextSecondary)))
-    .hint(line)
-    .control(state)
-    .render(ctx)
 }
 
 /// The API accounts an agent CLI runs on, `cli`'s, in the order they were added.

@@ -55,7 +55,14 @@
       "group": "{{accounts}} · {{providers}}",
       "line": "API provider · {{host}} · {{count}} models",
       "lineOne": "API provider · {{host}} · {{count}} model",
-      "keySet": "Key set"
+      "keySet": "Key set",
+      "replaceKey": "Replace key…",
+      "newKey": "New API key",
+      "replaceTitle": "Replace the key of {{name}}",
+      "replaceBody": "The new key takes the place of the one kept in the system keychain. Every project that runs a profile on this account uses it from its next run.",
+      "remove": "Remove",
+      "removeTitle": "Remove {{name}}?",
+      "removeBody": "Its key leaves the system keychain. A profile that runs on it stops running until another account is chosen for it."
     },
     "add": {
       "title": "Add an account",
