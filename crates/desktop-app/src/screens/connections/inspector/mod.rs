@@ -79,8 +79,6 @@ pub(super) enum Tested<'a> {
 /// What the page shows about the work on its connection.
 pub(super) struct Inspecting<'a> {
   pub listed: &'a ProjectConnections,
-  /// The person's agent accounts, which a CLI connection runs on one of.
-  pub accounts: &'a crate::services::accounts::Accounts,
   pub entry: Entry<'a>,
   pub open: &'a OpenProject,
   pub project: &'a str,
@@ -213,12 +211,6 @@ fn title(name: &str) -> Text {
     .variant(ProjectSettingsText::PageTitle.role())
 }
 
-/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`, the 6 `Dot` `IY1SX`); a check
-/// under way keeps its turning loader instead.
-pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
-  said_status(ctx, id, (status, detail), status.tone.word_color())
-}
-
 /// The page head's status (`Status` `l1Gh8O`), its word said in its tone when it asks for something, unless the page
 /// is a native connection's (`native`).
 fn head_status(ctx: &Ctx, status: Shown, detail: Option<&str>, native: bool) -> Row {
@@ -347,19 +339,6 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
   crate::screens::project_settings::kit::Group::new("connection-used-by-group", ctx.t("connections.usedBy"))
     .row(row)
     .into()
-}
-
-/// A row of a page's details: its label, its value at the end, in Geist Mono for a path or a command.
-fn detail_row(ctx: &mut Ctx, id: &str, (label, value): (&str, &str), mono: bool) -> Element {
-  let value = crate::screens::project_settings::kit::value(&format!("{id}-value"), value);
-  let value = if mono {
-    value
-      .variant(crate::theme::ExtraTypography::PropertyMono.role())
-      .color(PaletteColor::TextSecondary)
-  } else {
-    value
-  };
-  SettingRow::new(id.to_owned(), label).control(value).render(ctx)
 }
 
 /// The tone a page's sentence is said in: `warning` for a status that asks for something, else `text_muted`.

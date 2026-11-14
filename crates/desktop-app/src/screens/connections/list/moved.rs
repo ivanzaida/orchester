@@ -37,10 +37,7 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject) -> Element {
     ButtonKind::Secondary,
     ctx.t("connections.moved.general"),
   )
-  .opens(navigation.to(Route::Project(
-    id,
-    ProjectPage::Settings(ProjectSettingsTab::General),
-  )));
+  .opens(navigation.to(Route::Project(id, ProjectPage::Settings(ProjectSettingsTab::General))));
   Column::new()
     .id("connections-moved")
     .width(Dimension::Pct(100.0))

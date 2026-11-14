@@ -7,8 +7,6 @@
 //! 4). Add provider and Edit connection both use it; a model the connection keeps from its endpoint keeps its limits
 //! and efforts, and one added here has none.
 
-use std::sync::Arc;
-
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, SelectOption},
@@ -17,18 +15,13 @@ use lurq::{
 };
 use orchester_core::{
   account::ApiSetup,
-  connection::{
-    AgentProvider, ApiEndpoint, Effort, EndpointPreset, ModelSource, NativeModel, NativeModels,
-    offers_provider_fallback,
-  },
-  id::ConnectionId,
-  name::Name,
+  connection::{AgentProvider, EndpointPreset, ModelSource, NativeModel, NativeModels, offers_provider_fallback},
   resource::ModelId,
   secret::SecretValue,
 };
-use orchester_workspace::connections::{api_provider::base_url, data::ProjectConnections, native::NativeDraft};
+use orchester_workspace::connections::api_provider::base_url;
 
-use super::provider_form::{ProviderForm, SaveGuard};
+use super::provider_form::ProviderForm;
 use crate::{
   screens::project_settings::kit::{FormField, value, warning_line},
   ui::{
@@ -46,27 +39,10 @@ pub(in crate::screens) struct NativeForm {
   fields: ProviderForm,
   /// The default model's id; empty for none.
   default_model: Signal<String>,
-  /// The default effort's name; empty for the endpoint's own.
-  effort: Signal<String>,
   fallback: Signal<bool>,
-  /// Whether the fields were filled from the stored connection yet (Edit connection).
-  seeded: Signal<bool>,
 }
 
 impl NativeForm {
-  pub(super) fn new(ctx: &mut Ctx, provider: AgentProvider) -> Self {
-    let url = PRESET
-      .base_url(provider)
-      .map_or_else(String::new, |url| url.as_str().to_owned());
-    Self {
-      fields: ProviderForm::for_native(ctx, url),
-      default_model: ctx.signal(String::new()),
-      effort: ctx.signal(String::new()),
-      fallback: ctx.signal(false),
-      seeded: ctx.signal(false),
-    }
-  }
-
   /// The fields of an API account of Orchester's own agent (Settings › Accounts, *Model APIs*;
   /// `docs/design/agent-accounts.md`, "Agents run on accounts"): the same model API, with the key typed here for the
   /// app to keep, in place of a project's secret.
@@ -77,9 +53,7 @@ impl NativeForm {
     Self {
       fields: ProviderForm::for_native_account(ctx, url),
       default_model: ctx.signal(String::new()),
-      effort: ctx.signal(String::new()),
       fallback: ctx.signal(false),
-      seeded: ctx.signal(false),
     }
   }
 
@@ -133,84 +107,6 @@ impl NativeForm {
     }
     self.default_model.set(String::new());
     self.fallback.set(false);
-  }
-
-  /// Fills the fields once from the connection's model API as stored (Edit connection).
-  pub(super) fn seed(&self, api: &ApiEndpoint) {
-    self.fields.seed_native(api);
-    if self.seeded.get_untracked() {
-      return;
-    }
-    self.seeded.set(true);
-    let models = api.models();
-    self.default_model.set(
-      models
-        .default_model()
-        .map_or_else(String::new, |id| id.as_str().to_owned()),
-    );
-    self.effort.set(
-      models
-        .default_effort()
-        .map_or_else(String::new, |effort| effort.as_str().to_owned()),
-    );
-    self.fallback.set(api.provider_fallback());
-  }
-
-  pub(super) fn save_guard(&self) -> SaveGuard {
-    self.fields.save_guard()
-  }
-
-  /// The first reason the connection cannot be saved, in field order; `None` once it can.
-  pub(super) fn reason(&self, ctx: &Ctx, listed: &ProjectConnections) -> Option<Arc<str>> {
-    self.fields.reason(ctx, listed)
-  }
-
-  /// The rows of the Connection group after its name, for `provider`; `stored` are the models the connection has.
-  pub(super) fn rows(
-    &self,
-    ctx: &mut Ctx,
-    provider: AgentProvider,
-    (listed, stored): (&ProjectConnections, Option<&NativeModels>),
-  ) -> Vec<Element> {
-    let mut rows = vec![
-      self.preset_row(ctx, provider),
-      self.fields.url_row(ctx, provider),
-      self.fields.key_row(ctx, listed),
-      self.fields.models_row(ctx),
-      self.default_row(ctx),
-    ];
-    rows.extend(self.effort_row(ctx, stored));
-    rows.push(self.fallback_row(ctx, provider));
-    rows
-  }
-
-  /// The connection the fields make, `id` being the one edited (none adds one); `None` while a field cannot be saved.
-  pub(super) fn draft(
-    &self,
-    listed: &ProjectConnections,
-    stored: Option<&NativeModels>,
-    (id, name, provider): (Option<ConnectionId>, Name, AgentProvider),
-  ) -> Option<NativeDraft> {
-    let (base_url, key, ids) = self.fields.native_parts(listed)?;
-    let models: Vec<NativeModel> = ids.iter().map(|id| kept_or_manual(id, stored)).collect();
-    let default = ModelId::new(&self.default_model.get())
-      .ok()
-      .filter(|id| ids.contains(id));
-    let effort = default
-      .as_ref()
-      .and_then(|id| models.iter().find(|model| model.id() == id))
-      .and_then(|model| Effort::named(&self.effort.get()).filter(|effort| model.efforts().contains(effort)));
-    let models = NativeModels::new(models, default, effort).ok()?;
-    Some(NativeDraft {
-      id,
-      name,
-      provider,
-      preset: PRESET,
-      base_url,
-      key,
-      models,
-      provider_fallback: self.fallback.get() && offers_provider_fallback(provider, PRESET),
-    })
   }
 
   /// Where the agents' requests go, as a warning line under the group (`Sent to` `s4sjZm`).
@@ -319,31 +215,6 @@ impl NativeForm {
     FormField::new("connection-default-model", label)
       .hint(ctx.t("connections.native.defaultModelHint"))
       .render(ctx, select)
-  }
-
-  /// The default effort, while the default model is one the endpoint listed with efforts.
-  fn effort_row(&self, ctx: &mut Ctx, stored: Option<&NativeModels>) -> Option<Element> {
-    let model = ModelId::new(&self.default_model.get()).ok()?;
-    let efforts = stored?.model(&model)?.efforts();
-    if efforts.is_empty() {
-      return None;
-    }
-    let mut options = vec![SelectOption::new(
-      String::new(),
-      ctx.t("connections.native.endpointEffort").to_string(),
-    )];
-    options.extend(
-      efforts
-        .iter()
-        .map(|effort| SelectOption::new(effort.as_str().to_owned(), effort.as_str().to_owned())),
-    );
-    let label = ctx.t("connections.native.defaultEffortLabel");
-    let select = SelectField::new("connection-default-effort", label.clone(), self.effort.clone(), options).render(ctx);
-    Some(
-      FormField::new("connection-default-effort", label)
-        .hint(ctx.t("connections.native.defaultEffortHint"))
-        .render(ctx, select),
-    )
   }
 
   /// Provider fallback (§3.1): a switch, off unless a person turns it on, where the endpoint offers it.

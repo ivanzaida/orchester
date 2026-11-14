@@ -156,11 +156,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
     // The tab is gone: its bare address opens Project settings on General, where GitHub is.
     ProjectPage::Connections(view) if view.selected().is_none() && view.selected_decision().is_none() => {
-      project_settings::screen(
-        ctx,
-        project,
-        project_settings::Shown::Tab(ProjectSettingsTab::General),
-      )
+      project_settings::screen(ctx, project, project_settings::Shown::Tab(ProjectSettingsTab::General))
     }
     ProjectPage::Connections(view) => {
       project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))

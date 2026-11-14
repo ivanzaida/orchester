@@ -9,7 +9,7 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    theme::PaletteColor,
+    theme::{PaletteColor, SpacingSize},
   },
   components::Row,
   layout::Alignment,
@@ -29,7 +29,9 @@ use super::super::{
   work::{self, Change, Save},
 };
 use crate::{
+  navigation::Navigation,
   queries::{self, Session, project},
+  routes::{ConnectionsView, ProjectPage, Route},
   services::Services,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
@@ -199,7 +201,17 @@ fn account_row(ctx: &mut Ctx, props: &TabProps, save: &Save, read: &RepositoryRe
   let (hint, tone) = account_status(ctx, &state);
   let row = row.toned(hint, tone);
   let GitHubState::WrongAccount { active, .. } = &state else {
-    return row.control(mono_value("settings-github-account", &account)).render(ctx);
+    // The row opens GitHub's own page, which the Connections tab held (`Agents on accounts` D1 `E6kvpm`).
+    let page = Route::Project(
+      props.project.open.project.id(),
+      ProjectPage::Connections(ConnectionsView::of(connection.id())),
+    );
+    let end = Row::new()
+      .spacing(SpacingSize::Md)
+      .align_items(Alignment::Center)
+      .child(mono_value("settings-github-account", &account))
+      .child(crate::ui::setting_rows::opens_mark());
+    return row.control(end).opens(Navigation::of(ctx).to(page)).render(ctx);
   };
   let start = work::start(
     save,

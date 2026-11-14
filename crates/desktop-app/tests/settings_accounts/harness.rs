@@ -89,7 +89,11 @@ const PAGES: [&str; 5] = [
 
 /// Opens Settings › Accounts at `panel` of `account`.
 pub fn go(window: &mut Window, account: Option<AgentAccountId>, panel: AccountsPanel) {
-  window.navigation().go(Route::Accounts(AccountsView { account, panel }));
+  window.navigation().go(Route::Accounts(AccountsView {
+    account,
+    provider: None,
+    panel,
+  }));
   window.until("the accounts", |window| {
     PAGES.iter().any(|page| window.texts(page).is_some())
   });

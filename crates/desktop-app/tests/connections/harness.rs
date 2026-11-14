@@ -170,11 +170,23 @@ impl Seeded {
     }
   }
 
-  /// The row of connection `id` in Connections, which opens its page.
-  pub fn row(id: ConnectionId) -> String {
-    format!("connection-row-{id}-row")
-  }
-
   /// Why the form's Save cannot be used, if it says.
   pub const REASON: &str = "connection-form-actions-reason";
+}
+
+/// Chooses `label` in the select `id`.
+pub fn choose(seeded: &mut Seeded, id: &str, label: &str) {
+  let mut select = seeded
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("{id} is a select"));
+  let index = select
+    .labels()
+    .iter()
+    .position(|value| value.as_ref() == label)
+    .unwrap_or_else(|| panic!("{label} among {:?}", select.labels()));
+  select.commit(index);
+  seeded.window.pass();
 }

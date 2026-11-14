@@ -7,8 +7,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row, SelectOption, Text},
-  layout::Alignment,
+  components::{Column, Row, SelectOption},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -17,99 +16,20 @@ use orchester_core::{
 };
 use orchester_workspace::connections::{api_provider::base_url, data::ProjectConnections};
 
-use super::{KeyChoice, OnProvider, ProviderForm, active, name_problem};
+use super::{KeyChoice, ProviderForm, active, name_problem};
 use crate::{
   screens::project_settings::kit::{FormField, form_link, form_note, on_enter, warning_line},
-  theme::{ExtraSpacing, ExtraTypography, ProjectSettingsText},
+  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     chip::TagChip,
     field::{FieldInput, SelectField, field, field_error},
     icon::Icon,
     message::message_text,
-    notice::{Notice, NoticeTone},
-    pressable::pressable,
-    toggle::{Toggle, ToggleKind},
   },
 };
 
 impl ProviderForm {
-  /// The rows of the Connection group: what the CLI runs on, and the provider's fields while it is chosen.
-  pub(in super::super) fn rows(&self, ctx: &mut Ctx, cli: AgentProvider, listed: &ProjectConnections) -> Vec<Element> {
-    let mut rows = vec![self.choices(ctx, cli)];
-    if self.on() {
-      rows.push(self.url_row(ctx, cli));
-      rows.push(self.key_row(ctx, listed));
-      rows.push(self.models_row(ctx));
-    }
-    rows
-  }
-
-  /// *Runs on* (`KcPFk`): its own sign-in, or an API provider, one radio option over the other, each with what it
-  /// means under its title.
-  fn choices(&self, ctx: &mut Ctx, cli: AgentProvider) -> Element {
-    let detail = match cli {
-      AgentProvider::CodexCli => "connections.apiProvider.apiDetailCodex",
-      _ => "connections.apiProvider.apiDetailClaude",
-    };
-    let options = Column::new()
-      .id("connection-runs-on")
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .child(self.choice(
-        ctx,
-        "connection-runs-sign-in",
-        ("connections.apiProvider.signIn", "connections.apiProvider.signInDetail"),
-        false,
-      ))
-      .child(self.choice(
-        ctx,
-        "connection-runs-provider",
-        ("connections.apiProvider.api", detail),
-        true,
-      ));
-    FormField::new("connection-runs-on-field", ctx.t("connections.runsOn")).render(ctx, options)
-  }
-
-  /// One radio option of *Runs on* (`Its own sign-in` `sFKyN`): the radio, its title in 12.5, 500 while chosen, and
-  /// what it means in 11.5 `text_muted`; a press anywhere on it chooses it.
-  fn choice(&self, ctx: &Ctx, id: &str, (title, detail): (&str, &str), provider: bool) -> Element {
-    let chosen = self.on() == provider;
-    let title = ctx.t(title);
-    let (on, on_radio) = (self.on.clone(), self.on.clone());
-    let radio = Toggle::new(format!("{id}-radio"), ToggleKind::Radio, chosen, title.clone())
-      .hide_label()
-      .on_change(move |_| on_radio.set(OnProvider(provider)));
-    let title = Text::new(&title).id(format!("{id}-title"));
-    let title = if chosen {
-      title.variant(ExtraTypography::OptionTitle.role())
-    } else {
-      title
-        .variant(ProjectSettingsText::Value.role())
-        .color(lurq::app::theme::PaletteColor::TextPrimary)
-    };
-    pressable(move || on.set(OnProvider(provider)))
-      .id(id.to_owned())
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Start)
-      .describe("chosen", if chosen { "true" } else { "false" })
-      .child(radio)
-      .child(
-        Column::new()
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0))
-          .spacing(ExtraSpacing::Hair.role())
-          .child(title)
-          .child(
-            Text::new(&ctx.t(detail))
-              .variant(ExtraTypography::Note.role())
-              .width(Dimension::Pct(100.0)),
-          ),
-      )
-      .into()
-  }
-
   /// The base URL, with the API it must speak; a native connection's starts at its preset's.
   pub(in crate::screens) fn url_row(&self, ctx: &mut Ctx, provider: AgentProvider) -> Element {
     let (interface, more, placeholder) = match provider {
@@ -168,12 +88,6 @@ impl ProviderForm {
       .hint(ctx.t("accounts.api.keyHint"))
       .info(ctx.t("accounts.api.keyInfo"))
       .render(ctx, value)
-  }
-
-  /// The key's secret: the project's, the archived one the connection still names, or a new one with its name and
-  /// key under the select.
-  pub(in super::super) fn key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Element {
-    self.key_row_with(ctx, listed, false, false)
   }
 
   pub(super) fn key_row_with(
@@ -454,30 +368,4 @@ const fn models_words(native: bool) -> (&'static str, &'static str, &'static str
       "connections.apiProvider.modelsHint",
     ),
   }
-}
-
-/// What saving takes away when the page holds a connection on a provider back on its own sign-in (`FsIt3`): the base
-/// URL and models go, its CLI starts on the Default account, and the key's secret stays.
-pub(in super::super) fn off_provider_notice(
-  ctx: &Ctx,
-  connection: &str,
-  cli: AgentProvider,
-  secret: Option<&str>,
-) -> Element {
-  let program = cli.program_name().unwrap_or_default();
-  let body = match secret {
-    Some(secret) => ctx.t_args(
-      "connections.apiProvider.offProviderDetail",
-      [("cli", program), ("secret", secret)],
-    ),
-    None => ctx.t_args("connections.apiProvider.offProviderDetailNoSecret", [("cli", program)]),
-  };
-  Notice::new(
-    "connection-off-provider",
-    NoticeTone::Info,
-    ctx.t_args("connections.apiProvider.offProvider", [("name", connection)]),
-  )
-  .icon(Icon::Info)
-  .body(body)
-  .into()
 }

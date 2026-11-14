@@ -30,10 +30,7 @@ use crate::{
   queries::{self, Again},
   routes::{ConnectionsView, ProjectPage, ProjectSettingsTab, Route},
   screens::project_settings::kit,
-  services::{
-    Services,
-    accounts::{self, Accounts},
-  },
+  services::Services,
   ui::{message::message_text, state::load_error},
 };
 
@@ -116,7 +113,6 @@ impl Component for ConnectionsScreen {
     let query = data::load(ctx, project.open.repo_root.clone());
     self.again.follow(self.revision.get(), &query);
     let loaded = queries::state(&query);
-    let accounts = accounts::listed(ctx);
     let Some(listed) = loaded.data else {
       return kit::scroll(match loaded.error {
         Some(error) if !loaded.is_pending() => self.failed(ctx, &error),
@@ -129,7 +125,7 @@ impl Component for ConnectionsScreen {
       .selected()
       .and_then(|id| data::entries(&listed).into_iter().find(|entry| entry.id() == id));
     if let Some(entry) = chosen {
-      return kit::scroll(self.page(ctx, &project, (&listed, &accounts), entry, (&work, unread)));
+      return kit::scroll(self.page(ctx, &project, &listed, entry, (&work, unread)));
     }
     // Nothing with a page is named: an agent connection's page is gone, and the tab's list with it.
     kit::scroll(moved::page(ctx, &project))
@@ -191,10 +187,9 @@ impl ConnectionsScreen {
         .find(|(named, _)| *named == id)
         .map_or("", |(_, name)| name.as_str());
       let spec = match piece {
-        Work::Check | Work::Test | Work::UseActiveAccount => operations::connection_check(&open, name),
+        Work::Check | Work::UseActiveAccount => operations::connection_check(&open, name),
         Work::SetEnabled(enabled) => operations::mcp_server_switch(&open, name, enabled),
         Work::Remove => operations::mcp_server_remove(&open, name),
-        Work::SetAccount(_) => operations::connection_save(&open, name),
       };
       running.set(Running(Some((id, piece))));
       // The real clock, as the check's own time is: a check read back older than this is not this one's.
@@ -214,7 +209,7 @@ impl ConnectionsScreen {
     &self,
     ctx: &mut Ctx,
     project: &ShownProject,
-    (listed, accounts): (&ProjectConnections, &Accounts),
+    listed: &ProjectConnections,
     entry: Entry<'_>,
     (work, unread): (&WorkAction, Option<&Message>),
   ) -> Element {
@@ -239,7 +234,6 @@ impl ConnectionsScreen {
     let before = std::mem::replace(&mut *self.question.1.lock(), asked);
     let inspecting = Inspecting {
       listed,
-      accounts,
       entry,
       open: &project.open,
       project: project.open.project.name().as_str(),

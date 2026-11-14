@@ -85,6 +85,7 @@ fn closing_a_panel_drops_its_entry_when_the_tab_came_from_where_it_returns() {
   let list = Route::Accounts(AccountsView::default());
   let adding = Route::Accounts(AccountsView {
     account: None,
+    provider: None,
     panel: orchester_app::routes::AccountsPanel::Add,
   });
   tabs.go(list.clone());

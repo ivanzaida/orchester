@@ -2,6 +2,7 @@
   "project_settings": {
     "title": "Project settings",
     "general": "General",
+    "agentsHub": "Agents",
     "limits": "Limits",
     "environment": "Environment",
     "sources": "Sources",

@@ -16,86 +16,20 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  connection::{AgentConnection, ApiEndpoint, ConnectionStatus, GitHubConnection, GitHubState},
+  connection::{ConnectionStatus, GitHubConnection, GitHubState},
   time::Timestamp,
 };
 use orchester_workspace::{connections::probe::COMMAND_TIMEOUT, display, messages::Message};
 
 use super::{Inspecting, Tested};
 use crate::{
-  screens::connections::words::{CHECKING, Shown, Tone, agent_status, checked_version, github_status, provider_key},
+  screens::connections::words::{CHECKING, Shown, Tone, agent_status, github_status},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     message::message_text,
   },
 };
-
-/// The result box of an agent connection, once a check was pressed on it here.
-pub(super) fn agent(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>) -> Option<Element> {
-  let program = ctx.t(provider_key(connection.provider()));
-  let said = match inspecting.tested? {
-    Tested::Checking => checking(ctx, "connections.result.checkingCli", &program),
-    Tested::Failed(error, at) => failed(ctx, error).at(at),
-    Tested::Unread(error) => unread(ctx, error),
-    Tested::Checked => {
-      let at = connection.last_check()?.at;
-      let status = inspecting.listed.status_of(connection);
-      let version = checked_version(connection).unwrap_or_default();
-      let (models, seconds) = (
-        connection.models().len().to_string(),
-        COMMAND_TIMEOUT.as_secs().to_string(),
-      );
-      let args = [
-        ("program", &*program),
-        ("version", version),
-        ("models", models.as_str()),
-        ("seconds", seconds.as_str()),
-      ];
-      let key = agent_key(status, connection.api_provider().is_some());
-      Said::found(ctx, agent_status(status), ctx.t_args(key, args), at)
-    }
-  };
-  Some(said.render(ctx, inspecting.now))
-}
-
-/// The result box of a native connection to `api`, once Test connection or Fetch models was pressed on it here: the
-/// host the runner asks while it tests, then what the model API said and how many models the connection has.
-pub(super) fn native(
-  ctx: &Ctx,
-  connection: &AgentConnection,
-  api: &ApiEndpoint,
-  inspecting: &Inspecting<'_>,
-) -> Option<Element> {
-  let host = api.base_url().host();
-  let said = match inspecting.tested? {
-    Tested::Checking => Said {
-      shown: CHECKING,
-      heading: ctx.t(CHECKING.key),
-      detail: ctx.t_args("connections.result.checkingApi", [("host", host)]),
-      at: None,
-    },
-    Tested::Failed(error, at) => failed(ctx, error).at(at),
-    Tested::Unread(error) => unread(ctx, error),
-    Tested::Checked => {
-      let check = connection.last_check()?;
-      let status = inspecting.listed.status_of(connection);
-      let models = api.models().models().len().to_string();
-      let balance = check.result.balance().unwrap_or_default();
-      let args = [("host", host), ("models", models.as_str()), ("balance", balance)];
-      let key = match (status, check.result.balance()) {
-        (ConnectionStatus::Connected, _) => "connections.result.apiAnswered",
-        (ConnectionStatus::KeyRejected, _) => "connections.result.keyRejected",
-        (ConnectionStatus::BillingProblem, Some(_)) => "connections.result.billingBalance",
-        (ConnectionStatus::BillingProblem, None) => "connections.result.billing",
-        (ConnectionStatus::KeyMissing, _) => "connections.result.nativeKeyMissing",
-        _ => "connections.result.unreachable",
-      };
-      Said::found(ctx, agent_status(status), ctx.t_args(key, args), check.at)
-    }
-  };
-  Some(said.render(ctx, inspecting.now))
-}
 
 /// The result box of a GitHub connection in `state`, once a check was pressed on it here.
 pub(super) fn github(
@@ -121,24 +55,6 @@ pub(super) fn github(
     }
   };
   Some(said.render(ctx, inspecting.now))
-}
-
-/// What a check that ended in `status` found, for a CLI on an API provider when `on_provider`.
-const fn agent_key(status: ConnectionStatus, on_provider: bool) -> &'static str {
-  match status {
-    ConnectionStatus::Connected if on_provider => "connections.result.verifiedProvider",
-    ConnectionStatus::Connected => "connections.result.verified",
-    ConnectionStatus::SignInRequired => "connections.result.signedOut",
-    ConnectionStatus::SignInUnknown => "connections.result.signInUnknown",
-    ConnectionStatus::KeyMissing => "connections.result.keyMissing",
-    ConnectionStatus::ExecutableMissing => "connections.result.notFound",
-    ConnectionStatus::NotRecognized => "connections.result.notRecognized",
-    ConnectionStatus::NotChecked
-    | ConnectionStatus::CouldNotRun
-    | ConnectionStatus::KeyRejected
-    | ConnectionStatus::BillingProblem
-    | ConnectionStatus::EndpointUnreachable => "connections.result.couldNotRun",
-  }
 }
 
 fn checking(ctx: &Ctx, key: &str, program: &str) -> Said {

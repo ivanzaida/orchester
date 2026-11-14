@@ -10,7 +10,7 @@ use orchester_core::{
   store::SecretStore,
 };
 
-use super::{api_provider::choose, harness::Seeded};
+use super::harness::{Seeded, choose};
 
 /// The seeded `SENTRY_TOKEN`: its id and its label in a secret select.
 fn sentry_token(seeded: &Seeded) -> (SecretId, String) {

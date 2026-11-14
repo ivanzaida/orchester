@@ -31,6 +31,7 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
         window.navigation().route_now(),
         Route::Accounts(AccountsView {
           account: None,
+          provider: None,
           panel: AccountsPanel::AddApi,
         })
       );

@@ -10,15 +10,14 @@ use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
 };
-use orchester_core::id::{AgentAccountId, ConnectionId, ProjectId};
+use orchester_core::id::{ConnectionId, ProjectId};
 use orchester_workspace::{
   activity::OperationSpec,
   background,
   connections::{
-    data::{recheck_in, set_account_in},
+    data::recheck_in,
     github::expect_active_account_in,
     mcp::{remove_in, set_enabled_in},
-    native::test_in,
   },
   messages::{self, Message},
   tasks::outside::Outside,
@@ -32,20 +31,16 @@ use crate::services::Services;
 pub(super) enum Work {
   /// Check a CLI's or gh's program again.
   Check,
-  /// Test a native connection's model API through the runner, which also fetches its models.
-  Test,
   UseActiveAccount,
   /// Turn the MCP server on (`true`) or off for every profile that chooses it.
   SetEnabled(bool),
   Remove,
-  /// Run the agent connection on this account from now on, checked there.
-  SetAccount(AgentAccountId),
 }
 
 impl Work {
-  /// Whether the work finds out how the connection stands: a check of its program, or a test of its model API.
+  /// Whether the work finds out how the connection stands: a check of its program.
   pub(super) const fn is_check(self) -> bool {
-    matches!(self, Self::Check | Self::Test)
+    matches!(self, Self::Check)
   }
 }
 
@@ -80,7 +75,7 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
     ..
   } = Services::of(ctx);
   ctx.future_action(move |start: Start| {
-    let (activity, workspace, changes, runners) =
+    let (activity, workspace, changes, _runners) =
       (activity.clone(), workspace.clone(), changes.clone(), runners.clone());
     async move {
       let Start {
@@ -92,12 +87,10 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
       } = start;
       let run = async move {
         let blocking = match work {
-          Work::Test => return test_in(&runners, repo_root, id).await,
           Work::Check => Blocking::Check,
           Work::UseActiveAccount => Blocking::UseActiveAccount,
           Work::SetEnabled(enabled) => Blocking::SetEnabled(enabled),
           Work::Remove => Blocking::Remove,
-          Work::SetAccount(account) => Blocking::SetAccount(account),
         };
         background::run(move || run(&workspace, &repo_root, (id, blocking))).await?
       };
@@ -116,21 +109,10 @@ enum Blocking {
   UseActiveAccount,
   SetEnabled(bool),
   Remove,
-  SetAccount(AgentAccountId),
 }
 
-fn run(workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Blocking)) -> Result<(), Message> {
+fn run(_workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Blocking)) -> Result<(), Message> {
   match work {
-    Blocking::SetAccount(account) => {
-      let account = workspace
-        .agent_account(account)
-        .map_err(|error| messages::store_error(&error))?
-        .ok_or_else(|| messages::store_error(&orchester_store::StoreError::AgentAccountNotFound(account)))?;
-      set_account_in(repo_root, id, &account).map_err(|error| {
-        tracing::error!(%error, "cannot run the connection on another account");
-        error.message()
-      })
-    }
     Blocking::Check => recheck_in(repo_root, id).map_err(|error| {
       tracing::error!(%error, "cannot store the connection check");
       error.message()

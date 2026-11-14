@@ -64,10 +64,7 @@ pub fn new_mcp_server(ctx: &mut Ctx, project: &ShownProject) -> Element {
 /// Edit MCP server.
 pub fn edit_connection(ctx: &mut Ctx, project: &ShownProject, connection: ConnectionId) -> Element {
   ctx.mount_keyed::<McpForm>(
-    &format!(
-      "connection-edit-mcp-{}-{connection}",
-      project.open.project.id()
-    ),
+    &format!("connection-edit-mcp-{}-{connection}", project.open.project.id()),
     McpFormProps {
       project: project.clone(),
       server: Some(connection),
