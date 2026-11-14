@@ -21,7 +21,7 @@ mod edit_agent;
 mod inspector;
 mod list;
 pub(in crate::screens) mod mcp_form;
-mod native_form;
+pub(in crate::screens) mod native_form;
 mod page;
 pub(in crate::screens) mod provider_form;
 pub(crate) mod widen;

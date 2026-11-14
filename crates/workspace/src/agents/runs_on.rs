@@ -28,8 +28,9 @@ pub struct RunsOnChoice {
   pub account: Option<AgentAccountId>,
   /// The host of the API it runs on instead of a sign-in.
   pub host: Option<String>,
-  /// The API account an API provider's key is, by the key's id: the person's when the app has an account by this
-  /// id, else a secret of the project's (a connection made before API accounts).
+  /// The API account the key of an API provider, or of a native connection's model API, is, by the key's id: the
+  /// person's when the app has an account by this id, else a secret of the project's (a connection made before API
+  /// accounts).
   pub api_account: Option<ApiAccountId>,
   /// Its last check found the CLI signed out.
   pub signed_out: bool,
@@ -93,9 +94,7 @@ pub fn choices(
         cli: connection.provider(),
         account: connection.plan_account(),
         host,
-        api_account: connection
-          .api_provider()
-          .map(|provider| ApiAccountId::from_uuid(provider.key().as_uuid())),
+        api_account: connection.key().map(|key| ApiAccountId::from_uuid(key.as_uuid())),
         signed_out: connection.status() == ConnectionStatus::SignInRequired,
         models,
       }

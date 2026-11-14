@@ -62,7 +62,8 @@ pub(in crate::screens::hub::profile_form) struct OnAccount {
   pub connection: Option<RunsOnChoice>,
 }
 
-/// An API account of the person's on the rail: an agent CLI on a model API, by a key the app keeps.
+/// An API account of the person's on the rail, by a key the app keeps: an agent CLI on a model API, or Orchester's own
+/// agent on one (`cli` is then the API it calls).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::screens::hub::profile_form) struct OnApi {
   pub id: ApiAccountId,
@@ -72,6 +73,8 @@ pub(in crate::screens::hub::profile_form) struct OnApi {
   pub host: String,
   /// The models the account serves, as the person listed them in Settings.
   pub models: Vec<ModelChoice>,
+  /// Its effort is typed, not one of a list: an agent CLI's API account lists no efforts.
+  pub typed_effort: bool,
   /// The project's connection on it, when it has one.
   pub connection: Option<RunsOnChoice>,
 }
@@ -142,10 +145,11 @@ impl Target {
   }
 
   pub(in crate::screens::hub::profile_form) const fn types_effort(&self) -> bool {
-    matches!(
-      self,
-      Self::Api(_) | Self::Connection(RunsOnChoice { host: Some(_), .. })
-    )
+    match self {
+      Self::Api(api) => api.typed_effort,
+      Self::Connection(choice) => choice.host.is_some(),
+      Self::Account(_) | Self::Cli(..) => false,
+    }
   }
 }
 
@@ -207,28 +211,21 @@ pub(in crate::screens::hub::profile_form) fn items(
       });
     }
   }
-  for account in who.api {
-    let ApiSetup::Cli { cli, base_url, models } = account.setup() else {
-      continue;
-    };
+  for account in who.api.iter().filter(|account| account.agent().runs_agents()) {
+    let cli = account.agent();
     let connection = runs_on
       .iter()
-      .find(|choice| choice.cli == cli.provider() && choice.api_account == Some(account.id()));
+      .find(|choice| choice.cli == cli && choice.api_account == Some(account.id()));
     taken.extend(connection.map(|choice| choice.id));
     items.push(Item {
       id: format!("api-{}", account.id()).into(),
       target: Target::Api(OnApi {
         id: account.id(),
-        cli: cli.provider(),
+        cli,
         name: account.name().as_str().into(),
-        host: base_url.host().to_owned(),
-        models: models
-          .iter()
-          .map(|model| ModelChoice {
-            id: model.as_str().to_owned(),
-            efforts: Vec::new(),
-          })
-          .collect(),
+        host: account.setup().base_url().host().to_owned(),
+        models: served(account.setup()),
+        typed_effort: matches!(account.setup(), ApiSetup::Cli { .. }),
         connection: connection.cloned(),
       }),
     });
@@ -240,6 +237,32 @@ pub(in crate::screens::hub::profile_form) fn items(
     target: Target::Connection(choice.clone()),
   }));
   items
+}
+
+/// The models an API account serves, as listed in Settings: an agent CLI's with no efforts (its effort is typed), an
+/// account's of Orchester's own agent each with the efforts it takes.
+fn served(setup: &ApiSetup) -> Vec<ModelChoice> {
+  match setup {
+    ApiSetup::Cli { models, .. } => models
+      .iter()
+      .map(|model| ModelChoice {
+        id: model.as_str().to_owned(),
+        efforts: Vec::new(),
+      })
+      .collect(),
+    ApiSetup::Native { models, .. } => models
+      .models()
+      .iter()
+      .map(|model| ModelChoice {
+        id: model.id().as_str().to_owned(),
+        efforts: model
+          .efforts()
+          .iter()
+          .map(|effort| effort.as_str().to_owned())
+          .collect(),
+      })
+      .collect(),
+  }
 }
 
 /// The account the picker opens on while nothing is chosen, when the project has no connection on it yet: the first
@@ -430,7 +453,7 @@ fn connection(ctx: &Ctx, item: &Item, who: &Who<'_>) -> Connection {
     (Target::Api(_) | Target::Connection(_), Some(host)) => Connection {
       mark: Mark::Cloud,
       caption: ctx.t_args("local_hub.runsOn.provider", [("cli", &*cli), ("host", host)]),
-      typed_effort: true,
+      typed_effort: item.target.types_effort(),
       notice: Some(Notice {
         icon: Icon::Send,
         tone: NoticeTone::Warning,

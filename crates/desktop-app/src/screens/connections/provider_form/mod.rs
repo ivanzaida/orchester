@@ -118,6 +118,15 @@ impl ProviderForm {
     form
   }
 
+  /// [`Self::for_account`] for an account of Orchester's own agent: a native connection's fields, the URL starting
+  /// at `url`, its preset's.
+  pub(in crate::screens) fn for_native_account(ctx: &mut Ctx, url: String) -> Self {
+    let mut form = Self::for_account(ctx);
+    form.native = true;
+    form.url.set(url);
+    form
+  }
+
   /// Empties the fields, the typed key first: what was added is the app's now, and the page starts over.
   pub(in crate::screens) fn clear(&self) {
     self.value.update(Zeroize::zeroize);

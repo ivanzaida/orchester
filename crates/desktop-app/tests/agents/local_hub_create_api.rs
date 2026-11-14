@@ -7,7 +7,7 @@
 use orchester_app::{routes::HubFilter, test_support::signed_in::MemoryKeychain};
 use orchester_core::{
   account::{AccountCli, ApiSetup},
-  connection::BaseUrl,
+  connection::{AgentProvider, BaseUrl, EndpointPreset, ModelSource, NativeModel, NativeModels},
   id::{ApiAccountId, SecretId},
   name::Name,
   resource::ModelId,
@@ -98,4 +98,92 @@ fn local_hub_create_api_a_profile_runs_on_the_persons_api_account() {
     .profile;
   assert_eq!(made.connection(), connection.id());
   assert_eq!(made.model().as_str(), "deepseek-chat");
+}
+
+/// *Anthropic*, an API account of the person's for Orchester's own agent, with `claude-opus-5-5` listed for it.
+fn anthropic(agents: &Agents) -> ApiAccountId {
+  let workspace = agents.window.launch.workspace().expect("workspace");
+  let model = NativeModel::new(
+    ModelId::new("claude-opus-5-5").expect("a model id"),
+    None,
+    None,
+    Vec::new(),
+    ModelSource::Manual,
+  );
+  workspace
+    .add_api_account(
+      &MemoryKeychain::default(),
+      Name::new("Anthropic").expect("name"),
+      ApiSetup::native(
+        AgentProvider::AnthropicApi,
+        EndpointPreset::Official,
+        BaseUrl::new("https://api.anthropic.com").expect("a base URL"),
+        NativeModels::new(vec![model], None, None).expect("models"),
+        false,
+      )
+      .expect("a setup"),
+      &SecretValue::new("sk-typed-by-the-test".to_owned()).expect("a key"),
+    )
+    .expect("added")
+    .id()
+}
+
+/// An account of Orchester's own agent is on the rail too, with the models listed for it in Settings; looking at it
+/// makes the project's native connection on it, the account's copy, and a profile is made on that. No program of any
+/// CLI is asked for.
+#[test]
+fn local_hub_create_api_a_profile_runs_on_an_account_of_orchesters_own_agent() {
+  let mut agents = Agents::new(true);
+  let account = anthropic(&agents);
+  show_form(&mut agents, HubFilter::Profiles);
+  agents.set("team-new-profile-role-name-input", "Planner");
+  agents.click(RUNS_ON);
+  let menu = format!("{RUNS_ON}-menu");
+  let item = format!("{menu}-connection-api-{account}");
+  agents.until("the account on the rail", |s| s.exists(&item));
+
+  agents.click(&item);
+  let key = SecretId::from_uuid(account.as_uuid());
+  agents.until("the project's native connection on the account", |s| {
+    s.listed()
+      .connections
+      .iter()
+      .any(|connection| connection.api().is_some_and(|api| api.key() == key))
+  });
+  let listed = agents.listed();
+  let connection = listed
+    .connections
+    .iter()
+    .find(|connection| connection.api().is_some())
+    .expect("made");
+  assert_eq!(connection.name().as_str(), "Anthropic");
+  assert_eq!(connection.provider(), AgentProvider::AnthropicApi);
+
+  let model = format!("{menu}-model-0");
+  agents.until("the account's model", |s| {
+    s.exists(&model) && s.text(&model).contains("claude-opus-5-5")
+  });
+  agents.click(&model);
+  agents.until("the field says it", |s| {
+    s.text(RUNS_ON) == "Anthropic API · Anthropic · claude-opus-5-5"
+  });
+  if agents.exists(&menu) {
+    agents.click(RUNS_ON);
+  }
+  agents.until("the picker closed", |s| !s.exists(&menu));
+  agents.press_until("local-hub-new-create", "the profile", |s| {
+    s.listed()
+      .profiles
+      .iter()
+      .any(|entry| entry.profile.role().as_str() == "Planner")
+  });
+  let listed = agents.listed();
+  let made = &listed
+    .profiles
+    .iter()
+    .find(|entry| entry.profile.role().as_str() == "Planner")
+    .expect("the profile")
+    .profile;
+  assert_eq!(made.connection(), connection.id());
+  assert_eq!(made.model().as_str(), "claude-opus-5-5");
 }

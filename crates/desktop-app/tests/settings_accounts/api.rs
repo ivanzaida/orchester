@@ -95,3 +95,55 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
     },
   );
 }
+
+/// *Used with* offers Orchester's own agent too: its account takes a name and a key (the base URL starts at
+/// Anthropic's, and no model is needed), is kept as a native setup, and stands in a group of its own, *Model APIs*,
+/// with nothing of its key.
+#[test]
+fn settings_accounts_api_an_account_of_orchesters_own_agent_stands_under_model_apis() {
+  in_child(
+    "api::settings_accounts_api_an_account_of_orchesters_own_agent_stands_under_model_apis",
+    |_root| {
+      let mut window = Window::open();
+      go(&mut window, None, AccountsPanel::AddApi);
+      window.until("the page", |window| shown(window, "api-add-page"));
+      assert!(
+        !shown(&mut window, "accounts-group-model-apis"),
+        "no group while there is no such account"
+      );
+      // The own agent's fields are more than the window's 900 shows: a taller one keeps *Add provider* under the
+      // pointer, where a person scrolls.
+      window.tree.resize(1440, 1600);
+      window.pass();
+      click(&mut window, "api-add-cli-own");
+      window.until("the own agent's fields", |window| shown(window, "connection-presets"));
+      assert_eq!(joined(&mut window, "api-add-needs"), "Name it first");
+      set(&mut window, "api-add-name", "Anthropic");
+      window.until("the key is asked for", |window| {
+        joined(window, "api-add-needs") == "Type its API key"
+      });
+      set(&mut window, "connection-provider-secret-value", KEY);
+      click(&mut window, "api-add-save");
+      window.until("the list again", |window| shown(window, "settings-accounts"));
+
+      let added = AppDb::open(&window.data.database())
+        .expect("the application database")
+        .api_accounts()
+        .expect("read");
+      assert_eq!(added.len(), 1);
+      let account = &added[0];
+      assert!(
+        matches!(account.setup(), ApiSetup::Native { base_url, .. } if base_url.host() == "api.anthropic.com"),
+        "{:?}",
+        account.setup()
+      );
+      window.until("its group", |window| shown(window, "accounts-group-model-apis"));
+      let said = joined(&mut window, "accounts-group-model-apis");
+      assert!(
+        said.contains("Model APIs") && said.contains("Anthropic API · api.anthropic.com · no models listed yet"),
+        "{said}"
+      );
+      assert!(said.contains("Key set") && !said.contains(KEY), "{said}");
+    },
+  );
+}

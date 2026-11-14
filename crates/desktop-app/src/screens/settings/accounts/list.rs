@@ -79,7 +79,9 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
     }
     pane = pane.child(group);
   }
-  pane.child(group_note("accounts-note", &t(ctx, "accounts.note")))
+  pane
+    .with_children(api::model_apis(ctx, &api.0))
+    .child(group_note("accounts-note", &t(ctx, "accounts.note")))
 }
 
 /// Each CLI's accounts while they are read: each one's name, who is signed in under it and its state.
