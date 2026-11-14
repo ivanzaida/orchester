@@ -1,6 +1,6 @@
 //! The pinned action of a local profile while nothing is changed (`Actions` `o8tFHR`, as a team profile's panel has
-//! it): the fix of the first missing part of *Ready?* that has one (*Use Claude 2 for Builder*, *Add a Claude Code
-//! connection*, …) with what it asks of the person at its end. Once the panel holds a change the bar is Save's and
+//! it): the fix of the first missing part of *Ready?* that has one (*Use Claude Code · Work for Builder*, *Add a Claude
+//! Code connection*, …) with what it asks of the person at its end. Once the panel holds a change the bar is Save's and
 //! Cancel's ([`super::super::save_bar`]).
 
 use lurq::{app::ctx::Ctx, node::Element};
@@ -31,8 +31,8 @@ pub(super) fn first(parts: &[Part<Fix>]) -> Option<Fix> {
   })
 }
 
-/// The bar of `fix` of the profile `shown`, named `name`, which `press` does; `connection` names the connection *Use*
-/// keeps. Off while a save is under way.
+/// The bar of `fix` of the profile `shown`, named `name`, which `press` does; `connection` names the account *Use*
+/// keeps (*Claude Code · Default*). Off while a save is under way.
 pub(super) fn bar(
   ctx: &Ctx,
   (name, shown, connection): (&str, &LocalProfile, &str),

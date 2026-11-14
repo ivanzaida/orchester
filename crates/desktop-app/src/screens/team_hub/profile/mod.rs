@@ -1,13 +1,15 @@
 //! The panel of a team profile (`Agents · Profile` `NDZXC` C1, `WPvZx` C2, `QOBF2` C3; `Agents · All · admin`
 //! `t4mtQL`; `docs/design/team-configuration.md`, "What a computer fills in"): its head and chips, *From the team*
-//! (what every computer gets), *On this computer* (the connection it runs on: chosen without asking, a pick among
+//! (what every computer gets), *On this computer* (the account it runs on: the only one without asking, a pick among
 //! several, or none to add), *Ready here?* (each part it needs here, with the fix of what is missing) and, pinned at
 //! the bottom, the fix of the first missing part.
 //!
 //! The fixes are the person's: they write through the fill-ins of `orchester-workspace`
 //! ([`pick_team_connection`](orchester_workspace::workspace::Workspace::pick_team_connection), the program path, which
-//! MCP servers are on, a secret's value). The connection is picked by a person or by automation as the workspace
-//! takes it; the others widen what agents may do, so a press that automation made does nothing and says so.
+//! MCP servers are on, a secret's value). The account is picked by a person or by automation as the workspace
+//! takes it, and the project gets its connection on an account it has none on
+//! (`Workspace::run_profile_on_account`); the others widen what agents may do, so a press that automation made does
+//! nothing and says so.
 
 mod bar;
 mod computer;
@@ -29,11 +31,9 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
+use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{
-  agents::team_profile::{ConnectionChoice, TeamProfileSheet},
-  messages::Message,
-  sharing::team::TeamConfiguration,
+  agents::team_profile::TeamProfileSheet, messages::Message, sharing::team::TeamConfiguration,
 };
 
 use self::fix::Fix;
@@ -46,7 +46,10 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{AccountsView, HubFilter, HubView, ProjectPage, Route},
-  screens::settings::orchester::PersonOnly,
+  screens::{
+    hub::profile_form::here::{self, Offered},
+    settings::orchester::PersonOnly,
+  },
   services::Services,
   theme::HubSpacing,
   ui::{field::field_error, message::message_text, pressable::Press},
@@ -78,10 +81,11 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
 /// The panel of one profile: it is keyed by the resource, so a pick, an open dialog or a typed value never carries
 /// over to another profile.
 struct ProfilePanel {
-  /// The connection the person chose in the select, by id; empty while none is chosen.
+  /// What the person chose in the select, by the value it holds for it (a connection's id, or an account's item
+  /// while the project has no connection on the account); empty while nothing is chosen.
   chosen: Signal<String>,
   /// The connection kept as the profile's on this computer, by id; empty while none is. Once there is one, choosing
-  /// another in the select keeps that one.
+  /// another account in the select keeps that one.
   kept: Signal<String>,
   /// The pick the sheet last held, by id; a different one is a pick made elsewhere, which the select then follows.
   seen: Signal<String>,
@@ -113,7 +117,8 @@ impl Component for ProfilePanel {
         )
       }),
     };
-    panel.watch_pick(ctx, props.entry.id);
+    let navigation = Navigation::of(ctx);
+    panel.watch_pick(ctx, props.entry.id, navigation);
     panel.secret.follow_save(ctx, &panel.actions.add_value);
     panel
   }
@@ -125,11 +130,18 @@ impl Component for ProfilePanel {
     } = &props;
     self.follow_pick(sheet);
     let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
-    let parts = parts::parts(ctx, listing, entry, sheet);
+    // What it runs on now: the pick, else the only connection of its kind.
+    let current = sheet.runs_on().map(|choice| choice.id);
+    let offered = here::offered(ctx, (sheet.cli, &sheet.model), (&sheet.choices, current));
+    let accounts = here::first(&offered).is_some();
+    let parts = parts::parts(ctx, (listing, entry), sheet, accounts);
     let navigation = Navigation::of(ctx);
     let busy = self.actions.busy(props.reading);
-    let press = |fix: &Fix| self.press(fix, &props, &navigation);
-    let connection = self.connection(sheet);
+    let press = |fix: &Fix| self.press(fix, (&props, &offered), &navigation);
+    let connection = self
+      .chosen_of(&offered)
+      .map(|offered| offered.label.to_string())
+      .unwrap_or_default();
     let words = bar::Words {
       listing,
       entry,
@@ -137,7 +149,7 @@ impl Component for ProfilePanel {
       connection: &connection,
     };
     let head_end = archive::menu(ctx, &props.repo_root, entry, props.team.may_change);
-    let team = self.team_part(ctx, &props);
+    let team = self.team_part(ctx, &props, accounts);
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -150,7 +162,7 @@ impl Component for ProfilePanel {
       .with_children(team.notice)
       .with_children(member::lock_line(ctx, &props.team).filter(|_| self.edit.is_none()))
       .with_children(team.sections)
-      .child(computer::section(ctx, sheet, &self.chosen))
+      .child(computer::section(ctx, sheet, (&offered, &self.chosen)))
       .child(ready::section(
         ctx,
         (&ctx.t("team_hub.readiness.title"), &parts),
@@ -165,7 +177,7 @@ impl Component for ProfilePanel {
       .min_height(Dimension::Px(0.0));
     let pinned = team
       .bar
-      .or_else(|| fix::first(entry).map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy)));
+      .or_else(|| fix::first(entry, accounts).map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy)));
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
@@ -190,17 +202,9 @@ impl Drop for ProfilePanel {
   }
 }
 
-/// The connection the select holds (by id), else the first one listed: the one *Use* names and keeps.
-fn chosen_connection<'a>(chosen: &str, connections: &'a [ConnectionChoice]) -> Option<&'a ConnectionChoice> {
-  connections
-    .iter()
-    .find(|choice| choice.id.to_string() == chosen)
-    .or_else(|| connections.first())
-}
-
 impl ProfilePanel {
   /// What the team holds of it: an admin's edit (A26), else the plain *From the team*.
-  fn team_part(&self, ctx: &mut Ctx, props: &Props) -> TeamPart {
+  fn team_part(&self, ctx: &mut Ctx, props: &Props, accounts: bool) -> TeamPart {
     let config = Services::of(ctx)
       .workspace
       .team_read(&props.repo_root)
@@ -228,7 +232,7 @@ impl ProfilePanel {
       .collect();
     // The fix of what this computer lacks stays pinned while nothing is edited; Save's bar takes its place once
     // something is.
-    let fix = fix::first(&props.entry);
+    let fix = fix::first(&props.entry, accounts);
     TeamPart {
       chips: panel::chips_of(ctx, &props.entry, badges, None),
       notice: parts.notice,
@@ -237,18 +241,23 @@ impl ProfilePanel {
     }
   }
 
-  /// Once a connection is kept, choosing another in the select keeps that one (as *Use* does, and as the MCP tool
-  /// does for automation); before, the select only chooses and *Use* keeps it. A pick that failed puts the select
-  /// back on the one kept.
-  fn watch_pick(&self, ctx: &mut Ctx, profile: ResourceId) {
-    let (kept, pick) = (self.kept.clone(), self.actions.pick.clone());
+  /// Once a connection is kept, choosing another account in the select keeps that one (as *Use* does, and as the MCP
+  /// tool does for automation); before, the select only chooses and *Use* keeps it. A pick that failed puts the
+  /// select back on the one kept. *Add an account…* chooses nothing: it opens the accounts.
+  fn watch_pick(&self, ctx: &mut Ctx, profile: ResourceId, navigation: Navigation) {
+    let (kept, pick, chosen) = (self.kept.clone(), self.actions.pick.clone(), self.chosen.clone());
     ctx.watch(&self.chosen, move |now| {
       let kept = kept.get();
+      if *now == computer::ADD {
+        chosen.set(kept);
+        navigation.go(Route::Accounts(AccountsView::default()));
+        return;
+      }
       if kept.is_empty() || *now == kept {
         return;
       }
-      if let Ok(connection) = now.parse::<ConnectionId>() {
-        pick.run((profile, connection));
+      if let Some(here) = here::here_of(now) {
+        pick.run((profile, here));
       }
     });
     let (chosen, kept) = (self.chosen.clone(), self.kept.clone());
@@ -273,15 +282,18 @@ impl ProfilePanel {
     self.chosen.set(picked);
   }
 
-  /// The name of the connection the pinned *Use* names and uses.
-  fn connection(&self, sheet: &TeamProfileSheet) -> String {
-    chosen_connection(&self.chosen.get(), &sheet.connections)
-      .map(|choice| choice.name.clone())
-      .unwrap_or_default()
+  /// What the select holds among `offered`, else the first of them that can be chosen: what the pinned *Use* names
+  /// and keeps.
+  fn chosen_of<'a>(&self, offered: &'a [Offered]) -> Option<&'a Offered> {
+    let chosen = self.chosen.get();
+    offered
+      .iter()
+      .find(|offered| offered.value == chosen && !offered.other_models)
+      .or_else(|| here::first(offered))
   }
 
   /// What a press on the fix `fix` does, for the control `id`.
-  fn press(&self, fix: &Fix, props: &Props, navigation: &Navigation) -> Press {
+  fn press(&self, fix: &Fix, (props, offered): (&Props, &[Offered]), navigation: &Navigation) -> Press {
     let person = self.person.clone();
     let guarded = |action: Arc<dyn Fn() + Send + Sync>| {
       Press::run(move || {
@@ -298,13 +310,13 @@ impl ProfilePanel {
       ))),
       Fix::UseConnection => {
         let (action, profile, chosen) = (self.actions.pick.clone(), props.entry.id, self.chosen.clone());
-        let connections = props.sheet.connections.clone();
+        let Some(taken) = self.chosen_of(offered).cloned() else {
+          return Press::Open(navigation.to(Route::Accounts(AccountsView::default())));
+        };
         Press::run(move || {
-          if let Some(choice) = chosen_connection(&chosen.get(), &connections) {
-            // The select shows the one kept; with none chosen yet that is the first listed.
-            chosen.set(choice.id.to_string());
-            action.run((profile, choice.id));
-          }
+          // The select shows the one kept; with none chosen yet that is the first listed.
+          chosen.set(taken.value.clone());
+          action.run((profile, taken.here));
         })
       }
       Fix::SwitchOn(server) => {

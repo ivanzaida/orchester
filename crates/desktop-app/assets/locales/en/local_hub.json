@@ -148,8 +148,8 @@
       "noCli": "Its connection is gone, and {{model}} names no agent CLI to choose another of",
       "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
       "noneOfKind": "No {{cli}} connection on this computer",
-      "onlyOne": "Its connection is gone · {{name}} is the only {{cli}} connection",
-      "pickAmong": "{{count}} {{cli}} connections · choose one",
+      "onlyOne": "It runs on nothing here · {{name}} is the only account of its CLI",
+      "pickAmong": "{{count}} {{cli}} accounts · choose one",
       "serverOff": "Off · its runs go without it",
       "noValue": "No value set",
       "valueSet": "Value set"

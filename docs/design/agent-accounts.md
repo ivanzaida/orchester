@@ -401,6 +401,17 @@ tools speak of accounts only.
     (`Workspace::connect_account`): the models an account serves are read from that connection, so its line says
     *reading its models…* meanwhile, and a CLI whose program is not found says so under the picker. The picker
     makes it for the account it opens on too, as in a project that has no connection yet.
+- *A team profile on a member's computer* (C3). *From the team* has one read-only row, *CLI, model and effort*.
+  *Runs on*, under *On this computer*, offers this computer's accounts of the profile's CLI, each once, then what
+  runs on a key, and *Add an account…* last, which opens Settings › Accounts. An account that lists models, the
+  team's not among them, is shown and cannot be picked. The only account runs the profile without asking once the
+  project has its one connection on it; otherwise the person picks once and it is kept.
+- *The fix of a profile that runs on nothing here*, local or team: while this computer has an account of the
+  profile's CLI the fix is *Use Claude Code · Default for Builder*, which makes the project's connection on the
+  account when it has none, and keeps it. *Add a … connection* is left for a kind with no account (a model API).
+  The fix names the account, never a connection.
+- Not built yet: the drawing has *Runs here use* and *CLI, model and effort* in one section, *Agent CLI & model*;
+  the app keeps its sections *From the team* and *On this computer*, and the row there is still called *Runs on*.
 
 ### Screens (drawn 2026-11-13, not approved yet)
 

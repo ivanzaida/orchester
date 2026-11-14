@@ -63,7 +63,10 @@ use crate::{
   project::ShownProject,
   routes::{AccountsView, HubFilter, ProjectPage, Route},
   screens::{
-    hub::profile_form::{Connect, HeldFields, Here, OnEdit, OnHere, Standing},
+    hub::profile_form::{
+      Connect, HeldFields, Here, OnEdit, OnHere, Standing,
+      here::{self, Offered},
+    },
     team_hub::{
       actions::Busy,
       panel::{body, head_named},
@@ -207,12 +210,16 @@ impl Component for ProfilePanel {
       self.what,
       (changed, refused.is_some() || role_refused.is_some()),
     );
-    let parts = ready::parts(ctx, &hub, shown);
+    let offered = shown.cli.map_or_else(Vec::new, |cli| {
+      here::offered(ctx, (cli, &shown.model), (&shown.runs_on, shown.current))
+    });
+    let take = here::first(&offered).cloned();
+    let parts = ready::parts(ctx, &hub, (shown, &offered));
     let missing = ready::missing(&parts);
     let busy = self.busy();
     let locked = busy != Busy::Idle;
     let navigation = Navigation::of(ctx);
-    let press = |fix: &Fix| self.press(fix, (&project, shown), &navigation);
+    let press = |fix: &Fix| self.press(fix, (&project, take.as_ref()), &navigation);
     let head_end = head_end(ctx, &project, &entry, (id, PREFIX));
     let widening = self
       .pending
@@ -246,7 +253,7 @@ impl Component for ProfilePanel {
     let fix = pinned::first(&parts).filter(|_| !changed);
     let bar = self.bar(
       ctx,
-      (&entry, shown),
+      (&entry, shown, take.as_ref()),
       fix.map(|fix| (press(&fix), fix)),
       (changed, role_refused.as_ref()),
     );
@@ -374,14 +381,14 @@ impl ProfilePanel {
   fn bar(
     &self,
     ctx: &mut Ctx,
-    (entry, shown): (&Entry, &LocalProfile),
+    (entry, shown, take): (&Entry, &LocalProfile, Option<&Offered>),
     fix: Option<(Press, Fix)>,
     (changed, role): (bool, Option<&RoleErrors>),
   ) -> Element {
     let idle = self.busy() == Busy::Idle;
     if let Some((press, fix)) = fix {
-      let connection = shown.connections.first().map_or("", |choice| choice.name.as_str());
-      return pinned::bar(ctx, (&entry.name, shown, connection), (&fix, press), !idle);
+      let account = take.map_or("", |offered| &*offered.label);
+      return pinned::bar(ctx, (&entry.name, shown, account), (&fix, press), !idle);
     }
     save_bar::bar(
       ctx,
@@ -394,23 +401,20 @@ impl ProfilePanel {
     )
   }
 
-  /// What a press on `fix` does: a connection to use (the first of its CLI) is this computer's choice, made at once
-  /// while the panel holds no change and held with the change otherwise; the others open where the missing part is
-  /// set.
-  fn press(&self, fix: &Fix, (project, shown): (&ShownProject, &LocalProfile), navigation: &Navigation) -> Press {
+  /// What a press on `fix` does: an account to use (`take`, the first of its CLI the profile runs on as it is) is this
+  /// computer's choice, made at once while the panel holds no change; held with the change otherwise, when the
+  /// project has a connection on it. The others open where the missing part is set.
+  fn press(&self, fix: &Fix, (project, take): (&ShownProject, Option<&Offered>), navigation: &Navigation) -> Press {
     match fix {
       Fix::UseConnection => {
-        let target = shown.connections.first().map(|choice| choice.id);
+        let target = take.map(|offered| offered.here);
         let (choices, here, held) = (self.choices.clone(), self.here.clone(), self.held.clone());
-        Press::run(move || {
-          let Some(connection) = target else {
-            return;
-          };
-          if held.get_untracked().0.is_some_and(|held| held.changed) {
+        Press::run(move || match target {
+          Some(Here::Connection(connection)) if held.get_untracked().0.is_some_and(|held| held.changed) => {
             choices.make(Edit::Connection(connection));
-          } else {
-            here.run(Here::Connection(connection));
           }
+          Some(target) => here.run(target),
+          None => {}
         })
       }
       Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),

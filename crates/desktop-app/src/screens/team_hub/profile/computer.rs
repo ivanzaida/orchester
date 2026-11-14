@@ -1,7 +1,9 @@
-//! *On this computer* (`On this computer` `qtmpw` in `Agents · Profile` `NDZXC`, `WPvZx`, `QOBF2`): what is only this
-//! computer's and never sent to the team. Today that is the connection the profile runs on: the only one of its CLI
-//! kind without asking (C1), a pick among several, asked once and kept (C2), or none, which says what to add and
-//! substitutes nothing (C3).
+//! *On this computer* (`On this computer` `qtmpw` in `Agents · Profile` `NDZXC`, `WPvZx`, `QOBF2`; `Agents on
+//! accounts` C3 `OTVQt`): what is only this computer's and never sent to the team. Today that is the account the
+//! profile runs on: this computer's accounts of its CLI, each once, then what runs on a key
+//! ([`here`](crate::screens::hub::profile_form::here)). The only one runs it without asking; among several the person
+//! picks once and it is kept; an account that lists other models than the team's is shown and cannot be picked; with
+//! none, the row says what to add and substitutes nothing.
 
 use lurq::{
   app::{
@@ -13,12 +15,15 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::agents::team_profile::{ConnectionChoice, TeamProfileSheet};
+use orchester_workspace::agents::team_profile::TeamProfileSheet;
 
 use crate::{
-  screens::team_hub::{
-    rows::{self, Sub},
-    words::cli_key,
+  screens::{
+    hub::profile_form::{Here, here::Offered},
+    team_hub::{
+      rows::{self, Sub},
+      words::cli_key,
+    },
   },
   theme::{HubText, IconSize},
   ui::{
@@ -28,9 +33,12 @@ use crate::{
   },
 };
 
-pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet, chosen: &Signal<String>) -> Column {
+/// The value the select holds for *Add an account…*, which opens the accounts and chooses nothing.
+pub(super) const ADD: &str = "add";
+
+pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet, (offered, chosen): (&[Offered], &Signal<String>)) -> Column {
   let cli = ctx.t(cli_key(sheet.cli));
-  let (sub, value) = runs_on(ctx, sheet, &cli, chosen);
+  let (sub, value) = runs_on(ctx, sheet, &cli, (offered, chosen));
   rows::on_this_computer(
     ctx,
     vec![rows::row(
@@ -44,8 +52,13 @@ pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet, chosen: &Signal<Strin
 }
 
 /// What stands under *Runs on* and what the row's value is.
-fn runs_on(ctx: &Ctx, sheet: &TeamProfileSheet, cli: &str, chosen: &Signal<String>) -> (Sub, Element) {
-  match sheet.connections.as_slice() {
+fn runs_on(
+  ctx: &Ctx,
+  sheet: &TeamProfileSheet,
+  cli: &str,
+  (offered, chosen): (&[Offered], &Signal<String>),
+) -> (Sub, Element) {
+  match offered {
     [] => (
       Sub::quiet(ctx.t("team_hub.profile.runsOnNone")),
       Row::new()
@@ -61,29 +74,27 @@ fn runs_on(ctx: &Ctx, sheet: &TeamProfileSheet, cli: &str, chosen: &Signal<Strin
         )
         .into(),
     ),
-    [only] => (
+    // The only one runs it without asking once the project has its one connection on it.
+    [only] if matches!(only.here, Here::Connection(_)) && !only.other_models && sheet.runs_on().is_some() => (
       Sub::quiet(ctx.t("team_hub.profile.runsOnOnly")),
       only_one(ctx, sheet, only, cli),
     ),
-    many => {
+    several => {
       let sub = if sheet.picked.is_some() {
         Sub::quiet(ctx.t("team_hub.profile.runsOnPicked"))
       } else {
         Sub {
-          words: ctx.t_args(
-            "team_hub.profile.runsOnMany",
-            [("count", many.len().to_string()), ("cli", cli.to_owned())],
-          ),
+          words: ctx.t("team_hub.runsHere.pick"),
           color: PaletteColor::Warning,
         }
       };
-      (sub, select(ctx, sheet, cli, chosen))
+      (sub, select(ctx, cli, (several, chosen)))
     }
   }
 }
 
-/// *Claude Code · Claude 2 · the only Claude Code connection here*.
-fn only_one(ctx: &Ctx, sheet: &TeamProfileSheet, only: &ConnectionChoice, cli: &str) -> Element {
+/// *Claude Code · Default · the only Claude Code account here*.
+fn only_one(ctx: &Ctx, sheet: &TeamProfileSheet, only: &Offered, cli: &str) -> Element {
   Row::new()
     .id("team-hub-runs-on-value")
     .width(Dimension::Pct(100.0))
@@ -91,12 +102,9 @@ fn only_one(ctx: &Ctx, sheet: &TeamProfileSheet, only: &ConnectionChoice, cli: &
     .align_items(Alignment::Center)
     .child(AgentMark::of(sheet.cli).render(ctx, IconSize::Lg))
     .child(
-      Text::new(&ctx.t_args(
-        "team_hub.profile.connectionName",
-        [("cli", cli), ("name", only.name.as_str())],
-      ))
-      .id("team-hub-runs-on-name")
-      .variant(HubText::Value.role()),
+      Text::new(&only.label)
+        .id("team-hub-runs-on-name")
+        .variant(HubText::Value.role()),
     )
     .child(
       Text::new(&ctx.t_args("team_hub.profile.onlyOne", [("cli", cli)]))
@@ -106,34 +114,29 @@ fn only_one(ctx: &Ctx, sheet: &TeamProfileSheet, only: &ConnectionChoice, cli: &
     .into()
 }
 
-/// The pick among several: *Choose a Claude Code connection*, or the one picked.
-fn select(ctx: &Ctx, sheet: &TeamProfileSheet, cli: &str, chosen: &Signal<String>) -> Element {
-  let options = sheet
-    .connections
+/// The pick among several: *Choose a Claude Code account*, or the one picked; each with its plan, one that lists
+/// other models unavailable, and *Add an account…* last.
+fn select(ctx: &Ctx, cli: &str, (offered, chosen): (&[Offered], &Signal<String>)) -> Element {
+  let mut options: Vec<SelectOption<String>> = offered
     .iter()
-    .map(|choice| {
-      let option = SelectOption::new(
-        choice.id.to_string(),
-        ctx.t_args(
-          "team_hub.profile.connectionName",
-          [("cli", cli), ("name", choice.name.as_str())],
-        ),
-      );
-      match (&choice.version, sheet.cli.program_name()) {
-        (Some(version), Some(program)) => option.detail(ctx.t_args(
-          "team_hub.profile.cliVersion",
-          [("program", program), ("version", version)],
-        )),
-        _ => option,
+    .map(|offered| {
+      let option = SelectOption::new(offered.value.clone(), offered.label.to_string()).disabled(offered.other_models);
+      match &offered.detail {
+        Some(detail) => option.detail(detail.clone()),
+        None => option,
       }
     })
     .collect();
+  options.push(SelectOption::new(
+    ADD.to_owned(),
+    ctx.t("team_hub.runsHere.add").to_string(),
+  ));
   SelectField::new(
     "team-hub-pick",
     ctx.t("team_hub.profile.runsOn"),
     chosen.clone(),
     options,
   )
-  .placeholder(ctx.t_args("team_hub.profile.choose", [("cli", cli)]))
+  .placeholder(ctx.t_args("team_hub.runsHere.choose", [("cli", cli)]))
   .render(ctx)
 }

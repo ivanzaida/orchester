@@ -2,12 +2,21 @@
 //! same on every computer, every row a value: *None* where the profile has nothing of a kind, *CLI default* for an
 //! effort it leaves to the CLI (M1 `oPF2o`).
 
-use lurq::{app::ctx::Ctx, components::Row, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Row, Text},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
+};
 use orchester_workspace::agents::team_profile::{Listed, TeamProfileSheet};
 
-use crate::screens::team_hub::{
-  rows::{self, FromTeam, Sub},
-  words::cli_key,
+use crate::{
+  screens::team_hub::{
+    rows::{self, FromTeam, Sub},
+    words::cli_key,
+  },
+  theme::{HubText, IconSize},
+  ui::agent_mark::AgentMark,
 };
 
 pub(in crate::screens::team_hub) fn section(
@@ -15,30 +24,7 @@ pub(in crate::screens::team_hub) fn section(
   sheet: &TeamProfileSheet,
   note: FromTeam,
 ) -> lurq::components::Column {
-  let mut rows = vec![
-    rows::row(
-      "team-hub-from-team-cli",
-      &ctx.t("team_hub.profile.agentCli"),
-      Some(Sub::quiet(ctx.t("team_hub.profile.agentCliSub"))),
-      rows::words("team-hub-from-team-cli-value", &ctx.t(cli_key(sheet.cli))),
-    ),
-    rows::row(
-      "team-hub-from-team-model",
-      &ctx.t("team_hub.profile.model"),
-      None,
-      rows::mono("team-hub-from-team-model-value", &sheet.model),
-    ),
-  ];
-  let effort = sheet.effort.as_deref().map_or_else(
-    || ctx.t("team_hub.profile.effortDefault").to_string(),
-    |effort| effort_words(ctx, effort),
-  );
-  rows.push(rows::row(
-    "team-hub-from-team-effort",
-    &ctx.t("team_hub.profile.effort"),
-    None,
-    rows::words("team-hub-from-team-effort-value", &effort),
-  ));
+  let mut rows = vec![runs_with(ctx, sheet)];
   let lists = [
     (
       "instructions",
@@ -60,6 +46,40 @@ pub(in crate::screens::team_hub) fn section(
   let sub = Some(Sub::quiet(ctx.t("team_hub.profile.secretsSub")));
   rows.push(listed_row(ctx, "secrets", "team_hub.profile.secrets", secrets, sub));
   rows::from_team(ctx, note, rows)
+}
+
+/// *CLI, model and effort* (C3 `OTVQt`): what the team chose in one row, as the form that chooses it has it in one
+/// field; each part is a value of its own.
+fn runs_with(ctx: &Ctx, sheet: &TeamProfileSheet) -> Row {
+  let effort = sheet.effort.as_deref().map_or_else(
+    || ctx.t("team_hub.profile.effortDefault").to_string(),
+    |effort| effort_words(ctx, effort),
+  );
+  let value = Row::new()
+    .id("team-hub-from-team-runs-with-value")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(AgentMark::of(sheet.cli).render(ctx, IconSize::Lg))
+    .child(
+      Text::new(&ctx.t(cli_key(sheet.cli)))
+        .id("team-hub-from-team-cli-value")
+        .variant(HubText::Value.role())
+        .nowrap(),
+    )
+    .child(rows::mono("team-hub-from-team-model-value", &sheet.model))
+    .child(
+      Text::new(&effort)
+        .id("team-hub-from-team-effort-value")
+        .variant(HubText::Value.role())
+        .nowrap(),
+    );
+  rows::row(
+    "team-hub-from-team-cli",
+    &ctx.t("team_hub.runsHere.label"),
+    Some(Sub::quiet(ctx.t("team_hub.profile.agentCliSub"))),
+    value,
+  )
 }
 
 fn names(listed: &[Listed]) -> Vec<String> {

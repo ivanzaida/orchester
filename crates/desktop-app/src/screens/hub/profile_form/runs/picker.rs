@@ -296,7 +296,7 @@ pub(in crate::screens::hub::profile_form) fn connections(ctx: &Ctx, items: &[Ite
 }
 
 /// The account's name for a sign-in this computer lists, else the connection's own.
-fn name_of(ctx: &Ctx, target: &Target, who: &Who<'_>) -> Arc<str> {
+pub(in crate::screens::hub::profile_form) fn name_of(ctx: &Ctx, target: &Target, who: &Who<'_>) -> Arc<str> {
   match target {
     Target::Account(on) => who
       .accounts

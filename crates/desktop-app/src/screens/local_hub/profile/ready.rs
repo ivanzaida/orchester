@@ -12,12 +12,15 @@ use orchester_workspace::agents::{
   team_profile::ConnectionChoice,
 };
 
-use crate::screens::team_hub::{
-  profile::{
-    fix::Offer,
-    parts::{Part, State},
+use crate::screens::{
+  hub::profile_form::here::Offered,
+  team_hub::{
+    profile::{
+      fix::Offer,
+      parts::{Part, State},
+    },
+    words::cli_key,
   },
-  words::cli_key,
 };
 
 /// What a local profile's row offers at its end.
@@ -57,15 +60,16 @@ impl Offer for Fix {
   }
 }
 
-/// The connection, then each MCP server, then each secret of `profile`, as `hub` says they stand.
-pub(super) fn parts(ctx: &Ctx, hub: &LocalHub, profile: &LocalProfile) -> Vec<Part<Fix>> {
-  let mut parts = vec![connection(ctx, profile)];
+/// The connection, then each MCP server, then each secret of `profile`, as `hub` says they stand. `offered` is what
+/// it can run on here as it is: this computer's accounts of its CLI, and what runs on a key.
+pub(super) fn parts(ctx: &Ctx, hub: &LocalHub, (profile, offered): (&LocalProfile, &[Offered])) -> Vec<Part<Fix>> {
+  let mut parts = vec![connection(ctx, profile, offered)];
   parts.extend(profile.mcp_servers.iter().map(|(id, name)| server(ctx, hub, *id, name)));
   parts.extend(profile.secrets.iter().map(|name| secret(ctx, hub, profile, name)));
   parts
 }
 
-fn connection(ctx: &Ctx, profile: &LocalProfile) -> Part<Fix> {
+fn connection(ctx: &Ctx, profile: &LocalProfile, offered: &[Offered]) -> Part<Fix> {
   let state = match (profile.current, profile.cli) {
     (Some(current), Some(cli)) => {
       let found = profile.connections.iter().find(|choice| choice.id == current);
@@ -85,7 +89,7 @@ fn connection(ctx: &Ctx, profile: &LocalProfile) -> Part<Fix> {
         |choice| connection_words(ctx, cli, choice),
       ))
     }
-    (None, Some(cli)) => gone(ctx, &ctx.t(cli_key(cli)), &profile.connections),
+    (None, Some(cli)) => gone(ctx, &ctx.t(cli_key(cli)), offered),
     (_, None) => State::Missing {
       words: ctx.t_args("local_hub.ready.noCli", [("model", profile.model.as_str())]),
       fix: None,
@@ -116,16 +120,19 @@ fn connection_words(ctx: &Ctx, provider: AgentProvider, choice: &ConnectionChoic
   }
 }
 
-/// The connection the profile names is gone: none of its CLI to add, the only one to use, or several to choose from.
-fn gone(ctx: &Ctx, cli: &str, connections: &[ConnectionChoice]) -> State<Fix> {
-  match connections {
+/// The profile runs on nothing here (the connection it names is gone, or the project never had one): nothing of its
+/// CLI to add an account for, the only account to use, or several to choose from. An account the project has no
+/// connection on counts: using it makes the connection.
+fn gone(ctx: &Ctx, cli: &str, offered: &[Offered]) -> State<Fix> {
+  let takes: Vec<&Offered> = offered.iter().filter(|offered| !offered.other_models).collect();
+  match takes.as_slice() {
     [] => State::Missing {
       words: ctx.t_args("local_hub.ready.noneOfKind", [("cli", cli)]),
       fix: Some(Fix::AddConnection),
       blocking: true,
     },
     [only] => State::Missing {
-      words: ctx.t_args("local_hub.ready.onlyOne", [("cli", cli), ("name", &only.name)]),
+      words: ctx.t_args("local_hub.ready.onlyOne", [("name", &*only.label)]),
       fix: Some(Fix::UseConnection),
       blocking: false,
     },

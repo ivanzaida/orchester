@@ -191,8 +191,11 @@ fn local_hub_account_use_runs_it_on_the_first_of_its_kind_at_once_for_automation
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   agents.until("the fix", |s| s.exists("local-hub-fix-use"));
   assert!(
-    agents.text("local-hub-fix-use").contains("Claude 2"),
-    "the first of its kind"
+    agents
+      .text("local-hub-fix-use")
+      .contains("Use Claude Code · Default for Builder"),
+    "the account, not a connection: {}",
+    agents.text("local-hub-fix-use")
   );
 
   with_synthetic_input(|| agents.click("local-hub-fix-use"));

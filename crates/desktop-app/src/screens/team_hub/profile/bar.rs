@@ -25,7 +25,7 @@ pub(super) struct Words<'a> {
   pub listing: &'a Listing,
   pub entry: &'a Entry,
   pub sheet: &'a TeamProfileSheet,
-  /// The connection the person chose in the select: the first one while none is.
+  /// The account the person chose in the select (*Claude Code · Work*): the first one while none is.
   pub connection: &'a str,
 }
 

@@ -14,7 +14,7 @@ use crate::{screens::team_hub::model::Entry, ui::icon::Icon};
 /// that cannot say, a reviewer's connection) has none, and no action stands in its place.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::screens) enum Fix {
-  /// Keep the connection the person chose among several as the profile's.
+  /// Keep the account, or the connection, the person chose as what the profile runs on here.
   UseConnection,
   /// Go where a connection of the CLI kind is added.
   AddConnection,
@@ -105,8 +105,10 @@ pub(in crate::screens::team_hub) fn archived_named(entry: &Entry) -> Option<(Res
 }
 
 /// The fix to offer first for `entry`: opening what it names that the team archived, else the fix of the first part
-/// its readiness misses.
-pub(in crate::screens::team_hub) fn first(entry: &Entry) -> Option<Fix> {
+/// its readiness misses. A profile the project has no connection for is run on an account instead of sending the
+/// person to add one, while this computer has an account of its CLI (`accounts`): the project gets its connection on
+/// the account then.
+pub(in crate::screens::team_hub) fn first(entry: &Entry, accounts: bool) -> Option<Fix> {
   archived_named(entry).map_or_else(
     || {
       entry
@@ -114,6 +116,10 @@ pub(in crate::screens::team_hub) fn first(entry: &Entry) -> Option<Fix> {
         .as_ref()
         .and_then(|standing| standing.missing().first())
         .and_then(Fix::of)
+        .map(|fix| match fix {
+          Fix::AddConnection if accounts => Fix::UseConnection,
+          other => other,
+        })
     },
     |(id, _)| Some(Fix::OpenArchived(id)),
   )

@@ -10,6 +10,7 @@
 
 mod connect;
 mod held;
+pub(in crate::screens) mod here;
 mod made;
 mod offer;
 mod runs;

@@ -4,7 +4,7 @@
 //! (`docs/design/team-configuration.md`, "What a computer fills in").
 
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
+  connection::{AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
   id::{ConnectionId, ResourceId},
   resource::{TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
@@ -12,8 +12,15 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{team_body_edit::Latest, team_sheets};
-use crate::team_config::{TeamConfig, TeamResource};
+use super::{
+  runs_on::{self, RunsOnChoice},
+  team_body_edit::Latest,
+  team_sheets,
+};
+use crate::{
+  connections::data::agent_connections,
+  team_config::{TeamConfig, TeamResource},
+};
 
 /// A resource a profile uses.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -70,6 +77,9 @@ pub struct TeamProfileSheet {
   pub connections: Vec<ConnectionChoice>,
   /// The connection picked for it, while it is still one of [`Self::connections`].
   pub picked: Option<ConnectionId>,
+  /// [`Self::connections`] as the *Runs on* select offers them: who each runs as and the models it lists, so an
+  /// account is offered once and one that does not serve the team's model says so.
+  pub choices: Vec<RunsOnChoice>,
   /// What an admin's edit starts from: its latest version.
   pub edit: Option<Latest<TeamAgentProfile>>,
 }
@@ -138,6 +148,10 @@ fn sheet(
     .filter(|connection| matches!(connection.kind(), ConnectionKind::Agent(provider) if *provider == team.cli()))
     .map(ConnectionChoice::of)
     .collect();
+  let of_cli: Vec<AgentConnection> = agent_connections(connections.to_vec())
+    .into_iter()
+    .filter(|connection| connection.provider() == team.cli())
+    .collect();
   let picked = db
     .connection_pick(profile)?
     .map(|pick| pick.connection)
@@ -156,6 +170,7 @@ fn sheet(
     secrets,
     connections: of_kind,
     picked,
+    choices: runs_on::choices(&of_cli, None, |_| false),
     edit: config
       .resource(profile)
       .and_then(|resource| team_sheets::latest_of(resource, team)),
