@@ -9,11 +9,13 @@ use std::{collections::HashMap, fs, path::Path};
 use orchester_core::{
   account::ApiSetup,
   connection::{
-    AgentConnection, AgentProvider, BaseUrl, DecisionConnection, DecisionServerUrl, EndpointPreset, NativeModels,
+    AgentConnection, AgentProvider, ApiProvider, BaseUrl, DecisionConnection, DecisionServerUrl, EndpointPreset,
+    NativeModels,
   },
-  id::{ApiAccountId, DecisionConnectionId, ProjectId, SecretId},
+  id::{ApiAccountId, ConnectionId, DecisionConnectionId, ProjectId, SecretId},
   name::Name,
   project::{Project, ProjectKey},
+  resource::ModelId,
   secret::{self, Environment, NewSecret, SecretKind, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
   store::{ConnectionStore, SecretStore},
   time::Timestamp,
@@ -277,5 +279,103 @@ fn adopt_keys_a_decision_connection_becomes_a_server_of_the_app_by_its_own_id() 
     db.decision_reviewer_connection().expect("read"),
     Some(id),
     "the reviewer stays"
+  );
+}
+
+/// A Claude Code and a Codex connection of the project at `repo`, both on one key secret of the project's; the
+/// secret's id.
+fn two_clis_on_one_secret(fixture: &Fixture, repo: &Path) -> SecretId {
+  let mut db = ProjectDb::open(repo).expect("database");
+  let project = db.project().id();
+  let held = secret::add(
+    &mut db,
+    &fixture.vault,
+    project,
+    NewSecret {
+      name: SecretName::new("DEEPSEEK_KEY").expect("a valid name"),
+      kind: SecretKind::ApiKey,
+      environment: Environment::NEW_SECRET,
+    },
+    &SecretValue::new(KEY.to_owned()).expect("a key"),
+    Timestamp::now(),
+  )
+  .expect("the project's secret");
+  for (label, provider, url) in [
+    (
+      "Claude · DeepSeek",
+      AgentProvider::ClaudeCodeCli,
+      "https://api.deepseek.com/anthropic",
+    ),
+    ("Deepseek", AgentProvider::CodexCli, "https://api.deepseek.com/v1"),
+  ] {
+    let mut connection = AgentConnection::new(
+      ConnectionId::generate(),
+      name(label),
+      provider,
+      repo.join("cli.exe"),
+      Timestamp::now(),
+    )
+    .expect("a connection");
+    let models = vec![ModelId::new("deepseek-chat").expect("a model")];
+    connection
+      .set_api_provider(Some(
+        ApiProvider::new(BaseUrl::new(url).expect("a base URL"), held.id(), models).expect("a provider"),
+      ))
+      .expect("on a provider");
+    db.create_connection(&connection.into_connection()).expect("stored");
+  }
+  held.id()
+}
+
+/// Two agent CLIs of one project on the same key secret become two accounts, one for each CLI: the first keeps the
+/// secret's id, the second gets an id of its own, which its connection then names as its key's; both hold the key.
+#[test]
+fn adopt_keys_two_clis_on_one_secret_become_an_account_each() {
+  let fixture = fixture();
+  let repo = project(&fixture, ("KON", "Kontur"));
+  let key = two_clis_on_one_secret(&fixture, repo.path());
+
+  fixture
+    .workspace
+    .adopt_project_keys(repo.path(), &fixture.vault)
+    .expect("adopted");
+  fixture
+    .workspace
+    .adopt_project_keys(repo.path(), &fixture.vault)
+    .expect("a second time changes nothing");
+
+  let accounts = fixture.workspace.api_accounts().expect("read");
+  assert_eq!(accounts.len(), 2, "{accounts:?}");
+  let of = |provider: AgentProvider| {
+    accounts
+      .iter()
+      .find(|account| account.agent() == provider)
+      .expect("one")
+  };
+  let (claude, codex) = (of(AgentProvider::ClaudeCodeCli), of(AgentProvider::CodexCli));
+  assert_eq!(
+    claude.id(),
+    ApiAccountId::from_uuid(key.as_uuid()),
+    "the first keeps the secret's id"
+  );
+  assert_ne!(codex.id(), claude.id());
+  for account in [claude, codex] {
+    assert_eq!(
+      fixture
+        .vault
+        .read(&VaultKey::api_account(account.id()))
+        .expect("its entry")
+        .expose(),
+      KEY
+    );
+  }
+  let on_codex = connections(repo.path())
+    .into_iter()
+    .find(|connection| connection.provider() == AgentProvider::CodexCli)
+    .expect("the Codex connection");
+  assert_eq!(
+    on_codex.api_provider().expect("on a provider").key(),
+    SecretId::from_uuid(codex.id().as_uuid()),
+    "the Codex connection names its own account"
   );
 }

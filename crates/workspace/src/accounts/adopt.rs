@@ -6,7 +6,8 @@
 //! - An API account is made with the id of the project's key secret, so the connection keeps the id it names as its
 //!   key's and a session made on it before still continues; its key's value is copied into the app's entry. Where an
 //!   API account of the same kind of agent already reaches the same base URL with the same key (compared in memory,
-//!   never logged or shown), the connection goes onto that account instead.
+//!   never logged or shown), the connection goes onto that account instead. Two agent CLIs on one secret become two
+//!   accounts, one for each CLI: the second has an id of its own, which its connection then names.
 //! - A decision connection becomes a server of the app with its own id, so the project's choice of reviewer stays; its
 //!   key's value is copied into the server's entry and the connection names the server's id as its key's.
 //!
@@ -70,7 +71,10 @@ impl Workspace {
     };
     let accounts = self.api_accounts()?;
     let own = ApiAccountId::from_uuid(key.as_uuid());
-    if accounts.iter().any(|account| account.id() == own) {
+    // An account already has the id of the key: this connection's copy, or the account another connection on the
+    // same secret became (a key two agent CLIs share), which is no account of this one's kind of agent.
+    let holder = accounts.iter().find(|account| account.id() == own);
+    if holder.is_some_and(|account| account.agent() == setup.agent()) {
       return Ok(false);
     }
     let Some(value) = project_key(db, vault, key)? else {
@@ -91,11 +95,23 @@ impl Workspace {
       return Ok(true);
     }
     let name = self.account_name(&accounts, &setup, (connection.name(), db.project().name()));
-    let account = ApiAccount::new(own, name, setup, Timestamp::now());
+    // The id of the key's secret, so the connection stays as it is; where another kind of agent's account has that
+    // id already, an id of its own, which the connection then names as its key's.
+    let id = if holder.is_some() {
+      ApiAccountId::generate()
+    } else {
+      own
+    };
+    let account = ApiAccount::new(id, name, setup, Timestamp::now());
     vault
-      .store(&VaultKey::api_account(own), &value)
+      .store(&VaultKey::api_account(id), &value)
       .map_err(AccountsError::Keychain)?;
     self.db.lock().add_api_account(&account)?;
+    if id != own {
+      let mut moved = connection.clone();
+      repoint(&mut moved, key_of(id))?;
+      db.save_connection(&moved.into_connection())?;
+    }
     Ok(true)
   }
 
