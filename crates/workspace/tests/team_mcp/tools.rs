@@ -79,13 +79,18 @@ fn team_mcp_reads_come_from_the_team_server() {
   assert_eq!(module["branch"], crate::team_server::MODULE_BRANCH);
   assert_eq!(module["module"]["id"], server.module.to_string());
 
-  // Across projects, a team project's tasks are not read from this computer's copy: it is listed apart.
+  // Across projects, a team project's tasks are read from its server too, each naming its project (OA-36); never
+  // from this computer's copy.
   let across = checkout.call("list_tasks", &json!({})).expect("listed");
-  assert_eq!(across["tasks"], json!([]));
-  assert_eq!(
-    across["unreadable_projects"][0]["error"]["code"],
-    "team_project_unsupported"
-  );
+  let keys: Vec<&str> = across["tasks"]
+    .as_array()
+    .expect("tasks")
+    .iter()
+    .filter_map(|task| task["key"].as_str())
+    .collect();
+  assert_eq!(keys, ["KON-7"], "{across}");
+  assert_eq!(across["tasks"][0]["project"]["name"], "Kontur", "{across}");
+  assert_eq!(across["unreadable_projects"], json!([]), "{across}");
   assert!(
     checkout.db().tasks().expect("tasks").is_empty(),
     "no copy of the team's tasks"

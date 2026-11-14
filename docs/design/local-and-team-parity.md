@@ -60,7 +60,6 @@ removes the difference.
 | The ceilings of a subscription that leads to the end (OA-09) | held for every task it leads | found for a team task that ran here; none of the calls they bound work for a team run yet | follows from the rows below | OA-29 |
 | Returning a task to draft | `return_to_draft` | refused `team_no_queue` | a team task has no queue on this computer | stays: the server's lifecycle has no draft |
 | Forecasts and delivery figures (`get_delivery`) | answer | refused `team_project_unsupported` | not built | OA-36 |
-| Tasks of every project in one reading (`list_tasks` without a project) | answer | a linked project is left out | reads the server per project | OA-36 |
 
 ### What works the same already
 
