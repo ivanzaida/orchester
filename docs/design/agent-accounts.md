@@ -410,6 +410,17 @@ tools speak of accounts only.
     (`Workspace::connect_account`): the models an account serves are read from that connection, so its line says
     *reading its models…* meanwhile, and a CLI whose program is not found says so under the picker. The picker
     makes it for the account it opens on too, as in a project that has no connection yet.
+- *An account is who is signed in* (the person, 2026-11-14). Two folders of one CLI whose CLI reports the same
+  signed-in email are one account wherever a profile chooses one: one item on the rail and in a team profile's
+  *Runs on*, in the place of the first of them, standing for the folder the profile runs on now, else for one the
+  project has a connection on (`orchester_core::account::by_sign_in`). A folder nobody is signed in to, or whose
+  CLI does not say who, stands alone. Settings › Accounts still lists every folder, each saying which other it is
+  the same account as. A connection that differs from another only by its program (a wrapper script, say) is not
+  an account of its own: it is one of its account's connections.
+- *Where the picker opens.* Under its field, from the field's start; above the field where the window has no room
+  under it. It never lies on its field. The field fills its row.
+- *A profile's row in the list* names the CLI and the account it runs on (*Claude Code · Work*), by the account's
+  name, never by the name of the connection Orchester keeps for it.
 - *API accounts on the rail.* After the sign-ins the rail has the person's API accounts for an agent CLI, each
   once, whether the project has a connection on one or not, with the models the person listed for it in Settings;
   then the project's connections on a key of its own, made before API accounts. An API account's connection is made

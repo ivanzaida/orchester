@@ -35,7 +35,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{AccountsView, Route},
-  screens::{connections::provider_form::ProviderForm, settings::frame},
+  screens::{connections::provider_form::ProviderForm, project_settings::kit::FormField, settings::frame},
   services::Services,
   theme::IconSize,
   ui::{
@@ -48,9 +48,6 @@ use crate::{
     tabs::{Segment, SegmentFace, segmented},
   },
 };
-
-/// The name's field, as wide as a sign-in's (`Input` `t5Yiek`).
-const NAME_WIDTH: f32 = 340.0;
 
 /// What *Add provider* adds: the name, what reaches the model API, and the key.
 type NewApi = (Name, ApiSetup, SecretValue);
@@ -162,25 +159,24 @@ fn cli_row(ctx: &mut Ctx, draft: &Draft, chosen: AccountCli) -> Element {
     .render(ctx)
 }
 
-/// *Name*: how a profile is offered it (*Claude Code · DeepSeek*).
+/// *Name*: how a profile is offered it (*Claude Code · DeepSeek*). It is drawn as the base URL, the key and the
+/// models under it are, so the four fields of the group are one width.
 fn name_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
   let typed = draft.name.get();
   let typed = typed.trim();
-  let field = FieldInput::new("api-add-name", t(ctx, "accounts.add.name"), draft.name.clone())
-    .width(Dimension::Px(NAME_WIDTH))
-    .render(ctx);
-  let row = SettingRow::new("api-add-name-row", t(ctx, "accounts.add.name")).control(field);
+  let label = t(ctx, "accounts.add.name");
+  let field = FieldInput::new("api-add-name", label.clone(), draft.name.clone()).render(ctx);
   let cli = t(ctx, cli_key(cli));
-  if typed.is_empty() {
-    row.hint(ta(ctx, "accounts.add.nameShownEmpty", [("cli", cli)]))
+  let shown = if typed.is_empty() {
+    ta(ctx, "accounts.add.nameShownEmpty", [("cli", cli)])
   } else {
-    row.hint(ta(
+    ta(
       ctx,
       "accounts.add.nameShown",
       [("cli", cli), ("name", typed.to_owned())],
-    ))
-  }
-  .render(ctx)
+    )
+  };
+  FormField::new("api-add-name-row", label).hint(shown).render(ctx, field)
 }
 
 /// Whose change this is, *Cancel* and *Add provider*, with what the last try said over them.

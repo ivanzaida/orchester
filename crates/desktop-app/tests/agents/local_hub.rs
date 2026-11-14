@@ -334,7 +334,7 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
   agents.until("the panel", |s| s.exists(USE));
   assert_eq!(
     agents.text(&format!("local-hub-row-{id}-line")),
-    "Choose a Claude Code connection"
+    "Choose a Claude Code account"
   );
   for part in ["local-hub-profile-runs-on", "local-hub-profile-versions"] {
     assert!(agents.exists(part), "{part} is the panel's own");
@@ -345,9 +345,10 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
   // The fix is this computer's choice, made at once: nothing waits for Save and no version is made.
   agents.press_until(USE, "it runs on Claude 2", |s| !s.exists(USE));
   let row = format!("local-hub-row-{id}-line");
-  agents.until("the row says it runs on Claude 2, with nothing unsaved", |s| {
+  // The row names the account it runs on, not the connection Orchester keeps for it.
+  agents.until("the row says the account, with nothing unsaved", |s| {
     let line = s.text(&row);
-    line.contains("Claude 2") && !line.contains("Unsaved")
+    line == "Claude Code · Default" && !line.contains("Unsaved")
   });
   assert!(
     agents

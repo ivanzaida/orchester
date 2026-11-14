@@ -1,8 +1,8 @@
 //! The one field of what a profile runs with, the same in a local profile's panel and in every form of a profile
 //! (`Agents on accounts` C1 `RwzH2`, C2 `t7s3I`, C4 `IgFWn`): a row whose value is a picker that says what is chosen
 //! (*Claude Code · Work · claude-opus-5-5 · High*) and opens the compact *Runs on* picker (`ui::runs_on_picker`) under
-//! it, from its start: a dropdown never opens over its field. A local profile's has *Add* beside it, which opens the
-//! accounts.
+//! it, from its start, or above it where the window has no room under it: a dropdown never opens over its field. The
+//! field fills its row. A local profile's has *Add* beside it, which opens the accounts.
 
 use std::sync::Arc;
 
@@ -89,7 +89,7 @@ impl Field {
       menu.open.clone(),
       menu.anchor.clone(),
     );
-    let trigger = if self.said.chosen { trigger } else { trigger.warning() };
+    let trigger = if self.said.chosen { trigger } else { trigger.warning() }.fill();
     let mut value = Row::new()
       .id(format!("{ids}-runs-on-value"))
       .width(Dimension::Pct(100.0))
@@ -116,12 +116,13 @@ impl Field {
   }
 }
 
-/// `panel` under the field, from its start.
+/// `panel` under the field, from its start; over the field, from its start, where the window has no room under it.
+/// Either way the field stays in sight: the picker never lies on it.
 fn under(menu: &Menu, panel: Element) -> Element {
   Popup::new(menu.anchor.clone(), panel)
     .open(menu.open.clone())
     .placement(Placement::BottomStart)
     .offset(0.0, ExtraSpacing::Snug.value())
-    .collision(CollisionStrategy::Clamp)
+    .collision(CollisionStrategy::FlipThenClamp)
     .into()
 }

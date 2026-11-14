@@ -1,7 +1,8 @@
 //! What the compact *Runs on* picker of a profile's one field is given (`Agents on accounts` C1 `RwzH2`, C2 `t7s3I`,
 //! C4 `IgFWn`): everything the profile can run on as the rail and the line under it show it, and what is chosen.
 //!
-//! A local profile's rail is this computer's accounts, not the project's connections: one item for each sign-in of
+//! A local profile's rail is this computer's accounts, not the project's connections: one item for each sign-in (two
+//! folders signed in with one email are one account, so one item) of
 //! Claude Code, then of Codex, whether the project has a connection on it yet or not (choosing one that has none makes
 //! it), then what runs on a key. A connection on a sign-in this computer no longer lists stands by its own name. A
 //! sign-in is named by its account, and its line says *CLI · plan* with the plan's 5-hour use; one that is signed out
@@ -13,7 +14,7 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  account::{AgentAccount, ApiAccount, ApiSetup},
+  account::{AgentAccount, ApiAccount, ApiSetup, by_sign_in},
   connection::{
     AgentProvider, REASONING_EFFORT,
     plan_limits::{LimitState, PlanReadings},
@@ -172,12 +173,24 @@ pub(in crate::screens::hub::profile_form) fn items(
   let mut items = Vec::new();
   let mut taken: Vec<ConnectionId> = Vec::new();
   for cli in [AgentProvider::ClaudeCodeCli, AgentProvider::CodexCli] {
-    for account in who.accounts.of_provider(cli) {
-      let on: Vec<&RunsOnChoice> = runs_on
+    for folders in by_sign_in(who.accounts.of_provider(cli)) {
+      // The project's connections on each folder of the account, by folder.
+      let on = |account: &AgentAccount| -> Vec<&RunsOnChoice> {
+        runs_on
+          .iter()
+          .filter(|choice| choice.host.is_none() && choice.cli == cli && choice.account == Some(account.id()))
+          .collect()
+      };
+      let connected: Vec<(&AgentAccount, Vec<&RunsOnChoice>)> =
+        folders.iter().map(|account| (*account, on(account))).collect();
+      taken.extend(connected.iter().flat_map(|(_, on)| on.iter().map(|choice| choice.id)));
+      // The folder the item stands for: the one the profile runs on, else one the project has a connection on, else
+      // the first, which is the one the person named.
+      let (account, on) = connected
         .iter()
-        .filter(|choice| choice.host.is_none() && choice.cli == cli && choice.account == Some(account.id()))
-        .collect();
-      taken.extend(on.iter().map(|choice| choice.id));
+        .find(|(_, on)| on.iter().any(|choice| Some(choice.id) == current))
+        .or_else(|| connected.iter().find(|(_, on)| !on.is_empty()))
+        .unwrap_or(&connected[0]);
       let connection = on
         .iter()
         .find(|choice| Some(choice.id) == current)
@@ -188,7 +201,7 @@ pub(in crate::screens::hub::profile_form) fn items(
         target: Target::Account(OnAccount {
           id: account.id(),
           cli,
-          default: account.is_default(),
+          default: folders.iter().any(|folder| folder.is_default()),
           connection,
         }),
       });

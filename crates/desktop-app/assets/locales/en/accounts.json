@@ -54,7 +54,7 @@
       "afterBroughtHint": "Orchester checks at once who is signed in to it.",
       "afterBroughtInfo": "Such as a folder you set {{variable}} to. Orchester never deletes a folder it did not create."
     },
-    "note": "Accounts belong to you on this computer; every project can use them. Each is a folder where the CLI keeps its own sign-in. GitHub keeps using gh's signed-in account for now.",
+    "note": "Accounts and API providers belong to you on this computer; every project can use them. A sign-in is a folder where the CLI keeps it, outside every repository. A key is kept in the system keychain, never in a project. GitHub keeps using gh's signed-in account for now.",
     "reading": "Reading the accounts…",
     "loadFailed": "The accounts can't be read",
     "loadFailureDetail": "{{reason}}",

@@ -69,10 +69,12 @@ use crate::{
       agents::{self, TabCount},
       agents_bones,
       new_button::{made_under, new_button, new_words},
+      profile_form::here::Whose,
     },
     memory::{hub as memory_hub, state::Made},
     team_hub::{create, model::Kind, unread},
   },
+  services::accounts,
   ui::{
     button::{ActionButton, ButtonKind},
     failure::{Failure, LastFailure},
@@ -179,10 +181,10 @@ impl Component for LocalHubScreen {
       return self.memory_page(ctx, &project, view, (listing.as_ref(), memory_count));
     }
     let navigation = Navigation::of(ctx);
+    let whose = (accounts::listed(ctx), accounts::api_listed(ctx));
     let leave = Leave::new(&navigation, &self.leaving, self.unsaved.get().is_some());
     let selected = listing.as_ref().and_then(|listing| listing.selected(&view)).cloned();
-    let id = project.open.project.id();
-    let now = Timestamp::now();
+    let (id, now) = (project.open.project.id(), Timestamp::now());
     let body = match (failed, hub.zip(listing.as_ref())) {
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
@@ -197,6 +199,7 @@ impl Component for LocalHubScreen {
           now,
           unsaved: self.unsaved.get(),
           adding: Kind::of_filter(view.filter).filter(|_| view.adding),
+          whose: Whose::of(&whose),
         };
         self.hub_body(
           ctx,

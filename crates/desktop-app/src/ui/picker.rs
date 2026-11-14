@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::Text,
+  components::{Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -27,6 +27,7 @@ pub struct Picker {
   open: Signal<bool>,
   anchor: ElementRef,
   warning: bool,
+  fill: bool,
 }
 
 impl Picker {
@@ -44,12 +45,22 @@ impl Picker {
       open,
       anchor,
       warning: false,
+      fill: false,
     }
   }
 
   /// The chosen value needs attention, e.g. a version that no longer exists.
   pub fn warning(mut self) -> Self {
     self.warning = true;
+    self
+  }
+}
+
+impl Picker {
+  /// As wide as the room it is given, the chevron at its end, the choice cut with an ellipsis where it does not fit:
+  /// a form's field, where a picker in a toolbar is as wide as its words.
+  pub fn fill(mut self) -> Self {
+    self.fill = true;
     self
   }
 }
@@ -63,7 +74,13 @@ impl From<Picker> for Element {
     } else {
       PaletteColor::TextSecondary
     };
-    pressable(move || open.update(|open| *open = !*open))
+    let trigger = pressable(move || open.update(|open| *open = !*open));
+    let trigger = if picker.fill {
+      trigger.width(Dimension::Pct(100.0))
+    } else {
+      trigger
+    };
+    trigger
       .id(picker.id.clone())
       .ref_element(picker.anchor)
       .height(Dimension::Px(ControlHeight::Picker.value()))
@@ -83,13 +100,21 @@ impl From<Picker> for Element {
       .describe("a11y_name", picker.label.clone())
       .describe("state", if is_open { "open" } else { "closed" })
       .child(icon(picker.glyph, IconSize::Base, glyph))
-      .child(
-        Text::new(&picker.label)
+      .child({
+        let label = Text::new(&picker.label)
           .id(format!("{}-label", picker.id))
           .variant(TypographyStyle::Description)
           .color(PaletteColor::TextPrimary)
-          .nowrap(),
-      )
+          .nowrap();
+        if picker.fill {
+          label
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0))
+            .text_overflow(TextOverflow::Elipsis)
+        } else {
+          label
+        }
+      })
       .child(icon(
         if is_open { Icon::ChevronUp } else { Icon::ChevronDown },
         IconSize::Sm,

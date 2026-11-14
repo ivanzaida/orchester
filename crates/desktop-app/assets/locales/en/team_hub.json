@@ -51,7 +51,7 @@
       "namesArchivedLocal": "Names {{name}}, which was archived",
       "many": "{{count}} things missing here",
       "connectionNone": "No {{cli}} connection on this computer",
-      "connectionPick": "Choose a {{cli}} connection here",
+      "connectionPick": "Choose a {{cli}} account here",
       "connectionSignIn": "Sign in to {{cli}} here",
       "decisionConnection": "Needs a connection here",
       "mcpUndecided": "Switch it on or off on this computer",

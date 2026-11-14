@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{connection::AgentProvider, id::ConnectionId};
+use orchester_core::{account::ApiAccount, connection::AgentProvider, id::ConnectionId};
 use orchester_workspace::agents::runs_on::RunsOnChoice;
 
 use super::{
@@ -17,7 +17,7 @@ use super::{
 use crate::{
   screens::team_hub::words::cli_key,
   services::{
-    accounts::{self, plan_name},
+    accounts::{self, Accounts, ApiAccounts, account_name, plan_name},
     plan_limits,
   },
 };
@@ -67,6 +67,39 @@ pub(in crate::screens) fn here_of(value: &str) -> Option<Here> {
   match value.strip_prefix("account-") {
     Some(account) => account.parse().ok().map(Here::Account),
     None => value.parse().ok().map(Here::Connection),
+  }
+}
+
+/// Whose accounts they are: this computer's sign-ins, and the person's API accounts.
+#[derive(Clone, Copy)]
+pub(in crate::screens) struct Whose<'a> {
+  pub accounts: &'a Accounts,
+  pub api: &'a [ApiAccount],
+}
+
+impl<'a> Whose<'a> {
+  /// Of the accounts as read: the sign-ins, then the API accounts.
+  pub(in crate::screens) fn of((accounts, api): &'a (Accounts, ApiAccounts)) -> Self {
+    Self { accounts, api: &api.0 }
+  }
+}
+
+/// What `choice` runs as, in the name a person knows it by: the API account's, the sign-in's (*Default* for the CLI's
+/// own), else the connection's own name (a key the project holds itself, or a sign-in this computer no longer lists).
+pub(in crate::screens) fn name(ctx: &Ctx, choice: &RunsOnChoice, whose: Whose<'_>) -> Arc<str> {
+  let api = choice
+    .api_account
+    .and_then(|id| whose.api.iter().find(|account| account.id() == id));
+  if let Some(account) = api {
+    return account.name().as_str().into();
+  }
+  let sign_in = choice
+    .account
+    .filter(|_| choice.host.is_none())
+    .and_then(|id| whose.accounts.of(id));
+  match sign_in {
+    Some(account) => account_name(ctx, account).into(),
+    None => choice.name.as_str().into(),
   }
 }
 
