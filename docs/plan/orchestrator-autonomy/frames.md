@@ -8,6 +8,31 @@ variables, dark and light where the board has both. Fixture data as on the board
 Order of use: **A** unblocks the first milestone; **B** is needed before a person can turn *Lead to the end* on in
 the window; **C** and **E** follow; **D** and **F** last.
 
+## Drawn on 2026-11-14, waiting for the person's approval
+
+The person asked for the frames to be drawn for approval instead. They are on one board of
+`crates/desktop-app/design/orchester.pen`, **Orchestrator autonomy · frames to approve** (`F9DKO`, to the right of
+`Model menu · v2`), each a copy of the frame the group names; once approved they move to the boards named below.
+Saved in Pencil, not committed (the person commits the design).
+
+| Group | Frames |
+| --- | --- |
+| B, C, H | `Mw6FJ` L01 · Leading to the end (chip, line, *Before you leave*, *Work can start* and its turn); `yfux2` L02 · /watching (mode control, ceilings row, *Before you leave*); `hneXj` L03 · Choosing · Follow or Lead to the end (picker v2 with the mode above the key caps) |
+| H, C | `lnyaN` Parts · Lines (a–i); `zKrcC` Parts · Before you leave (a–d) |
+| B | `l9mu5K` Parts · Ceilings (row, form, out of bounds, mode menu, header chips) |
+| A | `Cbysv` Parts · An event whose turn failed or is held (a–g) |
+| B6, G | `IKstD` S01 · Project settings · Orchestrator (section *Leading to the end*, no *Also needed*) |
+| F | `CZyG9` S02 · Settings · General (group *Work*); `FJAKO` Parts · Keep the computer awake (on, off, not available) |
+| D | `znAkV` M01 · Edit module (group *Delivery*); `l36FmW` M02 · Module · Summary (Delivery row, acceptance task, properties); `cr0hf` Parts · Delivery (a–k); `GWVtj` Parts · Module form (a–c) |
+| E | `PyTUJ` W01 · Overview (*parked* rows, *Decided without you*); `ibiUO` W02 · KON-47 · Summary · parked; `S7onP` W03 · the leading conversation (parked, stuck, *Overrule…* quoted); `QxT8S` Parts · While you were away (a–f) |
+| Light | `rBat8`, `ug9CK`, `ejHwb`, `lT078` (L01, L02, L03, W01) |
+
+What the frames decided where this file left a choice: a leading chip is told by a flag and the words *to the end*;
+the mode sits in the picker above the key caps and switches with Tab; *Needs you* is the Overview's waiting list, with
+the decisions in a second card under it; *Deliver* is the Summary's first row; *Keep the computer awake* has its own
+group *Work*. Not drawn: the pickers of 02/03 (the composer v2 of Row 8 replaces them), the task picker with the mode
+(it is the module picker's), and the new-module form (M01's group is the same there).
+
 ## A · An event whose turn failed or is held (OA-02, OA-03)
 
 Board `Orchestrator WIP` `mPw5l`, beside the tool request's states (`ICzi3`): the row of an event in the
