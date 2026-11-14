@@ -11,12 +11,13 @@ use lurq::{
 use orchester_core::account::{AccountCli, AccountState, AgentAccount};
 
 use super::{
-  Parts,
+  Parts, api,
   words::{Shown, cli_key, identity, look, name, t, ta},
 };
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
+  services::accounts,
   theme::{IconSize, SettingsSpacing},
   ui::{
     agent_mark::AgentMark,
@@ -30,6 +31,7 @@ use crate::{
 /// The list page's column.
 pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
   let navigation = Navigation::of(ctx);
+  let api = accounts::api_listed(ctx);
   let mut pane = super::frame::pane("settings-accounts");
   for (index, cli) in AccountCli::ALL.into_iter().enumerate() {
     // Default last: the accounts the person added come first.
@@ -40,22 +42,39 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
     } else {
       ta(ctx, "accounts.group.other", [("count", accounts.len().to_string())])
     };
-    let rows: Vec<Element> = accounts
+    let count = match api::count(ctx, &api.0, cli) {
+      Some(providers) => ta(
+        ctx,
+        "accounts.api.group",
+        [("accounts", count), ("providers", providers)],
+      ),
+      None => count,
+    };
+    let mut rows: Vec<Element> = accounts
       .into_iter()
       .map(|account| row(ctx, parts, account, &navigation))
       .collect();
+    rows.extend(api::rows(ctx, &api.0, cli));
     let mut group = SettingGroup::new(format!("accounts-group-{}", cli.as_str()), t(ctx, cli_key(cli)))
       .meta(count)
       .rows(rows);
     if index == 0 {
-      group = group.end(
-        ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
+      let add = |id: &str, key: &str, panel: AccountsPanel| {
+        ActionButton::new(id.to_owned(), ButtonKind::Ghost, t(ctx, key))
           .icon(Icon::Plus)
           .in_heading()
-          .opens(navigation.to(Route::Accounts(AccountsView {
-            account: None,
-            panel: AccountsPanel::Add,
-          }))),
+          .opens(navigation.to(Route::Accounts(AccountsView { account: None, panel })))
+      };
+      group = group.end(
+        lurq::components::Row::new()
+          .spacing(lurq::app::theme::SpacingSize::Sm)
+          .align_items(lurq::layout::Alignment::Center)
+          .child(add("settings-add-account", "accounts.addAccount", AccountsPanel::Add))
+          .child(add(
+            "settings-add-api",
+            "accounts.api.addProvider",
+            AccountsPanel::AddApi,
+          )),
       );
     }
     pane = pane.child(group);

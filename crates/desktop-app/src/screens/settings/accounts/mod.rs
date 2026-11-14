@@ -6,6 +6,7 @@
 //! tab is mounted, the app's MCP server refuses window input (`mcp::input_gate`).
 
 mod add;
+mod api;
 mod details;
 mod facts;
 mod limits;
@@ -125,6 +126,8 @@ struct Work {
   opened: Signal<Opened>,
   checking: Signal<Ids>,
   pub draft: add::Draft,
+  /// *Add an API provider*: what is typed so far, and its action.
+  pub api: api::Draft,
   pub rename: Signal<String>,
   pub removal: remove::Choice,
   /// The account page's *…* menu: whether it is open, and the button it opens at.
@@ -217,6 +220,7 @@ impl Component for AccountsTab {
       opened: ctx.signal(Opened::default()),
       checking: ctx.signal(Ids::default()),
       draft: add::Draft::new(ctx),
+      api: api::Draft::new(ctx),
       rename: ctx.signal(String::new()),
       removal: remove::Choice::new(ctx),
       more: (ctx.signal(false), ElementRef::default()),
@@ -261,6 +265,7 @@ impl Component for AccountsTab {
     let (uses, reading) = uses(ctx, (selected, &self.again), props.revision.get());
     let (scroll, pane) = match (props.view.panel, selected) {
       (AccountsPanel::Add, _) => ("settings-accounts-add-scroll", add::page(ctx, &self.work)),
+      (AccountsPanel::AddApi, _) => ("settings-accounts-add-api-scroll", api::page(ctx, &self.work)),
       (AccountsPanel::SignIn, Some(_)) => (
         "settings-accounts-sign-in-scroll",
         sign_in::page(ctx, &parts, &self.work),
@@ -296,6 +301,7 @@ fn uses(
 fn follow(ctx: &mut Ctx, work: &Work) {
   let revision = ctx.props::<Props>().revision.clone();
   let navigation = Navigation::of(ctx);
+  let to_list = navigation.clone();
   let sign_in = work.clone();
   let bump = revision.clone();
   ctx.watch(&work.change.state(), move |state| {
@@ -314,6 +320,15 @@ fn follow(ctx: &mut Ctx, work: &Work) {
       Changed::Removed => AccountsView::default(),
     };
     navigation.replace(Route::Accounts(view));
+  });
+  // An API provider that was added is in the list, and its page starts over with no key in it.
+  let (bump, added) = (revision.clone(), work.api.clone());
+  ctx.watch(&work.api.add.state(), move |state| {
+    if state.is_fulfilled() {
+      added.clear();
+      bump.update(|revision| *revision += 1);
+      to_list.replace(Route::Accounts(AccountsView::default()));
+    }
   });
   let bump = revision.clone();
   ctx.watch(&work.check.state(), move |state| {

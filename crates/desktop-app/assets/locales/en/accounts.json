@@ -1,6 +1,25 @@
 {
   "accounts": {
     "addAccount": "Add account",
+    "api": {
+      "addProvider": "Add API provider",
+      "title": "Add an API provider",
+      "sub": "An agent CLI on a model API of your choice, with a key. Every project can then run a profile on it.",
+      "usedWith": "Used with",
+      "cli": "CLI",
+      "cliHint": "Claude Code speaks the Anthropic Messages API, Codex the OpenAI Responses API",
+      "provider": "Provider",
+      "keyHint": "Typed once and kept in the system keychain",
+      "keyInfo": "The key goes to the system keychain with the account and is never shown again. Only the CLI's process gets it when a run starts.",
+      "personNote": "Adding a host and a key that agents run on is a person's change: only you can add it.",
+      "add": "Add provider",
+      "one": "1 API provider",
+      "other": "{{count}} API providers",
+      "group": "{{accounts}} · {{providers}}",
+      "line": "API provider · {{host}} · {{count}} models",
+      "lineOne": "API provider · {{host}} · {{count}} model",
+      "keySet": "Key set"
+    },
     "add": {
       "title": "Add an account",
       "sub": "An account is a folder where a CLI keeps its own sign-in. Name it and choose its folder; then sign in with the CLI.",

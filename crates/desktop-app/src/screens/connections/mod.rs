@@ -23,7 +23,7 @@ mod list;
 pub(in crate::screens) mod mcp_form;
 mod native_form;
 mod page;
-mod provider_form;
+pub(in crate::screens) mod provider_form;
 pub(crate) mod widen;
 pub(super) mod words;
 mod work;

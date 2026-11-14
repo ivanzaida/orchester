@@ -417,6 +417,14 @@ tools speak of accounts only.
   next. A form keeps a model chosen on an account that is still being connected, and *Create* waits for the
   connection and says so. A team profile's *Runs on* select offers an API account once the project has its
   connection on it.
+- *Settings › Accounts* (A1, B2, in part). *Add API provider* stands beside *Add account* in the first group's
+  heading and opens a page of its own: the CLI, a name, the base URL, the key and the models. The key is typed once,
+  goes to the system keychain with the account and is shown nowhere afterwards; the page starts over empty once the
+  account is added. An API provider stands under its CLI's sign-ins in the list with its host, how many models it
+  serves and *Key set*, and the group's heading counts it. Not built yet: the menu the drawing opens from *Add
+  account* (A2), the *Used with* cards (the page has the CLI as a two-way choice, and Orchester's own agent is not
+  offered), an API provider's own page (B1: rename, replace the key, remove), each CLI's program line (A1, A3) and
+  the *Model APIs* group.
 - *A team profile on a member's computer* (C3). *From the team* has one read-only row, *CLI, model and effort*.
   *Runs on*, under *On this computer*, offers this computer's accounts of the profile's CLI, each once, then what
   runs on a key, and *Add an account…* last, which opens Settings › Accounts. An account that lists models, the

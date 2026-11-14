@@ -24,6 +24,8 @@ pub enum AccountsPanel {
   Add,
   /// Step 2 of *Add account* for the account it shows: sign in with the CLI's own login.
   SignIn,
+  /// *Add an API provider* (`Agents on accounts` B2 `OfUhN`): an agent CLI on a model API, with a key the app keeps.
+  AddApi,
   /// *Remove …?* in place on the account's page (`poD7g`).
   Remove,
   /// The name as a field in the page's head (`poD7g`).
@@ -31,11 +33,12 @@ pub enum AccountsPanel {
 }
 
 impl AccountsPanel {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::Account,
     Self::UsedBy,
     Self::Add,
     Self::SignIn,
+    Self::AddApi,
     Self::Remove,
     Self::Rename,
   ];
@@ -46,6 +49,7 @@ impl AccountsPanel {
       Self::UsedBy => "used_by",
       Self::Add => "add",
       Self::SignIn => "sign_in",
+      Self::AddApi => "add_api",
       Self::Remove => "remove",
       Self::Rename => "rename",
     }

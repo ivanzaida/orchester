@@ -111,7 +111,7 @@ impl ProviderForm {
   }
 
   /// The base URL, with the API it must speak; a native connection's starts at its preset's.
-  pub(in super::super) fn url_row(&self, ctx: &mut Ctx, provider: AgentProvider) -> Element {
+  pub(in crate::screens) fn url_row(&self, ctx: &mut Ctx, provider: AgentProvider) -> Element {
     let (interface, more, placeholder) = match provider {
       AgentProvider::CodexCli => (
         "connections.apiProvider.interfaceCodexShort",
@@ -151,6 +151,23 @@ impl ProviderForm {
       .hint(ctx.t(interface))
       .info(ctx.t(more))
       .render(ctx, url)
+  }
+
+  /// The key itself, typed once (`API key` in `Agents on accounts` B2 `OfUhN`): masked, kept by the app in the
+  /// system keychain, and never shown again.
+  pub(in crate::screens) fn typed_key_row(&self, ctx: &mut Ctx) -> Element {
+    // Read so that a typed key draws the page again: the value itself is no ctx signal.
+    self.key_revision.get();
+    let label = ctx.t("connections.apiProvider.key");
+    let revision = self.key_revision.clone();
+    let value = FieldInput::new("connection-provider-secret-value", label.clone(), self.value.clone())
+      .masked()
+      .on_typed(move |_| revision.update(|value| *value += 1))
+      .render(ctx);
+    FormField::new("connection-provider-key", label)
+      .hint(ctx.t("accounts.api.keyHint"))
+      .info(ctx.t("accounts.api.keyInfo"))
+      .render(ctx, value)
   }
 
   /// The key's secret: the project's, the archived one the connection still names, or a new one with its name and
@@ -275,7 +292,7 @@ impl ProviderForm {
 
   /// The field and *Add* that add model ids (`Entry row` `w12Vx`), Enter in the field as *Add*, the models added as
   /// removable pills under them (`Pills` `TQ7md`) and the note of how (`Note` `ku8BO`).
-  pub(in super::super) fn models_row(&self, ctx: &mut Ctx) -> Element {
+  pub(in crate::screens) fn models_row(&self, ctx: &mut Ctx) -> Element {
     let (placeholder, hint, info) = models_words(self.native);
     let listed = self.models.get().0;
     let pills = (!listed.is_empty()).then(|| {
@@ -351,7 +368,7 @@ impl ProviderForm {
 
   /// Where the agents' requests go, as a warning line under the group (`Sent to` `s4sjZm`), while the CLI runs on a
   /// provider; who holds the key and what a provider does not give in its (i).
-  pub(in super::super) fn warning(&self, ctx: &mut Ctx) -> Option<Element> {
+  pub(in crate::screens) fn warning(&self, ctx: &mut Ctx) -> Option<Element> {
     if !self.on() {
       return None;
     }

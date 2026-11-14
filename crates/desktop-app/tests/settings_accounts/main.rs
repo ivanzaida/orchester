@@ -3,6 +3,7 @@
 //! with a folder the person already uses, the sign-in step, renaming in place, and removing in place with its
 //! connections moved. Stand-in CLIs answer (see `harness`).
 
+mod api;
 mod harness;
 mod history;
 

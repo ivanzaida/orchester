@@ -74,7 +74,7 @@ pub(super) struct Models(Vec<String>);
 impl DevtoolsInspectable for Models {}
 
 /// The *Runs on* fields as signals the page types into.
-pub(super) struct ProviderForm {
+pub(in crate::screens) struct ProviderForm {
   on: Signal<OnProvider>,
   url: Signal<String>,
   key: Signal<KeyChoice>,
@@ -109,6 +109,25 @@ impl ProviderForm {
     }
   }
 
+  /// The base URL, key and model fields of an API account of the person's (Settings › Accounts, `Agents on accounts`
+  /// B2 `OfUhN`): always on a provider, with a key typed here that the app keeps, never a project's secret.
+  pub(in crate::screens) fn for_account(ctx: &mut Ctx) -> Self {
+    let form = Self::new(ctx);
+    form.on.set(OnProvider(true));
+    form.key.set(KeyChoice::New);
+    form
+  }
+
+  /// Empties the fields, the typed key first: what was added is the app's now, and the page starts over.
+  pub(in crate::screens) fn clear(&self) {
+    self.value.update(Zeroize::zeroize);
+    self.key_revision.update(|revision| *revision += 1);
+    self.url.set(String::new());
+    self.models.set(Models::default());
+    self.model.set(String::new());
+    self.model_error.set(None);
+  }
+
   /// The base URL, key and model fields of a native connection, the URL starting at `url`, its preset's.
   pub(super) fn for_native(ctx: &mut Ctx, url: String) -> Self {
     let mut form = Self::new(ctx);
@@ -137,12 +156,12 @@ impl ProviderForm {
   }
 
   /// The model ids added, in order.
-  pub(super) fn model_ids(&self) -> Vec<String> {
+  pub(in crate::screens) fn model_ids(&self) -> Vec<String> {
     self.models.get().0
   }
 
   /// The base URL as typed.
-  pub(super) fn url(&self) -> Signal<String> {
+  pub(in crate::screens) fn url(&self) -> Signal<String> {
     self.url.clone()
   }
 
@@ -213,7 +232,7 @@ impl ProviderForm {
   }
 
   /// What the page's Save goes through: the person gate and the key typed for a new secret.
-  pub(super) fn save_guard(&self) -> SaveGuard {
+  pub(in crate::screens) fn save_guard(&self) -> SaveGuard {
     SaveGuard {
       value: self.value.clone(),
     }
@@ -313,12 +332,12 @@ fn active(listed: &ProjectConnections, id: SecretId) -> Option<&Secret> {
 /// What the page's Save goes through, shared with its click handler: the person gate and the key typed for a new
 /// secret.
 #[derive(Clone)]
-pub(super) struct SaveGuard {
+pub(in crate::screens) struct SaveGuard {
   value: Signal<String>,
 }
 
 impl SaveGuard {
-  pub(in super::super) fn typed_key(&self) -> Option<SecretValue> {
+  pub(in crate::screens) fn typed_key(&self) -> Option<SecretValue> {
     // Blank means no new credential; a new-secret save reports valueRequired if the field changed under its click.
     self.value.with(|value| SecretValue::new(value.clone()).ok())
   }
