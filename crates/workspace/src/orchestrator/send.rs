@@ -149,6 +149,11 @@ pub async fn end_wait_turn(runners: &Runners, project: &OpenProject, message: Ch
   runners.chat_changed(&project.repo_root);
 }
 
+/// What the person reads when the project's runner did not attach for a turn they asked for, so nothing started.
+pub fn no_runner(error: RequestError) -> Message {
+  not_sent(&RunRequestError::Request(error))
+}
+
 /// The app could not serve the conversation's tools, so nothing was sent.
 pub fn tools_unavailable() -> SendError {
   SendError::NotSent(Message::new("orchestrator.send.toolsUnavailable"))

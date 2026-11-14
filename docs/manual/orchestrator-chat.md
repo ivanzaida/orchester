@@ -272,7 +272,13 @@ connection or its account), nothing more starts by itself: the event stays where
 you stopped is not tried again. While the project's **daily budget is used**, or the **account the Orchestrator runs
 on is at its plan limit**, no turn starts by itself at all: the events are kept and wait, and their turns start when
 the day turns or the limit resets (an hour after the limit was reported when its CLI did not say). Your own message is
-not held: it is refused or fails as before, and says why. A turn the Orchestrator started itself **compacts the
+not held: it is refused or fails as before, and says why. The conversation says all of this **under the event's
+row**, where its answer would be: *Couldn't answer — trying again at 14:05 · 2 of 4* with why; *Orchestrator is
+thinking · 2 of 4* from the second try on; *Left to you after 4 tries* with **Try again**, which starts one more
+turn for that event now (only you press it: automation driving the window is refused); *Held until 00:00 — today's
+budget is used*, *Held until 16:40 — the account's plan limit is reached*, or *Held — the account's plan limit is
+reached · trying again at 15:00* when its CLI did not say when it lifts. While turns are held, the header says so too
+(*Orchestrator is held until 00:00*). The row goes once a turn gets through. A turn the Orchestrator started itself **compacts the
 conversation first** when its session filled 70 % of its window (the same compaction as *Compact*, shown as the same
 line), so a conversation that leads a module for days keeps answering; your own messages are never compacted under. With the switch off the entry only
 links to its card. Such a turn is
@@ -330,7 +336,22 @@ No window offers it yet. Until one does, begin the order of your own `/watch-mod
 **lead to the end** (*lead to the end: merge once the review passed*): the targets are then led to the end within the
 default ceilings, and what follows the words is the order. A target the conversation only followed is led from then
 on. The Orchestrator's own `watch` tool never chooses it. To stop, `/unwatch`. `get_standing` says which targets are
-led (`leads_to_the_end`).
+led (`leads_to_the_end`). In the conversation a target led to the end is told from one that is only followed by a
+flag and words, not by colour: its header chip reads *Webhooks v2 to the end*, and its line *Leading Webhooks v2 to
+the end · 12 tasks — it starts them, merges them and parks what needs you*.
+
+### Before you leave
+
+Under the line of a target led to the end, and inside the `/watching` answer, **Before you leave** lists what would
+stop the work while nobody is at the computer, each with the place that fixes it: *Let the Orchestrator drive* is off
+(Project settings › Orchestrator), the Orchestrator has nothing it can run on (Orchestrator settings), tasks without a
+published pipeline (the task), a pipeline with no Deliver step, whose merges are not checked after merging (the
+pipeline), the project has no daily budget (Project settings › Runs), the computer may go to sleep (Settings ›
+General). Your checkout having local changes and closing the window have no place in the app to fix them, so they
+have no link; closing the window is always listed and not counted, since it is what you must not do. What the app
+cannot check (whether the tasks' MCP servers answer) is said last. With nothing found it is one quiet line, *Ready to
+leave*. It is read when it shows and when you press *Check again*, with no turn of the agent; nothing polls it. It
+warns and refuses nothing. A target the conversation only follows shows none of it.
 
 ### Events of a target led to the end
 
@@ -343,6 +364,12 @@ also gets events of the target as a whole, each once per state:
   merged.
 - **Stuck**: nothing can start and nothing moves; everything left is parked, waits for you, or is past a ceiling.
   The turn tells you once what each task waits for and what to do; you are told again only when that changes.
+
+Each is a line of the conversation with the turn it started under it: *Work can start in Webhooks v2: KON-41, KON-42
+— nothing they depend on is open*; *Webhooks v2 is stuck: 3 left for you — nothing else can start*, with *Needs you
+↗* to the Overview's waiting list; for a module with a branch of its own, *… its acceptance can start* with the
+acceptance pipeline's name, *… it can be delivered* with the branch and where it goes, and *… its delivery waits for
+you* with why and *Module ↗*.
 
 A subscription that only follows gets neither, and starts tasks only as before: in the turn of a success it merged
 under an order.

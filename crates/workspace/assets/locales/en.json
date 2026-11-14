@@ -2557,6 +2557,10 @@
       "deliver": "{{target}} is accepted: it can be delivered",
       "deliveryWaits": "Every task of {{target}} is done: its delivery waits for you"
     },
+    "tryAgain": {
+      "settled": "This no longer waits for an answer: there is nothing to try again.",
+      "busy": "The Orchestrator is answering in this conversation, or this turn was already started again. Try again once it has ended."
+    },
     "leaving": {
       "driveOff": "Let the Orchestrator drive is off for this project: no turn starts by itself, so nothing is led while you are away.",
       "orchestratorNotReady": "The Orchestrator has nothing it can run on now: its connection is not chosen, was removed, or is not signed in.",

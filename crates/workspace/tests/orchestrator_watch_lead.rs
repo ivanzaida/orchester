@@ -13,7 +13,10 @@ use orchester_core::{
     watch::{NamedTarget, WatchCommand},
   },
 };
-use orchester_workspace::orchestrator::watch::{watch_asked_in, watch_in};
+use orchester_workspace::orchestrator::{
+  chat::ChatView,
+  watch::{watch_asked_in, watch_in},
+};
 use support::{Fixture, at};
 
 fn everything() -> NamedTarget {
@@ -56,6 +59,20 @@ fn watch_lead_is_chosen_by_the_first_words_of_the_persons_own_order() {
     _ => None,
   });
   assert_eq!(command.as_deref(), Some(order));
+  // Its line is told as one that leads to the end; a later watch that only follows is not.
+  watch_in(fixture.repo.path(), &chat, &[everything()], "Ask before merging.").expect("watched");
+  let view = ChatView::load_in(fixture.repo.path(), chat.id())
+    .expect("read")
+    .expect("kept");
+  let lines: Vec<i64> = view
+    .entries
+    .iter()
+    .filter(|entry| matches!(entry.kind, EntryKind::Event(ChatEvent::Watch { .. })))
+    .map(|entry| entry.seq)
+    .collect();
+  assert_eq!(lines.len(), 2);
+  assert_eq!(view.led_to_end.get(&lines[0]), Some(&vec![WatchTarget::Project]));
+  assert_eq!(view.led_to_end.get(&lines[1]), None);
 }
 
 #[test]

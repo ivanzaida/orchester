@@ -103,7 +103,7 @@ fn leaving_json(leaving: &Leaving, translate: &Translate) -> Value {
   let not_checked: Vec<String> = leaving
     .not_checked
     .iter()
-    .map(|message| translate.text(message))
+    .map(|not| translate.text(&not.message()))
     .collect();
   json!({ "ready": leaving.ready(), "weak": weak, "not_checked": not_checked })
 }

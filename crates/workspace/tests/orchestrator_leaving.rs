@@ -12,7 +12,7 @@ use orchester_core::{
   orchestrator::{Ceilings, Chat, Subscription, TurnState, WatchMode, WatchTarget},
 };
 use orchester_exec::programs::Programs;
-use orchester_workspace::orchestrator::leaving::{AppSet, Leaving, Weak, leaving_in};
+use orchester_workspace::orchestrator::leaving::{AppSet, Leaving, Weak, leaving_in, leaving_of};
 use support::{Fixture, at};
 
 fn names(leaving: &Leaving) -> Vec<&'static str> {
@@ -79,6 +79,14 @@ fn leaving_names_what_would_stop_the_work_while_nobody_is_there() {
   let told = names(&left);
   assert!(!told.contains(&"drive_off") && !told.contains(&"may_sleep"), "{told:?}");
   assert!(told.contains(&"no_pipeline") && !left.ready(), "{told:?}");
+
+  // A conversation reads it for a target it leads to the end, and nothing for one it does not lead.
+  let here = leaving_of((root, &programs), (chat.id(), WatchTarget::Project), on).expect("read");
+  assert_eq!(here, Some(left));
+  let elsewhere = leaving_of((root, &programs), (ChatId::generate(), WatchTarget::Project), on).expect("read");
+  assert_eq!(elsewhere, None);
+  let not_led = leaving_of((root, &programs), (chat.id(), WatchTarget::WithoutModule), on).expect("read");
+  assert_eq!(not_led, None);
 }
 
 #[test]

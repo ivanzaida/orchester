@@ -6,12 +6,12 @@
 //! (`orchester_core::orchestrator::watch::asked_to_lead`): the way to choose it until a window offers it (OA-10). The
 //! watch the agent applies at the person's request never chooses it.
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use orchester_core::{
   id::ChatId,
   orchestrator::{
-    Ceilings, Chat, ChatEvent, Claim, Subscription, Subscriptions, WatchMode,
+    Ceilings, Chat, ChatEntry, ChatEvent, Claim, EntryKind, Subscription, Subscriptions, WatchMode, WatchTarget,
     watch::{AtRequest, LedElsewhere, NamedTarget, Told, WatchCommand, WatchLine, asked_to_lead},
   },
   time::Timestamp,
@@ -186,6 +186,48 @@ impl Applying<'_> {
     });
     Ok(())
   }
+}
+
+/// The entries among `entries`, a conversation's, that are the line of a /watch which led its targets to the end: the
+/// line kept right after the person's own command whose order begins with the words for it. The entry keeps no mode,
+/// so the conversation tells it as the command was applied ([`lead_asked`]): *Leading … to the end*.
+///
+/// Each with the targets it is the latest such line of: what would stop one of them while the person is away is told
+/// under that line, once per target however often the command was repeated.
+pub(in crate::orchestrator) fn led_to_end(entries: &[ChatEntry]) -> HashMap<i64, Vec<WatchTarget>> {
+  let mut lines: HashMap<i64, Vec<WatchTarget>> = HashMap::new();
+  let mut told: Vec<WatchTarget> = Vec::new();
+  for pair in entries.windows(2).rev() {
+    let (
+      EntryKind::Event(ChatEvent::WatchCommand {
+        command: WatchCommand::Watch { order, .. },
+      }),
+      EntryKind::Event(ChatEvent::Watch {
+        line:
+          WatchLine::Watching {
+            started,
+            already_here,
+            at_request: None,
+            ..
+          },
+      }),
+    ) = (&pair[0].kind, &pair[1].kind)
+    else {
+      continue;
+    };
+    if !matches!(lead_asked(order, false), WatchMode::Lead { .. }) {
+      continue;
+    }
+    let mut latest_of = Vec::new();
+    for target in started.iter().chain(already_here).map(|named| named.target) {
+      if !told.contains(&target) {
+        told.push(target);
+        latest_of.push(target);
+      }
+    }
+    lines.insert(pair[1].seq, latest_of);
+  }
+  lines
 }
 
 /// How a /watch with `order` takes its targets: leading them to the end, within the default ceilings, when it is the

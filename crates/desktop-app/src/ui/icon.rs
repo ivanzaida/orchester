@@ -115,6 +115,7 @@ icons! {
   Crosshair => '\u{e0ac}',
   Database => '\u{e0ad}',
   DatabaseZap => '\u{e50b}',
+  DoorOpen => '\u{e3d6}',
   Download => '\u{e0b2}',
   Ellipsis => '\u{e0b6}',
   Equal => '\u{e1bd}',

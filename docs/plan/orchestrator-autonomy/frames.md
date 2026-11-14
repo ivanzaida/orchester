@@ -27,6 +27,16 @@ Saved in Pencil, not committed (the person commits the design).
 | E | `PyTUJ` W01 · Overview (*parked* rows, *Decided without you*); `ibiUO` W02 · KON-47 · Summary · parked; `S7onP` W03 · the leading conversation (parked, stuck, *Overrule…* quoted); `QxT8S` Parts · While you were away (a–f) |
 | Light | `rBat8`, `ug9CK`, `ejHwb`, `lT078` (L01, L02, L03, W01) |
 
+**Node ids.** The ids above are those of the frames as first drawn (the exports in `.tmp/design-frames/out/`). In the
+document Pencil has open from the main checkout since 2026-11-14 the board and its frames have other ids, which the
+code built from them cites: the board `uYCy4`; `QMwUB` L01, `HpcQJ` L02, `e6nsBS` Parts · Lines, `k0jNa` Parts ·
+Before you leave, `tkjdw` Parts · An event whose turn failed or is held. Look the others up by name.
+
+**Built on 2026-11-14** (design verification pending): of L01, the leading chip, the leading line, *Before you leave*
+and the line *Work can start* with its turn; Parts · Lines a–f; Parts · Before you leave a–d, also inside the
+`/watching` answer; Parts · An event whose turn failed or is held a–g. What differs from a frame, and what has no
+entry to draw (Lines g and h), is in the task files OA-02, OA-03, OA-10, OA-13 and OA-19.
+
 What the frames decided where this file left a choice: a leading chip is told by a flag and the words *to the end*;
 the mode sits in the picker above the key caps and switches with Tab; *Needs you* is the Overview's waiting list, with
 the decisions in a second card under it; *Deliver* is the Summary's first row; *Keep the computer awake* has its own

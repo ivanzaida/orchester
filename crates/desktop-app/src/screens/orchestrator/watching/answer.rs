@@ -5,6 +5,8 @@
 //! its name, its kind, since when and the order it follows quoted, and *Stop watching*; under it a 34 high row per task
 //! with something going on: its key and run, its title, its status, its note and the link where the person answers
 //! it; then its other open tasks counted (30 high). The list is read from the live state, never from an agent.
+//! Between the total and the list, *Before you leave* for each target the conversation leads to the end (`L02`
+//! `HpcQJ` on the board `Orchestrator autonomy · frames to approve`; `super::super::watch`).
 
 use std::sync::Arc;
 
@@ -25,7 +27,11 @@ use orchester_workspace::{
 };
 
 use super::{
-  super::{data::Read, timeline::TurnRow},
+  super::{
+    data::Read,
+    timeline::{TurnEnv, TurnRow},
+    watch::leaving_cards,
+  },
   Live,
 };
 use crate::{
@@ -55,7 +61,7 @@ pub(in crate::screens::orchestrator) fn row(ctx: &mut Ctx, row: &TurnRow, key: &
   let id = format!("orchestrator-watching-{key}");
   let time = row.turn.at.map(display::clock).unwrap_or_default();
   let command = command(ctx, &id, &time);
-  let answer = answer(ctx, &id, &time, &row.env.watching);
+  let answer = answer(ctx, &id, &time, &row.env);
   Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -77,8 +83,9 @@ fn command(ctx: &mut Ctx, id: &str, time: &str) -> Element {
   own_bubble(ctx, &id, Some((chip, words)), (None, Some(applied))).into()
 }
 
-/// Orchester's answer: the total and the list, from the live state.
-fn answer(ctx: &mut Ctx, id: &str, time: &str, live: &Live) -> Element {
+/// Orchester's answer: the total, what would stop what it leads to the end, and the list, from the live state.
+fn answer(ctx: &mut Ctx, id: &str, time: &str, env: &TurnEnv) -> Element {
+  let live = &env.watching;
   let id = format!("{id}-answer");
   let body = Column::new()
     .width(Dimension::Pct(100.0))
@@ -86,8 +93,20 @@ fn answer(ctx: &mut Ctx, id: &str, time: &str, live: &Live) -> Element {
   let body = match &live.read {
     Some(Read::Ready(watching)) => {
       let total = total(ctx, watching);
+      let led: Vec<(WatchTarget, Arc<str>)> = watching
+        .subscriptions
+        .iter()
+        .filter(|watched| watched.to_the_end)
+        .map(|watched| (watched.target.target, message_text(ctx, &watched.target.name)))
+        .collect();
+      // Under the total, with their own room over each: none of it shows while nothing is led to the end.
+      let leaving = leaving_cards(ctx, (&id, ExtraSpacing::Loose.role()), env, led);
+      let said = Column::new()
+        .width(Dimension::Pct(100.0))
+        .child(words(&format!("{id}-total"), &total))
+        .with_children(leaving);
       let list = (!watching.subscriptions.is_empty()).then(|| list(ctx, &id, watching, live));
-      body.child(words(&format!("{id}-total"), &total)).with_children(list)
+      body.child(said).with_children(list)
     }
     Some(Read::Failed(why)) => {
       let reason = message_text(ctx, why);

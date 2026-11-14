@@ -13,6 +13,7 @@
 use std::path::Path;
 
 use orchester_core::{
+  id::{ChatId, ResourceId},
   integration::{base::BaseChoice, workspace::Workspaces},
   orchestrator::{Subscription, WatchTarget},
   resource::Pipeline,
@@ -45,8 +46,12 @@ pub enum Weak {
   OrchestratorNotReady(Message),
   /// These tasks have no pipeline, or one that is not published: they cannot start.
   NoPipeline(Vec<String>),
-  /// These tasks' pipelines end in no Deliver step: their merge is not checked on the merged result.
-  NoDeliverStep(Vec<String>),
+  /// These tasks' pipelines end in no Deliver step: their merge is not checked on the merged result. `pipelines` are
+  /// those pipelines, where a Deliver step is added.
+  NoDeliverStep {
+    tasks: Vec<String>,
+    pipelines: Vec<PipelineRef>,
+  },
   /// The work merges into the branch the person's checkout has, and the checkout has changes of its own now: a merge
   /// they stand in the way of waits for the person.
   CheckoutHasChanges { files: usize },
@@ -65,7 +70,7 @@ impl Weak {
       Self::DriveOff => "drive_off",
       Self::OrchestratorNotReady(_) => "orchestrator_not_ready",
       Self::NoPipeline(_) => "no_pipeline",
-      Self::NoDeliverStep(_) => "no_deliver_step",
+      Self::NoDeliverStep { .. } => "no_deliver_step",
       Self::CheckoutHasChanges { .. } => "checkout_has_changes",
       Self::NoDailyBudget => "no_daily_budget",
       Self::MaySleep => "may_sleep",
@@ -76,7 +81,7 @@ impl Weak {
   /// The tasks it names, by their keys.
   pub fn tasks(&self) -> &[String] {
     match self {
-      Self::NoPipeline(tasks) | Self::NoDeliverStep(tasks) => tasks,
+      Self::NoPipeline(tasks) | Self::NoDeliverStep { tasks, .. } => tasks,
       _ => &[],
     }
   }
@@ -87,7 +92,9 @@ impl Weak {
       Self::DriveOff => Message::new("orchestrator.leaving.driveOff"),
       Self::OrchestratorNotReady(why) => why.clone(),
       Self::NoPipeline(tasks) => Message::new("orchestrator.leaving.noPipeline").with("tasks", tasks.join(", ")),
-      Self::NoDeliverStep(tasks) => Message::new("orchestrator.leaving.noDeliverStep").with("tasks", tasks.join(", ")),
+      Self::NoDeliverStep { tasks, .. } => {
+        Message::new("orchestrator.leaving.noDeliverStep").with("tasks", tasks.join(", "))
+      }
       Self::CheckoutHasChanges { files } => {
         Message::new("orchestrator.leaving.checkoutHasChanges").with("count", files.to_string())
       }
@@ -98,13 +105,36 @@ impl Weak {
   }
 }
 
+/// A pipeline as a line names it, with the id its page opens by.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PipelineRef {
+  pub id: ResourceId,
+  pub name: String,
+}
+
+/// What the app cannot tell from here, and says so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotChecked {
+  /// Whether the MCP servers the tasks' profiles choose are on, found and answer.
+  Servers,
+}
+
+impl NotChecked {
+  /// What a person reads of it.
+  pub fn message(self) -> Message {
+    match self {
+      Self::Servers => Message::new("orchestrator.leaving.serversNotChecked"),
+    }
+  }
+}
+
 /// What was read of a leading subscription before the person leaves.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Leaving {
   /// What would stop or weaken the work, the most stopping first; empty when it is ready to be left.
   pub weak: Vec<Weak>,
   /// What the app cannot tell from here.
-  pub not_checked: Vec<Message>,
+  pub not_checked: Vec<NotChecked>,
 }
 
 impl Leaving {
@@ -147,9 +177,10 @@ pub fn leaving_in(
   if !without.is_empty() {
     weak.push(Weak::NoPipeline(without));
   }
-  let undelivered = without_deliver_step(&db, &unstarted(&["ready_to_start", "blocked_by", "held"])).map_err(stored)?;
-  if !undelivered.is_empty() {
-    weak.push(Weak::NoDeliverStep(undelivered));
+  let (tasks, pipelines) =
+    without_deliver_step(&db, &unstarted(&["ready_to_start", "blocked_by", "held"])).map_err(stored)?;
+  if !tasks.is_empty() {
+    weak.push(Weak::NoDeliverStep { tasks, pipelines });
   }
   if lands_in_checkout(&db, subscription.target()).map_err(stored)? {
     let runner = programs.runner();
@@ -168,8 +199,27 @@ pub fn leaving_in(
   weak.push(Weak::StopsWithWindow);
   Ok(Leaving {
     weak,
-    not_checked: vec![Message::new("orchestrator.leaving.serversNotChecked")],
+    not_checked: vec![NotChecked::Servers],
   })
+}
+
+/// [`leaving_in`] of what conversation `chat` leads to the end as `target`; `None` when it does not lead that
+/// target to the end now (it only follows it, or stopped): a conversation shows nothing then. Blocks on SQLite and
+/// git.
+pub fn leaving_of(
+  place: (&Path, &Programs),
+  (chat, target): (ChatId, WatchTarget),
+  app: AppSet,
+) -> Result<Option<Leaving>, Message> {
+  let subscriptions = ProjectDb::open_read_only(place.0)
+    .and_then(|db| db.active_subscriptions())
+    .map_err(|error| messages::store_error(&error))?;
+  let leading = subscriptions
+    .of_chat(chat)
+    .find(|subscription| subscription.target() == target && subscription.mode().ceilings().is_some());
+  leading
+    .map(|subscription| leaving_in(place, subscription, app))
+    .transpose()
 }
 
 /// Why the Orchestrator cannot run a turn now; `None` when it can.
@@ -178,9 +228,11 @@ fn orchestrator_unready(root: &Path) -> Result<Option<Message>, Message> {
   Ok((!readiness.is_ready()).then(|| Message::new("orchestrator.leaving.orchestratorNotReady")))
 }
 
-/// Those of `tasks`, by their keys, whose pipeline's latest published version has no Deliver step.
-fn without_deliver_step(db: &ProjectDb, tasks: &[String]) -> Result<Vec<String>, StoreError> {
+/// Those of `tasks`, by their keys, whose pipeline's latest published version has no Deliver step, and those
+/// pipelines, each once, in the order their tasks come.
+fn without_deliver_step(db: &ProjectDb, tasks: &[String]) -> Result<(Vec<String>, Vec<PipelineRef>), StoreError> {
   let mut without = Vec::new();
+  let mut pipelines: Vec<PipelineRef> = Vec::new();
   for task in recorded::all(db)? {
     let key = task.key().to_string();
     if !tasks.contains(&key) {
@@ -192,11 +244,20 @@ fn without_deliver_step(db: &ProjectDb, tasks: &[String]) -> Result<Vec<String>,
     let delivers = db
       .latest_version::<Pipeline>(pipeline)?
       .is_some_and(|version| version.body().deliver().is_some());
-    if !delivers {
-      without.push(key);
+    if delivers {
+      continue;
+    }
+    without.push(key);
+    if pipelines.iter().all(|known| known.id != pipeline)
+      && let Some(resource) = db.resource(pipeline)?
+    {
+      pipelines.push(PipelineRef {
+        id: pipeline,
+        name: resource.name().as_str().to_owned(),
+      });
     }
   }
-  Ok(without)
+  Ok((without, pipelines))
 }
 
 /// Whether the work of `target` merges into the branch the person's checkout has: a module with neither a branch of

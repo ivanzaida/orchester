@@ -6,7 +6,10 @@
 //! tasks left open (c), and *Every task of Mobile release is Done* with the summary turn it started (d). *Release
 //! checklist*, in History, holds a `/watch-task` without an order. *Search index, asked in words*, in History, holds
 //! the lines the Orchestrator's watch tools kept at the person's request (ORC-893). The modules hold drafts, so the
-//! subscription line counts their tasks.
+//! subscription line counts their tasks. A conversation that leads a module to the end, with the events whose turns
+//! failed or are held, is [`leading`]'s.
+
+pub mod leading;
 
 use orchester_core::{
   id::{ChatId, ModuleId},

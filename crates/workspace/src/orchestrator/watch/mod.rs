@@ -27,6 +27,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
+pub(super) use self::start::led_to_end;
 pub use self::{
   asked::watching_in,
   start::{Watched, watch_asked_in, watch_in},

@@ -1,6 +1,6 @@
 # OA-03 · A used budget and a plan limit hold turns until the reset
 
-- **Status:** done but for what is seen (2026-11-13; the held rows and the header line wait for the frames, `frames.md` A)
+- **Status:** done; what is seen built 2026-11-14, design verification pending (a separate agent verifies)
 - **Kind:** core + runner + workspace + UI
 - **Depends on:** OA-01 (and OA-02's frames for the held row)
 - **Branch:** —
@@ -85,3 +85,24 @@ orchestrator_auto_merge auto_merge`; `orchester-runner --features test-agent --t
 `--test chat_codex chat_codex`; `tools/check.ps1`: OK. Not run: Codex's `usageLimitExceeded` against a fake that
 names it (the chat's Codex fake has no such answer); the app's follower clock; a real CLI at its limit; macOS (no
 `cfg` code).
+
+## What is seen, as built (2026-11-14)
+
+Frame: `Parts · An event whose turn failed or is held` `tkjdw` d–g.
+
+- An event whose turn waits for the hold says so under its row (`wait::turn_state`, read with the conversation as
+  OA-02's rows are): *Held until 00:00 — today's budget is used*, *Held until 16:40 — the account's plan limit is
+  reached*, or, for a limit whose CLI named no reset, *Held — the account's plan limit is reached · trying again at
+  15:00* (`orchestrator::held::Hold`: the hold, and whether its end was named). Any entry that starts a turn by
+  itself says it: a wait that still stands, a run's end, an event of a target, a daily report, a subscription's end.
+  A failed turn that waits for its next try while the hold stands says the hold, not the try.
+- The header says *Orchestrator is held until 00:00* (or *… is held · trying again at 15:00*) while an event of the
+  conversation is held. **Differs from the frame:** the app's Leads sit right after the title's time (2026-11-11),
+  so the line is in the header's free room after them, where it takes only room nothing else uses and never folds a
+  chip; the frame draws the Leads at the header's end and the line before them.
+- The hold is read only while an event waits to start a turn, and only while the switch is on and the Orchestrator
+  has something to run on: with the switch off nothing is said to wait for a reset.
+
+Tests: `orchester-workspace --test orchestrator_held held`; `orchester-app --test orchestrator leading` (the held row
+and the header's line); `--test seed orchestrator` (the scenarios `orchestrator-held-budget`, `-held-plan`,
+`-held-plan-unnamed`).

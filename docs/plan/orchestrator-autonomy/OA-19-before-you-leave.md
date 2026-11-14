@@ -1,6 +1,6 @@
 # OA-19 · Before you leave: is what the conversation leads ready
 
-- **Status:** done as a reading; its card waits for frames (2026-11-14)
+- **Status:** built (2026-11-14); design verification pending (a separate agent verifies)
 - **Kind:** design + workspace + UI
 - **Depends on:** OA-09; the frames of `frames.md` C for its visible part
 - **Branch:** —
@@ -70,3 +70,25 @@ the daily budget with what the open tasks spend on average; a second connection 
 setting that only an Admin can change.
 
 Tests: `orchester-workspace --test orchestrator_leaving leaving`.
+
+## The card, as built (2026-11-14)
+
+Frames: `Parts · Before you leave` `k0jNa` a–d, under the leading line in `L01` `QMwUB` and inside the `/watching`
+answer in `L02` `HpcQJ` (between the total and the list).
+
+- `screens::orchestrator::watch::leaving`: a component per target led to the end, which reads
+  `leaving::leaving_of` (the reading of the conversation's subscription to that target, `None` when it does not lead
+  it to the end) when it shows and again on *Check again*, off the UI thread, with no agent turn. Under a
+  conversation's lines it shows under the latest line that led the target to the end.
+- The card's lines are the app's own short words for each finding, with the place that fixes it: the switch →
+  Project settings › Orchestrator; nothing to run on → Orchestrator settings; tasks without a pipeline → the first
+  of them; a pipeline without a Deliver step → that pipeline, a line per pipeline (`Weak::NoDeliverStep` now names
+  the pipelines beside the tasks); no daily budget → Project settings › Runs; the computer may sleep → Settings ›
+  General. With nothing found: *Ready to leave — nothing found that would stop Webhooks v2 · not checked: …*.
+- **Differs from the frame:** *Your checkout has local changes* has no link: the frame draws *Local integration ↗*,
+  but Local integration is a page of one run whose merge waits there, and nothing in the app commits or stashes the
+  checkout. *Pencil design is turned off* is not a finding the reading has (`not_checked` names the MCP servers
+  instead: *Not checked: whether the tasks' MCP servers answer*). The count leaves out *Closing the window stops the
+  work*, which is always listed (the frames count it in a and not in L01).
+
+Tests: `orchester-workspace --test orchestrator_leaving leaving`; `orchester-app --test orchestrator leading`.

@@ -292,7 +292,7 @@ impl Component for OrchestratorScreen {
     view.hold_started(&reads);
     view.what_i_watch.hold(&reads);
     let chat = match &reads.shown {
-      Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
+      Shown::Chat(shown) => Named::Chat(shown),
       // The conversation the first message started is named as new until it is read, as it was when it was sent.
       Shown::Loading if view.started_read(&reads).is_some() => Named::New,
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {

@@ -56,6 +56,9 @@ fn orchestrator_roles_follow_the_design() {
     ),
     (OrchestratorText::RequestDoubt, 12.0, 1.5, FontWeight::Normal, "Geist"),
     (OrchestratorText::RequestSaid, 12.5, 1.5, FontWeight::Normal, "Geist"),
+    // *Before you leave* and the place that fixes a finding (`Title`, `Link` in `k0jNa`).
+    (OrchestratorText::LeavingTitle, 12.5, 1.3, FontWeight::SemiBold, "Geist"),
+    (OrchestratorText::LeavingLink, 12.0, 1.3, FontWeight::Medium, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -78,6 +81,9 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorSpacing::StartComposer, 28.0),
     // What a stop left open, in from its line's start (`j6XFdt`).
     (OrchestratorSpacing::LeftOpen, 27.0),
+    // The *Before you leave* card's sides, and its findings in past its icon (`k0jNa`).
+    (OrchestratorSpacing::LeavingSide, 12.0),
+    (OrchestratorSpacing::LeavingIndent, 21.0),
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

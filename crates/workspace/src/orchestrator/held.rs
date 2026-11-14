@@ -26,9 +26,31 @@ pub fn held_in(root: &Path, now: Timestamp) -> Result<Option<Held>, Message> {
 /// What holds the turns Orchester starts by itself at `now`, as `db` has it: today's budget, counted as the runner
 /// counts it for a run, else the plan limit kept of the account the Orchestrator runs on now.
 pub(super) fn held(db: &ProjectDb, now: Timestamp) -> Result<Option<Held>, StoreError> {
+  Ok(hold(db, now)?.map(|hold| hold.held))
+}
+
+/// What holds the turns Orchester starts by itself, as a conversation tells it under the events that wait
+/// (`docs/plan/orchestrator-autonomy/frames.md` A): until when, and whether that time is a reset something named.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hold {
+  pub held: Held,
+  /// Whether the end of the hold is a reset that was named: the budget's day always is; a plan limit's only when its
+  /// CLI said when it lifts. Otherwise the time is when the next turn is tried, and the limit may still be there.
+  pub reset_named: bool,
+}
+
+/// [`held`] with whether its end was named.
+pub(super) fn hold(db: &ProjectDb, now: Timestamp) -> Result<Option<Hold>, StoreError> {
   let used_today = db.tokens_used_since(now.local_day_start())?;
   let budget_used = db.project_limits()?.daily_budget_used(used_today);
-  Ok(Held::at(now, budget_used, plan_hold(db)?))
+  let plan = plan_hold(db)?;
+  Ok(Held::at(now, budget_used, plan).map(|held| Hold {
+    held,
+    reset_named: match held {
+      Held::Budget { .. } => true,
+      Held::PlanLimit { .. } => plan.is_some_and(|plan| plan.resets.is_some()),
+    },
+  }))
 }
 
 /// The plan limit kept of the account the Orchestrator's published connection runs on; `None` while it has none, or

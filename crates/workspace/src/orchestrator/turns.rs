@@ -20,7 +20,7 @@ use orchester_core::{
 };
 use orchester_store::{FailedWait, ProjectDb, StoreError};
 
-use super::{held::held, waits::WaitTurn};
+use super::{held::held, settings::OrchestratorSetup, waits::WaitTurn};
 use crate::messages::{self, Message};
 
 /// An entry whose turn starts by itself: its conversation and `seq`, whether its turn merges a run on its own, and
@@ -118,6 +118,30 @@ pub fn next_due_in(root: &Path, now: Timestamp) -> Result<Option<Timestamp>, Mes
     )
   };
   read().map_err(|error| messages::store_error(&error))
+}
+
+/// Gives the wait kept as entry `seq` of conversation `chat` in the project at `root`, whose turn failed, one more
+/// turn now, as the person asked with *Try again* (`docs/plan/orchestrator-autonomy/OA-02-retry-clock.md`): also
+/// after its last try by itself, and without waiting for the time its next one is due. The turn is told how the one
+/// before it ended, as any later try is. Refused, with nothing changed, while the Orchestrator has nothing to run on,
+/// once the wait no longer stands, and while another turn of the conversation thinks or this one's is no longer the
+/// failed one. The caller asks the runner for the turn. Blocks on SQLite.
+pub fn try_again_in(root: &Path, (chat, seq): (ChatId, i64)) -> Result<WaitTurn, Message> {
+  if !OrchestratorSetup::load_in(root)?.readiness().is_ready() {
+    return Err(Message::new("orchestrator.send.notReady"));
+  }
+  let stored = |error: StoreError| messages::store_error(&error);
+  let mut db = ProjectDb::open(root).map_err(stored)?;
+  let entries = db.chat_entries(chat).map_err(stored)?;
+  let (standing, _) = super::waits::standing(&db, chat, &entries).map_err(stored)?;
+  if !standing.contains(&seq) {
+    return Err(Message::new("orchestrator.tryAgain.settled"));
+  }
+  let message = ChatMessageId::generate();
+  if !db.retry_wait_turn((chat, seq), message).map_err(stored)? {
+    return Err(Message::new("orchestrator.tryAgain.busy"));
+  }
+  Ok(WaitTurn { chat, message })
 }
 
 fn next_try(failed: &FailedWait) -> NextTry {

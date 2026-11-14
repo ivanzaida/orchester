@@ -14,12 +14,12 @@ use orchester_core::{
   id::{ModuleId, ResourceId, TaskId},
   module::ModuleState,
   orchestrator::{
-    Subscription, Subscriptions, WatchTarget,
+    ChatEntry, EntryKind, Subscription, Subscriptions, WatchTarget,
     parking::Parking,
     standing::{Around, Parked, QUIET, Raised, Standing, StandingEvent, TaskFacts, Unready, standing},
   },
   run::{PauseReason, RunStatus, TaskPhase},
-  store::{MergeStore, SettingsStore},
+  store::{MergeStore, ResourceStore, SettingsStore},
   task::Task,
   time::Timestamp,
 };
@@ -332,6 +332,55 @@ pub fn standing_in(root: &Path) -> Result<Vec<Led>, Message> {
     Reads::read(&db)?.all(&db)
   };
   read().map_err(|error| messages::store_error(&error))
+}
+
+/// What the line of an event of a module led to the end names of the module as it is now
+/// (`docs/plan/orchestrator-autonomy/frames.md` H, d and e): its acceptance pipeline, and the branch that is
+/// delivered with the branch it goes into.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModuleNow {
+  /// The name of its acceptance pipeline.
+  pub acceptance: Option<String>,
+  /// Its own branch.
+  pub branch: Option<String>,
+  /// The branch it is delivered into, when the module names one; the checkout's branch otherwise.
+  pub base: Option<String>,
+}
+
+/// The modules the events among `entries` are about, as they are now, by entry: for the events whose line names
+/// something of the module (its acceptance can start, it can be delivered). An event of a module that is gone, or
+/// that has no branch of its own any more, has none.
+pub(super) fn modules_now(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashMap<i64, ModuleNow>, StoreError> {
+  let mut now = HashMap::new();
+  for entry in entries {
+    let EntryKind::Standing { event, .. } = &entry.kind else {
+      continue;
+    };
+    let (WatchTarget::Module(id), Raised::Accept | Raised::Deliver) = (event.target, &event.raised) else {
+      continue;
+    };
+    let Some(module) = db.module(id)? else {
+      continue;
+    };
+    let Some(own) = module.own_branch() else {
+      continue;
+    };
+    let acceptance = match own.acceptance {
+      Some(pipeline) => db
+        .resource(pipeline)?
+        .map(|pipeline| pipeline.name().as_str().to_owned()),
+      None => None,
+    };
+    now.insert(
+      entry.seq,
+      ModuleNow {
+        acceptance,
+        branch: Some(own.branch.as_str().to_owned()),
+        base: module.base().branch().map(|base| base.as_str().to_owned()),
+      },
+    );
+  }
+  Ok(now)
 }
 
 /// The words of `event`'s line in its conversation.

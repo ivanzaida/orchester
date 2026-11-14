@@ -611,6 +611,10 @@ the access token and pairing codes, sharing and sign-in, secrets, and the task p
 refusals in a QA copy too. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
 presses apply, in one that does not they are refused, and only `examples/qa_app` turns it on. The seed's
 `orchestrator-leads` scenario has subscriptions standing for these states (the design-verification skill names them).
+`orchestrator-leading` has a conversation that leads a module to the end, with events whose turns failed (tried
+again, left to the person with *Try again*), and `orchestrator-held-budget`, `orchestrator-held-plan` and
+`orchestrator-held-plan-unnamed` the same events held by a used daily budget or by the plan limit of the
+Orchestrator's account.
 
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn

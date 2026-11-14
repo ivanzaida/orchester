@@ -104,13 +104,19 @@ pub enum OrchestratorText {
   /// 12.5 `text_secondary`, 1.5: the Orchestrator's reason, the words it told the agent or its recommendation, under a
   /// tool request's line (`nAFS9`, `O8p4u6`, `GESeJ` in `ICzi3`).
   RequestSaid,
+  /// 12.5/600 `text_primary`, 1.3: *Before you leave* at the head of its card (`Title` in `Parts · Before you leave`
+  /// `k0jNa`, board `Orchestrator autonomy · frames to approve`).
+  LeavingTitle,
+  /// 12/500 `text_primary`, 1.3: the place that fixes a finding of that card (*Project settings ↗*, `Link` in
+  /// `k0jNa`); *Check again* at its head in `text_secondary`.
+  LeavingLink,
 }
 
 /// The hint at a Leads chip's tooltip's foot, *× stops watching* (`j1E7E` in `X93D8T`).
 pub const LEADS_HINT_OPACITY: f32 = 0.7;
 
 impl OrchestratorText {
-  pub const ALL: [Self; 37] = [
+  pub const ALL: [Self; 39] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -148,6 +154,8 @@ impl OrchestratorText {
     Self::RequestAsked,
     Self::RequestDoubt,
     Self::RequestSaid,
+    Self::LeavingTitle,
+    Self::LeavingLink,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -193,6 +201,8 @@ impl OrchestratorText {
       Self::RequestAsked => "orchestrator_request_asked",
       Self::RequestDoubt => "orchestrator_request_doubt",
       Self::RequestSaid => "orchestrator_request_said",
+      Self::LeavingTitle => "orchestrator_leaving_title",
+      Self::LeavingLink => "orchestrator_leaving_link",
     }
   }
 
@@ -241,6 +251,8 @@ impl OrchestratorText {
       Self::RequestAsked => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted)),
       Self::RequestDoubt => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
       Self::RequestSaid => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
+      Self::LeavingTitle => style(12.5, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::LeavingLink => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
     }
   }
 }
@@ -264,14 +276,20 @@ pub enum OrchestratorSpacing {
   LinkColumns,
   /// 28: a new conversation's message over its composer's bar (`Composer` `QcfyZ` in `c99rep`).
   StartComposer,
-  /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`).
+  /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`);
+  /// where an event's turn stands, under the event's row (`Turn state` in `Parts · An event whose turn failed or is
+  /// held` `tkjdw`).
   LeftOpen,
   /// 24: a tool request's card in from the chat column's start, under its wait (`ICzi3` d in `mPw5l`).
   RequestCard,
+  /// 12: the sides of the *Before you leave* card (`Before you leave` in `k0jNa`).
+  LeavingSide,
+  /// 21: that card's findings, in from its start past its head's icon and gap (`Findings` in `k0jNa`).
+  LeavingIndent,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 9] = [
+  pub const ALL: [Self; 11] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
@@ -281,6 +299,8 @@ impl OrchestratorSpacing {
     Self::StartComposer,
     Self::LeftOpen,
     Self::RequestCard,
+    Self::LeavingSide,
+    Self::LeavingIndent,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -298,6 +318,8 @@ impl OrchestratorSpacing {
       Self::StartComposer => "orchestrator_start_composer",
       Self::LeftOpen => "orchestrator_left_open",
       Self::RequestCard => "orchestrator_request_card",
+      Self::LeavingSide => "orchestrator_leaving_side",
+      Self::LeavingIndent => "orchestrator_leaving_indent",
     }
   }
 
@@ -312,6 +334,8 @@ impl OrchestratorSpacing {
       Self::StartComposer => 28.0,
       Self::LeftOpen => 27.0,
       Self::RequestCard => 24.0,
+      Self::LeavingSide => 12.0,
+      Self::LeavingIndent => 21.0,
     }
   }
 }

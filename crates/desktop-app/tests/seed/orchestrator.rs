@@ -1,6 +1,7 @@
 //! The `orchestrator` scenario: its waits stand as the conversation reads them, under the keys the app's follower
 //! keeps them by, so following the project keeps nothing new; and the runs-on picker's sign-ins, with their checks and
-//! plan reads, are in the application database. `orchestrator-leads` has its subscriptions standing.
+//! plan reads, are in the application database. `orchestrator-leads` has its subscriptions standing, and
+//! `orchestrator-leading` and the held scenarios a module led to the end with the events whose turns failed or wait.
 
 use orchester_core::{
   account::AccountState,
@@ -17,7 +18,7 @@ use orchester_workspace::orchestrator::{
 };
 
 use super::Seed;
-use crate::kontur::scenarios::orchestrator::leads;
+use crate::kontur::scenarios::orchestrator::{leads, watch::leading};
 
 /// The conversation of `seed` titled `title`, as the screen reads it.
 fn conversation(seed: &Seed, title: &str) -> ChatView {
@@ -217,5 +218,72 @@ fn seed_orchestrator_requests_keep_a_request_in_each_state() {
     (Some(ToolApprovalDecision::Approved), Some(DecidedBy::Person)),
   ] {
     assert!(decided.contains(&expected), "{expected:?} in {decided:?}");
+  }
+}
+
+/// Where the turns of the events `shown` keeps stand, oldest event first.
+fn event_turns(shown: &ChatView) -> Vec<Option<orchester_workspace::orchestrator::event_turns::EventTurn>> {
+  use orchester_core::orchestrator::EntryKind;
+
+  let waits = shown
+    .entries
+    .iter()
+    .filter(|entry| matches!(entry.kind, EntryKind::Wait { .. }));
+  waits.map(|entry| shown.turns.of(entry.seq).cloned()).collect()
+}
+
+/// `orchestrator-leading`: Webhooks v2 is led to the end and Search index followed, and the module's three events say
+/// what became of their failed turns: left to the person, the fourth try to come, the second try to come.
+#[test]
+fn seed_orchestrator_leading_leads_a_module_to_the_end_with_events_whose_turns_failed() {
+  use orchester_workspace::orchestrator::event_turns::EventTurn;
+
+  let seed = Seed::of("orchestrator-leading");
+  let shown = conversation(&seed, leading::LEADING);
+  let subscriptions = seed.db().active_subscriptions().expect("the subscriptions");
+  let led: Vec<bool> = subscriptions
+    .of_chat(shown.chat.id())
+    .map(|subscription| subscription.mode().ceilings().is_some())
+    .collect();
+  assert_eq!(led, [true, false], "Webhooks v2 to the end, Search index followed");
+  assert_eq!(shown.led_to_end.len(), 1, "one line led its target to the end");
+  assert_eq!(shown.standing.len(), 3, "the three questions still wait");
+  let turns = event_turns(&shown);
+  let [
+    Some(EventTurn::LeftToPerson { tries: 4, .. }),
+    Some(EventTurn::TriedAgain { next: 4, of: 4, .. }),
+    Some(EventTurn::TriedAgain { next: 2, of: 4, .. }),
+  ] = turns.as_slice()
+  else {
+    panic!("left to the person, then two tries to come: {turns:?}");
+  };
+  assert_eq!(shown.turns.held(), None);
+}
+
+/// The held scenarios: the same events have no turn, and say what holds it and whether its end was named.
+#[test]
+fn seed_orchestrator_held_scenarios_hold_the_turns_of_their_events() {
+  use orchester_core::orchestrator::Held;
+  use orchester_workspace::orchestrator::event_turns::EventTurn;
+
+  for (scenario, budget, named) in [
+    ("orchestrator-held-budget", true, true),
+    ("orchestrator-held-plan", false, true),
+    ("orchestrator-held-plan-unnamed", false, false),
+  ] {
+    let seed = Seed::of(scenario);
+    let shown = conversation(&seed, leading::LEADING);
+    let hold = shown
+      .turns
+      .held()
+      .unwrap_or_else(|| panic!("{scenario} holds its turns"));
+    assert_eq!(matches!(hold.held, Held::Budget { .. }), budget, "{scenario}: {hold:?}");
+    assert_eq!(hold.reset_named, named, "{scenario}: {hold:?}");
+    let turns = event_turns(&shown);
+    assert_eq!(turns.len(), 3, "{scenario}");
+    assert!(
+      turns.iter().all(|turn| *turn == Some(EventTurn::Held(hold))),
+      "{scenario}: {turns:?}"
+    );
   }
 }

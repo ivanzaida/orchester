@@ -1,7 +1,9 @@
 //! What holds the turns Orchester starts by itself (`orchestrator::held`, OA-03): while the project's daily budget is
 //! used, or the account the Orchestrator runs on is at its plan limit, a wait is kept and starts no turn; its turn
 //! starts at the reset, when the follower's clock wakes it; and a turn the runner refused for the budget is taken back
-//! instead of failing.
+//! instead of failing. And what a conversation says of such turns under their events (`orchestrator::event_turns`,
+//! OA-02): held until when, tried again at what time and as which try, left to the person, and the one more turn
+//! the person's *Try again* starts.
 //! `cargo test -p orchester-workspace --test orchestrator_held held`.
 
 mod support;
@@ -15,7 +17,7 @@ use orchester_core::{
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   limits::ProjectLimits,
   name::Name,
-  orchestrator::{Chat, EntryKind, Held, OrchestratorSettings, PlanHold, WaitTurn},
+  orchestrator::{Chat, EntryKind, Held, OrchestratorSettings, PlanHold, TurnFailure, TurnState, WaitTurn},
   resource::ModelId,
   run::{StepFailure, TokenUsage},
   store::{ConnectionStore, SettingsStore},
@@ -25,8 +27,10 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::orchestrator::{
+  chat::ChatView,
+  event_turns::{EventTurn, Hold},
   held::held_in,
-  turns::next_due_in,
+  turns::{next_due_in, try_again_in},
   waits::{Followed, Switches, check_merges_in, follow_at},
 };
 use support::{Fixture, at};
@@ -212,4 +216,116 @@ fn held_turn_the_budget_refused_is_taken_back_and_starts_again_later() {
   );
   let again = follow_then(&fixture, now).turn.expect("it starts again");
   assert_ne!(again.message, started.message);
+}
+
+/// The entry of the one event `chat` keeps, and where its turn stands at `at(now)`, as the conversation says it.
+fn told(fixture: &Fixture, chat: &Chat, now: i64) -> (i64, Option<EventTurn>) {
+  let view = ChatView::load_at(fixture.repo.path(), chat.id(), at(now))
+    .expect("read")
+    .expect("kept");
+  let seq = view
+    .entries
+    .iter()
+    .find(|entry| matches!(entry.kind, EntryKind::Wait { .. }))
+    .expect("the event")
+    .seq;
+  (seq, view.turns.of(seq).cloned())
+}
+
+/// The turn kept under `message`, started at `at(now)`, fails a second later, as one that ran too long.
+fn fail_turn(fixture: &mut Fixture, message: ChatMessageId, now: i64) {
+  let failed = TurnState::Failed(TurnFailure::TimeLimit { minutes: 10 });
+  fixture
+    .db
+    .end_chat_turn(message, &failed, at(now + 1000))
+    .expect("ended");
+}
+
+#[test]
+fn held_events_say_until_when_and_whether_the_reset_was_named() {
+  let (mut fixture, chat, account) = with_an_event();
+  fixture.db.set_orchestrator_drives(true).expect("drives");
+  let now = 100 * HOUR + HOUR / 2;
+  // The account's CLI did not say when its limit lifts: the time is when the next turn is tried.
+  let unnamed = PlanHold {
+    since: at(now),
+    resets: None,
+  };
+  fixture.db.hold_orchestrator(account, unnamed).expect("kept");
+  assert_eq!(follow_then(&fixture, now).turn, None, "kept, and held");
+  let (_, said) = told(&fixture, &chat, now + 1);
+  let Some(EventTurn::Held(Hold {
+    held: Held::PlanLimit { until },
+    reset_named: false,
+  })) = said
+  else {
+    panic!("held by the plan limit, its reset not named: {said:?}");
+  };
+  assert_eq!(until, at(now + HOUR));
+  // A used budget holds first, and its day's end is always named.
+  use_up_the_budget(&mut fixture, account, now - 1);
+  let view = ChatView::load_at(fixture.repo.path(), chat.id(), at(now + 1))
+    .expect("read")
+    .expect("kept");
+  let Some(Hold {
+    held: Held::Budget { .. },
+    reset_named: true,
+  }) = view.turns.held()
+  else {
+    panic!("held by the budget: {:?}", view.turns);
+  };
+  // With the switch off nothing starts by itself, so nothing is said to wait for a reset.
+  fixture.db.set_orchestrator_drives(false).expect("off");
+  assert_eq!(told(&fixture, &chat, now + 1).1, None);
+}
+
+#[test]
+fn held_failed_turn_says_its_next_try_and_try_again_starts_one_more_after_the_last() {
+  let (mut fixture, chat, _account) = with_an_event();
+  fixture.db.set_orchestrator_drives(true).expect("drives");
+  let root = fixture.repo.path().to_path_buf();
+  let mut now = 100 * HOUR;
+  let first = follow_then(&fixture, now).turn.expect("the first turn");
+  let (seq, said) = told(&fixture, &chat, now);
+  assert_eq!(said, None, "a first turn that thinks has nothing to add");
+  fail_turn(&mut fixture, first.message, now);
+  let why = TurnFailure::TimeLimit { minutes: 10 };
+  // After 1, 5 and 15 minutes: the second, third and fourth of four.
+  for (number, wait) in [(2, 1), (3, 5), (4, 15)] {
+    let due = now + 1000 + wait * 60 * 1000;
+    let again = EventTurn::TriedAgain {
+      at: at(due),
+      next: number,
+      of: 4,
+      why: why.clone(),
+    };
+    assert_eq!(told(&fixture, &chat, now + 2000).1, Some(again));
+    now = due;
+    let turn = follow_then(&fixture, now).turn.expect("tried again");
+    assert_eq!(told(&fixture, &chat, now).1, Some(EventTurn::Trying { number, of: 4 }));
+    fail_turn(&mut fixture, turn.message, now);
+  }
+  let left = EventTurn::LeftToPerson {
+    tries: 4,
+    why: why.clone(),
+  };
+  assert_eq!(told(&fixture, &chat, now + 2000).1, Some(left));
+  assert_eq!(
+    follow_then(&fixture, now + 24 * HOUR).turn,
+    None,
+    "nothing more by itself"
+  );
+
+  // The person's Try again starts one more turn now, past the last try.
+  let again = try_again_in(&root, (chat.id(), seq)).expect("one more turn");
+  assert_eq!(again.chat, chat.id());
+  assert_eq!(
+    told(&fixture, &chat, now + 3000).1,
+    Some(EventTurn::Trying { number: 5, of: 5 })
+  );
+  let refused = try_again_in(&root, (chat.id(), seq)).expect_err("its turn thinks");
+  assert_eq!(refused.key, "orchestrator.tryAgain.busy");
+  fail_turn(&mut fixture, again.message, now + 3000);
+  let left = EventTurn::LeftToPerson { tries: 5, why };
+  assert_eq!(told(&fixture, &chat, now + 5000).1, Some(left));
 }

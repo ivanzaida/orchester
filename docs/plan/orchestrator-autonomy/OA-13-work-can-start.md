@@ -1,6 +1,6 @@
 # OA-13 · The event *work can start*
 
-- **Status:** done (2026-11-14); its line in the conversation waits for a frame
+- **Status:** done (2026-11-14); its line follows its frame since 2026-11-14, design verification pending
 - **Kind:** core + workspace
 - **Depends on:** OA-09, OA-12
 - **Branch:** —
@@ -74,3 +74,20 @@ Differs from the task file:
   `frames.md` (H).
 
 Tests: `orchester-workspace --test orchestrator_standing` (raised once per state, and again after a change).
+
+## The lines, by their frame (2026-11-14)
+
+`Parts · Lines` `e6nsBS` b–f (`screens::orchestrator::watch::standing`): *Work can start … — nothing they depend on is
+open* with its time; *… is stuck: 3 left for you — nothing else can start* (*— its budget is used* when that is why)
+with *Needs you ↗* to the Overview's waiting list in the time's place; *… its acceptance can start — Module
+acceptance* and *… it can be delivered — module/webhooks-v2 into main*, which name the module as it is now
+(`orchestrator::standing::ModuleNow`: the acceptance pipeline, the branch, and its base when the module names one);
+*… its delivery waits for you — Deliver when accepted is off* (or why else) with *Module ↗*. The turn's answer has
+the tag *work can start*.
+
+**No entry exists for two lines of the frame, so they are not built:** g, *KON-41 · run again 3 of 3 — parked for
+you* (a ceiling reached is the chat's `park_task` action in its turn, and the task then counts in the *stuck* event;
+no line of its own is kept), and h, *Budget used — nothing new starts; what runs finishes* (a used budget of the
+subscription makes the target *stuck* with `budget_used`, which the stuck line says as *— its budget is used*; there
+is no event of its own, and no ceilings form for *Change…* to open). i needs no row: the events one turn took show
+as their lines with the one answer under the last.

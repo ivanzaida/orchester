@@ -69,6 +69,24 @@ impl ProjectDb {
       .collect()
   }
 
+  /// The failed turns the waits of `chat` keep from before the turn each holds now, oldest first, by entry; a wait
+  /// none of whose earlier turns failed is not listed. The conversation says which try a turn is by them.
+  pub fn chat_wait_tries(&self, chat: ChatId) -> Result<Vec<(i64, Vec<FailedTry>)>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT seq, tries FROM orchestrator_entries
+       WHERE chat_id = ?1 AND kind = 'wait' AND tries IS NOT NULL ORDER BY seq",
+    )?;
+    let rows = statement
+      .query_map([chat.to_string()], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(seq, tries)| Ok((seq, tries_of(Some(&tries))?)))
+      .collect()
+  }
+
   /// Gives wait `seq` of `chat`, whose turn failed, its next turn, thinking, under `message`, and keeps the failed one
   /// among its earlier tries; under the conditions a first turn starts under ([`Self::start_wait_turn`]). The failed
   /// turn is no turn any more, so the todo list it kept goes with it. Whether it was given.

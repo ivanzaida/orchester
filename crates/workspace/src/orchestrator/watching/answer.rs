@@ -39,6 +39,8 @@ pub struct WatchedSubscription {
   pub target: TargetView,
   pub since: Timestamp,
   pub order: WatchOrder,
+  /// The conversation leads it to the end, and does not only follow it.
+  pub to_the_end: bool,
   /// Its tasks that have something going on, in the project's order.
   pub tasks: Vec<WatchedTask>,
   /// Its other open tasks, counted (*4 more tasks with nothing under way*); `None` when there are none.
@@ -135,6 +137,7 @@ impl WatchReads {
       target: self.target_view(subscription.target()),
       since: subscription.since(),
       order: self.order(subscription),
+      to_the_end: subscription.mode().ceilings().is_some(),
       tasks,
       rest: (rest > 0).then(|| counted(rest, ("orchestrator.watch.rest.one", "orchestrator.watch.rest.other"))),
       unreadable: self

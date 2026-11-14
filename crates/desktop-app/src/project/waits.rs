@@ -20,7 +20,7 @@ use lurq::app::{
   ctx::{Ctx, StreamEmitter},
   i18n::I18n,
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{id::ChatId, time::Timestamp};
 use orchester_store::StoreError;
 use orchester_workspace::{
   background, base_moved,
@@ -225,6 +225,51 @@ async fn start_queued(services: &Services, i18n: I18n, open: &OpenProject) -> Re
     answer(services, i18n, open, (turn, false)).await;
   }
   Ok(())
+}
+
+/// Starts one more turn for the wait kept as entry `seq` of conversation `chat` in `open`, whose turn failed, as
+/// the person asked with *Try again* (`orchester_workspace::orchestrator::turns::try_again_in`): the runner attached
+/// first, the turn given under the follower's lock, then asked for as the follower asks for one. Why, when nothing
+/// started. It runs as a task of its own: the row that asked goes once its turn thinks, and a turn marked thinking is
+/// always asked for or ended.
+pub(crate) async fn try_again(
+  services: &Services,
+  i18n: I18n,
+  open: &OpenProject,
+  entry: (ChatId, i64),
+) -> Result<(), Message> {
+  let (services, open) = (services.clone(), open.clone());
+  let (tell, started) = tokio::sync::oneshot::channel();
+  let runtime = services.runtime.clone();
+  let trying = runtime.spawn(async move {
+    let given = give_again(&services, &open, entry).await;
+    let (turn, result) = match given {
+      Ok(turn) => (Some(turn), Ok(())),
+      Err(why) => (None, Err(why)),
+    };
+    // The row that asked may be gone by now: the turn is answered whether or not anyone still listens.
+    drop(tell.send(result));
+    if let Some(turn) = turn {
+      services.runners.chat_changed(&open.repo_root);
+      keep_awake(&services, &open).await;
+      answer(&services, i18n, &open, (turn, true)).await;
+      keep_awake(&services, &open).await;
+    }
+  });
+  // Detached: the task ends when its turn does.
+  drop(trying);
+  started.await.unwrap_or_else(|_| Err(messages::interrupted()))
+}
+
+/// Gives the wait kept as `entry` its next turn, once `open`'s runner attached.
+async fn give_again(services: &Services, open: &OpenProject, entry: (ChatId, i64)) -> Result<WaitTurn, Message> {
+  if let Err(error) = services.runners.chat_runner(open).await {
+    tracing::info!(%error, "no runner attached for the turn the person asked to try again");
+    return Err(send::no_runner(error));
+  }
+  let root = open.repo_root.clone();
+  let _keeping = KEEPING.lock().await;
+  background::run(move || turns::try_again_in(&root, entry)).await?
 }
 
 /// Serves the tools of `turn`, one Orchester started by itself (`on_its_own`) or a queued message's, and asks `open`'s

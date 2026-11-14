@@ -17,7 +17,7 @@ use orchester_core::{
   id::ChatMessageId,
   orchestrator::{
     AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
-    WaitTurn,
+    WaitTurn, WatchTarget,
     standing::StandingEvent,
     watch::{WatchCommand, WatchSummary},
   },
@@ -25,7 +25,9 @@ use orchester_core::{
 };
 use orchester_workspace::orchestrator::{
   chat::{ChatView, EndMoved, EventFacts},
+  event_turns::EventTurn,
   requests::ChatRequest,
+  standing::ModuleNow,
   waits_on::view::RunWaitView,
 };
 
@@ -140,6 +142,14 @@ pub(super) struct Turn {
   /// The message a wait's entry holds its turn under: its own even when another event's turn took it, by which the
   /// events of one turn are found.
   own: Option<ChatMessageId>,
+  /// Where the turn its event starts by itself stands, while that says more than the turn's own end: tried again,
+  /// left to the person, or held (`super::wait::turn_state`).
+  pub(super) turn_state: Option<EventTurn>,
+  /// For the line of a /watch that led its targets to the end: the targets whose *Before you leave* shows under it
+  /// (`super::watch`); `None` for any other row.
+  pub(super) led_to_end: Option<Arc<[WatchTarget]>>,
+  /// What the line of an event of a module led to the end names of the module as it is now.
+  pub(super) module_now: Option<ModuleNow>,
 }
 
 impl Turn {
@@ -178,6 +188,9 @@ impl Turn {
       todo: None,
       mode: TurnMode::Acts,
       own: None,
+      turn_state: None,
+      led_to_end: None,
+      module_now: None,
     }
   }
 
@@ -232,6 +245,9 @@ impl Turn {
       todo: None,
       mode: TurnMode::Acts,
       own: turn.map(|turn| turn.message),
+      turn_state: None,
+      led_to_end: None,
+      module_now: None,
     }
   }
 
@@ -360,7 +376,7 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 /// `Ff7AD`, `super::watching`), each a row between the turns, which started none. A choice on such a card shows in the
 /// card's place (`super::led`). `None` for an entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
-  Some(match &entry.kind {
+  let row = match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
       wait: Some(Box::new(wait.clone())),
       stands: shown.standing.contains(&entry.seq),
@@ -379,6 +395,7 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
     },
     EntryKind::Standing { event, turn } => Turn {
       standing: Some(event.clone()),
+      module_now: shown.modules_now.get(&entry.seq).cloned(),
       ..Turn::opened(entry, turn.as_ref())
     },
     EntryKind::Event(event) if super::led::is_choice(event) => return None,
@@ -392,9 +409,17 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
     ) => Turn {
       compaction: Some(event.clone()),
       led: super::led::cards(entry, shown).map(Box::new),
+      led_to_end: shown
+        .led_to_end
+        .get(&entry.seq)
+        .map(|targets| Arc::from(targets.as_slice())),
       ..Turn::opened(entry, None)
     },
     _ => return None,
+  };
+  Some(Turn {
+    turn_state: shown.turns.of(entry.seq).cloned(),
+    ..row
   })
 }
 
@@ -485,6 +510,9 @@ fn person(
     todo: None,
     mode: TurnMode::Acts,
     own: None,
+    turn_state: None,
+    led_to_end: None,
+    module_now: None,
   }
 }
 
