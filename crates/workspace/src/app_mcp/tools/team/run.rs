@@ -151,7 +151,14 @@ fn start_base(
       )),
     };
   };
-  Ok((branch_tip(runner, root, branch)?, None))
+  // A module's branch this checkout does not have yet is made by its first start.
+  let tip = team_work::start_tip(runner, root, branch).map_err(|BranchNotFound(branch)| {
+    ToolError::refused(
+      "branch_not_found",
+      vec![Message::new("appMcp.errors.branchNotFound").with("branch", branch)],
+    )
+  })?;
+  Ok((tip, None))
 }
 
 /// The commit `branch` is at in the checkout at `root`: a module's branch is a start's base and a delivery's source.

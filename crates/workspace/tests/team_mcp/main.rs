@@ -29,6 +29,7 @@ mod delivery;
 mod local_task;
 mod mcp_server_remove;
 mod mcp_servers;
+mod module_branch;
 mod not_ready;
 mod orchestrator;
 mod pipelines;

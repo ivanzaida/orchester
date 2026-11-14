@@ -1,6 +1,6 @@
 # OA-33 · A module's branch is made when its first task starts, in both kinds
 
-- **Status:** todo
+- **Status:** done for a team module (2026-11-14); a local module has no branch until OA-17
 - **Kind:** workspace + runner
 - **Depends on:** OA-17
 - **Branch:** —
@@ -30,3 +30,23 @@ exists, and never checks it out.
 ## Done when
 
 - Workspace tests for both kinds. Its row leaves the parity table. `tools/check.ps1` passes.
+
+## As built (2026-11-14)
+
+`orchester_workspace::team_work::start_tip` gives a start the tip of its module's branch and makes the branch first
+when the checkout does not have it: tracking the remote's when a remote has a branch of that name, else at the tip of
+the branch the checkout has checked out, which is the base the module is delivered to
+(`orchester_core::integration::base::create_branch_at`). A branch that exists is never moved, the checkout stays on
+its branch, and two starts at once are safe: git refuses the second creation and the tip is read either way. Both
+starts use it: `run_task` (`app_mcp/tools/team/run.rs`) and the task page's Run (`desktop-app/src/team/start.rs`).
+With no branch checked out there is nothing to make it from, and the start is refused `branch_not_found` as before.
+
+Differs from the task file:
+
+- A local module has no branch of its own, so there is nothing to make for one until OA-17 gives it; the same
+  helper is then its.
+- A name taken by an unrelated branch is not told from the module's own: a branch of that name that exists is used
+  as it is, as before.
+- The case of a remote that has the branch is not covered by a test.
+
+Tests: `orchester-workspace --test team_mcp team_mcp_a_start_makes`.

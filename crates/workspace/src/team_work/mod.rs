@@ -56,7 +56,7 @@ use orchester_core::{id::RunId, run::RunStatus, store::RunStore};
 use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
-  branch::{BranchNotFound, branch_tip, checked_out_tip},
+  branch::{BranchNotFound, branch_tip, checked_out_tip, start_tip},
   bundle_missing::bundle_missing_message,
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
