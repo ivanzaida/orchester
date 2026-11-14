@@ -439,6 +439,20 @@ step 4. Tests: `-p orchester-core --test api_accounts`, `--test agent_profile ag
 `-p orchester-workspace --test api_accounts`, `--test runs_on`,
 `-p orchester-runner --features test-agent --test runs_on_here`.
 
+Built on the branch since (2026-11-14 and 15), steps 2 to 5; `docs/design/agent-accounts.md`, *As built so far* and
+*MCP tools*, says how. Step 2: API accounts, the model APIs of Orchester's own agent and the decision model's
+servers are the app's, with their keys in the OS keychain; a project's own keys become the app's when it opens
+(`Workspace::adopt_project_keys`: the same API and key is one account, two CLIs on one key an account each); the
+project secret that held a key is not archived. Step 3: the account is a pick beside the profile, in a local project
+as in a team one; a version still names the connection it was published on. Step 4: Settings › Accounts with each
+CLI's program, the *Add account* menu and an API provider's page; one *Runs on* field and picker for a profile; no
+Connections tab, and the pages of agent connections with their add and edit forms are removed (GitHub's page opens
+from General, an MCP server's from the Agents hub, a decision model's from Runs). Step 5: the tools name accounts
+(`list_accounts`, `check_account`, `list_models`, `set_profile_account`, `set_reviewer_account`; `save_profile_draft`
+and `set_reviewer` take `account`), and `docs/manual/` follows.
+**Left:** the person's approval of the board (step 1) and an independent design verification of each board (step 4's
+done-when); the macOS check (no platform code was added); the tool list checked against the app in `docs/evidence/`.
+
 1. **Design (UI, in Pencil, the person's document).** Settings › Accounts with the CLI's program path and check, the
    sign-ins and the API providers (add, edit, check, remove, *Used by* across projects); the profile's choice of an
    account for local and team profiles alike, with its model select and *Missing on this computer*; Project settings

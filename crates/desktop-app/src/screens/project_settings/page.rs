@@ -59,9 +59,7 @@ pub fn settings(
       )
     })
     .collect::<Vec<_>>();
-  let save = match shown {
-    _ => shown.autosaves().then(|| save_status(ctx, status)),
-  };
+  let save = shown.autosaves().then(|| save_status(ctx, status));
   let header = Row::new()
     .id("project-settings-header")
     .width(Dimension::Pct(100.0))

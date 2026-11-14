@@ -154,9 +154,9 @@ A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When an agent
 needs is still not found, the start page warns of it with the folders it searched, *Choose the
 claude file…*, whose file becomes that connection's program and is offered in *Add connection*, and
 *Check again*, which reads the login shell again; on Windows it says the same of the `PATH`. The app
-MCP tool `add_cli_connection` names the folders it searched too, and a CLI installed elsewhere can
-be added there by its file path (`program`): the app's *Connections* does not offer choosing a file
-in this version. Starting the program itself from a terminal,
+MCP tool `list_accounts` says where each CLI's program is (`programs`), and a CLI installed elsewhere is
+chosen in Settings › Accounts, on the CLI's line (*Change…*, *Choose program…*): no tool takes a
+program. Starting the program itself from a terminal,
 `~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on, and the
 login shell is not asked then.
 
@@ -543,8 +543,8 @@ depend on how the app was started (below). It hosts lurq's window tools, the app
 Orchester's domain tools: every tool of Orchester's MCP server above, and the setup tools that only this app
 serves, which set a project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
-`update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
-saved), `check_connection` and `list_models`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
+`update_project_limits`); `list_accounts`, `check_account`, `list_models` and `set_profile_account` (what a profile runs on, by
+account), `list_connections` and `check_connection`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
 and `remove_mcp_server` (Connections › MCP servers); `list_profiles`, `get_profile`, `save_profile_draft` and
 `publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, a copy, or the steps given, published
 as v1) and `save_pipeline` (publishes the next version: a pipeline has no drafts); `list_tools`, `get_tool`,

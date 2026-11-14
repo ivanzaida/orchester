@@ -387,7 +387,7 @@ fn follow(ctx: &mut Ctx, work: &Work) {
   // A provider renamed or edited shows its page as it is now; one removed, the list.
   let (bump, page) = (revision.clone(), work.provider.clone());
   ctx.watch(&work.provider.change.state(), move |state| {
-    if let Some(provider) = state.data.filter(|_| state.is_fulfilled()) {
+    if let Some(provider::Changed(provider)) = state.data.filter(|_| state.is_fulfilled()) {
       page.close();
       bump.update(|revision| *revision += 1);
       shown.replace(Route::Accounts(AccountsView::of_provider(

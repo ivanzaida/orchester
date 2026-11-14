@@ -340,3 +340,64 @@ fn api_runs_on_needs_the_program_of_the_cli_to_make_the_connection() {
   );
   assert!(connections(&fixture).is_empty());
 }
+
+/// A profile on the project's connection on an API account is one of the account's uses, by its role, and keeps the
+/// account from being removed; an agent CLI's provider is not tested by Orchester.
+#[test]
+fn api_runs_on_a_profile_on_the_account_is_its_use_and_keeps_it_from_removal() {
+  use orchester_core::{
+    resource::{AgentProfile, PromptText, ProviderSettings},
+    time::Timestamp,
+  };
+  use orchester_workspace::{accounts::AccountsError, agents::data::create_profile};
+
+  let fixture = fixture();
+  let account = deepseek(&fixture);
+  assert!(
+    fixture
+      .workspace
+      .api_account_uses(account)
+      .expect("read")
+      .profiles
+      .is_empty()
+  );
+  let connection = fixture
+    .workspace
+    .connect_api_account(fixture.repo.path(), account)
+    .expect("the project's connection on the account");
+  let profile = AgentProfile::new(
+    name("Runner"),
+    String::new(),
+    PromptText::new("Run.").expect("a prompt"),
+    connection,
+    ModelId::new("deepseek-chat").expect("a model id"),
+    ProviderSettings::default(),
+  );
+  let mut db = ProjectDb::open(fixture.repo.path()).expect("the project database");
+  let id = create_profile(&mut db, &profile, Timestamp::now()).expect("a profile on the connection");
+  drop(db);
+
+  let uses = fixture.workspace.api_account_uses(account).expect("read");
+  assert_eq!(uses.profiles.len(), 1, "{uses:?}");
+  assert_eq!(uses.profiles[0].profile, id);
+  assert_eq!(uses.profiles[0].role.as_deref(), Some("Runner"));
+  let refused = fixture.workspace.remove_api_account(&fixture.vault, account);
+  assert!(matches!(refused, Err(AccountsError::ApiInUse)), "{refused:?}");
+  assert!(
+    fixture.workspace.api_account(account).expect("read").is_some(),
+    "the account stays"
+  );
+  assert!(
+    fixture
+      .workspace
+      .api_account_has_key(&fixture.vault, account)
+      .expect("asked"),
+    "and so does its key"
+  );
+
+  let runtime = tokio::runtime::Builder::new_current_thread()
+    .build()
+    .expect("a runtime");
+  let tested = runtime.block_on(fixture.workspace.check_api_account(&fixture.vault, account));
+  assert!(matches!(tested, Err(AccountsError::NotTested)), "{tested:?}");
+}

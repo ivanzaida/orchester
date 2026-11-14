@@ -81,12 +81,10 @@ impl Seeded {
     self.window.pass();
   }
 
-  /// Project settings › Connections, once the connections are read.
+  /// Away from a connection's page: the tab's old address, which opens Project settings on General.
   pub fn list(&mut self) {
     self.go(ProjectPage::Connections(ConnectionsView::default()));
-    self.until("the connections", |seeded| {
-      seeded.exists("connections-list") || seeded.exists("connections-empty")
-    });
+    self.until("Project settings", |seeded| seeded.exists("settings-tab-general"));
   }
 
   /// The page of connection `id`, once it shows.

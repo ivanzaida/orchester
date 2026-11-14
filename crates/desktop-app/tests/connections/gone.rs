@@ -13,8 +13,9 @@ fn connections_gone_the_tabs_address_opens_general() {
   let mut seeded = Seeded::new("connections");
   seeded.go(ProjectPage::Connections(ConnectionsView::default()));
   seeded.until("Project settings on General", |seeded| {
-    seeded.exists("settings-tab-general") && seeded.exists("settings-github-login")
+    seeded.exists("settings-tab-general") && !seeded.exists("connections-moved")
   });
+  assert!(!seeded.exists("connection-inspector"));
   assert!(
     !seeded.exists("settings-tab-connections"),
     "Connections is no tab of Project settings"

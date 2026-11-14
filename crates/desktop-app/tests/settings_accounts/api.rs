@@ -4,7 +4,7 @@
 //! `cargo test -p orchester-app --test settings_accounts settings_accounts_api`.
 
 use orchester_app::routes::{AccountsPanel, AccountsView, Route};
-use orchester_core::account::ApiSetup;
+use orchester_core::{account::ApiSetup, id::ApiAccountId};
 use orchester_store::AppDb;
 
 use super::harness::{Window, click, go, in_child, joined, set, shown};
@@ -18,13 +18,19 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
     "api::settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_cli",
     |_root| {
       let mut window = Window::open();
+      // Tall enough for *Add provider* under the page's fields to take a press.
+      window.tree.resize(1440, 1600);
       go(&mut window, None, AccountsPanel::Account);
       assert!(
         shown(&mut window, "settings-add-account"),
         "a sign-in is still added here"
       );
-      // The list stands once the accounts are read; until then only its skeleton does.
-      window.until("the list", |window| shown(window, "settings-add-api"));
+      // The list stands once the accounts are read; until then only its skeleton does. *Add account* is a menu of
+      // two there (A2 `It53u`): a sign-in, or an API provider.
+      window.until("the list", |window| shown(window, "accounts-group-claude_code"));
+      click(&mut window, "settings-add-account");
+      window.until("the menu", |window| shown(window, "settings-add-api"));
+      assert!(shown(&mut window, "settings-add-sign-in"));
       click(&mut window, "settings-add-api");
       window.until("the page", |window| shown(window, "api-add-page"));
       assert_eq!(
@@ -88,6 +94,8 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
         joined(&mut window, "accounts-group-claude_code")
       );
 
+      provider_page(&mut window, account.id(), &row);
+
       // The page starts over: what was typed, the key first, is gone from it.
       go(&mut window, None, AccountsPanel::AddApi);
       window.until("the page", |window| shown(window, "api-add-page"));
@@ -95,6 +103,49 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
       assert!(!shown(&mut window, "connection-provider-model-0"), "no model is left");
     },
   );
+}
+
+/// The provider's row opens its page (B1 `gZTuX`): what reaches the API, how its key stands and nothing of the
+/// key; *Rename* is in the page's menu and takes at once.
+fn provider_page(window: &mut Window, id: ApiAccountId, row: &str) {
+  click(window, row);
+  window.until("its page", |window| shown(window, "provider-page"));
+  assert_eq!(
+    window.navigation().route_now(),
+    Route::Accounts(AccountsView::of_provider(id, AccountsPanel::Account))
+  );
+  window.until("what runs on it", |window| shown(window, "provider-used-by"));
+  let page = joined(window, "provider-page");
+  for words in [
+    "DeepSeek",
+    "Key set",
+    "used with Claude Code",
+    "Claude Code · Anthropic Messages API",
+    "https://api.deepseek.com/anthropic",
+    "deepseek-chat",
+    "api.deepseek.com · agreed per project at its first run",
+    "No project runs a profile on this account yet",
+  ] {
+    assert!(page.contains(words), "{words} in {page}");
+  }
+  assert!(!page.contains(KEY), "the key is shown nowhere");
+  // Rename is in the page's menu and takes at once.
+  click(window, "provider-more");
+  window.until("the menu", |window| shown(window, "provider-rename"));
+  assert!(shown(window, "provider-edit") && shown(window, "provider-remove"));
+  click(window, "provider-rename");
+  window.until("the name's field", |window| shown(window, "provider-rename-field"));
+  set(window, "provider-rename-field", "DeepSeek EU");
+  click(window, "provider-rename-save");
+  window.until("the new name", |window| {
+    AppDb::open(&window.data.database())
+      .expect("the application database")
+      .api_accounts()
+      .expect("read")
+      .first()
+      .is_some_and(|account| account.name().as_str() == "DeepSeek EU")
+  });
+  window.until("the page again", |window| shown(window, "provider-head-title"));
 }
 
 /// *Used with* offers Orchester's own agent too: its account takes a name and a key (the base URL starts at

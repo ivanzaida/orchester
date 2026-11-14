@@ -5,7 +5,6 @@
 //! task with the real runner and the fake Codex. Needs `git`.
 
 mod accounts;
-mod accounts_window;
 mod api_providers;
 mod approval_answers;
 mod approval_settings;

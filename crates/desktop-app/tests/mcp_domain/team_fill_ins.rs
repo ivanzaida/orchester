@@ -447,7 +447,6 @@ fn domain_team_list_secrets_shows_names_and_that_a_value_is_set_never_the_value(
 #[test]
 fn domain_team_profiles_report_this_computers_pick_and_leave_out_a_local_draft() {
   let mut team = team();
-  let connection = team.codex_connection();
   let mut db = team.db();
   let designer = AgentProfile::new(
     name("Designer"),
@@ -481,13 +480,10 @@ fn domain_team_profiles_report_this_computers_pick_and_leave_out_a_local_draft()
     .iter()
     .find(|profile| profile["id"] == team.codex_profile.to_string())
     .unwrap_or_else(|| panic!("the team's profile is listed: {listed}"));
-  let picked = team.served.ok("list_connections", &json!({ "project": "Kontur" }));
-  let name_of = picked["agents"]
-    .as_array()
-    .and_then(|all| all.iter().find(|c| c["id"] == connection.as_str()))
-    .map(|c| c["name"].clone())
-    .expect("the picked connection is listed");
-  assert_eq!(codex["connection"], name_of, "the pick is reported: {codex}");
+  assert_eq!(
+    codex["runs_on"]["account"]["default"], true,
+    "the choice is reported, by account: {codex}"
+  );
   assert_eq!(
     codex["state"]["state"], "published",
     "the server's version, no draft: {codex}"
@@ -498,13 +494,13 @@ fn domain_team_profiles_report_this_computers_pick_and_leave_out_a_local_draft()
     "get_profile",
     &json!({ "project": "Kontur", "profile": team.codex_profile.to_string() }),
   );
-  assert_eq!(got["profile"]["connection"]["id"], connection.as_str(), "{got}");
+  assert_eq!(got["profile"]["runs_on"]["account"]["default"], true, "{got}");
   let unpicked = team.served.ok(
     "get_profile",
     &json!({ "project": "Kontur", "profile": team.claude_profile.to_string() }),
   );
   assert!(
-    unpicked["profile"]["connection"].is_null(),
+    unpicked["profile"]["runs_on"].is_null(),
     "no pick, none reported: {unpicked}"
   );
 }

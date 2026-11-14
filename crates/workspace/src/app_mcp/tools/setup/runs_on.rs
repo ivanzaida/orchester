@@ -265,7 +265,7 @@ pub async fn list_models(services: &Services, args: AccountModels) -> Result<Val
       Named::Api(account) => account.name().as_str().to_owned(),
     };
     let Some(connection) = here else {
-      return Ok(not_connected(name, &named));
+      return Ok(not_connected(&name, &named));
     };
     let models: Vec<Value> = listed_models(connection)
       .iter()
@@ -290,7 +290,7 @@ pub async fn list_models(services: &Services, args: AccountModels) -> Result<Val
 
 /// The models of an account the project has no connection on yet: an API provider's are the ones the person typed
 /// for it; a sign-in's are not known until its CLI is asked, which choosing it for a profile does.
-fn not_connected(name: String, named: &Named) -> Value {
+fn not_connected(name: &str, named: &Named) -> Value {
   let (agent, source, models): (AgentProvider, Value, Vec<&str>) = match named {
     Named::SignIn(account) => (account.cli().provider(), Value::Null, Vec::new()),
     Named::Api(account) => match account.setup() {

@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{
+    component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
     theme::{PaletteColor, SpacingSize},
   },
@@ -64,6 +65,12 @@ pub(super) enum Change {
   Edit(ApiAccountId, ApiSetup),
 }
 
+/// The provider a change was made to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Changed(pub ApiAccountId);
+
+impl DevtoolsInspectable for Changed {}
+
 /// What the page holds besides the provider: the name being typed, its menu, the fields of *Edit* and its actions.
 #[derive(Clone)]
 pub(super) struct Page {
@@ -74,7 +81,7 @@ pub(super) struct Page {
   pub form: Arc<ProviderForm>,
   seeded: Signal<String>,
   /// Renames or edits a provider, and says which one it was.
-  pub change: FutureAction<Change, ApiAccountId, Message>,
+  pub change: FutureAction<Change, Changed, Message>,
   /// Lists the models of a model API Orchester's own agent calls, with its key.
   pub test: FutureAction<ApiAccountId, (), Message>,
 }
@@ -91,7 +98,7 @@ impl Page {
             Change::Rename(id, name) => workspace.rename_api_account(id, name),
             Change::Edit(id, setup) => workspace.change_api_account(id, setup),
           };
-          changed.map(|account| account.id()).map_err(|error| {
+          changed.map(|account| Changed(account.id())).map_err(|error| {
             tracing::warn!(%error, "an API provider was not changed");
             error.message()
           })

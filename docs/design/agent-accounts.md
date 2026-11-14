@@ -470,6 +470,27 @@ tools speak of accounts only.
     the ones General already had.
   - *MCP.* `list_accounts` also lists API providers and decision servers, never a key; `set_profile_account` runs
     a profile on a sign-in. The other tools of the table below are as they were.
+- *Built on 2026-11-15, the rest of the module*:
+  - *Settings › Accounts* as drawn on A1 to A3 and B1: each CLI's program under its title, with the version it
+    reports and *Change…*, or that it was not found (or does not answer as the CLI) with *Choose program…*;
+    *Add account* is a menu of two; an API provider's row opens its page: how its key stands, what it is used
+    with, *Replace key…*, and *Rename*, *Edit* (the base URL and models of an agent CLI's provider) and *Remove* in
+    its menu. *Remove* is refused while a profile or a run is on the provider, in the window and in
+    `Workspace::remove_api_account`. A model API Orchester's own agent calls has *Test*
+    (`Workspace::check_api_account`, the model-list request a project's runner makes for a native connection).
+    *Used by* lists the profiles that run on an account, each opening in its project's Agents hub; no connection
+    is named. Not built: *Edit* for Orchester's own agent's API, the *Used with* cards (it stays a segmented
+    choice), the date a key was set.
+  - *A sign-in's check* uses the program set for its CLI, as a connection made on it does.
+  - *The Connections tab's pages are gone*: the list, an agent connection's page, *Add provider*, *Edit
+    connection* with its account chooser, and *Add decision model*. The tab's old address opens Project settings
+    on General; an agent connection's says where connections went. GitHub's page opens from General's *GitHub
+    account* row, an MCP server's from the Agents hub, a decision model's (with its test) from Project settings ›
+    Runs.
+  - *MCP tools* name accounts only: the table at the end of this note.
+  - *Not done*: the project secret that held an adopted key is not archived (nothing of the project's is
+    removed); a local profile's version still names the connection it was published on, with the account as the
+    pick beside it.
 
 ### Screens (drawn 2026-11-13, not approved yet)
 
@@ -559,14 +580,19 @@ it. MCP servers are the Agents hub's tab (`IpzZ7`, already drawn for a local pro
 - Whether *Runs on* in a task's run (`lCApz`) may name an account of another CLI than the profile's, as its rail
   suggests today.
 
-### MCP tools (proposed 2026-11-13, not built)
+### MCP tools (built 2026-11-15)
 
-| Today | After |
+| Before | Now |
 |---|---|
-| `list_accounts` | also lists API providers (id, name, what it is used with, host, models, whether its key is on this computer) and each CLI's program; never a key |
-| `add_cli_connection`, `set_connection_account`, `pick_profile_connection` | one tool, `set_profile_account` (`project`, `profile`, `account`): a local or team profile by id or role, an account or API provider of its CLI by id or name (`default` for the CLI's Default). Another account than the profile runs on now is `person_only` unless *Let automation change agent permissions* is on, as today |
-| `set_api_provider` | gone: an API provider is added by a person, since the tool takes no key. `list_accounts` shows them and `set_profile_account` chooses one |
-| `check_connection` | `check_account` (`account`): a sign-in's or an API provider's check, once for every project |
-| `list_connections` | lists GitHub and, as *runs on*, what each profile runs on here; no agent connection is named or taken as an argument |
-| `list_models` (`connection`) | takes `account` |
-| the decision connection tools | keep their shape; `key` names no project secret any more |
+| `list_accounts` | also lists API providers (id, name, what it is used with, host, models, `key_here`, the status of its last test) and each CLI's program (`programs`: the path set, the copies on the search path); never a key |
+| `add_cli_connection`, `set_connection_account`, `pick_profile_connection` | gone. `set_profile_account` (`project`, `profile`, `account`): a local or team profile by id or role, a sign-in or an API provider of its CLI by id or name (`default` for the CLI's Default). Another sign-in than the profile runs on now, or an API provider it does not run on, is `person_only` unless *Let automation change agent permissions* is on |
+| `set_api_provider` | gone: an API provider is added by a person, since no tool takes a key. `list_accounts` shows them and `set_profile_account` chooses one |
+| `check_connection` | checks the GitHub connection only. `check_account` (`account`, `cli`) checks a sign-in, an API provider of Orchester's own agent (an agent CLI's provider is `not_tested`) or a decision server, once for every project |
+| `list_connections` | `runs_on`: what each profile runs on here, by account; GitHub, MCP servers and decision models as before. No agent connection is listed or taken as an argument |
+| `list_models` (`connection`) | takes `account` (and `cli`). Read-only: a sign-in the project has no connection on yet lists nothing until a profile runs on it |
+| `save_profile_draft` (`connection`), `set_reviewer` (`connection`) | take `account` (and `cli`); the project's connection on the account is made when it has none. A profile's `connection` in results is `runs_on` |
+| `pick_reviewer_connection` | `set_reviewer_account` (`reviewer`, `account`): an account for a language reviewer, a decision server for a decision reviewer |
+| the decision connection tools | keep their shape; `save_decision_connection` takes no `key_secret`: a server that needs a key is added by a person in Settings › Accounts, and results say `takes_key` |
+
+A CLI's program is a person's choice in Settings › Accounts (*Change…* on the CLI's line); no tool takes one, so
+the gate the old `add_cli_connection` had for a program of automation's choosing is gone with it.
