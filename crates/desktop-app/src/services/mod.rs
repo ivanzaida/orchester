@@ -51,6 +51,7 @@ pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
 use crate::{
+  awake::KeepAwake,
   mcp::{chat::ChatServers, qa_person::QaPerson},
   open_link::LinkInbox,
   project::hold::ReadHold,
@@ -91,6 +92,8 @@ pub struct Services {
   pub changes: OutsideChanges,
   /// The projects' merge and worktree-removal operations, shared by the task pages and the MCP tools.
   pub jobs: ProjectJobs,
+  /// The hold on the system while agents work and the person's setting keeps the computer awake.
+  pub awake: KeepAwake,
   /// Holds the project feeds' reads while QA captures loading states.
   pub hold: ReadHold,
   /// Holds the review page's hand-offs to the runner while QA captures what shows while one is under way.
@@ -181,6 +184,7 @@ impl Services {
       clock: Clock::system(),
       vault,
       jobs,
+      awake: KeepAwake::default(),
       hold: ReadHold::default(),
       hand_offs: ReadHold::default(),
       runtime,

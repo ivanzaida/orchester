@@ -10,7 +10,7 @@
 //! (each off until a person turns it on in the window), which OS notifications the app shows, when the
 //! Orchestrator's daily report comes (off until a person turns it on), whether the desktop app sends error
 //! reports, and whether the *Browser* window opens by itself when an agent starts browsing (both on until a person
-//! turns them off).
+//! turns them off), and whether the app keeps the computer awake while agents work (off until a person turns it on).
 
 use orchester_core::{
   app_mcp::McpPort,
@@ -138,7 +138,31 @@ ALTER TABLE app_settings ADD COLUMN browser_window_opens_itself INTEGER NOT NULL
   CHECK (browser_window_opens_itself IN (0, 1));
 ";
 
+pub(super) const KEEPS_AWAKE_MIGRATION: &str = r"
+-- Keep the computer awake while agents work (docs/plan/orchestrator-autonomy/OA-08-…): off until a person turns it
+-- on in Settings › General.
+ALTER TABLE app_settings ADD COLUMN keeps_awake INTEGER NOT NULL DEFAULT 0 CHECK (keeps_awake IN (0, 1));
+";
+
 impl AppDb {
+  /// Whether the app keeps the computer awake while agents work; off until a person turns it on.
+  pub fn keeps_awake(&self) -> Result<bool, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT keeps_awake FROM app_settings WHERE id = 1", [], |row| {
+          row.get(0)
+        })?,
+    )
+  }
+
+  pub fn set_keeps_awake(&mut self, keeps: bool) -> Result<(), StoreError> {
+    self
+      .connection
+      .execute("UPDATE app_settings SET keeps_awake = ?1 WHERE id = 1", params![keeps])?;
+    Ok(())
+  }
+
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
     let (minute, since): (Option<u16>, Option<i64>) = self.connection.query_row(

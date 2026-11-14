@@ -78,6 +78,15 @@ pub async fn error_reports(session: Session) -> Result<bool, Message> {
   .await
 }
 
+/// Whether the computer is kept awake while agents work (Settings › General › Work).
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn keeps_awake(session: Session) -> Result<bool, Message> {
+  stored(session, "keep the computer awake", |services| {
+    services.workspace.keeps_awake()
+  })
+  .await
+}
+
 /// The update settings and when Orchester Cloud last answered a check (Settings › General › Updates).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredUpdates {

@@ -94,6 +94,7 @@ CREATE TABLE ui_state (
   settings::BROWSER_WINDOW_MIGRATION,
   browser::MIGRATION,
   mcp_programs::MIGRATION,
+  settings::KEEPS_AWAKE_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

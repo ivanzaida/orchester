@@ -132,10 +132,31 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
     services.changes.record(open.project.id(), Outside::Tasks);
     services.servers.send_automatic_statuses().await;
   }
+  keep_awake(services, open).await;
   if let Some(turn) = followed.turn {
     answer(services, i18n, open, (turn, true)).await;
+    // The turn ended: the computer may sleep again unless an agent still works.
+    keep_awake(services, open).await;
   }
   Ok(())
+}
+
+/// Looks whether work is under way in `open` and whether the person keeps the computer awake for it, and holds the
+/// system awake or lets go (`crate::awake`). A look that cannot read changes nothing: the next one decides.
+async fn keep_awake(services: &Services, open: &OpenProject) {
+  let (workspace, root) = (services.workspace.clone(), open.repo_root.clone());
+  let looked = background::run(move || {
+    Ok::<_, StoreError>((
+      orchester_workspace::awake::work_under_way(&root)?,
+      workspace.keeps_awake()?,
+    ))
+  })
+  .await;
+  match looked {
+    Ok(Ok((under_way, allowed))) => services.awake.look(&open.repo_root, under_way, allowed),
+    Ok(Err(error)) => tracing::warn!(%error, "cannot read whether work is under way, to keep the computer awake"),
+    Err(error) => tracing::warn!(?error, "the look at the work under way did not finish"),
+  }
 }
 
 /// What git tells of `open`'s runs that succeeded, asked before the follower's lock and remembered for the runs it

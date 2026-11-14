@@ -9,6 +9,7 @@
 
 pub mod app_log;
 pub mod appearance;
+pub mod awake;
 pub mod brand;
 pub mod browser;
 pub mod chrome;

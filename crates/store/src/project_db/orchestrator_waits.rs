@@ -88,6 +88,15 @@ impl ProjectDb {
     self.kept_waits("message_id IS NULL AND json_extract(body, '$.automatic') = 1")
   }
 
+  /// Whether a turn of any conversation thinks now: a person's, or one Orchester started.
+  pub fn any_chat_turn_thinks(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT EXISTS (SELECT 1 FROM orchestrator_entries WHERE turn = 'thinking')",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
   /// The waits of every conversation whose turn thinks now, oldest first.
   pub fn waits_thinking(&self) -> Result<Vec<KeptWait>, StoreError> {
     self.kept_waits("turn = 'thinking'")
