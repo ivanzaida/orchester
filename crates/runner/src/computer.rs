@@ -20,10 +20,10 @@ use std::{
 use orchester_core::{
   computer::{CliHomes, ComputerConnection, ComputerError},
   connection::{DecisionConnection, mcp::McpServer},
-  id::{ConnectionId, DecisionConnectionId, ProjectId, ResourceId, SecretId},
+  id::{ApiAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
-  secret::{Secret, SecretName, SecretValue, SecretVault, VaultError},
+  secret::{Secret, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
   store::{ConnectionStore, McpServerStore, SecretStore},
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -61,6 +61,10 @@ pub(crate) trait ComputerResources: Send + Sync {
 
   /// The value of `secret` of `project` in this computer's keychain; [`VaultError::NotFound`] when it holds none.
   fn secret_value(&self, project: ProjectId, secret: &Secret) -> Result<SecretValue, VaultError>;
+
+  /// The key of the person's API account `account` in this computer's keychain, where the app keeps it for every
+  /// project; [`VaultError::NotFound`] when it holds none.
+  fn api_account_key(&self, account: ApiAccountId) -> Result<SecretValue, VaultError>;
 
   /// The value this computer gave the team secret `name`, in its keychain; `None` when none is set. A team secret is
   /// found by name, never by id.
@@ -148,6 +152,10 @@ impl ComputerResources for LocalComputer {
 
   fn secret_value(&self, project: ProjectId, secret: &Secret) -> Result<SecretValue, VaultError> {
     self.vault.read(&secret.vault_key(project))
+  }
+
+  fn api_account_key(&self, account: ApiAccountId) -> Result<SecretValue, VaultError> {
+    self.vault.read(&VaultKey::api_account(account))
   }
 
   fn team_secret_value(&self, name: &SecretName) -> Result<Option<SecretValue>, ComputerError> {

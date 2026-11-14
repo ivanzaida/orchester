@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use orchester_core::{
   account::{AccountCli, AgentAccount},
-  connection::{AgentConnection, AgentProvider, ConnectionAccount, ConnectionError},
-  id::{AgentAccountId, ConnectionId, ResourceId},
+  connection::{AgentConnection, AgentProvider, ApiProviderError, ConnectionAccount, ConnectionError},
+  id::{AgentAccountId, ApiAccountId, ConnectionId, ResourceId},
   name::Name,
   resource::AgentProfile,
   store::{ConnectionStore, ResourceStore},
@@ -39,8 +39,15 @@ pub enum RunsOnError {
   /// The profile's model, settings and permissions were made for another kind of agent than the account's CLI.
   #[error("the account is not one of the profile's CLI")]
   AnotherCli,
+  #[error("API account {0} is not in the list")]
+  ApiAccountNotFound(ApiAccountId),
+  /// The API account is for Orchester's own agent: no agent CLI runs on it, so no CLI connection is made on it.
+  #[error("the API account is not an agent CLI's")]
+  NotForCli,
   #[error(transparent)]
   Connection(#[from] ConnectionError),
+  #[error(transparent)]
+  Provider(#[from] ApiProviderError),
   #[error(transparent)]
   FillIn(#[from] FillInError),
 }
@@ -49,7 +56,10 @@ impl RunsOnError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) => messages::store_error(error),
-      Self::AccountNotFound(_) | Self::Connection(_) => Message::new("errors.storage"),
+      Self::AccountNotFound(_) | Self::ApiAccountNotFound(_) | Self::Connection(_) | Self::Provider(_) => {
+        Message::new("errors.storage")
+      }
+      Self::NotForCli => Message::new("accounts.errors.notForCli"),
       Self::CliMissing(_) => Message::new("accounts.errors.cliMissing"),
       Self::ProfileNotFound(_) => Message::new("agents.localConnection.gone"),
       Self::AnotherCli => Message::new("agents.localConnection.notOfKind"),
@@ -160,7 +170,10 @@ impl Workspace {
       .agent_program(account.cli())?
       .or_else(|| installed(account.cli()))
       .ok_or(RunsOnError::CliMissing(account.cli()))?;
-    let name = free_name(account, |name| connections.iter().any(|found| found.name() == name));
+    let called = account.name().map(Name::as_str);
+    let name = free_name((account.cli().product(), called), |name| {
+      connections.iter().any(|found| found.name() == name)
+    });
     let mut connection = AgentConnection::new(ConnectionId::generate(), name, provider, executable, Timestamp::now())?;
     connection.set_account(on)?;
     let check = connection
@@ -194,13 +207,11 @@ fn local_cli(db: &ProjectDb, profile: ResourceId) -> Result<Option<AgentProvider
   ))
 }
 
-/// A name for the project's connection on `account` that no connection `taken` says it has: the CLI and the account
-/// (*Claude Code · Work*), the CLI alone for a Default nobody renamed, numbered when that is taken.
-fn free_name(account: &AgentAccount, taken: impl Fn(&Name) -> bool) -> Name {
-  let product = account.cli().product();
-  let base = account
-    .name()
-    .map_or_else(|| product.to_owned(), |name| format!("{product} · {}", name.as_str()));
+/// A name for the project's connection on an account of the CLI `product`, called `account`, that no connection
+/// `taken` says it has: the CLI and the account (*Claude Code · Work*), the CLI alone for a Default nobody renamed,
+/// numbered when that is taken.
+pub(super) fn free_name((product, account): (&str, Option<&str>), taken: impl Fn(&Name) -> bool) -> Name {
+  let base = account.map_or_else(|| product.to_owned(), |name| format!("{product} · {name}"));
   let mut number = 1_u32;
   loop {
     let candidate = if number == 1 {

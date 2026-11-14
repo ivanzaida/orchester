@@ -8,8 +8,8 @@ use std::sync::Arc;
 use orchester_agent::{Endpoint, WireQuirks, check_anthropic};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::{ProjectId, SecretId},
-  secret::SecretValue,
+  id::{ApiAccountId, ProjectId, SecretId},
+  secret::{SecretValue, VaultError},
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -49,18 +49,33 @@ impl Scheduler {
   }
 }
 
-/// The API key in secret `key` of `project`, a native connection's or an API provider's, read through `computer`'s
-/// keychain; an archived or missing secret, or one the keychain does not give, is refused, named, never with its value.
+/// The API key `key` names, a native connection's or an API provider's, read through `computer`'s keychain: the
+/// secret of `project` by that id, and, when the project has none, the key of the person's API account by that id
+/// (a connection on an API account keeps the account's id as its key's: `docs/design/agent-accounts.md`, "Agents
+/// run on accounts"). An archived secret, or a key the keychain does not give, is refused, named, never with its
+/// value.
 pub(in crate::execution) fn api_key(
   computer: &dyn ComputerResources,
   project: ProjectId,
   key: SecretId,
 ) -> Result<Arc<SecretValue>, String> {
-  let secret = computer
-    .secret(key)
-    .map_err(|error| error.to_string())?
-    .filter(|secret| !secret.is_archived())
-    .ok_or_else(|| "the connection's API key secret is missing or archived".to_owned())?;
+  const MISSING: &str = "the connection's API key secret is missing or archived";
+  let Some(secret) = computer.secret(key).map_err(|error| error.to_string())? else {
+    let account = ApiAccountId::from_uuid(key.as_uuid());
+    return computer
+      .api_account_key(account)
+      .map(Arc::new)
+      .map_err(|error| match error {
+        VaultError::NotFound => MISSING.to_owned(),
+        error => {
+          tracing::warn!(%account, %error, "the keychain did not give an API account's key");
+          "the keychain did not give the key of the connection's API account".to_owned()
+        }
+      });
+  };
+  if secret.is_archived() {
+    return Err(MISSING.to_owned());
+  }
   computer.secret_value(project, &secret).map(Arc::new).map_err(|error| {
     tracing::warn!(secret = %secret.name(), %error, "the keychain did not give a connection's API key");
     format!("the keychain did not give the API key {}", secret.name())

@@ -374,6 +374,15 @@ tools speak of accounts only.
   in the OS keychain under `orchester-api-account:<account id>` / `key`; the account's id is the key's id. The
   window calls one an API provider. A sign-in and an API account of the same CLI never share a name, since a profile
   is offered both as *Claude Code · Work*.
+- *A project's connection on an API account* (`Workspace::connect_api_account`) is a copy of the account: its CLI,
+  the account's model API and models, and the account's id as the id of its key. The project holds no secret for
+  it. A run reads the key by that id: the project's secret when it has one (a connection made before this change),
+  else the account's keychain entry, which the runner reads from the keychain it already holds. So a key replaced in
+  Settings reaches every project at once, and a session's origin (base URL, key id) stays the same. The copy follows
+  the account's model API and models when the project opens (`Workspace::follow_api_accounts`). Only an agent CLI's
+  API account has such a connection; one for Orchester's own agent is refused there.
+- Not built yet: moving the keys projects hold today into API accounts, removing an API account, and the same for
+  Orchester's own agent and the decision model.
 - *The CLI's program* is one path per CLI for the computer (table `agent_programs`); a CLI without one is looked up
   on the search path, newest copy first, when a connection is made.
 - *What a profile runs on here* is a pick beside the profile (`team_connection_picks`, the table team profiles

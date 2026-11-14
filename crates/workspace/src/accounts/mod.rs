@@ -5,6 +5,7 @@
 //! system or a CLI; the UI calls it off the UI thread.
 
 mod api;
+mod api_runs_on;
 mod error;
 pub(crate) mod folders;
 mod runs_on;

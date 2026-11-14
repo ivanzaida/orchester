@@ -8,7 +8,7 @@ use std::{path::PathBuf, sync::Arc};
 use orchester_core::{
   computer::{ComputerConnection, ComputerError},
   connection::{DecisionConnection, mcp::McpServer},
-  id::{ConnectionId, DecisionConnectionId, ProjectId, ResourceId, SecretId},
+  id::{ApiAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
   secret::{Secret, SecretName, SecretValue, VaultError},
@@ -95,6 +95,10 @@ impl ComputerResources for ChannelComputer {
 
   fn secret_value(&self, project: ProjectId, secret: &Secret) -> Result<SecretValue, VaultError> {
     self.local.secret_value(project, secret)
+  }
+
+  fn api_account_key(&self, account: ApiAccountId) -> Result<SecretValue, VaultError> {
+    self.local.api_account_key(account)
   }
 
   fn team_secret_value(&self, name: &SecretName) -> Result<Option<SecretValue>, ComputerError> {

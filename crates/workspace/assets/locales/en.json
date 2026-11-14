@@ -2339,6 +2339,7 @@
       "noTrash": "This window can't move folders to the Recycle Bin or Trash. Untick it to remove the account and keep its folder.",
       "holdsAnotherAccount": "This folder holds another account's folder or lies inside one, so moving it to the Recycle Bin or Trash would take part of that account. It can't be moved there.",
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
+      "notForCli": "This API account is for Orchester's own agent. An agent CLI can't run on it.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
     },

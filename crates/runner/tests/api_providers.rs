@@ -9,10 +9,10 @@ mod support;
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, ApiProvider, BaseUrl, stream::AgentEvent},
-  id::{IdempotencyKey, RunId, SecretId},
+  id::{ApiAccountId, IdempotencyKey, RunId, SecretId},
   resource::ModelId,
   run::RunStatus,
-  secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
+  secret::{Environment, NewSecret, Secret, SecretKind, SecretName, SecretValue, SecretVault, VaultKey},
   store::{ActivityStore, ConnectionStore, SecretStore},
   time::Timestamp,
 };
@@ -290,4 +290,73 @@ async fn api_providers_a_session_continues_only_on_the_provider_and_key_it_was_m
   assert!(!host.contains("--resume"), "another host starts a new session: {host}");
   let key = resumed_after("https://api.deepseek.com/anthropic", true).await;
   assert!(!key.contains("--resume"), "another key starts a new session: {key}");
+}
+
+/// A connection on the person's API account keeps the account's id as its key's, and the project has no secret of
+/// it: the key is read from the account's own keychain entry, which the app keeps for every project
+/// (`docs/design/agent-accounts.md`, "Agents run on accounts"), and is redacted as a project's key is.
+#[tokio::test(flavor = "multi_thread")]
+async fn api_providers_the_key_of_the_persons_api_account_starts_the_agent() {
+  let account = ApiAccountId::generate();
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    model: Some(MODEL),
+    ..Setup::new("Append one line.")
+  });
+  project
+    .vault
+    .store(
+      &VaultKey::api_account(account),
+      &SecretValue::new(KEY.to_owned()).expect("a value"),
+    )
+    .expect("stored");
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
+  let stored = db.connections().expect("connections").remove(0);
+  let mut connection = AgentConnection::try_from(stored).expect("an agent connection");
+  let api = ApiProvider::new(
+    BaseUrl::new("https://api.deepseek.com/anthropic").expect("valid base URL"),
+    SecretId::from_uuid(account.as_uuid()),
+    vec![ModelId::new(MODEL).expect("valid model")],
+  )
+  .expect("a model");
+  connection.set_api_provider(Some(api)).expect("on Default");
+  db.save_connection(&connection.into_connection()).expect("saved");
+  assert!(db.secrets().expect("secrets").is_empty(), "the project holds no secret");
+  drop(db);
+
+  let (db, run, status) = ran(&project).await;
+
+  assert_eq!(status, RunStatus::Succeeded);
+  assert_eq!(reported(&db, run, "provider key: "), ["<redacted>"]);
+  assert!(
+    !activity_text(&db, run).contains(KEY),
+    "the key is in nothing the run keeps"
+  );
+}
+
+/// With neither a secret of the project nor an API account's key by the id, no agent starts.
+#[tokio::test(flavor = "multi_thread")]
+async fn api_providers_no_agent_starts_without_a_secret_or_an_account_of_the_keys_id() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    model: Some(MODEL),
+    ..Setup::new("Append one line.")
+  });
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
+  let stored = db.connections().expect("connections").remove(0);
+  let mut connection = AgentConnection::try_from(stored).expect("an agent connection");
+  let api = ApiProvider::new(
+    BaseUrl::new("https://api.deepseek.com/anthropic").expect("valid base URL"),
+    SecretId::generate(),
+    vec![ModelId::new(MODEL).expect("valid model")],
+  )
+  .expect("a model");
+  connection.set_api_provider(Some(api)).expect("on Default");
+  db.save_connection(&connection.into_connection()).expect("saved");
+  drop(db);
+
+  let (db, run, status) = ran(&project).await;
+
+  assert_ne!(status, RunStatus::Succeeded);
+  assert!(reported(&db, run, "provider: ").is_empty(), "the CLI did not start");
 }
