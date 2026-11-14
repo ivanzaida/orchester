@@ -4,17 +4,23 @@
 //! (`orchester_workspace::orchestrator::settings::save_in`). Until the version is read again, what was chosen shows
 //! chosen; a refused choice changes nothing and the picker says why.
 
+use std::path::Path;
+
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
   core::Signal,
 };
 use orchester_core::{id::ConnectionId, orchestrator::OrchestratorSettings, resource::ModelId};
-use orchester_workspace::orchestrator::{
-  runs_on::RunsOn,
-  settings::{Keep, OrchestratorSetup, Saving},
+use orchester_workspace::{
+  messages::Message,
+  orchestrator::{
+    runs_on::RunsOn,
+    settings::{Keep, OrchestratorSetup, Saving, save_in},
+  },
+  workspace::Workspace,
 };
 
-use super::Publish;
+use super::{Publish, sources::Account};
 
 /// What was chosen since the picker opened, as a signal holds it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -151,5 +157,21 @@ pub(super) fn efforts_for(setup: &OrchestratorSetup, connection: ConnectionId, m
     setup.any_efforts(connection)
   } else {
     efforts
+  }
+}
+
+/// Makes the connection of the project at `root` on `account`, which it has none on, and publishes that the
+/// Orchestrator runs on it, on the model a profile starts on. A connection that offers no model to start with is made
+/// and left on the rail, for a model to be chosen on it.
+pub(super) fn run_on_account(workspace: &Workspace, root: &Path, account: Account) -> Result<(), Message> {
+  let connection = match account {
+    Account::SignIn(id) => workspace.connect_account(root, id),
+    Account::Api(id) => workspace.connect_api_account(root, id),
+  }
+  .map_err(|error| error.message())?;
+  let setup = OrchestratorSetup::load_in(root)?;
+  match setup.choosing(connection) {
+    Some(settings) => save_in(root, &settings, Keep::Publish).map(drop),
+    None => Ok(()),
   }
 }

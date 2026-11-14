@@ -8,8 +8,9 @@
 //! under it, 6 above it and aligned to its start: the connections on a rail ([`connections`] says what each shows), the
 //! chosen one's models with Search and the chosen model's efforts. Choosing applies at once ([`picking`]): the choice
 //! is published as the Orchestrator's next version, through the checks of its settings page
-//! (`orchester_workspace::orchestrator::settings::save_in`), and the next answer runs on it. With no connection to
-//! choose the picker is its foot alone ([`foot`]).
+//! (`orchester_workspace::orchestrator::settings::save_in`), and the next answer runs on it. The rail is this
+//! computer's accounts ([`sources`]): one the project has no connection on yet gets one when it is chosen. With no
+//! account to choose the picker is its foot alone ([`foot`]).
 
 mod connections;
 mod foot;
@@ -41,7 +42,7 @@ use orchester_workspace::{
 
 use self::{
   picking::{Chooser, Picking},
-  sources::{Entry, Sources, cli_name},
+  sources::{Account, Entry, Open, Sources, cli_name},
 };
 use crate::{
   services::{
@@ -101,10 +102,16 @@ impl DevtoolsInspectable for RunsOnProps {}
 /// Publishing what the picker chose.
 type Publish = FutureAction<Saving, (), Message>;
 
+/// Running the Orchestrator of the project at a root on an account the project has no connection on yet.
+type Connect = FutureAction<(PathBuf, Account), (), Message>;
+
 pub(super) struct RunsOnPicker {
   anchor: ElementRef,
   picking: Picking,
   publish: Publish,
+  connect: Connect,
+  /// The account last chosen that the project had no connection on.
+  asked: Signal<Option<Account>>,
 }
 
 impl Component for RunsOnPicker {
@@ -112,6 +119,19 @@ impl Component for RunsOnPicker {
 
   fn create(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
+    let (runners, workspace) = (services.runners.clone(), services.workspace.clone());
+    let connect: Connect = ctx.future_action(move |(root, account): (PathBuf, Account)| {
+      let (runners, workspace) = (runners.clone(), workspace.clone());
+      async move {
+        let at = root.clone();
+        background::run(move || picking::run_on_account(&workspace, &at, account))
+          .await
+          .and_then(|done| done)?;
+        // The chat reads what it runs on, and the connections it can run on, again.
+        runners.chat_changed(&root);
+        Ok(())
+      }
+    });
     let publish: Publish = ctx.future_action(move |saving: Saving| {
       let runners = services.runners.clone();
       async move {
@@ -128,6 +148,8 @@ impl Component for RunsOnPicker {
       anchor: ElementRef::new(),
       picking: Picking::new(ctx),
       publish,
+      connect,
+      asked: ctx.signal(None),
     }
   }
 
@@ -136,6 +158,7 @@ impl Component for RunsOnPicker {
     let accounts = accounts::listed(ctx);
     let readings = plan_limits::account_readings(ctx);
     let uses = provider_uses(ctx, &props);
+    let api = accounts::api_listed(ctx);
     let open = props.open.get();
     let Some(setup) = props.setup.as_ref() else {
       return self.chip(ctx, &props, (None, false));
@@ -145,18 +168,19 @@ impl Component for RunsOnPicker {
       accounts: &accounts,
       readings: &readings,
       uses: &uses,
+      api: &api.0,
     };
-    let entries = sources.entries(ctx);
+    let (entries, unconnected) = (sources.entries(ctx), sources.open(ctx));
     let label = label(ctx, &sources);
     let switched = switched(&sources, &props);
     if !open {
       self.picking.forget();
       return self.chip(ctx, &props, (Some(&label), switched));
     }
-    let panel = if entries.is_empty() {
-      foot::empty_menu(ctx, &props)
+    let panel = if entries.is_empty() && unconnected.is_empty() {
+      foot::empty_menu(ctx)
     } else {
-      self.picker(ctx, &props, (&sources, &entries))
+      self.picker(ctx, &props, (&sources, &entries, &unconnected))
     };
     let chip = self.chip(ctx, &props, (Some(&label), switched));
     // Over the chip, 6 away from it (`Runs on menu` `p3gAA1` over `v8BAOZ` in `v6mWp8`), and never flipped under it,
@@ -172,8 +196,13 @@ impl Component for RunsOnPicker {
 }
 
 impl RunsOnPicker {
-  /// The shared picker over `entries`, what it hands back applied through the chooser.
-  fn picker(&self, ctx: &mut Ctx, props: &RunsOnProps, (sources, entries): (&Sources<'_>, &[Entry])) -> Element {
+  /// The shared picker over `entries` and the accounts of `open`, what it hands back applied through the chooser.
+  fn picker(
+    &self,
+    ctx: &mut Ctx,
+    props: &RunsOnProps,
+    (sources, entries, open): (&Sources<'_>, &[Entry], &[Open]),
+  ) -> Element {
     let state = self.publish.state().get();
     let settings = self.picking.chosen(sources.setup, state.error.is_some());
     let chooser = Chooser {
@@ -183,11 +212,49 @@ impl RunsOnPicker {
       publish: self.publish.clone(),
       root: props.root.clone(),
     };
+    let on_pick = self.on_pick(chooser, (entries, open), &props.root);
+    let close = props.open.clone();
+    let connecting = self.connecting();
+    let connections = connections::connections(
+      ctx,
+      sources,
+      (entries, open),
+      (settings.as_ref(), props.session.as_ref()),
+      connecting,
+    );
+    let notes = self.notes(ctx, sources, state.error.as_ref());
+    Picker::new(
+      "orchestrator-runs-on-menu",
+      (connections, connections::chosen(settings.as_ref())),
+      on_pick,
+      move || close.set(false),
+    )
+    .notes(notes)
+    .element(ctx)
+  }
+
+  /// What a pick does: a connection, a model or an effort goes to `chooser`; an account the project has no
+  /// connection on gets one, and the Orchestrator runs on it.
+  fn on_pick(
+    &self,
+    chooser: Chooser,
+    (entries, open): (&[Entry], &[Open]),
+    root: &std::path::Path,
+  ) -> impl Fn(Pick) + Send + Sync + 'static + use<> {
     let ids: Vec<_> = entries.iter().map(|entry| entry.id).collect();
-    let on_pick = move |pick: Pick| match pick {
+    let accounts: Vec<(String, Account)> = open
+      .iter()
+      .filter(|account| account.choosable)
+      .map(|account| (account.id(), account.account))
+      .collect();
+    let (connect, asked, root) = (self.connect.clone(), self.asked.clone(), root.to_path_buf());
+    move |pick: Pick| match pick {
       Pick::Connection(id) => {
         if let Some(connection) = ids.iter().find(|connection| connection.to_string() == *id) {
           chooser.connection(*connection);
+        } else if let Some((_, account)) = accounts.iter().find(|(open, _)| **open == *id) {
+          asked.set(Some(*account));
+          connect.run((root.clone(), *account));
         }
       }
       Pick::Model { connection, model } => {
@@ -196,11 +263,25 @@ impl RunsOnPicker {
         }
       }
       Pick::Effort(effort) => chooser.effort(effort.as_deref()),
-    };
-    let open = props.open.clone();
-    let connections = connections::connections(ctx, sources, entries, (settings.as_ref(), props.session.as_ref()));
+    }
+  }
+
+  /// The account whose connection is being made now.
+  fn connecting(&self) -> Option<Account> {
+    self
+      .connect
+      .state()
+      .get()
+      .is_pending()
+      .then(|| self.asked.get())
+      .flatten()
+  }
+
+  /// What the picker says under its efforts: why the last choice was not published or the last account not connected,
+  /// and that choosing replaces a draft.
+  fn notes(&self, ctx: &Ctx, sources: &Sources<'_>, failed: Option<&Message>) -> Vec<Notice> {
     let mut notes = Vec::new();
-    if let Some(error) = state.error.as_ref().filter(|_| self.picking.chose()) {
+    if let Some(error) = failed.filter(|_| self.picking.chose()) {
       notes.push(Notice {
         icon: Icon::CircleAlert,
         tone: NoticeTone::Danger,
@@ -210,6 +291,14 @@ impl RunsOnPicker {
         ),
       });
     }
+    let connect = self.connect.state().get();
+    if let Some(error) = connect.error.as_ref().filter(|_| !connect.is_pending()) {
+      notes.push(Notice {
+        icon: Icon::CircleX,
+        tone: NoticeTone::Danger,
+        text: message_text(ctx, error),
+      });
+    }
     if sources.setup.draft.is_some() {
       notes.push(Notice {
         icon: Icon::Info,
@@ -217,14 +306,7 @@ impl RunsOnPicker {
         text: ctx.t("orchestrator.runsOn.overDraft"),
       });
     }
-    Picker::new(
-      "orchestrator-runs-on-menu",
-      (connections, connections::chosen(settings.as_ref())),
-      on_pick,
-      move || open.set(false),
-    )
-    .notes(notes)
-    .element(ctx)
+    notes
   }
 
   /// The chip, saying what the next answer runs on (`label`: `None` while it is read); `switched` once the Orchestrator
