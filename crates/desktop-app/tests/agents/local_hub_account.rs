@@ -107,9 +107,10 @@ fn local_hub_account_the_rail_is_this_computers_accounts_once_each_with_add_besi
 
   open_picker(&mut agents);
 
+  // The accounts are read when the panel shows; the rail has them once they are.
   for cli in AccountCli::ALL {
     let item = format!("{MENU}-{}", default_of(cli));
-    assert!(agents.exists(&item), "{item} is on the rail");
+    agents.until("the account on the rail", |s| s.exists(&item));
   }
   for connection in connections {
     let item = format!("{MENU}-{}", on_rail(connection));

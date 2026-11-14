@@ -13,7 +13,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  account::{AccountState, AgentAccount, same_sign_in},
+  account::{AccountState, AgentAccount, ApiAccount, same_sign_in},
   connection::{AgentProvider, ConnectionAccount, plan_limits::LimitReading},
   id::AgentAccountId,
   time::Timestamp,
@@ -69,6 +69,36 @@ pub fn listed(ctx: &mut Ctx) -> Accounts {
           .map(|accounts| Accounts(Arc::new(accounts)))
           .map_err(|error| {
             tracing::warn!(%error, "the accounts can't be read for a connection's account");
+            messages::store_error(&error)
+          })
+      }
+    })
+    .state()
+    .get()
+    .data
+    .unwrap_or_default()
+}
+
+/// The person's API accounts as read; empty until they are, or when they can't be.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ApiAccounts(pub Arc<Vec<ApiAccount>>);
+
+impl DevtoolsInspectable for ApiAccounts {}
+
+/// The API accounts, read when the calling screen shows and again whenever an account changed ([`changes`]).
+pub fn api_listed(ctx: &mut Ctx) -> ApiAccounts {
+  let workspace = Services::of(ctx).workspace;
+  let changed = changes(ctx, &workspace);
+  ctx
+    .future(changed, move |_| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "api accounts");
+      let workspace = workspace.clone();
+      async move {
+        background::run(move || workspace.api_accounts())
+          .await?
+          .map(|accounts| ApiAccounts(Arc::new(accounts)))
+          .map_err(|error| {
+            tracing::warn!(%error, "the API accounts can't be read");
             messages::store_error(&error)
           })
       }

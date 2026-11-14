@@ -137,6 +137,8 @@ pub(in crate::screens) struct Drawn {
   pub role: Element,
   pub rows: Vec<Row>,
   pub made: Result<Made, Arc<str>>,
+  /// What it runs on is chosen, and the project's connection on that account is still being made.
+  pub waits: bool,
 }
 
 /// The resources of each list the profile gives, by [`ListKind`], as the fields hold them.
@@ -202,9 +204,11 @@ impl ProfileFields {
     let given = self.given.get();
     let accounts = accounts::listed(ctx);
     let readings = plan_limits::account_readings(ctx);
+    let api = accounts::api_listed(ctx);
     let who = picker::Who {
       accounts: &accounts,
       readings: &readings,
+      api: &api.0,
       connecting: form.connect.and_then(Connect::connecting),
     };
     let runs = Runs::of(self, form, &who);
@@ -212,7 +216,12 @@ impl ProfileFields {
     let mut rows = runs.rows(ctx, self, (form, &who));
     rows.extend(ListKind::ALL.map(|kind| self.list_row(ctx, form, (kind, &given))));
     let made = made::made(ctx, form, (&text, &given), &runs);
-    Drawn { role, rows, made }
+    Drawn {
+      role,
+      rows,
+      made,
+      waits: runs.waits(),
+    }
   }
 
   /// *Role*: the hub's section over the role as typed. A new profile's empty name says it is required only once Create

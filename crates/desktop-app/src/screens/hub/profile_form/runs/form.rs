@@ -15,7 +15,7 @@ use lurq::{
 use super::{
   Runs,
   field::Field,
-  picker::{self, Held, Item, OnAccount, Target, Who},
+  picker::{self, Held, Item, Who},
 };
 use crate::{
   screens::{
@@ -115,14 +115,8 @@ impl Chooser {
         let Some(item) = self.item(&id) else {
           return;
         };
-        if let (
-          Target::Account(OnAccount {
-            id, connection: None, ..
-          }),
-          Some(connect),
-        ) = (&item.target, &self.connect)
-        {
-          connect.run(*id);
+        if let (Some(on), Some(connect)) = (item.target.unconnected(), &self.connect) {
+          connect.run(on);
           return;
         }
         let model = self.model.get_untracked();
@@ -131,8 +125,14 @@ impl Chooser {
         }
       }
       Pick::Model { connection, model } => {
-        if let Some(item) = self.item(&connection) {
-          self.choose(item, &model);
+        let Some(item) = self.item(&connection) else {
+          return;
+        };
+        // An API account lists its models before the project has a connection on it: the choice is kept, and the
+        // connection it needs is made.
+        self.choose(item, &model);
+        if let (Some(on), Some(connect)) = (item.target.unconnected(), &self.connect) {
+          connect.run(on);
         }
       }
       Pick::Effort(effort) => self

@@ -410,6 +410,13 @@ tools speak of accounts only.
     (`Workspace::connect_account`): the models an account serves are read from that connection, so its line says
     *reading its models…* meanwhile, and a CLI whose program is not found says so under the picker. The picker
     makes it for the account it opens on too, as in a project that has no connection yet.
+- *API accounts on the rail.* After the sign-ins the rail has the person's API accounts for an agent CLI, each
+  once, whether the project has a connection on one or not, with the models the person listed for it in Settings;
+  then the project's connections on a key of its own, made before API accounts. An API account's connection is made
+  when it is looked at or a model of it is chosen. One connection is made at a time, the account asked for meanwhile
+  next. A form keeps a model chosen on an account that is still being connected, and *Create* waits for the
+  connection and says so. A team profile's *Runs on* select offers an API account once the project has its
+  connection on it.
 - *A team profile on a member's computer* (C3). *From the team* has one read-only row, *CLI, model and effort*.
   *Runs on*, under *On this computer*, offers this computer's accounts of the profile's CLI, each once, then what
   runs on a key, and *Add an account…* last, which opens Settings › Accounts. An account that lists models, the

@@ -5,7 +5,7 @@
 use orchester_core::{
   account::AccountCli,
   connection::{AgentConnection, AgentProvider, ConnectionStatus},
-  id::{AgentAccountId, ConnectionId},
+  id::{AgentAccountId, ApiAccountId, ConnectionId},
   resource::ModelId,
 };
 
@@ -28,6 +28,9 @@ pub struct RunsOnChoice {
   pub account: Option<AgentAccountId>,
   /// The host of the API it runs on instead of a sign-in.
   pub host: Option<String>,
+  /// The API account an API provider's key is, by the key's id: the person's when the app has an account by this
+  /// id, else a secret of the project's (a connection made before API accounts).
+  pub api_account: Option<ApiAccountId>,
   /// Its last check found the CLI signed out.
   pub signed_out: bool,
   /// What it lists, in its order, with the profile's own model kept on the connection the profile runs on.
@@ -90,6 +93,9 @@ pub fn choices(
         cli: connection.provider(),
         account: connection.plan_account(),
         host,
+        api_account: connection
+          .api_provider()
+          .map(|provider| ApiAccountId::from_uuid(provider.key().as_uuid())),
         signed_out: connection.status() == ConnectionStatus::SignInRequired,
         models,
       }

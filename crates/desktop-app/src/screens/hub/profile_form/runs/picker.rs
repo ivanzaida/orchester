@@ -13,19 +13,22 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  account::AgentAccount,
+  account::{AgentAccount, ApiAccount, ApiSetup},
   connection::{
     AgentProvider, REASONING_EFFORT,
     plan_limits::{LimitState, PlanReadings},
   },
-  id::{AgentAccountId, ConnectionId},
+  id::{AgentAccountId, ApiAccountId, ConnectionId},
   resource::TeamAgentProfile,
   time::Timestamp,
 };
 use orchester_workspace::agents::runs_on::{ModelChoice, RunsOnChoice};
 
 use crate::{
-  screens::team_hub::{profile::from_team::effort_words, words::cli_key},
+  screens::{
+    hub::profile_form::connect::On,
+    team_hub::{profile::from_team::effort_words, words::cli_key},
+  },
   services::{
     accounts::{Accounts, account_name, plan_name},
     plan_limits::five_hour_use,
@@ -41,8 +44,10 @@ use crate::{
 pub(in crate::screens::hub::profile_form) struct Who<'a> {
   pub accounts: &'a Accounts,
   pub readings: &'a PlanReadings,
-  /// The account the project's connection is being made on now: its line says its models are being read.
-  pub connecting: Option<AgentAccountId>,
+  /// The person's API accounts.
+  pub api: &'a [ApiAccount],
+  /// What the project's connection is being made on now: its line says its models are being read.
+  pub connecting: Option<On>,
 }
 
 /// A sign-in of this computer on the rail.
@@ -56,11 +61,28 @@ pub(in crate::screens::hub::profile_form) struct OnAccount {
   pub connection: Option<RunsOnChoice>,
 }
 
+/// An API account of the person's on the rail: an agent CLI on a model API, by a key the app keeps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::screens::hub::profile_form) struct OnApi {
+  pub id: ApiAccountId,
+  pub cli: AgentProvider,
+  pub name: Arc<str>,
+  /// The host its prompts and repository content go to.
+  pub host: String,
+  /// The models the account serves, as the person listed them in Settings.
+  pub models: Vec<ModelChoice>,
+  /// The project's connection on it, when it has one.
+  pub connection: Option<RunsOnChoice>,
+}
+
 /// What an item of the rail stands for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::screens::hub::profile_form) enum Target {
   Account(OnAccount),
-  /// A connection that is no listed account's: one on a key, or on a sign-in this computer no longer lists.
+  /// One of the person's API accounts for an agent CLI.
+  Api(OnApi),
+  /// A connection that is no listed account's: one on a key of the project's, or on a sign-in this computer no
+  /// longer lists.
   Connection(RunsOnChoice),
   /// A CLI, as a team's profile names it: the kind, and the models this computer lists for it.
   Cli(AgentProvider, Vec<ModelChoice>),
@@ -71,6 +93,7 @@ impl Target {
   pub(in crate::screens::hub::profile_form) const fn connection(&self) -> Option<&RunsOnChoice> {
     match self {
       Self::Account(account) => account.connection.as_ref(),
+      Self::Api(api) => api.connection.as_ref(),
       Self::Connection(choice) => Some(choice),
       Self::Cli(..) => None,
     }
@@ -79,22 +102,49 @@ impl Target {
   pub(in crate::screens::hub::profile_form) const fn cli(&self) -> AgentProvider {
     match self {
       Self::Account(account) => account.cli,
+      Self::Api(api) => api.cli,
       Self::Connection(choice) => choice.cli,
       Self::Cli(cli, _) => *cli,
     }
   }
 
-  /// The models it lists; none for an account the project has no connection on yet.
+  /// The models it lists; none for a sign-in the project has no connection on yet.
   pub(in crate::screens::hub::profile_form) fn models(&self) -> &[ModelChoice] {
     match self {
       Self::Cli(_, models) => models,
+      Self::Api(api) => &api.models,
       on => on.connection().map_or(&[], |choice| &choice.models),
     }
   }
 
   /// Whether it takes an effort of the person's own, not one of a list: an API provider.
+  /// What the project gets a connection on to run on it, while it has none: a sign-in, or an API account.
+  pub(in crate::screens::hub::profile_form) const fn unconnected(&self) -> Option<On> {
+    match self {
+      Self::Account(OnAccount {
+        id, connection: None, ..
+      }) => Some(On::Account(*id)),
+      Self::Api(OnApi {
+        id, connection: None, ..
+      }) => Some(On::Api(*id)),
+      _ => None,
+    }
+  }
+
+  /// The host of the model API its work goes to instead of a sign-in's.
+  pub(in crate::screens::hub::profile_form) fn host(&self) -> Option<&str> {
+    match self {
+      Self::Api(api) => Some(&api.host),
+      Self::Connection(choice) => choice.host.as_deref(),
+      Self::Account(_) | Self::Cli(..) => None,
+    }
+  }
+
   pub(in crate::screens::hub::profile_form) const fn types_effort(&self) -> bool {
-    matches!(self, Self::Connection(RunsOnChoice { host: Some(_), .. }))
+    matches!(
+      self,
+      Self::Api(_) | Self::Connection(RunsOnChoice { host: Some(_), .. })
+    )
   }
 }
 
@@ -144,6 +194,32 @@ pub(in crate::screens::hub::profile_form) fn items(
       });
     }
   }
+  for account in who.api {
+    let ApiSetup::Cli { cli, base_url, models } = account.setup() else {
+      continue;
+    };
+    let connection = runs_on
+      .iter()
+      .find(|choice| choice.cli == cli.provider() && choice.api_account == Some(account.id()));
+    taken.extend(connection.map(|choice| choice.id));
+    items.push(Item {
+      id: format!("api-{}", account.id()).into(),
+      target: Target::Api(OnApi {
+        id: account.id(),
+        cli: cli.provider(),
+        name: account.name().as_str().into(),
+        host: base_url.host().to_owned(),
+        models: models
+          .iter()
+          .map(|model| ModelChoice {
+            id: model.as_str().to_owned(),
+            efforts: Vec::new(),
+          })
+          .collect(),
+        connection: connection.cloned(),
+      }),
+    });
+  }
   let mut rest: Vec<&RunsOnChoice> = runs_on.iter().filter(|choice| !taken.contains(&choice.id)).collect();
   rest.sort_by_key(|choice| choice.host.is_some());
   items.extend(rest.into_iter().map(|choice| Item {
@@ -155,13 +231,8 @@ pub(in crate::screens::hub::profile_form) fn items(
 
 /// The account the picker opens on while nothing is chosen, when the project has no connection on it yet: the first
 /// of the rail.
-pub(in crate::screens::hub::profile_form) fn opens_unconnected(items: &[Item]) -> Option<AgentAccountId> {
-  match items.first().map(|item| &item.target) {
-    Some(Target::Account(OnAccount {
-      id, connection: None, ..
-    })) => Some(*id),
-    _ => None,
-  }
+pub(in crate::screens::hub::profile_form) fn opens_unconnected(items: &[Item]) -> Option<On> {
+  items.first().and_then(|item| item.target.unconnected())
 }
 
 /// The id of the rail's item of the CLI `cli` in a team profile's form: an identifier, never shown.
@@ -302,6 +373,7 @@ pub(in crate::screens::hub::profile_form) fn name_of(ctx: &Ctx, target: &Target,
       .accounts
       .of(on.id)
       .map_or_else(|| Arc::from(""), |account| account_name(ctx, account).into()),
+    Target::Api(api) => api.name.clone(),
     Target::Connection(choice) => choice.name.as_str().into(),
     Target::Cli(cli, _) => ctx.t(cli_key(*cli)),
   }
@@ -330,24 +402,37 @@ fn connection(ctx: &Ctx, item: &Item, who: &Who<'_>) -> Connection {
     notice: None,
     models: models(item.target.models()),
   };
-  match &item.target {
-    Target::Connection(RunsOnChoice { host: Some(host), .. }) => Connection {
+  if let Some(On::Api(_)) = item.target.unconnected().filter(|on| who.connecting == Some(*on)) {
+    return Connection {
+      mark: Mark::Cloud,
+      detail: Some(Detail {
+        text: ctx.t("local_hub.runsOn.reading"),
+        tip: None,
+        warns: false,
+      }),
+      ..base
+    };
+  }
+  match (&item.target, item.target.host()) {
+    (Target::Api(_) | Target::Connection(_), Some(host)) => Connection {
       mark: Mark::Cloud,
       caption: ctx.t_args("local_hub.runsOn.provider", [("cli", &*cli), ("host", host)]),
       typed_effort: true,
       notice: Some(Notice {
         icon: Icon::Send,
         tone: NoticeTone::Warning,
-        text: ctx.t_args("local_hub.runsOn.sentTo", [("host", host.as_str())]),
+        text: ctx.t_args("local_hub.runsOn.sentTo", [("host", host)]),
       }),
       ..base
     },
-    Target::Connection(choice) => sign_in(ctx, (None, choice.signed_out), who, (base, &cli)),
-    Target::Cli(..) => Connection {
+    (Target::Connection(choice), _) => sign_in(ctx, (None, choice.signed_out), who, (base, &cli)),
+    // An API account always has a host.
+    (Target::Api(_), None) => base,
+    (Target::Cli(..), _) => Connection {
       caption: ctx.t("team_hub.runsOn.caption"),
       ..base
     },
-    Target::Account(on) if on.connection.is_none() && who.connecting == Some(on.id) => Connection {
+    (Target::Account(on), _) if on.connection.is_none() && who.connecting == Some(On::Account(on.id)) => Connection {
       detail: Some(Detail {
         text: ctx.t("local_hub.runsOn.reading"),
         tip: None,
@@ -355,7 +440,7 @@ fn connection(ctx: &Ctx, item: &Item, who: &Who<'_>) -> Connection {
       }),
       ..base
     },
-    Target::Account(on) => {
+    (Target::Account(on), _) => {
       let signed_out = on.connection.as_ref().is_some_and(|choice| choice.signed_out);
       sign_in(ctx, (who.accounts.of(on.id), signed_out), who, (base, &cli))
     }

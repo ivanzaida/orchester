@@ -29,6 +29,12 @@ pub(super) struct Runs {
 }
 
 impl Runs {
+  /// Whether what is chosen waits for the project's connection on it, which is being made: the profile cannot be
+  /// made before it is there.
+  pub(super) fn waits(&self) -> bool {
+    self.on.is_some_and(|at| self.items[at].target.unconnected().is_some())
+  }
+
   /// What the fields come to among what this computer offers: a model the item chosen lists, and an effort that model
   /// takes there.
   pub(super) fn of(fields: &ProfileFields, form: &Form<'_>, who: &Who<'_>) -> Self {

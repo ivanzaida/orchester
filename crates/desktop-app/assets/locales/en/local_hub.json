@@ -129,6 +129,7 @@
       "unchosenEffort": "Choose an account · {{model}} · {{effort}}",
       "placeholder": "Choose an account and a model",
       "reading": "reading its models…",
+      "connecting": "Making the project's connection on the account…",
       "tip": "{{cli}} · {{name}}",
       "who": "{{cli}} · {{plan}} plan",
       "provider": "{{cli}} · {{host}}",

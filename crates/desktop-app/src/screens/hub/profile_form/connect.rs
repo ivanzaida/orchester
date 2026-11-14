@@ -13,68 +13,90 @@ use lurq::{
   },
   core::Signal,
 };
-use orchester_core::id::{AgentAccountId, ProjectId};
+use orchester_core::id::{AgentAccountId, ApiAccountId, ProjectId};
 use orchester_workspace::{background, messages::Message, tasks::outside::Outside};
 
 use crate::services::Services;
 
-/// An account a connection was asked for.
+/// What the project gets a connection on: a sign-in of the person's, or one of their API accounts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Asked(AgentAccountId);
-impl DevtoolsInspectable for Asked {}
+pub(in crate::screens::hub::profile_form) enum On {
+  Account(AgentAccountId),
+  Api(ApiAccountId),
+}
+impl DevtoolsInspectable for On {}
 
 /// Makes the project's connection on an account. Cloning shares it.
 #[derive(Clone)]
 pub(in crate::screens) struct Connect {
-  action: FutureAction<AgentAccountId, (), Message>,
+  action: FutureAction<On, (), Message>,
   /// The account last asked for.
-  asked: Signal<Option<Asked>>,
+  asked: Signal<Option<On>>,
   /// The account the picker last opened on with nothing chosen ([`Self::look`]).
-  looked: Signal<Option<Asked>>,
+  looked: Signal<Option<On>>,
+  /// The account asked for while another's connection was being made: it is made next.
+  waiting: Signal<Option<On>>,
 }
 
 impl Connect {
   /// For the project `project` at `root`; the screens that read its connections read them again once one is made.
   pub(in crate::screens) fn new(ctx: &mut Ctx, root: PathBuf, project: ProjectId) -> Self {
     let services = Services::of(ctx);
-    let action = ctx.future_action(move |account: AgentAccountId| {
+    let action = ctx.future_action(move |on: On| {
       let (root, changes, workspace) = (root.clone(), services.changes.clone(), services.workspace.clone());
       async move {
         background::run(move || {
-          workspace
-            .connect_account(&root, account)
-            .map_err(|error| error.message())
+          match on {
+            On::Account(account) => workspace.connect_account(&root, account),
+            On::Api(account) => workspace.connect_api_account(&root, account),
+          }
+          .map_err(|error| error.message())
         })
         .await??;
         changes.record(project, Outside::Connections);
         Ok(())
       }
     });
-    Self {
+    let connect = Self {
       action,
       asked: ctx.signal(None),
       looked: ctx.signal(None),
-    }
+      waiting: ctx.signal(None),
+    };
+    // One connection is made at a time; the account asked for meanwhile is next.
+    let next = connect.clone();
+    ctx.watch(&connect.action.state(), move |state| {
+      if state.is_pending() {
+        return;
+      }
+      if let Some(on) = next.waiting.get_untracked() {
+        next.waiting.set(None);
+        next.run(on);
+      }
+    });
+    connect
   }
 
-  /// Makes the project's connection on `account`, unless one is being made.
-  pub(super) fn run(&self, account: AgentAccountId) {
+  /// Makes the project's connection on `account`; while another's is being made, right after it.
+  pub(super) fn run(&self, account: On) {
     if self.action.run_if_idle(account) {
-      self.asked.set(Some(Asked(account)));
+      self.asked.set(Some(account));
+    } else if self.asked.get_untracked() != Some(account) {
+      self.waiting.set(Some(account));
     }
   }
 
   /// The picker opened on `account` with nothing chosen, as it does in a project that has no connection yet: its
   /// connection is made as a press on it would make it, once; a press asks again.
-  pub(super) fn look(&self, account: AgentAccountId) {
-    if self.looked.get_untracked() != Some(Asked(account)) {
-      self.looked.set(Some(Asked(account)));
+  pub(super) fn look(&self, account: On) {
+    if self.looked.get_untracked() != Some(account) {
+      self.looked.set(Some(account));
       self.run(account);
     }
   }
 
   /// The account whose connection is being made now.
-  pub(super) fn connecting(&self) -> Option<AgentAccountId> {
+  pub(super) fn connecting(&self) -> Option<On> {
     self
       .action
       .state()
@@ -82,7 +104,6 @@ impl Connect {
       .is_pending()
       .then(|| self.asked.get())
       .flatten()
-      .map(|asked| asked.0)
   }
 
   /// Why the last one asked for was not made.

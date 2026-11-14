@@ -23,6 +23,7 @@ use orchester_workspace::agents::{local_edit::Edit, local_hub::LocalProfile};
 
 use super::{
   Connect,
+  connect::On,
   runs::{
     field::{Field, Menu},
     picker::{self, Held, Item, OnAccount, Target},
@@ -91,9 +92,11 @@ impl HeldFields {
   pub(in crate::screens) fn rows(&self, ctx: &mut Ctx, standing: Standing, shown: &LocalProfile) -> Vec<Row> {
     let accounts = accounts::listed(ctx);
     let readings = plan_limits::account_readings(ctx);
+    let api = accounts::api_listed(ctx);
     let who = picker::Who {
       accounts: &accounts,
       readings: &readings,
+      api: &api.0,
       connecting: self.connect.connecting(),
     };
     let items = picker::items(&shown.runs_on, shown.current, &who);
@@ -172,21 +175,25 @@ impl Chooser {
         let Some(item) = self.item(&id) else {
           return;
         };
-        if self.runs_as_it_is(item) {
-          self.run_on(item);
-        } else if let Target::Account(OnAccount {
-          id, connection: None, ..
-        }) = &item.target
-        {
-          // An account of another CLI is only looked at: the project gets its connection on it, whose models the
-          // picker then lists.
-          self.connect.run(*id);
+        match item.target.unconnected() {
+          // An API account is looked at first, and so is a sign-in of another CLI: the project gets its connection
+          // on it, and the choice is made on that.
+          Some(on @ On::Api(_)) => self.connect.run(on),
+          Some(on) if !self.runs_as_it_is(item) => self.connect.run(on),
+          _ if self.runs_as_it_is(item) => self.run_on(item),
+          _ => {}
         }
       }
       Pick::Model { connection, model } => {
         let Some(item) = self.item(&connection) else {
           return;
         };
+        if let Some(on @ On::Api(_)) = item.target.unconnected() {
+          // Its models are the account's own, listed before the project has a connection on it: the connection is
+          // made first, and the model is chosen on it.
+          self.connect.run(on);
+          return;
+        }
         if item.is(self.current) {
           (self.on_edit)(Edit::Model(model.to_string()));
         } else if *model == *self.model && self.runs_as_it_is(item) {

@@ -46,9 +46,11 @@ pub(in crate::screens) fn offered(
 ) -> Vec<Offered> {
   let accounts = accounts::listed(ctx);
   let readings = plan_limits::account_readings(ctx);
+  let api = accounts::api_listed(ctx);
   let who = picker::Who {
     accounts: &accounts,
     readings: &readings,
+    api: &api.0,
     connecting: None,
   };
   let cli_words = ctx.t(cli_key(cli));
@@ -78,7 +80,8 @@ fn one(ctx: &Ctx, item: &Item, (cli, model): (&str, &str), who: &picker::Who<'_>
   let here = match (connection, &item.target) {
     (Some(choice), _) => Here::Connection(choice.id),
     (None, Target::Account(account)) => Here::Account(account.id),
-    // A CLI is a team form's choice, never something to run on.
+    // An API account is offered once the project has its connection on it, which the picker makes; a CLI is a
+    // team form's choice, never something to run on.
     (None, _) => return None,
   };
   let other_models = connection.is_some_and(|choice| !choice.models.is_empty() && !choice.serves(model));

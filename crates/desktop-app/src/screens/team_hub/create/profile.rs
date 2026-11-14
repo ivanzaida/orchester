@@ -54,6 +54,7 @@ impl Fields {
         connect: self.connect.as_ref(),
       },
     );
+    let waits = drawn.waits;
     let make = drawn.made.ok().map(|made| match made {
       Made::Local(profile) => Make::Profile(profile),
       Made::Team(profile) => Make::TeamProfile(profile),
@@ -64,7 +65,7 @@ impl Fields {
       rows: drawn.rows,
       computer: Some(ctx.t("team_new.computer.profile")),
       make,
-      off: fields::off(shown, &name),
+      off: fields::off(shown, &name).or(waits.then_some("local_hub.runsOn.connecting")),
       overlay: None,
     }
   }
