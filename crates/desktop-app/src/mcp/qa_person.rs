@@ -3,7 +3,9 @@
 //! `lurq_interact`, an MCP client's) of *Stop watching*, *Take it here* or *Leave it there*, *Start* on a proposed run,
 //! *Approve and do it*, *Apply* on a proposed change, going back, deleting a conversation, and a command applied from
 //! the composer (a `/watch-module`, `/watch-task` or `/unwatch` badge sent with Enter) go through as a person's, and a
-//! message it sends is the person's. Outside a QA copy such a press is refused to the client that made it
+//! message it sends is the person's. So do choosing *Follow* or *Lead to the end* in a /watch picker (Tab, or a press
+//! on a way) and, in the `/watching` answer, *Follow* in a leading subscription's mode menu and *Save* in its
+//! ceilings' form. Outside a QA copy such a press is refused to the client that made it
 //! ([`QaPerson::refuses`]), and the window stays as it was.
 //!
 //! Only `examples/qa_app` (the program `tools/qa-app.ps1` starts) turns it on, once, before its window opens

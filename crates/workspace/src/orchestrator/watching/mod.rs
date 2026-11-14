@@ -11,6 +11,7 @@
 mod answer;
 mod counts;
 mod leads;
+mod led;
 mod targets;
 mod team;
 
@@ -28,6 +29,7 @@ pub use self::{
   answer::{Going, WaitsFor, WatchedSubscription, WatchedTask, Watching},
   counts::WatchedTasks,
   leads::{ChatLeads, LeadChip, LeadCounts, Leader, LedIn},
+  led::LedToEnd,
   targets::{TargetView, WatchOrder},
 };
 use super::team_status::TeamReading;
@@ -46,6 +48,8 @@ pub struct WatchReads {
   team: TeamReading,
   /// A linked project's team tasks that `tasks` holds no row of, with where each stands.
   team_tasks: Vec<team::TeamTaskRead>,
+  /// What the work led to the end used of its ceilings; empty for reads made without a database.
+  led: led::LedReads,
 }
 
 impl WatchReads {
@@ -66,6 +70,7 @@ impl WatchReads {
       default_order: watch.default_order().into(),
       team: TeamReading::default(),
       team_tasks: Vec::new(),
+      led: led::LedReads::default(),
     }
   }
 
@@ -83,6 +88,7 @@ impl WatchReads {
     if db.sharing()?.is_some() {
       reads.team_tasks = team::read(db, &reads.tasks.tasks, &reads.team)?;
     }
+    reads.led = led::LedReads::read(db, &reads.subscriptions)?;
     Ok(reads)
   }
 

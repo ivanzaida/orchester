@@ -17,7 +17,9 @@ use orchester_core::{
   name::Name,
   orchestrator::{
     Chat, ChatEvent, Subscription, WatchTarget,
-    watch::{AtRequest, EndReason, NamedTarget, OpenTask, OpenWork, WatchCommand, WatchLine, WatchSummary},
+    watch::{
+      AtRequest, EndReason, NamedTarget, OpenTask, OpenWork, WatchCommand, WatchLine, WatchSummary, asked_to_lead,
+    },
   },
   task::{Task, organization::ChangeActor},
   time::Timestamp,
@@ -105,7 +107,8 @@ pub(super) fn module(
   Ok((named, tasks))
 }
 
-/// The person's /watch of `targets` with `order` in `chat` at `at`, and the subscription line it wrote.
+/// The person's /watch of `targets` with `order` in `chat` at `at`, and the subscription line it wrote; a command
+/// whose order begins with the words for it led its targets to the end.
 pub(super) fn watched(
   kontur: &mut Kontur,
   chat: &Chat,
@@ -115,6 +118,7 @@ pub(super) fn watched(
   let command = WatchCommand::Watch {
     targets: targets.clone(),
     order: order.to_owned(),
+    to_end: asked_to_lead(order).is_some(),
   };
   let line = WatchLine::Watching {
     started: targets,

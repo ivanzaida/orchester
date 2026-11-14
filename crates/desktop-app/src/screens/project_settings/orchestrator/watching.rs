@@ -1,5 +1,5 @@
 //! *Watching* (`wY6EX` in 07 `DE2Pj`, `docs/design/orchestrator-watch.md` decision 8): how the project's Orchestrator
-//! watches its runs, between *The Orchestrator may* and *Also needed*. *Default order for watching* (`cntrS`) is a
+//! watches its runs, between *Driving* and *Leading to the end*. *Default order for watching* (`cntrS`) is a
 //! multi-line field a /watch command without text takes as its order: Shift Enter adds a line, and it saves on Enter
 //! or as the person leaves it, like the rest of the tab; empty is no order. *A run without progress for* (`NOCbA`) is
 //! whole minutes in a box, *min* and a switch: a wrong value says why under the row and saves nothing, leaving the box

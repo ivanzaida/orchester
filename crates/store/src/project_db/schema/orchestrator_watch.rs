@@ -10,3 +10,12 @@ CREATE TABLE orchestrator_watch (
 ) STRICT;
 INSERT INTO orchestrator_watch (id, default_order, no_progress_minutes) VALUES (1, '', 20);
 ";
+
+/// The ceilings a new subscription that leads to the end takes (Project settings › Orchestrator › *Leading to the
+/// end*, `docs/plan/orchestrator-autonomy/OA-10-…`).
+pub(super) const LEAD_DEFAULTS_MIGRATION: &str = r"
+-- The project's ceilings for a new leading subscription, as JSON (`orchester_core::orchestrator::watch::Ceilings`);
+-- NULL while the project never set them, which reads as the built-in ones: 3 runs of a task, 4 returns of a run, 1
+-- raise by 50 % and no budget. A subscription keeps the ceilings it started with (orchestrator_subscriptions.lead).
+ALTER TABLE orchestrator_watch ADD COLUMN lead_ceilings TEXT;
+";

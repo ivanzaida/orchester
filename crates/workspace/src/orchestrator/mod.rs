@@ -54,6 +54,7 @@ pub mod team_status;
 mod told;
 pub mod tools;
 pub mod turns;
+pub mod typed_ceilings;
 pub mod waits;
 pub mod waits_on;
 pub mod watch;

@@ -200,7 +200,8 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::Estimates => client.invalidate(project::estimates(session, root)),
     ProjectRead::Orchestrator => {
       client.invalidate(project::orchestrator_drives(session.clone(), root.clone()));
-      client.invalidate(project::orchestrator_watch(session, root));
+      client.invalidate(project::orchestrator_watch(session.clone(), root.clone()));
+      client.invalidate(project::orchestrator_lead_defaults(session, root));
     }
     ProjectRead::Memory => client.invalidate(project::memory_settings(session, root)),
     ProjectRead::Variables => client.invalidate(project::variables(session, root)),

@@ -1,6 +1,7 @@
 //! `get_watches`: what the project's Orchestrator conversations lead and what waits there now, as `/watching` shows it
 //! ([`WatchReads::watching`]), and who leads a module or a task ([`led_in_json`]) for `get_module` and `get_task`. It
-//! only reads: subscribing, stopping and taking a target over stay the person's commands in the conversation.
+//! only reads: subscribing, stopping and taking a target over stay the person's commands in the conversation, and so
+//! do whether a target is led to the end and within which ceilings.
 
 use orchester_core::{
   id::{ChatId, ProjectId},
@@ -20,7 +21,7 @@ use crate::{
   links::Link,
   messages::Message,
   orchestrator::watching::{
-    Going, LedIn, TargetView, WaitsFor, WatchOrder, WatchReads, WatchedSubscription, WatchedTask, Watching,
+    Going, LedIn, LedToEnd, TargetView, WaitsFor, WatchOrder, WatchReads, WatchedSubscription, WatchedTask, Watching,
   },
 };
 
@@ -146,9 +147,24 @@ fn subscription_json(watched: &WatchedSubscription, translate: &Translate) -> Va
     "target": target_json(&watched.target, translate),
     "since": wire::time(watched.since),
     "order": order_json(&watched.order),
+    "mode": if watched.lead.is_some() { "lead_to_the_end" } else { "follow" },
+    "ceilings": watched.lead.map(ceilings_json),
     "tasks": tasks,
     "rest": watched.rest.as_ref().map(|rest| translate.text(rest)),
     "unreadable": watched.unreadable.as_ref().map(|why| translate.text(why)),
+  })
+}
+
+/// The ceilings of a subscription that leads to the end, and what its work spent of its budget while it has one.
+fn ceilings_json(led: LedToEnd) -> Value {
+  let ceilings = led.ceilings;
+  json!({
+    "runs_of_task": ceilings.runs_of_task(),
+    "returns_of_run": ceilings.returns_of_run(),
+    "raises_of_run": ceilings.raises_of_run(),
+    "raise_percent": ceilings.raise_percent(),
+    "budget_tokens": ceilings.budget().map(|budget| budget.get()),
+    "spent_tokens": led.spent.map(|spent| spent.get()),
   })
 }
 
@@ -187,6 +203,7 @@ fn task_json(task: &WatchedTask, translate: &Translate) -> Value {
     "going": going_json(task.going),
     "state": translate.text(&task.state),
     "note": task.note.as_ref().map(|note| translate.text(note)),
+    "again": task.again.as_ref().map(|again| translate.text(again)),
     "action": task.action.as_ref().map(|action| translate.text(action)),
     "link": &task.link,
   })

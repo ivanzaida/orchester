@@ -11,7 +11,8 @@
 //!
 //! The `/watch-module` command and its picker of modules (ORC-772) are [`module`], [`picker`] and [`rows`]; the
 //! `/watch-task` command and its picker of tasks (ORC-773) are [`task`] and [`task_rows`]. Both pickers read the
-//! [`catalog`] and draw in the [`panel`] they share.
+//! [`catalog`] and draw in the [`panel`] they share, where the person chooses whether the command follows its targets
+//! or leads them to the end ([`mode`], `L03` `xE361`).
 
 mod catalog;
 mod command;
@@ -19,6 +20,7 @@ mod ended;
 mod facts;
 mod leaving;
 mod lines;
+mod mode;
 mod module;
 /// The pickers' panel, rows and keys, which `/unwatch`'s picker draws too (`super::watching::unwatch`).
 pub(super) mod panel;

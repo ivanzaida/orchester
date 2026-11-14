@@ -1,8 +1,6 @@
 //! Orchestrator (`S03` `X8mFTS`): the tab after Runs with *Let the Orchestrator drive*, the project's own switch,
-//! flipped only by a person (ORC-909: it replaced six), and *Let automation answer approvals* read-only with *Open* to
-//! Settings › Automation.
-use orchester_app::routes::Route;
-
+//! flipped only by a person (ORC-909: it replaced six). The tab no longer shows *Also needed · set for this computer*:
+//! the chat does not depend on *Let automation answer approvals* (OA-11, `S01` `pK4S5`).
 use super::harness::Settings;
 
 /// The switch's element id and its label.
@@ -12,7 +10,7 @@ const LABEL: &str = "Let the Orchestrator drive";
 /// Project settings on its Orchestrator tab.
 fn orchestrator() -> Settings {
   let mut page = Settings::new(false);
-  page.tab("orchestrator", "settings-orchestrator-computer");
+  page.tab("orchestrator", "settings-orchestrator-leading");
   page
 }
 
@@ -102,29 +100,43 @@ fn project_settings_orchestrator_has_one_switch_which_is_the_projects_and_only_a
 }
 
 #[test]
-fn project_settings_orchestrator_shows_answering_approvals_and_opens_automation() {
+fn project_settings_orchestrator_no_longer_shows_also_needed_for_this_computer() {
   let mut page = Settings::new(false);
   let workspace = page.window.launch.workspace().expect("session").clone();
+  // Whatever the computer's setting says, the tab says nothing of it: it is for outside MCP clients alone.
   workspace
     .set_automation_answers_approvals(true)
     .expect("on for this computer");
-  page.tab("orchestrator", "settings-orchestrator-computer");
-  // The workspace counted the change, which reads Settings › Automation's query again.
-  page.until("its state", |p| {
-    p.exists("settings-orchestrator-answer-approvals-value")
-      && p.text("settings-orchestrator-answer-approvals-value") == "On"
-  });
-  assert!(
-    page
-      .text("settings-orchestrator-answer-approvals-hint")
-      .contains("Settings › Automation")
+  page.tab("orchestrator", "settings-orchestrator-leading");
+  page.until("the tab read", |p| p.exists("settings-orchestrator-leading-runs-field"));
+  for gone in [
+    "settings-orchestrator-computer",
+    "settings-orchestrator-answer-approvals-row",
+    "settings-orchestrator-answer-approvals-open",
+  ] {
+    assert!(!page.exists(gone), "{gone} is gone from the tab");
+  }
+  let shown = page.text("screen-project_settings");
+  for words in [
+    "Also needed",
+    "Let automation answer approvals",
+    "set for this computer",
+  ] {
+    assert!(!shown.contains(words), "{words}: {shown}");
+  }
+  // The tab ends with *Leading to the end* and its foot.
+  let bottom = |page: &mut Settings, id: &str| {
+    let bounds = page
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    bounds.y + bounds.height
+  };
+  let (watching, leading) = (
+    bottom(&mut page, "settings-orchestrator-watching"),
+    bottom(&mut page, "settings-orchestrator-leading"),
   );
-  page.click("settings-orchestrator-answer-approvals-open");
-  page.until("Settings › Automation", |p| {
-    p.window.navigation().route_now() == Route::Settings
-  });
-  assert!(
-    workspace.automation_answers_approvals().expect("read"),
-    "the row only reads it"
-  );
+  assert!(watching < leading, "{watching} {leading}");
 }

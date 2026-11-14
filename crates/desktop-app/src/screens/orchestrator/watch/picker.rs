@@ -10,6 +10,7 @@ use orchester_workspace::mentions::watch::{Choosing, Leader, WatchCatalog, modul
 
 use super::{
   catalog::CatalogReader,
+  mode::LeadChoice,
   module::{key_of, target_of},
   panel::Picker,
   rows::{self, Counts, Shown},
@@ -30,9 +31,9 @@ pub(super) struct ModulePicker {
 }
 
 impl ModulePicker {
-  pub(super) fn new(project: &ShownProject, of: Signal<Option<Conversation>>) -> Self {
+  pub(super) fn new(project: &ShownProject, of: Signal<Option<Conversation>>, mode: LeadChoice) -> Self {
     Self {
-      catalog: CatalogReader::new(project, of),
+      catalog: CatalogReader::new(project, of, mode),
     }
   }
 
@@ -79,6 +80,7 @@ impl ModulePicker {
       focused: asked.focused,
       counts,
       navigation,
+      mode: &self.catalog.mode,
     };
     let panel = rows::panel(ctx, &shown, asked.search);
     Offer { rows, panel }

@@ -18,6 +18,7 @@ mod mcp_client;
 mod memory;
 mod navigation_status;
 mod orchestrator;
+mod orchestrator_leading;
 mod orchestrator_watching;
 mod queries;
 mod reads;

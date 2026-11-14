@@ -475,11 +475,71 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "lead": {
+      "follow": "Follow",
+      "toTheEnd": "Lead to the end",
+      "what": "What it does with them",
+      "meaning": {
+        "follow": "Tells you and answers agents; you start, merge and deliver.",
+        "lead": "Starts its tasks, runs failed ones again and leaves you what it cannot do."
+      },
+      "menu": {
+        "name": "How {{name}} is taken: {{mode}}",
+        "follow": "Tells you and answers agents; you start, merge and deliver",
+        "lead": "Starts its tasks, runs failed ones again and leaves you what it cannot do"
+      },
+      "stop": "Stop leading",
+      "ceilings": {
+        "runs": "Runs of a task",
+        "returns": "Returns per run",
+        "raises": "Raises",
+        "raisesValue": "{{times}} by {{percent}} %",
+        "budget": "Budget",
+        "budgetValue": "{{used}} of {{most}} tokens",
+        "budgetNone": "none",
+        "change": "Change…",
+        "groupSeparator": ",",
+        "form": {
+          "title": "Ceilings · {{name}}",
+          "runs": {
+            "label": "Runs of a task",
+            "hint": "How many times it may run one task again · {{min}} to {{max}}"
+          },
+          "returns": {
+            "label": "Returns per run",
+            "hint": "Returns to an earlier step inside one run · {{min}} to {{max}}"
+          },
+          "raises": {
+            "label": "Raises of a limit",
+            "hint": "How often it may raise a run's limit, and by how much · {{min}} to {{max}}, up to {{percent}} %",
+            "times": "How often a run's limit may be raised",
+            "share": "By how much of the limit, in percent",
+            "by": "by",
+            "percent": "%",
+            "percentMost": "Up to {{max}} %",
+            "percentLeast": "At least {{min}} %"
+          },
+          "budget": {
+            "label": "Budget",
+            "hint": "Tokens for the whole target · empty: no budget",
+            "hintUsed": "Tokens for the whole target · empty: no budget · used {{used}}",
+            "invalid": "A number of tokens, or empty for no budget",
+            "unit": "tokens"
+          },
+          "bounds": "From {{min}} to {{max}}",
+          "note": "This subscription only · defaults in Project settings ↗",
+          "cancel": "Cancel",
+          "save": "Save"
+        }
+      }
+    },
     "watching": {
       "applied": "Applied {{time}}",
       "from": "Orchester",
       "meta": "{{time}} · the live state, no agent turn",
       "total": "This conversation leads {{leads}}. {{total}}.",
+      "totalLed": "This conversation leads {{led}} to the end. {{total}}.",
+      "totalLedAndFollows": "This conversation leads {{led}} to the end and follows {{follows}}. {{total}}.",
       "only": "{{total}}.",
       "and": "{{rest}} and {{last}}",
       "comma": "{{rest}}, {{next}}",
@@ -493,6 +553,7 @@
       },
       "stop": "Stop watching",
       "keyRun": "{{key}} · #{{run}}",
+      "notes": "{{first}} · {{second}}",
       "open": "{{action}} ↗",
       "failed": "Not applied",
       "dismiss": "Dismiss"
@@ -698,12 +759,14 @@
         "move": "↑ ↓",
         "enter": "Enter",
         "shiftEnter": "Shift Enter",
+        "tab": "Tab",
         "esc": "Esc"
       },
       "hint": {
         "move": "Move",
         "pick": "Pick and close",
         "addAnother": "Add another",
+        "mode": "Follow or lead",
         "close": "Close"
       },
       "led": {

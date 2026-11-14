@@ -15,14 +15,20 @@
 //!   hour) and four times (*Left to you after 4 tries*, with **Try again**).
 //! - the held ones: they have no turn yet, and nothing starts one: today's budget is used, or the account the
 //!   Orchestrator runs on is at its plan limit, with the reset its CLI named or with none.
+//!
+//! `orchestrator-ceilings` is `orchestrator-leading` as `L02 · /watching` `HpcQJ` and `Parts · Ceilings` draw it
+//! (OA-10): Webhooks v2 is led within a budget of 40M tokens of which its conversation's turns spent 12M, one more of
+//! its tasks runs for the second time (*run again 2 of 3*), and the conversation ends with the person's `/watching`,
+//! so its answer shows as the conversation opens: the mode control and *Stop leading* on Webhooks v2's row, its
+//! ceilings row with *Change…*, and Search index followed beside it.
 
 use orchester_core::{
   connection::AgentConnection,
   id::{AgentAccountId, ChatId, ChatMessageId},
   limits::ProjectLimits,
   orchestrator::{
-    Ceilings, Chat, OrchestratorSettings, PlanHold, Subscription, TurnFailure, TurnState, WatchMode,
-    watch::{NamedTarget, asked_to_lead},
+    Ceilings, Chat, ChatEvent, OrchestratorSettings, PlanHold, Subscription, TurnFailure, TurnState, WatchMode,
+    watch::{NamedTarget, WatchCommand, asked_to_lead},
   },
   run::TokenUsage,
   store::{ConnectionStore, SettingsStore},
@@ -40,7 +46,11 @@ use super::{
   },
   module, watched,
 };
-use crate::kontur::{Kontur, SeedError, catalogue::Catalogue, shapes::Shape};
+use crate::kontur::{
+  Kontur, SeedError,
+  catalogue::Catalogue,
+  shapes::{self, Shape},
+};
 
 /// The conversation that leads Webhooks v2 to the end.
 pub const LEADING: &str = "Webhooks v2 and Search index";
@@ -55,6 +65,15 @@ const SPENT: TokenUsage = TokenUsage {
   output: 700_000,
 };
 
+/// The budget of the subscription `orchestrator-ceilings` leads Webhooks v2 within, and what its conversation's
+/// turns spent of it.
+const LEAD_BUDGET: u64 = 40_000_000;
+const LEAD_SPENT: TokenUsage = TokenUsage {
+  input: 11_600_000,
+  cached_input: 0,
+  output: 400_000,
+};
+
 /// What holds the turns Orchester starts by itself.
 #[derive(Clone, Copy)]
 enum Holds {
@@ -67,22 +86,86 @@ enum Holds {
 }
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  leading(kontur, Holds::Nothing)
+  leading(kontur, Holds::Nothing).map(|_| ())
 }
 
 pub fn held_budget(kontur: &mut Kontur) -> Result<(), SeedError> {
-  leading(kontur, Holds::Budget)
+  leading(kontur, Holds::Budget).map(|_| ())
 }
 
 pub fn held_plan(kontur: &mut Kontur) -> Result<(), SeedError> {
-  leading(kontur, Holds::PlanLimit { named: true })
+  leading(kontur, Holds::PlanLimit { named: true }).map(|_| ())
 }
 
 pub fn held_plan_unnamed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  leading(kontur, Holds::PlanLimit { named: false })
+  leading(kontur, Holds::PlanLimit { named: false }).map(|_| ())
 }
 
-fn leading(kontur: &mut Kontur, holds: Holds) -> Result<(), SeedError> {
+/// `orchestrator-ceilings`: [`seed`], Webhooks v2 led within a budget part of which is spent, a task of it run again,
+/// and the person's `/watching` last in the conversation.
+pub fn ceilings(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let invalid = |error: &dyn std::fmt::Display| SeedError::Invalid(error.to_string());
+  let led = leading(kontur, Holds::Nothing)?;
+  let budget = TokenBudget::new(LEAD_BUDGET).map_err(|error| invalid(&error))?;
+  let default = Ceilings::default();
+  let within = Ceilings::new(
+    (default.runs_of_task(), default.returns_of_run()),
+    (default.raises_of_run(), default.raise_percent()),
+    Some(budget),
+  )
+  .map_err(|error| invalid(&error))?;
+  let lead = WatchMode::Lead { ceilings: within };
+  if kontur
+    .db
+    .set_subscription_mode(led.chat.id(), led.webhooks.target, lead)?
+    .is_none()
+  {
+    return Err(SeedError::Invalid("Webhooks v2 is not led".to_owned()));
+  }
+  let account = account(kontur)?;
+  let turn = (led.chat.id(), ChatMessageId::generate());
+  kontur
+    .db
+    .record_chat_usage(turn, (account, LEAD_SPENT), kontur.ago(25))?;
+  run_again(kontur, &led)?;
+  let asked = ChatEvent::WatchCommand {
+    command: WatchCommand::Watching,
+  };
+  let at = kontur.ago(1);
+  kontur.db.keep_watch_entries(&led.chat, &[asked], at)?;
+  Ok(())
+}
+
+/// A task of the module `led` leads whose first run failed and whose second is at work: *run again 2 of 3*.
+fn run_again(kontur: &mut Kontur, led: &Led) -> Result<(), SeedError> {
+  let orchester_core::orchestrator::WatchTarget::Module(module) = led.webhooks.target else {
+    return Err(SeedError::Invalid("Webhooks v2 is a module".to_owned()));
+  };
+  let pipeline = Some(&led.catalogue.feature_delivery);
+  let described = (
+    "Replay dead letters",
+    "Deliver a dead-lettered webhook again on request.",
+    &["A replayed delivery is signed again."][..],
+  );
+  let (made, failed, again) = (kontur.ago(4 * 60), kontur.ago(3 * 60), kontur.ago(35));
+  let mut task = kontur.task(described, pipeline, made)?;
+  shapes::apply(kontur, &mut task, pipeline, Shape::Failed("implement"), failed)?;
+  let mut task = kontur.find(&task.key().to_string())?;
+  shapes::apply(kontur, &mut task, pipeline, Shape::Running("implement"), again)?;
+  kontur
+    .db
+    .set_task_module(task.id(), Some(module), ChangeActor::Person, made)?;
+  Ok(())
+}
+
+/// The conversation that leads Webhooks v2 to the end, the module, and the project's published resources.
+struct Led {
+  chat: Chat,
+  webhooks: NamedTarget,
+  catalogue: Catalogue,
+}
+
+fn leading(kontur: &mut Kontur, holds: Holds) -> Result<Led, SeedError> {
   let (sign_ins, catalogue) = project(kontur, CodexPlan::Used)?;
   let on_codex = OrchestratorSettings::new(sign_ins.codex, model(CODEX_MODELS[0])?, None);
   kontur.db.publish_orchestrator(&on_codex, kontur.ago(3 * 24 * 60))?;
@@ -121,9 +204,8 @@ fn leading(kontur: &mut Kontur, holds: Holds) -> Result<(), SeedError> {
       for (seq, failures) in events.into_iter().zip([4, 3, 1]) {
         fail(kontur, (chat.id(), seq), failures)?;
       }
-      Ok(())
     }
-    Holds::Budget => use_up_the_budget(kontur),
+    Holds::Budget => use_up_the_budget(kontur)?,
     Holds::PlanLimit { named } => {
       let now = kontur.ago(0);
       let limit = PlanHold {
@@ -132,9 +214,13 @@ fn leading(kontur: &mut Kontur, holds: Holds) -> Result<(), SeedError> {
       };
       let account = account(kontur)?;
       kontur.db.hold_orchestrator(account, limit)?;
-      Ok(())
     }
   }
+  Ok(Led {
+    chat,
+    webhooks,
+    catalogue,
+  })
 }
 
 /// Three tasks of `module` whose Implement agent asked a question and waits for the answer.

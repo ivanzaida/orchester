@@ -1,7 +1,9 @@
 //! The person's watch command as the conversation keeps it (`Your command` `bZe0q` in `04` `OKtX2`): at the chat's end,
 //! a bubble on `own_message`, radius 12, 10 by 14, its parts 6 apart, at most 560 wide: the command's chip and one chip
 //! per target, 6 apart, then the order typed after them in 13/1.55 `text_primary`. Under it, 4 apart, *Applied 09:14*
-//! as a message's delivery line. The app applied it itself: it started no turn, so it has no actions.
+//! as a message's delivery line. The app applied it itself: it started no turn, so it has no actions. A command that
+//! led its targets to the end says so in a chip after them, *Lead to the end* with a `flag` (`Your command` in `L01`
+//! `QMwUB`, board `Orchestrator autonomy · frames to approve`).
 
 use lurq::{
   app::{
@@ -33,12 +35,12 @@ const BUBBLE_WIDTH: f32 = 560.0;
 /// The bubble of `command`, kept at `at`, with its delivery line; `id` names it.
 pub(super) fn bubble(ctx: &Ctx, id: &str, command: &WatchCommand, at: Option<Timestamp>) -> Element {
   let (name, glyph, targets, order) = match command {
-    WatchCommand::Watch { targets, order }
+    WatchCommand::Watch { targets, order, .. }
       if targets.iter().all(|named| matches!(named.target, WatchTarget::Task(_))) =>
     {
       ("watch-task", Icon::ScanEye, targets.as_slice(), order.trim())
     }
-    WatchCommand::Watch { targets, order } => ("watch-module", Icon::Eye, targets.as_slice(), order.trim()),
+    WatchCommand::Watch { targets, order, .. } => ("watch-module", Icon::Eye, targets.as_slice(), order.trim()),
     WatchCommand::Unwatch { targets } => ("unwatch", Icon::EyeOff, targets.as_slice(), ""),
     WatchCommand::UnwatchAll => ("unwatch", Icon::EyeOff, &[][..], ""),
     // Its row is the answer from the live state (`super::super::watching`); this is only its bubble's chip.
@@ -54,6 +56,10 @@ pub(super) fn bubble(ctx: &Ctx, id: &str, command: &WatchCommand, at: Option<Tim
         .iter()
         .enumerate()
         .map(|(index, named)| target_chip(ctx, &format!("{id}-target-{index}"), named)),
+    )
+    .with_children(
+      matches!(command, WatchCommand::Watch { to_end: true, .. })
+        .then(|| sent_chip(&format!("{id}-lead"), Icon::Flag, &ctx.t("orchestrator.lead.toTheEnd"))),
     );
   let order = (!order.is_empty()).then(|| {
     Text::new(order)

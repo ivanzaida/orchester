@@ -23,6 +23,8 @@ mod flow;
 mod hub;
 #[path = "theme/instructions.rs"]
 mod instructions;
+#[path = "theme/leading.rs"]
+mod leading;
 #[path = "theme/local_integration.rs"]
 mod local_integration;
 #[path = "theme/modules.rs"]

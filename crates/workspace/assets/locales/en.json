@@ -2385,6 +2385,7 @@
       "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
       "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
       "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
+      "notLedToEnd": "Not applied · this conversation only follows that, so it has no ceilings — nothing changed",
       "alreadyHere": "This conversation leads it already.",
       "eventTurn": "Not applied · Orchester started this turn by itself: what this conversation watches changes only when you ask — nothing changed",
       "unknownTarget": "Not applied · nothing in this project answers to “{{target}}”: name a task by its key or a module by its name — nothing changed",
@@ -2420,6 +2421,7 @@
           "dailyBudget": "the project's daily budget is spent",
           "readyToMerge": "you merge it"
         },
+        "again": "run again {{run}} of {{most}}",
         "action": {
           "answer": "Answer",
           "decide": "Decide",

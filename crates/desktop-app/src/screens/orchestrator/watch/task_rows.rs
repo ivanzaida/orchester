@@ -6,7 +6,8 @@
 //! `text_primary` (*· no module* without one), the workflow status in 11 `text_muted`, and at its end who leads it:
 //! *Added*, *Comes here via Webhooks v2* in `text_muted` when this conversation leads it through what covers it,
 //! *Watched here*, or *Led in «…» ↗* in `warning`. While the search is empty the Done and Canceled tasks hide behind
-//! *2 done tasks · type to find them*; one the search finds is faded to half and says *nothing to watch*.
+//! *2 done tasks · type to find them*; one the search finds is faded to half and says *nothing to watch*. Then how the
+//! command takes what is chosen, and the keys.
 
 use std::sync::Arc;
 
@@ -22,6 +23,7 @@ use orchester_core::{id::ProjectId, orchestrator::WatchTarget};
 use orchester_workspace::mentions::watch::{Leader, tasks::TaskEntry};
 
 use super::{
+  mode::LeadChoice,
   panel::{self, LedIn, Picker},
   rows::Counts,
 };
@@ -53,6 +55,8 @@ pub(super) struct Shown<'a> {
   pub(super) counts: Counts,
   /// Opens the conversation a *Led in* names.
   pub(super) navigation: Navigation,
+  /// Whether the command follows what is chosen or leads it to the end.
+  pub(super) mode: &'a LeadChoice,
 }
 
 /// The panel with its search, its rows and the keys.
@@ -90,7 +94,12 @@ pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> 
     );
     content.push(panel::finished((shown.id, PICKER), (hidden, &words)));
   }
-  content.push(panel::footer(ctx, (shown.id, PICKER), !shown.offered.is_empty()));
+  content.extend(panel::footer(
+    ctx,
+    (shown.id, PICKER),
+    !shown.offered.is_empty(),
+    shown.mode,
+  ));
   panel::frame((shown.id, PICKER), content)
 }
 

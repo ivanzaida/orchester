@@ -1,7 +1,8 @@
 //! ORC-758: what the project's Orchestrator conversations watch, kept in the project database: read per project and
 //! per conversation, one leader per target even when two conversations act at once, a take over and a stop or end in
 //! one change each, and the ended ones kept with when and why; a subscription that leads its target to the end is kept
-//! with its ceilings, and a target led to the end stays so when it is taken over or renewed (OA-09). Run with
+//! with its ceilings, and a target led to the end stays so when it is taken over or renewed (OA-09); the person changes
+//! a subscription's mode or ceilings in place (OA-10). Run with
 //! `cargo test -p orchester-store --test orchestrator_subscriptions subscriptions`.
 
 mod support;
@@ -259,6 +260,52 @@ fn subscriptions_that_lead_to_the_end_keep_their_ceilings_through_a_take_over() 
     Some(WatchMode::Follow),
     "and one that followed still follows"
   );
+}
+
+/// OA-10: the person changes how a subscription takes its target's work, or its ceilings, and it stays the same
+/// subscription.
+#[test]
+fn subscriptions_change_their_mode_in_place_and_only_for_the_conversation_that_leads() {
+  let (repo, mut db) = project();
+  let (mine, theirs) = (ChatId::generate(), ChatId::generate());
+  let target = WatchTarget::Module(ModuleId::generate());
+  let followed = watch(mine, target, "ask first", 3);
+  db.start_subscription(&followed).expect("kept");
+
+  let ceilings = Ceilings::new((5, 0), (3, 100), None).expect("ceilings");
+  let lead = WatchMode::Lead { ceilings };
+  assert_eq!(
+    db.set_subscription_mode(theirs, target, lead).expect("asked"),
+    None,
+    "another conversation changes nothing"
+  );
+  assert_eq!(
+    db.set_subscription_mode(mine, WatchTarget::Project, lead)
+      .expect("asked"),
+    None,
+    "nor does a target nobody leads"
+  );
+  assert_eq!(db.active_subscriptions().expect("read").of(target), Some(&followed));
+
+  let led = followed.clone().in_mode(lead);
+  assert_eq!(
+    db.set_subscription_mode(mine, target, lead).expect("changed"),
+    Some(led.clone())
+  );
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.active_subscriptions().expect("read").of(target), Some(&led));
+  assert_eq!(
+    reopened.chat_subscription_history(mine).expect("read"),
+    [active(led)],
+    "the same subscription, since when it was: nothing ended"
+  );
+
+  assert_eq!(
+    db.set_subscription_mode(mine, target, WatchMode::Follow)
+      .expect("changed"),
+    Some(followed.clone())
+  );
+  assert_eq!(db.active_subscriptions().expect("read").of(target), Some(&followed));
 }
 
 #[test]

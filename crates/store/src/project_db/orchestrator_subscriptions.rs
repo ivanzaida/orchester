@@ -114,6 +114,28 @@ impl ProjectDb {
     self.end_led(chat, target, WatchEnd::Stopped, at)
   }
 
+  /// `chat`'s subscription to `target` takes its target's work as `mode` says from now on, as the person chose: it
+  /// follows, or leads to the end within other ceilings. It stays the same subscription, since when it was, so what
+  /// its work spent goes on counting. Returns it as it is now; `None` when `chat` does not lead `target`.
+  pub fn set_subscription_mode(
+    &mut self,
+    chat: ChatId,
+    target: WatchTarget,
+    mode: WatchMode,
+  ) -> Result<Option<Subscription>, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let Some(led) = leader(&transaction, target)?.filter(|led| led.chat() == chat) else {
+      return Ok(None);
+    };
+    let (kind, id) = target_columns(target);
+    transaction.execute(
+      &format!("UPDATE orchestrator_subscriptions SET lead = ?3 WHERE {LEADS}"),
+      params![kind, id.unwrap_or_default(), lead_column(mode)?],
+    )?;
+    transaction.commit()?;
+    Ok(Some(led.in_mode(mode)))
+  }
+
   /// `chat`'s subscription to `target` ends by itself at `at`, for `reason` ([`orchester_core::orchestrator::watch::
   /// ending`]). Returns the subscription it ended; `None` when `chat` does not lead `target`.
   pub fn end_subscription(

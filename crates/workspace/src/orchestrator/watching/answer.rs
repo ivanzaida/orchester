@@ -2,7 +2,8 @@
 //! order, and the tasks it leads that have something going on — running, waiting for the person, queued, stopped at
 //! a limit, ready to merge — with the rest counted, and a one-line total of what waits for the person. A module's
 //! tasks are those in it now, the ones added after the subscription too. A task a more specific subscription leads
-//! is listed under that one only, so no task is listed twice.
+//! is listed under that one only, so no task is listed twice. A subscription that leads its target to the end says so
+//! with its ceilings and what it used of them ([`super::led`]).
 
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::{LeadCounts, TargetView, WatchOrder, WatchReads, counted};
+use super::{LeadCounts, LedToEnd, TargetView, WatchOrder, WatchReads, counted};
 use crate::{
   links::{Link, TaskPage},
   messages::Message,
@@ -26,6 +27,8 @@ use crate::{
 pub struct Watching {
   /// How many of each kind of target it leads (*2 modules and 1 task*).
   pub counts: LeadCounts,
+  /// How many of them it only follows; the others it leads to the end.
+  pub follows: LeadCounts,
   /// The total, one part each (*1 thing waits for you*, *1 run is stopped at a limit*); *Nothing waits for you*
   /// when nothing does, or *This conversation watches nothing yet*.
   pub total: Vec<Message>,
@@ -39,8 +42,9 @@ pub struct WatchedSubscription {
   pub target: TargetView,
   pub since: Timestamp,
   pub order: WatchOrder,
-  /// The conversation leads it to the end, and does not only follow it.
-  pub to_the_end: bool,
+  /// Its ceilings and what it used of them, when the conversation leads it to the end; `None` for one it only
+  /// follows.
+  pub lead: Option<LedToEnd>,
   /// Its tasks that have something going on, in the project's order.
   pub tasks: Vec<WatchedTask>,
   /// Its other open tasks, counted (*4 more tasks with nothing under way*); `None` when there are none.
@@ -63,6 +67,9 @@ pub struct WatchedTask {
   pub state: Message,
   /// What it waits for or where it stands (*its plan waits for you*); `None` for a running one.
   pub note: Option<Message>,
+  /// *run again 2 of 3*: which of the runs its subscription's ceiling allows the task is on, once a task led to the
+  /// end was run more than once; `None` otherwise.
+  pub again: Option<Message>,
   /// The word of [`Self::link`] when it answers or decides (*Decide*, *Summary*, *Review*).
   pub action: Option<Message>,
   /// Where the person answers it, or else the task's page.
@@ -111,8 +118,13 @@ impl WatchReads {
       .map(|subscription| self.watched(subscription, &waiting, &queued))
       .collect();
     let total = total(&subscriptions);
+    let follows = self
+      .subscriptions
+      .of_chat(chat)
+      .filter(|subscription| subscription.mode().ceilings().is_none());
     Watching {
       counts: LeadCounts::of(self.subscriptions.of_chat(chat)),
+      follows: LeadCounts::of(follows),
       total,
       subscriptions,
     }
@@ -129,7 +141,7 @@ impl WatchReads {
     });
     for task in led {
       match self.going(task, waiting, queued) {
-        Some(going) => tasks.push(self.watched_task(task, going)),
+        Some(going) => tasks.push(self.watched_task(task, going, subscription)),
         None => rest += 1,
       }
     }
@@ -137,7 +149,7 @@ impl WatchReads {
       target: self.target_view(subscription.target()),
       since: subscription.since(),
       order: self.order(subscription),
-      to_the_end: subscription.mode().ceilings().is_some(),
+      lead: self.led.of(subscription),
       tasks,
       rest: (rest > 0).then(|| counted(rest, ("orchestrator.watch.rest.one", "orchestrator.watch.rest.other"))),
       unreadable: self
@@ -174,8 +186,12 @@ impl WatchReads {
     }
   }
 
-  fn watched_task(&self, task: &Task, going: Going) -> WatchedTask {
+  fn watched_task(&self, task: &Task, going: Going, subscription: &Subscription) -> WatchedTask {
     let (state, note, action, page) = words(going);
+    let again = subscription
+      .mode()
+      .ceilings()
+      .and_then(|ceilings| self.led.again(task.id(), ceilings));
     WatchedTask {
       id: task.id(),
       key: task.key().to_string().into(),
@@ -192,6 +208,7 @@ impl WatchReads {
       going,
       state: Message::new(state),
       note,
+      again,
       action: action.map(Message::new),
       link: Link::Task(self.project, task.key().clone(), page).path(),
     }

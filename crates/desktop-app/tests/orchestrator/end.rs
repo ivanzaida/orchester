@@ -35,6 +35,7 @@ fn watch_tail(screen: &mut Orchestrator) -> String {
       command: WatchCommand::Watch {
         targets: vec![target.clone()],
         order: "Answer agents from the brief.".to_owned(),
+        to_end: false,
       },
     },
     ChatEvent::Watch {

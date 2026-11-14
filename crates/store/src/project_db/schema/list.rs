@@ -475,4 +475,5 @@ CREATE TABLE run_merges (
   super::parked_tasks::STANDINGS_MIGRATION,
   super::orchestrator_tries::TOGETHER_MIGRATION,
   super::module_branches::MIGRATION,
+  super::orchestrator_watch::LEAD_DEFAULTS_MIGRATION,
 ];

@@ -306,6 +306,7 @@ fn later_areas(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextSt
     .chain(super::side_question::typography(palette))
     .chain(super::ci::typography(palette))
     .chain(super::watching::typography(palette))
+    .chain(super::leading::typography(palette))
     .chain(super::team_state::typography(palette))
     .chain(super::runs_on_picker::typography(palette))
     .chain(super::flow::typography(palette))

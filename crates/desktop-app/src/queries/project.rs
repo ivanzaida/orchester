@@ -3,7 +3,12 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::SecretId, memory::MemorySettings, orchestrator::WatchSettings, resource::CommandEnvironment};
+use orchester_core::{
+  id::SecretId,
+  memory::MemorySettings,
+  orchestrator::{Ceilings, WatchSettings},
+  resource::CommandEnvironment,
+};
 use orchester_store::StoreError;
 use orchester_workspace::{
   background,
@@ -79,6 +84,15 @@ pub async fn orchestrator_drives(session: Session, root: PathBuf) -> Result<bool
 pub async fn orchestrator_watch(session: Session, root: PathBuf) -> Result<WatchSettings, Message> {
   stored((session, root), "orchestrator watch", |_, root| {
     orchestrator_settings::watch_in(root)
+  })
+  .await
+}
+
+/// The ceilings a new subscription that leads its target to the end takes (Orchestrator › Leading to the end).
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn orchestrator_lead_defaults(session: Session, root: PathBuf) -> Result<Ceilings, Message> {
+  stored((session, root), "orchestrator lead defaults", |_, root| {
+    orchestrator_settings::lead_defaults_in(root)
   })
   .await
 }

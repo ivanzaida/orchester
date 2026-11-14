@@ -21,7 +21,10 @@ use orchester_workspace::{
   tasks::data::ProjectTasks,
 };
 
-use super::panel::{self, Picker};
+use super::{
+  mode::LeadChoice,
+  panel::{self, Picker},
+};
 use crate::{
   project::ShownProject,
   screens::orchestrator::{data, draft::Conversation},
@@ -39,6 +42,8 @@ pub(super) struct CatalogReader {
   of: Signal<Option<Conversation>>,
   /// Who chooses while the screen shows a new conversation: an id no conversation has, so nothing reads as led here.
   unkept: ChatId,
+  /// Whether the picker's command follows what is chosen or leads it to the end.
+  pub(super) mode: LeadChoice,
 }
 
 /// The catalog as the picker's reading holds it.
@@ -48,7 +53,7 @@ struct Read(Arc<WatchCatalog>);
 impl DevtoolsInspectable for Read {}
 
 impl CatalogReader {
-  pub(super) fn new(project: &ShownProject, of: Signal<Option<Conversation>>) -> Self {
+  pub(super) fn new(project: &ShownProject, of: Signal<Option<Conversation>>, mode: LeadChoice) -> Self {
     Self {
       root: project.open.repo_root.clone(),
       project: project.open.project.id(),
@@ -56,6 +61,7 @@ impl CatalogReader {
       saves: project.feed.saves.clone(),
       of,
       unkept: ChatId::generate(),
+      mode,
     }
   }
 
@@ -97,7 +103,7 @@ impl CatalogReader {
       (None, None) => {
         return Offer {
           rows: Vec::new(),
-          panel: panel::reading(ctx, (asked.id, picker), asked.search),
+          panel: panel::reading(ctx, (asked.id, picker), (asked.search, &self.mode)),
         };
       }
     };
@@ -108,7 +114,7 @@ impl CatalogReader {
       panel: panel::unreadable(
         ctx,
         (asked.id, picker, &self.name, &why),
-        asked.search,
+        (asked.search, &self.mode),
         Arc::new(move || runners.chat_changed(&root)),
       ),
     }

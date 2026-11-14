@@ -70,6 +70,7 @@ impl WhatIWatch {
           icon: Icon::EyeOff,
           verb: ctx.t("composer.slash.command.unwatch.badge"),
         },
+        other_way: None,
       })),
     }
   }

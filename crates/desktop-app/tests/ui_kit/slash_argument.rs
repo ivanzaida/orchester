@@ -116,6 +116,7 @@ fn command(name: &'static str, verb: &str, applied: &Arc<Mutex<Vec<(&'static str
         icon: Icon::Eye,
         verb: Arc::from(verb),
       },
+      other_way: None,
     })),
   }
 }

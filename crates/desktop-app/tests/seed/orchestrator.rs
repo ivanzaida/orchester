@@ -1,7 +1,8 @@
 //! The `orchestrator` scenario: its waits stand as the conversation reads them, under the keys the app's follower
 //! keeps them by, so following the project keeps nothing new; and the runs-on picker's sign-ins, with their checks and
 //! plan reads, are in the application database. `orchestrator-leads` has its subscriptions standing, and
-//! `orchestrator-leading` and the held scenarios a module led to the end with the events whose turns failed or wait.
+//! `orchestrator-leading` and the held scenarios a module led to the end with the events whose turns failed or wait,
+//! and `orchestrator-ceilings` that module led within a budget, with `/watching` asked.
 
 use orchester_core::{
   account::AccountState,
@@ -286,4 +287,49 @@ fn seed_orchestrator_held_scenarios_hold_the_turns_of_their_events() {
       "{scenario}: {turns:?}"
     );
   }
+}
+
+/// `orchestrator-ceilings`: Webhooks v2 is led within a budget of which 12M are spent, one of its tasks runs for the
+/// second time, and the conversation's last entry is the person's `/watching`.
+#[test]
+fn seed_orchestrator_ceilings_leads_within_a_budget_with_what_was_spent_and_a_task_run_again() {
+  use orchester_core::orchestrator::{ChatEvent, EntryKind, watch::WatchCommand};
+  use orchester_workspace::orchestrator::watching::WatchReads;
+
+  let seed = Seed::of("orchestrator-ceilings");
+  let shown = conversation(&seed, leading::LEADING);
+  assert!(
+    matches!(
+      shown.entries.last().map(|entry| &entry.kind),
+      Some(EntryKind::Event(ChatEvent::WatchCommand {
+        command: WatchCommand::Watching
+      }))
+    ),
+    "the conversation opens on the /watching answer"
+  );
+  let watching = WatchReads::read(&seed.db(), seed.repo())
+    .expect("the watch reads")
+    .watching(shown.chat.id());
+  let [webhooks, search] = watching.subscriptions.as_slice() else {
+    panic!("two subscriptions: {:?}", watching.subscriptions);
+  };
+  assert_eq!(search.lead, None, "Search index is only followed");
+  let led = webhooks.lead.expect("Webhooks v2 is led to the end");
+  assert_eq!(
+    led.ceilings.budget().map(|budget| budget.get()),
+    Some(40_000_000),
+    "{led:?}"
+  );
+  let spent = led.spent.expect("a budget's spending is read").get();
+  assert!(
+    (12_000_000..12_500_000).contains(&spent),
+    "about 12M of the 40M: {spent}"
+  );
+  let again: Vec<&str> = webhooks
+    .tasks
+    .iter()
+    .filter(|task| task.again.is_some())
+    .map(|task| &*task.title)
+    .collect();
+  assert_eq!(again, ["Replay dead letters"], "one task was run again");
 }

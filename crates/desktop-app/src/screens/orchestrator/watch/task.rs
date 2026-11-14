@@ -5,7 +5,8 @@
 //! badge by their keys, and the composer's send has the conversation watch them with the message's words as their
 //! order, as `/watch-module` does ([`super::module::apply`]). A Done or Canceled task, or one chosen already, cannot be
 //! chosen; while the search is empty the Done and Canceled ones hide behind one row that counts them. One another
-//! conversation leads can be chosen, and the command returns it for the card.
+//! conversation leads can be chosen, and the command returns it for the card. Its picker chooses *Follow* or *Lead to
+//! the end* as the module picker does ([`super::mode`], `L03` `xE361`).
 
 use std::sync::Arc;
 
@@ -39,8 +40,9 @@ pub(in crate::screens::orchestrator) const TASK: &str = "watch-task";
 /// *Watch tasks* in the slash menu: it takes the tasks chosen in its picker, and its badge says *Watch* with the
 /// module's `eye` (P4).
 pub(in crate::screens::orchestrator) fn task_command(ctx: &Ctx, view: &View, project: &ShownProject) -> SlashCommand {
+  let mode = view.watching.task_mode.clone();
   let picker = TaskPicker {
-    catalog: CatalogReader::new(project, view.of.clone()),
+    catalog: CatalogReader::new(project, view.of.clone(), mode.clone()),
   };
   SlashCommand {
     name: TASK,
@@ -49,11 +51,12 @@ pub(in crate::screens::orchestrator) fn task_command(ctx: &Ctx, view: &View, pro
     detail: ctx.t("composer.slash.command.watchTask.detail"),
     does: Some(Does::Take(Taking {
       picker: Arc::new(picker),
-      apply: apply(view, project.open.repo_root.clone(), named_task),
+      apply: apply(view, project.open.repo_root.clone(), (named_task, mode.clone())),
       badge: Badge {
         icon: Icon::Eye,
         verb: ctx.t("composer.slash.command.watchTask.badge"),
       },
+      other_way: Some(mode.other_way(ctx)),
     })),
   }
 }
@@ -116,6 +119,7 @@ impl TaskPicker {
       focused: asked.focused,
       counts,
       navigation,
+      mode: &self.catalog.mode,
     };
     let panel = task_rows::panel(ctx, &shown, asked.search);
     Offer { rows, panel }
