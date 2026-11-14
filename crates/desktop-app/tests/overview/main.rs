@@ -13,6 +13,7 @@ mod kontur;
 mod support;
 
 mod actions;
+mod away;
 mod data;
 mod harness;
 mod states;

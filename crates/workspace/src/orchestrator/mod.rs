@@ -11,6 +11,7 @@ mod acts;
 pub mod approval;
 mod approval_turn;
 pub mod auto_merge;
+pub mod away;
 mod blocked;
 pub mod ceilings;
 mod change;

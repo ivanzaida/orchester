@@ -22,7 +22,7 @@ pub(in crate::screens) mod data;
 mod decision;
 mod delivery;
 mod digest;
-mod draft;
+pub(crate) mod draft;
 mod ending;
 mod env;
 mod export;

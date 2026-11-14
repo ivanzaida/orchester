@@ -11,6 +11,7 @@ use orchester_core::{
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
+  orchestrator::parking::Parking,
   question::AskedQuestions,
   resource::{StepKey, VersionNumber},
   run::{
@@ -312,6 +313,8 @@ pub struct TaskDetail {
   pub led_in: LedIn,
   /// The latest run's latest wait on another task, and how it stands (ORC-784); `None` when it never waited on one.
   pub waits_on: Option<RunWaitView>,
+  /// The Orchestrator parked the task for the person (`crate::orchestrator::parking`).
+  pub parked: Option<Parking>,
   /// The archive of a team resource that stopped the latest run (A22 `pUu78`), with the resource and who archived it.
   pub archive_stop: Option<orchester_store::ArchiveStop>,
   /// Whether the resource of [`Self::archive_stop`] is still archived here; it is not once an admin restored it, and
@@ -443,6 +446,7 @@ impl TaskDetail {
       shared,
       led_in,
       waits_on,
+      parked: db.parked_task(task.id())?,
       ..Self::without_runs(task, conversation, requirements)
     })
   }
@@ -473,6 +477,7 @@ impl TaskDetail {
       first_agent: None,
       led_in: LedIn::Nobody,
       waits_on: None,
+      parked: None,
       archive_stop: None,
       archived_still: false,
     }

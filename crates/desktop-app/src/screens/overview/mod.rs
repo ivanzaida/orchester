@@ -14,6 +14,7 @@
 //! tasks or setup were saved. Ages move on every [`TICK`].
 
 mod at_work;
+mod away;
 mod delivery;
 mod digest;
 mod header;
@@ -192,6 +193,13 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Xl);
+  // What the Orchestrator parked for the person and decided by itself, over what waits (`away`).
+  main = main.child(ctx.mount_keyed::<away::AwayCards>(
+    "overview-away-component",
+    away::AwayProps {
+      project: project.clone(),
+    },
+  ));
   if !items.is_empty() {
     main = main.child(digest::digest(ctx, id, &items, around.now));
   }

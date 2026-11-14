@@ -1,6 +1,6 @@
 # OA-23 · *While you were away*: decisions to review and what needs you
 
-- **Status:** blocked (waits for the frames, `frames.md` E)
+- **Status:** built (2026-11-14); design verification pending
 - **Kind:** design + UI
 - **Depends on:** OA-15, OA-22
 - **Branch:** —
@@ -38,3 +38,28 @@ the counts on *Needs you* in the project bar include what is parked. Strings in 
 - App tests for both sections, *Seen*, *Overrule* and the refusal of synthetic input (`--test needs_you away`,
   `--test orchestrator parked`); `--test i18n locales_`.
 - An independent design verification of every frame and state. `tools/check.ps1` passes.
+
+## As built (2026-11-14)
+
+Frames: `W01`, `W02`, `W03` and `Parts · While you were away` on the board `Orchestrator autonomy · frames to
+approve`. Read by `orchester_workspace::orchestrator::away` (parked tasks oldest first, open decisions newest
+first with their task's module), the same for a local and a team project.
+
+- **Overview** (`screens/overview/away.rs`), over the waiting list: *N parked for you*, a row per task with what is
+  needed, its age, **Give it back** and the task's link, and under it why and what to do in the Orchestrator's
+  words; *N decided without you*, grouped by module, a row per decision with what was done, when, **Seen** and
+  **Overrule…**, and under it the reason and the conversation; **Mark all seen** at the head. With neither, nothing
+  shows.
+- **Overrule…** marks the decision overruled, quotes it at the start of that conversation's draft
+  (`screens/orchestrator/draft::quote`) and opens the conversation for the person's own words.
+- **The task's Summary** (`screens/task/parked.rs`, `TaskDetail::parked`) starts with the parking's row in the
+  warning tone: what is needed, why and what to do, and **Give it back**.
+- All of these are a person's: synthetic input is refused outside a QA copy.
+- **Differs from the frames:** the parked tasks are a frame of their own over the waiting list, not rows inside it,
+  and are not added to its count; a row does not name the tasks a parked one holds up; the header's status line
+  and the properties of a parked task are as they were; the conversation has no line of its own for a parking (the
+  turn that parked says it, and the *stuck* line follows); *Overrule…* quotes as text, not as a block over the
+  composer; the card's *nothing decided*, loading and unreadable states are no card at all, a line of the reason
+  when the reading failed.
+
+Tests: `orchester-workspace --test orchestrator_away away`; `orchester-app --test overview overview_away`.
