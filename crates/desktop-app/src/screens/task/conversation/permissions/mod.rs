@@ -19,7 +19,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Placement, Popup, Row, Text},
@@ -43,7 +42,10 @@ use orchester_workspace::{
 };
 
 use crate::{
-  mcp::input_gate::{InputGate, persons_press},
+  mcp::{
+    input_gate::{InputGate, persons_press},
+    is_synthetic_input,
+  },
   project::{ProjectFeed, ShownProject},
   theme::{ExtraColor, ExtraSpacing, IconSize, PermissionsText},
   ui::{

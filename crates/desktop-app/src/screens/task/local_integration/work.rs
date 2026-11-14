@@ -9,7 +9,6 @@ use std::{
 use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
-  events::input_source,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -28,7 +27,10 @@ use orchester_workspace::{
 
 use super::TaskContext;
 use crate::{
-  mcp::input_gate::{InputGate, LocalInput},
+  mcp::{
+    input_gate::{InputGate, LocalInput},
+    input_source,
+  },
   services::Services,
 };
 

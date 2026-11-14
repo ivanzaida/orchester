@@ -17,7 +17,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Placement, Popup, Row, Text},
@@ -43,6 +42,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::is_synthetic_input,
   project::{ProjectFeed, ShownProject},
   screens::task::conversation::timeline::step_label,
   theme::{ExtraColor, ExtraSpacing, IconSize, ModelText},

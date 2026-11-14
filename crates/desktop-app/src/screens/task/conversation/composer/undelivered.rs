@@ -8,7 +8,7 @@
 //! runner did not take the composer says under its box; why the message was not queued again is said here.
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
+  app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::{Column, Row},
   layout::Alignment,
   node::Element,
@@ -24,7 +24,10 @@ use orchester_workspace::{
 
 use super::{super::shared::Shared, Composing, state::AfterTurn};
 use crate::{
-  mcp::input_gate::{Guarded, press_answerer},
+  mcp::{
+    input_gate::{Guarded, press_answerer},
+    is_synthetic_input,
+  },
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,

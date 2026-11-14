@@ -124,15 +124,14 @@ pub enum Guarded {
 /// synthetic input only while no person-only control is mounted and the stored consent covers `policy`. Read in the
 /// handler, while lurq delivers the input.
 pub fn input_may_decide(gate: Option<&InputGate>, policy: Guarded) -> bool {
-  !lurq::app::events::is_synthetic_input()
-    || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
+  !crate::mcp::is_synthetic_input() || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
 }
 
 /// Who gives an answer classified as `policy` with the input being delivered: the person with OS input; automation
 /// with lurq's synthetic input (an MCP client's), where [`input_may_decide`] lets it; `None` when only a person gives
 /// it. Read in the handler, while lurq delivers the input.
 pub fn answerer(gate: Option<&InputGate>, policy: Guarded) -> Option<Answerer> {
-  if !lurq::app::events::is_synthetic_input() {
+  if !crate::mcp::is_synthetic_input() {
     return Some(Answerer::Person);
   }
   input_may_decide(gate, policy).then_some(Answerer::Automation)
@@ -334,6 +333,11 @@ impl InputGate {
 
   /// Whether a protected control is mounted.
   pub fn protecting(&self) -> bool {
+    // A QA copy's MCP client counts as the person for the whole window (`super::qa_person`): nothing is kept from
+    // its input.
+    if super::qa_person::counts_every_input() {
+      return false;
+    }
     let controls = self.0.controls.lock();
     controls.settings > 0
       || controls.server > 0

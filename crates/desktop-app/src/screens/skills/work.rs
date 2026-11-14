@@ -7,7 +7,6 @@ use std::sync::{
 use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
-  events::is_synthetic_input,
 };
 use orchester_core::resource::Skill;
 use orchester_workspace::{
@@ -18,7 +17,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use crate::services::Services;
+use crate::{mcp::is_synthetic_input, services::Services};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Saved(pub SkillEntry);
 impl DevtoolsInspectable for Saved {}

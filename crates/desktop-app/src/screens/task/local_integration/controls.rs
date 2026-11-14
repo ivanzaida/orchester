@@ -18,7 +18,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::input_source,
     theme::SpacingSize,
   },
   components::{Column, Text},
@@ -35,7 +34,10 @@ use super::{
   work::{Action, Request, Work},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected},
+  mcp::{
+    input_gate::{Guarded, InputGate, Protected},
+    input_source,
+  },
   theme::LocalText,
   ui::{
     button::{ActionButton, ButtonKind},

@@ -2,10 +2,7 @@
 use std::sync::atomic::Ordering;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    events::{InputSource, input_source},
-  },
+  app::{ctx::Ctx, events::InputSource},
   node::Element,
 };
 
@@ -14,7 +11,7 @@ use super::{
   work::{Request, Work},
 };
 use crate::{
-  mcp::input_gate::Guarded,
+  mcp::{input_gate::Guarded, input_source},
   navigation::Navigation,
   ui::{
     button::{ActionButton, ButtonKind},

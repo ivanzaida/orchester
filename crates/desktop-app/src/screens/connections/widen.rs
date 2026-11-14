@@ -13,7 +13,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -23,7 +22,10 @@ use lurq::{
 use orchester_workspace::messages::Message;
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected, may_press},
+  mcp::{
+    input_gate::{Guarded, InputGate, Protected, may_press},
+    is_synthetic_input,
+  },
   theme::{ConnectionsText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},

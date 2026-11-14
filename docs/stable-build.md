@@ -606,11 +606,23 @@ and deleting a conversation take a synthetic press as a person's; and a message 
 the person's. The gate is one place, `orchester_app::mcp::qa_person::QaPerson`, held by the session's services: off
 on every start, it is turned on only by `examples/qa_app` before its window opens. The installed app, `tools/run.ps1`
 and every other start never turn it on, so there these presses are still refused and say so; it is no environment
-variable or setting another program could set. It widens nothing else: Settings, permission and approval questions,
-the access token and pairing codes, sharing and sign-in, secrets, and the task pages' person-only controls keep their
-refusals in a QA copy too. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
+variable or setting another program could set. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
 presses apply, in one that does not they are refused, and only `examples/qa_app` turns it on. The seed's
 `orchestrator-leads` scenario has subscriptions standing for these states (the design-verification skill names them).
+
+**In a QA copy the MCP client is the person for the whole window (the person, 2026-11-15).** The same program,
+`examples/qa_app`, also makes every window input of its MCP client count as the person's
+(`orchester_app::mcp::qa_person::count_every_input_as_the_persons`), so a QA copy can be tested whole through its MCP
+server: Settings (accounts and API providers, *Let automation change agent permissions*, the MCP server's own
+rows), permission and approval questions, sharing and sign-in, and the task pages' person-only controls take its
+presses as a person's, window input is not refused while one of them shows, and what it does is recorded as the
+person's. Looking at the window while a secret shows in it (the access token, a pairing code) stays refused. The app
+tells a person's input from automation's in one place, `orchester_app::mcp::qa_person::is_synthetic_input` and
+`input_source`, never through lurq's own functions, except where automation's input must stay automation's even in
+a QA copy: copy, cut and paste on a page of the browser window, and a web link in a chat, which automation never
+opens in the person's own browser. The switch is the program's, off on every start; the installed app,
+`tools/run.ps1` and every other start never turn it on, and it is no environment variable or setting.
+`tests/qa_every_input.rs` covers it.
 
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn

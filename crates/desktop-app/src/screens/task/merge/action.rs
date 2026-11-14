@@ -233,7 +233,7 @@ fn merging(ctx: &mut Ctx, task: &TaskContext, run: &RunView, how: Merging, in_wo
   // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which the card
   // shows, as it is.
   let start = move || {
-    let synthetic = lurq::app::events::is_synthetic_input();
+    let synthetic = crate::mcp::is_synthetic_input();
     let mut args = args.clone();
     if let Some(next) = &next {
       let next = Next {

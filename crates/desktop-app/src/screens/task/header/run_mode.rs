@@ -11,7 +11,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Row, Text},
@@ -29,6 +28,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::is_synthetic_input,
   project::ProjectFeed,
   screens::task::TaskContext,
   ui::{

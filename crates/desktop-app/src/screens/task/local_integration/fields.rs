@@ -2,17 +2,20 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{InputSource, input_source},
+    events::InputSource,
   },
   core::Signal,
   node::Element,
 };
 use orchester_workspace::tasks::local_integration::EditorPolicy;
 
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  field::FieldInput,
-  notice::{Notice, NoticeTone},
+use crate::{
+  mcp::input_source,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::FieldInput,
+    notice::{Notice, NoticeTone},
+  },
 };
 
 pub(super) fn input(

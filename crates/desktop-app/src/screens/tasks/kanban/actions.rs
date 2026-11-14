@@ -10,7 +10,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
   },
   core::{ElementRef, Signal},
 };
@@ -34,7 +33,10 @@ use super::{
   model::ColumnKey,
 };
 use crate::{
-  mcp::input_gate::{InputGate, persons_press},
+  mcp::{
+    input_gate::{InputGate, persons_press},
+    is_synthetic_input,
+  },
   project::ProjectFeed,
   screens::task_close::Subject,
   services::Services,

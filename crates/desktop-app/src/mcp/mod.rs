@@ -40,6 +40,7 @@ pub use self::{
   input_gate::InputGate,
   link::WindowLink,
   mode::{Build, DISCOVERY_VARIABLE, INSTALLED_BUILD_VARIABLE, McpMode},
+  qa_person::{input_source, is_synthetic_input},
   server::{address, endpoint},
   settings::{McpSettings, ThisRun, WindowControlSource},
   status::{McpKind, McpStatus, SeenClient, ServerState, Taken},
