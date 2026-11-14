@@ -107,15 +107,21 @@ impl HeldFields {
       team: false,
     };
     let said = picker::label(ctx, held, &who);
-    let sub = (!said.chosen).then(|| Sub {
-      words: ctx.t("local_hub.runsOn.choose"),
-      color: PaletteColor::Warning,
+    // Chosen, the field says what a change of it is: the account is this computer's at once, the rest is a version's.
+    let sub = Some(if said.chosen {
+      Sub::quiet(ctx.t("local_hub.runsOn.sub"))
+    } else {
+      Sub {
+        words: ctx.t("local_hub.runsOn.choose"),
+        color: PaletteColor::Warning,
+      }
     });
     let field = Field {
       ids: standing.ids,
       label: ctx.t("local_hub.runsOn.label"),
       sub,
       said,
+      missing: false,
       add: true,
       locked: standing.locked,
     };

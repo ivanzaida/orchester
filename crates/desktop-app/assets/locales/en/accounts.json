@@ -13,6 +13,12 @@
       "keyInfo": "The key goes to the system keychain with the account and is never shown again. Only the CLI's process gets it when a run starts.",
       "personNote": "Adding a host and a key that agents run on is a person's change: only you can add it.",
       "add": "Add provider",
+      "needs": {
+        "name": "Name it first",
+        "url": "Type its base URL, as https://…",
+        "key": "Type its API key",
+        "models": "Name at least one model"
+      },
       "one": "1 API provider",
       "other": "{{count}} API providers",
       "group": "{{accounts}} · {{providers}}",

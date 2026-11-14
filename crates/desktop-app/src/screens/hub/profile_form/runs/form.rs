@@ -63,6 +63,7 @@ impl Runs {
       }),
       sub,
       said,
+      missing,
       add: !team,
       locked: form.locked,
     };

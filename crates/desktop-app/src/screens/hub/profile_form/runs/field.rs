@@ -2,7 +2,7 @@
 //! (`Agents on accounts` C1 `RwzH2`, C2 `t7s3I`, C4 `IgFWn`): a row whose value is a picker that says what is chosen
 //! (*Claude Code · Work · claude-opus-5-5 · High*) and opens the compact *Runs on* picker (`ui::runs_on_picker`) under
 //! it, from its start, or above it where the window has no room under it: a dropdown never opens over its field. The
-//! field fills its row. A local profile's has *Add* beside it, which opens the accounts.
+//! field fills its row. A local profile's has *Add an account…* beside it, which opens Settings › Accounts.
 
 use std::sync::Arc;
 
@@ -63,7 +63,9 @@ pub(in crate::screens::hub::profile_form) struct Field {
   pub sub: Option<Sub>,
   /// What the field says, and whether something is chosen: it warns while nothing is.
   pub said: Label,
-  /// *Add* stands beside it: a local profile's accounts are the person's to add.
+  /// The form was tried without a choice: the field is outlined as a refused one.
+  pub missing: bool,
+  /// *Add an account…* stands beside it: a local profile's accounts are the person's to add, in Settings.
   pub add: bool,
   /// Nothing is chosen now: the menu stays closed.
   pub locked: bool,
@@ -89,7 +91,12 @@ impl Field {
       menu.open.clone(),
       menu.anchor.clone(),
     );
-    let trigger = if self.said.chosen { trigger } else { trigger.warning() }.fill();
+    let trigger = match (self.missing, self.said.chosen) {
+      (true, _) => trigger.invalid(),
+      (false, false) => trigger.warning(),
+      (false, true) => trigger,
+    }
+    .fill();
     let mut value = Row::new()
       .id(format!("{ids}-runs-on-value"))
       .width(Dimension::Pct(100.0))

@@ -69,6 +69,7 @@ use crate::{
     },
     team_hub::{
       actions::Busy,
+      bar::UseAll,
       panel::{body, head_named},
       profile::ready::section,
     },
@@ -124,6 +125,7 @@ struct ProfilePanel {
   listed: (Ref<Option<LocalProfile>>, Ref<Option<LocalProfile>>),
   unsaved: UnsavedSignal,
   what: Archivable,
+  id: ResourceId,
   /// The role as typed ([`role`]).
   typed: role::Typed,
   /// Whether the input that pressed *Save* may decide what the save changes in the role's prompts.
@@ -157,12 +159,12 @@ impl Component for ProfilePanel {
       }
     });
     let connect = Connect::new(ctx, root.clone(), project);
-    let here = edit::here(ctx, root, (props.id, project));
+    let here = edit::here(ctx, root, project);
     let on_here: OnHere = {
-      let (here, pending) = (here.clone(), pending.clone());
+      let (here, pending, id) = (here.clone(), pending.clone(), props.id);
       Arc::new(move |choice| {
         clear(&pending);
-        here.run(choice);
+        here.run((vec![id], choice));
       })
     };
     let on_edit: OnEdit = {
@@ -183,6 +185,7 @@ impl Component for ProfilePanel {
       listed,
       unsaved: props.unsaved,
       what: props.entry.what,
+      id: props.id,
       typed: ctx.signal(None),
       decided,
       gate: ctx.use_context::<InputGate>(),
@@ -219,7 +222,7 @@ impl Component for ProfilePanel {
     let busy = self.busy();
     let locked = busy != Busy::Idle;
     let navigation = Navigation::of(ctx);
-    let press = |fix: &Fix| self.press(fix, (&project, take.as_ref()), &navigation);
+    let press = |fix: &Fix| self.press(fix, (&project, id, take.as_ref()), &navigation);
     let head_end = head_end(ctx, &project, &entry, (id, PREFIX));
     let widening = self
       .pending
@@ -251,10 +254,11 @@ impl Component for ProfilePanel {
         refused.map(|error| -> Element { field_error("local-hub-profile-error", &message_text(ctx, &error)).into() }),
       );
     let fix = pinned::first(&parts).filter(|_| !changed);
+    let all = self.use_all(fix.as_ref(), take.as_ref(), ready::also_waiting(&hub, id, shown));
     let bar = self.bar(
       ctx,
       (&entry, shown, take.as_ref()),
-      fix.map(|fix| (press(&fix), fix)),
+      fix.map(|fix| (press(&fix), fix, all)),
       (changed, role_refused.as_ref()),
     );
     frame(entry.what, body, Some(bar))
@@ -382,13 +386,13 @@ impl ProfilePanel {
     &self,
     ctx: &mut Ctx,
     (entry, shown, take): (&Entry, &LocalProfile, Option<&Offered>),
-    fix: Option<(Press, Fix)>,
+    fix: Option<(Press, Fix, Option<UseAll>)>,
     (changed, role): (bool, Option<&RoleErrors>),
   ) -> Element {
     let idle = self.busy() == Busy::Idle;
-    if let Some((press, fix)) = fix {
+    if let Some((press, fix, all)) = fix {
       let account = take.map_or("", |offered| &*offered.label);
-      return pinned::bar(ctx, (&entry.name, shown, account), (&fix, press), !idle);
+      return pinned::bar(ctx, (&entry.name, shown, account), (&fix, press, all), !idle);
     }
     save_bar::bar(
       ctx,
@@ -404,7 +408,12 @@ impl ProfilePanel {
   /// What a press on `fix` does: an account to use (`take`, the first of its CLI the profile runs on as it is) is this
   /// computer's choice, made at once while the panel holds no change; held with the change otherwise, when the
   /// project has a connection on it. The others open where the missing part is set.
-  fn press(&self, fix: &Fix, (project, take): (&ShownProject, Option<&Offered>), navigation: &Navigation) -> Press {
+  fn press(
+    &self,
+    fix: &Fix,
+    (project, id, take): (&ShownProject, ResourceId, Option<&Offered>),
+    navigation: &Navigation,
+  ) -> Press {
     match fix {
       Fix::UseConnection => {
         let target = take.map(|offered| offered.here);
@@ -413,7 +422,7 @@ impl ProfilePanel {
           Some(Here::Connection(connection)) if held.get_untracked().0.is_some_and(|held| held.changed) => {
             choices.make(Edit::Connection(connection));
           }
-          Some(target) => here.run(target),
+          Some(target) => here.run((vec![id], target)),
           None => {}
         })
       }
@@ -423,6 +432,17 @@ impl ProfilePanel {
         ProjectPage::hub(view_of(HubFilter::McpServers, Some(Archivable::McpServer(*server)))),
       ))),
     }
+  }
+
+  /// *Use for all*: the account the pinned *Use* takes, for the profile and the `others` of its CLI that run on
+  /// nothing here, with how many they are. Nothing while no other waits, or while what *Use* takes runs on a key,
+  /// whose models are its own.
+  fn use_all(&self, fix: Option<&Fix>, take: Option<&Offered>, others: Vec<ResourceId>) -> Option<UseAll> {
+    let take = take.filter(|take| fix == Some(&Fix::UseConnection) && take.sign_in && !others.is_empty())?;
+    let (here, target) = (self.here.clone(), take.here);
+    let profiles: Vec<ResourceId> = [self.id].into_iter().chain(others).collect();
+    let count = profiles.len();
+    Some((count, Press::run(move || here.run((profiles.clone(), target)))))
   }
 
   /// Why the last choice or save did nothing, as the workspace said.

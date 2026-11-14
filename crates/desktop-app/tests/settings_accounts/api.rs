@@ -35,7 +35,8 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
         })
       );
 
-      // Nothing is added before every field can be saved.
+      // Nothing is added before every field can be saved, and the page says what it still needs.
+      assert_eq!(joined(&mut window, "api-add-needs"), "Name it first");
       set(&mut window, "api-add-name", "DeepSeek");
       set(
         &mut window,
@@ -52,6 +53,7 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
           .expect("read")
       };
       assert!(accounts(&window).is_empty(), "no model yet: nothing is added");
+      assert_eq!(joined(&mut window, "api-add-needs"), "Name at least one model");
 
       set(&mut window, "connection-provider-model", "deepseek-chat");
       click(&mut window, "connection-provider-add-model");

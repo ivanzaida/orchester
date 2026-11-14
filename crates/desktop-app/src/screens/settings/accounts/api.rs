@@ -95,6 +95,22 @@ impl Draft {
     self.name.set(String::new());
   }
 
+  /// The first thing the page still needs before it can add the provider, as the key of the words that say so;
+  /// nothing once [`Self::ready`] has what it adds.
+  fn needs(&self) -> Option<&'static str> {
+    if Name::new(&self.name.get()).is_err() {
+      Some("accounts.api.needs.name")
+    } else if base_url(&self.form.url().get()).is_err() {
+      Some("accounts.api.needs.url")
+    } else if self.form.save_guard().typed_key().is_none() {
+      Some("accounts.api.needs.key")
+    } else if self.ready().is_none() {
+      Some("accounts.api.needs.models")
+    } else {
+      None
+    }
+  }
+
   /// What the fields add, once each of them can be saved.
   fn ready(&self) -> Option<NewApi> {
     let name = Name::new(&self.name.get()).ok()?;
@@ -205,6 +221,14 @@ fn footer(ctx: &mut Ctx, draft: &Draft) -> Element {
     .error
     .filter(|_| !pending)
     .map(|error| field_error("api-add-error", &message_text(ctx, &error)));
+  // Why *Add provider* cannot be pressed yet, beside it: the next thing to type.
+  let needs = draft.needs().filter(|_| !pending).map(|key| {
+    Text::new(&t(ctx, key))
+      .id("api-add-needs")
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextSecondary)
+      .nowrap()
+  });
   let reason = Row::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -230,6 +254,7 @@ fn footer(ctx: &mut Ctx, draft: &Draft) -> Element {
         .spacing(SpacingSize::Md)
         .align_items(Alignment::Center)
         .child(reason)
+        .with_children(needs)
         .child(cancel)
         .child(save),
     )

@@ -240,8 +240,10 @@ fn team_hub_profile_with_no_connection_of_its_kind_is_run_on_an_account_and_subs
   team(&agents);
   let (profile, _) = builder(&agents);
   show(&mut agents, profile);
-  assert!(!agents.exists("team-hub-runs-on-none"), "an account is there to run it");
-  assert!(agents.exists("team-hub-pick"));
+  // This computer's accounts are read behind the panel's first frame.
+  agents.until("an account is there to run it", |s| {
+    s.exists("team-hub-pick") && !s.exists("team-hub-runs-on-none")
+  });
   assert_eq!(agents.text("team-hub-runs-on-sub"), "choose the account it runs on");
   assert!(
     agents.text("team-hub-pick").contains("Choose a Claude Code account"),
@@ -389,4 +391,55 @@ fn team_hub_profile_a_signed_in_connection_stays_ready() {
   show(&mut agents, profile);
   assert!(agents.text("team-hub-ready-connection-words").contains("Claude 2"));
   assert!(!agents.exists("team-hub-fix-sign-in"));
+}
+
+/// The team's profile Reviewer on Claude Code, which can miss nothing but an account.
+fn reviewer(agents: &Agents) -> ResourceId {
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let team = TeamAgentProfile::new(
+    Name::new("Reviewer").expect("name"),
+    String::new(),
+    PromptText::new("Review the work.").expect("prompt"),
+    (
+      AgentProvider::ClaudeCodeCli,
+      ModelId::new("claude-opus-5-5").expect("model"),
+      ProviderSettings::default(),
+    ),
+  );
+  let local = AgentProfile::from_team(&team, ConnectionId::generate());
+  cached(
+    &mut db,
+    ("team-reviewer", "Reviewer"),
+    serde_json::to_value(&team).expect("json"),
+    &local,
+  )
+}
+
+/// Two profiles of one CLI wait for an account here: *Use for all 2* stands beside *Use*, says how many wait, and one
+/// press of it keeps the account for both, on the one connection the project gets on it.
+#[test]
+fn team_hub_profile_use_for_all_keeps_the_account_for_every_profile_of_the_cli_that_waits() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let (profile, _) = builder(&agents);
+  let reviewer = reviewer(&agents);
+  show(&mut agents, profile);
+  agents.until("the fix for all", |s| s.exists("team-hub-fix-use-all"));
+  assert!(
+    agents.text("team-hub-fix-use-all").contains("Use for all 2"),
+    "{}",
+    agents.text("team-hub-fix-use-all")
+  );
+  assert_eq!(
+    agents.text("team-hub-actions-hint"),
+    "2 Claude Code profiles wait for an account · kept on this computer"
+  );
+
+  agents.click("team-hub-fix-use-all");
+
+  agents.until("both are picked on one connection", |s| {
+    let db = ProjectDb::open(&s.root).expect("database");
+    let picks = [profile, reviewer].map(|id| db.connection_pick(id).expect("pick").map(|pick| pick.connection));
+    picks[0].is_some() && picks[0] == picks[1]
+  });
 }

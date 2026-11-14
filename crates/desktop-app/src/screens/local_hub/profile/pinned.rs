@@ -32,11 +32,12 @@ pub(super) fn first(parts: &[Part<Fix>]) -> Option<Fix> {
 }
 
 /// The bar of `fix` of the profile `shown`, named `name`, which `press` does; `connection` names the account *Use*
-/// keeps (*Claude Code · Default*). Off while a save is under way.
+/// keeps (*Claude Code · Default*), and `all` is *Use for all* with how many profiles it sets. Off while a save is
+/// under way.
 pub(super) fn bar(
   ctx: &Ctx,
   (name, shown, connection): (&str, &LocalProfile, &str),
-  (fix, press): (&Fix, Press),
+  (fix, press, all): (&Fix, Press, Option<bar::UseAll>),
   busy: bool,
 ) -> Element {
   let cli = shown.cli.map(|cli| ctx.t(cli_key(cli)).to_string()).unwrap_or_default();
@@ -81,5 +82,13 @@ pub(super) fn bar(
     .icon(glyph)
     .pinned();
   let button = if busy { button.disabled() } else { button.press(press) };
-  bar::bar(vec![button.into()], Some(hint.to_string()))
+  let hint = match &all {
+    Some((count, _)) => bar::use_all_hint(ctx, *count, &cli),
+    None => hint.to_string(),
+  };
+  let all = all.map(|(count, press)| {
+    let button = bar::use_all(ctx, "local-hub", count);
+    if busy { button.disabled() } else { button.press(press) }.into()
+  });
+  bar::bar([button.into()].into_iter().chain(all).collect(), Some(hint))
 }

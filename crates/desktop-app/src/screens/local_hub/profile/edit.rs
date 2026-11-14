@@ -186,27 +186,37 @@ pub(super) fn question(ctx: &mut Ctx, asked: &Asked, (save, pending): (&Save, &P
 }
 
 /// Runs the profile somewhere else as it is: this computer's choice, made at once.
-pub(super) type HereAction = FutureAction<Here, (), Message>;
+pub(super) type HereAction = FutureAction<(Vec<ResourceId>, Here), (), Message>;
 
-/// Makes a connection, or an account of the person's, what the profile `id` of the project at `root` runs on here
+/// Makes a connection, or an account of the person's, what each of the profiles named, of the project at `root`,
+/// runs on here; every profile is tried, and the first refusal is the answer: one it cannot run stays as it was
 /// ([`local_connection::run_here`], `Workspace::run_profile_on_account`, which makes the project's connection on the
 /// account when it has none); the screens that read the profiles then read them again.
-pub(super) fn here(ctx: &mut Ctx, root: PathBuf, (id, project): (ResourceId, ProjectId)) -> HereAction {
+pub(super) fn here(ctx: &mut Ctx, root: PathBuf, project: ProjectId) -> HereAction {
   let services = Services::of(ctx);
-  ctx.future_action(move |here: Here| {
+  ctx.future_action(move |(profiles, here): (Vec<ResourceId>, Here)| {
     let (root, changes, workspace) = (root.clone(), services.changes.clone(), services.workspace.clone());
     async move {
-      background::run(move || match here {
-        Here::Connection(connection) => local_connection::run_here(&root, id, connection),
-        Here::Account(account) => workspace
-          .run_profile_on_account(&root, id, account)
-          .map_err(|error| error.message()),
+      let refused = background::run(move || {
+        let mut refused = None;
+        for id in profiles {
+          let kept = match here {
+            Here::Connection(connection) => local_connection::run_here(&root, id, connection),
+            Here::Account(account) => workspace
+              .run_profile_on_account(&root, id, account)
+              .map_err(|error| error.message()),
+          };
+          if let Err(error) = kept {
+            refused.get_or_insert(error);
+          }
+        }
+        refused
       })
-      .await??;
+      .await?;
       for change in [Outside::Profiles, Outside::Connections] {
         changes.record(project, change);
       }
-      Ok(())
+      refused.map_or(Ok(()), Err)
     }
   })
 }

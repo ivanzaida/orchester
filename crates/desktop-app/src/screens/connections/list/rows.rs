@@ -15,7 +15,7 @@ use orchester_workspace::connections::data::ProjectConnections;
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
-  routes::{ConnectionsView, NewConnection, ProjectPage, Route},
+  routes::{AccountsView, ConnectionsView, NewConnection, ProjectPage, Route},
   screens::{
     connections::{
       data::{Entry, github_state},
@@ -29,6 +29,8 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
+    notice::NoticeTone,
+    setting_notice::SettingNotice,
     unavailable::reason_line,
   },
 };
@@ -56,9 +58,29 @@ pub(super) fn groups(
     .id("connections-list")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Roomy.role())
+    .child(accounts_note(ctx, &navigation))
     .child(agents)
     .child(super::super::decision::listed(ctx, project, &listed.decisions))
     .child(github)
+    .into()
+}
+
+/// Over the groups, until the tab goes (`docs/design/agent-accounts.md`, "Agents run on accounts"): agent CLIs run on
+/// the person's accounts, which are added in Settings › Accounts; the CLI connections listed here are the ones
+/// Orchester keeps for them, so a row the person never added is no mistake.
+fn accounts_note(ctx: &Ctx, navigation: &Navigation) -> Element {
+  SettingNotice::new("connections-accounts-note", NoticeTone::Info)
+    .title(ctx.t("connections.accountsNote.title"))
+    .body(ctx.t("connections.accountsNote.body"))
+    .action(
+      ActionButton::new(
+        "connections-accounts-open",
+        ButtonKind::Secondary,
+        ctx.t("connections.accountsNote.open"),
+      )
+      .compact()
+      .opens(navigation.to(Route::Accounts(AccountsView::default()))),
+    )
     .into()
 }
 

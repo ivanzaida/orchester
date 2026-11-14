@@ -470,7 +470,8 @@ fn models(listed: &[ModelChoice]) -> Vec<Model> {
     .collect()
 }
 
-/// A sign-in's line: its plan and the plan's 5-hour use, that its limit is reached, or that it is signed out.
+/// A sign-in's line: who is signed in (else its plan) and the plan's 5-hour use, that its limit is reached, or that it
+/// is signed out.
 fn sign_in(
   ctx: &Ctx,
   (account, signed_out): (Option<&AgentAccount>, bool),
@@ -491,9 +492,13 @@ fn sign_in(
     .and_then(|account| account.last_check())
     .and_then(|check| check.known_identity())
     .and_then(|identity| identity.plan.as_deref());
-  let caption = match plan {
-    Some(plan) => ctx.t_args("local_hub.runsOn.who", [("cli", cli), ("plan", &plan_name(plan))]),
-    None => base.caption.clone(),
+  let plan = plan.map(|plan| ctx.t_args("local_hub.runsOn.who", [("cli", cli), ("plan", &plan_name(plan))]));
+  // An account is who is signed in: the line says the email where the CLI reports it, and the tooltip keeps the plan.
+  let email = account.and_then(AgentAccount::email);
+  let caption = match (email, &plan) {
+    (Some(email), _) => email.into(),
+    (None, Some(plan)) => plan.clone(),
+    (None, None) => base.caption.clone(),
   };
   let now = Timestamp::now();
   let reading = account.and_then(|account| who.readings.of_account(account.id()));
@@ -501,6 +506,7 @@ fn sign_in(
   let used = reading.and_then(|reading| five_hour_use(reading, now));
   Connection {
     caption,
+    tip_note: email.and(plan),
     five_hour: if reached { Some(100) } else { used },
     use_unread: account.is_some() && !reached && used.is_none(),
     limit: reached,

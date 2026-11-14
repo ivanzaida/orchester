@@ -33,6 +33,8 @@ pub(in crate::screens) struct Offered {
   pub detail: Option<Arc<str>>,
   /// It lists models and the profile's is not one of them: it cannot be chosen.
   pub other_models: bool,
+  /// A sign-in, which serves what its CLI does, and so every profile of the CLI; a key serves its own models.
+  pub sign_in: bool,
   /// What choosing it makes the profile run on.
   pub here: Here,
 }
@@ -140,6 +142,11 @@ fn one(ctx: &Ctx, item: &Item, (cli, model): (&str, &str), who: &picker::Who<'_>
       plan
     },
     other_models,
+    sign_in: match &item.target {
+      Target::Account(_) => true,
+      Target::Connection(choice) => choice.host.is_none(),
+      Target::Api(_) | Target::Cli(..) => false,
+    },
     here,
   })
 }

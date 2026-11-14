@@ -8,7 +8,11 @@ use orchester_core::{
 };
 use orchester_workspace::readiness::{ReadinessStanding, Undecided};
 
-use crate::{screens::team_hub::model::Entry, ui::icon::Icon};
+use crate::{
+  routes::HubFilter,
+  screens::team_hub::model::{Entry, Kind, Listing},
+  ui::icon::Icon,
+};
 
 /// A fix this computer takes by itself; a part this panel does not fix (a server this app cannot run, a keychain
 /// that cannot say, a reviewer's connection) has none, and no action stands in its place.
@@ -123,6 +127,18 @@ pub(in crate::screens::team_hub) fn first(entry: &Entry, accounts: bool) -> Opti
     },
     |(id, _)| Some(Fix::OpenArchived(id)),
   )
+}
+
+/// The other profiles of `listing` that run with `entry`'s CLI and wait, as it does, for an account to be chosen on
+/// this computer: what *Use for all* sets with it.
+pub(in crate::screens::team_hub) fn also_waiting(listing: &Listing, entry: &Entry, accounts: bool) -> Vec<ResourceId> {
+  listing
+    .shown(HubFilter::All)
+    .filter(|other| other.kind == Kind::Profile && other.id != entry.id)
+    .filter(|other| entry.cli.is_some() && other.cli == entry.cli)
+    .filter(|other| first(other, accounts) == Some(Fix::UseConnection))
+    .map(|other| other.id)
+    .collect()
 }
 
 /// What a row of *Ready here?* shows of a fix: the words of its link and what its control is called in element ids. A

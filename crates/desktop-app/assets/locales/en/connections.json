@@ -665,6 +665,11 @@
       "apiProvider": "A CLI on an API provider",
       "apiProviderDetail": "Claude Code or Codex on a compatible API such as DeepSeek's, with a key from Secrets"
     },
+    "accountsNote": {
+      "title": "Agent CLIs run on your accounts",
+      "body": "Sign-ins and API providers are added once, in Settings › Accounts, and every project can use them. A Claude Code or Codex connection listed here is the one Orchester keeps for an account a profile was offered: there is nothing to add or tend for it.",
+      "open": "Open Accounts"
+    },
     "groups": {
       "add": "Add",
       "addProvider": "Add provider",

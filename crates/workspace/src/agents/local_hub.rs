@@ -151,6 +151,11 @@ impl LocalHub {
     &self.plain
   }
 
+  /// Every published profile, with what the hub shows of it.
+  pub fn profiles(&self) -> &[(ResourceId, LocalProfile)] {
+    &self.profiles
+  }
+
   pub fn profile(&self, id: ResourceId) -> Option<&LocalProfile> {
     self
       .profiles

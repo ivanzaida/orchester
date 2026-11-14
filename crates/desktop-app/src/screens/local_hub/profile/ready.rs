@@ -6,7 +6,12 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{connection::AgentProvider, id::ConnectionId, secret::SecretName, sharing::Missing};
+use orchester_core::{
+  connection::AgentProvider,
+  id::{ConnectionId, ResourceId},
+  secret::SecretName,
+  sharing::Missing,
+};
 use orchester_workspace::agents::{
   local_hub::{LocalHub, LocalProfile},
   team_profile::ConnectionChoice,
@@ -58,6 +63,18 @@ impl Offer for Fix {
       Self::AddValue(_) => "add-value",
     }
   }
+}
+
+/// The other profiles of `hub` that run with the CLI of `shown`, the profile `id`, and run on nothing on this
+/// computer, as it does: what *Use for all* sets with it.
+pub(super) fn also_waiting(hub: &LocalHub, id: ResourceId, shown: &LocalProfile) -> Vec<ResourceId> {
+  hub
+    .profiles()
+    .iter()
+    .filter(|(other, profile)| *other != id && shown.cli.is_some() && profile.cli == shown.cli)
+    .filter(|(_, profile)| profile.current.is_none())
+    .map(|(other, _)| *other)
+    .collect()
 }
 
 /// The connection, then each MCP server, then each secret of `profile`, as `hub` says they stand. `offered` is what

@@ -9,10 +9,10 @@ use orchester_app::routes::{HubFilter, HubView};
 use orchester_core::{
   account::AccountCli,
   connection::{AgentConnection, AgentProvider, ConnectionAccount},
-  id::{AgentAccountId, ConnectionId},
+  id::{AgentAccountId, ConnectionId, ResourceId},
   name::Name,
-  resource::VersionNumber,
-  store::ConnectionStore,
+  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, Slug, VersionNumber},
+  store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -211,4 +211,63 @@ fn local_hub_account_use_runs_it_on_the_first_of_its_kind_at_once_for_automation
     "with no new version"
   );
   assert!(!agents.exists(ALLOW), "nothing to ask: no other account");
+}
+
+/// Reviewer, as Builder of [`builder_without_connection`] is: a Claude model on a connection the project no longer
+/// has, published as v1.
+fn reviewer_without_connection(agents: &Agents) -> ResourceId {
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let profile = AgentProfile::new(
+    Name::new("Reviewer").expect("name"),
+    "Reviews the change".into(),
+    PromptText::new("Review the change.").expect("instructions"),
+    ConnectionId::generate(),
+    ModelId::new("claude-opus-5-5").expect("model"),
+    ProviderSettings::default(),
+  );
+  let id = db
+    .create_resource(
+      Slug::new("reviewer").expect("slug"),
+      Name::new("Reviewer").expect("name"),
+      &profile,
+      Timestamp::now(),
+    )
+    .expect("resource")
+    .id();
+  db.publish_draft::<AgentProfile>(id, Timestamp::now())
+    .expect("published");
+  id
+}
+
+/// Two profiles of one CLI run on nothing here: *Use for all 2* stands beside *Use*, says how many wait, and one
+/// press of it runs both on the account, with no version of either.
+#[test]
+fn local_hub_account_use_for_all_runs_every_profile_of_the_cli_that_waits_on_the_account() {
+  let mut agents = Agents::new(true);
+  let (profile, [claude_2, _]) = builder_without_connection(&agents);
+  let reviewer = reviewer_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  agents.until("the fix for all", |s| s.exists("local-hub-fix-use-all"));
+  assert!(
+    agents.text("local-hub-fix-use-all").contains("Use for all 2"),
+    "{}",
+    agents.text("local-hub-fix-use-all")
+  );
+  assert_eq!(
+    agents.text("team-hub-actions-hint"),
+    "2 Claude Code profiles wait for an account · kept on this computer"
+  );
+
+  agents.click("local-hub-fix-use-all");
+
+  agents.until("both run on Claude 2", |s| {
+    [profile, reviewer].iter().all(|id| runs_here(s, *id) == claude_2) && !s.exists("local-hub-fix-use")
+  });
+  for id in [profile, reviewer] {
+    assert_eq!(
+      stored(&agents, id).1,
+      VersionState::Published(VersionNumber::FIRST),
+      "with no new version"
+    );
+  }
 }

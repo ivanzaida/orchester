@@ -115,7 +115,7 @@
       "version": "{{version}} · published {{date}}",
       "add": "Add",
       "nothingToAdd": "There is nothing else of this kind to give",
-      "addConnection": "Add",
+      "addConnection": "Add an account…",
       "instructions": "Instructions",
       "skills": "Skills",
       "tools": "Tools"
@@ -123,6 +123,7 @@
     "runsOn": {
       "label": "Runs on",
       "choose": "Choose an account",
+      "sub": "The account is this computer's choice and changes at once · a model or effort waits for Save",
       "value": "{{cli}} · {{name}} · {{model}}",
       "valueEffort": "{{cli}} · {{name}} · {{model}} · {{effort}}",
       "unchosen": "Choose an account · {{model}}",

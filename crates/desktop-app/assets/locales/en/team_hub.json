@@ -229,7 +229,8 @@
       "programTitle": "Choose the MCP server's program",
       "action": {
         "use": "Use {{connection}} for {{profile}}",
-        "add": "Add a {{cli}} connection",
+        "useAll": "Use for all {{count}}",
+        "add": "Add a {{cli}} account",
         "signIn": "Sign in to {{cli}}",
         "switchOn": "Switch on {{server}}",
         "setPath": "Set {{server}}'s program path",
@@ -240,6 +241,7 @@
         "then": "Then {{what}}",
         "done": "{{profile}} runs here once nothing is missing",
         "use": "Asked once per profile · kept on this computer",
+        "useAll": "{{count}} {{cli}} profiles wait for an account · kept on this computer",
         "add": "Opens Settings › Accounts",
         "signIn": "Opens Settings › Accounts",
         "openArchived": "In Archived · an admin restores it there"

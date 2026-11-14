@@ -39,7 +39,9 @@ use orchester_workspace::{
 use self::fix::Fix;
 use super::{
   actions::Actions,
-  archive, member,
+  archive,
+  bar::UseAll,
+  member,
   model::{Entry, Listing},
   panel, secret, words,
 };
@@ -175,9 +177,12 @@ impl Component for ProfilePanel {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
-    let pinned = team
-      .bar
-      .or_else(|| fix::first(entry, accounts).map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy)));
+    let pinned = team.bar.or_else(|| {
+      fix::first(entry, accounts).map(|fix| {
+        let all = self.use_all(&fix, (&props, &offered), accounts);
+        bar::bar(ctx, &words, (&fix, missing), (press(&fix), all), busy)
+      })
+    });
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),
@@ -257,7 +262,7 @@ impl ProfilePanel {
         return;
       }
       if let Some(here) = here::here_of(now) {
-        pick.run((profile, here));
+        pick.run((vec![profile], here));
       }
     });
     let (chosen, kept) = (self.chosen.clone(), self.kept.clone());
@@ -316,7 +321,7 @@ impl ProfilePanel {
         Press::run(move || {
           // The select shows the one kept; with none chosen yet that is the first listed.
           chosen.set(taken.value.clone());
-          action.run((profile, taken.here));
+          action.run((vec![profile], taken.here));
         })
       }
       Fix::SwitchOn(server) => {
@@ -332,6 +337,28 @@ impl ProfilePanel {
         guarded(Arc::new(move || entry.ask(&name)))
       }
     }
+  }
+
+  /// *Use for all*: the account the pinned *Use* names, kept for every profile of the CLI that waits for one here,
+  /// with how many they are. Nothing while no other profile waits, or while what *Use* names runs on a key, whose
+  /// models are its own.
+  fn use_all(&self, fix: &Fix, (props, offered): (&Props, &[Offered]), accounts: bool) -> Option<UseAll> {
+    let taken = self
+      .chosen_of(offered)
+      .filter(|taken| *fix == Fix::UseConnection && taken.sign_in)?
+      .clone();
+    let mut profiles = fix::also_waiting(&props.listing, &props.entry, accounts);
+    if profiles.is_empty() {
+      return None;
+    }
+    profiles.insert(0, props.entry.id);
+    let count = profiles.len();
+    let (action, chosen) = (self.actions.pick.clone(), self.chosen.clone());
+    let press = Press::run(move || {
+      chosen.set(taken.value.clone());
+      action.run((profiles.clone(), taken.here));
+    });
+    Some((count, press))
   }
 
   /// Why the last fix did nothing: what the workspace refused with. What went wrong with a secret's value shows in its
