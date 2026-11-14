@@ -167,7 +167,12 @@ fn accounts(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Accoun
   let account = string(args, "account")?
     .map(|named| account(named, lookup))
     .transpose()?;
-  if account.is_none() && !matches!(panel, AccountsPanel::Account | AccountsPanel::Add) {
+  if account.is_none()
+    && !matches!(
+      panel,
+      AccountsPanel::Account | AccountsPanel::Add | AccountsPanel::AddApi
+    )
+  {
     return Err(ToolError::Missing { param: "account" });
   }
   Ok(AccountsView { account, panel })
