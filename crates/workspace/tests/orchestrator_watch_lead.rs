@@ -405,64 +405,25 @@ fn watch_lead_typed_ceilings_are_read_field_by_field_and_out_of_bounds_is_refuse
     wrong.read(","),
     Err(vec![Wrong::Runs, Wrong::PercentAbove, Wrong::Budget])
   );
-  for (typed, why) in [
-    (
-      TypedCeilings {
-        runs: "0".to_owned(),
-        ..default.clone()
-      },
-      Wrong::Runs,
-    ),
-    (
-      TypedCeilings {
-        returns: "11".to_owned(),
-        ..default.clone()
-      },
-      Wrong::Returns,
-    ),
-    (
-      TypedCeilings {
-        raises: "4".to_owned(),
-        ..default.clone()
-      },
-      Wrong::Raises,
-    ),
-    (
-      TypedCeilings {
-        raises: "".to_owned(),
-        ..default.clone()
-      },
-      Wrong::Raises,
-    ),
-    (
-      TypedCeilings {
-        percent: "0".to_owned(),
-        ..default.clone()
-      },
-      Wrong::PercentBelow,
-    ),
-    (
-      TypedCeilings {
-        percent: "half".to_owned(),
-        ..default.clone()
-      },
-      Wrong::PercentAbove,
-    ),
-    (
-      TypedCeilings {
-        budget: "40M".to_owned(),
-        ..default.clone()
-      },
-      Wrong::Budget,
-    ),
-    (
-      TypedCeilings {
-        budget: "0".to_owned(),
-        ..default.clone()
-      },
-      Wrong::Budget,
-    ),
+  for (field, value, why) in [
+    ("runs", "0", Wrong::Runs),
+    ("returns", "11", Wrong::Returns),
+    ("raises", "4", Wrong::Raises),
+    ("raises", "", Wrong::Raises),
+    ("percent", "0", Wrong::PercentBelow),
+    ("percent", "half", Wrong::PercentAbove),
+    ("budget", "40M", Wrong::Budget),
+    ("budget", "0", Wrong::Budget),
   ] {
+    let mut typed = default.clone();
+    let place = match field {
+      "runs" => &mut typed.runs,
+      "returns" => &mut typed.returns,
+      "raises" => &mut typed.raises,
+      "percent" => &mut typed.percent,
+      _ => &mut typed.budget,
+    };
+    value.clone_into(place);
     assert_eq!(typed.read(","), Err(vec![why]), "{typed:?}");
   }
 }

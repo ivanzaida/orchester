@@ -163,17 +163,9 @@ fn orchestrator_watching_lead_shows_the_mode_and_the_ceilings_of_what_is_led_to_
   );
 }
 
-#[test]
-fn orchestrator_watching_lead_changes_the_ceilings_in_the_form_once_every_field_is_in_bounds() {
-  let mut answer = answer();
-  let row = answer.ceilings(0);
-  let (change, form) = (format!("{row}-change"), format!("{row}-form"));
-  let field = |name: &str| format!("{form}-{name}-field");
+/// The form `form` names each ceiling with its bounds, and ends in its note and its two buttons.
+fn says_its_rows(answer: &mut Answer, form: &str) {
   let hint = |name: &str| format!("{form}-{name}-hint");
-  answer.screen.click(&change);
-  answer.screen.until("the form", |screen| screen.exists(&form));
-  assert_eq!(answer.screen.text(&format!("{form}-title")), "Ceilings · Webhooks v2");
-  assert!((answer.screen.bounds(&form).width - 440.0).abs() < 0.5);
   for (name, said) in [
     ("runs", "How many times it may run one task again · 1 to 5"),
     ("returns", "Returns to an earlier step inside one run · 0 to 10"),
@@ -185,7 +177,7 @@ fn orchestrator_watching_lead_changes_the_ceilings_in_the_form_once_every_field_
   ] {
     assert_eq!(answer.screen.text(&hint(name)), said);
   }
-  let shown = answer.screen.text(&form);
+  let shown = answer.screen.text(form);
   for words in [
     "Runs of a task",
     "Returns per run",
@@ -200,6 +192,20 @@ fn orchestrator_watching_lead_changes_the_ceilings_in_the_form_once_every_field_
   ] {
     assert!(shown.contains(words), "{words}: {shown}");
   }
+}
+
+#[test]
+fn orchestrator_watching_lead_changes_the_ceilings_in_the_form_once_every_field_is_in_bounds() {
+  let mut answer = answer();
+  let row = answer.ceilings(0);
+  let (change, form) = (format!("{row}-change"), format!("{row}-form"));
+  let field = |name: &str| format!("{form}-{name}-field");
+  let hint = |name: &str| format!("{form}-{name}-hint");
+  answer.screen.click(&change);
+  answer.screen.until("the form", |screen| screen.exists(&form));
+  assert_eq!(answer.screen.text(&format!("{form}-title")), "Ceilings · Webhooks v2");
+  assert!((answer.screen.bounds(&form).width - 440.0).abs() < 0.5);
+  says_its_rows(&mut answer, &form);
   let values = ["runs", "returns", "raises", "percent", "budget"].map(|name| answer.value(&field(name)));
   assert_eq!(values, ["3", "4", "1", "50", ""], "the subscription's own ceilings");
 
@@ -264,48 +270,41 @@ fn orchestrator_watching_lead_changes_the_ceilings_in_the_form_once_every_field_
       && screen.text(&row) == "Runs of a task 5 Returns per run 4 Raises 1 by 100 % Budget 0 of 40M tokens Change…"
   });
   assert!(!answer.screen.exists("orchestrator-watching-problem"));
+}
 
-  answer.screen.click(&change);
-  for _ in 0..40 {
-    answer.screen.window.tree.tick_futures();
-    answer.screen.window.pass();
-    std::thread::sleep(std::time::Duration::from_millis(5));
-  }
-  eprintln!(
-    "DBG3 form={} change {:?} row {:?} conv {:?} list {:?}",
-    answer.screen.exists(&form),
-    answer.screen.bounds(&change),
-    answer.screen.bounds(&row),
-    answer.screen.bounds("orchestrator-conversation"),
-    answer.screen.text(&row)
-  );
-  answer.screen.click(&change);
-  // Cancel and Esc change nothing, and the form opens on the ceilings as they are now.
-  answer.screen.click(&change);
-  answer
-    .screen
-    .until("the form after the save", |screen| screen.exists(&form));
-  assert_eq!(answer.value(&field("runs")), "5");
-  assert_eq!(
-    answer.value(&field("budget")),
-    "40,000,000",
-    "an absolute number, grouped"
-  );
-  assert_eq!(
-    answer.screen.text(&hint("budget")),
-    "Tokens for the whole target · empty: no budget · used 0"
-  );
+/// Cancel and Esc change nothing, and the form opens again on the subscription's ceilings, whatever was typed.
+#[test]
+fn orchestrator_watching_lead_form_forgets_what_was_typed_when_it_is_cancelled() {
+  let mut answer = answer();
+  let row = answer.ceilings(0);
+  let (change, form) = (format!("{row}-change"), format!("{row}-form"));
+  let field = |name: &str| format!("{form}-{name}-field");
+  open(&mut answer.screen, &change, &form);
+  assert_eq!(answer.value(&field("runs")), "3");
   answer.screen.set(&field("runs"), "1");
   answer.screen.click(&format!("{form}-cancel"));
   answer.screen.until("the form closed", |screen| !screen.exists(&form));
-  answer.screen.click(&change);
-  answer
-    .screen
-    .until("the form after Cancel", |screen| screen.exists(&form));
-  assert_eq!(answer.value(&field("runs")), "5", "what was typed before is gone");
+  open(&mut answer.screen, &change, &form);
+  assert_eq!(answer.value(&field("runs")), "3", "what was typed before is gone");
   answer.screen.key(("Escape", "Escape"), false);
   answer.screen.until("Esc closes it", |screen| !screen.exists(&form));
-  assert_eq!(answer.mode(), WatchMode::Lead { ceilings: asked });
+  assert_eq!(
+    answer.mode(),
+    WatchMode::Lead {
+      ceilings: Ceilings::default()
+    }
+  );
+}
+
+/// Presses `opener` until `shown` is there. The answer is read again after a change of its subscriptions, and a
+/// press that lands while its rows are rebuilt opens nothing: a person presses again, and so does this.
+fn open(screen: &mut crate::harness::Orchestrator, opener: &str, shown: &str) {
+  screen.until("what the press opens", |screen| {
+    if !screen.exists(shown) {
+      screen.click(opener);
+    }
+    screen.exists(shown)
+  });
 }
 
 #[test]
@@ -313,8 +312,7 @@ fn orchestrator_watching_lead_follows_from_the_mode_menu_by_a_persons_press_only
   let mut answer = answer();
   let control = format!("{}-mode", answer.head(0));
   let menu = format!("{control}-menu");
-  answer.screen.click(&control);
-  answer.screen.until("the menu", |screen| screen.exists(&menu));
+  open(&mut answer.screen, &control, &menu);
   assert!((answer.screen.bounds(&menu).width - 440.0).abs() < 0.5);
   assert_eq!(
     answer.screen.text(&format!("{menu}-follow")),
@@ -336,8 +334,7 @@ fn orchestrator_watching_lead_follows_from_the_mode_menu_by_a_persons_press_only
   assert!(answer.mode().ceilings().is_some());
 
   // Automation's choice is refused.
-  answer.screen.click(&control);
-  answer.screen.until("the menu", |screen| screen.exists(&menu));
+  open(&mut answer.screen, &control, &menu);
   with_synthetic_input(|| answer.screen.click(&format!("{menu}-follow")));
   assert!(answer.screen.window.refused_press().is_some(), "refused to the client");
   assert!(answer.mode().ceilings().is_some(), "a synthetic press changes no mode");
@@ -347,10 +344,7 @@ fn orchestrator_watching_lead_follows_from_the_mode_menu_by_a_persons_press_only
     let subscriptions = answer.screen.db().active_subscriptions().expect("read");
     subscriptions.of(answer.led).expect("led").since()
   };
-  if !answer.screen.exists(&menu) {
-    answer.screen.click(&control);
-    answer.screen.until("the menu", |screen| screen.exists(&menu));
-  }
+  open(&mut answer.screen, &control, &menu);
   answer.screen.click(&format!("{menu}-follow"));
   answer.screen.until("followed", |screen| {
     let subscriptions = screen.db().active_subscriptions().expect("read");

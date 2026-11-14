@@ -1,6 +1,6 @@
 # OA-11 · The chat does not depend on *Let automation answer approvals*
 
-- **Status:** done but for its visible part (2026-11-13; the settings tab's *Also needed* row waits for its frame, `frames.md` G; two points wait for the person's word, see *Review*)
+- **Status:** done (2026-11-14); the settings tab no longer shows *Also needed*
 - **Kind:** workspace
 - **Depends on:** —
 - **Branch:** —
@@ -77,3 +77,9 @@ leads`; `orchester-app --test mcp_domain` for `orchestrator_chat::`, `orchestrat
 run of 64 and passed alone and with its module (load; this change does not touch what it tests). `tools/check.ps1`:
 OK. Not run: `complete_run` with `anyway` by the driving chat (no test), a turn with a real model, macOS (no `cfg`
 code).
+
+## The settings tab (2026-11-14, group G)
+
+Project settings › Orchestrator no longer has the section *Also needed · set for this computer* with *Let
+automation answer approvals*: the chat does not depend on that setting. Its code and strings are gone
+(`screens/project_settings/orchestrator/computer.rs`); the tab ends with *Leading to the end* (OA-10).

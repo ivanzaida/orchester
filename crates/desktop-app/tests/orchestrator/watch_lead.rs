@@ -49,16 +49,8 @@ fn commands(screen: &Orchestrator, chat: ChatId) -> Vec<bool> {
     .collect()
 }
 
-#[test]
-fn orchestrator_watch_lead_is_chosen_with_tab_or_a_press_and_the_badge_names_it() {
-  let Kontur {
-    mut screen,
-    here,
-    webhooks,
-    ..
-  } = kontur_with(|_| {});
-  open_picker(&mut screen);
-  screen.until("the modules", |screen| screen.exists(&row(webhooks)));
+/// The picker says both ways, what following means, and the key that switches them, between its rows and its keys.
+fn says_its_ways(screen: &mut Orchestrator) {
   let shown = screen.text(PICKER).replace('\u{a0}', " ");
   for words in [
     "What it does with them",
@@ -80,6 +72,19 @@ fn orchestrator_watch_lead_is_chosen_with_tab_or_a_press_and_the_badge_names_it(
     order.windows(2).all(|pair| pair[0] < pair[1]),
     "the way sits between the rows and the keys: {order:?}"
   );
+}
+
+#[test]
+fn orchestrator_watch_lead_is_chosen_with_tab_or_a_press_and_the_badge_names_it() {
+  let Kontur {
+    mut screen,
+    here,
+    webhooks,
+    ..
+  } = kontur_with(|_| {});
+  open_picker(&mut screen);
+  screen.until("the modules", |screen| screen.exists(&row(webhooks)));
+  says_its_ways(&mut screen);
   assert_eq!(badge_words(&mut screen, BADGE), "Watch", "Follow is where it starts");
 
   // Tab switches the way, wherever the focus is in the picker; the badge names it.

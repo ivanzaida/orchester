@@ -1,6 +1,6 @@
 # OA-10 · Choosing *Lead to the end*, its ceilings and what is used
 
-- **Status:** partly built (2026-11-14): the line and the header chip of a leading subscription, design verification pending; the pickers, `/watching`'s mode and ceilings, changing them and the settings rows are not built
+- **Status:** built (2026-11-14); design verification pending
 - **Kind:** design + UI
 - **Depends on:** OA-09
 - **Branch:** —
@@ -65,3 +65,27 @@ Frames: `L01` `QMwUB` and `Parts · Lines` `e6nsBS` a.
 
 Not built here: the *Lead to the end* chip in the command's bubble (`L01`), the pickers (`L03`), the mode control
 and the ceilings row of `/watching` (`L02`), the ceilings' form and the settings rows.
+
+## The pickers, the ceilings and the defaults, as built (2026-11-14)
+
+Frames: `L02`, `L03`, `Parts · Ceilings` and `S01` on the board `Orchestrator autonomy · frames to approve`.
+
+- **Choosing.** The /watch-module and /watch-task pickers have *What it does with them* above their key caps, with
+  **Follow** and **Lead to the end**, one line saying what leading means, and Tab switching it
+  (`screens/orchestrator/watch/mode.rs`); the composer's badge and the sent command's bubble name the mode. The
+  command keeps it (`WatchCommand::Watch::to_end`), so the leading line no longer has to be told from the order's
+  first words; the typed stand-in (*lead to the end* at the start of the order) still chooses it. *Follow* stays the
+  default. Choosing is the person's: synthetic input is refused outside a QA copy.
+- **/watching.** A leading subscription's head has its mode control (*Lead to the end*, with a menu of both ways
+  and a hint each) and *Stop leading*; under it the ceilings row (*Runs of a task · Returns per run · Raises ·
+  Budget* with what is used, *Budget none* without one) and **Change…**, which opens the form of `Parts · Ceilings`
+  b: four rows with their bounds, what is out of bounds said under its label in the danger tone, *Cancel* and
+  *Save* (`screens/orchestrator/watching/{lead,ceilings}.rs`, `orchester_workspace::orchestrator::watch::lead`,
+  `typed_ceilings`). Saving changes that subscription only, at once; going back to *Follow* keeps what runs.
+- **The project's defaults.** Project settings › Orchestrator has *Leading to the end*: the four ceilings a new
+  leading subscription takes (`orchestrator_watch.lead_ceilings`, a migration; NULL reads as the built-in 3 runs, 4
+  returns, 1 raise by 50 % and no budget). A team project keeps them the same way: they are this computer's.
+
+Tests: `orchester-store --test orchestrator_lead_defaults`, `--test orchestrator_subscriptions`;
+`orchester-workspace --test orchestrator_watch_lead`, `--test orchestrator_watch`; `orchester-app --test orchestrator`
+(`watch_lead::`, `watching_lead::`), `--test project_settings orchestrator`. QA: the scenario `orchestrator-ceilings`.
