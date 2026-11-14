@@ -193,16 +193,22 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Xl);
-  // What the Orchestrator parked for the person and decided by itself, over what waits (`away`).
-  main = main.child(ctx.mount_keyed::<away::AwayCards>(
-    "overview-away-component",
-    away::AwayProps {
-      project: project.clone(),
-    },
-  ));
+  // What the Orchestrator parked for the person stands over what waits; what it decided by itself, under it
+  // (`away`).
+  let away = |ctx: &mut Ctx, key: &str, part| {
+    ctx.mount_keyed::<away::AwayCards>(
+      key,
+      away::AwayProps {
+        project: project.clone(),
+        part,
+      },
+    )
+  };
+  main = main.child(away(ctx, "overview-away-parked", away::Part::Parked));
   if !items.is_empty() {
     main = main.child(digest::digest(ctx, id, &items, around.now));
   }
+  main = main.child(away(ctx, "overview-away-decided", away::Part::Decided));
   if items.is_empty() && at_work.is_empty() && queued.is_empty() {
     let last_merge = tasks.run_facts.merged_at.values().max().copied();
     main = main

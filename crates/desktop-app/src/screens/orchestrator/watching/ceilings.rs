@@ -45,7 +45,7 @@ use orchester_workspace::orchestrator::{
 
 use super::{
   LeadChange,
-  answer::{Line, REST_HEIGHT, action, line},
+  answer::{Line, REST_HEIGHT, action, line, note_action},
 };
 use crate::{
   navigation::Navigation,
@@ -438,7 +438,7 @@ impl CeilingsRow {
   /// one.
   fn foot(&self, ctx: &mut Ctx, id: &str, props: &CeilingsProps) -> Element {
     let route = Route::Project(props.project, ProjectPage::Settings(ProjectSettingsTab::Orchestrator));
-    let note = action(
+    let note = note_action(
       &format!("{id}-defaults"),
       &ctx.t("orchestrator.lead.ceilings.form.note"),
       Press::Open(Navigation::of(ctx).to(route)),

@@ -385,7 +385,18 @@ pub(super) fn modules_now(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashM
 
 /// The words of `event`'s line in its conversation.
 pub fn event_line(event: &StandingEvent) -> Message {
-  let target = event.name.clone().unwrap_or_default();
+  // The tasks without a module and the whole project have no name of their own: their lines say what they are.
+  let Some(target) = event.name.clone() else {
+    return match &event.raised {
+      Raised::CanStart { tasks } => Message::new("orchestrator.standing.canStartHere").with("tasks", tasks.join(", ")),
+      Raised::Stuck { left, .. } => {
+        Message::new("orchestrator.standing.stuckHere").with("count", left.len().to_string())
+      }
+      Raised::Accept | Raised::Deliver | Raised::DeliveryWaits { .. } => {
+        Message::new("orchestrator.standing.deliveryHere")
+      }
+    };
+  };
   match &event.raised {
     Raised::CanStart { tasks } => Message::new("orchestrator.standing.canStart")
       .with("target", target)

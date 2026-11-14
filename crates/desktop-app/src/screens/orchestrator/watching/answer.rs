@@ -449,6 +449,19 @@ pub(super) fn action(id: &str, words: &str, press: Press) -> Button {
     .child(Text::new(words).variant(WatchingText::Action.role()).nowrap())
 }
 
+/// [`action`] in the meta's 11.5 `text_muted`: a note that leads somewhere, beside buttons (`Note` in `Parts ·
+/// Ceilings` b).
+pub(super) fn note_action(id: &str, words: &str, press: Press) -> Button {
+  pressed(press)
+    .id(id.to_owned())
+    .describe("a11y_name", words.to_owned())
+    .flex_shrink(0.0)
+    .rounded(ExtraRadius::Link.role())
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .cursor(CursorIcon::Pointer)
+    .child(Text::new(words).variant(WatchingText::Meta.role()).nowrap())
+}
+
 /// A target's icon on its head row and in the `/unwatch` picker: a module's `boxes`, a task's `square-check`, the tasks
 /// without a module's `inbox` and the whole project's `folder-kanban`.
 pub(super) const fn target_icon(target: WatchTarget) -> Icon {

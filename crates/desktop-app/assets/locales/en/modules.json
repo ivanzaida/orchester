@@ -283,13 +283,6 @@
       "confirmTitle": "Deliver {{branch}} into {{into}}?",
       "confirmWhat": "{{branch}} is merged into {{into}} with a merge commit. The merge is not undone here.",
       "confirmOpen": "{{branch}} is merged into {{into}} with a merge commit, with {{open}} of the module's tasks still open. The merge is not undone here.",
-      "title": {
-        "plain": "{{branch}} → {{into}}",
-        "accepting": "{{branch}} → {{into}} · accepting",
-        "accepted": "{{branch}} → {{into}} · accepted",
-        "ceiling": "{{branch}} → {{into}} · acceptance found problems twice",
-        "delivered": "{{branch}} → {{into}} · delivered"
-      },
       "detail": {
         "nothing": "No task merged yet. The branch is made when the first task starts.",
         "atWork": "{{merged}} of {{tasks}} tasks merged · runs at work: {{runs}}",
@@ -299,7 +292,15 @@
         "accepted": "{{merged}} of {{tasks}} tasks merged · nothing was merged since its acceptance",
         "noAcceptance": "{{merged}} of {{tasks}} tasks merged · it has no acceptance pipeline",
         "ceiling": "{{merged}} of {{tasks}} tasks merged · it is left to you",
-        "delivered": "Delivered to {{into}} · {{commit}} · {{time}}"
+        "delivered": "Delivered to {{into}} · {{commit}} · {{time}}",
+        "notPassed": "{{merged}} of {{tasks}} tasks merged · its acceptance runs once more"
+      },
+      "state": {
+        "accepting": "Accepting",
+        "accepted": "Accepted",
+        "notPassed": "Acceptance did not pass",
+        "ceiling": "Acceptance found problems twice",
+        "delivered": "Delivered"
       }
     }
   }

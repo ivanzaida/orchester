@@ -42,6 +42,8 @@ pub struct Strip {
   tone: StripTone,
   title: Arc<str>,
   detail: Arc<str>,
+  /// What stands in the title's place, 8 apart: a title made of parts (a branch, an arrow, a state's badge).
+  title_parts: Option<Vec<Element>>,
   action: Option<Element>,
 }
 
@@ -54,12 +56,19 @@ impl Strip {
       tone: StripTone::default(),
       title: title.into(),
       detail: detail.into(),
+      title_parts: None,
       action: None,
     }
   }
 
   pub fn tone(mut self, tone: StripTone) -> Self {
     self.tone = tone;
+    self
+  }
+
+  /// `parts` in the title's place, in one line 8 apart, under the title's id (`Branch` in `Parts · Delivery`).
+  pub fn title_parts(mut self, parts: Vec<Element>) -> Self {
+    self.title_parts = Some(parts);
     self
   }
 
@@ -102,13 +111,22 @@ impl From<Strip> for Element {
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .spacing(ExtraSpacing::Tight.role())
-          .child(
-            Text::new(&strip.title)
+          .child(match strip.title_parts {
+            Some(parts) => Element::from(
+              Row::new()
+                .id(format!("{id}-title"))
+                .width(Dimension::Pct(100.0))
+                .spacing(SpacingSize::Sm)
+                .align_items(Alignment::Center)
+                .with_children(parts),
+            ),
+            None => Text::new(&strip.title)
               .id(format!("{id}-title"))
               .variant(HubText::TeamLine.role())
               .color(PaletteColor::TextPrimary)
-              .width(Dimension::Pct(100.0)),
-          )
+              .width(Dimension::Pct(100.0))
+              .into(),
+          })
           .child(
             Text::new(&strip.detail)
               .id(format!("{id}-detail"))

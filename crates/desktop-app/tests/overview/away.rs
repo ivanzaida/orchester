@@ -59,6 +59,13 @@ fn overview_away_shows_what_was_parked_and_decided_and_settles_each_by_a_press()
     words.contains("may not allow a push") && words.contains("Allow or deny it"),
     "{words}"
   );
+  // The decisions stand under what waits, read on their own.
+  seeded.until("what was decided", |seeded| seeded.shows("overview-decided"));
+  assert!(
+    seeded.top("overview-parked") < seeded.top("overview-waits")
+      && seeded.top("overview-waits") < seeded.top("overview-decided"),
+    "parked over what waits, decided under it"
+  );
   assert_eq!(seeded.text("overview-decided-title"), "1 decided without you");
   assert_eq!(
     seeded.text(&format!("overview-decision-{number}-what")),

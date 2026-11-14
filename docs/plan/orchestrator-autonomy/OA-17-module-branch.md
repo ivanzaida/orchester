@@ -125,3 +125,20 @@ approve`.
 
 Tests: `orchester-workspace --test module_delivery module_delivery_view`; `orchester-app --test modules
 modules_summary_of_a_module_with_its_own_branch`, `modules_edit_module_gives`.
+
+## After the design verification (2026-11-14)
+
+- The row's title is drawn as the frame draws it: the branch and its base in Geist Mono with an arrow between
+  them, and the state in a badge (`team::strip::Strip::title_parts`).
+- *Accepting* shows while the acceptance's own run is at work; an acceptance that did not pass says so, in the
+  warning tone, and that one more runs (it read *has not run yet*).
+- The module's progress, its header's facts and its burndown leave its acceptance tasks out, as its task list
+  does (`ModulePage::read`). The Modules list and the delivery view still count them.
+- *New task in module* is the quiet button while **Deliver** is the page's primary action.
+- Turning *Its own branch* off is refused while the branch holds merged work that was not delivered
+  (`modules.ownBranch.holdsWork`).
+- *Deliver* among the properties reads *By you* for a module without an acceptance pipeline.
+- A task's *Base* property names its module's own branch as what its next run starts from.
+
+Still as built and not as drawn: commits ahead of and behind the base are not counted; *The base moved*, *The
+checkout refused* and *Conflicts* are the refusal under the row, not rows of their own.

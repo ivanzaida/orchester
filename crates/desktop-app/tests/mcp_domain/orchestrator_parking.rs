@@ -5,7 +5,13 @@
 //! `cargo test -p orchester-app --test mcp_domain orchestrator_parking`.
 
 use orchester_core::{
-  orchestrator::{Ceilings, Subscription, WatchMode, WatchTarget, decision::Undo, parking::Needs},
+  id::ChatId,
+  orchestrator::{
+    Ceilings, Subscription, WatchMode, WatchTarget,
+    decision::Undo,
+    parking::{Needs, Parking, Words},
+  },
+  store::RunStore,
   time::Timestamp,
 };
 use orchester_store::{DecisionsRead, ProjectDb};
@@ -93,4 +99,35 @@ fn orchestrator_parking_leaves_a_led_task_to_the_person_until_it_is_given_back()
   assert!(give_back_in(&seeded.repo, task.id()).expect("given back"));
   let refused = chat_call(&mut served, &own, "run_task", start).expect_err("it has a run");
   assert_eq!(refused.code(), "already_ran", "{refused:?}");
+}
+
+#[test]
+fn orchestrator_parking_is_not_given_back_while_its_request_still_waits() {
+  let (_served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let request = db
+    .pending_tool_approvals_all()
+    .expect("requests")
+    .into_iter()
+    .next()
+    .expect("the seed has a request that waits");
+  let run = db.run(request.run).expect("read").expect("its run");
+  let parking = Parking {
+    task: run.task(),
+    run: Some(run.id()),
+    needs: Needs::Approval,
+    why: Words::new("Only a person may allow this command.").expect("words"),
+    to_do: Words::new("Allow or deny it on the request's card.").expect("words"),
+    by: ChatId::generate(),
+    at: Timestamp::now(),
+  };
+  db.park_task(&parking).expect("parked");
+
+  let refused = give_back_in(&seeded.repo, run.task()).expect_err("its request still waits");
+  assert_eq!(refused.key, "orchestrator.parking.requestOpen");
+  assert_eq!(
+    db.parked_task(run.task()).expect("read"),
+    Some(parking),
+    "the parking is kept"
+  );
 }

@@ -172,7 +172,14 @@ impl ModuleScreen {
     let id = project.open.project.id();
     let details = page.module.details();
     let navigation = Navigation::of(ctx);
-    let new_task = ActionButton::new("module-new-task", ButtonKind::Primary, ctx.t("modules.page.newTask"))
+    // One primary action on the page: while the module's delivery is it, New task in module steps back.
+    let delivers = page.delivery.as_ref().is_some_and(super::delivery::is_primary);
+    let kind = if delivers {
+      ButtonKind::Secondary
+    } else {
+      ButtonKind::Primary
+    };
+    let new_task = ActionButton::new("module-new-task", kind, ctx.t("modules.page.newTask"))
       .icon(Icon::Plus)
       .opens(navigation.to(Route::Project(id, ProjectPage::NewTaskInModule(page.module.id()))));
     let actions = vec![

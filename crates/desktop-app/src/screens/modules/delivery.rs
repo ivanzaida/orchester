@@ -1,7 +1,8 @@
 //! A local module's own branch on its way to its base branch, the first row of its Summary (`M02 · Module · Summary ·
 //! its branch and Deliver` and `Parts · Delivery` a–j on the board `Orchestrator autonomy · frames to approve`;
 //! `docs/plan/orchestrator-autonomy/OA-17-…`, `OA-20-…`). It is drawn as the strip a team module's delivery line is
-//! (`crate::team::strip`, `04f` `Wd4G1`): the branch and where it goes with how it stands, what that rests on under
+//! (`crate::team::strip`, `04f` `Wd4G1`): the branch and where it goes in Geist Mono with how it stands in a badge,
+//! what that rests on under
 //! it, and **Deliver** at its end when there is merged work the base branch has not. Deliver asks first, in a dialog:
 //! the merge into the base branch is not undone. A delivery git refuses (a conflict, the person's own changes in the
 //! way, a run still at work) says why under the row and leaves everything as it was. A module without a branch of
@@ -15,7 +16,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{PaletteColor, SpacingSize},
   },
-  components::Column,
+  components::{Column, Text},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -37,11 +38,13 @@ use crate::{
   screens::settings::orchester::moment,
   services::Services,
   team::strip::{Strip, StripTone},
+  theme::{ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    chip::{BadgeTone, badge},
     dialog::{Dialog, Tone},
     field::field_error,
-    icon::Icon,
+    icon::{Icon, icon},
     message::message_text,
   },
 };
@@ -85,6 +88,8 @@ enum Stands {
   Open,
   /// Every task is done; its acceptance has not run.
   Accept,
+  /// Every task is done; its acceptance did not pass, and one more starts by itself.
+  NotPassed,
   Accepting,
   Accepted,
   /// Every task is done and the module names no acceptance pipeline.
@@ -98,12 +103,17 @@ impl Stands {
     if view.merged == 0 {
       return Self::Nothing;
     }
+    // The acceptance's own run is at work while it accepts.
+    if view.step == DeliveryStep::Accepting {
+      return Self::Accepting;
+    }
     if !view.at_work.is_empty() {
       return Self::AtWork;
     }
     match view.step {
       DeliveryStep::Delivered => Self::Delivered,
       _ if view.open > 0 => Self::Open,
+      DeliveryStep::Accept if !view.acceptances.is_empty() => Self::NotPassed,
       DeliveryStep::Accept => Self::Accept,
       DeliveryStep::Accepting => Self::Accepting,
       DeliveryStep::Deliver | DeliveryStep::Person(PersonsDelivery::NotAllowed) => Self::Accepted,
@@ -119,6 +129,7 @@ impl Stands {
       Self::Delivered => "delivered",
       Self::Open => "open",
       Self::Accept => "accept",
+      Self::NotPassed => "not_passed",
       Self::Accepting => "accepting",
       Self::Accepted => "accepted",
       Self::NoAcceptance => "no_acceptance",
@@ -130,7 +141,7 @@ impl Stands {
   const fn tone(self) -> (StripTone, PaletteColor) {
     match self {
       Self::Accepted => (StripTone::Success, PaletteColor::Success),
-      Self::Ceiling => (StripTone::Warning, PaletteColor::Warning),
+      Self::NotPassed | Self::Ceiling => (StripTone::Warning, PaletteColor::Warning),
       _ => (StripTone::Plain, PaletteColor::TextMuted),
     }
   }
@@ -139,10 +150,15 @@ impl Stands {
   const fn offers(self) -> Option<ButtonKind> {
     match self {
       Self::Accepted | Self::NoAcceptance => Some(ButtonKind::Primary),
-      Self::AtWork | Self::Open | Self::Accept | Self::Ceiling => Some(ButtonKind::Secondary),
+      Self::AtWork | Self::Open | Self::Accept | Self::NotPassed | Self::Ceiling => Some(ButtonKind::Secondary),
       Self::Nothing | Self::Delivered | Self::Accepting => None,
     }
   }
+}
+
+/// Whether **Deliver** is the page's primary action for `view`: the header's own then steps back.
+pub fn is_primary(view: &DeliveryView) -> bool {
+  Stands::of(view).offers() == Some(ButtonKind::Primary)
 }
 
 pub struct ModuleDelivery {
@@ -201,13 +217,9 @@ impl Component for ModuleDelivery {
       .filter(|_| state.is_rejected())
       .map(|Refused(message)| field_error("module-delivery-refused", &message_text(ctx, message)));
     let (tone, glyph) = stands.tone();
-    let mut strip = Strip::new(
-      ID,
-      (Icon::GitBranch, glyph),
-      title(ctx, view, stands),
-      detail(ctx, view, stands),
-    )
-    .tone(tone);
+    let mut strip = Strip::new(ID, (Icon::GitBranch, glyph), "", detail(ctx, view, stands))
+      .title_parts(title(ctx, view, stands))
+      .tone(tone);
     if let Some(kind) = stands.offers() {
       strip = strip.action(self.button(ctx, view, (stands, kind), state.is_pending()));
     }
@@ -294,21 +306,37 @@ fn into(ctx: &Ctx, view: &DeliveryView) -> String {
     .map_or_else(|| ctx.t("modules.delivery.checkedOut").to_string(), ToString::to_string)
 }
 
-/// `module/webhooks-v2 → main`, and how it stands after it.
-fn title(ctx: &Ctx, view: &DeliveryView, stands: Stands) -> Arc<str> {
-  let key = match stands {
-    Stands::Nothing | Stands::AtWork | Stands::Open | Stands::Accept | Stands::NoAcceptance => {
-      "modules.delivery.title.plain"
-    }
-    Stands::Accepting => "modules.delivery.title.accepting",
-    Stands::Accepted => "modules.delivery.title.accepted",
-    Stands::Ceiling => "modules.delivery.title.ceiling",
-    Stands::Delivered => "modules.delivery.title.delivered",
+/// `module/webhooks-v2 → main` in Geist Mono with an arrow between them, and how it stands in a badge after them.
+fn title(ctx: &Ctx, view: &DeliveryView, stands: Stands) -> Vec<Element> {
+  let mono = |id: &str, words: &str, color: PaletteColor| -> Element {
+    Text::new(words)
+      .id(id.to_owned())
+      .variant(ExtraTypography::PropertyMono.role())
+      .color(color)
+      .nowrap()
+      .into()
   };
-  ctx.t_args(
-    key,
-    [("branch", view.own.branch.to_string()), ("into", into(ctx, view))],
-  )
+  let state = match stands {
+    Stands::Accepting => Some(("modules.delivery.state.accepting", BadgeTone::Neutral)),
+    Stands::Accepted => Some(("modules.delivery.state.accepted", BadgeTone::Success)),
+    Stands::NotPassed => Some(("modules.delivery.state.notPassed", BadgeTone::Warning)),
+    Stands::Ceiling => Some(("modules.delivery.state.ceiling", BadgeTone::Warning)),
+    Stands::Delivered => Some(("modules.delivery.state.delivered", BadgeTone::Success)),
+    Stands::Nothing | Stands::AtWork | Stands::Open | Stands::Accept | Stands::NoAcceptance => None,
+  };
+  let mut parts = vec![
+    mono(
+      "module-delivery-branch",
+      view.own.branch.as_str(),
+      PaletteColor::TextPrimary,
+    ),
+    icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted).into(),
+    mono("module-delivery-into", &into(ctx, view), PaletteColor::TextSecondary),
+  ];
+  if let Some((key, tone)) = state {
+    parts.push(badge("module-delivery-state", tone, &ctx.t(key)).into());
+  }
+  parts
 }
 
 /// What the row's state rests on.
@@ -327,6 +355,7 @@ fn detail(ctx: &Ctx, view: &DeliveryView, stands: Stands) -> Arc<str> {
     Stands::Open => ctx.t_args("modules.delivery.detail.open", counts),
     Stands::Accept => ctx.t_args("modules.delivery.detail.accept", counts),
     Stands::Accepting => ctx.t_args("modules.delivery.detail.accepting", counts),
+    Stands::NotPassed => ctx.t_args("modules.delivery.detail.notPassed", counts),
     Stands::Accepted => ctx.t_args("modules.delivery.detail.accepted", counts),
     Stands::NoAcceptance => ctx.t_args("modules.delivery.detail.noAcceptance", counts),
     Stands::Ceiling => ctx.t_args("modules.delivery.detail.ceiling", counts),

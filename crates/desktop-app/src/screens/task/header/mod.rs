@@ -131,6 +131,7 @@ impl Component for TaskHeader {
     let mode = props.view.tab() != TaskTab::Conversation;
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
       .or_else(|| team::status_line(ctx, &props.task))
+      .or_else(|| super::parked::status_line(ctx, &props.task))
       .or_else(|| super::waits_on::status_line(ctx, &props.task))
       .or_else(|| not_ready_line::shown(ctx, &props.task, mode))
       .unwrap_or_else(|| run_line::status_line(ctx, &props.task, mode));

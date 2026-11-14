@@ -332,4 +332,12 @@ fn module_delivery_view_says_where_a_branch_of_its_own_stands() {
     .expect("read")
     .expect("its own branch");
   assert_eq!(view.delivered, Some(delivered), "its latest delivery");
+
+  // With nothing merged that is not delivered, the branch may be taken away again.
+  let off = OwnChange {
+    own_branch: Some(false),
+    ..OwnChange::default()
+  };
+  let plain = change_own_in(repo.root(), &repo.programs, &owned, &off).expect("turned off");
+  assert_eq!(plain.own_branch(), None);
 }

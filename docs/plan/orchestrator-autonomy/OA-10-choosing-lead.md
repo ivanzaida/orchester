@@ -89,3 +89,9 @@ Frames: `L02`, `L03`, `Parts · Ceilings` and `S01` on the board `Orchestrator a
 Tests: `orchester-store --test orchestrator_lead_defaults`, `--test orchestrator_subscriptions`;
 `orchester-workspace --test orchestrator_watch_lead`, `--test orchestrator_watch`; `orchester-app --test orchestrator`
 (`watch_lead::`, `watching_lead::`), `--test project_settings orchestrator`. QA: the scenario `orchestrator-ceilings`.
+
+## After the design verification (2026-11-14)
+
+The ceilings form's note is in the meta's 11.5, so it clears *Cancel*. In a QA copy the form saved a ceiling and
+opened again after the save; the test that reopened it right after a save was unreliable in the headless harness
+and is split (the form's Cancel and Esc have their own test).

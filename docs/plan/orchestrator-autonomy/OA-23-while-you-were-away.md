@@ -63,3 +63,15 @@ first with their task's module), the same for a local and a team project.
   when the reading failed.
 
 Tests: `orchester-workspace --test orchestrator_away away`; `orchester-app --test overview overview_away`.
+
+## After the design verification (2026-11-14)
+
+- What was parked stands over what waits for the person, what was decided under it (the component is mounted
+  twice, `away::Part`).
+- **Give it back** is refused, with the parking kept and the reason under the row, while a tool request of the
+  run the task was parked with still waits (`orchestrator.parking.requestOpen`). What else a task was parked for
+  is not read: giving it back says the chat may go on.
+- A parked task's header says *Parked for you — an approval is needed* in the warning tone
+  (`screens/task/parked::status_line`).
+
+Tests: `orchester-app --test mcp_domain orchestrator_parking_is_not_given_back`, `--test overview overview_away`.

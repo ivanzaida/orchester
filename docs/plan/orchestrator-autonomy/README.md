@@ -286,3 +286,12 @@ head would have migrated from schema 176 to 178.
   targets, watch-only subscriptions, digests.
 - Planning a module from its design (the coverage audit of `.claude/skills/work-outside-orchester`): the chat leads
   the tasks a module has.
+
+## Design verification (2026-11-14)
+
+Two independent verifiers compared the frames of `Orchestrator autonomy · frames to approve` with QA copies of head
+`a880ac581`, at 1440 × 900: no blocking mismatch. What they found and what was changed after it is in the task
+files (OA-02, OA-03, OA-10, OA-15, OA-17, OA-23). The fixes were not verified again. Not reached by them: an
+answered turn of the Orchestrator (the `orchestrator-*` scenarios are static: their sign-ins run nothing), the
+lines of a stuck target, an acceptance and a delivery, a module that is accepted, *Ready to leave*, and the light
+theme.

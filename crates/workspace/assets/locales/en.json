@@ -2,6 +2,7 @@
   "modules": {
     "ownBranch": {
       "required": "An acceptance pipeline and Deliver when accepted are for a module with a branch of its own. Give the module its own branch first.",
+      "holdsWork": "The module's branch holds merged work that is not delivered yet. Deliver it first, then turn its own branch off.",
       "unreadable": "The repository's branches could not be read, so the module got no branch of its own. Nothing was changed."
     },
     "delivery": {
@@ -2554,10 +2555,16 @@
     },
     "standing": {
       "canStart": "Work can start in {{target}}: {{tasks}}",
+      "canStartHere": "Work can start: {{tasks}}",
+      "stuckHere": "What this conversation leads is stuck: {{count}} left for you",
+      "deliveryHere": "Every task is done",
       "stuck": "{{target}} is stuck: {{count}} left for you",
       "accept": "Every task of {{target}} is done: its acceptance can start",
       "deliver": "{{target}} is accepted: it can be delivered",
       "deliveryWaits": "Every task of {{target}} is done: its delivery waits for you"
+    },
+    "parking": {
+      "requestOpen": "Its agent's request is not answered yet: allow or deny it in the task's conversation first, then give the task back."
     },
     "tryAgain": {
       "settled": "This no longer waits for an answer: there is nothing to try again.",

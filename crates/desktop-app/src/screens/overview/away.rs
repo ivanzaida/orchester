@@ -11,6 +11,8 @@
 //! **Mark all seen** at the head. *Overrule…* opens that conversation with the decision quoted in the composer: the
 //! words are the person's own, and nothing is undone before the Orchestrator's next turn does it.
 //!
+//! The page mounts it twice: what was parked over what waits for the person, what was decided under it.
+//!
 //! All four actions are a person's: synthetic input is refused outside a QA copy (`crate::mcp::qa_person`). With
 //! nothing parked and nothing decided nothing shows.
 
@@ -68,6 +70,14 @@ const GROUP_HEIGHT: f32 = 28.0;
 #[derive(Clone, PartialEq)]
 pub struct AwayProps {
   pub project: ShownProject,
+  pub part: Part,
+}
+
+/// Which of the two frames a mount shows: what was parked stands over what waits, what was decided under it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+  Parked,
+  Decided,
 }
 
 impl DevtoolsInspectable for AwayProps {}
@@ -130,7 +140,7 @@ impl Component for AwayCards {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let AwayProps { project } = ctx.props::<AwayProps>().clone();
+    let AwayProps { project, part } = ctx.props::<AwayProps>().clone();
     let root = project.open.repo_root.clone();
     // Read again after every save of the project's tasks: a parking that ended, a decision just made.
     let saves = project.feed.saves.get();
@@ -141,7 +151,10 @@ impl Component for AwayCards {
       .state()
       .get();
     let column = Column::new()
-      .id("overview-away")
+      .id(match part {
+        Part::Parked => "overview-away",
+        Part::Decided => "overview-away-decided",
+      })
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl);
     let Some(Read(away)) = read.data else {
@@ -164,8 +177,8 @@ impl Component for AwayCards {
       person: QaPerson::of(ctx),
       now: Timestamp::now(),
     };
-    let parked = (!away.parked.is_empty()).then(|| view.parked(ctx, &away.parked));
-    let decided = (!away.decisions.is_empty()).then(|| view.decided(ctx, &away.decisions));
+    let parked = (part == Part::Parked && !away.parked.is_empty()).then(|| view.parked(ctx, &away.parked));
+    let decided = (part == Part::Decided && !away.decisions.is_empty()).then(|| view.decided(ctx, &away.decisions));
     column
       .describe("parked", away.parked.len().to_string())
       .describe("decisions", away.decisions.len().to_string())

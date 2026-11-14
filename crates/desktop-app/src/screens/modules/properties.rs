@@ -296,7 +296,7 @@ fn own_rows(ctx: &Ctx, props: &PropertiesProps) -> Vec<Element> {
     .acceptance
     .clone()
     .unwrap_or_else(|| ctx.t("modules.properties.noAcceptance"));
-  let delivers = ctx.t(if own.deliver_when_accepted {
+  let delivers = ctx.t(if own.deliver_when_accepted && own.acceptance.is_some() {
     "modules.properties.deliverWhenAccepted"
   } else {
     "modules.properties.deliverByYou"

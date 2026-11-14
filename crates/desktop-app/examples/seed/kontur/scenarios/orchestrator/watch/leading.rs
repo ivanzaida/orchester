@@ -2,11 +2,13 @@
 //! scenario with a conversation, the one the Orchestrator opens on, that leads the module *Webhooks v2* to the end and
 //! follows *Search index*, so a verifier reaches what the board `Orchestrator autonomy · frames to approve` draws
 //! (`L01` `QMwUB`, `Parts · Lines` `e6nsBS`, `Parts · Before you leave` `k0jNa`, `Parts · An event whose turn failed
-//! or is held` `tkjdw`). *Let the Orchestrator drive* is on, and the Orchestrator runs on the project's Codex
-//! connection, which `tools/qa-app.ps1 -FakeAgents` points at its fake: the turns the follower starts there are
-//! answered by the fake, never by a CLI of the person's. The person's `/watch-module` whose order begins with
-//! *Lead to the end* and its line are kept, with the subscriptions they made; *Before you leave* reads the copy as
-//! it is, and the app's follower raises *Work can start in Webhooks v2* for the module's drafts by itself.
+//! or is held` `tkjdw`). *Let the Orchestrator drive* is on, and the Orchestrator is set to run on the sign-in
+//! *Codex · Default*, whose program and account folder are names only, as every sign-in of these scenarios is: no
+//! turn is answered here, with or without `-FakeAgents`. A turn the follower starts fails at once and is tried
+//! again, so the rows of a failed turn also show by themselves, and never a CLI of the person's runs. The person's
+//! `/watch-module` whose order begins with *Lead to the end* and its line are kept, with the subscriptions they made;
+//! *Before you leave* reads the copy as it is, and the app's follower raises *Work can start in Webhooks v2* for the
+//! module's drafts by itself.
 //!
 //! Three of the module's tasks have an agent that asked a question, each an event of the conversation:
 //!

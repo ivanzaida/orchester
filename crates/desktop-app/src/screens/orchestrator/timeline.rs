@@ -27,7 +27,10 @@ use orchester_core::{
   id::{ChatMessageId, ProjectId},
   orchestrator::{Queued, TurnState, WaitKind},
 };
-use orchester_workspace::{orchestrator::tools::ChatScope, workspace::OpenProject};
+use orchester_workspace::{
+  orchestrator::{event_turns::EventTurn, tools::ChatScope},
+  workspace::OpenProject,
+};
 
 use super::{
   digest::{Digest, DigestProps, Waited, for_the_person},
@@ -424,6 +427,15 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
         _ => {
           let standing = (row.turn.stands, row.turn.request.as_ref());
           let status = Status::of(wait, standing, row.turn.state.as_ref(), &row.turn.answer);
+          // A turn that is held, waits for its next try or was left to the person reads nothing: the row under the
+          // event says what happens to it (`wait::turn_state`).
+          let status = match (status, row.turn.turn_state.as_ref()) {
+            (
+              Status::Reading,
+              Some(EventTurn::Held(_) | EventTurn::TriedAgain { .. } | EventTurn::LeftToPerson { .. }),
+            ) => Status::Waits,
+            (status, _) => status,
+          };
           let line = super::wait::line(ctx, &id, (wait, row.turn.at, turned), (status, row.env.project));
           if wait.kind == WaitKind::Approval {
             return super::wait::approval::opening(ctx, row, (&id, line), status);

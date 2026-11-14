@@ -91,3 +91,8 @@ no line of its own is kept), and h, *Budget used — nothing new starts; what ru
 subscription makes the target *stuck* with `budget_used`, which the stuck line says as *— its budget is used*; there
 is no event of its own, and no ceilings form for *Change…* to open). i needs no row: the events one turn took show
 as their lines with the one answer under the last.
+
+## After the design verification (2026-11-14)
+
+The lines of a target without a name of its own (the tasks without a module, the whole project) read *Work can
+start: KON-5* and *What this conversation leads is stuck: 3 left for you*; they read *Work can start in : KON-5*.

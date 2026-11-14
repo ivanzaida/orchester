@@ -24,10 +24,9 @@ fn modules_summary_of_a_module_with_its_own_branch_starts_with_its_delivery() {
   let (module, plain) = (picked.expect("the module"), plain.expect("the other module"));
   seeded.open(ProjectPage::Module(module, ModuleTab::Summary), "module-summary");
   seeded.until("the delivery row", |seeded| seeded.shows("module-delivery"));
-  assert_eq!(
-    seeded.text("module-delivery-title"),
-    "module/checkout → the checked-out branch"
-  );
+  assert_eq!(seeded.text("module-delivery-branch"), "module/checkout");
+  assert_eq!(seeded.text("module-delivery-into"), "the checked-out branch");
+  assert!(!seeded.shows("module-delivery-state"), "no state to say yet");
   assert!(
     seeded.text("module-delivery-detail").starts_with("No task merged yet"),
     "{}",

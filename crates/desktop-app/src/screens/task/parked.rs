@@ -12,9 +12,10 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::Column,
+  components::{Column, Row, Text},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -27,10 +28,11 @@ use super::TaskContext;
 use crate::{
   mcp::qa_person::QaPerson,
   team::strip::{Strip, StripTone},
+  theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    icon::Icon,
+    icon::{Icon, icon},
     message::message_text,
   },
 };
@@ -70,6 +72,44 @@ pub fn shown(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   ))
 }
 
+/// What needs the person, as the row's title and the header's status line say it.
+fn needed(ctx: &Ctx, needs: Needs) -> std::sync::Arc<str> {
+  ctx.t(match needs {
+    Needs::Decision => "task.parked.decision",
+    Needs::Approval => "task.parked.approval",
+    Needs::SignIn => "task.parked.signIn",
+    Needs::Tool => "task.parked.tool",
+    Needs::Ceiling => "task.parked.ceiling",
+    Needs::Other => "task.parked.other",
+  })
+}
+
+/// The header's status line of a parked task (`Status line` in W02): *Parked for you — an approval is needed*, in
+/// the warning tone after its glyph.
+pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
+  let parking = task.detail.parked.as_ref()?;
+  let line = Row::new()
+    .id("task-status-row")
+    .width(Dimension::Pct(100.0))
+    .min_width(Dimension::Px(0.0))
+    .child(
+      Row::new()
+        .id("task-status")
+        .describe("status", "parked")
+        .spacing(ExtraSpacing::Pair.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::CirclePause, IconSize::Base, PaletteColor::Warning).id("task-status-icon"))
+        .child(
+          Text::new(&needed(ctx, parking.needs))
+            .id("task-status-label")
+            .variant(TypographyStyle::Label)
+            .color(PaletteColor::Warning)
+            .nowrap(),
+        ),
+    );
+  Some(line.into())
+}
+
 pub struct ParkedRow {
   give_back: GiveBack,
 }
@@ -97,14 +137,7 @@ impl Component for ParkedRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props { task, parking } = ctx.props::<Props>().clone();
     let state = self.give_back.state().get();
-    let title = ctx.t(match parking.needs {
-      Needs::Decision => "task.parked.decision",
-      Needs::Approval => "task.parked.approval",
-      Needs::SignIn => "task.parked.signIn",
-      Needs::Tool => "task.parked.tool",
-      Needs::Ceiling => "task.parked.ceiling",
-      Needs::Other => "task.parked.other",
-    });
+    let title = needed(ctx, parking.needs);
     let detail = ctx.t_args(
       "task.parked.words",
       [("why", parking.why.as_str()), ("toDo", parking.to_do.as_str())],

@@ -54,13 +54,21 @@ impl OwnChange {
 /// Applies `change` to `module` of the project at `root`. A module that gets a branch of its own is given its name,
 /// `module/<slug>`, one no other module and no branch of the repository has; the branch itself is made when the
 /// module's first task starts. Taking the branch away leaves it in the repository: nothing deletes work. An
-/// acceptance pipeline or *Deliver when accepted* without a branch of its own is refused. Blocks on SQLite and git.
+/// acceptance pipeline or *Deliver when accepted* without a branch of its own is refused, and so is taking the
+/// branch away while it holds merged work that was not delivered. Blocks on SQLite and git.
 pub fn change_own_in(root: &Path, programs: &Programs, module: &Module, change: &OwnChange) -> Result<Module, Message> {
   if change.is_empty() {
     return Ok(module.clone());
   }
   let stored = |error: StoreError| messages::store_error(&error);
   let mut db = ProjectDb::open(root).map_err(stored)?;
+  if change.own_branch == Some(false) && module.own_branch().is_some() {
+    let tasks = db.tasks().map_err(stored)?;
+    let view = DeliveryView::read(&db, module, &tasks).map_err(stored)?;
+    if view.is_some_and(|view| view.undelivered()) {
+      return Err(Message::new("modules.ownBranch.holdsWork"));
+    }
+  }
   let own = match (change.own_branch, module.own_branch()) {
     (Some(false), _) => None,
     (_, Some(own)) => Some(own.clone()),

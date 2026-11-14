@@ -106,3 +106,8 @@ Frame: `Parts · An event whose turn failed or is held` `tkjdw` d–g.
 Tests: `orchester-workspace --test orchestrator_held held`; `orchester-app --test orchestrator leading` (the held row
 and the header's line); `--test seed orchestrator` (the scenarios `orchestrator-held-budget`, `-held-plan`,
 `-held-plan-unnamed`).
+
+## After the design verification (2026-11-14)
+
+An event whose turn is held, waits for its next try or was left to the person no longer carries the chip
+*Orchestrator is reading* over the row that says so: it reads *Waits for you* (`screens/orchestrator/timeline.rs`).

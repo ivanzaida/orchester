@@ -194,10 +194,22 @@ pub(super) fn end_moved(db: &mut ProjectDb) -> Result<bool, StoreError> {
 }
 
 /// The person gives parked task `task` of the project at `root` back to the Orchestrator; whether it was parked.
-/// The person's alone: no tool of the app or the chat calls it. Blocks on SQLite.
+/// Refused, with the parking kept, while a tool request of the run it was parked with still waits: only a person
+/// answers one, so the chat would park the task again at once. What else a task was parked for (a decision, a
+/// sign-in, a tool, a ceiling) is not read: giving it back says the chat may go on. The person's alone: no tool of
+/// the app or the chat calls it. Blocks on SQLite.
 pub fn give_back_in(root: &Path, task: TaskId) -> Result<bool, Message> {
-  let given = || -> Result<bool, StoreError> { Ok(ProjectDb::open(root)?.unpark_task(task)?.is_some()) };
-  given().map_err(|error| messages::store_error(&error))
+  let stored = |error: StoreError| messages::store_error(&error);
+  let mut db = ProjectDb::open(root).map_err(stored)?;
+  let Some(parking) = db.parked_task(task).map_err(stored)? else {
+    return Ok(false);
+  };
+  if let Some(run) = parking.run
+    && !db.pending_tool_approvals(run).map_err(stored)?.is_empty()
+  {
+    return Err(Message::new("orchestrator.parking.requestOpen"));
+  }
+  Ok(db.unpark_task(task).map_err(stored)?.is_some())
 }
 
 /// The tasks parked for the person in the project at `root`, the one parked first first. Blocks on SQLite.
