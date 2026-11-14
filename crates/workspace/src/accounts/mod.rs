@@ -6,6 +6,7 @@
 
 mod api;
 mod api_runs_on;
+mod decision;
 mod error;
 pub(crate) mod folders;
 mod runs_on;
@@ -33,6 +34,7 @@ use orchester_exec::ProcessRunner;
 use orchester_store::StoreError;
 
 pub use self::{
+  decision::{ServerKey, decision_key_of},
   error::AccountsError,
   folders::own_folder,
   runs_on::RunsOnError,

@@ -13,6 +13,7 @@ mod browser;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
+mod decision_servers;
 mod mcp_programs;
 mod owners;
 mod plan_reads;
@@ -99,6 +100,7 @@ CREATE TABLE ui_state (
   mcp_programs::MIGRATION,
   api_accounts::MIGRATION,
   agent_programs::MIGRATION,
+  decision_servers::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
