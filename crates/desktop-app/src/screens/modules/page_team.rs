@@ -134,7 +134,7 @@ impl ModuleScreen {
       .with_children(lock)
       .child(description(ctx, &shown.module))
       .child(work)
-      .child(tasks::section(ctx, project, &tasks.tasks, &self.toggled))
+      .child(tasks::section(ctx, project, (&tasks.tasks, &[]), &self.toggled))
       .with_children(burndown);
     let body = Row::new()
       .id("module-summary-body")

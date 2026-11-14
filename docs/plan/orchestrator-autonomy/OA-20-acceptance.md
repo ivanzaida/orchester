@@ -1,6 +1,6 @@
 # OA-20 · A module's acceptance before its delivery
 
-- **Status:** done but for what waits for frames (2026-11-14)
+- **Status:** built (2026-11-14); design verification pending; its form rows are OA-17's group *Delivery*
 - **Kind:** core + workspace + UI
 - **Depends on:** OA-17
 - **Branch:** —

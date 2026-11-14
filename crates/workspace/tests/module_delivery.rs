@@ -21,7 +21,9 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::modules::delivery::{DeliverRefusal, OwnChange, change_own_in, deliver_in, facts};
+use orchester_workspace::modules::delivery::{
+  DeliverRefusal, DeliveryView, OwnChange, change_own_in, deliver_in, facts,
+};
 
 fn git(root: &Path, args: &[&str]) -> String {
   let output = Command::new("git").args(args).current_dir(root).output().expect("git");
@@ -296,4 +298,38 @@ fn module_delivery_is_refused_while_a_task_of_the_module_is_still_to_accept() {
     ..read
   };
   assert_eq!(undelivered.step(), DeliveryStep::Person(PersonsDelivery::NoAcceptance));
+}
+
+#[test]
+fn module_delivery_view_says_where_a_branch_of_its_own_stands() {
+  let repo = Repo::new();
+  let module = repo.db.module(repo.module).expect("read").expect("module");
+  assert_eq!(
+    DeliveryView::read(&repo.db, &module, &[]).expect("read"),
+    None,
+    "a module without a branch of its own has no delivery to show"
+  );
+
+  let owned = repo.own(&OwnChange::default());
+  let view = DeliveryView::read(&repo.db, &owned, &[])
+    .expect("read")
+    .expect("its own branch");
+  assert_eq!(view.own.branch.as_str(), "module/webhooks-v2");
+  assert_eq!(view.into, None, "the branch the checkout has checked out");
+  assert_eq!((view.tasks, view.merged, view.open), (0, 0, 0));
+  assert!(view.at_work.is_empty() && view.acceptances.is_empty());
+  assert_eq!(view.step, DeliveryStep::Delivered, "nothing was merged into it");
+  assert!(!view.undelivered());
+  assert_eq!(view.delivered, None);
+
+  repo.work(
+    "webhooks.txt",
+    "retry three times
+",
+  );
+  let delivered = repo.deliver().expect("delivered");
+  let view = DeliveryView::read(&repo.db, &owned, &[])
+    .expect("read")
+    .expect("its own branch");
+  assert_eq!(view.delivered, Some(delivered), "its latest delivery");
 }

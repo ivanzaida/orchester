@@ -10,7 +10,7 @@ use std::{
 use chrono::NaiveDate;
 pub use orchester_core::module::progress::Progress;
 use orchester_core::{
-  id::{ModuleId, TaskId},
+  id::{ModuleId, ResourceId, TaskId},
   module::Module,
   store::TaskStore,
   task::Task,
@@ -21,6 +21,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   burndown::{Burndown, ChartDays, TaskTrack},
+  delivery::DeliveryView,
   measure::Measure,
 };
 use crate::delivery::{
@@ -85,6 +86,10 @@ pub struct ModulePage {
   pub progress: Progress,
   pub burndown: Burndown,
   pub forecast: Forecast,
+  /// Its own branch on the way to its base branch; `None` for a module without one.
+  pub delivery: Option<DeliveryView>,
+  /// The names of the project's published pipelines by id, which the module's acceptance pipeline is one of.
+  pub pipelines: Vec<(ResourceId, String)>,
 }
 
 impl ModulePage {
@@ -133,7 +138,13 @@ impl ModulePage {
       today: local_date(now),
     };
     let progress = Progress::of(&members, &measure);
+    let pipelines = crate::tasks::data::published_pipelines(db)?
+      .into_iter()
+      .map(|pipeline| (pipeline.id, pipeline.name.to_string()))
+      .collect();
     Ok(Some(Self {
+      delivery: DeliveryView::read(db, &module, &members)?,
+      pipelines,
       burndown: Burndown::of(&tracks, measure.unit, days),
       forecast: Forecast::of(progress.remaining(), &delivered, days.today, forecast::SEED),
       progress,

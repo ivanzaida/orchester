@@ -71,7 +71,27 @@
       },
       "create": "Create module",
       "save": "Save changes",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "delivery": {
+        "title": "Delivery",
+        "foot": "The branch is made when the module's first task starts. Off: tasks merge into the base branch, as before.",
+        "ownBranch": {
+          "label": "Its own branch",
+          "hintNamed": "Tasks merge into {{branch}}, not into your checkout",
+          "hintOn": "Tasks merge into a branch of the module's own, not into your checkout",
+          "hintOff": "Tasks merge into the base branch of each run"
+        },
+        "acceptance": {
+          "label": "Acceptance pipeline",
+          "hint": "Runs on the whole branch once every task is done; may stay empty",
+          "none": "None"
+        },
+        "deliver": {
+          "label": "Deliver when accepted",
+          "hint": "The Orchestrator merges the branch into its base branch when acceptance finds nothing",
+          "needsAcceptance": "Choose an acceptance pipeline first"
+        }
+      }
     },
     "page": {
       "back": "Modules",
@@ -89,7 +109,9 @@
       "tabs": {
         "summary": "Summary",
         "burndown": "Burndown"
-      }
+      },
+      "acceptance": "Acceptance",
+      "acceptanceTag": "Acceptance"
     },
     "summary": {
       "description": "Description",
@@ -105,7 +127,13 @@
       "created": "Created",
       "ledIn": "Led in",
       "ledInLink": "{{leader}} ↗",
-      "notSet": "Not set"
+      "notSet": "Not set",
+      "branch": "Branch",
+      "acceptance": "Acceptance",
+      "noAcceptance": "None",
+      "deliver": "Deliver",
+      "deliverWhenAccepted": "When accepted",
+      "deliverByYou": "By you"
     },
     "burndown": {
       "title": "Burndown",
@@ -245,6 +273,33 @@
           "noBase": "The checkout has no branch checked out to deliver onto, other than the module's own.",
           "branchMissing": "The module's branch {{branch}} isn't in this checkout."
         }
+      }
+    },
+    "delivery": {
+      "deliver": "Deliver",
+      "cancel": "Cancel",
+      "checkedOut": "the checked-out branch",
+      "waitsForRuns": "Runs of {{tasks}} have not ended",
+      "confirmTitle": "Deliver {{branch}} into {{into}}?",
+      "confirmWhat": "{{branch}} is merged into {{into}} with a merge commit. The merge is not undone here.",
+      "confirmOpen": "{{branch}} is merged into {{into}} with a merge commit, with {{open}} of the module's tasks still open. The merge is not undone here.",
+      "title": {
+        "plain": "{{branch}} → {{into}}",
+        "accepting": "{{branch}} → {{into}} · accepting",
+        "accepted": "{{branch}} → {{into}} · accepted",
+        "ceiling": "{{branch}} → {{into}} · acceptance found problems twice",
+        "delivered": "{{branch}} → {{into}} · delivered"
+      },
+      "detail": {
+        "nothing": "No task merged yet. The branch is made when the first task starts.",
+        "atWork": "{{merged}} of {{tasks}} tasks merged · runs at work: {{runs}}",
+        "open": "{{merged}} of {{tasks}} tasks merged",
+        "accept": "{{merged}} of {{tasks}} tasks merged · its acceptance has not run yet",
+        "accepting": "{{merged}} of {{tasks}} tasks merged · its acceptance works on the whole branch",
+        "accepted": "{{merged}} of {{tasks}} tasks merged · nothing was merged since its acceptance",
+        "noAcceptance": "{{merged}} of {{tasks}} tasks merged · it has no acceptance pipeline",
+        "ceiling": "{{merged}} of {{tasks}} tasks merged · it is left to you",
+        "delivered": "Delivered to {{into}} · {{commit}} · {{time}}"
       }
     }
   }

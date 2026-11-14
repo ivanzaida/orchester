@@ -1,6 +1,6 @@
 # OA-17 · A local module's own branch and its delivery, as a team module has
 
-- **Status:** done but for what waits for frames (2026-11-14)
+- **Status:** built (2026-11-14); design verification pending
 - **Kind:** design + core + workspace + UI
 - **Depends on:** OA-16; the frames of `frames.md` D for its visible part
 - **Branch:** —
@@ -99,3 +99,29 @@ New:
 Tests: `orchester-core --test module_delivery delivery`, `orchester-workspace --test module_delivery
 module_delivery` (a real repository), `orchester-runner --test execution run_base_resolution` (the first run makes
 the branch).
+
+## The form and the Summary, as built (2026-11-14)
+
+Frames: `M01`, `M02`, `Parts · Delivery` and `Parts · Module form` on the board `Orchestrator autonomy · frames to
+approve`.
+
+- **Edit module and New module** have the group *Delivery* under the chips (`screens/modules/form_delivery.rs`):
+  *Its own branch*, and only while it is on, *Acceptance pipeline* (none, or a published pipeline of the project)
+  and *Deliver when accepted*, which stays off and faded, with why, while no acceptance pipeline is chosen. Saved
+  with the form (`change_own_in`), on this computer.
+- **The Summary** of a module with a branch of its own starts with its delivery
+  (`screens/modules/delivery.rs`, read as `orchester_workspace::modules::delivery::DeliveryView` with the page):
+  the branch and where it goes, how it stands (nothing merged yet; N of M tasks merged, with the runs at work;
+  every task done with or without an acceptance; accepting; accepted; acceptances that did not pass twice;
+  delivered, with the commit and when) and **Deliver**, which asks in a dialog before it merges and says under
+  the row why a delivery was refused (a conflict, the person's changes in the way, runs at work). Its properties
+  name *Branch*, *Acceptance* and *Deliver*. The module's acceptance tasks stand in their own group, tagged
+  *Acceptance*, and are not counted among its tasks.
+- **Differs from the frames:** the row is the strip a team module's delivery line is (`team::strip`), so the state
+  is said in the title's words and not in a pill, and a warning row has no stroke; commits ahead of and behind the
+  base branch are not counted (the row reads from the project's records alone, no git); *The base moved*,
+  *Delivering* as a state of its own and *The checkout refused* / *Conflicts* as rows are the dialog's loader and
+  the refusal under the row; turning the branch off while it holds undelivered work is not refused.
+
+Tests: `orchester-workspace --test module_delivery module_delivery_view`; `orchester-app --test modules
+modules_summary_of_a_module_with_its_own_branch`, `modules_edit_module_gives`.

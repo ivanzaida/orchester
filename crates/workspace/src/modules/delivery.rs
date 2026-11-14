@@ -16,7 +16,7 @@ use orchester_core::{
   },
   module::{
     Module, ModuleError,
-    delivery::{Acceptance, DeliveryFacts, ModuleDelivered, OwnBranch, own_branch_name},
+    delivery::{Acceptance, DeliveryFacts, DeliveryStep, ModuleDelivered, OwnBranch, own_branch_name},
   },
   run::{BranchName, TaskPhase},
   store::{MergeStore, RunStore, TaskStore},
@@ -322,5 +322,71 @@ fn refusal(error: ModuleMergeError) -> DeliverRefusal {
     ModuleMergeError::Merge(MergeError::UncommittedInTheWay { files }) => DeliverRefusal::InTheWay(files),
     ModuleMergeError::Store(error) => DeliverRefusal::Store(error),
     other => DeliverRefusal::Failed(other.to_string()),
+  }
+}
+
+/// A module's own branch as its page shows it (`M02 · Module · Summary · its branch and Deliver` and `Parts ·
+/// Delivery` on the board `Orchestrator autonomy · frames to approve`): where its work stands on the way to its base
+/// branch, from the project's records alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeliveryView {
+  pub own: OwnBranch,
+  /// The base branch the module names; `None`: the branch the checkout has checked out.
+  pub into: Option<BranchName>,
+  /// The module's own tasks, Canceled ones and its acceptances left out, and how many of them have merged work.
+  pub tasks: usize,
+  pub merged: usize,
+  /// How many of them are neither Done nor Canceled.
+  pub open: usize,
+  /// The keys of the tasks whose latest run has not ended, acceptances too.
+  pub at_work: Vec<String>,
+  /// What the module waits for once its every task is done.
+  pub step: DeliveryStep,
+  /// Its latest delivery.
+  pub delivered: Option<ModuleDelivered>,
+  /// Its acceptance tasks, oldest first.
+  pub acceptances: Vec<TaskId>,
+}
+
+impl DeliveryView {
+  /// Module `module`'s own branch among `tasks`, the project's; `None` for a module without one. Blocks on SQLite.
+  pub fn read(db: &ProjectDb, module: &Module, tasks: &[Task]) -> Result<Option<Self>, StoreError> {
+    let Some(own) = module.own_branch().cloned() else {
+      return Ok(None);
+    };
+    let acceptances: Vec<TaskId> = db
+      .module_acceptances(module.id())?
+      .into_iter()
+      .map(|(task, _)| task)
+      .collect();
+    let (mut counted, mut merged, mut open) = (0, 0, 0);
+    for task in tasks.iter().filter(|task| task.module() == Some(module.id())) {
+      let status = task.organization().status();
+      if acceptances.contains(&task.id()) || status == WorkflowStatus::Canceled {
+        continue;
+      }
+      counted += 1;
+      merged += usize::from(last_merge(db, task.id())?.is_some());
+      open += usize::from(status != WorkflowStatus::Done);
+    }
+    Ok(Some(Self {
+      own,
+      into: match module.base() {
+        BaseChoice::Branch(branch) => Some(branch.clone()),
+        BaseChoice::CheckedOut => None,
+      },
+      tasks: counted,
+      merged,
+      open,
+      at_work: at_work(db, module.id())?,
+      step: facts(db, module)?.step(),
+      delivered: db.module_delivery(module.id())?,
+      acceptances,
+    }))
+  }
+
+  /// Whether the branch holds merged work its base branch has not been given.
+  pub const fn undelivered(&self) -> bool {
+    self.merged > 0 && !matches!(self.step, DeliveryStep::Delivered)
   }
 }

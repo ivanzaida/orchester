@@ -35,7 +35,7 @@ use super::{
 use crate::{
   project::ShownProject,
   screens::usage::words::{date_time, day},
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ModulesSpacing, TaskSpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, ModulesSpacing, TaskSpacing},
   ui::{
     date_picker::{Limits, PickerProps, date_panel},
     field::field_error,
@@ -60,11 +60,14 @@ pub struct PropertiesProps {
   pub led_in: Arc<LedIn>,
   /// The page's, which a change goes over until the page reads again.
   pub written: Written,
+  /// The name of the pipeline the module's acceptance runs on, for a module with a branch of its own that names one.
+  pub acceptance: Option<Arc<str>>,
 }
 
 impl PartialEq for PropertiesProps {
   fn eq(&self, other: &Self) -> bool {
-    (&self.project, &self.module, &self.led_in) == (&other.project, &other.module, &other.led_in)
+    (&self.project, &self.module, &self.led_in, &self.acceptance)
+      == (&other.project, &other.module, &other.led_in, &other.acceptance)
   }
 }
 
@@ -141,6 +144,7 @@ impl Component for ModuleProperties {
           .into(),
         None,
       ))
+      .with_children(own_rows(ctx, &props))
       .child(led_in::row(ctx, props.project.open.project.id(), &props.led_in))
       .with_children(self.refused(ctx))
       .describe("state", words::state_key(details.state()))
@@ -272,6 +276,52 @@ impl ModuleProperties {
   }
 }
 
+/// *Branch*, *Acceptance* and *Deliver* of a module with a branch of its own (`M02 · Module · Summary · its branch
+/// and Deliver`): the branch in Geist Mono, the acceptance pipeline's name or that it has none, and who delivers it.
+/// They are changed in Edit module.
+fn own_rows(ctx: &Ctx, props: &PropertiesProps) -> Vec<Element> {
+  let Some(own) = props.module.own_branch() else {
+    return Vec::new();
+  };
+  let value = |id: &str, words: &str, mono: bool| -> Element {
+    let text = Text::new(words).id(format!("{id}-value")).nowrap();
+    let style = if mono {
+      ExtraTypography::MonoKey.role()
+    } else {
+      TypographyStyle::Description
+    };
+    text.variant(style).color(PaletteColor::TextPrimary).into()
+  };
+  let acceptance = props
+    .acceptance
+    .clone()
+    .unwrap_or_else(|| ctx.t("modules.properties.noAcceptance"));
+  let delivers = ctx.t(if own.deliver_when_accepted {
+    "modules.properties.deliverWhenAccepted"
+  } else {
+    "modules.properties.deliverByYou"
+  });
+  let rows: [(&str, &str, Arc<str>, bool); 3] = [
+    (
+      "module-property-branch",
+      "modules.properties.branch",
+      own.branch.to_string().into(),
+      true,
+    ),
+    (
+      "module-property-acceptance",
+      "modules.properties.acceptance",
+      acceptance,
+      false,
+    ),
+    ("module-property-deliver", "modules.properties.deliver", delivers, false),
+  ];
+  rows
+    .into_iter()
+    .map(|(id, key, words, mono)| property((id, &ctx.t(key)), value(id, &words, mono), None))
+    .collect()
+}
+
 /// The dot before the state's word (`Dot` `fKFJa`).
 pub(super) const DOT: f32 = 6.0;
 
@@ -301,6 +351,7 @@ fn changed(
     module: Some(base),
     details,
     base: None,
+    own: None,
   })
 }
 
