@@ -151,23 +151,23 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | done; its row has no frame, macOS not run |
 | **B** | **What the chat may do on its own** | | | |
 | [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | done; choosing it waits for frames (B) |
-| [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | the line and the chip built, design verification pending; the pickers, ceilings and settings rows not built; a command chooses it meanwhile |
-| [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | done; its settings row waits for frames (G) |
+| [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | built; design verification pending |
+| [OA-11](OA-11-drive-answers.md) | The drive switch is the chat's consent to answer | workspace | — | done |
 | **C** | **A module to the end** | | | |
 | [OA-12](OA-12-standing.md) | Core: where a led target stands | core + workspace | OA-09 | done |
 | [OA-13](OA-13-work-can-start.md) | The event *work can start* | core + workspace | OA-09, OA-12 | done; its line follows its frame, design verification pending |
 | [OA-14](OA-14-run-again.md) | A failed task is run again within its ceiling | workspace | OA-09, OA-13 | done |
-| [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | done; what is seen waits for frames (OA-23) |
+| [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | done; shown on the Overview and the task's Summary (OA-23) |
 | [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | done |
-| [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | done; its form and Summary wait for frames (D) |
+| [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | built; design verification pending |
 | [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | done; not run with a real model |
 | **D** | **Quality without a person** | | | |
 | [OA-19](OA-19-before-you-leave.md) | Before you leave: is what the conversation leads ready | design + workspace + UI | OA-09, frames for its UI | built; design verification pending |
-| [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | done; its form rows wait for frames (D) |
+| [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | built; design verification pending |
 | [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | done as instructions |
 | **E** | **The record for the person** | | | |
-| [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | done; its screen is OA-23 |
-| [OA-23](OA-23-while-you-were-away.md) | *While you were away*: decisions to review and what needs you | design + UI | OA-15, OA-22, frames | blocked (frames) |
+| [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | done; shown on the Overview (OA-23) |
+| [OA-23](OA-23-while-you-were-away.md) | *While you were away*: decisions to review and what needs you | design + UI | OA-15, OA-22, frames | built; design verification pending |
 | [OA-24](OA-24-outside-notification.md) | A notification that leaves the computer | design + app | — | canceled (person, 2026-11-13) |
 | [OA-25](OA-25-daily-report.md) | The daily report names reasons, what is parked and what is held | workspace | OA-03, OA-15, OA-22 | done in the tool's answer |
 | **G** | **The same in team projects** | | | |
@@ -182,7 +182,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-35](OA-35-team-task-organization.md) | Dependencies between team tasks, and the rest of a task's organization | contract + workspace | — | needs decision (contract) |
 | [OA-36](OA-36-team-reads.md) | Forecasts and cross-project readings answer for team projects | workspace | — | `list_tasks` across projects done; `get_delivery` left |
 | **F** | **Proof** | | | |
-| [OA-26](OA-26-unattended-proof.md) | An unattended module, end to end, with the fake agents | tests | OA-01 … OA-03, OA-06, OA-07, OA-09, OA-12 … OA-15, OA-18, OA-21, OA-22 | todo |
+| [OA-26](OA-26-unattended-proof.md) | An unattended module, end to end, with the fake agents | tests | OA-01 … OA-03, OA-06, OA-07, OA-09, OA-12 … OA-15, OA-18, OA-21, OA-22 | a local module of three tasks runs end to end; the full scenario and the team run are left |
 
 ## Order
 

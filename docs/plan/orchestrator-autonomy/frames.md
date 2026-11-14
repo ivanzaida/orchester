@@ -37,6 +37,10 @@ and the line *Work can start* with its turn; Parts · Lines a–f; Parts · Befo
 `/watching` answer; Parts · An event whose turn failed or is held a–g. What differs from a frame, and what has no
 entry to draw (Lines g and h), is in the task files OA-02, OA-03, OA-10, OA-13 and OA-19.
 
+**Built later on 2026-11-14** (design verification pending): L02's mode control and ceilings row, L03, Parts ·
+Ceilings a–d and S01 (OA-10, OA-11); M01, M02, Parts · Delivery and Parts · Module form (OA-17, OA-20); W01, W02 and
+the *Overrule…* of W03 (OA-23). Each task file says where what was built differs from its frame.
+
 What the frames decided where this file left a choice: a leading chip is told by a flag and the words *to the end*;
 the mode sits in the picker above the key caps and switches with Tab; *Needs you* is the Overview's waiting list, with
 the decisions in a second card under it; *Deliver* is the Summary's first row; *Keep the computer awake* has its own

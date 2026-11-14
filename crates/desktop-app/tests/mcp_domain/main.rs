@@ -58,6 +58,7 @@ mod orchestrator_report_turn;
 mod orchestrator_resolve;
 mod orchestrator_sent;
 mod orchestrator_sent_as;
+mod orchestrator_unattended;
 mod person_decisions;
 mod pipeline_permissions;
 mod reads;

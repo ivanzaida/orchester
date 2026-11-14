@@ -499,3 +499,15 @@ whose event started the turn; in a person's turn, none of its own (the default o
 the conversation watches nothing, when one of its subscriptions already covers the task, or when another conversation
 leads the task's module or the tasks without a module — then the task's events go there, and `create_task`'s answer
 (`watch`) and the action's row say which.
+
+## What it parked and decided while you were away
+
+The project's Overview shows, over what waits for you, the tasks the Orchestrator parked for you (what is needed,
+why it could not go on and what to do; **Give it back** hands the task back to the conversation that leads it, and
+the same row stands at the top of the task's Summary) and the decisions it made by itself that you have not looked
+at, by module, each with its reason: **Seen** takes one off the list, **Mark all seen** all of them, and
+**Overrule…** opens the conversation that decided with the decision quoted in the composer, for your own words.
+
+A module with a branch of its own (Edit module › *Delivery*) shows its delivery first on its Summary, with
+**Deliver**; the ceilings of a conversation that leads to the end are in `/watching` (**Change…**) and their
+defaults in Project settings › Orchestrator › *Leading to the end*.
