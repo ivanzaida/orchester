@@ -1,11 +1,17 @@
-//! Agent CLIs on API providers through the domain tools (`docs/design/api-providers.md`): running a connection on a
-//! provider's host or key is a person's decision unless they let automation widen, going back to the sign-in or
-//! changing only the models is not; the provider names its key secret, and no result holds the key.
+//! The person's API providers through the domain tools (`docs/design/agent-accounts.md`, "Agents run on accounts"):
+//! a provider is added by a person in Settings › Accounts and listed without its key; running a profile on one
+//! sends the project's work to its host, a person's decision unless they let automation widen; and no result holds
+//! the key.
 
 use std::sync::Arc;
 
-use orchester_core::secret::{Environment, NewSecret, SecretKind, SecretName, SecretValue};
-use orchester_workspace::secrets::data::add_in;
+use orchester_core::{
+  account::{AccountCli, ApiAccount, ApiSetup},
+  connection::BaseUrl,
+  name::Name,
+  resource::ModelId,
+  secret::SecretValue,
+};
 use serde_json::{Value, json};
 
 use super::{Served, vault::MemoryVault, write_program};
@@ -13,35 +19,36 @@ use super::{Served, vault::MemoryVault, write_program};
 /// The key the vault holds; no result may hold it.
 const KEY: &str = "sk-fake-provider-domain-2b9c47e1";
 
-/// The connections scenario served on a vault holding the key in secret DEEPSEEK_KEY.
-fn served() -> Served {
+/// The connections scenario served on a vault, with the API provider *DeepSeek* of Claude Code added as a person
+/// adds it in Settings › Accounts, and a file chosen as Claude Code's program on this computer.
+fn served() -> (Served, ApiAccount) {
   let vault = Arc::new(MemoryVault::default());
-  let (served, seeded) = Served::seeded_on_vault("connections", vault.clone());
-  let new = NewSecret {
-    name: SecretName::new("DEEPSEEK_KEY").expect("a secret name"),
-    kind: SecretKind::ApiKey,
-    environment: Environment::Development,
-  };
-  let value = SecretValue::new(KEY.to_owned()).expect("a value");
-  add_in(&seeded.repo, vault.as_ref(), new, &value).expect("the key secret");
-  served
-}
-
-fn on(url: &str, models: &[&str]) -> Value {
-  json!({
-    "project": "Kontur",
-    "connection": "Claude · Kontur",
-    "api_provider": { "base_url": url, "key_secret": "DEEPSEEK_KEY", "models": models },
-  })
-}
-
-fn assert_person_only(error: &Value) {
-  assert_eq!(error["code"], "person_only", "{error}");
-  let reasons = error["reasons"].to_string();
-  assert!(
-    reasons.contains("api.deepseek.com") && reasons.contains("DEEPSEEK_KEY"),
-    "{error}"
-  );
+  let (served, _) = Served::seeded_on_vault("connections", vault.clone());
+  let models = ["deepseek-flash", "deepseek-v4-pro"]
+    .into_iter()
+    .map(|model| ModelId::new(model).expect("a model id"))
+    .collect();
+  let setup = ApiSetup::cli(
+    AccountCli::ClaudeCode,
+    BaseUrl::new("https://api.deepseek.com/anthropic").expect("a base URL"),
+    models,
+  )
+  .expect("a setup");
+  let workspace = &served.services().workspace;
+  let account = workspace
+    .add_api_account(
+      vault.as_ref(),
+      Name::new("DeepSeek").expect("a name"),
+      setup,
+      &SecretValue::new(KEY.to_owned()).expect("a value"),
+    )
+    .expect("the provider is added");
+  let program = served.folder.path().join("my-claude.exe");
+  write_program(&program, 0o755);
+  workspace
+    .set_agent_program(AccountCli::ClaudeCode, &program)
+    .expect("the program is kept");
+  (served, account)
 }
 
 fn assert_no_key(text: &str) {
@@ -49,118 +56,79 @@ fn assert_no_key(text: &str) {
 }
 
 #[test]
-fn domain_api_providers_need_a_person_for_a_new_host_or_key_and_never_hold_the_key() {
-  let mut served = served();
-  let deepseek = on("https://api.deepseek.com/anthropic", &["deepseek-flash"]);
-  assert_person_only(&served.refused("set_api_provider", &deepseek));
+fn domain_api_providers_are_listed_without_their_key_and_serve_the_models_typed_for_them() {
+  let (mut served, account) = served();
+  let listed = served.ok("list_accounts", &json!({}));
+  assert_no_key(&listed.to_string());
+  let provider = listed["api_providers"]
+    .as_array()
+    .and_then(|providers| providers.iter().find(|provider| provider["name"] == "DeepSeek"))
+    .unwrap_or_else(|| panic!("DeepSeek is listed: {listed}"));
+  assert_eq!(provider["id"], account.id().to_string());
+  assert_eq!(provider["used_with"], "claude_code");
+  assert_eq!(provider["host"], "api.deepseek.com");
+  assert_eq!(provider["key_here"], true, "{provider}");
+  assert_eq!(provider["status"], Value::Null, "an agent CLI's provider is not tested");
+  let programs = listed["programs"].as_array().expect("each CLI's program");
+  let claude = programs
+    .iter()
+    .find(|program| program["cli"] == "claude_code")
+    .expect("Claude Code's");
+  assert!(
+    claude["set"].as_str().is_some_and(|set| set.ends_with("my-claude.exe")),
+    "{claude}"
+  );
+
+  // The project has no connection on it yet: its models are the ones typed for it.
+  let models = served.ok("list_models", &json!({ "project": "Kontur", "account": "deepseek" }));
+  assert_eq!(models["source"], "api_provider", "{models}");
+  assert_eq!(models["models"][1]["id"], "deepseek-v4-pro", "{models}");
+  let refused = served.refused("check_account", &json!({ "account": "DeepSeek" }));
+  assert_eq!(refused["code"], "not_tested", "{refused}");
+}
+
+#[test]
+fn domain_api_providers_take_a_profile_only_while_a_person_lets_automation_widen() {
+  let (mut served, account) = served();
+  // A profile on Claude Code's own sign-in, with a model the provider serves too.
+  served.let_automation_widen(true);
+  served.ok(
+    "save_profile_draft",
+    &json!({
+      "project": "Kontur", "role": "Runner", "account": "default", "cli": "claude_code", "model": "deepseek-flash",
+    }),
+  );
+  served.let_automation_widen(false);
+  let on = json!({ "project": "Kontur", "profile": "Runner", "account": "DeepSeek" });
+  let refused = served.refused("set_profile_account", &on);
+  assert_eq!(refused["code"], "person_only", "{refused}");
+  assert!(refused["reasons"].to_string().contains("api.deepseek.com"), "{refused}");
 
   served.let_automation_widen(true);
-  let set = served.ok("set_api_provider", &deepseek);
+  let set = served.ok("set_profile_account", &on);
   assert_no_key(&set.to_string());
-  let connection = &set["connection"];
-  assert_eq!(
-    connection["status"], "connected",
-    "the CLI's own sign-in is not used: {connection}"
-  );
-  assert_eq!(connection["account"], Value::Null, "{connection}");
-  assert_eq!(
-    connection["api_provider"],
-    json!({
-      "base_url": "https://api.deepseek.com/anthropic",
-      "host": "api.deepseek.com",
-      "key_secret": "DEEPSEEK_KEY",
-      "models": ["deepseek-flash"],
-    })
-  );
+  assert_eq!(set["api_provider"]["id"], account.id().to_string(), "{set}");
+  let connections = served.ok("list_connections", &json!({ "project": "Kontur" }));
+  let row = connections["runs_on"]
+    .as_array()
+    .and_then(|rows| rows.iter().find(|row| row["profile"]["role"] == "Runner"))
+    .unwrap_or_else(|| panic!("Runner is listed: {connections}"));
+  assert_eq!(row["runs_on"]["api_provider"]["name"], "DeepSeek", "{row}");
+  assert_eq!(row["runs_on"]["account"], Value::Null, "{row}");
 
+  // The provider it runs on already is no widening.
   served.let_automation_widen(false);
-  let models = served.ok(
-    "set_api_provider",
-    &on(
-      "https://api.deepseek.com/anthropic",
-      &["deepseek-flash", "deepseek-v4-pro"],
-    ),
-  );
-  assert_eq!(
-    models["connection"]["api_provider"]["models"],
-    json!(["deepseek-flash", "deepseek-v4-pro"]),
-    "only the models change: no widening"
-  );
-  let listed = served.ok(
-    "list_models",
-    &json!({ "project": "Kontur", "connection": "Claude · Kontur" }),
-  );
-  assert_eq!(listed["source"], "api_provider", "{listed}");
-  assert_eq!(listed["models"][1]["id"], "deepseek-v4-pro", "{listed}");
-  let elsewhere = on("https://gateway.example.com", &["deepseek-flash"]);
-  assert_eq!(served.refused("set_api_provider", &elsewhere)["code"], "person_only");
-
-  for tool in ["list_connections", "list_secrets", "get_project"] {
+  served.ok("set_profile_account", &on);
+  for tool in ["list_connections", "list_profiles", "list_secrets", "get_project"] {
     let text = match served.call(tool, &json!({ "project": "Kontur" })) {
       Ok(value) | Err(value) => value.to_string(),
     };
     assert_no_key(&text);
   }
-
+  // Back on the CLI's own sign-in: its Default is never a widening.
   let back = served.ok(
-    "set_api_provider",
-    &json!({ "project": "Kontur", "connection": "Claude · Kontur", "api_provider": null }),
+    "set_profile_account",
+    &json!({ "project": "Kontur", "profile": "Runner", "account": "default" }),
   );
-  assert_eq!(
-    back["connection"]["api_provider"],
-    Value::Null,
-    "going back is a narrowing"
-  );
-  assert_eq!(back["connection"]["status"], "sign_in_required");
-}
-
-#[test]
-fn domain_api_providers_are_checked_as_the_form_checks_them() {
-  let mut served = served();
-  served.let_automation_widen(true);
-  let refused = |served: &mut Served, args: &Value| served.refused("set_api_provider", args)["code"].clone();
-  assert_eq!(
-    refused(&mut served, &on("http://api.deepseek.com", &["deepseek-flash"])),
-    "invalid_base_url"
-  );
-  assert_eq!(
-    refused(&mut served, &on("https://api.deepseek.com", &[])),
-    "invalid_api_provider"
-  );
-  assert_eq!(
-    refused(&mut served, &on("https://api.deepseek.com", &["deep seek"])),
-    "invalid_model"
-  );
-  let mut unknown = on("https://api.deepseek.com", &["deepseek-flash"]);
-  unknown["api_provider"]["key_secret"] = json!("NO_SUCH_SECRET");
-  assert_eq!(refused(&mut served, &unknown), "secret_not_found");
-  let mut github = on("https://api.deepseek.com", &["deepseek-flash"]);
-  github["connection"] = json!("gh · github.com");
-  assert_eq!(refused(&mut served, &github), "not_an_agent_connection");
-}
-
-#[test]
-fn domain_api_providers_a_cli_added_on_a_provider_names_both_widenings() {
-  let mut served = served();
-  let program = served.folder.path().join("my-claude.exe");
-  write_program(&program, 0o755);
-  let args = json!({
-    "project": "Kontur",
-    "kind": "claude",
-    "name": "DeepSeek · Claude",
-    "program": program.display().to_string(),
-    "api_provider": {
-      "base_url": "https://api.deepseek.com/anthropic",
-      "key_secret": "DEEPSEEK_KEY",
-      "models": ["deepseek-flash"],
-    },
-  });
-  let refused = served.refused("add_cli_connection", &args);
-  assert_person_only(&refused);
-  served.let_automation_widen(true);
-  assert_eq!(
-    served.refused("add_cli_connection", &args)["code"],
-    "not_verified",
-    "the program is checked once a person lets it, and saved only when it is the CLI"
-  );
+  assert_eq!(back["account"]["default"], true, "{back}");
 }

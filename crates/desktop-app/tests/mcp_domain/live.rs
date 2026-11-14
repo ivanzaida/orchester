@@ -79,26 +79,17 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
   // The runs start whatever this computer's disk has free: the guard keeps 1 GB here instead of 50.
   let kept = served.ok("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 1 }));
   assert_eq!(kept["disk_guard"]["keep_free_gb"], 1);
-  let fake_codex =
-    json!({ "project": "Kontur", "kind": "codex", "name": "Codex · Kontur", "program": fake.display().to_string() });
-  let refused = served.refused("add_cli_connection", &fake_codex);
-  assert_eq!(
-    refused["code"], "person_only",
-    "a program not on the search path is a person's choice"
-  );
-  // A person lets automation set the project up, the fake CLI and write access included.
+  // A person chooses the fake CLI as Codex's program in Settings › Accounts and lets automation set the project
+  // up, write access included; no tool takes a program.
+  served
+    .services()
+    .workspace
+    .set_agent_program(orchester_core::account::AccountCli::Codex, fake)
+    .expect("the program is kept");
   served.let_automation_widen(true);
-  let connection = served.ok("add_cli_connection", &fake_codex);
-  assert_eq!(connection["check"]["verified"], true, "{connection}");
-  assert_eq!(connection["connection"]["status"], "connected");
-  let models = served.ok(
-    "list_models",
-    &json!({ "project": "Kontur", "connection": "Codex · Kontur" }),
-  );
-  assert_eq!(models["models"][0]["id"], "gpt-5.5");
   let offered = served.refused(
     "save_profile_draft",
-    &json!({ "project": "Kontur", "role": "Builder", "connection": "Codex · Kontur", "model": "gpt-5.5", "effort": "extreme" }),
+    &json!({ "project": "Kontur", "role": "Builder", "account": "default", "cli": "codex", "model": "gpt-5.5", "effort": "extreme" }),
   );
   assert_eq!(offered["code"], "effort_not_offered");
   let profile = served.ok(
@@ -107,7 +98,7 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
       "project": "Kontur",
       "role": "Builder",
       "responsibilities": "Implements the task.",
-      "connection": "Codex · Kontur",
+      "account": "default", "cli": "codex",
       "model": "gpt-5.5",
       "effort": "medium",
       "permissions": { "repository": "write", "commands": "any_in_worktree", "network": "on" },
@@ -117,6 +108,14 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
     profile["profile"]["state"]["state"], "published",
     "created as v1: {profile}"
   );
+  assert_eq!(profile["profile"]["runs_on"]["account"]["default"], true, "{profile}");
+  let models = served.ok(
+    "list_models",
+    &json!({ "project": "Kontur", "account": "default", "cli": "codex" }),
+  );
+  assert_eq!(models["models"][0]["id"], "gpt-5.5");
+  let connections = served.ok("list_connections", &json!({ "project": "Kontur" }));
+  assert_eq!(connections["runs_on"][0]["status"], "connected", "{connections}");
   assert_eq!(profile["profile"]["state"]["published_version"], 1);
   delivery(repo);
   let pipeline = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Delivery" }));

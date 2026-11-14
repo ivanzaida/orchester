@@ -76,12 +76,12 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       ConnectionProblem::NoneOfKind => part_of(
         "connection",
         json!({ "cli": cli, "problem": "none_of_kind" }),
-        fix(Some("add_cli_connection"), None),
+        fix(Some("set_profile_account"), None),
       ),
       ConnectionProblem::PickNeeded => part_of(
         "connection",
         json!({ "cli": cli, "problem": "pick_needed" }),
-        fix(Some("pick_profile_connection"), None),
+        fix(Some("set_profile_account"), None),
       ),
     },
     Missing::ConnectionSignIn { cli, connection, .. } => part_of(
@@ -103,7 +103,7 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       ConnectionProblem::PickNeeded => part_of(
         "decision_connection",
         json!({ "reviewer": reviewer.to_string(), "problem": "pick_needed" }),
-        fix(Some("pick_reviewer_connection"), None),
+        fix(Some("set_reviewer_account"), None),
       ),
     },
     Missing::McpUnsupported { server, why } => part_of(

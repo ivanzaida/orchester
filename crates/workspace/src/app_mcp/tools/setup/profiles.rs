@@ -21,6 +21,7 @@ use super::{
     readiness_json,
   },
   connections::agent_by_id,
+  runs_on::Accounts,
   widening,
 };
 use crate::{
@@ -56,11 +57,21 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
     across(&services, args.project.as_deref(), |open, db| {
       let agents = ProjectAgents::load(db)?;
       let listed = listed_profiles(db, &agents)?;
-      Ok((agents, listed, readiness_json::read(&services, db, &open.repo_root)?))
+      let mut picks = std::collections::BTreeMap::new();
+      for (id, _) in &listed {
+        picks.insert(*id, db.connection_pick(*id)?.and_then(|pick| pick.account));
+      }
+      let accounts = Accounts::load(&services)?;
+      Ok((
+        agents,
+        listed,
+        readiness_json::read(&services, db, &open.repo_root)?,
+        (accounts, picks),
+      ))
     })
   })
   .await?;
-  Ok(read.json("profiles", translate, |open, (agents, listed, readiness)| {
+  Ok(read.json("profiles", translate, |open, (agents, listed, readiness, (accounts, picks))| {
     listed
       .iter()
       .filter_map(|(id, here)| Some((agents.profile(*id)?, here)))
@@ -69,7 +80,7 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
         json!({
           "id": entry.id.to_string(),
           "role": entry.profile.role().as_str(),
-          "connection": connection.map(|connection| connection.name().as_str()),
+          "runs_on": connection.map(|connection| accounts.runs_on_json(connection, picks.get(&entry.id).copied().flatten())),
           "model": entry.profile.model().as_str(),
           "effort": stored_effort(&entry.profile),
           "state": state_json(entry.state),
@@ -86,7 +97,7 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
   blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
     let id = profile_named(&ProjectAgents::load_in(&open.repo_root)?, &args.profile)?.id;
-    let mut profile = profile_with_revision(&open, id)?;
+    let mut profile = profile_with_revision(&services, &open, id)?;
     let readiness = readiness_json::read(&services, &db, &open.repo_root)?;
     profile["readiness"] = readiness_json::resource_of(&readiness, id);
     Ok(json!({ "profile": profile }))
@@ -97,7 +108,11 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
 /// Profile `id` of `open` as get_profile shows it, with its revision ([`crate::drafts::draft_revision`]) read
 /// before the profile: a save made meanwhile shows in the profile, so a save on that revision is refused rather
 /// than going over what was not shown.
-pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Result<Value, ToolError> {
+pub(super) fn profile_with_revision(
+  services: &Services,
+  open: &OpenProject,
+  id: ResourceId,
+) -> Result<Value, ToolError> {
   let revision = revision_of::<AgentProfile>(&ProjectDb::open(&open.repo_root)?, id)?;
   let agents = ProjectAgents::load_in(&open.repo_root)?;
   let entry = agents
@@ -106,6 +121,7 @@ pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Resul
   let db = ProjectDb::open(&open.repo_root)?;
   let here = connection_here(&db, &agents, entry)?;
   let mut value = profile_json(&db, &agents, (entry, here), open.project.id())?;
+  value["runs_on"] = runs_on(services, &db, entry.id, here)?;
   value["revision"] = json!(revision);
   Ok(value)
 }
@@ -142,7 +158,9 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
       .profile(id)
       .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
     let here = connection_here(&db, &agents, entry)?;
-    Ok(json!({ "profile": profile_json(&db, &agents, (entry, here), open.project.id())? }))
+    let mut profile = profile_json(&db, &agents, (entry, here), open.project.id())?;
+    profile["runs_on"] = runs_on(&services, &db, id, here)?;
+    Ok(json!({ "profile": profile }))
   })
   .await
 }
@@ -150,7 +168,7 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
 /// The profiles a project lists, each with the connection it runs on here. A team project offers only the team's
 /// resources (`docs/design/team-configuration.md`, edge cases 2 and 3): a profile of this computer's own that was never
 /// published stays out, as it does from the hub.
-fn listed_profiles(
+pub(super) fn listed_profiles(
   db: &ProjectDb,
   agents: &ProjectAgents,
 ) -> Result<Vec<(ResourceId, Option<ConnectionId>)>, StoreError> {
@@ -170,7 +188,7 @@ fn listed_profiles(
 
 /// The connection `entry` runs on here: for a team profile the one this computer picked for it, which the window shows
 /// too, else the connection its body names.
-fn connection_here<'a>(
+pub(super) fn connection_here<'a>(
   db: &ProjectDb,
   agents: &'a ProjectAgents,
   entry: &ProfileEntry,
@@ -179,6 +197,18 @@ fn connection_here<'a>(
     .connection_pick(entry.id)?
     .and_then(|pick| agent_by_id(&agents.connections, pick.connection));
   Ok(picked.or_else(|| agent_by_id(&agents.connections, entry.profile.connection())))
+}
+
+/// What profile `id` runs on here, by account, as `list_connections` says it; null while it runs on nothing here.
+fn runs_on(
+  services: &Services,
+  db: &ProjectDb,
+  id: ResourceId,
+  here: Option<&AgentConnection>,
+) -> Result<Value, ToolError> {
+  let picked = db.connection_pick(id)?.and_then(|pick| pick.account);
+  let accounts = Accounts::load(services)?;
+  Ok(json!(here.map(|connection| accounts.runs_on_json(connection, picked))))
 }
 
 /// The profile of `agents` named by its id or, ignoring case, its role.
@@ -236,11 +266,7 @@ pub(super) fn profile_json(
     "role": profile.role().as_str(),
     "responsibilities": profile.responsibilities(),
     "instructions": profile.instructions().as_str(),
-    "connection": connection.map(|connection| json!({
-      "id": connection.id().to_string(),
-      "name": connection.name().as_str(),
-      "provider": connection.provider(),
-    })),
+    "agent": connection.map(AgentConnection::provider),
     "model": profile.model().as_str(),
     "effort": stored_effort(profile),
     "permissions": permissions_json(profile.permissions()),

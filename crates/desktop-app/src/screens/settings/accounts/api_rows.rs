@@ -1,18 +1,14 @@
-//! What an API provider's row does in Settings › Accounts (`Agents on accounts` A1 `aOR4w`; B1 `xN1Jy` in part):
-//! *Replace key…* takes a new key for it, typed once into a question over the window and kept by the app in place of
-//! the one it had, and *Remove* takes the account and its key away, after a question. A project's connection on a
-//! removed account stays as a record of what ran on it, and says its key is missing.
-//!
-//! Not here yet: renaming an account, another base URL or other models for it, and testing it.
+//! What an API provider's page asks over the window (`Agents on accounts` B1 `gZTuX`): *Replace key…* takes a new
+//! key for it, typed once and kept by the app in place of the one it had, and *Remove* takes the provider and its
+//! key away, after a question. A project's connection on a removed provider stays as a record of what ran on it.
 
 use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize},
+    theme::SpacingSize,
   },
-  components::{Column, Row, Text},
+  components::{Column, Text},
   core::Signal,
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{account::ApiAccount, id::ApiAccountId, secret::SecretValue};
@@ -22,18 +18,17 @@ use zeroize::Zeroize;
 use super::words::{t, ta};
 use crate::{
   services::Services,
-  theme::{IconSize, ProjectSettingsText},
+  theme::ProjectSettingsText,
   ui::{
     button::{ActionButton, ButtonKind},
     dialog::Dialog,
     field::{FieldInput, field_error},
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
-    setting_rows::{SettingRow, row_tile, status},
   },
 };
 
-/// What the rows of the API providers do, and the question one of them asks.
+/// What an API provider's page does with its key and the provider itself, and the question it asks.
 #[derive(Clone)]
 pub(super) struct ApiRows {
   pub remove: FutureAction<ApiAccountId, (), Message>,
@@ -87,48 +82,17 @@ impl ApiRows {
     }
   }
 
-  /// One API account's row: a cloud mark, its name over `line`, that its key is kept, *Replace key…* and *Remove*.
-  pub fn row(&self, ctx: &mut Ctx, account: &ApiAccount, line: String) -> Element {
-    let id = format!("api-row-{}", account.id());
-    let busy = self.remove.state().get().is_pending() || self.replace.state().get().is_pending();
-    let ask = |open: &Signal<bool>| {
-      let (asked, open, key, account) = (self.asked.clone(), open.clone(), self.key.clone(), account.id());
-      move || {
-        key.update(Zeroize::zeroize);
-        asked.set(account.to_string());
-        open.set(true);
-      }
-    };
-    let button = |name: &str, key: &str, glyph: Icon, open: &Signal<bool>| {
-      let button = ActionButton::new(format!("{id}-{name}"), ButtonKind::Ghost, t(ctx, key))
-        .icon(glyph)
-        .small();
-      if busy {
-        button.disabled()
-      } else {
-        button.on_click(ask(open))
-      }
-    };
-    let end = Row::new()
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Center)
-      .child(status(
-        &format!("{id}-state"),
-        (PaletteColor::Success, PaletteColor::TextSecondary),
-        &t(ctx, "accounts.api.keySet"),
-      ))
-      .child(button(
-        "replace",
-        "accounts.api.replaceKey",
-        Icon::KeyRound,
-        &self.replacing,
-      ))
-      .child(button("remove", "accounts.api.remove", Icon::Trash2, &self.removing));
-    SettingRow::new(id, account.name().as_str().to_owned())
-      .lead(row_tile(icon(Icon::Cloud, IconSize::Md, PaletteColor::TextSecondary)))
-      .hint(line)
-      .control(end)
-      .render(ctx)
+  /// Asks *Replace the key of …* for `account`, with an empty field.
+  pub fn ask_replace(&self, account: ApiAccountId) {
+    self.key.update(Zeroize::zeroize);
+    self.asked.set(account.to_string());
+    self.replacing.set(true);
+  }
+
+  /// Asks *Remove …?* for `account`.
+  pub fn ask_remove(&self, account: ApiAccountId) {
+    self.asked.set(account.to_string());
+    self.removing.set(true);
   }
 
   /// The question that shows over the window for the account asked about: *Remove …?* or *Replace the key of …*, with

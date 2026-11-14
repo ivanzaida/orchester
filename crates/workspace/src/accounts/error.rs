@@ -55,6 +55,12 @@ pub enum AccountsError {
   /// The OS keychain did not keep or give an API account's key; the message never carries the key.
   #[error(transparent)]
   Keychain(VaultError),
+  /// An agent profile runs on the API account, or a run that has not ended is on it.
+  #[error("the API account is in use")]
+  ApiInUse,
+  /// Only a model API Orchester's own agent calls is tested with its key; an agent CLI's provider is tested by its CLI.
+  #[error("an agent CLI's API provider is not tested by Orchester")]
+  NotTested,
   #[error("the program path `{0}` is not absolute")]
   RelativeProgram(PathBuf),
 }
@@ -100,6 +106,8 @@ impl AccountsError {
       Self::ApiAccount(ApiAccountError::FallbackNotOffered) => Message::new("connections.native.fallback.notOffered"),
       Self::Keychain(error) => messages::vault_error(error),
       Self::RelativeProgram(_) => Message::new("errors.executableNotAbsolute"),
+      Self::ApiInUse => Message::new("accounts.errors.apiInUse"),
+      Self::NotTested => Message::new("accounts.errors.notTested"),
       Self::ApiAccount(
         ApiAccountError::NotNative(_) | ApiAccountError::AnotherAgent | ApiAccountError::CheckNotTaken,
       )

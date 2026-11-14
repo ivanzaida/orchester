@@ -6,10 +6,12 @@
 
 mod adopt;
 mod api;
+mod api_check;
 mod api_runs_on;
 mod decision;
 mod error;
 pub(crate) mod folders;
+mod program;
 mod runs_on;
 pub mod sign_in;
 pub mod trash;
@@ -38,8 +40,9 @@ pub use self::{
   decision::{ServerKey, decision_key_of},
   error::AccountsError,
   folders::own_folder,
+  program::CliProgram,
   runs_on::RunsOnError,
-  uses::{AccountUses, ConnectionUse, RunUse},
+  uses::{AccountUses, ConnectionUse, ProfileUse, RunUse},
 };
 use crate::{connections::probe, workspace::Workspace};
 
@@ -178,11 +181,12 @@ impl Workspace {
     Ok(())
   }
 
-  /// Asks the account's CLI who is signed in to its folder and records the answer. The CLI runs from the `PATH`,
-  /// with the environment agents get and the account's folder variable.
+  /// Asks the account's CLI who is signed in to its folder and records the answer. The CLI is the program set for
+  /// it on this computer, else the one on the `PATH`, and runs with the environment agents get and the account's
+  /// folder variable.
   pub fn check_agent_account(&self, id: AgentAccountId) -> Result<AgentAccount, AccountsError> {
     let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
-    let check = check(&account)?;
+    let check = check(&account, self.agent_program(account.cli())?)?;
     let mut db = self.db.lock();
     // Read again: the person may have renamed it while the CLI answered.
     let mut account = db.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
@@ -196,7 +200,7 @@ impl Workspace {
   /// The connections of every listed project that run on the account, with their profiles, and the runs on it now.
   pub fn agent_account_uses(&self, id: AgentAccountId) -> Result<AccountUses, AccountsError> {
     let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
-    Ok(uses::uses(&account, &self.projects()?))
+    Ok(uses::uses(uses::On::SignIn(&account), &self.projects()?))
   }
 
   /// Removes the account as `move_to` and `trash` say: its connections in every project on this computer (another
@@ -207,7 +211,7 @@ impl Workspace {
     let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     let accounts = self.agent_accounts()?;
     let projects = self.every_project()?;
-    let uses = uses::uses(&account, &projects);
+    let uses = uses::uses(uses::On::SignIn(&account), &projects);
     if !uses.unreadable.is_empty() {
       return Err(AccountsError::ProjectsUnreadable(uses.unreadable));
     }
@@ -362,14 +366,14 @@ impl Workspace {
   }
 }
 
-/// Checks `account` now.
-fn check(account: &AgentAccount) -> Result<AccountCheck, AccountsError> {
+/// Checks `account` now, with `set`, the program the person set for its CLI, else the one on the `PATH`.
+fn check(account: &AgentAccount, set: Option<PathBuf>) -> Result<AccountCheck, AccountsError> {
   let now = Timestamp::now();
   if account.folder().path().is_some_and(|folder| !folder.is_dir()) {
     return Ok(AccountCheck::folder_missing(now));
   }
   let environment = cli_environment(account)?;
-  let program = probe::detect(account.cli().program()).into_iter().next();
+  let program = set.or_else(|| probe::detect(account.cli().program()).into_iter().next());
   Ok(AccountCheck::run(
     account.cli(),
     program.as_deref(),

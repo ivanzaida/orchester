@@ -8,9 +8,7 @@
 //!
 //! A decision model's server is added here too, and stands under *Model APIs* ([`super::decision`]).
 //!
-//! A row's own actions, *Replace key…* and *Remove*, are [`super::api_rows`].
-//!
-//! Not here yet: renaming an account, another base URL or other models for it, and testing it.
+//! A provider's row opens its page ([`super::provider`]).
 
 use std::sync::Arc;
 
@@ -36,8 +34,8 @@ use orchester_workspace::{background, connections::api_provider::base_url, messa
 
 use super::{
   Work,
-  api_rows::ApiRows,
   decision::{NewServer, Servers},
+  provider_rows::Rows,
   words::{cli_key, t, ta},
 };
 use crate::{
@@ -397,8 +395,8 @@ pub(super) fn count(ctx: &Ctx, api: &[ApiAccount], cli: AccountCli) -> Option<St
 }
 
 /// The rows of `cli`'s API providers, under its sign-ins: the name, *API provider*, its host and how many models it
-/// serves, and that its key is kept.
-pub(super) fn rows(ctx: &mut Ctx, api: &[ApiAccount], cli: AccountCli, actions: &ApiRows) -> Vec<Element> {
+/// serves, and how its key stands; a press opens its page.
+pub(super) fn rows(ctx: &mut Ctx, api: &[ApiAccount], cli: AccountCli, actions: &Rows) -> Vec<Element> {
   of_cli(api, cli)
     .map(|account| {
       let models = match account.setup() {
@@ -428,7 +426,7 @@ pub(super) fn model_apis(
   ctx: &mut Ctx,
   api: &[ApiAccount],
   (servers, decision): (&Servers, &[DecisionConnection]),
-  actions: &ApiRows,
+  actions: &Rows,
 ) -> Option<Element> {
   let mut rows: Vec<Element> = api
     .iter()

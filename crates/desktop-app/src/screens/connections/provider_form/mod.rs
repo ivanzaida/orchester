@@ -206,7 +206,7 @@ impl ProviderForm {
   }
 
   /// Fills the fields once from the provider the stored connection runs on, if any.
-  pub(super) fn seed(&self, provider: Option<&ApiProvider>) {
+  pub(in crate::screens) fn seed(&self, provider: Option<&ApiProvider>) {
     if self.seeded.get_untracked() {
       return;
     }

@@ -117,7 +117,7 @@ impl ApiSetup {
 
   /// Whether `other` reaches the same API as the same kind of agent: a check of one holds for the other, whose
   /// models and provider fallback may differ.
-  fn same_api(&self, other: &Self) -> bool {
+  pub fn same_api(&self, other: &Self) -> bool {
     let preset = |setup: &Self| match setup {
       Self::Cli { .. } => None,
       Self::Native { preset, .. } => Some(*preset),

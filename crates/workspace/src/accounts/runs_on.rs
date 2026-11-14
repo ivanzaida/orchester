@@ -47,6 +47,9 @@ pub enum RunsOnError {
   Provider(#[from] ApiProviderError),
   #[error(transparent)]
   FillIn(#[from] FillInError),
+  /// The profile cannot run on the account as it is: another kind of agent, or a model the account does not serve.
+  #[error("the profile cannot run on the account")]
+  Refused(Message),
 }
 
 impl RunsOnError {
@@ -60,6 +63,7 @@ impl RunsOnError {
       Self::ProfileNotFound(_) => Message::new("agents.localConnection.gone"),
       Self::AnotherCli => Message::new("agents.localConnection.notOfKind"),
       Self::FillIn(error) => error.message(),
+      Self::Refused(reason) => reason.clone(),
     }
   }
 }

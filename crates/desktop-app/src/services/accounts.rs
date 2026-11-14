@@ -13,12 +13,12 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  account::{AccountState, AgentAccount, ApiAccount, same_sign_in},
+  account::{AccountCli, AccountState, AgentAccount, ApiAccount, same_sign_in},
   connection::{AgentProvider, ConnectionAccount, DecisionConnection, plan_limits::LimitReading},
-  id::AgentAccountId,
+  id::{AgentAccountId, ApiAccountId},
   time::Timestamp,
 };
-use orchester_workspace::{background, messages, workspace::Workspace};
+use orchester_workspace::{accounts::CliProgram, background, messages, workspace::Workspace};
 
 use super::Services;
 
@@ -137,6 +137,63 @@ pub fn decision_listed(ctx: &mut Ctx) -> DecisionServers {
     .get()
     .data
     .unwrap_or_default()
+}
+
+/// Where each agent CLI's program is on this computer, with the version it reports; and the API accounts whose key
+/// this computer's keychain does not hold.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OnThisComputer {
+  pub programs: Arc<Vec<CliProgram>>,
+  pub keys_missing: Arc<Vec<ApiAccountId>>,
+}
+
+impl DevtoolsInspectable for OnThisComputer {}
+
+impl OnThisComputer {
+  pub fn program(&self, cli: AccountCli) -> Option<&CliProgram> {
+    self.programs.iter().find(|program| program.cli == cli)
+  }
+}
+
+/// What this computer has of the accounts (Settings › Accounts): each CLI's program, asked for its version, and
+/// which API accounts' keys the keychain lacks. Read when the calling screen shows and again whenever an account
+/// or a program changed ([`changes`]); `None` until the first read is in.
+pub fn on_this_computer(ctx: &mut Ctx) -> Option<OnThisComputer> {
+  let services = Services::of(ctx);
+  let (workspace, vault) = (services.workspace, services.vault);
+  let changed = changes(ctx, &workspace);
+  ctx
+    .future(changed, move |_| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "agent programs");
+      let (workspace, vault) = (workspace.clone(), vault.clone());
+      async move {
+        background::run(move || {
+          let programs = AccountCli::ALL
+            .into_iter()
+            .map(|cli| workspace.cli_program(cli))
+            .collect::<Result<Vec<_>, _>>()?;
+          let keys_missing = workspace
+            .api_accounts()?
+            .iter()
+            .map(ApiAccount::id)
+            // A keychain that cannot be asked reads as a key that is not here, which is what a run would find.
+            .filter(|id| !workspace.api_account_has_key(vault.get(), *id).unwrap_or(false))
+            .collect();
+          Ok(OnThisComputer {
+            programs: Arc::new(programs),
+            keys_missing: Arc::new(keys_missing),
+          })
+        })
+        .await?
+        .map_err(|error: orchester_store::StoreError| {
+          tracing::warn!(%error, "the agent CLIs' programs can't be read");
+          messages::store_error(&error)
+        })
+      }
+    })
+    .state()
+    .get()
+    .data
 }
 
 /// How often an account was added, renamed, checked, moved or removed, through Settings, a screen or automation.

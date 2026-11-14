@@ -1,21 +1,14 @@
-//! `list_connections`, `add_cli_connection`, `check_connection` and `list_models`: a project's
-//! connections as Connections lists them, a Codex or Claude CLI added as Add connection adds it (checked
-//! first, saved only when it answers as the expected CLI), checked again, and the models the profile
-//! editor offers for one. A CLI added on an API provider names its key secret ([`super::api_providers`]); no secret's
-//! value is listed.
-
-use std::path::{Path, PathBuf};
+//! `list_connections` and `check_connection`: what a project is connected to. Its agents run on the person's
+//! accounts (`docs/design/agent-accounts.md`, "Agents run on accounts"), so no agent connection is listed, named or
+//! taken: `runs_on` says what each profile runs on on this computer, by account ([`super::runs_on`]). GitHub, the
+//! MCP servers and the decision models are the project's own and are listed as before. No secret's value is listed.
 
 use orchester_core::{
-  connection::{
-    AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError, ConnectionKind,
-  },
-  id::{ConnectionId, ProjectId},
-  name::Name,
+  connection::{AgentConnection, Connection},
+  id::ConnectionId,
   store::ConnectionStore,
 };
-use orchester_exec::search_path::{ChosenProgramError, ProgramLookup, SearchFolder, chosen_program};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -24,60 +17,21 @@ use super::{
   super::{
     Translate,
     across::{InProjects, across},
-    wire,
   },
-  api_providers::{ApiProviderInput, provider_from, provider_json, widens},
-  widening,
+  profiles::{connection_here, listed_profiles},
+  runs_on::Accounts,
 };
 use crate::{
-  agents::form::{effort_options, listed_models},
+  agents::data::ProjectAgents,
   app_mcp::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
-  connections::{
-    api_provider::save_on_provider_in,
-    choose_program::chosen_message,
-    data::{ConnectionDraft, ProjectConnections, SaveError, recheck_in, save_in},
-    native, probe,
-  },
+  connections::data::{ProjectConnections, recheck_in},
   links::Link,
-  messages::{self, Message},
+  messages::Message,
   tasks::outside::Outside,
 };
-
-/// The agent CLIs a connection can be added for.
-#[derive(Clone, Copy, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-#[schemars(crate = "rmcp::schemars")]
-pub enum CliKind {
-  Codex,
-  Claude,
-}
-
-impl CliKind {
-  const fn provider(self) -> AgentProvider {
-    match self {
-      Self::Codex => AgentProvider::CodexCli,
-      Self::Claude => AgentProvider::ClaudeCodeCli,
-    }
-  }
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-#[schemars(crate = "rmcp::schemars")]
-pub struct AddCliConnection {
-  /// The project's id, or its name.
-  pub project: String,
-  pub kind: CliKind,
-  /// The connection's name, unique among the project's connections, e.g. "Codex · Kontur".
-  pub name: String,
-  /// The CLI's absolute path; left out, the newest copy on the search path.
-  pub program: Option<String>,
-  /// Runs the CLI on this model API with an API key instead of its own sign-in.
-  pub api_provider: Option<ApiProviderInput>,
-}
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -85,8 +39,15 @@ pub struct AddCliConnection {
 pub struct InConnection {
   /// The project's id, or its name.
   pub project: String,
-  /// The connection's id, or its name.
+  /// The GitHub connection's id, or its name.
   pub connection: String,
+}
+
+/// What a project is connected to, as read for `list_connections`.
+struct Listed {
+  connections: ProjectConnections,
+  /// What each listed profile runs on here.
+  runs_on: Vec<Value>,
 }
 
 pub async fn list_connections(
@@ -96,20 +57,18 @@ pub async fn list_connections(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
+    let accounts = Accounts::load(&services)?;
     across(&services, args.project.as_deref(), |_, db| {
-      Ok(ProjectConnections::load(db)?.with_api_accounts(&services.workspace.api_accounts()?))
+      let connections = ProjectConnections::load(db)?.with_api_accounts(&accounts.api);
+      let runs_on = runs_on(db, &connections, &accounts)?;
+      Ok(Listed { connections, runs_on })
     })
   })
   .await?;
-  let agents = read.items(|open, listed| {
-    listed
-      .connections
-      .iter()
-      .map(|connection| agent_json(connection, listed, open.project.id()))
-      .collect()
-  });
+  let runs_on = read.items(|_, listed| listed.runs_on.clone());
   let github = read.items(|open, listed| {
     listed
+      .connections
       .github
       .iter()
       .map(|connection| {
@@ -123,16 +82,17 @@ pub async fn list_connections(
       })
       .collect()
   });
-  let mcp = read.items(|open, listed| super::mcp_servers::servers_json(listed, open.project.id()));
+  let mcp = read.items(|open, listed| super::mcp_servers::servers_json(&listed.connections, open.project.id()));
   let decisions = read.items(|_, listed| {
     listed
+      .connections
       .decisions
       .iter()
       .map(super::decision_connections::connection_json)
       .collect()
   });
   Ok(json!({
-    "agents": agents,
+    "runs_on": runs_on,
     "github": github,
     "mcp_servers": mcp,
     "decision_models": decisions,
@@ -140,213 +100,54 @@ pub async fn list_connections(
   }))
 }
 
-pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> Result<Value, ToolError> {
+/// What each profile the project lists runs on on this computer: the account or API provider, and whether a run
+/// can start on it now; `runs_on` is null for a profile that runs on nothing here yet.
+fn runs_on(db: &ProjectDb, connections: &ProjectConnections, accounts: &Accounts) -> Result<Vec<Value>, ToolError> {
+  let agents = ProjectAgents::load(db)?;
+  let mut rows = Vec::new();
+  for (id, _) in listed_profiles(db, &agents)? {
+    let Some(entry) = agents.profile(id) else {
+      continue;
+    };
+    let here = connection_here(db, &agents, entry)?;
+    let picked = db.connection_pick(id)?.and_then(|pick| pick.account);
+    rows.push(json!({
+      "profile": { "id": id.to_string(), "role": entry.profile.role().as_str() },
+      "model": entry.profile.model().as_str(),
+      "runs_on": here.map(|connection| accounts.runs_on_json(connection, picked)),
+      "status": here.map(|connection| connections.status_of(connection).as_str()),
+    }));
+  }
+  Ok(rows)
+}
+
+/// Checks the project's GitHub connection again, as *Check again* beside the repository does: `gh` is run here.
+/// What an agent runs on is an account's, checked by `check_account`.
+pub async fn check_connection(services: &Services, args: InConnection) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let provider = args.kind.provider();
-    let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-    // The chosen file is only examined here: nothing runs it before the widening gate below.
-    let chosen = args
-      .program
-      .map(|program| chosen_program(Path::new(&program)).map_err(|error| chosen_refused(&error)))
-      .transpose()?;
-    let lookup = probe::find_agent(provider).expect("a CLI kind names an agent CLI, which has a program to find");
-    let program = match chosen {
-      Some(program) => program,
-      None => found_program(provider, &lookup)?,
-    };
-    let found = match &lookup {
-      ProgramLookup::Found(found) => found.as_slice(),
-      ProgramLookup::NotFound { .. } => &[],
-    };
-    // A program of automation's own choosing would run as the project's agent: a person's decision,
-    // made before anything runs it. A copy found on the search path is saved as the search path names it,
-    // never as the client named it: a link the client chose could be pointed elsewhere later. So is an API
-    // provider, which would get the project's prompts and code.
-    let mut reasons = Vec::new();
-    let program = match probe::found_copy(found, &program) {
-      Some(copy) => copy.to_path_buf(),
-      None => {
-        reasons.push(Message::new("appMcp.widens.program").with("program", program.display().to_string()));
-        program
-      }
-    };
-    let api = match &args.api_provider {
-      Some(input) => {
-        let db = ProjectDb::open(&open.repo_root)?;
-        let provider = provider_from(&db, input)?;
-        reasons.extend(widens(&db, name.as_str(), None, &provider)?);
-        Some(provider)
-      }
-      None => None,
-    };
-    widening::allowed(&services, reasons)?;
-    let check = probe::check(provider, &program).expect("an agent CLI is checked by running it");
-    let draft = ConnectionDraft {
-      id: None,
-      name,
-      provider,
-      executable: program,
-      check: check.clone(),
-    };
-    let id = match api {
-      None => save_in(&open.repo_root, draft).map_err(|error| save_error(&error, &check))?,
-      Some(api) => save_on_provider_in(&open.repo_root, draft, api).map_err(|error| save_error(&error, &check))?,
-    };
-    services.changes.record(open.project.id(), Outside::Connections);
-    let listed = ProjectConnections::load_in(&open.repo_root)?.with_api_accounts(&services.workspace.api_accounts()?);
-    let connection = listed
-      .connection(id)
-      .ok_or_else(|| ToolError::not_found(Missing::Connection, id.to_string()))?;
-    Ok(json!({
-      "connection": agent_json(connection, &listed, open.project.id()),
-      "check": check_json(&check),
-    }))
-  })
-  .await
-}
-
-/// Checks a connection again as its page's *Check again* or *Test connection* does: a CLI is run here, a native
-/// connection is tested by the project's runner, which reads its key and lists its models (`connections::native`).
-pub async fn check_connection(services: &Services, args: InConnection) -> Result<Value, ToolError> {
-  let found = services.clone();
-  let named = args.connection.clone();
-  let (open, connection) = blocking(move || {
-    let open = found.project(&args.project)?;
-    let connection = connection_named(&ProjectDb::open(&open.repo_root)?, &named)?;
-    Ok((open, connection))
-  })
-  .await?;
-  let id = connection.id();
-  if matches!(connection.kind(), ConnectionKind::Agent(provider) if provider.is_native()) {
-    native::test_in(&services.runners, open.repo_root.clone(), id)
-      .await
-      .map_err(|reason| refused("not_checked", reason))?;
-  } else {
-    let root = open.repo_root.clone();
-    blocking(move || {
-      recheck_in(&root, id).map_err(|error| match error {
-        SaveError::NativeNotAvailable => refused("not_checked", error.message()),
-        other => ToolError::refused("project_data", vec![other.message()]),
-      })
-    })
-    .await?;
-  }
-  let services = services.clone();
-  blocking(move || {
-    services.changes.record(open.project.id(), Outside::Connections);
-    let listed = ProjectConnections::load_in(&open.repo_root)?.with_api_accounts(&services.workspace.api_accounts()?);
-    let connection = match (listed.connection(id), listed.github_connection(id)) {
-      (Some(agent), _) => agent_json(agent, &listed, open.project.id()),
-      (None, Some(github)) => json!({ "id": id.to_string(), "status": github.status().as_str() }),
-      (None, None) => return Err(ToolError::not_found(Missing::Connection, &args.connection)),
-    };
-    Ok(json!({ "connection": connection }))
-  })
-  .await
-}
-
-pub async fn list_models(services: &Services, args: InConnection) -> Result<Value, ToolError> {
-  let services = services.clone();
-  blocking(move || {
-    let (open, db) = services.read_project(&args.project)?;
-    let decisions = db.decision_connections()?;
-    let connections = db.connections()?;
-    let id = model_connection_id(&connections, &decisions, &args.connection)?;
-    if let Some(connection) = decisions
-      .iter()
-      .find(|connection| ModelConnectionId::Decision(connection.id()) == id)
-    {
-      let models: Vec<Value> = connection
-        .models()
-        .iter()
-        .map(|model| json!({ "id": model.as_str(), "efforts": [] }))
-        .collect();
-      return Ok(json!({
-        "connection": connection.name().as_str(),
-        "checked": connection.last_check().is_some(),
-        "source": "decision",
-        "models": models,
-      }));
+    let connection = connection_named(&ProjectDb::open(&open.repo_root)?, &args.connection)?;
+    let id = connection.id();
+    if AgentConnection::try_from(connection).is_ok() {
+      return Err(ToolError::refused(
+        "not_a_github_connection",
+        vec![Message::new("appMcp.errors.checkAccountInstead")],
+      ));
     }
-    let connection = connections
-      .into_iter()
-      .find(|connection| ModelConnectionId::Agent(connection.id()) == id)
-      .expect("model_connection_id found a connection in one of the two lists");
-    let connection = AgentConnection::try_from(connection).map_err(|_| {
-      refused(
-        "not_an_agent_connection",
-        Message::new("appMcp.errors.notAnAgentConnection").with("connection", args.connection.clone()),
-      )
-    })?;
-    let models: Vec<Value> = listed_models(&connection)
-      .iter()
-      .map(|model| json!({ "id": model.as_str(), "efforts": effort_options(&connection, model) }))
-      .collect();
-    Ok(json!({
-      "connection": connection.name().as_str(),
-      "checked": connection.last_check().is_some(),
-      // An API provider's models are typed by a person, not listed by the CLI; a native connection's are fetched
-      // from its endpoint or added by a person.
-      "source": match (connection.api(), connection.api_provider()) {
-        (Some(_), _) => json!("native"),
-        (None, Some(_)) => json!("api_provider"),
-        (None, None) => json!(connection.catalog().map(|catalog| catalog.source())),
-      },
-      "models": models,
-      "link": Link::Connection(open.project.id(), connection.id()).path(),
-    }))
+    recheck_in(&open.repo_root, id).map_err(|error| ToolError::refused("project_data", vec![error.message()]))?;
+    services.changes.record(open.project.id(), Outside::Connections);
+    let listed = ProjectConnections::load_in(&open.repo_root)?;
+    let github = listed
+      .github_connection(id)
+      .ok_or_else(|| ToolError::not_found(Missing::Connection, &args.connection))?;
+    Ok(json!({ "connection": { "id": id.to_string(), "status": github.status().as_str() } }))
   })
   .await
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ModelConnectionId {
-  Agent(ConnectionId),
-  Decision(orchester_core::id::DecisionConnectionId),
-}
-
-fn model_connection_id(
-  connections: &[Connection],
-  decisions: &[orchester_core::connection::DecisionConnection],
-  named: &str,
-) -> Result<ModelConnectionId, ToolError> {
-  let entries = connections
-    .iter()
-    .map(|connection| {
-      (
-        ModelConnectionId::Agent(connection.id()),
-        connection.id().to_string(),
-        connection.name(),
-      )
-    })
-    .chain(decisions.iter().map(|connection| {
-      (
-        ModelConnectionId::Decision(connection.id()),
-        connection.id().to_string(),
-        connection.name(),
-      )
-    }));
-  // Names are unique only within each table; an exact ID always takes precedence across both.
-  if let Some((id, ..)) = entries.clone().find(|(_, id, _)| id == named) {
-    return Ok(id);
-  }
-  let lowered = named.to_lowercase();
-  let mut matches = entries.filter(|(_, _, name)| name.as_str().to_lowercase() == lowered);
-  let (id, ..) = matches
-    .next()
-    .ok_or_else(|| ToolError::not_found(Missing::Connection, named))?;
-  if matches.next().is_some() {
-    return Err(ToolError::InvalidArguments(format!(
-      "more than one connection is named {named:?}; name it by id"
-    )));
-  }
-  Ok(id)
 }
 
 /// The project's connection named by `named`: its id or, ignoring case, its name.
-pub(super) fn connection_named(db: &ProjectDb, named: &str) -> Result<Connection, ToolError> {
+fn connection_named(db: &ProjectDb, named: &str) -> Result<Connection, ToolError> {
   let lowered = named.to_lowercase();
   db.connections()?
     .into_iter()
@@ -354,121 +155,7 @@ pub(super) fn connection_named(db: &ProjectDb, named: &str) -> Result<Connection
     .ok_or_else(|| ToolError::not_found(Missing::Connection, named))
 }
 
-/// The project's agent connection named by `named`, as [`connection_named`] finds it.
-pub(super) fn agent_named(db: &ProjectDb, named: &str) -> Result<AgentConnection, ToolError> {
-  AgentConnection::try_from(connection_named(db, named)?).map_err(|_| {
-    refused(
-      "not_an_agent_connection",
-      Message::new("appMcp.errors.notAnAgentConnection").with("connection", named.to_owned()),
-    )
-  })
-}
-
 /// The agent connection `id` among `connections`, by its id.
 pub(super) fn agent_by_id(connections: &[AgentConnection], id: ConnectionId) -> Option<&AgentConnection> {
   connections.iter().find(|connection| connection.id() == id)
-}
-
-/// An agent connection of `project` as Connections lists it, with its link: its inspector.
-pub(super) fn agent_json(connection: &AgentConnection, listed: &ProjectConnections, project: ProjectId) -> Value {
-  let secrets = &listed.secrets;
-  let check = connection.last_check();
-  let version = check.and_then(|check| match &check.result {
-    CheckResult::Available { version, .. } => Some(version.clone()),
-    _ => None,
-  });
-  json!({
-    "id": connection.id().to_string(),
-    "name": connection.name().as_str(),
-    "provider": connection.provider(),
-    "program": connection.executable().map(|program| program.display().to_string()),
-    "status": listed.status_of(connection).as_str(),
-    "version": version,
-    "checked_at": check.map(|check| wire::time(check.at)),
-    "models": listed_models(connection).len(),
-    "account": connection.plan_account().map(|account| account.to_string()),
-    "api_provider": connection.api_provider().map(|provider| provider_json(provider, secrets)),
-    "link": Link::Connection(project, connection.id()).path(),
-  })
-}
-
-fn check_json(check: &ConnectionCheck) -> Value {
-  let (version, models) = match &check.result {
-    CheckResult::Available { version, catalog, .. } => (
-      Some(version.clone()),
-      catalog
-        .models()
-        .iter()
-        .map(|model| model.id().as_str().to_owned())
-        .collect(),
-    ),
-    _ => (None, Vec::new()),
-  };
-  json!({
-    "status": check.result.status().as_str(),
-    "verified": check.result.is_verified(),
-    "version": version,
-    "models": models,
-  })
-}
-
-/// Why the connection was not saved, with what its check found when the CLI did not answer as expected.
-fn save_error(error: &SaveError, check: &ConnectionCheck) -> ToolError {
-  let code = match error {
-    SaveError::NotVerified => {
-      let found = Message::new("appMcp.errors.checkFound").with("status", check.result.status().as_str().to_owned());
-      return ToolError::refused("not_verified", vec![error.message(), found]);
-    }
-    SaveError::Store(StoreError::DuplicateConnectionName(_)) => "name_taken",
-    SaveError::Connection(ConnectionError::RelativeExecutable(_)) => "program_not_absolute",
-    SaveError::NativeNotAvailable => "not_checked",
-    SaveError::Store(_) | SaveError::Connection(_) => "project_data",
-  };
-  ToolError::refused(code, vec![error.message()])
-}
-
-/// The newest copy of the CLI on the search path, or the refusal that names the folders searched.
-fn found_program(provider: AgentProvider, lookup: &ProgramLookup) -> Result<PathBuf, ToolError> {
-  let searched: &[SearchFolder] = match lookup {
-    ProgramLookup::Found(found) => return found.first().cloned().ok_or_else(|| not_found(provider, &[])),
-    ProgramLookup::NotFound { searched } => searched,
-  };
-  Err(not_found(provider, searched))
-}
-
-fn not_found(provider: AgentProvider, searched: &[SearchFolder]) -> ToolError {
-  let program = provider.program_name().unwrap_or_default().to_owned();
-  if searched.is_empty() {
-    return refused(
-      "program_not_found",
-      Message::new("appMcp.errors.cliNotFound").with("program", program),
-    );
-  }
-  let folders: Vec<String> = searched
-    .iter()
-    .map(|folder| folder.path().display().to_string())
-    .collect();
-  refused(
-    "program_not_found",
-    Message::new("appMcp.errors.cliNotFoundIn")
-      .with("program", program)
-      .with("folders", folders.join(", ")),
-  )
-}
-
-/// Why the program file the client chose cannot be a CLI connection's program.
-fn chosen_refused(error: &ChosenProgramError) -> ToolError {
-  let code = match error {
-    ChosenProgramError::NotAbsolute(_) => "program_not_absolute",
-    ChosenProgramError::NotLocal(_) => "program_not_local",
-    ChosenProgramError::Missing(_) => "program_not_found",
-    ChosenProgramError::NotAFile(_) => "program_not_a_file",
-    ChosenProgramError::NotExecutable(_) => "program_not_executable",
-    ChosenProgramError::Unreadable { .. } => "program_unreadable",
-  };
-  refused(code, chosen_message(error))
-}
-
-fn refused(code: &str, reason: Message) -> ToolError {
-  ToolError::refused(code, vec![reason])
 }

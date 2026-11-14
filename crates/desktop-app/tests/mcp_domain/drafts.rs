@@ -53,7 +53,8 @@ fn domain_a_tool_draft_saved_on_its_revision_is_refused_once_someone_saved_it_me
 #[test]
 fn domain_a_profile_draft_saved_on_its_revision_is_refused_once_someone_saved_it_meanwhile() {
   let mut served = served();
-  let builder = json!({ "project": "Kontur", "role": "Builder 2", "connection": "Codex · Kontur", "model": "gpt-5.5" });
+  let builder =
+    json!({ "project": "Kontur", "role": "Builder 2", "account": "default", "cli": "codex", "model": "gpt-5.5" });
   served.ok("save_profile_draft", &builder);
   let named = with(builder, json!({ "profile": "Builder 2" }));
   let get = json!({ "project": "Kontur", "profile": "Builder 2" });

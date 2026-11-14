@@ -20,7 +20,8 @@ fn domain_tools_are_listed_beside_lurqs_and_the_apps_with_their_scopes() {
     "run_task",
     "decide_approval",
     "add_project",
-    "add_cli_connection",
+    "set_profile_account",
+    "check_account",
     "add_mcp_server",
     "update_mcp_server",
     "remove_mcp_server",
@@ -40,8 +41,16 @@ fn domain_tools_are_listed_beside_lurqs_and_the_apps_with_their_scopes() {
   let read_only = |name: &str| named(name).expect("listed")["annotations"]["readOnlyHint"] == true;
   assert!(read_only("list_projects") && read_only("get_pipeline"));
   assert!(!read_only("create_task") && !read_only("merge_run"));
-  let schema = &named("add_cli_connection").expect("listed")["inputSchema"];
-  assert_eq!(schema["required"], json!(["project", "kind", "name"]));
+  let schema = &named("set_profile_account").expect("listed")["inputSchema"];
+  assert_eq!(schema["required"], json!(["project", "profile", "account"]));
+  for gone in [
+    "add_cli_connection",
+    "set_connection_account",
+    "set_api_provider",
+    "pick_profile_connection",
+  ] {
+    assert!(named(gone).is_none(), "{gone} named an agent connection and is gone");
+  }
 }
 
 #[test]
@@ -134,7 +143,11 @@ fn domain_automation_answers_approvals_only_while_a_person_lets_it() {
   );
   assert_eq!(refused["code"], "automation_not_allowed");
   let connection = served.ok("list_connections", &json!({ "project": "Kontur" }));
-  assert!(connection["agents"].is_array());
+  assert!(connection["runs_on"].is_array());
+  assert!(
+    connection.get("agents").is_none(),
+    "no agent connection is listed: {connection}"
+  );
 }
 
 #[test]
@@ -176,9 +189,9 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
   );
   let unknown = served.refused(
     "save_profile_draft",
-    &json!({ "project": "Kontur", "role": "Builder", "connection": "nowhere", "model": "gpt-5.5" }),
+    &json!({ "project": "Kontur", "role": "Builder", "account": "nowhere", "model": "gpt-5.5" }),
   );
-  assert_eq!(unknown["code"], "connection_not_found");
+  assert_eq!(unknown["code"], "account_not_found");
   let environment = served.refused(
     "set_project_environment",
     &json!({ "project": "Kontur", "variables": [{ "name": "1BAD", "value": "x" }] }),

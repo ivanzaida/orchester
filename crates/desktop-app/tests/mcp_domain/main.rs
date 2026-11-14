@@ -383,7 +383,7 @@ impl Drop for Served {
   }
 }
 
-/// A file that is not a CLI, with the Unix permission `mode`: `add_cli_connection` checks a chosen program file
+/// A file that is not a CLI, with the Unix permission `mode`: `add_cli_connection` would run a chosen program file
 /// exists before its gate.
 fn write_program(path: &Path, #[cfg_attr(windows, expect(unused_variables))] mode: u32) {
   std::fs::write(path, "not a program").expect("the file is written");

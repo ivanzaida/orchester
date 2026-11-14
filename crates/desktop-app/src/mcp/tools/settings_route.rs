@@ -14,7 +14,9 @@ use crate::routes::{
 };
 
 /// The parameters besides `route` that settings takes.
-pub const PARAMS: &[&str] = &["tab", "account", "panel", "server", "step", "ask", "invite", "project"];
+pub const PARAMS: &[&str] = &[
+  "tab", "account", "provider", "panel", "server", "step", "ask", "invite", "project",
+];
 
 /// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`. `updates` and `whats-new` are General
 /// with its *Updates* in view, the release notes open with `whats-new`; `plan-limits` is General with its *Plan limits*
@@ -61,9 +63,13 @@ pub fn properties() -> Map<String, Value> {
       "type": "string",
       "description": "settings tab accounts: the account whose page opens, by its id or name, or claude-default / codex-default.",
     },
+    "provider": {
+      "type": "string",
+      "description": "settings tab accounts: the API provider whose page opens, by its id (list_accounts).",
+    },
     "panel": {
       "type": "string",
-      "description": "settings tab accounts: add (Add account), or with `account` sign_in, rename or remove (asked in place).",
+      "description": "settings tab accounts: add (Add account) or add_api (Add an API provider); with `account` sign_in, rename or remove (asked in place); with `provider` rename or edit.",
     },
     "server": {
       "type": "string",
@@ -96,7 +102,7 @@ pub fn route(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route
   let tab = string(args, "tab")?.unwrap_or("automation");
   let takes: &[&str] = match tab {
     "automation" => &["ask"],
-    "accounts" => &["account", "panel"],
+    "accounts" => &["account", "provider", "panel"],
     "orchester" => &["server", "ask", "invite"],
     "connect" => &["server", "step"],
     "invite" => &["server", "project"],
@@ -152,7 +158,8 @@ fn automation(args: &Map<String, Value>) -> Result<Route, ToolError> {
   }
 }
 
-/// Accounts: the list, an account's page (`account`) and the panel it opens on (`panel`), or *Add account*.
+/// Accounts: the list, an account's page (`account`) or an API provider's (`provider`, its id) and the panel it
+/// opens on (`panel`), or *Add account*.
 fn accounts(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<AccountsView, ToolError> {
   let panel = match string(args, "panel")? {
     None => AccountsPanel::Account,
@@ -167,7 +174,16 @@ fn accounts(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Accoun
   let account = string(args, "account")?
     .map(|named| account(named, lookup))
     .transpose()?;
+  let provider = string(args, "provider")?
+    .map(|id| {
+      id.parse().map_err(|_| ToolError::InvalidParam {
+        param: "provider",
+        reason: format!("`{id}` is not an API provider's id"),
+      })
+    })
+    .transpose()?;
   if account.is_none()
+    && provider.is_none()
     && !matches!(
       panel,
       AccountsPanel::Account | AccountsPanel::Add | AccountsPanel::AddApi
@@ -175,7 +191,11 @@ fn accounts(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Accoun
   {
     return Err(ToolError::Missing { param: "account" });
   }
-  Ok(AccountsView { account, panel })
+  Ok(AccountsView {
+    account,
+    provider,
+    panel,
+  })
 }
 
 /// The account `named` names: its id, its name (any case), or claude-default / codex-default.

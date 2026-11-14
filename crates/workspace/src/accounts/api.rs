@@ -14,7 +14,7 @@ use orchester_core::{
 };
 use orchester_store::StoreError;
 
-use super::AccountsError;
+use super::{AccountUses, AccountsError, uses};
 use crate::workspace::Workspace;
 
 impl Workspace {
@@ -89,9 +89,25 @@ impl Workspace {
     Ok(account)
   }
 
-  /// Removes the API account and its key: it leaves the list and its name is free again. A project's connection on
-  /// it stays, as the record of what ran on it, and says its key is missing; runs that used it still name it.
+  /// The agent profiles of every listed project that run on the API account, and the runs on it now.
+  pub fn api_account_uses(&self, id: ApiAccountId) -> Result<AccountUses, AccountsError> {
+    let account = self.api_account(id)?.ok_or(StoreError::ApiAccountNotFound(id))?;
+    Ok(uses::uses(uses::On::Api(&account), &self.projects()?))
+  }
+
+  /// Removes the API account and its key: it leaves the list and its name is free again. Refused while an agent
+  /// profile of a project on this computer runs on it, while a run that has not ended is on it, and while a project
+  /// can't be read (a profile there may run on it). A project's connection on it stays, as the record of what ran
+  /// on it; runs that used it still name it.
   pub fn remove_api_account(&self, vault: &dyn SecretVault, id: ApiAccountId) -> Result<(), AccountsError> {
+    let account = self.listed_api_account(id)?;
+    let uses = uses::uses(uses::On::Api(&account), &self.every_project()?);
+    if !uses.unreadable.is_empty() {
+      return Err(AccountsError::ProjectsUnreadable(uses.unreadable));
+    }
+    if !uses.profiles.is_empty() || !uses.running.is_empty() {
+      return Err(AccountsError::ApiInUse);
+    }
     self.db.lock().remove_api_account(id, Timestamp::now())?;
     match vault.delete(&VaultKey::api_account(id)) {
       Ok(()) | Err(VaultError::NotFound) => {}
@@ -140,7 +156,7 @@ impl Workspace {
   }
 
   /// The API account `id` while it is in the list.
-  fn listed_api_account(&self, id: ApiAccountId) -> Result<ApiAccount, AccountsError> {
+  pub(super) fn listed_api_account(&self, id: ApiAccountId) -> Result<ApiAccount, AccountsError> {
     self
       .api_accounts()?
       .into_iter()

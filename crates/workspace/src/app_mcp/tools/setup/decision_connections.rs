@@ -1,5 +1,6 @@
 //! Automation's decision connection tools use the same workspace writes as the window.
-//! No argument accepts authority or a key value; hosted saves are always person_only.
+//! No argument accepts authority, a key value or a secret: a server that takes a key is added by a person in
+//! Settings › Accounts, where the app keeps the key. Hosted saves are always person_only.
 
 use orchester_core::{
   connection::{DecisionConnection, DecisionServerUrl},
@@ -11,10 +12,7 @@ use rmcp::{handler::server::common::schema_for_type, schemars::JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{
-  super::{Spec, parse},
-  api_providers::secret_named,
-};
+use super::super::{Spec, parse};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -29,8 +27,8 @@ pub(super) const SPECS: &[Spec] = &[
   Spec {
     name: "save_decision_connection",
     description: "Adds or edits a decision model connection. Without connection, adds; with its id or name, edits. \
-      base_url ends before /systemone; Check uses GET {base_url}/models. key_secret is an existing project secret \
-      id or name, never its value; null means no key. A hosted server is always person_only for automation, \
+      base_url ends before /systemone; Check uses GET {base_url}/models. It takes no key: a server that needs one is added by a person in Settings › \
+      Accounts; an edit keeps the key the connection has. A hosted server is always person_only for automation, \
       including edits. Only localhost, 127.0.0.1 and [::1] count as this computer. Changing server or key drops \
       its listed models and check. A rename keeps them. Returns the saved connection.",
     schema: schema_for_type::<Save>,
@@ -61,7 +59,6 @@ struct Save {
   connection: Option<String>,
   name: String,
   base_url: String,
-  key_secret: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -95,19 +92,17 @@ async fn save(services: &Services, args: Save) -> Result<Value, ToolError> {
   blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
+    let edited = args
+      .connection
+      .as_deref()
+      .map(|named| named_connection(&db, named))
+      .transpose()?;
     let draft = DecisionDraft {
-      id: args
-        .connection
-        .as_deref()
-        .map(|named| named_connection(&db, named).map(|found| found.id()))
-        .transpose()?,
+      id: edited.as_ref().map(DecisionConnection::id),
       name: Name::new(&args.name).map_err(|_| invalid("invalid_name"))?,
       base_url: DecisionServerUrl::new(&args.base_url).map_err(|_| invalid("invalid_base_url"))?,
-      key: args
-        .key_secret
-        .as_deref()
-        .map(|named| secret_named(&db, named).map(|secret| secret.id()))
-        .transpose()?,
+      // The key an edited connection has stays; a tool gives none.
+      key: edited.as_ref().and_then(DecisionConnection::key),
     };
     let id = decision::save_in(&open.repo_root, &draft, Writer::Automation).map_err(failure)?;
     services.changes.record(open.project.id(), Outside::Connections);
@@ -163,7 +158,7 @@ pub(super) fn connection_json(connection: &DecisionConnection) -> Value {
     "name": connection.name().as_str(),
     "base_url": connection.base_url().as_str(),
     "on_this_computer": connection.is_on_this_computer(),
-    "key_secret": connection.key().map(|id| id.to_string()),
+    "takes_key": connection.key().is_some(),
     "models": connection.models().iter().map(ModelId::as_str).collect::<Vec<_>>(),
     "last_check": connection.last_check(),
   })

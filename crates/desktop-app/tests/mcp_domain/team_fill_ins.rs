@@ -197,13 +197,36 @@ impl Team {
       .is_some()
   }
 
+  /// Keeps the program of the project's Codex connection as this computer's Codex, as a person sets it in Settings
+  /// › Accounts: a connection Orchester makes for another account runs it.
+  fn codex_program_for_accounts(&self) {
+    use orchester_core::store::ConnectionStore;
+    let program = self
+      .db()
+      .connections()
+      .expect("the project's connections")
+      .iter()
+      .find_map(|connection| connection.executable().map(Path::to_path_buf))
+      .expect("the Codex connection has a program");
+    self
+      .served
+      .services()
+      .workspace
+      .set_agent_program(AccountCli::Codex, &program)
+      .expect("the program is kept");
+  }
+
   pub(super) fn codex_connection(&mut self) -> String {
-    let listed = self.served.ok("list_connections", &json!({ "project": "Kontur" }));
-    listed["agents"]
-      .as_array()
-      .and_then(|connections| connections.iter().find(|c| c["provider"] == "codex_cli"))
-      .map(|connection| connection["id"].as_str().expect("an id").to_owned())
-      .unwrap_or_else(|| panic!("a Codex connection is listed: {listed}"))
+    use orchester_core::store::ConnectionStore;
+    let connections = self.db().connections().expect("the project's connections");
+    connections
+      .iter()
+      .find(|connection| {
+        matches!(connection.kind(), orchester_core::connection::ConnectionKind::Agent(provider)
+          if *provider == orchester_core::connection::AgentProvider::CodexCli)
+      })
+      .map(|connection| connection.id().to_string())
+      .expect("the project has a Codex connection")
   }
 }
 
@@ -220,35 +243,37 @@ pub(super) fn assert_person_only(error: &Value) {
 }
 
 #[test]
-fn domain_team_pick_profile_connection_keeps_the_pick_for_a_team_profile() {
+fn domain_team_set_profile_account_keeps_the_choice_for_a_team_profile() {
   let mut team = team();
   let connection = team.codex_connection();
-  let args =
-    |profile: ResourceId| json!({ "project": "Kontur", "profile": profile.to_string(), "connection": connection });
+  let args = |profile: &str, account: &str| json!({ "project": "Kontur", "profile": profile, "account": account });
+  let codex = team.codex_profile.to_string();
   let changes = team.connection_changes();
-  let picked = team.served.ok("pick_profile_connection", &args(team.codex_profile));
+  let picked = team.served.ok("set_profile_account", &args(&codex, "default"));
   assert_eq!(picked["profile"]["name"], "codex-builder");
-  assert_eq!(picked["connection"]["id"], connection);
+  assert_eq!(picked["account"]["default"], true, "{picked}");
   let kept = team
     .db()
     .connection_pick(team.codex_profile)
     .expect("read")
     .expect("a pick");
-  assert_eq!(kept.connection.to_string(), connection);
-  assert_eq!(kept.account, None);
+  assert_eq!(
+    kept.connection.to_string(),
+    connection,
+    "on the connection the project has on the account"
+  );
+  assert_eq!(kept.account, Some(AccountCli::Codex.default_account()));
   assert!(
     team.connection_changes() > changes,
     "the screens read the connections again"
   );
+  let listed = team.served.ok("list_connections", &json!({ "project": "Kontur" }));
+  assert!(
+    listed.get("agents").is_none(),
+    "no agent connection is listed: {listed}"
+  );
 
-  let refused = team
-    .served
-    .refused("pick_profile_connection", &args(team.claude_profile));
-  assert_eq!(refused["code"], "connection_does_not_fit", "{refused}");
-  assert_eq!(team.db().connection_pick(team.claude_profile).expect("read"), None);
-
-  let unknown = json!({ "project": "Kontur", "profile": "nobody", "connection": connection });
-  let refused = team.served.refused("pick_profile_connection", &unknown);
+  let refused = team.served.refused("set_profile_account", &args("nobody", "default"));
   assert_eq!(refused["code"], "profile_not_found", "{refused}");
 }
 
@@ -262,18 +287,20 @@ fn picked_account(team: &Team) -> Option<AgentAccountId> {
 }
 
 #[test]
-fn domain_team_pick_profile_connection_account_other_than_the_effective_one_is_a_persons_to_choose() {
+fn domain_team_set_profile_account_other_than_the_effective_one_is_a_persons_to_choose() {
   let mut team = team();
-  let connection = team.codex_connection();
   let (client, other) = (
     add_account(&team.app_database, AccountCli::Codex, "Client"),
     add_account(&team.app_database, AccountCli::Codex, "Other"),
   );
-  let pick = |account: &str| json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": account });
+  // The fake program the fixture's Codex connection runs is this computer's Codex, for the accounts' connections.
+  team.codex_program_for_accounts();
+  let pick =
+    |account: &str| json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": account });
 
-  // The connection runs on the CLI's Default, so Client is another account: a person's choice.
+  // The project's only Codex connection runs on the CLI's Default, so Client is another account: a person's choice.
   team.served.let_automation_widen(false);
-  let refused = team.served.refused("pick_profile_connection", &pick("Client"));
+  let refused = team.served.refused("set_profile_account", &pick("Client"));
   assert_person_only(&refused);
   assert_eq!(
     team.db().connection_pick(team.codex_profile).expect("read"),
@@ -282,57 +309,41 @@ fn domain_team_pick_profile_connection_account_other_than_the_effective_one_is_a
   );
 
   team.served.let_automation_widen(true);
-  let picked = team.served.ok("pick_profile_connection", &pick("Client"));
-  assert_eq!(picked["account"], client.id().to_string());
+  let picked = team.served.ok("set_profile_account", &pick("Client"));
+  assert_eq!(picked["account"]["id"], client.id().to_string());
   assert_eq!(picked_account(&team), Some(client.id()));
 
   // The same account again, and the pick's account is the one the profile runs on now: no widening.
   team.served.let_automation_widen(false);
-  team.served.ok("pick_profile_connection", &pick("client"));
+  team.served.ok("set_profile_account", &pick("client"));
   assert_eq!(picked_account(&team), Some(client.id()));
 
   // Another account than the earlier pick's is refused again, and the pick stays.
-  assert_person_only(&team.served.refused("pick_profile_connection", &pick("Other")));
+  assert_person_only(&team.served.refused("set_profile_account", &pick("Other")));
   assert_eq!(picked_account(&team), Some(client.id()));
   assert_ne!(client.id(), other.id());
 }
 
 #[test]
-fn domain_team_pick_profile_connection_account_of_the_connection_itself_is_not_gated() {
+fn domain_team_set_profile_account_the_clis_default_is_not_gated() {
   let mut team = team();
-  let connection = team.codex_connection();
   team.served.let_automation_widen(false);
-  let args = json!({
-    "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": "default",
-  });
-  team.served.ok("pick_profile_connection", &args);
+  let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": "default" });
+  team.served.ok("set_profile_account", &args);
   assert_eq!(picked_account(&team), Some(AccountCli::Codex.default_account()));
 }
 
 #[test]
-fn domain_team_pick_profile_connection_refuses_an_account_that_is_not_of_the_connections_cli() {
+fn domain_team_set_profile_account_refuses_an_account_that_is_not_of_the_profiles_cli() {
   let mut team = team();
-  let connection = team.codex_connection();
   add_account(&team.app_database, AccountCli::ClaudeCode, "Lab");
   team.served.let_automation_widen(true);
   for account in ["Lab", "nobody"] {
-    let args = json!({
-      "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": account,
-    });
-    let refused = team.served.refused("pick_profile_connection", &args);
+    let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": account });
+    let refused = team.served.refused("set_profile_account", &args);
     assert_eq!(refused["code"], "account_not_found", "{refused}");
     assert_eq!(team.db().connection_pick(team.codex_profile).expect("read"), None);
   }
-}
-
-#[test]
-fn domain_team_pick_profile_connection_refuses_a_project_that_is_not_the_teams() {
-  let (mut served, _) = Served::seeded_with("empty", Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")));
-  let listed = served.ok("list_connections", &json!({ "project": "Kontur" }));
-  let connection = listed["agents"][0]["id"].as_str().expect("an id").to_owned();
-  let args = json!({ "project": "Kontur", "profile": "anyone", "connection": connection });
-  let refused = served.refused("pick_profile_connection", &args);
-  assert_eq!(refused["code"], "team_project_required", "{refused}");
 }
 
 #[test]
@@ -456,8 +467,8 @@ fn domain_team_profiles_report_this_computers_pick_and_leave_out_a_local_draft()
     .expect("a profile of this computer's own, never published")
     .id();
   drop(db);
-  let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection });
-  team.served.ok("pick_profile_connection", &args);
+  let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": "default" });
+  team.served.ok("set_profile_account", &args);
 
   let listed = team.served.ok("list_profiles", &json!({ "project": "Kontur" }));
   let profiles = listed["profiles"].as_array().expect("profiles");

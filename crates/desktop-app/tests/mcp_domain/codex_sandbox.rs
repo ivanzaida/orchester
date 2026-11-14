@@ -30,7 +30,7 @@ fn save(sandbox: Option<&str>) -> Value {
     permissions["codex_sandbox"] = json!(sandbox);
   }
   json!({
-    "project": "Kontur", "profile": "Sandboxed", "role": "Sandboxed", "connection": "Codex · Kontur",
+    "project": "Kontur", "profile": "Sandboxed", "role": "Sandboxed", "account": "default", "cli": "codex",
     "model": "gpt-5.5", "permissions": permissions,
   })
 }

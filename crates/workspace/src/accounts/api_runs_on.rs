@@ -12,15 +12,16 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   account::{AccountCli, ApiAccount, ApiSetup},
   connection::{AgentConnection, ApiEndpoint, ApiProvider, ConnectionAccount},
-  id::{ApiAccountId, ConnectionId, SecretId},
+  id::{ApiAccountId, ConnectionId, ResourceId, SecretId},
   name::Name,
   store::ConnectionStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ConnectionPick, ProjectDb};
 
 use super::runs_on::{RunsOnError, free_name};
 use crate::{
+  agents::local_connection::run_here,
   connections::{data::agent_connections, probe},
   tasks::outside::Outside,
   workspace::Workspace,
@@ -70,6 +71,34 @@ impl Workspace {
     db.create_connection(&connection)?;
     self.changes.record(db.project().id(), Outside::Connections);
     Ok(connection.id())
+  }
+
+  /// Makes the agent profile `profile` of the project at `repo_root` run on the API account `account` on this
+  /// computer, in place of what it ran on here before: the project's connection on the account is made when it has
+  /// none, and the profile's version stays as it is. Refused for an account of another kind of agent than the
+  /// profile's, and for one that does not serve the profile's model.
+  pub fn run_profile_on_api_account(
+    &self,
+    repo_root: &Path,
+    profile: ResourceId,
+    account: ApiAccountId,
+  ) -> Result<(), RunsOnError> {
+    let connection = self.connect_api_account(repo_root, account)?;
+    let db = ProjectDb::open(repo_root)?;
+    let project = db.project().id();
+    let team = db.sharing()?.is_some();
+    drop(db);
+    if team {
+      let pick = ConnectionPick {
+        connection,
+        account: None,
+      };
+      return Ok(self.pick_team_connection(repo_root, profile, pick)?);
+    }
+    run_here(repo_root, profile, connection).map_err(RunsOnError::Refused)?;
+    self.changes.record(project, Outside::Connections);
+    self.changes.record(project, Outside::Profiles);
+    Ok(())
   }
 
   /// A connection of `cli` on its API account `account`, on the program set for the CLI here, else the one
@@ -128,7 +157,7 @@ impl Workspace {
 
 /// Whether `connection` is the project's copy of `account`: the account's kind of agent, with the account's id as
 /// its key's.
-fn on_account(connection: &AgentConnection, account: &ApiAccount) -> bool {
+pub(super) fn on_account(connection: &AgentConnection, account: &ApiAccount) -> bool {
   connection.provider() == account.agent() && connection.key() == Some(key_of(account.id()))
 }
 
