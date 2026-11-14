@@ -162,7 +162,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | done; its form and Summary wait for frames (D) |
 | [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | done; not run with a real model |
 | **D** | **Quality without a person** | | | |
-| [OA-19](OA-19-before-you-leave.md) | Before you leave: is what the conversation leads ready | design + workspace + UI | OA-09, frames for its UI | todo |
+| [OA-19](OA-19-before-you-leave.md) | Before you leave: is what the conversation leads ready | design + workspace + UI | OA-09, frames for its UI | done in `get_standing`; its card waits for frames (C) |
 | [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | done; its form rows wait for frames (D) |
 | [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | done as instructions |
 | **E** | **The record for the person** | | | |

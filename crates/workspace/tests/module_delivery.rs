@@ -84,11 +84,11 @@ impl Repo {
   }
 
   /// Gives the module a branch of its own, and says what else `change` says.
-  fn own(&self, change: OwnChange) -> orchester_core::module::Module {
+  fn own(&self, change: &OwnChange) -> orchester_core::module::Module {
     let module = self.db.module(self.module).expect("read").expect("module");
     let change = OwnChange {
       own_branch: Some(true),
-      ..change
+      ..change.clone()
     };
     change_own_in(self.root(), &self.programs, &module, &change).expect("its own branch")
   }
@@ -131,7 +131,7 @@ fn module_delivery_gives_a_module_a_branch_of_its_own_by_its_name() {
   .expect_err("refused");
   assert_eq!(refused.key, "modules.ownBranch.required");
 
-  let owned = repo.own(OwnChange {
+  let owned = repo.own(&OwnChange {
     acceptance: Some(Some(pipeline)),
     deliver_when_accepted: Some(true),
     ..OwnChange::default()
@@ -186,7 +186,7 @@ fn module_delivery_merges_the_modules_branch_into_its_base_and_keeps_it() {
   let repo = Repo::new();
   // A module without a branch of its own has nothing to deliver.
   assert_eq!(repo.deliver().expect_err("refused").code(), "no_own_branch");
-  repo.own(OwnChange::default());
+  repo.own(&OwnChange::default());
   assert_eq!(
     repo.deliver().expect_err("refused").code(),
     "nothing_to_deliver",
@@ -228,7 +228,7 @@ fn module_delivery_merges_the_modules_branch_into_its_base_and_keeps_it() {
 #[test]
 fn module_delivery_that_conflicts_changes_nothing() {
   let repo = Repo::new();
-  repo.own(OwnChange::default());
+  repo.own(&OwnChange::default());
   repo.work("shared.txt", "the module's line\n");
   fs::write(repo.root().join("shared.txt"), "the base's line\n").expect("edit");
   git(repo.root(), &["commit", "--quiet", "-am", "base moved"]);
@@ -253,7 +253,7 @@ fn module_delivery_that_conflicts_changes_nothing() {
 fn module_delivery_is_refused_while_a_task_of_the_module_is_still_to_accept() {
   let mut repo = Repo::new();
   let pipeline = ResourceId::generate();
-  let module = repo.own(OwnChange {
+  let module = repo.own(&OwnChange {
     acceptance: Some(Some(pipeline)),
     ..OwnChange::default()
   });
@@ -284,7 +284,7 @@ fn module_delivery_is_refused_while_a_task_of_the_module_is_still_to_accept() {
   assert_eq!((read.acceptances, read.acceptance), (1, Acceptance::UnderWay));
 
   // A module that names no acceptance pipeline is delivered by the person only.
-  let unguarded = repo.own(OwnChange {
+  let unguarded = repo.own(&OwnChange {
     acceptance: Some(None),
     ..OwnChange::default()
   });

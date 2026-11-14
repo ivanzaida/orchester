@@ -27,6 +27,7 @@ mod guard;
 pub mod held;
 mod keep;
 mod leads;
+pub mod leaving;
 mod led_start;
 mod mcp_servers;
 mod merge_conflicts;

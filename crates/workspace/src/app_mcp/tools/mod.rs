@@ -197,6 +197,18 @@ async fn dispatch_answers(
     "get_auto_mode" => Err(approval_settings::retired(name, "get_approvals")),
     "set_auto_mode" => Err(approval_settings::retired(name, "set_allow_autopilot and set_reviewer")),
     "set_run_auto_mode" => Err(approval_settings::retired(name, "set_run_manual")),
+    other => dispatch_planning(services, translate, other, arguments).await,
+  }
+}
+
+/// The tools of the project's modules, what its Orchestrator conversations watch and decide, and its reports.
+async fn dispatch_planning(
+  services: &Services,
+  translate: &Translate,
+  name: &str,
+  arguments: Value,
+) -> Result<Value, ToolError> {
+  match name {
     "list_modules" => modules::list_modules(services, parse(arguments)?).await,
     "get_module" => modules::get_module(services, parse(arguments)?, translate).await,
     "create_module" => modules::create_module(services, parse(arguments)?).await,
@@ -205,7 +217,7 @@ async fn dispatch_answers(
     "start_acceptance" => module_delivery::start_acceptance(services, parse(arguments)?).await,
     "get_watches" => watches::get_watches(services, parse(arguments)?, translate).await,
     "get_decisions" => decisions::get_decisions(services, parse(arguments)?).await,
-    "get_standing" => standing::get_standing(services, parse(arguments)?).await,
+    "get_standing" => standing::get_standing(services, parse(arguments)?, translate).await,
     "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     "get_delivery" => delivery::get_delivery(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,

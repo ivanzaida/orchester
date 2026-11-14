@@ -2557,6 +2557,17 @@
       "deliver": "{{target}} is accepted: it can be delivered",
       "deliveryWaits": "Every task of {{target}} is done: its delivery waits for you"
     },
+    "leaving": {
+      "driveOff": "Let the Orchestrator drive is off for this project: no turn starts by itself, so nothing is led while you are away.",
+      "orchestratorNotReady": "The Orchestrator has nothing it can run on now: its connection is not chosen, was removed, or is not signed in.",
+      "noPipeline": "These tasks have no published pipeline and cannot start: {{tasks}}.",
+      "noDeliverStep": "The pipelines of these tasks end in no Deliver step, so their merge is not checked on the merged result: {{tasks}}.",
+      "checkoutHasChanges": "This work merges into the branch your checkout has, and the checkout has {{count}} uncommitted files now: a merge they stand in the way of waits for you. Commit them, or give the module a branch of its own.",
+      "noDailyBudget": "The project has no daily budget: nothing bounds what is spent while you are away.",
+      "maySleep": "The computer may go to sleep while agents work: Keep the computer awake while agents work is off in Settings › General.",
+      "stopsWithWindow": "Closing Orchester's window stops the work: leave it open.",
+      "serversNotChecked": "Whether the MCP servers the tasks' profiles choose are on and answer is not checked here: a start says so, task by task."
+    },
     "module": {
       "notLed": "This conversation does not lead that module to the end: in a turn Orchester started by itself, the chat starts an acceptance and asks for a delivery only of a module it leads to the end. Nothing was changed.",
       "notDue": "The module does not wait for that now: it stands {{standing}} (get_standing, get_module). Nothing was changed."

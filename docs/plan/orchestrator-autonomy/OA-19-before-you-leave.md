@@ -1,6 +1,6 @@
 # OA-19 · Before you leave: is what the conversation leads ready
 
-- **Status:** todo
+- **Status:** done as a reading; its card waits for frames (2026-11-14)
 - **Kind:** design + workspace + UI
 - **Depends on:** OA-09; the frames of `frames.md` C for its visible part
 - **Branch:** —
@@ -47,3 +47,26 @@ all-clear state, and the same inside `/watching`.
 
 - Workspace tests for each line and the all-clear (`--test orchestrator_readiness`); app tests for the card.
 - An independent design verification. `tools/check.ps1` passes.
+
+## As built (2026-11-14)
+
+One reading of a subscription that leads to the end (`orchestrator::leaving::leaving_in`), made when it is asked
+for; nothing polls it. `get_standing` gives it as `before_you_leave` for each such subscription: `ready`, the lines
+(`weak`), each by its name with its words and the tasks it names, and what the app cannot check (`not_checked`).
+
+The lines, the most stopping first: *Let the Orchestrator drive* is off; the Orchestrator has nothing it can run on;
+tasks that are still to start have no published pipeline; their pipelines end in no Deliver step; the work lands in
+the branch the person's checkout has and the checkout has uncommitted changes now (a module with a branch of its own
+does not have this line); the project has no daily budget; the computer may sleep (OA-08's setting is off); and,
+always, closing the window stops the work. That last line alone leaves the reading *ready*: it is what the person
+must not do.
+
+**Not read, and said so in `not_checked`:** whether an MCP server a task's profile chooses is on, found, and
+answers. A start's own readiness tells that task by task (`Workspace::ready_to_start`), with the keychain; reading
+it for every task of a module here was left out.
+
+**Not built:** the card under the leading line and inside `/watching` (frames C); the comparison of what is left of
+the daily budget with what the open tasks spend on average; a second connection (OA-04, later); a line for a team's
+setting that only an Admin can change.
+
+Tests: `orchester-workspace --test orchestrator_leaving leaving`.

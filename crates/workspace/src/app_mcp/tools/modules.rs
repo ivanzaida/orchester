@@ -213,7 +213,7 @@ pub async fn create_module(services: &Services, args: CreateModule) -> Result<Va
       acceptance: acceptance(&open.repo_root, args.acceptance_pipeline.as_deref().map(Some))?,
       deliver_when_accepted: args.deliver_when_accepted,
     };
-    let module = owned(&services, &open.repo_root, module, &change)?;
+    let module = owned(&services, &open.repo_root, &module, &change)?;
     services.changes.record(open.project.id(), Outside::Tasks);
     Ok(json!({ "module": module_json(open.project.id(), &module) }))
   })
@@ -256,12 +256,8 @@ pub async fn update_module(services: &Services, args: UpdateModule) -> Result<Va
       acceptance: acceptance(&open.repo_root, args.acceptance_pipeline.as_ref().map(Option::as_deref))?,
       deliver_when_accepted: args.deliver_when_accepted,
     };
-    let written = owned(
-      &services,
-      &open.repo_root,
-      written.with_own_branch(module.own_branch().cloned()),
-      &change,
-    )?;
+    let written = written.with_own_branch(module.own_branch().cloned());
+    let written = owned(&services, &open.repo_root, &written, &change)?;
     services.changes.record(open.project.id(), Outside::Tasks);
     Ok(json!({ "module": module_json(open.project.id(), &written) }))
   })
@@ -303,8 +299,8 @@ fn acceptance(root: &Path, given: Option<Option<&str>>) -> Result<Option<Option<
 }
 
 /// `module` with `change` applied to its own branch ([`change_own_in`]).
-fn owned(services: &Services, root: &Path, module: Module, change: &OwnChange) -> Result<Module, ToolError> {
-  change_own_in(root, &services.programs, &module, change)
+fn owned(services: &Services, root: &Path, module: &Module, change: &OwnChange) -> Result<Module, ToolError> {
+  change_own_in(root, &services.programs, module, change)
     .map_err(|message| ToolError::refused("invalid_module", vec![message]))
 }
 

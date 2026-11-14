@@ -840,3 +840,13 @@ Answers `subscriptions`, each with `conversation` (`id`, `title`, `link`), `targ
 A task is in the most specific subscription that covers it. A team task is the one its runs on this computer
 recorded: one that never ran here is not listed.
 
+A module with a branch of its own whose every task is done stands `to_deliver` until that branch is on its base
+branch; `waits_for` says for what (`accept`, `accepting`, `deliver`, or `person_…` when what comes next is the
+person's).
+
+For a subscription that leads to the end, `before_you_leave` says what would stop or weaken the work while nobody is
+at the computer: `ready`, and `weak`, each line with its `kind` (`drive_off`, `orchestrator_not_ready`,
+`no_pipeline`, `no_deliver_step`, `checkout_has_changes`, `no_daily_budget`, `may_sleep`, `stops_with_window`), its
+`tasks` and its words; `not_checked` names what the app cannot tell from here. It warns and refuses nothing.
+`ready` is true when only `stops_with_window` is left.
+

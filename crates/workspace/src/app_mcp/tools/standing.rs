@@ -1,7 +1,9 @@
 //! `get_standing`: where what the project's Orchestrator conversations watch stands
 //! (`crate::orchestrator::standing`, `docs/plan/orchestrator-autonomy/OA-12-…`): each subscription's tasks, each as
-//! done, working, waiting and for what, ready to start, blocked, failed or parked, and the target as a whole. Reading
-//! only, and the same for a local and a team project.
+//! done, working, waiting and for what, ready to start, blocked, failed or parked, and the target as a whole; and, for
+//! one that leads to the end, what would stop or weaken it while nobody is at the computer
+//! (`crate::orchestrator::leaving`, `docs/plan/orchestrator-autonomy/OA-19-…`). Reading only, and the same for a
+//! local and a team project.
 
 use orchester_core::{
   id::ProjectId,
@@ -16,14 +18,17 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{watches::find_chat, wire};
+use super::{Translate, watches::find_chat, wire};
 use crate::{
   app_mcp::{
     error::ToolError,
     services::{Services, blocking},
   },
   links::Link,
-  orchestrator::standing::{Led, Reads},
+  orchestrator::{
+    leaving::{AppSet, Leaving, leaving_in},
+    standing::{Led, Reads},
+  },
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -37,24 +42,70 @@ pub struct GetStanding {
   pub conversation: Option<String>,
 }
 
-pub async fn get_standing(services: &Services, args: GetStanding) -> Result<Value, ToolError> {
+pub async fn get_standing(services: &Services, args: GetStanding, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  blocking(move || {
+  let (project, chats, read) = blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
     let chats = db.chats()?;
     let only = match &args.conversation {
       Some(named) => Some(find_chat(&chats, named)?.chat.id()),
       None => None,
     };
-    let subscriptions: Vec<Value> = Reads::read(&db)?
-      .all(&db)?
-      .iter()
-      .filter(|led| only.is_none_or(|chat| led.subscription.chat() == chat))
-      .map(|led| led_json(open.project.id(), &chats, led))
-      .collect();
-    Ok(json!({ "subscriptions": subscriptions }))
+    let app = AppSet {
+      drives: services.workspace.orchestrator_drives(&open.repo_root)?,
+      keeps_awake: services.workspace.keeps_awake()?,
+    };
+    let mut read = Vec::new();
+    for led in Reads::read(&db)?.all(&db)? {
+      if only.is_some_and(|chat| led.subscription.chat() != chat) {
+        continue;
+      }
+      // Only a subscription that leads to the end is left to itself, so only it is read for what would stop it.
+      let leaving = match led.subscription.mode().ceilings() {
+        Some(_) => Some(
+          leaving_in((&open.repo_root, &services.programs), &led.subscription, app)
+            .map_err(|message| ToolError::refused("unreadable", vec![message]))?,
+        ),
+        None => None,
+      };
+      read.push((led, leaving));
+    }
+    Ok((open.project.id(), chats, read))
   })
-  .await
+  .await?;
+  let subscriptions: Vec<Value> = read
+    .iter()
+    .map(|(led, leaving)| {
+      let mut told = led_json(project, &chats, led);
+      told["before_you_leave"] = leaving
+        .as_ref()
+        .map_or(Value::Null, |leaving| leaving_json(leaving, translate));
+      told
+    })
+    .collect();
+  Ok(json!({ "subscriptions": subscriptions }))
+}
+
+/// What would stop or weaken a leading subscription while nobody is there: whether it is ready to be left, each line
+/// by its name with its words and the tasks it names, and what the app cannot check.
+fn leaving_json(leaving: &Leaving, translate: &Translate) -> Value {
+  let weak: Vec<Value> = leaving
+    .weak
+    .iter()
+    .map(|weak| {
+      json!({
+        "kind": weak.name(),
+        "tasks": weak.tasks(),
+        "shown": translate.text(&weak.message()),
+      })
+    })
+    .collect();
+  let not_checked: Vec<String> = leaving
+    .not_checked
+    .iter()
+    .map(|message| translate.text(message))
+    .collect();
+  json!({ "ready": leaving.ready(), "weak": weak, "not_checked": not_checked })
 }
 
 fn led_json(project: ProjectId, chats: &[ChatListing], led: &Led) -> Value {
