@@ -257,12 +257,10 @@ pub async fn control_run(services: &Services, args: InRun, control: Control) -> 
   })
   .await?;
   let id = run.id();
-  // A team task's work starts and goes on under the claim the team server gave it (team_work): continuing an
-  // interrupted run from here would take the old sharing stream's claim instead, so it is refused like continue_run.
-  // A paused run resumes under the claim its work started with, and takes none.
-  if team && matches!(run.status(), RunStatus::Interrupted(_)) {
-    return Err(team::team_only_on_server("resume_run"));
-  }
+  // A team task's work starts and goes on under the claim the team server gave it (team_work): a paused run resumes,
+  // and an interrupted one continues from its last checkpoint, under the claim its work started with, as its task's
+  // page lets it, and takes none of the old sharing stream. Its heartbeat renews the claim once it works again; a
+  // claim lost meanwhile fences the run.
   // Work on a shared task goes on only under the person's claim; Pause and Cancel need none.
   let claim = match control {
     Control::Resume if team => WorkClaim::default(),

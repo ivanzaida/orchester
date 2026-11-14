@@ -68,7 +68,7 @@ fn team_task(team: &Started) -> WatchTarget {
 }
 
 /// Reads the watched team tasks from the server, as the app does every minute.
-fn refreshed(checkout: &Checkout) -> Refreshed {
+pub(crate) fn refreshed(checkout: &Checkout) -> Refreshed {
   checkout
     .runtime
     .block_on(refresh(&checkout.servers, checkout.root(), NEVER_STALE))
@@ -335,7 +335,7 @@ fn team_mcp_a_local_task_watch_ends_on_its_stored_row_and_needs_no_reading() {
 }
 
 /// Caches the server's module as the project's own (as the sync does) and watches it.
-fn module_watch(checkout: &Checkout, module: ModuleId) -> WatchTarget {
+pub(crate) fn module_watch(checkout: &Checkout, module: ModuleId) -> WatchTarget {
   let details = ModuleDetails::new(
     Name::new("Webhooks").expect("name"),
     "",

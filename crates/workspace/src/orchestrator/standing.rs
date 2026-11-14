@@ -11,7 +11,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  id::{ModuleId, ResourceId, TaskId},
   module::ModuleState,
   orchestrator::{
     Subscription, Subscriptions, WatchTarget,
@@ -44,6 +44,9 @@ pub struct Reads {
   facts: HashMap<TaskId, TaskFacts>,
   parked: HashMap<TaskId, Parking>,
   team: TeamReading,
+  /// The team tasks the team server's reading saw that never ran on this computer, with the module each is in: no
+  /// record here defines them, and the conversation that leads their module has them still to start.
+  unrun: Vec<(TaskId, Option<ModuleId>)>,
   subscriptions: Subscriptions,
   /// How many more agents may work now.
   free_slots: usize,
@@ -95,11 +98,38 @@ impl Reads {
       running += usize::from(of_task.phase == TaskPhase::Running);
       facts.insert(task.id(), of_task);
     }
+    let mut unrun = Vec::new();
+    for (id, seen) in team.seen() {
+      if facts.contains_key(&id) {
+        continue;
+      }
+      facts.insert(
+        id,
+        TaskFacts {
+          key: seen.key.to_string(),
+          closed: seen.status.is_closed(),
+          phase: TaskPhase::Draft,
+          runs: 0,
+          // A team task's pipeline is the team's, whose readiness the server checks when the work starts.
+          unready: None,
+          parked: if parked.contains_key(&id) {
+            Some(Parked::ByChat)
+          } else {
+            seen.blocked.as_ref().map(|_| Parked::ByPerson)
+          },
+          blockers: Vec::new(),
+          low_disk: false,
+          held: holds.project,
+        },
+      );
+      unrun.push((id, seen.module));
+    }
     let slots = usize::try_from(db.project_limits()?.agent_slots().get().get()).unwrap_or(usize::MAX);
     Ok(Self {
       tasks,
       facts,
       parked,
+      unrun,
       team,
       subscriptions: db.active_subscriptions()?,
       free_slots: slots.saturating_sub(running),
@@ -109,17 +139,18 @@ impl Reads {
   /// Where what `subscription` leads stands: its tasks are those whose events go to it, the most specific
   /// subscription that covers each.
   pub fn led(&self, db: &ProjectDb, subscription: &Subscription) -> Result<Led, StoreError> {
-    let inside: Vec<&Task> = self
+    let leads = |id: TaskId, module: Option<ModuleId>| self.subscriptions.leader_of(id, module) == Some(subscription);
+    let ran = self
       .tasks
       .iter()
-      .map(|(task, _)| task)
-      .filter(|task| self.subscriptions.leader_of(task.id(), self.team.module_of(task)) == Some(subscription))
+      .map(|(task, _)| (task.id(), self.team.module_of(task)));
+    let inside: Vec<TaskId> = ran
+      .chain(self.unrun.iter().copied())
+      .filter(|(id, module)| leads(*id, *module))
+      .map(|(id, _)| id)
       .collect();
-    let ids: HashSet<TaskId> = inside.iter().map(|task| task.id()).collect();
-    let target: Vec<TaskFacts> = inside
-      .iter()
-      .filter_map(|task| self.facts.get(&task.id()).cloned())
-      .collect();
+    let ids: HashSet<TaskId> = inside.iter().copied().collect();
+    let target: Vec<TaskFacts> = inside.iter().filter_map(|id| self.facts.get(id).cloned()).collect();
     let blocking: HashSet<&str> = target
       .iter()
       .flat_map(|facts| facts.blockers.iter().map(String::as_str))
@@ -144,7 +175,7 @@ impl Reads {
     };
     let parked = inside
       .iter()
-      .filter_map(|task| Some((task.key().to_string(), self.parked.get(&task.id())?.clone())))
+      .filter_map(|id| Some((self.facts.get(id)?.key.clone(), self.parked.get(id)?.clone())))
       .collect();
     Ok(Led {
       subscription: subscription.clone(),
@@ -203,10 +234,13 @@ impl Around1<'_> {
       Some(pipeline) if !self.published.contains(&pipeline) => Some(Unready::PipelineNotReady),
       Some(_) => None,
     };
+    // A team task's Blocked mark is the team server's: the last reading holds it, this computer's records never do.
+    let blocked = task.organization().blocked_reason().is_some()
+      || self.team.task(task.id()).is_some_and(|seen| seen.blocked.is_some());
     let parked = if self.parked {
       Some(Parked::ByChat)
     } else {
-      task.organization().blocked_reason().map(|_| Parked::ByPerson)
+      blocked.then_some(Parked::ByPerson)
     };
     Ok(TaskFacts {
       key: task.key().to_string(),

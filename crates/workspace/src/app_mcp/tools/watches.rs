@@ -11,7 +11,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Translate, team, wire};
+use super::{Translate, wire};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -36,9 +36,6 @@ pub struct GetWatches {
 }
 
 pub async fn get_watches(services: &Services, args: GetWatches, translate: &Translate) -> Result<Value, ToolError> {
-  if team::of_reading(services, &args.project).await?.is_some() {
-    return Err(team::team_only_on_server("get_watches"));
-  }
   let services = services.clone();
   let (project, read) = blocking(move || {
     let (open, db) = services.read_project(&args.project)?;

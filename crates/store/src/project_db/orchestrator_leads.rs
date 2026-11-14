@@ -6,7 +6,8 @@
 //! ([`ProjectDb::wait_turn_prompt`]). Nothing here changes a subscription.
 
 use orchester_core::{
-  id::{ChatId, RunId, TaskId},
+  id::{ChatId, ModuleId, RunId, TaskId},
+  integration::base::RunBaseSource,
   orchestrator::{
     AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, TaskEvent, TaskEventKind,
     WatchTarget,
@@ -110,7 +111,7 @@ impl ProjectDb {
   /// through among those that led then (one that ended since, its task merged and done, still counts), with its own
   /// order or the project's default.
   pub fn ordered_when(&self, chat: ChatId, wait: &AgentWait, at: Timestamp) -> Result<bool, StoreError> {
-    let Some(task) = self.run_task(wait.run)? else {
+    let Some((task, module)) = self.run_place(wait.run)? else {
       return Ok(false);
     };
     let then: Vec<Subscription> = self
@@ -120,7 +121,7 @@ impl ProjectDb {
       .map(|kept| kept.subscription)
       .collect();
     let own = Subscriptions::new(then.clone()).map_err(|error| corrupt("orchestrator subscriptions", error))?;
-    let through = event_subscription(&own, chat, task.id(), task.module()).map(Subscription::target);
+    let through = event_subscription(&own, chat, task, module).map(Subscription::target);
     let leads = Leads::new(
       then.iter().map(|subscription| Lead::new(subscription, String::new())),
       &self.orchestrator_watch()?,
@@ -129,12 +130,31 @@ impl ProjectDb {
   }
 
   /// The target of the subscription of `chat` an event of `run`'s task comes through ([`Self::task_came_through`]);
-  /// `None` also once the run or its task is gone.
+  /// `None` also once the run is gone.
   pub fn came_through(&self, chat: ChatId, run: RunId) -> Result<Option<WatchTarget>, StoreError> {
-    match self.run_task(run)? {
-      Some(task) => self.task_came_through(chat, &task),
-      None => Ok(None),
+    let Some((task, module)) = self.run_place(run)? else {
+      return Ok(None);
+    };
+    let own = Subscriptions::new(self.chat_subscriptions(chat)?)
+      .map_err(|error| corrupt("orchestrator subscriptions", error))?;
+    Ok(event_subscription(&own, chat, task, module).map(Subscription::target))
+  }
+
+  /// The task of `run` and the module it is in, for the subscription its events come through: its stored row's; for a
+  /// team task this computer keeps no row of, the module its run started in (the module the team server accepted its
+  /// start in). `None` once the run is gone.
+  fn run_place(&self, run: RunId) -> Result<Option<(TaskId, Option<ModuleId>)>, StoreError> {
+    if let Some(task) = self.run_task(run)? {
+      return Ok(Some((task.id(), task.module())));
     }
+    let Some(found) = self.run(run).map_err(|error| corrupt("run", error))? else {
+      return Ok(None);
+    };
+    let module = match found.base_source() {
+      RunBaseSource::Module { module } => Some(module),
+      RunBaseSource::Task | RunBaseSource::CheckedOut | RunBaseSource::Project => None,
+    };
+    Ok(Some((found.task(), module)))
   }
 
   /// The target of the subscription of `chat` an event of `task` comes through: the most specific of its own that

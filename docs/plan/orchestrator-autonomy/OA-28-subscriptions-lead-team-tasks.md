@@ -1,6 +1,6 @@
 # OA-28 · Subscriptions lead team tasks by their module, and `/watching` answers
 
-- **Status:** in progress (the module of a team task that ran here: done 2026-11-13; the rest below)
+- **Status:** done but for what its last section lists (2026-11-14)
 - **Kind:** workspace
 - **Depends on:** —
 - **Branch:** —
@@ -65,3 +65,31 @@ of it to route.
   this computer's rows (`ProjectTasks`), which for a team task are the old stream's copy or nothing. They need the
   tasks of the watched modules as the reading holds them.
 - A team task that never ran here in a start the chat makes by itself (`led_start` finds stored tasks): OA-29.
+
+## Done on 2026-11-14
+
+- A watched module is read whole from the team server (`orchestrator::team_status`): every task the server puts in
+  it, with its key, title, status and Blocked mark, whether or not it ran here; and it is read though no team task
+  ran here yet. One request of the task list per 200 tasks of a watched module, as before.
+- Where a led module stands (`get_standing`, the events *work can start* and *stuck*) counts those tasks: one that
+  never ran reads *ready to start*, one the server holds Blocked reads *parked by the person*, one the server closed
+  reads *done*. A module's watch no longer ends while the server holds an open task in it that never ran here.
+- The chat's start in a turn Orchester started (`led_start`) finds a team task as its runs recorded it, and one that
+  never ran here by the reading; the start itself goes through `run_task` and the team server, which takes the claim.
+- `/watching` and `get_watches` answer for a team project (`orchestrator::watching::team`): the team tasks as their
+  runs recorded them and those of the reading, closed as the server last said.
+- The prompt of a turn an event of a team task started is told the subscription it came through, its order and the
+  leading note, by the module its run started in (`ProjectDb::came_through`).
+
+Tests: `orchester-workspace --test team_mcp led_module`, with the watch tests of `watch_ends`. Not covered by a
+test: the chat's own `run_task` of a team task in a turn Orchester started (the team test binary has no harness for
+the chat's calls).
+
+**Left:**
+
+- A task the server moved out of every watched module stays led by the module its run started in until it runs
+  again, and the prompt of its event names that module's subscription.
+- A subscription to the tasks without a module, or to the whole project, lists only the team tasks that ran here:
+  a reading lists watched modules, not the project.
+- What waits in a team task (`/watching`'s *waits for an answer*) is not named for a task this computer keeps no row
+  of.

@@ -119,8 +119,8 @@ impl WatchReads {
   fn watched(&self, subscription: &Subscription, waiting: &[WaitingItem], queued: &[TaskId]) -> WatchedSubscription {
     let mut tasks = Vec::new();
     let mut rest = 0;
-    let led = self.tasks.tasks.iter().filter(|task| {
-      !task.organization().status().is_closed()
+    let led = self.every_task().filter(|task| {
+      !self.closed(task)
         && self
           .leading(task)
           .is_some_and(|leading| leading.target() == subscription.target())
@@ -147,10 +147,8 @@ impl WatchReads {
   /// The project's open tasks that wait in the queue for their run to start, in the order they start.
   fn queued(&self) -> Vec<TaskId> {
     self
-      .tasks
-      .tasks
-      .iter()
-      .filter(|task| !task.organization().status().is_closed() && self.phase(task) == Some(TaskPhase::Queued))
+      .every_task()
+      .filter(|task| !self.closed(task) && self.phase(task) == Some(TaskPhase::Queued))
       .map(Task::id)
       .collect()
   }
@@ -179,12 +177,15 @@ impl WatchReads {
       id: task.id(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
-      run: self
-        .tasks
-        .phases
-        .get(&task.id())
-        .and_then(|latest| latest.run())
-        .map(|latest| latest.number),
+      run: match self.team_task(task.id()) {
+        Some(read) => read.run,
+        None => self
+          .tasks
+          .phases
+          .get(&task.id())
+          .and_then(|latest| latest.run())
+          .map(|latest| latest.number),
+      },
       going,
       state: Message::new(state),
       note,

@@ -26,6 +26,7 @@ mod bundle_missing;
 mod bundle_schema;
 mod created;
 mod delivery;
+mod led_module;
 mod local_task;
 mod mcp_server_remove;
 mod mcp_servers;

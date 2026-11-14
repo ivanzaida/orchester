@@ -8,6 +8,7 @@
 //! of its own inside a module led to the end is such a task, as the more specific subscription decides.
 
 use orchester_core::{
+  id::{ModuleId, TaskId},
   orchestrator::{
     Subscription, Subscriptions,
     change::{Change, MessageThen},
@@ -138,10 +139,13 @@ fn step_budget(db: &ProjectDb, run: Run) -> Result<Option<u64>, ToolError> {
   Ok(raise::budget_use(&view, limit).and_then(|(_, budget)| budget.map(|budget| budget.get())))
 }
 
-/// The refusal of the chat's start of `task` in a turn nobody asked for, when a subscription leads it to the end and
-/// that subscription's work spent its budget; `None` while it may start.
-pub(super) fn start_refused(db: &ProjectDb, task: &Task) -> Result<Option<Message>, StoreError> {
-  let Some(led) = Led::of_task(db, task)? else {
+/// The refusal of the chat's start of task `id`, which is in `module` now, in a turn nobody asked for, when a
+/// subscription leads it to the end and that subscription's work spent its budget; `None` while it may start.
+pub(super) fn start_refused(
+  db: &ProjectDb,
+  (id, module): (TaskId, Option<ModuleId>),
+) -> Result<Option<Message>, StoreError> {
+  let Some(led) = Led::of(db, id, module)? else {
     return Ok(None);
   };
   Ok(led.within_budget(db)?.err().map(message))
@@ -157,8 +161,13 @@ struct Led {
 impl Led {
   /// The leading of `task`; `None` while no subscription leads it to the end.
   fn of_task(db: &ProjectDb, task: &Task) -> Result<Option<Self>, StoreError> {
+    Self::of(db, task.id(), module_now(db, task))
+  }
+
+  /// The leading of task `id`, which is in `module` now; `None` while no subscription leads it to the end.
+  fn of(db: &ProjectDb, id: TaskId, module: Option<ModuleId>) -> Result<Option<Self>, StoreError> {
     let subscriptions = db.active_subscriptions()?;
-    let Some(leading) = subscriptions.leader_of(task.id(), module_now(db, task)).cloned() else {
+    let Some(leading) = subscriptions.leader_of(id, module).cloned() else {
       return Ok(None);
     };
     Ok(leading.mode().ceilings().map(|ceilings| Self {

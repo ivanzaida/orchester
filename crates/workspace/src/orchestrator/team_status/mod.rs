@@ -11,6 +11,10 @@
 //! made (signed out, the server unreachable, a refusal) is not an answer: the subscription goes on, and its listing
 //! says why ([`TeamReading::cannot_read`]) until a later reading sees the task.
 //!
+//! A watched module is read whole: every task the server puts in it, whether or not it ever ran on this computer, so
+//! a conversation that leads the module knows the tasks it has still to start
+//! (`docs/plan/orchestrator-autonomy/OA-28-…`).
+//!
 //! The cost of a reading is bounded by what is watched, never by the project's size: one `GET tasks/{id}` for each
 //! team task a *task* subscription names, and for each watched *module* one request of the task list, filtered to that
 //! module, per `MAX_PAGE_LIMIT` (200) tasks the module holds. A pass stops at the first sign that the server cannot be
@@ -52,13 +56,15 @@ pub struct TeamTask {
   pub status: WorkflowStatus,
   /// The module the server puts the task in.
   pub module: Option<ModuleId>,
+  /// Why the server holds it Blocked; `None` while it does not.
+  pub blocked: Option<String>,
 }
 
 /// The last reading of a project's watched team tasks.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TeamReading {
   tasks: HashMap<TaskId, TeamTask>,
-  /// The watched modules whose recorded team tasks the server listed in full.
+  /// The watched modules whose tasks the server listed in full.
   listed: HashSet<ModuleId>,
   /// The project's team tasks when the reading was made: one recorded since is not in it, and the reading says nothing
   /// of which module it is in.
@@ -111,6 +117,13 @@ impl TeamReading {
     self.tasks.values()
   }
 
+  /// Every task the reading saw, by its id, in the order of their keys: the same order at every reading.
+  pub(super) fn seen(&self) -> Vec<(TaskId, &TeamTask)> {
+    let mut seen: Vec<(TaskId, &TeamTask)> = self.tasks.iter().map(|(id, task)| (*id, task)).collect();
+    seen.sort_by_key(|(_, task)| task.key.number());
+    seen
+  }
+
   /// The workflow status the team server last gave team task `id`; `None` while no reading saw it.
   pub(super) fn status_of(&self, id: TaskId) -> Option<WorkflowStatus> {
     self.tasks.get(&id).map(|seen| seen.status)
@@ -127,10 +140,10 @@ impl TeamReading {
       .map_or_else(|| task.module(), |seen| seen.module)
   }
 
-  /// Whether the team tasks in `module` are all known, given the project's team tasks `team` now: the project has
-  /// none, or the server listed the module in a reading made when every one of them was recorded.
-  pub(super) fn knows_module(&self, module: ModuleId, team: &HashSet<TaskId>) -> bool {
-    team.is_empty() || (self.listed.contains(&module) && team.is_subset(&self.covered))
+  /// Whether the team tasks in `module` are all known, given the project's team tasks `team` now: the project is not
+  /// `linked` to a team server, or the server listed the module in a reading made when every one of them was recorded.
+  pub(super) fn knows_module(&self, module: ModuleId, team: &HashSet<TaskId>, linked: bool) -> bool {
+    !linked || (self.listed.contains(&module) && team.is_subset(&self.covered))
   }
 
   /// Whether the subscription to `target` waits because the team server could not be asked about what it depends on:
@@ -227,16 +240,14 @@ pub fn forget(root: &Path) {
 
 /// The server project the project at `root` is linked to and what its subscriptions need of its team tasks: those a
 /// task subscription names, and the modules a module subscription names (the server says which module each team task
-/// is in), with the project's id. `None` when no subscription needs any, or the project has no team task recorded.
+/// is in), with the project's id. `None` when no subscription needs any. A watched module is read though no team task
+/// ran here yet: the server may hold tasks in it.
 fn wanted_in(root: &Path) -> Result<Option<(ProjectId, SharingLink, Wants)>, StoreError> {
   let db = ProjectDb::open(root)?;
   let Some(link) = db.sharing()? else {
     return Ok(None);
   };
   let team = db.team_task_ids()?;
-  if team.is_empty() {
-    return Ok(None);
-  }
   let subscriptions = db.active_subscriptions()?;
   let mut wants = Wants::default();
   for target in subscriptions.as_slice().iter().map(Subscription::target) {

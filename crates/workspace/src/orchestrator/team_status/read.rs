@@ -51,7 +51,7 @@ pub(super) async fn pass(servers: &Servers, link: &SharingLink, wants: &Wants) -
     }
   }
   for &module in &wants.modules {
-    match reader.module(module, &wants.team).await {
+    match reader.module(module).await {
       Ok(found) => {
         reading.listed.insert(module);
         reading.tasks.extend(found);
@@ -98,12 +98,12 @@ impl Reader<'_> {
     self.settle(result, "a watched team task")
   }
 
-  /// The tasks of `team` the server puts in `module`, by their ids: the pages of its list filtered to the module.
-  async fn module(&mut self, module: ModuleId, team: &[TaskId]) -> Result<Vec<(TaskId, TeamTask)>, Unread> {
+  /// The tasks the server puts in `module`, by their ids: the pages of its list filtered to the module.
+  async fn module(&mut self, module: ModuleId) -> Result<Vec<(TaskId, TeamTask)>, Unread> {
     if self.stopped {
       return Err(Unread);
     }
-    let result = self.fetch_module(module, team).await;
+    let result = self.fetch_module(module).await;
     self.settle(result, "the tasks of a watched module")
   }
 
@@ -144,7 +144,7 @@ impl Reader<'_> {
     self.ensure_current()
   }
 
-  async fn fetch_module(&self, module: ModuleId, team: &[TaskId]) -> Result<Vec<(TaskId, TeamTask)>, TeamReadError> {
+  async fn fetch_module(&self, module: ModuleId) -> Result<Vec<(TaskId, TeamTask)>, TeamReadError> {
     let mut found = Vec::new();
     let mut after = None;
     loop {
@@ -158,7 +158,7 @@ impl Reader<'_> {
       };
       let page = self.session.authority().tasks(&request).await?;
       self.ensure_current()?;
-      for read in page.items.iter().filter(|read| team.contains(&read.task.id)) {
+      for read in &page.items {
         found.push((read.task.id, team_task(self.link, read)?));
       }
       match page.next {
@@ -185,5 +185,6 @@ fn team_task(link: &SharingLink, read: &TaskRead) -> Result<TeamTask, TeamReadEr
     title: read.task.content.title.clone(),
     status: read.task.content.workflow,
     module: read.task.content.module,
+    blocked: read.task.content.blocked_reason.clone(),
   })
 }
