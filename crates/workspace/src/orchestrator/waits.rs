@@ -160,7 +160,7 @@ fn follow(
   now.extend(current_ends(&db, reading, |key| {
     kept.contains(key) && !pending.contains(key)
   })?);
-  now.extend(current_stalls(&db, reading.project, at)?);
+  now.extend(current_stalls(&db, reading.project, at, |key| kept.contains(key))?);
   now.extend(current_conflicts(&db, reading.project)?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
@@ -350,7 +350,8 @@ pub(super) fn standing(
     HashSet::new()
   };
   if waits.iter().any(|(_, wait)| is_stall(wait.kind)) {
-    let stalls = current_stalls(db, db.project().id(), Timestamp::now())?;
+    // Every period's event that was kept still stands while its run stalls.
+    let stalls = current_stalls(db, db.project().id(), Timestamp::now(), |_| true)?;
     now.extend(stalls.into_iter().map(|(key, _)| key));
   }
   let keys: HashMap<i64, String> = db.chat_wait_keys(chat)?.into_iter().collect();

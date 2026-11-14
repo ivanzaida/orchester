@@ -36,11 +36,15 @@ use crate::{
 
 const MINUTE_MILLIS: i64 = 60_000;
 
-/// The no-progress events of the project's runs that stall at `now`, each by the key it is kept by.
+/// The no-progress events of the project's runs that stall at `now`, each by the key it is kept by: for each run
+/// the event of the period its stall is in now, and those of its earlier periods that were `kept` when they came,
+/// which stand with it. A period nobody looked in is not raised afterwards: a run found stalled for an hour raises one
+/// event, not three.
 pub(super) fn current_stalls(
   db: &ProjectDb,
   project: ProjectId,
   now: Timestamp,
+  kept: impl Fn(&str) -> bool,
 ) -> Result<Vec<(String, AgentWait)>, StoreError> {
   let Some(minutes) = db.orchestrator_watch()?.no_progress_minutes() else {
     return Ok(Vec::new());
@@ -49,7 +53,8 @@ pub(super) fn current_stalls(
   for (task, run, last) in working(db)? {
     // One event per period of the stall: its key carries `last` and the period, so the follower keeps each once and
     // progress makes new ones. The earlier periods' events stand with the latest.
-    for period in 1..=stall_periods(last, now, Some(minutes)) {
+    let periods = stall_periods(last, now, Some(minutes));
+    for period in 1..=periods {
       let stalled = minutes.saturating_mul(period);
       let kind = TaskEventKind::NoProgress {
         since: last,
@@ -61,6 +66,9 @@ pub(super) fn current_stalls(
         1 => format!("stall:{}:{}", run.id(), last.unix_millis()),
         _ => format!("stall:{}:{}:{period}", run.id(), last.unix_millis()),
       };
+      if period < periods && !kept(&key) {
+        continue;
+      }
       stalls.push((key, stalled_wait(project, (&task, &run), TaskEvent { kind, at })));
     }
   }

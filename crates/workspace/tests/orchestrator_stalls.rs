@@ -173,6 +173,28 @@ fn stalls_raise_one_event_after_the_set_minutes_and_progress_rearms_it() {
 }
 
 #[test]
+fn stalls_found_after_several_periods_raise_one_event_not_one_per_period() {
+  let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
+  running(&mut fixture, "Add login");
+  // Nobody looked for an hour: the stall is in its third period, and that one event is raised.
+  assert!(follow(&fixture, false, minute(61)).kept);
+  let kept = stalls(&fixture);
+  assert_eq!(kept.len(), 1, "{kept:?}");
+  assert!(
+    matches!(
+      kept[0].kind,
+      WaitKind::Event(TaskEvent {
+        kind: TaskEventKind::NoProgress { minutes: 60, .. },
+        ..
+      })
+    ),
+    "{kept:?}"
+  );
+  assert_eq!(follow(&fixture, false, minute(62)), Followed::default(), "kept once");
+}
+
+#[test]
 fn stalls_start_a_turn_only_under_answer_agents() {
   let mut fixture = Fixture::new();
   fixture.everything(minute(-2));
