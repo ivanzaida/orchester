@@ -46,8 +46,7 @@ pub(super) fn run_on_codex(agents: &mut Agents, model: &str) {
   });
   agents.click(&row);
   agents.until("the field says it", |s| s.text(RUNS_ON).contains(model));
-  // The picker stays open for the effort; the field closes it, as a person does before going on with the form.
-  agents.click(RUNS_ON);
+  // The model chosen closes the picker.
   agents.until("the picker closed", |s| !s.exists(&menu));
 }
 

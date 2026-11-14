@@ -18,6 +18,7 @@ use orchester_core::{
 use super::{
   connections,
   harness::{Orchestrator, Setup},
+  runs_on::open_again,
 };
 
 /// The picker's element ids start with this.
@@ -143,6 +144,8 @@ fn orchestrator_picker_keys_move_between_areas_and_choose() {
   screen.key(("Enter", "Enter"), false);
   let opus = OrchestratorSettings::new(screen.claude, ModelId::new("opus").expect("model"), None);
   screen.until("opus published", |screen| published(screen) == Some((2, opus.clone())));
+  // The model chosen closed the picker: its efforts are chosen in it opened again.
+  open_again(&mut screen);
   screen.until("opus's efforts", |screen| screen.exists(&format!("{MENU}-effort-low")));
   // Tab to the efforts, on Default; → to Low; Enter.
   screen.key(("Tab", "Tab"), false);

@@ -76,7 +76,11 @@ fn local_hub_create_api_a_profile_runs_on_the_persons_api_account() {
   agents.until("the field says it", |s| {
     s.text(RUNS_ON) == "Claude Code · DeepSeek · deepseek-chat"
   });
-  agents.click(RUNS_ON);
+  // The model chosen closes the picker, unless the form had not read the account's connection yet: then the field
+  // closes it.
+  if agents.exists(&menu) {
+    agents.click(RUNS_ON);
+  }
   agents.until("the picker closed", |s| !s.exists(&menu));
   // Create waits for the project's connection on the account, then takes the press.
   agents.press_until("local-hub-new-create", "the profile", |s| {

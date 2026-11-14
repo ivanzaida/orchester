@@ -131,8 +131,10 @@ fn team_qa_hub_profile_form_creates_a_profile_with_its_role_instructions_and_wha
   );
   choose(&mut window, NEW, ("CodexCli", "gpt-5.5"));
   assert_eq!(window.text(NEW), "Codex · gpt-5.5");
-  // The picker stays open over the form until it is closed, as a menu does.
-  window.press(NEW);
+  // The model chosen closed the picker.
+  window.until("the picker closed", |window| {
+    window.texts(&format!("{NEW}-menu")).is_none()
+  });
   window.press("local-hub-profile-add-instructions-button");
   window.press(&format!("local-hub-profile-instructions-{rules}"));
   window.until("the instruction's tag", |window| {

@@ -14,6 +14,7 @@ use std::sync::Arc;
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::Row,
+  core::Signal,
 };
 use orchester_core::{
   connection::AgentProvider,
@@ -136,6 +137,7 @@ impl HeldFields {
       on_here: self.on_here.clone(),
       connect: self.connect.clone(),
       gate: self.gate.clone(),
+      open: self.menu.open.clone(),
     };
     if let (true, None, Some(account)) = (
       self.menu.open.get() && !standing.locked,
@@ -172,6 +174,8 @@ struct Chooser {
   on_here: OnHere,
   connect: Connect,
   gate: Option<InputGate>,
+  /// The picker shows while it holds: a model chosen closes it.
+  open: Signal<bool>,
 }
 
 impl Chooser {
@@ -210,6 +214,7 @@ impl Chooser {
             model: model.to_string(),
           });
         }
+        self.open.set(false);
       }
       Pick::Effort(effort) => (self.on_edit)(Edit::Effort(effort.map(|effort| effort.to_string()))),
     }

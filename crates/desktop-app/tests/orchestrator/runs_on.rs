@@ -139,6 +139,13 @@ pub(super) fn open(screen: &mut Orchestrator) {
   screen.until("the picker", |screen| screen.exists(MENU));
 }
 
+/// Opens the picker again from the chip, once a chosen model closed it.
+pub(super) fn open_again(screen: &mut Orchestrator) {
+  screen.until("the picker closed", |screen| !screen.exists(MENU));
+  screen.click("orchestrator-runs-on-chip");
+  screen.until("the picker again", |screen| screen.exists(MENU));
+}
+
 /// The pointer rests on `id` until its tooltip shows.
 pub(super) fn rest_on(screen: &mut Orchestrator, id: &str) {
   let frame = screen.bounds(id);
@@ -264,8 +271,10 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
   assert_frame(&mut screen);
 }
 
+/// A model chosen is published and closes the picker (the person's decision of 2026-11-14); an effort is chosen in
+/// it opened again, and keeps it open.
 #[test]
-fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
+fn orchestrator_picker_applies_a_model_and_closes_and_an_effort_at_once() {
   let mut screen = Orchestrator::new(Setup::Ready);
   open(&mut screen);
   screen.press(&part("model-1"));
@@ -274,7 +283,7 @@ fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
   screen.until("the chip", |screen| {
     screen.text("orchestrator-runs-on").ends_with("· opus")
   });
-  assert!(screen.exists(MENU), "the picker stays open");
+  open_again(&mut screen);
   screen.press(&part("effort-high"));
   let high = OrchestratorSettings::new(
     screen.claude,
@@ -282,6 +291,7 @@ fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
     Some("high".to_owned()),
   );
   screen.until("high published", |screen| published(screen) == Some((3, high.clone())));
+  assert!(screen.exists(MENU), "an effort keeps the picker open");
   // Choosing what is chosen publishes nothing.
   screen.press(&part("effort-high"));
   screen.window.pass();

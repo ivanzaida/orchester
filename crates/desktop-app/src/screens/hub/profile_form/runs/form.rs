@@ -1,8 +1,9 @@
 //! The field in a form of a profile (a new one's, and an admin's edit of a team one): what the picker hands back goes
 //! to the form's fields. A model is chosen with what lists it, so choosing one chooses the account, or the CLI, it is
 //! shown under; an item of the rail is only shown until then, and afterwards takes the model with it where it lists
-//! that model too. An account the project has no connection on yet gets one when it is looked at
-//! ([`Connect`](crate::screens::hub::profile_form::Connect)), so that its models can be listed.
+//! that model too. The picker closes once a model is chosen (the person's decision of 2026-11-14); the effort is
+//! chosen in it before, or by opening it again. An account the project has no connection on yet gets one when it is
+//! looked at ([`Connect`](crate::screens::hub::profile_form::Connect)), so that its models can be listed.
 
 use std::sync::Arc;
 
@@ -74,6 +75,7 @@ impl Runs {
       model: fields.model.clone(),
       effort: fields.effort.clone(),
       connect: form.connect.cloned(),
+      open: fields.menu.open.clone(),
     };
     if let (true, None, Some(connect), Some(account)) = (
       fields.menu.open.get() && !form.locked,
@@ -107,6 +109,8 @@ struct Chooser {
   model: Signal<String>,
   effort: Signal<String>,
   connect: Option<Connect>,
+  /// The picker shows while it holds: a model chosen closes it.
+  open: Signal<bool>,
 }
 
 impl Chooser {
@@ -132,8 +136,10 @@ impl Chooser {
         // An API account lists its models before the project has a connection on it: the choice is kept, and the
         // connection it needs is made.
         self.choose(item, &model);
-        if let (Some(on), Some(connect)) = (item.target.unconnected(), &self.connect) {
-          connect.run(on);
+        match (item.target.unconnected(), &self.connect) {
+          // The picker stays to say whether the connection was made.
+          (Some(on), Some(connect)) => connect.run(on),
+          _ => self.open.set(false),
         }
       }
       Pick::Effort(effort) => self

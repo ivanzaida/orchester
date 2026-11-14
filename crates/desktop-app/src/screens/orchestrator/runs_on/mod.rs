@@ -41,7 +41,7 @@ use orchester_workspace::{
 };
 
 use self::{
-  picking::{Chooser, Picking},
+  picking::{Chooser, Chose, Picking},
   sources::{Account, Entry, Open, Sources, cli_name},
 };
 use crate::{
@@ -112,6 +112,9 @@ pub(super) struct RunsOnPicker {
   connect: Connect,
   /// The account last chosen that the project had no connection on.
   asked: Signal<Option<Account>>,
+  /// A model was chosen and is being published: the picker closes once the version read holds it, so that it opens
+  /// again on what was chosen, and stays to say why when it was refused.
+  closes: Signal<bool>,
 }
 
 impl Component for RunsOnPicker {
@@ -150,6 +153,7 @@ impl Component for RunsOnPicker {
       publish,
       connect,
       asked: ctx.signal(None),
+      closes: ctx.signal(false),
     }
   }
 
@@ -159,7 +163,6 @@ impl Component for RunsOnPicker {
     let readings = plan_limits::account_readings(ctx);
     let uses = provider_uses(ctx, &props);
     let api = accounts::api_listed(ctx);
-    let open = props.open.get();
     let Some(setup) = props.setup.as_ref() else {
       return self.chip(ctx, &props, (None, false));
     };
@@ -173,8 +176,13 @@ impl Component for RunsOnPicker {
     let (entries, unconnected) = (sources.entries(ctx), sources.open(ctx));
     let label = label(ctx, &sources);
     let switched = switched(&sources, &props);
-    if !open {
+    self.close_once_read(&props, setup);
+    if !props.open.get() {
       self.picking.forget();
+      // Closed by hand while a model was being published: nothing waits to close it any more.
+      if self.closes.get_untracked() {
+        self.closes.set(false);
+      }
       return self.chip(ctx, &props, (Some(&label), switched));
     }
     let panel = if entries.is_empty() && unconnected.is_empty() {
@@ -212,7 +220,7 @@ impl RunsOnPicker {
       publish: self.publish.clone(),
       root: props.root.clone(),
     };
-    let on_pick = self.on_pick(chooser, (entries, open), &props.root);
+    let on_pick = self.on_pick(chooser, (entries, open), props);
     let close = props.open.clone();
     let connecting = self.connecting();
     let connections = connections::connections(
@@ -233,13 +241,28 @@ impl RunsOnPicker {
     .element(ctx)
   }
 
-  /// What a pick does: a connection, a model or an effort goes to `chooser`; an account the project has no
-  /// connection on gets one, and the Orchestrator runs on it.
+  /// Closes the picker a model was chosen in, once `setup`, as read again, holds the choice; a refused choice keeps it
+  /// open, where its reason shows.
+  fn close_once_read(&self, props: &RunsOnProps, setup: &OrchestratorSetup) {
+    if !self.closes.get() {
+      return;
+    }
+    let state = self.publish.state().get();
+    if state.error.is_some() {
+      self.closes.set(false);
+    } else if !state.is_pending() && self.picking.read(setup) {
+      self.closes.set(false);
+      props.open.set(false);
+    }
+  }
+
+  /// What a pick does: a connection, a model or an effort goes to `chooser`, and a model closes the picker; an account
+  /// the project has no connection on gets one, and the Orchestrator runs on it.
   fn on_pick(
     &self,
     chooser: Chooser,
     (entries, open): (&[Entry], &[Open]),
-    root: &std::path::Path,
+    props: &RunsOnProps,
   ) -> impl Fn(Pick) + Send + Sync + 'static + use<> {
     let ids: Vec<_> = entries.iter().map(|entry| entry.id).collect();
     let accounts: Vec<(String, Account)> = open
@@ -247,7 +270,8 @@ impl RunsOnPicker {
       .filter(|account| account.choosable)
       .map(|account| (account.id(), account.account))
       .collect();
-    let (connect, asked, root) = (self.connect.clone(), self.asked.clone(), root.to_path_buf());
+    let (connect, asked, root) = (self.connect.clone(), self.asked.clone(), props.root.clone());
+    let (shown, closes) = (props.open.clone(), self.closes.clone());
     move |pick: Pick| match pick {
       Pick::Connection(id) => {
         if let Some(connection) = ids.iter().find(|connection| connection.to_string() == *id) {
@@ -258,8 +282,15 @@ impl RunsOnPicker {
         }
       }
       Pick::Model { connection, model } => {
-        if let Some(connection) = ids.iter().find(|candidate| candidate.to_string() == *connection) {
-          chooser.model(*connection, &model);
+        let Some(connection) = ids.iter().find(|candidate| candidate.to_string() == *connection) else {
+          return;
+        };
+        // A model chosen closes the picker (the person's decision of 2026-11-14): at once when it is what runs
+        // already, else once it is published.
+        match chooser.model(*connection, &model) {
+          Chose::Publishing => closes.set(true),
+          Chose::Same => shown.set(false),
+          Chose::Nothing => {}
         }
       }
       Pick::Effort(effort) => chooser.effort(effort.as_deref()),
