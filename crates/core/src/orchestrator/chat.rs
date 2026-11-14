@@ -537,6 +537,16 @@ pub struct WaitTurn {
   pub message: ChatMessageId,
   pub state: TurnState,
   pub ended: Option<Timestamp>,
+  /// The turn that took this event with it, the one an older event of the conversation started
+  /// ([`super::instructions::together_prompt`]); `None` for the event that started its turn.
+  pub taken_with: Option<ChatMessageId>,
+}
+
+impl WaitTurn {
+  /// The turn that answers this event: the one that took it, or its own.
+  pub fn answered_by(&self) -> ChatMessageId {
+    self.taken_with.unwrap_or(self.message)
+  }
 }
 
 impl EntryKind {
@@ -557,7 +567,7 @@ impl EntryKind {
       }
       | Self::Standing {
         turn: Some(started), ..
-      } => Some((started.message, &started.state)),
+      } => Some((started.answered_by(), &started.state)),
       _ => None,
     }
   }

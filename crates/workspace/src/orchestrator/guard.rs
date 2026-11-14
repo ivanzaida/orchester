@@ -158,7 +158,7 @@ pub(super) async fn resume_as(scope: &ChatScope, arguments: &JsonObject, drives:
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &named)?;
     let present = db.worktree_removal(run.id())?.is_none() && run_work_present(&db, &root, &run);
-    let started_by = thinking_wait(&db.chat_entries(chat)?);
+    let started_by = thinking_waits(&db.chat_entries(chat)?);
     let resume = ChatResume::of(run.status(), db.runner_failure(run.id())?, present);
     let continuing = match resume {
       ChatResume::Interrupted(cause) => Some(continuing_of(&db, run.id(), cause)?),
@@ -193,14 +193,14 @@ pub(super) fn continuing_of(db: &ProjectDb, run: RunId, cause: InterruptCause) -
 }
 
 /// What a resume reads of its run: its id and number, what the chat may do with it, what a turn nobody asked for does
-/// about it (`None` when the chat may not continue it), and the wait whose turn is the one under way in the chat's
+/// about it (`None` when the chat may not continue it), and the waits whose turn is the one under way in the chat's
 /// conversation.
 struct Read {
   run: RunId,
   number: u32,
   resume: ChatResume,
   continuing: Option<Continuing>,
-  started_by: Option<AgentWait>,
+  started_by: Vec<AgentWait>,
 }
 
 impl Read {
@@ -215,7 +215,7 @@ impl Read {
       ChatResume::Paused | ChatResume::Other => Ok(Resume::Now(self.run)),
       ChatResume::Interrupted(_) if !drives => Err(self.refused("person_only", "orchestrator.tools.resumePersonOnly")),
       ChatResume::Interrupted(_) if !on_its_own => Ok(Resume::Now(self.run)),
-      // A turn nobody asked for continues only the run whose interruption started it.
+      // A turn nobody asked for continues only a run whose interruption is among the events that started it.
       ChatResume::Interrupted(_) if !self.started_by_its_interruption() => {
         Err(self.refused("person_only", "orchestrator.tools.resumePersonOnly"))
       }
@@ -242,12 +242,12 @@ impl Read {
     }
   }
 
-  /// Whether the turn under way is the one this run's interruption started by itself.
+  /// Whether this run's interruption is among the events that started the turn under way.
   fn started_by_its_interruption(&self) -> bool {
     self
       .started_by
-      .as_ref()
-      .is_some_and(|wait| wait.run == self.run && wait.kind == WaitKind::Ended(RunEnd::Interrupted))
+      .iter()
+      .any(|wait| wait.run == self.run && wait.kind == WaitKind::Ended(RunEnd::Interrupted))
   }
 
   fn refused(&self, code: &str, key: &'static str) -> ToolError {
@@ -265,10 +265,14 @@ const fn stopped_key(stop: PersonsStop) -> &'static str {
   }
 }
 
-/// The wait among a conversation's `entries` whose turn thinks now: the turn under way, when a wait started it.
-pub(super) fn thinking_wait(entries: &[ChatEntry]) -> Option<AgentWait> {
-  entries.iter().rev().find_map(|entry| match &entry.kind {
-    EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some(wait.clone()),
-    _ => None,
-  })
+/// The waits among a conversation's `entries` whose turn thinks now, oldest first: the events of the turn under way,
+/// when waits started it (the one that started it and those it took with it).
+pub(super) fn thinking_waits(entries: &[ChatEntry]) -> Vec<AgentWait> {
+  entries
+    .iter()
+    .filter_map(|entry| match &entry.kind {
+      EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some(wait.clone()),
+      _ => None,
+    })
+    .collect()
 }

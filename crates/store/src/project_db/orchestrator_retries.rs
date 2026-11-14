@@ -12,7 +12,7 @@ use rusqlite::{OptionalExtension, params};
 use super::{
   ProjectDb,
   orchestrator::wait_of,
-  orchestrator_waits::{KeptWait, NO_TURN_UNDER_WAY},
+  orchestrator_waits::{KeptWait, LEAD_THINKS, NO_TURN_UNDER_WAY},
 };
 use crate::{
   StoreError,
@@ -72,7 +72,28 @@ impl ProjectDb {
   /// Gives wait `seq` of `chat`, whose turn failed, its next turn, thinking, under `message`, and keeps the failed one
   /// among its earlier tries; under the conditions a first turn starts under ([`Self::start_wait_turn`]). The failed
   /// turn is no turn any more, so the todo list it kept goes with it. Whether it was given.
-  pub fn retry_wait_turn(&mut self, (chat, seq): (ChatId, i64), message: ChatMessageId) -> Result<bool, StoreError> {
+  pub fn retry_wait_turn(&mut self, entry: (ChatId, i64), message: ChatMessageId) -> Result<bool, StoreError> {
+    self.retry_as(entry, message, None)
+  }
+
+  /// [`Self::retry_wait_turn`] for a wait the turn `lead`, which thinks now, takes with it
+  /// ([`Self::join_wait_turn`]): its next turn is that one, under `message`.
+  pub fn rejoin_wait_turn(
+    &mut self,
+    entry: (ChatId, i64),
+    (lead, message): (ChatMessageId, ChatMessageId),
+  ) -> Result<bool, StoreError> {
+    self.retry_as(entry, message, Some(lead))
+  }
+
+  /// Gives wait `seq` of `chat`, whose turn failed, its next turn under `message`: its own, or the turn `lead` that
+  /// takes it.
+  fn retry_as(
+    &mut self,
+    (chat, seq): (ChatId, i64),
+    message: ChatMessageId,
+    lead: Option<ChatMessageId>,
+  ) -> Result<bool, StoreError> {
     let transaction = self.connection.transaction()?;
     let failed = transaction
       .query_row(
@@ -96,12 +117,20 @@ impl ProjectDb {
     let tries = serde_json::to_string(&tries).map_err(|error| corrupt("chat wait tries", error))?;
     // The todo list names its turn by the message the entry is about to lose, and holds that message in place.
     transaction.execute("DELETE FROM orchestrator_todos WHERE message_id = ?1", [failed_turn])?;
+    let free = if lead.is_some() { LEAD_THINKS } else { NO_TURN_UNDER_WAY };
     let changed = transaction.execute(
       &format!(
-        "UPDATE orchestrator_entries SET message_id = ?3, turn = 'thinking', failure = NULL, ended_at = NULL, tries = ?4
-         WHERE seq = ?2 AND chat_id = ?1 AND kind = 'wait' AND turn = 'failed' AND {NO_TURN_UNDER_WAY}"
+        "UPDATE orchestrator_entries
+         SET message_id = ?3, turn = 'thinking', failure = NULL, ended_at = NULL, tries = ?5, taken_with = ?4
+         WHERE seq = ?2 AND chat_id = ?1 AND kind = 'wait' AND turn = 'failed' AND {free}"
       ),
-      params![chat.to_string(), seq, message.to_string(), tries],
+      params![
+        chat.to_string(),
+        seq,
+        message.to_string(),
+        lead.map(|lead| lead.to_string()),
+        tries
+      ],
     )?;
     // A turn that was not given leaves the failed one as it was, its todo list too: the transaction is dropped.
     if changed == 1 {

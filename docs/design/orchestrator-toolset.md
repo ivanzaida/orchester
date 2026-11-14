@@ -100,8 +100,9 @@ drive*, and says what changed.**
      `reason`, kept with what was asked as its answer (`ChatAction::tool_answer`). The conversation shows the request in
      the states of `Orchestrator WIP` `mPw5l` (`ICzi3`): being read, allowed or denied by the Orchestrator with its
      answer nested, waiting for the person with the Orchestrator's words and the Conversation tab's own card under
-     them, and answered by the person. Not built: several requests that arrive together are not read in one turn;
-     each gets its own, one at a time per conversation.
+     them, and answered by the person. Requests that wait together in one conversation are read in one turn, with
+     the other events that wait there, five at most (2026-11-14, `docs/plan/orchestrator-autonomy/OA-07-…`): the
+     turn decides any request among the events that started it.
      In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.

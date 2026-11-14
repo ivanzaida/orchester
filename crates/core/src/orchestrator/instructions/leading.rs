@@ -9,13 +9,13 @@ use crate::orchestrator::{
 };
 
 /// The judgement every leading turn is asked for.
-const LEADING: &str = "This conversation leads this task to the end, and nobody is at the computer: you are not   asked to report, you are asked to move it.\n\
+const LEADING: &str = "This conversation leads this task to the end, and nobody is at the computer: you are not \n  asked to report, you are asked to move it.\n\
   - Read where the target stands first (get_standing), then act on this event.\n\
-  - Decide what is the task's to decide. A question the brief, the criteria, the project's docs and AGENTS.md do not   answer is decided in this order: what the design shows; what the app already does for the same thing; what   surprises the person least; the smaller and more easily reverted change.\n\
-  - Park what is not yours with park_task, and go on with the rest: anything irreversible or outward (a push, a   release, deleting work, another system, money), anything a tool refuses as the person's, a ceiling that was   reached, a tool that did not answer after another try. Where the order of this conversation asks to be asked   first, park instead of deciding.\n\
-  - Accept a step as it is only when what it could not check cannot be checked at all; a tool that did not answer is   tried again, and then the task is parked. Say which step and what was left unverified.\n\
-  - When tasks of the target would change the same files, do not run them side by side: make one wait for the other   (update_task blocked_by) where the project keeps that, or start them one after the other.\n\
-  - Never wait in words: do not end the turn by telling the person to press something your tools can do, nor by   asking a question nobody is there to answer.\n\
+  - Decide what is the task's to decide. A question the brief, the criteria, the project's docs and AGENTS.md do not \n  answer is decided in this order: what the design shows; what the app already does for the same thing; what \n  surprises the person least; the smaller and more easily reverted change.\n\
+  - Park what is not yours with park_task, and go on with the rest: anything irreversible or outward (a push, a \n  release, deleting work, another system, money), anything a tool refuses as the person's, a ceiling that was \n  reached, a tool that did not answer after another try. Where the order of this conversation asks to be asked \n  first, park instead of deciding.\n\
+  - Accept a step as it is only when what it could not check cannot be checked at all; a tool that did not answer is \n  tried again, and then the task is parked. Say which step and what was left unverified.\n\
+  - When tasks of the target would change the same files, do not run them side by side: make one wait for the other \n  (update_task blocked_by) where the project keeps that, or start them one after the other.\n\
+  - Never wait in words: do not end the turn by telling the person to press something your tools can do, nor by \n  asking a question nobody is there to answer.\n\
   - Give your reason, in one sentence, with every action that is a judgement.";
 
 /// What the turn of `wait`, an event of a task led to the end, is told beside its prompt. `stall_step`: for a run

@@ -1,12 +1,13 @@
 //! OA-18: what a turn of a subscription that leads to the end is told beside its event's prompt, by the kind of the
 //! event and, for a stall, by its period; and that an event's own prompt says none of it.
-//! `cargo test -p orchester-core --test orchestrator_instructions leading`.
+//! OA-07: what a turn that takes several events is told.
+//! `cargo test -p orchester-core --test orchestrator_instructions leading together`.
 
 use orchester_core::{
   id::RunId,
   orchestrator::{
     AgentWait, RunEnd, TaskEvent, TaskEventKind, WaitKind,
-    instructions::{leading_note, wait_prompt},
+    instructions::{TOGETHER_MOST, leading_note, together_prompt, wait_prompt},
   },
   time::Timestamp,
 };
@@ -102,4 +103,22 @@ fn leading_note_is_not_part_of_an_events_own_prompt() {
     let prompt = wait_prompt(&wait(kind));
     assert!(!prompt.contains("leads this task to the end"), "{prompt}");
   }
+}
+
+#[test]
+fn together_prompt_tells_each_event_in_order_and_one_event_as_it_is() {
+  let question = wait_prompt(&wait(WaitKind::Question));
+  assert_eq!(together_prompt(std::slice::from_ref(&question)), question);
+  let told = together_prompt(&[question.clone(), wait_prompt(&wait(WaitKind::Plan))]);
+  assert!(
+    told.starts_with("[Orchester] 2 events wait in this conversation"),
+    "{told}"
+  );
+  let (first, second) = (
+    told.find("Event 1 of 2:").expect("the first"),
+    told.find("Event 2 of 2:").expect("the second"),
+  );
+  assert!(first < second && told[first..second].contains(&question), "{told}");
+  assert!(told.contains("stays open"), "{told}");
+  assert_eq!(TOGETHER_MOST, 5);
 }

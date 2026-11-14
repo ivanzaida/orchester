@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
-  orchestrator::{AgentWait, Chat},
+  orchestrator::{AgentWait, Chat, instructions::together_prompt},
   time::Timestamp,
 };
 use rusqlite::{OptionalExtension, params};
@@ -23,6 +23,10 @@ pub(super) const NO_TURN_UNDER_WAY: &str = "NOT EXISTS (SELECT 1 FROM orchestrat
   AND (turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken')
     OR (kind = 'event' AND json_extract(body, '$.kind') = 'compaction'
       AND json_extract(body, '$.state.state') = 'running')))";
+
+/// The turn `?4` of conversation `?1` thinks: a wait may be given to it ([`ProjectDb::join_wait_turn`]).
+pub(super) const LEAD_THINKS: &str =
+  "EXISTS (SELECT 1 FROM orchestrator_entries WHERE message_id = ?4 AND chat_id = ?1 AND turn = 'thinking')";
 
 /// A wait kept without a turn, which starts one by itself, and the conversation it was kept in.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -131,16 +135,56 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
-  /// Takes the turn under `message` back from the wait or daily report it was given to, which nothing answered and
-  /// nothing failed: the entry has no turn again and starts one later, as if it had not been given. Whether it was
-  /// taken back; not once the turn ended.
-  pub fn release_wait_turn(&mut self, message: ChatMessageId) -> Result<bool, StoreError> {
+  /// Gives wait `seq` of `chat`, which has no turn, to the turn `lead` that an older event of the conversation started
+  /// and that thinks now (`docs/plan/orchestrator-autonomy/OA-07-…`): it thinks with that turn, under `message`, a
+  /// name of its own, and ends as that turn ends. Whether it was given.
+  pub fn join_wait_turn(
+    &mut self,
+    (chat, seq): (ChatId, i64),
+    (lead, message): (ChatMessageId, ChatMessageId),
+  ) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
-      "UPDATE orchestrator_entries SET message_id = NULL, turn = NULL
-       WHERE message_id = ?1 AND kind IN ('wait', 'report') AND turn = 'thinking'",
-      [message.to_string()],
+      &format!(
+        "UPDATE orchestrator_entries SET message_id = ?3, turn = 'thinking', taken_with = ?4
+         WHERE seq = ?2 AND chat_id = ?1 AND kind = 'wait' AND message_id IS NULL AND {LEAD_THINKS}"
+      ),
+      params![chat.to_string(), seq, message.to_string(), lead.to_string()],
     )?;
     Ok(changed == 1)
+  }
+
+  /// `prompt`, the prompt of the turn `message` that a wait of `chat` started, followed by the prompts of the events
+  /// that turn took with it, oldest first ([`together_prompt`]); `prompt` alone when it took none.
+  pub(super) fn taken_together(
+    &self,
+    (chat, message): (ChatId, ChatMessageId),
+    prompt: String,
+  ) -> Result<String, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT seq, body FROM orchestrator_entries WHERE taken_with = ?1 AND kind = 'wait' ORDER BY seq")?;
+    let taken = statement
+      .query_map([message.to_string()], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    let mut prompts = vec![prompt];
+    for (seq, body) in taken {
+      prompts.push(self.retried(seq, self.wait_turn_prompt(chat, &wait_of(&body)?)?)?);
+    }
+    Ok(together_prompt(&prompts))
+  }
+
+  /// Takes the turn under `message` back from the wait or daily report it was given to, and from the waits it took
+  /// with it, which nothing answered and nothing failed: the entries have no turn again and start one later, as if it
+  /// had not been given. Whether it was taken back; not once the turn ended.
+  pub fn release_wait_turn(&mut self, message: ChatMessageId) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE orchestrator_entries SET message_id = NULL, turn = NULL, taken_with = NULL
+       WHERE (message_id = ?1 OR taken_with = ?1) AND kind IN ('wait', 'report') AND turn = 'thinking'",
+      [message.to_string()],
+    )?;
+    Ok(changed >= 1)
   }
 
   /// The conversation whose last entry is the newest, of those History lists (not archived); `None` while the project

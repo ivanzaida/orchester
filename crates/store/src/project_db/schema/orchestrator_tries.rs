@@ -13,3 +13,12 @@ pub(super) const LEAD_MIGRATION: &str = r"
 -- The ceilings of a subscription that leads its target to the end, as JSON; NULL for one that follows.
 ALTER TABLE orchestrator_subscriptions ADD COLUMN lead TEXT;
 ";
+
+/// Several events that wait in one conversation are taken in one turn (`docs/plan/orchestrator-autonomy/OA-07-…`).
+pub(super) const TOGETHER_MIGRATION: &str = r"
+-- The turn that took this entry's event with it: the message of an older entry of the same conversation, whose turn
+-- answers both. The entry thinks and ends as that turn does, under a message of its own. NULL for an entry that
+-- started its own turn, or none.
+ALTER TABLE orchestrator_entries ADD COLUMN taken_with TEXT;
+CREATE INDEX orchestrator_entries_taken_with ON orchestrator_entries (taken_with) WHERE taken_with IS NOT NULL;
+";

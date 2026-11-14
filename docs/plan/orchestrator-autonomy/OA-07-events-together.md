@@ -1,6 +1,6 @@
 # OA-07 · Events that wait in one conversation are taken in one turn
 
-- **Status:** todo
+- **Status:** done (2026-11-14)
 - **Kind:** core + workspace
 - **Depends on:** OA-01
 - **Branch:** —
@@ -42,3 +42,28 @@ design lists "several requests that arrive together are not read in one turn" as
 - Workspace tests for the taking, the cap, the turn-scoped rules over several events and a partly settled turn
   (`--test orchestrator_waits together`).
 - A design frame only if the grouped rows differ from today's; then its verification. `tools/check.ps1` passes.
+
+## As built (2026-11-14)
+
+- The turn the oldest due wait of a conversation starts takes the next due waits of that conversation with it, five
+  events at most (`orchester_core::orchestrator::instructions::TOGETHER_MOST`, `orchestrator::turns::take_with`). Each
+  taken entry thinks under a message of its own and names the turn that took it (`orchestrator_entries.taken_with`,
+  schema 177); ending, releasing or interrupting that turn does the same to every entry it took, so a failed turn
+  leaves each event failed with its own try, and each is tried again (together again when they are due together).
+- The prompt tells every event as it is told alone, oldest first, under one opening line
+  (`instructions::together_prompt`), each with its own note of an earlier failed turn.
+- The turn-scoped rules read the turn's events: `decide_approval` takes any request among them, `resume_run` continues
+  a run whose interruption is among them, and a start after a merge is open when a success among them was merged in
+  the turn. A task created in such a turn follows the subscription of the oldest event.
+- A success whose turn merges its run is taken only while no merge of another conversation waits before it, so merges
+  still go in the order the runs ended; the successes one turn took merge one after the other in it.
+- A daily report, the summary of a watching that ended and an event of a whole target (*work can start*, *stuck*,
+  OA-13 and OA-15) keep turns of their own.
+- The conversation shows the events of one turn as their lines, in order, with the one answer under the last of them
+  (`screens/orchestrator/turns.rs`); the rows are today's rows, so no frame was needed.
+- A conversation forked from one with such a turn shows each copied event with its own ended turn.
+
+Tests: `orchester-workspace --test orchestrator_together together` (the taking, the cap, a failed turn, a turn nobody
+took and one a runner did not hold, successes of one conversation, a merge another conversation waits for),
+`orchester-core --test orchestrator_instructions together`, `orchester-app --test mcp_domain
+orchestrator_approval_turn` (two requests in one turn).

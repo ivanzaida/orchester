@@ -6,13 +6,16 @@
 //! that, or after a failure only the person can lift, no turn starts by itself and the wait is the person's, where it
 //! shows outside the chat. A turn the person stopped did not fail and is not tried again. While the project's daily
 //! budget is used or the Orchestrator's account is at its plan limit ([`super::held`]) nothing starts by itself: the
-//! entries wait for the reset.
+//! entries wait for the reset. The turn a wait starts takes the next waits of its conversation that are due with it,
+//! [`TOGETHER_MOST`] events at most (`docs/plan/orchestrator-autonomy/OA-07-events-together.md`): each thinks and ends
+//! as that turn does, so a turn that failed leaves each of them to be tried again. A daily report, the summary of a
+//! watching that ended and an event of a whole target keep turns of their own.
 
 use std::{collections::HashSet, path::Path};
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
-  orchestrator::{AgentWait, Merging, NextTry},
+  orchestrator::{AgentWait, Merging, NextTry, instructions::TOGETHER_MOST},
   time::Timestamp,
 };
 use orchester_store::{FailedWait, ProjectDb, StoreError};
@@ -27,6 +30,8 @@ struct NextTurn {
   seq: i64,
   merges: bool,
   turn: Turn,
+  /// A wait: the turn of an older wait of its conversation may take it, and its own turn takes the next ones.
+  joins: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -129,6 +134,7 @@ fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>, now: Timestamp) -> Result
       seq: kept.seq,
       merges: merges(&kept.wait),
       turn: Turn::First,
+      joins: true,
     });
   let again = db
     .automatic_waits_failed()?
@@ -146,6 +152,7 @@ fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>, now: Timestamp) -> Result
         seq: failed.kept.seq,
         merges: merges(&failed.kept.wait),
         turn,
+        joins: true,
       })
     });
   let reports = db.automatic_reports_without_turn()?.into_iter().map(|kept| NextTurn {
@@ -153,6 +160,7 @@ fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>, now: Timestamp) -> Result
     seq: kept.seq,
     merges: false,
     turn: Turn::First,
+    joins: false,
   });
   let mut next: Vec<NextTurn> = first.chain(again).chain(reports).collect();
   next.sort_by_key(|turn| turn.seq);
@@ -165,27 +173,64 @@ fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>, now: Timestamp) -> Result
 /// tried again, or thinks.
 fn start(db: &mut ProjectDb, next: &[NextTurn]) -> Result<Option<WaitTurn>, StoreError> {
   let mut merging_before = db.waits_thinking()?.iter().any(|kept| merges(&kept.wait));
-  for next in next {
-    if next.merges && merging_before {
+  for (index, lead) in next.iter().enumerate() {
+    if lead.merges && merging_before {
       continue;
     }
     let message = ChatMessageId::generate();
     // Refused while another turn of its conversation thinks: the entry keeps no new turn and starts once that one
     // ended.
-    let started = match next.turn {
-      Turn::First => db.start_wait_turn((next.chat, next.seq), message)?,
-      Turn::Again => db.retry_wait_turn((next.chat, next.seq), message)?,
+    let started = match lead.turn {
+      Turn::First => db.start_wait_turn((lead.chat, lead.seq), message)?,
+      Turn::Again => db.retry_wait_turn((lead.chat, lead.seq), message)?,
       Turn::Later => false,
     };
     if started {
+      if lead.joins {
+        take_with(db, (lead, message), &next[index + 1..], merging_before)?;
+      }
       return Ok(Some(WaitTurn {
-        chat: next.chat,
+        chat: lead.chat,
         message,
       }));
     }
-    merging_before |= next.merges;
+    merging_before |= lead.merges;
   }
   Ok(None)
+}
+
+/// Gives the turn `message`, which the wait `lead` started, the waits of its conversation that are due after it among
+/// `rest`, oldest first, until it holds [`TOGETHER_MOST`] events: each thinks and ends with that turn. A success whose
+/// turn merges its run is taken only while no merge of another turn waits before it (`merging_before`), as it would
+/// start; the successes one turn takes merge one after the other in it.
+fn take_with(
+  db: &mut ProjectDb,
+  (lead, message): (&NextTurn, ChatMessageId),
+  rest: &[NextTurn],
+  mut merging_before: bool,
+) -> Result<(), StoreError> {
+  let mut taken = 1;
+  for next in rest {
+    if taken == TOGETHER_MOST {
+      break;
+    }
+    let entry = (next.chat, next.seq);
+    let own = ChatMessageId::generate();
+    let joined = next.joins
+      && next.chat == lead.chat
+      && !(next.merges && merging_before)
+      && match next.turn {
+        Turn::First => db.join_wait_turn(entry, (message, own))?,
+        Turn::Again => db.rejoin_wait_turn(entry, (message, own))?,
+        Turn::Later => false,
+      };
+    if joined {
+      taken += 1;
+    } else {
+      merging_before |= next.merges;
+    }
+  }
+  Ok(())
 }
 
 /// Whether the turn of `wait` merges its run on its own.

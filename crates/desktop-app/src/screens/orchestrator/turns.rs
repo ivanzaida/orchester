@@ -5,7 +5,9 @@
 //! message the answer under way took (*Send now*) goes on with that answer: what the answer said after it shows under
 //! it, and so does how the answer ended. The turn that carries out an approved plan has no message of the person's to
 //! show: it goes on under the plan it carries out (`12c` `j7Oa9v`). The messages that wait for the answer to end,
-//! queued or handed to it, show after every turn, in order.
+//! queued or handed to it, show after every turn, in order. The events one turn took together
+//! (`docs/plan/orchestrator-autonomy/OA-07-events-together.md`) show as their lines, in order, with the one answer
+//! under the last of them.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -135,6 +137,9 @@ pub(super) struct Turn {
   pub(super) todo: Option<TodoList>,
   /// How the person's message's turn went: it planned only, or it acted.
   pub(super) mode: TurnMode,
+  /// The message a wait's entry holds its turn under: its own even when another event's turn took it, by which the
+  /// events of one turn are found.
+  own: Option<ChatMessageId>,
 }
 
 impl Turn {
@@ -172,6 +177,7 @@ impl Turn {
       waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
+      own: None,
     }
   }
 
@@ -200,7 +206,7 @@ impl Turn {
   /// The row of `entry`, which opens with a wait or a report (the caller sets which), and the turn it started, if any.
   fn opened(entry: &ChatEntry, turn: Option<&WaitTurn>) -> Self {
     Self {
-      message: turn.map(|turn| turn.message),
+      message: turn.map(WaitTurn::answered_by),
       sending: None,
       text: Arc::from(""),
       attachments: Arc::from([]),
@@ -225,6 +231,7 @@ impl Turn {
       waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
+      own: turn.map(|turn| turn.message),
     }
   }
 
@@ -324,6 +331,7 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
     }
   }
   join_answers(&mut turns);
+  show_together(&mut turns);
   // A turn's list is the one its agent keeps for the message, wait or report that started it.
   for turn in &mut turns {
     turn.todo = turn
@@ -476,6 +484,7 @@ fn person(
     waits_on: Vec::new(),
     todo: None,
     mode: TurnMode::Acts,
+    own: None,
   }
 }
 
@@ -497,6 +506,25 @@ fn join_answers(turns: &mut [Turn]) {
         answering = Some((turns[index].state.clone(), turns[index].ended));
       }
       Arrival::Own | Arrival::Waiting => {}
+    }
+  }
+}
+
+/// The events one turn took together show as one: the answer is under the last of them, which every part went to, and
+/// the ones before it are their lines alone, as an event that started no turn is.
+fn show_together(turns: &mut [Turn]) {
+  for index in 0..turns.len() {
+    let Some(message) = turns[index].message.filter(|_| turns[index].own.is_some()) else {
+      continue;
+    };
+    let last = turns
+      .iter()
+      .rposition(|turn| turn.own.is_some() && turn.message == Some(message));
+    if last.is_some_and(|last| last != index) {
+      let row = &mut turns[index];
+      row.message = None;
+      row.state = None;
+      row.ended = None;
     }
   }
 }

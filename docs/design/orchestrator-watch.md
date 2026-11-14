@@ -152,7 +152,8 @@ From `MvWyD` (frames 01–06, unchanged):
    - a run without progress for N minutes;
    - events from while Orchester was closed.
 
-   Events that come during a turn wait and are taken together in the next one. There are no timers.
+   Events that come during a turn wait and are taken together in the next one, five at most, oldest first (built
+   2026-11-14, `docs/plan/orchestrator-autonomy/OA-07-events-together.md`). There are no timers.
 6. **Waits on.** When a run waits on another task, that task's merge into the run's base branch is an event of the
    waiting task. Its turn brings the branch in and continues the run.
 7. **Permissions** are unchanged: an order can only narrow the person-only switches. While *Let the Orchestrator
