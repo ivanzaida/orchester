@@ -200,6 +200,28 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 7. **Then:** OA-17 and OA-20 (the module's own branch, its acceptance and delivery) and OA-08 (awake). The visible
    tasks follow their frames whenever those arrive.
 
+## QA round (2026-11-14, head `5c64909fd`)
+
+In a QA copy (`tools/qa-app.ps1 -Name autonomy -Scenario orchestrator-watch -FakeAgents`), through its MCP server:
+
+- `get_standing`, `get_decisions` and `get_daily_report` answer in the running app; the seeded project's database
+  migrated to schema 176.
+- A conversation leading the module *Webhooks v2* to the end reads `can_start` with its three draft tasks; after a
+  change of the project the follower kept *Work can start in Webhooks v2: KON-10, KON-11, KON-12* in the
+  conversation, once. With the three tasks parked it kept *Webhooks v2 is stuck: 3 left for you*, once;
+  `get_standing` gave each task as `parked` with what the person is to do, `get_decisions` the parking's decision,
+  and the day's report its `led` section. Both lines show in the window.
+- Not reached there: the person's `/watch-module` with *lead to the end* typed in the composer (the window tools did
+  not open the command menu; the leading subscription and the parkings were written into the QA copy's own
+  database), a turn of the Orchestrator (the switch stayed off: its CLI there is a real one), and `park_task` called
+  by an agent. These are covered by the automated tests only.
+- Found: the follower runs when something of the project changes, so a leading subscription raises its first event
+  with the next change, not by a clock. A subscription the person makes in the window is such a change.
+
+In the installed app (`E:\Orchester`, the debug build of this head): the real project opened, its database migrated
+from schema 173 to 176, the runner attached, nothing was kept or started, and the log has no error of this work. Its
+Orchestrator is not signed in, so no turn could be seen there.
+
 ## Edge cases and what settles them
 
 | Case | Today | Settled by |
