@@ -241,7 +241,7 @@
         "then": "Then {{what}}",
         "done": "{{profile}} runs here once nothing is missing",
         "use": "Asked once per profile · kept on this computer",
-        "useAll": "{{count}} {{cli}} profiles wait for an account · kept on this computer",
+        "useAll": "{{count}} {{cli}} profiles wait for an account",
         "add": "Opens Settings › Accounts",
         "signIn": "Opens Settings › Accounts",
         "openArchived": "In Archived · an admin restores it there"

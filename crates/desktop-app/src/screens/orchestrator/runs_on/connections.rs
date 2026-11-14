@@ -4,11 +4,11 @@
 //!
 //! An account the project has no connection on yet stands on the rail as a connected one does, with no models until
 //! choosing it made its connection. A Claude Code or Codex sign-in is named by its account; the line under its name
-//! says *CLI · plan*, and its plan's 5-hour use; at its limit the caption says until when, in `warning`, with *limit
-//! reached* under it. An API provider says its CLI and host, the tokens its agents spent today and *no plan limit* (its
-//! key's secret is that line's tooltip), takes a model and an effort of the person's own, and says where its data goes.
-//! A sign-in to another connection or account than the conversation's session lives on says in its tooltip that
-//! choosing it starts a new session.
+//! says who is signed in (*CLI · plan* where the CLI does not say), and its plan's 5-hour use; at its limit the caption
+//! says until when, in `warning`, with *limit reached* under it. An API provider says its CLI and host, the tokens its
+//! agents spent today and *no plan limit* (its key's secret is that line's tooltip), takes a model and an effort of the
+//! person's own, and says where its data goes. A sign-in to another connection or account than the conversation's
+//! session lives on says in its tooltip that choosing it starts a new session.
 
 use std::sync::Arc;
 
@@ -174,12 +174,15 @@ fn sign_in(ctx: &mut Ctx, (who, provider): (SignedIn<'_>, AgentProvider), base: 
     .and_then(|check| check.known_identity())
     .and_then(|identity| identity.plan.as_deref());
   let until = who.reading.and_then(|reading| reading.resets_at(now));
-  let caption = match (reached, until, plan) {
-    (true, Some(until), _) => ctx.t_args(
+  // An account is who is signed in: its line says the email where the CLI reports it, as a profile's picker does.
+  let email = who.account.and_then(|account| account.email());
+  let caption = match (reached, until, email, plan) {
+    (true, Some(until), ..) => ctx.t_args(
       "orchestrator.runsOn.limitUntil",
       [("cli", &*cli), ("time", &display::clock(until))],
     ),
-    (_, _, Some(plan)) => ctx.t_args("orchestrator.runsOn.who", [("cli", &*cli), ("plan", &plan_name(plan))]),
+    (_, _, Some(email), _) => email.into(),
+    (_, _, None, Some(plan)) => ctx.t_args("orchestrator.runsOn.who", [("cli", &*cli), ("plan", &plan_name(plan))]),
     _ => ctx.t_args("orchestrator.runsOn.whoNoPlan", [("cli", &*cli)]),
   };
   let used = who.reading.and_then(|reading| five_hour_use(reading, now));

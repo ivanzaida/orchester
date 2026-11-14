@@ -123,7 +123,7 @@
     "runsOn": {
       "label": "Runs on",
       "choose": "Choose an account",
-      "sub": "The account is this computer's choice and changes at once · a model or effort waits for Save",
+      "sub": "The account changes at once · a model or effort waits for Save",
       "value": "{{cli}} · {{name}} · {{model}}",
       "valueEffort": "{{cli}} · {{name}} · {{model}} · {{effort}}",
       "unchosen": "Choose an account · {{model}}",

@@ -255,7 +255,7 @@ fn local_hub_account_use_for_all_runs_every_profile_of_the_cli_that_waits_on_the
   );
   assert_eq!(
     agents.text("team-hub-actions-hint"),
-    "2 Claude Code profiles wait for an account · kept on this computer"
+    "2 Claude Code profiles wait for an account"
   );
 
   agents.click("local-hub-fix-use-all");

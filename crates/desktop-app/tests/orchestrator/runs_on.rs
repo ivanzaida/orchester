@@ -234,14 +234,19 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
     "nothing chosen"
   );
 
-  // Choosing Work runs on it at once, and its line says its plan and its plan's use, over a 32 meter filled to it.
+  // Choosing Work runs on it at once, and its line says who is signed in and its plan's use, over a 32 meter filled to
+  // it.
   screen.press(&on_rail(at_work));
   screen.until("Work published", |screen| {
     published(screen).is_some_and(|(version, settings)| version == 2 && settings.connection() == at_work)
   });
   screen.until("Work's plan", |screen| screen.text(&part("who-use")) == "5h 42%");
   assert_eq!(screen.text(&part("who-name")), "Work");
-  assert_eq!(screen.text(&part("who-caption")), "Claude Code · Pro plan");
+  assert_eq!(
+    screen.text(&part("who-caption")),
+    "work@example.com",
+    "who is signed in"
+  );
   let meter = screen.bounds(&part("who-meter"));
   assert!((meter.width - 32.0).abs() < 0.5, "with its meter: {meter:?}");
   let fill = screen.bounds(&part("who-meter-fill"));

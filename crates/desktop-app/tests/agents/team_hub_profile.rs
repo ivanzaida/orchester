@@ -432,7 +432,7 @@ fn team_hub_profile_use_for_all_keeps_the_account_for_every_profile_of_the_cli_t
   );
   assert_eq!(
     agents.text("team-hub-actions-hint"),
-    "2 Claude Code profiles wait for an account · kept on this computer"
+    "2 Claude Code profiles wait for an account"
   );
 
   agents.click("team-hub-fix-use-all");
