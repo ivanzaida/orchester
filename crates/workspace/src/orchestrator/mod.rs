@@ -30,6 +30,7 @@ mod leads;
 mod led_start;
 mod mcp_servers;
 mod merge_conflicts;
+mod module_turn;
 mod own_project;
 pub mod parking;
 pub mod plan;

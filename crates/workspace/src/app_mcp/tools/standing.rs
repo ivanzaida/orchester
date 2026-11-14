@@ -72,7 +72,11 @@ fn led_json(project: ProjectId, chats: &[ChatListing], led: &Led) -> Value {
   let (can_start, slot_free, budget_used) = match &led.standing.target {
     TargetStanding::CanStart { tasks, slot_free } => (tasks.clone(), Some(*slot_free), false),
     TargetStanding::Stuck { budget_used } => (Vec::new(), None, *budget_used),
-    TargetStanding::Working | TargetStanding::Done => (Vec::new(), None, false),
+    TargetStanding::Working | TargetStanding::Done | TargetStanding::ToDeliver(_) => (Vec::new(), None, false),
+  };
+  let waits_for = match led.standing.target {
+    TargetStanding::ToDeliver(step) => Some(step.name()),
+    _ => None,
   };
   let tasks: Vec<Value> = led
     .standing
@@ -95,6 +99,7 @@ fn led_json(project: ProjectId, chats: &[ChatListing], led: &Led) -> Value {
     "can_start": can_start,
     "slot_free": slot_free,
     "budget_used": budget_used,
+    "waits_for": waits_for,
     "tasks": tasks,
   })
 }

@@ -18,6 +18,7 @@ mod merge_attempts;
 mod merge_queue;
 mod message_waits;
 mod messages;
+mod module_delivery;
 mod modules;
 mod orchestrated;
 mod pipeline_copy;
@@ -200,6 +201,8 @@ async fn dispatch_answers(
     "get_module" => modules::get_module(services, parse(arguments)?, translate).await,
     "create_module" => modules::create_module(services, parse(arguments)?).await,
     "update_module" => modules::update_module(services, parse(arguments)?).await,
+    "deliver_module" => module_delivery::deliver_module(services, parse(arguments)?, translate).await,
+    "start_acceptance" => module_delivery::start_acceptance(services, parse(arguments)?).await,
     "get_watches" => watches::get_watches(services, parse(arguments)?, translate).await,
     "get_decisions" => decisions::get_decisions(services, parse(arguments)?).await,
     "get_standing" => standing::get_standing(services, parse(arguments)?).await,

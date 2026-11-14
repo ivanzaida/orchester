@@ -22,7 +22,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub(super) use self::{
-  deliver::merge_run,
+  deliver::{deliver_module, merge_run},
   modules::{create_module, get_module, list_modules, update_module},
   run::run_task,
   tasks::{get_task, list_tasks},

@@ -1,6 +1,6 @@
 # OA-17 · A local module's own branch and its delivery, as a team module has
 
-- **Status:** todo (the person, 2026-11-13: the module has its branch, and the Orchestrator delivers it)
+- **Status:** done but for what waits for frames (2026-11-14)
 - **Kind:** design + core + workspace + UI
 - **Depends on:** OA-16; the frames of `frames.md` D for its visible part
 - **Branch:** —
@@ -56,3 +56,46 @@ A team module already has what this task gives a local one: a branch of its own 
 (`docs/design/local-and-team-parity.md`). So this task does not invent a second model: the choice, the branch's
 making (OA-33), the merge of a run into it (OA-27 for team runs), acceptance (OA-20) and the delivery's rule (OA-32)
 are one design with two owners of the data, and the Summary's states are the team module's states.
+
+## As built (2026-11-14)
+
+Reused from OA-16's map: `BaseChoice::Branch`, `RunBaseSource::Module`, the landing beside the checkout, `merge_run`
+and the merge queue as they are, `resolve_conflicts`, core's `merge_module` with `merge_module_in` and
+`module_merged_in`, and the clean-up of run branches (a base branch is never removed, and a module's branch is one).
+
+New:
+
+- **The choice.** A module has an own branch or none (`orchester_core::module::delivery::OwnBranch`,
+  `modules.own_branch`, schema 178), kept on this computer as its base branch is. Its name is `module/<slug>` of the
+  module's name, with `-2`, `-3`, … while a module or a branch of the repository has it (`own_branch_name`); renaming
+  the module does not rename it. `create_module` and `update_module` take `own_branch`, `acceptance_pipeline` and
+  `deliver_when_accepted`; `get_module` gives them with what the module waits for.
+- **The runs.** A module's tasks that set no base branch of their own take the module's own branch
+  (`Module::run_base`, `ProjectDb::next_run_base`): they start from it and merge into it, beside the person's
+  checkout. The module's base branch becomes where it is delivered.
+- **The branch is made by the first start** (OA-33, a local module's half): the runner makes it at the tip of the
+  module's base branch, or at the checkout's `HEAD` when the module set none, when the run starts
+  (`runner/src/execution/coordinator/prepare.rs`); the preflight makes nothing.
+- **Delivery** (`modules::delivery::deliver_in`, the tool `deliver_module`): the module's branch at its tip is merged
+  into its base branch with a merge commit, under the merge hold, and the delivery is kept (`module_deliveries`).
+  Refused while a run of the module has not ended, when the branch holds nothing its base lacks, and as the merge
+  refuses: a conflict and a checkout that stands in the way leave everything as it was, for the person. A merge an
+  earlier call made and did not record is found, never made twice.
+- **A led module is not done until it is delivered**: its standing reads *to deliver* with what it waits for
+  (`TargetStanding::ToDeliver`), its conversation is told (OA-20), and its watch does not end before.
+- Nothing deletes a module's branch: taking the choice away leaves it in the repository, and closing a module
+  touches no branch.
+
+**Not built:**
+
+- The module form's choice and the Summary's states: they wait for the frames of `frames.md` D. The choice is the
+  tools' until then.
+- Bringing the base branch into the module's branch when the base moved: a delivery that conflicts is refused and
+  left to the person; nothing notices that a module's base moved.
+- A conflict of a run's merge into the module's branch is still shown on Local integration in the window, which
+  answers *Stale* there; the chat's path (`continue_run` `resolve_conflicts`) works by branch name and is not
+  affected.
+
+Tests: `orchester-core --test module_delivery delivery`, `orchester-workspace --test module_delivery
+module_delivery` (a real repository), `orchester-runner --test execution run_base_resolution` (the first run makes
+the branch).

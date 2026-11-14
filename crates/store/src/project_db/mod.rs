@@ -47,6 +47,7 @@ mod merge_queue;
 mod merges;
 mod message_records;
 mod messages;
+mod module_branches;
 mod modules;
 mod native;
 mod new_resources;

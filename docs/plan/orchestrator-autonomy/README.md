@@ -148,7 +148,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-05](OA-05-compaction-before-a-turn.md) | The conversation is compacted before a turn that would not fit | workspace + runner | — | done |
 | [OA-06](OA-06-stall-again.md) | A run that stays stalled is raised again, and its turn may act | core + workspace | OA-09, OA-15 | done but for the long tool call |
 | [OA-07](OA-07-events-together.md) | Events that wait in one conversation are taken in one turn | core + workspace | OA-01 | done |
-| [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | todo |
+| [OA-08](OA-08-window-closed.md) | Agents keep working with the window closed and the computer awake | app (Windows and macOS) + UI | frames for its setting | done; its row has no frame, macOS not run |
 | **B** | **What the chat may do on its own** | | | |
 | [OA-09](OA-09-lead-mode-and-ceilings.md) | Core: a subscription leads to the end, with ceilings | core + store + workspace | — | done; choosing it waits for frames (B) |
 | [OA-10](OA-10-choosing-lead.md) | Choosing *Lead to the end*, its ceilings and what is used | design + UI | OA-09, frames | blocked (frames); a command chooses it meanwhile |
@@ -159,11 +159,11 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-14](OA-14-run-again.md) | A failed task is run again within its ceiling | workspace | OA-09, OA-13 | done |
 | [OA-15](OA-15-parking.md) | Parking a task for the person, and a led target that is stuck | core + store + workspace | OA-12 | done; what is seen waits for frames (OA-23) |
 | [OA-16](OA-16-map-merges.md) | Map: how a run merges into a base branch that is not checked out | research | — | done |
-| [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | todo |
+| [OA-17](OA-17-module-branch.md) | A local module's own branch and its delivery | design + core + workspace + UI | OA-16, frames for its UI | done; its form and Summary wait for frames (D) |
 | [OA-18](OA-18-leading-instructions.md) | The instructions of a leading turn | core | OA-12 … OA-15 | done; not run with a real model |
 | **D** | **Quality without a person** | | | |
 | [OA-19](OA-19-before-you-leave.md) | Before you leave: is what the conversation leads ready | design + workspace + UI | OA-09, frames for its UI | todo |
-| [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | todo |
+| [OA-20](OA-20-acceptance.md) | A module's acceptance before its delivery | core + workspace + UI | OA-17 | done; its form rows wait for frames (D) |
 | [OA-21](OA-21-person-only-requests.md) | A person-only request in a led run parks its task | workspace | OA-15 | done as instructions |
 | **E** | **The record for the person** | | | |
 | [OA-22](OA-22-decisions.md) | The chat's own decisions with their reasons | core + store + workspace | — | done; its screen is OA-23 |
@@ -176,8 +176,8 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | done but a message that runs a team task again |
 | [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | needs decision |
 | [OA-31](OA-31-claims-while-work-is-led.md) | A claim holds while its work is led, and a run that lost it stops | contract + workspace + runner | — | needs decision (contract) |
-| [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | todo |
-| [OA-33](OA-33-module-branch-is-made.md) | A module's branch is made when its first task starts, in both kinds | workspace + runner | OA-17 | done for a team module; a local one waits for OA-17 |
+| [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | done as one tool; a team module has no acceptance yet |
+| [OA-33](OA-33-module-branch-is-made.md) | A module's branch is made when its first task starts, in both kinds | workspace + runner | OA-17 | done |
 | [OA-34](OA-34-limits-of-team-runs.md) | A team run's limits are raised as a local run's are | contract + workspace | OA-29 | needs decision (contract) |
 | [OA-35](OA-35-team-task-organization.md) | Dependencies between team tasks, and the rest of a task's organization | contract + workspace | — | needs decision (contract) |
 | [OA-36](OA-36-team-reads.md) | Forecasts and cross-project readings answer for team projects | workspace | — | todo |

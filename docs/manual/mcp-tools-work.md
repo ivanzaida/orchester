@@ -302,14 +302,66 @@ Makes a new open module in a **local** project (refused as `shared_task` in a sh
 | `target_date` | string \| null | no   | `YYYY-MM-DD`, not before the start.       |
 | `base_branch` | string \| null | no   | `checked_out` (default) or a branch name; a name only a remote has (`release` or `origin/release`) creates its local branch, tracking it. |
 
+| `own_branch` | boolean \| null | no | A local project only. `true` gives the module a branch of its own, `module/<slug>`. |
+| `acceptance_pipeline` | string \| null | no | A local project only, with `own_branch`: the published pipeline its acceptance runs on, by id or name. |
+| `deliver_when_accepted` | boolean \| null | no | A local project only, with `own_branch`: the conversation that leads the module may deliver it once accepted. |
+
 Put tasks in it with `create_task`/`update_task`'s `module`. Refusals: `branch_not_found` (the repository has the
-branch nowhere; nothing is made).
+branch nowhere; nothing is made), `invalid_module` (an acceptance pipeline or *Deliver when accepted* for a module
+without a branch of its own).
+
+**A module's own branch.** With `own_branch`, the module's tasks that set no base branch of their own start from
+`module/<slug>` and merge into it, beside the person's checkout, which is never touched by those merges. The branch
+is made at the tip of the module's base branch when the module's first task starts. The module's base branch is then
+where it is **delivered** (`deliver_module`). Its name is kept once chosen; a name a module or the repository has
+already gets `-2`, `-3`, … Taking the choice away (`update_module` with `own_branch: false`) leaves the branch in the
+repository.
 
 ### `update_module` — changes data
 
 Changes `name`, `description`, `start_date`, `target_date` (`null` = no date), `state` (`open` | `closed`) or
 `base_branch` (as `create_module` takes it; the next runs of its tasks that inherit theirs take it, runs that started
 keep theirs); fields left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
+`own_branch`, `acceptance_pipeline` (`null` = none) and `deliver_when_accepted` change a local module's own branch
+and how it is delivered, as `create_module` sets them. `get_module` gives `own_branch`: `null`, or the branch, the
+acceptance pipeline, *Deliver when accepted*, how many acceptances the module had and where the latest stands
+(`none`, `under_way`, `passed`, `not_passed`), its last delivery, and `waits_for`.
+
+### `deliver_module` — changes data
+
+Delivers a module that has a branch of its own: merges that branch, at its tip, into the module's base branch with a
+merge commit, as one whole. It is a call of its own in both kinds of project, apart from any run's merge.
+
+| Parameter | Type | Req. | Notes |
+|---|---|---|---|
+| `project` | string | yes | |
+| `module` | string | yes | Id or name. |
+| `authorization` | string \| null | no | A team project only: the operation id of the Admin's delivery authorization. |
+
+- **A local module.** Refused while a task of it has a run that has not ended (`runs_at_work`), when its branch holds
+  nothing its base lacks (`nothing_to_deliver`), for a module without a branch of its own (`no_own_branch`), and as
+  the merge refuses, with everything left as it was: `delivery_conflicts` (the base moved and the merge conflicts),
+  `uncommitted_in_the_way` (the person's checkout has changes the merge would overwrite), `integration_running`.
+  Returns `delivered`: `into`, `head`, `revision`, `at`.
+- **A team module.** The delivery is requested from the team server, under the module's claim, as `merge_run` of
+  one of its runs requests it; an Admin's authorization or the team's *automatic merge* decides it, and the tool
+  never authorizes.
+- **In a turn of the Orchestrator chat nobody asked for**, only for a module that conversation leads to the end, at
+  the step the module waits for: `not_led`, `not_due` otherwise.
+
+### `start_acceptance` — changes data
+
+Starts the acceptance of a local module that has a branch of its own and names an acceptance pipeline. Orchester
+makes one task in the module, on that pipeline, and starts it; its run starts from the module's branch and reviews
+the module's whole diff against its base branch. The task's brief is Orchester's: the module's tasks with their
+criteria, and every step automation accepted unverified. Parameters: `project`, `module` (req.).
+
+Refused while a task of the module is still open (`tasks_open`), while an acceptance is under way
+(`acceptance_under_way`), once the branch as it is now passed one (`already_accepted`), for a module without a branch
+of its own or an acceptance pipeline (`no_own_branch`, `no_acceptance_pipeline`), and for a team project
+(`team_project_unsupported`). The module is *accepted* once that task is done, until more work is merged into the
+module's branch. Findings are made tasks of the module by whoever reads the report; the acceptance is started again
+after them. Returns `acceptance`: the task's key and its run, or why the run did not start.
 
 ### `get_watches` — read-only
 

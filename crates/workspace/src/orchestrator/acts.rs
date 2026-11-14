@@ -29,7 +29,9 @@ use super::{
   created::{self, CREATE_TASK},
   decisions, guard,
   keep::{self, HOLD_QUEUE, Named},
-  led_start, proposal,
+  led_start,
+  module_turn::{self, DELIVER_MODULE, START_ACCEPTANCE},
+  proposal,
   repository::INIT_REPOSITORY,
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE, app_tool},
 };
@@ -166,6 +168,7 @@ async fn act(
     DECIDE_APPROVAL => decide_approval(deps, scope, arguments).await,
     _ if proposes => propose_change(deps, scope, name, arguments).await,
     MERGE_RUN => merge(deps, scope, arguments).await,
+    DELIVER_MODULE | START_ACCEPTANCE => module_step(deps, scope, name, arguments).await,
     CANCEL_RUN | INIT_REPOSITORY | ANSWER_QUESTION | SEND_MESSAGE => applied(deps, scope, name, arguments).await,
     CONTINUE_RUN => continuing(deps, scope, arguments).await,
     RESUME_RUN => resume(deps, scope, arguments, drives).await,
@@ -222,6 +225,20 @@ async fn merge(deps: (&Services, &Translate), scope: &ChatScope, arguments: &Jso
   let mut acted = applied(deps, scope, MERGE_RUN, arguments).await?;
   acted.kept.on_its_own = scope.on_its_own;
   Ok(acted)
+}
+
+/// `deliver_module` and `start_acceptance` while driving: in a turn nobody asked for, only for a module the
+/// conversation leads to the end, at the step the module waits for ([`module_turn::checked`]).
+async fn module_step(
+  deps: (&Services, &Translate),
+  scope: &ChatScope,
+  name: &str,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  if scope.on_its_own {
+    module_turn::checked(scope, name, arguments).await?;
+  }
+  Ok(Acted::done(app_tool(deps, name, arguments.clone()).await))
 }
 
 /// `decide_approval` while driving: in a turn nobody asked for, only the request whose wait started the turn

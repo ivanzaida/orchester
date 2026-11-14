@@ -127,3 +127,11 @@ the conversation shows the entry at all:
 - A parked task on its page and in *Needs you* (what is needed, why, what to do, *Give back*), and the list of the
   Orchestrator's decisions with *Mark seen*: OA-23's frames.
 
+- The lines of a led module whose every task is done (OA-20, 2026-11-14): *Every task of Webhooks v2 is done: its
+  acceptance can start* and *Webhooks v2 is accepted: it can be delivered* (`circle-play`, `text_muted`), and *Every
+  task of Webhooks v2 is done: its delivery waits for you* (`circle-alert`, `warning`).
+- The events one turn took together (OA-07) show as their lines, in order, with the one answer under the last: no
+  new row, so no frame; say if they should be grouped visibly.
+- *Keep the computer awake while agents work* (OA-08, 2026-11-14): a switch row in Settings › General, in a group
+  *Work* between *Privacy* and *Updates*, built from the parts of *Send error reports* (`tMyiy`). Group F's frame
+  replaces it.

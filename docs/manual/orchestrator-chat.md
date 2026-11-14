@@ -88,6 +88,7 @@ refused as `drive_only`), `list_profiles`, `get_profile`, `save_profile_draft`, 
 | `cancel_run` | direct | direct | proposal | refused `report_turn` |
 | `continue_run` | direct, every choice | direct, every choice | proposal: only `allow_retry`, `return_to`, `resolve_conflicts`; the other choices `person_only` | refused `report_turn` |
 | `merge_run` | direct | direct for a run the rule lets it (`left_to_person` otherwise; see auto-merge) | proposal | refused `report_turn` |
+| `start_acceptance`, `deliver_module` | direct | direct, with a reason, for a module this conversation leads to the end, at the step the module waits for (`not_led`, `not_due` otherwise) | not offered | refused `report_turn` |
 | `answer_question`, `send_message` | direct (a message that would decide a waiting plan is refused `plan_decision_person_only`: use `decide_plan`) | direct | proposal | refused `report_turn` |
 | `decide_plan`, `complete_run` | direct | direct | not among its tools | refused `report_turn` |
 | `update_project_limits` | direct, the daily budget too | direct, but the daily budget (`person_only`) | not among its tools | refused `report_turn` |

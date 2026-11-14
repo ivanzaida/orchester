@@ -1,5 +1,26 @@
 {
   "modules": {
+    "ownBranch": {
+      "required": "An acceptance pipeline and Deliver when accepted are for a module with a branch of its own. Give the module its own branch first.",
+      "unreadable": "The repository's branches could not be read, so the module got no branch of its own. Nothing was changed."
+    },
+    "delivery": {
+      "noOwnBranch": "This module has no branch of its own: its tasks merge into its base branch themselves, so there is nothing to deliver.",
+      "runsAtWork": "Runs of this module have not ended: {{tasks}}. A module is delivered once nothing of it is still at work. Nothing was merged.",
+      "nothing": "The module's branch holds nothing its base branch lacks. Nothing was merged.",
+      "noBaseBranch": "The checkout has no branch checked out, and the module names no base branch, so there is no branch to deliver into. Nothing was merged.",
+      "onOwnBranch": "The module's own branch is the branch it would be delivered into. Check out another branch, or set the module's base branch. Nothing was merged.",
+      "busy": "Another merge or a local integration holds the checkout now. Nothing was merged; try again once it ended.",
+      "conflicts": "The module's branch conflicts with its base branch in {{files}}. Nothing was merged: bring the base branch into the module's branch and resolve them there, then deliver again.",
+      "inTheWay": "The checkout has uncommitted changes the delivery would overwrite: {{files}}. Nothing was merged: commit or put them aside, then deliver again.",
+      "failed": "Git did not merge the module's branch: {{detail}}. Nothing was merged."
+    },
+    "acceptance": {
+      "noPipeline": "This module names no acceptance pipeline. Set one for it first (update_module, acceptance_pipeline).",
+      "tasksOpen": "Tasks of this module are still open: {{tasks}}. Its acceptance starts once every task of it is done or canceled.",
+      "underWay": "An acceptance of this module is under way. Wait for its run to end.",
+      "alreadyAccepted": "The module's branch, as it is now, passed its acceptance already. Nothing was started."
+    },
     "errors": {
       "targetBeforeStart": "The target date can't be before the start date.",
       "duplicateName": "Another module already has this name.",
@@ -2531,7 +2552,14 @@
     },
     "standing": {
       "canStart": "Work can start in {{target}}: {{tasks}}",
-      "stuck": "{{target}} is stuck: {{count}} left for you"
+      "stuck": "{{target}} is stuck: {{count}} left for you",
+      "accept": "Every task of {{target}} is done: its acceptance can start",
+      "deliver": "{{target}} is accepted: it can be delivered",
+      "deliveryWaits": "Every task of {{target}} is done: its delivery waits for you"
+    },
+    "module": {
+      "notLed": "This conversation does not lead that module to the end: in a turn Orchester started by itself, the chat starts an acceptance and asks for a delivery only of a module it leads to the end. Nothing was changed.",
+      "notDue": "The module does not wait for that now: it stands {{standing}} (get_standing, get_module). Nothing was changed."
     },
     "ceilings": {
       "runs": "This task had {{used}} runs, and what leads it to the end runs a task {{allowed}} times at most. Nothing started: leave the task to the person, with what failed each time.",

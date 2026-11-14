@@ -35,6 +35,7 @@ fn leading() -> Around {
     free_slots: 2,
     ceilings: Some(Ceilings::default()),
     budget_used: false,
+    delivery: None,
   }
 }
 

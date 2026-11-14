@@ -1,13 +1,14 @@
 //! `list_modules`, `get_module`, `create_module` and `update_module`: a project's modules as the Modules list and a
 //! module's page show them (progress, tasks, the burndown by local day, who leads it), and modules made and changed as
 //! the module form does, through the project's [`TaskWriter`], which makes a shared project's on its server. A
-//! module's base branch is this computer's ([`base_branch`]). A team project's modules are read from and changed on
-//! its team server ([`super::team`]).
+//! module's base branch is this computer's ([`base_branch`]), and so are its own branch, its acceptance pipeline and
+//! *Deliver when accepted* ([`crate::modules::delivery`]). A team project's modules are read from and changed on its
+//! team server ([`super::team`]), which assigns a team module's branch.
 
 use std::path::Path;
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, ResourceId},
   integration::base::BaseChoice,
   module::{Module, ModuleDetails, ModuleState},
   store::TaskStore,
@@ -18,7 +19,7 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
 use super::{
-  Translate, base_branch,
+  Translate, base_branch, module_delivery,
   task_write::write_error,
   team, watches,
   wire::{self, Workflow, task_link},
@@ -32,10 +33,11 @@ use crate::{
   modules::{
     burndown::Burndown,
     data::{ModulePage, ModuleSummary, Progress, summaries},
+    delivery::{OwnChange, change_own_in},
     form::ModuleForm,
   },
   orchestrator::watching::WatchReads,
-  tasks::{outside::Outside, writer::TaskWriter},
+  tasks::{data::published_pipelines, outside::Outside, writer::TaskWriter},
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -94,6 +96,19 @@ pub struct CreateModule {
   /// remote has (`release` or `origin/release`) creates its local branch, tracking it.
   #[serde(default)]
   pub base_branch: Option<String>,
+  /// A local project only. `true` gives the module a branch of its own, `module/<slug>`, made from its base branch
+  /// when its first task starts: its tasks' runs start from it and merge into it, without the person's working tree,
+  /// and the module reaches its base branch by its delivery (deliver_module).
+  #[serde(default)]
+  pub own_branch: Option<bool>,
+  /// A local project only, for a module with a branch of its own: the published pipeline its acceptance runs on, by
+  /// id or name (start_acceptance).
+  #[serde(default)]
+  pub acceptance_pipeline: Option<String>,
+  /// A local project only, for a module with a branch of its own: whether the conversation that leads it to the end
+  /// may deliver it once its acceptance passed. Off: only the person delivers it.
+  #[serde(default)]
+  pub deliver_when_accepted: Option<bool>,
 }
 
 /// The fields to change; those left out stay as they are, and a null date is no date.
@@ -119,6 +134,16 @@ pub struct UpdateModule {
   /// or a branch name; a name only a remote has creates its local branch, tracking it. Runs that started keep theirs.
   #[serde(default)]
   pub base_branch: Option<String>,
+  /// A local project only. `true` gives the module a branch of its own (see create_module), `false` takes it away:
+  /// the branch stays in the repository, and the next runs take the module's base branch again.
+  #[serde(default)]
+  pub own_branch: Option<bool>,
+  /// A local project only: the published pipeline the module's acceptance runs on, by id or name; `null` for none.
+  #[serde(default, deserialize_with = "nullable")]
+  pub acceptance_pipeline: Option<Option<String>>,
+  /// A local project only: whether the conversation that leads the module to the end may deliver it once accepted.
+  #[serde(default)]
+  pub deliver_when_accepted: Option<bool>,
 }
 
 /// An argument that may be given as `null` (`Some(None)`); one left out is `None`.
@@ -148,17 +173,19 @@ pub async fn get_module(services: &Services, args: GetModule, translate: &Transl
     return team::get_module(services, &team, &args.module).await;
   }
   let services = services.clone();
-  let (project, page, led_in) = blocking(move || {
+  let (project, page, led_in, own) = blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
     let module = find_module(&db, &args.module)?;
     let page = ModulePage::read(&db, module.id(), orchester_core::time::Timestamp::now())?
       .ok_or_else(|| ToolError::not_found(Missing::Module, &args.module))?;
     let led_in = WatchReads::read(&db, &open.repo_root)?.module_led_in(module.id());
-    Ok((open.project.id(), page, led_in))
+    let own = module_delivery::own_branch_json(&db, &module)?;
+    Ok((open.project.id(), page, led_in, own))
   })
   .await?;
   let mut page = page_json(project, &page);
   page["led_in"] = watches::led_in_json(&led_in, translate);
+  page["own_branch"] = own;
   Ok(page)
 }
 
@@ -181,6 +208,12 @@ pub async fn create_module(services: &Services, args: CreateModule) -> Result<Va
     let mut writer = TaskWriter::open(&open.repo_root, &services.servers).map_err(write_error)?;
     let module = writer.create_module(details).map_err(write_error)?;
     let module = based(&open.repo_root, module, (&BaseChoice::CheckedOut, base))?;
+    let change = OwnChange {
+      own_branch: args.own_branch,
+      acceptance: acceptance(&open.repo_root, args.acceptance_pipeline.as_deref().map(Some))?,
+      deliver_when_accepted: args.deliver_when_accepted,
+    };
+    let module = owned(&services, &open.repo_root, module, &change)?;
     services.changes.record(open.project.id(), Outside::Tasks);
     Ok(json!({ "module": module_json(open.project.id(), &module) }))
   })
@@ -218,6 +251,17 @@ pub async fn update_module(services: &Services, args: UpdateModule) -> Result<Va
       .update_module(module.id(), current, details)
       .map_err(write_error)?;
     let written = based(&open.repo_root, written, (module.base(), base))?;
+    let change = OwnChange {
+      own_branch: args.own_branch,
+      acceptance: acceptance(&open.repo_root, args.acceptance_pipeline.as_ref().map(Option::as_deref))?,
+      deliver_when_accepted: args.deliver_when_accepted,
+    };
+    let written = owned(
+      &services,
+      &open.repo_root,
+      written.with_own_branch(module.own_branch().cloned()),
+      &change,
+    )?;
     services.changes.record(open.project.id(), Outside::Tasks);
     Ok(json!({ "module": module_json(open.project.id(), &written) }))
   })
@@ -238,6 +282,30 @@ fn based(root: &Path, module: Module, (before, after): (&BaseChoice, Option<Base
     Some(after) if &after != before => Ok(ProjectDb::open(root)?.set_module_base(module.id(), before, after)?),
     _ => Ok(module.with_base(before.clone())),
   }
+}
+
+/// The acceptance pipeline `given` names among the project's published pipelines, by id or name; `Some(None)` for
+/// none, `None` when nothing was given.
+fn acceptance(root: &Path, given: Option<Option<&str>>) -> Result<Option<Option<ResourceId>>, ToolError> {
+  let Some(given) = given else {
+    return Ok(None);
+  };
+  let Some(named) = given else {
+    return Ok(Some(None));
+  };
+  let lowered = named.to_lowercase();
+  let published = published_pipelines(&ProjectDb::open(root)?)?;
+  published
+    .into_iter()
+    .find(|pipeline| pipeline.id.to_string() == named || pipeline.name.to_lowercase() == lowered)
+    .map(|pipeline| Some(Some(pipeline.id)))
+    .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
+}
+
+/// `module` with `change` applied to its own branch ([`change_own_in`]).
+fn owned(services: &Services, root: &Path, module: Module, change: &OwnChange) -> Result<Module, ToolError> {
+  change_own_in(root, &services.programs, &module, change)
+    .map_err(|message| ToolError::refused("invalid_module", vec![message]))
 }
 
 /// The module of project database `db` named by its id or, ignoring case, its name.
@@ -268,6 +336,7 @@ fn module_json(project: ProjectId, module: &Module) -> Value {
       ModuleState::Closed => "closed",
     },
     "base_branch": base_branch::module_json(module.base()),
+    "own_branch": module.own_branch().map(|own| own.branch.as_str().to_owned()),
     "created_at": wire::time(module.created_at()),
     "link": Link::Module(project, module.id()).path(),
   })

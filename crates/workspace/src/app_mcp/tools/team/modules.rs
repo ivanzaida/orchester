@@ -119,6 +119,11 @@ async fn changed(team: &Team, services: &Services, action: ModuleAction) -> Resu
   }
 }
 
+/// The id of the module `named` by its id or, ignoring case, its name.
+pub(super) async fn module_named(project: &TeamProject, named: &str) -> Result<ModuleId, ToolError> {
+  Ok(find(project, named).await?.module.module.id)
+}
+
 /// The module `named` by its id or, ignoring case, its name.
 async fn find(project: &TeamProject, named: &str) -> Result<ModuleSummary, ToolError> {
   if let Ok(id) = named.parse::<ModuleId>() {

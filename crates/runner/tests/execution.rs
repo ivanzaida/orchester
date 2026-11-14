@@ -13,7 +13,7 @@ use orchester_core::{
   },
   id::{IdempotencyKey, RunId, TaskId},
   integration::base::{BaseChoice, RunBaseSource, TaskBase},
-  module::{ModuleDetails, ModuleState},
+  module::{ModuleDetails, ModuleState, delivery::OwnBranch},
   name::Name,
   resource::StepKey,
   revision::Revision,
@@ -432,4 +432,48 @@ async fn run_to_the_end(root: &std::path::Path, task: TaskId) -> orchester_core:
     .await
     .expect("the run starts");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
+}
+
+/// A module with a branch of its own (`docs/plan/orchestrator-autonomy/OA-17-…`): its first run makes the branch at
+/// the tip of the module's base branch, starts from it and records it as its base, and the checkout stays where it
+/// was; the next run starts from where the branch is by then.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_base_resolution_the_first_run_of_a_module_makes_its_own_branch() {
+  let first = project(&Setup::new("Append one line."));
+  let root = first.repo.path();
+  let own = BranchName::new("module/webhooks-v2").expect("branch");
+  let module = {
+    let mut db = ProjectDb::open(root).expect("open");
+    let details = ModuleDetails::new(
+      Name::new("Webhooks v2").expect("name"),
+      "",
+      (None, None),
+      ModuleState::Open,
+    )
+    .expect("details");
+    let module = db.create_module(details, Timestamp::now()).expect("module").id();
+    db.set_module_own_branch(module, Some(&OwnBranch::new(own.clone())))
+      .expect("its own branch");
+    db.set_task_module(first.task, Some(module), ChangeActor::Person, Timestamp::now())
+      .expect("moved");
+    module
+  };
+  assert_eq!(
+    git(root, &["branch", "--list", own.as_str()]),
+    "",
+    "nothing made the branch yet"
+  );
+  let main = git(root, &["rev-parse", "main"]);
+
+  let run = run_to_the_end(root, first.task).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(run.base_branch(), Some(&own));
+  assert_eq!(run.base_source(), RunBaseSource::Module { module });
+  assert_eq!(run.base().as_str(), main, "made at the tip of the module's base branch");
+  assert_eq!(git(root, &["rev-parse", own.as_str()]), main, "the branch is there");
+  assert_eq!(
+    git(root, &["symbolic-ref", "--short", "HEAD"]),
+    "main",
+    "the checkout stays on main"
+  );
 }

@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use orchester_core::{
   id::{ModuleId, ProjectId, TaskId},
-  module::Module,
+  module::{Module, delivery::DeliveryStep},
   orchestrator::{
     Subscription, WatchTarget,
     watch::{EndReason, Ending, TargetTasks, WatchSummary},
@@ -92,7 +92,9 @@ pub(super) fn end_closed(
     tasks: db.tasks()?,
     modules: db.modules()?,
     team,
+    undelivered: HashSet::new(),
   };
+  let work = work.with_undelivered(db)?;
   let mut ended = false;
   for subscription in closable {
     let Some(summary) = work.summary(subscription, automatic) else {
@@ -115,15 +117,31 @@ struct Work {
   tasks: Vec<Task>,
   modules: Vec<Module>,
   team: TeamReading,
+  /// The modules with a branch of their own that is not on their base branch yet
+  /// (`orchester_core::module::delivery`): a conversation that leads one to the end goes on until it is delivered.
+  undelivered: HashSet<ModuleId>,
 }
 
 /// What an ended subscription's target is called, its title when it is a task, its link, and why it ended.
 type Ended = (String, Option<String>, String, EndReason);
 
 impl Work {
+  /// `self` with the modules whose own branch is still to be delivered, read from `db`.
+  fn with_undelivered(mut self, db: &ProjectDb) -> Result<Self, StoreError> {
+    for module in &self.modules {
+      if module.own_branch().is_some() && crate::modules::delivery::facts(db, module)?.step() != DeliveryStep::Delivered
+      {
+        self.undelivered.insert(module.id());
+      }
+    }
+    Ok(self)
+  }
+
   /// The summary `subscription` ends with now; `None` while it goes on, or once its target is gone.
   fn summary(&self, subscription: &Subscription, automatic: bool) -> Option<WatchSummary> {
+    let leads = subscription.mode().ceilings().is_some();
     let (name, title, link, reason) = match subscription.target() {
+      WatchTarget::Module(id) if leads && self.undelivered.contains(&id) => return None,
       WatchTarget::Task(id) if self.team_ids.contains(&id) => self.team_task_ended(id)?,
       WatchTarget::Task(id) => self.task_ended(id)?,
       WatchTarget::Module(id) => self.module_ended(id)?,

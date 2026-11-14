@@ -18,8 +18,8 @@ use crate::{
   rows::{corrupt, parse},
 };
 
-const SELECT_MODULES: &str =
-  "SELECT id, name, description, start_date, target_date, state, created_at, base_branch FROM modules";
+const SELECT_MODULES: &str = "SELECT id, name, description, start_date, target_date, state, created_at, base_branch, \
+   own_branch, acceptance_pipeline, deliver_when_accepted FROM modules";
 
 impl ProjectDb {
   /// The project's modules, oldest first.
@@ -251,6 +251,9 @@ struct ModuleRow {
   state: String,
   created_at: i64,
   base_branch: Option<String>,
+  own_branch: Option<String>,
+  acceptance_pipeline: Option<String>,
+  deliver_when_accepted: bool,
 }
 
 impl ModuleRow {
@@ -264,6 +267,9 @@ impl ModuleRow {
       state: row.get(5)?,
       created_at: row.get(6)?,
       base_branch: row.get(7)?,
+      own_branch: row.get(8)?,
+      acceptance_pipeline: row.get(9)?,
+      deliver_when_accepted: row.get(10)?,
     })
   }
 
@@ -296,7 +302,12 @@ impl ModuleRow {
         details,
         Timestamp::from_unix_millis(self.created_at),
       )
-      .with_base(super::base_branch::parse_module_base(self.base_branch.as_deref())?),
+      .with_base(super::base_branch::parse_module_base(self.base_branch.as_deref())?)
+      .with_own_branch(super::module_branches::parse_own(
+        self.own_branch.as_deref(),
+        self.acceptance_pipeline.as_deref(),
+        self.deliver_when_accepted,
+      )?),
     )
   }
 }

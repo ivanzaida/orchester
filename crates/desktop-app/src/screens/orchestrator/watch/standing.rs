@@ -26,7 +26,8 @@ pub(in crate::screens::orchestrator) fn line(
 ) -> Element {
   let glyph = match event.raised {
     Raised::CanStart { .. } => (Icon::CirclePlay, PaletteColor::TextMuted),
-    Raised::Stuck { .. } => (Icon::CircleAlert, PaletteColor::Warning),
+    Raised::Stuck { .. } | Raised::DeliveryWaits { .. } => (Icon::CircleAlert, PaletteColor::Warning),
+    Raised::Accept | Raised::Deliver => (Icon::CirclePlay, PaletteColor::TextMuted),
   };
   let said = Said {
     glyph,

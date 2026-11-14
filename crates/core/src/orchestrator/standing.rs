@@ -9,7 +9,10 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use super::{Ceilings, WatchTarget};
-use crate::run::TaskPhase;
+use crate::{
+  module::delivery::{DeliveryStep, PersonsDelivery},
+  run::TaskPhase,
+};
 
 /// Who left a task to the person.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,6 +172,9 @@ pub struct Around {
   pub ceilings: Option<Ceilings>,
   /// The subscription's budget is spent: nothing more is started under it.
   pub budget_used: bool,
+  /// For a module: what it waits for once its every task is done ([`crate::module::delivery`]); `None` for any other
+  /// target.
+  pub delivery: Option<DeliveryStep>,
 }
 
 /// Where the whole target stands.
@@ -183,6 +189,8 @@ pub enum TargetStanding {
   /// Nothing can be started and nothing moves: what is left waits for the person. `budget_used`: tasks could start
   /// but for the subscription's budget.
   Stuck { budget_used: bool },
+  /// Every task of the module is done, and its branch is not on its base branch yet: what it waits for.
+  ToDeliver(DeliveryStep),
 }
 
 impl TargetStanding {
@@ -193,6 +201,7 @@ impl TargetStanding {
       Self::CanStart { .. } => "can_start",
       Self::Working => "working",
       Self::Stuck { .. } => "stuck",
+      Self::ToDeliver(_) => "to_deliver",
     }
   }
 }
@@ -219,7 +228,10 @@ pub fn standing(target: &[TaskFacts], outside: &[TaskFacts], around: &Around) ->
     .map(|(key, _)| key.clone())
     .collect();
   let target = if tasks.iter().all(|(_, standing)| *standing == TaskStanding::Done) {
-    TargetStanding::Done
+    match around.delivery {
+      None | Some(DeliveryStep::Delivered) => TargetStanding::Done,
+      Some(step) => TargetStanding::ToDeliver(step),
+    }
   } else if !startable.is_empty() && !around.budget_used {
     TargetStanding::CanStart {
       tasks: startable,
@@ -271,7 +283,8 @@ fn moving(tasks: &[(String, TaskStanding)], outside: &[TaskFacts]) -> bool {
 }
 
 /// What a leading subscription's standing raises in its conversation, once per state
-/// (`docs/plan/orchestrator-autonomy/OA-13-…`, `OA-15-…`): work can start, or the target is stuck.
+/// (`docs/plan/orchestrator-autonomy/OA-13-…`, `OA-15-…`, `OA-20-…`): work can start, the target is stuck, or a module
+/// whose every task is done waits for its acceptance or its delivery.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "raised", rename_all = "snake_case")]
 pub enum Raised {
@@ -283,6 +296,12 @@ pub enum Raised {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     budget_used: bool,
   },
+  /// Every task of the module is done: its acceptance is to be started.
+  Accept,
+  /// The module is accepted: its delivery is to be asked for.
+  Deliver,
+  /// Every task of the module is done, and what comes next is the person's.
+  DeliveryWaits { why: PersonsDelivery },
 }
 
 /// A task left when a target is stuck: its key, where it stands ([`TaskStanding::name`]) and what that waits for,
@@ -318,7 +337,13 @@ impl Raised {
           .collect(),
         budget_used: *budget_used,
       }),
-      TargetStanding::CanStart { slot_free: false, .. } | TargetStanding::Working | TargetStanding::Done => None,
+      TargetStanding::ToDeliver(DeliveryStep::Accept) => Some(Self::Accept),
+      TargetStanding::ToDeliver(DeliveryStep::Deliver) => Some(Self::Deliver),
+      TargetStanding::ToDeliver(DeliveryStep::Person(why)) => Some(Self::DeliveryWaits { why: *why }),
+      TargetStanding::ToDeliver(DeliveryStep::Accepting | DeliveryStep::Delivered)
+      | TargetStanding::CanStart { slot_free: false, .. }
+      | TargetStanding::Working
+      | TargetStanding::Done => None,
     }
   }
 
@@ -333,6 +358,9 @@ impl Raised {
           .collect();
         format!("stuck:{}:{budget_used}", left.join(","))
       }
+      Self::Accept => "accept".to_owned(),
+      Self::Deliver => "deliver".to_owned(),
+      Self::DeliveryWaits { why } => format!("delivery_waits:{}", DeliveryStep::Person(*why).name()),
     }
   }
 }

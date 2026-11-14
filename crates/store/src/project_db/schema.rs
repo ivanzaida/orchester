@@ -48,6 +48,7 @@ mod mcp;
 mod memory;
 mod merge_attempts;
 mod merge_queue;
+mod module_branches;
 mod modules;
 mod native_commands;
 mod native_conversations;

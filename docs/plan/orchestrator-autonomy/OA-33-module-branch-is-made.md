@@ -50,3 +50,8 @@ Differs from the task file:
 - The case of a remote that has the branch is not covered by a test.
 
 Tests: `orchester-workspace --test team_mcp team_mcp_a_start_makes`.
+
+## A local module (2026-11-14)
+
+Done with OA-17: the runner makes a local module's own branch when its first run starts, at the tip of the module's
+base branch.

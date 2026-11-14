@@ -79,6 +79,7 @@ impl Reads {
       .map(|(task, _)| (task.id(), task.key().to_string()))
       .collect();
     let holds = db.queue_holds()?;
+    let acceptances = db.acceptance_task_ids()?;
     let mut facts = HashMap::new();
     let mut running = 0;
     for (task, runs) in &tasks {
@@ -89,6 +90,7 @@ impl Reads {
         team: &team,
         published: &published,
         parked: parked.contains_key(&task.id()),
+        acceptance: acceptances.contains(&task.id()),
       };
       let of_task = read.facts(
         task,
@@ -168,10 +170,19 @@ impl Reads {
         .is_err(),
       Some(_) | None => false,
     };
+    // A module with a branch of its own is not done until that branch is on its base branch.
+    let delivery = match subscription.target() {
+      WatchTarget::Module(id) => match db.module(id)? {
+        Some(module) => Some(crate::modules::delivery::facts(db, &module)?.step()),
+        None => None,
+      },
+      WatchTarget::Task(_) | WatchTarget::WithoutModule | WatchTarget::Project => None,
+    };
     let around = Around {
       free_slots: self.free_slots,
       ceilings,
       budget_used,
+      delivery,
     };
     let parked = inside
       .iter()
@@ -202,6 +213,8 @@ struct Around1<'a> {
   team: &'a TeamReading,
   published: &'a HashSet<ResourceId>,
   parked: bool,
+  /// The task is a module's acceptance, which Orchester made.
+  acceptance: bool,
 }
 
 impl Around1<'_> {
@@ -227,6 +240,8 @@ impl Around1<'_> {
       Some(status) => status.is_closed(),
       None => !team && task.organization().status().is_closed(),
     };
+    // An acceptance that did not pass is done as an attempt: its findings become tasks, and it is not run again.
+    let closed = closed || (self.acceptance && matches!(phase, TaskPhase::Failed | TaskPhase::Cancelled));
     // A team task's pipeline is the team's, whose readiness the server checks when the work starts.
     let unready = match task.details().pipeline {
       _ if team => None,
@@ -329,5 +344,8 @@ pub fn event_line(event: &StandingEvent) -> Message {
     Raised::Stuck { left, .. } => Message::new("orchestrator.standing.stuck")
       .with("target", target)
       .with("count", left.len().to_string()),
+    Raised::Accept => Message::new("orchestrator.standing.accept").with("target", target),
+    Raised::Deliver => Message::new("orchestrator.standing.deliver").with("target", target),
+    Raised::DeliveryWaits { .. } => Message::new("orchestrator.standing.deliveryWaits").with("target", target),
   }
 }

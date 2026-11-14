@@ -3,6 +3,7 @@
 //! of a task's run or an event of it started by itself ([`wait_prompt`], [`event_prompt`]), a daily report did
 //! ([`report_prompt`]), or a subscription that ended by itself did ([`watch_summary_prompt`]).
 
+mod acceptance;
 mod events;
 mod leading;
 mod standing;
@@ -10,6 +11,7 @@ mod summary;
 mod together;
 
 pub use self::{
+  acceptance::{ACCEPTANCE_CRITERIA, AcceptedTask, acceptance_brief, acceptance_title},
   events::event_prompt,
   leading::leading_note,
   standing::standing_prompt,

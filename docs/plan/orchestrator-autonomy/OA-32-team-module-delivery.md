@@ -1,6 +1,6 @@
 # OA-32 · The Orchestrator asks for a team module's delivery, as it delivers a local one
 
-- **Status:** todo
+- **Status:** done as a call of its own; the gate before it is local only (2026-11-14)
 - **Kind:** workspace
 - **Depends on:** OA-17, OA-20, OA-27
 - **Branch:** —
@@ -37,3 +37,14 @@ it in any turn. A local module has no delivery at all until OA-17.
 - Workspace tests with the stand-in server for the three outcomes (delivered, not authorized, refused by the
   checkout).
 - Its row leaves the parity table. `tools/check.ps1` passes.
+
+## As built (2026-11-14)
+
+`deliver_module` is one tool for both kinds. For a team module it requests the delivery from the team server as
+`merge_run` of one of its runs did, without a run (`team::deliver_module`): under the module's claim, decided by an
+Admin's authorization or the team's automatic merge; the tool never authorizes. In a turn Orchester started the
+chat may ask for it for a team module it leads to the end once every task of the module is done.
+
+**Left:** the acceptance before a team module's delivery (OA-20 keeps a module's acceptance on this computer and
+makes its task here, which a team project's tasks are not), and parking the module for its Admin by name when the
+server keeps the request waiting: the refusal is told to the chat, which tells the person.

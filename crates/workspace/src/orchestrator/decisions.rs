@@ -16,6 +16,7 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::{Value, json};
 
 use super::{
+  module_turn::{DELIVER_MODULE, START_ACCEPTANCE},
   parking::PARK_TASK,
   tools::{ANSWER_QUESTION, CONTINUE_RUN, ChatScope, RUN_TASK},
 };
@@ -29,12 +30,26 @@ const REASON: &str = "reason";
 const DECIDE_PLAN: &str = "decide_plan";
 
 /// The tools whose call is a judgement of the chat's own when nobody asked for it: how a stopped run goes on (an
-/// acceptance, a return, a retry, a raise), an answer to an agent's question, and a decision on a plan.
-const JUDGED: [&str; 3] = [CONTINUE_RUN, ANSWER_QUESTION, DECIDE_PLAN];
+/// acceptance, a return, a retry, a raise), an answer to an agent's question, a decision on a plan, and a module's
+/// acceptance and delivery.
+const JUDGED: [&str; 5] = [
+  CONTINUE_RUN,
+  ANSWER_QUESTION,
+  DECIDE_PLAN,
+  START_ACCEPTANCE,
+  DELIVER_MODULE,
+];
 
 /// The tools that take a reason: the judgements, and `run_task`, whose reason is required only when it runs a task
 /// again ([`super::led_start`]).
-const REASONED: [&str; 4] = [CONTINUE_RUN, ANSWER_QUESTION, DECIDE_PLAN, RUN_TASK];
+const REASONED: [&str; 6] = [
+  CONTINUE_RUN,
+  ANSWER_QUESTION,
+  DECIDE_PLAN,
+  RUN_TASK,
+  START_ACCEPTANCE,
+  DELIVER_MODULE,
+];
 
 /// `tool`, given the chat's `reason` when it is one of [`REASONED`].
 pub(super) fn with_reason(tool: &mut Tool) {
