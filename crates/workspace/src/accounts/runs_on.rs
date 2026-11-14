@@ -41,9 +41,6 @@ pub enum RunsOnError {
   AnotherCli,
   #[error("API account {0} is not in the list")]
   ApiAccountNotFound(ApiAccountId),
-  /// The API account is for Orchester's own agent: no agent CLI runs on it, so no CLI connection is made on it.
-  #[error("the API account is not an agent CLI's")]
-  NotForCli,
   #[error(transparent)]
   Connection(#[from] ConnectionError),
   #[error(transparent)]
@@ -59,7 +56,6 @@ impl RunsOnError {
       Self::AccountNotFound(_) | Self::ApiAccountNotFound(_) | Self::Connection(_) | Self::Provider(_) => {
         Message::new("errors.storage")
       }
-      Self::NotForCli => Message::new("accounts.errors.notForCli"),
       Self::CliMissing(_) => Message::new("accounts.errors.cliMissing"),
       Self::ProfileNotFound(_) => Message::new("agents.localConnection.gone"),
       Self::AnotherCli => Message::new("agents.localConnection.notOfKind"),

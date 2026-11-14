@@ -4,14 +4,16 @@
 //! account's id, and the project holds no secret of it, so a run reads the key from the account's own entry and a
 //! key replaced in Settings reaches every project at once.
 //!
-//! Only an agent CLI's API account has such a connection. An account for Orchester's own agent is refused here.
+//! An agent CLI's API account is copied as a connection of the CLI on that model API; an account of Orchester's own
+//! agent, as a native connection on it.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   account::{AccountCli, ApiAccount, ApiSetup},
-  connection::{AgentConnection, ApiProvider, ConnectionAccount},
+  connection::{AgentConnection, ApiEndpoint, ApiProvider, ConnectionAccount},
   id::{ApiAccountId, ConnectionId, SecretId},
+  name::Name,
   store::ConnectionStore,
   time::Timestamp,
 };
@@ -30,10 +32,10 @@ pub const fn key_of(account: ApiAccountId) -> SecretId {
 }
 
 impl Workspace {
-  /// The connection of the project at `repo_root` on the API account `account`, made now when it has none: on the
-  /// program set for the account's CLI on this computer, else the newest one on the search path, named after the CLI
-  /// and the account (*Claude Code · DeepSeek*). Refused for an account of Orchester's own agent, and when a
-  /// connection has to be made and the CLI's program is not found.
+  /// The connection of the project at `repo_root` on the API account `account`, made now when it has none. An agent
+  /// CLI's is made on the program set for the CLI on this computer, else the newest one on the search path, named
+  /// after the CLI and the account (*Claude Code · DeepSeek*), and is refused when that program is not found. One of
+  /// Orchester's own agent is named after the account and takes the check the account has.
   pub fn connect_api_account(&self, repo_root: &Path, account: ApiAccountId) -> Result<ConnectionId, RunsOnError> {
     self.connect_api_account_with(repo_root, account, |cli| {
       probe::detect_agent(cli.provider()).into_iter().next()
@@ -51,9 +53,6 @@ impl Workspace {
     let account = self
       .api_account(account)?
       .ok_or(RunsOnError::ApiAccountNotFound(account))?;
-    let ApiSetup::Cli { cli, .. } = account.setup() else {
-      return Err(RunsOnError::NotForCli);
-    };
     let mut db = ProjectDb::open(repo_root)?;
     let connections = agent_connections(db.connections()?);
     let existing = connections
@@ -63,13 +62,30 @@ impl Workspace {
     if let Some(found) = existing {
       return Ok(found.id());
     }
+    let taken = |name: &Name| connections.iter().any(|found| found.name() == name);
+    let connection = match account.setup() {
+      ApiSetup::Cli { cli, .. } => self.cli_copy(&account, *cli, installed, taken)?,
+      ApiSetup::Native { .. } => native_copy(&account, taken)?,
+    };
+    db.create_connection(&connection)?;
+    self.changes.record(db.project().id(), Outside::Connections);
+    Ok(connection.id())
+  }
+
+  /// A connection of `cli` on its API account `account`, on the program set for the CLI here, else the one
+  /// `installed` finds, checked there.
+  fn cli_copy(
+    &self,
+    account: &ApiAccount,
+    cli: AccountCli,
+    installed: impl FnOnce(AccountCli) -> Option<PathBuf>,
+    taken: impl Fn(&Name) -> bool,
+  ) -> Result<AgentConnection, RunsOnError> {
     let executable = self
-      .agent_program(*cli)?
-      .or_else(|| installed(*cli))
-      .ok_or(RunsOnError::CliMissing(*cli))?;
-    let name = free_name((cli.product(), Some(account.name().as_str())), |name| {
-      connections.iter().any(|found| found.name() == name)
-    });
+      .agent_program(cli)?
+      .or_else(|| installed(cli))
+      .ok_or(RunsOnError::CliMissing(cli))?;
+    let name = free_name((cli.product(), Some(account.name().as_str())), taken);
     let mut connection = AgentConnection::new(
       ConnectionId::generate(),
       name,
@@ -77,16 +93,14 @@ impl Workspace {
       executable,
       Timestamp::now(),
     )?;
-    connection.set_api_provider(Some(provider_of(&account)?))?;
+    connection.set_api_provider(provider_of(account))?;
     let check = connection
       .executable()
       .and_then(|program| probe::check_on(cli.provider(), program, &ConnectionAccount::Default));
     if let Some(check) = check {
       connection.record_check(check)?;
     }
-    db.create_connection(&connection)?;
-    self.changes.record(db.project().id(), Outside::Connections);
-    Ok(connection.id())
+    Ok(connection)
   }
 
   /// Brings the connections of the project at `repo_root` that are on an API account up to date with it: the model
@@ -99,11 +113,9 @@ impl Workspace {
       let Some(account) = accounts.iter().find(|account| on_account(&connection, account)) else {
         continue;
       };
-      let now = provider_of(account)?;
-      if connection.api_provider() == Some(&now) {
+      if !follow(&mut connection, account)? {
         continue;
       }
-      connection.set_api_provider(Some(now))?;
       db.save_connection(&connection.into_connection())?;
       changed = true;
     }
@@ -114,23 +126,68 @@ impl Workspace {
   }
 }
 
-/// Whether `connection` is the project's copy of `account`: the account's CLI, with the account's id as its key's.
+/// Whether `connection` is the project's copy of `account`: the account's kind of agent, with the account's id as
+/// its key's.
 fn on_account(connection: &AgentConnection, account: &ApiAccount) -> bool {
-  connection.provider() == account.agent()
-    && connection
-      .api_provider()
-      .is_some_and(|provider| provider.key() == key_of(account.id()))
+  connection.provider() == account.agent() && connection.key() == Some(key_of(account.id()))
 }
 
-/// What a connection on `account` runs on: the account's model API and models, under the account's id as the key's.
-/// Refused for an account of Orchester's own agent, which no CLI connection is on.
-fn provider_of(account: &ApiAccount) -> Result<ApiProvider, RunsOnError> {
+/// Makes `connection`, the project's copy of `account`, say what the account does now; whether anything changed.
+fn follow(connection: &mut AgentConnection, account: &ApiAccount) -> Result<bool, RunsOnError> {
+  if let Some(now) = provider_of(account) {
+    if connection.api_provider() == Some(&now) {
+      return Ok(false);
+    }
+    connection.set_api_provider(Some(now))?;
+    return Ok(true);
+  }
+  match endpoint_of(account) {
+    Some(now) if connection.api() != Some(&now) => {
+      connection.set_api(now)?;
+      Ok(true)
+    }
+    _ => Ok(false),
+  }
+}
+
+/// A native connection on `account`, an API account of Orchester's own agent: named after the account, on its model
+/// API, with the check the account has.
+fn native_copy(account: &ApiAccount, taken: impl Fn(&Name) -> bool) -> Result<AgentConnection, RunsOnError> {
+  let api = endpoint_of(account).ok_or(RunsOnError::ApiAccountNotFound(account.id()))?;
+  let name = free_name((account.name().as_str(), None), taken);
+  let mut connection = AgentConnection::native(ConnectionId::generate(), name, account.agent(), api, Timestamp::now())?;
+  if let Some(check) = account.last_check() {
+    connection.record_check(check.clone())?;
+  }
+  Ok(connection)
+}
+
+/// What a CLI's connection on `account` runs on: the account's model API and models, under the account's id as the
+/// key's; `None` for an account of Orchester's own agent.
+fn provider_of(account: &ApiAccount) -> Option<ApiProvider> {
   let ApiSetup::Cli { base_url, models, .. } = account.setup() else {
-    return Err(RunsOnError::NotForCli);
+    return None;
   };
-  Ok(ApiProvider::new(
-    base_url.clone(),
-    key_of(account.id()),
-    models.clone(),
-  )?)
+  // An agent CLI's API account lists at least one model (`ApiSetup::cli`), which is all a provider asks.
+  ApiProvider::new(base_url.clone(), key_of(account.id()), models.clone()).ok()
+}
+
+/// The model API a native connection on `account` talks to, under the account's id as the key's; `None` for an agent
+/// CLI's account.
+fn endpoint_of(account: &ApiAccount) -> Option<ApiEndpoint> {
+  let ApiSetup::Native {
+    preset,
+    base_url,
+    models,
+    provider_fallback,
+    ..
+  } = account.setup()
+  else {
+    return None;
+  };
+  Some(
+    ApiEndpoint::new(*preset, base_url.clone(), key_of(account.id()))
+      .with_models(models.clone())
+      .with_provider_fallback(*provider_fallback),
+  )
 }

@@ -7,13 +7,13 @@ use std::{
 };
 
 use orchester_core::{
-  account::AgentAccount,
+  account::{AgentAccount, ApiAccount},
   connection::{
     AgentConnection, AgentProvider, ApiProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionError,
-    GitHubConnection,
+    ConnectionStatus, GitHubConnection,
     mcp::{McpServer, McpServerName},
   },
-  id::{ConnectionId, ResourceId},
+  id::{ApiAccountId, ConnectionId, ResourceId},
   name::Name,
   repository::RepositoryLink,
   resource::ModelId,
@@ -66,6 +66,9 @@ pub struct ProjectConnections {
   pub model_uses: Arc<Vec<ModelUse>>,
   pub link: Option<Arc<RepositoryLink>>,
   pub launches: Arc<Vec<(ConnectionId, Launch)>>,
+  /// The person's API accounts on this computer, by id: a connection that is the project's copy of one names its id
+  /// as its key's. Empty until [`Self::with_api_accounts`] says them, which the project's database does not.
+  pub api_accounts: Arc<Vec<ApiAccountId>>,
 }
 
 impl ProjectConnections {
@@ -133,11 +136,24 @@ impl ProjectConnections {
       model_uses: Arc::new(model_uses::load(store)?),
       link: store.repository_link()?.map(Arc::new),
       launches: Arc::new(launches),
+      api_accounts: Arc::default(),
     })
   }
 
   pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
     Self::load(&ProjectDb::open(repo_root)?)
+  }
+
+  /// The connections on a computer whose person has the API accounts `accounts`.
+  #[must_use]
+  pub fn with_api_accounts(mut self, accounts: &[ApiAccount]) -> Self {
+    self.api_accounts = Arc::new(accounts.iter().map(ApiAccount::id).collect());
+    self
+  }
+
+  /// How `connection` stands: *Key missing* when its key is neither a secret of the project nor an API account's.
+  pub fn status_of(&self, connection: &AgentConnection) -> ConnectionStatus {
+    connection.status_here(&self.secrets, &self.api_accounts)
   }
 
   pub fn connection(&self, id: ConnectionId) -> Option<&AgentConnection> {

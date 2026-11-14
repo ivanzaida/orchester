@@ -6,6 +6,7 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::ConnectionStatus,
+  id::ApiAccountId,
   resource::{AgentProfile, Pipeline, ResourceKind, VersionNumber},
   store::{ConnectionStore, ResourceStore, SecretStore},
 };
@@ -55,7 +56,8 @@ pub struct ReadyCheck {
 }
 
 impl ProjectReadiness {
-  pub fn load<S>(store: &S) -> Result<Self, StoreError>
+  /// `accounts` are the person's API accounts on this computer, whose key a connection on one of them runs with.
+  pub fn load<S>(store: &S, accounts: &[ApiAccountId]) -> Result<Self, StoreError>
   where
     S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError> + SecretStore<Error = StoreError>,
   {
@@ -74,7 +76,12 @@ impl ProjectReadiness {
     let secrets = store.secrets()?;
     let connections = agent_connections(store.connections()?)
       .iter()
-      .map(|connection| (connection.name().as_str().into(), connection.status_with(&secrets)))
+      .map(|connection| {
+        (
+          connection.name().as_str().into(),
+          connection.status_here(&secrets, accounts),
+        )
+      })
       .collect();
     Ok(Self {
       agents,
@@ -83,8 +90,8 @@ impl ProjectReadiness {
     })
   }
 
-  pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
-    Self::load(&ProjectDb::open(repo_root)?)
+  pub fn load_in(repo_root: &Path, accounts: &[ApiAccountId]) -> Result<Self, StoreError> {
+    Self::load(&ProjectDb::open(repo_root)?, accounts)
   }
 
   /// The three checks in [`CheckKind::ALL`]'s order; names in a line joined by `separator`.

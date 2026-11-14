@@ -284,7 +284,7 @@ fn board_rows_say_a_run_ready_to_merge_is_at_delivery() {
 #[test]
 fn ready_to_run_reads_the_published_agents_and_pipelines_and_wants_a_connection() {
   let (fixture, _tasks) = project();
-  let readiness = ProjectReadiness::load_in(fixture.repo.path()).expect("read the readiness");
+  let readiness = ProjectReadiness::load_in(fixture.repo.path(), &[]).expect("read the readiness");
   let checks = readiness.checks(", ");
   let kinds: Vec<CheckKind> = checks.iter().map(|check| check.kind).collect();
   assert_eq!(kinds, CheckKind::ALL);

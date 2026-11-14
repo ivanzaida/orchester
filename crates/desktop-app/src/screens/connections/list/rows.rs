@@ -159,7 +159,7 @@ fn agents_group(
         None => agent_line(ctx, connection),
       };
       let line = with_usage(ctx, line, listed.used_by(connection.id()).count());
-      let status = connection_status(connection, connection.status_with(&listed.secrets));
+      let status = connection_status(connection, listed.status_of(connection));
       row(
         ctx,
         Entry::Agent(connection),

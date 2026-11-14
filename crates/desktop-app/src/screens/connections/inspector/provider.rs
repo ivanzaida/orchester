@@ -37,7 +37,7 @@ pub(super) fn parts(
 ) -> Parts {
   let secrets = &inspecting.listed.secrets;
   let key = secrets.iter().find(|secret| secret.id() == provider.key());
-  let status = connection.status_with(secrets);
+  let status = inspecting.listed.status_of(connection);
   let shown_status = shown(inspecting, connection_status(connection, status));
   let mut runs_on =
     Group::new("connection-provider", ctx.t("connections.runsOn")).rows(program_rows(ctx, connection, inspecting));

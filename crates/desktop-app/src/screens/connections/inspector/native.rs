@@ -52,7 +52,7 @@ pub(super) fn parts(
   used: Element,
   (inspecting, actions): (&Inspecting<'_>, &Actions),
 ) -> Parts {
-  let status = connection.status_with(&inspecting.listed.secrets);
+  let status = inspecting.listed.status_of(connection);
   let shown_status = shown(inspecting, connection_status(connection, status));
   let test = check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions);
   let head_actions = if status == ConnectionStatus::KeyMissing {
@@ -146,7 +146,7 @@ fn rows(ctx: &mut Ctx, connection: &AgentConnection, api: &ApiEndpoint, inspecti
   ];
   rows.push(key_row(ctx, api, &inspecting.listed.secrets));
   // Why the test waits, under the key it waits for, as well as on its locked buttons (`Reason` `Mq4XM` in 05k).
-  if connection.status_with(&inspecting.listed.secrets) == ConnectionStatus::KeyMissing {
+  if inspecting.listed.status_of(connection) == ConnectionStatus::KeyMissing {
     let why = ctx.t("connections.native.testWaitsForKey");
     rows.push(
       Row::new()
@@ -232,7 +232,7 @@ fn models(
     actions,
   )
   .compact();
-  let fetch = match connection.status_with(&inspecting.listed.secrets) {
+  let fetch = match inspecting.listed.status_of(connection) {
     ConnectionStatus::KeyMissing => fetch.unavailable(ctx.t("connections.native.testNeedsKey")),
     _ => fetch,
   };

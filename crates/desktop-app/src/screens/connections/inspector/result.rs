@@ -40,7 +40,7 @@ pub(super) fn agent(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspec
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
-      let status = connection.status_with(&inspecting.listed.secrets);
+      let status = inspecting.listed.status_of(connection);
       let version = checked_version(connection).unwrap_or_default();
       let (models, seconds) = (
         connection.models().len().to_string(),
@@ -79,7 +79,7 @@ pub(super) fn native(
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let check = connection.last_check()?;
-      let status = connection.status_with(&inspecting.listed.secrets);
+      let status = inspecting.listed.status_of(connection);
       let models = api.models().models().len().to_string();
       let balance = check.result.balance().unwrap_or_default();
       let args = [("host", host), ("models", models.as_str()), ("balance", balance)];

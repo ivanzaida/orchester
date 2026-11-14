@@ -73,11 +73,11 @@ pub async fn set_api_provider(services: &Services, args: SetApiProvider) -> Resu
     let id = connection.id();
     set_provider(&mut db, connection.into_connection(), provider).map_err(|error| saved(&error, &args.connection))?;
     services.changes.record(open.project.id(), Outside::Connections);
-    let listed = ProjectConnections::load_in(&open.repo_root)?;
+    let listed = ProjectConnections::load_in(&open.repo_root)?.with_api_accounts(&services.workspace.api_accounts()?);
     let connection = listed
       .connection(id)
       .ok_or_else(|| ToolError::not_found(crate::app_mcp::error::Missing::Connection, &args.connection))?;
-    Ok(json!({ "connection": agent_json(connection, &listed.secrets, open.project.id()) }))
+    Ok(json!({ "connection": agent_json(connection, &listed, open.project.id()) }))
   })
   .await
 }

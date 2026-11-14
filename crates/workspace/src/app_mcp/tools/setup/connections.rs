@@ -12,7 +12,6 @@ use orchester_core::{
   },
   id::{ConnectionId, ProjectId},
   name::Name,
-  secret::Secret,
   store::ConnectionStore,
 };
 use orchester_exec::search_path::{ChosenProgramError, ProgramLookup, SearchFolder, chosen_program};
@@ -98,7 +97,7 @@ pub async fn list_connections(
   let services = services.clone();
   let read = blocking(move || {
     across(&services, args.project.as_deref(), |_, db| {
-      Ok(ProjectConnections::load(db)?)
+      Ok(ProjectConnections::load(db)?.with_api_accounts(&services.workspace.api_accounts()?))
     })
   })
   .await?;
@@ -106,7 +105,7 @@ pub async fn list_connections(
     listed
       .connections
       .iter()
-      .map(|connection| agent_json(connection, &listed.secrets, open.project.id()))
+      .map(|connection| agent_json(connection, listed, open.project.id()))
       .collect()
   });
   let github = read.items(|open, listed| {
@@ -196,12 +195,12 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
       Some(api) => save_on_provider_in(&open.repo_root, draft, api).map_err(|error| save_error(&error, &check))?,
     };
     services.changes.record(open.project.id(), Outside::Connections);
-    let listed = ProjectConnections::load_in(&open.repo_root)?;
+    let listed = ProjectConnections::load_in(&open.repo_root)?.with_api_accounts(&services.workspace.api_accounts()?);
     let connection = listed
       .connection(id)
       .ok_or_else(|| ToolError::not_found(Missing::Connection, id.to_string()))?;
     Ok(json!({
-      "connection": agent_json(connection, &listed.secrets, open.project.id()),
+      "connection": agent_json(connection, &listed, open.project.id()),
       "check": check_json(&check),
     }))
   })
@@ -237,9 +236,9 @@ pub async fn check_connection(services: &Services, args: InConnection) -> Result
   let services = services.clone();
   blocking(move || {
     services.changes.record(open.project.id(), Outside::Connections);
-    let listed = ProjectConnections::load_in(&open.repo_root)?;
+    let listed = ProjectConnections::load_in(&open.repo_root)?.with_api_accounts(&services.workspace.api_accounts()?);
     let connection = match (listed.connection(id), listed.github_connection(id)) {
-      (Some(agent), _) => agent_json(agent, &listed.secrets, open.project.id()),
+      (Some(agent), _) => agent_json(agent, &listed, open.project.id()),
       (None, Some(github)) => json!({ "id": id.to_string(), "status": github.status().as_str() }),
       (None, None) => return Err(ToolError::not_found(Missing::Connection, &args.connection)),
     };
@@ -371,7 +370,8 @@ pub(super) fn agent_by_id(connections: &[AgentConnection], id: ConnectionId) -> 
 }
 
 /// An agent connection of `project` as Connections lists it, with its link: its inspector.
-pub(super) fn agent_json(connection: &AgentConnection, secrets: &[Secret], project: ProjectId) -> Value {
+pub(super) fn agent_json(connection: &AgentConnection, listed: &ProjectConnections, project: ProjectId) -> Value {
+  let secrets = &listed.secrets;
   let check = connection.last_check();
   let version = check.and_then(|check| match &check.result {
     CheckResult::Available { version, .. } => Some(version.clone()),
@@ -382,7 +382,7 @@ pub(super) fn agent_json(connection: &AgentConnection, secrets: &[Secret], proje
     "name": connection.name().as_str(),
     "provider": connection.provider(),
     "program": connection.executable().map(|program| program.display().to_string()),
-    "status": connection.status_with(secrets).as_str(),
+    "status": listed.status_of(connection).as_str(),
     "version": version,
     "checked_at": check.map(|check| wire::time(check.at)),
     "models": listed_models(connection).len(),

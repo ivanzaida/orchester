@@ -89,7 +89,7 @@ fn cli(
   used: Element,
   (inspecting, actions): (&Inspecting<'_>, &Actions),
 ) -> Parts {
-  let status = connection.status_with(&inspecting.listed.secrets);
+  let status = inspecting.listed.status_of(connection);
   let shown_status = shown(inspecting, connection_status(connection, status));
   let mut notices: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   notices.extend(what_to_do(ctx, connection, status, shown_status, inspecting));
@@ -198,7 +198,7 @@ fn what_to_do(
 /// *Program*: the program file and what starts it in its hint, its version as the value; *Script* when a launcher
 /// runs one.
 pub(super) fn program_rows(ctx: &mut Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>) -> Vec<Element> {
-  let status = connection.status_with(&inspecting.listed.secrets);
+  let status = inspecting.listed.status_of(connection);
   let launch = inspecting.listed.launch_of(connection.id());
   let path = connection
     .executable()

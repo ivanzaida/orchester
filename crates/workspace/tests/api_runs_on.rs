@@ -9,7 +9,9 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use orchester_core::{
   account::{AccountCli, ApiSetup},
-  connection::{AgentConnection, AgentProvider, BaseUrl, EndpointPreset, NativeModels},
+  connection::{
+    AgentConnection, AgentProvider, BaseUrl, ConnectionStatus, EndpointPreset, ModelSource, NativeModel, NativeModels,
+  },
   id::{ApiAccountId, ProjectId, SecretId},
   name::Name,
   project::{Project, ProjectKey},
@@ -190,10 +192,21 @@ fn api_runs_on_a_connection_follows_what_the_account_serves_when_the_project_ope
   assert_eq!(provider.key(), SecretId::from_uuid(account.as_uuid()));
 }
 
-#[test]
-fn api_runs_on_an_account_of_orchesters_own_agent_is_refused_and_makes_nothing() {
-  let fixture = fixture();
-  let native = fixture
+/// An API account of Orchester's own agent, on Anthropic's own API with `served` as its models.
+fn anthropic(fixture: &Fixture, served: &[&str]) -> ApiAccountId {
+  let listed = served
+    .iter()
+    .map(|id| {
+      NativeModel::new(
+        ModelId::new(id).expect("a model id"),
+        None,
+        None,
+        Vec::new(),
+        ModelSource::Manual,
+      )
+    })
+    .collect();
+  fixture
     .workspace
     .add_api_account(
       &fixture.vault,
@@ -202,21 +215,110 @@ fn api_runs_on_an_account_of_orchesters_own_agent_is_refused_and_makes_nothing()
         AgentProvider::AnthropicApi,
         EndpointPreset::Official,
         BaseUrl::new("https://api.anthropic.com").expect("a base URL"),
-        NativeModels::default(),
+        NativeModels::new(listed, None, None).expect("models"),
         false,
       )
       .expect("a setup"),
       &SecretValue::new("sk-typed-by-the-test".to_owned()).expect("a key"),
     )
     .expect("added")
-    .id();
+    .id()
+}
 
-  let refused = fixture
+/// An account of Orchester's own agent gets a native connection that is its copy: named after it, on its model API
+/// and models, its key the account's id, with no secret in the project, and no program of any CLI asked for. Its key
+/// is not missing where the person's API accounts are known.
+#[test]
+fn api_runs_on_an_account_of_orchesters_own_agent_gets_a_native_connection_that_is_its_copy() {
+  let fixture = fixture();
+  let native = anthropic(&fixture, &["claude-opus-5-5"]);
+
+  let made = fixture
     .workspace
-    .connect_api_account_with(fixture.repo.path(), native, nothing_installed);
+    .connect_api_account_with(fixture.repo.path(), native, nothing_installed)
+    .expect("a native connection needs no program");
+  let again = fixture
+    .workspace
+    .connect_api_account_with(fixture.repo.path(), native, nothing_installed)
+    .expect("the one it has");
 
-  assert!(matches!(refused, Err(RunsOnError::NotForCli)), "{refused:?}");
-  assert!(connections(&fixture).is_empty());
+  assert_eq!(made, again, "made once");
+  let listed = connections(&fixture);
+  let [connection] = listed.as_slice() else {
+    panic!("one connection: {listed:?}");
+  };
+  assert_eq!(connection.name().as_str(), "Anthropic");
+  assert_eq!(connection.provider(), AgentProvider::AnthropicApi);
+  let api = connection.api().expect("a native connection");
+  assert_eq!(api.key(), SecretId::from_uuid(native.as_uuid()));
+  assert_eq!(api.base_url().as_str(), "https://api.anthropic.com");
+  assert_eq!(api.models().models().len(), 1);
+  let db = ProjectDb::open(fixture.repo.path()).expect("database");
+  assert!(
+    db.secrets().expect("read").is_empty(),
+    "the project holds no secret of it"
+  );
+  assert_eq!(
+    connection.status_with(&[]),
+    ConnectionStatus::KeyMissing,
+    "by the project's secrets alone"
+  );
+  assert_ne!(
+    connection.status_here(&[], &[native]),
+    ConnectionStatus::KeyMissing,
+    "the key is the account's"
+  );
+}
+
+/// The copy follows the account: other models typed in Settings reach the project when it opens.
+#[test]
+fn api_runs_on_a_native_connection_follows_its_account_when_the_project_opens() {
+  let fixture = fixture();
+  let native = anthropic(&fixture, &["claude-opus-5-5"]);
+  fixture
+    .workspace
+    .connect_api_account_with(fixture.repo.path(), native, nothing_installed)
+    .expect("made");
+  let models = ["claude-opus-5-5", "claude-sonnet-5-5"]
+    .iter()
+    .map(|id| {
+      NativeModel::new(
+        ModelId::new(id).expect("a model id"),
+        None,
+        None,
+        Vec::new(),
+        ModelSource::Manual,
+      )
+    })
+    .collect();
+  fixture
+    .workspace
+    .change_api_account(
+      native,
+      ApiSetup::native(
+        AgentProvider::AnthropicApi,
+        EndpointPreset::Official,
+        BaseUrl::new("https://api.anthropic.com").expect("a base URL"),
+        NativeModels::new(models, None, None).expect("models"),
+        false,
+      )
+      .expect("a setup"),
+    )
+    .expect("changed");
+
+  fixture
+    .workspace
+    .follow_api_accounts(fixture.repo.path())
+    .expect("followed");
+
+  let listed = connections(&fixture);
+  let api = listed[0].api().expect("a native connection");
+  assert_eq!(api.models().models().len(), 2);
+  assert_eq!(
+    api.key(),
+    SecretId::from_uuid(native.as_uuid()),
+    "the key stays the account's"
+  );
 }
 
 #[test]
