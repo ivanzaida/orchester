@@ -200,3 +200,21 @@ fn ceilings_count_automations_returns_and_every_raise_of_a_run() {
   );
   assert_eq!(raises(&events), 2, "every raise, whoever made it");
 }
+
+#[test]
+fn ceilings_leading_is_asked_for_by_the_first_words_of_an_order() {
+  use orchester_core::orchestrator::watch::asked_to_lead;
+  assert_eq!(asked_to_lead("lead to the end"), Some(""));
+  assert_eq!(
+    asked_to_lead("  Lead To The End: merge when green"),
+    Some("merge when green")
+  );
+  assert_eq!(
+    asked_to_lead("lead to the end. Ask before a push."),
+    Some("Ask before a push.")
+  );
+  assert_eq!(asked_to_lead("lead to the endgame"), None, "another word");
+  assert_eq!(asked_to_lead("Please lead to the end"), None, "only at its start");
+  assert_eq!(asked_to_lead(""), None);
+  assert_eq!(asked_to_lead("веди до кінця"), None, "the words are these words");
+}

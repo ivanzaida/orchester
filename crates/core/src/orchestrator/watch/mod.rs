@@ -28,7 +28,9 @@ pub use self::{
   created::{Created, CreatedWatch, created_task, created_task_watch, event_subscription},
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
-  lead::{Ceiling, CeilingReached, Ceilings, CeilingsError, WatchMode, own_returns, raises},
+  lead::{
+    Ceiling, CeilingReached, Ceilings, CeilingsError, LEAD_TO_THE_END, WatchMode, asked_to_lead, own_returns, raises,
+  },
   line::{AtRequest, LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
   stop::{LeftOpen, OpenWork},
   summary::WatchSummary,

@@ -323,6 +323,14 @@ the order that applies (see [Orders](#orders)).
   is refused `report_turn`). `get_daily_report` reads a day's report. The daily report is not
   an event of a task: the routing rule does not apply to it.
 
+### Choosing to lead to the end, for now
+
+No window offers it yet. Until one does, begin the order of your own `/watch-module` or `/watch-task` with the words
+**lead to the end** (*lead to the end: merge once the review passed*): the targets are then led to the end within the
+default ceilings, and what follows the words is the order. A target the conversation only followed is led from then
+on. The Orchestrator's own `watch` tool never chooses it. To stop, `/unwatch`. `get_standing` says which targets are
+led (`leads_to_the_end`).
+
 ### Events of a target led to the end
 
 A conversation that leads a target **to the end** (see [Leading to the end](#leading-to-the-end-and-its-ceilings))

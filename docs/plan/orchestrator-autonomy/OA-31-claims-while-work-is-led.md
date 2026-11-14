@@ -1,6 +1,6 @@
 # OA-31 · A claim holds while its work is led, and a run that lost it stops
 
-- **Status:** todo
+- **Status:** needs decision (D1 and D8: for whom a claim is renewed while its work waits, and for how long); the contract changes here first, then the platform's side
 - **Kind:** contract + workspace + runner
 - **Depends on:** —
 - **Branch:** —

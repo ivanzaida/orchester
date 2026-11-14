@@ -34,6 +34,26 @@ impl WatchMode {
   }
 }
 
+/// The words that, at the start of the order of the person's own /watch, have its targets led to the end: the way to
+/// choose it until a window offers it (`docs/plan/orchestrator-autonomy/OA-10-…`).
+pub const LEAD_TO_THE_END: &str = "lead to the end";
+
+/// The rest of `order` when it begins with [`LEAD_TO_THE_END`], in any case, as a whole phrase: what follows it and
+/// the punctuation after it is the order itself. `None` for any other order.
+pub fn asked_to_lead(order: &str) -> Option<&str> {
+  let trimmed = order.trim_start();
+  let head = trimmed.get(..LEAD_TO_THE_END.len())?;
+  if !head.eq_ignore_ascii_case(LEAD_TO_THE_END) {
+    return None;
+  }
+  let rest = &trimmed[LEAD_TO_THE_END.len()..];
+  // "lead to the endgame" is an order of its own.
+  if rest.chars().next().is_some_and(char::is_alphanumeric) {
+    return None;
+  }
+  Some(rest.trim_start_matches(|c: char| c.is_whitespace() || matches!(c, ':' | '.' | ',' | ';' | '!' | '-')))
+}
+
 /// What bounds the chat's own doing for work it leads to the end.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Kept", into = "Kept")]

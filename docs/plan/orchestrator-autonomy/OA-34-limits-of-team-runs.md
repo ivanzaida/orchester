@@ -1,6 +1,6 @@
 # OA-34 · A team run's limits are raised as a local run's are
 
-- **Status:** todo
+- **Status:** needs decision (D6: what a holder may raise without an Admin); the contract changes here first, then the platform's side
 - **Kind:** contract + workspace
 - **Depends on:** OA-29
 - **Branch:** —

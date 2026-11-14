@@ -747,6 +747,9 @@ project with none of its own; the application-wide values are no longer shown or
   run). `park_task` leaves a task the chat cannot move to the person with what they are to do: it reads as parked,
   nothing starts it (`parked`), the events of its run are tried no more, and it ends when its run moves or the
   person gives it back.
+- **Leading to the end is chosen by the person's own command, for now** (2026-11-14, until OA-10's window): a
+  `/watch-module` or `/watch-task` whose order begins with *lead to the end* has its targets led, within the default
+  ceilings, with what follows as the order. The agent's `watch` tool never chooses it.
 - **A leading turn is told to move the work, not to report** (2026-11-14, OA-18, OA-21, OA-06). The prompt of a turn
   an event started carries a leading note when the subscription the event came through leads its task to the end:
   read where the target stands, decide what is the task's to decide in a stated order of precedence, park what is

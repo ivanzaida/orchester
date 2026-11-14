@@ -1,6 +1,6 @@
 # OA-30 · A team task is Done once its work is merged, as a local one is
 
-- **Status:** todo
+- **Status:** needs decision (D4, and how the server records it)
 - **Kind:** workspace (and the contract, if the server must agree)
 - **Depends on:** OA-27
 - **Branch:** —
@@ -36,3 +36,12 @@ a merge nothing is sent: "whether a merged team run makes its task Done is open 
 
 - Workspace tests with the stand-in server: Done after the merge, the refusal kept, a watch that ends.
 - Its two rows leave the parity table. `tools/check.ps1` passes.
+
+## Found (2026-11-14), before building
+
+The contract lets the holder of a task's claim, or an Admin, set `workflow` to `done` (`task.complete`,
+`docs/cloud-api.md`), and records who closed it as `closed.how = person {by}`, the caller of the patch. A Done the
+desktop sends by itself after a merge would be recorded as that person's own. So beside D4 (Done at the merge into
+the module's branch, or at the module's delivery) the person has to say how the server records a Done that
+automation sent: as the holder's, or as a kind of its own, which is a change of the contract. Not built until then;
+the task page's *Mark as done* stays the way.

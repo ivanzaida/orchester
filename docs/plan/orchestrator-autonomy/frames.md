@@ -114,6 +114,9 @@ state on a platform where it cannot be held (*Not available on this system*).
 
 ## H · Events of a target led to the end (added 2026-11-14)
 
+Choosing to lead (group B) has a stand-in until it is drawn: the person's `/watch-module` or `/watch-task` whose
+order begins with *lead to the end*. The frames of B replace it.
+
 Built without a frame, drawn as the lines about what a conversation watches are (`Parts · Lines` `avDZO`), so that
 the conversation shows the entry at all:
 

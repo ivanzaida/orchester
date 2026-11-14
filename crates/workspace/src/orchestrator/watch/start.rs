@@ -1,15 +1,18 @@
 //! `/watch-task` and `/watch-module`: each target is claimed for the conversation (`Subscriptions::claim`); a new one
 //! is kept at once, one the conversation leads already takes the command's order, and one another conversation leads
 //! is kept nowhere and returned for the card. A conversation whose less specific subscription took in a new target
-//! (a module whose task is watched here now) is told so in a line of its own, with no card.
+//! (a module whose task is watched here now) is told so in a line of its own, with no card. The person's own command
+//! whose order begins with *lead to the end* has its targets led to the end, within the default ceilings
+//! (`orchester_core::orchestrator::watch::asked_to_lead`): the way to choose it until a window offers it (OA-10). The
+//! watch the agent applies at the person's request never chooses it.
 
 use std::path::Path;
 
 use orchester_core::{
   id::ChatId,
   orchestrator::{
-    Chat, ChatEvent, Claim, Subscription, Subscriptions,
-    watch::{AtRequest, LedElsewhere, NamedTarget, Told, WatchCommand, WatchLine},
+    Ceilings, Chat, ChatEvent, Claim, Subscription, Subscriptions, WatchMode,
+    watch::{AtRequest, LedElsewhere, NamedTarget, Told, WatchCommand, WatchLine, asked_to_lead},
   },
   time::Timestamp,
 };
@@ -58,9 +61,16 @@ fn apply(
   }
   let mut db = ProjectDb::open(root)?;
   let now = Timestamp::now();
+  // Only the person's own command chooses to lead to the end; its order is then what follows those words.
+  let (mode, command_order) = (lead_asked(order, asked), order);
+  let order = match mode {
+    WatchMode::Lead { .. } => asked_to_lead(order).unwrap_or(order),
+    WatchMode::Follow => order,
+  };
   let mut applying = Applying {
     chat: chat.id(),
     order,
+    mode,
     now,
     set: db.active_subscriptions()?,
     watched: Watched::default(),
@@ -77,6 +87,8 @@ fn apply(
   if watched.applied_nothing() {
     return Err(WatchError::Gone(watched.gone));
   }
+  // The command is kept as the person wrote it; the lines name the order that applies.
+  let command_order = command_order.trim().to_owned();
   let order = order.trim().to_owned();
   let line = ChatEvent::Watch {
     line: WatchLine::Watching {
@@ -90,7 +102,10 @@ fn apply(
   let entries = if asked {
     vec![line]
   } else {
-    let command = WatchCommand::Watch { targets: named, order };
+    let command = WatchCommand::Watch {
+      targets: named,
+      order: command_order,
+    };
     vec![ChatEvent::WatchCommand { command }, line]
   };
   db.keep_watch_entries(chat, &entries, now)?;
@@ -105,6 +120,8 @@ fn apply(
 struct Applying<'a> {
   chat: ChatId,
   order: &'a str,
+  /// How the command takes its targets: following them, or leading them to the end.
+  mode: WatchMode,
   now: Timestamp,
   set: Subscriptions,
   watched: Watched,
@@ -119,7 +136,7 @@ impl Applying<'_> {
       return Ok(given.clone());
     };
     let named = found.named;
-    let subscription = Subscription::new(self.chat, named.target, self.order, self.now);
+    let subscription = Subscription::new(self.chat, named.target, self.order, self.now).in_mode(self.mode);
     match self.set.claim(self.chat, named.target, found.module) {
       Claim::New { .. } => match db.start_subscription(&subscription)? {
         WatchStart::Started => {
@@ -134,11 +151,16 @@ impl Applying<'_> {
         WatchStart::LedElsewhere(led) => self.led_elsewhere(db, named.clone(), (led.chat(), led.since()))?,
       },
       Claim::AlreadyHere => {
-        let renewed = self
-          .set
-          .of(named.target)
-          .is_some_and(|led| led.order() != subscription.order());
-        if renewed {
+        let led = self.set.of(named.target);
+        let renewed = led.is_some_and(|led| led.order() != subscription.order());
+        // A target the conversation only follows is led to the end from now on: a renewal keeps how a target is
+        // taken, so the following ends and the leading starts.
+        let leads_now = self.mode.ceilings().is_some() && led.is_some_and(|led| led.mode().ceilings().is_none());
+        if leads_now {
+          db.stop_subscription(self.chat, named.target, self.now)?;
+          db.start_subscription(&subscription)?;
+          self.set = db.active_subscriptions()?;
+        } else if renewed {
           db.take_over_subscription(&subscription)?;
           self.set = self.set.take_over(subscription, found.module).into_set();
         }
@@ -163,5 +185,18 @@ impl Applying<'_> {
       since,
     });
     Ok(())
+  }
+}
+
+/// How a /watch with `order` takes its targets: leading them to the end, within the default ceilings, when it is the
+/// person's own command (`asked`: the agent applies it at their request) and its order begins with the words for it;
+/// following them otherwise.
+fn lead_asked(order: &str, asked: bool) -> WatchMode {
+  if !asked && asked_to_lead(order).is_some() {
+    WatchMode::Lead {
+      ceilings: Ceilings::default(),
+    }
+  } else {
+    WatchMode::Follow
   }
 }

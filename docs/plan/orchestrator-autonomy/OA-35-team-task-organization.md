@@ -1,6 +1,6 @@
 # OA-35 · Dependencies between team tasks, and the rest of a task's organization
 
-- **Status:** todo
+- **Status:** needs decision (what of a task's organization the server keeps, and who may change it); the contract changes here first, then the platform's side
 - **Kind:** contract + workspace
 - **Depends on:** —
 - **Branch:** —
