@@ -14,7 +14,7 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountState, AgentAccount, ApiAccount, same_sign_in},
-  connection::{AgentProvider, ConnectionAccount, plan_limits::LimitReading},
+  connection::{AgentProvider, ConnectionAccount, DecisionConnection, plan_limits::LimitReading},
   id::AgentAccountId,
   time::Timestamp,
 };
@@ -99,6 +99,36 @@ pub fn api_listed(ctx: &mut Ctx) -> ApiAccounts {
           .map(|accounts| ApiAccounts(Arc::new(accounts)))
           .map_err(|error| {
             tracing::warn!(%error, "the API accounts can't be read");
+            messages::store_error(&error)
+          })
+      }
+    })
+    .state()
+    .get()
+    .data
+    .unwrap_or_default()
+}
+
+/// The person's decision model servers as read; empty until they are, or when they can't be.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DecisionServers(pub Arc<Vec<DecisionConnection>>);
+
+impl DevtoolsInspectable for DecisionServers {}
+
+/// The decision model servers, read when the calling screen shows and again whenever one changed ([`changes`]).
+pub fn decision_listed(ctx: &mut Ctx) -> DecisionServers {
+  let workspace = Services::of(ctx).workspace;
+  let changed = changes(ctx, &workspace);
+  ctx
+    .future(changed, move |_| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "decision servers");
+      let workspace = workspace.clone();
+      async move {
+        background::run(move || workspace.decision_servers())
+          .await?
+          .map(|servers| DecisionServers(Arc::new(servers)))
+          .map_err(|error| {
+            tracing::warn!(%error, "the decision model servers can't be read");
             messages::store_error(&error)
           })
       }

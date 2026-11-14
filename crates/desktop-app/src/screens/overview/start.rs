@@ -30,7 +30,7 @@ use super::{
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AccountsView, ProjectPage, Route},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
@@ -197,10 +197,13 @@ fn step_line(ctx: &mut Ctx, project: ProjectId, line: &StartLine) -> Row {
 /// Where a step is done, and its link's words.
 fn destination(ctx: &mut Ctx, project: ProjectId, step: StartStep) -> (std::sync::Arc<str>, Open) {
   let (key, page) = match step {
-    StartStep::Connect => (
-      "overview.start.connections",
-      ProjectPage::Connections(ConnectionsView::default()),
-    ),
+    // Agents run on the person's accounts, which are the app's: Settings › Accounts.
+    StartStep::Connect => {
+      return (
+        ctx.t("overview.start.connections"),
+        Navigation::of(ctx).to(Route::Accounts(AccountsView::default())),
+      );
+    }
     StartStep::Profile => ("overview.start.agents", ProjectPage::Agents),
     StartStep::Pipeline => ("overview.start.pipelines", ProjectPage::Pipelines),
     StartStep::Task => ("overview.start.newTask", ProjectPage::NewTask),

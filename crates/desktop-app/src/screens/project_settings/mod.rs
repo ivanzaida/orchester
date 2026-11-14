@@ -85,7 +85,8 @@ impl Shown {
   }
 }
 
-/// A tab of the page (`Tabs` `A5Sf0Q`, seven since `S03` `X8mFTS`).
+/// A tab of the page (`Tabs` `A5Sf0Q`), and Connections, which is a tab no longer and only says what its pages are
+/// under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Section {
   General,
@@ -100,12 +101,14 @@ enum Section {
 }
 
 impl Section {
-  const ALL: [Self; 7] = [
+  /// The tabs of the row. Connections is none of them (`docs/design/agent-accounts.md`, "Agents run on accounts",
+  /// decision 7): agents run on the accounts of Settings › Accounts and GitHub is in General. The pages it had still
+  /// open by their own routes, under no tab: a connection made before accounts, a decision model's test.
+  const ALL: [Self; 6] = [
     Self::General,
     Self::Runs,
     Self::Orchestrator,
     Self::Context,
-    Self::Connections,
     Self::Environment,
     Self::Sharing,
   ];

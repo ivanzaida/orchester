@@ -86,7 +86,6 @@ pub fn group(
 }
 fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);
-  let project = props.tab.project.open.project.id();
   let open = ActionButton::new(
     "settings-auto-open-connections",
     ButtonKind::Secondary,
@@ -94,10 +93,7 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   )
   .icon(Icon::Plug)
   .in_form()
-  .opens(nav.to(crate::routes::Route::Project(
-    project,
-    crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
-  )));
+  .opens(nav.to(crate::routes::Route::Accounts(crate::routes::AccountsView::default())));
   SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"))
     .info(ctx.t("project_settings.reviewerDetail"))
     .toned(ctx.t("project_settings.reviewerUnavailable"), Tone::Warning)

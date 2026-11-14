@@ -12,6 +12,7 @@ use orchester_core::account::{AccountCli, AccountState, AgentAccount};
 
 use super::{
   Parts, api,
+  decision::Servers,
   words::{Shown, cli_key, identity, look, name, t, ta},
 };
 use crate::{
@@ -29,9 +30,10 @@ use crate::{
 };
 
 /// The list page's column.
-pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
+pub(super) fn page(ctx: &mut Ctx, parts: &Parts, servers: &Servers) -> Column {
   let navigation = Navigation::of(ctx);
   let api = accounts::api_listed(ctx);
+  let decision = accounts::decision_listed(ctx);
   let mut pane = super::frame::pane("settings-accounts");
   for (index, cli) in AccountCli::ALL.into_iter().enumerate() {
     // Default last: the accounts the person added come first.
@@ -80,7 +82,8 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
     pane = pane.child(group);
   }
   pane
-    .with_children(api::model_apis(ctx, &api.0))
+    .with_children(api::model_apis(ctx, &api.0, (servers, &decision.0)))
+    .with_children(servers.question(ctx, &decision.0))
     .child(group_note("accounts-note", &t(ctx, "accounts.note")))
 }
 

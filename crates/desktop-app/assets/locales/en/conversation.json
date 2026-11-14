@@ -275,7 +275,7 @@
         "model": "Model",
         "effortNone": "Not offered by this connection",
         "note": "This connection serves one model, so this step can’t switch. To escalate, give {{agent}}’s profile another connection and restart the step.",
-        "link": "Connections"
+        "link": "Accounts"
       },
       "event": {
         "changedStep": "Model changed for this step",
@@ -323,7 +323,7 @@
       "noExitCode": "no exit code",
       "noExitCodeTook": "no exit code · {{took}}",
       "notSignedIn": "The agent CLI is not signed in",
-      "notSignedInDetail": "Sign in to the CLI in your own terminal, check the connection again in Connections, then run the task again. Orchester never signs in for you.",
+      "notSignedInDetail": "Sign in to the CLI in your own terminal, check the account again in Settings › Accounts, then run the task again. Orchester never signs in for you.",
       "openInChanges": "open in Changes ↗",
       "outputOmitted": "{{size}} of earlier output was not kept",
       "outputTrimmed": "{{count}} earlier lines are not shown",

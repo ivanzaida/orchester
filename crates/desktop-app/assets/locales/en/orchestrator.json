@@ -324,7 +324,7 @@
       "failed": "The answer failed",
       "failedBody": "{{reason}} · Your message is kept.",
       "retry": "Retry",
-      "openConnections": "Open Connections",
+      "openConnections": "Open Accounts",
       "pickAccount": "Pick account",
       "earlier": "This answer failed: {{reason}}",
       "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
@@ -802,9 +802,9 @@
       "note": "A reply already under way finishes on the version it started with; a published change applies from the next reply.",
       "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
       "noConnection": {
-        "title": "No connection in {{project}} can run the Orchestrator",
-        "body": "It needs an agent connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
-        "open": "Open connections"
+        "title": "No account {{project}} has can run the Orchestrator",
+        "body": "It needs an account of yours that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
+        "open": "Open Accounts"
       },
       "saveFailed": "Not saved: {{reason}}"
     },

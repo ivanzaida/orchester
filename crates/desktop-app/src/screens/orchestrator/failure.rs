@@ -20,7 +20,7 @@ use orchester_core::{connection::AccountStartProblem, id::ProjectId, orchestrato
 use super::timeline::TurnRow;
 use crate::{
   navigation::Navigation,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AccountsView, ProjectPage, Route},
   theme::{ExtraSpacing, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -135,12 +135,18 @@ impl Fix {
   fn button(self, ctx: &mut Ctx, row: &TurnRow) -> Option<ActionButton> {
     let project: ProjectId = row.env.project;
     let (id, key, glyph, page) = match self {
-      Self::Connections => (
-        "orchestrator-open-connections",
-        "orchestrator.failure.openConnections",
-        Icon::Plug,
-        ProjectPage::Connections(ConnectionsView::default()),
-      ),
+      // What the Orchestrator runs on is an account of the person's: Settings › Accounts.
+      Self::Connections => {
+        return Some(
+          ActionButton::new(
+            "orchestrator-open-connections",
+            ButtonKind::Ghost,
+            ctx.t("orchestrator.failure.openConnections"),
+          )
+          .icon(Icon::Plug)
+          .opens(Navigation::of(ctx).to(Route::Accounts(AccountsView::default()))),
+        );
+      }
       Self::Settings => (
         "orchestrator-open-settings",
         "orchestrator.notReady.openSettings",

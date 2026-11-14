@@ -80,7 +80,7 @@
     "reload": "Reload",
     "finishEditing": "Save or fix the changes in this section before opening another.",
     "reviewerUnavailable": "Manual's reviewer needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
-    "openConnections": "Open Connections",
+    "openConnections": "Open Accounts",
     "outsideTitle": "Changed outside this screen",
     "outsideDetail": "Your edits are kept. Reload to show the values stored now.",
     "project": "Project",

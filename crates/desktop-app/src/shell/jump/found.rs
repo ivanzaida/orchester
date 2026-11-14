@@ -16,8 +16,8 @@ use orchester_workspace::tasks::{
 
 use crate::{
   routes::{
-    AccountsView, AgentTab, ConnectionsView, ModuleTab, OrchesterView, ProjectPage, ProjectSettingsTab, Route, Screen,
-    SecretsView, TaskView,
+    AccountsView, AgentTab, ModuleTab, OrchesterView, ProjectPage, ProjectSettingsTab, Route, Screen, SecretsView,
+    TaskView,
   },
   screens::{hub::HubTab, tasks::phrases},
   shell::sidebar::place::Place,
@@ -310,11 +310,6 @@ fn settings_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
       "context",
       "project_settings.context",
       ProjectPage::Settings(ProjectSettingsTab::Context),
-    ),
-    (
-      "connections",
-      "project_settings.connections",
-      ProjectPage::Connections(ConnectionsView::default()),
     ),
     (
       "environment",

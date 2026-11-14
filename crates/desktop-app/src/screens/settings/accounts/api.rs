@@ -6,7 +6,9 @@
 //! profile on the account. The base URL, key and model fields are the ones a connection's form has
 //! ([`ProviderForm`], [`NativeForm`]).
 //!
-//! Not here yet: an account's own page (rename, replace the key, test, remove), and the decision model's server.
+//! A decision model's server is added here too, and stands under *Model APIs* ([`super::decision`]).
+//!
+//! Not here yet: an account's own page (rename, replace the key, test, remove).
 
 use std::sync::Arc;
 
@@ -23,7 +25,7 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountCli, ApiAccount, ApiSetup},
-  connection::AgentProvider,
+  connection::{AgentProvider, DecisionConnection},
   name::Name,
   resource::ModelId,
   secret::SecretValue,
@@ -32,6 +34,7 @@ use orchester_workspace::{background, connections::api_provider::base_url, messa
 
 use super::{
   Work,
+  decision::{NewServer, Servers},
   words::{cli_key, t, ta},
 };
 use crate::{
@@ -64,15 +67,18 @@ const OWN: AgentProvider = AgentProvider::AnthropicApi;
 pub(super) enum UsedWith {
   Cli(AccountCli),
   Own,
+  /// A decision model's server, which reviews what agents ask to do.
+  Decision,
 }
 
 impl DevtoolsInspectable for UsedWith {}
 
 impl UsedWith {
-  const ALL: [Self; 3] = [
+  const ALL: [Self; 4] = [
     Self::Cli(AccountCli::ClaudeCode),
     Self::Cli(AccountCli::Codex),
     Self::Own,
+    Self::Decision,
   ];
 
   /// What its segment's id ends with.
@@ -80,6 +86,7 @@ impl UsedWith {
     match self {
       Self::Cli(cli) => cli.as_str(),
       Self::Own => "own",
+      Self::Decision => "decision",
     }
   }
 
@@ -87,12 +94,17 @@ impl UsedWith {
     match self {
       Self::Cli(cli) => cli_key(cli),
       Self::Own => "accounts.api.own",
+      Self::Decision => "accounts.api.decision.used",
     }
   }
 }
 
-/// What *Add provider* adds: the name, what reaches the model API, and the key.
-type NewApi = (Name, ApiSetup, SecretValue);
+/// What *Add provider* adds: an API account (its name, what reaches the model API, and the key), or a decision
+/// model's server.
+pub(super) enum NewApi {
+  Account(Name, ApiSetup, SecretValue),
+  Server(NewServer),
+}
 pub(super) type AddAction = FutureAction<NewApi, (), Message>;
 
 /// What the person has typed so far for a new API provider. Cloning shares it.
@@ -104,6 +116,8 @@ pub(super) struct Draft {
   pub form: Arc<ProviderForm>,
   /// The fields of an account of Orchester's own agent.
   pub own: Arc<NativeForm>,
+  /// The key of a decision model's server, typed as an account's is.
+  pub decision_key: Arc<ProviderForm>,
   pub add: AddAction,
 }
 
@@ -111,19 +125,31 @@ impl Draft {
   pub fn new(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let (workspace, vault) = (services.workspace, services.vault);
-    let add = ctx.future_action(move |(name, setup, key): NewApi| {
+    let add = ctx.future_action(move |new: NewApi| {
       let (workspace, vault) = (workspace.clone(), vault.clone());
       async move {
-        background::run(move || {
-          workspace
-            .add_api_account(vault.get(), name, setup, &key)
-            .map(|_| ())
-            .map_err(|error| {
-              tracing::warn!(%error, "an API provider was not added");
-              error.message()
-            })
+        let (adding, keys) = (workspace.clone(), vault.clone());
+        let server = background::run(move || {
+          let added = match new {
+            NewApi::Account(name, setup, key) => adding.add_api_account(keys.get(), name, setup, &key).map(|_| None),
+            NewApi::Server((name, url, key)) => adding
+              .add_decision_server(keys.get(), name, url, key.as_ref())
+              .map(|server| Some(server.id())),
+          };
+          added.map_err(|error| {
+            tracing::warn!(%error, "an API provider was not added");
+            error.message()
+          })
         })
-        .await?
+        .await??;
+        // A decision model's server is asked for its models at once: its row then says how it stands. The server is
+        // added whatever it answers.
+        if let Some(server) = server
+          && let Err(error) = workspace.check_decision_server(vault.get(), server).await
+        {
+          tracing::warn!(%error, "a decision model server just added was not checked");
+        }
+        Ok(())
       }
     });
     Self {
@@ -131,6 +157,7 @@ impl Draft {
       name: ctx.signal(String::new()),
       form: Arc::new(ProviderForm::for_account(ctx)),
       own: Arc::new(NativeForm::for_account(ctx, OWN)),
+      decision_key: Arc::new(ProviderForm::for_account(ctx)),
       add,
     }
   }
@@ -139,18 +166,11 @@ impl Draft {
   pub fn clear(&self) {
     self.form.clear();
     self.own.clear(OWN);
+    self.decision_key.clear();
     self.name.set(String::new());
   }
 
-  /// The base URL as typed and the key typed, of the fields in use.
-  fn typed(&self) -> (String, Option<SecretValue>) {
-    match self.used.get() {
-      UsedWith::Cli(_) => (self.form.url().get(), self.form.save_guard().typed_key()),
-      UsedWith::Own => (self.own.url().get(), self.own.typed_key()),
-    }
-  }
-
-  /// What reaches the model API, once the fields say it.
+  /// What reaches the model API, once the fields of an API account say it; `None` for a decision model's server.
   fn setup(&self) -> Option<ApiSetup> {
     match self.used.get() {
       UsedWith::Cli(cli) => {
@@ -164,20 +184,29 @@ impl Draft {
         ApiSetup::cli(cli, url, models).ok()
       }
       UsedWith::Own => self.own.account_setup(OWN),
+      UsedWith::Decision => None,
     }
   }
 
   /// The first thing the page still needs before it can add the provider, as the key of the words that say so;
-  /// nothing once [`Self::ready`] has what it adds.
-  fn needs(&self) -> Option<&'static str> {
-    let (url, key) = self.typed();
-    if Name::new(&self.name.get()).is_err() {
+  /// nothing once [`Self::ready`] has what it adds. A decision model's server needs no key.
+  fn needs(&self, servers: &Servers) -> Option<&'static str> {
+    let named = Name::new(&self.name.get()).is_ok();
+    let (url, key) = match self.used.get() {
+      UsedWith::Cli(_) => (
+        base_url(&self.form.url().get()).is_ok(),
+        self.form.save_guard().typed_key().is_some(),
+      ),
+      UsedWith::Own => (base_url(&self.own.url().get()).is_ok(), self.own.typed_key().is_some()),
+      UsedWith::Decision => (servers.typed_url().is_some(), true),
+    };
+    if !named {
       Some("accounts.api.needs.name")
-    } else if base_url(&url).is_err() {
+    } else if !url {
       Some("accounts.api.needs.url")
-    } else if key.is_none() {
+    } else if !key {
       Some("accounts.api.needs.key")
-    } else if self.setup().is_none() {
+    } else if self.ready(servers).is_none() {
       Some("accounts.api.needs.models")
     } else {
       None
@@ -185,11 +214,20 @@ impl Draft {
   }
 
   /// What the fields add, once each of them can be saved.
-  fn ready(&self) -> Option<NewApi> {
+  fn ready(&self, servers: &Servers) -> Option<NewApi> {
     let name = Name::new(&self.name.get()).ok()?;
-    let setup = self.setup()?;
-    let key = self.typed().1?;
-    Some((name, setup, key))
+    let key = match self.used.get() {
+      UsedWith::Cli(_) => self.form.save_guard().typed_key(),
+      UsedWith::Own => self.own.typed_key(),
+      UsedWith::Decision => {
+        return Some(NewApi::Server((
+          name,
+          servers.typed_url()?,
+          self.decision_key.save_guard().typed_key(),
+        )));
+      }
+    };
+    Some(NewApi::Account(name, self.setup()?, key?))
   }
 }
 
@@ -212,6 +250,12 @@ pub(super) fn page(ctx: &mut Ctx, work: &Work) -> Column {
       provider.rows(draft.own.account_rows(ctx, OWN)),
       Some(draft.own.warning(ctx)),
     ),
+    UsedWith::Decision => (
+      provider
+        .row(work.servers.url_row(ctx))
+        .row(draft.decision_key.typed_key_row(ctx)),
+      None,
+    ),
   };
   frame::pane("api-add-page")
     .child(frame::crumb(
@@ -231,7 +275,7 @@ pub(super) fn page(ctx: &mut Ctx, work: &Work) -> Column {
     .child(used_with)
     .child(provider)
     .with_children(warning)
-    .child(footer(ctx, draft))
+    .child(footer(ctx, draft, &work.servers))
 }
 
 /// *Used with*: Claude Code, Codex, or Orchester's own agent.
@@ -266,24 +310,24 @@ fn name_row(ctx: &mut Ctx, draft: &Draft, used: UsedWith) -> Element {
       "accounts.add.nameShown",
       [("cli", t(ctx, cli_key(cli))), ("name", typed.to_owned())],
     ),
-    (UsedWith::Own, true) => t(ctx, "accounts.api.nameShownOwnEmpty"),
-    (UsedWith::Own, false) => ta(ctx, "accounts.api.nameShownOwn", [("name", typed.to_owned())]),
+    (UsedWith::Own | UsedWith::Decision, true) => t(ctx, "accounts.api.nameShownOwnEmpty"),
+    (UsedWith::Own | UsedWith::Decision, false) => ta(ctx, "accounts.api.nameShownOwn", [("name", typed.to_owned())]),
   };
   FormField::new("api-add-name-row", label).hint(shown).render(ctx, field)
 }
 
 /// Whose change this is, *Cancel* and *Add provider*, with what the last try said over them.
-fn footer(ctx: &mut Ctx, draft: &Draft) -> Element {
+fn footer(ctx: &mut Ctx, draft: &Draft, servers: &Servers) -> Element {
   let navigation = Navigation::of(ctx);
   let state = draft.add.state().get();
   let save = ActionButton::new("api-add-save", ButtonKind::Primary, t(ctx, "accounts.api.add")).icon(Icon::Check);
   let save = if state.is_pending() {
     save.loading()
-  } else if draft.ready().is_some() {
-    let draft = draft.clone();
+  } else if draft.ready(servers).is_some() {
+    let (draft, servers) = (draft.clone(), servers.clone());
     save.on_click(move || {
       // Read again at the press: the key is no ctx signal, and a field may have changed under it.
-      if let Some(new) = draft.ready() {
+      if let Some(new) = draft.ready(&servers) {
         draft.add.run(new);
       }
     })
@@ -299,7 +343,7 @@ fn footer(ctx: &mut Ctx, draft: &Draft) -> Element {
     .filter(|_| !pending)
     .map(|error| field_error("api-add-error", &message_text(ctx, &error)));
   // Why *Add provider* cannot be pressed yet, beside it: the next thing to type.
-  let needs = draft.needs().filter(|_| !pending).map(|key| {
+  let needs = draft.needs(servers).filter(|_| !pending).map(|key| {
     Text::new(&t(ctx, key))
       .id("api-add-needs")
       .variant(TypographyStyle::Description)
@@ -374,9 +418,13 @@ pub(super) fn rows(ctx: &mut Ctx, api: &[ApiAccount], cli: AccountCli) -> Vec<El
 }
 
 /// *Model APIs*: the accounts of Orchester's own agent, each with the API it calls, its host and how many models are
-/// listed for it; nothing while the person has none.
-pub(super) fn model_apis(ctx: &mut Ctx, api: &[ApiAccount]) -> Option<Element> {
-  let rows: Vec<Element> = api
+/// listed for it, then the decision model servers; nothing while the person has neither.
+pub(super) fn model_apis(
+  ctx: &mut Ctx,
+  api: &[ApiAccount],
+  (servers, decision): (&Servers, &[DecisionConnection]),
+) -> Option<Element> {
+  let mut rows: Vec<Element> = api
     .iter()
     .filter_map(|account| {
       let ApiSetup::Native { provider, models, .. } = account.setup() else {
@@ -408,6 +456,7 @@ pub(super) fn model_apis(ctx: &mut Ctx, api: &[ApiAccount]) -> Option<Element> {
       Some(row(ctx, account, line))
     })
     .collect();
+  rows.extend(servers.rows(ctx, decision));
   if rows.is_empty() {
     return None;
   }

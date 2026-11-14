@@ -7,6 +7,7 @@
 
 mod add;
 mod api;
+mod decision;
 mod details;
 mod facts;
 mod limits;
@@ -128,6 +129,8 @@ struct Work {
   pub draft: add::Draft,
   /// *Add an API provider*: what is typed so far, and its action.
   pub api: api::Draft,
+  /// The decision model servers: the base URL typed for a new one, and what their rows do.
+  pub servers: decision::Servers,
   pub rename: Signal<String>,
   pub removal: remove::Choice,
   /// The account page's *…* menu: whether it is open, and the button it opens at.
@@ -221,6 +224,7 @@ impl Component for AccountsTab {
       checking: ctx.signal(Ids::default()),
       draft: add::Draft::new(ctx),
       api: api::Draft::new(ctx),
+      servers: decision::Servers::new(ctx),
       rename: ctx.signal(String::new()),
       removal: remove::Choice::new(ctx),
       more: (ctx.signal(false), ElementRef::default()),
@@ -274,7 +278,7 @@ impl Component for AccountsTab {
         "settings-account-scroll",
         details::page(ctx, &parts, &self.work, (uses.as_ref(), reading)),
       ),
-      (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts)),
+      (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts, &self.work.servers)),
     };
     frame::column(scroll, pane)
   }
@@ -322,10 +326,11 @@ fn follow(ctx: &mut Ctx, work: &Work) {
     navigation.replace(Route::Accounts(view));
   });
   // An API provider that was added is in the list, and its page starts over with no key in it.
-  let (bump, added) = (revision.clone(), work.api.clone());
+  let (bump, added, servers) = (revision.clone(), work.api.clone(), work.servers.clone());
   ctx.watch(&work.api.add.state(), move |state| {
     if state.is_fulfilled() {
       added.clear();
+      servers.url.set(String::new());
       bump.update(|revision| *revision += 1);
       to_list.replace(Route::Accounts(AccountsView::default()));
     }
