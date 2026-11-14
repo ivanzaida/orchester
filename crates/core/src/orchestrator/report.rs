@@ -88,6 +88,83 @@ pub struct DailyReport {
   /// it was kept.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub automatic: bool,
+  /// What the Orchestrator did on its own that day and what it left to the person; `None` for a day with nothing of
+  /// it, and in a report kept before there was such a record.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub led: Option<LedDay>,
+}
+
+/// What the Orchestrator did on its own on a day and what it left to the person
+/// (`docs/plan/orchestrator-autonomy/OA-25-…`): read from the project's records, not from an agent's summary.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LedDay {
+  /// The decisions it made that day, in the order it made them, each with its reason.
+  pub decisions: Vec<ReportDecision>,
+  /// How many of them the person has not looked at.
+  pub open_decisions: usize,
+  /// The tasks parked for the person when the report was read, the one parked first first.
+  pub parked: Vec<ReportParked>,
+  /// The targets led to the end that are stuck, as people read them.
+  pub stuck: Vec<String>,
+  /// The events whose turn failed as often as it is tried, which are the person's now.
+  pub left_to_person: usize,
+  /// What holds the turns Orchester starts by itself, when the report was read.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub held: Option<ReportHeld>,
+  /// What each subscription that leads to the end used of its budget.
+  pub leading: Vec<ReportLeading>,
+}
+
+impl LedDay {
+  /// Whether the day has nothing of it to tell.
+  pub fn is_empty(&self) -> bool {
+    self.decisions.is_empty()
+      && self.parked.is_empty()
+      && self.stuck.is_empty()
+      && self.left_to_person == 0
+      && self.held.is_none()
+      && self.leading.is_empty()
+  }
+}
+
+/// A decision of the Orchestrator's own: its number in the project, the tool, the task it names, its reason in the
+/// chat's words and whether the person looked at it (`open`, `seen` or `overruled`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportDecision {
+  pub number: i64,
+  pub tool: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub task: Option<String>,
+  pub reason: String,
+  pub review: String,
+  pub at: Timestamp,
+}
+
+/// A task parked for the person: what is needed of them and what to do, in the chat's words.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportParked {
+  pub task: String,
+  pub needs: String,
+  pub to_do: String,
+  pub since: Timestamp,
+}
+
+/// What holds the turns Orchester starts by itself (`budget` or `plan_limit`), and until when.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportHeld {
+  pub by: String,
+  pub until: Timestamp,
+}
+
+/// A subscription that leads to the end: its target as people read it, where it stands, and what its work spent
+/// against its budget (`None`: it has none).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportLeading {
+  pub target: String,
+  pub standing: String,
+  pub spent: u64,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub budget: Option<u64>,
 }
 
 impl DailyReport {

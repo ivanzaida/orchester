@@ -592,6 +592,7 @@ fn report(kontur: &mut Kontur, chat: &Chat, at: Timestamp) -> Result<(), SeedErr
     },
     queued: Vec::new(),
     automatic: false,
+    led: None,
   };
   kontur.db.keep_daily_report(chat, &report, at)?;
   Ok(())

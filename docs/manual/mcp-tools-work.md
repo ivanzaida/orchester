@@ -735,6 +735,12 @@ Orchestrator did (`way`: direct, itself, applied by the person); the day's token
 account against the daily budget; the queued tasks in order; and `merge_queue` (runs in the queue now and those
 merged, failed or removed since the day began). Every item has its app link.
 
+When the Orchestrator did something on its own that day, or left something to you, the report also has `led`: its
+`decisions` of the day with their reasons (and `open_decisions`, how many you have not looked at), the tasks
+`parked` for you with what to do, the led targets that are `stuck`, how many events were `left_to_person` after
+their tries, what holds its turns (`held`: `budget` or `plan_limit`, and until when), and for each subscription that
+leads to the end where it stands and what it `spent` against its `budget`. A day with nothing of it has no `led`.
+
 Parameters: `project` (req.), `day` (`YYYY-MM-DD` | null).
 
 ### `get_decisions` — read-only

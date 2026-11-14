@@ -4,9 +4,11 @@
 //! conversation, or of one it opens while the project has none. A day without activity gets none; a report whose time
 //! passed while the app was closed comes at its next start, labelled with its day ([`rules::due_days`]). With *Let the
 //! Orchestrator answer agents* on, the report starts one Orchestrator turn by itself, which adds a summary and only
-//! proposes (`orchestrator::waits` starts it as a wait's). `get_daily_report` reads the same report.
+//! proposes (`orchestrator::waits` starts it as a wait's). `get_daily_report` reads the same report. What the
+//! Orchestrator did on its own that day and what it left to the person is its section [`led`] (OA-25).
 
 mod facts;
+mod led;
 mod rules;
 mod usage;
 mod waiting;
@@ -47,7 +49,11 @@ pub fn build_in(
   let built = || {
     let db = ProjectDb::open(root)?;
     let facts = facts_in((&db, root, programs), (day, now))?;
-    Ok::<_, StoreError>(rules::build(&facts, db.project().id()))
+    let led = led::of(&db, (day, now))?;
+    Ok::<_, StoreError>(DailyReport {
+      led,
+      ..rules::build(&facts, db.project().id())
+    })
   };
   built().map_err(|error| messages::store_error(&error))
 }
@@ -99,7 +105,12 @@ pub fn deliver_in(
     if !active(&facts, &report) {
       return Ok(Delivery::Quiet);
     }
-    let report = DailyReport { automatic, ..report };
+    let led = led::of(&db, (day, now))?;
+    let report = DailyReport {
+      automatic,
+      led,
+      ..report
+    };
     let chat = match db.latest_chat()? {
       Some(id) => db.chat(id)?,
       None => None,
