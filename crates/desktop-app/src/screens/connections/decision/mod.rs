@@ -403,10 +403,9 @@ pub(super) fn listed(ctx: &mut Ctx, project: &ShownProject, connections: &[Decis
       )
       .icon(Icon::Plus)
       .compact()
-      .opens(navigation.to(Route::Project(
-        project.open.project.id(),
-        ProjectPage::NewConnection(crate::routes::NewConnection::DecisionModel),
-      ))),
+      .opens(navigation.to(Route::Accounts(crate::routes::AccountsView::panel(
+        crate::routes::AccountsPanel::AddApi,
+      )))),
     )
     .rows(rows)
     .into()

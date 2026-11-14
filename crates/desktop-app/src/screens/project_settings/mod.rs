@@ -279,7 +279,7 @@ impl Component for SettingsScreen {
       (Shown::Rules, _) => ctx.mount_keyed::<rules::Rules>("project-settings-rules", props),
       (Shown::Storage, _) => ctx.mount_keyed::<storage::StoragePage>("project-settings-storage", props),
       (Shown::Connections(view), _) => super::connections::screen(ctx, &project, view),
-      (Shown::NewConnection(kind), _) => super::connections::new_connection(ctx, &project, kind),
+      (Shown::NewConnection(NewConnection::McpServer), _) => super::connections::new_mcp_server(ctx, &project),
       (Shown::EditConnection(id), _) => super::connections::edit_connection(ctx, &project, id),
       (Shown::Secrets(view), _) => environment::tab(ctx, props, view),
     };

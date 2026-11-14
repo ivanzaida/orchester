@@ -35,7 +35,6 @@ use orchester_workspace::{
 };
 use zeroize::Zeroize;
 
-pub(super) use self::fields::{environment_key, off_provider_notice};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, may_press},
   ui::message::message_text,

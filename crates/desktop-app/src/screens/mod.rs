@@ -56,7 +56,7 @@ use crate::{
   project::{ProjectState, Projects, ShownProject, TeamRead},
   routes::{
     AgentTab, HubFilter, HubView, InstructionsView, NewConnection, PipelineView, PipelinesFilter, PipelinesView,
-    ProjectPage, Route,
+    ProjectPage, ProjectSettingsTab, Route,
   },
 };
 
@@ -154,13 +154,18 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     | ProjectPage::NewTool
     | ProjectPage::Tool(..) => library_or_hub(ctx, project, page),
     ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
+    // The tab is gone: its bare address opens Project settings on General, where GitHub is.
+    ProjectPage::Connections(view) if view.selected().is_none() && view.selected_decision().is_none() => {
+      project_settings::screen(
+        ctx,
+        project,
+        project_settings::Shown::Tab(ProjectSettingsTab::General),
+      )
+    }
     ProjectPage::Connections(view) => {
       project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))
     }
     ProjectPage::NewConnection(NewConnection::McpServer) => new_mcp_server(ctx, project),
-    ProjectPage::NewConnection(kind) => {
-      project_settings::screen(ctx, project, project_settings::Shown::NewConnection(*kind))
-    }
     ProjectPage::EditConnection(id) => {
       project_settings::screen(ctx, project, project_settings::Shown::EditConnection(*id))
     }
