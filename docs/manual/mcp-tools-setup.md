@@ -116,127 +116,88 @@ they answer `retired`, naming these).
 
 ---
 
-## 2. Connections and accounts
+## 2. Accounts and connections
 
-### `list_connections` — read-only · cross-project
-
-A project's connections, each with its app link (its inspector in Connections):
-
-- **Agent connections** — id, name, provider (`codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`),
-  program, status from the last check, CLI version, number of models, and the API provider a CLI runs on
-  (`base_url`, host, `key_secret`'s name, models).
-- **GitHub connections** — id, name, host, status.
-- **MCP servers** — id, name, enabled, transport (`stdio` with program, args and working directory, or `http` with
-  url and authorization: scheme `none`, `bearer`, `basic` with username, `basic_credential` or `header` with name,
-  and its secret as `NAME@environment`; the url's query values are left out), environment (each variable's name and
-  whether it is plain or a secret — values are never listed), the tools that run without asking, and the roles of
-  the profiles whose draft or latest published version chooses the server.
-
-| Parameter | Type           | Req. | Description                                                        |
-|-----------|----------------|------|--------------------------------------------------------------------|
-| `project` | string \| null | no   | The project's id or name; left out, every project the app knows. |
-
-### `add_cli_connection` — changes data · gate AP for an unusual program or an API provider
-
-Adds a connection to an agent CLI, as Connections › Add connection does. The CLI is first checked with read-only
-commands (version, whether it is signed in, its models). It is saved only when it answers as the expected CLI; the
-check result comes back either way. A CLI that is not signed in is saved and reads `sign_in_required`.
-
-With `api_provider` the CLI runs on that model API with an API key instead of its own sign-in: Claude Code needs an
-Anthropic Messages API, Codex an OpenAI Responses API. The key is an existing **project secret** named by id or name;
-the models typed are the ones profiles on the connection choose from.
-
-Gates: a `program` that is not a copy found on the search path is `person_only` (checked before it runs) unless AP is
-on; any `api_provider` is `person_only` unless AP is on, because agents would send the project's prompts, code and
-command output to that host.
-
-A given `program` is examined before any gate, without running it, and saved as given (a link stays a link):
-`program_not_absolute` for a relative path, `program_not_local` for a path on another machine or a device (or reached
-through a link that leads there; refused before anything reads it), `program_not_found` when no file is there,
-`program_not_a_file` for a folder, `program_not_executable` on macOS for a file without an execute permission
-(`chmod +x`), and `program_unreadable` when it cannot be examined. Without `program`, when no copy is found, `program_not_found` names
-the folders searched, in search order (on Windows: the inherited `PATH`, then the `Path` Windows keeps for the
-machine and the user; on macOS: the inherited `PATH`, the login shell's `PATH`, then the usual install folders).
-
-| Parameter      | Type                    | Req. | Description                                                                  |
-|----------------|-------------------------|------|------------------------------------------------------------------------------|
-| `project`      | string                  | yes  | The project's id, or its name.                                               |
-| `kind`         | `codex` \| `claude`     | yes  | Which CLI.                                                                   |
-| `name`         | string                  | yes  | Unique among the project's connections, e.g. `Codex · Kontur`.               |
-| `program`      | string \| null          | no   | Absolute path of the CLI; left out, the newest copy on the search path.      |
-| `api_provider` | ApiProvider \| null     | no   | Run the CLI on a model API with an API key (see below).                      |
-
-**ApiProvider** object:
-
-| Field        | Type          | Req. | Description                                                                                          |
-|--------------|---------------|------|------------------------------------------------------------------------------------------------------|
-| `base_url`   | string        | yes  | `https://…`, or `http://` only for `localhost`, `127.0.0.1`, `[::1]`; no user, password, query or fragment. Example (DeepSeek): Claude Code `https://api.deepseek.com/anthropic`, Codex `https://api.deepseek.com`. |
-| `key_secret` | string        | yes  | The project secret holding the key: its id, or its name when exactly one non-archived secret has it. |
-| `models`     | array<string> | yes  | At least one model id the provider serves.                                                           |
-
-### `set_api_provider` — changes data · gate AP when moving to a new host or key
-
-Runs a Codex or Claude Code connection on an API provider, or back on its CLI's own sign-in (`null`). Moving to a
-host or key the connection does not use now is `person_only` unless AP is on; going back to the sign-in, or changing
-only the models, is always accepted. A connection on a provider runs on its CLI's *Default* account and reads no plan
-limits. Returns the connection as `list_connections` lists it.
-
-| Parameter      | Type                | Req. | Description                                                  |
-|----------------|---------------------|------|--------------------------------------------------------------|
-| `project`      | string              | yes  | The project's id, or its name.                               |
-| `connection`   | string              | yes  | A Codex or Claude Code connection, by id or name.            |
-| `api_provider` | ApiProvider \| null | no   | The provider (as in `add_cli_connection`); `null` = sign-in. |
-
-### `check_connection` — changes data
-
-Checks a connection's program again (its *Check again*) and stores what it found: status, version and models. A
-native (Anthropic API) connection is tested as its *Test connection* tests it: the project's runner reads its key and
-lists the endpoint's models, which are merged into its models; refused as `not_checked` with why when the runner is
-not running or the test did not happen.
-
-| Parameter    | Type   | Req. | Description                      |
-|--------------|--------|------|----------------------------------|
-| `project`    | string | yes  | The project's id, or its name.   |
-| `connection` | string | yes  | The connection's id, or its name.|
-
-### `list_models` — read-only
-
-The models an agent connection offers, each with the reasoning efforts it accepts, as the profile editor offers them:
-the ones its last check listed, an API provider's typed ones (`source` `api_provider`), or a native connection's
-fetched and added ones (`source` `native`). A model not listed can still be given to `save_profile_draft` (it then
-runs as *not verified*); an effort is kept only where the model lists it. `link` is the connection's app link.
-
-Parameters: `project` (string, req.), `connection` (string, req.).
+A project's agents run on the person's **accounts**, which every project shares (Settings › Accounts): the sign-ins
+of Claude Code and Codex, and the API providers (a model API with a key the app keeps). No tool adds, names or
+lists an agent connection: Orchester keeps one in a project for each account its profiles run on. Adding, renaming
+and removing an account or an API provider, signing in, entering a key and choosing a CLI's program are done by a
+person in the window.
 
 ### `list_accounts` — read-only · no arguments
 
-The person's agent CLI accounts on this computer (Settings › Accounts), which every project's connections can run
-on: id, `cli` (`claude_code` | `codex`), name (`null` for an unrenamed Default), whether it is the CLI's Default (its
-own folder), state (`signed_in`, `not_signed_in`, `sign_in_expired`, `sign_in_unknown`, `cli_not_found`,
-`folder_missing`, `not_checked`), whether Orchester created its folder or the person brought it, the
-account it shares a sign-in with, and its link. No email and no folder are listed.
+What agents can run on on this computer:
 
-`plan_limits` is the latest plan-limits reading (or `null`): `source` (`turn` — reported by an agent turn; `read` —
-read by Orchester outside a run), `observed_at` (ms since epoch), `age_seconds`, `state` (`normal`, `near`,
-`reached`), `plan`, `blocked` (why the CLI refuses turns: `window`, `credits`, `workspace`, `other`, or `null`), and
-each window by length in minutes (`300` = five-hour, `10080` = weekly) with `used_percent`, `resets_at` and
-`reset_since_reading` (true when the reset has passed since the reading — current use is then unknown, never
-estimated). Codex accounts are read on their own; Claude Code accounts only by a turn or the person's *Check now*.
+- **`accounts`** — the agent CLI sign-ins: id, `cli` (`claude_code`, `codex`), name (null for a Default nobody
+  renamed), `default`, `state` (`signed_in`, `not_signed_in`, `sign_in_expired`, `sign_in_unknown`, `cli_not_found`,
+  `folder_missing`, `not_checked`), `folder` (`cli_own`, `created`, `brought`), `same_sign_in_as`, its link, and
+  `plan_limits`: the latest plan limits reading (source, `observed_at`, `age_seconds`, state, plan, `blocked`, and
+  each window with `used_percent`, `resets_at` and `reset_since_reading`), or null. No email and no folder path.
+- **`api_providers`** — id, name, `used_with` (`claude_code`, `codex`, or `orchester_agent` for Orchester's own
+  agent), host, models, `key_here` (whether this computer's keychain holds its key) and `status` (its last test's,
+  for Orchester's own agent; null otherwise). Never a key.
+- **`decision_servers`** — the decision model servers: id, name, host, `takes_key`, models, `checked`.
+- **`programs`** — where each agent CLI's program is: `cli`, `set` (the path the person set, or null) and
+  `on_search_path` (the copies found there, in search order).
 
-Adding, renaming, removing and signing in accounts are done by a person in the window.
+### `check_account` — changes data
 
-### `set_connection_account` — changes data · gate AP for another account
+Checks one of the person's accounts again, once for every project. A sign-in's CLI is asked who is signed in to its
+folder (read-only status commands): returns `account`. An API provider of Orchester's own agent is asked for its
+models with its key, which spends no tokens: returns `api_provider` with its `status`; `key_missing` when the
+keychain does not hold the key. An agent CLI's API provider is refused as `not_tested`: its CLI talks to it, and
+its first run tests it. A decision model's server is asked for its models: returns `decision_server`.
 
-Chooses which account an agent CLI connection runs on (the connection's *Account* field). Runs that start from now
-on use it; a running agent keeps its account. The connection is checked again on that account. Choosing a different
-account than the current one is `person_only` unless AP is on (it can send the project's code to another
-organisation's provider).
+Parameters: `account` (req.: a sign-in, an API provider or a decision server, by id or name), `cli` (`codex` or
+`claude_code`: whose account a name is; needed for `default`).
 
-| Parameter    | Type   | Req. | Description                                                                  |
-|--------------|--------|------|------------------------------------------------------------------------------|
-| `project`    | string | yes  | The project's id, or its name.                                               |
-| `connection` | string | yes  | The agent connection's id, or its name.                                      |
-| `account`    | string | yes  | An account of the connection's CLI by id or name; `default` = its Default.   |
+### `list_models` — read-only
+
+The models an account serves, each with the reasoning efforts it takes (none for decision models), as a profile's
+*Runs on* offers them. A sign-in's are the ones its CLI listed for the project; one the project has no connection on
+yet lists none (`checked` false) until `set_profile_account` or `save_profile_draft` runs a profile on it. An API
+provider's are the ones the person typed (`source` `api_provider`), those of Orchester's own agent the endpoint's or
+the person's (`native`), a decision server's its last check's (`decision`). An unlisted model can still be given to
+`save_profile_draft` (not verified).
+
+Parameters: `project` (req.), `account` (req.: id or name), `cli` (as for `check_account`).
+
+### `set_profile_account` — changes data · gate AP for another account or an API provider
+
+Runs an agent profile on one of the person's accounts on this computer, as choosing the account in the profile's
+*Runs on* does, in a local project and a team project alike. The project gets its connection on the account when it
+has none, and the profile's version stays as it is. Moving a profile that already runs on an account to another
+sign-in that is not the CLI's Default, or running it on an API provider it does not run on now (which sends the
+project's prompts and code to that provider's host), is refused as `person_only` unless AP is on. Refused as
+`account_not_found` for an account that is not one of the profile's CLI, and as `account` when the account does not
+serve the profile's model or its CLI's program is not found. Returns the profile and the `account` or
+`api_provider`.
+
+Parameters: `project` (req.), `profile` (req.: id or role; a team's profile in a team project), `account` (req.: a
+sign-in or an API provider of the profile's CLI, by id or name; `default` is the CLI's Default).
+
+### `list_connections` — read-only · cross-project
+
+What a project is connected to:
+
+- **`runs_on`** — a row for each agent profile the project lists: `profile` {id, role}, `model`, `status` (whether
+  a run can start on it now) and `runs_on`: `agent` (`codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`)
+  with `account` (a sign-in, as `list_accounts` gives it) or `api_provider`; null for a profile that runs on nothing
+  here yet.
+- **`github`** — the project's GitHub connection: id, name, host, status, link.
+- **`mcp_servers`** — the project's MCP servers (see §3).
+- **`decision_models`** — the project's decision model servers: id, name, `base_url`, `on_this_computer`,
+  `takes_key`, models, `last_check`.
+
+Parameters: `project` (left out: every project; unreadable ones are listed in `unreadable_projects`).
+
+### `check_connection` — changes data
+
+Checks the project's GitHub connection again, as *Check again* beside the repository does, and stores what `gh`
+said. Refused as `not_a_github_connection` for anything else: what an agent runs on is an account
+(`check_account`).
+
+Parameters: `project` (req.), `connection` (req.: the GitHub connection's id or name).
 
 ---
 
@@ -351,17 +312,6 @@ it on is `person_only` always, also while AP is on, with nothing changed: only a
 here, in the window. Its fields, `program` (a name) included, are the team's, published as its next version by an
 admin with `update_mcp_server`.
 
-### `pick_profile_connection` — changes data · team project · gate AP for another account
-
-Chooses the connection a team profile runs on on this computer (the profile's *Connection* field in a team project).
-The pick is kept on this computer only; a connection added later changes nothing. Refused as `team_project_required`
-in a project that is not shared with a team, `profile_not_found` for a profile that is not the team's,
-`connection_does_not_fit` for a connection of another CLI kind than the profile names, and `person_only` for an
-`account` other than the profile's earlier pick unless AP is on.
-
-Parameters: `project` (req.), `profile` (req.: id or role of a team profile), `connection` (req.: id or name of an
-agent connection), `account` (id or name of an account of the connection's CLI; `default` is the CLI's Default).
-
 ### `list_team_mcp_servers` — read-only · cross-project
 
 The team's MCP servers of a team project (a local project answers an empty list; `list_connections` lists the
@@ -371,19 +321,20 @@ computer uses), `launch` (`kind: program` with the program's name, arguments, fo
 [`readiness`](#readiness-here). A program's path on this computer and a secret's value are never listed.
 Parameter: `project` (string | null; left out, every project's, each naming its project).
 
-### `pick_reviewer_connection` — changes data · team project
+### `set_reviewer_account` — changes data · team project
 
-Chooses the connection a team reviewer runs on on this computer (the reviewer's *Connection* field in a team project),
-as `pick_profile_connection` does for a profile. A language reviewer takes an agent connection of the CLI kind its
-newest version names; a decision reviewer takes a decision connection. The pick is kept on this computer only. Refused
-as `team_project_required` in a project that is not shared with a team, `reviewer_not_found` for a reviewer that is not
-the team's, `connection_does_not_fit` for a connection of the other kind, `server_not_allowed` for a decision connection
-whose server the reviewer's destinations do not list (a server on this computer always is), `not_team_form` for a
-reviewer whose newest version names a connection (the earlier form; it is published again), and `person_only` for a
-decision connection whose server is not on this computer (it would send the project's requests there).
+Chooses what a team reviewer runs on on this computer (the reviewer's *Runs on* in a team project), as
+`set_profile_account` says it for a profile. A language reviewer takes one of the person's accounts of the CLI kind
+its newest version names, for which the project gets its connection when it has none; a decision reviewer takes a
+decision model's server. The choice is kept on this computer only. Refused as `team_project_required` in a project
+that is not shared with a team, `reviewer_not_found` for a reviewer that is not the team's, `account_not_found` for
+an account of another kind, `server_not_allowed` for a decision server the reviewer's destinations do not list (a
+server on this computer always is), `not_team_form` for a reviewer whose newest version is in the earlier form (it
+is published again), and `person_only` for a decision server that is not on this computer (it would send the
+project's requests there).
 
-Parameters: `project` (req.), `reviewer` (req.: id or name of a team reviewer), `connection` (req.: id or name of an
-agent connection, or of a decision connection for a decision reviewer).
+Parameters: `project` (req.), `reviewer` (req.: id or name of a team reviewer), `account` (req.: an account by id or
+name for a language reviewer; a decision server by id or name for a decision reviewer).
 
 ---
 
@@ -395,7 +346,7 @@ its MCP servers. Pipeline steps run **published** profiles. Profiles are version
 
 ### `list_profiles` — read-only · cross-project
 
-Each profile: id, role, connection, model, effort, where it stands (`draft`, `stale_draft`, `published` with its
+Each profile: id, role, `runs_on` (as in `list_connections`), model, effort, where it stands (`draft`, `stale_draft`, `published` with its
 version), its [`readiness`](#readiness-here) on this computer, and its link. Parameter: `project` (string | null).
 
 ### `get_profile` — read-only
@@ -426,7 +377,7 @@ profile. Reading it opens the project's data only to read it: it migrates and wr
   "version": 3,
   "missing": [
     { "kind": "connection", "cli": "codex_cli", "problem": "pick_needed",
-      "fix": { "tool": "pick_profile_connection", "gate": null } },
+      "fix": { "tool": "set_profile_account", "gate": null } },
     { "kind": "mcp_off", "server": { "id": "…", "name": "knowledge" },
       "fix": { "tool": "set_mcp_server_enabled", "gate": "person" } },
     { "kind": "mcp_program", "server": { "id": "…", "name": "knowledge" }, "problem": "not_set",
@@ -447,7 +398,7 @@ profile. Reading it opens the project's data only to read it: it migrates and wr
 
 | `kind` | Fields | Fix |
 |---|---|---|
-| `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `add_cli_connection` / `pick_profile_connection` |
+| `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `set_profile_account` / `pick_profile_connection` |
 | `connection_sign_in` | `cli`, `connection` (id) — the connection the profile runs on needs the CLI's sign-in and its last check found it signed out | none: a person signs in (Connections shows how); `fix: { "tool": null, "gate": "person" }` |
 | `decision_connection` | `reviewer` (id), `problem`: `none_of_kind` (no decision connection: add one) or `pick_needed` (several, none picked for this reviewer) — a team decision reviewer | `save_decision_connection` / `pick_reviewer_connection` |
 | `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
@@ -468,7 +419,7 @@ did not say) and `member` (`member` and its `cause`).
 ### `save_profile_draft` — changes data · gate AP for widening
 
 Saves a profile's draft with every field of its editor; without `profile` a new profile is made. Checked as the
-editor checks it: role, an agent connection of the project and a model are required; role instructions may use
+editor checks it: role, an account to run on and a model are required; role instructions may use
 `{{variables}}`; permissions must be ones the connection's CLI enforces on this computer; MCP servers must be the
 project's.
 
@@ -482,7 +433,8 @@ Autopilot (it answers requests in a person's place, so it additionally needs AA,
 | `project`           | string                 | yes  | The project's id, or its name.                                                                |
 | `profile`           | string \| null         | no   | Profile to change, by id or role; left out = new profile.                                     |
 | `role`              | string                 | yes  | The agent's role, e.g. `Builder`; steps and instructions name it.                             |
-| `connection`        | string                 | yes  | Agent connection, by id or name.                                                              |
+| `account`           | string                 | yes  | What it runs on: a sign-in or an API provider, by id or name; `default` needs `cli`.          |
+| `cli`               | `codex` / `claude_code` | no   | Whose account a name is; needed for `default`.                                                |
 | `model`             | string                 | yes  | A model id `list_models` gives, or another the CLI runs (then *not verified*).                |
 | `effort`            | string \| null         | no   | A reasoning effort the model lists; left out = the CLI's default.                             |
 | `responsibilities`  | string                 | no   | What the agent is responsible for, a sentence or two. Default `""`.                           |

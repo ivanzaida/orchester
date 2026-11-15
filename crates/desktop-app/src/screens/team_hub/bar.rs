@@ -3,13 +3,22 @@
 //! at its end, what the person is told about it.
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, SpacingSize},
+  },
   components::{Row, Text},
   layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use crate::theme::{HubSpacing, HubText};
+use crate::{
+  theme::{HubSpacing, HubText},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    pressable::Press,
+  },
+};
 
 /// The bar with `buttons` at its start and `hint` at its end; the kind's panels each say what they put in them.
 pub(in crate::screens) fn bar(buttons: Vec<Element>, hint: Option<String>) -> Element {
@@ -58,4 +67,28 @@ pub(in crate::screens) fn bar_ending(
   }
   .with_children(end)
   .into()
+}
+
+/// *Use for all*: how many profiles it sets, and what a press on it does.
+pub(in crate::screens) type UseAll = (usize, Press);
+
+/// *Use for all 9*, beside the pinned *Use … for …*: the same account for each of the `count` profiles of the CLI that
+/// wait for one on this computer, the open one among them. Its id starts with `prefix`.
+pub(in crate::screens) fn use_all(ctx: &Ctx, prefix: &str, count: usize) -> ActionButton {
+  ActionButton::new(
+    format!("{prefix}-fix-use-all"),
+    ButtonKind::Secondary,
+    ctx.t_args("team_hub.fix.action.useAll", [("count", count.to_string())]),
+  )
+  .pinned()
+}
+
+/// What the bar says at its end while [`use_all`] stands in it: how many profiles of `cli` wait.
+pub(in crate::screens) fn use_all_hint(ctx: &Ctx, count: usize, cli: &str) -> String {
+  ctx
+    .t_args(
+      "team_hub.fix.hint.useAll",
+      [("count", &*count.to_string()), ("cli", cli)],
+    )
+    .to_string()
 }

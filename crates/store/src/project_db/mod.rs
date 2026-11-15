@@ -150,6 +150,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
+pub(crate) use self::connections::{parse_provider, provider_text};
 pub use self::{
   approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,

@@ -97,7 +97,6 @@ fn every_read(served: &mut Served) -> Vec<(String, Value)> {
   let profiles = names(served, "list_profiles", "profiles", "id");
   let pipelines = names(served, "list_pipelines", "pipelines", "id");
   let tools = names(served, "list_tools", "tools", "id");
-  let connections = names(served, "list_connections", "agents", "id");
   let with = |key: &str, values: &[Value]| -> Vec<Value> {
     values
       .iter()
@@ -116,7 +115,7 @@ fn every_read(served: &mut Served) -> Vec<(String, Value)> {
       "get_profile" => with("profile", &profiles),
       "get_pipeline" => with("pipeline", &pipelines),
       "get_tool" => with("tool", &tools),
-      "list_models" => with("connection", &connections),
+      "list_models" => vec![json!({ "project": "Kontur", "account": "default", "cli": "codex" })],
       "get_task" => vec![json!({ "project": "Kontur", "key": "KON-1" })],
       "get_run" | "get_plan" | "get_changes" => vec![json!({ "project": "Kontur", "run": "1" })],
       "get_instruction" => vec![json!({ "project": "Kontur", "instruction": "any" })],

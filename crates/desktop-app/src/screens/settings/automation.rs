@@ -20,7 +20,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    events::{InputSource, input_source},
+    events::InputSource,
   },
   components::Row,
   core::Signal,
@@ -42,6 +42,7 @@ use crate::{
   mcp::{
     McpSettings,
     input_gate::{Guarded, InputGate, Protected},
+    input_source,
   },
   queries::{self, Session, app},
   ui::{

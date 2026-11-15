@@ -3,7 +3,7 @@
 //! its checkbox, the full-width action, the way back as a ghost button, and what follows in a note.
 
 use lurq::{
-  app::{ctx::Ctx, events::input_source, theme::SpacingSize},
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Text},
   node::Element,
 };
@@ -12,7 +12,7 @@ use orchester_workspace::tasks::local_integration::LocalOrigin;
 
 use super::{Action, Inspector, Mode, Props, action_panel, button, guard_note, mode_button};
 use crate::{
-  mcp::input_gate::Guarded,
+  mcp::{input_gate::Guarded, input_source},
   theme::LocalText,
   ui::{
     button::ButtonKind,

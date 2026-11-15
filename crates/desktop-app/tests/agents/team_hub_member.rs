@@ -19,7 +19,7 @@ use super::{
   support::project_id,
   team_hub::{keep_team, open, team, team_as, team_with_profile_and_tool},
   team_hub_mcp::{Switch, program_body, program_file, remote_body, server, show, switch_of, team_server},
-  team_hub_profile::{builder, claude, show as show_profile},
+  team_hub_profile::{builder, claude, claude_home, show as show_profile},
 };
 
 const LOCK: &str = "Only team admins change this: dana-k (Admin) and olha (Server admin).";
@@ -311,7 +311,7 @@ fn team_hub_member_the_connection_pick_is_theirs_and_is_kept() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  claude(&agents.root, "Claude Home", "2.1.170");
+  claude_home(&agents.root, "2.1.170");
   let (profile, _) = builder(&agents);
   become_member(&agents);
   show_profile(&mut agents, profile);

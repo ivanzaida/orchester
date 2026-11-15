@@ -9,7 +9,8 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  id::{ResourceId, RunId, TaskId},
+  computer::ComputerError,
+  id::{ConnectionId, ResourceId, RunId, TaskId},
   name::Name,
   permission::AgentPermissions,
   resource::{
@@ -25,6 +26,7 @@ use super::link::{
   LinkError,
   resources::{Pinned, ResourceLink, blob, pinned_version, resource_names},
 };
+use crate::computer::ComputerResources;
 
 /// Why a pinned body, label or file of a run cannot be resolved.
 #[derive(Debug, Error)]
@@ -97,6 +99,21 @@ impl RunResolver {
         let name = Name::new(&names.name).map_err(|error| LinkError::other(&error))?;
         Ok((slug, name))
       }
+    }
+  }
+
+  /// The connection `computer` runs the agent profile version `pinned`, whose content is `body`, on: the one the
+  /// run's inputs bound when it was made from inputs, else the computer's own choice for the profile, which a person
+  /// may change while the run goes on.
+  pub(in crate::execution) fn runs_on(
+    &self,
+    computer: &dyn ComputerResources,
+    pinned: &PinnedVersion,
+    body: &AgentProfile,
+  ) -> Result<ConnectionId, ComputerError> {
+    match self {
+      Self::Inputs(_) => Ok(body.connection()),
+      Self::Published => computer.profile_connection(pinned.resource, body.connection()),
     }
   }
 

@@ -1,6 +1,6 @@
-//! Add and Edit decision model, sharing draft checks and secret handling (01 XMNUP and 01b z3G09h).
+//! Edit decision model, with its draft checks and secret handling (01b z3G09h). A decision model is added in
+//! Settings › Accounts.
 mod actions;
-mod add;
 use std::sync::OnceLock;
 
 use lurq::{
@@ -42,7 +42,6 @@ pub(in super::super) struct DecisionEditor {
   original: OnceLock<DecisionConnection>,
   work: actions::Action,
   checking: Signal<bool>,
-  server: Signal<super::super::add_decision::Server>,
 }
 impl Component for DecisionEditor {
   type Props = Props;
@@ -71,7 +70,6 @@ impl Component for DecisionEditor {
       original: OnceLock::new(),
       work,
       checking: ctx.signal(false),
-      server: ctx.signal(super::super::add_decision::Server::TypeSafe),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -85,14 +83,8 @@ impl Component for DecisionEditor {
       self.fields.initialized.set(true);
       self.fields.url.set("https://api.typesafe.ai/v1".to_owned());
     }
-    let local_preset = props.connection.is_none()
-      && self.server.get() == super::super::add_decision::Server::Local
-      && DecisionServerUrl::new(&self.fields.url.get()).is_ok_and(|url| url.is_on_this_computer());
-    let mut rows = self.fields.rows(ctx, &props.listed, local_preset);
+    let mut rows = self.fields.rows(ctx, &props.listed, false);
     rows.push(self.models(ctx, &props));
-    if props.connection.is_none() {
-      return self.add_page(ctx, &props, rows);
-    }
     let close = props.close.clone();
     let back = crate::ui::button::ActionButton::new(
       "decision-edit-back",

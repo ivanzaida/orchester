@@ -25,7 +25,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, Interval},
-    events::is_synthetic_input,
   },
   components::Column,
   core::Signal,
@@ -52,7 +51,7 @@ use super::{
   TaskContext, arranged,
   ready::{changed, in_worktree},
 };
-use crate::{services::Services, ui::button::ActionButton};
+use crate::{mcp::is_synthetic_input, services::Services, ui::button::ActionButton};
 
 /// How often the run's worktree is read again while the person resolves its conflicts there.
 const LOOK: Duration = Duration::from_secs(2);

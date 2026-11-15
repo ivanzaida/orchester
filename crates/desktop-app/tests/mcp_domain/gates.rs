@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{Served, write_program};
+use super::Served;
 
 /// Kontur seeded empty, its Codex connection's program any file the seed records as checked.
 fn served() -> Served {
@@ -32,7 +32,7 @@ impl Served {
 }
 
 fn profile(role: &str, permissions: Option<Value>) -> Value {
-  let mut args = json!({ "project": "Kontur", "role": role, "connection": "Codex · Kontur", "model": "gpt-5.5" });
+  let mut args = json!({ "project": "Kontur", "role": role, "account": "default", "cli": "codex", "model": "gpt-5.5" });
   if let Some(permissions) = permissions {
     args["permissions"] = permissions;
   }
@@ -248,57 +248,6 @@ fn domain_loading_the_repositorys_agent_files_again_needs_a_person() {
   served.let_automation_widen(true);
   let on = served.ok("set_repository_agent_files", &set(true));
   assert_eq!(on["repository_agent_files"], true);
-}
-
-#[test]
-fn domain_a_cli_of_automations_choosing_needs_a_person_before_it_runs() {
-  let mut served = served();
-  let program = served.folder.path().join("my-codex.exe");
-  write_program(&program, 0o755);
-  let args = cli_args(&program);
-  assert_person_only(&served.refused("add_cli_connection", &args));
-  served.let_automation_widen(true);
-  assert_eq!(
-    served.refused("add_cli_connection", &args)["code"],
-    "not_verified",
-    "checked once a person lets it"
-  );
-}
-
-/// A chosen file that cannot be a program is refused for what it is, before any gate and without running anything.
-#[test]
-fn domain_a_chosen_cli_file_is_checked_before_anything_runs() {
-  let mut served = served();
-  let missing = served.folder.path().join("no-such-codex.exe");
-  let refused = served.refused("add_cli_connection", &cli_args(&missing));
-  assert_eq!(refused["code"], "program_not_found", "{refused}");
-  assert!(refused.to_string().contains("There is no file at"), "{refused}");
-  let folder = served.folder.path().to_path_buf();
-  assert_eq!(
-    served.refused("add_cli_connection", &cli_args(&folder))["code"],
-    "program_not_a_file"
-  );
-  #[cfg(unix)]
-  {
-    let program = served.folder.path().join("codex-not-executable");
-    write_program(&program, 0o644);
-    assert_eq!(
-      served.refused("add_cli_connection", &cli_args(&program))["code"],
-      "program_not_executable"
-    );
-  }
-  #[cfg(windows)]
-  assert_eq!(
-    served.refused(
-      "add_cli_connection",
-      &cli_args(Path::new(r"\\server.invalid\share\codex.exe"))
-    )["code"],
-    "program_not_local"
-  );
-}
-
-fn cli_args(program: &Path) -> Value {
-  json!({ "project": "Kontur", "kind": "codex", "name": "Mine", "program": program.display().to_string() })
 }
 
 #[test]

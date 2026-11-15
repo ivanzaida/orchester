@@ -787,7 +787,7 @@
       "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
       "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
-      "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
+      "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check its account in Settings › Accounts.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "networkHostsNotEnforceable": {
         "codex": "Step “{{step}}” limits network access to a host list, which Codex can’t enforce on this computer: its sandbox can’t keep commands off the network here. Choose network off or on, or a connection that can enforce the list.",
@@ -802,7 +802,7 @@
       "baseCommitMissing": "Can't start: the commit {{commit}} the team run starts from is not in this repository. Fetch it, then start the run again.",
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
-        "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
+        "none": "Step “{{step}}” runs on a connection that has no account. Choose an account in its profile's Runs on.",
         "folderMissing": "Step “{{step}}” runs on an account whose folder {{folder}} no longer exists. Remove the account or choose another one for the connection."
       }
     },
@@ -887,7 +887,7 @@
         "noConnection": "Auto mode needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
         "connectionGone": "The reviewer connection chosen in Project settings is gone. Choose another there.",
         "unsupported": "The reviewer connection chosen in Project settings cannot review yet (the OpenAI API). Choose another there.",
-        "noModel": "The reviewer connection lists no model. Check it under Connections, or choose a model in Project settings."
+        "noModel": "The reviewer's account lists no model. Check it in Settings › Accounts, or choose a model in Project settings."
       }
     }
   },
@@ -1022,10 +1022,8 @@
       "networkOnDetail": "Commands and web tools can reach the network."
     },
     "localConnection": {
-      "gone": "This project no longer has the profile, so no connection was chosen.",
-      "draftFirst": "The profile has edits that are not published. Open its editor to choose the connection with them, or discard them first; nothing was changed.",
-      "notOfKind": "That is not a connection of the profile's CLI in this project, so nothing was changed.",
-      "widens": "Using that connection would widen what the profile's agents may do. Open the profile's editor to confirm it; nothing was changed."
+      "gone": "This project no longer has the profile, so nothing was changed.",
+      "notOfKind": "That does not run the profile's CLI in this project, so nothing was changed."
     },
     "localEdit": {
       "noConnection": "The project has no connection of that kind for the profile to run on, so nothing was changed.",
@@ -1643,7 +1641,7 @@
       "codexSandboxNotCodex": "Only a Codex connection has a sandbox to turn off: leave codex_sandbox out, or on.",
       "codexSandboxShared": "A shared project's profiles keep the Codex sandbox on in this version: leave codex_sandbox out, or on.",
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
-      "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
+      "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in the Agents hub before adding it to this profile.",
       "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
       "givenTwice": "Name each instruction, skill and tool once.",
       "toolNotCheck": "{{tool}} is not a check an agent can call: a profile gives its agents only command tools with access rules.",
@@ -1679,7 +1677,9 @@
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
       "mcpExemptTool": "A tool name is empty or holds a line break: {{value}}",
       "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory, environment and variable_names, a remote server authorization and secret_headers.",
-      "accountChoice": "Choosing the account a connection runs on: it decides whose sign-in, and which organisation's provider, gets the project's work.",
+      "profileNoCli": "This profile names no agent CLI to choose an account of: its connection is gone and its model names none. Choose what it runs on in its panel first.",
+      "accountChoice": "Choosing the account a profile runs on: it decides whose sign-in, and which organisation's provider, gets the project's work.",
+      "checkAccountInstead": "Only the project's GitHub connection is checked here. What an agent runs on is an account: check it with check_account.",
       "teamMcpOnPersonOnly": "Turning on one of the team's MCP servers lets the team's agents use it on this computer, which only a person decides, in Orchester's window; Let automation change agent permissions does not lift this. Nothing was changed.",
       "teamMcpNameNotEditable": "A team MCP server keeps the name it was made with; leave the name out or give the same one. Nothing was changed.",
       "teamMcpProgramIsPath": "{{program}} is a path. A team MCP server names its program (npx, uvx), as a name found on the search path; each computer sets where it is, and a person does that in Orchester's window. Nothing was created or changed.",
@@ -1845,7 +1845,8 @@
       "mcpNeedsValue": "The server would need a variable or secret header the version this computer uses does not, with a value this computer gives it.",
       "teamMcpServer": "A new version of {{server}} would let the agents of profiles that choose it do more than the version this computer uses.",
       "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it.",
-      "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}."
+      "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}.",
+      "apiAccount": "The agents of {{profile}} would send the project’s prompts, code and command output to {{host}}, with the key of your API provider {{account}}."
     },
     "prompts": {
       "instruction": "Publishing the instruction adds its text to the prompts of every agent it applies to.",
@@ -2286,9 +2287,9 @@
     "refusedAfterStart": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. Your claim on the task was released. Fix each of these before you start it again.",
     "refusedAfterStartKept": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. Your claim on the task is kept, because another run here still needs it. Fix each of these before you start it again.",
     "refusedAfterStartHeld": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. The team server refused to release your claim on the task, so it may still be held. Fix each of these before you start it again.",
-    "connectionNoneOfKind": "Add a {{cli}} connection in Connections: {{profile}} runs on one, and this computer has none.",
-    "connectionSignIn": "Sign in to {{cli}} in Connections: {{profile}} runs on it, and it is signed out on this computer.",
-    "decisionConnectionNoneOfKind": "Add a decision connection in Connections: the reviewer {{reviewer}} runs on one, and this computer has none.",
+    "connectionNoneOfKind": "Add a {{cli}} account in Settings › Accounts: {{profile}} runs on one, and this computer has none.",
+    "connectionSignIn": "Sign in to {{cli}} in Settings › Accounts: {{profile}} runs on it, and it is signed out on this computer.",
+    "decisionConnectionNoneOfKind": "Add a decision model's server in Settings › Accounts: the reviewer {{reviewer}} runs on one, and this computer has none.",
     "connectionPickNeeded": "Pick the {{cli}} connection {{profile}} runs on: this computer has several, and none is picked for it.",
     "decisionConnectionPickNeeded": "Pick the decision connection the reviewer {{reviewer}} runs on: this computer has several, and none is picked for it.",
     "mcpOff": "Switch on the MCP server {{server}} for this computer: the profiles of the pipeline give it to their agents.",
@@ -2297,8 +2298,8 @@
     "mcpMoreThanOneSecretHeader": "The MCP server {{server}} takes more than one secret header, and this app can't send several yet, so the agents could not use it. Ask a team Admin to change it to one.",
     "secret": "Set a value for the secret {{secret}} on this computer: an MCP server or tool of the pipeline is given it.",
     "secretUnreadable": "The keychain did not say whether this computer has a value for the secret {{secret}}, which an MCP server of the pipeline is given. Unlock the keychain and run it again.",
-    "localMcpProgramNotFound": "The program of the MCP server {{server}} was not found on the PATH or in the project. Install it, or choose its program again in Connections.",
-    "localMcpProgramMoved": "The program of the MCP server {{server}} now leads into the project's repository or off this computer, so a run would not start it. Choose its program again in Connections.",
+    "localMcpProgramNotFound": "The program of the MCP server {{server}} was not found on the PATH or in the project. Install it, or choose its program again in the server's panel, in the Agents hub.",
+    "localMcpProgramMoved": "The program of the MCP server {{server}} now leads into the project's repository or off this computer, so a run would not start it. Choose its program again in the server's panel, in the Agents hub.",
     "localSecret": "Set a value for the secret {{secret}} on this computer: a tool of the pipeline uses it.",
     "undecidedNotTeamForm": "{{resource}} is not in the team's form on this computer yet, so it is not known what it needs: ask a team Admin to publish it again.",
     "undecidedChoosesMcpServer": "{{resource}} chooses the MCP server {{server}}, which this computer has not synced from the team yet, so it is not known what it needs.",
@@ -2334,6 +2335,8 @@
       "unsupported": "Accounts other than Default are not supported for this CLI on this computer yet.",
       "removeDefault": "Default is the CLI's own folder and can't be removed.",
       "inUse": "A run is on this account. Remove it after the run ends, or stop that run first.",
+      "apiInUse": "An agent profile runs on this API provider. Choose another account for it first; Used by lists them.",
+      "notTested": "Orchester tests only the model APIs its own agent calls. An agent CLI's provider is tested by the CLI's first run.",
       "moveTarget": "Choose another account of the same CLI for its connections, or No account.",
       "notCreated": "Orchester didn't create this folder, so it stays where it is.",
       "projectsUnreadable": "{{projects}} could not be read, so a run there may be on this account. Remove it once they open.",

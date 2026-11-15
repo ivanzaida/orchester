@@ -130,8 +130,8 @@ impl Actions {
     }
   }
 
-  /// Hands back `model` of the connection shown unless it is what is chosen already. A choice made takes the reason a
-  /// refused connection gave away from the line under the rail.
+  /// Hands back `model` of the connection shown; the one chosen already closes the picker instead. A choice made takes
+  /// the reason a refused connection gave away from the line under the rail.
   fn model(&self, model: &Arc<str>) {
     self.panel.refused.set(None);
     let Some(connection) = self.shown.and_then(|at| self.props.connections.get(at)) else {
@@ -139,6 +139,9 @@ impl Actions {
     };
     let chosen = &self.props.chosen;
     if connection.id == chosen.connection && chosen.model.as_ref() == Some(model) {
+      // The choice as it stands, confirmed: nothing is handed back, and the picker closes as it does once a model is
+      // chosen.
+      (self.props.on_close)();
       return;
     }
     (self.props.on_pick)(Pick::Model {

@@ -61,7 +61,7 @@ impl AutoMode {
           confirm: ctx.t_args("project_settings.decision.use", [("name", name)]),
           keep: ctx.t_args("project_settings.decision.keep", [("name", keep_name.as_str())]),
           on_confirm: Arc::new(move || {
-            if lurq::app::events::is_synthetic_input() || confirm.outside() {
+            if crate::mcp::is_synthetic_input() || confirm.outside() {
               return;
             }
             // Bind consent to exactly the destination, model and threshold that the question showed.
@@ -74,7 +74,7 @@ impl AutoMode {
             }
           }),
           on_keep: Arc::new(move || {
-            if lurq::app::events::is_synthetic_input() {
+            if crate::mcp::is_synthetic_input() {
               return;
             }
             keep.hosted_confirmed.set(Asked(None));

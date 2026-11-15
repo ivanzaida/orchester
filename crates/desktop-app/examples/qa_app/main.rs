@@ -9,9 +9,9 @@
 //! seed's `team-*` scenarios leave beside the database ([`team::State`]) sets up a stand-in team server on loopback
 //! that answers while the window is open ([`team`]); where a person's press is part of the state, the window opens
 //! there ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Its MCP client
-//! counts as the person for the Orchestrator's person-only actions (`orchester_app::mcp::qa_person`), so a verifier
-//! applies a /watch, stops one and takes a led target as a person does. Fixture data for QA, never shipped: an example
-//! is no part of the app's program.
+//! counts as the person for every input it sends the window (`orchester_app::mcp::qa_person`), so a verifier reaches
+//! what a person's press reaches: Settings, the questions only a person answers, the Orchestrator's own actions.
+//! Fixture data for QA, never shipped: an example is no part of the app's program.
 //!
 //!   qa_app [--signed-in | --signed-out] [--settings] [--join-team]
 
@@ -191,6 +191,9 @@ fn as_qa_copy(launch: &Launch, database: &Path) -> Option<error_reports::Reports
   if let Some(services) = launch.services() {
     services.qa_person.count_mcp_client_as_person();
   }
+  // And for the whole window (the person's decision of 2026-11-15): every input of the verifier's MCP client is the
+  // person's here, so a QA copy is tested whole through its MCP server.
+  orchester_app::mcp::qa_person::count_every_input_as_the_persons();
   reports
 }
 

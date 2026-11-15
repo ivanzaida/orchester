@@ -2,7 +2,6 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    events::input_source,
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, SelectOption, Text},
@@ -14,7 +13,7 @@ use orchester_workspace::tasks::local_integration::{ConflictView, Preview};
 
 use super::{Props, Resolver};
 use crate::{
-  mcp::input_gate::Guarded,
+  mcp::{input_gate::Guarded, input_source},
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, SelectField},

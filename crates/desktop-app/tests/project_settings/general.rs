@@ -100,11 +100,11 @@ fn project_settings_auto_mode_without_a_reviewer_says_why() {
   assert!(!page.exists("settings-reviewer-connection"));
   assert!(!page.exists("settings-reviewer-model"));
   assert!(!page.exists("settings-reviewer-effort"));
-  assert!(page.text("settings-auto-open-connections").contains("Open Connections"));
+  assert!(page.text("settings-auto-open-connections").contains("Open Accounts"));
   page.click("settings-auto-open-connections");
   assert!(matches!(
     page.window.navigation().route_now(),
-    orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Connections(_))
+    orchester_app::routes::Route::Accounts(_)
   ));
 }
 

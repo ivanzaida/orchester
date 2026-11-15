@@ -10,10 +10,10 @@ use std::path::Path;
 
 use orchester_core::{
   connection::{DecisionCheck, DecisionCheckResult, DecisionConnection, DecisionServerUrl},
-  id::{DecisionConnectionId, SecretId},
+  id::{ApiAccountId, DecisionConnectionId, SecretId},
   name::Name,
   resource::ModelId,
-  secret::SecretVault,
+  secret::{SecretValue, SecretVault, VaultKey},
   store::SecretStore,
   time::Timestamp,
 };
@@ -112,20 +112,20 @@ pub async fn check_in(
   id: DecisionConnectionId,
   selected: Option<&ModelId>,
 ) -> Result<DecisionConnection, DecisionError> {
-  let (tested, project, key_available) = {
+  let (tested, key) = {
     let db = ProjectDb::open(root)?;
     let tested = load(&db, id)?;
-    let key_available = match tested.key().map(|key| ensure_key(&db, key)).transpose() {
-      Ok(_) => true,
-      Err(DecisionError::KeyUnavailable) => false,
-      Err(error) => return Err(error),
+    let key = match tested.key() {
+      Some(key) => Some(key_here(&db, vault, key)?),
+      None => None,
     };
-    (tested, db.project().id(), key_available)
+    (tested, key)
   };
-  let (result, models) = if key_available {
-    http::check(project, vault, &tested).await?
-  } else {
-    (DecisionCheckResult::KeyRefused, None)
+  let (result, models) = match key {
+    // The key is archived, or the keychain did not give it: as good as refused.
+    Some(None) => (DecisionCheckResult::KeyRefused, None),
+    Some(Some(key)) => http::check_with_key(tested.base_url(), Some(&key)).await?,
+    None => http::check_with_key(tested.base_url(), None).await?,
   };
   let check = DecisionCheck {
     at: Timestamp::now(),
@@ -162,6 +162,28 @@ pub fn record_checked_in(
       return Ok(checked);
     }
   }
+}
+
+/// Asks the server at `url` for its models, with `key` when it takes one: the check of a server the app keeps, which
+/// is no project's (`Workspace::check_decision_server`).
+pub(crate) async fn list_models(
+  url: &DecisionServerUrl,
+  key: Option<&SecretValue>,
+) -> Result<(DecisionCheckResult, Option<Vec<ModelId>>), DecisionError> {
+  http::check_with_key(url, key).await
+}
+
+/// The key `key` names, as this computer has it: the value of the project's secret, or, when the project has no
+/// secret by that id, of the decision model server of the app whose copy the connection is, which keeps its key under
+/// its own id. `None` when the secret is archived or the keychain does not give the value.
+fn key_here(db: &ProjectDb, vault: &dyn SecretVault, key: SecretId) -> Result<Option<SecretValue>, DecisionError> {
+  let entry = match db.secret(key)? {
+    Some(secret) if secret.is_archived() => return Ok(None),
+    Some(secret) => secret.vault_key(db.project().id()),
+    None => VaultKey::api_account(ApiAccountId::from_uuid(key.as_uuid())),
+  };
+  // Vault diagnostics may contain platform details; neither they nor values are returned or logged.
+  Ok(vault.read(&entry).ok())
 }
 
 fn ensure_key(db: &ProjectDb, key: SecretId) -> Result<(), DecisionError> {

@@ -33,7 +33,7 @@ pub(super) fn open(seeded: &mut Seeded, id: DecisionConnectionId) {
 }
 
 #[test]
-fn connections_decision_page_lists_server_models_and_usage_and_opens_from_list() {
+fn connections_decision_page_lists_server_models_and_usage() {
   let mut seeded = Seeded::new("connections");
   let connection = connection(&seeded, DecisionCheckResult::Connected);
   seeded
@@ -46,8 +46,7 @@ fn connections_decision_page_lists_server_models_and_usage_and_opens_from_list()
       )),
     })
     .expect("reviewer");
-  seeded.list();
-  seeded.click(&format!("decision-row-{}-row", connection.id()));
+  seeded.go(ProjectPage::Connections(ConnectionsView::decision(connection.id())));
   seeded.until("decision page", |seeded| seeded.exists("decision-connection-page"));
   for words in [
     "Decision server",
@@ -62,7 +61,9 @@ fn connections_decision_page_lists_server_models_and_usage_and_opens_from_list()
   seeded.click("decision-more");
   assert!(seeded.text("decision-delete").contains("Choose another reviewer"));
   seeded.click("decision-back-back");
-  seeded.until("connections", |seeded| seeded.exists("connections-list"));
+  seeded.until("Project settings", |seeded| {
+    seeded.exists("settings-tab-general") && !seeded.exists("decision-connection-page")
+  });
 }
 
 #[test]

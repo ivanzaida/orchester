@@ -1,7 +1,8 @@
-//! What the runs-on picker is with no connection to choose (`No connections` `cjnbn` in `Runs-on picker · states`
+//! What the runs-on picker is with no account to choose (`No connections` `cjnbn` in `Runs-on picker · states`
 //! `t7cdi`): only its foot, 360 wide on `surface_raised` in a `border_strong` stroke, radius `lg`, lifted by the `lg`
-//! shadow, with no line over it. It is 8 by 12 and says that no connection runs the Orchestrator yet (11.5/1.4
-//! `text_muted`) and offers *Connections ↗* (12 `text_secondary`), which opens Project settings › Connections.
+//! shadow, with no line over it. It is 8 by 12 and says that there is no account to run the Orchestrator on yet
+//! (11.5/1.4 `text_muted`) and offers *Accounts ↗* (12 `text_secondary`), which opens Settings › Accounts, where a
+//! sign-in or an API provider is added for every project.
 
 use lurq::{
   app::{
@@ -13,10 +14,9 @@ use lurq::{
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::RunsOnProps;
 use crate::{
   navigation::Navigation,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AccountsView, Route},
   theme::{ExtraColor, ExtraRadius, ExtraTypography, OrchestratorText},
   ui::pressable::opening,
 };
@@ -25,23 +25,20 @@ use crate::{
 const WIDTH: f32 = 360.0;
 
 /// The picker with nothing to choose: its foot alone.
-pub(super) fn empty_menu(ctx: &mut Ctx, props: &RunsOnProps) -> Element {
+pub(super) fn empty_menu(ctx: &mut Ctx) -> Element {
   let navigation = Navigation::of(ctx);
-  let settings = opening(navigation.to(Route::Project(
-    props.project,
-    ProjectPage::Connections(ConnectionsView::default()),
-  )))
-  .id("orchestrator-connections")
-  .describe("a11y_name", ctx.t("orchestrator.runsOn.connections"))
-  .flex_shrink(0.0)
-  .rounded(ExtraRadius::Link.role())
-  .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-  .cursor(CursorIcon::Pointer)
-  .child(
-    Text::new(&ctx.t("orchestrator.runsOn.connections"))
-      .variant(OrchestratorText::PickerLink.role())
-      .nowrap(),
-  );
+  let settings = opening(navigation.to(Route::Accounts(AccountsView::default())))
+    .id("orchestrator-accounts")
+    .describe("a11y_name", ctx.t("orchestrator.runsOn.accounts"))
+    .flex_shrink(0.0)
+    .rounded(ExtraRadius::Link.role())
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .cursor(CursorIcon::Pointer)
+    .child(
+      Text::new(&ctx.t("orchestrator.runsOn.accounts"))
+        .variant(OrchestratorText::PickerLink.role())
+        .nowrap(),
+    );
   let foot = Row::new()
     .id("orchestrator-runs-on-foot")
     .width(Dimension::Pct(100.0))
@@ -49,7 +46,7 @@ pub(super) fn empty_menu(ctx: &mut Ctx, props: &RunsOnProps) -> Element {
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(
-      Text::new(&ctx.t("orchestrator.runsOn.noConnection"))
+      Text::new(&ctx.t("orchestrator.runsOn.noAccount"))
         .variant(ExtraTypography::Note.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),

@@ -10,7 +10,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
@@ -32,7 +31,10 @@ use orchester_workspace::{
 };
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, refuse_press},
+  mcp::{
+    input_gate::{Guarded, InputGate, refuse_press},
+    is_synthetic_input,
+  },
   services::Services,
   theme::{ExtraSpacing, IconSize},
   ui::{

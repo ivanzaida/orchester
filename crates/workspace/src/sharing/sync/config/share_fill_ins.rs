@@ -261,7 +261,7 @@ fn basic_part(credential: &str) -> &str {
     .map_or(credential, |_| &credential[BASIC.len()..])
 }
 
-/// The connection of each profile's newest published version, which the profile keeps running on.
+/// The connection each published profile runs on here, which it keeps running on.
 fn picks(db: &ProjectDb) -> Result<Vec<FillIn>, SharingError> {
   let connections = db.connections()?;
   let mut picks = Vec::new();
@@ -269,7 +269,7 @@ fn picks(db: &ProjectDb) -> Result<Vec<FillIn>, SharingError> {
     let Some(newest) = db.latest_version::<AgentProfile>(profile.id())? else {
       continue;
     };
-    let connection = newest.body().connection();
+    let connection = db.connection_here(profile.id(), newest.body().connection())?;
     let agent = connections
       .iter()
       .any(|found| found.id() == connection && matches!(found.kind(), ConnectionKind::Agent(_)));

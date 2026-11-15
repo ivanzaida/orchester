@@ -323,7 +323,7 @@ fn run_model_connection_with_one_model_is_fixed_and_offers_no_apply() {
     "Not offered by this connection"
   );
   assert!(!page.has("conversation-model-apply"));
-  assert!(page.text("conversation-model-connections").starts_with("Connections"));
+  assert!(page.text("conversation-model-connections").starts_with("Accounts"));
 }
 
 #[test]

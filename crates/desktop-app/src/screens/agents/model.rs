@@ -20,7 +20,7 @@ use orchester_workspace::agents::{
 
 use super::{fields::Fields, words};
 use crate::{
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::Route,
   screens::hub::parts::{boxed, field, group, head, note, stacked_field},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -337,14 +337,13 @@ fn effort_field(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnect
   )
 }
 
-/// *CLI 2.1 is too old for the model*, with Choose another model and Open connection.
+/// *CLI 2.1 is too old for the model*, with Choose another model and Open accounts, where the CLI's program is.
 fn too_old(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnection>) -> Option<Element> {
   let connection = connection?;
   let model = ModelId::new(&fields.model_value()).ok()?;
   let problem = connection.cannot_run(&model)?;
   let open = fields.model_open.clone();
   let nav = crate::navigation::Navigation::of(ctx);
-  let project = ctx.props::<super::editor::Props>().project.open.project.id();
   Some(
     Notice::new(
       "agent-model-too-old",
@@ -366,10 +365,7 @@ fn too_old(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnection>)
         ctx.t("agents.openConnection"),
       )
       .icon(Icon::Plug)
-      .opens(nav.to(Route::Project(
-        project,
-        ProjectPage::Connections(ConnectionsView::of(connection.id())),
-      ))),
+      .opens(nav.to(Route::Accounts(crate::routes::AccountsView::default()))),
     )
     .into(),
   )

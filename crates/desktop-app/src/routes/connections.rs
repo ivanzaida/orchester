@@ -87,25 +87,22 @@ impl ConnectionsView {
   }
 }
 
-/// What Add connection adds: an agent provider (the default), an MCP server, or a decision model
-/// (01 XMNUP and 01b z3G09h), which agents cannot run on.
+/// What the *New* page under the old Connections address adds: an MCP server, the one kind of connection a
+/// person still adds in a project. An agent runs on an account and a decision model on a server of the app's, both
+/// added in Settings › Accounts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum NewConnection {
   #[default]
-  AgentProvider,
   McpServer,
-  DecisionModel,
 }
 
 impl NewConnection {
-  pub const ALL: [Self; 3] = [Self::AgentProvider, Self::McpServer, Self::DecisionModel];
+  pub const ALL: [Self; 1] = [Self::McpServer];
 
   /// The kind's name in a path's query and in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
-      Self::AgentProvider => "agent_provider",
       Self::McpServer => "mcp_server",
-      Self::DecisionModel => "decision_model",
     }
   }
 
@@ -114,8 +111,7 @@ impl NewConnection {
   }
 
   pub(super) fn path(self, new: String) -> String {
-    let kind = (self != Self::default()).then(|| self.name());
-    with_query(new, &[(KIND, kind)])
+    with_query(new, &[(KIND, Some(self.name()))])
   }
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {

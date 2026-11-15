@@ -72,7 +72,7 @@ pub(super) fn project_settings_page(args: &Map<String, Value>) -> Result<Project
   }
 }
 
-/// What `kind` adds, an agent provider when left out.
+/// What `kind` adds: an MCP server, also when left out.
 pub(super) fn new_connection(args: &Map<String, Value>) -> Result<NewConnection, ToolError> {
   let Some(name) = string(args, "kind")? else {
     return Ok(NewConnection::default());

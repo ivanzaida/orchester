@@ -134,7 +134,7 @@ fn connections_decision_edit_reuses_secret_picker_and_redacts_new_key_on_cancel(
   let before = seeded.db().secrets().expect("secrets").len();
   open(&mut seeded, connection.id());
   edit(&mut seeded);
-  super::api_provider::choose(&mut seeded, "connection-provider-key", "SENTRY_TOKEN (Development)");
+  super::harness::choose(&mut seeded, "connection-provider-key", "SENTRY_TOKEN (Development)");
   seeded.click("decision-edit-save");
   seeded.until("saved key", |s| {
     s.exists("decision-connection-page") && s.text("decision-key-name").contains("SENTRY_TOKEN")

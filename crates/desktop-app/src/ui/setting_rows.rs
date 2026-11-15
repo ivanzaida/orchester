@@ -65,6 +65,7 @@ pub struct SettingGroup {
   meta_bone: Option<Element>,
   end: Option<Element>,
   notice: Option<Element>,
+  line: Option<Element>,
   rows: Vec<Element>,
   foot: Option<Element>,
   note: Option<Arc<str>>,
@@ -80,6 +81,7 @@ impl SettingGroup {
       meta_bone: None,
       end: None,
       notice: None,
+      line: None,
       rows: Vec::new(),
       foot: None,
       note: None,
@@ -90,6 +92,12 @@ impl SettingGroup {
   /// `NZECi`).
   pub fn notice(mut self, notice: impl Into<Element>) -> Self {
     self.notice = Some(notice.into());
+    self
+  }
+
+  /// A quiet line between the heading and the box, 8 from each (a CLI's program, `Agents on accounts` A1 `aOR4w`).
+  pub fn line(mut self, line: impl Into<Element>) -> Self {
+    self.line = Some(line.into());
     self
   }
 
@@ -210,6 +218,7 @@ impl From<SettingGroup> for Element {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(heading)
+      .with_children(group.line)
       .with_children(notice)
       .with_children(rows)
       .with_children(group.foot)

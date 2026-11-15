@@ -203,7 +203,7 @@ fn overview_states_seed_reaches_long_lists_and_every_plan_limit_look() {
 fn overview_of_a_new_project_marks_its_steps_done_from_its_state() {
   let mut seeded = Seeded::overview("empty", OverviewTab::Running);
   seeded.until("the steps", |seeded| seeded.shows("overview-start-task"));
-  let readiness = ProjectReadiness::load_in(&seeded.repo).expect("the readiness reads");
+  let readiness = ProjectReadiness::load_in(&seeded.repo, &[]).expect("the readiness reads");
   let lines = steps(&readiness, 0, ", ");
   for line in &lines {
     let state = if line.done { "done" } else { "todo" };

@@ -42,7 +42,7 @@ pub(super) fn try_again(ctx: &mut Ctx, project: &ShownProject, button: ActionBut
   let (job, vault) = (project.feed.jobs.of(run.run), services.vault);
   // A merge that does not begin (another one took the project meanwhile) leaves the job's state as it is.
   let start = move || {
-    if lurq::app::events::is_synthetic_input() {
+    if crate::mcp::is_synthetic_input() {
       job.start_synthetic_merge(args.clone(), vault.clone());
     } else {
       job.start_merge(args.clone());

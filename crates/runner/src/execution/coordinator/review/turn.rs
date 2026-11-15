@@ -142,8 +142,14 @@ impl ReviewTurn {
     let chosen = db
       .step_connection(self.run.id(), &self.step)
       .map_err(|error| cannot(error.to_string()))?;
+    let runs_on = match chosen {
+      Some(chosen) => chosen,
+      None => db
+        .connection_here(profile.resource, body.connection())
+        .map_err(|error| cannot(error.to_string()))?,
+    };
     let stored = db
-      .connection(chosen.unwrap_or(body.connection()))
+      .connection(runs_on)
       .map_err(|error| cannot(error.to_string()))?
       .ok_or(ReviewFailure::Turn(TurnFailure::ConnectionGone))?;
     let connection = AgentConnection::try_from(stored).map_err(|error| match error {

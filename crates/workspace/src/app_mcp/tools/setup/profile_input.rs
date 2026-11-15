@@ -24,7 +24,7 @@ use orchester_core::{
     browser::{AllowedSites, BrowserAccess},
   },
   resource::{AgentProfile, ChosenResources, ModelId, RepositoryAccess, Resource},
-  store::{McpServerStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore},
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -32,8 +32,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  connections::agent_named,
   profiles::{profile_named, profile_with_revision, publish_error},
+  runs_on::{self, CliKind},
   widening,
 };
 use crate::{
@@ -71,8 +71,11 @@ pub struct SaveProfileDraft {
   /// The role instructions every prompt of the agent carries; may use {{variables}}.
   #[serde(default)]
   pub instructions: String,
-  /// The agent connection it runs on, by its id or name.
-  pub connection: String,
+  /// What it runs on: a sign-in or an API provider of the person's, by its id or its name (list_accounts);
+  /// `default` is a CLI's Default and needs `cli`. The project gets its connection on the account when it has none.
+  pub account: String,
+  /// The agent CLI whose account `account` names; needed for `default` and for a name two CLIs' accounts share.
+  pub cli: Option<CliKind>,
   /// The model id, one list_models gives or another the CLI runs.
   pub model: String,
   /// A reasoning effort the model lists; left out, the CLI's default.
@@ -214,7 +217,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       .as_deref()
       .map(|named| profile_named(&agents, named))
       .transpose()?;
-    let connection = agent_named(&db, &args.connection)?;
+    let connection = account_connection(&blocked, &root, &args)?;
     let permissions = match &args.permissions {
       Some(given) => permissions(given, &root, existing.map(|entry| entry.profile.permissions()))?,
       None => existing.map_or_else(
@@ -251,8 +254,18 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
   services
     .changes
     .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
-  let profile = blocking(move || profile_with_revision(&open, id)).await?;
+  let reading = services.clone();
+  let profile = blocking(move || profile_with_revision(&reading, &open, id)).await?;
   Ok(json!({ "profile": profile }))
+}
+
+/// The project's connection on the account the arguments name, made now when it has none.
+fn account_connection(services: &Services, root: &Path, args: &SaveProfileDraft) -> Result<AgentConnection, ToolError> {
+  let id = runs_on::account_connection(services, root, args.cli, &args.account)?;
+  ProjectDb::open(root)?
+    .connection(id)?
+    .and_then(|connection| AgentConnection::try_from(connection).ok())
+    .ok_or_else(|| ToolError::not_found(Missing::Account, &args.account))
 }
 
 /// A new profile created as v1, with no draft: published as Publish does, so it is refused where publishing is, and its

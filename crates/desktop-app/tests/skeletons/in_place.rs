@@ -76,24 +76,3 @@ fn skeletons_project_settings_tabs_come_up_with_their_groups_and_a_later_read_mo
     "Limits, read on its own, takes its bones' room: {read:?} vs {bones:?}"
   );
 }
-
-#[test]
-fn skeletons_a_heading_with_an_action_starts_where_any_other_does() {
-  let mut held = Held::new();
-  held.page(ProjectPage::Settings(ProjectSettingsTab::General));
-  held.until("settings-project-reading-title");
-  let plain = (
-    held.bounds("settings-project-reading-title"),
-    held.bounds("settings-project-reading-rows"),
-  );
-  held.page(ProjectPage::Connections(Default::default()));
-  held.until("connections-add-agent");
-  let with_action = (
-    held.bounds("connections-reading-agents-title"),
-    held.bounds("connections-reading-agents-rows"),
-  );
-  assert!(
-    (plain.0.y - with_action.0.y).abs() < 0.5 && (plain.1.y - with_action.1.y).abs() < 0.5,
-    "the same heading and rows' y: {plain:?} vs {with_action:?}"
-  );
-}

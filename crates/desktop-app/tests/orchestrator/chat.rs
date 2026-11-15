@@ -275,7 +275,9 @@ fn orchestrator_names_a_cli_that_is_not_signed_in_and_where_to_fix_it() {
   assert!(failure.contains("isn't signed in on this computer"), "{failure}");
   assert!(screen.exists("orchestrator-retry"));
   screen.click("orchestrator-open-connections");
-  screen.until("Connections", |screen| screen.exists("screen-connections"));
+  screen.until("Settings › Accounts", |screen| {
+    matches!(screen.route(), orchester_app::routes::Route::Accounts(_))
+  });
 }
 
 #[test]

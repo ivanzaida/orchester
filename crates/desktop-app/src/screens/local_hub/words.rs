@@ -16,7 +16,10 @@ use orchester_workspace::{
 };
 
 use super::model::Entry;
-use crate::screens::team_hub::words::{cli_key, date};
+use crate::screens::{
+  hub::profile_form::here::{self, Whose},
+  team_hub::words::{cli_key, date},
+};
 
 /// What a kind is called in a row's tag under All and Archived (`team_hub.kind.tag.*`); a kind the hub lists has one.
 pub(super) const fn kind_tag_key(kind: ResourceKind) -> Option<&'static str> {
@@ -66,14 +69,14 @@ pub(super) enum Unsaved {
   Refused,
 }
 
-pub(super) fn line(ctx: &Ctx, now: Timestamp, entry: &Entry, unsaved: Option<Unsaved>) -> Said {
+pub(super) fn line(ctx: &Ctx, (now, whose): (Timestamp, Whose<'_>), entry: &Entry, unsaved: Option<Unsaved>) -> Said {
   if let Some(at) = entry.archived {
     return Said {
       text: archived_at(ctx, now, at),
       color: PaletteColor::TextMuted,
     };
   }
-  let state = state(ctx, entry);
+  let state = state(ctx, entry, whose);
   match unsaved {
     Some(Unsaved::Refused) => Said {
       text: ctx.t("local_hub.line.saveRefused"),
@@ -96,7 +99,7 @@ pub(in crate::screens) fn archived_at(ctx: &Ctx, now: Timestamp, at: Timestamp) 
 }
 
 /// How the entry stands, in the words of its kind.
-fn state(ctx: &Ctx, entry: &Entry) -> Said {
+fn state(ctx: &Ctx, entry: &Entry, whose: Whose<'_>) -> Said {
   let muted = |text: Arc<str>| Said {
     text,
     color: PaletteColor::TextMuted,
@@ -113,7 +116,7 @@ fn state(ctx: &Ctx, entry: &Entry) -> Said {
     },
     _ => match entry.kind {
       ResourceKind::McpServer => muted(on(ctx, entry)),
-      ResourceKind::AgentProfile => muted(profile_line(ctx, entry)),
+      ResourceKind::AgentProfile => muted(profile_line(ctx, entry, whose)),
       _ => muted(ctx.t("local_hub.line.ready")),
     },
   }
@@ -135,13 +138,21 @@ fn on(ctx: &Ctx, entry: &Entry) -> Arc<str> {
   }
 }
 
-/// *Claude Code · Claude 2*: the CLI and the connection a profile runs on.
-fn profile_line(ctx: &Ctx, entry: &Entry) -> Arc<str> {
-  let connection = entry.profile.as_ref().and_then(|profile| profile.connection.clone());
-  match (entry.cli, connection) {
-    (Some(cli), Some(connection)) => ctx.t_args(
+/// *Claude Code · Work*: the CLI and the account a profile runs on, by the account's name, never by the name of the
+/// connection Orchester keeps for it.
+fn profile_line(ctx: &Ctx, entry: &Entry, whose: Whose<'_>) -> Arc<str> {
+  let on = entry.profile.as_ref().and_then(|profile| {
+    profile
+      .runs_on
+      .iter()
+      .find(|choice| Some(choice.id) == profile.current)
+      .map(|choice| here::name(ctx, choice, whose).to_string())
+      .or_else(|| profile.connection.clone())
+  });
+  match (entry.cli, on) {
+    (Some(cli), Some(account)) => ctx.t_args(
       "local_hub.line.runsOn",
-      [("cli", ctx.t(cli_key(cli)).to_string()), ("connection", connection)],
+      [("cli", ctx.t(cli_key(cli)).to_string()), ("account", account)],
     ),
     (Some(cli), None) => ctx.t(cli_key(cli)),
     (None, _) => ctx.t("local_hub.line.ready"),

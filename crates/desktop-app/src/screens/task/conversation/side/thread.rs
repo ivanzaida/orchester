@@ -314,7 +314,7 @@ fn actions(
             // Who pressed is read while the press is delivered, as the run composer reads it. An answer that decides
             // for the run is automation's only under the person's consent: refused to it otherwise.
             let by = match decision {
-              None if lurq::app::events::is_synthetic_input() => Some(Answerer::Automation),
+              None if crate::mcp::is_synthetic_input() => Some(Answerer::Automation),
               None => Some(Answerer::Person),
               Some(kind) => press_answerer(
                 gate.as_ref(),

@@ -1,6 +1,6 @@
 //! An admin's edit of a team profile in its panel, in place (`A26 · Agents · Profile · admin · editing` `WSw0W`): the
 //! profile's fields as a new one's form has them ([`ProfileFields`]), over the latest version: *Role* first, then
-//! *From the team* with the Agent CLI, model and effort as selects, the instructions, MCP servers, tools and skills it
+//! *From the team* with the CLI, model and effort in one field, the instructions, MCP servers, tools and skills it
 //! gives its agents in tags with *Add* (a menu of the team's live resources of that kind), and the secrets it needs
 //! (read-only: they follow from what it uses). *On this computer* and *Ready here?* stay the panel's own. Save
 //! publishes the body the fields make as the next version at once ([`super::super::edit`]).
@@ -23,7 +23,7 @@ use crate::{
 };
 
 /// The ids of the edit's parts, which tests and automation address: `team-hub-role-name-input`,
-/// `team-hub-from-team-cli`, `team-hub-from-team-mcp-value`, …
+/// `team-hub-from-team-runs-on`, `team-hub-from-team-mcp-value`, …
 const IDS: Ids = Ids {
   role: "team-hub-role",
   rows: "team-hub-from-team",
@@ -78,7 +78,7 @@ impl ProfileEdit {
         locked: false,
         name_said: None,
         first: None,
-        held: None,
+        connect: None,
       },
     );
     // Fields of a team's scope make a team profile; the other arm never runs.

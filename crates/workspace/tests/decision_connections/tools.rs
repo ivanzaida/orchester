@@ -31,7 +31,7 @@ async fn mcp_decision_reviewer_connections_save_check_list_edit_delete_and_refus
   let (repo, _) = project();
   let services = services(repo.path());
   let (url, task) = server("200 OK", TYPESAFE, "", false).await;
-  let mut args = json!({"project":"Decision checks","name":"Decision","base_url":url,"key_secret":null});
+  let mut args = json!({"project":"Decision checks","name":"Decision","base_url":url});
   let saved = call(&services, "save_decision_connection", args.clone())
     .await
     .expect("add");
@@ -91,7 +91,7 @@ async fn assert_models(services: &app_mcp::Services, id: &str) {
     let listed = call(
       services,
       "list_models",
-      json!({"project":"Decision checks","connection":named}),
+      json!({"project":"Decision checks","account":named}),
     )
     .await
     .expect("decision models by name or id");
@@ -102,7 +102,7 @@ async fn assert_models(services: &app_mcp::Services, id: &str) {
 }
 
 async fn reject_key_values(services: &app_mcp::Services, args: &Value) {
-  for field in ["key", "key_value", "api_key"] {
+  for field in ["key", "key_value", "api_key", "key_secret"] {
     let mut args = args.clone();
     args[field] = "synthetic-rejected-value".into();
     assert!(matches!(
@@ -113,7 +113,7 @@ async fn reject_key_values(services: &app_mcp::Services, args: &Value) {
 }
 
 #[test]
-fn mcp_decision_reviewer_schemas_only_accept_secret_references_and_offer_no_test() {
+fn mcp_decision_reviewer_schemas_accept_no_key_or_secret_and_offer_no_test() {
   let tools: Vec<_> = app_mcp::listed().into_iter().chain(app_mcp::setup::listed()).collect();
   for name in [
     "save_decision_connection",
@@ -123,7 +123,7 @@ fn mcp_decision_reviewer_schemas_only_accept_secret_references_and_offer_no_test
   ] {
     let tool = tools.iter().find(|tool| tool.name == name).expect("listed tool");
     let properties = tool.input_schema["properties"].as_object().expect("properties");
-    for field in ["key", "key_value", "api_key", "writer"] {
+    for field in ["key", "key_value", "api_key", "key_secret", "writer"] {
       assert!(!properties.contains_key(field), "{name} must not accept {field}");
     }
     assert_eq!(tool.input_schema["additionalProperties"], false);
@@ -163,7 +163,7 @@ fn services(root: &std::path::Path) -> app_mcp::Services {
 }
 
 #[tokio::test]
-async fn mcp_decision_reviewer_models_prioritize_ids_and_reject_ambiguous_names() {
+async fn mcp_decision_reviewer_models_are_named_by_the_server_never_by_an_agent_connection() {
   use orchester_core::{
     connection::{AgentConnection, AgentProvider},
     id::ConnectionId,
@@ -190,42 +190,45 @@ async fn mcp_decision_reviewer_models_prioritize_ids_and_reject_ambiguous_names(
   .expect("agent");
   db.create_connection(&agent).expect("save agent");
 
-  for (id, name, is_decision) in [
-    (agent_id.to_string(), decision_id.to_string(), false),
-    (decision_id.to_string(), agent_id.to_string(), true),
-  ] {
-    let listed = call(
-      &services,
-      "list_models",
-      json!({"project":"Decision checks","connection":id.to_string()}),
-    )
-    .await
-    .expect("exact id wins over another connection's name");
-    assert_eq!(listed["connection"], name);
-    assert_eq!(listed["source"] == "decision", is_decision);
-  }
+  // The decision server is named by its id, even where an agent connection goes by that id as its name: no tool
+  // names an agent connection.
+  let listed = call(
+    &services,
+    "list_models",
+    json!({"project":"Decision checks","account":decision_id.to_string()}),
+  )
+  .await
+  .expect("a decision server by its id");
+  assert_eq!(listed["account"], agent_id.to_string());
+  assert_eq!(listed["source"], "decision");
+  call(
+    &services,
+    "list_models",
+    json!({"project":"Decision checks","account":agent_id.to_string()}),
+  )
+  .await
+  .expect("the decision server by its name, which is the agent connection's id");
 
   decision.name = Name::new("ShÄrÉd").expect("name");
   save_in(repo.path(), &decision, Writer::Automation).expect("rename decision");
   agent.rename(Name::new("shäréd").expect("name"));
   db.save_connection(&agent).expect("rename agent");
   for named in ["ShÄrÉd", "shäréd", "SHÄRÉD"] {
-    let error = call(
+    let listed = call(
       &services,
       "list_models",
-      json!({"project":"Decision checks","connection":named}),
+      json!({"project":"Decision checks","account":named}),
     )
     .await
-    .expect_err("shared name requires an id");
-    assert!(matches!(error, ToolError::InvalidArguments(detail) if detail.contains("name it by id")));
+    .expect("the decision server by its name, whatever an agent connection is called");
+    assert_eq!(listed["source"], "decision");
   }
-  for id in [agent_id.to_string(), decision_id.to_string()] {
-    call(
-      &services,
-      "list_models",
-      json!({"project":"Decision checks","connection":id.to_string()}),
-    )
-    .await
-    .expect("shared names still resolve by id");
-  }
+  let error = call(
+    &services,
+    "list_models",
+    json!({"project":"Decision checks","account":"no such account"}),
+  )
+  .await
+  .expect_err("nothing is named so");
+  assert!(!matches!(error, ToolError::InvalidArguments(_)), "{error:?}");
 }

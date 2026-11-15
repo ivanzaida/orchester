@@ -93,6 +93,7 @@ fn seed_live_pipelines_pass_the_run_preflight_and_its_drafts_are_ready() {
       profiles: &profiles,
       tools: &BTreeMap::new(),
       connections: &connections,
+      chosen_here: &BTreeMap::new(),
       mcp_servers: &mcp_servers,
       secrets: &secrets,
     });

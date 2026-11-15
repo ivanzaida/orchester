@@ -3,7 +3,7 @@
 //! its failure reaches the person.
 
 use orchester_core::{
-  id::DecisionConnectionId,
+  id::{ApiAccountId, DecisionConnectionId},
   run::review::{ReviewerChoice, default_decision_threshold},
 };
 
@@ -33,6 +33,13 @@ pub(super) fn decision_setup(
       .computer
       .secret_value(sources.project, &secret)
       // `.ok()`: keychain diagnostics can carry private data; a missing key fails the review with a typed failure.
+      .ok(),
+    // No secret of the project by this id: the connection is the project's copy of a decision model server of the
+    // person's, whose key the app keeps under the server's id, as an API account's.
+    Ok(None) => sources
+      .computer
+      .api_account_key(ApiAccountId::from_uuid(id.as_uuid()))
+      // `.ok()`: as above.
       .ok(),
     _ => None,
   });

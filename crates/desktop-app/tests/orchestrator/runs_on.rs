@@ -8,11 +8,7 @@
 
 use std::time::{Duration, Instant};
 
-use orchester_app::{
-  chrome::TITLE_BAR_HEIGHT,
-  routes::{ConnectionsView, OrchestratorChat, ProjectPage, Route},
-  ui::tooltip::TOOLTIP_DELAY,
-};
+use orchester_app::{chrome::TITLE_BAR_HEIGHT, routes::OrchestratorChat, ui::tooltip::TOOLTIP_DELAY};
 use orchester_core::{
   account::{
     AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AccountIdentity, AgentAccount, CheckedProgram,
@@ -36,8 +32,8 @@ use super::{
   history::kept,
 };
 
-/// A Claude Code account named `name` whose CLI said `signed_in` (as `ana@example.com` on the `pro` plan) or signed
-/// out, with a Claude Code connection on it; the account and the connection.
+/// A Claude Code account named `name` whose CLI said `signed_in` (as `<name>@example.com` on the `pro` plan: an account
+/// is who is signed in) or signed out, with a Claude Code connection on it; the account and the connection.
 pub(super) fn on_account(screen: &Orchestrator, name: &str, signed_in: bool) -> (AgentAccount, ConnectionId) {
   let folder = screen.window.data.dir.path().join(format!("claude-{name}"));
   std::fs::create_dir_all(&folder).expect("the account's folder");
@@ -58,7 +54,7 @@ pub(super) fn on_account(screen: &Orchestrator, name: &str, signed_in: bool) -> 
     AccountCheckResult::SignedIn {
       program,
       identity: AccountIdentity {
-        email: Some("ana@example.com".to_owned()),
+        email: Some(format!("{}@example.com", name.to_lowercase())),
         plan: Some("pro".to_owned()),
         ..AccountIdentity::default()
       },
@@ -141,6 +137,13 @@ pub(super) fn open(screen: &mut Orchestrator) {
   screen.go(OrchestratorChat::New);
   screen.click("orchestrator-runs-on-chip");
   screen.until("the picker", |screen| screen.exists(MENU));
+}
+
+/// Opens the picker again from the chip, once a chosen model closed it.
+pub(super) fn open_again(screen: &mut Orchestrator) {
+  screen.until("the picker closed", |screen| !screen.exists(MENU));
+  screen.click("orchestrator-runs-on-chip");
+  screen.until("the picker again", |screen| screen.exists(MENU));
 }
 
 /// The pointer rests on `id` until its tooltip shows.
@@ -238,14 +241,19 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
     "nothing chosen"
   );
 
-  // Choosing Work runs on it at once, and its line says its plan and its plan's use, over a 32 meter filled to it.
+  // Choosing Work runs on it at once, and its line says who is signed in and its plan's use, over a 32 meter filled to
+  // it.
   screen.press(&on_rail(at_work));
   screen.until("Work published", |screen| {
     published(screen).is_some_and(|(version, settings)| version == 2 && settings.connection() == at_work)
   });
   screen.until("Work's plan", |screen| screen.text(&part("who-use")) == "5h 42%");
   assert_eq!(screen.text(&part("who-name")), "Work");
-  assert_eq!(screen.text(&part("who-caption")), "Claude Code · Pro plan");
+  assert_eq!(
+    screen.text(&part("who-caption")),
+    "work@example.com",
+    "who is signed in"
+  );
   let meter = screen.bounds(&part("who-meter"));
   assert!((meter.width - 32.0).abs() < 0.5, "with its meter: {meter:?}");
   let fill = screen.bounds(&part("who-meter-fill"));
@@ -263,8 +271,10 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
   assert_frame(&mut screen);
 }
 
+/// A model chosen is published and closes the picker (the person's decision of 2026-11-14); an effort is chosen in
+/// it opened again, and keeps it open.
 #[test]
-fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
+fn orchestrator_picker_applies_a_model_and_closes_and_an_effort_at_once() {
   let mut screen = Orchestrator::new(Setup::Ready);
   open(&mut screen);
   screen.press(&part("model-1"));
@@ -273,7 +283,7 @@ fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
   screen.until("the chip", |screen| {
     screen.text("orchestrator-runs-on").ends_with("· opus")
   });
-  assert!(screen.exists(MENU), "the picker stays open");
+  open_again(&mut screen);
   screen.press(&part("effort-high"));
   let high = OrchestratorSettings::new(
     screen.claude,
@@ -281,6 +291,7 @@ fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
     Some("high".to_owned()),
   );
   screen.until("high published", |screen| published(screen) == Some((3, high.clone())));
+  assert!(screen.exists(MENU), "an effort keeps the picker open");
   // Choosing what is chosen publishes nothing.
   screen.press(&part("effort-high"));
   screen.window.pass();
@@ -412,7 +423,7 @@ fn orchestrator_picker_says_why_a_connection_the_keys_choose_cannot_be_chosen() 
   screen.key(("ArrowLeft", "ArrowLeft"), false);
   screen.key(("Enter", "Enter"), false);
   screen.until("why it cannot be chosen", |screen| {
-    screen.text(&part("who-caption")) == "Claude Code · Away: not signed in, sign in in Connections"
+    screen.text(&part("who-caption")) == "Claude Code · Away: not signed in, sign in in Settings › Accounts"
   });
   assert_eq!(
     published(&screen).map(|(version, _)| version),
@@ -482,27 +493,54 @@ fn orchestrator_picker_says_in_tooltips_that_another_account_starts_a_new_sessio
   );
 }
 
+/// A project with no connection has this computer's accounts to run the Orchestrator on all the same: each CLI's own
+/// sign-in stands on the rail, with no models until choosing it made the project's connection, and the picker is no
+/// foot alone.
 #[test]
-fn orchestrator_picker_without_connections_is_its_foot_with_no_line_over_it() {
+fn orchestrator_picker_without_connections_offers_this_computers_accounts() {
   let mut screen = Orchestrator::new(Setup::NoConnection);
   open(&mut screen);
-  for part in ["rail-scroll", "search", "model-scroll", "effort-row"] {
-    assert!(!screen.exists(&self::part(part)), "no {part}");
-  }
-  assert_eq!(
-    screen.text(MENU),
-    "No connection to run the Orchestrator yet. Add one in Connections. Connections ↗"
-  );
-  let (menu, foot) = (screen.bounds(MENU), screen.bounds("orchestrator-runs-on-foot"));
-  assert!((foot.y - menu.y).abs() < 1.5, "the foot at the top: {menu:?} {foot:?}");
+  assert!(screen.exists(&part("rail-scroll")), "the rail");
   assert!(
-    (menu.width - 360.0).abs() < 0.5,
-    "only as wide as its foot (`cjnbn`): {menu:?}"
+    !screen.exists("orchestrator-runs-on-foot"),
+    "no foot: there is an account to choose"
   );
-  screen.click("orchestrator-connections");
-  assert_eq!(
-    screen.route(),
-    Route::Project(screen.project, ProjectPage::Connections(ConnectionsView::default())),
-    "its link opens Project settings › Connections"
+  for cli in [AccountCli::ClaudeCode, AccountCli::Codex] {
+    let item = part(&format!("connection-account-{}", cli.default_account()));
+    assert!(screen.exists(&item), "{item}");
+  }
+  assert!(
+    screen.db().connections().expect("read").is_empty(),
+    "looking makes no connection"
   );
+}
+
+/// Choosing an account the project has no connection on makes the connection, as a profile's picker does: nobody adds
+/// one in the project. The program set for the CLI here is a file that is not there, so no real CLI starts and the
+/// connection lists no model to start on: it stands on the rail for a model to be chosen, and nothing is published.
+#[test]
+fn orchestrator_picker_choosing_an_account_makes_the_projects_connection_on_it() {
+  let mut screen = Orchestrator::new(Setup::NoConnection);
+  let missing = screen.window.data.dir.path().join("no-claude.exe");
+  screen
+    .window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_agent_program(AccountCli::ClaudeCode, &missing)
+    .expect("the program set for Claude Code");
+  open(&mut screen);
+  let account = part(&format!(
+    "connection-account-{}",
+    AccountCli::ClaudeCode.default_account()
+  ));
+  assert!(screen.exists(&account), "the account on the rail");
+
+  screen.click(&account);
+
+  screen.until("the project's connection on the account", |screen| {
+    let made = screen.db().connections().expect("read");
+    made.len() == 1 && screen.exists(&on_rail(made[0].id())) && !screen.exists(&account)
+  });
+  assert_eq!(published(&screen), None, "no model to start on: nothing is published");
 }

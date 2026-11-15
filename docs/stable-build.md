@@ -154,9 +154,9 @@ A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When an agent
 needs is still not found, the start page warns of it with the folders it searched, *Choose the
 claude file…*, whose file becomes that connection's program and is offered in *Add connection*, and
 *Check again*, which reads the login shell again; on Windows it says the same of the `PATH`. The app
-MCP tool `add_cli_connection` names the folders it searched too, and a CLI installed elsewhere can
-be added there by its file path (`program`): the app's *Connections* does not offer choosing a file
-in this version. Starting the program itself from a terminal,
+MCP tool `list_accounts` says where each CLI's program is (`programs`), and a CLI installed elsewhere is
+chosen in Settings › Accounts, on the CLI's line (*Change…*, *Choose program…*): no tool takes a
+program. Starting the program itself from a terminal,
 `~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on, and the
 login shell is not asked then.
 
@@ -543,8 +543,8 @@ depend on how the app was started (below). It hosts lurq's window tools, the app
 Orchester's domain tools: every tool of Orchester's MCP server above, and the setup tools that only this app
 serves, which set a project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
-`update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
-saved), `check_connection` and `list_models`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
+`update_project_limits`); `list_accounts`, `check_account`, `list_models` and `set_profile_account` (what a profile runs on, by
+account), `list_connections` and `check_connection`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
 and `remove_mcp_server` (Connections › MCP servers); `list_profiles`, `get_profile`, `save_profile_draft` and
 `publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, a copy, or the steps given, published
 as v1) and `save_pipeline` (publishes the next version: a pipeline has no drafts); `list_tools`, `get_tool`,
@@ -606,11 +606,23 @@ and deleting a conversation take a synthetic press as a person's; and a message 
 the person's. The gate is one place, `orchester_app::mcp::qa_person::QaPerson`, held by the session's services: off
 on every start, it is turned on only by `examples/qa_app` before its window opens. The installed app, `tools/run.ps1`
 and every other start never turn it on, so there these presses are still refused and say so; it is no environment
-variable or setting another program could set. It widens nothing else: Settings, permission and approval questions,
-the access token and pairing codes, sharing and sign-in, secrets, and the task pages' person-only controls keep their
-refusals in a QA copy too. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
+variable or setting another program could set. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
 presses apply, in one that does not they are refused, and only `examples/qa_app` turns it on. The seed's
 `orchestrator-leads` scenario has subscriptions standing for these states (the design-verification skill names them).
+
+**In a QA copy the MCP client is the person for the whole window (the person, 2026-11-15).** The same program,
+`examples/qa_app`, also makes every window input of its MCP client count as the person's
+(`orchester_app::mcp::qa_person::count_every_input_as_the_persons`), so a QA copy can be tested whole through its MCP
+server: Settings (accounts and API providers, *Let automation change agent permissions*, the MCP server's own
+rows), permission and approval questions, sharing and sign-in, and the task pages' person-only controls take its
+presses as a person's, window input is not refused while one of them shows, and what it does is recorded as the
+person's. Looking at the window while a secret shows in it (the access token, a pairing code) stays refused. The app
+tells a person's input from automation's in one place, `orchester_app::mcp::qa_person::is_synthetic_input` and
+`input_source`, never through lurq's own functions, except where automation's input must stay automation's even in
+a QA copy: copy, cut and paste on a page of the browser window, and a web link in a chat, which automation never
+opens in the person's own browser. The switch is the program's, off on every start; the installed app,
+`tools/run.ps1` and every other start never turn it on, and it is no environment variable or setting.
+`tests/qa_every_input.rs` covers it.
 
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn

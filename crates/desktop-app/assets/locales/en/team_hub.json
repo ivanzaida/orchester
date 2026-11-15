@@ -51,7 +51,7 @@
       "namesArchivedLocal": "Names {{name}}, which was archived",
       "many": "{{count}} things missing here",
       "connectionNone": "No {{cli}} connection on this computer",
-      "connectionPick": "Choose a {{cli}} connection here",
+      "connectionPick": "Choose a {{cli}} account here",
       "connectionSignIn": "Sign in to {{cli}} here",
       "decisionConnection": "Needs a connection here",
       "mcpUndecided": "Switch it on or off on this computer",
@@ -142,6 +142,22 @@
       "anthropicApi": "Anthropic API",
       "openaiApi": "OpenAI API"
     },
+    "runsOn": {
+      "label": "CLI, model and effort",
+      "sub": "The team's choice · each computer picks its account",
+      "value": "{{cli}} · {{model}}",
+      "valueEffort": "{{cli}} · {{model}} · {{effort}}",
+      "placeholder": "Choose a CLI and a model",
+      "caption": "models from its list"
+    },
+    "runsHere": {
+      "plan": "{{plan}} plan",
+      "otherModels": "other models",
+      "add": "Add an account…",
+      "choose": "Choose a {{cli}} account",
+      "pick": "choose the account it runs on",
+      "label": "CLI, model and effort"
+    },
     "profile": {
       "fromTeam": "From the team",
       "fromTeamNote": "· the same on every computer",
@@ -173,7 +189,7 @@
       "runsOnMany": "{{count}} {{cli}} connections here",
       "runsOnNone": "nothing is substituted",
       "connectionName": "{{cli}} · {{name}}",
-      "onlyOne": "· the only {{cli}} connection here",
+      "onlyOne": "· the only {{cli}} account here",
       "noConnection": "No {{cli}} connection on this computer",
       "choose": "Choose a {{cli}} connection",
       "cliVersion": "{{program}} {{version}}"
@@ -185,7 +201,8 @@
       "connectionOk": "{{cli}} · {{name}}",
       "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
       "noneOfKind": "No {{cli}} connection here",
-      "pickNeeded": "Choose a {{cli}} connection here",
+      "accountNeeded": "Choose a {{cli}} account here",
+      "pickNeeded": "Choose a {{cli}} account here",
       "signedOut": "{{cli}} is signed out here",
       "programHere": "Set its program path here",
       "programSet": "Ready · program path set",
@@ -201,7 +218,7 @@
     },
     "fix": {
       "link": {
-        "use": "Use a connection →",
+        "use": "Use an account →",
         "add": "Add →",
         "signIn": "Sign in →",
         "switchOn": "Switch on →",
@@ -212,7 +229,8 @@
       "programTitle": "Choose the MCP server's program",
       "action": {
         "use": "Use {{connection}} for {{profile}}",
-        "add": "Add a {{cli}} connection",
+        "useAll": "Use for all {{count}}",
+        "add": "Add a {{cli}} account",
         "signIn": "Sign in to {{cli}}",
         "switchOn": "Switch on {{server}}",
         "setPath": "Set {{server}}'s program path",
@@ -223,6 +241,7 @@
         "then": "Then {{what}}",
         "done": "{{profile}} runs here once nothing is missing",
         "use": "Asked once per profile · kept on this computer",
+        "useAll": "{{count}} {{cli}} profiles wait for an account",
         "add": "Opens Settings › Accounts",
         "signIn": "Opens Settings › Accounts",
         "openArchived": "In Archived · an admin restores it there"

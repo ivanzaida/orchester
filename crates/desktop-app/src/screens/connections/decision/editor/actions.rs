@@ -146,7 +146,7 @@ impl DecisionEditor {
         draft: draft.clone(),
         key: key.clone(),
         value: guard.typed_key(),
-        writer: if lurq::app::events::is_synthetic_input() {
+        writer: if crate::mcp::is_synthetic_input() {
           Writer::Automation
         } else {
           Writer::Person
@@ -194,7 +194,7 @@ impl DecisionEditor {
       let checking = self.checking.clone();
       let expected = self.original.get().cloned();
       save.on_click(move || {
-        let synthetic = lurq::app::events::is_synthetic_input();
+        let synthetic = crate::mcp::is_synthetic_input();
         // Hosted decision connections are strictly person-only, even with automation consent. Refused, the form stays
         // as it was.
         if hosted && !persons_press(gate.as_ref(), "save a decision connection on another computer") {

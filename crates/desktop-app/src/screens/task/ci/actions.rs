@@ -101,7 +101,7 @@ impl CiActions {
 
 /// Who pressed now: automation driving the window, or a person.
 pub fn pressed_by() -> Answerer {
-  if lurq::app::events::is_synthetic_input() {
+  if crate::mcp::is_synthetic_input() {
     Answerer::Automation
   } else {
     Answerer::Person

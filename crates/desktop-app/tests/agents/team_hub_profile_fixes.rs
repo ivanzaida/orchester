@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use super::{
   harness::Agents,
   team_hub::{open, team},
-  team_hub_profile::{builder_using, claude, show},
+  team_hub_profile::{builder_using, claude, claude_home, show},
 };
 
 const VALUE: &str = "ghp_not-a-real-token-9f2c";
@@ -376,7 +376,7 @@ fn team_hub_profile_fix_choosing_another_connection_after_a_pick_keeps_it() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  let home = claude(&agents.root, "Claude Home", "2.1.170");
+  let home = claude_home(&agents.root, "2.1.170");
   let ((profile, _), _) = builder_using(&agents, false);
   show(&mut agents, profile);
   let pick = |agents: &Agents| {
@@ -397,14 +397,18 @@ fn team_hub_profile_fix_choosing_another_connection_after_a_pick_keeps_it() {
     None,
     "choosing alone keeps nothing before the first pick"
   );
-  assert!(agents.text("team-hub-fix-use").contains("Use Claude Home for Builder"));
+  assert!(
+    agents
+      .text("team-hub-fix-use")
+      .contains("Use Claude Code · Claude Home for Builder")
+  );
   agents.click("team-hub-fix-use");
   agents.until("kept", |s| pick(s) == Some(home));
   agents.until("read back", |s| {
     s.text("team-hub-runs-on-sub") == "picked on this computer"
   });
   // After it, the select is the pick: choosing another keeps that one.
-  choose(&mut agents, "Claude Code · Claude 2");
+  choose(&mut agents, "Claude Code · Default");
   agents.until("the other is kept", |s| pick(s) == Some(first));
   agents.until("read back", |s| {
     s.text("team-hub-ready-connection-words").contains("Claude 2")
@@ -477,11 +481,11 @@ fn team_hub_profile_fix_the_select_follows_a_pick_made_elsewhere() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  let home = claude(&agents.root, "Claude Home", "2.1.170");
+  let home = claude_home(&agents.root, "2.1.170");
   let ((profile, _), _) = builder_using(&agents, false);
   show(&mut agents, profile);
   assert!(
-    agents.text("team-hub-pick").contains("Choose a Claude Code connection"),
+    agents.text("team-hub-pick").contains("Choose a Claude Code account"),
     "{}",
     agents.text("team-hub-pick")
   );
@@ -501,8 +505,8 @@ fn team_hub_profile_fix_the_select_follows_a_pick_made_elsewhere() {
   agents.until("the select follows", |s| {
     s.text("team-hub-pick").contains("Claude Home")
   });
-  assert!(!agents.text("team-hub-pick").contains("Choose a Claude Code connection"));
-  choose(&mut agents, "Claude Code · Claude 2");
+  assert!(!agents.text("team-hub-pick").contains("Choose a Claude Code account"));
+  choose(&mut agents, "Claude Code · Default");
   agents.until("the other is kept", |s| {
     ProjectDb::open(&s.root)
       .expect("database")
@@ -519,10 +523,14 @@ fn team_hub_profile_fix_automation_uses_a_connection() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  claude(&agents.root, "Claude Home", "2.1.170");
+  claude_home(&agents.root, "2.1.170");
   let ((profile, _), _) = builder_using(&agents, false);
   show(&mut agents, profile);
-  assert!(agents.text("team-hub-fix-use").contains("Use Claude 2 for Builder"));
+  assert!(
+    agents
+      .text("team-hub-fix-use")
+      .contains("Use Claude Code · Default for Builder")
+  );
 
   with_synthetic_input(|| agents.click("team-hub-fix-use"));
 

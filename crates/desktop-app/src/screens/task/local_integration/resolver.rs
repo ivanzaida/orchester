@@ -8,7 +8,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{InputSource, input_source},
+    events::InputSource,
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, SelectOption, Text},
@@ -24,7 +24,7 @@ use super::{
   work::{Action, Outcome, Request, Work},
 };
 use crate::{
-  mcp::input_gate::Guarded,
+  mcp::{input_gate::Guarded, input_source},
   navigation::guard::LeaveGuard,
   ui::{
     button::{ActionButton, ButtonKind},

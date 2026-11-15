@@ -490,6 +490,8 @@ when a Windows installer exists.
 | `sessions` | id, pid, started / ended, `end_kind`: clean, runs_paused, quit_now; still open means crash |
 | `ui_state` | key → text: the window's tabs (`tabs`: their locations in order and the active one, without history); later window placement and drafts not tied to a project |
 | `servers` | the shared servers (`server.md`, "Desktop data"): id, normalized address (unique), the server's name, plain HTTP allowed, added at, and the account signed in from this computer (user id, username, display name, admin, signed in at). The token is in the OS keychain under `orchester-server:<server id>` / `token` |
+| `api_accounts` | the person's API accounts (`docs/design/agent-accounts.md`, "Agents run on accounts"): id, the kind of agent (`codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`), name (unique per kind among those not removed), the model API and its models as JSON, added at, removed at (the row stays, so finished runs still name what they ran on), and the last check. The key is in the OS keychain under `orchester-api-account:<account id>` / `key`, never in a project secret |
+| `agent_programs` | the program of each agent CLI on this computer: CLI (`claude_code`, `codex`), absolute path, set at. A CLI without a row is looked up on the `PATH` |
 
 A session row is written at start with `ended_at = NULL`. A clean exit fills it; a row still
 open at the next start means the previous session crashed.

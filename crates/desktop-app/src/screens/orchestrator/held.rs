@@ -14,7 +14,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{PaletteColor, RadiusSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
@@ -35,7 +34,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  mcp::input_gate::InputGate,
+  mcp::{input_gate::InputGate, is_synthetic_input},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{

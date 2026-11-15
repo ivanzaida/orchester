@@ -30,7 +30,8 @@ use super::{
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AccountsView, ProjectPage, Route},
+  services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::LastFailure,
@@ -87,13 +88,21 @@ impl Component for GettingStarted {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<StartProps>().clone();
-    let read = ctx.future((props.repo_root.clone(), props.revision), |(repo_root, _)| async move {
-      background::run(move || ProjectReadiness::load_in(&repo_root))
+    let workspace = Services::of(ctx).workspace;
+    let read = ctx.future((props.repo_root.clone(), props.revision), move |(repo_root, _)| {
+      let workspace = workspace.clone();
+      async move {
+        background::run(move || {
+          // The person's API accounts: a connection on one of them holds no secret of the project.
+          let accounts: Vec<_> = workspace.api_accounts()?.iter().map(|account| account.id()).collect();
+          ProjectReadiness::load_in(&repo_root, &accounts)
+        })
         .await?
         .map_err(|error| {
           tracing::error!(%error, "cannot read whether the project is ready to run");
           messages::store_error(&error)
         })
+      }
     });
     let state = read.state().get();
     let failed = self.last.follow(&state);
@@ -188,10 +197,13 @@ fn step_line(ctx: &mut Ctx, project: ProjectId, line: &StartLine) -> Row {
 /// Where a step is done, and its link's words.
 fn destination(ctx: &mut Ctx, project: ProjectId, step: StartStep) -> (std::sync::Arc<str>, Open) {
   let (key, page) = match step {
-    StartStep::Connect => (
-      "overview.start.connections",
-      ProjectPage::Connections(ConnectionsView::default()),
-    ),
+    // Agents run on the person's accounts, which are the app's: Settings › Accounts.
+    StartStep::Connect => {
+      return (
+        ctx.t("overview.start.connections"),
+        Navigation::of(ctx).to(Route::Accounts(AccountsView::default())),
+      );
+    }
     StartStep::Profile => ("overview.start.agents", ProjectPage::Agents),
     StartStep::Pipeline => ("overview.start.pipelines", ProjectPage::Pipelines),
     StartStep::Task => ("overview.start.newTask", ProjectPage::NewTask),

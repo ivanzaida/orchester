@@ -6,16 +6,19 @@ use std::path::Path;
 
 use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
-  id::{ConnectionId, ResourceId},
+  id::ResourceId,
   run::Answerer,
   secret::{SecretName, SecretValue},
 };
 use orchester_store::ConnectionPick;
-use orchester_workspace::{background, messages::Message};
+use orchester_workspace::{background, messages::Message, workspace::Workspace};
 
-use crate::services::{
-  Services,
-  path_picker::{PathKind, PathPicker},
+use crate::{
+  screens::hub::profile_form::Here,
+  services::{
+    Services,
+    path_picker::{PathKind, PathPicker},
+  },
 };
 
 /// Whether a fix can be pressed now.
@@ -30,8 +33,10 @@ pub(in crate::screens) enum Busy {
 
 #[derive(Clone)]
 pub(super) struct Actions {
-  /// Keeps the connection (second) as the profile's (first) on this computer.
-  pub pick: FutureAction<(ResourceId, ConnectionId), (), Message>,
+  /// Keeps the connection, or the account (second), as what each of the profiles (first) runs on on this computer;
+  /// the project gets its connection on an account it has none on. Every profile is tried, and the first refusal is
+  /// the answer: one the account cannot run stays as it was.
+  pub pick: FutureAction<(Vec<ResourceId>, Here), (), Message>,
   /// Asks for the program of the MCP server, then sets it.
   pub set_path: FutureAction<ResourceId, (), Message>,
   pub switch_on: FutureAction<ResourceId, (), Message>,
@@ -49,21 +54,7 @@ impl Actions {
     let root = root.to_path_buf();
     let picker = PathPicker::of(ctx);
     let title = ctx.t("team_hub.fix.programTitle");
-    let pick = {
-      let (workspace, root) = (workspace.clone(), root.clone());
-      ctx.future_action(move |(profile, connection): (ResourceId, ConnectionId)| {
-        let (workspace, root) = (workspace.clone(), root.clone());
-        async move {
-          let pick = ConnectionPick {
-            connection,
-            account: None,
-          };
-          background::run(move || workspace.pick_team_connection(&root, profile, pick))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-    };
+    let pick = pick(ctx, &workspace, &root);
     let set_path = {
       let (workspace, root) = (workspace.clone(), root.clone());
       ctx.future_action(move |server: ResourceId| {
@@ -148,4 +139,38 @@ impl Actions {
     .into_iter()
     .find_map(|state| state.error.clone().filter(|_| !state.is_pending()))
   }
+}
+
+/// [`Actions::pick`] for the project at `root`.
+fn pick(ctx: &mut Ctx, workspace: &Workspace, root: &Path) -> FutureAction<(Vec<ResourceId>, Here), (), Message> {
+  let (workspace, root) = (workspace.clone(), root.to_path_buf());
+  ctx.future_action(move |(profiles, here): (Vec<ResourceId>, Here)| {
+    let (workspace, root) = (workspace.clone(), root.clone());
+    async move {
+      background::run(move || {
+        let mut refused = None;
+        for profile in profiles {
+          let kept = match here {
+            Here::Connection(connection) => {
+              let pick = ConnectionPick {
+                connection,
+                account: None,
+              };
+              workspace
+                .pick_team_connection(&root, profile, pick)
+                .map_err(|error| error.message())
+            }
+            Here::Account(account) => workspace
+              .run_profile_on_account(&root, profile, account)
+              .map_err(|error| error.message()),
+          };
+          if let Err(error) = kept {
+            refused.get_or_insert(error);
+          }
+        }
+        refused.map_or(Ok(()), Err)
+      })
+      .await?
+    }
+  })
 }

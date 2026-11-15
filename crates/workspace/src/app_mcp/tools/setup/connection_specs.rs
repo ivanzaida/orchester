@@ -1,82 +1,50 @@
-//! The tool specs of agent connections: listing and adding them, API providers, models, and the accounts they run on.
+//! The tool specs of what a project is connected to and of the accounts its agents run on: the person's sign-ins
+//! and API providers, the models each serves, and which one a profile runs on. No tool names an agent connection.
 
 use rmcp::handler::server::common::schema_for_type;
 
-use super::{accounts, api_providers, connections};
+use super::{accounts, connections, runs_on};
 use crate::app_mcp::tools::{Spec, across::InProjects};
 
 pub(super) const SPECS: &[Spec] = &[
   Spec {
     name: "list_connections",
-    description: "A project's connections: agent connections (id, name, provider codex_cli, claude_code_cli, \
-                  anthropic_api or openai_api, program, status from the last check, CLI version, number of models, \
-                  the API provider a CLI runs on: base_url, host, key_secret's name and models), decision_models \
-                  (id, name, base_url, on_this_computer, key_secret id, models and last_check with answer timestamp), \
-                  GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
-                  agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
-                  with url and authorization: its scheme none, bearer, basic with username, basic_credential or \
-                  header with name, and its secret NAME@environment; the values of the url's query left out), \
-                  environment (each \
-                  variable's name and whether it is plain text or a secret, NAME@environment; a plain value is not \
-                  listed, nor any secret's value), the tools that run without asking and the roles of the profiles \
-                  whose draft or latest published version chooses it. Each connection and server has its link in \
-                  the app (its inspector in Connections). Without `project`, every project's, each naming its \
-                  project (unreadable_projects lists the projects that could not be read, with why).",
+    description: "What a project is connected to, of one project or, with no project given, of every project. \
+                  runs_on has a row for each agent profile the project lists: profile {id, role}, model, status \
+                  (whether a run can start on it now) and runs_on, what it runs on on this computer: agent \
+                  (codex_cli, claude_code_cli, anthropic_api, openai_api) with account, one of the person's \
+                  sign-ins as list_accounts gives it, or api_provider, one of their API providers; runs_on is \
+                  null for a profile that runs on nothing here yet (set_profile_account). No agent connection is \
+                  listed: Orchester keeps one for each account a project's profiles run on. github is the \
+                  project's GitHub connection with its host, status and link; mcp_servers are its MCP servers; \
+                  decision_models its decision model servers with base_url, on_this_computer, takes_key, models \
+                  and last_check. No key and no secret's value is listed. Projects that could not be read are \
+                  listed in unreadable_projects.",
     schema: schema_for_type::<InProjects>,
     read_only: true,
   },
   Spec {
-    name: "add_cli_connection",
-    description: "Adds a connection to an agent CLI, as Connections › Add connection does: `kind` codex or claude, \
-                  a unique `name`, and the CLI's `program` as an absolute path (left out: the newest copy found on \
-                  the search path). A program that is not a copy found on the search path is refused as \
-                  person_only, before it runs, unless a person turned on Let automation change agent permissions. \
-                  The CLI is checked first with read-only commands (its version, whether it is \
-                  signed in, its models); it is saved only when it answers as the expected CLI, and the check \
-                  comes back either way. A CLI that is not signed in is saved and reads sign_in_required. With \
-                  `api_provider` the CLI runs on that model API with an API key instead of its own sign-in: claude \
-                  needs an Anthropic Messages API, codex an OpenAI Responses API; the key is an existing project \
-                  secret named by id or name (no tool takes a secret's value) and the models typed are the ones \
-                  profiles on it choose from. A provider is refused as person_only unless a person turned on Let \
-                  automation change agent permissions: the agents would send the project's prompts, code and \
-                  command output to that host.",
-    schema: schema_for_type::<connections::AddCliConnection>,
-    read_only: false,
-  },
-  Spec {
-    name: "set_api_provider",
-    description: "Runs a Codex or Claude Code connection on an API provider (`api_provider`: base_url, key_secret, \
-                  models, as add_cli_connection takes it), or back on its CLI's own sign-in (null). Running on a \
-                  host or key the connection does not run on now is refused as person_only unless a person turned \
-                  on Let automation change agent permissions; going back to the sign-in, or changing only the \
-                  models, is not. A connection on a provider runs on its CLI's Default account and reads no plan \
-                  limits. Returns the connection as list_connections lists it.",
-    schema: schema_for_type::<api_providers::SetApiProvider>,
-    read_only: false,
-  },
-  Spec {
     name: "check_connection",
-    description: "Checks a connection's program again, as its Check again does, and stores what it found: status, \
-                  version and models. A native connection is tested as its Test connection does: the project's \
-                  runner reads its key and lists the endpoint's models.",
+    description: "Checks the project's GitHub connection again, as Check again beside the repository does, and \
+                  stores what gh said: its status. Refused as not_a_github_connection for anything else: what an \
+                  agent runs on is an account, checked by check_account.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: false,
   },
   Spec {
     name: "list_models",
-    description: "The models an agent or decision connection offers, each with the reasoning efforts it takes \
-                  (none for decision models). Decision models come from the connection's last model-list check, \
-                  with source decision. Agent models are offered as in the profile editor: its last check's, an \
-                  API provider's or a native connection's own. An unlisted agent model can still be given to \
-                  save_profile_draft (not verified); effort is kept only where listed. Agent connections include link.",
-    schema: schema_for_type::<connections::InConnection>,
+    description: "The models an account serves, each with the reasoning efforts it takes (none for decision \
+                  models), as a profile's Runs on offers them: `account` is a sign-in, an API provider or a \
+                  decision model's server by id or name (list_accounts); `cli` (codex or claude_code) says whose \
+                  account a name is, and is needed for `default`. A sign-in's models are the ones its CLI listed                   for the project; one the project has no connection on yet lists none (checked false) until                   set_profile_account or save_profile_draft runs a profile on it. An API provider's are the ones                   the person typed (source api_provider), those of Orchester's own agent the endpoint's or the                   person's (native), a decision server's its last check's (decision). An unlisted model can                   still be given to save_profile_draft (not verified); effort is kept only where listed.",
+    schema: schema_for_type::<runs_on::AccountModels>,
     read_only: true,
   },
   Spec {
     name: "list_accounts",
-    description: "The person's agent CLI accounts on this computer, which every project's connections can run on \
-                  (Settings › Accounts): id, cli (claude_code or codex), name (null for a Default nobody renamed), \
-                  whether it is the CLI's Default (its own folder), state (signed_in, not_signed_in, \
+    description: "What agents can run on on this computer, for every project (Settings › Accounts). accounts are \
+                  the person's agent CLI sign-ins: id, cli (claude_code or codex), name (null for a Default nobody \
+                  renamed), whether it is the CLI's Default (its own folder), state (signed_in, not_signed_in, \
                   sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_checked), \
                   whether Orchester created its folder or the person brought it, and the account it shares a \
                   sign-in with, if any, and its link in Settings › Accounts. No email and no folder are listed. \
@@ -87,20 +55,43 @@ pub(super) const SPECS: &[Spec] = &[
                   window by minutes (300 five-hour, 10080 weekly) with used_percent, resets_at and \
                   reset_since_reading (true when its reset has passed since: its use now is unknown, never \
                   estimated). Codex accounts are read on their own; Claude Code accounts only by a turn or the \
-                  person's Check now. Adding, renaming and removing accounts \
-                  and signing them in are done by a person in the window.",
+                  person's Check now. api_providers are the person's API providers: id, name, used_with \
+                  (claude_code, codex, or orchester_agent for Orchester's own agent), host, models, key_here \
+                  (whether this computer's keychain holds its key) and status (its last test's, for Orchester's \
+                  own agent; null otherwise). decision_servers are their decision model servers: id, name, host, \
+                  takes_key, models and whether a check listed them. programs says where each agent CLI's \
+                  program is: cli, set (the path the person set, or null) and on_search_path (the copies found \
+                  there, in search order). No key is listed. Adding, renaming and removing accounts and API \
+                  providers, signing in and entering a key are done by a person in the window.",
     schema: schema_for_type::<accounts::NoArguments>,
     read_only: true,
   },
   Spec {
-    name: "set_connection_account",
-    description: "Chooses which account an agent CLI connection runs on, as the connection's Account field does: \
-                  `account` is an account of the connection's CLI by id or name (list_accounts), `default` its \
-                  Default. Runs that start from now on use it; a running agent keeps its account. The connection is \
-                  checked again on that account. Choosing another account than the connection's is refused as \
-                  person_only unless a person turned on Let automation change agent permissions: it can send the \
-                  project's code to another organisation's provider.",
-    schema: schema_for_type::<accounts::SetConnectionAccount>,
+    name: "check_account",
+    description: "Checks one of the person's accounts again, once for every project: `account` is a sign-in, an \
+                  API provider or a decision model's server by id or name (list_accounts); `cli` (codex or \
+                  claude_code) says whose account a name is, and is needed for `default`. A sign-in's CLI is \
+                  asked who is signed in to its folder (read-only status commands) and the answer is kept: \
+                  returns account. An API provider of Orchester's own agent is asked for its models with its key, \
+                  which spends no tokens: returns api_provider with its status. An agent CLI's API provider is \
+                  refused as not_tested: its CLI talks to it, and its first run tests it. A decision model's \
+                  server is asked for its models (a bodyless GET {base_url}/models): returns decision_server. \
+                  No key is returned.",
+    schema: schema_for_type::<accounts::CheckAccount>,
+    read_only: false,
+  },
+  Spec {
+    name: "set_profile_account",
+    description: "Runs an agent profile on one of the person's accounts on this computer, as choosing the account \
+                  in the profile's Runs on does: `profile` is a profile of the project by id or role (a team's in a \
+                  team project), `account` a sign-in or an API provider of the profile's CLI by id or name \
+                  (list_accounts), `default` its Default. The project gets its connection on the account when it \
+                  has none, and the profile's version stays as it is. Moving a profile that already runs on an \
+                  account to another sign-in that is not the CLI's Default, or running it on an API provider it \
+                  does not run on now, which sends the project's prompts and code to that provider's host, is \
+                  refused as person_only unless a person turned on Let automation change agent permissions. \
+                  Returns the profile and the account or api_provider.",
+    schema: schema_for_type::<runs_on::SetProfileAccount>,
     read_only: false,
   },
 ];

@@ -1,13 +1,20 @@
 //! What this computer fills in for the team's configuration. Run with `cargo test -p orchester-store --test
 //! team_fill_ins fill_in`.
 
-use std::{collections::HashMap, fs};
+use std::{
+  collections::{BTreeMap, HashMap},
+  fs,
+};
 
 use orchester_core::{
+  connection::{AgentConnection, AgentProvider},
   id::{AgentAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId},
   name::Name,
   project::{Project, ProjectKey},
+  resource::{AgentProfile, ModelId, PromptText, ProviderSettings},
   secret::{SecretName, SecretValue, SecretVault, VaultError, VaultKey},
+  store::ConnectionStore,
+  time::Timestamp,
 };
 use orchester_store::{ConnectionPick, ProjectDb, StoreError};
 use parking_lot::Mutex;
@@ -218,4 +225,65 @@ fn fill_in_secret_in_keychain_asks_whether_the_value_is_there_and_never_reads_it
   let refused = AsksBeforeReading(Err(VaultError::AccessDenied("locked".to_owned())));
   let error = db.team_secret_in_keychain(&refused, &name).expect_err("cannot say");
   assert!(matches!(error, StoreError::Keychain(VaultError::AccessDenied(_))));
+}
+
+fn agent_connection(db: &mut ProjectDb, provider: AgentProvider, name: &str) -> ConnectionId {
+  let connection = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new(name).expect("valid name"),
+    provider,
+    std::env::temp_dir().join("agent-cli"),
+    Timestamp::from_unix_millis(1),
+  )
+  .expect("a connection");
+  db.create_connection(&connection).expect("stored");
+  connection.id()
+}
+
+fn profile_on(connection: ConnectionId) -> AgentProfile {
+  AgentProfile::new(
+    Name::new("Builder").expect("valid role"),
+    "Implements the approved plan.".into(),
+    PromptText::new("You implement {{task.title}}.").expect("valid prompt"),
+    connection,
+    ModelId::new("claude-opus").expect("valid model"),
+    ProviderSettings::new(BTreeMap::new()).expect("valid settings"),
+  )
+}
+
+#[test]
+fn fill_in_local_profile_runs_here_on_the_pick_of_its_kind() {
+  let (_repo, mut db) = project_repo();
+  let own = agent_connection(&mut db, AgentProvider::ClaudeCodeCli, "Claude");
+  let work = agent_connection(&mut db, AgentProvider::ClaudeCodeCli, "Claude · Work");
+  let codex = agent_connection(&mut db, AgentProvider::CodexCli, "Codex");
+  let profile = ResourceId::generate();
+  let published = profile_on(own);
+  let here = |db: &ProjectDb| db.profile_here(profile, published.clone()).expect("read").connection();
+  let pick = |connection| ConnectionPick {
+    connection,
+    account: None,
+  };
+
+  assert_eq!(here(&db), own, "no pick: as published");
+
+  db.set_connection_pick(profile, pick(work)).expect("picked");
+  assert_eq!(here(&db), work);
+  assert_eq!(
+    db.profile_here(ResourceId::generate(), published.clone())
+      .expect("read")
+      .connection(),
+    own,
+    "another profile's pick is not this one's"
+  );
+
+  db.set_connection_pick(profile, pick(codex)).expect("picked");
+  assert_eq!(here(&db), own, "a pick of another kind of agent is not taken");
+
+  db.set_connection_pick(profile, pick(ConnectionId::generate()))
+    .expect("picked");
+  assert_eq!(here(&db), own, "a pick that names no connection is not taken");
+
+  db.clear_connection_pick(profile).expect("cleared");
+  assert_eq!(here(&db), own);
 }

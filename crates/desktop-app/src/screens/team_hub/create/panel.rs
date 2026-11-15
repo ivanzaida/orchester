@@ -47,7 +47,10 @@ use crate::{
   routes::{HubView, ProjectPage, Route},
   screens::{
     connections::data,
-    hub::{profile_form::Offer, team::admins},
+    hub::{
+      profile_form::{Connect, Offer},
+      team::admins,
+    },
     local_hub::view_of,
     team_hub::{bar, model::Kind, panel as shared, rows},
   },
@@ -98,17 +101,22 @@ enum Form {
 }
 
 impl Form {
-  fn new(ctx: &mut Ctx, kind: Kind, mode: Mode) -> Self {
-    match (kind, mode) {
+  fn new(ctx: &mut Ctx, props: &Props) -> Self {
+    match (props.kind, props.mode) {
       (Kind::McpServer, Mode::Local) => Self::LocalMcpServer(local_mcp::Fields::new(ctx)),
-      _ => Self::of_team_kind(ctx, kind),
+      // A local profile runs on an account of the person's, which the project gets its connection on.
+      (Kind::Profile, Mode::Local) => {
+        let connect = Connect::new(ctx, props.repo_root.clone(), props.project);
+        Self::Profile(profile::Fields::new(ctx, Some(connect)))
+      }
+      (kind, _) => Self::of_team_kind(ctx, kind),
     }
   }
 
   /// The form of `kind` whose fields a team and a local project share (an MCP server's differ).
   fn of_team_kind(ctx: &mut Ctx, kind: Kind) -> Self {
     match kind {
-      Kind::Profile => Self::Profile(profile::Fields::new(ctx)),
+      Kind::Profile => Self::Profile(profile::Fields::new(ctx, None)),
       Kind::McpServer => Self::McpServer(TeamMcp::new(ctx)),
       Kind::Instruction => Self::Instruction(instruction::Fields::new(ctx)),
       Kind::Skill => Self::Skill(skill::Fields::new(ctx)),
@@ -158,7 +166,7 @@ impl Component for NewPanel {
       }
     });
     Self {
-      form: Form::new(ctx, props.kind, props.mode),
+      form: Form::new(ctx, &props),
       tried: ctx.signal(false),
       work,
       made,

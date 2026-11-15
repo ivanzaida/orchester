@@ -3,6 +3,7 @@
 //! with a folder the person already uses, the sign-in step, renaming in place, and removing in place with its
 //! connections moved. Stand-in CLIs answer (see `harness`).
 
+mod api;
 mod harness;
 mod history;
 
@@ -274,10 +275,11 @@ fn settings_accounts_removes_an_account_in_place_and_moves_its_connections() {
         .create_connection(&connection)
         .expect("created");
       go(&mut window, Some(work.id()), AccountsPanel::Account);
+      // The project has a connection on Work and no profile on it: Used by names profiles, never a connection.
       window.until("what uses Work", |window| {
-        joined(window, "account-used-by").contains("Codex · Work")
+        joined(window, "account-used-by").contains("No project runs a profile on this account yet")
       });
-      assert!(joined(&mut window, "account-used-by-meta").contains("1 in 1 project"));
+      assert!(!joined(&mut window, "account-used-by").contains("Codex · Work"));
       more(&mut window);
       click(&mut window, "account-remove");
       window.until("the question in place", |window| {

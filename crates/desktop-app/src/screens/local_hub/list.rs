@@ -22,7 +22,7 @@ use super::{
 use crate::{
   routes::HubFilter,
   screens::{
-    hub::section::section,
+    hub::{profile_form::here::Whose, section::section},
     team_hub::{create::new_row, list::LIST_WIDTH, model::Kind},
   },
   theme::ExtraSpacing,
@@ -39,6 +39,8 @@ pub(super) struct Shown<'a> {
   pub unsaved: Option<(Archivable, Unsaved)>,
   /// The kind whose form is open in the panel: its *New* row stands over the groups, chosen.
   pub adding: Option<Kind>,
+  /// Whose accounts a profile's row names what it runs on by.
+  pub whose: Whose<'a>,
 }
 
 pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
