@@ -3,6 +3,7 @@
 
 mod app_db;
 mod busy;
+mod decision_settings;
 mod error;
 mod git_exclude;
 pub mod location;

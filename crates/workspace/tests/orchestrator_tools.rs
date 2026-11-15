@@ -117,12 +117,12 @@ fn orchestrator_tools_while_driving_are_every_domain_tool_of_the_app_but_a_few()
   }
 }
 
-/// Choosing the connection a profile runs on here is open to the Orchestrator (the person's decision of 2026-11-11):
-/// while it drives it picks a team profile's connection, and it drafts and publishes a local profile on another one.
+/// Choosing what a profile runs on here is open to the Orchestrator (the person's decision of 2026-11-11): while it
+/// drives it chooses a profile's account, and it drafts and publishes a local profile on another one.
 #[test]
-fn orchestrator_tools_while_driving_choose_a_profiles_connection() {
+fn orchestrator_tools_while_driving_choose_a_profiles_account() {
   let driving: Vec<String> = listed(true).into_iter().map(|tool| tool.name.to_string()).collect();
-  for name in ["pick_profile_connection", "save_profile_draft", "publish_profile"] {
+  for name in ["set_profile_account", "save_profile_draft", "publish_profile"] {
     assert!(
       driving.iter().any(|tool| tool == name),
       "{name} is listed while driving"
@@ -148,9 +148,9 @@ fn orchestrator_tools_while_not_driving_leave_what_a_person_decides_out() {
     "set_repository_agent_files",
     "set_code_index",
     "update_project_limits",
-    "add_cli_connection",
-    "set_connection_account",
-    "set_api_provider",
+    "set_profile_account",
+    "set_reviewer_account",
+    "check_account",
     "add_mcp_server",
     "update_mcp_server",
     "remove_mcp_server",

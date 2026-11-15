@@ -373,7 +373,7 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::Skills => Icon::GraduationCap,
     Screen::Tools => Icon::Wrench,
     Screen::Secrets => Icon::KeyRound,
-    Screen::Connections => Icon::Plug,
+    Screen::Connections => Icon::SlidersHorizontal,
     Screen::NewConnection => Icon::Plus,
     Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,

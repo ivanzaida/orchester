@@ -10,10 +10,10 @@ use super::{
   fields::{self, Body, Shown, name_error},
   work::Make,
 };
-use crate::screens::hub::profile_form::{Form, Ids, Made, ProfileFields, Scope};
+use crate::screens::hub::profile_form::{Connect, Form, Ids, Made, ProfileFields, Scope};
 
 /// The ids of the form's parts, which tests and automation address: `team-new-profile-role-name-input`,
-/// `team-new-profile-cli`, `team-new-profile-mcp-value`, …
+/// `team-new-profile-runs-on`, `team-new-profile-mcp-value`, …
 const IDS: Ids = Ids {
   role: "team-new-profile-role",
   rows: "team-new-profile",
@@ -21,12 +21,15 @@ const IDS: Ids = Ids {
 
 pub(super) struct Fields {
   fields: ProfileFields,
+  /// Makes the project's connection on an account looked at in the picker; a local project's form has it.
+  connect: Option<Connect>,
 }
 
 impl Fields {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
+  pub(super) fn new(ctx: &mut Ctx, connect: Option<Connect>) -> Self {
     Self {
       fields: ProfileFields::new(ctx),
+      connect,
     }
   }
 
@@ -48,9 +51,10 @@ impl Fields {
         locked: shown.locked,
         name_said,
         first: Some(shown.first),
-        held: None,
+        connect: self.connect.as_ref(),
       },
     );
+    let waits = drawn.waits;
     let make = drawn.made.ok().map(|made| match made {
       Made::Local(profile) => Make::Profile(profile),
       Made::Team(profile) => Make::TeamProfile(profile),
@@ -61,7 +65,7 @@ impl Fields {
       rows: drawn.rows,
       computer: Some(ctx.t("team_new.computer.profile")),
       make,
-      off: fields::off(shown, &name),
+      off: fields::off(shown, &name).or(waits.then_some("local_hub.runsOn.connecting")),
       overlay: None,
     }
   }

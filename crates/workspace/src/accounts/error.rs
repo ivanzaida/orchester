@@ -1,9 +1,10 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  account::{AccountError, FolderProblem, RemovalError},
+  account::{AccountError, ApiAccountError, FolderProblem, RemovalError},
   connection::{ConnectionError, invocation::InvocationError},
   name::Name,
+  secret::VaultError,
 };
 use orchester_store::{RunStoreError, StoreError};
 use thiserror::Error;
@@ -49,6 +50,19 @@ pub enum AccountsError {
   Connection(ConnectionError),
   #[error(transparent)]
   Invocation(InvocationError),
+  #[error(transparent)]
+  ApiAccount(ApiAccountError),
+  /// The OS keychain did not keep or give an API account's key; the message never carries the key.
+  #[error(transparent)]
+  Keychain(VaultError),
+  /// An agent profile runs on the API account, or a run that has not ended is on it.
+  #[error("the API account is in use")]
+  ApiInUse,
+  /// Only a model API Orchester's own agent calls is tested with its key; an agent CLI's provider is tested by its CLI.
+  #[error("an agent CLI's API provider is not tested by Orchester")]
+  NotTested,
+  #[error("the program path `{0}` is not absolute")]
+  RelativeProgram(PathBuf),
 }
 
 impl AccountsError {
@@ -87,7 +101,20 @@ impl AccountsError {
         Message::new("accounts.errors.folderMissing").with("folder", folder.display().to_string())
       }
       Self::Terminal(_) => Message::new("accounts.errors.terminal"),
-      Self::Runs(_) | Self::Account(_) | Self::Connection(_) | Self::Invocation(_) => Message::new("errors.storage"),
+      Self::ApiAccount(ApiAccountError::NoModels) => Message::new("connections.provider.noModels"),
+      Self::ApiAccount(ApiAccountError::PresetNotOffered) => Message::new("connections.native.preset.notOffered"),
+      Self::ApiAccount(ApiAccountError::FallbackNotOffered) => Message::new("connections.native.fallback.notOffered"),
+      Self::Keychain(error) => messages::vault_error(error),
+      Self::RelativeProgram(_) => Message::new("errors.executableNotAbsolute"),
+      Self::ApiInUse => Message::new("accounts.errors.apiInUse"),
+      Self::NotTested => Message::new("accounts.errors.notTested"),
+      Self::ApiAccount(
+        ApiAccountError::NotNative(_) | ApiAccountError::AnotherAgent | ApiAccountError::CheckNotTaken,
+      )
+      | Self::Runs(_)
+      | Self::Account(_)
+      | Self::Connection(_)
+      | Self::Invocation(_) => Message::new("errors.storage"),
     }
   }
 }

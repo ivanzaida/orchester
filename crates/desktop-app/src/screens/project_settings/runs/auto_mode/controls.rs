@@ -49,7 +49,7 @@ pub fn group(
   let busy = save.state().get().is_pending();
   let mode = super::approve_mode::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() && options.decisions.is_empty() {
-    unavailable_reviewer(ctx, props)
+    unavailable_reviewer(ctx)
   } else {
     let busy = busy || tab.check.state().get().is_pending();
     reviewer_row(ctx, (tab, props), (options, cannot_run), busy)
@@ -84,9 +84,8 @@ pub fn group(
     None => group,
   }
 }
-fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
+fn unavailable_reviewer(ctx: &mut Ctx) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);
-  let project = props.tab.project.open.project.id();
   let open = ActionButton::new(
     "settings-auto-open-connections",
     ButtonKind::Secondary,
@@ -94,10 +93,7 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   )
   .icon(Icon::Plug)
   .in_form()
-  .opens(nav.to(crate::routes::Route::Project(
-    project,
-    crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
-  )));
+  .opens(nav.to(crate::routes::Route::Accounts(crate::routes::AccountsView::default())));
   SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"))
     .info(ctx.t("project_settings.reviewerDetail"))
     .toned(ctx.t("project_settings.reviewerUnavailable"), Tone::Warning)

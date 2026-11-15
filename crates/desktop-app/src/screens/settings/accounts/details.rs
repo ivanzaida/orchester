@@ -75,7 +75,7 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, (uses, reading): (
     .with_children(question)
     .child(facts::group(ctx, account))
     .child(limits::group(ctx, work, account))
-    .child(used_by::group(ctx, uses))
+    .child(used_by::group(ctx, uses, "account-used-by"))
 }
 
 /// The account as its page heads it: *Claude Code · Work*.

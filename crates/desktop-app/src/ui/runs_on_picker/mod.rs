@@ -11,7 +11,9 @@
 //! picker goes to it; Tab and Shift+Tab move the keys between the rail, the models and the effort row, where the
 //! current item shows the app's focus ring; ← → move within the rail and the efforts, ↑ ↓ in the list, Enter (and Space
 //! on an effort) chooses where the keys are (a connection that cannot be chosen says why on the line under the rail)
-//! and Esc calls `on_close`. A connection that cannot be chosen sits at 40 % and its tooltip says why.
+//! and Esc calls `on_close`, as choosing the model that is chosen already does: its caller closes it once a model is
+//! chosen, and that one is no choice to hand back. A connection that cannot be chosen sits at 40 % and its tooltip
+//! says why.
 
 mod actions;
 mod effort;

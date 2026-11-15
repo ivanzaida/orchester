@@ -46,7 +46,8 @@ impl RunTask {
       Err(ResolveError::Link(error)) => return Err(error.into()),
       Err(_) => return Ok(None),
     };
-    let connection = self.computer.connection(body.connection())?;
+    let runs_on = self.resolver.runs_on(&*self.computer, profile, &body)?;
+    let connection = self.computer.connection(runs_on)?;
     let Some(ConnectionKind::Agent(provider)) = connection.as_ref().map(|connection| connection.connection().kind())
     else {
       return Ok(None);

@@ -5,7 +5,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{InputSource, input_source},
+    events::InputSource,
   },
   node::Element,
 };
@@ -13,7 +13,7 @@ use orchester_workspace::messages::Message;
 
 use super::{Change, change};
 use crate::{
-  mcp::{AppMcp, ServerState},
+  mcp::{AppMcp, ServerState, input_source},
   screens::settings::save_state::{Outcome, SaveState},
   ui::{
     field::field_error,

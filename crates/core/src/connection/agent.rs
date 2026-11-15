@@ -10,7 +10,7 @@ use super::{
   model_requirements::CliTooOld,
 };
 use crate::{
-  id::{AgentAccountId, ConnectionId},
+  id::{AgentAccountId, ApiAccountId, ConnectionId, SecretId},
   name::Name,
   resource::ModelId,
   secret::Secret,
@@ -220,10 +220,19 @@ impl AgentConnection {
   /// connection whose key secret is not among them reads *Key missing*, whatever its last check found,
   /// since nothing reaches the API without the key.
   pub fn status_with(&self, active: &[Secret]) -> ConnectionStatus {
+    self.status_here(active, &[])
+  }
+
+  /// [`Self::status_with`] on a computer whose person has the API accounts `accounts`: the project's connection on
+  /// one of them names the account's id as its key's, which no project secret has, and its key is not missing for
+  /// that (`docs/design/agent-accounts.md`, "Agents run on accounts").
+  pub fn status_here(&self, active: &[Secret], accounts: &[ApiAccountId]) -> ConnectionStatus {
+    let held = |key: SecretId| {
+      active.iter().any(|secret| secret.id() == key && !secret.is_archived())
+        || accounts.iter().any(|account| account.as_uuid() == key.as_uuid())
+    };
     match self.key() {
-      Some(key) if !active.iter().any(|secret| secret.id() == key && !secret.is_archived()) => {
-        ConnectionStatus::KeyMissing
-      }
+      Some(key) if !held(key) => ConnectionStatus::KeyMissing,
       _ => self.connection.status(),
     }
   }

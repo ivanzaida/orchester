@@ -8,7 +8,6 @@ use std::sync::{
 use lurq::{
   app::{
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, InputEditError, InputToken, InputTokens, Row, ScrollVertical},
@@ -24,6 +23,7 @@ use orchester_workspace::instructions::{
 
 use super::{state::Tab, work::Author};
 use crate::{
+  mcp::is_synthetic_input,
   screens::hub::parts::{head, note},
   theme::instructions,
   ui::{

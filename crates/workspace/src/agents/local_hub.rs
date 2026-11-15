@@ -23,11 +23,12 @@ use super::{
   local_edit::GivenKind,
   local_given::{GivenLists, GivenNames},
   role::RoleText,
+  runs_on::{self, RunsOnChoice},
   team_hub::Form,
   team_profile::ConnectionChoice,
 };
 use crate::{
-  connections::mcp::McpServerText,
+  connections::{data::agent_connections, mcp::McpServerText},
   local_archive::Archivable,
   readiness::{LocalMcpReadiness, ProjectReadiness, ReadinessError},
   workspace::Workspace,
@@ -65,6 +66,8 @@ pub struct LocalProfile {
   pub connections: Vec<ConnectionChoice>,
   /// The connection it names, while it is one of [`Self::connections`].
   pub current: Option<ConnectionId>,
+  /// Everything it could run on, of its CLI or another, as its *Runs on* picker offers it.
+  pub runs_on: Vec<RunsOnChoice>,
   /// When its latest version was published.
   pub published_at: Timestamp,
   /// What the selects of its panel offer ([`ProfileOptions`]).
@@ -146,6 +149,11 @@ impl LocalHub {
   /// The instructions, then the skills, then the profiles and tools that have only a draft, each by name.
   pub fn plain(&self) -> &[LocalPlain] {
     &self.plain
+  }
+
+  /// Every published profile, with what the hub shows of it.
+  pub fn profiles(&self) -> &[(ResourceId, LocalProfile)] {
+    &self.profiles
   }
 
   pub fn profile(&self, id: ResourceId) -> Option<&LocalProfile> {
@@ -267,7 +275,9 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
     };
     // What the panel shows is the latest published version, what runs: a local profile is edited in place, with no
     // drafts (decided by the person 2026-11-09), so a draft stored of it (an MCP client's) is not the panel's.
-    let shown = around.shown(db, resource.id(), (version.published_at(), version.body()))?;
+    // On what this computer chose for it: that is what a run starts it on.
+    let here = db.profile_here(resource.id(), version.body().clone())?;
+    let shown = around.shown(db, resource.id(), (version.published_at(), &here))?;
     profiles.push((resource.id(), shown));
   }
   Ok(profiles)
@@ -360,6 +370,11 @@ impl Around {
         .find(|choice| choice.id == body.connection())
         .map(|choice| choice.id),
       connections: of_kind,
+      runs_on: runs_on::choices(
+        &agent_connections(self.connections.clone()),
+        Some(body.model()),
+        |connection| connection.id() == body.connection(),
+      ),
       published_at,
       options: ProfileOptions {
         given: self.given.offered(body),

@@ -3,26 +3,10 @@
 //! uses the connection names it by its id, so it keeps using it.
 
 use orchester_app::routes::ProjectPage;
-use orchester_core::{
-  connection::{AgentProvider, ConnectionKind},
-  id::ConnectionId,
-  store::ConnectionStore,
-};
+use orchester_core::{connection::ConnectionKind, id::ConnectionId, store::ConnectionStore};
 use orchester_workspace::connections::data::ProjectConnections;
 
 use super::harness::Seeded;
-
-/// The connection of `kind` the seed has.
-fn seeded_connection(seeded: &Seeded, kind: &ConnectionKind) -> ConnectionId {
-  seeded
-    .db()
-    .connections()
-    .expect("connections")
-    .into_iter()
-    .find(|connection| connection.kind() == kind)
-    .expect("the seed's connection")
-    .id()
-}
 
 fn name_of(seeded: &Seeded, id: ConnectionId) -> String {
   seeded
@@ -49,49 +33,6 @@ fn rename(seeded: &mut Seeded, id: ConnectionId) {
   seeded.until("the rename", |seeded| seeded.exists("connection-rename"));
   seeded.click("connection-rename");
   seeded.until("the name field", |seeded| seeded.exists("connection-rename-name"));
-}
-
-#[test]
-fn connections_agent_connection_is_renamed_in_its_inspector_and_keeps_its_profiles() {
-  let mut seeded = Seeded::new("connections");
-  let codex = seeded_connection(&seeded, &ConnectionKind::Agent(AgentProvider::CodexCli));
-  let profiles = uses(&seeded, codex);
-  assert!(profiles > 0, "the seed's profiles run on Codex");
-  rename(&mut seeded, codex);
-  seeded.set("connection-rename-name", "Claude · Kontur");
-  assert!(
-    seeded
-      .text("connection-rename-name-note")
-      .contains("already has this name")
-  );
-  seeded.click("connection-rename-save");
-  seeded.set("connection-rename-name", "   ");
-  assert!(seeded.exists("connection-rename-name-note"), "a blank name is refused");
-  seeded.click("connection-rename-save");
-  assert_eq!(name_of(&seeded, codex), "Codex · Kontur", "nothing refused is stored");
-  seeded.set("connection-rename-name", "  Codex · main ");
-  assert!(!seeded.exists("connection-rename-name-note"));
-  seeded.click("connection-rename-save");
-  seeded.until("the new name stored", |seeded| name_of(seeded, codex) == "Codex · main");
-  seeded.until("the page to show it", |seeded| {
-    seeded.exists("connection-inspector-title") && seeded.text("connection-inspector-title") == "Codex · main"
-  });
-  seeded.list();
-  seeded.until("its row", |seeded| seeded.exists(&Seeded::row(codex)));
-  assert!(seeded.text(&Seeded::row(codex)).contains("Codex · main"));
-  assert_eq!(uses(&seeded, codex), profiles, "its profiles still run on it");
-}
-
-#[test]
-fn connections_rename_is_cancelled_without_storing() {
-  let mut seeded = Seeded::new("connections");
-  let codex = seeded_connection(&seeded, &ConnectionKind::Agent(AgentProvider::CodexCli));
-  rename(&mut seeded, codex);
-  seeded.set("connection-rename-name", "Codex · elsewhere");
-  seeded.click("connection-rename-cancel");
-  assert!(!seeded.exists("connection-rename-name"));
-  assert_eq!(seeded.text("connection-inspector-title"), "Codex · Kontur");
-  assert_eq!(name_of(&seeded, codex), "Codex · Kontur");
 }
 
 #[test]

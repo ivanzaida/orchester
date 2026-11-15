@@ -18,7 +18,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
   },
   components::Row,
   core::{ElementRef, Signal},
@@ -44,7 +43,10 @@ pub use self::{
   delete::confirmation_in,
 };
 use crate::{
-  mcp::input_gate::{InputGate, persons_press},
+  mcp::{
+    input_gate::{InputGate, persons_press},
+    is_synthetic_input,
+  },
   navigation::{Navigation, press::OpenIn},
   project::ProjectFeed,
   routes::Route,

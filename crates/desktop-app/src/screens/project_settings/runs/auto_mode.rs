@@ -328,8 +328,7 @@ impl AutoMode {
     let base = settings.auto_mode.clone();
     let hosted =
       project_settings::decision_reviewer::choosing_hosted(&base, &asked, &settings.decision_connections).is_some();
-    if hosted
-      && (self.hosted_confirmed.get_untracked().0.as_ref() != Some(&asked) || lurq::app::events::is_synthetic_input())
+    if hosted && (self.hosted_confirmed.get_untracked().0.as_ref() != Some(&asked) || crate::mcp::is_synthetic_input())
     {
       return;
     }

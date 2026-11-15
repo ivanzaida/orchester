@@ -4,7 +4,7 @@ use orchester_core::{
   account::{
     AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AccountIdentity, AccountState, AgentAccount,
     CheckedProgram, FolderProblem, MoveTo, Removal, RemovalError, account_folder_name, brought_folder_problem,
-    same_sign_in,
+    by_sign_in, same_sign_in,
   },
   command::Command,
   connection::{
@@ -440,5 +440,29 @@ fn accounts_plan_readings_are_kept_per_account() {
     readings.get(AgentProvider::ClaudeCodeCli).map(|reading| reading.at),
     Some(Timestamp::from_unix_millis(20)),
     "a view per CLI reads the newest"
+  );
+}
+
+/// An account is who is signed in: two folders of one CLI with one email are one account, where the first stands; a
+/// folder nobody is signed in to stands alone, and so does the same email under another CLI.
+#[test]
+fn accounts_are_unique_by_the_email_signed_in() {
+  let mut work = created("Work");
+  let mut freelance = created("Freelance");
+  let mut other = created("Other");
+  let nobody = created("Nobody");
+  work.record_check(signed_in("ana@example.com"));
+  freelance.record_check(signed_in("ana@example.com"));
+  other.record_check(signed_in("bo@example.com"));
+  let listed = [work.clone(), other.clone(), nobody.clone(), freelance.clone()];
+
+  let ids: Vec<Vec<_>> = by_sign_in(&listed)
+    .into_iter()
+    .map(|group| group.into_iter().map(AgentAccount::id).collect())
+    .collect();
+
+  assert_eq!(
+    ids,
+    vec![vec![work.id(), freelance.id()], vec![other.id()], vec![nobody.id()]]
   );
 }

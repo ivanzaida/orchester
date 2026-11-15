@@ -4,17 +4,23 @@
 //! (`orchester_workspace::orchestrator::settings::save_in`). Until the version is read again, what was chosen shows
 //! chosen; a refused choice changes nothing and the picker says why.
 
+use std::path::Path;
+
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
   core::Signal,
 };
 use orchester_core::{id::ConnectionId, orchestrator::OrchestratorSettings, resource::ModelId};
-use orchester_workspace::orchestrator::{
-  runs_on::RunsOn,
-  settings::{Keep, OrchestratorSetup, Saving},
+use orchester_workspace::{
+  messages::Message,
+  orchestrator::{
+    runs_on::RunsOn,
+    settings::{Keep, OrchestratorSetup, Saving, save_in},
+  },
+  workspace::Workspace,
 };
 
-use super::Publish;
+use super::{Publish, sources::Account};
 
 /// What was chosen since the picker opened, as a signal holds it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -54,10 +60,27 @@ impl Picking {
       .or_else(|| setup.settings.clone())
   }
 
+  /// `setup`, as read, holds what was chosen since the picker opened.
+  pub(super) fn read(&self, setup: &OrchestratorSetup) -> bool {
+    let applied = self.applied.get().0;
+    applied.is_some() && applied == setup.settings
+  }
+
   /// Something was chosen since the picker opened: why publishing it failed is the picker's to say.
   pub(super) fn chose(&self) -> bool {
     self.applied.get().0.is_some()
   }
+}
+
+/// What a choice came to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Chose {
+  /// It is no choice: nothing changed.
+  Nothing,
+  /// It is what the Orchestrator runs on already.
+  Same,
+  /// It is being published.
+  Publishing,
 }
 
 /// What choosing in the picker does, for the project at `root`, `chosen` what it shows chosen.
@@ -90,10 +113,10 @@ impl Chooser {
 
   /// Runs on `model` of `connection`, with the effort chosen when `model` lists it, or the one typed on an API
   /// provider.
-  pub(super) fn model(&self, connection: ConnectionId, model: &str) {
+  pub(super) fn model(&self, connection: ConnectionId, model: &str) -> Chose {
     // The picker offers only names a model can have (`ModelId::new`), so this holds; a name it does not is not applied.
     let Ok(model) = ModelId::new(model) else {
-      return;
+      return Chose::Nothing;
     };
     let typed = self.typed_only(connection);
     let efforts = efforts_for(&self.setup, connection, &model);
@@ -101,7 +124,7 @@ impl Chooser {
       .chosen_on(connection)
       .and_then(|chosen| chosen.effort().map(str::to_owned))
       .filter(|effort| typed || efforts.contains(effort));
-    self.apply(OrchestratorSettings::new(connection, model, effort));
+    self.apply(OrchestratorSettings::new(connection, model, effort))
   }
 
   /// Runs on `effort` (`None`: the CLI's own) with the model chosen.
@@ -131,9 +154,9 @@ impl Chooser {
   }
 
   /// Publishes `settings` unless they are what is chosen.
-  fn apply(&self, settings: OrchestratorSettings) {
+  fn apply(&self, settings: OrchestratorSettings) -> Chose {
     if self.chosen.as_ref() == Some(&settings) {
-      return;
+      return Chose::Same;
     }
     self.picking.applied.set(Applied(Some(settings.clone())));
     self.publish.run(Saving {
@@ -141,6 +164,7 @@ impl Chooser {
       settings,
       keep: Keep::Publish,
     });
+    Chose::Publishing
   }
 }
 
@@ -151,5 +175,21 @@ pub(super) fn efforts_for(setup: &OrchestratorSetup, connection: ConnectionId, m
     setup.any_efforts(connection)
   } else {
     efforts
+  }
+}
+
+/// Makes the connection of the project at `root` on `account`, which it has none on, and publishes that the
+/// Orchestrator runs on it, on the model a profile starts on. A connection that offers no model to start with is made
+/// and left on the rail, for a model to be chosen on it.
+pub(super) fn run_on_account(workspace: &Workspace, root: &Path, account: Account) -> Result<(), Message> {
+  let connection = match account {
+    Account::SignIn(id) => workspace.connect_account(root, id),
+    Account::Api(id) => workspace.connect_api_account(root, id),
+  }
+  .map_err(|error| error.message())?;
+  let setup = OrchestratorSetup::load_in(root)?;
+  match setup.choosing(connection) {
+    Some(settings) => save_in(root, &settings, Keep::Publish).map(drop),
+    None => Ok(()),
   }
 }

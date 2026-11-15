@@ -119,6 +119,9 @@ pub fn route_json(route: &Route) -> Value {
       if let Some(account) = view.account {
         params.insert("account".to_owned(), json!(account.to_string()));
       }
+      if let Some(provider) = view.provider {
+        params.insert("provider".to_owned(), json!(provider.to_string()));
+      }
       if view.panel != AccountsPanel::Account {
         params.insert("panel".to_owned(), json!(view.panel.name()));
       }

@@ -7,10 +7,7 @@
 //! time.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    events::{KeyboardEvent, is_synthetic_input},
-  },
+  app::{ctx::Ctx, events::KeyboardEvent},
   components::Row,
   core::{ElementRef, Signal},
   layout::Alignment,
@@ -19,7 +16,10 @@ use lurq::{
 use orchester_workspace::files::MAX_MATCHES;
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, persons_press, refuse_press},
+  mcp::{
+    input_gate::{Guarded, InputGate, persons_press, refuse_press},
+    is_synthetic_input,
+  },
   theme::ExtraSpacing,
   ui::{field::FieldInput, icon::Icon, icon_button::IconButton},
 };

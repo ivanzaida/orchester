@@ -5,7 +5,6 @@
 //! returns a secret's value.
 
 mod accounts;
-mod api_providers;
 mod complete;
 mod connection_specs;
 mod connections;
@@ -32,6 +31,7 @@ mod profile_input;
 mod profiles;
 mod project;
 mod project_tools;
+pub(super) mod runs_on;
 mod secrets;
 mod service_input;
 mod services;
@@ -441,12 +441,11 @@ async fn dispatch(
     "set_project_environment" => project::set_environment(services, parse(arguments)?).await,
     "set_repository_agent_files" => project::set_agent_files(services, parse(arguments)?).await,
     "list_connections" => connections::list_connections(services, parse(arguments)?, translate).await,
-    "add_cli_connection" => connections::add_cli_connection(services, parse(arguments)?).await,
     "check_connection" => connections::check_connection(services, parse(arguments)?).await,
-    "list_models" => connections::list_models(services, parse(arguments)?).await,
-    "set_api_provider" => api_providers::set_api_provider(services, parse(arguments)?).await,
+    "list_models" => runs_on::list_models(services, parse(arguments)?).await,
+    "check_account" => accounts::check_account(services, parse(arguments)?).await,
     "list_accounts" => accounts::list_accounts(services, parse(arguments)?).await,
-    "set_connection_account" => accounts::set_connection_account(services, parse(arguments)?).await,
+    "set_profile_account" => runs_on::set_profile_account(services, parse(arguments)?).await,
     "add_mcp_server" => mcp_servers::add_mcp_server(services, parse(arguments)?).await,
     "update_mcp_server" => mcp_servers::update_mcp_server(services, parse(arguments)?).await,
     "remove_mcp_server" => mcp_servers::remove_mcp_server(services, parse(arguments)?).await,

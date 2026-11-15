@@ -137,6 +137,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     profiles: &profiles,
     tools: &tools,
     connections: &connections,
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &db.mcp_servers()?,
     secrets: &secrets,
   });

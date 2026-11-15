@@ -1,5 +1,6 @@
 //! What a computer fills in for a team project, over MCP (`docs/design/team-configuration.md`, "What a computer fills
-//! in"): `pick_profile_connection` chooses the connection (and account) a team profile runs on here, and the team MCP
+//! in"): `set_reviewer_account` chooses what a team reviewer runs on here (a team profile's account is
+//! `set_profile_account`'s, as a local profile's is), and the team MCP
 //! servers `set_mcp_server_enabled` and `update_mcp_server` name are the team's resources, not the project's own
 //! servers. Turning a team MCP server on lets agents run more here, which the person decided is theirs alone, in the
 //! window (decision 12): over MCP it answers `person_only` always, which the switch *Let automation change agent
@@ -11,107 +12,25 @@ mod reviewer;
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{resource::ResourceKind, run::Answerer};
-use orchester_store::{ConnectionPick, ProjectDb};
-use rmcp::{handler::server::common::schema_for_type, schemars::JsonSchema};
-use serde::Deserialize;
+use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
-use super::{
-  super::{Spec, parse},
-  accounts,
-  connections::agent_named,
-  widening,
-};
+use super::super::{Spec, parse};
 use crate::{
-  app_mcp::{
-    error::{Missing, ToolError},
-    services::{Services, blocking},
-  },
+  app_mcp::{error::ToolError, services::Services},
   messages::Message,
   team_config::{TeamConfig, TeamRead, TeamResource},
   team_fill_ins::FillInError,
 };
 
-pub(super) const SPECS: &[Spec] = &[
-  Spec {
-    name: "pick_profile_connection",
-    description: "Chooses the connection a team profile runs on on this computer, as the profile's Connection field \
-                does in a team project: `profile` is a team profile by id or role, `connection` an agent connection \
-                of the project by id or name, of the CLI kind the profile names (a profile that names none takes any \
-                agent connection). The pick is kept on this computer only and a connection added later changes \
-                nothing. `account` (an account of the connection's CLI by id or name, list_accounts; `default` is the \
-                CLI's Default) is for a connection that needs one; choosing another account than the one the \
-                profile runs on now (its earlier pick's, else the connection's own) is refused as person_only unless \
-                a person turned on Let automation change agent permissions. Refused as team_project_required in a \
-                project that is not shared with a team and as profile_not_found for a profile that is not the \
-                team's. Returns the pick.",
-    schema: schema_for_type::<PickProfileConnection>,
-    read_only: false,
-  },
-  reviewer::SPEC,
-];
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-#[schemars(crate = "rmcp::schemars")]
-pub struct PickProfileConnection {
-  /// The project's id, or its name.
-  pub project: String,
-  /// The team profile's id, or its role.
-  pub profile: String,
-  /// The agent connection's id, or its name.
-  pub connection: String,
-  /// The account of the connection's CLI, by id or name; `default` is the CLI's Default.
-  pub account: Option<String>,
-}
+pub(super) const SPECS: &[Spec] = &[reviewer::SPEC];
 
 /// Calls tool `name` of [`SPECS`] with `arguments`.
 pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> Result<Value, ToolError> {
   match name {
-    "pick_profile_connection" => pick_profile_connection(services, parse(arguments)?).await,
-    "pick_reviewer_connection" => reviewer::pick_reviewer_connection(services, parse(arguments)?).await,
+    "set_reviewer_account" => reviewer::set_reviewer_account(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
-}
-
-async fn pick_profile_connection(services: &Services, args: PickProfileConnection) -> Result<Value, ToolError> {
-  let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
-    require_team_project(&db)?;
-    let profile = team_named(&services, &open.repo_root, ResourceKind::AgentProfile, &args.profile)?
-      .ok_or_else(|| ToolError::not_found(Missing::Profile, &args.profile))?;
-    let connection = agent_named(&db, &args.connection)?;
-    let account = match &args.account {
-      Some(named) => Some(accounts::account_for(&services, connection.provider(), named)?),
-      None => None,
-    };
-    if let Some(account) = &account {
-      // The account the profile runs on now: its earlier pick's, else the connection's own.
-      let effective = db
-        .connection_pick(profile.id)?
-        .and_then(|earlier| earlier.account)
-        .or_else(|| connection.account().id(connection.provider()));
-      if effective != Some(account.id()) {
-        widening::allowed(&services, vec![Message::new("appMcp.errors.accountChoice")])?;
-      }
-    }
-    let pick = ConnectionPick {
-      connection: connection.id(),
-      account: account.as_ref().map(|account| account.id()),
-    };
-    services
-      .workspace
-      .pick_team_connection(&open.repo_root, profile.id, pick)
-      .map_err(refusal)?;
-    Ok(json!({
-      "profile": { "id": profile.id.to_string(), "name": profile.name.as_str() },
-      "connection": { "id": connection.id().to_string(), "name": connection.name().as_str() },
-      "account": account.map(|account| account.id().to_string()),
-    }))
-  })
-  .await
 }
 
 /// Turns the team MCP server `server` off here, as `set_mcp_server_enabled` does; on is a person's alone, so it is

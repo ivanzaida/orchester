@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -25,7 +25,10 @@ use orchester_workspace::{
 
 use super::CompleteAction;
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, press_answerer},
+  mcp::{
+    input_gate::{Guarded, InputGate, press_answerer},
+    is_synthetic_input,
+  },
   navigation::{
     Navigation,
     pointed::{Pointed, PointedCard},

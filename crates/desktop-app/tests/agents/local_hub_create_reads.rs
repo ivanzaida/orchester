@@ -11,7 +11,8 @@ use orchester_core::connection::mcp::McpServerSelection;
 use super::{
   harness::Agents,
   local_hub::server,
-  local_hub_create::{choose, form_route, show_form},
+  local_hub_create::{form_route, show_form},
+  local_hub_create_profile::run_on_codex,
   support::project_id,
 };
 
@@ -31,8 +32,7 @@ fn local_hub_create_a_profile_that_chooses_too_many_servers_says_so_under_the_ro
   agents.window.tree.resize(1440, 2400);
   show_form(&mut agents, HubFilter::Profiles);
   agents.set("team-new-profile-role-name-input", "Reviewer");
-  choose(&mut agents, "team-new-profile-cli", "Codex");
-  choose(&mut agents, "team-new-profile-model", "test-model");
+  run_on_codex(&mut agents, "test-model");
 
   for id in &ids[..McpServerSelection::MAX] {
     agents.window.press("local-hub-profile-add-mcp-button");

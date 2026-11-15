@@ -435,11 +435,13 @@ fn choosing_a_connection_a_model_and_an_effort_hands_each_back_and_applies_nothi
 }
 
 #[test]
-fn choosing_what_is_chosen_already_hands_nothing_back() {
+fn choosing_what_is_chosen_already_hands_nothing_back_and_the_chosen_model_closes_the_picker() {
   let mut open = open();
   let kit = &mut open.kit;
   kit.click(&item("work"));
+  assert_eq!(*open.closed.lock(), 0);
   kit.click(&row(0));
+  assert_eq!(*open.closed.lock(), 1, "the model as it stands closes it");
   kit.click(&effort("high"));
   assert!(open.picks.lock().is_empty());
 }

@@ -42,9 +42,16 @@ pub(in crate::screens) struct Part<F = Fix> {
 }
 
 /// The connection, then each MCP server, then each secret of the profile, as `entry`'s standing says they are.
-pub(super) fn parts(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &TeamProfileSheet) -> Vec<Part> {
+/// `accounts` says this computer has an account of the profile's CLI, which a project with no connection for it can
+/// be run on.
+pub(super) fn parts(
+  ctx: &Ctx,
+  (listing, entry): (&Listing, &Entry),
+  sheet: &TeamProfileSheet,
+  accounts: bool,
+) -> Vec<Part> {
   let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
-  let mut parts = vec![connection(ctx, sheet, missing)];
+  let mut parts = vec![connection(ctx, sheet, missing, accounts)];
   parts.extend(
     sheet
       .mcp_servers
@@ -55,7 +62,7 @@ pub(super) fn parts(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &TeamPro
   parts
 }
 
-fn connection(ctx: &Ctx, sheet: &TeamProfileSheet, missing: &[Missing]) -> Part {
+fn connection(ctx: &Ctx, sheet: &TeamProfileSheet, missing: &[Missing], accounts: bool) -> Part {
   let cli = ctx.t(cli_key(sheet.cli));
   let signed_out = missing
     .iter()
@@ -68,6 +75,11 @@ fn connection(ctx: &Ctx, sheet: &TeamProfileSheet, missing: &[Missing]) -> Part 
       words: ctx.t_args("team_hub.ready.signedOut", [("cli", &*cli)]),
       fix: Some(Fix::SignIn),
       blocking: true,
+    },
+    Some(ConnectionProblem::NoneOfKind) if accounts => State::Missing {
+      words: ctx.t_args("team_hub.ready.accountNeeded", [("cli", &*cli)]),
+      fix: Some(Fix::UseConnection),
+      blocking: false,
     },
     Some(ConnectionProblem::NoneOfKind) => State::Missing {
       words: ctx.t_args("team_hub.ready.noneOfKind", [("cli", &*cli)]),

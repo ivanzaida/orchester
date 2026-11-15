@@ -28,7 +28,7 @@ use super::Choices;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AccountsView, Route},
   theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -326,7 +326,6 @@ fn locked_row(ctx: &mut Ctx, (id, label): (&str, &str)) -> Element {
 /// No connection of the project can run the Orchestrator: why, and Connections.
 fn no_connection(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let navigation = Navigation::of(ctx);
-  let id = project.open.project.id();
   let name = project.open.project.name().as_str();
   let open = ActionButton::new(
     "orchestrator-settings-open-connections",
@@ -334,7 +333,7 @@ fn no_connection(ctx: &mut Ctx, project: &ShownProject) -> Element {
     ctx.t("orchestrator.settings.noConnection.open"),
   )
   .icon(Icon::Plug)
-  .opens(navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default()))));
+  .opens(navigation.to(Route::Accounts(AccountsView::default())));
   Notice::new(
     "orchestrator-settings-no-connection",
     NoticeTone::Warning,

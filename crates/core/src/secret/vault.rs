@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use super::SecretValue;
-use crate::id::{InstallationId, ProjectId, SecretId, ServerId};
+use crate::id::{ApiAccountId, InstallationId, ProjectId, SecretId, ServerId};
 
 /// Where a secret's value is kept in the OS keychain: the service `orchester:<project id>` and the
 /// account `<secret id>`. Both ids are UUIDs that never change, so a project whose folder moves
@@ -19,6 +19,8 @@ impl VaultKey {
   const TOKEN_ACCOUNT: &str = "token";
   const APP_MCP_SERVICE: &str = "orchester-app-mcp";
   const CLOUD_SERVICE: &str = "orchester-cloud";
+  const API_ACCOUNT_PREFIX: &str = "orchester-api-account:";
+  const KEY_ACCOUNT: &str = "key";
 
   pub fn new(project: ProjectId, secret: SecretId) -> Self {
     Self {
@@ -53,6 +55,16 @@ impl VaultKey {
     Self {
       service: Self::APP_MCP_SERVICE.to_owned(),
       account: installation.to_string(),
+    }
+  }
+
+  /// The key of an API account: the service `orchester-api-account:<account id>` and the account `key`
+  /// (`docs/design/agent-accounts.md`, "Agents run on accounts"). It belongs to no project, so every project's
+  /// agents on the account read the same key.
+  pub fn api_account(account: ApiAccountId) -> Self {
+    Self {
+      service: format!("{}{account}", Self::API_ACCOUNT_PREFIX),
+      account: Self::KEY_ACCOUNT.to_owned(),
     }
   }
 

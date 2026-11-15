@@ -11,7 +11,10 @@ use lurq::{
   },
   node::Element,
 };
-use orchester_core::connection::plan_limits::PlanReadings;
+use orchester_core::{
+  connection::plan_limits::{LimitReading, PlanReadings},
+  time::Timestamp,
+};
 use orchester_workspace::plan_limits::{Readings, reads::Shown};
 
 use super::Services;
@@ -61,6 +64,22 @@ pub fn account_readings(ctx: &mut Ctx) -> PlanReadings {
     }
   }
   readings
+}
+
+/// The 5-hour window, in minutes.
+const FIVE_HOURS: u64 = 300;
+
+/// How much of the plan's 5-hour window `reading` says is used at `now`, a whole share of at most a hundred; `None`
+/// when it has no such window, or the window has reset since.
+pub fn five_hour_use(reading: &LimitReading, now: Timestamp) -> Option<u8> {
+  reading
+    .limits
+    .windows
+    .iter()
+    .find(|window| window.minutes() == FIVE_HOURS && !window.expired(now))
+    .and_then(|window| window.percent())
+    // Clamped to 0..=100 first: the cast keeps every bit.
+    .map(|used| used.round().clamp(0.0, 100.0) as u8)
 }
 
 /// Marks what mounts it as shown while it is mounted: the accounts are read when it opens and every few minutes

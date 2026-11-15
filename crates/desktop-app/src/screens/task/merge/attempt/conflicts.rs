@@ -14,7 +14,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
@@ -44,7 +43,10 @@ use orchester_workspace::{
 
 use super::{facts::link, section_head};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, press_answerer},
+  mcp::{
+    input_gate::{Guarded, InputGate, press_answerer},
+    is_synthetic_input,
+  },
   navigation::link::Open,
   project::ShownProject,
   screens::review::task::{

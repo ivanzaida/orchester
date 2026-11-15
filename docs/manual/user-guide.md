@@ -210,7 +210,7 @@ person-only. A server reaches only agents of profiles that choose it.
 **GitHub**: detected at setup; its page offers *Check again* and *Use this account*. Adding or editing a GitHub
 connection in the window is not built yet.
 
-Over MCP: `add_cli_connection`, `set_api_provider`, `check_connection`, `list_models`, `set_connection_account`,
+Over MCP: `list_accounts`, `check_account`, `list_models`, `set_profile_account`, `check_connection`,
 `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`, `remove_mcp_server`.
 
 ### Agents hub

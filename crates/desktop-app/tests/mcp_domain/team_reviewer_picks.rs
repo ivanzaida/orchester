@@ -1,4 +1,4 @@
-//! The connection a team reviewer runs on, picked over MCP: a language reviewer's of its CLI kind, a decision
+//! What a team reviewer runs on, chosen over MCP: a language reviewer's account of its CLI kind, a decision
 //! reviewer's among the decision connections its destinations allow, a hosted one a person's to choose, and a version
 //! in the earlier form refused as not the team's form.
 
@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use super::team_fill_ins::{Team, assert_person_only, name, team, team_resource};
 
 #[test]
-fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
+fn domain_team_set_reviewer_account_keeps_the_choice_for_a_team_reviewer() {
   let mut team = team();
   let connection = team.codex_connection();
   let language = |cli: &str| -> TeamReviewer {
@@ -40,11 +40,11 @@ fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
   );
   drop(db);
   team.keep_team();
-  let args = |reviewer: ResourceId, connection: &str| json!({ "project": "Kontur", "reviewer": reviewer.to_string(), "connection": connection });
+  let args = |reviewer: ResourceId, account: &str| json!({ "project": "Kontur", "reviewer": reviewer.to_string(), "account": account });
 
-  let picked = team.served.ok("pick_reviewer_connection", &args(codex, &connection));
+  let picked = team.served.ok("set_reviewer_account", &args(codex, "default"));
   assert_eq!(picked["reviewer"]["name"], "codex-reviewer");
-  assert_eq!(picked["connection"]["id"], connection);
+  assert_eq!(picked["runs_on"]["name"], "default", "{picked}");
   assert_eq!(
     team
       .db()
@@ -53,24 +53,24 @@ fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
       .map(|pick| pick.connection.to_string()),
     Some(connection.clone())
   );
-  let refused = team
-    .served
-    .refused("pick_reviewer_connection", &args(claude, &connection));
-  assert_eq!(refused["code"], "connection_does_not_fit", "{refused}");
+  // An account of another CLI than the reviewer's is none of its accounts.
+  super::accounts::add_account(&team.app_database, orchester_core::account::AccountCli::Codex, "Client");
+  let refused = team.served.refused("set_reviewer_account", &args(claude, "Client"));
+  assert_eq!(refused["code"], "account_not_found", "{refused}");
   assert_eq!(team.db().connection_pick(claude).expect("read"), None);
   let refused = team.served.refused(
-    "pick_reviewer_connection",
-    &json!({"project": "Kontur", "reviewer": "nobody", "connection": connection}),
+    "set_reviewer_account",
+    &json!({"project": "Kontur", "reviewer": "nobody", "account": "default"}),
   );
   assert_eq!(refused["code"], "reviewer_not_found", "{refused}");
 
   team
     .served
-    .ok("pick_reviewer_connection", &args(decisions, &local.to_string()));
+    .ok("set_reviewer_account", &args(decisions, &local.to_string()));
   assert_eq!(team.db().decision_pick(decisions).expect("read"), Some(local));
   let refused = team
     .served
-    .refused("pick_reviewer_connection", &args(decisions, &hosted.to_string()));
+    .refused("set_reviewer_account", &args(decisions, &hosted.to_string()));
   assert_person_only(&refused);
   assert_eq!(
     team.db().decision_pick(decisions).expect("read"),
@@ -79,15 +79,15 @@ fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
   );
   let refused = team
     .served
-    .refused("pick_reviewer_connection", &args(decisions, &connection));
+    .refused("set_reviewer_account", &args(decisions, &connection));
   assert_eq!(refused["code"], "connection_not_found", "{refused}");
 
   let refused = team
     .served
-    .refused("pick_reviewer_connection", &args(members, &hosted.to_string()));
+    .refused("set_reviewer_account", &args(members, &hosted.to_string()));
   assert_eq!(refused["code"], "server_not_allowed", "{refused}");
   assert_eq!(team.db().decision_pick(members).expect("read"), None);
-  let refused = team.served.refused("pick_reviewer_connection", &args(old, &connection));
+  let refused = team.served.refused("set_reviewer_account", &args(old, "default"));
   assert_eq!(refused["code"], "not_team_form", "{refused}");
   assert_eq!(team.db().connection_pick(old).expect("read"), None);
 }

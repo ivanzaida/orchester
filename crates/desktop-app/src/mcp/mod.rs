@@ -40,6 +40,7 @@ pub use self::{
   input_gate::InputGate,
   link::WindowLink,
   mode::{Build, DISCOVERY_VARIABLE, INSTALLED_BUILD_VARIABLE, McpMode},
+  qa_person::{input_source, is_synthetic_input},
   server::{address, endpoint},
   settings::{McpSettings, ThisRun, WindowControlSource},
   status::{McpKind, McpStatus, SeenClient, ServerState, Taken},
@@ -62,7 +63,9 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a \
   release build grants only when the app's settings allow it or ORCHESTER_APP_MCP_WINDOW_CONTROL=on. \
   The domain tools set a project up and drive its work through data, with the rules of the app's screens: \
-  add_project, connections (add_cli_connection, set_api_provider, check_connection, list_models, add_mcp_server,   update_mcp_server, set_mcp_server_enabled, remove_mcp_server, list_team_mcp_servers, pick_profile_connection), agent profiles \
+  add_project, accounts (list_accounts, check_account, list_models, set_profile_account), connections \
+  (list_connections, check_connection, add_mcp_server, update_mcp_server, set_mcp_server_enabled, \
+  remove_mcp_server, list_team_mcp_servers), agent profiles \
   (save_profile_draft, publish_profile), pipelines (create_pipeline, save_pipeline, duplicate_pipeline), \
   instructions, project settings, then tasks (create_task, run_task), runs (get_run, send_message), \
   approvals, questions, plans, get_changes and merge_run. Name a project by its id or name, a task by its \

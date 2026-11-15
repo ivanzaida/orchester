@@ -35,7 +35,7 @@ use super::{
 };
 use crate::{
   navigation::{Navigation, link::Open},
-  routes::{ProjectPage, Route},
+  routes::{AccountsView, ProjectPage, Route},
   team::start::{Started, Stop},
   theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize, NOT_READY_ROW_HEIGHT, TaskRadius, TaskText},
   ui::{
@@ -89,7 +89,10 @@ fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element
   let team = task.team.is_some();
   let project = task.project.open.project.id();
   let navigation = Navigation::of(ctx);
-  let open = |page: ProjectPage| navigation.to(Route::Project(project, page));
+  let open = |opens: fix::Opens| match opens {
+    fix::Opens::Page(page) => navigation.to(Route::Project(project, page)),
+    fix::Opens::Accounts => navigation.to(Route::Accounts(AccountsView::default())),
+  };
   let rows = refusal
     .parts()
     .iter()
@@ -113,7 +116,7 @@ fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element
         .variant(ExtraTypography::Lead.role()),
     )
     .child(rows_box(rows))
-    .child(actions(ctx, team, open(ProjectPage::Agents)))
+    .child(actions(ctx, team, open(fix::Opens::Page(ProjectPage::Agents))))
     .into()
 }
 
@@ -179,7 +182,7 @@ fn row(
   ctx: &mut Ctx,
   (index, part): (usize, &NotReadyPart),
   (team, last): (bool, bool),
-  open: &dyn Fn(ProjectPage) -> Open,
+  open: &dyn Fn(fix::Opens) -> Open,
 ) -> Element {
   let Words { glyph, what, need } = words::of(ctx, part, team);
   let id = format!("task-not-ready-row-{index}");

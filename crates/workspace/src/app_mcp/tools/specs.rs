@@ -214,7 +214,7 @@ pub(super) const SPECS: &[Spec] = &[
   },
   Spec {
     name: "set_reviewer",
-    description: "Chooses the reviewer Manual asks before the person. connection names a language reviewer with model and effort; decision_connection names a decision reviewer with model and threshold (0.01–0.99, two decimals, default 0.80). Without either, uses the default language reviewer. Choosing a hosted decision reviewer is always person_only. Threshold edits and switching back to a language reviewer are narrowing. Requires Let automation answer approvals; other reviewer changes require Let automation change agent permissions. Answers as get_approvals does.",
+    description: "Chooses the reviewer Manual asks before the person. account names what a language reviewer runs on, a sign-in or an API provider of the person by id or name (list_accounts; cli says whose account a name is and is needed for default), with model and effort; decision_connection names a decision reviewer with model and threshold (0.01–0.99, two decimals, default 0.80). Without either, uses the default language reviewer. Choosing a hosted decision reviewer is always person_only. Threshold edits and switching back to a language reviewer are narrowing. Requires Let automation answer approvals; other reviewer changes require Let automation change agent permissions. Answers as get_approvals does.",
     schema: schema_for_type::<approval_settings::SetReviewer>,
     read_only: false,
   },

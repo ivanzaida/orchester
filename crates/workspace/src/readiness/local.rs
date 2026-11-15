@@ -44,7 +44,7 @@ pub(super) fn profiles(db: &ProjectDb, repo_root: &Path) -> Result<Vec<Profile>,
     let Some(version) = db.latest_version::<AgentProfile>(resource.id())? else {
       continue;
     };
-    let own = version.body().connection();
+    let own = db.connection_here(resource.id(), version.body().connection())?;
     let provider = db.connection(own)?.and_then(|connection| match connection.kind() {
       ConnectionKind::Agent(provider) => Some(*provider),
       ConnectionKind::GitHub { .. } => None,

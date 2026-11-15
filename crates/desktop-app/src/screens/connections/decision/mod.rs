@@ -26,7 +26,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsView, ProjectPage, Route},
-  screens::project_settings::kit::{self, Group, SettingRow, back, entity_head, tile},
+  screens::project_settings::kit::{self, back, entity_head},
   theme::ProjectSettingsText,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -369,45 +369,4 @@ fn glyph(connection: &DecisionConnection) -> Icon {
   } else {
     Icon::Scale
   }
-}
-
-/// Decision servers and the entry to Add decision model.
-pub(super) fn listed(ctx: &mut Ctx, project: &ShownProject, connections: &[DecisionConnection]) -> Element {
-  let navigation = Navigation::of(ctx);
-  let rows = connections
-    .iter()
-    .map(|connection| {
-      let open = navigation.to(Route::Project(
-        project.open.project.id(),
-        ProjectPage::Connections(ConnectionsView::decision(connection.id())),
-      ));
-      SettingRow::new(format!("decision-row-{}", connection.id()), connection.name().as_str())
-        .item()
-        .lead(tile(ctx, glyph(connection)))
-        .hint(connection.base_url().as_str())
-        .control(crate::ui::icon::icon(
-          Icon::ChevronRight,
-          crate::theme::IconSize::Md,
-          lurq::app::theme::PaletteColor::TextMuted,
-        ))
-        .opens(open)
-        .render(ctx)
-    })
-    .collect::<Vec<_>>();
-  Group::new("connections-decisions", ctx.t("decision_connection.group"))
-    .end(
-      ActionButton::new(
-        "connections-add-decision",
-        ButtonKind::Ghost,
-        ctx.t("decision_connection.add"),
-      )
-      .icon(Icon::Plus)
-      .compact()
-      .opens(navigation.to(Route::Project(
-        project.open.project.id(),
-        ProjectPage::NewConnection(crate::routes::NewConnection::DecisionModel),
-      ))),
-    )
-    .rows(rows)
-    .into()
 }

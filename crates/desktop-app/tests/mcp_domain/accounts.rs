@@ -1,6 +1,6 @@
 //! `list_accounts` names the person's accounts without their emails or folders, with each one's latest plan limits
-//! reading, and `set_connection_account` moves a connection to another account only while a person lets automation
-//! widen; so do a profile saved on a connection of another account and auto mode's reviewer chosen on one.
+//! reading, and `set_profile_account` moves a profile to another account only while a person lets automation
+//! widen; so do a profile saved on another account and auto mode's reviewer chosen on one.
 
 use std::path::Path;
 
@@ -21,7 +21,7 @@ use serde_json::json;
 use super::{Seeded, Served};
 
 #[test]
-fn domain_accounts_are_listed_and_chosen_for_a_connection_by_a_person_only() {
+fn domain_accounts_are_listed_and_chosen_for_a_profile_by_a_person_only() {
   let (mut served, seeded) = Served::seeded("connections");
   let client = AgentAccount::new(
     AgentAccountId::generate(),
@@ -48,34 +48,33 @@ fn domain_accounts_are_listed_and_chosen_for_a_connection_by_a_person_only() {
   assert_eq!(named["folder"], "created");
   assert!(named.get("email").is_none() && !listed.to_string().contains("codex-client"));
 
-  let connections = served.ok("list_connections", &json!({ "project": "Kontur" }));
-  let codex = connections["agents"]
-    .as_array()
-    .and_then(|agents| agents.iter().find(|agent| agent["provider"] == "codex_cli"))
-    .expect("the seed's Codex connection")["name"]
-    .clone();
-  let choose = |account: &str| json!({ "project": "Kontur", "connection": codex, "account": account });
+  // A profile of the project that runs on Codex's Default, the account its version names.
+  served.let_automation_widen(true);
+  served.ok(
+    "save_profile_draft",
+    &json!({ "project": "Kontur", "role": "Runner", "account": "default", "cli": "codex", "model": "gpt-5.5" }),
+  );
+  let choose = |account: &str| json!({ "project": "Kontur", "profile": "Runner", "account": account });
   served.let_automation_widen(false);
-  let refused = served.refused("set_connection_account", &choose("Client"));
+  let refused = served.refused("set_profile_account", &choose("Client"));
   assert_eq!(refused["code"], "person_only", "{refused}");
   served.let_automation_widen(true);
-  let chosen = served.ok("set_connection_account", &choose("client"));
+  let chosen = served.ok("set_profile_account", &choose("client"));
   assert_eq!(chosen["account"]["id"], client.id().to_string());
   let connections = served.ok("list_connections", &json!({ "project": "Kontur" }));
-  assert!(
-    connections["agents"]
-      .as_array()
-      .is_some_and(|agents| agents.iter().any(|agent| agent["account"] == client.id().to_string())),
-    "{connections}"
-  );
-  let missing = served.refused("set_connection_account", &choose("Personal"));
+  let row = connections["runs_on"]
+    .as_array()
+    .and_then(|rows| rows.iter().find(|row| row["profile"]["role"] == "Runner"))
+    .unwrap_or_else(|| panic!("Runner is listed: {connections}"));
+  assert_eq!(row["runs_on"]["account"]["id"], client.id().to_string(), "{row}");
+  assert!(connections.get("agents").is_none(), "{connections}");
+  let missing = served.refused("set_profile_account", &choose("Personal"));
   assert_eq!(missing["code"], "account_not_found", "{missing}");
+  // The same account again is no move, and the CLI's Default never is one.
   served.let_automation_widen(false);
-  served.ok("set_connection_account", &choose("Client"));
-  assert_eq!(
-    served.refused("set_connection_account", &choose("default"))["code"],
-    "person_only"
-  );
+  served.ok("set_profile_account", &choose("Client"));
+  let back = served.ok("set_profile_account", &choose("default"));
+  assert_eq!(back["account"]["default"], true, "{back}");
 }
 
 /// Adds `cli`'s account `name` to the application database at `app_database`, in a folder made for it.
@@ -124,15 +123,15 @@ fn domain_profiles_and_the_reviewer_move_to_another_account_only_when_a_person_l
   connect(&seeded, ("Codex · Client", AgentProvider::CodexCli), &client);
   connect(&seeded, ("Claude · Lab", AgentProvider::ClaudeCodeCli), &lab);
   served.let_automation_widen(false);
-  let profile = |role: &str, connection: &str| json!({ "project": "Kontur", "role": role, "connection": connection, "model": "gpt-5.5" });
+  let profile = |role: &str, account: &str| json!({ "project": "Kontur", "role": role, "account": account, "cli": "codex", "model": "gpt-5.5" });
   // A new profile is created as v1; the moves below are drafts over it.
-  served.ok("save_profile_draft", &profile("Runner", "Codex · Kontur"));
-  let refused = served.refused("save_profile_draft", &profile("Client runner", "Codex · Client"));
+  served.ok("save_profile_draft", &profile("Runner", "default"));
+  let refused = served.refused("save_profile_draft", &profile("Client runner", "Client"));
   assert_eq!(
     refused["code"], "person_only",
     "a new profile on another account: {refused}"
   );
-  let mut moved = profile("Runner", "Codex · Client");
+  let mut moved = profile("Runner", "Client");
   moved["profile"] = json!("Runner");
   let refused = served.refused("save_profile_draft", &moved);
   assert_eq!(
@@ -144,7 +143,7 @@ fn domain_profiles_and_the_reviewer_move_to_another_account_only_when_a_person_l
     .workspace
     .set_automation_answers_approvals(true)
     .expect("the setting is saved");
-  let reviewer = json!({ "project": "Kontur", "connection": "Claude · Lab" });
+  let reviewer = json!({ "project": "Kontur", "account": "Lab" });
   let refused = served.refused("set_reviewer", &reviewer);
   assert_eq!(
     refused["code"], "person_only",

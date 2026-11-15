@@ -18,7 +18,7 @@ use super::{Section, Shown, Status};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{NewConnection, Route, Screen},
+  routes::{Route, Screen},
   theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
     icon::{Icon, icon},
@@ -59,15 +59,7 @@ pub fn settings(
       )
     })
     .collect::<Vec<_>>();
-  let save = match shown {
-    // A provider being added says it isn't saved yet (`Saved` `v6VzvO` in `10` `LaTB4`).
-    Shown::NewConnection(NewConnection::AgentProvider | NewConnection::DecisionModel) => Some(status_line(
-      ctx,
-      (Icon::CircleDashed, PaletteColor::TextMuted),
-      "project_settings.notSavedYet",
-    )),
-    _ => shown.autosaves().then(|| save_status(ctx, status)),
-  };
+  let save = shown.autosaves().then(|| save_status(ctx, status));
   let header = Row::new()
     .id("project-settings-header")
     .width(Dimension::Pct(100.0))

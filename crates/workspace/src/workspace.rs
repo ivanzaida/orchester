@@ -333,6 +333,14 @@ impl Workspace {
     if let Err(error) = self.follow_accounts(repo_root) {
       tracing::warn!(%error, "cannot move a project's connections off removed accounts");
     }
+    // The project opens all the same; its connections on API accounts follow what changed the next time it opens.
+    if let Err(error) = self.follow_api_accounts(repo_root) {
+      tracing::warn!(%error, "cannot bring a project's connections up to date with the API accounts");
+    }
+    // The project opens all the same; it gets its copies of the decision model servers the next time it opens.
+    if let Err(error) = self.follow_decision_servers(repo_root) {
+      tracing::warn!(%error, "cannot give a project the decision model servers");
+    }
     // The project opens all the same, its estimates off; the copy is tried again the next time it opens.
     if let Err(error) = db.copy_estimates_story_points(|| self.db.lock().estimates_story_points()) {
       tracing::warn!(%error, "cannot copy the application-wide estimates setting into a project");

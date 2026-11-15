@@ -1,11 +1,16 @@
 //! What this computer fills in for the team's configuration, kept in the project database
 //! (`docs/design/team-configuration.md`): the connection (and account) picked per team profile, which team MCP
 //! servers are on here, and secret values by secret name. A secret's value lives in the OS keychain; its row holds
-//! the name and the keychain handle only.
+//! the name and the keychain handle only. A local project's agent profile has the same pick: what it runs on is this
+//! computer's choice there too ([`ProjectDb::profile_here`]).
+
+use std::collections::BTreeMap;
 
 use orchester_core::{
   id::{AgentAccountId, ConnectionId, DecisionConnectionId, ResourceId, SecretId},
+  resource::AgentProfile,
   secret::{SecretName, SecretValue, SecretVault, VaultKey},
+  store::ConnectionStore,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -56,6 +61,49 @@ impl ProjectDb {
         .map(|account| parse("picked account id", &account))
         .transpose()?,
     }))
+  }
+
+  /// Every pick made on this computer, by profile. A team decision reviewer's pick is among them under its own id
+  /// ([`Self::set_decision_pick`]): it names no agent connection, so nothing takes it for one.
+  pub fn connection_picks(&self) -> Result<BTreeMap<ResourceId, ConnectionId>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT resource_id, connection_id FROM team_connection_picks")?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(profile, connection)| {
+        Ok((
+          parse("picked profile id", &profile)?,
+          parse("picked connection id", &connection)?,
+        ))
+      })
+      .collect()
+  }
+
+  /// `body`, the content of the project's agent profile `profile`, as it runs on this computer: on the connection
+  /// picked here for it when it can run on that one ([`AgentProfile::chosen_here`]), else as it was published. A
+  /// local profile's pick is kept as a team profile's is, so changing what a profile runs on never needs a new
+  /// version (`docs/design/agent-accounts.md`, "Agents run on accounts", decision 4).
+  pub fn profile_here(&self, profile: ResourceId, body: AgentProfile) -> Result<AgentProfile, StoreError> {
+    let connection = self.connection_here(profile, body.connection())?;
+    Ok(body.with_connection(connection))
+  }
+
+  /// The connection the project's agent profile `profile` runs on here when its version names `named`: the one
+  /// [`Self::profile_here`] runs it on.
+  pub fn connection_here(&self, profile: ResourceId, named: ConnectionId) -> Result<ConnectionId, StoreError> {
+    let Some(pick) = self.connection_pick(profile)? else {
+      return Ok(named);
+    };
+    if pick.connection == named {
+      return Ok(named);
+    }
+    let own = self.connection(named)?;
+    let chosen = self.connection(pick.connection)?;
+    Ok(AgentProfile::connection_here(named, own.as_ref(), chosen.as_ref()))
   }
 
   /// Keeps `connection` as the decision connection the team decision reviewer `reviewer` runs on here, replacing an

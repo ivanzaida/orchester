@@ -133,7 +133,7 @@
     "start": {
       "head": "Set up {{project}} to run tasks",
       "done": "{{count}} of 4 done",
-      "connections": "Project settings › Connections ↗",
+      "connections": "Settings › Accounts ↗",
       "agents": "Agents ↗",
       "pipelines": "Pipelines ↗",
       "newTask": "New task ↗",

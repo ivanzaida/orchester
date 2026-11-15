@@ -14,7 +14,14 @@ pub(crate) fn pinned_profile(
   pinned: PinnedVersion,
 ) -> Result<Option<AgentProfile>, StoreError> {
   if let Some(version) = db.version::<AgentProfile>(pinned.resource, pinned.number)? {
-    return Ok(Some(version.body().clone()));
+    let body = version.body().clone();
+    // A run made from inputs keeps the connection they bound; any other follows this computer's choice for the
+    // profile, as its agents do when they start.
+    return Ok(Some(if db.run_inputs(run)?.is_some() {
+      body
+    } else {
+      db.profile_here(pinned.resource, body)?
+    }));
   }
   Ok(db.run_inputs(run)?.and_then(|inputs| inputs.profile(pinned)))
 }

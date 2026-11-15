@@ -13,7 +13,7 @@
 
 use orchester_core::{
   connection::{AgentConnection, Connection, moves_to_another_account},
-  id::ProjectId,
+  id::{ConnectionId, ProjectId},
   resource::ModelId,
   run::{
     Answerer, ApproveMode, ApproveModePersonOnly,
@@ -28,11 +28,17 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{runs::find_run, setup::widening::allowed};
+use super::{
+  runs::find_run,
+  setup::{
+    runs_on::{CliKind, account_connection},
+    widening::allowed,
+  },
+};
 use crate::{
   agents::form::effort_options,
   app_mcp::{
-    error::ToolError,
+    error::{Missing, ToolError},
     services::{Services, blocking},
   },
   links::{Link, TaskPage},
@@ -115,14 +121,18 @@ impl From<ApproveModeArg> for ApproveMode {
 pub struct SetReviewer {
   /// The project's id, or its name.
   pub project: String,
-  /// An agent connection's id or name: Claude Code, Codex, or a native one on the Anthropic API. Left out:
-  /// the default reviewer (the first Claude Code connection with Haiku 4.5).
-  pub connection: Option<String>,
-  /// A decision connection id or name; mutually exclusive with connection.
+  /// What a language reviewer runs on: a sign-in or an API provider of the person's, by its id or name
+  /// (list_accounts), of Claude Code, Codex, or Orchester's own agent on the Anthropic API; `default` is a CLI's
+  /// Default and needs `cli`. The project gets its connection on the account when it has none. Left out: the
+  /// default reviewer (the first Claude Code account with Haiku 4.5).
+  pub account: Option<String>,
+  /// The agent CLI whose account `account` names; needed for `default` and for a name two CLIs' accounts share.
+  pub cli: Option<CliKind>,
+  /// A decision connection id or name; mutually exclusive with account.
   pub decision_connection: Option<String>,
-  /// A model of that connection; its default when left out.
+  /// A model of that account; its default when left out.
   pub model: Option<String>,
-  /// A reasoning effort the model takes; the connection's default when left out.
+  /// A reasoning effort the model takes; the account's default when left out.
   pub effort: Option<String>,
   /// Decision reviewer threshold, 0.01–0.99 with at most two decimal places; defaults to 0.80.
   pub threshold: Option<f64>,
@@ -232,10 +242,17 @@ pub async fn set_reviewer(services: &Services, args: SetReviewer) -> Result<Valu
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
+    // The project's connection on the account the reviewer is to run on, made now when it has none.
+    let language = match &args.account {
+      Some(named) if args.decision_connection.is_none() => {
+        Some(account_connection(&services, &open.repo_root, args.cli, named)?)
+      }
+      _ => None,
+    };
     let mut db = ProjectDb::open(&open.repo_root)?;
     let current = db.auto_mode_settings()?;
     let decisions = db.decision_connections()?;
-    let reviewer = reviewer_change(&services, &db, &current, &args, &decisions)?;
+    let reviewer = reviewer_change(&services, &db, &current, (&args, language), &decisions)?;
     if db.save_auto_mode_with_decision_if_current(&current, &AutoModeSettings { reviewer }, &decisions)?
       == orchester_store::AutoModeSave::ChangedOutside
     {
@@ -269,11 +286,11 @@ fn reviewer_change(
   services: &Services,
   db: &ProjectDb,
   current: &AutoModeSettings,
-  argument: &SetReviewer,
+  (argument, language): (&SetReviewer, Option<ConnectionId>),
   decisions: &[orchester_core::connection::DecisionConnection],
 ) -> Result<Option<ReviewerChoice>, ToolError> {
   let connections = db.connections()?;
-  let reviewer = chosen_reviewer(&connections, decisions, argument)?;
+  let reviewer = chosen_reviewer(&connections, decisions, (argument, language))?;
   let next = AutoModeSettings {
     reviewer: reviewer.clone(),
   };
@@ -311,12 +328,12 @@ fn moves_reviewer_account(connections: &[Connection], current: &AutoModeSettings
 fn chosen_reviewer(
   connections: &[Connection],
   decisions: &[orchester_core::connection::DecisionConnection],
-  argument: &SetReviewer,
+  (argument, language): (&SetReviewer, Option<ConnectionId>),
 ) -> Result<Option<ReviewerChoice>, ToolError> {
   if let Some(named) = &argument.decision_connection {
-    if argument.connection.is_some() || argument.effort.is_some() {
+    if argument.account.is_some() || argument.effort.is_some() {
       return Err(ToolError::InvalidArguments(
-        "decision reviewers take neither connection nor effort".into(),
+        "decision reviewers take neither account nor effort".into(),
       ));
     }
     let connection = decisions
@@ -348,18 +365,23 @@ fn chosen_reviewer(
       "only decision reviewers take a threshold".into(),
     ));
   }
-  chosen(connections, argument)
+  chosen(connections, argument, language)
 }
 
-/// The reviewer `argument` names among `connections`; `None` for the default one.
-fn chosen(connections: &[Connection], argument: &SetReviewer) -> Result<Option<ReviewerChoice>, ToolError> {
-  let Some(named) = &argument.connection else {
+/// The reviewer on `language`, the project's connection on the account `argument` names, among `connections`;
+/// `None` for the default one.
+fn chosen(
+  connections: &[Connection],
+  argument: &SetReviewer,
+  language: Option<ConnectionId>,
+) -> Result<Option<ReviewerChoice>, ToolError> {
+  let Some(language) = language else {
     return Ok(None);
   };
   let connection = connections
     .iter()
-    .find(|connection| connection.id().to_string() == *named || connection.name().as_str() == named)
-    .ok_or_else(|| ToolError::InvalidArguments(format!("no connection is named {named}")))?;
+    .find(|connection| connection.id() == language)
+    .ok_or_else(|| ToolError::not_found(Missing::Account, argument.account.as_deref().unwrap_or_default()))?;
   if reviewer_kind(connection).is_none() {
     return Err(unavailable(ReviewerUnavailable::Unsupported));
   }

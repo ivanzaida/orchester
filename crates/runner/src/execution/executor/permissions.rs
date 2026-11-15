@@ -134,8 +134,9 @@ pub(in crate::execution) fn provider_of(
     Err(ResolveError::Link(error)) => return Err(failed("cannot read the agent profile", &error)),
     Err(_) => return Err(Rejection::ProfileNotInRun),
   };
-  let connection = computer
-    .connection(body.connection())
+  let connection = resolver
+    .runs_on(computer, &pinned, &body)
+    .and_then(|runs_on| computer.connection(runs_on))
     .map_err(|error| failed("cannot read the profile's connection", &error))?;
   match connection.as_ref().map(|connection| connection.connection().kind()) {
     Some(ConnectionKind::Agent(provider)) => Ok(*provider),

@@ -2,17 +2,19 @@
 //! run on as the rail and the line under it show it (`05 · Account and model` `v6mWp8`, `05b · On DeepSeek` `AZp3I`,
 //! `Runs-on picker · states` `t7cdi` in `Orchestrator · redesign` `hujxu`), and what is chosen.
 //!
-//! A Claude Code or Codex sign-in is named by its account; the line under its name says *CLI · plan*, and its plan's
-//! 5-hour use; at its limit the caption says until when, in `warning`, with *limit reached* under it. An API provider
-//! says its CLI and host, the tokens its agents spent today and *no plan limit* (its key's secret is that line's
-//! tooltip), takes a model and an effort of the person's own, and says where its data goes. A sign-in to another
-//! connection or account than the conversation's session lives on says in its tooltip that choosing it starts a new
-//! session.
+//! An account the project has no connection on yet stands on the rail as a connected one does, with no models until
+//! choosing it made its connection. A Claude Code or Codex sign-in is named by its account; the line under its name
+//! says who is signed in (*CLI · plan* where the CLI does not say), and its plan's 5-hour use; at its limit the caption
+//! says until when, in `warning`, with *limit reached* under it. An API provider says its CLI and host, the tokens its
+//! agents spent today and *no plan limit* (its key's secret is that line's tooltip), takes a model and an effort of the
+//! person's own, and says where its data goes. A sign-in to another connection or account than the conversation's
+//! session lives on says in its tooltip that choosing it starts a new session.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
+  connection::AgentProvider,
   id::ConnectionId,
   orchestrator::{ChatSession, OrchestratorSettings},
   time::Timestamp,
@@ -22,19 +24,16 @@ use orchester_workspace::{display, orchestrator::runs_on::RunsOn};
 
 use super::{
   picking::efforts_for,
-  sources::{Entry, Sources, cli_name, tip},
+  sources::{Account, Entry, Open, SignedIn, Sources, cli_name, tip, tip_open},
 };
 use crate::{
-  services::accounts::plan_name,
+  services::{accounts::plan_name, plan_limits::five_hour_use},
   ui::{
     agent_mark::AgentMark,
     icon::Icon,
     runs_on_picker::{Chosen, Connection, Detail, Mark, Model, Notice, NoticeTone},
   },
 };
-
-/// The 5-hour window, in minutes.
-const FIVE_HOURS: u64 = 300;
 
 /// What the picker shows chosen: the connection, model and effort the Orchestrator runs on; nothing while none is.
 pub(super) fn chosen(settings: Option<&OrchestratorSettings>) -> Chosen {
@@ -54,21 +53,74 @@ pub(super) fn starts_new_session(sources: &Sources<'_>, connection: ConnectionId
     .is_some_and(|account| session.change(connection, account).is_some())
 }
 
-/// The connections of `entries` for the picker, `chosen` what the Orchestrator runs on now and `session` the account
-/// the conversation's session is on.
+/// The rail for the picker: the connections of `entries` and the accounts of `open`, in the rail's groups; `chosen`
+/// what the Orchestrator runs on now, `session` the account the conversation's session is on, and `connecting` the
+/// account whose connection is being made.
 pub(super) fn connections(
   ctx: &mut Ctx,
   sources: &Sources<'_>,
-  entries: &[Entry],
+  (entries, open): (&[Entry], &[Open]),
   (chosen, session): (Option<&OrchestratorSettings>, Option<&ChatSession>),
+  connecting: Option<Account>,
 ) -> Vec<Connection> {
-  entries
-    .iter()
-    .map(|entry| {
-      let on = chosen.filter(|chosen| chosen.connection() == entry.id);
-      connection(ctx, sources, entry, (on, session))
-    })
-    .collect()
+  let mut rail = Vec::with_capacity(entries.len() + open.len());
+  for entry in entries {
+    let on = chosen.filter(|chosen| chosen.connection() == entry.id);
+    rail.push((entry.group, connection(ctx, sources, entry, (on, session))));
+  }
+  for account in open {
+    let shown = unconnected(ctx, sources, account, connecting == Some(account.account));
+    rail.push((account.group, shown));
+  }
+  // Stable: within a group the connections stand before the accounts the project has none on.
+  rail.sort_by_key(|(group, _)| *group);
+  rail.into_iter().map(|(_, shown)| shown).collect()
+}
+
+/// An account the project has no connection on, as the rail shows it: named and captioned as a connected one is, with
+/// no models until its connection is made, which its line says while it is (`connecting`).
+fn unconnected(ctx: &mut Ctx, sources: &Sources<'_>, open: &Open, connecting: bool) -> Connection {
+  let tip_words = tip_open(ctx, open);
+  let base = Connection {
+    id: open.id().into(),
+    mark: Mark::Agent(AgentMark::of(open.provider)),
+    name: open.name.clone(),
+    caption: Arc::from(""),
+    tip: tip_words.clone(),
+    five_hour: None,
+    use_unread: false,
+    limit: false,
+    unavailable: (!open.choosable).then_some(tip_words),
+    detail: None,
+    tip_note: None,
+    typed_model: false,
+    typed_effort: false,
+    notice: None,
+    models: Vec::new(),
+  };
+  let shown = match (&open.host, open.account) {
+    (Some(host), _) => Connection {
+      mark: Mark::Cloud,
+      caption: ctx.t_args(
+        "orchestrator.runsOn.providerWho",
+        [("cli", &*cli_name(ctx, open.provider)), ("host", &**host)],
+      ),
+      ..base
+    },
+    (None, Account::SignIn(id)) => sign_in(ctx, (sources.who(sources.accounts.of(id)), open.provider), base),
+    (None, Account::Api(_)) => base,
+  };
+  if connecting {
+    return Connection {
+      detail: Some(Detail {
+        text: ctx.t("orchestrator.runsOn.connecting"),
+        tip: None,
+        warns: false,
+      }),
+      ..shown
+    };
+  }
+  shown
 }
 
 fn connection(
@@ -100,14 +152,16 @@ fn connection(
   };
   match &entry.runs_on {
     RunsOn::ApiProvider { base_url, .. } => provider(ctx, sources, (entry, base_url.host()), base),
-    RunsOn::SignIn(_) | RunsOn::Native => sign_in(ctx, sources, entry, base),
+    RunsOn::SignIn(_) | RunsOn::Native => {
+      let who = sources.signed_in(&entry.runs_on, entry.provider);
+      sign_in(ctx, (who, entry.provider), base)
+    }
   }
 }
 
 /// A sign-in's caption, plan use and limit.
-fn sign_in(ctx: &mut Ctx, sources: &Sources<'_>, entry: &Entry, base: Connection) -> Connection {
-  let cli = cli_name(ctx, entry.provider);
-  let who = sources.signed_in(&entry.runs_on, entry.provider);
+fn sign_in(ctx: &mut Ctx, (who, provider): (SignedIn<'_>, AgentProvider), base: Connection) -> Connection {
+  let cli = cli_name(ctx, provider);
   if !who.signed_in {
     let caption = ctx.t_args("orchestrator.runsOn.signedOut", [("cli", &*cli)]);
     return Connection { caption, ..base };
@@ -120,26 +174,23 @@ fn sign_in(ctx: &mut Ctx, sources: &Sources<'_>, entry: &Entry, base: Connection
     .and_then(|check| check.known_identity())
     .and_then(|identity| identity.plan.as_deref());
   let until = who.reading.and_then(|reading| reading.resets_at(now));
-  let caption = match (reached, until, plan) {
-    (true, Some(until), _) => ctx.t_args(
+  // An account is who is signed in: its line says the email where the CLI reports it, as a profile's picker does.
+  let email = who.account.and_then(|account| account.email());
+  let caption = match (reached, until, email, plan) {
+    (true, Some(until), ..) => ctx.t_args(
       "orchestrator.runsOn.limitUntil",
       [("cli", &*cli), ("time", &display::clock(until))],
     ),
-    (_, _, Some(plan)) => ctx.t_args("orchestrator.runsOn.who", [("cli", &*cli), ("plan", &plan_name(plan))]),
+    (_, _, Some(email), _) => email.into(),
+    (_, _, None, Some(plan)) => ctx.t_args("orchestrator.runsOn.who", [("cli", &*cli), ("plan", &plan_name(plan))]),
     _ => ctx.t_args("orchestrator.runsOn.whoNoPlan", [("cli", &*cli)]),
   };
-  let used = who.reading.and_then(|reading| {
-    reading
-      .limits
-      .windows
-      .iter()
-      .find(|window| window.minutes() == FIVE_HOURS && !window.expired(now))
-      .and_then(|window| window.percent())
-  });
+  let used = who.reading.and_then(|reading| five_hour_use(reading, now));
   Connection {
     caption,
-    five_hour: if reached { Some(100) } else { used.map(percent) },
+    five_hour: if reached { Some(100) } else { used },
     use_unread: !reached && used.is_none(),
+    limit: reached,
     detail: reached.then(|| Detail {
       text: ctx.t("orchestrator.runsOn.limitReached"),
       tip: None,
@@ -147,12 +198,6 @@ fn sign_in(ctx: &mut Ctx, sources: &Sources<'_>, entry: &Entry, base: Connection
     }),
     ..base
   }
-}
-
-/// A share of at most a hundred, whole.
-fn percent(used: f64) -> u8 {
-  // Clamped to 0..=100 first: the cast keeps every bit.
-  used.round().clamp(0.0, 100.0) as u8
 }
 
 /// An API provider: its CLI and host, its tokens today and no plan limit, what it takes of the person's own, and where

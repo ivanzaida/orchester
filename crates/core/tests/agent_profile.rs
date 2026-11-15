@@ -1,13 +1,17 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::mcp::{McpSelectionError, McpServerSelection},
+  connection::{
+    AgentConnection, AgentProvider, Connection,
+    mcp::{McpSelectionError, McpServerSelection},
+  },
   id::{ConnectionId, ResourceId},
   name::Name,
   permission::{AgentPermissions, ApprovalMode, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::{
     AgentProfile, ChosenResources, ModelId, PromptText, ProviderSettings, ProviderSettingsError, ResourceBody,
   },
+  time::Timestamp,
 };
 
 fn builder() -> AgentProfile {
@@ -180,4 +184,50 @@ fn agent_profile_keeps_its_mcp_servers() {
   assert_eq!(toggled.toggled(first).expect("one more").ids(), &[second, first]);
   let tampered = json.replace(&second.to_string(), &first.to_string());
   assert!(serde_json::from_str::<AgentProfile>(&tampered).is_err());
+}
+
+fn connection(provider: AgentProvider) -> Connection {
+  let program = std::env::temp_dir().join("agent-cli");
+  AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new(&format!("{provider:?}")).expect("valid name"),
+    provider,
+    program,
+    Timestamp::from_unix_millis(1),
+  )
+  .expect("a connection")
+  .into_connection()
+}
+
+#[test]
+fn agent_profile_runs_on_the_connection_chosen_here_of_its_kind() {
+  let own = connection(AgentProvider::ClaudeCodeCli);
+  let work = connection(AgentProvider::ClaudeCodeCli);
+  let codex = connection(AgentProvider::CodexCli);
+  let published = builder().with_connection(own.id());
+
+  let unchosen = published.clone().chosen_here(Some(&own), None);
+  assert_eq!(unchosen, published, "without a choice it runs as published");
+
+  let chosen = published.clone().chosen_here(Some(&own), Some(&work));
+  assert_eq!(chosen.connection(), work.id());
+  assert_eq!(
+    chosen.with_connection(own.id()),
+    published,
+    "only what it runs on differs"
+  );
+
+  let other_kind = published.clone().chosen_here(Some(&own), Some(&codex));
+  assert_eq!(
+    other_kind.connection(),
+    own.id(),
+    "its model and permissions are for the kind it names"
+  );
+
+  let own_gone = published.chosen_here(None, Some(&codex));
+  assert_eq!(
+    own_gone.connection(),
+    codex.id(),
+    "the choice is all that says what it runs on"
+  );
 }

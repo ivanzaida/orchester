@@ -13,6 +13,11 @@ of its own with its crumb back (`03b` `xN1Jy`; *Rename* and *Remove* in its *…
 account* is a page too (`03c` `XAm8i`), followed by the sign-in step. The states are on the sheet `poD7g`. The panels
 and frames named below describe the earlier list-beside-details layout; their words and rules still apply.
 
+**Changed 2026-11-13 (user).** A project no longer holds agent connections: a profile chooses an account directly,
+and API providers move to the app. See [Agents run on accounts](#agents-run-on-accounts-decided-2026-11-13) at the
+end; where it differs from the text below (*a project connection chooses one*, the connection's Account field), it
+wins. Not built yet.
+
 ## What exists today (checked in the code on 2026-10-12)
 
 - A project **connection** is a program on this computer (`crates/core/src/connection/mod.rs`, `Connection`): kind,
@@ -320,3 +325,274 @@ recommended; still open. 4, 9 and 10 not answered yet.
 9. **Same account twice.** Recommended: allow, with the plain note that limits are shared. Alternative: refuse.
 10. **macOS Claude accounts.** Decided: per-folder Keychain items were verified on a Mac (2026-10-29), so Claude
     accounts other than Default work on macOS as on Windows.
+
+## Agents run on accounts (decided 2026-11-13)
+
+Decided by the person on 2026-11-13, after asking why a project has Connections when the app has Accounts. Not
+designed in Pencil and not built yet; the work is `docs/plan.md`, *Agents run on accounts*.
+
+**Why.** A project's agent connection holds a program path, an account, a last check and a model list. The first is
+the computer's and the rest follow the account, so the project adds only a name and an id. Connections are older than
+accounts; the account became a field of the connection because profiles and runs already pinned a connection id. In
+a team project a person has to add a connection in every project before *Runs here use* can name their account.
+
+**The decisions.**
+
+1. **No agent connections in a project.** Nobody adds, names or sees one. There is no per-project list of allowed
+   accounts either: a profile chooses from every account of the app.
+2. **Settings › Accounts holds everything an agent can run on**: each CLI's program path and check (the computer's),
+   the sign-ins (*Claude Code · Work*), and the API providers.
+3. **API providers are app-wide.** This reverses decisions 1 and 2 of `api-providers.md`. A provider (base URL, key,
+   models) is added once and offered in every project; its key is in the OS secret store under an app key, not in a
+   project secret. Native API connections (Anthropic API, OpenAI API) and the decision model's server
+   (`decision-reviewer.md`) are the same kind of thing — a URL and a key — and move with them.
+4. **The account is the computer's choice, not part of the profile version**, in a local project as in a team one.
+   A profile version names the CLI kind and the model; which account it runs on here is chosen beside it and changes
+   without *Publish*. Local and team profiles then follow one rule (`shared-configuration.md`, decision 11), and
+   moving to another account at a plan limit needs no new version.
+5. **Sending a project's work to a provider is still agreed per project.** The data-location acknowledgement (04.H7
+   `M2ctRR`) asks once for each project, although the provider is shared.
+6. **Existing keys are merged on migration** when the base URL and the key's value are the same (compared in memory,
+   never logged or shown); the others become separate providers named after their project, for the person to merge.
+7. **The Connections tab of Project settings goes away.** GitHub moves to the repository's settings, MCP servers to
+   the Agents hub beside Tools.
+
+**What the project database keeps.** A run must still say what it ran on after the account is renamed or removed,
+and usage is counted by it. So the project keeps a record of each account or provider its agents ran on, made by
+Orchester when one is chosen and never shown as a thing to manage: it stays the `connections` table behind
+`ConnectionId` (about 1,500 uses in 420 files, tests and the frozen `crates/desktop` included). Screens and MCP
+tools speak of accounts only.
+
+**As built so far** (branch `module/agents-on-accounts`):
+
+- *The app is the source of truth, the project's row a copy.* The runner never opens the application database, so
+  what a run needs is in the project's connection row, as an account's folder already is, and Orchester keeps the
+  rows in step when the app's side changes (`Workspace::follow_accounts`). A run therefore reads current values at
+  its start without a path of its own to the app.
+- *API accounts* (`orchester_core::account::ApiAccount`, table `api_accounts` in `orchester.db`): a name, the kind
+  of agent (`claude_code_cli`, `codex_cli`, `anthropic_api`, `openai_api`), the model API and its models. The key is
+  in the OS keychain under `orchester-api-account:<account id>` / `key`; the account's id is the key's id. The
+  window calls one an API provider. A sign-in and an API account of the same CLI never share a name, since a profile
+  is offered both as *Claude Code · Work*.
+- *A project's connection on an API account* (`Workspace::connect_api_account`) is a copy of the account: its CLI,
+  the account's model API and models, and the account's id as the id of its key. The project holds no secret for
+  it. A run reads the key by that id: the project's secret when it has one (a connection made before this change),
+  else the account's keychain entry, which the runner reads from the keychain it already holds. So a key replaced in
+  Settings reaches every project at once, and a session's origin (base URL, key id) stays the same. The copy follows
+  the account's model API and models when the project opens (`Workspace::follow_api_accounts`). Only an agent CLI's
+  API account has such a connection; one for Orchester's own agent is refused there.
+- Not built yet: moving the keys projects hold today into API accounts, removing an API account, and the same for
+  Orchester's own agent and the decision model.
+- *The CLI's program* is one path per CLI for the computer (table `agent_programs`); a CLI without one is looked up
+  on the search path, newest copy first, when a connection is made.
+- *What a profile runs on here* is a pick beside the profile (`team_connection_picks`, the table team profiles
+  use; `ProjectDb::profile_here`). Published versions are immutable and keep naming a connection: that is where the
+  profile runs until a pick is made. A pick is taken when it runs the same kind of agent as that connection, or when
+  that connection is gone. `Workspace::run_profile_on_account` makes the pick and, when the project has no
+  connection on the account yet, the connection: named after the CLI and the account (*Claude Code · Work*) and
+  checked there.
+- *Runs.* A local run takes the pick at each agent start, so a change made while it waits applies to its next
+  agent, as a new session. A team run keeps the connection its inputs bound when the server accepted it. The check
+  before a run (`preflight`) looks at the connection the profile runs on here.
+- *The one field* (C1, C2, C4). Every form of a profile, and a local profile's panel, has one field for what it
+  runs with, which opens the compact *Runs on* picker (`ui::runs_on_picker`, 300 wide, the component the
+  Orchestrator's bar opens) under it. A local profile's is *Runs on*: the rail is this computer's accounts, one item
+  each (Claude Code's sign-ins, Codex's, then what runs on a key), whether the project has a connection on one or
+  not. A team profile's is *CLI, model and effort*: the rail is the CLIs, and no account is chosen there. The field
+  keeps saying what the profile runs on while another account is only looked at.
+  - In a local profile's panel, an account of the profile's CLI that serves its model is this computer's choice:
+    it applies at once with no new version (a pick), and only a person makes it when the work moves to another
+    account or another API's host. A model, an effort, or an account of another CLI with one of its models is the
+    profile's: the panel holds it and *Save* publishes it, after which the pick is cleared.
+  - In a form, a model is chosen with what lists it, so choosing one chooses the account (or the CLI) it is shown
+    under; an item of the rail is only looked at until then.
+  - An account the project has no connection on yet gets one when it is looked at
+    (`Workspace::connect_account`): the models an account serves are read from that connection, so its line says
+    *reading its models…* meanwhile, and a CLI whose program is not found says so under the picker. The picker
+    makes it for the account it opens on too, as in a project that has no connection yet.
+- *An account is who is signed in* (the person, 2026-11-14). Two folders of one CLI whose CLI reports the same
+  signed-in email are one account wherever a profile chooses one: one item on the rail and in a team profile's
+  *Runs on*, in the place of the first of them, standing for the folder the profile runs on now, else for one the
+  project has a connection on (`orchester_core::account::by_sign_in`). A folder nobody is signed in to, or whose
+  CLI does not say who, stands alone. Settings › Accounts still lists every folder, each saying which other it is
+  the same account as. A connection that differs from another only by its program (a wrapper script, say) is not
+  an account of its own: it is one of its account's connections.
+- *Where the picker opens.* Under its field, from the field's start; above the field where the window has no room
+  under it. It never lies on its field. The field fills its row.
+- *A profile's row in the list* names the CLI and the account it runs on (*Claude Code · Work*), by the account's
+  name, never by the name of the connection Orchester keeps for it.
+- *API accounts on the rail.* After the sign-ins the rail has the person's API accounts for an agent CLI, each
+  once, whether the project has a connection on one or not, with the models the person listed for it in Settings;
+  then the project's connections on a key of its own, made before API accounts. An API account's connection is made
+  when it is looked at or a model of it is chosen. One connection is made at a time, the account asked for meanwhile
+  next. A form keeps a model chosen on an account that is still being connected, and *Create* waits for the
+  connection and says so. A team profile's *Runs on* select offers an API account once the project has its
+  connection on it.
+- *Settings › Accounts* (A1, B2, in part). *Add API provider* stands beside *Add account* in the first group's
+  heading and opens a page of its own: the CLI, a name, the base URL, the key and the models. The key is typed once,
+  goes to the system keychain with the account and is shown nowhere afterwards; the page starts over empty once the
+  account is added. An API provider stands under its CLI's sign-ins in the list with its host, how many models it
+  serves and *Key set*, and the group's heading counts it. Not built yet: the menu the drawing opens from *Add
+  account* (A2), the *Used with* cards (the page has the CLI as a two-way choice, and Orchester's own agent is not
+  offered), an API provider's own page (B1: rename, replace the key, remove), each CLI's program line (A1, A3) and
+  the *Model APIs* group.
+- *A team profile on a member's computer* (C3). *From the team* has one read-only row, *CLI, model and effort*.
+  *Runs on*, under *On this computer*, offers this computer's accounts of the profile's CLI, each once, then what
+  runs on a key, and *Add an account…* last, which opens Settings › Accounts. An account that lists models, the
+  team's not among them, is shown and cannot be picked. The only account runs the profile without asking once the
+  project has its one connection on it; otherwise the person picks once and it is kept.
+- *The fix of a profile that runs on nothing here*, local or team: while this computer has an account of the
+  profile's CLI the fix is *Use Claude Code · Default for Builder*, which makes the project's connection on the
+  account when it has none, and keeps it. *Add a … connection* is left for a kind with no account (a model API).
+  The fix names the account, never a connection.
+- Not built yet: the drawing has *Runs here use* and *CLI, model and effort* in one section, *Agent CLI & model*;
+  the app keeps its sections *From the team* and *On this computer*, and the row there is still called *Runs on*.
+
+- *Built on 2026-11-14 and 15, after the person's answers* (accounts are unique by the signed-in email; native API
+  connections and the decision model's server go to Settings as *Model APIs*; the picker closes once a model is
+  chosen; a QA copy's MCP client is the person for the whole window):
+  - *The picker.* A sign-in stands once for every folder one email is signed in to, its line says the email, and
+    the picker closes once a model is chosen, also the one chosen already. The Orchestrator's composer lists this
+    computer's accounts the same way; an account the project has no connection on gets one when it is chosen.
+  - *Use for all N* beside *Use … for …*, in the local and the team hub, for the profiles of one CLI that run on
+    nothing here.
+  - *Model APIs.* *Add an API provider* offers Orchester's own agent and a decision model's server beside the two
+    CLIs. An account of Orchester's own agent is copied into a project as a native connection; a decision model's
+    server (`decision_servers` in `orchester.db`, its key under the server's id) is copied into every project by
+    its own id. An API provider's row replaces its key and removes it; a decision server's row checks and removes
+    it. Not built: renaming, another base URL or other models, testing an account, a provider's own page.
+  - *Existing keys.* When a project opens, a connection on a key of its own becomes the copy of an API account with
+    the key secret's id (the same API and key in two projects is one account), and a decision connection a server
+    of the app by its own id. Nothing of the project's is removed; a run reads the app's key first.
+  - *Project settings.* The tab row has no Connections and nothing in the app leads there for agents: those links
+    open Settings › Accounts. The pages the tab had (a connection made before accounts, a decision model's test,
+    GitHub's page) still open by their own routes, under no tab; they are not removed yet, and GitHub's rows are
+    the ones General already had.
+  - *MCP.* `list_accounts` also lists API providers and decision servers, never a key; `set_profile_account` runs
+    a profile on a sign-in. The other tools of the table below are as they were.
+- *Built on 2026-11-15, the rest of the module*:
+  - *Settings › Accounts* as drawn on A1 to A3 and B1: each CLI's program under its title, with the version it
+    reports and *Change…*, or that it was not found (or does not answer as the CLI) with *Choose program…*;
+    *Add account* is a menu of two; an API provider's row opens its page: how its key stands, what it is used
+    with, *Replace key…*, and *Rename*, *Edit* (the base URL and models of an agent CLI's provider) and *Remove* in
+    its menu. *Remove* is refused while a profile or a run is on the provider, in the window and in
+    `Workspace::remove_api_account`. A model API Orchester's own agent calls has *Test*
+    (`Workspace::check_api_account`, the model-list request a project's runner makes for a native connection).
+    *Used by* lists the profiles that run on an account, each opening in its project's Agents hub; no connection
+    is named. Not built: *Edit* for Orchester's own agent's API, the *Used with* cards (it stays a segmented
+    choice), the date a key was set.
+  - *A sign-in's check* uses the program set for its CLI, as a connection made on it does.
+  - *The Connections tab's pages are gone*: the list, an agent connection's page, *Add provider*, *Edit
+    connection* with its account chooser, and *Add decision model*. The tab's old address opens Project settings
+    on General; an agent connection's says where connections went. GitHub's page opens from General's *GitHub
+    account* row, an MCP server's from the Agents hub, a decision model's (with its test) from Project settings ›
+    Runs.
+  - *MCP tools* name accounts only: the table at the end of this note.
+  - *Not done*: the project secret that held an adopted key is not archived (nothing of the project's is
+    removed); a local profile's version still names the connection it was published on, with the account as the
+    pick beside it.
+
+### Screens (drawn 2026-11-13, not approved yet)
+
+Drawn by Claude in `crates/desktop-app/design/orchester.pen`, board **Agents on accounts** (`PChvX`, right of
+*Remote runners*), from the decisions above and the boards that exist; the person has not approved it and had not
+saved the document when this was written. Its frames:
+
+| Frame | Id |
+|---|---|
+| A1 · Settings › Accounts: each CLI's program, its sign-ins and API providers, Model APIs | `aOR4w` |
+| A2 · *Add account* open: *Sign in to another account*, *Add an API provider* | `It53u` |
+| A3 · a CLI's program not found | `t2YD7` |
+| B1 · an API provider's page | `gZTuX` |
+| B2 · Add an API provider | `OfUhN` |
+| C1 · local profile · the one field *Runs on*, its picker open | `RwzH2` |
+| C2 · local profile · an account with other models, held with the model | `t7s3I` |
+| C3 · team profile · member · *CLI, model and effort* read-only, the account dropdown open | `OTVQt` |
+| C4 · team profile · admin · *CLI, model and effort* open | `IgFWn` |
+| D1 · Project settings › General, no Connections tab | `E6kvpm` |
+| What the design decides (10 rules) and States · words (7) | `U19l6`, `xoeo3` |
+
+Where the board and the text below differ, the board is newer. The person's rulings on it, 2026-11-13:
+
+- **One field, one picker.** A local profile has no separate *Agent CLI*, *Account*, *Model* and *Reasoning effort*
+  rows: one field, *Runs on*, opens the *Runs on* picker the app already has (`ui::runs_on_picker`, the Pencil
+  component `ZcGGy`) — the rail of accounts by CLI, the models of the account chosen, the effort under them. A team
+  profile has the same field for what the team chooses, *CLI, model and effort* (the rail holds the CLIs), and
+  *Runs here use* beside it for the account. The existing component is made to look as drawn here and reused, not
+  rebuilt.
+- **A dropdown opens under its field**, never above it; the panel scrolls to make room.
+- GitHub is not a group of its own, since *General* already has the repository's GitHub rows; its *GitHub account*
+  row opens the GitHub page.
+
+The frame ids in the text below are the boards these change or start from. Every name and number in them stays
+fixture data.
+
+**Settings › Accounts** (`t8i6m`; the tab keeps its name, since a sign-in and an API provider are both what agents
+run as).
+
+- One group per agent CLI, as today, with two additions. Under the group's title, one quiet line for the program:
+  *claude 2.1.173 · C:\…\claude.exe* and *Change…*; when none is set and none is found, *Claude Code was not found on
+  this computer* in `danger` with *Choose program…*. The group's rows are its sign-ins, Default first, then its API
+  providers, each with a cloud mark where a sign-in has the CLI's: *DeepSeek* · *api.deepseek.com · 2 models* ·
+  *Key set*. *Add account* becomes a menu of two: *Sign in to another account* (today's page `XAm8i`) and *Add an
+  API provider*.
+- A third group, **Model APIs**, for the APIs Orchester's own agent talks to: *Anthropic API* · *api.anthropic.com ·
+  balance $12.40* · *Connected*. Shown only where the native agent is offered.
+- The note under the groups: *Accounts and API providers belong to you on this computer; every project can use
+  them. A key is kept in Windows Credential Manager* (macOS: *the login keychain*)*, never in a project.*
+- **An API provider's page** (from `xN1Jy`): name; *Used with* (Claude Code, read-only after adding); base URL;
+  *API key* — *Set · Oct 31* and *Replace…*, never the value; models (the token list of `hc1vS`); *Used by* (profiles
+  by project, as an account's); *Remove* in the *…* menu, refused while a profile runs on it, with the list.
+- **Add an API provider** (from `hc1vS`, as a page like `XAm8i`): *Used with* (Claude Code · Anthropic Messages,
+  Codex · OpenAI Responses), name, base URL, API key (a field for the value, typed once), models. Primary *Add
+  provider*. The data-location note of `hc1vS` stays, saying the acknowledgement is asked per project at the first
+  run.
+- States (sheet `poD7g`): key missing from this computer's keychain (*Key missing · Enter it again*); key rejected;
+  endpoint unreachable; the name taken by a sign-in or a provider of the same CLI.
+
+**The profile's account** (local `fFxoM`, team `sakAV` / `p779C` / `FO7Cq`, pickers `lCApz` `rjPcV` `Aj9AU`).
+
+- The field *Connection* of a local profile becomes *Account*, with the badge *This computer* and the hint *Kept on
+  this computer · changing it makes no new version*. The select lists every account of the profile's CLI: sign-ins
+  (*Claude Code · Work* — *Max plan*), then API providers (*Claude Code · DeepSeek* — *api.deepseek.com*), then a
+  separator and *Add an account…*, which opens Settings › Accounts. A team member's *Runs here use* (`sakAV`) is the
+  same select with the same list; its hint keeps *never sent to the team*.
+- An account that serves the profile's model applies at once: no *Save*, no *vN*. A sign-in is taken to serve what
+  its CLI lists; an API provider serves the models typed for it.
+- An account that does not serve the profile's model is still offered, with *other models* at the right. In a local
+  project choosing it holds the change in the panel: *Model* opens on that account's models, and *Save* publishes
+  the model as the next version and sets the account with it; *Cancel* leaves both. In a team project a member
+  cannot change the model, so such a row is disabled: *Doesn't serve claude-opus-5-5 · the team chose the model*.
+- *Ready?* speaks of accounts: *Two Claude Code accounts · choose one* (`fFxoM`), *No Claude Code account on this
+  computer* with *Add an account…* (`FO7Cq`; a local project gets the same row), *Not signed in · Work*, *DeepSeek's
+  key is missing on this computer*.
+- The compact *Runs on* picker (`lCApz`): the rail's marks are accounts of the app, not the project's connections;
+  nothing else moves.
+
+**Project settings** (`dk46o`): the tab *Connections* is gone and the tab row is *General · Runs · Context ·
+Secrets · Sharing*. *GitHub* becomes a group of *General* under the repository rows, with the page `KItiZ` behind
+it. MCP servers are the Agents hub's tab (`IpzZ7`, already drawn for a local project) and their pages (`Ptkxo`,
+`OyMrX`) open from there. The empty state `WYCDL` goes; the loading board `C2vSe` loses its row.
+
+**To settle with the drawing.**
+
+- Where the decision model's server lives once its key is the app's: a row of *Model APIs*, or its own group.
+- Whether *Runs on* in a task's run (`lCApz`) may name an account of another CLI than the profile's, as its rail
+  suggests today.
+
+### MCP tools (built 2026-11-15)
+
+| Before | Now |
+|---|---|
+| `list_accounts` | also lists API providers (id, name, what it is used with, host, models, `key_here`, the status of its last test) and each CLI's program (`programs`: the path set, the copies on the search path); never a key |
+| `add_cli_connection`, `set_connection_account`, `pick_profile_connection` | gone. `set_profile_account` (`project`, `profile`, `account`): a local or team profile by id or role, a sign-in or an API provider of its CLI by id or name (`default` for the CLI's Default). Another sign-in than the profile runs on now, or an API provider it does not run on, is `person_only` unless *Let automation change agent permissions* is on |
+| `set_api_provider` | gone: an API provider is added by a person, since no tool takes a key. `list_accounts` shows them and `set_profile_account` chooses one |
+| `check_connection` | checks the GitHub connection only. `check_account` (`account`, `cli`) checks a sign-in, an API provider of Orchester's own agent (an agent CLI's provider is `not_tested`) or a decision server, once for every project |
+| `list_connections` | `runs_on`: what each profile runs on here, by account; GitHub, MCP servers and decision models as before. No agent connection is listed or taken as an argument |
+| `list_models` (`connection`) | takes `account` (and `cli`). Read-only: a sign-in the project has no connection on yet lists nothing until a profile runs on it |
+| `save_profile_draft` (`connection`), `set_reviewer` (`connection`) | take `account` (and `cli`); the project's connection on the account is made when it has none. A profile's `connection` in results is `runs_on` |
+| `pick_reviewer_connection` | `set_reviewer_account` (`reviewer`, `account`): an account for a language reviewer, a decision server for a decision reviewer |
+| the decision connection tools | keep their shape; `save_decision_connection` takes no `key_secret`: a server that needs a key is added by a person in Settings › Accounts, and results say `takes_key` |
+
+A CLI's program is a person's choice in Settings › Accounts (*Change…* on the CLI's line); no tool takes one, so
+the gate the old `add_cli_connection` had for a program of automation's choosing is gone with it.

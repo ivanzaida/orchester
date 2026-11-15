@@ -54,7 +54,7 @@
     },
     "composer": {
       "placeholder": "Ask the Orchestrator…",
-      "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex connection and a model for it.",
+      "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex account and a model for it.",
       "setUp": "Set up the Orchestrator",
       "readable": "Conversations stay readable; you can send once it is set up.",
       "loading": "Loading…",
@@ -93,12 +93,13 @@
       "cli": "{{cli}} · {{model}}",
       "provider": "{{provider}} · {{model}}",
       "railSignIn": "{{cli}} · {{name}}",
-      "railSignedOut": "{{cli}} · {{name}}: not signed in, sign in in Connections",
+      "railSignedOut": "{{cli}} · {{name}}: not signed in, sign in in Settings › Accounts",
       "railProvider": "{{name}} · {{host}}",
       "who": "{{cli}} · {{plan}} plan",
       "whoNoPlan": "{{cli}}",
       "limitUntil": "{{cli}} · limit until {{time}}",
-      "signedOut": "{{cli}} · not signed in: sign in in Connections",
+      "signedOut": "{{cli}} · not signed in: sign in in Settings › Accounts",
+      "connecting": "reading its models…",
       "limitReached": "limit reached",
       "providerWho": "{{cli}} · {{host}}",
       "providerUse": "{{tokens}} today · no plan limit",
@@ -108,8 +109,8 @@
       "overDraft": "Choosing here publishes a new version and replaces the draft saved in Orchestrator settings.",
       "newSession": "Choosing it starts a new session: earlier messages aren't remembered.",
       "newSessionStarted": "A new session started: earlier messages aren't remembered.",
-      "noConnection": "No connection to run the Orchestrator yet. Add one in Connections.",
-      "connections": "Connections ↗"
+      "noAccount": "No account to run the Orchestrator on yet. Add one in Settings › Accounts.",
+      "accounts": "Accounts ↗"
     },
     "suggestions": {
       "plan": "Plan tasks from a scope file",
@@ -405,7 +406,7 @@
       "failed": "The answer failed",
       "failedBody": "{{reason}} · Your message is kept.",
       "retry": "Retry",
-      "openConnections": "Open Connections",
+      "openConnections": "Open Accounts",
       "pickAccount": "Pick account",
       "earlier": "This answer failed: {{reason}}",
       "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
@@ -952,9 +953,9 @@
       "note": "A reply already under way finishes on the version it started with; a published change applies from the next reply.",
       "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
       "noConnection": {
-        "title": "No connection in {{project}} can run the Orchestrator",
-        "body": "It needs an agent connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
-        "open": "Open connections"
+        "title": "No account {{project}} has can run the Orchestrator",
+        "body": "It needs an account of yours that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
+        "open": "Open Accounts"
       },
       "saveFailed": "Not saved: {{reason}}"
     },

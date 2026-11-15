@@ -94,7 +94,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
     // An answer of what the run waits for is automation's only under the person's consent: refused to it otherwise,
     // and the draft stays as it is.
     let by = match decides {
-      None => Some(if lurq::app::events::is_synthetic_input() {
+      None => Some(if crate::mcp::is_synthetic_input() {
         Answerer::Automation
       } else {
         Answerer::Person

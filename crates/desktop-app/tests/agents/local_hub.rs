@@ -334,30 +334,29 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
   agents.until("the panel", |s| s.exists(USE));
   assert_eq!(
     agents.text(&format!("local-hub-row-{id}-line")),
-    "Choose a Claude Code connection"
+    "Choose a Claude Code account"
   );
-  for part in [
-    "local-hub-profile-connection",
-    "local-hub-profile-model",
-    "local-hub-profile-versions",
-  ] {
+  for part in ["local-hub-profile-runs-on", "local-hub-profile-versions"] {
     assert!(agents.exists(part), "{part} is the panel's own");
   }
   for page in ["agent-role", "agent-crumb", "agents-hub-title"] {
     assert!(!agents.exists(page), "{page} belongs to the editor's page");
   }
-  // The fix is a change the panel holds, as a choice in the select is; Save publishes it.
-  agents.press_until(USE, "the panel holds Claude 2", |s| !s.exists(USE));
-  agents.press_until("local-hub-profile-save", "published on Claude 2", |s| {
-    s.listed()
-      .profile(id)
-      .is_some_and(|entry| entry.profile.connection() == claude_2)
-  });
+  // The fix is this computer's choice, made at once: nothing waits for Save and no version is made.
+  agents.press_until(USE, "it runs on Claude 2", |s| !s.exists(USE));
   let row = format!("local-hub-row-{id}-line");
-  agents.until("the row says it runs on Claude 2, saved", |s| {
+  // The row names the account it runs on, not the connection Orchester keeps for it.
+  agents.until("the row says the account, with nothing unsaved", |s| {
     let line = s.text(&row);
-    line.contains("Claude 2") && !line.contains("Unsaved")
+    line == "Claude Code · Default" && !line.contains("Unsaved")
   });
+  assert!(
+    agents
+      .listed()
+      .profile(id)
+      .is_some_and(|entry| entry.profile.connection() != claude_2),
+    "the published version is as it was"
+  );
 }
 
 #[test]

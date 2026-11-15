@@ -2354,6 +2354,8 @@ Agent feedback implemented (ORC-14, 2026-10-22) from *Pull request feedback* `se
 
 ## Agent profiles and connections
 
+Decided 2026-11-13 (user), not built yet: a project holds no agent connections. A profile chooses one of the app's accounts or API providers (Settings › Accounts) as this computer's choice, and the Connections tab goes away (GitHub to the repository's settings, MCP servers to the Agents hub). See `agent-accounts.md`, *Agents run on accounts*; the text below describes the app as built.
+
 An agent profile defines a role, responsibilities, role instructions and a project connection/model. Connections establish project access to repositories, agent providers and MCP servers. Tools expose the actual callable actions. A provider is selected per profile; the project does not impose one provider on every agent.
 
 The profile editor has *Profile*, *Permissions* and *Used in pipelines* tabs; see [Agent permissions](#agent-permissions).

@@ -25,7 +25,7 @@ pub(super) struct Words<'a> {
   pub listing: &'a Listing,
   pub entry: &'a Entry,
   pub sheet: &'a TeamProfileSheet,
-  /// The connection the person chose in the select: the first one while none is.
+  /// The account the person chose in the select (*Claude Code · Work*): the first one while none is.
   pub connection: &'a str,
 }
 
@@ -72,7 +72,10 @@ impl Words<'_> {
   }
 
   /// What stands at the bar's end: what the fix asks of the person, what comes next, or when the profile runs.
-  fn hint(&self, ctx: &Ctx, fix: &Fix, missing: &[Missing]) -> String {
+  fn hint(&self, ctx: &Ctx, fix: &Fix, (missing, all): (&[Missing], Option<usize>)) -> String {
+    if let (Fix::UseConnection, Some(count)) = (fix, all) {
+      return bar::use_all_hint(ctx, count, &ctx.t(cli_key(self.sheet.cli)));
+    }
     match fix {
       Fix::UseConnection => return ctx.t("team_hub.fix.hint.use").to_string(),
       Fix::AddConnection => return ctx.t("team_hub.fix.hint.add").to_string(),
@@ -91,15 +94,25 @@ impl Words<'_> {
   }
 }
 
-/// The bar of the first missing part's `fix`, which `press` does; loading while one is being taken, disabled while
-/// the hub is read again.
+/// The bar of the first missing part's `fix`, which `press` does, with *Use for all* after it where `all` says how
+/// many profiles wait for the same account and what a press on it does; loading while one is being taken, disabled
+/// while the hub is read again.
 pub(super) fn bar(
   ctx: &Ctx,
   words: &Words<'_>,
   (fix, missing): (&Fix, &[Missing]),
-  press: Press,
+  (press, all): (Press, Option<bar::UseAll>),
   busy: Busy,
 ) -> Element {
+  let count = all.as_ref().map(|(count, _)| *count);
+  let all = all.map(|(count, press)| {
+    let button = bar::use_all(ctx, "team-hub", count);
+    match busy {
+      Busy::Idle => button.press(press),
+      Busy::Taking | Busy::Reading => button.disabled(),
+    }
+    .into()
+  });
   let button = ActionButton::new(
     format!("team-hub-fix-{}", fix.name()),
     ButtonKind::Primary,
@@ -112,5 +125,8 @@ pub(super) fn bar(
     Busy::Taking => button.loading(),
     Busy::Reading => button.disabled(),
   };
-  bar::bar(vec![button.into()], Some(words.hint(ctx, fix, missing)))
+  bar::bar(
+    [button.into()].into_iter().chain(all).collect(),
+    Some(words.hint(ctx, fix, (missing, count))),
+  )
 }

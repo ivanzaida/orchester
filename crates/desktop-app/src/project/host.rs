@@ -137,17 +137,28 @@ impl Component for ProjectLoader {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let LoaderProps { project, active } = ctx.props::<LoaderProps>().clone();
     let projects = Projects::of(ctx);
-    let workspace = Services::of(ctx).workspace;
+    let services = Services::of(ctx);
+    let (workspace, vault) = (services.workspace, services.vault);
     let attempt = projects.attempt(project);
     let resolved = ctx.future((project, attempt), move |(project, _)| {
-      let workspace = workspace.clone();
+      let (workspace, vault) = (workspace.clone(), vault.clone());
       async move {
-        background::run(move || resolve(&workspace, project))
-          .await?
-          .map_err(|error| {
-            tracing::error!(%error, "cannot read the workspace's projects");
-            messages::store_error(&error)
-          })
+        background::run(move || {
+          let state = resolve(&workspace, project)?;
+          // What the project held of model APIs before accounts were the app's becomes the app's; the project opens
+          // all the same, and it is tried again the next time it opens.
+          if let ProjectState::Open(open) = &state
+            && let Err(error) = workspace.adopt_project_keys(&open.repo_root, vault.get())
+          {
+            tracing::warn!(%error, "a project's keys were not made the app's");
+          }
+          Ok(state)
+        })
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the workspace's projects");
+          messages::store_error(&error)
+        })
       }
     });
     let resolved = resolved.state().get();

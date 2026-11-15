@@ -1,35 +1,50 @@
-//! The list of accounts (`03 · Accounts` `t8i6m`): a group per CLI, its heading with how many accounts it has (and
-//! *Add account* at the first one's end), a row per account with the CLI maker's mark in its tile, its name, who is
-//! signed in under it, its state and a chevron: a press opens its page. The accounts the person added come first,
-//! Default (the CLI's own folder) last. The note under the groups says whose accounts they are.
+//! The list of accounts (`03 · Accounts` `t8i6m`; `Agents on accounts` A1 `aOR4w`): a group per CLI, its heading with
+//! how many accounts it has (and *Add account* at the first one's end, a menu of two), the CLI's program under it, a
+//! row per account with the CLI maker's mark in its tile, its name, who is signed in under it, its state and a chevron:
+//! a press opens its page. The accounts the person added come first, Default (the CLI's own folder) last. The note
+//! under the groups says whose accounts they are.
 
 use lurq::{
   app::{ctx::Ctx, theme::TypographyStyle},
-  components::Column,
-  node::Element,
+  components::{Column, Row},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::account::{AccountCli, AccountState, AgentAccount};
 
 use super::{
-  Parts,
+  Parts, Work, api, program,
+  provider_rows::Rows,
   words::{Shown, cli_key, identity, look, name, t, ta},
 };
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
+  services::accounts,
   theme::{IconSize, SettingsSpacing},
   ui::{
     agent_mark::AgentMark,
     button::{ActionButton, ButtonKind},
     icon::Icon,
+    menu::{MenuItem, menu_at_end, menu_panel},
     setting_rows::{SettingGroup, SettingRow, group_note, opens_mark, row_tile, status},
     skeleton::{self, Skeleton, fading},
   },
 };
 
+/// The width of the menu *Add account* opens (`Menu` `Qa7Oo` on A2 `It53u`).
+const ADD_MENU_WIDTH: f32 = 240.0;
+
 /// The list page's column.
-pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
+pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work) -> Column {
   let navigation = Navigation::of(ctx);
+  let api = accounts::api_listed(ctx);
+  let decision = accounts::decision_listed(ctx);
+  let here = accounts::on_this_computer(ctx);
+  let servers = &work.servers;
+  let api_rows = &Rows {
+    navigation: navigation.clone(),
+    missing: here.as_ref().map(|here| here.keys_missing.clone()),
+  };
   let mut pane = super::frame::pane("settings-accounts");
   for (index, cli) in AccountCli::ALL.into_iter().enumerate() {
     // Default last: the accounts the person added come first.
@@ -40,27 +55,72 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
     } else {
       ta(ctx, "accounts.group.other", [("count", accounts.len().to_string())])
     };
-    let rows: Vec<Element> = accounts
+    let count = match api::count(ctx, &api.0, cli) {
+      Some(providers) => ta(
+        ctx,
+        "accounts.api.group",
+        [("accounts", count), ("providers", providers)],
+      ),
+      None => count,
+    };
+    let mut rows: Vec<Element> = accounts
       .into_iter()
       .map(|account| row(ctx, parts, account, &navigation))
       .collect();
+    rows.extend(api::rows(ctx, &api.0, cli, api_rows));
     let mut group = SettingGroup::new(format!("accounts-group-{}", cli.as_str()), t(ctx, cli_key(cli)))
       .meta(count)
       .rows(rows);
+    if let Some(line) = program::line(ctx, here.as_ref(), cli, &work.program) {
+      group = group.line(line);
+    }
     if index == 0 {
-      group = group.end(
-        ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
-          .icon(Icon::Plus)
-          .in_heading()
-          .opens(navigation.to(Route::Accounts(AccountsView {
-            account: None,
-            panel: AccountsPanel::Add,
-          }))),
-      );
+      group = group.end(add_menu(ctx, work, &navigation));
     }
     pane = pane.child(group);
   }
-  pane.child(group_note("accounts-note", &t(ctx, "accounts.note")))
+  pane
+    .with_children(api::model_apis(ctx, &api.0, (servers, &decision.0), api_rows))
+    .with_children(servers.question(ctx, &decision.0))
+    .child(group_note("accounts-note", &t(ctx, "accounts.note")))
+}
+
+/// *Add account* and the menu of two it opens (`Agents on accounts` A2 `It53u`): *Sign in to another account*, and
+/// *Add an API provider*.
+fn add_menu(ctx: &mut Ctx, work: &Work, navigation: &Navigation) -> Element {
+  let (open, anchor) = work.add_menu.clone();
+  let toggle = open.clone();
+  let button = ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
+    .icon(Icon::Plus)
+    .in_heading()
+    .element_ref(anchor.clone())
+    .on_click(move || toggle.update(|open| *open = !*open));
+  let menu = open.get().then(|| {
+    let to = |panel: AccountsPanel| {
+      let navigation = navigation.clone();
+      move || navigation.go(Route::Accounts(AccountsView::panel(panel)))
+    };
+    let items = [
+      MenuItem::new(
+        "settings-add-sign-in",
+        t(ctx, "accounts.addMenu.signIn"),
+        to(AccountsPanel::Add),
+      )
+      .icon(Icon::UserRound),
+      MenuItem::new(
+        "settings-add-api",
+        t(ctx, "accounts.addMenu.apiProvider"),
+        to(AccountsPanel::AddApi),
+      )
+      .icon(Icon::Cloud),
+    ];
+    let panel = items.into_iter().fold(
+      menu_panel("settings-add-menu").width(Dimension::Px(ADD_MENU_WIDTH)),
+      |panel, item| panel.child(item.render(ctx, &open)),
+    );
+    menu_at_end(anchor, open.clone(), panel)
+  });
+  Row::new().child(button).with_children(menu).into()
 }
 
 /// Each CLI's accounts while they are read: each one's name, who is signed in under it and its state.
@@ -104,10 +164,7 @@ pub(in crate::screens::settings) fn reading(ctx: &mut Ctx) -> Element {
           ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
             .icon(Icon::Plus)
             .in_heading()
-            .opens(navigation.to(Route::Accounts(AccountsView {
-              account: None,
-              panel: AccountsPanel::Add,
-            }))),
+            .opens(navigation.to(Route::Accounts(AccountsView::panel(AccountsPanel::Add)))),
         );
       }
       Column::new()

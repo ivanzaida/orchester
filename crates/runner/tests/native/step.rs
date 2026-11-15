@@ -4,13 +4,15 @@
 
 use orchester_core::{
   connection::{
-    AgentProvider, BaseUrl, Effort, EngineVendor,
+    AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, CheckResult, ConnectionCheck, Effort, EngineVendor,
     stream::{AgentEvent, CallDetail, FileChangeKind, NativeCall},
   },
-  id::IdempotencyKey,
+  id::{ApiAccountId, IdempotencyKey, SecretId},
   native::{store::NativeConversationStore, tools::ToolName},
   run::{InvocationEngine, RunStatus},
-  store::ActivityStore,
+  secret::{SecretValue, SecretVault, VaultKey},
+  store::{ActivityStore, ConnectionStore},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 use serde_json::json;
@@ -98,4 +100,59 @@ async fn native_step_reads_edits_and_finishes() {
   let requests = server.model_requests();
   assert_eq!(requests.len(), 3);
   assert_eq!(requests[0].json()["output_config"]["effort"], json!("low"));
+}
+
+/// A native connection that is the project's copy of an API account of the person's names the account's id as its
+/// key's, and the project holds no secret by it: the step reads the key from the account's own keychain entry, which
+/// the app keeps for every project (`docs/design/agent-accounts.md`, "Agents run on accounts"), and the key is in
+/// nothing the run keeps.
+#[tokio::test(flavor = "multi_thread")]
+async fn native_step_runs_on_the_key_of_the_persons_api_account() {
+  let script = Script::new()
+    .expect(|request| assert_eq!(request.header("x-api-key"), Some(KEY)))
+    .reply_sse(finish("toolu_finish"));
+  let server = serve(script).await;
+  let project = native_project("Say hello in the README.", None, &server);
+  let root = project.repo.path();
+  let account = ApiAccountId::generate();
+  {
+    let mut db = ProjectDb::open(root).expect("open");
+    let stored = db.connections().expect("connections").remove(0);
+    let mut connection = AgentConnection::try_from(stored).expect("an agent connection");
+    let api = connection.api().expect("a native connection").clone();
+    let on_account = ApiEndpoint::new(
+      api.preset(),
+      api.base_url().clone(),
+      SecretId::from_uuid(account.as_uuid()),
+    );
+    connection.set_api(on_account).expect("the account's endpoint");
+    connection
+      .record_check(ConnectionCheck {
+        at: Timestamp::now(),
+        result: CheckResult::Api { balance: None },
+      })
+      .expect("an API check fits a native connection");
+    db.save_connection(&connection.into_connection()).expect("saved");
+  }
+  project
+    .vault
+    .store(
+      &VaultKey::api_account(account),
+      &SecretValue::new(KEY.to_owned()).expect("a value"),
+    )
+    .expect("stored");
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+
+  server.finish();
+  assert_eq!(run.status(), &RunStatus::Succeeded, "{:#?}", activity(root, id));
+  assert!(
+    !activity_text(&activity(root, id)).contains(KEY),
+    "the key is in nothing the run keeps"
+  );
 }

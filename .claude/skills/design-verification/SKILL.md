@@ -207,9 +207,12 @@ applies the command; *Stop watching*, × on a Leads chip and `/unwatch` stop; *T
 conversation* answer the already-led card; *Start* on a proposed run, *Approve and do it* on a plan, a proposed
 change's accept, Edit / *Rewind to here* and *Delete conversation* go through; and what you send from the composer is
 the person's message. Only the installed app and normal starts still refuse them (that refusal is covered by
-`tests/orchestrator/qa_person.rs`, not by you). Everything else person-only stays refused in a QA copy too: Settings'
-protected switches, permission and approval questions, tokens and pairing codes, sharing and sign-in, secrets, and the
-task pages' person-only controls; for those the person-only notice is the expected state. For the led-in states use
+`tests/orchestrator/qa_person.rs`, not by you). Since 2026-11-15 the same holds for the whole window: in a QA copy
+every input your MCP client sends counts as the person's (`docs/stable-build.md` › *In a QA copy the MCP client is the
+person for the whole window*), so Settings' protected switches, accounts and API providers, permission and approval
+questions, sharing and sign-in and the task pages' person-only controls are yours to press there: do them and verify
+what follows. Only looking at the window while a token or pairing code shows stays refused. A QA copy is the
+program `tools/qa-app.ps1` starts; a plain debug `orchester` is not one and still refuses. For the led-in states use
 `orchestrator-leads` (above); a task's or module's *Led in* line in the pickers needs nothing else.
 
 **Keys with modifiers.** `lurq_interact` `key` takes the key's own name in `key` and its modifiers in `modifiers`:

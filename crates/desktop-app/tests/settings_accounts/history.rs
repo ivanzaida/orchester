@@ -7,7 +7,11 @@ use orchester_core::{account::AccountCli, id::AgentAccountId};
 use super::harness::{Window, click, go, in_child, shown};
 
 fn at(account: Option<AgentAccountId>, panel: AccountsPanel) -> Route {
-  Route::Accounts(AccountsView { account, panel })
+  Route::Accounts(AccountsView {
+    account,
+    provider: None,
+    panel,
+  })
 }
 
 fn now(window: &Window) -> Route {

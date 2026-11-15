@@ -72,13 +72,12 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `set_repository_agent_files` | AP to turn on | Whether agents load `AGENTS.md`/`CLAUDE.md` |
 | `get_storage` | RO | The disk guard and, while it holds, what could be cleaned |
 | `set_keep_free` | | The free space the disk guard keeps |
-| `list_connections` | RO | Agent connections, GitHub, MCP servers |
-| `add_cli_connection` | AP for unusual programs / API providers | Add a Claude Code or Codex connection |
-| `set_api_provider` | AP for new hosts/keys | Run a CLI connection on an API provider, or back on its sign-in |
-| `check_connection` | | Check a connection again |
-| `list_models` | RO | A connection's models and efforts |
-| `list_accounts` | RO | CLI accounts and plan limits |
-| `set_connection_account` | AP | The account a connection runs on |
+| `list_accounts` | RO | Sign-ins, API providers, decision servers, each CLI's program, plan limits |
+| `check_account` | | Check a sign-in, an API provider or a decision server again |
+| `list_models` | RO | An account's models and efforts |
+| `set_profile_account` | AP for another account / an API provider | The account a profile runs on here |
+| `list_connections` | RO | What each profile runs on, GitHub, MCP servers, decision models |
+| `check_connection` | | Check the GitHub connection again |
 | `add_mcp_server` | AP | Add an MCP server for agents |
 | `update_mcp_server` | AP for widening | Change an MCP server |
 | `remove_mcp_server` | | Remove an MCP server |

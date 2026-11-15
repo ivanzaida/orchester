@@ -36,7 +36,7 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
   let unsaved = shown
     .unsaved
     .and_then(|(what, state)| (what == entry.what).then_some(state));
-  let said = words::line(ctx, shown.now, entry, unsaved);
+  let said = words::line(ctx, (shown.now, shown.whose), entry, unsaved);
   agent_row(AgentRow {
     id: &id,
     chosen: shown.selected == Some(entry.what),

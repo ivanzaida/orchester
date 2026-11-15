@@ -11,7 +11,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    events::{InputSource, input_source},
+    events::InputSource,
   },
   core::Signal,
   node::Element,
@@ -24,7 +24,10 @@ use orchester_workspace::{
 
 use super::super::{Status, TabProps, kit::SettingRow};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected},
+  mcp::{
+    input_gate::{Guarded, InputGate, Protected},
+    input_source,
+  },
   queries::{self, Session, project},
   services::Services,
   ui::{

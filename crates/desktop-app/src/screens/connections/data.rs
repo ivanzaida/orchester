@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use lurq::{app::ctx::Ctx, query::QueryHandle};
 use orchester_core::{
-  connection::{AgentConnection, GitHubConnection, GitHubState, mcp::McpServer},
+  connection::{GitHubConnection, GitHubState, mcp::McpServer},
   id::ConnectionId,
   time::Timestamp,
 };
@@ -31,7 +31,6 @@ impl lurq::app::component::DevtoolsInspectable for Saved {}
 /// One connection of the list.
 #[derive(Clone, Copy)]
 pub(super) enum Entry<'a> {
-  Agent(&'a AgentConnection),
   GitHub(&'a GitHubConnection),
   Mcp(&'a McpServer),
 }
@@ -39,7 +38,6 @@ pub(super) enum Entry<'a> {
 impl<'a> Entry<'a> {
   pub(super) fn id(self) -> ConnectionId {
     match self {
-      Self::Agent(connection) => connection.id(),
       Self::GitHub(connection) => connection.id(),
       Self::Mcp(server) => server.id(),
     }
@@ -47,7 +45,6 @@ impl<'a> Entry<'a> {
 
   pub(super) fn name(self) -> &'a str {
     match self {
-      Self::Agent(connection) => connection.name().as_str(),
       Self::GitHub(connection) => connection.name().as_str(),
       Self::Mcp(server) => server.name().as_str(),
     }
@@ -56,19 +53,18 @@ impl<'a> Entry<'a> {
   /// When its program was last checked; an MCP server is never checked.
   pub(super) fn checked_at(self) -> Option<Timestamp> {
     match self {
-      Self::Agent(connection) => connection.last_check().map(|check| check.at),
       Self::GitHub(connection) => connection.last_check().map(|check| check.at),
       Self::Mcp(_) => None,
     }
   }
 }
 
-/// Every connection, agent providers first, then GitHub, then MCP servers.
+/// Every connection that has a page: GitHub, then the MCP servers. An agent connection has none: Orchester keeps
+/// it for an account, which Settings › Accounts shows.
 pub(super) fn entries(listed: &ProjectConnections) -> Vec<Entry<'_>> {
-  let agents = listed.connections.iter().map(Entry::Agent);
   let github = listed.github.iter().map(Entry::GitHub);
   let mcp = listed.mcp.iter().map(Entry::Mcp);
-  agents.chain(github).chain(mcp).collect()
+  github.chain(mcp).collect()
 }
 
 /// How a GitHub connection stands for the project: the account its repository link expects, if the link

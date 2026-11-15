@@ -61,6 +61,10 @@ pub enum Edit {
   TakeBack(GivenKind, ResourceId),
   /// Runs on another connection of its CLI, with the same model and effort.
   Connection(ConnectionId),
+  /// Runs on a connection of any CLI with one of the models it lists, at the CLI's default effort and, for another
+  /// CLI, with the access that CLI can keep: what the *Runs on* picker chooses when the connection chosen does not
+  /// serve the profile's model.
+  RunsOn { connection: ConnectionId, model: String },
   /// Its role as typed: the name, what it answers for and the role instructions.
   Role(RoleText),
 }
@@ -70,7 +74,7 @@ impl Edit {
   const fn keeps_runtime(&self) -> bool {
     !matches!(
       self,
-      Self::Cli(_) | Self::Model(_) | Self::Effort(_) | Self::Connection(_)
+      Self::Cli(_) | Self::Model(_) | Self::Effort(_) | Self::Connection(_) | Self::RunsOn { .. }
     )
   }
 }
@@ -122,18 +126,25 @@ pub fn hold(root: &Path, profile: ResourceId, held: Option<&AgentProfile>, edit:
   }
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   offered(&db, edit)?;
-  let published = db
+  // The published version as it runs here: what the panel shows while it holds nothing, so the first choice starts
+  // from the connection this computer chose for it.
+  let here = db
     .latest_version::<AgentProfile>(profile)
+    .and_then(|published| {
+      published
+        .map(|version| db.profile_here(profile, version.body().clone()))
+        .transpose()
+    })
     .map_err(|error| messages::store_error(&error))?;
   let current = held
-    .or_else(|| published.as_ref().map(|version| version.body()))
+    .or(here.as_ref())
     .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
   let body = changed(&listed, current, edit)?;
   let shown = profile_as(&db, profile, &body)
     .map_err(|error| messages::store_error(&error))?
     .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
   Ok(Held {
-    changed: published.as_ref().map(|version| version.body()) != Some(&body),
+    changed: here.as_ref() != Some(&body),
     body,
     shown,
   })
@@ -182,6 +193,13 @@ pub fn save(
   let published = apply(root, drafted, body.clone(), Action::Publish, (allowed, decided));
   if !had_draft && !matches!(published, Ok(Outcome::Saved(_))) {
     discard_saved(root, profile, &body);
+  }
+  if matches!(published, Ok(Outcome::Saved(_))) {
+    // The version just published names what the panel showed it running on: an earlier choice of this computer's
+    // would run it elsewhere.
+    ProjectDb::open(root)
+      .and_then(|mut db| db.clear_connection_pick(profile))
+      .map_err(|error| messages::store_error(&error))?;
   }
   published
 }
@@ -336,6 +354,7 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
       fields.servers = selection(ids)?;
     }
     Edit::Connection(connection) => fields.use_connection(listed, *connection)?,
+    Edit::RunsOn { connection, model } => fields.run_on(listed, *connection, model)?,
     Edit::Give(kind, resource) => *fields.given(*kind) = kind.of(current).with(*resource),
     Edit::TakeBack(kind, resource) => *fields.given(*kind) = kind.of(current).without(*resource),
     Edit::Role(_) => {}
@@ -435,6 +454,30 @@ impl<'a> Fields<'a> {
       .find(|found| found.id() == connection && Some(found.provider()) == cli)
       .ok_or_else(|| Message::new("agents.localConnection.notOfKind"))?;
     self.connection = Some(chosen);
+    Ok(())
+  }
+
+  /// A connection of any CLI that runs agents, with `model`, one it lists. Another CLI keeps the access it can, as
+  /// [`Self::use_cli`] does.
+  fn run_on(&mut self, listed: &'a ProjectAgents, connection: ConnectionId, model: &str) -> Result<(), Message> {
+    let chosen = listed
+      .connections
+      .iter()
+      .find(|found| found.id() == connection && found.provider().runs_agents())
+      .ok_or_else(|| Message::new("agents.localConnection.notOfKind"))?;
+    let wanted = ModelId::new(model).map_err(|_| Message::new("errors.modelInvalid"))?;
+    if !listed_models(chosen).contains(&wanted) {
+      return Err(Message::new("agents.localEdit.modelNotOffered"));
+    }
+    if self.connection.map(AgentConnection::provider) != Some(chosen.provider()) {
+      let (permissions, servers) =
+        access_for_connection(&self.permissions, &self.servers, chosen.provider(), Platform::current());
+      self.permissions = permissions;
+      self.servers = servers;
+    }
+    self.connection = Some(chosen);
+    wanted.as_str().clone_into(&mut self.model);
+    self.effort = None;
     Ok(())
   }
 
