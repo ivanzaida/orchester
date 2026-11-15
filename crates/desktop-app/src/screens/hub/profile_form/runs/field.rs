@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::{CollisionStrategy, Ctx, Placement},
-    theme::SpacingSize,
+    theme::{Breakpoint, SpacingSize},
   },
   components::{Column, Popup, Row},
   core::{ElementRef, Signal},
@@ -97,12 +97,29 @@ impl Field {
       (false, true) => trigger,
     }
     .fill();
-    let mut value = Row::new()
+    // Side by side where the window is wide; in a narrower one *Add an account* goes under the field, which keeps the
+    // row's width (a wrapping row would not grow it again).
+    let side_by_side = ctx.breakpoint() >= Some(Breakpoint::Xl);
+    let value = if side_by_side {
+      Row::new().align_items(Alignment::Center)
+    } else {
+      Row::new().wrap()
+    };
+    let mut value = value
       .id(format!("{ids}-runs-on-value"))
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(trigger));
+      .child(
+        Column::new()
+          .width(if side_by_side {
+            Dimension::Px(0.0)
+          } else {
+            Dimension::Pct(100.0)
+          })
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .child(trigger),
+      );
     if self.add {
       value = value.child(
         ActionButton::new(

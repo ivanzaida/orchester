@@ -19,7 +19,7 @@ use lurq::{
   },
   components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::dimension::Dimension,
 };
 use orchester_core::id::ProjectId;
@@ -91,11 +91,11 @@ pub(super) fn header(ctx: &mut Ctx, header: Header<'_>) -> Column {
     (options, queue),
     (read_only.clone(), member),
   );
-  let row = title_row(ctx)
-    .child(Spacer::new().flex(1.0))
+  let end = Row::new()
     .child(search(ctx, choices))
     .child(layout_switch(ctx, display, "tasks-layout", false))
     .with_children(controls);
+  let row = title_and(ctx, end);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -111,9 +111,19 @@ pub(super) fn header(ctx: &mut Ctx, header: Header<'_>) -> Column {
 
 /// The header of a team project whose data cannot be read: its title and the search (`Header` `IYa9R` in 06 `GR3RS`).
 pub(super) fn title_and_search(ctx: &mut Ctx, choices: &Choices) -> Row {
-  title_row(ctx)
-    .child(Spacer::new().flex(1.0))
-    .child(search(ctx, choices))
+  let end = Row::new().child(search(ctx, choices));
+  title_and(ctx, end)
+}
+
+/// The title at the row's start and `end`, the controls, at its end; in a narrow window `end` goes on to a second
+/// line whole, where its search gives way.
+fn title_and(ctx: &Ctx, end: Row) -> Row {
+  let end = end
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center);
+  title_row(ctx).justify(Justify::SpaceBetween).child(end)
 }
 
 /// The search, as the list's path holds it: the one control of the row that gives way in a narrow window.
