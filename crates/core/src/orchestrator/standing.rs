@@ -288,8 +288,14 @@ fn moving(tasks: &[(String, TaskStanding)], outside: &[TaskFacts]) -> bool {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "raised", rename_all = "snake_case")]
 pub enum Raised {
-  /// These tasks can be started now and an agent is free, by their keys.
-  CanStart { tasks: Vec<String> },
+  /// These tasks can be started now and an agent is free, by their keys; `under_way`: the target's tasks an agent
+  /// works on or whose work waits to be merged. A turn may keep a task back while another that changes the same files
+  /// is under way, so the event is raised again when what is under way changes.
+  CanStart {
+    tasks: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    under_way: Vec<String>,
+  },
   /// Nothing can start and nothing moves: what is left, each with where it stands.
   Stuck {
     left: Vec<Left>,
@@ -320,7 +326,15 @@ impl Raised {
   /// or could start work but for a free agent.
   pub fn of(standing: &Standing, note: impl Fn(&str) -> Option<String>) -> Option<Self> {
     match &standing.target {
-      TargetStanding::CanStart { tasks, slot_free: true } => Some(Self::CanStart { tasks: tasks.clone() }),
+      TargetStanding::CanStart { tasks, slot_free: true } => Some(Self::CanStart {
+        tasks: tasks.clone(),
+        under_way: standing
+          .tasks
+          .iter()
+          .filter(|(_, standing)| matches!(standing, TaskStanding::Working | TaskStanding::ToMerge))
+          .map(|(task, _)| task.clone())
+          .collect(),
+      }),
       TargetStanding::Stuck { budget_used } => Some(Self::Stuck {
         left: standing
           .tasks
@@ -350,7 +364,8 @@ impl Raised {
   /// What tells one state from another: an event is raised when it changes, never twice for the same.
   pub fn state(&self) -> String {
     match self {
-      Self::CanStart { tasks } => format!("can_start:{}", tasks.join(",")),
+      Self::CanStart { tasks, under_way } if under_way.is_empty() => format!("can_start:{}", tasks.join(",")),
+      Self::CanStart { tasks, under_way } => format!("can_start:{}:under_way:{}", tasks.join(","), under_way.join(",")),
       Self::Stuck { left, budget_used } => {
         let left: Vec<String> = left
           .iter()

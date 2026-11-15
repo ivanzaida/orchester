@@ -349,6 +349,7 @@ fn each_event() -> [Raised; 5] {
   [
     Raised::CanStart {
       tasks: vec!["KON-41".to_owned(), "KON-42".to_owned()],
+      under_way: Vec::new(),
     },
     Raised::Stuck {
       left: vec![left("KON-41"), left("KON-42"), left("KON-43")],

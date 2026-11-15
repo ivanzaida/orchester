@@ -22,14 +22,20 @@ pub fn standing_prompt(event: &StandingEvent) -> String {
   };
   let nobody = "Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator drive is on.";
   match &event.raised {
-    Raised::CanStart { tasks } => format!(
-      "[Orchester] This conversation leads {target} to the end, and work can start now: {tasks}.\n{nobody} Read \
+    Raised::CanStart { tasks, under_way } => format!(
+      "[Orchester] This conversation leads {target} to the end, and work can start now: {tasks}.{busy}\n{nobody} \
+       Read \
        where the target stands with get_standing and each task with get_task before you start it. Start \
        with run_task what should start now, as many as agents are free; start tasks that would change the same files \
        one after the other, not together. A task whose run failed is run again with run_task and your reason, within \
        its ceiling of runs, only when you see why it failed and that another run can pass. What only the person can \
        move, park with park_task and go on with the rest.",
       tasks = tasks.join(", "),
+      busy = if under_way.is_empty() {
+        " Nothing else of it is under way.".to_owned()
+      } else {
+        format!(" Still under way: {}.", under_way.join(", "))
+      },
     ),
     Raised::Stuck { left, budget_used } => {
       let left: Vec<String> = left

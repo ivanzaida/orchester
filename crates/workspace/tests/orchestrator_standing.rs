@@ -141,7 +141,8 @@ fn standing_raises_work_that_can_start_and_a_stuck_target_once_per_state() {
   assert_eq!(
     raised[0].raised,
     Raised::CanStart {
-      tasks: vec!["ORC-1".to_owned()]
+      tasks: vec!["ORC-1".to_owned()],
+      under_way: Vec::new(),
     }
   );
   assert!(

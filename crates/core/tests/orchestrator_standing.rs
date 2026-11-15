@@ -4,7 +4,7 @@
 use orchester_core::{
   orchestrator::{
     Ceilings,
-    standing::{Around, Parked, TargetStanding, TaskFacts, TaskStanding, Unready, standing},
+    standing::{Around, Parked, Raised, TargetStanding, TaskFacts, TaskStanding, Unready, standing},
   },
   run::TaskPhase,
 };
@@ -284,5 +284,37 @@ fn standing_names_are_stable() {
     }
     .name(),
     "can_start"
+  );
+}
+
+#[test]
+fn standing_raises_work_that_can_start_again_once_what_is_under_way_ends() {
+  let raised = |first: TaskPhase| {
+    let facts = [task("A", first), task("B", TaskPhase::Draft)];
+    Raised::of(&standing(&facts, &[], &leading()), |_| None).expect("B can start")
+  };
+  let working = raised(TaskPhase::Running);
+  assert_eq!(
+    working,
+    Raised::CanStart {
+      tasks: vec!["B".to_owned()],
+      under_way: vec!["A".to_owned()],
+    }
+  );
+  let merged = raised(TaskPhase::Merged);
+  assert_eq!(
+    merged.state(),
+    "can_start:B",
+    "the state it had before under way was told"
+  );
+  assert_ne!(
+    working.state(),
+    merged.state(),
+    "a turn that kept B back while A worked is asked again once A is merged"
+  );
+  assert_ne!(
+    raised(TaskPhase::Succeeded).state(),
+    merged.state(),
+    "A waits to be merged"
   );
 }
