@@ -19,11 +19,10 @@ use orchester_workspace::{accounts::CliProgram, background, display, messages::M
 use super::words::{cli_key, t, ta};
 use crate::{
   services::{Services, accounts::OnThisComputer},
-  theme::IconSize,
+  theme::{ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    setting_rows::mono_value,
   },
 };
 
@@ -62,7 +61,7 @@ pub(super) fn line(
   let program = here?.program(cli)?;
   let id = format!("accounts-program-{}", cli.as_str());
   let button = |key: &str| {
-    let button = ActionButton::new(format!("{id}-choose"), ButtonKind::Ghost, t(ctx, key)).small();
+    let button = ActionButton::new(format!("{id}-choose"), ButtonKind::Ghost, t(ctx, key)).in_heading();
     if choose.state().get().is_pending() {
       button.disabled()
     } else {
@@ -79,13 +78,17 @@ pub(super) fn line(
   let line = match (&program.version, &program.path) {
     (Some(version), Some(path)) => line
       .child(icon(Icon::Terminal, IconSize::Sm, PaletteColor::TextMuted))
-      .child(mono_value(
-        &format!("{id}-version"),
-        &format!("{} {version}", cli.program()),
-      ))
       .child(
-        mono_value(&format!("{id}-path"), &display::shorten_path(path, PATH_CHARS))
-          .color(PaletteColor::TextMuted)
+        Text::new(&format!("{} {version}", cli.program()))
+          .id(format!("{id}-version"))
+          .variant(ExtraTypography::MonoKey.role())
+          .color(PaletteColor::TextSecondary)
+          .nowrap(),
+      )
+      .child(
+        Text::new(&display::shorten_path(path, PATH_CHARS))
+          .id(format!("{id}-path"))
+          .variant(ExtraTypography::MonoKey.role())
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap(),

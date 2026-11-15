@@ -252,16 +252,7 @@ fn head(
   (account, rows): (&ApiAccount, &Rows),
   uses: (Option<&AccountUses>, bool),
 ) -> Element {
-  let line = Row::new()
-    .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(rows.state(ctx, "provider-state", account))
-    .child(
-      lurq::components::Text::new(&ta(ctx, "accounts.api.usedWithLine", [("agent", agent(ctx, account))]))
-        .id("provider-used-with-line")
-        .variant(lurq::app::theme::TypographyStyle::Description)
-        .nowrap(),
-    );
+  let line = rows.state_line(ctx, "provider-state", account, agent(ctx, account));
   let id = account.id();
   let replace = {
     let rows = work.api_rows.clone();
@@ -289,7 +280,7 @@ fn head(
   frame::head(
     "provider-head",
     Some(tile),
-    (account.name().as_str(), Some(line.into())),
+    (account.name().as_str(), Some(line)),
     actions,
   )
   .into()
@@ -471,7 +462,7 @@ fn facts(ctx: &mut Ctx, account: &ApiAccount, rows: &Rows) -> Element {
     .row(key_row.render(ctx))
     .row(
       SettingRow::new("provider-models", t(ctx, "accounts.api.models"))
-        .control(mono_value("provider-models-value", &models))
+        .control(value("provider-models-value", &models))
         .render(ctx),
     )
     .row(

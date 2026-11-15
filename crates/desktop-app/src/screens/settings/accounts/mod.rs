@@ -219,6 +219,8 @@ pub struct AccountsTab {
   started: Signal<bool>,
   /// Reads what uses the shown account again after each change.
   again: Again,
+  /// What the tab showed last: another page starts without the menus of the one before.
+  shown: parking_lot::Mutex<Option<AccountsView>>,
   _protected: Protected,
 }
 
@@ -254,12 +256,23 @@ impl Component for AccountsTab {
       work,
       started: ctx.signal(false),
       again: Again::live(),
+      shown: parking_lot::Mutex::new(None),
       _protected: gate.protect(Guarded::Accounts),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    if self
+      .shown
+      .lock()
+      .replace(props.view)
+      .is_some_and(|before| before != props.view)
+    {
+      self.work.more.0.set(false);
+      self.work.add_menu.0.set(false);
+      self.work.provider.more.0.set(false);
+    }
     if !self.started.get() {
       self.started.set(true);
       let checked = props.accounts.iter().map(AgentAccount::id).collect();

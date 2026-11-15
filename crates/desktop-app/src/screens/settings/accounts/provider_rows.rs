@@ -16,7 +16,7 @@ use lurq::{
 };
 use orchester_core::{account::ApiAccount, connection::CheckResult, id::ApiAccountId};
 
-use super::words::t;
+use super::words::{t, ta};
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
@@ -55,35 +55,53 @@ impl Rows {
       .render(ctx)
   }
 
-  /// How the provider stands: its key is missing here, what its last test found, or that its key is set.
+  /// How the provider stands, as a dot and its words.
   pub fn state(&self, ctx: &Ctx, id: &str, account: &ApiAccount) -> Element {
+    let (colors, key) = self.look(account);
+    status(id, colors, &t(ctx, key))
+      .describe("state", key.rsplit('.').next().unwrap_or_default())
+      .into()
+  }
+
+  /// How the provider stands at the head of its page: the same, and what it is used with, in one line.
+  pub fn state_line(&self, ctx: &Ctx, id: &str, account: &ApiAccount, agent: String) -> Element {
+    let (colors, key) = self.look(account);
+    let words = ta(
+      ctx,
+      "accounts.api.usedWithLine",
+      [("state", t(ctx, key)), ("agent", agent)],
+    );
+    status(id, colors, &words)
+      .describe("state", key.rsplit('.').next().unwrap_or_default())
+      .into()
+  }
+
+  /// The colors of the dot and the words, and the key of the words: the provider's key is missing here, what its
+  /// last test found, or that its key is set.
+  fn look(&self, account: &ApiAccount) -> ((PaletteColor, PaletteColor), &'static str) {
     let quiet = PaletteColor::TextSecondary;
     let missing = self
       .missing
       .as_ref()
       .is_some_and(|missing| missing.contains(&account.id()));
-    let (colors, key) = if missing {
-      ((PaletteColor::Danger, PaletteColor::Danger), "accounts.api.keyMissing")
-    } else {
-      match account.last_check().map(|check| &check.result) {
-        Some(CheckResult::Api { .. }) => ((PaletteColor::Success, quiet), "accounts.api.state.connected"),
-        Some(CheckResult::KeyRejected) => (
-          (PaletteColor::Danger, PaletteColor::Danger),
-          "accounts.api.state.keyRejected",
-        ),
-        Some(CheckResult::BillingProblem { .. }) => (
-          (PaletteColor::Warning, PaletteColor::Warning),
-          "accounts.api.state.billing",
-        ),
-        Some(CheckResult::EndpointUnreachable) => (
-          (PaletteColor::Danger, PaletteColor::Danger),
-          "accounts.api.state.unreachable",
-        ),
-        _ => ((PaletteColor::Success, quiet), "accounts.api.keySet"),
-      }
-    };
-    status(id, colors, &t(ctx, key))
-      .describe("state", key.rsplit('.').next().unwrap_or_default())
-      .into()
+    if missing {
+      return ((PaletteColor::Danger, PaletteColor::Danger), "accounts.api.keyMissing");
+    }
+    match account.last_check().map(|check| &check.result) {
+      Some(CheckResult::Api { .. }) => ((PaletteColor::Success, quiet), "accounts.api.state.connected"),
+      Some(CheckResult::KeyRejected) => (
+        (PaletteColor::Danger, PaletteColor::Danger),
+        "accounts.api.state.keyRejected",
+      ),
+      Some(CheckResult::BillingProblem { .. }) => (
+        (PaletteColor::Warning, PaletteColor::Warning),
+        "accounts.api.state.billing",
+      ),
+      Some(CheckResult::EndpointUnreachable) => (
+        (PaletteColor::Danger, PaletteColor::Danger),
+        "accounts.api.state.unreachable",
+      ),
+      _ => ((PaletteColor::Success, quiet), "accounts.api.keySet"),
+    }
   }
 }

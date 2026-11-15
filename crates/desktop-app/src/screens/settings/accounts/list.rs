@@ -72,7 +72,7 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work) -> Column {
       .meta(count)
       .rows(rows);
     if let Some(line) = program::line(ctx, here.as_ref(), cli, &work.program) {
-      group = group.notice(line);
+      group = group.line(line);
     }
     if index == 0 {
       group = group.end(add_menu(ctx, work, &navigation));
@@ -94,7 +94,6 @@ fn add_menu(ctx: &mut Ctx, work: &Work, navigation: &Navigation) -> Element {
     .icon(Icon::Plus)
     .in_heading()
     .element_ref(anchor.clone())
-    .menu_open(open.get())
     .on_click(move || toggle.update(|open| *open = !*open));
   let menu = open.get().then(|| {
     let to = |panel: AccountsPanel| {

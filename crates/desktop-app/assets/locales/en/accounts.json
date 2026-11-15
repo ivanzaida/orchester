@@ -73,7 +73,7 @@
         "billing": "Billing problem",
         "unreachable": "Endpoint unreachable"
       },
-      "usedWithLine": "· used with {{agent}}",
+      "usedWithLine": "{{state}} · used with {{agent}}",
       "wire": {
         "cli": "{{cli}} · {{api}}",
         "messages": "Anthropic Messages API",
@@ -93,9 +93,9 @@
       "edit": "Edit",
       "editOwn": "The API of Orchester's own agent can't be changed here yet. Add another provider for another API.",
       "editNote": "Every project's agents use the new base URL and models from their next start.",
-      "removeInUse": "A profile or a run is on it. Choose another account for the profiles under Used by first.",
+      "removeInUse": "A profile or a run is on it: Used by lists them. Choose another account for them first.",
       "removeReading": "Reading what runs on it…",
-      "pageNote": "Rename, Edit and Remove are in the … menu. Edit changes the base URL and the models for every project at its agents' next start. Remove is refused while a profile runs on the provider. The key is never shown: Replace key… takes a new one.",
+      "pageNote": "The … menu holds Rename, Edit and Remove. Edit changes the base URL and the models for every project at its agents' next start. Remove is refused while a profile runs on the provider, and lists them. The key is never shown: Replace key… takes a new one.",
       "replaceKey": "Replace key…",
       "replaceConfirm": "Replace key",
       "newKey": "New API key",

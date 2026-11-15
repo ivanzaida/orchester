@@ -153,7 +153,7 @@ impl Screen {
       Self::Skills => "shell.screens.skills",
       Self::Tools => "shell.screens.tools",
       Self::Secrets => "shell.screens.environment",
-      Self::Connections => "shell.screens.connections",
+      Self::Connections => "shell.screens.projectSettings",
       Self::NewConnection => "shell.screens.newConnection",
       Self::EditConnection => "shell.screens.editConnection",
       Self::ProjectSettings => "shell.screens.projectSettings",
