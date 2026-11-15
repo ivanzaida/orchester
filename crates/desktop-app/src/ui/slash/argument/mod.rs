@@ -350,6 +350,24 @@ impl SlashField {
 
   /// Enter or Shift Enter in the picker: its focused row, while it can be chosen and its badge does not hold it yet,
   /// becomes the badge's last choice, and the search empties. Whether a row was focused that can be chosen.
+  /// A press on row `at` of the open picker: one that can be chosen takes the focus, is added and the picker closes.
+  pub(super) fn pick(&self, at: usize) {
+    {
+      let mut offered = self.offered_choices.lock();
+      let Some(offered) = offered
+        .as_mut()
+        .filter(|offered| offered.rows.get(at).is_some_and(|(_, can)| *can))
+      else {
+        return;
+      };
+      offered.focused = Some(at);
+    }
+    self.choice_focus.set(Some(at));
+    if self.add_focused() {
+      self.close_picker();
+    }
+  }
+
   fn add_focused(&self) -> bool {
     let offered = self.offered_choices.lock().clone().unwrap_or_default();
     let Some((choice, true)) = offered.focused.and_then(|at| offered.rows.get(at)).cloned() else {

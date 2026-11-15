@@ -109,10 +109,7 @@ impl Component for Picker {
       field.forget_choices();
       return Element::new();
     };
-    let search = PickerSearch::new(
-      field.search.clone(),
-      (self.search_field.clone(), self.focused_row.clone()),
-    );
+    let search = PickerSearch::new(field, (self.search_field.clone(), self.focused_row.clone()));
     let asked = Asked {
       id: props.id,
       filter: &filter,

@@ -150,7 +150,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize, search: &PickerSearch) -> Elemen
   if entry.faded.is_some() {
     row.opacity(DISABLED_OPACITY).into()
   } else {
-    row.into()
+    search.pickable(row, at).into()
   }
 }
 
