@@ -6,7 +6,12 @@
 //! screen, every few seconds. What was read for one run is never shown for another, and a read again after a
 //! failure shows as being read.
 
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{
+  collections::HashSet,
+  path::Path,
+  sync::{Arc, LazyLock},
+  time::Duration,
+};
 
 use lurq::{
   app::ctx::{Ctx, FutureState, StreamEmitter},
@@ -32,6 +37,10 @@ use crate::{
   services::Services,
   ui::tabs::counted,
 };
+
+/// The runs whose Changes the person asked to show as their own work alone, for as long as the app runs: a team task's
+/// page that read its task again builds its parts anew, and the choice stays.
+static OWN_ONLY: LazyLock<Mutex<HashSet<RunId>>> = LazyLock::new(Mutex::default);
 
 /// How often the worktree is read again while an agent works in it.
 const WORKTREE_REFRESH: Duration = Duration::from_secs(3);
@@ -162,8 +171,9 @@ pub struct ChangesReads {
   /// The file the Changes tab showed last: it stays shown while no file is named and it is listed, and
   /// the tab opens on it again.
   shown: Arc<Mutex<Option<ChangedFile>>>,
-  /// The person asked for the run's own changes, without what its branch took in from other branches.
-  own_only: Signal<bool>,
+  /// Counts the person's presses between a run's own changes and all a merge brings ([`OWN_ONLY`]), so the changes
+  /// are read again.
+  own_only: Signal<u64>,
 }
 
 impl ChangesReads {
@@ -176,7 +186,7 @@ impl ChangesReads {
       last_read: LastRead::default(),
       latest: ctx.signal(None),
       shown: Arc::default(),
-      own_only: ctx.signal(false),
+      own_only: ctx.signal(0),
     }
   }
 
@@ -219,9 +229,16 @@ impl ChangesReads {
     *self.shown.lock() = Some(file);
   }
 
-  /// Shows the run's own changes, without what its branch took in, or everything a merge brings.
-  pub(super) fn show_own_only(&self, own: bool) {
-    self.own_only.set(own);
+  /// Shows `run`'s own changes, without what its branch took in, or everything a merge brings.
+  pub(super) fn show_own_only(&self, run: RunId, own: bool) {
+    let mut chosen = OWN_ONLY.lock();
+    if own {
+      chosen.insert(run);
+    } else {
+      chosen.remove(&run);
+    }
+    drop(chosen);
+    self.own_only.update(|presses| *presses += 1);
   }
 
   pub(super) fn retry(&self) {
@@ -242,7 +259,9 @@ impl ChangesReads {
     let services = Services::of(ctx);
     let (programs, hold) = (services.programs, services.hold);
     let range = run.map(|run| RunRange::of(&run.run));
-    let deps = (repo_root.to_path_buf(), range, retry, self.own_only.get());
+    self.own_only.get();
+    let own_only = run.is_some_and(|run| OWN_ONLY.lock().contains(&run.id()));
+    let deps = (repo_root.to_path_buf(), range, retry, own_only);
     let load = ctx.future(deps, move |(repo_root, range, _, own_only)| {
       let (programs, hold) = (programs.clone(), hold.clone());
       async move {

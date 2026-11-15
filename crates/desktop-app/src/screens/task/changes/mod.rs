@@ -163,7 +163,7 @@ impl Component for ChangesTab {
       changes
         .taken
         .as_ref()
-        .map(|(taken, own)| taken::notice(ctx, &props.reads, (taken, *own))),
+        .map(|(taken, own)| taken::notice(ctx, (&props.reads, run.id()), (taken, *own))),
     );
     let committed = match checkpointed {
       Checkpointed::TooLarge { size, .. } => {
