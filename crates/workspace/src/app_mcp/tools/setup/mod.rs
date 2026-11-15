@@ -19,6 +19,7 @@ mod mcp_server_specs;
 mod mcp_server_text;
 mod mcp_servers;
 mod merge;
+mod merge_taken;
 pub use self::team_mcp_window::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_names, team_mcp_server};
 pub(crate) use self::{
   mcp_preview::preview as preview_mcp,

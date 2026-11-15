@@ -1685,6 +1685,8 @@
       "mergedOutside": "The run’s work is in {{branch}} already: it was merged without Orchester.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
+      "tookInBranch": "The run's branch took in {{commits}} commits from {{branch}} that its target does not have, and merging it would bring them too. A person merges it from the task page, whose Changes tab says what it brings; leave it to them (park the task).",
+      "tookInOtherBranches": "The run's branch took in {{commits}} commits from other branches that its target does not have, and merging it would bring them too. A person merges it from the task page, whose Changes tab says what it brings; leave it to them (park the task).",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › Automation.",
       "promptPersonOnly": "This changes what agents are told, which a person decides in Orchester: they publish it in the window or apply the Orchestrator's proposal, or let automation decide by turning on Let automation change agent permissions in Settings › Automation. Saving a draft stays open to automation.",
       "autoApproveNeedsAnswers": "Autopilot answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",

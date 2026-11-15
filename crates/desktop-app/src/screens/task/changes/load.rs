@@ -12,13 +12,14 @@ use lurq::{
   app::ctx::{Ctx, FutureState, StreamEmitter},
   core::Signal,
 };
-use orchester_core::{id::RunId, run::TaskPhase, time::Timestamp};
+use orchester_core::{id::RunId, integration::TakenIn, run::TaskPhase, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::Message,
   tasks::{
     changes::{
-      Checkpointed, NotCheckpointed, Refresh, RunRange, RunStage, listed_files, not_checkpointed_in, run_changes_in,
+      Checkpointed, NotCheckpointed, Refresh, RunChangesView, RunRange, RunStage, listed_files, not_checkpointed_in,
+      run_changes_view_in,
     },
     detail::{RunView, TaskDetail},
   },
@@ -50,6 +51,9 @@ impl lurq::app::component::DevtoolsInspectable for CheckpointedRead {}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunChanges {
   pub checkpointed: CheckpointedRead,
+  /// What the run's branch took in from other branches, and whether the checkpointed changes are its agent's own
+  /// without it; `None` while read, and when it took in nothing.
+  pub taken: Option<(TakenIn, bool)>,
   /// What the run's worktree holds beyond its checkpoint; `None` until read.
   pub worktree: Option<Result<NotCheckpointed, Message>>,
 }
@@ -158,6 +162,8 @@ pub struct ChangesReads {
   /// The file the Changes tab showed last: it stays shown while no file is named and it is listed, and
   /// the tab opens on it again.
   shown: Arc<Mutex<Option<ChangedFile>>>,
+  /// The person asked for the run's own changes, without what its branch took in from other branches.
+  own_only: Signal<bool>,
 }
 
 impl ChangesReads {
@@ -170,6 +176,7 @@ impl ChangesReads {
       last_read: LastRead::default(),
       latest: ctx.signal(None),
       shown: Arc::default(),
+      own_only: ctx.signal(false),
     }
   }
 
@@ -190,9 +197,13 @@ impl ChangesReads {
   pub fn read(&self, ctx: &mut Ctx, project: &OpenProject, detail: &TaskDetail, follow: Follow) -> Option<RunChanges> {
     let retry = self.retry.get();
     let run = detail.run.as_ref();
-    let checkpointed = self.checkpointed(ctx, &project.repo_root, run, retry);
+    let (checkpointed, taken) = self.checkpointed(ctx, &project.repo_root, run, retry);
     let worktree = self.not_checkpointed(ctx, project, run, (follow, retry));
-    let changes = run.map(|_| RunChanges { checkpointed, worktree });
+    let changes = run.map(|_| RunChanges {
+      checkpointed,
+      taken,
+      worktree,
+    });
     if self.latest.get_untracked() != changes {
       self.latest.set(changes.clone());
     }
@@ -208,6 +219,11 @@ impl ChangesReads {
     *self.shown.lock() = Some(file);
   }
 
+  /// Shows the run's own changes, without what its branch took in, or everything a merge brings.
+  pub(super) fn show_own_only(&self, own: bool) {
+    self.own_only.set(own);
+  }
+
   pub(super) fn retry(&self) {
     self.retry.update(|attempt| *attempt += 1);
   }
@@ -216,12 +232,18 @@ impl ChangesReads {
     self.last_read.clone()
   }
 
-  fn checkpointed(&self, ctx: &mut Ctx, repo_root: &Path, run: Option<&RunView>, retry: u64) -> CheckpointedRead {
+  fn checkpointed(
+    &self,
+    ctx: &mut Ctx,
+    repo_root: &Path,
+    run: Option<&RunView>,
+    retry: u64,
+  ) -> (CheckpointedRead, Option<(TakenIn, bool)>) {
     let services = Services::of(ctx);
     let (programs, hold) = (services.programs, services.hold);
     let range = run.map(|run| RunRange::of(&run.run));
-    let deps = (repo_root.to_path_buf(), range, retry);
-    let load = ctx.future(deps, move |(repo_root, range, _)| {
+    let deps = (repo_root.to_path_buf(), range, retry, self.own_only.get());
+    let load = ctx.future(deps, move |(repo_root, range, _, own_only)| {
       let (programs, hold) = (programs.clone(), hold.clone());
       async move {
         let Some(range) = range else {
@@ -229,7 +251,7 @@ impl ChangesReads {
         };
         hold.released().await;
         let run = range.run;
-        let read = background::run(move || run_changes_in(&repo_root, &programs, &range))
+        let read = background::run(move || run_changes_view_in(&repo_root, &programs, (&range, own_only)))
           .await
           .and_then(|read| {
             read.map_err(|error| {
@@ -241,9 +263,16 @@ impl ChangesReads {
       }
     });
     match run.and_then(|run| current(load.state().get(), run.id())) {
-      None => CheckpointedRead::Loading,
-      Some(Ok(checkpointed)) => CheckpointedRead::Ready(checkpointed),
-      Some(Err(error)) => CheckpointedRead::Failed(error),
+      None => (CheckpointedRead::Loading, None),
+      Some(Ok(RunChangesView {
+        checkpointed,
+        taken_in,
+        own_only,
+      })) => (
+        CheckpointedRead::Ready(checkpointed),
+        taken_in.map(|taken| (taken, own_only)),
+      ),
+      Some(Err(error)) => (CheckpointedRead::Failed(error), None),
     }
   }
 

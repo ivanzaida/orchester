@@ -175,6 +175,8 @@ pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translat
     project: args.project.clone(),
     run: args.run.clone(),
   };
+  // What its branch took in from other branches would land with it: that merge is the person's.
+  super::merge_taken::refuse_taken_in(services, (&args.project, &args.run)).await?;
   if let Some(team) = team::of_run(services, (&args.project, &args.run)).await? {
     let (root, run) = (team.open.repo_root.clone(), args.run.clone());
     let (on_base, unmerged) = blocking(move || {

@@ -18,6 +18,7 @@ mod load;
 mod open_file;
 pub(super) mod reading;
 mod states;
+mod taken;
 mod toolbar;
 
 use std::sync::Arc;
@@ -158,6 +159,12 @@ impl Component for ChangesTab {
       CheckpointedRead::Ready(checkpointed) => checkpointed,
     };
     let column = column.child(toolbar(ctx, run, checkpointed, self.try_locally(ctx, &props)));
+    let column = column.with_children(
+      changes
+        .taken
+        .as_ref()
+        .map(|(taken, own)| taken::notice(ctx, &props.reads, (taken, *own))),
+    );
     let committed = match checkpointed {
       Checkpointed::TooLarge { size, .. } => {
         return column.child(states::too_large(ctx, *size, run.run.branch().as_str()));

@@ -26,6 +26,7 @@ pub mod removal;
 pub mod resolve;
 pub mod retry;
 mod sweep;
+mod taken_in;
 pub mod workspace;
 
 use std::path::Path;
@@ -55,6 +56,7 @@ pub use self::{
     settle_removal,
   },
   sweep::{SweepError, Swept, sweep},
+  taken_in::{TakenIn, taken_in, without_taken_in},
 };
 use crate::{
   command::{CommandError, CommandRunner},

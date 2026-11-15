@@ -595,3 +595,5 @@ fn local_integration_newer_run_invalidates_old_run_merge_authority() {
   assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), checked.base.head);
   assert!(db.run_merge(fixture.run).expect("merge record").is_none());
 }
+#[path = "local_integration/taken_in.rs"]
+mod taken_in;
