@@ -214,6 +214,19 @@ pub(super) fn end_moved(db: &ProjectDb, wait: &AgentWait, end: RunEnd) -> Result
   Ok((!stands).then(|| EndMoved::of(status)))
 }
 
+/// Whether the end `wait`, kept by `key`, is no longer its run's end: a later end of the same run, or a later run of
+/// its task, came after it, and the follower keeps and follows only that one ([`current_ends`]). The end of a batch
+/// is kept by the batch's key and never is.
+pub(super) fn end_superseded(db: &ProjectDb, wait: &AgentWait, key: &str) -> Result<bool, StoreError> {
+  let own = key
+    .strip_prefix(&format!("end:{}:", wait.run))
+    .and_then(|sequence| sequence.parse::<u64>().ok());
+  let Some(sequence) = own else {
+    return Ok(false);
+  };
+  Ok(db.run_latest_end(wait.run)?.map(|latest| latest.get()) != Some(sequence))
+}
+
 /// The key of the batch `run` is one of when the daily budget or its group's budget stopped it: those it stopped on
 /// the day `ended` happened; `None` for an end of its own.
 fn batch_key(db: &ProjectDb, run: &Run, end: RunEnd, ended: &EndedRun) -> Result<Option<String>, StoreError> {

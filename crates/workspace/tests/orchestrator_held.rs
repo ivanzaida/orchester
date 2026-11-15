@@ -329,3 +329,38 @@ fn held_failed_turn_says_its_next_try_and_try_again_starts_one_more_after_the_la
   let left = EventTurn::LeftToPerson { tries: 5, why };
   assert_eq!(told(&fixture, &chat, now + 5000).1, Some(left));
 }
+
+/// A run of `task` that started at `at(when)` and failed: an end the chat keeps as an event.
+fn fail_a_run(fixture: &mut Fixture, task: orchester_core::id::TaskId, when: i64) {
+  let mut run = fixture.started_run(task, at(when));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .fail_step(execution, StepFailure::ReportedFailed, Timestamp::now())
+    .expect("failed");
+  fixture.record(&run, &events);
+}
+
+#[test]
+fn held_end_that_a_later_end_of_its_task_replaced_says_no_next_try_and_takes_no_try_again() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  fixture.db.set_orchestrator_drives(true).expect("drives");
+  let chat = fixture.everything(at(10));
+  let task = fixture.task("Add login", at(40));
+  fail_a_run(&mut fixture, task, 50);
+  let root = fixture.repo.path().to_path_buf();
+  let now = 100 * HOUR;
+  let first = follow_then(&fixture, now).turn.expect("the end's turn");
+  fail_turn(&mut fixture, first.message, now);
+  let (seq, said) = told(&fixture, &chat, now + 2000);
+  assert!(matches!(said, Some(EventTurn::TriedAgain { .. })), "{said:?}");
+
+  // The task runs again and that run fails too: its end is kept, and only that one is followed from now on.
+  fail_a_run(&mut fixture, task, now + 3000);
+  let later = follow_then(&fixture, now + 4000).turn.expect("the later end's turn");
+  fail_turn(&mut fixture, later.message, now + 4000);
+  let due = now + 4000 + 60 * 60 * 1000;
+  assert_eq!(told(&fixture, &chat, due).1, None, "the first end waits for no try");
+  let refused = try_again_in(&root, (chat.id(), seq)).expect_err("its end was replaced");
+  assert_eq!(refused.key, "orchestrator.tryAgain.settled");
+}

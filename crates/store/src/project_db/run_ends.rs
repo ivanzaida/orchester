@@ -3,7 +3,7 @@
 //! which keeps each end once. Read in one query, without loading the runs.
 
 use orchester_core::{id::RunId, run::EventSequence, time::Timestamp};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use super::{ProjectDb, runs::sequence_value};
 use crate::{StoreError, rows::parse};
@@ -70,6 +70,24 @@ impl ProjectDb {
         })
       })
       .collect()
+  }
+
+  /// The sequence of `run`'s latest event that ends or stops a run, as [`Self::ended_runs_since`] reads it, while
+  /// `run` is its task's latest run; `None` when it has none or a later run of its task started. An end kept before
+  /// it is not the run's end any more: a later one of the same run, or of a later run, was kept in its place.
+  pub fn run_latest_end(&self, run: RunId) -> Result<Option<EventSequence>, StoreError> {
+    let sequence = self
+      .connection
+      .query_row(
+        "SELECT e.sequence FROM run_events e JOIN runs r ON r.id = e.run_id
+         WHERE e.run_id = ?1 AND e.kind IN ('succeeded', 'failed', 'waiting_for_person', 'paused', 'interrupted')
+           AND NOT EXISTS (SELECT 1 FROM runs n WHERE n.task_id = r.task_id AND n.number > r.number)
+         ORDER BY e.sequence DESC LIMIT 1",
+        params![run.to_string()],
+        |row| row.get::<_, i64>(0),
+      )
+      .optional()?;
+    sequence.map(sequence_value).transpose()
   }
 
   /// When `run` was interrupted, oldest first: a run interrupted again soon after is not continued by the

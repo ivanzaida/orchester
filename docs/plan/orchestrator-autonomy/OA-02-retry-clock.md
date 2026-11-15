@@ -63,3 +63,11 @@ approve`.
 Tests: `orchester-workspace --test orchestrator_held held` (the states, the schedule's tries, *Try again* and its
 refusal); `orchester-app --test orchestrator leading` (the rows, the refusal of synthetic input, a try that started
 nothing); `--test seed orchestrator` (the QA scenario `orchestrator-leading`). Not run: a try in a running app.
+## After the check on the real project (2026-11-15)
+
+In the stable, on the Orchester project's own conversations, two events of one run said *Couldn't answer — trying
+again at Nov 9 12:41 · 2 of 4* for good: the run had ended twice more since, and the follower keeps and tries again
+only a run's latest end (`run_ends::current_ends`), while the conversation read every end whose run still stood
+where that end put it. An end that a later end of its run, or a later run of its task, took the place of no longer
+stands (`run_ends::end_superseded`, `ProjectDb::run_latest_end`): it says no next try, and *Try again* is refused
+for it. Test: `orchester-workspace --test orchestrator_held held_end_that_a_later_end`.

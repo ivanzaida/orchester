@@ -77,7 +77,8 @@ fn modules_edit_module_gives_the_module_a_branch_of_its_own() {
   press(&mut seeded, "module-own-branch");
   seeded.until("the lower rows", |seeded| seeded.shows("module-acceptance-row"));
   assert!(seeded.shows("module-deliver-when-accepted-row"));
-  assert_eq!(seeded.options("module-acceptance")[0], "None");
+  assert_eq!(seeded.text("module-acceptance-label"), "Acceptance pipeline");
+  assert_eq!(seeded.options("module-acceptance-pipeline")[0], "None");
 
   seeded.click("module-editor-save");
   seeded.until("the module's page", |seeded| seeded.shows("module-summary"));

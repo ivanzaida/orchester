@@ -151,7 +151,8 @@ fn acceptance_row(
         .map(|(id, name)| SelectOption::new(AcceptancePick(Some(*id)), name.clone())),
     );
   }
-  let select = SelectField::new("module-acceptance", label.clone(), acceptance.clone(), options)
+  // An id of its own: the row's label is `module-acceptance-label`, which the select would also name its value.
+  let select = SelectField::new("module-acceptance-pipeline", label.clone(), acceptance.clone(), options)
     .leading(Icon::Workflow)
     .width(Dimension::Px(PIPELINE_WIDTH))
     .render(ctx);

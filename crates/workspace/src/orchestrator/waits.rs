@@ -45,7 +45,7 @@ use super::{
   auto_merge::{completes_in, merging_in},
   chat::EndMoved,
   merge_conflicts::current_conflicts,
-  run_ends::{Reading, current_ends, end_moved, merge_checks},
+  run_ends::{Reading, current_ends, end_moved, end_superseded, merge_checks},
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
   team_status::{TeamReading, module_now},
@@ -323,7 +323,8 @@ fn last_exchanged(messages: &[TaskMessage], execution: StepExecutionId) -> Optio
 
 /// The entries of conversation `chat` (its `entries`) whose waits still stand: the waits of agents that still wait,
 /// the stalls of runs that made no progress since ([`super::stalls`]), and the ends of runs still where they ended
-/// ([`end_moved`]); and, for the ends that no longer stand, what became of their runs. A wait the person dealt with
+/// ([`end_moved`]) and not followed by a later end of theirs ([`end_superseded`]); and, for the ends that no longer
+/// stand, what became of their runs. A wait the person dealt with
 /// elsewhere, on its task's page, stays kept in the conversation but no longer stands. Blocks on SQLite.
 pub(super) fn standing(
   db: &ProjectDb,
@@ -358,6 +359,8 @@ pub(super) fn standing(
   let (mut standing, mut moved) = (HashSet::new(), HashMap::new());
   for (seq, wait) in waits {
     let stands = match wait.kind {
+      // A later end of its run was kept in its place: that one stands, and is the one tried again.
+      WaitKind::Ended(_) if keys.get(&seq).map_or(Ok(false), |key| end_superseded(db, wait, key))? => false,
       WaitKind::Ended(end) => match end_moved(db, wait, end)? {
         Some(what) => {
           moved.insert(seq, what);
