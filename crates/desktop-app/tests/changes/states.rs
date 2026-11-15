@@ -104,7 +104,7 @@ fn changes_that_cannot_be_read_say_why_until_try_again() {
   let mut page = Page::open();
   let objects = page.repo.join(".git").join("objects");
   let moved = page.repo.join(".git").join("objects-away");
-  fs::rename(&objects, &moved).expect("hide the repository's objects");
+  hide(&objects, &moved);
   page.changes("KON-12", "changes-failed");
   assert!(
     page
@@ -150,4 +150,20 @@ fn changes_of_an_unreadable_run_a_missing_worktree_and_a_run_without_checkpoint(
   );
   assert!(!notice.contains("beyond the checkpoint"), "{notice}");
   assert!(!notice.contains("checkpointed files still show"), "{notice}");
+}
+
+/// Moves the repository's objects from `objects` to `moved`. Windows refuses while a git the opened page started still
+/// reads them, so the move is asked again for a while.
+fn hide(objects: &std::path::Path, moved: &std::path::Path) {
+  let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+  loop {
+    match fs::rename(objects, moved) {
+      Ok(()) => return,
+      Err(error) if std::time::Instant::now() < until => {
+        let _busy = error;
+        std::thread::sleep(std::time::Duration::from_millis(100));
+      }
+      Err(error) => panic!("hide the repository's objects: {error}"),
+    }
+  }
 }
