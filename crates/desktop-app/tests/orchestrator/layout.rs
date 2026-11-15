@@ -53,13 +53,18 @@ fn orchestrator_header_is_one_line_over_a_760_column_and_history_opens_on_the_ri
   assert!(same(panel.width, 300.0), "{panel:?}");
   assert!(
     same(panel.x + panel.width, main.x + main.width),
-    "over the chat's right edge: {panel:?} in {main:?}"
+    "at the chat's right edge: {panel:?} in {main:?}"
   );
   assert!(same(panel.y, header.y + header.height), "under the header: {panel:?}");
+  // History stands beside the chat, which takes what is left: nothing of it, Send least of all, is under the panel.
+  let beside = screen.bounds("orchestrator-composer");
+  assert!(same(beside.width, 760.0), "{beside:?}");
   assert!(
-    same(screen.bounds("orchestrator-composer").x, composer.x),
-    "History lies over the chat and moves nothing"
+    beside.x + beside.width <= panel.x + 0.5,
+    "the composer is beside History: {beside:?}, {panel:?}"
   );
+  let send = screen.bounds("orchestrator-send");
+  assert!(send.x + send.width <= panel.x + 0.5, "Send shows: {send:?}, {panel:?}");
   let row = screen.bounds(&format!("orchestrator-history-{chat}"));
   assert!(
     same(row.height, 46.0),

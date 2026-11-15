@@ -233,10 +233,12 @@ fn result(ctx: &Ctx, found: &Found, current: bool, open: Open) -> Element {
     .align_items(Alignment::Center)
     .child(icon(found.icon, IconSize::Md, found.tone.clone()).id(format!("{id}-icon")))
     .child(
+      // A long title gives way with an ellipsis, so the keys and the *Enter* cap stay inside the row.
       Text::new(&found.label)
         .variant(ShellText::JumpResult.role())
         .nowrap()
-        .max_width(Dimension::Pct(100.0))
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
         .text_overflow(TextOverflow::Elipsis),
     )
     // The hint takes the room left, so the keys and the *Enter* cap stay at the row's end.

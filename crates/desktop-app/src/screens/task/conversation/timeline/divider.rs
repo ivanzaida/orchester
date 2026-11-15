@@ -138,7 +138,7 @@ pub(crate) fn step_label(ctx: &Ctx, number: usize, step: &str) -> Arc<str> {
 /// opens shows under the divider (`super::todo`).
 pub(super) fn step(ctx: &mut Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc<str>), foldable: bool) -> Element {
   let text = Text::new(&step_text(ctx, head))
-    .id("conversation-step-text")
+    .id(format!("conversation-step-{key}-text"))
     .variant(ConversationText::Divider.role())
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)

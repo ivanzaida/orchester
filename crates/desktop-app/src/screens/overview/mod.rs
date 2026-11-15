@@ -33,7 +33,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
-    theme::SpacingSize,
+    theme::{Breakpoint, SpacingSize},
   },
   components::{Column, Row, ScrollVertical},
   core::Signal,
@@ -233,8 +233,8 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
   let side = side_column()
     .with_children(limits::limits(ctx, (&near, &around.accounts), &at_work, around.now))
     .child(landed::landed(ctx, id, (&merges, queue_line(tasks))))
-    .child(delivery::delivery(ctx, id, root, project.feed.saves.get()));
-  columns(main, side)
+    .child(delivery::delivery(ctx, project, tasks.shared));
+  columns(ctx, main, side)
 }
 
 /// The page while the tasks are read (`ae6PR`): the sections' heads, links and *Hold new starts* real, their counts
@@ -260,7 +260,7 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
     ))
     .child(skeleton::at_work(ctx, &label));
   let queue_count = skeleton::count(ctx, "overview-queue", &label);
-  let hold = queue::hold_reading(ctx, (id, root.clone()));
+  let hold = queue::hold_reading(ctx, (id, root));
   let queue = section::section("overview-queue")
     .child(section::counted_head(
       "overview-queue",
@@ -282,8 +282,9 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
   let side = side_column()
     .with_children(limits::limits(ctx, (&near, &around.accounts), &[], around.now))
     .child(landed::reading(ctx, id, (queue_state, landed_bones)))
-    .child(delivery::delivery(ctx, id, root, project.feed.saves.get()));
-  columns(main, side)
+    // While the tasks are read it is not known yet whether the project is a team's: the side reads this computer's.
+    .child(delivery::delivery(ctx, project, false));
+  columns(ctx, main, side)
 }
 
 fn side_column() -> Column {
@@ -294,7 +295,18 @@ fn side_column() -> Column {
     .spacing(SpacingSize::Xl)
 }
 
-fn columns(main: Column, side: Column) -> Element {
+/// The main column and the side column beside it; in a window under the `lg` breakpoint the side column stands under
+/// the main one, as wide, so neither is squeezed.
+fn columns(ctx: &Ctx, main: Column, side: Column) -> Element {
+  if ctx.breakpoint() < Some(Breakpoint::Lg) {
+    return Column::new()
+      .id("overview-columns")
+      .width(Dimension::Pct(100.0))
+      .spacing(OverviewSpacing::Columns.role())
+      .child(main.width(Dimension::Pct(100.0)))
+      .child(side.width(Dimension::Pct(100.0)))
+      .into();
+  }
   Row::new()
     .id("overview-columns")
     .width(Dimension::Pct(100.0))

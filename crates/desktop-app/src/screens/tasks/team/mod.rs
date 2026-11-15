@@ -129,8 +129,8 @@ pub(super) fn read(
 
 /// How many of the tasks something waits for the person in on this computer are in each open status, under the view's
 /// search and filters: read from the server's open tasks, the listing Needs you and Active read too, only while
-/// something waits. `None` while they are read.
-fn waiting(
+/// something waits. `None` while they are read. The sidebar's Tasks count adds them as Active does.
+pub(crate) fn waiting(
   ctx: &mut Ctx,
   source: &TeamSource,
   key: &TaskListKey,

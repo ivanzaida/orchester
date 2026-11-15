@@ -49,7 +49,7 @@ pub fn build_in(
   let built = || {
     let db = ProjectDb::open(root)?;
     let facts = facts_in((&db, root, programs), (day, now))?;
-    let led = led::of(&db, (day, now))?;
+    let led = led::of((&db, root), (day, now))?;
     Ok::<_, StoreError>(DailyReport {
       led,
       ..rules::build(&facts, db.project().id())
@@ -105,7 +105,7 @@ pub fn deliver_in(
     if !active(&facts, &report) {
       return Ok(Delivery::Quiet);
     }
-    let led = led::of(&db, (day, now))?;
+    let led = led::of((&db, root), (day, now))?;
     let report = DailyReport {
       automatic,
       led,

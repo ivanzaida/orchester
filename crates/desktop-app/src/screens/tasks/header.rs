@@ -47,6 +47,8 @@ use crate::{
 /// The header's row (`AL7qv`) and its search (`Search` `c8xTL`).
 const ROW_HEIGHT: f32 = 32.0;
 const SEARCH_WIDTH: f32 = 240.0;
+/// The narrowest the search gets in a narrow window, so Filter, Display and New task stay in it.
+const SEARCH_MIN_WIDTH: f32 = 120.0;
 
 /// What the person chose to narrow and order the list, and the search's input, which `/` focuses.
 pub(super) struct Choices {
@@ -114,16 +116,22 @@ pub(super) fn title_and_search(ctx: &mut Ctx, choices: &Choices) -> Row {
     .child(search(ctx, choices))
 }
 
-/// The search, as the list's path holds it.
+/// The search, as the list's path holds it: the one control of the row that gives way in a narrow window.
 fn search(ctx: &mut Ctx, choices: &Choices) -> lurq::node::Element {
-  FieldInput::new("tasks-search", ctx.t("tasks.search.label"), choices.search.clone())
+  let field = FieldInput::new("tasks-search", ctx.t("tasks.search.label"), choices.search.clone())
     .search()
     .keys(ctx.t("tasks.search.keys"))
     .clearable(ctx.t("tasks.search.clear"))
     .placeholder(ctx.t("tasks.search.placeholder"))
-    .width(Dimension::Px(SEARCH_WIDTH))
+    .width(Dimension::Pct(100.0))
     .element(choices.search_input.clone())
-    .render(ctx)
+    .render(ctx);
+  Row::new()
+    .width(Dimension::Px(SEARCH_WIDTH))
+    .min_width(Dimension::Px(SEARCH_MIN_WIDTH))
+    .flex_shrink(1.0)
+    .child(field)
+    .into()
 }
 
 /// Filter, Display, `…` and New task, locked for `read_only`'s reason; Create multiple says the same reason. A team
@@ -187,7 +195,9 @@ fn title_row(ctx: &Ctx) -> Row {
   Row::new()
     .id("tasks-header")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW_HEIGHT))
+    // In a narrow window the controls go on to a second line rather than past the window's edge.
+    .min_height(Dimension::Px(ROW_HEIGHT))
+    .wrap()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(

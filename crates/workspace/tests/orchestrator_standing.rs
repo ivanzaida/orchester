@@ -78,7 +78,7 @@ fn standing_reads_each_task_of_what_a_subscription_watches() {
   let mut run = fixture.started_run(finished, at(160));
   fixture.succeed(&mut run, at(170));
 
-  let all = Reads::read(&fixture.db)
+  let all = Reads::read(&fixture.db, fixture.repo.path())
     .expect("read")
     .all(&fixture.db)
     .expect("standing");

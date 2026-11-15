@@ -246,7 +246,7 @@ fn master_detail(
       .find(|record| record.id() == chosen)
   });
   let panel = panel_of(ctx, state, memory, record, team);
-  let mut row = agents::master_detail("memory", false, (list, panel));
+  let mut row = agents::master_detail(ctx, "memory", false, (list, panel));
   if let Some(record) = record.filter(|record| state.opened.get() == Opened::Delete(record.id())) {
     let props = opened::delete(record, among(memory, &scope(memory)));
     let modal = ctx.mount_keyed::<DeleteConfirm>(&format!("memory-delete-{}", record.id()), props);

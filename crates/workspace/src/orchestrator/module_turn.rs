@@ -47,7 +47,7 @@ pub(super) async fn checked(scope: &ChatScope, name: &str, arguments: &JsonObjec
         vec![Message::new("orchestrator.module.notLed")],
       ));
     };
-    let stands = Reads::read(&db)?.led(&db, leading)?.standing.target;
+    let stands = Reads::read(&db, &root)?.led(&db, leading)?.standing.target;
     let wanted = if delivers {
       DeliveryStep::Deliver
     } else {

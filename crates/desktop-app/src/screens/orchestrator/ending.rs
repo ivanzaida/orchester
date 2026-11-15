@@ -73,7 +73,14 @@ pub(super) fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
     TurnState::Failed(failure) if row.last && !row.turn.on_its_own() => vec![failure_line(ctx, row, failure)],
     // An event whose failed turn is tried again or left to the person says so under its row instead.
     TurnState::Failed(_) if row.turn.turn_state.is_some() => Vec::new(),
-    TurnState::Failed(failure) => vec![divider("orchestrator-failed", &earlier(ctx, failure), None)],
+    // An earlier answer that failed is one of many such lines: its id names its message.
+    TurnState::Failed(failure) => {
+      let id = row.turn.message.map_or_else(
+        || "orchestrator-failed".to_owned(),
+        |message| format!("orchestrator-failed-{message}"),
+      );
+      vec![divider(&id, &earlier(ctx, failure), None)]
+    }
   }
 }
 

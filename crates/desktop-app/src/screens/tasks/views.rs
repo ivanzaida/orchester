@@ -71,6 +71,8 @@ pub(super) fn views(
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
+        // In a narrow window what stands at the line's end goes on under the views rather than past the window.
+        .wrap()
         .spacing(ExtraSpacing::Tabs.role())
         .align_items(Alignment::Center)
         .with_children(tabs)

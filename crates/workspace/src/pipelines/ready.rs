@@ -161,12 +161,29 @@ pub fn problems(basis: Basis<'_>) -> Vec<Problem> {
   found.extend(steps.iter().cloned().map(Problem::Step));
   match basis.standing {
     Some(ReadinessStanding::Missing(readiness)) => {
-      found.extend(readiness.missing().iter().cloned().map(Problem::Missing));
+      // A profile a step names already says it has no connection here: it is not counted twice.
+      let named = |id: ResourceId| steps.iter().any(|step| step.blocked.names() == Some(id));
+      found.extend(
+        readiness
+          .missing()
+          .iter()
+          .filter(|missing| profile_of(missing).is_none_or(|profile| !named(profile)))
+          .cloned()
+          .map(Problem::Missing),
+      );
     }
     Some(ReadinessStanding::Undecided(why)) => found.extend(undecided(why, (basis.undecided, &steps), basis.runs)),
     Some(ReadinessStanding::Ready) | None => {}
   }
   found
+}
+
+/// The profile a missing part is of, when it is a profile's connection.
+const fn profile_of(missing: &Missing) -> Option<ResourceId> {
+  match missing {
+    Missing::Connection { profile, .. } | Missing::ConnectionSignIn { profile, .. } => Some(*profile),
+    _ => None,
+  }
 }
 
 /// The profiles and tools named when the pipeline is undecided: each undecided one, else the reason as it stands. A

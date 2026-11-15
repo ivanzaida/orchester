@@ -258,7 +258,7 @@ fn read(ctx: &mut Ctx, props: &LeadsProps) -> Option<Led> {
     async move {
       hold.released().await;
       background::run(move || {
-        let read = ProjectDb::open_read_only(&root).and_then(|db| WatchReads::read(&db, &root));
+        let read = ProjectDb::open_read_only(&root).and_then(|db| WatchReads::read_chat_leads(&db, &root));
         read
           .map(|reads| Led(Arc::new(reads.chat_leads(chat))))
           .map_err(|error| {

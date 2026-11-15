@@ -4,6 +4,8 @@
 //! tries, what holds its turns, and what each leading subscription spent. Read from the project's records; a day
 //! with nothing of it has no such section.
 
+use std::path::Path;
+
 use chrono::NaiveDate;
 use orchester_core::{
   orchestrator::{
@@ -22,7 +24,10 @@ use crate::{
 };
 
 /// The section of `day` in `db`'s project, read at `now`; `None` when there is nothing of it to tell.
-pub(super) fn of(db: &ProjectDb, (day, now): (NaiveDate, Timestamp)) -> Result<Option<LedDay>, StoreError> {
+pub(super) fn of(
+  (db, root): (&ProjectDb, &Path),
+  (day, now): (NaiveDate, Timestamp),
+) -> Result<Option<LedDay>, StoreError> {
   let (start, end) = Day::of(day).bounds();
   let mut decisions = db.decisions(&DecisionsRead {
     since: Some(start),
@@ -47,7 +52,7 @@ pub(super) fn of(db: &ProjectDb, (day, now): (NaiveDate, Timestamp)) -> Result<O
     .iter()
     .filter(|failed| NextTry::after(&failed.last, failed.earlier.len()) == NextTry::LeftToPerson)
     .count();
-  let (leading, stuck) = leading(db)?;
+  let (leading, stuck) = leading(db, root)?;
   let led = LedDay {
     open_decisions: decisions.iter().filter(|decision| decision.review.is_open()).count(),
     decisions: decisions
@@ -79,7 +84,7 @@ pub(super) fn of(db: &ProjectDb, (day, now): (NaiveDate, Timestamp)) -> Result<O
 
 /// The subscriptions that lead to the end, each with where it stands and what it spent, and those of them that are
 /// stuck, by their names. Reads nothing of the project's tasks while none leads to the end.
-fn leading(db: &ProjectDb) -> Result<(Vec<ReportLeading>, Vec<String>), StoreError> {
+fn leading(db: &ProjectDb, root: &Path) -> Result<(Vec<ReportLeading>, Vec<String>), StoreError> {
   let subscriptions = db.active_subscriptions()?;
   let ends: Vec<_> = subscriptions
     .as_slice()
@@ -89,7 +94,7 @@ fn leading(db: &ProjectDb) -> Result<(Vec<ReportLeading>, Vec<String>), StoreErr
   if ends.is_empty() {
     return Ok((Vec::new(), Vec::new()));
   }
-  let reads = Reads::read(db)?;
+  let reads = Reads::read(db, root)?;
   let (mut leading, mut stuck) = (Vec::new(), Vec::new());
   for subscription in ends {
     let led = reads.led(db, subscription)?;

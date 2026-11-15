@@ -56,6 +56,8 @@ pub fn row(ctx: &mut Ctx, navigation: &Navigation) -> Element {
     .padding(Padding::new().left(SpacingSize::Sm).right(SpacingSize::Xs))
     .spacing(SpacingSize::Sm)
     .rounded(RadiusSize::Md)
+    // An input's fill: the light theme's border alone is lost on the sidebar's surface.
+    .background(PaletteColor::SurfaceInput)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))

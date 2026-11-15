@@ -805,7 +805,7 @@
       "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
-      "connectionNotPicked": "Step “{{step}}” uses a team agent profile that has no connection on this computer yet. Pick a connection for this team profile.",
+      "connectionNotPicked": "Step “{{step}}” uses a team agent profile that has no account on this computer yet. Choose an account for this team profile.",
       "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
       "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
@@ -967,7 +967,7 @@
       },
       "publish": {
         "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
-        "connectionNotPicked": "This team profile has no connection on this computer yet, so what it can enforce is unknown. Pick a connection for this team profile before publishing."
+        "connectionNotPicked": "This team profile has no account on this computer yet, so what it can enforce is unknown. Choose an account for this team profile before publishing."
       },
       "repository": "Repository access",
       "commands": "Commands",
@@ -1342,7 +1342,6 @@
         "other": "{{count}} runs"
       }
     },
-    "version": {},
     "create": {
       "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
       "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
@@ -1393,7 +1392,6 @@
       "unpublishedTool": "Tool not published",
       "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
     },
-    "inspector": {},
     "changes": {
       "description": "Pipeline · description edited",
       "added": "{{step}} · added",
@@ -1645,14 +1643,10 @@
       "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note.",
       "folderNotAbsolute": "Name the project’s folder by its absolute path.",
       "invalidKeepFree": "Keep free is whole GB from {{min}} to {{max}}.",
-      "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
-      "cliNotFoundIn": "No {{program}} was found in the folders searched: {{folders}}. Give the CLI’s absolute path as the program.",
       "programMissing": "There is no file at {{program}}.",
       "programNotAFile": "{{program}} is not a file: give the program file itself, not a folder.",
       "programNotExecutable": "{{program}} is not marked as a program that can run (chmod +x).",
       "programUnreadable": "{{program}} cannot be read: {{reason}}",
-      "notAnAgentConnection": "{{connection}} is not an agent connection; profiles run on agent connections only.",
-      "checkFound": "The check found: {{status}}.",
       "connectionRunsNoAgents": "This profile’s connection does not run agents in this version, so it cannot be published. Choose another connection.",
       "noDraft": "There is no draft to publish: the latest version is current. Save a draft first.",
       "effortNotOffered": "{{model}} does not list the effort {{effort}}. list_models gives the efforts each model takes.",
@@ -1716,9 +1710,6 @@
       "teamMcpUrlQuery": "The {{field}} of a team MCP server has a query or a fragment, and a key in it would go to the team server and to every member. Leave it out of the URL and name the header the server is sent it in (secret_headers); each computer fills in the secret itself. Nothing was created or changed.",
       "teamOnlyField": "{{field}} is a field of a team project's MCP server only: it names what each computer of a team fills in. In a project of this computer's own a server has environment and authorization instead.",
       "teamArchivePersonOnly": "Only a person archives a team's resource: it stops runs on every computer, so it is confirmed in Orchester's window.",
-      "secretNotFound": "This project has no secret {{secret}} that is not archived.",
-      "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
-      "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets).",
       "conversationAmbiguous": "More than one Orchestrator conversation is titled {{conversation}}; name it by its id (get_watches without a conversation lists those that lead something).",
       "teamUnavailable": "The team server can't be reached now, so nothing was read or changed. Nothing is answered from this computer's copy; try again once it answers.",
       "teamNeedsVersion": "The team server needs Orchester {{version}} or later and refuses this version, so nothing was read or changed. A person updates Orchester from Settings › Updates.",
@@ -1845,7 +1836,6 @@
       "reviewer": "Another reviewer would approve requests in every Manual run in your place.",
       "reviewerAccount": "The reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
       "account": "Its agents would run on another account than the latest version's: another sign-in, and possibly another organisation's provider, would get the project's work.",
-      "program": "{{program}} is not a copy of the CLI found on the search path.",
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
       "approvalGate": "Step {{step}} would no longer wait for a person's approval.",
       "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
@@ -1867,7 +1857,6 @@
       "mcpNeedsValue": "The server would need a variable or secret header the version this computer uses does not, with a value this computer gives it.",
       "teamMcpServer": "A new version of {{server}} would let the agents of profiles that choose it do more than the version this computer uses.",
       "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it.",
-      "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}.",
       "apiAccount": "The agents of {{profile}} would send the project’s prompts, code and command output to {{host}}, with the key of your API provider {{account}}."
     },
     "prompts": {

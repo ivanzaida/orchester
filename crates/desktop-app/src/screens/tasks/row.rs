@@ -244,6 +244,8 @@ fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
     .id(format!("task-title-{key}"))
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
+    // In a narrow window the tags and the former key are cut at the title's column, never drawn over the next one.
+    .clip()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(

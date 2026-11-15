@@ -399,7 +399,7 @@ fn hub_body(
     }
     (None, None) => archived::nothing_picked(ctx),
   };
-  agents::master_detail("team-hub", reading, (list, panel))
+  agents::master_detail(ctx, "team-hub", reading, (list, panel))
 }
 
 /// The open tab holds nothing: for an admin, what the kind is and *New <kind>*; for a member, that an admin adds it and

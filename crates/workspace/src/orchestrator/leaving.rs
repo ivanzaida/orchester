@@ -161,7 +161,7 @@ pub fn leaving_in(
   if let Some(why) = orchestrator_unready(root)? {
     weak.push(Weak::OrchestratorNotReady(why));
   }
-  let led = Reads::read(&db)
+  let led = Reads::read(&db, root)
     .and_then(|reads| reads.led(&db, subscription))
     .map_err(stored)?;
   let unstarted = |named: &[&str]| -> Vec<String> {

@@ -37,6 +37,8 @@ pub(super) fn who(ctx: &mut Ctx, id: &str, connection: &Connection, refused: Opt
     .variant(RunsOnPickerText::Caption.role())
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
+    // The caption gives way first, so the use at the line's end is never cut.
+    .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0));
   let caption = if warns {
     caption.color(PaletteColor::Warning)

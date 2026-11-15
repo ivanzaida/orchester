@@ -56,7 +56,7 @@ pub async fn get_standing(services: &Services, args: GetStanding, translate: &Tr
       keeps_awake: services.workspace.keeps_awake()?,
     };
     let mut read = Vec::new();
-    for led in Reads::read(&db)?.all(&db)? {
+    for led in Reads::read(&db, &open.repo_root)?.all(&db)? {
       if only.is_some_and(|chat| led.subscription.chat() != chat) {
         continue;
       }

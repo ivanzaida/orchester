@@ -45,8 +45,10 @@ pub(in crate::screens) fn bar_ending(
   let bar = Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(HubSpacing::Actions.value()))
-    .padding(Padding::horizontal(HubSpacing::Sections.role()))
+    // A panel too narrow for every button takes them on a second line rather than past its edge.
+    .min_height(Dimension::Px(HubSpacing::Actions.value()))
+    .wrap()
+    .padding(Padding::symmetric(HubSpacing::Sections.role(), SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfacePanel)

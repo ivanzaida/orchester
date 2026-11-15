@@ -7,7 +7,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
+  components::{Row, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -172,6 +172,10 @@ fn glyphed(id: &str, (glyph, tone): (Icon, PaletteColor), words: &str) -> Elemen
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Base, tone))
-    .child(value(&format!("{id}-label"), words, Look::Primary))
+    .child(
+      value(&format!("{id}-label"), words, Look::Primary)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
     .into()
 }

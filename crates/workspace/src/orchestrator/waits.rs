@@ -167,7 +167,7 @@ fn follow(
   // A parked task someone acted on since is parked no more, before its target is read.
   super::parking::end_moved(&mut db)?;
   // What a subscription that leads to the end raises of its whole target: work that can start, or that it is stuck.
-  let kept = super::standing::raise(&mut db, switches.drives, at)? || kept;
+  let kept = super::standing::raise((&mut db, reading.root), switches.drives, at)? || kept;
   let completed = switches.drives && complete_on_its_own(&db, reading)?;
   // After the waits, so that a watched task's last run end is kept while its conversation still leads it.
   let ended = watch_ends::end_closed(&mut db, TeamReading::of(reading.root), ready, Timestamp::now())?;

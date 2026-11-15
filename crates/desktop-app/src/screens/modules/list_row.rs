@@ -13,7 +13,7 @@ use lurq::{
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, module::ModuleState};
@@ -225,8 +225,8 @@ fn progress(ctx: &Ctx, id: &str, summary: &ModuleSummary) -> Element {
     .width(Dimension::Px(PROGRESS_WIDTH))
     .flex_shrink(0.0)
     .spacing(SpacingSize::Sm)
-    .justify(Justify::End)
     .align_items(Alignment::Center)
+    // The meter stands at the column's start in every row, and the words take the rest, at its end.
     .child(
       Column::new()
         .width(Dimension::Px(METER_WIDTH))
@@ -237,6 +237,9 @@ fn progress(ctx: &Ctx, id: &str, summary: &ModuleSummary) -> Element {
       Text::new(&words)
         .id(format!("{id}-done"))
         .variant(TypographyStyle::Description)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .text_align(TextAlign::Right)
         .nowrap(),
     )
     .into()

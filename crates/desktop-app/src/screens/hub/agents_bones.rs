@@ -50,7 +50,7 @@ const BAR: [f32; 2] = [72.0, 80.0];
 
 /// The hub's body in bones under `id`, named `label` (the hub's reading words).
 pub(crate) fn body(ctx: &mut Ctx, id: &str, label: Arc<str>) -> Element {
-  let bones = master_detail(id, true, (list(ctx), detail(ctx, id)));
+  let bones = master_detail(ctx, id, true, (list(ctx), detail(ctx, id)));
   Skeleton::new(id.to_owned(), label).fills().show(ctx, bones)
 }
 

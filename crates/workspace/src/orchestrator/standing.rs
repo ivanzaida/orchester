@@ -3,7 +3,9 @@
 //! every subscription, and for a subscription that leads to the end the events its standing raises in its
 //! conversation, once per state: work can start (OA-13), or the target is stuck (OA-15). A local and a team project
 //! read the same way: a team task is the one its runs recorded, its module and whether it is closed being the team
-//! server's last reading when it saw the task ([`super::team_status`]).
+//! server's last reading when it saw the task ([`super::team_status`]). A latest run that passed every step and that
+//! Orchester did not merge is asked of git as the task list asks it ([`crate::tasks::delivery`]): its work merged
+//! into its branch by a person, or by a team mate's computer, is done, not to merge.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -12,6 +14,7 @@ use std::{
 
 use orchester_core::{
   id::{ModuleId, ResourceId, TaskId},
+  integration::RunWork,
   module::ModuleState,
   orchestrator::{
     ChatEntry, EntryKind, Subscription, Subscriptions, WatchTarget,
@@ -23,6 +26,7 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
@@ -33,7 +37,7 @@ use crate::{
   messages::{self, Message},
   tasks::{
     data::published_pipelines,
-    hold,
+    delivery, hold,
     recorded::{self, WithRuns, is_team},
   },
 };
@@ -64,8 +68,9 @@ pub struct Led {
 }
 
 impl Reads {
-  /// Reads the project of `db`. Blocks on SQLite.
-  pub fn read(db: &ProjectDb) -> Result<Self, StoreError> {
+  /// Reads the project of `db`, whose checkout is at `repo_root`. Blocks on SQLite, and on git for the latest runs
+  /// that passed every step and that Orchester did not merge ([`merged_outside`]).
+  pub fn read(db: &ProjectDb, repo_root: &Path) -> Result<Self, StoreError> {
     let tasks = recorded::all_with_runs(db)?;
     let team = reading_of(db);
     let parked: HashMap<TaskId, Parking> = db
@@ -100,6 +105,7 @@ impl Reads {
       running += usize::from(of_task.phase == TaskPhase::Running);
       facts.insert(task.id(), of_task);
     }
+    merged_outside(repo_root, &tasks, &mut facts);
     let mut unrun = Vec::new();
     for (id, seen) in team.seen() {
       if facts.contains_key(&id) {
@@ -273,6 +279,32 @@ impl Around1<'_> {
 
 type WithRunsOf = [orchester_core::run::ListedRun<orchester_store::RunStoreError>];
 
+/// Settles, as git in the checkout at `repo_root` tells them, the latest runs of `tasks` whose `facts` read as passed
+/// and not merged in Orchester: one whose work its branch holds was merged without Orchester (by a person, or by a
+/// team mate's computer for a team task) and reads as merged, as the task list reads it. One reading of the branches
+/// for all of them, which [`delivery::deliveries`] keeps for the session.
+fn merged_outside(repo_root: &Path, tasks: &[WithRuns], facts: &mut HashMap<TaskId, TaskFacts>) {
+  let (ids, works): (Vec<TaskId>, Vec<RunWork>) = tasks
+    .iter()
+    .filter(|(task, _)| facts.get(&task.id()).is_some_and(|of| of.phase == TaskPhase::Succeeded))
+    .filter_map(|(task, runs)| {
+      let latest = runs.iter().rev().find_map(|listed| listed.as_ref().ok())?;
+      Some((task.id(), RunWork::of(latest)))
+    })
+    .unzip();
+  if works.is_empty() {
+    return;
+  }
+  for (id, delivered) in ids
+    .into_iter()
+    .zip(delivery::deliveries(&Programs::processes(), repo_root, &works))
+  {
+    if let Some(of) = facts.get_mut(&id) {
+      of.phase = delivered.phase(of.phase);
+    }
+  }
+}
+
 /// The name of `target` as people read it: an open module's name or a task's key; `None` for the tasks without a
 /// module, the whole project, and a target that is gone.
 fn target_name(db: &ProjectDb, target: WatchTarget) -> Result<Option<String>, StoreError> {
@@ -289,8 +321,12 @@ fn target_name(db: &ProjectDb, target: WatchTarget) -> Result<Option<String>, St
 /// Raises, in the conversation of each subscription that leads to the end, the event its standing raises now, when
 /// its state changed since the last look: work can start, or the target is stuck. `drives`: the person's switch,
 /// which decides whether the event starts a turn by itself. Whether it kept one. Reads nothing while no subscription
-/// leads to the end. Blocks on SQLite.
-pub(super) fn raise(db: &mut ProjectDb, drives: bool, now: Timestamp) -> Result<bool, StoreError> {
+/// leads to the end. Blocks on SQLite, and on git as [`Reads::read`] does.
+pub(super) fn raise(
+  (db, repo_root): (&mut ProjectDb, &Path),
+  drives: bool,
+  now: Timestamp,
+) -> Result<bool, StoreError> {
   let leading: Vec<Subscription> = db
     .active_subscriptions()?
     .as_slice()
@@ -301,7 +337,7 @@ pub(super) fn raise(db: &mut ProjectDb, drives: bool, now: Timestamp) -> Result<
   if leading.is_empty() {
     return Ok(false);
   }
-  let reads = Reads::read(db)?;
+  let reads = Reads::read(db, repo_root)?;
   let mut kept = false;
   for subscription in &leading {
     let led = reads.led(db, subscription)?;
@@ -329,7 +365,7 @@ pub(super) fn raise(db: &mut ProjectDb, drives: bool, now: Timestamp) -> Result<
 pub fn standing_in(root: &Path) -> Result<Vec<Led>, Message> {
   let read = || -> Result<Vec<Led>, StoreError> {
     let db = ProjectDb::open_read_only(root)?;
-    Reads::read(&db)?.all(&db)
+    Reads::read(&db, root)?.all(&db)
   };
   read().map_err(|error| messages::store_error(&error))
 }

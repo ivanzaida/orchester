@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, Breakpoint, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Stack, Text},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
@@ -19,7 +19,7 @@ use lurq::{
 use crate::{
   routes::HubFilter,
   screens::team_hub::list::LIST_WIDTH,
-  theme::{ExtraSpacing, HubSpacing, HubText},
+  theme::{ExtraSpacing, HubSpacing, HubText, PIPELINE_HUB_LIST_NARROW},
   ui::{
     icon::Icon,
     state::glyph_tile,
@@ -191,8 +191,15 @@ const fn label_key(filter: HubFilter) -> &'static str {
 }
 
 /// The list and the panel side by side in the body's outline. While what they show is read again they stay as they
-/// are, never dimmed: a panel's own write makes the hub read again, and the page must not blink with each.
-pub(crate) fn master_detail(prefix: &str, reading: bool, (list, panel): (Element, Element)) -> Element {
+/// are, never dimmed: a panel's own write makes the hub read again, and the page must not blink with each. In a
+/// window under the `xl` breakpoint the list gives way first, to [`PIPELINE_HUB_LIST_NARROW`] as the Pipelines hub's
+/// does, so the panel keeps a width its fields and its bar are read at.
+pub(crate) fn master_detail(ctx: &Ctx, prefix: &str, reading: bool, (list, panel): (Element, Element)) -> Element {
+  let list_width = if ctx.breakpoint() >= Some(Breakpoint::Xl) {
+    LIST_WIDTH
+  } else {
+    PIPELINE_HUB_LIST_NARROW
+  };
   Row::new()
     .id(format!("{prefix}-master-detail"))
     .describe("state", if reading { "reading" } else { "read" })
@@ -202,7 +209,7 @@ pub(crate) fn master_detail(prefix: &str, reading: bool, (list, panel): (Element
     .rounded(RadiusSize::Md)
     .child(
       Column::new()
-        .width(Dimension::Px(LIST_WIDTH))
+        .width(Dimension::Px(list_width))
         .height(Dimension::Pct(100.0))
         .flex_shrink(0.0)
         .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))

@@ -100,23 +100,24 @@ pub fn chat_row_marked(
   (name, meta, mark): (&str, &str, Option<Element>),
   body: Vec<Element>,
 ) -> Element {
-  message_row(id, avatar, head((name, meta, mark)), body).into()
+  let head = head(&id, (name, meta, mark));
+  message_row(id, avatar, head, body).into()
 }
 
-/// Who wrote a message, `name`, then `meta` and `mark`.
-fn head((name, meta, mark): (&str, &str, Option<Element>)) -> Row {
+/// Who wrote message `id`, `name`, then `meta` and `mark`, under ids of that message's own.
+fn head(id: &str, (name, meta, mark): (&str, &str, Option<Element>)) -> Row {
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(
       Text::new(name)
-        .id("conversation-message-name")
+        .id(format!("{id}-name"))
         .variant(ConversationText::Name.role())
         .nowrap(),
     )
     .child(
       Text::new(meta)
-        .id("conversation-message-meta")
+        .id(format!("{id}-meta"))
         .variant(TypographyStyle::Caption)
         .nowrap(),
     )

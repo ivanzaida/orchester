@@ -33,7 +33,7 @@ mod row;
 mod shared;
 mod skeleton;
 mod states;
-mod team;
+pub(crate) mod team;
 mod team_view;
 mod views;
 

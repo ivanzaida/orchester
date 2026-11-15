@@ -99,6 +99,8 @@ pub(super) fn card(ctx: &mut Ctx, project: ProjectId, navigation: &Navigation) -
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()).right(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
     .rounded(ExtraRadius::Tile.role())
+    // A panel's fill: the light theme's border alone is lost on the sidebar's surface.
+    .background(PaletteColor::SurfacePanel)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .child(usage)
