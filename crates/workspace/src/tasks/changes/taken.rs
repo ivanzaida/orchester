@@ -16,7 +16,7 @@ pub struct RunChangesView {
   /// What its branch took in from other branches; `None` when nothing, or when git could not tell.
   pub taken_in: Option<TakenIn>,
   /// The changes are its agent's own, without what it took in; `false` when they are all a merge brings, and when the
-  /// own ones were asked for but its start and what it took in conflict, so they cannot be told apart.
+  /// own ones were asked for but git could not build the point they are read from.
   pub own_only: bool,
 }
 
@@ -44,7 +44,7 @@ pub fn run_changes_view_in(
     None
   });
   let own = match (&taken, own_only) {
-    (Some(taken), true) => without_taken_in(&runner, git, (&start, &taken.tip)).unwrap_or_else(|error| {
+    (Some(taken), true) => without_taken_in(&runner, git, (&start, taken)).unwrap_or_else(|error| {
       tracing::warn!(%error, run = %range.run, "cannot merge the run's start with what its branch took in");
       None
     }),

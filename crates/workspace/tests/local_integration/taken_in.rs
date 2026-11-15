@@ -68,3 +68,41 @@ fn taken_in_says_what_the_branch_took_in_and_reads_the_run_s_own_changes_alone()
   assert!(own.own_only);
   assert_eq!(files(&own.checkpointed), ["task.txt"], "the agent's work alone");
 }
+
+#[test]
+fn taken_in_a_file_both_sides_changed_shows_whole_among_the_run_s_own_changes() {
+  let fixture = Fixture::worked(false, ("taken-in-conflict-", "task"), |root, task| {
+    let own = commit(task, "task.txt", "the run's work\n", "task work");
+    git(root, &["checkout", "-q", "-b", "other", "main"]);
+    commit(root, "task.txt", "other's work\n", "other on task.txt");
+    commit(root, "other.txt", "other work\n", "other");
+    git(root, &["checkout", "-q", "main"]);
+    // The run takes other in and settles the file both changed.
+    let merged = std::process::Command::new("git")
+      .args(["merge", "--no-ff", "--no-edit", "other"])
+      .current_dir(task)
+      .output()
+      .expect("merge");
+    assert!(!merged.status.success(), "the merge stops at the conflict");
+    std::fs::write(task.join("task.txt"), "the run's work, with other's\n").expect("settle");
+    git(task, &["add", "task.txt"]);
+    git(task, &["commit", "--no-edit"]);
+    vec![own, git(task, &["rev-parse", "HEAD"])]
+  });
+  let run = ProjectDb::open(fixture.root())
+    .expect("db")
+    .run(fixture.run)
+    .expect("read")
+    .expect("run");
+  let own = run_changes_view_in(fixture.root(), &Programs::processes(), (&RunRange::of(&run), true)).expect("own");
+  assert!(own.own_only, "the point is built though the two conflict");
+  assert_eq!(
+    files(&own.checkpointed),
+    ["task.txt"],
+    "other.txt is what it took in; task.txt shows whole"
+  );
+  assert!(
+    !fixture.root().join(".git/orchester-taken-in.index").exists(),
+    "its index is removed"
+  );
+}

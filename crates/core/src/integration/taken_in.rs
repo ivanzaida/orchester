@@ -63,35 +63,83 @@ pub fn taken_in(
   Ok(Some(TakenIn { commits, from, tip }))
 }
 
-/// The tree of `start` merged with `tip`, what the branch took in, as git would merge them: the point the run's own
-/// work is read from. `None` when they conflict, as then no such point holds.
+/// The tree of `start` merged with what the branch took in (`taken.tip`), as git merges them, each file they conflict
+/// on as `start` has it, so the run's own work in it is never hidden (the file shows whole, what was taken in with
+/// it): the point the run's own work is read from. Built in an index
+/// of its own, which is removed after; the repository's index and checkout stay as they are. `None` when git printed
+/// no tree.
 pub fn without_taken_in(
   runner: &impl CommandRunner,
   (program, repo): (&Path, &Path),
-  (start, tip): (&Revision, &Revision),
+  (start, taken): (&Revision, &TakenIn),
 ) -> Result<Option<Revision>, GitError> {
   let git = Git::new(runner, program, repo);
-  let output = git.output(&["merge-tree", "--write-tree", start.as_str(), tip.as_str()])?;
-  if !output.success() {
+  let output = git.output(&[
+    "merge-tree",
+    "--write-tree",
+    "--name-only",
+    start.as_str(),
+    taken.tip.as_str(),
+  ])?;
+  let mut lines = output.stdout.lines();
+  let Some(tree) = lines.next().map(str::trim).and_then(|tree| Revision::new(tree).ok()) else {
     return Ok(None);
+  };
+  if output.success() {
+    return Ok(Some(tree));
   }
-  let tree = output.stdout.lines().next().unwrap_or_default().trim().to_owned();
-  Revision::new(&tree).map(Some).map_err(|_| GitError::Unrecognized {
+  // Conflicts: their names follow the tree, up to an empty line.
+  let conflicted: Vec<&str> = lines.map(str::trim).take_while(|path| !path.is_empty()).collect();
+  settled(&git, (&tree, start), &conflicted).map(Some)
+}
+
+/// `tree` with each of `paths` as `start` has it (none where `start` has none), written in an index of its own.
+fn settled<R: CommandRunner>(
+  git: &Git<'_, R>,
+  (tree, start): (&Revision, &Revision),
+  paths: &[&str],
+) -> Result<Revision, GitError> {
+  let index = git.stdout(&["rev-parse", "--git-path", "orchester-taken-in.index"])?;
+  let index = git.dir().join(index);
+  let built = (|| {
+    git.stdout_in_index(&index, &["read-tree", tree.as_str()])?;
+    for path in paths {
+      let entry = git.stdout(&["ls-tree", start.as_str(), "--", path])?;
+      match entry
+        .split_once('\t')
+        .map(|(head, _)| head.split_whitespace().collect::<Vec<_>>())
+      {
+        Some(parts) if parts.len() == 3 => {
+          let info = format!("{},{},{path}", parts[0], parts[2]);
+          git.stdout_in_index(&index, &["update-index", "--add", "--cacheinfo", &info])?;
+        }
+        _ => {
+          git.stdout_in_index(&index, &["update-index", "--force-remove", "--", path])?;
+        }
+      }
+    }
+    git.stdout_in_index(&index, &["write-tree"])
+  })();
+  // The index is this call's alone and is removed whatever came of it. One that could not be removed is a file in the
+  // repository's git directory that nothing reads, and the next call starts it again with read-tree: losing that
+  // error loses nothing.
+  let _left = std::fs::remove_file(&index);
+  let written = built?;
+  Revision::new(&written).map_err(|_| GitError::Unrecognized {
     expected: "a tree",
-    detail: tree,
+    detail: written,
   })
 }
 
-/// The second parent of the newest merge on the first-parent line of `range` whose merged-in side is outside it.
+/// The second parent of the newest merge on the first-parent line of `range`: the side it took in.
 fn newest_merged_in<R: CommandRunner>(git: &Git<'_, R>, range: &[&str]) -> Result<Option<Revision>, GitError> {
   let mut args = vec!["rev-list", "--first-parent", "--merges", "--parents"];
   args.extend(range);
   let merges = git.stdout(&args)?;
-  let newest = merges
-    .lines()
-    .next()
-    .and_then(|line| line.split_whitespace().nth(2).map(str::to_owned));
-  Ok(newest.and_then(|parent| Revision::new(&parent).ok()))
+  let Some(newest) = merges.lines().next() else {
+    return Ok(None);
+  };
+  Ok(newest.split_whitespace().nth(2).and_then(|tip| Revision::new(tip).ok()))
 }
 
 /// A local branch that holds `tip`, other than the run's and its target: `main` or `master` when one does.
