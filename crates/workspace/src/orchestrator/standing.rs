@@ -319,7 +319,9 @@ fn target_name(db: &ProjectDb, target: WatchTarget) -> Result<Option<String>, St
 }
 
 /// Raises, in the conversation of each subscription that leads to the end, the event its standing raises now, when
-/// its state changed since the last look: work can start, or the target is stuck. `drives`: the person's switch,
+/// its state changed since the last look: work can start, or the target is stuck. Not while a turn of that
+/// conversation thinks: what it does moves the target (an acceptance it makes is a task that can start until its run
+/// starts, a moment later), and the look after it ended reads where it left it. `drives`: the person's switch,
 /// which decides whether the event starts a turn by itself. Whether it kept one. Reads nothing while no subscription
 /// leads to the end. Blocks on SQLite, and on git as [`Reads::read`] does.
 pub(super) fn raise(
@@ -340,6 +342,9 @@ pub(super) fn raise(
   let reads = Reads::read(db, repo_root)?;
   let mut kept = false;
   for subscription in &leading {
+    if db.chat_turn_thinks(subscription.chat())? {
+      continue;
+    }
     let led = reads.led(db, subscription)?;
     let raised = Raised::of(&led.standing, |task| {
       let parking = led.parked.iter().find(|(key, _)| key == task);

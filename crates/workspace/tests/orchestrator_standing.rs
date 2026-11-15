@@ -8,10 +8,11 @@ mod support;
 use std::collections::HashSet;
 
 use orchester_core::{
-  id::{ChatId, IdempotencyKey, TaskId},
+  conversation::MessageBody,
+  id::{ChatId, ChatMessageId, IdempotencyKey, TaskId},
   name::Name,
   orchestrator::{
-    Ceilings, Chat, EntryKind, Subscription, WatchMode, WatchTarget,
+    Ceilings, Chat, EntryKind, Subscription, TurnState, WatchMode, WatchTarget,
     parking::{Needs, Parking, Words},
     standing::{Raised, StandingEvent, TargetStanding},
   },
@@ -183,4 +184,42 @@ fn standing_raises_work_that_can_start_and_a_stuck_target_once_per_state() {
   let raised = events(&fixture, chat.id());
   assert_eq!(raised.len(), 3, "{raised:?}");
   assert!(matches!(raised[2].raised, Raised::CanStart { .. }));
+}
+
+#[test]
+fn standing_raises_nothing_while_a_turn_of_its_conversation_thinks() {
+  let mut fixture = Fixture::new();
+  let chat: Chat = fixture.everything(at(100));
+  draft(&mut fixture, "Add login", at(110));
+  fixture
+    .db
+    .stop_subscription(chat.id(), WatchTarget::Project, at(190))
+    .expect("stopped");
+  let lead = WatchMode::Lead {
+    ceilings: Ceilings::default(),
+  };
+  let leading = Subscription::new(chat.id(), WatchTarget::Project, "", at(200)).in_mode(lead);
+  fixture.db.start_subscription(&leading).expect("leads to the end");
+
+  // The person asked something, and the turn thinks: what it does moves the target.
+  let message = ChatMessageId::generate();
+  let text = MessageBody::new("Start what can start.").expect("text");
+  fixture
+    .db
+    .keep_chat_message(&chat, (message, &text), at(210))
+    .expect("kept");
+  follow(&fixture);
+  assert!(
+    events(&fixture, chat.id()).is_empty(),
+    "nothing raised while the turn thinks"
+  );
+
+  fixture
+    .db
+    .end_chat_turn(message, &TurnState::Answered, at(220))
+    .expect("ended");
+  follow(&fixture);
+  let raised = events(&fixture, chat.id());
+  assert_eq!(raised.len(), 1, "where the turn left it: {raised:?}");
+  assert!(matches!(raised[0].raised, Raised::CanStart { .. }));
 }

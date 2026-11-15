@@ -97,6 +97,15 @@ impl ProjectDb {
     )?)
   }
 
+  /// Whether a turn of conversation `chat` thinks now: a person's, or one Orchester started.
+  pub fn chat_turn_thinks(&self, chat: ChatId) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1 AND turn = 'thinking')",
+      [chat.to_string()],
+      |row| row.get(0),
+    )?)
+  }
+
   /// The waits of every conversation whose turn thinks now, oldest first.
   pub fn waits_thinking(&self) -> Result<Vec<KeptWait>, StoreError> {
     self.kept_waits("turn = 'thinking'")
