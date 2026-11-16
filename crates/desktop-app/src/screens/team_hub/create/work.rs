@@ -183,7 +183,7 @@ fn team_resource(workspace: &Workspace, root: &Path, request: Press) -> Result<N
     Make::TeamProfile(profile) => (
       ResourceKind::AgentProfile,
       profile.role().clone(),
-      Publication::of_body(root, id, &*profile).map_err(refused)?,
+      Publication::of_team_profile(&profile).map_err(refused)?,
     ),
     Make::McpServer(input) => {
       let server =

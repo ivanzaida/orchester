@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, TeamTool, Tool},
+  resource::{AgentProfile, TeamAgentProfile, TeamTool, Tool},
   sharing::LocalEntities,
   store::{ConnectionStore, McpServerStore, SecretStore},
 };
@@ -69,6 +69,12 @@ impl Publication {
   /// is.
   pub fn of_team_tool(tool: &TeamTool) -> Result<Self, EditRefused> {
     team_body::team_tool(tool).map_err(|error| store_failure(&error))
+  }
+
+  /// `profile`, an agent profile already in the team's form, with the references its body names: the team's server
+  /// refuses a profile whose references are not those its body names (`references`).
+  pub fn of_team_profile(profile: &TeamAgentProfile) -> Result<Self, EditRefused> {
+    team_body::team_profile(profile).map_err(|error| store_failure(&error))
   }
 }
 

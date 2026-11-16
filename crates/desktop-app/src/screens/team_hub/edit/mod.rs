@@ -116,7 +116,7 @@ team_body!(
   Outside::Profiles,
   "publish a team profile's version that widens what agents may do",
   profile_widens,
-  team_body_edit::save
+  team_body_edit::save_team_profile
 );
 
 /// A profile widens what its agents may do when its role's prompts change (what they are told to do first), its
