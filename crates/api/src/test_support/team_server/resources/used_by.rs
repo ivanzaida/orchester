@@ -69,6 +69,15 @@ impl TeamServer {
     state.resources.projects.entry(id).or_default().runs.push(run);
   }
 
+  /// What uses a resource of the project at `slug` cannot be read from now on: the server answers `500 internal`,
+  /// while everything else of it, its event stream too, answers as before. Panics for a slug the stand-in does not
+  /// hold.
+  pub fn fail_used_by(&self, slug: &str) {
+    let mut state = self.state.lock();
+    let id = project_id(&state.projects, slug);
+    state.resources.projects.entry(id).or_default().used_by_fails = true;
+  }
+
   /// The claim on the task of `run` in the project at `slug` is now `holder`'s (a take-over) or released (`None`: the
   /// task then lists no runs). It is the task's claim, so it changes the holder of every pinned run of that task.
   /// Panics for a run that was not pinned.

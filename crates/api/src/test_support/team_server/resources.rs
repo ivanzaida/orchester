@@ -45,6 +45,8 @@ struct Project {
   answers: HashMap<String, (u16, Value)>,
   /// The runs [`TeamServer::pin_run`] registered.
   runs: Vec<PinnedRun>,
+  /// What uses a resource is answered `500 internal`, once [`TeamServer::fail_used_by`] said so.
+  used_by_fails: bool,
   /// The number of changes made; the event cursor the list is current at.
   cursor: u64,
 }
@@ -256,6 +258,7 @@ pub(super) fn answer((path, query): (&str, &str), body: &str, state: &Mutex<Stat
     ("POST", None) => held.create(body),
     ("PATCH", Some((resource, ""))) => held.patch(resource, body),
     ("GET", Some((resource, "versions"))) => held.versions(resource, query),
+    ("GET", Some((_, "used-by"))) if held.used_by_fails => (500, error("internal")),
     ("GET", Some((resource, "used-by"))) => held.used_by(resource),
     ("POST", Some((resource, "versions"))) => held.publish(resource, body),
     _ => return None,
