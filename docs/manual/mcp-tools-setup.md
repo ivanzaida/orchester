@@ -550,6 +550,7 @@ separate publish. (`save_pipeline_draft` and `publish_pipeline` are gone; callin
 | `name`             | string                   | yes  | Display name.                                                                                       |
 | `profile`          | string \| null           | no   | Published agent profile that runs the step (id or name). A step needs `profile` or `tool`: without either it is `not_publishable`. |
 | `tool`             | string \| null           | no   | Published command tool the step calls instead (id or name).                                         |
+| `tests`            | boolean                  | no   | A Test step instead (`docs/architecture/agent-testing.md`, "The Test step"): no `profile`, `tool` or agent fields. |
 | `runs_after`       | array<string>            | no   | Keys of the steps it runs after (no cycles).                                                        |
 | `approval_gate`    | boolean                  | no   | The step's result waits for a person's approval (e.g. a plan).                                      |
 | `on_failure`       | {`return_to`: string, `retries`: integer ≥ 1} \| null | no | Return to an earlier step it runs after; after `retries` returns the run waits for a person. |
@@ -563,14 +564,20 @@ separate publish. (`save_pipeline_draft` and `publish_pipeline` are gone; callin
 Example command step: `{"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
 "on_failure": {"return_to": "implement", "retries": 2}}`.
 
+Example Test step: `{"key": "tests", "name": "Tests", "tests": true, "runs_after": ["implement"], "on_failure":
+{"return_to": "implement", "retries": 2}}`. It runs the published suites whose services own a path the run changed,
+plus those marked always, lint then unit then e2e, stopping after the first layer that fails; a failed test runs once
+more, and one that passes then is flaky and does not fail the step. On failure the writing step reads only the failed
+tests; later steps read the stored result.
+
 Refusals: `invalid_pipeline` (the steps do not form a pipeline), `not_publishable` with every reason (no steps, a
 step without a profile or tool or one that cannot run here, steps the flow cannot draw as one line, the version
 limit), `unchanged` (equal to the latest version), `version_changed` (a version was published since it was read).
 
 `person_only` unless AP is on, naming **every** reason at once — what saving and what publishing a draft asked a
 person for before, together: dropping an approval gate or *ask about tool calls* that the latest version has
-(removing the step that has it included); adding a step that calls a tool the latest version does not call under
-that key (it runs a program on this computer); and anything not **provably no weaker** than the latest version (same
+(removing the step that has it included); adding a step that calls a tool, or a Test step, the latest version does
+not have under that key (it runs programs on this computer); and anything not **provably no weaker** than the latest version (same
 steps, wiring, failure routes, profiles and tools; each step's approval, asking about tool calls, write access,
 commands and network the same or stricter). So every version a task can run is one a person saved, allowed, or could
 not object to.
@@ -799,3 +806,42 @@ Completes a run that passed every step and **committed nothing** (its task's lat
 Refusals: `expects_changes` (pipeline expects changes and no `anyway`), `automation_not_allowed` (`anyway` without
 AA), `has_commits` (use `merge_run`), `already_completed`, `run_not_completable` (did not succeed, not the latest,
 merged, or waiting in a merge). The completion is recorded as automation's.
+
+---
+
+## 11. Flaky tests
+
+A Test step runs a failed test once more; one that passes then is **flaky** and does not fail the step. Every flaky
+outcome is kept for the project with its suite, test, run and time. A test flaky in **3 runs within 14 days** is
+*watched*: one flaky outcome is often chance and two can be one bad hour, a third in another run is a pattern; runs
+are counted, not outcomes, so one run going back and forth does not make a test watched alone, and a fixed test leaves
+the list after two quiet weeks. The person moves a test to **quarantine** and back: a quarantined test still runs,
+and when it fails again its failure is in the step's result for the steps after it and in the flaky history, but it
+never fails the step and is never returned to the writing step.
+
+### `list_flaky_tests` — read-only
+
+Every test a Test step saw flaky, or that is quarantined: `suite`, `test` (its name as `run_tests` names it),
+`standing` (`quarantined` with `quarantined_since`, `watched` or `seen`), `flaky_runs` (within the window),
+`last_flaky` and `last_quarantined_failure` (ms since the epoch, `null` for never); quarantined first, then watched,
+then the others. `watch` gives `after_runs` and `window_days`. Parameter: `project` (req.).
+
+### `quarantine_test` — changes data · gate AP
+
+Quarantines a flaky test for the Test steps that start from then on. Its failures would pass, so it is refused as
+`person_only` unless a person turned on *Let automation change agent permissions*. Refusals: `not_flaky` (no Test
+step saw it flaky), `invalid_test`. Answers `changed` (`false` when it was quarantined already) and `test` as
+`list_flaky_tests` gives it.
+
+### `release_test` — changes data
+
+Takes a test out of quarantine: its failures fail the Test steps that start from then on again. Always taken. Answers
+`changed` and `test` (`null` for a test never seen flaky).
+
+`quarantine_test` and `release_test` both take:
+
+| Parameter | Type   | Req. | Description                                      |
+|-----------|--------|------|--------------------------------------------------|
+| `project` | string | yes  | The project's id, or its name.                   |
+| `suite`   | string | yes  | The test suite's name, as `list_flaky_tests` gives it. |
+| `test`    | string | yes  | The test's name, as `list_flaky_tests` gives it. |

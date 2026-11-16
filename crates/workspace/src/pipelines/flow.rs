@@ -30,6 +30,8 @@ pub enum Runs {
   Tool {
     name: Arc<str>,
   },
+  /// Orchester runs the project's test suites (a Test step).
+  Tests,
   NoProfile,
   NoTool,
   /// The step names a profile that has no published version (or none any more).
@@ -54,7 +56,7 @@ pub enum Runs {
 impl Runs {
   /// Whether the step cannot run as it is, which its card shows in amber.
   pub const fn needs_you(&self) -> bool {
-    !matches!(self, Self::Profile { .. } | Self::Tool { .. })
+    !matches!(self, Self::Profile { .. } | Self::Tool { .. } | Self::Tests)
   }
 
   /// Whether nothing is chosen yet, so the card offers to choose.
@@ -241,7 +243,7 @@ fn card(
 ) -> StepCard {
   let access = match &step.kind {
     StepKind::Agent { repository, .. } => Some(*repository),
-    StepKind::Tool { .. } => None,
+    StepKind::Tool { .. } | StepKind::Test => None,
   };
   StepCard {
     key: step.key.clone(),
@@ -302,6 +304,7 @@ fn runs(step: &Step, assignables: &Assignables) -> Runs {
         name: tool.name.clone(),
       },
     },
+    StepKind::Test => Runs::Tests,
   }
 }
 

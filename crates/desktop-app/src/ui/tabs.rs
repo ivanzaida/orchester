@@ -48,6 +48,8 @@ const TEXT_SEGMENT_HEIGHT: f32 = 22.0;
 const ICON_SEGMENT_WIDTH: f32 = 28.0;
 /// The height of what only holds a width.
 const NO_ROOM: f32 = 0.0;
+/// A tab's dot (`Dot` `JrkWf` in `cjvRr`).
+const DOT_SIZE: f32 = 6.0;
 
 #[derive(Clone)]
 enum TabState {
@@ -69,6 +71,8 @@ pub struct PageTab {
   badge: Option<usize>,
   /// How many there are, a number after the label, and whether it counts what waits for the person.
   count: Option<(usize, bool)>,
+  /// A dot after the count in the tone of what it counts.
+  dot: Option<PaletteColor>,
   /// The count is still read: its bone after the label.
   reading: bool,
   height: f32,
@@ -84,6 +88,7 @@ impl PageTab {
       explanation: None,
       badge: None,
       count: None,
+      dot: None,
       reading: false,
       height: TAB_HEIGHT,
     }
@@ -145,6 +150,14 @@ impl PageTab {
     self
   }
 
+  /// A 6 dot in `tone` 6 after the count, the state of what it counts, e.g. a run's services (`Dot` `JrkWf` in
+  /// `cjvRr`: `danger` once one crashed); its element id is `<id>-dot`.
+  #[must_use]
+  pub fn dot(mut self, tone: PaletteColor) -> Self {
+    self.dot = Some(tone);
+    self
+  }
+
   /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`), as
   /// wide as one digit so a count of one digit moves no tab after it; its element id is `<id>-count`.
   #[must_use]
@@ -192,7 +205,12 @@ impl PageTab {
       .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" });
-    let button = button.child(counted_label(&self.id, label, (self.badge, self.count, self.reading)));
+    let button = button.child(counted_label(
+      &self.id,
+      label,
+      (self.badge, self.count, self.reading),
+      self.dot,
+    ));
     let button = if self.explanation.is_some() {
       button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
     } else {
@@ -237,21 +255,18 @@ fn label_in_room(id: &str, label: &str, color: PaletteColor) -> Column {
 }
 
 /// A tab's label with its badge, its quiet count (in `warning` when it counts what waits for the person), or the
-/// count's bone while it is read. The count and its bone stand in the room of one digit at least, so a count of one
-/// digit replaces the bone without moving the tabs after it.
+/// count's bone while it is read, and its dot after them. The count and its bone stand in the room of one digit at
+/// least, so a count of one digit replaces the bone without moving the tabs after it.
 fn counted_label(
   id: &str,
   label: Element,
   (badge, count, reading): (Option<usize>, Option<(usize, bool)>, bool),
+  dot: Option<PaletteColor>,
 ) -> Element {
-  let row = Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(label);
-  match (badge, count) {
-    (Some(count), _) => row.child(count_badge(&format!("{id}-badge"), count)).into(),
-    (None, Some((count, waits))) => row
-      .child(digit_room(
+  let counted: Option<Element> = match (badge, count) {
+    (Some(count), _) => Some(count_badge(&format!("{id}-badge"), count).into()),
+    (None, Some((count, waits))) => Some(
+      digit_room(
         Text::new(&count.to_string())
           .id(format!("{id}-count"))
           .variant(TypographyStyle::Description)
@@ -261,13 +276,28 @@ fn counted_label(
             PaletteColor::TextMuted
           })
           .nowrap(),
-      ))
+      )
       .into(),
-    (None, None) if reading => row
-      .child(digit_room(skeleton::count_in_room()).id(format!("{id}-count")))
-      .into(),
-    (None, None) => row.into(),
-  }
+    ),
+    (None, None) if reading => Some(digit_room(skeleton::count_in_room()).id(format!("{id}-count")).into()),
+    (None, None) => None,
+  };
+  let dot = dot.map(|tone| {
+    Row::new()
+      .id(format!("{id}-dot"))
+      .width(Dimension::Px(DOT_SIZE))
+      .height(Dimension::Px(DOT_SIZE))
+      .flex_shrink(0.0)
+      .rounded(ExtraRadius::Full.role())
+      .background(tone)
+  });
+  Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(label)
+    .with_children(counted)
+    .with_children(dot)
+    .into()
 }
 
 /// `count` in the room of one digit of a count at least: a copy of the widest digit no higher than nothing holds it.

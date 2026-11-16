@@ -195,7 +195,7 @@ fn unassigned(step: &Step) -> Option<Message> {
   let key = match step.kind {
     StepKind::Agent { profile: None, .. } => "pipelines.problems.noProfile",
     StepKind::Tool { tool: None } => "pipelines.problems.noTool",
-    StepKind::Agent { .. } | StepKind::Tool { .. } => return None,
+    StepKind::Agent { .. } | StepKind::Tool { .. } | StepKind::Test => return None,
   };
   Some(Message::new(key).with("step", step.name.as_str().to_owned()))
 }

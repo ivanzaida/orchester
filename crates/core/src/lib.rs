@@ -52,6 +52,7 @@ pub mod task;
 pub mod task_group;
 pub mod task_selection;
 pub mod test_report;
+pub mod test_step;
 pub mod time;
 pub mod tokens;
 pub mod usage;

@@ -148,6 +148,9 @@ pub struct RunView {
   pub base_notices: Vec<orchester_core::base_move::BaseNotice>,
   /// Its *Fix CI automatically* switch and the Fix CI it sent or stopped at (`crate::pull_requests::ci_fix`).
   pub ci_fixes: orchester_core::pull_request::ci::fix::RunFixes,
+  /// What its latest Test step found (ORC-266). Read where the task page loads the run (`TaskDetail::load_in`) from
+  /// the run's storage; `None` elsewhere, and for a run without a finished Test step.
+  pub tests: Option<super::test_results::TestResults>,
 }
 
 impl RunView {
@@ -372,8 +375,6 @@ impl TaskDetail {
     let task = super::recorded::page_task_of(&db, task)?.ok_or(StoreError::TaskNotFound(task))?;
     let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let blocked_by = blocking_keys(&db, &task)?;
-    // A team task's pipeline that the team's configuration lacks is told by its team read (`team_detail`), from memory.
-    let missing_pipeline = None;
     let unsent_status = db.unsent_status(task.id())?;
     let shared = db.shared_task_info(task.id())?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
@@ -391,7 +392,6 @@ impl TaskDetail {
         latest_unreadable: Some(Unreadable::of(latest)),
         history,
         blocked_by,
-        missing_pipeline,
         unsent_status,
         shared,
         led_in,
@@ -423,6 +423,7 @@ impl TaskDetail {
     let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
     if let Some(view) = &mut run {
       view.worktree_not_removed = super::worktree_left::not_removed(&db, repo_root, view.id())?;
+      view.tests = super::test_results::read(repo_root, &view.run);
     }
     let result = run
       .as_ref()
@@ -441,7 +442,6 @@ impl TaskDetail {
       history,
       earlier_unreadable,
       blocked_by,
-      missing_pipeline,
       unsent_status,
       shared,
       led_in,
@@ -471,6 +471,8 @@ impl TaskDetail {
       history: Vec::new(),
       earlier_unreadable: Vec::new(),
       blocked_by: Vec::new(),
+      // A team task's pipeline that the team's configuration lacks is told by its team read (`team_detail`), from
+      // memory.
       missing_pipeline: None,
       unsent_status: None,
       shared: None,
@@ -544,6 +546,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     finished_at,
     worktree_removed,
     worktree_not_removed: None,
+    tests: None,
     runner_failure: history::runner_failure(db, &run)?,
     pipeline,
     version: pinned.number,

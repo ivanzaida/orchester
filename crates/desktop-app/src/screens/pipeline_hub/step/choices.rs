@@ -95,9 +95,14 @@ pub(super) fn choices(ctx: &Ctx, assignables: &Assignables, step: &Step) -> Choi
     executors.push(current);
     clis.push(None);
   }
+  if current == Executor::Tests {
+    items.push(tests_item(ctx));
+    executors.push(current);
+    clis.push(None);
+  }
   let cli = match current {
     Executor::Profile(id) => assignables.profile(id).and_then(|profile| profile.provider),
-    Executor::Tool(_) | Executor::Unset => None,
+    Executor::Tool(_) | Executor::Unset | Executor::Tests => None,
   };
   let mut chosen = Choices {
     items,
@@ -124,7 +129,7 @@ fn unlisted(ctx: &Ctx, assignables: &Assignables, current: Executor, model: Opti
   let (id, group) = match current {
     Executor::Profile(id) if assignables.profile(id).is_none() => (id, Group::Profiles),
     Executor::Tool(id) if assignables.tool(id).is_none() => (id, Group::Tools),
-    Executor::Profile(_) | Executor::Tool(_) | Executor::Unset => return None,
+    Executor::Profile(_) | Executor::Tool(_) | Executor::Unset | Executor::Tests => return None,
   };
   let draft_profile = assignables.draft_profiles.iter().find(|profile| profile.id == id);
   let draft_tool = assignables.draft_tools.iter().find(|tool| tool.id == id);
@@ -235,6 +240,21 @@ fn tool_item(ctx: &Ctx, assignables: &Assignables, tool: &ToolChoice) -> Item {
     model: None,
     suffix: Some(suffix),
     warning,
+  }
+}
+
+/// A Test step's own entry, listed only for such a step: Orchester runs the project's test suites itself, so the
+/// picker offers it to no other step (a Test step is made through `save_pipeline`).
+fn tests_item(ctx: &Ctx) -> Item {
+  Item {
+    key: "tests".into(),
+    group: Group::Tools,
+    mark: Mark::Icon(Icon::FlaskConical),
+    name: ctx.t("pipeline_hub.agent.tests"),
+    runs_on: Arc::from(""),
+    model: None,
+    suffix: Some(ctx.t("pipeline_hub.agent.testsDecide")),
+    warning: None,
   }
 }
 

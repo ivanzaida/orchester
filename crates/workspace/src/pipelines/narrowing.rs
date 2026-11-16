@@ -153,7 +153,7 @@ pub fn check_step(
         )?;
       }
     }
-    StepKind::Tool { tool: None } => {}
+    StepKind::Tool { tool: None } | StepKind::Test => {}
   }
   Ok(())
 }

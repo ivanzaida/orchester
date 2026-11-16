@@ -169,6 +169,73 @@ fn settings_general_stores_the_last_threshold_typed_quickly() {
   );
 }
 
+/// The value the field `id` holds, once it holds one.
+fn field_value(window: &mut Window, id: &str) -> Option<String> {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_text_input())
+    .map(|input| input.value())
+}
+
+/// *Services* › *Services at once*: the computer's limit, 8 until changed, saved as it is typed, refused outside 1 to
+/// 32, shown again from what is stored and filled again when it changes elsewhere.
+#[test]
+fn settings_general_saves_the_computers_services_at_once_and_reads_it_back() {
+  const FIELD: &str = "settings-service-slots-value";
+  let mut window = general();
+  let workspace = window.launch.workspace().expect("the session started").clone();
+  window.until("the stored limit in the field", |window| {
+    field_value(window, FIELD).as_deref() == Some("8")
+  });
+  assert_eq!(window.text("settings-services-title"), "Services");
+  assert_eq!(window.text("settings-service-slots-label"), "Services at once");
+  assert_eq!(
+    window.text("settings-service-slots-hint"),
+    "On this computer, for every project · a stack takes one per service · 1 to 32"
+  );
+  window.set(FIELD, "12");
+  window.until("the limit to be saved", |_| {
+    workspace.service_slots().expect("the limit reads").get().get() == 12
+  });
+  for typed in ["0", "33", "two"] {
+    window.set(FIELD, typed);
+    window.until("the field to say why", |window| {
+      window.texts("settings-service-slots-error").is_some()
+    });
+    assert_eq!(
+      window.text("settings-service-slots-error"),
+      "Enter a whole number from 1 to 32.",
+      "{typed}"
+    );
+  }
+  assert_eq!(
+    workspace.service_slots().expect("the limit reads").get().get(),
+    12,
+    "a value outside 1 to 32 is not saved"
+  );
+  window.set(FIELD, "12");
+  window.until("the saves to settle", |window| {
+    window.text("settings-save-state") == "All changes saved" && window.texts("settings-service-slots-error").is_none()
+  });
+
+  // Shown again from what is stored.
+  window.navigation().go(Route::AllProjects);
+  window.pass();
+  window.navigation().go(Route::General);
+  window.until("the stored limit again", |window| {
+    field_value(window, FIELD).as_deref() == Some("12")
+  });
+
+  // A change made elsewhere (`update_project_limits`' `computer_service_slots`) fills the field.
+  workspace
+    .set_service_slots(orchester_core::limits::ComputerServiceSlots::new(16).expect("in range"))
+    .expect("an outside change");
+  window.until("the outside change in the field", |window| {
+    field_value(window, FIELD).as_deref() == Some("16")
+  });
+}
+
 #[test]
 fn settings_general_keeps_the_last_theme_pressed_quickly() {
   let mut window = general();

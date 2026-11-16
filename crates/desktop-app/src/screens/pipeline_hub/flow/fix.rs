@@ -22,7 +22,7 @@ impl Fix {
     match runs {
       Runs::ProfileNotPublished { id } | Runs::ProfileConnectionGone { id, .. } => Some(Self::Profile(*id)),
       Runs::ToolNotPublished { id } | Runs::ToolNotRunnable { id, .. } => Some(Self::Tool(*id)),
-      Runs::Profile { .. } | Runs::Tool { .. } | Runs::NoProfile | Runs::NoTool => None,
+      Runs::Profile { .. } | Runs::Tool { .. } | Runs::Tests | Runs::NoProfile | Runs::NoTool => None,
     }
   }
 

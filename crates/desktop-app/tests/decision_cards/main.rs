@@ -3,9 +3,10 @@
 //! person and by automation, ended before an answer), a command waiting for approval and the ways one ends
 //! (approved once, denied, approved by automation, ended without an answer), and plans; on `cards-auto-mode`, a
 //! command as auto mode's review leaves it ([`auto_mode`]); on `cards-approval-modes`, requests as the run's approval
-//! mode answered them ([`approval_modes`]). The window's runner program does not exist: an answer
-//! reaches no runner, and the card says why ([`answering`]); a run recorded at work is interrupted, so what its
-//! agent asked in its turn no longer waits, unless the seed holds its step waiting for the person. Needs `git`.
+//! mode answered them ([`approval_modes`]); on `service-cards`, the cards of a run's services ([`services`]). The
+//! window's runner program does not exist: an answer reaches no runner, and the card says why ([`answering`]); a run
+//! recorded at work is interrupted, so what its agent asked in its turn no longer waits, unless the seed holds its
+//! step waiting for the person. Needs `git`.
 
 mod answering;
 mod approval_modes;
@@ -20,6 +21,7 @@ mod deny_message;
 mod kontur;
 mod model_approved;
 mod project;
+mod services;
 #[path = "../support/mod.rs"]
 mod support;
 mod theme;

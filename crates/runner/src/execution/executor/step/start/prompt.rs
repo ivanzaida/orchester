@@ -10,12 +10,12 @@ use std::{num::NonZeroU32, path::Path};
 use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
-  resource::{InjectionEvent, Instruction, Step},
+  resource::{InjectionEvent, Instruction, Step, StepKind},
   revision::Revision,
   run::{
     AssembledPrompt, BaseMoved, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
     PinnedVersion, PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext,
-    StepOutput, run_delivers,
+    StepOutput, StepStatus, StoredTestResult, run_delivers,
   },
   store::{ActivityStore, RunStore},
 };
@@ -67,6 +67,7 @@ impl RunTask {
       .plans(self.run.id())
       .map_err(|error| problem(error.to_string()))?;
     let dependencies = dependencies(&self.run, step, &outputs, &plans);
+    let tests = test_results(&self.run, step, &outputs);
     let retry = self.retry_report(execution, &outputs)?;
     let resolving = self.resolving_merge(execution, worktree);
     let instructions = self.pinned_instructions()?;
@@ -95,6 +96,7 @@ impl RunTask {
       skills: &skills,
       code_index,
       dependencies: &dependencies,
+      tests: &tests,
       revision: Plan::awaiting_revision(&plans, execution, continuation.last_started).map(|(plan, note)| {
         PlanRevision {
           version: plan.version,
@@ -197,7 +199,7 @@ impl RunTask {
 
 /// The outputs of the passed executions of the steps `step` depends on, in pipeline order: a gated
 /// step's is the plan that was approved, its latest; any other's what it left for the steps after
-/// it.
+/// it. A Test step's result is told apart ([`test_results`]).
 fn dependencies<'a>(
   run: &'a Run,
   step: &Step,
@@ -209,7 +211,7 @@ fn dependencies<'a>(
     .body()
     .steps()
     .iter()
-    .filter(|dependency| step.depends_on.contains(&dependency.key))
+    .filter(|dependency| step.depends_on.contains(&dependency.key) && dependency.kind != StepKind::Test)
     .filter_map(|dependency| {
       let passed = run.latest_execution(&dependency.key)?;
       let attempt = run
@@ -221,6 +223,36 @@ fn dependencies<'a>(
         step: dependency,
         attempt: attempt.number(),
         text,
+      })
+    })
+    .collect()
+}
+
+/// The results the passed Test steps `step` runs after, directly or not, stored with the run, in pipeline order.
+fn test_results<'a>(run: &'a Run, step: &Step, outputs: &'a [StepOutput]) -> Vec<StoredTestResult<'a>> {
+  run
+    .snapshot()
+    .body()
+    .steps()
+    .iter()
+    .filter(|tested| {
+      tested.kind == StepKind::Test
+        && tested.key != step.key
+        && run.snapshot().downstream_of(&tested.key).contains(&step.key)
+    })
+    .filter_map(|tested| {
+      let passed = run
+        .latest_execution(&tested.key)
+        .filter(|execution| execution.status() == StepStatus::Passed)?;
+      let attempt = run
+        .attempts()
+        .iter()
+        .find(|attempt| attempt.execution(passed.id()).is_some())?;
+      let output = outputs.iter().find(|output| output.execution == passed.id())?;
+      Some(StoredTestResult {
+        step: tested,
+        attempt: attempt.number(),
+        text: &output.text,
       })
     })
     .collect()

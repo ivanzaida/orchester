@@ -66,6 +66,7 @@ pub(crate) struct SettingRow {
   /// Lines under the hint, in the words' column.
   lines: Vec<Element>,
   lead: Option<Element>,
+  beside: Vec<Element>,
   controls: Vec<Element>,
   under: Vec<Element>,
   open: Option<Open>,
@@ -90,6 +91,7 @@ impl SettingRow {
       hint_style: ProjectSettingsText::Hint.role(),
       lines: Vec::new(),
       lead: None,
+      beside: Vec::new(),
       controls: Vec::new(),
       under: Vec::new(),
       open: None,
@@ -190,6 +192,12 @@ impl SettingRow {
     self
   }
 
+  /// What sits right after the label, 6 from it: a tag such as a service's driver (`Chip · no UI` `GCK3E`).
+  pub(crate) fn beside(mut self, beside: impl Into<Element>) -> Self {
+    self.beside.push(beside.into());
+    self
+  }
+
   /// A control at the row's end; several sit 8 apart.
   pub(crate) fn control(mut self, control: impl Into<Element>) -> Self {
     self.controls.push(control.into());
@@ -272,6 +280,7 @@ impl SettingRow {
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .child(label)
+      .with_children(std::mem::take(&mut self.beside))
       .with_children(info);
     let heading = if self.cut_label {
       heading.width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0))

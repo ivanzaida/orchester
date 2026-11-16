@@ -17,6 +17,18 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 pub fn started_run(db: &mut ProjectDb) -> RunId {
+  let mut run = runs(db, 1).remove(0);
+  let events = run.start(Timestamp::now()).expect("start");
+  db.append_events(&run, &events).expect("started run");
+  run.id()
+}
+
+/// `count` runs of one task, not started: what a history of runs refers to.
+pub fn run_ids(db: &mut ProjectDb, count: usize) -> Vec<RunId> {
+  runs(db, count).iter().map(|run| run.id()).collect()
+}
+
+fn runs(db: &mut ProjectDb, count: usize) -> Vec<orchester_core::run::Run> {
   let now = Timestamp::now();
   let task = db
     .create_tasks(
@@ -33,25 +45,25 @@ pub fn started_run(db: &mut ProjectDb) -> RunId {
     .expect("task")[0]
     .id();
   let snapshot = snapshot(db);
-  let mut run = db
-    .create_run(
-      IdempotencyKey::generate(),
-      NewRun {
-        task,
-        snapshot,
-        branch: BranchName::new("orchester/kon-1-run-1").expect("branch"),
-        base: Revision::new(&"a".repeat(40)).expect("revision"),
-        base_branch: None,
-        base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
-        budget: None,
-        max_duration: None,
-      },
-      now,
-    )
-    .expect("run");
-  let events = run.start(now).expect("start");
-  db.append_events(&run, &events).expect("started run");
-  run.id()
+  (1..=count)
+    .map(|number| {
+      db.create_run(
+        IdempotencyKey::generate(),
+        NewRun {
+          task,
+          snapshot: snapshot.clone(),
+          branch: BranchName::new(&format!("orchester/kon-1-run-{number}")).expect("branch"),
+          base: Revision::new(&"a".repeat(40)).expect("revision"),
+          base_branch: None,
+          base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
+          budget: None,
+          max_duration: None,
+        },
+        now,
+      )
+      .expect("run")
+    })
+    .collect()
 }
 
 fn snapshot(db: &mut ProjectDb) -> RunSnapshot {

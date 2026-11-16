@@ -4,6 +4,7 @@
 mod broken;
 mod capped;
 mod formats;
+mod runs;
 
 use orchester_core::test_report::{ReportFormat, TestCase, TestReport, read_report};
 

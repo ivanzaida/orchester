@@ -229,7 +229,7 @@ pub enum StepFailure {
   /// The step's changes could not be committed or merged.
   CheckpointFailed,
   /// A command tool's program exited with a code the tool does not expect, or did not finish
-  /// within the tool's timeout.
+  /// within the tool's timeout; or a Test step's tests failed.
   CommandFailed,
   /// The agent finished and reported `unverified`: it could not check everything the step is for.
   Unverified,

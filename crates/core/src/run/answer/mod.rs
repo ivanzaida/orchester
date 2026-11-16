@@ -46,7 +46,7 @@ pub enum ApprovalAnswer {
   /// This request, and later ones of the run that are alike ([`RuleScope::similar`]).
   Similar,
   /// This request, and later ones alike in every run of the project ([`ProjectScope`]): only Orchester's
-  /// `start_qa_app`, while the QA script is unchanged.
+  /// `start_qa_app`, while the QA script is unchanged, and its service starts, while each service is unchanged.
   SimilarProject,
   /// This request, and for good: a command's `prefix` goes into its profile's Allowed commands as a
   /// new profile version, an MCP tool into its server's Tools that run without asking.

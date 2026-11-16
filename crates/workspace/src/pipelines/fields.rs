@@ -27,6 +27,8 @@ pub enum Executor {
   Unset,
   Profile(ResourceId),
   Tool(ResourceId),
+  /// Orchester runs the project's test suites (a Test step).
+  Tests,
 }
 
 impl Executor {
@@ -35,12 +37,13 @@ impl Executor {
       StepKind::Agent { profile: Some(id), .. } => Self::Profile(id),
       StepKind::Tool { tool: Some(id) } => Self::Tool(id),
       StepKind::Agent { profile: None, .. } | StepKind::Tool { tool: None } => Self::Unset,
+      StepKind::Test => Self::Tests,
     }
   }
 
   /// Runs the step with this executor. Choosing a profile for an agent step keeps its
   /// repository access, model and permission narrowing; nothing chosen keeps whether it is an
-  /// agent or a tool step.
+  /// agent or a tool step, and leaves a Test step as it is.
   pub fn apply(self, step: &mut Step) {
     let (repository, model, permissions) = match &step.kind {
       StepKind::Agent {
@@ -49,7 +52,7 @@ impl Executor {
         permissions,
         ..
       } => (*repository, model.clone(), permissions.clone()),
-      StepKind::Tool { .. } => (RepositoryAccess::ReadOnly, None, StepPermissions::default()),
+      StepKind::Tool { .. } | StepKind::Test => (RepositoryAccess::ReadOnly, None, StepPermissions::default()),
     };
     step.kind = match (self, &step.kind) {
       (Self::Profile(id), _) => StepKind::Agent {
@@ -59,6 +62,7 @@ impl Executor {
         permissions,
       },
       (Self::Tool(id), _) => StepKind::Tool { tool: Some(id) },
+      (Self::Tests, _) | (Self::Unset, StepKind::Test) => StepKind::Test,
       (Self::Unset, StepKind::Agent { .. }) => StepKind::Agent {
         profile: None,
         repository,
@@ -167,7 +171,7 @@ impl ModelChoice {
   pub fn of(step: &Step) -> Self {
     match &step.kind {
       StepKind::Agent { model, .. } => Self(model.clone()),
-      StepKind::Tool { .. } => Self(None),
+      StepKind::Tool { .. } | StepKind::Test => Self(None),
     }
   }
 
@@ -207,7 +211,7 @@ impl AccessChoice {
   pub const fn of(step: &Step) -> Self {
     match step.kind {
       StepKind::Agent { repository, .. } => Self(repository),
-      StepKind::Tool { .. } => Self(RepositoryAccess::ReadOnly),
+      StepKind::Tool { .. } | StepKind::Test => Self(RepositoryAccess::ReadOnly),
     }
   }
 

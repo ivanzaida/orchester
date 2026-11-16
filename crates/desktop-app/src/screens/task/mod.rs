@@ -35,6 +35,8 @@ mod pause_wait;
 mod queue_words;
 mod read;
 mod reading;
+mod removal;
+mod services;
 mod sharing;
 pub(crate) mod summary;
 mod team;
@@ -56,7 +58,6 @@ use orchester_core::{
 };
 use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
-pub use self::context::TaskContext;
 pub(crate) use self::conversation::{links, step_label};
 use self::{
   changes::{ChangesReads, FileCount, Follow},
@@ -66,6 +67,10 @@ use self::{
   },
   read::{ReadAgain, TaskRead},
   summary::{EventWords, SummaryProps, TaskSummary, Version},
+};
+pub use self::{
+  context::TaskContext,
+  removal::{Removal, RemovalPlace},
 };
 use crate::{
   navigation::Navigation,
@@ -267,43 +272,6 @@ struct FrameProps {
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
 
-/// Whose *Remove worktree* confirmation is open, and where: under the header when the header's button
-/// opened it for the latest run, in the run's row of *Runs of this task* when the row's did. One at a
-/// time.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Removal {
-  pub run: Option<RunId>,
-  pub place: RemovalPlace,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum RemovalPlace {
-  #[default]
-  Header,
-  Row,
-}
-
-impl lurq::app::component::DevtoolsInspectable for Removal {}
-
-impl Removal {
-  pub const fn closed() -> Self {
-    Self {
-      run: None,
-      place: RemovalPlace::Header,
-    }
-  }
-
-  /// Open for `run` at `place`.
-  pub const fn of(run: RunId, place: RemovalPlace) -> Self {
-    Self { run: Some(run), place }
-  }
-
-  /// Open for `run` at `place` now.
-  pub fn shows(self, run: RunId, place: RemovalPlace) -> bool {
-    self.run == Some(run) && self.place == place
-  }
-}
-
 /// What the frame shares with its parts while it shows one task.
 #[derive(Clone)]
 pub struct PageState {
@@ -365,6 +333,8 @@ struct TaskFrame {
   retries: Signal<u64>,
   /// The Changes tab's reads, for its count in the page tabs and the tab itself.
   changes: ChangesReads,
+  /// The run's services as its runner lists them, for the Services tab's count and dot and the tab itself.
+  services: services::ServicesReads,
   /// Why the task could not be read again, kept while it is read again until a reading succeeds.
   stale: Signal<StaleRead>,
   state: PageState,
@@ -406,6 +376,7 @@ impl Component for TaskFrame {
       composer,
       retries: ctx.signal(0),
       changes: ChangesReads::new(ctx),
+      services: services::ServicesReads::new(ctx),
       stale: ctx.signal(StaleRead(None)),
       state: PageState {
         removal: ctx.signal(Removal::closed()),
@@ -444,6 +415,7 @@ impl Component for TaskFrame {
     ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
     ctx.provide(self.changes.clone());
+    ctx.provide(self.services.clone());
     let feed = &props.project.feed;
     // A change of the merge queue changes where the task's run stands in its delivery (ORC-19).
     let queue = crate::project::merge_queue::changes(ctx, &props.project.open.repo_root);
@@ -504,6 +476,7 @@ impl Component for TaskFrame {
       view: props.view.clone(),
       stale,
     };
+    let services_reader = services::reader(ctx, &task);
     let take_over = team_controls::take_over_dialog(ctx, &task);
     let blocking = team_controls::blocking_dialog(ctx, &task);
     let body = tab(ctx, &props.view, task);
@@ -516,8 +489,7 @@ impl Component for TaskFrame {
       .child(body)
       .with_children(reader)
       .with_children(readers)
-      .with_children(take_over)
-      .with_children(blocking)
+      .with_children(take_over.into_iter().chain(blocking).chain(services_reader))
       .into()
   }
 }
@@ -560,6 +532,7 @@ fn tab(ctx: &mut Ctx, view: &TaskView, task: TaskContext) -> Element {
     TaskView::Conversation => conversation_tab(ctx, &task),
     TaskView::Changes(_) => changes_tab(ctx, &task),
     TaskView::LocalIntegration => local_integration::tab(ctx, &task),
+    TaskView::Services => services::tab(ctx, &task),
   }
 }
 

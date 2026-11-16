@@ -45,6 +45,15 @@ impl AppCall {
     })
   }
 
+  /// A call of the QA app the step started, as a driver makes it: its MCP tool `tool` with `arguments`.
+  pub fn of_qa_app(tool: &str, arguments: Value) -> Self {
+    Self {
+      pid: None,
+      tool: tool.to_owned(),
+      arguments,
+    }
+  }
+
   /// The app's pid; `None` for the QA app the step started.
   pub const fn pid(&self) -> Option<NonZeroU32> {
     self.pid

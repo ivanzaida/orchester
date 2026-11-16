@@ -308,6 +308,16 @@ pub enum RunnerProblem {
     #[serde(default)]
     holders: Vec<QaSlotHolder>,
   },
+  /// A service the agent started crashed after it was ready; the agent got the same facts as a notice.
+  ServiceCrashed(crate::service::ServiceCrash),
+  /// A start of the agent's failed because Docker was not available or a service was not ready in time; the agent
+  /// got the same facts in its start's answer. Boxed: its lines and names would make every problem as large.
+  ServiceStartFailed(Box<crate::service::ServiceStartFailure>),
+  /// The agent's start of services, or of a test suite's own process, waits for service slots
+  /// (`docs/architecture/agent-testing.md`, decision 3): too few of them are free under its project's share and the
+  /// computer's limit; the wait says how many are held and by whom. It goes on once enough services stop, after the
+  /// starts that waited before it in the same project. Boxed: its holders would make every problem as large.
+  WaitingForServiceSlots(Box<crate::service::ServiceSlotWait>),
 }
 
 /// A run whose QA app holds a QA slot: its task's key (`ORC-62`) and its number (39), as its slot file names them.

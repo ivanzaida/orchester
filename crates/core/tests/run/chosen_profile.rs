@@ -45,7 +45,7 @@ fn succeeded() -> Logged {
 fn snapshot_agent(run: &Run, step: &str) -> (PinnedVersion, String) {
   match run.snapshot().step(&key(step)).expect("a step").executor() {
     StepExecutor::Agent { profile, model, .. } => (*profile, model.as_str().to_owned()),
-    StepExecutor::Tool { .. } => panic!("an agent step"),
+    StepExecutor::Tool { .. } | StepExecutor::Test => panic!("an agent step"),
   }
 }
 

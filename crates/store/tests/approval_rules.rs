@@ -69,7 +69,66 @@ fn qa_rule(blob: &str) -> ProjectScope {
     tool: "start_qa_app".to_owned(),
     reach: ToolReach::Script { blob: blob.to_owned() },
   })
+  .pop()
   .expect("a project rule")
+}
+
+/// The rule *Approve for every run of this project* keeps for the service `name`, whose variable `API_TOKEN` has the
+/// plain value `value`.
+fn service_rule(name: &str, value: &str) -> ProjectScope {
+  use orchester_core::{
+    resource::{CommandProgram, VariableName},
+    service::{
+      Readiness, ReadyCheck, ReadyTimeout, Service, ServiceApproval, ServiceName, ServiceValue, ServiceVariables,
+    },
+  };
+  let readiness = Readiness::new(ReadyCheck::PortOpen, ReadyTimeout::from_secs(20).expect("in range"));
+  let variables = ServiceVariables::new(std::collections::BTreeMap::from([(
+    VariableName::new("API_TOKEN").expect("a name"),
+    ServiceValue::Plain(value.to_owned()),
+  )]))
+  .expect("variables");
+  let service = Service::new(
+    ServiceName::new(name).expect("a name"),
+    CommandProgram::new("node").expect("a program"),
+    readiness,
+  )
+  .with_variables(variables);
+  ProjectScope::Service(ServiceApproval::of(&service))
+}
+
+#[test]
+fn approval_rules_of_the_project_keep_one_rule_per_service_without_its_values() {
+  let (repo, mut db, run, _) = started_run();
+  let (web, api) = (service_rule("web", "token-4b1d"), service_rule("api", "token-4b1d"));
+  let first = db
+    .add_project_approval_rules(std::slice::from_ref(&web), (run.id(), "invocation:web"), at(10))
+    .expect("web's rule");
+  // A start of `web` with its need `api`: `web` keeps its rule, `api` gets one, in one transaction.
+  let added = db
+    .add_project_approval_rules(&[api.clone(), web.clone()], (run.id(), "invocation:start"), at(11))
+    .expect("the start's rules");
+  assert_eq!(added[1].id, first[0].id, "an active rule is not added twice");
+  assert_ne!(added[0].id, first[0].id);
+  drop(db);
+  let db = ProjectDb::open(repo.path()).expect("reopen");
+  let rules = db.project_approval_rules().expect("rules");
+  let scopes: Vec<&ProjectScope> = rules.iter().map(|rule| &rule.scope).collect();
+  assert_eq!(scopes, [&web, &api]);
+  let connection = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("raw");
+  let stored: Vec<String> = connection
+    .prepare("SELECT scope FROM project_approval_rules")
+    .expect("query")
+    .query_map([], |row| row.get(0))
+    .expect("rows")
+    .collect::<Result<_, _>>()
+    .expect("scopes");
+  assert!(
+    stored
+      .iter()
+      .all(|scope| scope.contains("API_TOKEN") && !scope.contains("token-4b1d")),
+    "a rule names a variable, never its value: {stored:?}"
+  );
 }
 
 #[test]
@@ -94,7 +153,7 @@ fn approval_rules_of_the_project_outlive_their_run_and_are_revoked() {
   assert_eq!(rules.len(), 2);
   assert_eq!(
     (rules[0].made_in, rules[0].answered, rules[0].scope.script()),
-    (run.id(), 1, "3f2a1b9c")
+    (run.id(), 1, Some("3f2a1b9c"))
   );
   assert!(db.revoke_project_approval_rule(rule.id, at(13)).expect("revoked"));
   assert!(!db.revoke_project_approval_rule(rule.id, at(14)).expect("once"));

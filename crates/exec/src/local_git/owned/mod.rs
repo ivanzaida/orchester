@@ -29,9 +29,9 @@ pub use platform::Directory;
 pub use store::StoreOwnership;
 #[cfg(unix)]
 use unix as platform;
-#[cfg(windows)]
-use windows as platform;
 
+#[cfg(windows)]
+use self::windows as platform;
 use super::{LocalError, LocalGitError, digest};
 
 const MAX_BYTES: u64 = 16 * 1024 * 1024;

@@ -247,6 +247,14 @@ A run row whose id or task id cannot be parsed still fails the whole listing
 whether such a row is reported as a project-level "unreadable rows" error that still lists the others. **needs
 decision**.
 
+### AT1 · Agent testing in a team's configuration (needs the server's contract)
+
+Services, stacks, test suites and the flaky-test quarantine are kept on each member's computer in a team project too
+(`docs/design/local-and-team-parity.md`, *Agent testing*). The team server's contract takes none of their kinds
+(`docs/cloud-api.md`), and a team pipeline's version with a Test step was never sent to a server. Change the contract
+here first (`orchester-api`, `docs/cloud-api.md`), then the server in `orchester-platform`; both rows of the table
+leave it with this task.
+
 ## M · MCP servers
 
 ### M8 · Orchester's own MCP server · branch `claude/app-mcp` (from master `3d76beff`, UI)

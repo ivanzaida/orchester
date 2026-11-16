@@ -149,7 +149,7 @@ fn open_builder_stands_under_the_agent_label_and_opens_the_profile() {
   let plan = keys(&agents, ready)[0].clone();
   let builder = match &super::pipeline_step::stored(&agents, ready).steps()[0].kind {
     StepKind::Agent { profile, .. } => profile.expect("a profile"),
-    StepKind::Tool { .. } => panic!("an agent step"),
+    StepKind::Tool { .. } | StepKind::Test => panic!("an agent step"),
   };
   open_step(&mut agents, ready, &plan);
   assert_eq!(agents.text("pipeline-hub-step-agent-row-label"), "Agent");

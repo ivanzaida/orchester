@@ -39,10 +39,10 @@ pub enum RuleRecord {
     scope: RuleScope,
     at: Timestamp,
   },
-  /// Approve for every run of this project, given to request `request` of `run`
-  /// ([`ProjectDb::add_project_approval_rule`]).
+  /// Approve for every run of this project, given to request `request` of `run`: a rule of each of `scopes`, one per
+  /// service of a start, kept together or not at all ([`ProjectDb::add_project_approval_rules`]).
   Project {
-    scope: ProjectScope,
+    scopes: Vec<ProjectScope>,
     run: RunId,
     request: String,
     at: Timestamp,
@@ -52,12 +52,12 @@ pub enum RuleRecord {
 }
 
 /// What a [`RuleRecord`] did: the rule that answers from now on (an active one of the same scope when there was one
-/// already), or that a project rule's count went up.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// already), the project's rules in the order of their scopes, or that a project rule's count went up.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "rule")]
 pub enum RuleAnswer {
   Run(ApprovalRuleId),
-  Project(ProjectRuleId),
+  Project(Vec<ProjectRuleId>),
   Counted,
 }
 
@@ -142,11 +142,17 @@ impl ProjectDb {
     Ok(match record {
       RuleRecord::Run { run, scope, at } => RuleAnswer::Run(self.add_approval_rule(*run, scope, *at)?.id),
       RuleRecord::Project {
-        scope,
+        scopes,
         run,
         request,
         at,
-      } => RuleAnswer::Project(self.add_project_approval_rule(scope, (*run, request), *at)?.id),
+      } => RuleAnswer::Project(
+        self
+          .add_project_approval_rules(scopes, (*run, request), *at)?
+          .into_iter()
+          .map(|rule| rule.id)
+          .collect(),
+      ),
       RuleRecord::ProjectAnswered { rule } => {
         self.project_rule_answered(*rule)?;
         RuleAnswer::Counted

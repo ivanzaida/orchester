@@ -73,7 +73,7 @@ impl Blocked {
   /// What keeps a step that runs `runs` from running; `None` when it can run.
   pub fn of(runs: &Runs) -> Option<Self> {
     Some(match runs {
-      Runs::Profile { .. } | Runs::Tool { .. } => return None,
+      Runs::Profile { .. } | Runs::Tool { .. } | Runs::Tests => return None,
       Runs::NoProfile => Self::NoProfile,
       Runs::NoTool => Self::NoTool,
       Runs::ProfileNotPublished { id } => Self::ProfileNotPublished { id: *id },

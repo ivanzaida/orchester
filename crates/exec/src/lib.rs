@@ -13,12 +13,16 @@ pub mod awake;
 pub mod browser;
 pub mod clone_console;
 pub mod disk_space;
+pub mod docker;
 pub mod external;
 pub mod launch;
+pub mod listener;
 pub mod local_git;
+pub mod native_ui;
 pub mod priority;
 #[cfg(unix)]
 pub mod process_group;
+pub mod process_tree;
 pub mod programs;
 pub mod ripgrep;
 pub mod run_git;

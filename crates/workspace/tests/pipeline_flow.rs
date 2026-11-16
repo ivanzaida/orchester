@@ -280,7 +280,7 @@ fn conflicts_go_to_the_person_when_no_step_can_write() {
         },
         ..step.clone()
       },
-      StepKind::Tool { .. } => step.clone(),
+      StepKind::Tool { .. } | StepKind::Test => step.clone(),
     })
     .collect();
   let pipeline = Pipeline::new(reader_only)

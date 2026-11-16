@@ -64,7 +64,7 @@ impl Pipeline {
             tool: *tool,
           });
         }
-        StepKind::Agent { .. } | StepKind::Tool { .. } => {}
+        StepKind::Agent { .. } | StepKind::Tool { .. } | StepKind::Test => {}
       }
     }
     match self.deliver().and_then(|deliver| deliver.integrator()) {

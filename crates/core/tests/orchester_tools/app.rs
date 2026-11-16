@@ -196,3 +196,47 @@ fn start_qa_app_waiting_note_names_its_holders_and_reads_notes_stored_before_the
   let earlier: RunnerProblem = serde_json::from_str(r#"{"problem":"waiting_for_qa_slot"}"#).expect("reads");
   assert_eq!(earlier, RunnerProblem::WaitingForQaSlot { holders: Vec::new() });
 }
+
+#[test]
+fn service_slots_waiting_note_names_its_holders_and_reads_notes_stored_before_them() {
+  use orchester_core::{
+    connection::stream::RunnerProblem,
+    id::ProjectId,
+    service::{ServiceSlotHolder, ServiceSlotWait, SlotStep, SlotUse},
+    time::Timestamp,
+  };
+  let named = RunnerProblem::WaitingForServiceSlots(Box::new(ServiceSlotWait {
+    slots: 4,
+    share: 8,
+    limit: 8,
+    starts: Some(SlotUse {
+      stack: Some("team".to_owned()),
+      services: vec!["postgres".to_owned(), "team-web".to_owned()],
+    }),
+    free: Some(2),
+    held: Some(6),
+    holders: vec![ServiceSlotHolder {
+      project: ProjectId::generate(),
+      task: "PLT-38".to_owned(),
+      run: 3,
+      step: Some(SlotStep {
+        number: 4,
+        name: "Test".to_owned(),
+      }),
+      what: SlotUse::suite(),
+      slots: 6,
+      since: Timestamp::from_unix_millis(1_000),
+    }],
+  }));
+  let stored = serde_json::to_string(&named).expect("stored");
+  assert_eq!(serde_json::from_str::<RunnerProblem>(&stored).expect("reads"), named);
+  // A note stored before holders and counts were kept still reads, naming none.
+  let earlier: RunnerProblem =
+    serde_json::from_str(r#"{"problem":"waiting_for_service_slots","slots":4,"share":4,"limit":8}"#).expect("reads");
+  let RunnerProblem::WaitingForServiceSlots(wait) = earlier else {
+    panic!("a slots note");
+  };
+  assert_eq!((wait.slots, wait.share, wait.limit), (4, 4, 8));
+  assert_eq!((wait.starts, wait.free, wait.held), (None, None, None));
+  assert!(wait.holders.is_empty());
+}

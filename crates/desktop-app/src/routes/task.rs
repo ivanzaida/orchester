@@ -14,17 +14,18 @@ const MEMORY: &str = "memory";
 const LOCAL_INTEGRATION: &str = "local-integration";
 
 /// A tab of a task's page, in the page's order (ORC-100, `Tabs` `QFr7g` in `Task header` `j8DakG`): Summary, the
-/// one a task opens on, then Conversation and Changes.
+/// one a task opens on, then Conversation, Changes and the run's Services (ORC-265, `cjvRr`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskTab {
   #[default]
   Summary,
   Conversation,
   Changes,
+  Services,
 }
 
 impl TaskTab {
-  pub const ALL: [Self; 3] = [Self::Summary, Self::Conversation, Self::Changes];
+  pub const ALL: [Self; 4] = [Self::Summary, Self::Conversation, Self::Changes, Self::Services];
 
   /// The tab's name: its segment in a path, and its name in the app's MCP tools.
   pub const fn name(self) -> &'static str {
@@ -32,6 +33,7 @@ impl TaskTab {
       Self::Summary => "summary",
       Self::Conversation => "conversation",
       Self::Changes => "changes",
+      Self::Services => "services",
     }
   }
 
@@ -45,6 +47,7 @@ impl TaskTab {
       Self::Summary => "task.tabs.summary",
       Self::Conversation => "task.tabs.conversation",
       Self::Changes => "task.tabs.changes",
+      Self::Services => "task.tabs.services",
     }
   }
 }
@@ -62,6 +65,8 @@ pub enum TaskView {
   Changes(Option<ChangedFile>),
   /// Local integration, which *Try locally* on Changes opens; under the Changes tab.
   LocalIntegration,
+  /// The services the steps of the task's run at work started.
+  Services,
 }
 
 impl TaskView {
@@ -74,6 +79,7 @@ impl TaskView {
       TaskTab::Summary => Self::Summary,
       TaskTab::Conversation => Self::Conversation,
       TaskTab::Changes => Self::Changes(None),
+      TaskTab::Services => Self::Services,
     }
   }
 
@@ -92,6 +98,7 @@ impl TaskView {
       Self::Summary | Self::Memory => TaskTab::Summary,
       Self::Conversation => TaskTab::Conversation,
       Self::Changes(_) | Self::LocalIntegration => TaskTab::Changes,
+      Self::Services => TaskTab::Services,
     }
   }
 
@@ -100,7 +107,7 @@ impl TaskView {
     match self {
       Self::Memory => Some(MEMORY),
       Self::LocalIntegration => Some(LOCAL_INTEGRATION),
-      Self::Summary | Self::Conversation | Self::Changes(_) => None,
+      Self::Summary | Self::Conversation | Self::Changes(_) | Self::Services => None,
     }
   }
 
@@ -113,13 +120,14 @@ impl TaskView {
       Self::Conversation => Self::Conversation,
       Self::Changes(_) => Self::Changes(None),
       Self::LocalIntegration => Self::LocalIntegration,
+      Self::Services => Self::Services,
     }
   }
 
   pub const fn file(&self) -> Option<&ChangedFile> {
     match self {
       Self::Changes(file) => file.as_ref(),
-      Self::Summary | Self::Memory | Self::Conversation | Self::LocalIntegration => None,
+      Self::Summary | Self::Memory | Self::Conversation | Self::LocalIntegration | Self::Services => None,
     }
   }
 

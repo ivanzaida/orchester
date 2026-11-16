@@ -77,6 +77,16 @@ removes the difference.
 - `list_tasks`, `get_task`, `list_modules` and `get_module` read a team project from its server.
 - A watch on a team task ends on the status the server reports (`docs/design/orchestrator-watch.md`, *Team tasks*).
 
+### Agent testing
+
+Read from the code when `module/agent-testing` took `master` (2026-11-16), not run against a team server. Services,
+stacks and test suites start, run and show the same in both kinds of project; what differs is who keeps them.
+
+| Behaviour | Local project | Team project | Why | Closes it |
+| --- | --- | --- | --- | --- |
+| Services, stacks, test suites and the flaky-test quarantine (Project settings › Services) | kept on this computer | kept on this computer too, by each member for themselves: the team does not share them, though they are a project's configuration | the server's contract keeps none of agent testing's kinds (`docs/cloud-api.md`, `team_resource`) | AT1 (`docs/plan.md`) |
+| A Test step in a pipeline | saved and run | a team pipeline's version is kept on the team server, whose contract was written before the Test step: whether it takes such a version was not run | the same | AT1 |
+
 ### Outside the Orchestrator
 
 Found in the docs while this was written, not read in the code:

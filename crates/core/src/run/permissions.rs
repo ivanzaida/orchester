@@ -209,7 +209,7 @@ impl Run {
   pub fn profile_of(&self, step: &StepKey) -> Option<ResourceId> {
     match self.snapshot().step(step)?.executor() {
       StepExecutor::Agent { profile, .. } => Some(profile.resource),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     }
   }
 

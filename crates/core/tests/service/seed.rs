@@ -70,6 +70,33 @@ fn seed_capture_paths_are_json_paths() {
 }
 
 #[test]
+fn seed_capture_paths_read_members_and_elements() {
+  let answer = serde_json::json!({
+    "id": "team-7",
+    "team-id": 7,
+    "items": [{"id": "a"}, {"id": "b", "tags": ["x", "y"]}],
+    "empty": null
+  });
+  let find = |path: &str| CapturePath::new(path).expect("a JSON path").find(&answer).cloned();
+  assert_eq!(find("$"), Some(answer.clone()));
+  assert_eq!(find("$.id"), Some(serde_json::json!("team-7")));
+  assert_eq!(find("$.team-id"), Some(serde_json::json!(7)));
+  assert_eq!(find("$.items[1].id"), Some(serde_json::json!("b")));
+  assert_eq!(find("$.items[1].tags[0]"), Some(serde_json::json!("x")));
+  assert_eq!(find("$.empty"), Some(serde_json::Value::Null));
+  for missing in [
+    "$.name",
+    "$.items[2]",
+    "$.id[0]",
+    "$.items.id",
+    "$[0]",
+    "$.items[1].tags[99999999999999999999]",
+  ] {
+    assert_eq!(find(missing), None, "{missing}");
+  }
+}
+
+#[test]
 fn seed_request_urls_and_headers_are_valid() {
   for invalid in ["", "localhost/api", "ftp://host/x", "{{url}}/a b", "https://host/\n"] {
     assert_eq!(
