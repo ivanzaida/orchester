@@ -35,10 +35,11 @@ describes how the chat works, which tools its agent has and what it does directl
 3. **While it drives, the chat is a client of the app** — every change is made at once by the tool's own rules, and a
    refusal is the tool's. Publishing, starting, canceling, pausing, resuming, continuing (accepting a step, raising
    limits and budgets and resuming after the daily budget included), merging, answering agents and messaging their
-   runs, making the folder a git repository and writing with git all happen directly. Whatever only *Let automation …*
-   allows another client stays refused: what widens what agents may do is `person_only` without *Let automation change
-   agent permissions*; answering agents' questions and messages needs *Let automation answer approvals*, as for any
-   client.
+   runs, making the folder a git repository and writing with git all happen directly. What widens what agents may do
+   stays `person_only` without *Let automation change agent permissions*. *Let automation answer approvals* is for
+   outside MCP clients only: while it drives, the chat answers questions and messages, decides plans and tool requests
+   and raises limits without it. One exception is its own: in a turn the Orchestrator started itself it does not change
+   the project's daily budget (`person_only`); ask it in a message and it does.
 4. **While it does not drive, changes are cards** — publishing, starting a run (unless the project allows Autopilot),
    canceling, merging, answering agents and continuing a stopped run are proposal cards, and no turn starts by itself.
    Pipelines are the exception: there is no card for them, the chat changes none. A card to publish a pipeline kept
@@ -56,8 +57,9 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 approvals (`answer_question`, `send_message`, `decide_plan`, `decide_approval`), queue holds, creating, saving and
 duplicating pipelines, the profile, instruction, skill, tool, service and stack drafts and their publication,
 connections and accounts, the project's settings the app lets automation change (Autopilot, reviewer, environment,
-limits, code index, repository agent files). Each keeps its own rules: `decide_approval` and `decide_plan` need *Let
-automation answer approvals*, and what only a person may do is `person_only`, as for an outside client.
+limits, code index, repository agent files). Each keeps its own rules, and what only a person may do is
+`person_only`, as for an outside client; what asks an outside client for *Let automation answer approvals* does not
+ask the driving chat for it.
 
 **While it does not drive**, it has these: `list_projects`, `get_project`, `list_tasks`, `get_task`, `create_task`,
 `update_task`, `list_modules`, `get_module`, `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`,
@@ -86,7 +88,10 @@ refused as `drive_only`), `list_profiles`, `get_profile`, `save_profile_draft`, 
 | `cancel_run` | direct | direct | proposal | refused `report_turn` |
 | `continue_run` | direct, every choice | direct, every choice | proposal: only `allow_retry`, `return_to`, `resolve_conflicts`; the other choices `person_only` | refused `report_turn` |
 | `merge_run` | direct | direct for a run the rule lets it (`left_to_person` otherwise; see auto-merge) | proposal | refused `report_turn` |
-| `answer_question`, `send_message` | direct (deciding a waiting plan is refused `plan_decision_person_only`) | direct | proposal | refused `report_turn` |
+| `start_acceptance`, `deliver_module` | direct | direct, with a reason, for a module this conversation leads to the end, at the step the module waits for (`not_led`, `not_due` otherwise) | not offered | refused `report_turn` |
+| `answer_question`, `send_message` | direct (a message that would decide a waiting plan is refused `plan_decision_person_only`: use `decide_plan`) | direct | proposal | refused `report_turn` |
+| `decide_plan`, `complete_run` | direct | direct | not among its tools | refused `report_turn` |
+| `update_project_limits` | direct, the daily budget too | direct, but the daily budget (`person_only`) | not among its tools | refused `report_turn` |
 | `publish_*` | direct, unless the draft widens agents' permissions while *Let automation change agent permissions* is off (`person_only`) | same | proposal | refused `report_turn` |
 | `init_repository`, `git_*` writes, `mcp_*` | direct (`git_*` that can lose work stay `git_propose` cards; `mcp_*` that widen need *Let automation change agent permissions*) | same | cards; git writes `write_off` | refused `report_turn` |
 
@@ -118,11 +123,12 @@ runs* and *write with git* — and a project that had *answer agents* on starts 
   tells the person to press a button its tools can press.
 - A day's report and the summary of a watching that ended by itself start a turn that changes nothing (`report_turn`).
 
-Related: *Let automation answer approvals* and *Let automation change agent permissions* (Settings › Automation),
+Related: *Let automation change agent permissions* (Settings › Automation; *Let automation answer approvals* there is
+for outside MCP clients and does not concern the chat),
 *Daily report from the Orchestrator* (Settings › Notifications), *Let Orchester estimate story points* (Project settings
 › Runs › Estimates).
 
-## Chat-only tools (27)
+## Chat-only tools (28)
 
 ### `init_repository`
 
@@ -171,6 +177,17 @@ What ends the wait, read by the waits follower:
   waits for a message gets one telling it to go on; a plan waiting for a decision goes on once the person decides it.
   No agent turn starts.
 - **The waiting run ends** — the wait ends without a word.
+
+### `park_task`
+
+Leaves a task to you when the Orchestrator cannot move it itself: a decision that is yours, a request only you may
+allow, a sign-in, a tool that does not answer, or a ceiling of its leading that was reached. It says what kind of
+thing is needed, why it could not go on and what exactly you are to do. The task then reads as *parked* where its
+target stands (`get_standing`), nothing starts it, and the events of its run start no turn again; the Orchestrator
+goes on with the rest. It ends by itself when you act on the task's run, or when you give the task back. In a turn
+nobody asked for, the Orchestrator parks only a task its conversation leads, and the parking is one of its
+[decisions](#its-own-decisions-with-reasons) for you to review. Showing a parked task on its page and in *Needs you*
+is not built yet.
 
 ### `watch` and `unwatch`
 
@@ -247,7 +264,23 @@ subscription that starts later takes it into its conversation. To get every even
 A watched task's events never reach another conversation, whoever dealt with it before. With *Let the Orchestrator
 drive* on, each entry also starts **one** turn there by itself — never while another turn of that conversation thinks
 (it waits for that turn to end) and only while what it is about still stands; whoever started the run and whatever
-raised the event, the Orchestrator's own answer, message, merge or cancel included. With the switch off the entry only
+raised the event, the Orchestrator's own answer, message, merge or cancel included. A turn that **failed** (it could
+not start, the CLI failed, Orchester or its runner closed under it, or it ran past its 10 minutes) is **tried again**
+in the same entry after 1, 5 and 15 minutes, while the event still stands and the switch is on; the next turn is told
+how the earlier one ended. After the fourth failure, or at once when only you can lift it (not signed in, the
+connection or its account), nothing more starts by itself: the event stays where it shows outside the chat. A turn
+you stopped is not tried again. While the project's **daily budget is used**, or the **account the Orchestrator runs
+on is at its plan limit**, no turn starts by itself at all: the events are kept and wait, and their turns start when
+the day turns or the limit resets (an hour after the limit was reported when its CLI did not say). Your own message is
+not held: it is refused or fails as before, and says why. The conversation says all of this **under the event's
+row**, where its answer would be: *Couldn't answer — trying again at 14:05 · 2 of 4* with why; *Orchestrator is
+thinking · 2 of 4* from the second try on; *Left to you after 4 tries* with **Try again**, which starts one more
+turn for that event now (only you press it: automation driving the window is refused); *Held until 00:00 — today's
+budget is used*, *Held until 16:40 — the account's plan limit is reached*, or *Held — the account's plan limit is
+reached · trying again at 15:00* when its CLI did not say when it lifts. While turns are held, the header says so too
+(*Orchestrator is held until 00:00*). The row goes once a turn gets through. A turn the Orchestrator started itself **compacts the
+conversation first** when its session filled 70 % of its window (the same compaction as *Compact*, shown as the same
+line), so a conversation that leads a module for days keeps answering; your own messages are never compacted under. With the switch off the entry only
 links to its card. Such a turn is
 marked `[Orchester]`; it is told the subscription the event came through and
 the order that applies (see [Orders](#orders)).
@@ -296,6 +329,67 @@ the order that applies (see [Orders](#orders)).
   back). With *Let the Orchestrator drive* on, a turn adds a summary and recommendations and **changes nothing** (every change
   is refused `report_turn`). `get_daily_report` reads a day's report. The daily report is not
   an event of a task: the routing rule does not apply to it.
+
+### Choosing to lead to the end, for now
+
+No window offers it yet. Until one does, begin the order of your own `/watch-module` or `/watch-task` with the words
+**lead to the end** (*lead to the end: merge once the review passed*): the targets are then led to the end within the
+default ceilings, and what follows the words is the order. A target the conversation only followed is led from then
+on. The Orchestrator's own `watch` tool never chooses it. To stop, `/unwatch`. `get_standing` says which targets are
+led (`leads_to_the_end`). In the conversation a target led to the end is told from one that is only followed by a
+flag and words, not by colour: its header chip reads *Webhooks v2 to the end*, and its line *Leading Webhooks v2 to
+the end · 12 tasks — it starts them, merges them and parks what needs you*.
+
+### Before you leave
+
+Under the line of a target led to the end, and inside the `/watching` answer, **Before you leave** lists what would
+stop the work while nobody is at the computer, each with the place that fixes it: *Let the Orchestrator drive* is off
+(Project settings › Orchestrator), the Orchestrator has nothing it can run on (Orchestrator settings), tasks without a
+published pipeline (the task), a pipeline with no Deliver step, whose merges are not checked after merging (the
+pipeline), the project has no daily budget (Project settings › Runs), the computer may go to sleep (Settings ›
+General). Your checkout having local changes and closing the window have no place in the app to fix them, so they
+have no link; closing the window is always listed and not counted, since it is what you must not do. What the app
+cannot check (whether the tasks' MCP servers answer) is said last. With nothing found it is one quiet line, *Ready to
+leave*. It is read when it shows and when you press *Check again*, with no turn of the agent; nothing polls it. It
+warns and refuses nothing. A target the conversation only follows shows none of it.
+
+### Events of a target led to the end
+
+A conversation that leads a target **to the end** (see [Leading to the end](#leading-to-the-end-and-its-ceilings))
+also gets events of the target as a whole, each once per state:
+
+- **Work can start**: tasks of the target can be started now and an agent is free. The turn starts them with
+  `run_task`, also a task whose run failed, with its reason, while its ceiling of runs allows another. This is what
+  starts the first tasks after you chose to have the target led, and the next when an agent frees or a blocker is
+  merged.
+- **Stuck**: nothing can start and nothing moves; everything left is parked, waits for you, or is past a ceiling.
+  The turn tells you once what each task waits for and what to do; you are told again only when that changes.
+
+Each is a line of the conversation with the turn it started under it: *Work can start in Webhooks v2: KON-41, KON-42
+— nothing they depend on is open*; *Webhooks v2 is stuck: 3 left for you — nothing else can start*, with *Needs you
+↗* to the Overview's waiting list; for a module with a branch of its own, *… its acceptance can start* with the
+acceptance pipeline's name, *… it can be delivered* with the branch and where it goes, and *… its delivery waits for
+you* with why and *Module ↗*.
+
+A subscription that only follows gets neither, and starts tasks only as before: in the turn of a success it merged
+under an order.
+
+In every turn an event of a task led to the end starts, the Orchestrator is also told that nobody is there: it reads
+where the target stands, decides what is the task's to decide (by what the design shows, then what the app already
+does, then what surprises you least, then the smaller change), parks what is yours, and never ends a turn by asking
+you something. A **run without progress** is raised again each further period it stays stalled, three times at
+most; for a task led to the end the first turn writes to its agents, the second stops the run and continues it
+from its last checkpoint, and the third parks the task. A **tool request only you may allow** is denied when the
+task plainly does not need it, and otherwise the task is parked for you, with the request's card still yours.
+
+### Its own decisions, with reasons
+
+In a turn it started itself, the Orchestrator gives a one-sentence **reason** with every judgement: how a stopped run
+goes on (accepting a step, a return, a retry, a raise), an answer to an agent's question, a decision on a plan, a
+tool request it allows or denies. Without one the call is refused (`reason_required`). What it did is kept as a
+**decision** of the project, with the task, the run, the reason and the conversation, and stays *open* until you mark
+it seen or overrule it. `get_decisions` lists them for any client and for the chat; the screen that shows them is not
+built yet. In a turn your own message started it needs no reason and makes no decision: you asked.
 
 ## Watching
 
@@ -357,6 +451,19 @@ switch is on, an order such as *start tasks as they become ready* is carried out
 Orchestrator merged: it starts the tasks of what the conversation leads that can start now, once each. A start an
 agent slot refused waits for the next merged success of what it leads; no other event brings it back.
 
+### Leading to the end, and its ceilings
+
+A subscription **follows** its target (everything above) or **leads it to the end**. Leading is the person's choice
+alone; no window offers it yet. For a task led to the end the Orchestrator's own doing, in the turns it starts
+itself, is bounded by the subscription's ceilings, held by its tools whichever of them moves the run
+(`continue_run`, a message that continues a run or runs its task again, `run_task`): 4 returns or retries of a run by
+automation, 1 raise of a run's limit by at most half (never to no limit; a raise of yours counts), 3 runs of a task,
+and an optional token budget for everything the subscription leads, after which nothing is started, returned or
+raised. Past one, the call is refused `ceiling_reached` and the task is left to you. What you ask for in a message is
+not bound. Taking a target over, or renewing its order, keeps it led to the end with its ceilings; stop watching it
+and watch it again to only follow it. A task you watch on its own inside a module led to the end is only followed:
+the more specific subscription decides.
+
 ### Already led elsewhere
 
 Choosing a target another conversation leads applies the rest of the command and shows a card under its line:
@@ -392,3 +499,15 @@ whose event started the turn; in a person's turn, none of its own (the default o
 the conversation watches nothing, when one of its subscriptions already covers the task, or when another conversation
 leads the task's module or the tasks without a module — then the task's events go there, and `create_task`'s answer
 (`watch`) and the action's row say which.
+
+## What it parked and decided while you were away
+
+The project's Overview shows, over what waits for you, the tasks the Orchestrator parked for you (what is needed,
+why it could not go on and what to do; **Give it back** hands the task back to the conversation that leads it, and
+the same row stands at the top of the task's Summary) and the decisions it made by itself that you have not looked
+at, by module, each with its reason: **Seen** takes one off the list, **Mark all seen** all of them, and
+**Overrule…** opens the conversation that decided with the decision quoted in the composer, for your own words.
+
+A module with a branch of its own (Edit module › *Delivery*) shows its delivery first on its Summary, with
+**Deliver**; the ceilings of a conversation that leads to the end are in `/watching` (**Change…**) and their
+defaults in Project settings › Orchestrator › *Leading to the end*.

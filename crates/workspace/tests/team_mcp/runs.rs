@@ -130,7 +130,7 @@ fn team_mcp_delivery_of_a_team_module_is_refused_not_missing() {
 }
 
 #[test]
-fn team_mcp_resume_run_takes_no_old_claim_and_continues_nothing_locally() {
+fn team_mcp_resume_run_of_an_interrupted_team_run_takes_no_old_claim() {
   let team = started();
   team.settle(|run, now| {
     run
@@ -139,13 +139,14 @@ fn team_mcp_resume_run_takes_no_old_claim_and_continues_nothing_locally() {
   });
 
   let resume = json!({"project": "Kontur", "run": team.run.to_string()});
-  assert_eq!(team.checkout.refused("resume_run", &resume), "team_project_unsupported");
+  // It continues under the claim its work started with: the request reaches the runner, which this session lacks.
+  assert_eq!(team.checkout.refused("resume_run", &resume), "runner_unavailable");
   assert!(
     team.checkout.db().sharing().expect("link").is_some(),
     "still a team project"
   );
   let run = team.checkout.call("get_run", &resume).expect("the run");
-  assert_eq!(run["status"]["state"], "interrupted", "the run was not continued");
+  assert_eq!(run["status"]["state"], "interrupted", "no runner continued it");
   assert!(
     team.checkout.db().tasks().expect("tasks").is_empty(),
     "no claim of the old sharing stream cached the task here"

@@ -136,6 +136,7 @@ fn watch_several_targets_keeps_the_new_and_returns_the_one_already_led() {
         command: WatchCommand::Watch {
           targets: targets.to_vec(),
           order: "Ask before merging.".to_owned(),
+          to_end: false,
         },
       },
       ChatEvent::Watch {

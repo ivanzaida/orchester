@@ -6,20 +6,27 @@
 //! Each line is one row, 4 in at its sides, its parts 10 apart: a 13 icon, its words in 12.5 `text_secondary`, what it
 //! adds after them in 12 `text_muted` filling the row, and at its end the time or *Open ↗* in 12 `text_secondary`.
 //!
+//! A /watch that led its targets to the end says so with a `flag` (`Parts · Lines` `e6nsBS` a), and what would stop
+//! each of them while the person is away shows under its line ([`leaving`]).
+//!
 //! The `/watch-module` command and its picker of modules (ORC-772) are [`module`], [`picker`] and [`rows`]; the
 //! `/watch-task` command and its picker of tasks (ORC-773) are [`task`] and [`task_rows`]. Both pickers read the
-//! [`catalog`] and draw in the [`panel`] they share.
+//! [`catalog`] and draw in the [`panel`] they share, where the person chooses whether the command follows its targets
+//! or leads them to the end ([`mode`], `L03` `xE361`).
 
 mod catalog;
 mod command;
 mod ended;
 mod facts;
+mod leaving;
 mod lines;
+mod mode;
 mod module;
 /// The pickers' panel, rows and keys, which `/unwatch`'s picker draws too (`super::watching::unwatch`).
 pub(super) mod panel;
 mod picker;
 mod rows;
+mod standing;
 mod task;
 mod task_rows;
 
@@ -30,12 +37,15 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  orchestrator::{ChatEvent, WatchTarget, watch::NamedTarget},
+  orchestrator::{
+    ChatEvent, WatchTarget,
+    watch::{NamedTarget, WatchLine},
+  },
   time::Timestamp,
 };
 use orchester_workspace::display;
@@ -43,13 +53,15 @@ use orchester_workspace::display;
 pub(super) use self::{
   ended::line as ended_line,
   facts::WatchFacts,
+  leaving::cards as leaving_cards,
   module::{WatchAction, follow, module_command, problem, watch_action},
+  standing::line as standing_line,
   task::task_command,
 };
 use super::timeline::TurnEnv;
 use crate::{
   navigation::link::Open,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, OrchestratorText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText},
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -57,16 +69,43 @@ use crate::{
 };
 
 /// The row of watch entry `event`, named `id`, kept at `at`: the person's command, or a line about what the
-/// conversation watches; `None` for another event.
+/// conversation watches, which led its targets to the end when `to_end` names them: those whose *Before you leave*
+/// shows under it. `None` for another event.
 pub(super) fn row(
   ctx: &mut Ctx,
   id: &str,
   event: &ChatEvent,
-  (at, env): (Option<Timestamp>, &TurnEnv),
+  (at, env, to_end): (Option<Timestamp>, &TurnEnv, Option<&[WatchTarget]>),
 ) -> Option<Element> {
   match event {
     ChatEvent::WatchCommand { command } => Some(command::bubble(ctx, id, command, at)),
-    ChatEvent::Watch { line } => lines::line(ctx, id, line, (at, env)),
+    ChatEvent::Watch { line } => {
+      let row = lines::line(ctx, id, line, (at, env, to_end.is_some()))?;
+      let WatchLine::Watching {
+        started, already_here, ..
+      } = line
+      else {
+        return Some(row);
+      };
+      // What would stop each target while the person is away, under the latest line that led it to the end.
+      let led: Vec<(WatchTarget, Arc<str>)> = started
+        .iter()
+        .chain(already_here)
+        .filter(|named| to_end.is_some_and(|targets| targets.contains(&named.target)))
+        .map(|named| (named.target, target_name(ctx, named)))
+        .collect();
+      let cards = leaving_cards(ctx, (id, OrchestratorSpacing::Items.role()), env, led);
+      if cards.is_empty() {
+        return Some(row);
+      }
+      Some(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .child(row)
+          .with_children(cards)
+          .into(),
+      )
+    }
     _ => None,
   }
 }

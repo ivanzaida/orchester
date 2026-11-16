@@ -180,7 +180,8 @@ async fn checked(
     let not_found = |BranchNotFound(branch)| Stop::BranchNotFound(branch);
     let base = match &branch {
       Some(branch) => (
-        team_work::branch_tip(programs.runner(), &root, branch).map_err(not_found)?,
+        // A module's branch this checkout does not have yet is made by its first start.
+        team_work::start_tip(programs.runner(), &root, branch).map_err(not_found)?,
         None,
       ),
       None => {

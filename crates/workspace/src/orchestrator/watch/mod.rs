@@ -7,10 +7,13 @@
 //! conversation, and the line another conversation is owed in that one. Only the person subscribes: with a command,
 //! or by asking the Orchestrator in words, whose `watch` and `unwatch` tools ([`tool`], ORC-893) apply the same
 //! watch and stop for its conversation only ([`watch_asked_in`], [`StopBy::Request`]) and never take a target over.
+//! Whether a target is only followed or led to the end is the person's choice too: in the command's picker
+//! ([`lead_in`]) and, for a subscription that exists, in the `/watching` answer ([`follow_in`], [`set_ceilings_in`]).
 //! A target closed or deleted meanwhile is refused with [`WatchError`], whose [`WatchError::message`] the composer
 //! shows.
 
 mod asked;
+mod lead;
 mod read;
 mod start;
 mod stop;
@@ -27,9 +30,11 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
+pub(super) use self::start::led_to_end;
 pub use self::{
   asked::watching_in,
-  start::{Watched, watch_asked_in, watch_in},
+  lead::{follow_in, set_ceilings_in},
+  start::{Watched, lead_in, watch_asked_in, watch_in},
   stop::{StopBy, StopWhat, Unwatched, stop_in},
   take::{TakenHere, leave_there_in, take_over_in},
 };
@@ -53,6 +58,9 @@ pub enum WatchError {
     chat: orchester_core::id::ChatId,
     title: String,
   },
+  /// The ceilings of a target the conversation only follows: there are none to change.
+  #[error("the conversation does not lead that target to the end")]
+  NotLedToEnd,
   /// *Take it here* of a target the conversation leads already.
   #[error("the conversation leads that target already")]
   AlreadyHere,
@@ -71,6 +79,7 @@ impl WatchError {
       }
       Self::NotWatched => Message::new("orchestrator.watch.notWatched"),
       Self::LedElsewhere { title, .. } => Message::new("orchestrator.watch.ledElsewhere").with("title", title.clone()),
+      Self::NotLedToEnd => Message::new("orchestrator.watch.notLedToEnd"),
       Self::AlreadyHere => Message::new("orchestrator.watch.alreadyHere"),
       Self::Store(error) => messages::store_error(error),
     }

@@ -284,6 +284,16 @@
       "changed": "Last change",
       "changedValue": "{{by}} · {{time}}",
       "note": "Briefs, criteria and messages written before the join still say {{former}}; Orchester doesn't rewrite them. Searching {{former}} finds this task."
+    },
+    "parked": {
+      "decision": "Parked for you — a decision is needed",
+      "approval": "Parked for you — an approval is needed",
+      "signIn": "Parked for you — a sign-in is needed",
+      "tool": "Parked for you — a tool did not answer",
+      "ceiling": "Parked for you — a ceiling is reached",
+      "other": "Parked for you",
+      "words": "{{why}} {{toDo}}",
+      "giveBack": "Give it back"
     }
   }
 }

@@ -47,20 +47,25 @@ mod merge_queue;
 mod merges;
 mod message_records;
 mod messages;
+mod module_branches;
 mod modules;
 mod native;
 mod new_resources;
 mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
+mod orchestrator_decisions;
 mod orchestrator_fork;
+mod orchestrator_holds;
 mod orchestrator_leads;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
+mod orchestrator_retries;
 mod orchestrator_rewind;
 mod orchestrator_sent;
 mod orchestrator_settings;
+mod orchestrator_standing;
 mod orchestrator_subscriptions;
 mod orchestrator_switches;
 mod orchestrator_titles;
@@ -70,6 +75,7 @@ mod orchestrator_watch_summaries;
 mod organization;
 mod organized_drafts;
 mod owned_records;
+mod parked_tasks;
 mod permission_events;
 mod pipeline_publishes;
 mod plan_limits;
@@ -166,10 +172,12 @@ pub use self::{
   message_records::MessageRecord,
   notice_records::NoticeRecord,
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_decisions::DecisionsRead,
   orchestrator_fork::ChatFork,
   orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_retries::FailedWait,
   orchestrator_rewind::ChatRewind,
   orchestrator_subscriptions::{KeptSubscription, WatchStart},
   orchestrator_titles::ChatDeletion,

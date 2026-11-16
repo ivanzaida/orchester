@@ -5,11 +5,12 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{id::ResourceId, resource::ResourceBody, store::ResourceStore, time::Timestamp};
 use orchester_exec::programs::Programs;
-use orchester_store::{ProjectDb, RegisteredProject};
+use orchester_store::{ProjectDb, RegisteredProject, StoreError};
 
 use super::error::{Missing, ToolError};
 use crate::{
   activity::Activity,
+  decisions::DecisionKind,
   messages::Message,
   pull_requests::ci::CiReads,
   runner::Runners,
@@ -94,10 +95,23 @@ impl Services {
     self
   }
 
-  /// Whether the Orchestrator chat drives: the person's switch lets it decide what a stopped run needs (accepting a
-  /// step, raising limits) that only a person's *Let automation answer approvals* lets another client decide.
-  pub(super) const fn chat_drives(&self) -> bool {
-    self.chat_drives
+  /// Whether these calls may answer in the person's place: the calls of the Orchestrator chat while it drives, and
+  /// any other client's while the person lets automation answer approvals. That setting is for outside clients only
+  /// (the person's decision of 2026-11-13, `docs/plan/orchestrator-autonomy/OA-11-…`): *Let the Orchestrator drive*
+  /// is the chat's whole consent: to answer an agent, decide a plan or a stopped run and raise a limit, and also to
+  /// choose who reviews requests and to publish a profile that approves by itself (the person, 2026-11-13). What
+  /// widens what agents may do still needs *Let automation change agent permissions*.
+  pub(super) fn answers_allowed(&self) -> Result<bool, StoreError> {
+    Ok(self.chat_drives || self.workspace.automation_answers_approvals()?)
+  }
+
+  /// Refuses a decision of `kind` taken in the person's place (`automation_not_allowed`) unless
+  /// [`Self::answers_allowed`].
+  pub(super) fn require(&self, kind: DecisionKind) -> Result<(), ToolError> {
+    if self.chat_drives {
+      return Ok(());
+    }
+    kind.require(&self.workspace)
   }
 
   /// Whether a person decided what the publication changes in agents' prompts: they applied it, or let the chat drive.

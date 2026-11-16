@@ -21,15 +21,17 @@ use serde_json::Value;
 
 use super::{
   approval_turn::{self, DECIDE_APPROVAL},
-  auto_merge, blocked,
+  auto_merge, blocked, ceilings,
   change::{
     self, continuation,
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
   created::{self, CREATE_TASK},
-  guard,
+  decisions, guard,
   keep::{self, HOLD_QUEUE, Named},
-  led_start, proposal,
+  led_start,
+  module_turn::{self, DELIVER_MODULE, START_ACCEPTANCE},
+  proposal,
   repository::INIT_REPOSITORY,
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE, app_tool},
 };
@@ -52,13 +54,28 @@ pub(super) async fn act_and_keep(
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Value, ToolError> {
-  let acted = act((services, translate), scope, name, arguments).await;
+  // A judgement's reason is the chat's, not the app tool's: it is taken off before the tool is reached.
+  let (reason, arguments) = match decisions::split(name, arguments) {
+    Ok((reason, rest)) => (reason, rest),
+    Err(error) => return Err(error),
+  };
+  let arguments = &arguments;
+  let acted = match decisions::refused(scope, name, arguments, reason.as_deref()) {
+    Some(refused) => Acted::done(Err(refused)),
+    None => act((services, translate), scope, name, (arguments, reason.is_some())).await,
+  };
   let Acted { mut result, kept } = acted;
   let outcome = match (&result, kept.waits) {
     (Ok(_), Some(waits)) => waits,
     (Ok(_), None) => ActionOutcome::Done,
     (Err(error), _) => keep::refusal(error, translate),
   };
+  // What the chat did on its own with a reason is a decision the person reviews: a judgement's, or its answer to a
+  // tool request.
+  let reason = reason.or_else(|| kept.tool_answer.as_ref().map(|answer| answer.reason.clone()));
+  let decided = (scope.on_its_own && outcome == ActionOutcome::Done)
+    .then(|| reason.map(|reason| (kept.task.clone(), reason)))
+    .flatten();
   let named = kept.task.map(Named::Task).or_else(|| keep::named_task(arguments));
   let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
   // A hold that held new starts keeps what it held, for its card.
@@ -79,6 +96,9 @@ pub(super) async fn act_and_keep(
     ..ChatAction::new(name, None, outcome)
   };
   keep::keep(scope, (named, held), action).await;
+  if let Some((task, reason)) = decided {
+    decisions::keep(scope, name, arguments, (task, &reason)).await;
+  }
   runners.chat_changed(&scope.root);
   result
 }
@@ -113,18 +133,20 @@ struct Kept {
   tool_answer: Option<ToolAnswer>,
 }
 
-/// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person.
+/// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person; `reasoned`: the call
+/// gave the chat's reason.
 async fn act(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   name: &str,
-  arguments: &JsonObject,
+  (arguments, reasoned): (&JsonObject, bool),
 ) -> Acted {
   let drives = match drives(services, scope).await {
     Ok(drives) => drives,
     Err(error) => return Acted::done(Err(error)),
   };
-  if let Some(refused) = guard::pipeline_refused(name, drives) {
+  if let Some(refused) = guard::pipeline_refused(name, drives).or_else(|| guard::budget_refused(scope, name, arguments))
+  {
     return Acted::done(Err(refused));
   }
   // While driving, the tools are called as the chat's own: what only a person's switch allowed a client (accepting a
@@ -142,10 +164,11 @@ async fn act(
     Err(error) => return Acted::done(Err(error)),
   };
   let acted = match name {
-    RUN_TASK => start(deps, scope, arguments, drives).await,
+    RUN_TASK => start(deps, scope, (arguments, reasoned), drives).await,
     DECIDE_APPROVAL => decide_approval(deps, scope, arguments).await,
     _ if proposes => propose_change(deps, scope, name, arguments).await,
     MERGE_RUN => merge(deps, scope, arguments).await,
+    DELIVER_MODULE | START_ACCEPTANCE => module_step(deps, scope, name, arguments).await,
     CANCEL_RUN | INIT_REPOSITORY | ANSWER_QUESTION | SEND_MESSAGE => applied(deps, scope, name, arguments).await,
     CONTINUE_RUN => continuing(deps, scope, arguments).await,
     RESUME_RUN => resume(deps, scope, arguments, drives).await,
@@ -179,6 +202,7 @@ async fn applied(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   let (change, task) = change::subject((scope, services), name, arguments).await?;
+  ceilings::message_within(scope, &change.change).await?;
   let result = change::apply((services, translate), scope, &change, &[], Answerer::Automation).await;
   Ok(Acted {
     result,
@@ -196,11 +220,25 @@ async fn applied(
 /// ([`change::apply`]).
 async fn merge(deps: (&Services, &Translate), scope: &ChatScope, arguments: &JsonObject) -> Result<Acted, ToolError> {
   if scope.on_its_own {
-    auto_merge::check(scope, arguments).await?;
+    auto_merge::check(deps.0, scope, arguments).await?;
   }
   let mut acted = applied(deps, scope, MERGE_RUN, arguments).await?;
   acted.kept.on_its_own = scope.on_its_own;
   Ok(acted)
+}
+
+/// `deliver_module` and `start_acceptance` while driving: in a turn nobody asked for, only for a module the
+/// conversation leads to the end, at the step the module waits for ([`module_turn::checked`]).
+async fn module_step(
+  deps: (&Services, &Translate),
+  scope: &ChatScope,
+  name: &str,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  if scope.on_its_own {
+    module_turn::checked(scope, name, arguments).await?;
+  }
+  Ok(Acted::done(app_tool(deps, name, arguments.clone()).await))
 }
 
 /// `decide_approval` while driving: in a turn nobody asked for, only the request whose wait started the turn
@@ -232,6 +270,7 @@ async fn continuing(
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
+  ceilings::continue_within(scope, arguments).await?;
   if continuation::kept_as_change(arguments) {
     return applied(deps, scope, CONTINUE_RUN, arguments).await;
   }
@@ -244,12 +283,12 @@ async fn continuing(
 async fn start(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
-  arguments: &JsonObject,
+  (arguments, reasoned): (&JsonObject, bool),
   drives: bool,
 ) -> Result<Acted, ToolError> {
   blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
   if drives && scope.on_its_own {
-    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str)).await?;
+    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str), reasoned).await?;
   }
   // In a turn nobody asked for, a start is only proposed, unless the chat drives.
   if !drives && (scope.on_its_own || !allows_autopilot(scope).await?) {

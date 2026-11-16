@@ -37,7 +37,7 @@ use orchester_core::{
   command::Command,
   connection::{
     AgentProvider,
-    app_server::Update,
+    app_server::{CodexFailure, Update},
     app_server_config::{chat_read_command, read_chat_configuration},
     invocation::{CODEX_PROVIDER_ID, CodexChat, CodexChatSkill, CodexMcp, OnProvider, Platform, on_account},
     mcp::InvocationExemptions,
@@ -380,8 +380,13 @@ impl Turn {
           over = true;
           None
         }
-        // A chat turn that fails ends as failed whatever the reason; it waits for no plan limit.
-        Update::Failure(_) => None,
+        // A chat turn that fails ends as failed whatever the reason: the turn itself waits for no plan limit. The
+        // limit is kept, so that Orchester starts no further turn by itself until it lifts.
+        Update::Failure(CodexFailure::UsageLimit) => {
+          self.keep_usage_limit(account);
+          None
+        }
+        Update::Failure(CodexFailure::Other) => None,
       };
       // A process that cannot take the answer is ending; its exit says how.
       if let Some(answer) = answer

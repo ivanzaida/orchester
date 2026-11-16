@@ -1,5 +1,27 @@
 {
   "modules": {
+    "ownBranch": {
+      "required": "An acceptance pipeline and Deliver when accepted are for a module with a branch of its own. Give the module its own branch first.",
+      "holdsWork": "The module's branch holds merged work that is not delivered yet. Deliver it first, then turn its own branch off.",
+      "unreadable": "The repository's branches could not be read, so the module got no branch of its own. Nothing was changed."
+    },
+    "delivery": {
+      "noOwnBranch": "This module has no branch of its own: its tasks merge into its base branch themselves, so there is nothing to deliver.",
+      "runsAtWork": "Runs of this module have not ended: {{tasks}}. A module is delivered once nothing of it is still at work. Nothing was merged.",
+      "nothing": "The module's branch holds nothing its base branch lacks. Nothing was merged.",
+      "noBaseBranch": "The checkout has no branch checked out, and the module names no base branch, so there is no branch to deliver into. Nothing was merged.",
+      "onOwnBranch": "The module's own branch is the branch it would be delivered into. Check out another branch, or set the module's base branch. Nothing was merged.",
+      "busy": "Another merge or a local integration holds the checkout now. Nothing was merged; try again once it ended.",
+      "conflicts": "The module's branch conflicts with its base branch in {{files}}. Nothing was merged: bring the base branch into the module's branch and resolve them there, then deliver again.",
+      "inTheWay": "The checkout has uncommitted changes the delivery would overwrite: {{files}}. Nothing was merged: commit or put them aside, then deliver again.",
+      "failed": "Git did not merge the module's branch: {{detail}}. Nothing was merged."
+    },
+    "acceptance": {
+      "noPipeline": "This module names no acceptance pipeline. Set one for it first (update_module, acceptance_pipeline).",
+      "tasksOpen": "Tasks of this module are still open: {{tasks}}. Its acceptance starts once every task of it is done or canceled.",
+      "underWay": "An acceptance of this module is under way. Wait for its run to end.",
+      "alreadyAccepted": "The module's branch, as it is now, passed its acceptance already. Nothing was started."
+    },
     "errors": {
       "targetBeforeStart": "The target date can't be before the start date.",
       "duplicateName": "Another module already has this name.",
@@ -783,7 +805,7 @@
       "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
-      "connectionNotPicked": "Step “{{step}}” uses a team agent profile that has no connection on this computer yet. Pick a connection for this team profile.",
+      "connectionNotPicked": "Step “{{step}}” uses a team agent profile that has no account on this computer yet. Choose an account for this team profile.",
       "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
       "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
@@ -945,7 +967,7 @@
       },
       "publish": {
         "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
-        "connectionNotPicked": "This team profile has no connection on this computer yet, so what it can enforce is unknown. Pick a connection for this team profile before publishing."
+        "connectionNotPicked": "This team profile has no account on this computer yet, so what it can enforce is unknown. Choose an account for this team profile before publishing."
       },
       "repository": "Repository access",
       "commands": "Commands",
@@ -1320,7 +1342,6 @@
         "other": "{{count}} runs"
       }
     },
-    "version": {},
     "create": {
       "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
       "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
@@ -1371,7 +1392,6 @@
       "unpublishedTool": "Tool not published",
       "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
     },
-    "inspector": {},
     "changes": {
       "description": "Pipeline · description edited",
       "added": "{{step}} · added",
@@ -1623,14 +1643,10 @@
       "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note.",
       "folderNotAbsolute": "Name the project’s folder by its absolute path.",
       "invalidKeepFree": "Keep free is whole GB from {{min}} to {{max}}.",
-      "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
-      "cliNotFoundIn": "No {{program}} was found in the folders searched: {{folders}}. Give the CLI’s absolute path as the program.",
       "programMissing": "There is no file at {{program}}.",
       "programNotAFile": "{{program}} is not a file: give the program file itself, not a folder.",
       "programNotExecutable": "{{program}} is not marked as a program that can run (chmod +x).",
       "programUnreadable": "{{program}} cannot be read: {{reason}}",
-      "notAnAgentConnection": "{{connection}} is not an agent connection; profiles run on agent connections only.",
-      "checkFound": "The check found: {{status}}.",
       "connectionRunsNoAgents": "This profile’s connection does not run agents in this version, so it cannot be published. Choose another connection.",
       "noDraft": "There is no draft to publish: the latest version is current. Save a draft first.",
       "effortNotOffered": "{{model}} does not list the effort {{effort}}. list_models gives the efforts each model takes.",
@@ -1669,6 +1685,8 @@
       "mergedOutside": "The run’s work is in {{branch}} already: it was merged without Orchester.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
+      "tookInBranch": "The run's branch took in {{commits}} commits from {{branch}} that its target does not have, and merging it would bring them too. A person merges it from the task page, whose Changes tab says what it brings; leave it to them (park the task).",
+      "tookInOtherBranches": "The run's branch took in {{commits}} commits from other branches that its target does not have, and merging it would bring them too. A person merges it from the task page, whose Changes tab says what it brings; leave it to them (park the task).",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › Automation.",
       "promptPersonOnly": "This changes what agents are told, which a person decides in Orchester: they publish it in the window or apply the Orchestrator's proposal, or let automation decide by turning on Let automation change agent permissions in Settings › Automation. Saving a draft stays open to automation.",
       "autoApproveNeedsAnswers": "Autopilot answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
@@ -1694,9 +1712,6 @@
       "teamMcpUrlQuery": "The {{field}} of a team MCP server has a query or a fragment, and a key in it would go to the team server and to every member. Leave it out of the URL and name the header the server is sent it in (secret_headers); each computer fills in the secret itself. Nothing was created or changed.",
       "teamOnlyField": "{{field}} is a field of a team project's MCP server only: it names what each computer of a team fills in. In a project of this computer's own a server has environment and authorization instead.",
       "teamArchivePersonOnly": "Only a person archives a team's resource: it stops runs on every computer, so it is confirmed in Orchester's window.",
-      "secretNotFound": "This project has no secret {{secret}} that is not archived.",
-      "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
-      "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets).",
       "conversationAmbiguous": "More than one Orchestrator conversation is titled {{conversation}}; name it by its id (get_watches without a conversation lists those that lead something).",
       "teamUnavailable": "The team server can't be reached now, so nothing was read or changed. Nothing is answered from this computer's copy; try again once it answers.",
       "teamNeedsVersion": "The team server needs Orchester {{version}} or later and refuses this version, so nothing was read or changed. A person updates Orchester from Settings › Updates.",
@@ -1823,7 +1838,6 @@
       "reviewer": "Another reviewer would approve requests in every Manual run in your place.",
       "reviewerAccount": "The reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
       "account": "Its agents would run on another account than the latest version's: another sign-in, and possibly another organisation's provider, would get the project's work.",
-      "program": "{{program}} is not a copy of the CLI found on the search path.",
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
       "approvalGate": "Step {{step}} would no longer wait for a person's approval.",
       "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
@@ -1845,7 +1859,6 @@
       "mcpNeedsValue": "The server would need a variable or secret header the version this computer uses does not, with a value this computer gives it.",
       "teamMcpServer": "A new version of {{server}} would let the agents of profiles that choose it do more than the version this computer uses.",
       "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it.",
-      "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}.",
       "apiAccount": "The agents of {{profile}} would send the project’s prompts, code and command output to {{host}}, with the key of your API provider {{account}}."
     },
     "prompts": {
@@ -2367,6 +2380,7 @@
       "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
       "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
       "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
+      "notLedToEnd": "Not applied · this conversation only follows that, so it has no ceilings — nothing changed",
       "alreadyHere": "This conversation leads it already.",
       "eventTurn": "Not applied · Orchester started this turn by itself: what this conversation watches changes only when you ask — nothing changed",
       "unknownTarget": "Not applied · nothing in this project answers to “{{target}}”: name a task by its key or a module by its name — nothing changed",
@@ -2402,6 +2416,7 @@
           "dailyBudget": "the project's daily budget is spent",
           "readyToMerge": "you merge it"
         },
+        "again": "run again {{run}} of {{most}}",
         "action": {
           "answer": "Answer",
           "decide": "Decide",
@@ -2532,11 +2547,51 @@
       },
       "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
+    "standing": {
+      "canStart": "Work can start in {{target}}: {{tasks}}",
+      "canStartHere": "Work can start: {{tasks}}",
+      "stuckHere": "What this conversation leads is stuck: {{count}} left for you",
+      "deliveryHere": "Every task is done",
+      "stuck": "{{target}} is stuck: {{count}} left for you",
+      "accept": "Every task of {{target}} is done: its acceptance can start",
+      "deliver": "{{target}} is accepted: it can be delivered",
+      "deliveryWaits": "Every task of {{target}} is done: its delivery waits for you"
+    },
+    "parking": {
+      "requestOpen": "Its agent's request is not answered yet: allow or deny it in the task's conversation first, then give the task back."
+    },
+    "tryAgain": {
+      "settled": "This no longer waits for an answer: there is nothing to try again.",
+      "busy": "The Orchestrator is answering in this conversation, or this turn was already started again. Try again once it has ended."
+    },
+    "leaving": {
+      "driveOff": "Let the Orchestrator drive is off for this project: no turn starts by itself, so nothing is led while you are away.",
+      "orchestratorNotReady": "The Orchestrator has nothing it can run on now: its connection is not chosen, was removed, or is not signed in.",
+      "noPipeline": "These tasks have no published pipeline and cannot start: {{tasks}}.",
+      "noDeliverStep": "The pipelines of these tasks end in no Deliver step, so their merge is not checked on the merged result: {{tasks}}.",
+      "checkoutHasChanges": "This work merges into the branch your checkout has, and the checkout has {{count}} uncommitted files now: a merge they stand in the way of waits for you. Commit them, or give the module a branch of its own.",
+      "noDailyBudget": "The project has no daily budget: nothing bounds what is spent while you are away.",
+      "maySleep": "The computer may go to sleep while agents work: Keep the computer awake while agents work is off in Settings › General.",
+      "stopsWithWindow": "Closing Orchester's window stops the work: leave it open.",
+      "serversNotChecked": "Whether the MCP servers the tasks' profiles choose are on and answer is not checked here: a start says so, task by task."
+    },
+    "module": {
+      "notLed": "This conversation does not lead that module to the end: in a turn Orchester started by itself, the chat starts an acceptance and asks for a delivery only of a module it leads to the end. Nothing was changed.",
+      "notDue": "The module does not wait for that now: it stands {{standing}} (get_standing, get_module). Nothing was changed."
+    },
+    "ceilings": {
+      "runs": "This task had {{used}} runs, and what leads it to the end runs a task {{allowed}} times at most. Nothing started: leave the task to the person, with what failed each time.",
+      "returns": "You returned or retried this run {{used}} times, and what leads its task to the end allows {{allowed}}. Nothing was changed: leave the task to the person, with what you tried and what came of it.",
+      "raises": "This run's limits were raised {{used}} times, and what leads its task to the end allows {{allowed}}. Nothing was changed: leave the task to the person, with how far the run got.",
+      "raiseBy": "What leads this run's task to the end raises a limit to {{allowed}} at most, in the limit's own unit, and never removes one. Nothing was changed: raise it within that, or leave the task to the person.",
+      "budget": "The work this conversation leads to the end spent {{used}} tokens of the {{allowed}} its subscription allows. Nothing started: what runs may finish, and the rest is the person's."
+    },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app.",
       "notMergeTurn": "In a turn Orchester started by itself, the chat starts tasks only in the turn of a run's success it merged, where the order of what this conversation leads asks for it. Nothing started; the person can start it in the app.",
       "alreadyRan": "{{task}} has run already: running a task again is the person's, never a turn Orchester started by itself. Nothing started; the person can run it again in the app.",
+      "parked": "{{task}} is parked for the person: nothing starts it until they act on it or give it back. Go on with the rest.",
       "notLed": "{{task}} is not led by this conversation: in a turn Orchester started by itself, the chat starts only the tasks this conversation leads, so nothing started. The person can start it in the app, or watch it in this conversation."
     },
     "waitsOn": {
@@ -2551,6 +2606,8 @@
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
+      "reasonRequired": "Nobody asked for this turn, so {{tool}} is your own decision: call it again with `reason`, one sentence on why, of at most 400 characters. It is kept for the person to review. Nothing was changed.",
+      "dailyBudgetPersonOnly": "The project's daily budget bounds what is spent while nobody watches, so it is not changed in a turn nobody asked for. Nothing was changed: tell the person what stopped at it and what you recommend, and they change it or ask you to.",
       "pipelinesDriveOnly": "While Let the Orchestrator drive is off, the Orchestrator changes no pipeline: a pipeline has only saved versions, so there is no draft to propose. Nothing was changed: tell the person what to change and that they save it in Pipelines, or that they can turn on Let the Orchestrator drive.",
       "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",
       "cancelWaits": "Run #{{run}} goes on: canceling it waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to cancel.",

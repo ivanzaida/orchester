@@ -56,7 +56,7 @@ const STEP_HEIGHT: f32 = 55.0;
 
 /// The page's body in bones under [`ID`], named `label` (the page's reading words).
 pub(super) fn body(ctx: &mut Ctx, label: Arc<str>) -> Element {
-  let bones = master_detail(ID, true, (list(), detail(ctx)));
+  let bones = master_detail(ctx, ID, true, (list(), detail(ctx)));
   Skeleton::new(ID, label).fills().show(ctx, bones)
 }
 

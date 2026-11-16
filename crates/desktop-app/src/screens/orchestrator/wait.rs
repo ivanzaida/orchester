@@ -13,6 +13,7 @@
 //! The end of a task's run is a wait of its own kind, with its own line ([`super::run_end`]).
 
 pub(super) mod approval;
+pub(super) mod turn_state;
 
 use std::sync::Arc;
 

@@ -251,14 +251,14 @@ fn a_profile_that_is_not_ready_says_why_in_the_list_and_can_still_be_chosen() {
   assert_eq!(agents.text(&format!("{}-name", item(1))), "Explorer");
   assert_eq!(
     agents.text(&format!("{}-runs", item(1))),
-    "Choose a connection",
+    "Choose an account",
     "it says what to do, not what it runs on"
   );
   agents.click(&item(1));
   agents.until("chosen", |s| s.text("pipeline-hub-step-agent-name") == "Explorer");
   assert_eq!(
     agents.text("pipeline-hub-step-agent-runs"),
-    "Choose a connection",
+    "Choose an account",
     "the field's own second line says it, in place of what it runs on"
   );
   assert!(

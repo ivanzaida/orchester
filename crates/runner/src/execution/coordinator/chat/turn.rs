@@ -14,11 +14,12 @@ use orchester_core::{
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
     context_use::ContextUse,
+    plan_limits::{LimitReading, PlanLimits},
     stream::{AgentEvent, OutputStream},
   },
   conversation::MessageBody,
   id::{AgentAccountId, ChatMessageId, ProjectId},
-  orchestrator::{Chat, ChatEvent, Leads, OrchestratorSettings, TurnFailure, TurnState, runs_orchestrator},
+  orchestrator::{Chat, ChatEvent, Leads, OrchestratorSettings, PlanHold, TurnFailure, TurnState, runs_orchestrator},
   resource::CommandEnvironment,
   secret::SecretValue,
   store::{ConnectionStore, SettingsStore},
@@ -75,19 +76,34 @@ impl Turn {
   /// Runs the turn to its end, or until `stop` says so, giving it the messages sent now that `steers` hands over,
   /// and records how it ended; what it had of them and did not take is left for turns of their own.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>, mut steers: mpsc::UnboundedReceiver<ChatMessageId>) {
-    let state = match self.prepare(false) {
-      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => {
-        self.run_codex(prepared, (stop, &mut steers)).await
+    let (state, account) = match self.prepare(false) {
+      Ok(prepared) => {
+        let account = prepared.account;
+        let state = if prepared.connection.provider() == AgentProvider::CodexCli {
+          self.run_codex(prepared, (stop, &mut steers)).await
+        } else {
+          self.run_claude(prepared, (stop, &mut steers)).await
+        };
+        (state, Some(account))
       }
-      Ok(prepared) => self.run_claude(prepared, (stop, &mut steers)).await,
-      Err(failure) => TurnState::Failed(failure),
+      Err(failure) => (TurnState::Failed(failure), None),
     };
     if let TurnState::Failed(TurnFailure::CannotStart { reason }) = &state {
       tracing::warn!(chat = %self.chat.id(), %reason, "a turn of the Orchestrator chat could not start");
     }
-    self.record(|db| db.end_chat_turn(self.message, &state, Timestamp::now()).map(drop));
+    // An account whose turn answered is at no plan limit: what was kept of one is forgotten. Not on usage alone, which
+    // a turn that fails at the limit reports too.
+    let answered_on = account.filter(|_| state == TurnState::Answered);
     steers.close();
     self.release_steering();
+    // Kept last: once the end is kept the conversation is free, and its next turn may be asked for at once.
+    self.record(|db| {
+      db.end_chat_turn(self.message, &state, Timestamp::now())?;
+      match answered_on {
+        Some(account) => db.release_orchestrator(account),
+        None => Ok(()),
+      }
+    });
   }
 
   /// What the turn starts from, or why it cannot start. A session the turn cannot resume, on another connection or
@@ -182,6 +198,7 @@ impl Turn {
         let turn = (self.chat.id(), self.message);
         self.record(|db| db.record_chat_usage(turn, (account, usage), Timestamp::now()));
       }
+      AgentEvent::PlanLimits { limits } => self.keep_plan_limits(limits, account),
       AgentEvent::NotSignedIn { .. } => seen.failure = Some(TurnFailure::NotSignedIn),
       AgentEvent::TurnFailed { message } | AgentEvent::Error { message } => {
         seen.failure.get_or_insert(TurnFailure::Failed { reason: message });
@@ -192,6 +209,56 @@ impl Turn {
       } if !line.trim().is_empty() => seen.stderr = Some(line),
       _ => {}
     }
+  }
+
+  /// Keeps whether `account`'s plan limit refuses turns now, as its CLI just reported in `limits`, and when the CLI
+  /// said it lifts: while it does, Orchester starts no turn by itself on that account
+  /// (`orchester_core::orchestrator::hold`). A report that refuses none forgets what was kept.
+  fn keep_plan_limits(&self, limits: PlanLimits, account: AgentAccountId) {
+    let at = Timestamp::now();
+    self.record(|db| {
+      let provider = db
+        .connection(self.settings.connection())?
+        .and_then(|connection| AgentConnection::try_from(connection).ok())
+        .map(|connection| connection.provider());
+      // The connection went meanwhile: its turn ends as failed, and nothing of its account is kept.
+      let Some(provider) = provider else {
+        return Ok(());
+      };
+      let reading = LimitReading {
+        provider,
+        account: Some(account),
+        at,
+        limits,
+      };
+      if reading.refuses_turns(at) {
+        db.hold_orchestrator(
+          account,
+          PlanHold {
+            since: at,
+            resets: reading.reached_limit_resets(),
+          },
+        )
+      } else {
+        db.release_orchestrator(account)
+      }
+    });
+  }
+
+  /// Keeps that `account` is at its plan limit, as Codex named its turn's failure, when nothing was kept of it yet:
+  /// the limits it reported before say when it lifts, and are not written over.
+  pub(super) fn keep_usage_limit(&self, account: AgentAccountId) {
+    let at = Timestamp::now();
+    self.record(|db| match db.orchestrator_hold(account)? {
+      Some(_) => Ok(()),
+      None => db.hold_orchestrator(
+        account,
+        PlanHold {
+          since: at,
+          resets: None,
+        },
+      ),
+    });
   }
 
   /// Applies `change` to the project's database; a change that cannot be kept is logged, and the turn goes on.

@@ -18,7 +18,7 @@ use lurq::{
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, TaskId},
   task::{Task, organization::WorkflowStatus},
   time::Timestamp,
 };
@@ -65,8 +65,15 @@ impl Toggled {
   }
 }
 
-pub fn section(ctx: &mut Ctx, project: ProjectId, tasks: &[Task], toggled: &Signal<Toggled>) -> Element {
-  let head = section_head(ctx, "module-tasks-head", "modules.page.tasks", Some(tasks.len()));
+/// The module's `tasks`; those of `acceptances` are its acceptance tasks, shown apart and not counted among them.
+pub fn section(
+  ctx: &mut Ctx,
+  project: ProjectId,
+  (tasks, acceptances): (&[Task], &[TaskId]),
+  toggled: &Signal<Toggled>,
+) -> Element {
+  let own = tasks.iter().filter(|task| !acceptances.contains(&task.id())).count();
+  let head = section_head(ctx, "module-tasks-head", "modules.page.tasks", Some(own));
   let body: Element = if tasks.is_empty() {
     // 25 under the heading's top, as the line in `lAYch` sits, where the list starts 21 under it.
     Text::new(&ctx.t("modules.page.noTasks"))
@@ -76,7 +83,7 @@ pub fn section(ctx: &mut Ctx, project: ProjectId, tasks: &[Task], toggled: &Sign
       .padding(Padding::new().top(ExtraSpacing::Fine.role()))
       .into()
   } else {
-    list(ctx, project, tasks, toggled)
+    list(ctx, project, (tasks, acceptances), toggled)
   };
   Column::new()
     .id("module-tasks-section")
@@ -87,14 +94,24 @@ pub fn section(ctx: &mut Ctx, project: ProjectId, tasks: &[Task], toggled: &Sign
     .into()
 }
 
-fn list(ctx: &mut Ctx, project: ProjectId, tasks: &[Task], toggled: &Signal<Toggled>) -> Element {
+fn list(
+  ctx: &mut Ctx,
+  project: ProjectId,
+  (tasks, acceptances): (&[Task], &[TaskId]),
+  toggled: &Signal<Toggled>,
+) -> Element {
   let shown = toggled.get();
   let now = Timestamp::now();
   let mut lines = Vec::new();
+  let accepting: Vec<&Task> = tasks.iter().filter(|task| acceptances.contains(&task.id())).collect();
+  if !accepting.is_empty() {
+    lines.push(acceptance_line(ctx, accepting.len()));
+    lines.extend(accepting.into_iter().map(|task| row(ctx, project, (task, true), now)));
+  }
   for status in ORDER {
     let members: Vec<&Task> = tasks
       .iter()
-      .filter(|task| task.organization().status() == status)
+      .filter(|task| task.organization().status() == status && !acceptances.contains(&task.id()))
       .collect();
     if members.is_empty() {
       continue;
@@ -102,7 +119,7 @@ fn list(ctx: &mut Ctx, project: ProjectId, tasks: &[Task], toggled: &Signal<Togg
     let folded = shown.folded(status);
     lines.push(group_line(ctx, (status, members.len(), folded), toggled));
     if !folded {
-      lines.extend(members.into_iter().map(|task| row(ctx, project, task, now)));
+      lines.extend(members.into_iter().map(|task| row(ctx, project, (task, false), now)));
     }
   }
   Column::new()
@@ -177,9 +194,49 @@ fn group_line(ctx: &Ctx, (status, count, folded): (WorkflowStatus, usize, bool),
   .into()
 }
 
-/// A task's row, which opens the task.
-fn row(ctx: &mut Ctx, project: ProjectId, task: &Task, now: Timestamp) -> Element {
+/// *Acceptance · 1*: the module's acceptance tasks, over its own (`Group · Acceptance` in `M02 · Module · Summary ·
+/// its branch and Deliver`), drawn as a group's line that does not fold.
+fn acceptance_line(ctx: &Ctx, count: usize) -> Element {
+  Row::new()
+    .id("module-group-acceptance")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(GROUP_HEIGHT))
+    .padding(
+      Padding::new()
+        .top(TasksSpacing::GroupTop.role())
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm),
+    )
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::ShieldCheck, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t("modules.page.acceptance"))
+        .id("module-group-acceptance-label")
+        .variant(TypographyStyle::Label)
+        .color(PaletteColor::TextSecondary)
+        .nowrap(),
+    )
+    .child(
+      Text::new(&count.to_string())
+        .id("module-group-acceptance-count")
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    )
+    .into()
+}
+
+/// A task's row, which opens the task; an acceptance task's says so after its title.
+fn row(ctx: &mut Ctx, project: ProjectId, (task, acceptance): (&Task, bool), now: Timestamp) -> Element {
   let key = task.key().to_string();
+  let tag = acceptance.then(|| {
+    crate::ui::row_group::tag(
+      &format!("module-task-acceptance-{key}"),
+      &ctx.t("modules.page.acceptanceTag"),
+      false,
+    )
+  });
   let (glyph, tone) = workflow_look(task.organization().status());
   let line = Row::new()
     .width(Dimension::Pct(100.0))
@@ -206,6 +263,7 @@ fn row(ctx: &mut Ctx, project: ProjectId, task: &Task, now: Timestamp) -> Elemen
         .render(ctx),
       ),
     )
+    .with_children(tag)
     .child(
       Row::new()
         .width(Dimension::Px(AGE_WIDTH))

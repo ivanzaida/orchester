@@ -329,6 +329,15 @@
         "unreadable": "The warning threshold can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}"
       },
+      "work": {
+        "title": "Work",
+        "keepAwake": {
+          "label": "Keep the computer awake while agents work",
+          "hint": "The computer does not go to sleep by itself while an agent works or the Orchestrator answers. Closing the window still stops the work, and a laptop still sleeps when its lid is closed on battery",
+          "unreadable": "Whether to keep the computer awake can't be read: {{reason}}",
+          "notSaved": "Not saved, so it stays as it was: {{reason}}"
+        }
+      },
       "privacy": {
         "title": "Privacy",
         "errorReports": {

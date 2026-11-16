@@ -7,6 +7,7 @@
 //! Orchester is not ready ([`outside`]).
 //! `cargo test -p orchester-workspace --test orchestrator_report report`.
 
+mod led;
 mod outside;
 #[path = "../support/mod.rs"]
 mod support;

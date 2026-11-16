@@ -241,10 +241,14 @@ impl SlashMenu {
 
 /// The rows of `faces` that match `typed` ([`face_matched`]), with the matched letters.
 fn matching<'a>(faces: &'a [Face], typed: &str) -> Vec<Matched<'a>> {
-  faces
+  let mut found: Vec<Matched<'a>> = faces
     .iter()
     .filter_map(|face| face_matched(face, typed).map(|letters| (face, letters)))
-    .collect()
+    .collect();
+  // A command whose own name is what was typed comes first, so Enter runs it (`/watching` is *What I watch*, not
+  // *Stop watching*, whose label also holds the word); the rest keep their order.
+  found.sort_by_key(|(face, _)| face.skill || !face.name.eq_ignore_ascii_case(typed));
+  found
 }
 
 /// Where `typed` is in the row of `face`: in its label, whose letters show in bold; or in a command's own name, which

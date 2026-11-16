@@ -23,6 +23,8 @@ pub fn key_cap(id: &str, keys: &str) -> Element {
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Sm)
+    // A cap keeps its width beside words that give way.
+    .flex_shrink(0.0)
     .child(Text::new(keys).variant(ExtraTypography::MonoSmall.role()).nowrap())
     .into()
 }

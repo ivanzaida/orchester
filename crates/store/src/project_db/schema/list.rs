@@ -467,4 +467,13 @@ CREATE TABLE run_merges (
   super::approval_modes::DANGEROUS_MIGRATION,
   super::pipeline_drafts::MIGRATION,
   super::team_cache::MIGRATION,
+  super::orchestrator_tries::MIGRATION,
+  super::orchestrator_holds::MIGRATION,
+  super::orchestrator_tries::LEAD_MIGRATION,
+  super::orchestrator_decisions::MIGRATION,
+  super::parked_tasks::MIGRATION,
+  super::parked_tasks::STANDINGS_MIGRATION,
+  super::orchestrator_tries::TOGETHER_MIGRATION,
+  super::module_branches::MIGRATION,
+  super::orchestrator_watch::LEAD_DEFAULTS_MIGRATION,
 ];

@@ -13,6 +13,7 @@ pub mod app_mcp;
 pub mod app_paths;
 pub mod app_updates;
 pub mod attachments;
+pub mod awake;
 pub mod background;
 pub mod base_moved;
 pub mod browser;

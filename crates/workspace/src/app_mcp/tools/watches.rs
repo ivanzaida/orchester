@@ -1,6 +1,7 @@
 //! `get_watches`: what the project's Orchestrator conversations lead and what waits there now, as `/watching` shows it
 //! ([`WatchReads::watching`]), and who leads a module or a task ([`led_in_json`]) for `get_module` and `get_task`. It
-//! only reads: subscribing, stopping and taking a target over stay the person's commands in the conversation.
+//! only reads: subscribing, stopping and taking a target over stay the person's commands in the conversation, and so
+//! do whether a target is led to the end and within which ceilings.
 
 use orchester_core::{
   id::{ChatId, ProjectId},
@@ -11,7 +12,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Translate, team, wire};
+use super::{Translate, wire};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -20,7 +21,7 @@ use crate::{
   links::Link,
   messages::Message,
   orchestrator::watching::{
-    Going, LedIn, TargetView, WaitsFor, WatchOrder, WatchReads, WatchedSubscription, WatchedTask, Watching,
+    Going, LedIn, LedToEnd, TargetView, WaitsFor, WatchOrder, WatchReads, WatchedSubscription, WatchedTask, Watching,
   },
 };
 
@@ -36,9 +37,6 @@ pub struct GetWatches {
 }
 
 pub async fn get_watches(services: &Services, args: GetWatches, translate: &Translate) -> Result<Value, ToolError> {
-  if team::of_reading(services, &args.project).await?.is_some() {
-    return Err(team::team_only_on_server("get_watches"));
-  }
   let services = services.clone();
   let (project, read) = blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
@@ -91,7 +89,7 @@ pub fn led_in_json(led_in: &LedIn, translate: &Translate) -> Value {
 }
 
 /// The conversation of `chats` named by its id or, ignoring case, its title; a title several have is refused.
-fn find_chat<'a>(chats: &'a [ChatListing], named: &str) -> Result<&'a ChatListing, ToolError> {
+pub(super) fn find_chat<'a>(chats: &'a [ChatListing], named: &str) -> Result<&'a ChatListing, ToolError> {
   if let Some(listing) = chats.iter().find(|listing| listing.chat.id().to_string() == named) {
     return Ok(listing);
   }
@@ -149,9 +147,24 @@ fn subscription_json(watched: &WatchedSubscription, translate: &Translate) -> Va
     "target": target_json(&watched.target, translate),
     "since": wire::time(watched.since),
     "order": order_json(&watched.order),
+    "mode": if watched.lead.is_some() { "lead_to_the_end" } else { "follow" },
+    "ceilings": watched.lead.map(ceilings_json),
     "tasks": tasks,
     "rest": watched.rest.as_ref().map(|rest| translate.text(rest)),
     "unreadable": watched.unreadable.as_ref().map(|why| translate.text(why)),
+  })
+}
+
+/// The ceilings of a subscription that leads to the end, and what its work spent of its budget while it has one.
+fn ceilings_json(led: LedToEnd) -> Value {
+  let ceilings = led.ceilings;
+  json!({
+    "runs_of_task": ceilings.runs_of_task(),
+    "returns_of_run": ceilings.returns_of_run(),
+    "raises_of_run": ceilings.raises_of_run(),
+    "raise_percent": ceilings.raise_percent(),
+    "budget_tokens": ceilings.budget().map(|budget| budget.get()),
+    "spent_tokens": led.spent.map(|spent| spent.get()),
   })
 }
 
@@ -190,6 +203,7 @@ fn task_json(task: &WatchedTask, translate: &Translate) -> Value {
     "going": going_json(task.going),
     "state": translate.text(&task.state),
     "note": task.note.as_ref().map(|note| translate.text(note)),
+    "again": task.again.as_ref().map(|again| translate.text(again)),
     "action": task.action.as_ref().map(|action| translate.text(action)),
     "link": &task.link,
   })

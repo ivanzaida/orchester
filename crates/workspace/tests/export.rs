@@ -126,6 +126,9 @@ fn conversation() -> ChatView {
     requests: Default::default(),
     waits_on: Default::default(),
     context: None,
+    turns: Default::default(),
+    led_to_end: Default::default(),
+    modules_now: Default::default(),
   }
 }
 

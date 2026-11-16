@@ -135,20 +135,63 @@ fn stalls_raise_one_event_after_the_set_minutes_and_progress_rearms_it() {
   assert_eq!((kept[0].run, kept[0].task.as_str()), (run.id(), "ORC-1"));
   assert!(!kept[0].automatic, "answer agents is off: no turn");
   assert_eq!(
-    follow(&fixture, false, minute(45)),
+    follow(&fixture, false, minute(39)),
     Followed::default(),
-    "one event per stall"
+    "one event per period of the stall"
   );
-  progress(&mut fixture, &run, minute(50));
+  // It stays stalled: raised again for the second and the third period, and no more (OA-06).
+  assert!(follow(&fixture, false, minute(45)).kept, "the second period");
+  assert!(follow(&fixture, false, minute(60)).kept, "the third period");
   assert_eq!(
-    follow(&fixture, false, minute(69)),
+    follow(&fixture, false, minute(200)),
+    Followed::default(),
+    "three times at most per stall"
+  );
+  let kept = stalls(&fixture);
+  assert_eq!(kept.len(), 3, "{kept:?}");
+  let again = |minutes, at| {
+    WaitKind::Event(TaskEvent {
+      kind: TaskEventKind::NoProgress {
+        since: minute(0),
+        minutes,
+      },
+      at,
+    })
+  };
+  assert_eq!(kept[1].kind, again(40, minute(40)));
+  assert_eq!(kept[2].kind, again(60, minute(60)));
+  progress(&mut fixture, &run, minute(210));
+  assert_eq!(
+    follow(&fixture, false, minute(229)),
     Followed::default(),
     "progress re-armed it"
   );
-  assert!(follow(&fixture, false, minute(70)).kept, "a new stall");
+  assert!(follow(&fixture, false, minute(230)).kept, "a new stall");
   let kept = stalls(&fixture);
-  assert_eq!(kept.len(), 2, "{kept:?}");
-  assert_eq!(kept[1].kind, stalled_since(minute(50), minute(70)));
+  assert_eq!(kept.len(), 4, "{kept:?}");
+  assert_eq!(kept[3].kind, stalled_since(minute(210), minute(230)));
+}
+
+#[test]
+fn stalls_found_after_several_periods_raise_one_event_not_one_per_period() {
+  let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
+  running(&mut fixture, "Add login");
+  // Nobody looked for an hour: the stall is in its third period, and that one event is raised.
+  assert!(follow(&fixture, false, minute(61)).kept);
+  let kept = stalls(&fixture);
+  assert_eq!(kept.len(), 1, "{kept:?}");
+  assert!(
+    matches!(
+      kept[0].kind,
+      WaitKind::Event(TaskEvent {
+        kind: TaskEventKind::NoProgress { minutes: 60, .. },
+        ..
+      })
+    ),
+    "{kept:?}"
+  );
+  assert_eq!(follow(&fixture, false, minute(62)), Followed::default(), "kept once");
 }
 
 #[test]
@@ -228,7 +271,9 @@ fn stalls_are_never_raised_for_waiting_queued_paused_or_held_runs() {
   assert!(matches!(waits, Ok(Borrow::Wait(_))), "{waits:?}");
   follow(&fixture, false, minute(500));
   let kept = stalls(&fixture);
-  let tasks: Vec<&str> = kept.iter().map(|wait| wait.task.as_str()).collect();
+  // The stalled run's event is raised once for each period it stayed stalled.
+  let mut tasks: Vec<&str> = kept.iter().map(|wait| wait.task.as_str()).collect();
+  tasks.dedup();
   assert_eq!(
     tasks,
     ["ORC-5"],
@@ -280,8 +325,8 @@ fn stalls_tell_when_following_again_may_raise_one() {
   assert!(follow(&fixture, false, minute(5)).kept);
   assert_eq!(
     next_stall_in(fixture.repo.path(), minute(6)),
-    Ok(Some(minute(11))),
-    "stalled already: the soonest it could stall again"
+    Ok(Some(minute(10))),
+    "stalled already: its next period without progress"
   );
   progress(&mut fixture, &run, minute(8));
   assert_eq!(next_stall_in(fixture.repo.path(), minute(9)), Ok(Some(minute(13))));

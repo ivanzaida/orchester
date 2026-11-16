@@ -609,6 +609,10 @@ and every other start never turn it on, so there these presses are still refused
 variable or setting another program could set. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
 presses apply, in one that does not they are refused, and only `examples/qa_app` turns it on. The seed's
 `orchestrator-leads` scenario has subscriptions standing for these states (the design-verification skill names them).
+`orchestrator-leading` has a conversation that leads a module to the end, with events whose turns failed (tried
+again, left to the person with *Try again*), and `orchestrator-held-budget`, `orchestrator-held-plan` and
+`orchestrator-held-plan-unnamed` the same events held by a used daily budget or by the plan limit of the
+Orchestrator's account.
 
 **In a QA copy the MCP client is the person for the whole window (the person, 2026-11-15).** The same program,
 `examples/qa_app`, also makes every window input of its MCP client count as the person's

@@ -11,7 +11,10 @@
 //! (choosing a command held already opens its own badge's picker). Then Backspace at the start of the text removes the
 //! last badge, and a badge's `x` removes it. The composer's own send applies every badge to its choices with the
 //! message's text ([`SlashField::apply_held`]) and sends the message with them. What a picker offers is the command's
-//! own ([`ArgumentPicker`]); the slash menu draws the badges and does the keys.
+//! own ([`ArgumentPicker`]); the slash menu draws the badges and does the keys. A command that takes its choices in
+//! one of two ways ([`OtherWay`]: the Orchestrator's /watch follows its targets or leads them to the end, `L03` `xE361`
+//! on the board `Orchestrator autonomy · frames to approve`) switches between them with Tab while its picker is open,
+//! and its badge names the way chosen.
 
 mod badges;
 mod picker;
@@ -21,13 +24,14 @@ use std::sync::{Arc, atomic::Ordering};
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, events::KeyboardEvent},
+  core::Signal,
   node::Element,
 };
 use orchester_core::id::ChatId;
 
 pub use self::search::PickerSearch;
 pub(super) use self::{badges::badges, picker::picker};
-use super::{SlashField, step};
+use super::{Run, SlashField, step};
 use crate::ui::icon::Icon;
 
 /// One of the things a command's argument can be, as its picker's row and its badge show it.
@@ -87,12 +91,27 @@ pub struct Badge {
   pub verb: Arc<str>,
 }
 
-/// What a command that takes an argument does: its picker, what applying it does, and its badge.
+/// The second way a command takes its choices, beside the one its badge names by default: the command's picker draws
+/// the choice between the two, and Tab switches it while the picker is open.
+#[derive(Clone)]
+pub struct OtherWay {
+  /// Whether it is chosen now: the command's own state, which its picker draws and its apply reads. A command chosen
+  /// anew starts without it.
+  pub chosen: Signal<bool>,
+  /// What the badge says while it is chosen.
+  pub badge: Badge,
+  /// Tab in the open picker: the command switches between its two ways.
+  pub switch: Run,
+}
+
+/// What a command that takes an argument does: its picker, what applying it does, its badge, and the other way it
+/// takes its choices when it has one.
 #[derive(Clone)]
 pub struct Taking {
   pub picker: Arc<dyn ArgumentPicker>,
   pub apply: Apply,
   pub badge: Badge,
+  pub other_way: Option<OtherWay>,
 }
 
 /// One badge of the composer: the command it holds and the choices taken for it.
@@ -179,6 +198,10 @@ impl SlashField {
     self.clear_search();
     let mut held = self.argument.get_untracked();
     if !held.iter().any(|kept| kept.command == name) {
+      // A command chosen anew takes its choices its first way.
+      if let Some(way) = self.other_way_of(name).filter(|way| way.chosen.get_untracked()) {
+        way.chosen.set(false);
+      }
       held.push(Arguing {
         command: name,
         badge,
@@ -200,6 +223,31 @@ impl SlashField {
       .iter()
       .find(|(held, _)| *held == command)
       .map(|(_, taking)| taking.clone())
+  }
+
+  /// The other way the held command `command` takes its choices, when it has one.
+  fn other_way_of(&self, command: &str) -> Option<OtherWay> {
+    self.taking_of(command).and_then(|taking| taking.other_way)
+  }
+
+  /// What the badge of `held` says now, read tracked: the other way's while its command's picker chose it.
+  pub(super) fn badge_of(&self, held: &Arguing) -> Badge {
+    match self.other_way_of(held.command) {
+      Some(way) if way.chosen.get() => way.badge,
+      _ => held.badge.clone(),
+    }
+  }
+
+  /// Tab in the open picker: its command switches between its two ways. Whether it has two.
+  fn switch_way(&self) -> bool {
+    let picking = self
+      .argument
+      .with_untracked(|held| held.iter().find(|badge| badge.picking).map(|badge| badge.command));
+    let Some(way) = picking.and_then(|command| self.other_way_of(command)) else {
+      return false;
+    };
+    (way.switch)();
+    true
   }
 
   /// Takes Backspace in an empty field while a badge is held, no picker open and the composer's field has the focus:
@@ -243,6 +291,7 @@ impl SlashField {
         self.close_picker();
         true
       }
+      "Tab" if plain(event) => self.switch_way(),
       "Backspace" if plain(event) && self.focused.get_untracked() && self.draft.get_untracked().is_empty() => {
         self.remove_last();
         true
@@ -301,6 +350,24 @@ impl SlashField {
 
   /// Enter or Shift Enter in the picker: its focused row, while it can be chosen and its badge does not hold it yet,
   /// becomes the badge's last choice, and the search empties. Whether a row was focused that can be chosen.
+  /// A press on row `at` of the open picker: one that can be chosen takes the focus, is added and the picker closes.
+  pub(super) fn pick(&self, at: usize) {
+    {
+      let mut offered = self.offered_choices.lock();
+      let Some(offered) = offered
+        .as_mut()
+        .filter(|offered| offered.rows.get(at).is_some_and(|(_, can)| *can))
+      else {
+        return;
+      };
+      offered.focused = Some(at);
+    }
+    self.choice_focus.set(Some(at));
+    if self.add_focused() {
+      self.close_picker();
+    }
+  }
+
   fn add_focused(&self) -> bool {
     let offered = self.offered_choices.lock().clone().unwrap_or_default();
     let Some((choice, true)) = offered.focused.and_then(|at| offered.rows.get(at)).cloned() else {

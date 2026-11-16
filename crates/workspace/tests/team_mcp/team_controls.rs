@@ -1,6 +1,7 @@
 //! The run controls and the reads of what waits on a person, for a team task's run that has no row of its task here
-//! (team authority P7): a paused run resumes under the claim its work started with, a fenced one and one that was
-//! interrupted are refused before anything is stored, and the waits of a team run are listed under its recorded key.
+//! (team authority P7): a paused run resumes, and an interrupted one continues, under the claim its work started with
+//! (the same in both kinds of project, `docs/design/local-and-team-parity.md`), a fenced one is refused before anything
+//! is stored, and the waits of a team run are listed under its recorded key.
 
 use orchester_core::{
   run::{InterruptCause, StepFailure, WaitReason},
@@ -182,18 +183,49 @@ fn team_mcp_a_fenced_team_run_takes_no_message_whatever_its_state() {
 }
 
 #[test]
-fn team_mcp_a_message_to_an_interrupted_team_run_with_its_worktree_is_refused_before_it_is_stored() {
+fn team_mcp_a_message_to_an_interrupted_team_run_with_its_worktree_continues_it_under_its_claim() {
   let team = interrupted();
   std::fs::create_dir_all(run_worktree(team.checkout.root(), team.run)).expect("worktree");
   let message = json!({"project": "Kontur", "run": team.run.to_string(), "text": "Carry on."});
 
-  // The run could be continued, which a team task's work does only through the team server.
-  assert_eq!(
-    team.checkout.refused("send_message", &message),
-    "team_project_unsupported"
-  );
-  assert_eq!(team.messages(), 0, "nothing was stored");
+  // The run can be continued: the message is stored for its agent and the runner is asked to continue the run (this
+  // session has none, so it stays queued). No claim of the old sharing stream was asked for.
+  let sent = team.checkout.call("send_message", &message).expect("stored");
+  assert_eq!(team.messages(), 1, "{sent}");
   assert!(no_task_rows(&team));
+}
+
+#[test]
+fn team_mcp_an_interrupted_team_run_continues_under_its_own_claim() {
+  let team = interrupted();
+  let resume = json!({"project": "Kontur", "run": team.run.to_string()});
+
+  // As a paused one resumes: the request reaches the runner (this session has none), with no claim taken.
+  assert_eq!(team.checkout.refused("resume_run", &resume), "runner_unavailable");
+  assert!(no_task_rows(&team));
+}
+
+#[test]
+fn team_mcp_a_stopped_team_run_takes_its_decision_under_its_own_claim() {
+  let team = started();
+  team.step_into(|run, execution, now| run.fail_step(execution, StepFailure::AgentFailed, now).expect("failed"));
+  team
+    .checkout
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("the switch");
+  let run = team.run.to_string();
+  let retry = json!({"project": "Kontur", "run": run, "choice": {"kind": "allow_retry"}});
+
+  // The choice is read as the task's page offers it, not refused for being a team run's: whatever it answers, it is
+  // not the team refusal, and no row of the task was cached.
+  let refused = team.checkout.refused("continue_run", &retry);
+  assert_ne!(refused, "team_project_unsupported");
+  assert!(no_task_rows(&team));
+
+  // A fenced run takes no decision.
+  team.fence();
+  assert_eq!(team.checkout.refused("continue_run", &retry), "claim_fenced");
 }
 
 #[test]

@@ -63,6 +63,11 @@ impl Day {
   pub(super) fn holds(self, at: Timestamp) -> bool {
     self.start <= at && at < self.end
   }
+
+  /// When the day starts and when the next one does.
+  pub(super) const fn bounds(self) -> (Timestamp, Timestamp) {
+    (self.start, self.end)
+  }
 }
 
 /// The report of `facts`' day in project `project`.
@@ -80,6 +85,7 @@ pub(super) fn build(facts: &DayFacts, project: ProjectId) -> DailyReport {
     usage: usage::of(facts, project),
     queued: Vec::new(),
     automatic: false,
+    led: None,
   };
   for task in &facts.tasks {
     place(&mut report, facts, (project, task));

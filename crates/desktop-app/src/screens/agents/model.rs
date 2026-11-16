@@ -362,7 +362,7 @@ fn too_old(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnection>)
       ActionButton::new(
         "agent-open-connection",
         ButtonKind::Primary,
-        ctx.t("agents.openConnection"),
+        ctx.t("agents.openAccounts"),
       )
       .icon(Icon::Plug)
       .opens(nav.to(Route::Accounts(crate::routes::AccountsView::default()))),

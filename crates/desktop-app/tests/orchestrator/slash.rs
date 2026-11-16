@@ -16,8 +16,10 @@ use orchester_app::{
   ui::tooltip::TOOLTIP_DELAY,
 };
 use orchester_core::{
+  name::Name,
   orchestrator::EntryKind,
-  resource::{InstructionScope, Skill},
+  resource::{InstructionScope, Skill, Slug},
+  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_workspace::skills::editor;
@@ -228,20 +230,28 @@ fn orchestrator_slash_offers_the_watch_commands_faded_while_nothing_is_watched()
   assert_eq!(draft(&mut screen), "/wa");
 }
 
-/// The project's skills (ORC-325): `release-notes` published, `draft-only` never published.
+/// The project's skills (ORC-325): `release-notes` published (a new skill is saved as its first version, ORC-816),
+/// `draft-only` never published, a draft the store keeps with no version.
 fn publish_skills(screen: &Orchestrator) {
   let skill = |description: &str| {
     Skill::new(description.into(), "Body".into(), Vec::new(), InstructionScope::Project).expect("a skill")
   };
-  let notes = editor::save_in(
+  editor::save_in(
     &screen.root,
     None,
     "release-notes",
     &skill("Release notes from the merged tasks"),
   )
-  .expect("a draft");
-  editor::publish_in(&screen.root, &notes).expect("v1");
-  editor::save_in(&screen.root, None, "draft-only", &skill("Never published")).expect("a draft");
+  .expect("v1");
+  screen
+    .db()
+    .create_resource(
+      Slug::new("draft-only").expect("slug"),
+      Name::new("draft-only").expect("name"),
+      &skill("Never published"),
+      Timestamp::now(),
+    )
+    .expect("a draft");
 }
 
 /// The Skills section (`IQOLN`, `OKWFL`) lists the published skills, never a draft; choosing one puts its chip before

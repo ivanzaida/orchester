@@ -6,7 +6,10 @@
 //! tasks left open (c), and *Every task of Mobile release is Done* with the summary turn it started (d). *Release
 //! checklist*, in History, holds a `/watch-task` without an order. *Search index, asked in words*, in History, holds
 //! the lines the Orchestrator's watch tools kept at the person's request (ORC-893). The modules hold drafts, so the
-//! subscription line counts their tasks.
+//! subscription line counts their tasks. A conversation that leads a module to the end, with the events whose turns
+//! failed or are held, is [`leading`]'s.
+
+pub mod leading;
 
 use orchester_core::{
   id::{ChatId, ModuleId},
@@ -14,7 +17,9 @@ use orchester_core::{
   name::Name,
   orchestrator::{
     Chat, ChatEvent, Subscription, WatchTarget,
-    watch::{AtRequest, EndReason, NamedTarget, OpenTask, OpenWork, WatchCommand, WatchLine, WatchSummary},
+    watch::{
+      AtRequest, EndReason, NamedTarget, OpenTask, OpenWork, WatchCommand, WatchLine, WatchSummary, asked_to_lead,
+    },
   },
   task::{Task, organization::ChangeActor},
   time::Timestamp,
@@ -102,7 +107,8 @@ pub(super) fn module(
   Ok((named, tasks))
 }
 
-/// The person's /watch of `targets` with `order` in `chat` at `at`, and the subscription line it wrote.
+/// The person's /watch of `targets` with `order` in `chat` at `at`, and the subscription line it wrote; a command
+/// whose order begins with the words for it led its targets to the end.
 pub(super) fn watched(
   kontur: &mut Kontur,
   chat: &Chat,
@@ -112,6 +118,7 @@ pub(super) fn watched(
   let command = WatchCommand::Watch {
     targets: targets.clone(),
     order: order.to_owned(),
+    to_end: asked_to_lead(order).is_some(),
   };
   let line = WatchLine::Watching {
     started: targets,

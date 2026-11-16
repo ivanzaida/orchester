@@ -23,8 +23,9 @@ use serde_json::Value;
 use super::{
   acts::{act_and_keep, drives},
   approval::{self, APPLY_PROPOSAL},
-  approval_turn, duplicate, git, guard, leads, mcp_servers,
+  approval_turn, decisions, duplicate, git, guard, leads, mcp_servers,
   own_project::{in_own_project, own_project_by_id},
+  parking::{self, PARK_TASK},
   plan::{self, PROPOSE_PLAN},
   repository::{self, INIT_REPOSITORY},
   told,
@@ -43,7 +44,7 @@ use crate::{
 /// starting a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's
 /// agents a message and continuing a run that waits for a person's decision. While it drives, it has every other tool
 /// of the app too ([`listed`]). A name whose tool the app does not have (yet) is not listed.
-pub const TOOLS: [&str; 57] = [
+pub const TOOLS: [&str; 59] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -101,21 +102,25 @@ pub const TOOLS: [&str; 57] = [
   "get_delivery",
   "get_story_point_calibration",
   "get_daily_report",
+  "get_decisions",
+  "get_standing",
 ];
 
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
 /// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
 /// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), applying a proposal the
 /// person approved in their own words ([`super::approval`]), answering with a plan in plan-only mode
-/// ([`super::plan`]), making a waiting run wait on another task ([`super::waits_on`]), and watching and stopping
+/// ([`super::plan`]), making a waiting run wait on another task ([`super::waits_on`]), parking a task for the
+/// person ([`super::parking`]), and watching and stopping
 /// watching at the person's request in words ([`watch_tool`]).
-pub const CHAT_TOOLS: [&str; 27] = [
+pub const CHAT_TOOLS: [&str; 28] = [
   watch_tool::WATCH,
   watch_tool::UNWATCH,
   INIT_REPOSITORY,
   APPLY_PROPOSAL,
   PROPOSE_PLAN,
   WAIT_ON_TASK,
+  PARK_TASK,
   git::NAMES[0],
   git::NAMES[1],
   git::NAMES[2],
@@ -180,9 +185,16 @@ pub fn listed(drives: bool) -> Vec<Tool> {
         tool.description = Some(told.into());
       }
       approval_turn::with_reason(&mut tool);
+      decisions::with_reason(&mut tool);
       tool
     })
-    .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])
+    .chain([
+      repository::tool(),
+      approval::tool(),
+      plan::tool(),
+      waits_on::tool(),
+      parking::tool(),
+    ])
     .chain(git::tools())
     .chain(mcp_servers::tools())
     .chain(watch_tool::tools())
@@ -253,6 +265,9 @@ pub async fn call(
   }
   if name == WAIT_ON_TASK {
     return waits_on::call((translate, runners), scope, arguments).await;
+  }
+  if name == PARK_TASK {
+    return parking::call((translate, runners), scope, arguments).await;
   }
   if read_only {
     own_project_by_id(scope, &mut arguments);

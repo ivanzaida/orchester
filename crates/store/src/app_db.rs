@@ -101,6 +101,7 @@ CREATE TABLE ui_state (
   api_accounts::MIGRATION,
   agent_programs::MIGRATION,
   decision_servers::MIGRATION,
+  settings::KEEPS_AWAKE_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

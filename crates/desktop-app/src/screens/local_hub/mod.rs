@@ -353,7 +353,7 @@ impl LocalHubScreen {
       Some(kind) => self.form(ctx, project, listing, kind),
       None => self.panel(ctx, (project, hub), selected),
     };
-    agents::master_detail("local-hub", reading, (list, panel))
+    agents::master_detail(ctx, "local-hub", reading, (list, panel))
   }
 
   /// The form that makes a new one of `kind` (`Agents · New agent profile` … `New tool`, L3–L7).

@@ -9,6 +9,7 @@
 mod claude;
 mod codex;
 mod compact;
+mod compact_first;
 mod skill;
 mod steer;
 mod turn;
@@ -50,6 +51,26 @@ enum Work {
   Turn(ChatMessageId),
   /// The compaction kept as this entry ([`compact`]).
   Compaction(i64),
+  /// The turn of this message, which first carries out the compaction kept as this entry ([`compact_first`]).
+  TurnAfterCompaction(ChatMessageId, i64),
+}
+
+impl Work {
+  /// The message whose turn it is, for a turn.
+  const fn turn(self) -> Option<ChatMessageId> {
+    match self {
+      Self::Turn(message) | Self::TurnAfterCompaction(message, _) => Some(message),
+      Self::Compaction(_) => None,
+    }
+  }
+
+  /// The entry of the compaction it carries out, for one that does.
+  const fn compaction(self) -> Option<i64> {
+    match self {
+      Self::Compaction(seq) | Self::TurnAfterCompaction(_, seq) => Some(seq),
+      Self::Turn(_) => None,
+    }
+  }
 }
 
 struct Running {
@@ -91,6 +112,22 @@ impl Chats {
   }
 }
 
+/// Whether `work` of conversation `chat` kept its end already: its task has only to return, and the conversation is
+/// free. The end is the last thing a turn or a compaction keeps, and what tells the desktop to ask for the next turn,
+/// so the next turn is not refused as busy for the moment its task takes to return.
+fn over(db: &ProjectDb, chat: ChatId, work: Work) -> Result<bool, Rejection> {
+  match work.turn() {
+    Some(message) => db
+      .chat_turn(message)
+      .map(|kept| kept.is_none_or(|kept| !kept.turn.is_thinking()))
+      .map_err(|error| failed("cannot read the chat message", &error)),
+    None => db
+      .chat_compacting(chat)
+      .map(|compacting| !compacting)
+      .map_err(|error| failed("cannot read the conversation's compaction", &error)),
+  }
+}
+
 impl Scheduler {
   /// Answers the person's message `message` with a turn of the Orchestrator's agent, using the domain tools at
   /// `tools`; nothing when its turn is under way or ended already.
@@ -98,7 +135,7 @@ impl Scheduler {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
-    let db = self.open()?;
+    let mut db = self.open()?;
     let kept = db
       .chat_turn(message)
       .map_err(|error| failed("cannot read the chat message", &error))?
@@ -119,10 +156,11 @@ impl Scheduler {
     let mut running = self.inner.chats.running.lock();
     running.retain(|_, turn| !turn.task.is_finished());
     match running.get(&chat) {
-      Some(turn) if turn.work == Work::Turn(message) => return Ok(()),
-      Some(_) => return Err(Rejection::ChatBusy),
-      None => {}
+      Some(turn) if turn.work.turn() == Some(message) => return Ok(()),
+      Some(turn) if !over(&db, chat, turn.work)? => return Err(Rejection::ChatBusy),
+      Some(_) | None => {}
     }
+    let first = self.compact_first(&mut db, &kept, &settings)?;
     let (stop, stopped) = oneshot::channel();
     let turn = Turn {
       root: self.inner.project_root.clone(),
@@ -138,11 +176,19 @@ impl Scheduler {
       time_limit: self.inner.chats.time_limit(),
     };
     let (steers, steered) = mpsc::unbounded_channel();
-    let task = tokio::spawn(turn.run(stopped, steered));
+    let work = first.as_ref().map_or(Work::Turn(message), |first| {
+      Work::TurnAfterCompaction(message, first.seq)
+    });
+    let task = tokio::spawn(async move {
+      match first {
+        Some(first) => turn.run_after(first, stopped, steered).await,
+        None => turn.run(stopped, steered).await,
+      }
+    });
     running.insert(
       chat,
       Running {
-        work: Work::Turn(message),
+        work,
         stop: Some(stop),
         steers: Some(steers),
         task,
@@ -218,20 +264,8 @@ impl Scheduler {
   /// one, as interrupted, but those this runner carries out: no runner carries them out any more.
   pub(super) fn interrupt_chat_turns(&self, db: &mut ProjectDb, only: Option<ChatId>) -> Result<(), Rejection> {
     let held = self.inner.chats.held();
-    let messages: Vec<ChatMessageId> = held
-      .iter()
-      .filter_map(|work| match work {
-        Work::Turn(message) => Some(*message),
-        Work::Compaction(_) => None,
-      })
-      .collect();
-    let compactions: Vec<i64> = held
-      .iter()
-      .filter_map(|work| match work {
-        Work::Compaction(seq) => Some(*seq),
-        Work::Turn(_) => None,
-      })
-      .collect();
+    let messages: Vec<ChatMessageId> = held.iter().filter_map(|work| work.turn()).collect();
+    let compactions: Vec<i64> = held.iter().filter_map(|work| work.compaction()).collect();
     let mut chats = db
       .interrupt_chat_turns(&messages, only)
       .map_err(|error| failed("cannot end the chat's interrupted turns", &error))?;

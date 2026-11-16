@@ -117,15 +117,13 @@ fn team_mcp_continue_run_of_a_local_run_in_a_team_project_is_decided_as_a_local_
 }
 
 #[test]
-fn team_mcp_continue_run_of_a_team_run_is_refused_by_its_team_record() {
+fn team_mcp_continue_run_of_a_team_run_is_decided_as_its_page_offers_and_its_limits_are_its_admins() {
   let team = crate::team_runs::started();
   let run = team.run.to_string();
 
+  // The run works: its page offers no resume, and that is the refusal, not one for being a team run's.
   let resume = json!({"project": "Kontur", "run": run, "choice": {"kind": "resume"}});
-  assert_eq!(
-    team.checkout.refused("continue_run", &resume),
-    "team_project_unsupported"
-  );
+  assert_eq!(team.checkout.refused("continue_run", &resume), "not_stopped_at_limit");
   let raise = json!({
     "project": "Kontur",
     "run": run,

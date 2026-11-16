@@ -30,7 +30,7 @@ fn sidebar_review_opens_its_list_and_history_retraces_it() {
   window.until("a task's review", |window| {
     window
       .texts("screen-review")
-      .is_some_and(|texts| texts[0].contains("KON-12"))
+      .is_some_and(|texts| texts.iter().any(|text| text == "KON-12"))
   });
   assert!(
     selected(&mut window, "nav-review"),
@@ -40,7 +40,7 @@ fn sidebar_review_opens_its_list_and_history_retraces_it() {
   window.until("Back to the list", |window| {
     window
       .texts("screen-review")
-      .is_some_and(|texts| !texts[0].contains("KON-12"))
+      .is_some_and(|texts| !texts.iter().any(|text| text.contains("KON-12")))
   });
   assert_eq!(navigation.route_now(), list);
   navigation.forward();

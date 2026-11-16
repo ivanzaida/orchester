@@ -406,15 +406,37 @@
           "invalid": "Whole minutes, {{min}} to {{max}} — or turn it off"
         }
       },
-      "alsoNeeded": "Also needed · set for this computer",
-      "alsoNeededFoot": "Set once in Settings for every project: it is about what may answer in your place on this computer.",
-      "answerApprovals": {
-        "label": "Let automation answer approvals",
-        "hint": "Answering agents' questions and messages acts only while this is on too · Settings › Automation",
-        "on": "On",
-        "off": "Off",
-        "open": "Open",
-        "unreadable": "Whether automation may answer approvals can't be read: {{reason}}"
+      "leading": {
+        "title": "Leading to the end",
+        "where": "What a new leading subscription takes · /watching changes it for one",
+        "foot": "A new project starts with {{runs}} runs, {{returns}} returns, {{raises}} raise by {{percent}} % and no budget. Subscriptions already made keep theirs.",
+        "invalid": "A whole number, {{min}} to {{max}}",
+        "runs": {
+          "label": "Runs of a task",
+          "hint": "How many times it may run one task again before the task is parked for you · {{min}} to {{max}}",
+          "unit": "runs"
+        },
+        "returns": {
+          "label": "Returns per run",
+          "hint": "Returns to an earlier step inside one run · {{min}} to {{max}}",
+          "unit": "returns"
+        },
+        "raises": {
+          "label": "Raises of a limit",
+          "hint": "How often it may raise a run's token or time limit, and by how much · {{min}} to {{max}}, up to {{percent}} %",
+          "times": "How often a run's limit may be raised",
+          "share": "By how much of the limit, in percent",
+          "by": "by",
+          "percent": "%",
+          "invalidShare": "A whole number of percent, {{min}} to {{max}}"
+        },
+        "budget": {
+          "label": "Budget",
+          "hint": "Tokens for the whole target; nothing new starts once it is used · empty: no budget",
+          "unit": "tokens",
+          "none": "None",
+          "invalid": "A whole number of tokens above 0 — or leave it empty for no budget"
+        }
       }
     },
     "limitsNote": "Apply to new runs",

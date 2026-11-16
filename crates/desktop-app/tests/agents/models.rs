@@ -1,3 +1,4 @@
+use orchester_app::routes::Route;
 use orchester_core::{connection::AgentConnection, resource::ModelId, store::ConnectionStore};
 use orchester_store::ProjectDb;
 
@@ -55,14 +56,12 @@ fn agents_custom_model_warning_opens_model_menu_and_connection() {
   assert!(!screen.exists("agent-model-too-old"));
   screen.click("agent-model");
   screen.click("agent-model-option-1");
+  assert_eq!(screen.text("agent-open-connection"), "Open Accounts");
   screen.click("agent-open-connection");
   assert!(
-    screen
-      .window
-      .navigation()
-      .route_now()
-      .path()
-      .contains(&connection.id().to_string())
+    matches!(screen.window.navigation().route_now(), Route::Accounts(_)),
+    "the CLI's program is set in Settings › Accounts: {:?}",
+    screen.window.navigation().route_now()
   );
 }
 

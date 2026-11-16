@@ -45,6 +45,19 @@ impl<'a, R: CommandRunner> Git<'a, R> {
     })
   }
 
+  /// [`Self::stdout`] with git's index at `index` instead of the repository's: a tree is built there and the person's
+  /// index and checkout stay untouched.
+  pub(super) fn stdout_in_index(&self, index: &Path, args: &[&str]) -> Result<String, GitError> {
+    let index = index.to_string_lossy();
+    let command = local_git_command(self.program, self.dir, args.iter().copied()).with_env("GIT_INDEX_FILE", &index);
+    let output = self.runner.run(&command)?;
+    if output.success() {
+      Ok(output.stdout.trim().to_owned())
+    } else {
+      Err(GitError::Failed(message(&output)))
+    }
+  }
+
   /// Whether the command exits with 0, for queries whose every failure means "no".
   pub(super) fn succeeds(&self, args: &[&str]) -> Result<bool, GitError> {
     Ok(self.output(args)?.success())

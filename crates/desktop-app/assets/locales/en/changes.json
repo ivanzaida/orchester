@@ -93,6 +93,14 @@
       "title": "The run's worktree was removed",
       "detail": "Only its checkpointed work is shown."
     },
-    "unreadable": "Nothing this run changed can be shown until its record can be read. Summary lists the task’s runs."
+    "unreadable": "Nothing this run changed can be shown until its record can be read. Summary lists the task’s runs.",
+    "takenIn": {
+      "title": "This run's branch took in {{commits}} commits from other branches that its target doesn't have",
+      "titleFrom": "This run's branch took in {{commits}} commits from {{branch}} that its target doesn't have",
+      "allShown": "Merging the run brings them too: what is listed is everything the merge would bring. Orchester leaves this merge to you.",
+      "ownShown": "Only the run's own changes are listed, read from its start merged with what its branch took in. Merging it still brings those commits.",
+      "showOwn": "Show only the run's changes",
+      "showAll": "Show everything the merge brings"
+    }
   }
 }

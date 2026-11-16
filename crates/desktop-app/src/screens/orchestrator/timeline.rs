@@ -8,7 +8,7 @@
 //! ([`super::report`]), with the turn they started, if any. The person's watch commands and the lines the app writes
 //! about what the conversation watches are rows of their own, with no turn ([`super::watch`]).
 //! Waits for the person kept one after another, with no message of theirs between them, gather into one digest
-//! ([`super::digest`]).
+//! ([`super::digest`]). An event whose turn failed or is held says so under its row ([`super::wait::turn_state`]).
 
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
@@ -27,7 +27,10 @@ use orchester_core::{
   id::{ChatMessageId, ProjectId},
   orchestrator::{Queued, TurnState, WaitKind},
 };
-use orchester_workspace::{orchestrator::tools::ChatScope, workspace::OpenProject};
+use orchester_workspace::{
+  orchestrator::{event_turns::EventTurn, tools::ChatScope},
+  workspace::OpenProject,
+};
 
 use super::{
   digest::{Digest, DigestProps, Waited, for_the_person},
@@ -333,11 +336,12 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
       })
       .or_else(|| super::rewind::forked::line(ctx, &format!("orchestrator-forked-{key}"), event, row.env.project))
       .or_else(|| {
+        let to_end = row.turn.led_to_end.as_deref();
         super::watch::row(
           ctx,
           &format!("orchestrator-watch-{key}"),
           event,
-          (row.turn.at, &row.env),
+          (row.turn.at, &row.env, to_end),
         )
       });
     // A /watch's line, then the cards of its targets other conversations lead (05 `EIjDH`).
@@ -372,6 +376,8 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(OrchestratorSpacing::Items.role())
     .child(opening);
+  // Where the turn of an event stands, where its answer would be: tried again, left to the person, or held.
+  let state = super::wait::turn_state::row(ctx, row, &key);
   let column = match edited {
     Some((_, after)) if answer.is_some() || !end.is_empty() => column
       .with_children((after > 0).then(|| super::rewind::editing::drop_line(ctx, after)))
@@ -383,7 +389,7 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
           .with_children(answer)
           .with_children(end),
       ),
-    _ => column.with_children(answer).with_children(end),
+    _ => column.with_children(answer).with_children(end).with_children(state),
   };
   room(ctx, dimmed(column, dropped), first)
 }
@@ -395,6 +401,12 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
   if let Some(summary) = &row.turn.watch_ended {
     let id = format!("orchestrator-watch-ended-{key}");
     let line = super::watch::ended_line(ctx, &id, summary, row.turn.at);
+    return (line, super::answer::answer(ctx, row));
+  }
+  if let Some(event) = &row.turn.standing {
+    let id = format!("orchestrator-standing-{key}");
+    let told = (&**event, row.turn.module_now.as_ref());
+    let line = super::watch::standing_line(ctx, &id, told, (row.turn.at, row.env.project));
     return (line, super::answer::answer(ctx, row));
   }
   match (&row.turn.wait, &row.turn.report) {
@@ -415,6 +427,15 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
         _ => {
           let standing = (row.turn.stands, row.turn.request.as_ref());
           let status = Status::of(wait, standing, row.turn.state.as_ref(), &row.turn.answer);
+          // A turn that is held, waits for its next try or was left to the person reads nothing: the row under the
+          // event says what happens to it (`wait::turn_state`).
+          let status = match (status, row.turn.turn_state.as_ref()) {
+            (
+              Status::Reading,
+              Some(EventTurn::Held(_) | EventTurn::TriedAgain { .. } | EventTurn::LeftToPerson { .. }),
+            ) => Status::Waits,
+            (status, _) => status,
+          };
           let line = super::wait::line(ctx, &id, (wait, row.turn.at, turned), (status, row.env.project));
           if wait.kind == WaitKind::Approval {
             return super::wait::approval::opening(ctx, row, (&id, line), status);

@@ -64,7 +64,7 @@ fn pipeline_hub_ready_fixes_a_card_whose_profile_lost_its_connection_is_amber_an
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
   let card = format!("pipeline-hub-flow-step-{build}");
-  assert_eq!(agents.text(&format!("{card}-runs")), "Explorer has no connection");
+  assert_eq!(agents.text(&format!("{card}-runs")), "Explorer has no account here");
   assert_eq!(agents.text(&format!("{card}-fix-choose-words")), "Open profile");
   agents.click(&format!("{card}-fix"));
   agents.until("the profile", |s| {
@@ -177,7 +177,7 @@ fn pipeline_hub_ready_fixes_the_chip_and_the_line_count_what_ready_lists_for_a_p
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
   assert_eq!(
     agents.text(&format!("team-hub-ready-step-{plan}-words")),
-    "Explorer has no connection"
+    "Explorer has no account here"
   );
   assert_eq!(
     agents.text(&format!("team-hub-ready-step-{build}-words")),

@@ -158,14 +158,14 @@ fn pipeline_hub_ready_a_step_whose_profile_lost_its_connection_is_named_and_open
   let key = build_step(&agents, stuck);
   open(&mut agents, PipelinesFilter::All, Some(stuck));
 
-  let line = "02 Build runs Explorer, which has no connection";
+  let line = "02 Build runs Explorer, which has no account here";
   assert_eq!(agents.text(&format!("pipeline-hub-row-{stuck}-line")), line);
   assert_eq!(agents.text("pipeline-hub-chip-1-label"), line);
   assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
   let row = format!("team-hub-ready-step-{key}");
   assert_eq!(
     agents.text(&format!("{row}-words")),
-    "Explorer has no connection",
+    "Explorer has no account here",
     "the step that runs it"
   );
   assert!(
@@ -194,7 +194,7 @@ fn pipeline_hub_ready_every_step_whose_profile_lost_its_connection_has_a_row_and
   for (key, name) in [(plan, "Explorer"), (build, "Builder")] {
     assert_eq!(
       agents.text(&format!("team-hub-ready-step-{key}-words")),
-      format!("{name} has no connection")
+      format!("{name} has no account here")
     );
   }
 }

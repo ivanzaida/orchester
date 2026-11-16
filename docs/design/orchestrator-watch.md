@@ -152,7 +152,8 @@ From `MvWyD` (frames 01–06, unchanged):
    - a run without progress for N minutes;
    - events from while Orchester was closed.
 
-   Events that come during a turn wait and are taken together in the next one. There are no timers.
+   Events that come during a turn wait and are taken together in the next one, five at most, oldest first (built
+   2026-11-14, `docs/plan/orchestrator-autonomy/OA-07-events-together.md`). There are no timers.
 6. **Waits on.** When a run waits on another task, that task's merge into the run's base branch is an event of the
    waiting task. Its turn brings the branch in and continues the run.
 7. **Permissions** are unchanged: an order can only narrow the person-only switches. While *Let the Orchestrator
@@ -236,6 +237,23 @@ The strings belong to the app's locale files in `crates/desktop-app/assets/local
 - the chip hints to `composer.json`.
 
 These names are suggestions for the implementation task.
+
+## Leading to the end (2026-11-14)
+
+What a conversation shows of a target it leads to the end is drawn on another board, **Orchestrator autonomy · frames
+to approve** (`docs/plan/orchestrator-autonomy/frames.md`), and built from it where these frames end:
+
+- the header chip and the line of a target led to the end (`L01` `QMwUB`, `Parts · Lines` `e6nsBS` a): a `flag`
+  and the words *to the end*, in `screens::orchestrator::leads::chip` and `watch::lines`;
+- the lines of the target's events (`e6nsBS` b–f), in `watch::standing`;
+- *Before you leave* under that line and inside the `/watching` answer (`Parts · Before you leave` `k0jNa`, `L02`
+  `HpcQJ`), in `watch::leaving`;
+- what became of an event's turn, under the event's row, and the header's line while turns are held (`Parts · An
+  event whose turn failed or is held` `tkjdw`), in `wait::turn_state` and `header`.
+
+Their strings are in `orchestrator.json` (`watch`, `leads`, `standing`, `leaving`, `turnState`, `startedBy`).
+The pickers' mode, the mode control and the ceilings of `/watching` and the settings rows of that board are not
+built yet (OA-10).
 
 ## Not here
 

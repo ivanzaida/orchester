@@ -22,7 +22,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub(super) use self::{
-  deliver::merge_run,
+  deliver::{deliver_module, merge_run},
   modules::{create_module, get_module, list_modules, update_module},
   run::run_task,
   tasks::{get_task, list_tasks},
@@ -39,7 +39,7 @@ use crate::{
   sharing::{SharingError, sync::SystemClock},
   tasks::{
     detail::run_store_error,
-    recorded::{RunRoute, is_team, route_of_run},
+    recorded::{RunRoute, is_team, route_of_run, server_task_of},
   },
   team_reads::{TeamProject, TeamReadError, TeamSession},
   workspace::OpenProject,
@@ -263,6 +263,27 @@ pub(super) async fn may_merge_on_base(services: &Services, team: &Team) -> Resul
     "admin_required",
     vec![Message::new("appMcp.errors.teamBaseMergeAdmin")],
   ))
+}
+
+/// Why the team server holds the task of `team`'s run `run` blocked now: its *Blocked* reason there; `None` while it
+/// is not blocked. This computer's records of a team task hold what its run started with, never that mark. A server
+/// that cannot be read is the read's refusal.
+pub(super) async fn blocked_reason(services: &Services, team: &Team, run: &str) -> Result<Option<String>, ToolError> {
+  let (root, named) = (team.open.repo_root.clone(), run.to_owned());
+  let task = blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    let task = find_run(&db, &named)?.task();
+    Ok(server_task_of(&db, task)?.unwrap_or(task))
+  })
+  .await?;
+  let reads = team.reads(services).await?;
+  Ok(
+    tasks::find(&reads, &task.to_string())
+      .await?
+      .task
+      .content
+      .blocked_reason,
+  )
 }
 
 /// A merge a person approved in a proposal is of a local run's own commit, so on a team task's run it is refused:

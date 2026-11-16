@@ -1,6 +1,7 @@
 //! The Orchestrator chat follows the agents of an open project (`orchester_workspace::orchestrator::waits`): whenever
 //! the project's runs change state, its tasks are saved or its conversations change, and at the soonest time one of
-//! its runs may stall (`orchester_workspace::orchestrator::stalls`), its new waits are kept in the conversation, the
+//! its runs may stall (`orchester_workspace::orchestrator::stalls`), the failed turn of a wait is due again or what
+//! held its turns ends (`orchester_workspace::orchestrator::turns`), its new waits are kept in the conversation, the
 //! subscriptions whose tasks were all closed end (ORC-764), and a
 //! wait that starts an Orchestrator turn by itself gets its turn as a person's message does: the project's runner
 //! attached first, its tools served (`mcp::chat`) and the runner asked to answer it. Mounted with the project's feed,
@@ -10,7 +11,7 @@
 
 use std::{
   collections::{HashMap, HashSet},
-  path::PathBuf,
+  path::{Path, PathBuf},
   sync::LazyLock,
   time::Duration,
 };
@@ -19,7 +20,7 @@ use lurq::app::{
   ctx::{Ctx, StreamEmitter},
   i18n::I18n,
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{id::ChatId, time::Timestamp};
 use orchester_store::StoreError;
 use orchester_workspace::{
   background, base_moved,
@@ -30,6 +31,7 @@ use orchester_workspace::{
     stalls,
     team_status::{self, POLL},
     tools::ChatScope,
+    turns,
     waits::{self, Followed, MergeChecks, SucceededAt, Switches, WaitTurn},
   },
   runner::Runners,
@@ -56,6 +58,7 @@ pub(super) fn follow(ctx: &mut Ctx, (open, changes): (&OpenProject, u64)) {
   let services = Services::of(ctx);
   let chats = chats(ctx, (services.runners.clone(), open.repo_root.clone()));
   let stalls = stall_clock(ctx, (open.repo_root.clone(), changes));
+  let retries = retry_clock(ctx, (open.repo_root.clone(), chats));
   let team = team_clock(
     ctx,
     (
@@ -67,24 +70,27 @@ pub(super) fn follow(ctx: &mut Ctx, (open, changes): (&OpenProject, u64)) {
   );
   let i18n = ctx.i18n().clone();
   let open = open.clone();
-  ctx.future((open.repo_root.clone(), changes, chats, stalls, team), move |_| {
-    let (services, i18n, open) = (services.clone(), i18n.clone(), open.clone());
-    async move {
-      // A future whose deps change is replaced and aborted, and the turn a follower starts changes them (its
-      // conversation thinks, its tools change runs): following runs as a task of its own, so a turn it marked
-      // thinking is always asked for or ended.
-      let runtime = services.runtime.clone();
-      let following = runtime.spawn(async move { follow_once(&services, i18n, &open).await });
-      let followed = following.await.unwrap_or_else(|error| {
-        tracing::error!(%error, "following the waits of the project's agents did not finish");
-        Err(messages::interrupted())
-      });
-      if let Err(error) = &followed {
-        tracing::error!(?error, "cannot follow the waits of the project's agents");
+  ctx.future(
+    (open.repo_root.clone(), changes, chats, (stalls, retries), team),
+    move |_| {
+      let (services, i18n, open) = (services.clone(), i18n.clone(), open.clone());
+      async move {
+        // A future whose deps change is replaced and aborted, and the turn a follower starts changes them (its
+        // conversation thinks, its tools change runs): following runs as a task of its own, so a turn it marked
+        // thinking is always asked for or ended.
+        let runtime = services.runtime.clone();
+        let following = runtime.spawn(async move { follow_once(&services, i18n, &open).await });
+        let followed = following.await.unwrap_or_else(|error| {
+          tracing::error!(%error, "following the waits of the project's agents did not finish");
+          Err(messages::interrupted())
+        });
+        if let Err(error) = &followed {
+          tracing::error!(?error, "cannot follow the waits of the project's agents");
+        }
+        followed
       }
-      followed
-    }
-  });
+    },
+  );
 }
 
 /// Starts the turn of a message the person queued while the Orchestrator answered, once its conversation's turn
@@ -126,10 +132,31 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
     services.changes.record(open.project.id(), Outside::Tasks);
     services.servers.send_automatic_statuses().await;
   }
+  keep_awake(services, open).await;
   if let Some(turn) = followed.turn {
     answer(services, i18n, open, (turn, true)).await;
+    // The turn ended: the computer may sleep again unless an agent still works.
+    keep_awake(services, open).await;
   }
   Ok(())
+}
+
+/// Looks whether work is under way in `open` and whether the person keeps the computer awake for it, and holds the
+/// system awake or lets go (`crate::awake`). A look that cannot read changes nothing: the next one decides.
+async fn keep_awake(services: &Services, open: &OpenProject) {
+  let (workspace, root) = (services.workspace.clone(), open.repo_root.clone());
+  let looked = background::run(move || {
+    Ok::<_, StoreError>((
+      orchester_workspace::awake::work_under_way(&root)?,
+      workspace.keeps_awake()?,
+    ))
+  })
+  .await;
+  match looked {
+    Ok(Ok((under_way, allowed))) => services.awake.look(&open.repo_root, under_way, allowed),
+    Ok(Err(error)) => tracing::warn!(%error, "cannot read whether work is under way, to keep the computer awake"),
+    Err(error) => tracing::warn!(?error, "the look at the work under way did not finish"),
+  }
 }
 
 /// What git tells of `open`'s runs that succeeded, asked before the follower's lock and remembered for the runs it
@@ -200,6 +227,51 @@ async fn start_queued(services: &Services, i18n: I18n, open: &OpenProject) -> Re
   Ok(())
 }
 
+/// Starts one more turn for the wait kept as entry `seq` of conversation `chat` in `open`, whose turn failed, as
+/// the person asked with *Try again* (`orchester_workspace::orchestrator::turns::try_again_in`): the runner attached
+/// first, the turn given under the follower's lock, then asked for as the follower asks for one. Why, when nothing
+/// started. It runs as a task of its own: the row that asked goes once its turn thinks, and a turn marked thinking is
+/// always asked for or ended.
+pub(crate) async fn try_again(
+  services: &Services,
+  i18n: I18n,
+  open: &OpenProject,
+  entry: (ChatId, i64),
+) -> Result<(), Message> {
+  let (services, open) = (services.clone(), open.clone());
+  let (tell, started) = tokio::sync::oneshot::channel();
+  let runtime = services.runtime.clone();
+  let trying = runtime.spawn(async move {
+    let given = give_again(&services, &open, entry).await;
+    let (turn, result) = match given {
+      Ok(turn) => (Some(turn), Ok(())),
+      Err(why) => (None, Err(why)),
+    };
+    // The row that asked may be gone by now: the turn is answered whether or not anyone still listens.
+    drop(tell.send(result));
+    if let Some(turn) = turn {
+      services.runners.chat_changed(&open.repo_root);
+      keep_awake(&services, &open).await;
+      answer(&services, i18n, &open, (turn, true)).await;
+      keep_awake(&services, &open).await;
+    }
+  });
+  // Detached: the task ends when its turn does.
+  drop(trying);
+  started.await.unwrap_or_else(|_| Err(messages::interrupted()))
+}
+
+/// Gives the wait kept as `entry` its next turn, once `open`'s runner attached.
+async fn give_again(services: &Services, open: &OpenProject, entry: (ChatId, i64)) -> Result<WaitTurn, Message> {
+  if let Err(error) = services.runners.chat_runner(open).await {
+    tracing::info!(%error, "no runner attached for the turn the person asked to try again");
+    return Err(send::no_runner(error));
+  }
+  let root = open.repo_root.clone();
+  let _keeping = KEEPING.lock().await;
+  background::run(move || turns::try_again_in(&root, entry)).await?
+}
+
 /// Serves the tools of `turn`, one Orchester started by itself (`on_its_own`) or a queued message's, and asks `open`'s
 /// runner to answer it; a turn neither takes ends failed.
 async fn answer(services: &Services, i18n: I18n, open: &OpenProject, (turn, on_its_own): (WaitTurn, bool)) {
@@ -246,32 +318,53 @@ fn chats(ctx: &mut Ctx, deps: (Runners, PathBuf)) -> u64 {
 /// (`orchester_workspace::orchestrator::stalls`): a stall changes nothing else the follower is woken by. One clock for
 /// the project, read again whenever its run states (the deps' count) change, and idle while no agent works.
 fn stall_clock(ctx: &mut Ctx, deps: (PathBuf, u64)) -> u64 {
-  let ticks = ctx.stream(deps, |(root, _), emitter: StreamEmitter<u64, ()>| async move {
-    let mut ticks = 0;
-    loop {
-      if !emitter.emit(ticks) {
-        return;
-      }
-      let next = {
-        let root = root.clone();
-        background::run(move || stalls::next_stall_in(&root, Timestamp::now()))
-          .await
-          .and_then(|next| next)
-      };
-      let due = match next {
-        Ok(Some(due)) => due,
-        Ok(None) => return,
-        Err(error) => {
-          tracing::error!(?error, "cannot read when a run of the project may stall");
-          return;
-        }
-      };
-      let wait = due.unix_millis().saturating_sub(Timestamp::now().unix_millis());
-      tokio::time::sleep(Duration::from_millis(u64::try_from(wait).unwrap_or(0))).await;
-      ticks += 1;
-    }
+  let ticks = ctx.stream(deps, |(root, _), emitter: StreamEmitter<u64, ()>| {
+    tick_when_due(root, stalls::next_stall_in, emitter)
   });
   ticks.state().get().data.unwrap_or(0)
+}
+
+/// How often the soonest time a turn of the project at the deps' folder may start by the clock alone passed
+/// (`orchester_workspace::orchestrator::turns`): a failed turn is due again, or the daily budget or the plan limit
+/// that held the turns reset. One clock for the project, read again whenever its conversations (the deps' count)
+/// change, and idle while no turn waits for a time.
+fn retry_clock(ctx: &mut Ctx, deps: (PathBuf, u64)) -> u64 {
+  let ticks = ctx.stream(deps, |(root, _), emitter: StreamEmitter<u64, ()>| {
+    tick_when_due(root, turns::next_due_in, emitter)
+  });
+  ticks.state().get().data.unwrap_or(0)
+}
+
+/// Emits a count that grows each time the soonest time `next` gives for the project at `root`, after now, passed;
+/// ends once it gives none, or cannot be read.
+async fn tick_when_due(
+  root: PathBuf,
+  next: fn(&Path, Timestamp) -> Result<Option<Timestamp>, Message>,
+  emitter: StreamEmitter<u64, ()>,
+) {
+  let mut ticks = 0;
+  loop {
+    if !emitter.emit(ticks) {
+      return;
+    }
+    let due = {
+      let root = root.clone();
+      background::run(move || next(&root, Timestamp::now()))
+        .await
+        .and_then(|due| due)
+    };
+    let due = match due {
+      Ok(Some(due)) => due,
+      Ok(None) => return,
+      Err(error) => {
+        tracing::error!(?error, "cannot read when the project's follower is due again");
+        return;
+      }
+    };
+    let wait = due.unix_millis().saturating_sub(Timestamp::now().unix_millis());
+    tokio::time::sleep(Duration::from_millis(u64::try_from(wait).unwrap_or(0))).await;
+    ticks += 1;
+  }
 }
 
 /// How often the team server's answer about the project's watched team tasks changed

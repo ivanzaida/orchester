@@ -1,7 +1,9 @@
 //! What started an Orchestrator turn by itself, as a tag on its answer (`Started by` `S1Agi` in `04 · Leading two
 //! modules` `OKtX2` of `Orchestrator watch · redesign`): 18 high on `surface_raised`, radius 4, 6 at its sides, an 11
 //! `zap` and its words 4 apart, both 11 `text_muted`: *KON-41's wait*, *KON-52 merged*. An answer with a name line has
-//! it after the time; one nested under a wait's line has it first in the quote.
+//! it after the time; one nested under a wait's line has it first in the quote. The turn of an event of a target led
+//! to the end says which (`Started by` in `L01` `QMwUB`, board `Orchestrator autonomy · frames to approve`): *work
+//! can start*.
 
 use std::sync::Arc;
 
@@ -14,7 +16,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::orchestrator::{AgentWait, TaskEventKind, WaitKind};
+use orchester_core::orchestrator::{
+  AgentWait, TaskEventKind, WaitKind,
+  standing::{Raised, StandingEvent},
+};
 use orchester_workspace::orchestrator::chat::EventFacts;
 
 use crate::{
@@ -27,6 +32,23 @@ const HEIGHT: f32 = 18.0;
 
 /// The tag of the turn `wait` started by itself, with what its event names beside it (`facts`); `id` names it.
 pub(super) fn tag(ctx: &Ctx, id: &str, wait: &AgentWait, facts: Option<&EventFacts>) -> Element {
+  tagged(id, &words(ctx, wait, facts))
+}
+
+/// The tag of the turn `event`, of a target led to the end, started by itself; `id` names it.
+pub(super) fn standing_tag(ctx: &Ctx, id: &str, event: &StandingEvent) -> Element {
+  let key = match event.raised {
+    Raised::CanStart { .. } => "orchestrator.startedBy.canStart",
+    Raised::Stuck { .. } => "orchestrator.startedBy.stuck",
+    Raised::Accept => "orchestrator.startedBy.accept",
+    Raised::Deliver => "orchestrator.startedBy.deliver",
+    Raised::DeliveryWaits { .. } => "orchestrator.startedBy.deliveryWaits",
+  };
+  tagged(id, &ctx.t(key))
+}
+
+/// The tag named `id` that says `words`.
+fn tagged(id: &str, words: &str) -> Element {
   Row::new()
     .id(id.to_owned())
     .flex_shrink(0.0)
@@ -38,7 +60,7 @@ pub(super) fn tag(ctx: &Ctx, id: &str, wait: &AgentWait, facts: Option<&EventFac
     .rounded(RadiusSize::Sm)
     .child(icon(Icon::Zap, IconSize::Xs, PaletteColor::TextMuted))
     .child(
-      Text::new(&words(ctx, wait, facts))
+      Text::new(words)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Caption)
         .nowrap(),

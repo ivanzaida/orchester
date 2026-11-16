@@ -4,6 +4,9 @@
 //! its key, in 11.5 `text_secondary`, and always an 11 `x` in `text_muted` ([`super::stop`]), so the pointer never
 //! changes its width. A press opens the module or the task; a press on the `x` stops that subscription instead. Under
 //! the pointer it is on `hover` in `border_strong`, its name in `text_primary` and its `x` in `text_secondary`.
+//! A target the conversation leads to the end (`Lead · Webhooks v2` in `L01` `QMwUB`, board `Orchestrator autonomy ·
+//! frames to approve`) has a `flag` for its icon and *to the end* after its name in 11.5 `text_muted`; one it only
+//! follows stays as it was.
 //!
 //! Once the pointer rested on it as long as a tooltip waits, its tooltip hangs 8 under the header, its start at the
 //! chip's start (`Tooltip · subscription` `nzz9r` in `X93D8T` d): `text_primary`, radius 4, 6 over and under and 8 at
@@ -126,6 +129,17 @@ impl Component for LeadChipView {
       name: Some(name.to_string()),
     };
     let stop = stop_button(ctx, &props.id, (&props.hold, named), (IconSize::Xs, hovered));
+    // Told by an icon and words, not by color alone.
+    let (glyph, mode) = if props.lead.to_the_end {
+      let mode = Text::new(&ctx.t("orchestrator.leads.toTheEnd"))
+        .id(format!("{}-mode", props.id))
+        .variant(OrchestratorText::LeadsChip.role())
+        .color(PaletteColor::TextMuted)
+        .nowrap();
+      (Icon::Flag, Some(mode))
+    } else {
+      (target_icon(target), None)
+    };
     let tip = self.tip.get().then(|| tooltip(ctx, &props, &self.pill));
     let (enter, leave) = (self.on_hover(), self.on_leave());
     base
@@ -141,8 +155,10 @@ impl Component for LeadChipView {
       .rounded(ExtraRadius::Full.role())
       .on_mouse_enter(enter)
       .on_mouse_leave(leave)
-      .child(icon(target_icon(target), IconSize::Xs, PaletteColor::TextSecondary))
+      .describe("to_the_end", props.lead.to_the_end.to_string())
+      .child(icon(glyph, IconSize::Xs, PaletteColor::TextSecondary))
       .child(label)
+      .with_children(mode)
       .child(stop)
       .with_children(tip)
   }

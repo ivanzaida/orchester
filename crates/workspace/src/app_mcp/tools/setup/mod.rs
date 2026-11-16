@@ -19,11 +19,12 @@ mod mcp_server_specs;
 mod mcp_server_text;
 mod mcp_servers;
 mod merge;
+mod merge_taken;
 pub use self::team_mcp_window::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_names, team_mcp_server};
 pub(crate) use self::{
   mcp_preview::preview as preview_mcp,
   mcp_servers::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer},
-  merge::merge_proposed,
+  merge::{merge_proposed, team_blocked_reason},
 };
 mod pipeline_steps;
 pub(super) mod pipelines;

@@ -146,17 +146,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     Some(set_up) => vec![set_up],
     None => vec![send(ctx, view, composer.sending)],
   };
-  let bar = Row::new()
-    .id("orchestrator-composer-bar")
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(attach(ctx, view))
-    .child(composer.runs_on)
-    .with_children(switch)
-    .child(Spacer::new().flex(1.0))
-    .with_children(composer.context)
-    .with_children(end);
+  let bar = bar(attach(ctx, view), (composer.runs_on, switch), (composer.context, end));
   let draft = view.draft.clone();
   let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));
   let attached = tray::tray(ctx, ATTACHMENTS, &view.attached, &put_back);
@@ -191,6 +181,39 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .width(Dimension::Pct(100.0))
     .child(spaced)
     .with_children(composer.menus)
+}
+
+/// The row under the message: attach, runs on and the plan switch at its start, the context and Send at its end. In a
+/// narrow chat (History open beside it at the window's least width) the start gives way and is cut; the end keeps its
+/// room.
+fn bar(
+  attach: impl Into<Element>,
+  (runs_on, switch): (Element, Option<Element>),
+  (context, end): (Option<Element>, Vec<Element>),
+) -> Row {
+  let start = Row::new()
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .clip()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(attach)
+    .child(runs_on)
+    .with_children(switch);
+  let end = Row::new()
+    .flex_shrink(0.0)
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .with_children(context)
+    .with_children(end);
+  Row::new()
+    .id("orchestrator-composer-bar")
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(start)
+    .child(Spacer::new().flex(1.0))
+    .child(end)
 }
 
 /// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or

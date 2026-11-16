@@ -9,6 +9,7 @@ mod console;
 mod exchange;
 mod watched;
 
+pub mod awake;
 pub mod browser;
 pub mod clone_console;
 pub mod disk_space;

@@ -58,6 +58,7 @@ pub enum AppRead {
   /// What automation may do and whether agents control the window, every consent.
   Automation,
   Accounts,
+  KeepsAwake,
 }
 
 /// What a project's runs starting, ending or changing state touches: the project's settings, whose rules *Approve for
@@ -157,6 +158,7 @@ pub const fn app_touched(kind: AppOutside) -> &'static [AppRead] {
     AppOutside::DailyReport => &[AppRead::DailyReport],
     AppOutside::Browser => &[AppRead::Browser],
     AppOutside::Automation => &[AppRead::Automation],
+    AppOutside::KeepsAwake => &[AppRead::KeepsAwake],
   }
 }
 
@@ -179,12 +181,13 @@ pub const OUTSIDE: [Outside; 14] = [
 ];
 
 /// Every application setting's change, for following them all.
-pub const APP_OUTSIDE: [AppOutside; 5] = [
+pub const APP_OUTSIDE: [AppOutside; 6] = [
   AppOutside::UsageThreshold,
   AppOutside::ErrorReports,
   AppOutside::DailyReport,
   AppOutside::Browser,
   AppOutside::Automation,
+  AppOutside::KeepsAwake,
 ];
 
 /// Invalidates the project at `root`'s query `read`: an entry a tab or the project's loader shows reads again behind
@@ -197,7 +200,8 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::Estimates => client.invalidate(project::estimates(session, root)),
     ProjectRead::Orchestrator => {
       client.invalidate(project::orchestrator_drives(session.clone(), root.clone()));
-      client.invalidate(project::orchestrator_watch(session, root));
+      client.invalidate(project::orchestrator_watch(session.clone(), root.clone()));
+      client.invalidate(project::orchestrator_lead_defaults(session, root));
     }
     ProjectRead::Memory => client.invalidate(project::memory_settings(session, root)),
     ProjectRead::Variables => client.invalidate(project::variables(session, root)),
@@ -231,5 +235,6 @@ pub fn invalidate_app(client: &QueryClient, session: &Session, read: AppRead) {
       }
     }
     AppRead::Accounts => client.invalidate(app::agent_accounts(session)),
+    AppRead::KeepsAwake => client.invalidate(app::keeps_awake(session)),
   }
 }

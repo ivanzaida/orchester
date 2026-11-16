@@ -59,5 +59,10 @@ pub fn update_limits(
     saved = Some(after);
     Ok((after.agent_slots() != before.agent_slots()).then_some(after.agent_slots()))
   })?;
+  // The turns the Orchestrator starts by itself wait while today's budget is used (`orchestrator::held`), and nothing
+  // else of a saved limit wakes what follows them.
+  if saved.is_some() {
+    runners.chat_changed(repo_root);
+  }
   Ok(saved)
 }

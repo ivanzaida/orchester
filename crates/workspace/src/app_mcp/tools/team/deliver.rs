@@ -65,6 +65,30 @@ pub(in crate::app_mcp::tools) async fn merge_run(
 ) -> Result<Value, ToolError> {
   let (root, named) = (team.open.repo_root.clone(), run.to_owned());
   let module = blocking(move || run_module(&ProjectDb::open(&root)?, &named)).await?;
+  deliver_of(services, team, (module, authorization), translate).await
+}
+
+/// `deliver_module` for a team module `named` by its id or name: its delivery requested as a call of its own, apart
+/// from a run's merge (`docs/plan/orchestrator-autonomy/OA-32-…`), by the same rules.
+pub(in crate::app_mcp::tools) async fn deliver_module(
+  services: &Services,
+  team: &Team,
+  (named, authorization): (&str, Option<OperationId>),
+  translate: &Translate,
+) -> Result<Value, ToolError> {
+  let project = team.reads(services).await?;
+  let module = super::modules::module_named(&project, named).await?;
+  deliver_of(services, team, (module, authorization), translate).await
+}
+
+/// Requests the delivery of `module` of `team`, citing the Admin's `authorization` when one is named, or carries on
+/// the module's open one.
+async fn deliver_of(
+  services: &Services,
+  team: &Team,
+  (module, authorization): (ModuleId, Option<OperationId>),
+  translate: &Translate,
+) -> Result<Value, ToolError> {
   let project = team.reads(services).await?;
   let branch = match read(&project, project.module(module)).await {
     Ok(read) => read.into_value().module.branch,

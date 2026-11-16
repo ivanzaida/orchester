@@ -12,7 +12,7 @@ use orchester_core::{
   orchestrator::{
     AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, Queued, TurnFailure, TurnMode,
     TurnState, WaitTurn,
-    instructions::{report_prompt, watch_summary_prompt},
+    instructions::{report_prompt, standing_prompt, watch_summary_prompt},
     plan::plan_prompt,
   },
   resource::ModelId,
@@ -26,6 +26,7 @@ use super::{
   attachments::{self, AttachmentOwner},
   orchestrator_plans::plan_of,
   orchestrator_reports::report_of,
+  orchestrator_standing::standing_of,
   orchestrator_watch_summaries::summary_of,
 };
 use crate::{
@@ -54,6 +55,8 @@ pub struct ChatTurn {
   pub chat: Chat,
   pub text: MessageBody,
   pub turn: TurnState,
+  /// Orchester started it by itself, for a wait, a daily report or a watching that ended; not a person's message.
+  pub on_its_own: bool,
 }
 
 impl ProjectDb {
@@ -152,10 +155,14 @@ impl ProjectDb {
       .ok_or_else(|| corrupt("chat message", "its conversation is gone"))?;
     let mode = TurnMode::of_word(mode.as_deref()).map_err(|error| corrupt("chat turn mode", error))?;
     let prompt = match (kind.as_str(), mode) {
-      ("wait", _) => self.wait_turn_prompt(chat.id(), &wait_of(&body)?)?,
-      ("report", _) => match summary_of(&body)? {
-        Some(summary) => watch_summary_prompt(&summary),
-        None => report_prompt(&report_of(&body)?),
+      ("wait", _) => {
+        let own = self.retried(seq, self.wait_turn_prompt(chat.id(), &wait_of(&body)?)?)?;
+        self.taken_together((chat.id(), message), own)?
+      }
+      ("report", _) => match (summary_of(&body)?, standing_of(&body)?) {
+        (Some(summary), _) => watch_summary_prompt(&summary),
+        (None, Some(event)) => standing_prompt(&event),
+        (None, None) => report_prompt(&report_of(&body)?),
       },
       (_, TurnMode::Plans) => plan_prompt(&body),
       _ => body,
@@ -171,10 +178,12 @@ impl ProjectDb {
       chat,
       text: MessageBody::new(&prompt).map_err(|error| corrupt("chat message", error))?,
       turn,
+      on_its_own: matches!(kind.as_str(), "wait" | "report"),
     }))
   }
 
-  /// Ends the turn of `message` as `state` at `at`, unless it ended already. Returns whether it changed.
+  /// Ends the turn of `message` as `state` at `at`, unless it ended already, for the entry that started it and for
+  /// the waits it took with it. Returns whether it changed.
   pub fn end_chat_turn(
     &mut self,
     message: ChatMessageId,
@@ -182,10 +191,16 @@ impl ProjectDb {
     at: Timestamp,
   ) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
-      "UPDATE orchestrator_entries SET turn = ?2, failure = ?3, ended_at = ?4 WHERE message_id = ?1 AND turn = 'thinking'",
-      params![message.to_string(), state.word(), failure_column(state)?, at.unix_millis()],
+      "UPDATE orchestrator_entries SET turn = ?2, failure = ?3, ended_at = ?4
+       WHERE (message_id = ?1 OR taken_with = ?1) AND turn = 'thinking'",
+      params![
+        message.to_string(),
+        state.word(),
+        failure_column(state)?,
+        at.unix_millis()
+      ],
     )?;
-    Ok(changed == 1)
+    Ok(changed >= 1)
   }
 
   /// Ends every turn still thinking as interrupted, but those of `held`, which a runner answers, and, when `only`
@@ -205,7 +220,8 @@ impl ProjectDb {
         continue;
       }
       transaction.execute(
-        "UPDATE orchestrator_entries SET turn = 'failed', failure = ?2 WHERE message_id = ?1 AND turn = 'thinking'",
+        "UPDATE orchestrator_entries SET turn = 'failed', failure = ?2
+         WHERE (message_id = ?1 OR taken_with = ?1) AND turn = 'thinking'",
         params![message.to_string(), failure],
       )?;
       if !chats.contains(&chat) {
@@ -326,7 +342,7 @@ impl ProjectDb {
   /// The entries of `chat` in the order they were kept.
   pub fn chat_entries(&self, chat: ChatId) -> Result<Vec<ChatEntry>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT seq, kind, at, body, message_id, turn, failure, model, ended_at, by_automation, mode
+      "SELECT seq, kind, at, body, message_id, turn, failure, model, ended_at, by_automation, mode, taken_with
        FROM orchestrator_entries WHERE chat_id = ?1 ORDER BY seq",
     )?;
     let rows = statement.query_map([chat.to_string()], |row| {
@@ -342,6 +358,7 @@ impl ProjectDb {
         ended: row.get(8)?,
         by_automation: row.get(9)?,
         mode: row.get(10)?,
+        taken_with: row.get(11)?,
       })
     })?;
     rows.map(|row| row?.into_entry()).collect()
@@ -405,6 +422,7 @@ struct RawEntry {
   ended: Option<i64>,
   by_automation: bool,
   mode: Option<String>,
+  taken_with: Option<String>,
 }
 
 impl RawEntry {
@@ -434,17 +452,21 @@ impl RawEntry {
         None => EntryKind::Event(serde_json::from_str(&self.body).map_err(|error| corrupt("chat event", error))?),
       },
       ("wait", message, turn, _) => EntryKind::Wait {
-        turn: started_turn((message, turn), self.failure.as_deref(), self.ended)?,
+        turn: started_turn((message, turn, self.taken_with), self.failure.as_deref(), self.ended)?,
         wait: wait_of(&self.body)?,
       },
       ("report", message, turn, _) => {
-        let turn = started_turn((message, turn), self.failure.as_deref(), self.ended)?;
-        match summary_of(&self.body)? {
-          Some(summary) => EntryKind::WatchEnded {
+        let turn = started_turn((message, turn, self.taken_with), self.failure.as_deref(), self.ended)?;
+        match (summary_of(&self.body)?, standing_of(&self.body)?) {
+          (Some(summary), _) => EntryKind::WatchEnded {
             summary: Box::new(summary),
             turn,
           },
-          None => EntryKind::Report {
+          (None, Some(event)) => EntryKind::Standing {
+            event: Box::new(event),
+            turn,
+          },
+          (None, None) => EntryKind::Report {
             turn,
             report: Box::new(report_of(&self.body)?),
           },
@@ -460,10 +482,10 @@ impl RawEntry {
   }
 }
 
-/// The turn a wait or a report started by itself, from its entry's message and turn columns; `None` while it started
-/// none.
+/// The turn a wait or a report started by itself, from its entry's message and turn columns, and the turn that took it
+/// with it, if one did; `None` while it started none.
 fn started_turn(
-  (message, turn): (Option<String>, Option<String>),
+  (message, turn, taken_with): (Option<String>, Option<String>, Option<String>),
   failure: Option<&str>,
   ended: Option<i64>,
 ) -> Result<Option<WaitTurn>, StoreError> {
@@ -474,6 +496,7 @@ fn started_turn(
     message: parse("chat message id", &message)?,
     state: turn_state(&turn, failure)?,
     ended: ended.map(Timestamp::from_unix_millis),
+    taken_with: taken_with.map(|lead| parse("chat message id", &lead)).transpose()?,
   }))
 }
 
@@ -499,13 +522,15 @@ fn turn_state(word: &str, failure: Option<&str>) -> Result<TurnState, StoreError
   })
 }
 
-/// The messages and conversations of the entries whose turn is `word`, in the order they were kept.
+/// The messages and conversations of the entries whose turn is `word`, in the order they were kept; a wait a turn took
+/// with it is named by that turn's message.
 pub(super) fn entries_in(
   connection: &rusqlite::Connection,
   word: &str,
 ) -> Result<Vec<(ChatMessageId, ChatId)>, StoreError> {
-  let mut statement =
-    connection.prepare("SELECT message_id, chat_id FROM orchestrator_entries WHERE turn = ?1 ORDER BY seq")?;
+  let mut statement = connection.prepare(
+    "SELECT COALESCE(taken_with, message_id), chat_id FROM orchestrator_entries WHERE turn = ?1 ORDER BY seq",
+  )?;
   statement
     .query_map([word], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
     .map(|row| {

@@ -40,6 +40,22 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// What the turns of `chat` spent from `since` on, counted as the daily budget counts it.
+  pub fn chat_tokens_since(&self, chat: ChatId, since: Timestamp) -> Result<TokensUsed, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT input_tokens, cached_input_tokens, output_tokens FROM orchestrator_usage WHERE chat_id = ?1 AND at >= ?2",
+    )?;
+    let rows = statement
+      .query_map(params![chat.to_string(), since.unix_millis()], |row| {
+        Ok([row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?])
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|tokens| usage(tokens).map(TokenUsage::counted_tokens))
+      .sum()
+  }
+
   /// What the turn answering `message` spent, counted as the daily budget counts it.
   pub fn chat_turn_tokens(&self, message: ChatMessageId) -> Result<TokensUsed, StoreError> {
     counted(&self.connection, "WHERE message_id = ?1", &message.to_string())

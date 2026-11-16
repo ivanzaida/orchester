@@ -159,6 +159,13 @@ run again`, `orchester-runner --features test-agent --test instructions instruct
 cards); the Artifacts tab still says runs keep no artifacts; no notification for *Ready to complete* or *Committed
 nothing*; no form field for a task's own choice (MCP only).
 
+## O · The Orchestrator leads tasks and modules with nobody at the computer
+
+What is missing for it and the tasks that close it are in `docs/plan/orchestrator-autonomy/` (its `README.md` is the
+tracker: findings, the person's decisions, tasks OA-01 … OA-36 with their status, their order, and the edge cases
+each settles). It holds for local and team projects alike: `docs/design/local-and-team-parity.md` is the rule and
+the table of what a team project still does differently, which the plan's block G closes.
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still

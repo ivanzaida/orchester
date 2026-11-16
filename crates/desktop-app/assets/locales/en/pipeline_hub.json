@@ -29,9 +29,9 @@
       "toolNotPublished": "{{number}} {{step}} runs a tool that is not published yet",
       "toolNotRunnable": "{{number}} {{step}} runs {{tool}}, which can't run as a step yet",
       "stepsNotReady": "{{count}} steps not ready",
-      "connectionGone": "{{name}} has no connection",
-      "connectionGoneMany": "{{name}} and {{count}} more have no connection",
-      "profileConnectionGone": "{{number}} {{step}} runs {{profile}}, which has no connection",
+      "connectionGone": "{{name}} has no account here",
+      "connectionGoneMany": "{{name}} and {{count}} more have no account here",
+      "profileConnectionGone": "{{number}} {{step}} runs {{profile}}, which has no account here",
       "profileGone": "{{number}} {{step}} runs a profile that is no longer available",
       "toolGone": "{{number}} {{step}} runs a tool that is no longer available"
     },
@@ -87,7 +87,7 @@
     "agent": {
       "choose": "Choose an agent profile or tool",
       "unpublished": "This profile has no published version yet",
-      "connectionGone": "Choose a connection",
+      "connectionGone": "Choose an account",
       "toolUnavailable": "This tool can't run as a step yet",
       "toolDecides": "Its exit code decides the step",
       "toolDecidesAfter": "· its exit code decides the step",
@@ -322,7 +322,7 @@
         "noLine": "The steps break a rule no order puts right, such as two steps with one key. Cancel puts the saved steps back.",
         "line": "Make it a line"
       },
-      "profileConnectionGone": "{{profile}} has no connection"
+      "profileConnectionGone": "{{profile}} has no account here"
     },
     "states": {
       "failed": {
@@ -353,11 +353,11 @@
       "profilesAndTools": "Profiles and tools",
       "allReady": "{{names}} · ready",
       "none": "No step runs a profile or tool yet",
-      "connectionGone": "Its connection is gone",
+      "connectionGone": "Its account is gone",
       "noSteps": "No steps yet",
       "addStep": "Add step →",
       "makeLine": "Make it a line →",
-      "profileConnectionGone": "{{profile}} has no connection",
+      "profileConnectionGone": "{{profile}} has no account here",
       "profilesAndToolsOf": "Profiles and tools · {{version}}",
       "chooseAnother": "Choose another →",
       "missingSaveOff": "{{count}} missing · Save stays off"
@@ -417,7 +417,7 @@
       "commands": "Commands",
       "commandsSub": "A step can only narrow what {{profile}} allows",
       "networkOff": "Turn network off",
-      "networkUnavailable": "This profile and its connection cannot enforce turning network off on this platform.",
+      "networkUnavailable": "This profile and its account cannot enforce turning network off on this platform.",
       "askTools": "Ask when a tool needs approval",
       "resetPermissions": "Use profile commands and network"
     }

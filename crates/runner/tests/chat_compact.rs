@@ -1,7 +1,8 @@
 //! *Compact* of an Orchestrator conversation's session (ORC-309), end to end against the fake CLIs at their boundary:
 //! Claude Code's `/compact` (`tests/support/fake_claude_chat.rs`) and Codex App Server's `thread/compact/start`
 //! (`tests/support/fake_codex_chat.rs`). A compaction is kept running, then done with the size before and after, or
-//! failed with why; a conversation without a session or with a turn under way is refused.
+//! failed with why; a conversation without a session or with a turn under way is refused. A turn Orchester started
+//! by itself compacts a session that is nearly full before it runs; a person's own message never does (OA-05).
 //! Run with `cargo test -p orchester-runner --features test-agent --test chat_compact compact`.
 
 mod support;
@@ -11,8 +12,10 @@ use std::{fs, path::Path};
 use orchester_core::{
   connection::{AgentProvider, ConnectionAccount, context_use::ContextUse},
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, ChatEvent, CompactionState, EntryKind, OrchestratorSettings, TurnFailure, TurnState},
+  id::{ChatId, ChatMessageId, RunId},
+  orchestrator::{
+    AgentWait, Chat, ChatEvent, CompactionState, EntryKind, OrchestratorSettings, TurnFailure, TurnState, WaitKind,
+  },
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
@@ -224,5 +227,156 @@ async fn compact_on_codex_compacts_the_thread_and_lowers_the_reading() {
     matches!(&ended[..], [(Some(172_000), CompactionState::Failed { reason: TurnFailure::Failed { reason } })]
       if reason.contains("no history to compact")),
     "{ended:?}"
+  );
+}
+
+/// A wait of an agent kept in `chat`, and the turn it started by itself.
+fn wait_turn(root: &Path, chat: ChatId) -> ChatMessageId {
+  let mut db = ProjectDb::open(root).expect("open");
+  let kept = db.chat(chat).expect("read").expect("the conversation");
+  let wait = AgentWait {
+    kind: WaitKind::Message,
+    task: "ORC-1".to_owned(),
+    title: "Say hello".to_owned(),
+    run: RunId::generate(),
+    number: 1,
+    step: Some("Implement".to_owned()),
+    agent: Some("Builder".to_owned()),
+    place: None,
+    others: 0,
+    link: "/project/p/tasks/ORC-1/conversation".to_owned(),
+    automatic: true,
+    continuing: None,
+    merging: None,
+  };
+  db.keep_agent_wait(&kept, ("message:x:1", &wait), Timestamp::now())
+    .expect("kept");
+  let seq = db.automatic_waits_without_turn().expect("waits")[0].seq;
+  let message = ChatMessageId::generate();
+  assert!(db.start_wait_turn((chat, seq), message).expect("started"));
+  message
+}
+
+/// The turn of `message` once it is no longer thinking.
+async fn ended(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, message: ChatMessageId) -> TurnState {
+  let wait = async {
+    loop {
+      let turn = ProjectDb::open(root)
+        .expect("open")
+        .chat_turn(message)
+        .expect("read")
+        .expect("kept")
+        .turn;
+      if !turn.is_thinking() {
+        return turn;
+      }
+      events.recv().await.expect("the scheduler notifies");
+    }
+  };
+  tokio::time::timeout(PATIENCE, wait)
+    .await
+    .expect("the turn ends in time")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn compact_runs_first_in_a_turn_orchester_started_once_the_session_is_nearly_full() {
+  let project = on(AgentProvider::ClaudeCodeCli, "haiku");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = conversation(root, AgentProvider::ClaudeCodeCli, Some("session-long"));
+  let started = wait_turn(root, chat);
+  scheduler
+    .answer_in_chat(started, tools())
+    .await
+    .expect("the turn starts");
+  assert_eq!(ended(root, &mut events, started).await, TurnState::Answered);
+  assert_eq!(
+    compactions(root, &mut events, chat).await,
+    [(Some(172_000), CompactionState::Done { after: None })],
+    "the session held 172k of 200k: compacted before the turn ran"
+  );
+  let entries = ProjectDb::open(root)
+    .expect("open")
+    .chat_entries(chat)
+    .expect("entries");
+  let compacted = entries
+    .iter()
+    .position(|entry| matches!(entry.kind, EntryKind::Event(ChatEvent::Compaction { .. })))
+    .expect("the compaction");
+  let replied = entries
+    .iter()
+    .position(|entry| matches!(entry.kind, EntryKind::Reply { .. }))
+    .expect("the turn's reply");
+  assert!(compacted < replied, "the compaction, then the answer");
+  let log = log(root);
+  let started: Vec<&str> = log.lines().filter(|line| line.starts_with("argv: ")).collect();
+  assert_eq!(started.len(), 2, "one CLI to compact, one to answer: {log}");
+  assert!(
+    !started[0].contains("--disable-slash-commands") && started[1].contains("--disable-slash-commands"),
+    "/compact ran first, with slash commands on, then the turn: {started:?}"
+  );
+  assert!(
+    started.iter().all(|line| line.contains("--resume session-long")),
+    "both resume the conversation's session: {started:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn compact_that_fails_first_does_not_keep_the_turn_from_running() {
+  let project = on(AgentProvider::ClaudeCodeCli, "haiku");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = conversation(root, AgentProvider::ClaudeCodeCli, Some("cannot-compact"));
+  // Exactly the share a session is compacted from.
+  ProjectDb::open(root)
+    .expect("open")
+    .set_chat_context(chat, &ContextUse::reported(140_000, 200_000))
+    .expect("context");
+  let started = wait_turn(root, chat);
+  scheduler
+    .answer_in_chat(started, tools())
+    .await
+    .expect("the turn starts");
+  assert_eq!(
+    ended(root, &mut events, started).await,
+    TurnState::Answered,
+    "the turn ran"
+  );
+  let kept = compactions(root, &mut events, chat).await;
+  assert!(
+    matches!(kept.as_slice(), [(Some(140_000), CompactionState::Failed { .. })]),
+    "after the compaction that failed: {kept:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn compact_runs_first_for_no_message_of_the_persons_and_no_session_with_room() {
+  let project = on(AgentProvider::ClaudeCodeCli, "haiku");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  // A person's message in a session that is nearly full: they see the meter, and decide.
+  let full = conversation(root, AgentProvider::ClaudeCodeCli, Some("session-long"));
+  let mut db = ProjectDb::open(root).expect("open");
+  let kept = db.chat(full).expect("read").expect("the conversation");
+  let (asked, body) = (ChatMessageId::generate(), MessageBody::new("And now?").expect("text"));
+  db.keep_chat_message(&kept, (asked, &body), Timestamp::now())
+    .expect("kept");
+  scheduler.answer_in_chat(asked, tools()).await.expect("the turn starts");
+  assert_eq!(ended(root, &mut events, asked).await, TurnState::Answered);
+  assert!(compactions(root, &mut events, full).await.is_empty());
+
+  // A turn Orchester started in a session with room left.
+  let roomy = conversation(root, AgentProvider::ClaudeCodeCli, Some("session-short"));
+  db.set_chat_context(roomy, &ContextUse::reported(139_000, 200_000))
+    .expect("context");
+  let started = wait_turn(root, roomy);
+  scheduler
+    .answer_in_chat(started, tools())
+    .await
+    .expect("the turn starts");
+  assert_eq!(ended(root, &mut events, started).await, TurnState::Answered);
+  assert!(
+    compactions(root, &mut events, roomy).await.is_empty(),
+    "69 % of the window is not nearly full"
   );
 }

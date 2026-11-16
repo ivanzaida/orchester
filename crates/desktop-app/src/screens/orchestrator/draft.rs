@@ -57,6 +57,17 @@ pub(super) fn set(project: ProjectId, of: Conversation, text: &str) {
   DRAFTS.change((project, of), |draft| text.clone_into(&mut draft.text));
 }
 
+/// Puts `quote` at the start of the draft of conversation `chat`, over what the person wrote there: what *Overrule…*
+/// on the Overview quotes of a decision (`crate::screens::overview`), for the person's own words after it. A draft
+/// that already starts with it stays as it is.
+pub(crate) fn quote(project: ProjectId, chat: ChatId, quote: &str) {
+  DRAFTS.change((project, Conversation::Chat(chat)), |draft| {
+    if !draft.text.starts_with(quote) {
+      draft.text = format!("{quote}{}", draft.text);
+    }
+  });
+}
+
 /// The files the draft of `of` holds.
 pub(super) fn attachments(project: ProjectId, of: Conversation) -> Vec<NewAttachment> {
   DRAFTS.read((project, of), |draft| draft.attachments.clone())

@@ -43,8 +43,8 @@ pub enum MergeLeft {
   /// Its pipeline ends in a Deliver step: the merge queue delivers it, after a person's approval when the step asks
   /// for one (ORC-19).
   DeliveredByQueue,
-  /// It is a team task's run: it goes into its module's branch and is delivered with the module, which a person
-  /// requests.
+  /// It is a team task's run, which the chat did not merge on its own until 2026-11-13. Kept for the entries that say
+  /// so; nothing gives this reason any more.
   TeamDelivery,
   /// It is a team run whose start did not finish recording its team work on this computer, so it can be neither
   /// merged nor delivered from here.

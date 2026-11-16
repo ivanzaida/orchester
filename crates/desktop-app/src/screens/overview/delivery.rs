@@ -3,9 +3,10 @@
 //! is none); then the queued work with its 85% date, while any is queued. *Delivery ↗* opens the Delivery view. Read
 //! off the UI thread (`orchester_workspace::overview::delivery`) when the project's tasks were saved, never per frame;
 //! while it is read the modules are bones (`super::skeleton::delivery`), and a reading that fails stands in the
-//! section's place with Try again (05 `JzNRO`).
+//! section's place with Try again (05 `JzNRO`). A team project's modules, their progress and their forecasts are the
+//! team server's, as its Modules list shows them ([`team_modules`]); this computer's copy of them is not shown.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use chrono::{Datelike, NaiveDate};
 use lurq::{
@@ -19,7 +20,11 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{
+  id::{ModuleId, ProjectId},
+  module::{ModuleState, progress::Progress},
+  time::Timestamp,
+};
 use orchester_workspace::{
   background,
   delivery::{DeliveryPeriod, Forecast, Outlook},
@@ -32,8 +37,13 @@ use orchester_workspace::{
 use super::section::{SIDE_LINE_HEIGHT, head, line, link, section};
 use crate::{
   navigation::Navigation,
+  project::ShownProject,
   routes::{ProjectPage, Route},
   services::Services,
+  team::{
+    pages::{TeamModule, team_module_list},
+    view,
+  },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::{Failure, LastFailure},
@@ -46,8 +56,26 @@ use crate::{
 /// A meter's height (`O4fmlz`).
 pub(super) const METER_HEIGHT: f32 = 4.0;
 
-pub(super) fn delivery(ctx: &mut Ctx, project: ProjectId, root: PathBuf, saves: u64) -> Element {
-  ctx.mount_keyed::<DeliverySection>("overview-delivery", DeliveryProps { project, root, saves })
+pub(super) fn delivery(ctx: &mut Ctx, shown: &ShownProject, shared: bool) -> Element {
+  let team = team_modules(ctx, shown, shared);
+  let props = DeliveryProps {
+    project: shown.open.project.id(),
+    root: shown.open.repo_root.clone(),
+    saves: shown.feed.saves.get(),
+    team,
+  };
+  ctx.mount_keyed::<DeliverySection>("overview-delivery", props)
+}
+
+/// A team project's modules as its server counts them, once they are read, as its Modules list reads them; `None` for
+/// a local project, and while they are read or cannot be.
+fn team_modules(ctx: &mut Ctx, shown: &ShownProject, shared: bool) -> Option<Arc<Vec<TeamModule>>> {
+  if !shared {
+    return None;
+  }
+  view::provide_client(ctx);
+  let source = view::source(ctx, shown).ok().flatten()?;
+  ctx.query(team_module_list(source)).data()
 }
 
 #[derive(Clone, PartialEq)]
@@ -56,6 +84,53 @@ struct DeliveryProps {
   root: PathBuf,
   /// Every save of the project's tasks: a merge is one, and the forecasts are read again after it.
   saves: u64,
+  /// A team project's modules as its server counts them.
+  team: Option<Arc<Vec<TeamModule>>>,
+}
+
+/// A module's line as the section shows it: its forecast is `None` when the team server's names no day.
+struct Line {
+  id: ModuleId,
+  name: Arc<str>,
+  progress: Progress,
+  forecast: Option<Forecast>,
+}
+
+/// The open modules of a local project as this computer reads them.
+fn local_lines(delivery: &OverviewDelivery) -> Vec<Line> {
+  delivery
+    .modules
+    .iter()
+    .map(|module| Line {
+      id: module.id,
+      name: module.name.clone(),
+      progress: module.progress,
+      forecast: Some(module.forecast.clone()),
+    })
+    .collect()
+}
+
+/// The open modules of a team project by target date, the ones without a target last, as its server counts them.
+fn team_lines(modules: &[TeamModule]) -> Vec<Line> {
+  let mut open: Vec<&TeamModule> = modules
+    .iter()
+    .filter(|module| module.module.details().state() == ModuleState::Open)
+    .collect();
+  open.sort_by_key(|module| {
+    (
+      module.module.details().target().is_none(),
+      module.module.details().target(),
+    )
+  });
+  open
+    .into_iter()
+    .map(|module| Line {
+      id: module.module.id(),
+      name: module.module.name().as_str().into(),
+      progress: module.progress,
+      forecast: module.forecast.clone(),
+    })
+    .collect()
 }
 
 impl DevtoolsInspectable for DeliveryProps {}
@@ -76,7 +151,12 @@ impl Component for DeliverySection {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let DeliveryProps { project, root, saves } = ctx.props::<DeliveryProps>().clone();
+    let DeliveryProps {
+      project,
+      root,
+      saves,
+      team,
+    } = ctx.props::<DeliveryProps>().clone();
     let hold = Services::of(ctx).hold;
     let read = ctx.future((root, saves, self.tries.get()), move |(root, ..)| {
       let hold = hold.clone();
@@ -118,8 +198,12 @@ impl Component for DeliverySection {
     let Some(delivery) = state.data else {
       return section.child(super::skeleton::delivery(ctx));
     };
+    let lines = match &team {
+      Some(modules) => team_lines(modules),
+      None => local_lines(&delivery),
+    };
     section
-      .with_children(delivery.modules.iter().take(MODULES_SHOWN).map(|module| {
+      .with_children(lines.iter().take(MODULES_SHOWN).map(|module| {
         let unit = match module.progress.unit {
           WorkUnit::Tasks => "overview.delivery.tasks",
         };
@@ -136,7 +220,7 @@ impl Component for DeliverySection {
           name: &module.name,
           done: &done,
           percent,
-          forecast: &forecast(ctx, &module.forecast),
+          forecast: &module.forecast.as_ref().map_or_else(String::new, |known| forecast(ctx, known)),
         };
         item.render()
       }))

@@ -5,7 +5,9 @@
 //! message the answer under way took (*Send now*) goes on with that answer: what the answer said after it shows under
 //! it, and so does how the answer ended. The turn that carries out an approved plan has no message of the person's to
 //! show: it goes on under the plan it carries out (`12c` `j7Oa9v`). The messages that wait for the answer to end,
-//! queued or handed to it, show after every turn, in order.
+//! queued or handed to it, show after every turn, in order. The events one turn took together
+//! (`docs/plan/orchestrator-autonomy/OA-07-events-together.md`) show as their lines, in order, with the one answer
+//! under the last of them.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -15,14 +17,17 @@ use orchester_core::{
   id::ChatMessageId,
   orchestrator::{
     AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
-    WaitTurn,
+    WaitTurn, WatchTarget,
+    standing::StandingEvent,
     watch::{WatchCommand, WatchSummary},
   },
   time::Timestamp,
 };
 use orchester_workspace::orchestrator::{
   chat::{ChatView, EndMoved, EventFacts},
+  event_turns::EventTurn,
   requests::ChatRequest,
+  standing::ModuleNow,
   waits_on::view::RunWaitView,
 };
 
@@ -105,6 +110,8 @@ pub(super) struct Turn {
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
   pub(super) watch_ended: Option<Box<WatchSummary>>,
+  /// An event of a target the conversation leads to the end, whose line opens the row instead of a person's message.
+  pub(super) standing: Option<Box<StandingEvent>>,
   /// An event that is the whole row: a compaction of the session (`super::compaction`), where a rewind went back to
   /// (`super::rewind::line`), a watch command or line (`super::watch`), or the person's `/watching`, answered from the
   /// live state (`super::watching`).
@@ -132,6 +139,17 @@ pub(super) struct Turn {
   pub(super) todo: Option<TodoList>,
   /// How the person's message's turn went: it planned only, or it acted.
   pub(super) mode: TurnMode,
+  /// The message a wait's entry holds its turn under: its own even when another event's turn took it, by which the
+  /// events of one turn are found.
+  own: Option<ChatMessageId>,
+  /// Where the turn its event starts by itself stands, while that says more than the turn's own end: tried again,
+  /// left to the person, or held (`super::wait::turn_state`).
+  pub(super) turn_state: Option<EventTurn>,
+  /// For the line of a /watch that led its targets to the end: the targets whose *Before you leave* shows under it
+  /// (`super::watch`); `None` for any other row.
+  pub(super) led_to_end: Option<Arc<[WatchTarget]>>,
+  /// What the line of an event of a module led to the end names of the module as it is now.
+  pub(super) module_now: Option<ModuleNow>,
 }
 
 impl Turn {
@@ -155,6 +173,7 @@ impl Turn {
       request: None,
       report: None,
       watch_ended: None,
+      standing: None,
       compaction: None,
       led: None,
       seq: None,
@@ -168,13 +187,17 @@ impl Turn {
       waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
+      own: None,
+      turn_state: None,
+      led_to_end: None,
+      module_now: None,
     }
   }
 
   /// Whether its turn, if any, was one Orchester started by itself: a wait's, a report's or a subscription's end's,
   /// with no words of the person's to send again.
   pub(super) const fn on_its_own(&self) -> bool {
-    self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some()
+    self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some() || self.standing.is_some()
   }
 
   /// Whether the row is the person's `/watching`, which Orchester answers from the live state.
@@ -196,7 +219,7 @@ impl Turn {
   /// The row of `entry`, which opens with a wait or a report (the caller sets which), and the turn it started, if any.
   fn opened(entry: &ChatEntry, turn: Option<&WaitTurn>) -> Self {
     Self {
-      message: turn.map(|turn| turn.message),
+      message: turn.map(WaitTurn::answered_by),
       sending: None,
       text: Arc::from(""),
       attachments: Arc::from([]),
@@ -207,6 +230,7 @@ impl Turn {
       request: None,
       report: None,
       watch_ended: None,
+      standing: None,
       compaction: None,
       led: None,
       seq: Some(entry.seq),
@@ -220,6 +244,10 @@ impl Turn {
       waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
+      own: turn.map(|turn| turn.message),
+      turn_state: None,
+      led_to_end: None,
+      module_now: None,
     }
   }
 
@@ -285,7 +313,9 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         add_person((&mut turns, &mut waiting), entry, shown);
         continue;
       }
-      EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } => continue,
+      EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } | EntryKind::Standing { .. } => {
+        continue;
+      }
       EntryKind::Plan(plan) => {
         plans += 1;
         Part::Plan {
@@ -317,6 +347,7 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
     }
   }
   join_answers(&mut turns);
+  show_together(&mut turns);
   // A turn's list is the one its agent keeps for the message, wait or report that started it.
   for turn in &mut turns {
     turn.todo = turn
@@ -345,7 +376,7 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 /// `Ff7AD`, `super::watching`), each a row between the turns, which started none. A choice on such a card shows in the
 /// card's place (`super::led`). `None` for an entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
-  Some(match &entry.kind {
+  let row = match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
       wait: Some(Box::new(wait.clone())),
       stands: shown.standing.contains(&entry.seq),
@@ -362,6 +393,11 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       watch_ended: Some(summary.clone()),
       ..Turn::opened(entry, turn.as_ref())
     },
+    EntryKind::Standing { event, turn } => Turn {
+      standing: Some(event.clone()),
+      module_now: shown.modules_now.get(&entry.seq).cloned(),
+      ..Turn::opened(entry, turn.as_ref())
+    },
     EntryKind::Event(event) if super::led::is_choice(event) => return None,
     EntryKind::Event(
       event @ (ChatEvent::Compaction { .. }
@@ -373,9 +409,17 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
     ) => Turn {
       compaction: Some(event.clone()),
       led: super::led::cards(entry, shown).map(Box::new),
+      led_to_end: shown
+        .led_to_end
+        .get(&entry.seq)
+        .map(|targets| Arc::from(targets.as_slice())),
       ..Turn::opened(entry, None)
     },
     _ => return None,
+  };
+  Some(Turn {
+    turn_state: shown.turns.of(entry.seq).cloned(),
+    ..row
   })
 }
 
@@ -451,6 +495,7 @@ fn person(
     request: None,
     report: None,
     watch_ended: None,
+    standing: None,
     compaction: None,
     led: None,
     seq: Some(entry.seq),
@@ -464,6 +509,10 @@ fn person(
     waits_on: Vec::new(),
     todo: None,
     mode: TurnMode::Acts,
+    own: None,
+    turn_state: None,
+    led_to_end: None,
+    module_now: None,
   }
 }
 
@@ -485,6 +534,25 @@ fn join_answers(turns: &mut [Turn]) {
         answering = Some((turns[index].state.clone(), turns[index].ended));
       }
       Arrival::Own | Arrival::Waiting => {}
+    }
+  }
+}
+
+/// The events one turn took together show as one: the answer is under the last of them, which every part went to, and
+/// the ones before it are their lines alone, as an event that started no turn is.
+fn show_together(turns: &mut [Turn]) {
+  for index in 0..turns.len() {
+    let Some(message) = turns[index].message.filter(|_| turns[index].own.is_some()) else {
+      continue;
+    };
+    let last = turns
+      .iter()
+      .rposition(|turn| turn.own.is_some() && turn.message == Some(message));
+    if last.is_some_and(|last| last != index) {
+      let row = &mut turns[index];
+      row.message = None;
+      row.state = None;
+      row.ended = None;
     }
   }
 }

@@ -141,7 +141,7 @@ fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them()
     ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),
     ("nav-review", "screen-review", "Review"),
     ("nav-modules", "screen-modules", "Modules"),
-    ("nav-agents", "agents-hub", "Agents"),
+    ("nav-agents", "screen-local-hub", "Agents"),
   ] {
     assert_eq!(
       window.texts(item).expect("the item shows").first().map(String::as_str),

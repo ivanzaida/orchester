@@ -16,6 +16,7 @@
     },
     "leads": {
       "more": "+{{count}}",
+      "toTheEnd": "to the end",
       "moreTip": "Also leads {{targets}}",
       "stop": "Stop watching {{name}}",
       "since": {
@@ -294,7 +295,88 @@
       "conflict": "{{task}}'s merge conflict",
       "merged": "{{task}} merged",
       "closed": "{{task}} closed",
-      "waited": "What {{task}} waits on"
+      "waited": "What {{task}} waits on",
+      "canStart": "work can start",
+      "stuck": "stuck",
+      "accept": "acceptance can start",
+      "deliver": "can be delivered",
+      "deliveryWaits": "delivery waits for you"
+    },
+    "turnState": {
+      "triedAgain": "Couldn't answer — trying again at {{time}} · {{next}} of {{of}}",
+      "thinking": "Orchestrator is thinking · {{number}} of {{of}}",
+      "left": {
+        "one": "Left to you after 1 try",
+        "other": "Left to you after {{count}} tries"
+      },
+      "tryAgain": "Try again",
+      "refused": "— not tried again: {{reason}}",
+      "heldBudget": "Held until {{time}} — today's budget is used",
+      "heldPlan": "Held until {{time}} — the account's plan limit is reached",
+      "heldPlanUnnamed": "Held — the account's plan limit is reached · trying again at {{time}}",
+      "header": "Orchestrator is held until {{time}}",
+      "headerUnnamed": "Orchestrator is held · trying again at {{time}}",
+      "day": "{{date}} {{time}}",
+      "why": {
+        "timeLimit": "— the answer took longer than {{minutes}} minutes",
+        "failed": "— {{reason}}",
+        "interrupted": "— Orchester or its runner closed",
+        "cannotStart": "— its CLI couldn't be started",
+        "notSignedIn": "— its CLI isn't signed in",
+        "connectionGone": "— its connection is gone",
+        "accountNone": "— the connection has no account to sign in with",
+        "accountFolderMissing": "— the account's folder {{folder}} is gone"
+      }
+    },
+    "standing": {
+      "canStart": "— nothing they depend on is open",
+      "stuck": "— nothing else can start",
+      "stuckBudget": "— its budget is used",
+      "accept": "— {{pipeline}}",
+      "deliver": "— {{branch}} into {{base}}",
+      "deliverCheckout": "— {{branch}} into the branch your checkout has",
+      "noAcceptance": "— no acceptance pipeline is chosen",
+      "acceptanceCeiling": "— its acceptance did not pass",
+      "notAllowed": "— Deliver when accepted is off",
+      "needsYou": "Needs you ↗",
+      "module": "Module ↗"
+    },
+    "leaving": {
+      "title": "Before you leave",
+      "count": {
+        "one": "1 thing can stop {{target}} while you are away",
+        "other": "{{count}} things can stop {{target}} while you are away"
+      },
+      "checkAgain": "Check again",
+      "unreadable": "— it can't be checked: {{reason}}",
+      "driveOff": "Let the Orchestrator drive is off",
+      "orchestratorNotReady": "The Orchestrator has nothing it can run on",
+      "noPipeline": {
+        "one": "{{tasks}} has no pipeline",
+        "other": "{{tasks}} have no pipeline"
+      },
+      "noDeliverStep": "{{pipeline}} has no Deliver step — its merges are not checked after merging",
+      "noDeliverStepOf": "The pipeline of {{tasks}} has no Deliver step — its merges are not checked after merging",
+      "checkoutHasChanges": "Your checkout has local changes — a merge that touches them will wait for you",
+      "noDailyBudget": "The project has no daily budget — nothing bounds what is spent",
+      "maySleep": "The computer may go to sleep",
+      "stopsWithWindow": "Closing the window stops the work",
+      "notChecked": {
+        "servers": "Not checked: whether the tasks' MCP servers answer"
+      },
+      "link": {
+        "projectSettings": "Project settings ↗",
+        "orchestratorSettings": "Orchestrator settings ↗",
+        "task": "{{task}} ↗",
+        "pipeline": "Pipeline ↗",
+        "settings": "Settings ↗"
+      },
+      "ready": "Ready to leave",
+      "readyAside": "— nothing found that would stop {{target}} · {{unchecked}}",
+      "readyAsideAll": "— nothing found that would stop {{target}}",
+      "unchecked": {
+        "servers": "not checked: whether the tasks' MCP servers answer"
+      }
     },
     "decision": {
       "showDetails": "Show details",
@@ -394,11 +476,71 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "lead": {
+      "follow": "Follow",
+      "toTheEnd": "Lead to the end",
+      "what": "What it does with them",
+      "meaning": {
+        "follow": "Tells you and answers agents; you start, merge and deliver.",
+        "lead": "Starts its tasks, runs failed ones again and leaves you what it cannot do."
+      },
+      "menu": {
+        "name": "How {{name}} is taken: {{mode}}",
+        "follow": "Tells you and answers agents; you start, merge and deliver",
+        "lead": "Starts its tasks, runs failed ones again and leaves you what it cannot do"
+      },
+      "stop": "Stop leading",
+      "ceilings": {
+        "runs": "Runs of a task",
+        "returns": "Returns per run",
+        "raises": "Raises",
+        "raisesValue": "{{times}} by {{percent}} %",
+        "budget": "Budget",
+        "budgetValue": "{{used}} of {{most}} tokens",
+        "budgetNone": "none",
+        "change": "Change…",
+        "groupSeparator": ",",
+        "form": {
+          "title": "Ceilings · {{name}}",
+          "runs": {
+            "label": "Runs of a task",
+            "hint": "How many times it may run one task again · {{min}} to {{max}}"
+          },
+          "returns": {
+            "label": "Returns per run",
+            "hint": "Returns to an earlier step inside one run · {{min}} to {{max}}"
+          },
+          "raises": {
+            "label": "Raises of a limit",
+            "hint": "How often it may raise a run's limit, and by how much · {{min}} to {{max}}, up to {{percent}} %",
+            "times": "How often a run's limit may be raised",
+            "share": "By how much of the limit, in percent",
+            "by": "by",
+            "percent": "%",
+            "percentMost": "Up to {{max}} %",
+            "percentLeast": "At least {{min}} %"
+          },
+          "budget": {
+            "label": "Budget",
+            "hint": "Tokens for the whole target · empty: no budget",
+            "hintUsed": "Tokens for the whole target · empty: no budget · used {{used}}",
+            "invalid": "A number of tokens, or empty for no budget",
+            "unit": "tokens"
+          },
+          "bounds": "From {{min}} to {{max}}",
+          "note": "This subscription only · defaults in Project settings ↗",
+          "cancel": "Cancel",
+          "save": "Save"
+        }
+      }
+    },
     "watching": {
       "applied": "Applied {{time}}",
       "from": "Orchester",
       "meta": "{{time}} · the live state, no agent turn",
       "total": "This conversation leads {{leads}}. {{total}}.",
+      "totalLed": "This conversation leads {{led}} to the end. {{total}}.",
+      "totalLedAndFollows": "This conversation leads {{led}} to the end and follows {{follows}}. {{total}}.",
       "only": "{{total}}.",
       "and": "{{rest}} and {{last}}",
       "comma": "{{rest}}, {{next}}",
@@ -412,6 +554,7 @@
       },
       "stop": "Stop watching",
       "keyRun": "{{key}} · #{{run}}",
+      "notes": "{{first}} · {{second}}",
       "open": "{{action}} ↗",
       "failed": "Not applied",
       "dismiss": "Dismiss"
@@ -485,6 +628,12 @@
         "more": "{{first}}, {{next}}"
       },
       "leading": "Leading {{targets}}",
+      "toEnd": "{{target}} to the end",
+      "toEndCounted": {
+        "one": "{{target}} to the end · {{count}} task",
+        "other": "{{target}} to the end · {{count}} tasks"
+      },
+      "leadingToEndAside": "— it starts them, merges them and parks what needs you",
       "atRequest": "at your request",
       "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
       "nowLedIn": "{{target}} is now led in «{{title}}»",
@@ -611,12 +760,14 @@
         "move": "↑ ↓",
         "enter": "Enter",
         "shiftEnter": "Shift Enter",
+        "tab": "Tab",
         "esc": "Esc"
       },
       "hint": {
         "move": "Move",
         "pick": "Pick and close",
         "addAnother": "Add another",
+        "mode": "Follow or lead",
         "close": "Close"
       },
       "led": {

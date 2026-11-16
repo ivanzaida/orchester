@@ -203,8 +203,9 @@ fn orchestrator_task_events_are_bordered_lines_and_their_turns_say_what_started_
 fn orchestrator_task_events_a_stall_settles_in_the_open_conversation_once_its_run_progresses() {
   let mut screen = Orchestrator::new(Setup::NoRunner);
   let delivery = screen.delivery();
-  let hour_ago = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 60 * 60_000);
-  let (run, execution) = started(&screen, (delivery, "Retry failed deliveries"), hour_ago);
+  // In the first period of its stall: twenty minutes are set, and it stood for twenty-five.
+  let stalled_at = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 25 * 60_000);
+  let (run, execution) = started(&screen, (delivery, "Retry failed deliveries"), stalled_at);
   follow(&screen);
   let seq = entry_of(&screen, &run);
   screen.go(OrchestratorChat::Latest);

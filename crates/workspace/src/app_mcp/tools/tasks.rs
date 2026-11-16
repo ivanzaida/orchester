@@ -114,19 +114,21 @@ pub async fn get_calibration(services: &Services, args: GetCalibration) -> Resul
 }
 
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
+  let team_filters = orchester_api::v2::TaskFilters {
+    statuses: args.status.iter().copied().map(Into::into).collect(),
+    search: args
+      .search
+      .as_deref()
+      .and_then(|text| orchester_api::v2::SearchText::new(text).ok()),
+    ..orchester_api::v2::TaskFilters::default()
+  };
   if let Some(named) = &args.project
     && let Some(team) = team::of_reading(services, named).await?
   {
-    let filters = orchester_api::v2::TaskFilters {
-      statuses: args.status.into_iter().map(Into::into).collect(),
-      search: args
-        .search
-        .as_deref()
-        .and_then(|text| orchester_api::v2::SearchText::new(text).ok()),
-      ..orchester_api::v2::TaskFilters::default()
-    };
-    return team::list_tasks(services, &team, filters).await;
+    return team::list_tasks(services, &team, team_filters).await;
   }
+  let across_projects = args.project.is_none();
+  let reading = services;
   let services = services.clone();
   let project = args.project.clone();
   let read = blocking(move || {
@@ -151,7 +153,7 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
     organization: &filter,
     separator: SEPARATOR,
   };
-  Ok(read.json("tasks", translate, |open, data| {
+  let mut listed = read.json("tasks", translate, |open, data| {
     let project = open.project.id();
     browse::rows(data, TaskTab::All, query, TaskSort::Manual)
       .iter()
@@ -178,7 +180,59 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
         })
       })
       .collect()
-  }))
+  });
+  if across_projects {
+    with_team_projects(reading, translate, &mut listed, &team_filters).await;
+  }
+  Ok(listed)
+}
+
+/// Reads, into `listed`, the tasks of each project the reading across projects left out as a team project's
+/// (`team_project_unsupported`): from its team server, each naming its project, as a call naming that project gives
+/// them. A project whose server could not be asked stays among `unreadable_projects`, with that reason instead.
+async fn with_team_projects(
+  services: &Services,
+  translate: &Translate,
+  listed: &mut Value,
+  filters: &orchester_api::v2::TaskFilters,
+) {
+  let Some(unreadable) = listed["unreadable_projects"].as_array().cloned() else {
+    return;
+  };
+  let (mut still, mut tasks) = (Vec::new(), Vec::new());
+  for mut project in unreadable {
+    let named = project["id"].as_str().map(str::to_owned);
+    let (Some(named), true) = (named, project["error"]["code"] == "team_project_unsupported") else {
+      still.push(project);
+      continue;
+    };
+    let read = match team::of_reading(services, &named).await {
+      Ok(Some(team)) => team::list_tasks(services, &team, filters.clone()).await,
+      // Not a team project after all: it stays as it was listed.
+      Ok(None) => {
+        still.push(project);
+        continue;
+      }
+      Err(error) => Err(error),
+    };
+    match read {
+      Ok(mut read) => {
+        let naming = json!({ "id": project["id"], "name": project["name"] });
+        for mut task in read["tasks"].take().as_array().cloned().unwrap_or_default() {
+          task["project"] = naming.clone();
+          tasks.push(task);
+        }
+      }
+      Err(error) => {
+        project["error"] = error.to_json(|message| translate.text(message))["error"].take();
+        still.push(project);
+      }
+    }
+  }
+  if let Some(all) = listed["tasks"].as_array_mut() {
+    all.extend(tasks);
+  }
+  listed["unreadable_projects"] = Value::Array(still);
 }
 
 pub async fn get_task(services: &Services, args: GetTask, translate: &Translate) -> Result<Value, ToolError> {

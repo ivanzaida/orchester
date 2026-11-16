@@ -99,7 +99,10 @@ pub fn group(ctx: &mut Ctx, task: &TaskContext, run: &RunView, more: &Signal<boo
     fact(
       "task-fact-base",
       &ctx.t("summary.facts.base"),
-      value("task-fact-base", &base_value(ctx, run), Look::Mono),
+      // One line, as the branch's: a long base ends with an ellipsis rather than in three broken lines.
+      value("task-fact-base", &base_value(ctx, run), Look::Mono)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     ),
     checkpoint(ctx, run),
     tokens(ctx, run),

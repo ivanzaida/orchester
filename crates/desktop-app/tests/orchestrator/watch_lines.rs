@@ -73,6 +73,7 @@ fn checklist(db: &mut ProjectDb, task: &NamedTarget) -> Chat {
   let command = WatchCommand::Watch {
     targets: vec![task.clone()],
     order: String::new(),
+    to_end: false,
   };
   db.keep_watch_entries(&checklist, &[ChatEvent::WatchCommand { command }], Timestamp::now())
     .expect("kept");
@@ -88,6 +89,7 @@ fn entries(module: &NamedTarget, (task, key): (NamedTarget, &str), checklist: &C
       command: WatchCommand::Watch {
         targets: vec![module.clone()],
         order: "Answer agents from the brief.".to_owned(),
+        to_end: false,
       },
     },
     line(WatchLine::Watching {

@@ -172,11 +172,12 @@ fn textarea_focus_preserves_text_insets_growth_and_scroll_after_twelve_lines() {
     .find(|quad| matches!(&quad.content, QuadContent::Text { text, .. } if text.contains("line\n")))
     .expect("the overflowing textarea paints its value");
   assert!(text.y < capped.y + 7.0, "the caret scrolls the text to the last line");
-  assert_close(text.clip.y - capped.y, 7.0, "scroll clip starts below the top inset");
+  // lurq clips what scrolls at the padding box, as CSS's overflow does: under the 1 border, not under the inset.
+  assert_close(text.clip.y - capped.y, 1.0, "scroll clip starts under the border");
   assert_close(
     text.clip.height,
-    capped.height - 14.0,
-    "scroll clip keeps both vertical insets",
+    capped.height - 2.0,
+    "scroll clip is the box inside its borders",
   );
 }
 
@@ -209,7 +210,11 @@ fn textarea_focus_soft_wrapping_keeps_insets_and_caps_both_area_sizes() {
         .expect("the wrapped textarea paints its value");
       assert_close(text.clip.x - capped.x, 10.0, "wrapped text's left inset");
       assert_close(text.clip.width, width - 20.0, "wrap width excludes both side insets");
-      assert_close(text.clip.y - capped.y, 7.0, "wrapped text's top inset");
+      assert_close(
+        text.clip.y - capped.y,
+        1.0,
+        "wrapped text's clip starts under the border",
+      );
     }
   }
 }

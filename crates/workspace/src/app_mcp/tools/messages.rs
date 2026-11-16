@@ -57,8 +57,9 @@ enum Reach {
 }
 
 /// How the message sent `way` in `mode` reaches run `run`. A team task's run (told by the run itself: a local task's
-/// run in a team-linked project is not one) the team server fenced takes no message at all, in any state, and is not
-/// started again or continued from here: refused before the message is stored.
+/// run in a team-linked project is not one) the team server fenced takes no message at all, in any state; a message
+/// that would run the task again is refused before it is stored, because a team task's work starts only through the
+/// team server (`run_task`).
 fn reach_checked(
   db: &orchester_store::ProjectDb,
   (mode, way): (&ComposerMode, Way),
@@ -77,7 +78,6 @@ fn reach_checked(
     .map(Reach::Team)
     .map_err(|starts| match starts {
       StartsWork::RunAgain => team_run_again(),
-      StartsWork::ContinueInterrupted => team::team_only_on_server("send_message"),
     })
 }
 
@@ -144,7 +144,7 @@ pub async fn send_message(
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
-        kind.require(&reading.workspace)?;
+        reading.require(kind)?;
       }
     }
     Ok((project, prepared, reach))
@@ -156,9 +156,9 @@ pub async fn send_message(
     if let SentBy::Orchestrator(_) = by {
       return Err(plan_person_only());
     }
-    let workspace = services.workspace.clone();
+    let consenting = services.clone();
     if !matches!(by, SentBy::Person(_)) {
-      blocking(move || crate::decisions::DecisionKind::Plan.require(&workspace)).await?;
+      blocking(move || consenting.require(crate::decisions::DecisionKind::Plan)).await?;
     }
     let (root, text, answerer) = (project.repo_root.clone(), args.text.clone(), by.answerer());
     let command = blocking(move || plan_changes(&root, &prepared, &text, (answerer, None)).map_err(refusal)).await?;

@@ -6,10 +6,13 @@
 //! ([`ProjectDb::wait_turn_prompt`]). Nothing here changes a subscription.
 
 use orchester_core::{
-  id::{ChatId, RunId, TaskId},
+  id::{ChatId, ModuleId, RunId, TaskId},
+  integration::base::RunBaseSource,
   orchestrator::{
-    AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, WatchTarget,
-    instructions::wait_prompt, watch::event_subscription,
+    AcceptedUnverified, AgentWait, Lead, Leads, Merging, Subscription, Subscriptions, TaskEvent, TaskEventKind,
+    WatchTarget,
+    instructions::{leading_note, wait_prompt},
+    watch::event_subscription,
   },
   store::{ActivityStore, RunStore, TaskStore},
   task::Task,
@@ -44,10 +47,47 @@ impl ProjectDb {
     } else {
       leads.event_prompt(wait, self.came_through(chat, wait.run)?)
     };
-    Ok(match self.accepted_note(wait)? {
+    let prompt = match self.accepted_note(wait)? {
       Some(note) => format!("{prompt}\n\n{note}"),
       None => prompt,
+    };
+    Ok(if self.leads_to_the_end(chat, wait)? {
+      format!("{prompt}\n\n{}", leading_note(wait, self.stall_step(wait)?))
+    } else {
+      prompt
     })
+  }
+
+  /// Whether the subscription of `chat` the event `wait` came through leads its task to the end.
+  fn leads_to_the_end(&self, chat: ChatId, wait: &AgentWait) -> Result<bool, StoreError> {
+    let Some(through) = self.came_through(chat, wait.run)? else {
+      return Ok(false);
+    };
+    Ok(
+      self
+        .chat_subscriptions(chat)?
+        .iter()
+        .any(|subscription| subscription.target() == through && subscription.mode().ceilings().is_some()),
+    )
+  }
+
+  /// For a run that makes no progress, which period of its stall `wait` was raised for, from 1: its minutes over the
+  /// project's *A run without progress for*. `None` for any other wait, and while the setting is off.
+  fn stall_step(&self, wait: &AgentWait) -> Result<Option<u32>, StoreError> {
+    let Some(TaskEvent {
+      kind: TaskEventKind::NoProgress { minutes, .. },
+      ..
+    }) = wait.kind.event()
+    else {
+      return Ok(None);
+    };
+    Ok(
+      self
+        .orchestrator_watch()?
+        .no_progress_minutes()
+        .filter(|period| *period > 0)
+        .map(|period| (minutes / period).max(1)),
+    )
   }
 
   /// For the turn of a run's success that merges it, the steps of the run automation accepted as they were and what
@@ -71,7 +111,7 @@ impl ProjectDb {
   /// through among those that led then (one that ended since, its task merged and done, still counts), with its own
   /// order or the project's default.
   pub fn ordered_when(&self, chat: ChatId, wait: &AgentWait, at: Timestamp) -> Result<bool, StoreError> {
-    let Some(task) = self.run_task(wait.run)? else {
+    let Some((task, module)) = self.run_place(wait.run)? else {
       return Ok(false);
     };
     let then: Vec<Subscription> = self
@@ -81,7 +121,7 @@ impl ProjectDb {
       .map(|kept| kept.subscription)
       .collect();
     let own = Subscriptions::new(then.clone()).map_err(|error| corrupt("orchestrator subscriptions", error))?;
-    let through = event_subscription(&own, chat, task.id(), task.module()).map(Subscription::target);
+    let through = event_subscription(&own, chat, task, module).map(Subscription::target);
     let leads = Leads::new(
       then.iter().map(|subscription| Lead::new(subscription, String::new())),
       &self.orchestrator_watch()?,
@@ -90,12 +130,31 @@ impl ProjectDb {
   }
 
   /// The target of the subscription of `chat` an event of `run`'s task comes through ([`Self::task_came_through`]);
-  /// `None` also once the run or its task is gone.
+  /// `None` also once the run is gone.
   pub fn came_through(&self, chat: ChatId, run: RunId) -> Result<Option<WatchTarget>, StoreError> {
-    match self.run_task(run)? {
-      Some(task) => self.task_came_through(chat, &task),
-      None => Ok(None),
+    let Some((task, module)) = self.run_place(run)? else {
+      return Ok(None);
+    };
+    let own = Subscriptions::new(self.chat_subscriptions(chat)?)
+      .map_err(|error| corrupt("orchestrator subscriptions", error))?;
+    Ok(event_subscription(&own, chat, task, module).map(Subscription::target))
+  }
+
+  /// The task of `run` and the module it is in, for the subscription its events come through: its stored row's; for a
+  /// team task this computer keeps no row of, the module its run started in (the module the team server accepted its
+  /// start in). `None` once the run is gone.
+  fn run_place(&self, run: RunId) -> Result<Option<(TaskId, Option<ModuleId>)>, StoreError> {
+    if let Some(task) = self.run_task(run)? {
+      return Ok(Some((task.id(), task.module())));
     }
+    let Some(found) = self.run(run).map_err(|error| corrupt("run", error))? else {
+      return Ok(None);
+    };
+    let module = match found.base_source() {
+      RunBaseSource::Module { module } => Some(module),
+      RunBaseSource::Task | RunBaseSource::CheckedOut | RunBaseSource::Project => None,
+    };
+    Ok(Some((found.task(), module)))
   }
 
   /// The target of the subscription of `chat` an event of `task` comes through: the most specific of its own that

@@ -266,6 +266,7 @@ fn prefetch_project(ctx: &mut Ctx, session: &Session, open: &OpenProject) {
   ctx.query(project::estimates(s.clone(), r.clone()));
   ctx.query(project::orchestrator_drives(s.clone(), r.clone()));
   ctx.query(project::orchestrator_watch(s.clone(), r.clone()));
+  ctx.query(project::orchestrator_lead_defaults(s.clone(), r.clone()));
   ctx.query(project::memory_settings(s.clone(), r.clone()));
   ctx.query(project::variables(s.clone(), r.clone()));
   ctx.query(project::connections(s.clone(), r.clone()));

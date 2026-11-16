@@ -226,13 +226,15 @@ where
 pub enum TeamThen {
   Deliver,
   Resume,
+  /// The interrupted run goes on from its last checkpoint, as *Continue* on its task's page lets it: under the claim
+  /// its work started with, which its heartbeat renews again once it works.
+  ContinueInterrupted,
   RaiseLimit,
 }
 
 /// What would start a team task's work from this computer, without the team server's claim and work start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StartsWork {
-  ContinueInterrupted,
   RunAgain,
 }
 
@@ -244,17 +246,24 @@ impl TryFrom<Then> for TeamThen {
       Then::Deliver => Ok(Self::Deliver),
       Then::Resume => Ok(Self::Resume),
       Then::RaiseLimit => Ok(Self::RaiseLimit),
-      Then::ContinueInterrupted => Err(StartsWork::ContinueInterrupted),
+      Then::ContinueInterrupted => Ok(Self::ContinueInterrupted),
       Then::RunAgain => Err(StartsWork::RunAgain),
     }
   }
 }
 
 /// [`follow`] for a message to an unfenced team task's run: no claim of the old sharing stream is taken, which would
-/// also cache the team task's definition here. Delivering and resuming go to the runner as they do elsewhere.
+/// also cache the team task's definition here. Delivering, resuming and continuing an interrupted run go to the runner
+/// as they do elsewhere.
 pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &Stored<'_>, then: TeamThen) -> Sent {
   let command = match then {
     TeamThen::RaiseLimit => return Sent::AwaitsLimit,
+    TeamThen::ContinueInterrupted => {
+      return runner.continue_run(runners, stored.run).await.unwrap_or_else(|error| {
+        tracing::warn!(%error, "the team run did not go on with the message");
+        Sent::Queued(control_message(&error))
+      });
+    }
     TeamThen::Deliver => Command::DeliverMessages { run: stored.run },
     TeamThen::Resume => Command::ResumeRun { run: stored.run },
   };

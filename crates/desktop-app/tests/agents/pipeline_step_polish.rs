@@ -280,7 +280,7 @@ fn pipeline_step_polish_an_override_kept_on_a_profile_whose_cli_is_not_known_sta
   assert!(!agents.exists(DROPPED), "kept, not dropped");
   assert_eq!(
     agents.text("pipeline-hub-step-agent-runs"),
-    "Choose a connection · model: gpt-override",
+    "Choose an account · model: gpt-override",
     "what to do, and the override kept"
   );
 }

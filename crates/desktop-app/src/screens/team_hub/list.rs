@@ -67,7 +67,7 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
     .with_children(groups);
   ScrollVertical::new(groups)
     .id("team-hub-list-scroll")
-    .width(Dimension::Px(LIST_WIDTH))
+    .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()
 }

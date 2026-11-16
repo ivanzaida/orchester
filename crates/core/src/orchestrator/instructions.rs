@@ -3,10 +3,21 @@
 //! of a task's run or an event of it started by itself ([`wait_prompt`], [`event_prompt`]), a daily report did
 //! ([`report_prompt`]), or a subscription that ended by itself did ([`watch_summary_prompt`]).
 
+mod acceptance;
 mod events;
+mod leading;
+mod standing;
 mod summary;
+mod together;
 
-pub use self::{events::event_prompt, summary::watch_summary_prompt};
+pub use self::{
+  acceptance::{ACCEPTANCE_CRITERIA, AcceptedTask, acceptance_brief, acceptance_title},
+  events::event_prompt,
+  leading::leading_note,
+  standing::standing_prompt,
+  summary::watch_summary_prompt,
+  together::{TOGETHER_MOST, together_prompt},
+};
 use super::{
   merging::{MergeLeft, Merging},
   report::DailyReport,
@@ -37,9 +48,10 @@ const WHO_DECIDES: &str = "Who decides: the project's switch Let the Orchestrato
   tool of yours can press (run a task, cancel, pause, resume, continue a run, merge, answer, publish): you call \
   the tool, and say what you did. Orchester starts a turn of yours for every wait of an agent, every run that stops, \
   ends or succeeds and every event of the work you lead, including for runs you started; decide what the work \
-  needs and do it. While the switch is off, what changes something becomes a proposal card that the person applies \
-  or dismisses in the conversation, and no turn starts by itself: each answer of a tool says which happened \
-  (waits_for_person).";
+  needs and do it. Events that wait together in one conversation come in one turn, five at most, oldest first: \
+  settle each as its own message asks. While the switch is off, what changes something becomes a proposal card \
+  that the person applies or dismisses in the conversation, and no turn starts by itself: each answer of a tool \
+  says which happened (waits_for_person).";
 
 /// What the system prompt says of agents that wait.
 const AGENTS_WAIT: &str = "Agents that wait:\n\
@@ -61,8 +73,10 @@ const AGENTS_WAIT: &str = "Agents that wait:\n\
   one refuses, the person does it in the app. While Let the Orchestrator drive is on, a tool request of what you lead \
   starts a turn of yours: approve it once only when it plainly serves the task and is safe, deny it with a reason for \
   the agent only when it is plainly wrong, and otherwise leave it to the person with your recommendation. In a turn \
-  Orchester started, decide_approval decides only the request that started it (not_this_request); while you drive, \
-  that switch is what lets you answer it, whatever Let automation answer approvals says. You never widen \
+  Orchester started, decide_approval decides only a request among the events that started it (not_this_request). \
+  While you drive, that switch is your whole consent, for this and for every answer, plan decision and limit your tools take: Let \
+  automation answer approvals is for other clients, whatever a tool's description says. In a turn Orchester \
+  started you do not change the project's daily budget (person_only): say what stopped at it. You never widen \
   what agents may do beyond what a tool lets you, read secret values or delete work.";
 
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).

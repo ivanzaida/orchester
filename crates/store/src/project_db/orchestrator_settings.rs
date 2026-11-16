@@ -1,9 +1,10 @@
 //! What the project's Orchestrator chat runs on (`orchester_core::orchestrator::OrchestratorSettings`): its published
 //! versions and the draft saved since the latest. Beside them, how it watches the project's runs
-//! (`orchester_core::orchestrator::WatchSettings`), kept as set, without versions.
+//! (`orchester_core::orchestrator::WatchSettings`), and the ceilings a new subscription that leads to the end takes
+//! (`orchester_core::orchestrator::Ceilings`), both kept as set, without versions.
 
 use orchester_core::{
-  orchestrator::{OrchestratorSettings, WatchSettings},
+  orchestrator::{Ceilings, OrchestratorSettings, WatchSettings},
   resource::ModelId,
   time::Timestamp,
 };
@@ -37,6 +38,32 @@ impl ProjectDb {
     )?;
     Ok(())
   }
+
+  /// The ceilings a new subscription that leads to the end takes; a project that never set them has the built-in
+  /// ones ([`Ceilings::default`]).
+  pub fn lead_defaults(&self) -> Result<Ceilings, StoreError> {
+    let kept: Option<String> =
+      self
+        .connection
+        .query_row("SELECT lead_ceilings FROM orchestrator_watch WHERE id = 1", [], |row| {
+          row.get(0)
+        })?;
+    match kept {
+      Some(kept) => serde_json::from_str(&kept).map_err(|error| corrupt("orchestrator lead defaults", error)),
+      None => Ok(Ceilings::default()),
+    }
+  }
+
+  /// Keeps `ceilings` as what a new leading subscription takes, in place of what was set before. The subscriptions
+  /// that lead already keep theirs.
+  pub fn save_lead_defaults(&mut self, ceilings: &Ceilings) -> Result<(), StoreError> {
+    let kept = serde_json::to_string(ceilings).map_err(|error| corrupt("orchestrator lead defaults", error))?;
+    self
+      .connection
+      .execute("UPDATE orchestrator_watch SET lead_ceilings = ?1 WHERE id = 1", [kept])?;
+    Ok(())
+  }
+
   /// What the Orchestrator runs on: its latest published version; `None` until a person published one.
   pub fn orchestrator_settings(&self) -> Result<Option<OrchestratorSettings>, StoreError> {
     Ok(self.orchestrator_published()?.map(|(_, settings)| settings))

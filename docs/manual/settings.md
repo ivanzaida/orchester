@@ -192,7 +192,8 @@ runs, write with git); a project that had *Answer agents* on starts with it on.
 | **Let the Orchestrator drive** | Off | On: the chat calls the same tools an outside agent gets from Orchester's MCP server, by the same rules and refusals, with no proposal cards — it starts, cancels, pauses, resumes and continues runs (accepting a step, raising limits and budgets and resuming after the daily budget included), merges runs (a finished run on its own too, unless its task says *Don't merge automatically*), answers agents and messages their runs, publishes the drafts it saves and writes with git (reset, clean, branch/tag deletion, force push, discarding and rebase stay cards); and it is woken for every wait, stop, end and event, runs it started included. What widens what agents may do still needs *Let automation change agent permissions*. Off: the chat proposes each change and you apply it, and no turn starts by itself. |
 
 *Also needed · set for this computer*: *Let automation answer approvals*, read-only here with its state and *Open*,
-which goes to Settings › Automation. Answering agents' questions and messages acts only while it is on too.
+which goes to Settings › Automation. The Orchestrator no longer depends on it (it is for outside MCP clients); the
+section and its hint stay until the tab is redrawn.
 
 ### 2.4 Context
 

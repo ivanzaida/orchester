@@ -40,7 +40,7 @@ pub(super) fn event_facts(
       Some(run) => task_of(db, run.task())?,
       None => None,
     };
-    let module = match task.as_ref().and_then(|task| task.module()) {
+    let module = match task.as_ref().and_then(|task| super::team_status::module_now(db, task)) {
       Some(module) => db.module(module)?.map(|module| module.name().as_str().to_owned()),
       None => None,
     };

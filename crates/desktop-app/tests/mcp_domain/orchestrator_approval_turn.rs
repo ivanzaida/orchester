@@ -53,7 +53,15 @@ fn refused(called: &Result<Value, ToolError>) -> Option<&str> {
 }
 
 /// The turn `request`'s wait started by itself in `scope`'s conversation, thinking now.
-fn turn_of_request(db: &mut ProjectDb, scope: &ChatScope, request: &PendingToolApproval) {
+fn turn_of_request(db: &mut ProjectDb, scope: &ChatScope, request: &PendingToolApproval) -> ChatMessageId {
+  let seq = waiting_request(db, scope, request);
+  let message = ChatMessageId::generate();
+  assert!(db.start_wait_turn((scope.chat, seq), message).expect("started"));
+  message
+}
+
+/// The wait of `request`, kept in `scope`'s conversation to start a turn by itself: its entry.
+fn waiting_request(db: &mut ProjectDb, scope: &ChatScope, request: &PendingToolApproval) -> i64 {
   let run = db.run(request.run).expect("read").expect("the run");
   let wait = AgentWait {
     kind: WaitKind::Approval,
@@ -74,17 +82,12 @@ fn turn_of_request(db: &mut ProjectDb, scope: &ChatScope, request: &PendingToolA
   let key = format!("approval:{}:{}", run.id(), request.id);
   db.keep_agent_wait(&conversation, (&key, &wait), Timestamp::now())
     .expect("kept");
-  let seq = db
-    .automatic_waits_without_turn()
+  db.automatic_waits_without_turn()
     .expect("waits")
     .into_iter()
     .find(|kept| kept.key == key)
     .expect("it waits for its turn")
-    .seq;
-  assert!(
-    db.start_wait_turn((scope.chat, seq), ChatMessageId::generate())
-      .expect("started")
-  );
+    .seq
 }
 
 #[test]
@@ -152,4 +155,35 @@ fn orchestrator_approval_turn_decides_only_the_request_that_started_it() {
   // A turn the person's message started may decide any request.
   let asked = chat_call(&mut served, &person, "decide_approval", decide(second));
   assert_ne!(refused(&asked), Some("not_this_request"), "{asked:?}");
+}
+
+#[test]
+fn orchestrator_approval_turn_decides_each_request_among_the_events_it_took_together() {
+  let (mut served, seeded) = Served::seeded("cards");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let waiting = db.pending_tool_approvals_all().expect("waiting requests");
+  let [first, second, ..] = waiting.as_slice() else {
+    panic!("the cards wait on two requests at least: {waiting:?}");
+  };
+  allow(&served, &seeded.repo);
+  let person = chat(&served, &mut db);
+  let own = ChatScope {
+    on_its_own: true,
+    ..person
+  };
+  // One turn took both requests' waits (OA-07): the first started it, the second went with it.
+  let lead = turn_of_request(&mut db, &own, first);
+  let seq = waiting_request(&mut db, &own, second);
+  assert!(
+    db.join_wait_turn((own.chat, seq), (lead, ChatMessageId::generate()))
+      .expect("taken")
+  );
+  let outside = hostile(&mut db, first, "git status", 1);
+
+  for request in [first, second] {
+    let decided = chat_call(&mut served, &own, "decide_approval", decide(request));
+    assert_ne!(refused(&decided), Some("not_this_request"), "{decided:?}");
+  }
+  let other = chat_call(&mut served, &own, "decide_approval", decide(&outside));
+  assert_eq!(refused(&other), Some("not_this_request"), "{other:?}");
 }

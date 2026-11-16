@@ -34,7 +34,7 @@ fn focus(page: &mut Settings, id: &str) {
 }
 
 #[test]
-fn project_settings_orchestrator_watching_sits_between_the_switches_and_this_computer() {
+fn project_settings_orchestrator_watching_sits_between_the_switch_and_leading_to_the_end() {
   let mut page = watching();
   let top = |page: &mut Settings, id: &str| {
     page
@@ -45,12 +45,12 @@ fn project_settings_orchestrator_watching_sits_between_the_switches_and_this_com
       .unwrap_or_else(|| panic!("{id} is laid out"))
       .y
   };
-  let (may, watching, computer) = (
+  let (may, watching, leading) = (
     top(&mut page, "settings-orchestrator-may"),
     top(&mut page, "settings-orchestrator-watching"),
-    top(&mut page, "settings-orchestrator-computer"),
+    top(&mut page, "settings-orchestrator-leading"),
   );
-  assert!(may < watching && watching < computer, "{may} {watching} {computer}");
+  assert!(may < watching && watching < leading, "{may} {watching} {leading}");
   assert!(page.text("settings-orchestrator-watching-head").contains("Watching"));
   assert!(
     page

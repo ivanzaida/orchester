@@ -35,6 +35,7 @@ mod form;
 mod groups;
 mod hub;
 pub mod instructions;
+mod leading;
 mod lifecycle;
 mod local_integration;
 mod markdown;
@@ -104,6 +105,7 @@ pub use self::{
   fonts::mono_space,
   groups::GroupText,
   hub::{HubSpacing, HubText},
+  leading::{CEILINGS_FORM_WIDTH, LeadingSpacing, LeadingText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   markdown::{blank_line_between_blocks, code_lines},
@@ -212,6 +214,7 @@ pub fn install(app: &mut App, mode: Mode) {
   permissions::install(theme);
   side_question::install(theme);
   watching::install(theme);
+  leading::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

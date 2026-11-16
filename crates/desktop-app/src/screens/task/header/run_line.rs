@@ -325,5 +325,11 @@ fn when(ctx: &Ctx, run: &RunView, archived: Option<Timestamp>) -> Option<Arc<str
   } else {
     ("task.runLine.started", run.invocations.first()?.started_at)
   };
-  Some(ctx.t_args(key, [("time", display::clock(at))]))
+  // A time of an earlier day names its day too (`started Nov 8, 20:07`); today's is the clock alone.
+  let time = if at.local_day_start() == Timestamp::now().local_day_start() {
+    display::clock(at)
+  } else {
+    crate::screens::usage::words::date_time(ctx, at).to_string()
+  };
+  Some(ctx.t_args(key, [("time", time)]))
 }

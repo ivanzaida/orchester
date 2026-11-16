@@ -81,7 +81,7 @@ pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value,
   let asked = asked_version(args.decision, args.version)?;
   let reading = services.clone();
   let (project, review) = blocking(move || {
-    crate::decisions::DecisionKind::Plan.require(&reading.workspace)?;
+    reading.require(crate::decisions::DecisionKind::Plan)?;
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let view = run_view(&db, find_run(&db, &args.run)?)?;

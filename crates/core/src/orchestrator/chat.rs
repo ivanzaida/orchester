@@ -10,6 +10,7 @@ use super::{
   proposal::ProposedStart,
   report::DailyReport,
   rewind::RewoundTo,
+  standing::StandingEvent,
   wait::AgentWait,
   watch::{CreatedWatch, WatchCommand, WatchLine, WatchSummary},
 };
@@ -519,6 +520,12 @@ pub enum EntryKind {
     summary: Box<WatchSummary>,
     turn: Option<WaitTurn>,
   },
+  /// An event of a target the conversation leads to the end ([`StandingEvent`]: work can start, or the target is
+  /// stuck), and the turn it started by itself, once it started one.
+  Standing {
+    event: Box<StandingEvent>,
+    turn: Option<WaitTurn>,
+  },
   /// A plan the Orchestrator answered with in a turn that plans, and where it stands ([`super::plan`]).
   Plan(Box<ChatPlan>),
 }
@@ -530,6 +537,16 @@ pub struct WaitTurn {
   pub message: ChatMessageId,
   pub state: TurnState,
   pub ended: Option<Timestamp>,
+  /// The turn that took this event with it, the one an older event of the conversation started
+  /// ([`super::instructions::together_prompt`]); `None` for the event that started its turn.
+  pub taken_with: Option<ChatMessageId>,
+}
+
+impl WaitTurn {
+  /// The turn that answers this event: the one that took it, or its own.
+  pub fn answered_by(&self) -> ChatMessageId {
+    self.taken_with.unwrap_or(self.message)
+  }
 }
 
 impl EntryKind {
@@ -547,7 +564,10 @@ impl EntryKind {
       }
       | Self::WatchEnded {
         turn: Some(started), ..
-      } => Some((started.message, &started.state)),
+      }
+      | Self::Standing {
+        turn: Some(started), ..
+      } => Some((started.answered_by(), &started.state)),
       _ => None,
     }
   }

@@ -219,3 +219,39 @@ the person's edit
       .is_none()
   );
 }
+
+#[test]
+fn local_integration_merged_outside_reads_as_done_where_a_conversation_stands() {
+  use orchester_core::{
+    id::ChatId,
+    orchestrator::{Chat, Subscription, WatchTarget, standing::TaskStanding},
+    time::Timestamp,
+  };
+  use orchester_workspace::orchestrator::standing::standing_in;
+
+  let fixture = Fixture::new(false);
+  let since = Timestamp::now();
+  {
+    let mut db = ProjectDb::open(fixture.root()).expect("db");
+    let chat = Chat::named(ChatId::generate(), "Everything", since);
+    db.keep_watch_entries(&chat, &[], since).expect("conversation");
+    let subscription = Subscription::new(chat.id(), WatchTarget::Project, "", since);
+    db.start_subscription(&subscription).expect("watching");
+  }
+  let stands = |root: &std::path::Path| {
+    let led = standing_in(root).expect("standing");
+    led[0].standing.tasks[0].1.clone()
+  };
+  assert_eq!(
+    stands(fixture.root()),
+    TaskStanding::ToMerge,
+    "its work waits to be merged"
+  );
+  // A person, or a team mate's computer, merges it into its base branch without Orchester.
+  git(fixture.root(), &["merge", "--ff-only", "task"]);
+  assert_eq!(
+    stands(fixture.root()),
+    TaskStanding::Done,
+    "what its branch holds is merged, as the task list says, and nobody is asked to merge it again"
+  );
+}
