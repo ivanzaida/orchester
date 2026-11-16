@@ -2351,6 +2351,7 @@
         "shape": "The team's server could not read it as a version.",
         "catalog": "The team's server does not accept the list of agent tools and models this computer reported with it.",
         "unspecified": "The team's server says its content is not valid, without saying why.",
+        "testStep": "The team's server does not accept a pipeline with a Test step: it is from before agent testing. Update the team's server, or remove the Test step. Agents can still run this computer's test suites with run_tests.",
         "archived": "The team archived this resource, so it takes no new version.",
         "notAdminHere": "You are no longer an admin of the team, so only an admin can change it. Nothing was sent.",
         "localEntities": "It names connections, MCP servers or secrets that belong to this computer only, so the team can't take it. Nothing was sent.",

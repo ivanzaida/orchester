@@ -357,6 +357,26 @@ fn team_pipeline_save_a_refusal_stores_nothing_and_says_why() {
 }
 
 #[test]
+fn team_pipeline_save_a_server_from_before_agent_testing_refuses_a_test_step_by_name() {
+  let team = Team::owner();
+  let id = team.created();
+  team.server.reject_content(SLUG, "body");
+  let mut edit = PipelineEdit::new(checks(team.tool, "With tests."));
+  let key = edit.add_step(name("Tests"), None);
+  edit.update(&key, |step| step.kind = StepKind::Test);
+  let body = edit.validate().expect("a valid pipeline");
+
+  let refused = team
+    .blocking(move |servers, root| servers.publish_team_pipeline(&root, id, number(1), &body))
+    .expect_err("refused");
+
+  assert_eq!(refused, NotTaken::Refused(Refusal::Rejected(Rejection::TestStep)));
+  assert_eq!(refused.message().key, "sharing.edit.refused.testStep");
+  assert_eq!(refused.code(), "team_server_refused");
+  assert_eq!(team.latest(id), (1, "Ours.".to_owned()), "nothing is stored");
+}
+
+#[test]
 fn team_pipeline_save_an_unreachable_server_stores_nothing() {
   let team = Team::owner();
   let id = team.created();

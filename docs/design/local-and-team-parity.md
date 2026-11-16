@@ -85,7 +85,7 @@ stacks and test suites start, run and show the same in both kinds of project; wh
 | Behaviour | Local project | Team project | Why | Closes it |
 | --- | --- | --- | --- | --- |
 | Services, stacks, test suites and the flaky-test quarantine (Project settings › Services) | kept on this computer | kept on this computer too, by each member for themselves: the team does not share them, though they are a project's configuration | the server's contract keeps none of agent testing's kinds (`docs/cloud-api.md`, `team_resource`) | AT1 (`docs/plan.md`) |
-| A Test step in a pipeline | saved and run | refused: a team pipeline's version is kept on the team server, whose contract was written before the Test step, and team server 0.11.3 answers such a version `422 invalid` (`team_server_refused`; run against it on 2026-11-16). A team's agents still run the suites of this computer with `run_tests` | the same | AT1 |
+| A Test step in a pipeline | saved and run | refused: a team pipeline's version is kept on the team server, whose contract was written before the Test step, and team server 0.11.3 answers such a version `422 invalid` (`team_server_refused`; run against it on 2026-11-16), which the save says as the Test step's: update the team's server, or remove the step. A team's agents still run the suites of this computer with `run_tests` | the same | AT1 |
 
 ### Outside the Orchestrator
 

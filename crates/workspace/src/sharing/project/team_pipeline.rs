@@ -15,7 +15,7 @@ use orchester_api::{
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   name::Name,
-  resource::{Pipeline, Slug, VersionNumber},
+  resource::{Pipeline, Slug, StepKind, VersionNumber},
 };
 use orchester_store::{ProjectDb, StoreError};
 use tokio::runtime::Handle;
@@ -27,7 +27,7 @@ use crate::{
     Servers, SharingError,
     sync::{ConfigServer, pipeline_content, pipeline_executors},
     team::said,
-    team_edit::{Local, Refusal, recorded},
+    team_edit::{Local, Refusal, Rejection, recorded},
   },
   team_config::{Changed, TeamConfig, TeamResource},
 };
@@ -115,7 +115,7 @@ impl Servers {
       .block_on(server.publish_version(resource, publish))
       .map_err(|error| match own_version(&error, &sent) {
         Some(version) => NotTaken::Reached { version },
-        None => taken(error),
+        None => of_test_step(body, taken(error)),
       })?;
     let number = version.number;
     self
@@ -148,7 +148,9 @@ impl Servers {
       name: name.as_str().to_owned(),
       version: pipeline_content(&db, &team, id, body).map_err(taken)?,
     };
-    let created = runtime()?.block_on(server.create_resource(create)).map_err(taken)?;
+    let created = runtime()?
+      .block_on(server.create_resource(create))
+      .map_err(|error| of_test_step(body, taken(error)))?;
     if let Some(kept) = TeamResource::of(&created.resource, Some(created.version.into())) {
       self.inner.workspace.team.update(repo_root, |config| {
         config.keep(kept);
@@ -236,6 +238,18 @@ fn own_version(error: &SharingError, sent: &serde_json::Value) -> Option<Version
       Some(latest.number)
     }
     _ => None,
+  }
+}
+
+/// `refused` of `body`, with a rejection of its content said as the Test step's when it has one: a team server from
+/// before agent testing rejects such a pipeline whole, naming a rule of the team's form no pipeline can break.
+fn of_test_step(body: &Pipeline, refused: NotTaken) -> NotTaken {
+  let tests = body.steps().iter().any(|step| step.kind == StepKind::Test);
+  match refused {
+    NotTaken::Refused(Refusal::Rejected(Rejection::Body | Rejection::Shape | Rejection::Unspecified)) if tests => {
+      NotTaken::Refused(Refusal::Rejected(Rejection::TestStep))
+    }
+    refused => refused,
   }
 }
 
