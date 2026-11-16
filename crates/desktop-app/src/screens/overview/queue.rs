@@ -35,6 +35,7 @@ use orchester_workspace::{
 
 use super::section::{LINE_HEIGHT, head, key, line, mono_time, section, show_all, title};
 use crate::{
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView},
   services::Services,
@@ -51,9 +52,23 @@ use crate::{
 /// The place's room (`dRvuU`).
 pub(super) const PLACE_WIDTH: f32 = 30.0;
 
-/// The section: `lines` in start order, with Hold new starts for the project at `root`, `held` while they are.
-pub(super) fn queue(ctx: &mut Ctx, (project, root): (ProjectId, PathBuf), lines: &[QueuedLine], held: bool) -> Column {
-  let hold = ctx.mount_keyed::<HoldStarts>("overview-queue-hold", HoldProps { project, root, held });
+/// The section: `lines` in start order, with Hold new starts for the project at `root`, `held` while they are
+/// (`(held, by_person)`: and whether a person held them, which automation does not release).
+pub(super) fn queue(
+  ctx: &mut Ctx,
+  (project, root): (ProjectId, PathBuf),
+  lines: &[QueuedLine],
+  (held, by_person): (bool, bool),
+) -> Column {
+  let hold = ctx.mount_keyed::<HoldStarts>(
+    "overview-queue-hold",
+    HoldProps {
+      project,
+      root,
+      held,
+      by_person,
+    },
+  );
   let navigation = Navigation::of(ctx);
   let separator = ctx.t("overview.listSeparator");
   let shown: Vec<Element> = lines
@@ -123,6 +138,7 @@ pub(super) fn hold_reading(ctx: &mut Ctx, (project, root): (ProjectId, PathBuf))
       project,
       root,
       held: false,
+      by_person: false,
     },
   )
 }
@@ -131,6 +147,8 @@ struct HoldProps {
   project: ProjectId,
   root: PathBuf,
   held: bool,
+  /// A person held the project's new starts: automation does not release them.
+  by_person: bool,
 }
 
 impl DevtoolsInspectable for HoldProps {}
@@ -148,6 +166,7 @@ impl DevtoolsInspectable for Holding {}
 /// *Hold new starts*, or *Release new starts* while they are held, with why a change was refused under it.
 struct HoldStarts {
   hold: FutureAction<Holding, (), Message>,
+  gate: Option<InputGate>,
 }
 
 impl Component for HoldStarts {
@@ -166,11 +185,16 @@ impl Component for HoldStarts {
         Ok(())
       }
     });
-    Self { hold }
+    Self {
+      hold,
+      gate: ctx.use_context::<InputGate>(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let HoldProps { root, held, .. } = ctx.props::<HoldProps>().clone();
+    let HoldProps {
+      root, held, by_person, ..
+    } = ctx.props::<HoldProps>().clone();
     let state = self.hold.state().get();
     let (glyph, label) = if held {
       (Icon::Play, ctx.t("overview.queue.release"))
@@ -181,13 +205,15 @@ impl Component for HoldStarts {
     let button = if state.is_pending() {
       button.loading()
     } else {
-      let hold = self.hold.clone();
+      let (hold, gate) = (self.hold.clone(), self.gate.clone());
       button.on_click(move || {
-        hold.run(Holding {
-          root: root.clone(),
-          held: !held,
-          actor: crate::screens::tasks::actor_now(),
-        });
+        if let Some(actor) = crate::screens::tasks::hold_actor(gate.as_ref(), !held, by_person) {
+          hold.run(Holding {
+            root: root.clone(),
+            held: !held,
+            actor,
+          });
+        }
       })
     };
     let failed = state.error.as_ref().map(|error| {

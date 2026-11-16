@@ -190,7 +190,7 @@ impl MakeLocal {
     } else {
       let (make, person) = (self.make.clone(), self.person.clone());
       confirm.on_click(move || {
-        if person.allows(CONFIRM) {
+        if person.allows("make a shared project local") {
           make.run(());
         }
       })
@@ -203,8 +203,7 @@ impl MakeLocal {
         (&title, &body),
         pairs,
         vec![cancel.into(), confirm.into()],
-      ))
-      .with_children(self.person.reason(ctx, CONFIRM));
+      ));
     let state = self.make.state().get();
     if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
       column = column.child(field_error("sharing-make-local-error", &reason.text(ctx)));

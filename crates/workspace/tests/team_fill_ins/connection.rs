@@ -1,16 +1,10 @@
 //! The connection (and account) a team profile runs on.
 
-use orchester_core::{
-  account::AccountCli,
-  connection::AgentProvider,
-  id::ConnectionId,
-  name::Name,
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile, VersionNumber},
-};
+use orchester_core::{account::AccountCli, connection::AgentProvider, id::ConnectionId};
 use orchester_store::ConnectionPick;
 use orchester_workspace::team_fill_ins::FillInError;
 
-use crate::support::{Team, cached, pick, team_resource};
+use crate::support::{Team, pick, team_profile};
 
 #[test]
 fn team_fill_ins_pick_a_connection_of_the_profiles_cli_kind() {
@@ -39,22 +33,6 @@ fn team_fill_ins_pick_a_connection_of_the_profiles_cli_kind() {
     "the earlier pick stays"
   );
   assert_eq!(team.connection_changes(), before + 1, "a refusal changes nothing");
-}
-
-#[test]
-fn team_fill_ins_a_version_cached_before_the_cli_kind_still_fits_by_its_connections_role() {
-  let team = Team::new();
-  team
-    .workspace
-    .pick_team_connection(&team.root, team.legacy_profile, pick(team.claude))
-    .expect("a Claude Code connection for a profile that named one");
-  let refused = team
-    .workspace
-    .pick_team_connection(&team.root, team.legacy_profile, pick(team.codex));
-  assert!(
-    matches!(refused, Err(FillInError::ConnectionDoesNotFit { .. })),
-    "{refused:?}"
-  );
 }
 
 #[test]
@@ -141,48 +119,20 @@ fn team_fill_ins_a_pick_points_a_team_profile_at_the_connection_it_runs_on() {
     let mut db = team.db();
     crate::support::connection(&mut db, &team.root, AgentProvider::CodexCli, "codex work")
   };
-  let body = TeamAgentProfile::new(
-    Name::new("Builder").expect("role"),
-    String::new(),
-    PromptText::new("Build.").expect("prompt"),
-    (
-      AgentProvider::CodexCli,
-      ModelId::new("gpt-5.5").expect("model"),
-      ProviderSettings::default(),
-    ),
-  );
-  let server_body = serde_json::to_value(&body).expect("a team profile serializes");
-  let profile = {
-    let mut db = team.db();
-    let id = team_resource(
-      &mut db,
-      "team-builder",
-      AgentProfile::from_team(&body, ConnectionId::generate()),
-      Vec::new(),
-    );
-    let mut version = cached(AgentProfile::from_team(&body, ConnectionId::generate()), Vec::new());
-    version.server_body = server_body.clone();
-    db.cache_shared_version(id, &version).expect("the team form cached");
-    id
-  };
-  let runs_on = |team: &Team| {
-    let cached = team
-      .db()
-      .cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
-      .expect("read")
-      .expect("cached");
-    (cached.local_body.connection(), cached.server_body)
-  };
+  let body = team_profile(AgentProvider::CodexCli);
+  let profile = team.cached_profile("team-builder", &body);
+  let runs_on = |team: &Team| crate::unresolved::runs_on(team, profile);
+  let named = |id| crate::unresolved::named(&team, id);
 
   team
     .workspace
     .pick_team_connection(&team.root, profile, pick(second))
     .expect("a Codex connection for a Codex profile");
 
-  assert_eq!(runs_on(&team), (second, server_body.clone()));
+  assert_eq!(runs_on(&team), named(second));
   team
     .workspace
     .pick_team_connection(&team.root, profile, pick(team.codex))
     .expect("another pick replaces it");
-  assert_eq!(runs_on(&team), (team.codex, server_body));
+  assert_eq!(runs_on(&team), named(team.codex));
 }

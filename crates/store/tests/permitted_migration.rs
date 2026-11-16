@@ -14,7 +14,7 @@ use orchester_core::{
   run::{CommandShell, DecidedBy, NativeCommandAsk, PendingToolApproval, RuleScope, ToolApprovalDecision},
   store::ActivityStore,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ProjectMigration};
 use rusqlite::{Connection, types::Value};
 use support::{at, copied_at_version, model, started_run};
 use tempfile::TempDir;
@@ -156,15 +156,18 @@ fn populated() -> (TempDir, Asked) {
   (repo, asked)
 }
 
-/// The schema versions before the `permissions` rebuild, before the automation rebuild, which follows
-/// it, and before the auto mode rebuild, which follows that, of a database at `current`; the auto mode
-/// reviewer's columns, the run's recorded origin, the reviewing flag and the native agents' conversations
-/// come last.
-const fn before_rebuilds(current: u32) -> (u32, u32, u32) {
-  (current - 7, current - 6, current - 5)
+/// The schema versions before the `permissions` rebuild, before the automation rebuild, which follows it, and before
+/// the auto mode rebuild, which follows that.
+fn before_rebuilds() -> (u32, u32, u32) {
+  (
+    ProjectDb::version_before(ProjectMigration::PermittedDecisions),
+    ProjectDb::version_before(ProjectMigration::AutomationAnswers),
+    ProjectDb::version_before(ProjectMigration::AutoMode),
+  )
 }
 
-/// Upgrades `old` and checks that its requests, index and triggers are as `old` had them.
+/// Upgrades `old` and checks that its requests, indexes and triggers are as `old` had them; a later migration may add
+/// an index or a trigger (the denial notes do), none drops or changes one.
 fn upgraded(old: &Path, current: u32) -> Connection {
   let before = rows(&database(old));
   let indexes = schema_of(&database(old), "index");
@@ -182,8 +185,15 @@ fn upgraded(old: &Path, current: u32) -> Connection {
     )
     .expect("reviews");
   assert_eq!(reviewed, 0);
-  assert_eq!(schema_of(&after, "index"), indexes);
-  assert_eq!(schema_of(&after, "trigger"), triggers);
+  let (indexes_after, triggers_after) = (schema_of(&after, "index"), schema_of(&after, "trigger"));
+  assert!(
+    indexes.iter().all(|index| indexes_after.contains(index)),
+    "{indexes:?} kept in {indexes_after:?}"
+  );
+  assert!(
+    triggers.iter().all(|trigger| triggers_after.contains(trigger)),
+    "{triggers:?} kept in {triggers_after:?}"
+  );
   let dangling: i64 = after
     .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))
     .expect("foreign key check");
@@ -224,7 +234,7 @@ fn permitted_migration_then_automation_keeps_permissions_answers() {
   let current = version(&database(repo.path()));
   let old = copied_at_version(
     &repo.path().join(".orchester").join("orchester.db"),
-    before_rebuilds(current).1,
+    before_rebuilds().1,
   );
   upgraded(old.path(), current);
   takes_the_new_answers(old.path(), asked);
@@ -249,7 +259,7 @@ fn permitted_migration_then_auto_mode_keeps_automation_answers() {
   let current = version(&database(repo.path()));
   let old = copied_at_version(
     &repo.path().join(".orchester").join("orchester.db"),
-    before_rebuilds(current).2,
+    before_rebuilds().2,
   );
   upgraded(old.path(), current);
   takes_the_new_answers(old.path(), asked);
@@ -261,7 +271,7 @@ fn permitted_migration_keeps_every_request_of_the_schema_before() {
   let current = version(&database(repo.path()));
   let old = copied_at_version(
     &repo.path().join(".orchester").join("orchester.db"),
-    before_rebuilds(current).0,
+    before_rebuilds().0,
   );
   let before = rows(&database(old.path()));
   let states: Vec<&Value> = before.1.iter().map(|row| &row[9]).collect();
@@ -277,6 +287,8 @@ fn permitted_migration_keeps_every_request_of_the_schema_before() {
     names,
     [
       "command_approvals_metadata_immutable",
+      "denial_notes_denied_only",
+      "denial_notes_immutable",
       "native_command_approvals_immutable",
       "native_command_approvals_valid",
       "tool_approvals_decided_once",

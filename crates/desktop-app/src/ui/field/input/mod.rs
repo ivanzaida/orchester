@@ -107,6 +107,8 @@ pub struct FieldInput {
   end_aligned: bool,
   /// A line inside a text area's box, under its lines ([`FieldInput::foot`]).
   foot: Option<Arc<str>>,
+  /// Which mounting of the field this is ([`FieldInput::fresh`]).
+  fresh: u64,
 }
 
 /// Compared by what it shows; the value by its signal. The input's element ref and controller are its owner's, kept
@@ -142,6 +144,7 @@ impl PartialEq for FieldInput {
       && self.tab_first == other.tab_first
       && self.end_aligned == other.end_aligned
       && self.foot == other.foot
+      && self.fresh == other.fresh
   }
 }
 
@@ -185,6 +188,7 @@ impl FieldInput {
       tab_first: None,
       end_aligned: false,
       foot: None,
+      fresh: 0,
     }
   }
 
@@ -405,8 +409,15 @@ impl FieldInput {
     self
   }
 
+  /// Mounts the field anew when `fresh` changes, which lets go of the focus it had: lurq has no call for that, but
+  /// blurs a node it replaces.
+  pub fn fresh(mut self, fresh: u64) -> Self {
+    self.fresh = fresh;
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let key = format!("field-{}", self.id);
+    let key = format!("field-{}-{}", self.id, self.fresh);
     ctx.mount_keyed::<FieldBox>(&key, self)
   }
 }

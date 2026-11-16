@@ -2,8 +2,8 @@
 //! assignment, a module's branch, work start and a module's delivery authorized or requested, with the server's ids
 //! of its targets and the revisions it was decided on, checked here without any effect. A new task names one of the
 //! team's pipelines by its resource id (`docs/architecture/server.md` row 80, decided 2026-11-05), never a person's own
-//! local one; its limits and workflow status are configuration whose owner is open (D4/D6): such a task is refused
-//! before it is sent, never sent without them.
+//! local one; its limits are configuration whose owner is open (D6) and its later workflow statuses are the lifecycle's
+//! (D4, on the task's patch): such a task is refused before it is sent, never sent without them.
 
 use orchester_api::{
   TaskContent,
@@ -25,7 +25,26 @@ use super::{
   action::{AssignmentAction, ClaimAction, DeliveryAction, DeliveryStep, WorkAction},
   ownership::{TeamLink, team_authority, team_subject},
 };
-use crate::team_reads::listed::TeamPipelines;
+use crate::{sharing::Servers, team_reads::listed::TeamPipelines};
+
+/// Which pipelines a team task may name: the team's, as this session read its configuration from the team server.
+/// Read only when a task names one, so an action that names none is not held up while the configuration is read.
+pub(super) struct TeamPipelineCheck<'a> {
+  pub(super) servers: &'a Servers,
+  pub(super) root: &'a std::path::Path,
+}
+
+impl TeamPipelineCheck<'_> {
+  /// `pipeline` as a team task names it, its resource id, when it is one of the team's pipelines; any other is refused
+  /// before anything is sent, and so is any while the team's configuration cannot be read.
+  pub(super) fn named(&self, pipeline: ResourceId) -> Result<String, ActionError> {
+    let config = self.servers.team_read(self.root).loaded()?;
+    if !TeamPipelines::of(&config).contains(pipeline) {
+      return Err(ActionError::NotTeamPipeline(pipeline));
+    }
+    Ok(pipeline.to_string())
+  }
+}
 
 pub(super) struct TeamRequest {
   pub(super) command: TeamCommand,
@@ -56,9 +75,10 @@ impl TeamRequest {
   }
 }
 
-/// `task.create`: one task, in the default workflow status, without limits, naming a team pipeline by its id.
+/// `task.create`: one task, in the default workflow status (a later one is the lifecycle's), without limits, naming a
+/// team pipeline by its id.
 pub(super) fn create_task(
-  db: &ProjectDb,
+  pipelines: &TeamPipelineCheck<'_>,
   details: &TaskDetails,
   organization: &TaskOrganization,
 ) -> Result<TeamRequest, ActionError> {
@@ -66,16 +86,13 @@ pub(super) fn create_task(
     return Err(ActionError::DecisionRequired(DecisionId::D6));
   }
   if organization.status() != WorkflowStatus::default() {
-    return Err(ActionError::DecisionRequired(DecisionId::D4));
+    return Err(ActionError::StatusOnCreate(organization.status()));
   }
   let mut content = TaskContent {
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
-    pipeline: details
-      .pipeline
-      .map(|pipeline| team_pipeline(db, pipeline))
-      .transpose()?,
+    pipeline: details.pipeline.map(|pipeline| pipelines.named(pipeline)).transpose()?,
     limits: None,
     workflow: WorkflowStatus::default(),
     priority: organization.priority(),
@@ -87,15 +104,6 @@ pub(super) fn create_task(
   };
   content.set_organization(organization);
   Ok(TeamRequest::unrevised(TeamCommand::TaskCreate { content }))
-}
-
-/// `pipeline` as a team task names it, its resource id, when it is one of the team's pipelines here; any other is
-/// refused before anything is sent.
-pub(super) fn team_pipeline(db: &ProjectDb, pipeline: ResourceId) -> Result<String, ActionError> {
-  if !TeamPipelines::of(db)?.contains(pipeline) {
-    return Err(ActionError::NotTeamPipeline(pipeline));
-  }
-  Ok(pipeline.to_string())
 }
 
 /// `module.branch.set`, on the module's revision.
@@ -138,8 +146,8 @@ pub(super) fn assignment(db: &ProjectDb, link: TeamLink, action: AssignmentActio
   Ok(TeamRequest::revised(command, &[(target, action.read)]))
 }
 
-/// `work.start` of a task, on the task's and its module's revisions, which the server needs both of. A module's own
-/// work waits for its execution bundle (D3).
+/// `work.start` of a task, on the task's revision and, when it is in a module, its module's, which the server then
+/// needs both of. A module's own work waits for its execution bundle (D3).
 pub(super) fn work(db: &ProjectDb, link: TeamLink, action: &WorkAction) -> Result<TeamRequest, ActionError> {
   let authority = team_authority(db, link, action.authority)?;
   let Subject::Task { id: task } = authority.subject else {
@@ -149,10 +157,8 @@ pub(super) fn work(db: &ProjectDb, link: TeamLink, action: &WorkAction) -> Resul
     authority,
     base_commit: action.base_commit.clone(),
   };
-  let read = [
-    (RevisionTarget::Task(task), action.read),
-    (RevisionTarget::Module(action.module), action.module_read),
-  ];
+  let mut read = vec![(RevisionTarget::Task(task), action.read)];
+  read.extend(action.module.map(|(module, at)| (RevisionTarget::Module(module), at)));
   Ok(TeamRequest::revised(command, &read))
 }
 

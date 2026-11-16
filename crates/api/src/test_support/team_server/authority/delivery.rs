@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use super::{
   Authority, Person, Standing,
   commands::{Refused, module_holder, module_index},
+  lifecycle,
   work::{module_id, module_number},
 };
 
@@ -203,6 +204,9 @@ fn report(authority: &mut Authority, command: &Value, binding: &Binding<'_>) -> 
     Authorized::AwaitingAdmin | Authorized::Automatic => Value::Null,
   };
   *slot = None;
+  if delivered {
+    lifecycle::delivered(authority, binding.index);
+  }
   let state = if delivered { "delivered" } else { "failed" };
   Ok(answer(binding, (state, operation), &[]))
 }

@@ -1,7 +1,8 @@
 //! The hub's list (`List` `gETjg` in `t4mtQL`): the resources of the filter in three groups by what this computer
 //! needs, each under a title with its count (`Section · Needs you here` `o6TEKq`), a row with its glyph, name, line
 //! and at its end its tag and version (`Item · Builder` `tF2OL`, [`super::row`]); the instructions' and skills' lists
-//! say under their group why every one is ready (`Why` `e1C14P`).
+//! say under their group why every one is ready (`Why` `e1C14P`). Under *Archived* it is one list of what the team
+//! archived, each row with its kind and who archived it when (`List` in A36 `qvMZD`).
 
 use lurq::{
   app::theme::{PaletteColor, SpacingSize},
@@ -20,13 +21,13 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::HubFilter,
-  theme::{ExtraSpacing, HubSpacing, HubText},
+  theme::{ExtraSpacing, HubText},
 };
 
 /// The list's width (`List` `gETjg`).
-pub(super) const LIST_WIDTH: f32 = 440.0;
+pub(in crate::screens) const LIST_WIDTH: f32 = 440.0;
 /// A group's title row (`Section · Needs you here` `o6TEKq`).
-const SECTION_HEIGHT: f32 = 32.0;
+pub(in crate::screens) const SECTION_HEIGHT: f32 = 32.0;
 
 /// What the list needs besides the resources.
 pub(super) struct Shown<'a> {
@@ -39,43 +40,49 @@ pub(super) struct Shown<'a> {
 }
 
 pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
-  let groups = GROUPS.into_iter().filter_map(|group| {
-    let entries: Vec<&Entry> = listing.group(shown.filter, group).collect();
-    if entries.is_empty() {
-      return None;
-    }
-    Some(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .child(section(ctx, group, entries.len()))
-        .with_children(entries.into_iter().map(|entry| row(ctx, listing, entry, shown))),
-    )
-  });
-  let archived: Vec<&Entry> = listing.archived(shown.filter).collect();
-  let archived = (!archived.is_empty()).then(|| {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .child(section_named(
-        ctx,
-        ("archived", "team_hub.group.archived", PaletteColor::TextMuted),
-        archived.len(),
-      ))
-      .with_children(archived.into_iter().map(|entry| row(ctx, listing, entry, shown)))
-  });
+  let groups: Vec<Column> = if shown.filter == HubFilter::Archived {
+    let archived: Vec<&Entry> = listing.shown(shown.filter).collect();
+    let named = ("archived", "team_hub.group.archived", PaletteColor::TextMuted);
+    vec![group_of(
+      ctx,
+      listing,
+      (section_named(ctx, named, archived.len()), archived),
+      shown,
+    )]
+  } else {
+    GROUPS
+      .into_iter()
+      .filter_map(|group| {
+        let entries: Vec<&Entry> = listing.group(shown.filter, group).collect();
+        (!entries.is_empty()).then(|| group_of(ctx, listing, (section(ctx, group, entries.len()), entries), shown))
+      })
+      .collect()
+  };
   let groups = Column::new()
     .id("team-hub-list")
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
     .with_children(shown.adding.map(|kind| create::new_row(ctx, kind)))
-    .with_children(groups)
-    .with_children(archived)
-    .with_children(note(ctx, shown.filter));
+    .with_children(groups);
   ScrollVertical::new(groups)
     .id("team-hub-list-scroll")
-    .width(Dimension::Px(LIST_WIDTH))
+    .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()
+}
+
+/// A group's title row over its rows.
+fn group_of(
+  ctx: &lurq::app::ctx::Ctx,
+  listing: &Listing,
+  (title, entries): (Row, Vec<&Entry>),
+  shown: &Shown<'_>,
+) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(title)
+    .with_children(entries.into_iter().map(|entry| row(ctx, listing, entry, shown)))
 }
 
 fn section(ctx: &lurq::app::ctx::Ctx, group: Group, count: usize) -> Row {
@@ -112,26 +119,4 @@ fn section_named(ctx: &lurq::app::ctx::Ctx, (name, key, color): (&str, &str, Pal
         .color(color)
         .nowrap(),
     )
-}
-
-/// Why every resource of the filter is ready, under the list (`Why` `e1C14P` in `Agents · Instructions` `c3jU1R`): the
-/// kinds with nothing to fill in on a computer.
-fn note(ctx: &lurq::app::ctx::Ctx, filter: HubFilter) -> Option<Row> {
-  let key = match filter {
-    HubFilter::Instructions => "team_hub.note.instructions",
-    HubFilter::Skills => "team_hub.note.skills",
-    _ => return None,
-  };
-  Some(
-    Row::new()
-      .id("team-hub-note")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, HubSpacing::NoteY.role()))
-      .child(
-        Text::new(&ctx.t(key))
-          .id("team-hub-note-text")
-          .variant(HubText::ListNote.role())
-          .flex(1.0),
-      ),
-  )
 }

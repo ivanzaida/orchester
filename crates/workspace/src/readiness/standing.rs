@@ -2,21 +2,16 @@
 
 use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId},
-  resource::{ResourceKind, TeamProfileError},
+  resource::ResourceKind,
   sharing::{Missing, Readiness},
 };
 
 /// Why what a resource needs of this computer cannot be known. It is not ready, and not assumed to need nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Undecided {
-  /// The version this computer uses is not a team body it can read: a profile cached before the team configuration
-  /// model or a reviewer that names a connection (ORC-887), or one that is neither the server's nor waiting to be sent
-  /// to it (ORC-845 removes the first).
+  /// The team's latest version is not a body of its kind's team form this version can read: a profile published
+  /// before the team configuration model, or a reviewer that names a connection (ORC-887).
   NotTeamForm,
-  /// A version of a team profile published here, which the server has not numbered, cannot be put in the team's form,
-  /// so it cannot be published either: this says why (writable folders, a local MCP server that is no team one, a
-  /// connection that is no agent connection).
-  CannotBePublished(TeamProfileError),
   /// A team profile chooses an MCP server the team does not offer here: not synced yet (an archived one is
   /// [`Self::ChoosesArchivedMcpServer`]).
   ChoosesMcpServer(ResourceId),
@@ -30,11 +25,19 @@ pub enum Undecided {
   UsesArchivedInstruction(ResourceId, String),
   /// A pipeline runs a profile or tool, or merges with an integrator, that this computer has no version of.
   RunsUnknown(ResourceId),
+  /// A step of a local pipeline names a profile or tool that was archived here: its id and its name. The pipeline keeps
+  /// naming it and cannot start until it is restored or the step names another (ORC-842).
+  RunsArchived(ResourceId, String),
+  /// A local profile chooses a local MCP server that was archived here: its id and its name. The profile cannot run
+  /// until the server is restored or the profile stops choosing it.
+  ChoosesArchivedLocalMcpServer(ConnectionId, String),
   /// A local profile runs on a connection that is not an agent connection of the project.
   ConnectionGone(ConnectionId),
-  /// A tool of a team project holds a project secret by id. A team names its secrets, so nobody can say whether the
-  /// secret this id stands for has a value on the teammates' computers (ORC-830 puts the tool in the team's form).
-  TeamToolSecretById(SecretId),
+  /// A tool of a team project whose latest version was published before the team's form holds a project secret by
+  /// the id it had on the publisher's computer. A team names its secrets, so nobody can say whether that secret has a
+  /// value on the teammates' computers until an admin publishes the tool again by name. The id is not kept: it is never
+  /// shown or sent.
+  TeamToolSecretById,
   /// A tool of a local project uses a secret the project does not have, or has archived: no value can be set for it.
   SecretGone(SecretId),
   /// The keychain refused to say whether a tool's secret has a value here, or this platform has none.

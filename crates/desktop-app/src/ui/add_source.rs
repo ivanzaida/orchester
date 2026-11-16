@@ -50,9 +50,19 @@ pub enum Layout {
   Stacked,
   /// Only *Add folder*.
   Picker,
+  /// Only *+ Add*, a ghost button with a plus (`Add` `krs4B` in `Pipelines · v2` P1 `s7LMyQ`, `uchig` in P13): what the
+  /// Pipelines hub's source rows end in. It picks a folder as [`Self::Picker`] does.
+  Ghost,
   /// A popover's one line (`Add row` `d49YSf` in `B56QE`): the box, an icon-only *Choose folder…* and a primary
   /// *Add*, 6 apart; the hint only once a path was checked.
   Compact,
+}
+
+impl Layout {
+  /// Whether the control is only a button that asks for a folder.
+  const fn is_picker(self) -> bool {
+    matches!(self, Self::Picker | Self::Ghost)
+  }
 }
 
 type OnAdd = Arc<dyn Fn(SourcePath) + Send + Sync>;
@@ -157,7 +167,7 @@ impl Component for AddSource {
     } else {
       self.choose_button(ctx, &props).into()
     };
-    if props.layout == Layout::Picker {
+    if props.layout.is_picker() {
       let refused = self.refused.get();
       return Column::new()
         .id(props.id.to_string())
@@ -191,7 +201,7 @@ impl Component for AddSource {
         .spacing(ExtraSpacing::Snug.role())
         .child(line(field, ExtraSpacing::Snug.role()).child(choose).child(add))
         .with_children(checked.is_some().then_some(hint)),
-      Layout::Line | Layout::Picker => column
+      Layout::Line | Layout::Picker | Layout::Ghost => column
         .spacing(ExtraSpacing::Snug.role())
         .child(line(field, SpacingSize::Sm).child(choose).child(add))
         .child(hint),
@@ -275,6 +285,12 @@ impl AddSource {
         Icon::FolderPlus,
         props.place.clone(),
       ),
+      Layout::Ghost => (
+        format!("{}-add", props.id),
+        props.add.clone(),
+        Icon::Plus,
+        props.place.clone(),
+      ),
       Layout::Line | Layout::Stacked | Layout::Compact => (
         format!("{}-choose", props.id),
         ctx.t("ui.addSource.choose"),
@@ -282,8 +298,13 @@ impl AddSource {
         None,
       ),
     };
-    let button = ActionButton::new(id, ButtonKind::Secondary, label).icon(glyph);
-    let waiting = props.layout == Layout::Picker && place.is_none();
+    let kind = if props.layout == Layout::Ghost {
+      ButtonKind::Ghost
+    } else {
+      ButtonKind::Secondary
+    };
+    let button = ActionButton::new(id, kind, label).icon(glyph);
+    let waiting = props.layout.is_picker() && place.is_none();
     if props.locked || waiting || self.pick.state().get().is_pending() {
       return button.disabled();
     }
@@ -374,7 +395,7 @@ fn hint(ctx: &Ctx, id: &str, checked: Option<&Result<Candidate, Refusal>>, layou
         .color(color)
         .flex(1.0),
     );
-  if layout == Layout::Picker {
+  if layout.is_picker() {
     return row.into();
   }
   row.width(Dimension::Pct(100.0)).into()

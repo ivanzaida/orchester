@@ -47,6 +47,10 @@ name = "accounts"
 required-features = ["test-agent"]
 
 [[test]]
+name = "runs_on_here"
+required-features = ["test-agent"]
+
+[[test]]
 name = "api_providers"
 required-features = ["test-agent"]
 
@@ -291,6 +295,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "approval_mode_answer"
+required-features = ["test-agent"]
+
+[[test]]
+name = "dangerous_auto_approve"
 required-features = ["test-agent"]
 
 [[test]]

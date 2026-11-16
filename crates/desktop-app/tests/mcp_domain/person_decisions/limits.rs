@@ -40,11 +40,8 @@ fn decisions_reach_person_limit_card_refuses_client_input_until_the_person_lets_
         app.shows(button) && !app.shows("raise-limit-offline")
       });
       if by == Answerer::Automation {
-        f.press(button, by);
-        f.app
-          .until("client raise refused", |app| app.shows("raise-limit-person-only"));
+        f.refused_then_consent(button, "raise-limit-person-only");
         assert!(at_token_limit(&db, run), "{button}: nothing raised");
-        f.consent();
       }
       f.press(button, by);
       f.app.until(&format!("{button} by {by:?} continues the run"), |app| {

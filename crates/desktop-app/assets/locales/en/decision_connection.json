@@ -55,7 +55,6 @@
     "save": "Save connection",
     "completeFields": "Enter a valid name and base URL, and complete or choose the key secret.",
     "personOnly": "A reviewer on a server off this computer is a person’s change: only you can save it.",
-    "secretPersonOnly": "Creating a key secret needs a person, or permission for automation to change agent permissions.",
     "editLocal": "Requests go to the server on this computer. Nothing is sent off it. Start the server yourself; Orchester does not install or start it. Secret values are never sent as project content.",
     "editHosted": "Each request the reviewer judges is sent to {{host}} with this key: the command or tool call, its working folder, the agent’s note and last messages, and the task’s title, brief and criteria, redacted as the approval card shows them. Secret values never are. The server provider’s terms and data policy apply.",
     "delete": "Delete connection",

@@ -3,7 +3,10 @@
 //! «Webhooks v2»* in the conversation that lost a target, and the variant for a task inside its module, with an
 //! `arrow-right-left` and *Open ↗* to the conversation that leads it now; and *Stopped watching Search index* with an
 //! `eye-off`, its time, and under it, 27 in and 4 apart, what the stop left open as links to the tasks. The lines of
-//! a target taken here and led here again read as *now led in* does, with their time.
+//! a target taken here and led here again read as *now led in* does, with their time. A /watch that led its targets
+//! to the end (`Parts · Lines` `e6nsBS` a on the board `Orchestrator autonomy · frames to approve`, `L01`
+//! `QMwUB`) reads *Leading Webhooks v2 to the end · 12 tasks — it starts them, merges them and parks what needs
+//! you*, with a `flag`.
 
 use std::sync::Arc;
 
@@ -34,13 +37,13 @@ use crate::{
   ui::icon::Icon,
 };
 
-/// The row of `line`, kept at `at`, named `id`; `None` for a /watch that leads nothing new here (what it found led
-/// elsewhere or gone is the command's card's to show).
+/// The row of `line`, kept at `at`, named `id`, a /watch's that led its targets to the end when `to_end`; `None`
+/// for a /watch that leads nothing new here (what it found led elsewhere or gone is the command's card's to show).
 pub(super) fn line(
   ctx: &mut Ctx,
   id: &str,
   line: &WatchLine,
-  (at, env): (Option<Timestamp>, &TurnEnv),
+  (at, env, to_end): (Option<Timestamp>, &TurnEnv, bool),
 ) -> Option<Element> {
   let element = match line {
     WatchLine::Watching {
@@ -53,7 +56,7 @@ pub(super) fn line(
       if led.is_empty() {
         return None;
       }
-      leading(ctx, id, (&led, at_request.is_some()), &env.watch)
+      leading(ctx, id, (&led, at_request.is_some(), to_end), &env.watch)
     }
     WatchLine::NowLedIn {
       target,
@@ -93,32 +96,48 @@ fn at_request(ctx: &Ctx, asked: bool) -> Option<Arc<str>> {
   asked.then(|| ctx.t("orchestrator.watch.atRequest"))
 }
 
-/// *Leading* the targets `led`, each module with how many tasks it holds now, tagged when `asked` in words.
-fn leading(ctx: &Ctx, id: &str, (led, asked): (&[&NamedTarget], bool), facts: &WatchFacts) -> Element {
+/// *Leading* the targets `led`, each module with how many tasks it holds now, tagged when `asked` in words; led
+/// `to_end`, each says so, with a `flag` and what leading to the end does.
+fn leading(ctx: &Ctx, id: &str, (led, asked, to_end): (&[&NamedTarget], bool, bool), facts: &WatchFacts) -> Element {
   let names: Vec<Arc<str>> = led
     .iter()
     .map(|named| {
       let name = target_name(ctx, named);
-      match facts.tasks_of(named.target) {
-        Some(count) => {
-          let key = if count == 1 {
-            "orchestrator.watch.counted.one"
-          } else {
-            "orchestrator.watch.counted.other"
-          };
+      let (one, other, bare) = if to_end {
+        (
+          "orchestrator.watch.toEndCounted.one",
+          "orchestrator.watch.toEndCounted.other",
+          Some("orchestrator.watch.toEnd"),
+        )
+      } else {
+        (
+          "orchestrator.watch.counted.one",
+          "orchestrator.watch.counted.other",
+          None,
+        )
+      };
+      match (facts.tasks_of(named.target), bare) {
+        (Some(count), _) => {
+          let key = if count == 1 { one } else { other };
           ctx.t_args(key, [("target", name.to_string()), ("count", count.to_string())])
         }
-        None => name,
+        (None, Some(bare)) => ctx.t_args(bare, [("target", &*name)]),
+        (None, None) => name,
       }
     })
     .collect();
+  let (glyph, aside, outcome) = if to_end {
+    (Icon::Flag, "orchestrator.watch.leadingToEndAside", "leading_to_end")
+  } else {
+    (Icon::Eye, "orchestrator.watch.leadingAside", "leading")
+  };
   let said = Said {
-    glyph: (Icon::Eye, PaletteColor::TextMuted),
+    glyph: (glyph, PaletteColor::TextMuted),
     words: ctx.t_args("orchestrator.watch.leading", [("targets", joined(ctx, &names))]),
     tag: at_request(ctx, asked),
-    aside: Some(ctx.t("orchestrator.watch.leadingAside")),
+    aside: Some(ctx.t(aside)),
   };
-  line_row(id, "leading", said, None).into()
+  line_row(id, outcome, said, None).into()
 }
 
 /// *X is now led in «title»*, conversation `chat` of `project`, with *Open ↗* to it. A target the person took there

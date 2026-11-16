@@ -128,6 +128,25 @@ fn side_question_send_passes_it_on_as_one_message() {
   assert!(messages[0].contains("Side answer: Builder's third test run failed"));
 }
 
+/// KON-13's Builder waits on a question, so *Send to Builder* answers it: a decision automation takes only under the
+/// person's consent. A client's press is refused to it at the press, and the pane stays as it was.
+#[test]
+fn side_question_send_that_answers_the_waiting_agent_is_refused_to_a_client() {
+  let (mut window, seeded) = opened();
+  let send = pane_ids(&mut window, "side-answer-send-").remove(0);
+  let before = pane_text(&mut window);
+  lurq::app::events::with_synthetic_input(|| click(&mut window, &send));
+  assert_eq!(
+    window.refused_press(),
+    Some("send a side question's answer that decides for a waiting run"),
+    "refused to the client"
+  );
+  window.pass();
+  assert!(pane_ids(&mut window, "side-answer-sent-").is_empty(), "not sent");
+  assert_eq!(pane_text(&mut window), before, "the pane stays as it was");
+  assert!(persons_messages(&seeded).is_empty(), "nothing reached Builder");
+}
+
 #[test]
 fn side_question_closes_and_keeps_its_questions() {
   let (mut window, _) = opened();

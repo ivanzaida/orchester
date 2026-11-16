@@ -35,7 +35,7 @@ use super::{
   Choice, Continuing,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   theme::{DecisionText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -302,10 +302,8 @@ impl ChoiceCard<'_> {
         match chosen {
           // Which account the step's agent runs on is a person's decision, as the Account field's.
           Some(chosen) => button.on_click(move || {
-            if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+            if may_press(gate.as_ref(), Guarded::PermissionWidening, super::CONTINUE_ON) {
               send(continue_on(run, chosen.id()));
-            } else {
-              tracing::warn!("synthetic input continued a run on another account; not taken");
             }
           }),
           None => button.disabled(),
@@ -347,11 +345,9 @@ impl ChoiceCard<'_> {
     ActionButton::new(id.to_owned(), kind, ctx.t("decisions.planLimit.tryNow"))
       .icon(Icon::RotateCcw)
       .on_click(move || {
-        if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+        if may_press(gate.as_ref(), Guarded::PermissionWidening, super::TRY_NOW) {
           asked.set(Some(Continuing));
           action.run((Continuing, try_now(run)));
-        } else {
-          tracing::warn!("synthetic input tried a run at its plan limit; not taken");
         }
       })
   }

@@ -10,7 +10,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
   },
   core::{ElementRef, Signal},
 };
@@ -33,7 +32,15 @@ use super::{
   display::Display,
   model::ColumnKey,
 };
-use crate::{project::ProjectFeed, screens::task_close::Subject, services::Services};
+use crate::{
+  mcp::{
+    input_gate::{InputGate, persons_press},
+    is_synthetic_input,
+  },
+  project::ProjectFeed,
+  screens::task_close::Subject,
+  services::Services,
+};
 
 /// Where a drop goes: a column, in a row of the board when it has rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -232,6 +239,7 @@ pub struct BoardState {
   pub set_down: Arc<Mutex<bool>>,
   /// The press under way lifted its card: letting go opens nothing, wherever the card was let go.
   pub lifted_press: Arc<Mutex<bool>>,
+  gate: Option<InputGate>,
 }
 
 impl BoardState {
@@ -260,7 +268,14 @@ impl BoardState {
       frame: ElementRef::default(),
       set_down: Arc::default(),
       lifted_press: Arc::default(),
+      gate: ctx.use_context::<InputGate>(),
     }
+  }
+
+  /// Whether the press being delivered may delete tasks: a person's; automation's is refused to it, and the board
+  /// stays as it was.
+  pub fn may_delete(&self) -> bool {
+    persons_press(self.gate.as_ref(), "delete tasks")
   }
 
   /// Whether a change is under way; a render that reads it follows it.

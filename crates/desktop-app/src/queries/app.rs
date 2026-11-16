@@ -8,7 +8,7 @@ use orchester_core::{
   account::AgentAccount,
   app_update::UpdateSettings,
   connection::plan_limits::{LimitReading, ReadingSource},
-  id::AgentAccountId,
+  id::{AgentAccountId, ApiAccountId},
   limits::ComputerServiceSlots,
   orchestrator::ReportTime,
   time::Timestamp,
@@ -31,6 +31,16 @@ use crate::screens::settings::Consent;
 pub async fn account_uses(session: Session, account: AgentAccountId) -> Result<AccountUses, Message> {
   let workspace = session.0.workspace;
   background::run(move || workspace.agent_account_uses(account))
+    .await?
+    .map_err(|error| error.message())
+}
+
+/// What uses an API provider across the projects (its page in Settings › Accounts): live, since profiles and runs
+/// change it.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+pub async fn api_account_uses(session: Session, account: ApiAccountId) -> Result<AccountUses, Message> {
+  let workspace = session.0.workspace;
+  background::run(move || workspace.api_account_uses(account))
     .await?
     .map_err(|error| error.message())
 }
@@ -85,6 +95,15 @@ pub async fn service_slots(session: Session) -> Result<ComputerServiceSlots, Mes
 pub async fn error_reports(session: Session) -> Result<bool, Message> {
   stored(session, "send error reports", |services| {
     services.workspace.sends_error_reports()
+  })
+  .await
+}
+
+/// Whether the computer is kept awake while agents work (Settings › General › Work).
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn keeps_awake(session: Session) -> Result<bool, Message> {
+  stored(session, "keep the computer awake", |services| {
+    services.workspace.keeps_awake()
   })
   .await
 }

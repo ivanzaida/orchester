@@ -8,12 +8,14 @@
 
 mod first_download;
 mod hub_archive;
-mod hub_conflict;
-mod hub_created;
+mod hub_archived;
 mod hub_edit;
-mod hub_edit_race;
-mod hub_unsent;
-mod hub_unsent_publish;
+mod hub_edit_kinds;
+mod hub_forms;
+mod hub_keep;
+mod hub_profile_form;
+mod hub_states;
+mod hub_tools;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 #[allow(
@@ -21,16 +23,23 @@ mod hub_unsent_publish;
   reason = "the seed's team scenarios and the QA app's team states both include the state file (the marker the seed writes and the QA app reads)"
 )]
 mod kontur;
+mod local_archived;
+mod make_local;
 mod not_ready;
 mod start_failed;
 mod start_notices;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 mod team_actions;
+mod team_cached_task;
+mod team_closed_by;
 mod team_create;
 mod team_edit;
+mod team_lifecycle;
+mod team_lifecycle_menus;
 mod team_pages;
 mod team_tasks;
+mod team_unrecorded;
 mod team_work_actions;
 
 use lurq::app::events::with_synthetic_input;
@@ -95,8 +104,7 @@ fn team_qa_join_opens_on_the_code_with_the_address_typed_and_takes_no_mcp_press(
   assert_eq!(value(&mut window, CODE_FIELD), "");
 
   with_synthetic_input(|| window.press(SUBMIT));
-  let refused = format!("{SUBMIT}-person-only");
-  window.until("the press to be refused", |window| window.texts(&refused).is_some());
+  window.until("the press to be refused", |window| window.refused_press().is_some());
   assert_eq!(server.code_joins(), Vec::<bool>::new());
 }
 

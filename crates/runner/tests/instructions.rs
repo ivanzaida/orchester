@@ -1,7 +1,8 @@
 //! Project instructions in the prompts agents receive: those injected at start in a new session's
 //! prompt on standard input, those injected at resume when a session continues, each invocation
 //! with the sources of its prompt, the versions the run pinned when it started, and the run's
-//! revisions its prompts name; and the browser's lines, in a step with the browser only. Against
+//! revisions its prompts name; and the browser's lines, in a step with the browser only. An instruction reaches an
+//! agent only when its profile gives it (`support::given`). Against
 //! `orchester-fake-codex` and `orchester-fake-claude`; needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test instructions`.
 
@@ -31,7 +32,9 @@ use orchester_core::{
 use orchester_ipc::AttachSession;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, git, killed_mid_run, project, reported, scheduler, settled, wait_for};
+use self::support::{
+  Setup, StepSpec, git, given::give_builder, killed_mid_run, project, reported, scheduler, settled, wait_for,
+};
 
 fn rule(text: &str, targets: AgentTargets, events: &[InjectionEvent]) -> Instruction {
   Instruction::new(
@@ -85,12 +88,14 @@ async fn instructions_for_the_agent_at_start_are_in_the_prompt_it_reads() {
     "Review checklist",
     &rule("Check the tests.", reviewer, &[InjectionEvent::Start]),
   );
-  publish(
+  let resume = publish(
     root,
     "resume-checks",
     "Resume checks",
     &rule("Run git status first.", AgentTargets::All, &[InjectionEvent::Resume]),
   );
+  // The Builder gives every one of them but the Reviewer's checklist, which its targets leave out besides.
+  give_builder(root, &[git, resume]);
   let (scheduler, mut events) = scheduler(root);
   let run = scheduler
     .start_run(orchester_core::id::IdempotencyKey::generate(), project.task)
@@ -132,6 +137,7 @@ async fn instructions_for_resuming_reach_a_continued_session_in_their_pinned_ver
     "Resume checks",
     &rule("Run git status first.", AgentTargets::All, &[InjectionEvent::Resume]),
   );
+  give_builder(root, &[resume]);
   let run = killed_mid_run(root, project.task).await;
   // Published after the run started: the run keeps v1.
   {
@@ -270,7 +276,7 @@ async fn instructions_run_revision_before_the_first_checkpoint_fails_the_step_an
 async fn resumed_prompt(then: impl FnOnce(&Path)) -> (String, String) {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();
-  publish(
+  let compare = publish(
     root,
     "compare",
     "Compare",
@@ -280,6 +286,7 @@ async fn resumed_prompt(then: impl FnOnce(&Path)) -> (String, String) {
       &[InjectionEvent::Resume],
     ),
   );
+  give_builder(root, &[compare]);
   let base = git(root, &["rev-parse", "HEAD"]);
   let run = killed_mid_run(root, project.task).await;
   let worktree = root.join(".orchester/worktrees").join(run.to_string());

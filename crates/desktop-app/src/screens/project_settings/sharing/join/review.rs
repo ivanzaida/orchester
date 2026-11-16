@@ -239,8 +239,7 @@ impl Review {
           .child(text)
           .child(Spacer::new().width(Dimension::Px(0.0)))
           .child(actions),
-      )
-      .with_children(self.person.reason(ctx, CONFIRM));
+      );
     head(column)
   }
 
@@ -264,7 +263,7 @@ impl Review {
     }
     let (join, person, ticked) = (self.join.clone(), self.person.clone(), plan.ticked());
     button.on_click(move || {
-      if person.allows(CONFIRM) {
+      if person.allows("join a project to a team") {
         join.run(ticked.clone());
       }
     })

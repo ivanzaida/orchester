@@ -7,8 +7,8 @@
 //! card (a run's end or a merge's conflicts: its task's Summary), whatever the switches. A wait of a task no
 //! conversation leads goes to no conversation and starts no turn (ORC-895): only subscriptions route the waits, and
 //! none opens a conversation. With *Let the Orchestrator drive* on, a kept wait, whoever started the run and whatever
-//! raised it (ORC-909), except a tool request ([`WaitKind::starts_turns`]), also starts one Orchestrator turn by itself
-//! in its conversation
+//! raised it (ORC-909), a tool request too (2026-11-11, [`super::approval_turn`]), also starts one Orchestrator turn by
+//! itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. The turn of an interrupted run's end
@@ -17,8 +17,9 @@
 //! the runs ended; a run that committed nothing and whose result is its report is completed by the same rule, without a
 //! turn (ORC-93). A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry
 //! first, and so does the summary of a subscription that ended by itself, which each follow looks for
-//! ([`super::watch_ends`], ORC-764). The app attaches the runner when [`follow_in`] says a turn is pending, and asks
-//! it for the turns [`follow_in`] gives, with the chat's tools served for them.
+//! ([`super::watch_ends`], ORC-764). A wait whose turn failed is tried again ([`super::turns`]). The app attaches the
+//! runner when [`follow_in`] says a turn is pending, and asks it for the turns [`follow_in`] gives, with the chat's
+//! tools served for them.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -29,24 +30,26 @@ use orchester_core::{
   connection::stream::InvocationOutcome,
   conversation::{Message as TaskMessage, Sender},
   id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
-  orchestrator::{AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind},
+  orchestrator::{AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, RunEnd, Subscriptions, WaitKind},
   question::AskedQuestions,
   run::{CompletedBy, PendingToolApproval, Plan},
-  store::{ConversationStore, RunStore, TaskStore, WorktreeStore},
+  store::{ConversationStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{KeptWait, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 
 pub use super::run_ends::{MergeChecks, SucceededAt};
 use super::{
   auto_merge::{completes_in, merging_in},
   chat::EndMoved,
   merge_conflicts::current_conflicts,
-  run_ends::{Reading, current_ends, end_moved, merge_checks},
+  run_ends::{Reading, current_ends, end_moved, end_superseded, merge_checks},
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
+  team_status::{TeamReading, module_now},
+  turns::{Started, settled, start_next},
   waits_on::follow as waits_on,
   watch_ends,
 };
@@ -57,6 +60,7 @@ use crate::{
     changes::run_work_present,
     completion,
     detail::{RunView, run_store_error, run_view},
+    recorded::{self, task_of},
   },
 };
 
@@ -143,17 +147,6 @@ pub fn check_merges_in(
   checked().map_err(|error| messages::store_error(&error))
 }
 
-/// The keys of the waits kept, and of those kept that start a turn still to come: a kept end that starts none needs no
-/// look again.
-fn settled(db: &ProjectDb) -> Result<(HashSet<String>, HashSet<String>), StoreError> {
-  let pending = db
-    .automatic_waits_without_turn()?
-    .into_iter()
-    .map(|kept| kept.key)
-    .collect();
-  Ok((db.kept_wait_keys()?, pending))
-}
-
 fn follow(
   reading: &Reading,
   (switches, ready): (Switches, bool),
@@ -167,13 +160,17 @@ fn follow(
   now.extend(current_ends(&db, reading, |key| {
     kept.contains(key) && !pending.contains(key)
   })?);
-  now.extend(current_stalls(&db, reading.project, at)?);
+  now.extend(current_stalls(&db, reading.project, at, |key| kept.contains(key))?);
   now.extend(current_conflicts(&db, reading.project)?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
+  // A parked task someone acted on since is parked no more, before its target is read.
+  super::parking::end_moved(&mut db)?;
+  // What a subscription that leads to the end raises of its whole target: work that can start, or that it is stuck.
+  let kept = super::standing::raise((&mut db, reading.root), switches.drives, at)? || kept;
   let completed = switches.drives && complete_on_its_own(&db, reading)?;
   // After the waits, so that a watched task's last run end is kept while its conversation still leads it.
-  let ended = watch_ends::end_closed(&mut db, ready, Timestamp::now())?;
+  let ended = watch_ends::end_closed(&mut db, TeamReading::of(reading.root), ready, Timestamp::now())?;
   let followed = Followed {
     kept: kept || ended,
     completed,
@@ -183,18 +180,17 @@ fn follow(
     return Ok(followed);
   }
   let waiting: HashSet<&str> = now.iter().map(|(key, _)| key.as_str()).collect();
-  let next = next_turns(&db, &waiting)?;
-  if next.is_empty() {
-    return Ok(followed);
-  }
-  if !attached {
-    return Ok(Followed {
+  Ok(match start_next(&mut db, &waiting, (attached, at))? {
+    Started::Nothing => followed,
+    Started::Pending => Followed {
       pending: true,
       ..followed
-    });
-  }
-  let turn = start(&mut db, &next)?;
-  Ok(Followed { turn, ..followed })
+    },
+    Started::Turn(turn) => Followed {
+      turn: Some(turn),
+      ..followed
+    },
+  })
 }
 
 /// Completes, as the Orchestrator would merge them, the runs git found with nothing to merge (`reading.checks`) whose
@@ -253,7 +249,7 @@ fn keep_new(
       continue;
     };
     // Kept whatever the switch: the switch only decides whether it starts a turn by itself (ORC-894).
-    let automatic = switches.drives && wait.kind.starts_turns();
+    let automatic = switches.drives;
     let continuing = if automatic { continuing((db, root), wait)? } else { None };
     let merging = if automatic && wait.kind == WaitKind::Ended(RunEnd::Succeeded) {
       Some(merging_in(db, wait.run)?)
@@ -273,15 +269,16 @@ fn keep_new(
 
 /// The conversation that leads the task of `wait`'s run as the project's active `subscriptions` tell, now
 /// ([`Subscriptions::leading`]: the task's own, then its module's or that of the tasks without a module, then the
-/// whole project's); `None` while none covers it, or its run or task is gone.
+/// whole project's), its module being the one it is in now ([`module_now`]); `None` while none covers it, or its run or
+/// task is gone.
 fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Result<Option<ChatId>, StoreError> {
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
     return Ok(None);
   };
-  let Some(task) = db.task(run.task())? else {
+  let Some(task) = task_of(db, run.task())? else {
     return Ok(None);
   };
-  Ok(subscriptions.leading(task.id(), task.module()))
+  Ok(subscriptions.leading(task.id(), module_now(db, &task)))
 }
 
 /// What the turn `wait` starts does about its run while the chat drives:
@@ -305,53 +302,6 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
   )
 }
 
-/// An entry that starts a turn by itself and has none: its conversation, its `seq`, and whether its turn merges a
-/// run on its own.
-type NextTurn = (ChatId, i64, bool);
-
-/// The entries of every conversation that start a turn by themselves and have none, oldest first: the waits that
-/// still wait (their keys among `waiting`), the daily reports (`super::report`), whose turn adds a summary to what
-/// they tell, and the ends of subscriptions (`super::watch_ends`), whose turn writes their module's or task's summary.
-fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<NextTurn>, StoreError> {
-  let mut next: Vec<NextTurn> = db
-    .automatic_waits_without_turn()?
-    .into_iter()
-    .filter(|kept| waiting.contains(kept.key.as_str()))
-    .map(|kept: KeptWait| (kept.chat, kept.seq, merges(&kept.wait)))
-    .chain(
-      db.automatic_reports_without_turn()?
-        .into_iter()
-        .map(|kept| (kept.chat, kept.seq, false)),
-    )
-    .collect();
-  next.sort_by_key(|(_, seq, _)| *seq);
-  Ok(next)
-}
-
-/// Gives the oldest of `next` whose conversation has no turn thinking its turn, in that conversation; none while a
-/// turn thinks in each of theirs. Runs merge one at a time in the order they ended: a turn that merges its run on its
-/// own does not start while one that ended before, in any conversation, still waits for its turn or thinks.
-fn start(db: &mut ProjectDb, next: &[NextTurn]) -> Result<Option<WaitTurn>, StoreError> {
-  let mut merging_before = db.waits_thinking()?.iter().any(|kept| merges(&kept.wait));
-  for &(chat, seq, merging) in next {
-    if merging && merging_before {
-      continue;
-    }
-    let message = ChatMessageId::generate();
-    // Refused while another turn of its conversation thinks: the entry keeps no turn and starts once that one ended.
-    if db.start_wait_turn((chat, seq), message)? {
-      return Ok(Some(WaitTurn { chat, message }));
-    }
-    merging_before |= merging;
-  }
-  Ok(None)
-}
-
-/// Whether the turn of `wait` merges its run on its own.
-fn merges(wait: &AgentWait) -> bool {
-  wait.merging == Some(Merging::Merges)
-}
-
 /// Whether `execution`'s latest invocation ended because a person stopped its turn (*Stop turn*).
 fn stopped_by_person(view: &RunView, execution: StepExecutionId) -> bool {
   view
@@ -373,7 +323,8 @@ fn last_exchanged(messages: &[TaskMessage], execution: StepExecutionId) -> Optio
 
 /// The entries of conversation `chat` (its `entries`) whose waits still stand: the waits of agents that still wait,
 /// the stalls of runs that made no progress since ([`super::stalls`]), and the ends of runs still where they ended
-/// ([`end_moved`]); and, for the ends that no longer stand, what became of their runs. A wait the person dealt with
+/// ([`end_moved`]) and not followed by a later end of theirs ([`end_superseded`]); and, for the ends that no longer
+/// stand, what became of their runs. A wait the person dealt with
 /// elsewhere, on its task's page, stays kept in the conversation but no longer stands. Blocks on SQLite.
 pub(super) fn standing(
   db: &ProjectDb,
@@ -400,13 +351,16 @@ pub(super) fn standing(
     HashSet::new()
   };
   if waits.iter().any(|(_, wait)| is_stall(wait.kind)) {
-    let stalls = current_stalls(db, db.project().id(), Timestamp::now())?;
+    // Every period's event that was kept still stands while its run stalls.
+    let stalls = current_stalls(db, db.project().id(), Timestamp::now(), |_| true)?;
     now.extend(stalls.into_iter().map(|(key, _)| key));
   }
   let keys: HashMap<i64, String> = db.chat_wait_keys(chat)?.into_iter().collect();
   let (mut standing, mut moved) = (HashSet::new(), HashMap::new());
   for (seq, wait) in waits {
     let stands = match wait.kind {
+      // A later end of its run was kept in its place: that one stands, and is the one tried again.
+      WaitKind::Ended(_) if keys.get(&seq).map_or(Ok(false), |key| end_superseded(db, wait, key))? => false,
       WaitKind::Ended(end) => match end_moved(db, wait, end)? {
         Some(what) => {
           moved.insert(seq, what);
@@ -433,8 +387,8 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
   let mut approvals = db.pending_tool_approvals_all()?;
   approvals.retain(|approval| !reviewing.contains(&approval.id));
   let mut waits = Vec::new();
-  for task in db.tasks()? {
-    let Some(Ok(run)) = db.runs_of_task(task.id()).map_err(run_store_error)?.pop() else {
+  for (task, mut runs) in recorded::all_with_runs(db)? {
+    let Some(Ok(run)) = runs.pop() else {
       continue;
     };
     // A run that ended waits for no one.

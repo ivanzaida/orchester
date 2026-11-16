@@ -1,5 +1,5 @@
 //! The connections, MCP servers and secrets a body of this computer names, over explicit bodies of each kind: found
-//! (a team body must name none), and resolved through the bindings of versions cached before the team model.
+//! (a team body must name none).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -11,7 +11,6 @@ use orchester_core::{
     },
   },
   id::{ConnectionId, ResourceId, SecretId},
-  import::Entity,
   name::Name,
   permission::StepPermissions,
   resource::{
@@ -19,8 +18,8 @@ use orchester_core::{
     HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText,
     ProviderSettings, RepositoryAccess, Step, StepKey, StepKind, Tool, ToolAction,
   },
-  secret::{Environment, NewSecret, Secret, SecretKind, SecretName, tool_uses},
-  sharing::{Binding, BindingKindError, ConnectionRole, LocalEntities, Reference, ReferenceKind, named, resolve},
+  secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
+  sharing::{ConnectionRole, LocalEntities, Reference, ReferenceKind, named},
   time::Timestamp,
 };
 use serde_json::Value;
@@ -183,10 +182,6 @@ fn publisher() -> Computer {
   }
 }
 
-fn bind(reference: &Reference, local: Entity) -> Binding {
-  Binding::new(reference.clone(), local).expect("same kind")
-}
-
 #[test]
 fn sharing_references_of_a_profile_are_its_connection_and_mcp_servers_by_kind_name_and_role() {
   let computer = publisher();
@@ -243,61 +238,4 @@ fn sharing_references_pipelines_and_instructions_name_only_shared_resources() {
 
   assert!(named(&pipeline(profile, tool), computer.entities()).is_empty());
   assert!(named(&instruction(pipeline_id), computer.entities()).is_empty());
-}
-
-#[test]
-fn sharing_references_resolve_bound_references_to_local_ids_and_keep_unbound_ones() {
-  let computer = publisher();
-  let (work, github) = (&computer.connections[0], &computer.servers[0]);
-  let body = profile(work.id(), &[github.id()]);
-  let references = named(&body, computer.entities());
-  let here = connection("work", AgentProvider::ClaudeCodeCli);
-
-  let resolved = resolve(body, &[bind(&references[0], Entity::Connection(here.id()))]);
-
-  let resolved: AgentProfile = serde_json::from_value(resolved).expect("still a profile");
-  assert_eq!(resolved.connection(), here.id());
-  assert_eq!(resolved.mcp_servers().ids(), [github.id()]);
-}
-
-#[test]
-fn sharing_references_resolve_a_tool_secret_and_leave_other_tools_alone() {
-  let computer = publisher();
-  let (token, warehouse) = (&computer.secrets[0], &computer.secrets[1]);
-  let local = secret("API_TOKEN", SecretKind::AccessToken);
-  let bindings = [bind(&Reference::secret(token), Entity::Secret(local.id()))];
-
-  let http: Tool = serde_json::from_value(resolve(http_tool(token.id()), &bindings)).expect("still a tool");
-  let database: Tool = serde_json::from_value(resolve(database_tool(warehouse.id()), &bindings)).expect("a tool");
-
-  assert!(tool_uses(&http, local.id()));
-  assert!(tool_uses(&database, warehouse.id()));
-}
-
-#[test]
-fn sharing_references_resolve_keeps_shared_resource_ids() {
-  let (profile, tool) = (ResourceId::generate(), ResourceId::generate());
-  let body = pipeline(profile, tool);
-  let computer = publisher();
-  let bindings = [bind(
-    &Reference::connection(&computer.connections[0]),
-    Entity::Connection(ConnectionId::generate()),
-  )];
-
-  assert_eq!(resolve(body.clone(), &bindings), body);
-}
-
-#[test]
-fn sharing_references_a_binding_is_of_the_reference_kind() {
-  let computer = publisher();
-  let reference = Reference::mcp_server(&computer.servers[0]);
-
-  let error: BindingKindError =
-    Binding::new(reference.clone(), Entity::Connection(ConnectionId::generate())).expect_err("another kind");
-  assert_eq!(
-    error.to_string(),
-    "a mcp_server reference is bound only to a local entity of that kind"
-  );
-  assert!(Binding::new(reference.clone(), Entity::Resource(ResourceId::generate())).is_err());
-  assert!(Binding::new(reference, Entity::McpServer(ConnectionId::generate())).is_ok());
 }

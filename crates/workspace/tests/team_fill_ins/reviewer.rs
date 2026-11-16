@@ -12,7 +12,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::team_fill_ins::FillInError;
 
-use crate::support::{Team, name, pick, team_resource};
+use crate::support::{Team, name, pick};
 
 fn language() -> TeamReviewer {
   serde_json::from_value(
@@ -35,23 +35,14 @@ fn hosts(listed: &[&str]) -> ReviewerDestinations {
   ))
 }
 
-/// Writes the body of the earlier form (it names a connection) over the newest version of `reviewer`, as a cache from
-/// before ORC-887 holds it.
-fn make_old_form(team: &Team, reviewer: ResourceId) {
+/// A team reviewer `slug` whose latest version is in the earlier form (it names a connection), as one published before
+/// ORC-887 is.
+fn old_form(team: &Team, slug: &str) -> ResourceId {
   let old = serde_json::json!({
     "kind": "language", "connection": {"kind": "connection", "name": "Team language", "role": "claude_code_cli"},
     "model": "m-1", "effort": null
   });
-  let stored = serde_json::json!({"schema": <TeamReviewer as ResourceBody>::SCHEMA, "body": old}).to_string();
-  let database = rusqlite::Connection::open(team.root.join(".orchester").join("orchester.db")).expect("database");
-  let changed = database
-    .execute(
-      "UPDATE shared_version_bodies SET local_body = ?1 \
-       WHERE version_id IN (SELECT id FROM resource_versions WHERE resource_id = ?2)",
-      rusqlite::params![stored, reviewer.to_string()],
-    )
-    .expect("the old form");
-  assert_eq!(changed, 1);
+  team.keep(slug, <TeamReviewer as ResourceBody>::KIND, old)
 }
 
 fn decision_connection(db: &mut ProjectDb, label: &str, url: &str) -> DecisionConnectionId {
@@ -66,14 +57,8 @@ fn decision_connection(db: &mut ProjectDb, label: &str, url: &str) -> DecisionCo
 }
 
 fn reviewers(team: &Team) -> (ResourceId, ResourceId) {
-  let mut db = team.db();
-  let language = team_resource(&mut db, "language-reviewer", language(), Vec::new());
-  let decision = team_resource(
-    &mut db,
-    "decision-reviewer",
-    decision(ReviewerDestinations::MembersComputers),
-    Vec::new(),
-  );
+  let language = team.team_resource("language-reviewer", &language());
+  let decision = team.team_resource("decision-reviewer", &decision(ReviewerDestinations::MembersComputers));
   (language, decision)
 }
 
@@ -146,12 +131,7 @@ fn team_fill_ins_a_reviewer_pick_names_the_teams_reviewer_and_the_kind_of_connec
 fn team_fill_ins_a_decision_reviewer_runs_on_a_decision_connection_and_a_remote_one_is_a_persons_to_pick() {
   let team = Team::new();
   let mut db = team.db();
-  let reviewer = team_resource(
-    &mut db,
-    "listing-reviewer",
-    decision(hosts(&["api.typesafe.ai"])),
-    Vec::new(),
-  );
+  let reviewer = team.team_resource("listing-reviewer", &decision(hosts(&["api.typesafe.ai"])));
   let (local, hosted) = (
     decision_connection(&mut db, "local", "http://127.0.0.1:8000"),
     decision_connection(&mut db, "hosted", "https://api.typesafe.ai/v1"),
@@ -189,14 +169,9 @@ fn team_fill_ins_a_decision_reviewer_runs_on_a_decision_connection_and_a_remote_
 fn team_fill_ins_a_decision_server_the_reviewer_does_not_list_is_refused_even_to_a_person() {
   let team = Team::new();
   let mut db = team.db();
-  let members_only = team_resource(
-    &mut db,
-    "members-only",
-    decision(ReviewerDestinations::MembersComputers),
-    Vec::new(),
-  );
-  let other_host = team_resource(&mut db, "other-host", decision(hosts(&["other.example"])), Vec::new());
-  let no_host = team_resource(&mut db, "no-host", decision(hosts(&[])), Vec::new());
+  let members_only = team.team_resource("members-only", &decision(ReviewerDestinations::MembersComputers));
+  let other_host = team.team_resource("other-host", &decision(hosts(&["other.example"])));
+  let no_host = team.team_resource("no-host", &decision(hosts(&[])));
   let (local, hosted) = (
     decision_connection(&mut db, "local", "http://127.0.0.1:8000"),
     decision_connection(&mut db, "hosted", "https://api.typesafe.ai/v1"),
@@ -221,11 +196,12 @@ fn team_fill_ins_a_decision_server_the_reviewer_does_not_list_is_refused_even_to
 #[test]
 fn team_fill_ins_a_reviewer_that_names_a_connection_is_refused_as_not_in_the_teams_form() {
   let team = Team::new();
-  let (language, decision) = reviewers(&team);
+  let (language, decision) = (
+    old_form(&team, "language-reviewer"),
+    old_form(&team, "decision-reviewer"),
+  );
   let mut db = team.db();
   let server = decision_connection(&mut db, "local", "http://127.0.0.1:8000");
-  make_old_form(&team, language);
-  make_old_form(&team, decision);
 
   let refused = team
     .workspace

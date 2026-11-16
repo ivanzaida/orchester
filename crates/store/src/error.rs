@@ -2,8 +2,8 @@ use std::{io, path::PathBuf, time::Duration};
 
 use orchester_core::{
   id::{
-    AgentAccountId, ConnectionId, InvocationId, MemoryId, OperationId, ProjectId, ResourceId, RunId, SecretId,
-    ServerId, TaskId, VersionId,
+    AgentAccountId, ApiAccountId, ConnectionId, InvocationId, MemoryId, OperationId, ProjectId, ResourceId, RunId,
+    SecretId, ServerId, TaskId,
   },
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError, RunnerFailure},
@@ -60,14 +60,6 @@ pub enum StoreError {
   /// A stored value no longer satisfies the domain rules; the database was edited or damaged.
   #[error("stored {what} is invalid: {detail}")]
   Corrupt { what: &'static str, detail: String },
-  /// The resource has a version the team server numbered, so it is the team's and is not taken back. Nothing was
-  /// changed.
-  #[error("resource {0} has a version the team server numbered; it is the team's now")]
-  AlreadyNumbered(ResourceId),
-  /// The resource holds more than the version created here (a later version or a draft), or was not created here, so
-  /// taking it back would lose someone's work. Nothing was changed.
-  #[error("resource {0} holds more than the version created here; it is not taken back")]
-  HoldsMore(ResourceId),
   /// A value cannot be represented in the database, e.g. a number beyond its 64-bit integers.
   #[error("{0} cannot be stored")]
   Unrepresentable(&'static str),
@@ -171,12 +163,17 @@ pub enum StoreError {
   /// A new resource has no draft: it is created as its first version, and a draft is only ever saved over a version.
   #[error("resource {0} has no published version, so it can hold no draft")]
   NoFirstVersion(ResourceId),
+  /// Resources of this kind are stored only as published versions (pipelines, D-032): none is created as a draft and
+  /// none holds one. Nothing was changed.
+  #[error("a {0:?} holds no draft")]
+  NoDrafts(ResourceKind),
+  /// A pipeline edit that equals the version it was made from changes nothing: no version is published for it, and
+  /// nothing was changed.
+  #[error("the edit of resource {0} equals its latest version")]
+  Unchanged(ResourceId),
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),
-  /// A run or a task here uses the version published here, so it is not taken back. Nothing was changed.
-  #[error("version {0} is used by a run or a task here")]
-  VersionInUse(VersionId),
   #[error(transparent)]
   Publish(#[from] PublishError),
   #[error(transparent)]
@@ -213,6 +210,9 @@ pub enum StoreError {
   /// Another account has the folder already.
   #[error("another account uses the folder already")]
   AccountFolderTaken,
+  /// The application database has no API account with this id, or only a removed one.
+  #[error("API account {0} is not in the list")]
+  ApiAccountNotFound(ApiAccountId),
   /// The application database has no shared server with this id.
   #[error("server {0} is not in the list")]
   ServerNotFound(ServerId),
@@ -359,6 +359,9 @@ pub enum RunStoreError {
   /// The run's inputs do not belong to its task, or its snapshot does not pin what they carry. Nothing was recorded.
   #[error("the inputs of a run of task {task} do not match it: {reason}")]
   InputsMismatch { task: TaskId, reason: &'static str },
+  /// The run would pin or use `0`, which a local project archived. Nothing was recorded.
+  #[error("the run would use {0}, which was archived")]
+  UsesArchived(String),
 }
 
 impl RunStoreError {
@@ -375,7 +378,8 @@ impl RunStoreError {
       | Self::WorktreeRemoved(_)
       | Self::Merged(_)
       | Self::Resolving(_)
-      | Self::InputsMismatch { .. } => RunnerFailure::Other,
+      | Self::InputsMismatch { .. }
+      | Self::UsesArchived(_) => RunnerFailure::Other,
     }
   }
 }

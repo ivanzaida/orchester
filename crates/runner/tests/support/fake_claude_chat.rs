@@ -13,6 +13,8 @@
 //!   (`fake_claude_input`), prints it back as it takes it and replies `Noted: <message>`, as Claude Code takes a
 //!   message after the tool call that runs;
 //! - "Fail now": ends with an error result and exit code 1;
+//! - "Hit the plan limit": prints the `rate_limit_event` of a five-hour window that is used up and resets in an hour,
+//!   then fails as Claude Code does at its usage limit;
 //! - "Say the key": replies with the provider's key, and "Fail with the key" prints it on standard error and exits with
 //!   1: the runner must keep it out of what the chat keeps;
 //! - anything else: replies `Noted: <message>`.
@@ -62,6 +64,16 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
   }
   if message.contains("Fail now") {
     result(session, true, "Something broke on the provider's side.");
+    return ExitCode::from(1);
+  }
+  if message.contains("Hit the plan limit") {
+    let resets = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .map_or(0, |now| now.as_secs() + 3600);
+    let limit = json!({"type": "rate_limit_event", "rate_limit_info": {"status": "rejected", "resetsAt": resets,
+      "rateLimitType": "five_hour", "utilization": 1.0, "isUsingOverage": false}});
+    println!("{limit}");
+    result(session, true, "Claude AI usage limit reached");
     return ExitCode::from(1);
   }
   let key = std::env::var(KEY_VARIABLE).unwrap_or_default();

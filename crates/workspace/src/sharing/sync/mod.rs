@@ -1,6 +1,7 @@
 //! The shared projects' live event streams (`docs/architecture/server.md`, "Live updates"): one per shared project on
 //! this computer while its server takes this computer's token and the person is a member, each following the project's
-//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]), reporting this computer's
+//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`], in memory: [`live`]),
+//! reporting this computer's
 //! catalog while it is open ([`catalog`]) and saying how it stands ([`state`]). Started with the connection monitor and
 //! kept in step with the servers and the projects: a project shared, joined or made local, a sign-in or sign-out
 //! starts or ends its stream.
@@ -9,6 +10,7 @@ mod apply;
 mod archive;
 mod catalog;
 mod config;
+mod live;
 mod state;
 pub mod stream;
 
@@ -32,22 +34,24 @@ use orchester_core::{
 use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
-pub(crate) use self::{
-  archive::pins,
-  config::{is_local_form, non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
-};
 pub use self::{
-  archive::{ArchiveError, Pinning, pinning},
+  archive::{ArchiveError, Pinning, pinning, pinning_mcp_server},
   catalog::CATALOG_CHECK,
-  config::{
-    BindingsHere, ConfigServer, FillInOutcome, HereReference, Needer, RemoteResourceStore, ShareFillIns, Standing,
-    Waiting, bind, chosen_at, keep_uploaded_configuration, upload_configuration, use_here, waiting,
-  },
+  config::{ConfigServer, FillInOutcome, ShareFillIns, upload_configuration},
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
-use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};
-use crate::{background, runner::Runners};
+pub(crate) use self::{
+  archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
+  config::{pipeline_content, pipeline_executors, team_body},
+};
+use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
+use crate::{
+  background,
+  messages::Message,
+  runner::Runners,
+  team_config::{TeamConfigs, Unreached},
+};
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
 pub async fn run(servers: Servers, runners: Runners) {
@@ -94,13 +98,17 @@ fn keep(
 ) {
   let mut kept = HashMap::new();
   let mut not_members = Vec::new();
+  let configs = &servers.inner.workspace.team;
+  configs.keep(&projects.iter().map(ProjectServer::repo_root).collect::<Vec<_>>());
   for project in projects {
     let root = project.repo_root().to_owned();
     if project.link().removed_at.is_some() {
+      unreached(configs, &project, &SharingError::NotMember);
       not_members.push(root);
       continue;
     }
     if !follows(servers, &project) {
+      unreached(configs, &project, &SharingError::SignedOut);
       continue;
     }
     let id = project.link().project;
@@ -113,6 +121,15 @@ fn keep(
   *streams = kept;
   let followed: HashSet<PathBuf> = streams.keys().cloned().collect();
   servers.keep_sync_states(&followed, not_members);
+}
+
+/// The team's configuration of `project` cannot be read for `error`, as no stream follows it.
+fn unreached(configs: &TeamConfigs, project: &ProjectServer, error: &SharingError) {
+  let unreached = Unreached {
+    reason: error.message(&project.entry().address),
+    at: orchester_core::time::Timestamp::now(),
+  };
+  configs.unreached(project.repo_root(), unreached);
 }
 
 /// Whether `project`'s server can stream to this computer: someone is signed in there, and the person is a member.
@@ -157,37 +174,6 @@ struct Live {
   current: Arc<AtomicBool>,
 }
 
-impl Live {
-  /// Sends the versions of the team's configuration published here while the server could not be reached, now that
-  /// the stream connected again (row 36). One the server does not take waits on its version with why; the stream goes
-  /// on either way.
-  async fn send_published(&self) {
-    let project = self.project.clone();
-    let shared = project.link().project;
-    let root = project.repo_root().to_owned();
-    let servers = self.servers.clone();
-    let sent = background::run(move || -> Result<_, SharingError> {
-      let lane = servers.send_lane(project.repo_root());
-      let _sending = send_turn(&lane);
-      let db = orchester_store::ProjectDb::open(project.repo_root())?;
-      let mut taken = Vec::new();
-      let sent = RemoteResourceStore::new(db, project)?.send_waiting(&mut taken);
-      Ok((taken, sent))
-    })
-    .await;
-    match sent {
-      Ok(Ok((taken, sent))) => {
-        self.servers.note_taken_back(&root, taken);
-        if let Err(error) = sent {
-          tracing::warn!(%error, project = %shared, "versions published here wait to be sent");
-        }
-      }
-      Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
-      Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
-    }
-  }
-}
-
 impl Source for Live {
   async fn open(&self, cursor: Option<u64>) -> Result<EventStream, StreamEnd> {
     let entry = self.project.entry();
@@ -209,10 +195,7 @@ impl Source for Live {
     };
     let opened = client.events(&token, self.project.link().project, cursor).await;
     match &opened {
-      Ok(_) => {
-        self.servers.reached(server);
-        self.send_published().await;
-      }
+      Ok(_) => self.servers.reached(server),
       Err(StreamEnd::Unauthorized) => self.servers.refused(server).await,
       Err(_) => {}
     }
@@ -261,7 +244,14 @@ impl Source for Live {
   }
 
   async fn archived(&self, resource: ResourceId, by: Option<&str>) {
-    archive::stop_runs(&self.runners, self.project.repo_root(), (resource, by)).await;
+    let root = self.project.repo_root();
+    // An archive arrives on the stream after its configuration was read, which names what was archived.
+    match self.servers.team_read(root).config().cloned() {
+      Some(config) => archive::stop_runs(&self.runners, (root, config), (resource, by)).await,
+      None => {
+        tracing::warn!(%resource, "an archive arrived before the team's configuration was read; no run is stopped")
+      }
+    }
     self.servers.shared_changed();
   }
 
@@ -273,5 +263,32 @@ impl Source for Live {
     self
       .servers
       .set_sync_state(self.project.repo_root(), Some(state), &self.current);
+  }
+
+  fn configs(&self) -> &TeamConfigs {
+    &self.servers.inner.workspace.team
+  }
+
+  fn unreached(&self, error: &SharingError) -> Message {
+    error.message(&self.project.entry().address)
+  }
+
+  async fn retried(&self) {
+    let mut asked = self.servers.subscribe_sync();
+    if asked.changed().await.is_err() {
+      // The servers are gone with the window: nobody asks again.
+      std::future::pending::<()>().await;
+    }
+  }
+}
+
+impl Servers {
+  /// Asks the team server of the project at `repo_root` again now (*Try again* of the Agents hub): the monitor checks
+  /// it at once and the project's stream, waiting to connect again, connects and reads the team's configuration.
+  /// Blocking: it reads the project's link.
+  pub fn retry_project(&self, repo_root: &std::path::Path) -> Result<(), SharingError> {
+    let project = ProjectServer::open(self, repo_root)?.ok_or(SharingError::ServerMissing)?;
+    self.retry_now(project.link().server);
+    Ok(())
   }
 }

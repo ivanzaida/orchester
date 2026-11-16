@@ -8,6 +8,7 @@ use std::{
 };
 
 use orchester_workspace::i18n::{FALLBACK_LOCALE, LOCALES};
+use serde::de::{self, DeserializeSeed, MapAccess, Visitor};
 use serde_json::Value;
 
 /// Leaf key → sorted `{{placeholder}}` names.
@@ -180,4 +181,58 @@ fn locales_hold_only_keys_the_sources_name() {
   let named = named_keys(&sections);
   let unused: Vec<&String> = known.keys().filter(|key| !named.contains(*key)).collect();
   assert!(unused.is_empty(), "keys no source names: {unused:?}");
+}
+
+/// A locale value that fails to parse when an object in it repeats a key: serde_json keeps the last of two equal
+/// keys silently, so a repeated key would hide the earlier text and its placeholders.
+struct Unique;
+
+impl<'de> DeserializeSeed<'de> for Unique {
+  type Value = ();
+
+  fn deserialize<D: de::Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+    deserializer.deserialize_any(self)
+  }
+}
+
+impl<'de> Visitor<'de> for Unique {
+  type Value = ();
+
+  fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    formatter.write_str("a string or an object of them")
+  }
+
+  fn visit_str<E: de::Error>(self, _: &str) -> Result<(), E> {
+    Ok(())
+  }
+
+  fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+    let mut seen = BTreeSet::new();
+    while let Some(key) = map.next_key::<String>()? {
+      if !seen.insert(key.clone()) {
+        return Err(de::Error::custom(format!("repeats the key `{key}`")));
+      }
+      map.next_value_seed(Unique)?;
+    }
+    Ok(())
+  }
+}
+
+fn repeated_key(contents: &str) -> Result<(), serde_json::Error> {
+  Unique.deserialize(&mut serde_json::Deserializer::from_str(contents))
+}
+
+#[test]
+fn no_locale_file_repeats_a_key() {
+  assert!(
+    repeated_key(r#"{ "a": { "b": "x", "c": "y" }, "d": { "b": "w" } }"#).is_ok(),
+    "a key in two objects is not a repeat"
+  );
+  let error = repeated_key(r#"{ "a": { "b": "x", "b": "z" } }"#).expect_err("a repeat in one object is found");
+  assert!(error.to_string().contains("`b`"), "{error}");
+  for (locale, contents) in LOCALES {
+    if let Err(error) = repeated_key(contents) {
+      panic!("locale `{locale}` {error}");
+    }
+  }
 }

@@ -2,7 +2,8 @@
 //! Copy in its states in 09e `Ezec2`, ORC-323): on `code_bg` inside a `border` stroke, radius 6. Its head, over a
 //! `border` rule, says the language in 11 `text_muted`, with the file the fence names (*rust · sender.rs*), 12 from
 //! the start, and holds Copy at its end, 4 inside it: a 13 `copy` and 11/500 *Copy* in `text_secondary`, 6 apart and
-//! 8 at their sides, the `hover` fill under the pointer, always shown. A press puts the code on the clipboard without
+//! 8 at their sides, the `hover` fill under the pointer, always shown and the pointer's only (never a Tab stop, no
+//! focus ring, as every toolbar's button: `ui::pressable`). A press puts the code on the clipboard without
 //! its fence or its language; then for 2 s it says *Copied* by a `check` in `success` on the `hover` fill, or
 //! *Couldn't copy* by a `triangle-alert`, both in `danger`. The code is lurq's Markdown code, Geist Mono 12/1.5 in
 //! `text_primary`, 8 over and under it and 12 at its sides; its lines never wrap and scroll sideways inside the box,
@@ -33,7 +34,7 @@ use crate::{
   ui::{
     clipboard::Clipboard,
     icon::{Icon, icon},
-    pressable::{Focus, Press},
+    pressable::Press,
   },
 };
 
@@ -163,6 +164,7 @@ impl CodeBlockView {
       .rounded(RadiusSize::Md)
       .describe("a11y_name", words.clone())
       .class(copied.class())
+      .focusable(false)
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .active_style(Style::new().background(ExtraColor::Pressed.role()))
@@ -179,7 +181,7 @@ impl CodeBlockView {
     } else {
       button
     };
-    press.on(Focus::Keyboard.apply(button))
+    press.on(button)
   }
 }
 

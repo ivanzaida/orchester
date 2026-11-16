@@ -38,6 +38,7 @@ use super::{
   states,
 };
 use crate::{
+  mcp::input_gate::InputGate,
   navigation::{Navigation, shortcuts::Keys},
   routes::{ProjectPage, Route},
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
@@ -161,6 +162,7 @@ fn text_pane(ctx: &mut Ctx, page: &Page<'_>, file: &FilePath, text: &Arc<FileTex
   let tokens = reads::tokens(ctx, (file, text), &page.view.highlighting);
   let clipboard = Copier::of(ctx);
   let select = selector(ctx, page);
+  let gate = ctx.use_context::<InputGate>();
   ctx.mount_keyed::<CodePane>(
     "files-code",
     CodeProps {
@@ -172,6 +174,7 @@ fn text_pane(ctx: &mut Ctx, page: &Page<'_>, file: &FilePath, text: &Arc<FileTex
       select,
       refusal: page.view.refusal.clone(),
       clipboard,
+      gate,
     },
   )
 }
@@ -207,6 +210,8 @@ struct CodeProps {
   select: Select,
   refusal: Signal<Option<Refusal>>,
   clipboard: Copier,
+  /// Refuses what only a person does to the automation that pressed it.
+  gate: Option<InputGate>,
 }
 
 impl PartialEq for CodeProps {
@@ -399,7 +404,7 @@ impl CodePane {
 fn copy_keys(props: &CodeProps) -> impl Fn(KeyboardEvent) + Send + Sync + 'static + use<> {
   let copy = props.lines.map(|lines| {
     actions::copy(
-      props.clipboard.clone(),
+      (props.clipboard.clone(), props.gate.clone()),
       props.refusal.clone(),
       (props.text.clone(), Some(lines)),
     )

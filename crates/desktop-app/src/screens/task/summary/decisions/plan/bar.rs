@@ -16,7 +16,6 @@ use orchester_core::run::{PlanDecision, ReviewNote};
 use orchester_ipc::Command;
 use orchester_workspace::{
   decisions::DecisionKind,
-  messages::Message,
   tasks::{detail::RunView, plan::PlanReview},
 };
 
@@ -25,7 +24,7 @@ use super::super::{
   step_label,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, answerer},
+  mcp::input_gate::{Guarded, InputGate, press_answerer},
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -52,7 +51,6 @@ pub struct DecisionBar<'a> {
   pub asked: &'a Signal<Option<Choice>>,
   pub action: &'a DecisionAction<Choice>,
   pub gate: Option<InputGate>,
-  pub person_only: &'a Signal<bool>,
   /// The project's runner is online: deciding needs it.
   pub online: bool,
   /// The card shows an earlier version than the one that waits.
@@ -112,12 +110,6 @@ impl DecisionBar<'_> {
       .spacing(SpacingSize::Sm)
       .child(row)
       .child(hints)
-      .with_children(self.person_only.get().then(|| {
-        field_error(
-          "plan-review-person-only",
-          &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
-        )
-      }))
       .with_children(offline.map(|reason| reason_line("plan-review-offline", &reason)))
       .with_children(refused.map(|refused| field_error("plan-review-refused", &message_text(ctx, &refused))))
       .into()
@@ -169,18 +161,16 @@ impl DecisionBar<'_> {
   fn decide(&self, choice: Choice, decision: PlanDecision) -> Arc<dyn Fn() + Send + Sync> {
     let waiting = self.review.waiting();
     let (run, execution, version) = (self.review.run, waiting.execution, waiting.version);
-    let (gate, person_only) = (self.gate.clone(), self.person_only.clone());
+    let gate = self.gate.clone();
     let (action, asked) = (self.action.clone(), self.asked.clone());
     Arc::new(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
       if action.state().get_untracked().is_pending() {
         return;
       }
-      let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Plan)) else {
-        person_only.set(true);
+      let Some(by) = press_answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Plan), "decide on a plan") else {
         return;
       };
-      person_only.set(false);
       asked.set(Some(choice));
       action.run((
         choice,

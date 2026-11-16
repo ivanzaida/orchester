@@ -21,7 +21,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  created::{settle, with_waiting},
   project::{Variable, environment},
   project_tools::{tool_json, tool_named, tools_with_revision},
   tool_program::found_program,
@@ -75,7 +74,7 @@ pub struct SaveToolDraft {
 
 pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result<Value, ToolError> {
   let blocked = services.clone();
-  let (open, id, saved, created) = blocking(move || {
+  let (open, id, saved) = blocking(move || {
     let open = blocked.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let tools = ProjectTools::load(&db)?;
@@ -112,19 +111,12 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
         )
       }
     };
-    Ok((open, id, saved, existing.is_none()))
+    Ok((open, id, saved))
   })
   .await?;
-  let waiting = if created {
-    settle(services, open.repo_root.clone(), id).await
-  } else {
-    Ok(None)
-  };
-  // After a refused creation took the tool back, so a screen that reads on this does not see it.
   services
     .changes
     .record(open.project.id(), crate::tasks::outside::Outside::Tools);
-  let waiting = waiting?;
   let tool = blocking(move || {
     let (tools, revision) = tools_with_revision(&open.repo_root, id)?;
     let entry = tools
@@ -136,7 +128,7 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
     Ok(value)
   })
   .await?;
-  Ok(with_waiting(json!({ "tool": tool }), "tool", waiting))
+  Ok(json!({ "tool": tool }))
 }
 
 /// `entry` with the fields `args` give, unless it widens what the tool runs and no person lets it.

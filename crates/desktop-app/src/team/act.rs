@@ -13,7 +13,8 @@ use orchester_api::{
 use orchester_core::id::ClaimId;
 use orchester_workspace::{
   actions::{
-    Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, PipelineRefusal, Refusal, TeamOutcome,
+    Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, LifecycleRefusal, PipelineRefusal,
+    Refusal, TeamOutcome,
   },
   background,
   secrets::Vault,
@@ -40,6 +41,8 @@ pub enum Acted {
   /// The server refused the pipeline the task names (`422 invalid` with its reason), or this computer did before
   /// sending it: nothing changed.
   PipelineRefused(PipelineRefusal),
+  /// The server refused to close, reopen or block a task (decision D4): nothing changed.
+  Lifecycle(LifecycleRefusal),
   /// The server accepts desktops of this version and later only: nothing changed, and asking again after the update
   /// is safe.
   NeedsVersion(ReleaseVersion),
@@ -179,6 +182,7 @@ fn refused(refusal: &Refusal, current: Option<Current>) -> Acted {
     } => Acted::Refused(AuthorityErrorCode::Forbidden),
     Refusal::Route { .. } => Acted::Refused(AuthorityErrorCode::Invalid),
     Refusal::TaskPipeline(refusal) => Acted::PipelineRefused(*refusal),
+    Refusal::TaskLifecycle(refusal) => Acted::Lifecycle(*refusal),
   }
 }
 

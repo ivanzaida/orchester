@@ -14,10 +14,12 @@ impl TaskFrame {
   /// changes and, while the page shows the card of a run an archive stopped, every change of the shared cache (a
   /// restore there drops what the card says still uses the resource).
   pub(super) fn saves(&self, feed: &ProjectFeed, queue: u64) -> u64 {
-    // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
+    // A run switched to Manual by an MCP client changes its mode chip and its Conversation; so does the project's
+    // Approve mode, moved in Settings or by an MCP client (every run's chips say Dangerous auto-approve, or no
+    // longer).
     let outside = feed.outside.get();
     let shared = if self.archive_card.get() { feed.saves.get() } else { 0 };
-    feed.revision.get() + outside.tasks + outside.runs + queue + shared
+    feed.revision.get() + outside.tasks + outside.runs + outside.auto_mode + queue + shared
   }
 
   /// Notes whether `detail` shows the card of a run an archive stopped ([`Self::saves`]).

@@ -151,7 +151,7 @@ fn the_chat_server_lists_every_chat_tool_the_app_has() {
     "merge_run",
     "hold_queue",
     "release_queue",
-    "publish_pipeline",
+    "save_pipeline",
     "init_repository",
   ] {
     assert!(served.iter().any(|tool| tool == name), "{name} is served: {served:?}");

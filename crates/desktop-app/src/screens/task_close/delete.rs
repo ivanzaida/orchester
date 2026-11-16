@@ -3,7 +3,7 @@
 //! artifacts, its memory records, the project's records and approval rules from its runs, the links of the tasks it
 //! blocks), that its worktrees and merged branches are removed while merged work stays in git, and the choice to
 //! remove its unmerged work too, off each time it opens. A task that cannot be deleted now says why, and Delete is
-//! unavailable. Only a person deletes: an MCP client's press is refused, and the card says so.
+//! unavailable. Only a person deletes: an MCP client's press is refused to it, and the card stays as it was.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -39,7 +39,6 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     popover::popover_panel,
-    tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -127,10 +126,6 @@ impl Component for DeleteCard {
       .error
       .filter(|failed| !pending && failed.task == props.subject.id)
       .map(|failed| field_error(&format!("{id}-error"), &message_text(ctx, &failed.message)));
-    let refused = closer
-      .person_only
-      .get()
-      .then(|| person_only(format!("{id}-person-only"), &ctx.t("task_close.delete.personOnly")));
     let deletable = matches!(preview, Some(Ok(_)));
     let frame = match props.popover {
       Some(width) => popover_panel(id, width),
@@ -139,7 +134,6 @@ impl Component for DeleteCard {
     frame
       .child(head)
       .with_children(body)
-      .with_children(refused)
       .with_children(failed)
       .child(buttons(ctx, closer, &props.subject, (id, deletable, pending)))
   }

@@ -11,9 +11,7 @@ use std::{
 use orchester_core::{
   blob::ContentHash,
   connection::{AgentConnection, AgentProvider},
-  id::{
-    ClaimId, ConnectionId, ModuleId, OperationId, ProjectId, ResourceId, SecretId, ServerId, TaskId, VersionId, WorkId,
-  },
+  id::{ClaimId, ConnectionId, ModuleId, OperationId, ProjectId, ResourceId, ServerId, TaskId, VersionId, WorkId},
   name::Name,
   permission::StepPermissions,
   resource::{
@@ -24,8 +22,8 @@ use orchester_core::{
     BranchName, CommitId, PinnedVersion, PublishedVersions, RunSnapshot,
     bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
-      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
-      TaskAtStart, TeamAcceptance,
+      BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
+      TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -115,7 +113,7 @@ fn team() -> InputsOrigin {
     work: WorkId::generate(),
     claim: ClaimId::generate(),
     operation: OperationId::generate(),
-    module: ModuleId::generate(),
+    module: Some(ModuleId::generate()),
     branch: BranchName::new("orchester/module-webhooks").expect("branch"),
     base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
     bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),
@@ -155,11 +153,8 @@ fn bound(fixture: &Fixture) -> LocalBindings {
       required_cli: None,
       mcp_servers: Vec::new(),
     }],
-    references: vec![BoundReference::Secret {
-      named: SecretId::generate(),
-      local: SecretId::generate(),
-    }],
     team_mcp: Vec::new(),
+    local_mcp: Vec::new(),
   }
 }
 
@@ -215,22 +210,16 @@ fn run_inputs_label_pinned_resources_from_the_canonical_inputs() {
 #[test]
 fn run_inputs_resolve_a_profile_on_its_binding_and_the_task_at_start() {
   let fixture = fixture();
-  let server = ConnectionId::generate();
-  let mut bindings = LocalBindings {
-    references: vec![BoundReference::McpServer {
-      named: ConnectionId::generate(),
-      local: server,
-    }],
-    ..bound(&fixture)
-  };
-  bindings.profiles[0].mcp_servers = vec![server];
+  let bindings = bound(&fixture);
   let inputs = RunInputs::new(content(&fixture, team()), bindings.clone(), LocalConsent::default()).expect("inputs");
   let pinned = inputs.bundle().inputs().profiles()[0].pinned();
   let profile = inputs.profile(pinned).expect("the pinned profile");
   assert_eq!(profile.connection(), bindings.profiles[0].connection);
   assert_eq!(profile.role().as_str(), "Reviewer");
-  assert_eq!(profile.mcp_servers().ids(), [server]);
-  assert_eq!(inputs.bound_mcp_servers().ids().len(), 1);
+  assert!(
+    profile.mcp_servers().ids().is_empty(),
+    "this profile names no MCP server"
+  );
   let other = PinnedVersion {
     version: VersionId::generate(),
     ..pinned
@@ -345,13 +334,10 @@ fn run_inputs_keep_local_bindings_out_of_the_canonical_content() {
     !text.contains(&connection),
     "a local connection is not canonical content"
   );
-  let BoundReference::Secret { named, local } = &bindings.references[0] else {
-    panic!("a secret reference");
-  };
   let value = serde_json::to_value(&bindings).expect("serializes");
-  assert_eq!(
-    value["references"][0],
-    json!({"kind": "secret", "named": named, "local": local})
+  assert!(
+    value.get("references").is_none(),
+    "no reference of a publisher's computer is bound"
   );
   let inputs = RunInputs::new(content.clone(), bindings, LocalConsent::default()).expect("inputs");
   assert_eq!(inputs.bundle(), &content);
@@ -407,4 +393,50 @@ fn run_inputs_connection_kind_absent_in_older_bindings_and_local_runs_stay_usabl
   let local =
     RunInputs::new(content(&fixture, InputsOrigin::Local), older, LocalConsent::default()).expect("local inputs");
   assert_eq!(local.check_connection(fixture.profile, &connection), Ok(()));
+}
+
+#[test]
+fn run_inputs_bind_a_local_mcp_server_by_its_id_in_the_bindings_or_a_profiles_selection() {
+  let fixture = fixture();
+  let (bound_for_run, chosen, other) = (
+    ConnectionId::generate(),
+    ConnectionId::generate(),
+    ConnectionId::generate(),
+  );
+  let mut bindings = bound(&fixture);
+  assert!(
+    !bindings.binds_local_mcp(other),
+    "a run that binds no server binds none"
+  );
+  bindings.local_mcp = vec![bound_for_run, chosen];
+  bindings.profiles[0].mcp_servers = vec![chosen];
+  assert!(bindings.binds_local_mcp(bound_for_run));
+  assert!(bindings.binds_local_mcp(chosen));
+  assert!(!bindings.binds_local_mcp(other));
+  bindings.local_mcp = Vec::new();
+  assert!(
+    bindings.binds_local_mcp(chosen),
+    "the profile's selection alone binds it"
+  );
+  assert!(!bindings.binds_local_mcp(bound_for_run));
+}
+
+/// A team task in no module: what the server accepted names no module, and what was kept before the module became
+/// optional still reads.
+#[test]
+fn run_inputs_team_acceptance_of_a_task_in_no_module_leaves_the_module_out() {
+  let InputsOrigin::Team(mut acceptance) = team() else {
+    panic!("a team origin");
+  };
+  let with_module = serde_json::to_value(&acceptance).expect("serializes");
+  assert!(with_module["module"].is_string(), "{with_module}");
+  let read: TeamAcceptance = serde_json::from_value(with_module).expect("reads what was kept before");
+  assert_eq!(read, acceptance);
+
+  acceptance.module = None;
+  let without = serde_json::to_value(&acceptance).expect("serializes");
+  assert!(without.get("module").is_none(), "{without}");
+  let read: TeamAcceptance = serde_json::from_value(without).expect("reads");
+  assert_eq!(read.module, None);
+  assert_eq!(read.branch, acceptance.branch);
 }

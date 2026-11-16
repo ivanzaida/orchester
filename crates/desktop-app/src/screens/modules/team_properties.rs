@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -181,10 +181,14 @@ fn muted(id: &str, words: &str) -> Element {
   text(id, words, PaletteColor::TextMuted).into()
 }
 
+/// `words` on one line, which a long value (a branch's name) ends with an ellipsis rather than past the column.
 fn text(id: &str, words: &str, color: PaletteColor) -> Text {
   Text::new(words)
     .id(id.to_owned())
     .variant(TypographyStyle::Description)
     .color(color)
     .nowrap()
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .text_overflow(TextOverflow::Elipsis)
 }

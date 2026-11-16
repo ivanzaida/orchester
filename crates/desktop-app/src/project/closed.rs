@@ -40,7 +40,7 @@ pub(super) fn settle(ctx: &mut Ctx, (open, changes): (&OpenProject, u64)) {
 }
 
 /// How often the shared projects' caches changed; `servers` wakes the stream for every shared project.
-pub(super) fn shared_changes(ctx: &mut Ctx, servers: &Servers) -> u64 {
+pub(crate) fn shared_changes(ctx: &mut Ctx, servers: &Servers) -> u64 {
   let count = ctx.stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
     let mut updates = servers.subscribe_shared();
     loop {

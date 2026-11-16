@@ -5,7 +5,7 @@
 //! workspace reads them from its stream. Make local keeps no copy of it: the cached resources and versions go, with the
 //! references and the bindings, while the project's own resources stay and the runs keep their snapshots.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
@@ -21,18 +21,17 @@ use orchester_core::{
   sharing::MemberRole,
   store::{BlobStore, ResourceStore, RunStore},
 };
-use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget, ResourceSharing, StoreError};
-use orchester_workspace::sharing::{
-  ShareRefusalReason, SharingError,
-  sync::{keep_uploaded_configuration, upload_configuration},
+use orchester_store::{ProjectDb, StoreError};
+use orchester_workspace::{
+  sharing::{ShareRefusalReason, SharingError, sync::upload_configuration},
+  team_config::TeamConfig,
 };
 
 use super::{
   ALICE, BOB, Member, TeamServer, Workspace, link,
-  publish::{Publisher, json, number, rule},
+  publish::{Publisher, json, number, one_step, rule},
   seen_within,
   support::{Fixture, at},
-  team_copy::one_step,
 };
 
 /// How long the second workspace may take to cache the uploaded resources from its stream.
@@ -112,16 +111,13 @@ impl Sharer {
     self.db().run(self.run_id).expect("read").expect("the run")
   }
 
-  /// Shares the project with `server` as its owner: the configuration goes up, the project is linked, and the uploaded
-  /// resources are kept as the server's.
+  /// Shares the project with `server` as its owner: the configuration goes up and the project is linked; the project's
+  /// own resources stay in its database as they were.
   pub(super) async fn share(&self, server: &TeamServer) {
     let publisher = Publisher::online(server, ALICE);
     let root = self.fixture.repo.path().to_owned();
-    let uploaded = upload_configuration(&publisher, &root).await.expect("uploaded");
+    upload_configuration(&publisher, &root).await.expect("uploaded");
     link(&mut self.db(), server, MemberRole::Owner);
-    keep_uploaded_configuration(&publisher, &root, uploaded)
-      .await
-      .expect("kept as the server's");
   }
 }
 
@@ -152,19 +148,27 @@ pub(super) fn on_server(server: &TeamServer, resource: ResourceId) -> Vec<(u32, 
     .collect()
 }
 
-/// A second workspace, Bob's, following the project until each of `resources` is cached there.
-async fn bob_caches(server: &TeamServer, resources: &[ResourceId]) -> Workspace {
+/// A second workspace, Bob's, following the project until each of `resources` is read into its memory, and what it
+/// read.
+async fn bob_reads(server: &TeamServer, resources: &[ResourceId]) -> Arc<TeamConfig> {
   let bob = Workspace::linked(server);
-  let stream = bob.follow(Member::of(server, BOB));
+  let member = Member::of(server, BOB);
+  let configs = member.configs.clone();
+  let stream = bob.follow(member);
   seen_within(CACHED, "the resources on the second workspace", || {
-    let db = bob.db();
-    resources
-      .iter()
-      .all(|resource| db.latest_version_number(*resource).ok().flatten().is_some())
+    configs.read(&bob.root).config().is_some_and(|config| {
+      resources
+        .iter()
+        .all(|resource| config.resource(*resource).and_then(|read| read.number()).is_some())
+    })
   })
   .await;
   stream.abort();
-  bob
+  configs
+    .read(&bob.root)
+    .config()
+    .cloned()
+    .expect("read on the second workspace")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -184,7 +188,7 @@ async fn live_updates_share_uploads_every_resource_with_its_numbers_and_skill_fi
     [(1, 11, alice_moreau()), (2, 13, alice_moreau())],
     "every version, numbers and times kept"
   );
-  assert_eq!(on_server(&server, delivery), [(1, 5, alice_moreau())]);
+  assert_eq!(on_server(&server, delivery), [(1, 4, alice_moreau())], "created as v1");
   assert_eq!(on_server(&server, builder), [(1, 3, alice_moreau())]);
   assert_eq!(on_server(&server, alice.skill), [(1, 15, alice_moreau())]);
   let (hash, content) = alice.part.clone();
@@ -205,28 +209,26 @@ async fn live_updates_share_uploads_every_resource_with_its_numbers_and_skill_fi
     before,
     "the same versions, ids and bodies"
   );
-  for resource in [alice.style, alice.skill, delivery, builder] {
-    let sharing = db.resource_sharing(resource).expect("read");
-    assert!(matches!(sharing, Some(ResourceSharing::Shared(_))), "{sharing:?}");
+  for resource in [alice.style, alice.skill, delivery, builder, alice.unpublished] {
+    assert_eq!(
+      db.resource_sharing(resource).expect("read"),
+      None,
+      "the project's own resources are kept as they were, not as a copy of the team's"
+    );
   }
-  assert_eq!(db.resource_sharing(alice.unpublished).expect("read"), None);
-  let cached = db.cached_version::<Instruction>(alice.style, number(2)).expect("read");
-  assert_eq!(cached.expect("the server's v2").publisher.name, "Alice Moreau");
   assert_eq!(alice.run(), run, "the run is unchanged");
 
-  let bob = bob_caches(&server, &[alice.style, builder, delivery]).await;
-  let bobs = style_versions(&bob.db(), alice.style);
+  let bob = bob_reads(&server, &[alice.style, builder, delivery]).await;
+  let style = bob.resource(alice.style).expect("Style on the second workspace");
   assert_eq!(
-    bobs
-      .iter()
-      .map(|version| (version.number().get(), version.body().clone()))
-      .collect::<Vec<_>>(),
-    [(1, rule("v1")), (2, rule("v2"))]
+    style.number().map(orchester_core::resource::VersionNumber::get),
+    Some(2)
   );
-  let pipeline = bob.db().latest_version::<Pipeline>(delivery).expect("read");
+  assert_eq!(style.body::<Instruction>().map(Result::ok), Some(Some(rule("v2"))));
+  let pipeline = bob.resource(delivery).expect("Delivery on the second workspace");
   assert_eq!(
-    pipeline.expect("Delivery on the second workspace").body(),
-    run.snapshot().body()
+    pipeline.body::<Pipeline>().map(Result::ok),
+    Some(Some(run.snapshot().body().clone()))
   );
   let member = Member::of(&server, BOB);
   let skill = member
@@ -320,15 +322,15 @@ async fn live_updates_share_uploads_nothing_when_a_pipeline_runs_a_profile_it_do
   let (delivery, _) = alice.delivery();
   let mut db = alice.db();
   let hotfix = db
-    .create_resource(
+    .create_published(
       slug("hotfix"),
       name("Hotfix"),
       &one_step(ResourceId::generate()),
       at(30),
     )
     .expect("Hotfix")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(hotfix, at(31)).expect("v1");
   let publisher = Publisher::online(&server, ALICE);
 
   let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;
@@ -346,16 +348,11 @@ async fn live_updates_share_uploads_nothing_when_a_pipeline_runs_a_profile_it_do
   assert_eq!(on_server(&server, delivery), [], "nothing was uploaded");
 }
 
-/// Nothing of the resource is left in the project: not the row, not a cached version, not a listing of its kind.
+/// Nothing of the resource is in the project: not the row, not a version, not a listing of its kind.
 fn assert_resource_gone(db: &ProjectDb, resource: ResourceId) {
   assert!(
     matches!(db.resource_sharing(resource), Err(StoreError::ResourceNotFound(_))),
-    "the resource is gone"
-  );
-  assert_eq!(
-    db.latest_version_number(resource).expect("read"),
-    None,
-    "no cached version"
+    "no such resource"
   );
   for kind in [
     ResourceKind::Pipeline,
@@ -375,6 +372,8 @@ fn assert_resource_gone(db: &ProjectDb, resource: ResourceId) {
 async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_past_runs_are_unchanged() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &[]);
   let alice = Sharer::new();
+  // Read before the Share: a shared project lists none of its own resources.
+  let (delivery, builder) = alice.delivery();
   alice.share(&server).await;
   let tone = ResourceId::generate();
   let named = ReferenceTarget::TeamResource {
@@ -386,57 +385,35 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
     json("tone"),
     vec![named],
   );
-  let bob = bob_caches(&server, &[alice.style, tone]).await;
-  let naming = |resource| KeptTarget::TeamResource {
-    kind: ResourceKind::Skill,
-    id: resource,
-  };
-  assert_eq!(
-    bob
-      .db()
-      .versions_naming(&naming(alice.skill))
-      .expect("read")
-      .iter()
-      .map(|version| version.resource)
-      .collect::<Vec<_>>(),
-    [tone],
-    "Tone's reference is cached"
-  );
-  assert_eq!(
-    bob.db().reference_bindings().expect("read"),
-    [],
-    "a team reference binds nothing"
-  );
-  let (delivery, builder) = alice.delivery();
+  let bob = Workspace::linked(&server);
+  let read = bob_reads(&server, &[alice.style, tone]).await;
+  assert!(read.resource(tone).is_some(), "Tone is read into memory");
+  assert_resource_gone(&bob.db(), tone);
   let run = alice.run();
   alice.db().make_local().expect("made local");
   bob.db().make_local().expect("made local");
 
   assert_eq!(alice.run(), run, "the run is unchanged");
-  let gone = [
-    (alice.db(), alice.style),
-    (alice.db(), alice.skill),
-    (alice.db(), delivery),
-    (alice.db(), builder),
-    (bob.db(), alice.style),
-    (bob.db(), tone),
-  ];
-  for (db, resource) in gone {
-    assert_resource_gone(&db, resource);
+  for resource in [alice.style, tone] {
+    assert_resource_gone(&bob.db(), resource);
   }
-  assert!(
-    matches!(
-      alice.db().versions::<Instruction>(alice.style),
-      Err(StoreError::ResourceNotFound(_))
-    ),
-    "no cached versions of a gone resource"
-  );
+  assert_resource_gone(&alice.db(), tone);
   let notes = alice.db().resources(ResourceKind::Instruction).expect("read");
+  let mut kept = notes.iter().map(|found| found.id()).collect::<Vec<_>>();
+  kept.sort();
+  let mut own = vec![alice.style, alice.unpublished];
+  own.sort();
   assert_eq!(
-    notes.iter().map(|found| found.id()).collect::<Vec<_>>(),
-    [alice.unpublished],
-    "Alice's own instruction stays"
+    kept, own,
+    "Alice's own instructions are hers again, as they were before the Share"
   );
+  assert_eq!(style_versions(&alice.db(), alice.style).len(), 2, "with their versions");
+  for resource in [delivery, builder, alice.skill] {
+    assert!(
+      matches!(alice.db().resource_sharing(resource), Ok(None)),
+      "{resource} is Alice's own again"
+    );
+  }
   assert!(
     alice
       .db()
@@ -445,9 +422,6 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
       .is_some(),
     "with its draft"
   );
-  let db = bob.db();
-  assert_eq!(db.reference_bindings().expect("read"), []);
-  assert_eq!(db.versions_naming(&naming(alice.skill)).expect("read"), []);
   assert_eq!(
     on_server(&server, alice.style).len(),
     2,

@@ -15,14 +15,14 @@ use orchester_core::{
   integration::attempt::{AttemptOutcome, MergeAsker},
   merge_queue::{Left, QueueState},
   orchestrator::{AgentWait, TaskEvent, TaskEventKind, WaitKind},
-  store::{RunStore, TaskStore},
+  store::RunStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
   links::{Link, TaskPage},
-  tasks::detail::run_store_error,
+  tasks::{detail::run_store_error, recorded::task_of},
 };
 
 /// The merges of the project's runs that stopped at conflicts and are news now, each by the key its event is kept by.
@@ -64,7 +64,7 @@ fn conflict_wait(
   let Some(run) = db.run(run).map_err(run_store_error)? else {
     return Ok(None);
   };
-  let Some(task) = db.task(run.task())? else {
+  let Some(task) = task_of(db, run.task())? else {
     return Ok(None);
   };
   Ok(Some(AgentWait {

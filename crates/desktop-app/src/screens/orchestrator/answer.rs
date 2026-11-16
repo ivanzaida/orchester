@@ -122,11 +122,15 @@ pub(super) fn nested(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   Some(quoted(&format!("orchestrator-answer-{key}"), quote))
 }
 
-/// The tag of what started `row`'s turn by itself: its wait, its run's end or its event; `None` for a person's turn.
+/// The tag of what started `row`'s turn by itself: its wait, its run's end or its event, or an event of a target led
+/// to the end; `None` for a person's turn.
 fn started(ctx: &Ctx, row: &TurnRow) -> Option<Element> {
-  let wait = row.turn.wait.as_deref()?;
   row.turn.state.as_ref()?;
   let id = format!("orchestrator-started-by-{}", row.turn.key());
+  if let Some(event) = &row.turn.standing {
+    return Some(super::started_by::standing_tag(ctx, &id, event));
+  }
+  let wait = row.turn.wait.as_deref()?;
   Some(super::started_by::tag(ctx, &id, wait, row.turn.event.as_ref()))
 }
 

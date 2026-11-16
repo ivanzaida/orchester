@@ -10,14 +10,17 @@ use std::{num::NonZeroU32, path::Path};
 
 use orchester_api::SharedResourceKind;
 use orchester_core::{
-  id::ResourceId,
-  resource::{AgentProfile, Resource, ResourceBody, TeamMcpServer, TeamReviewer, VersionNumber},
-  store::{ResourceStore, TaskStore},
+  id::{ConnectionId, ResourceId, RunId},
+  resource::{
+    AgentProfile, Instruction, Resource, ResourceBody, ResourceKind, Skill, TeamMcpServer, TeamReviewer, Tool,
+  },
+  run::{RunSnapshot, RunStatus},
+  store::{McpServerStore, ResourceStore, RunStore, TaskStore},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
-use super::{UsedBy, UsedByError, UsedByResource, UsedByRun, names};
-use crate::sharing::sync::pins;
+use super::{RunLine, RunState, UsedBy, UsedByError, UsedByResource, UsedByRun, names};
+use crate::sharing::sync::{pins, pins_mcp_server};
 
 pub(super) fn used_by(root: &Path, resource: ResourceId) -> Result<UsedBy, UsedByError> {
   let db = ProjectDb::open(root)?;
@@ -29,21 +32,78 @@ pub(super) fn used_by(root: &Path, resource: ResourceId) -> Result<UsedBy, UsedB
   })
 }
 
+/// A local MCP server's answer: the profiles whose latest version chooses it, and the runs that use it (a run uses the
+/// servers its pinned profile versions choose). A local MCP server is a connection, not a versioned resource, so it has
+/// its own typed id.
+pub(super) fn used_by_mcp_server(root: &Path, server: ConnectionId) -> Result<UsedBy, UsedByError> {
+  let db = ProjectDb::open(root)?;
+  db.mcp_server(server)?.ok_or(UsedByError::NotFound)?;
+  let mut profiles = Vec::new();
+  for resource in db.resources(ResourceKind::AgentProfile)? {
+    let Some(latest) = db.latest_version::<AgentProfile>(resource.id())? else {
+      continue;
+    };
+    if latest.body().mcp_servers().ids().contains(&server) {
+      profiles.push(UsedByResource {
+        kind: SharedResourceKind::AgentProfile,
+        id: resource.id(),
+        name: resource.name().to_string(),
+        version: latest.number(),
+      });
+    }
+  }
+  profiles.sort_by_cached_key(|used| (used.name.to_lowercase(), used.id.to_string()));
+  Ok(UsedBy {
+    resources: profiles,
+    runs: runs_where(&db, |run, snapshot| pins_mcp_server(&db, (run, snapshot), server))?,
+  })
+}
+
+/// How each of `runs` stands, for the confirmation that lists the runs an archive stops (`Agents · Archive · used by`
+/// L11); a run the project no longer has is left out.
+pub(super) fn run_lines(root: &Path, runs: &[RunId]) -> Result<Vec<RunLine>, UsedByError> {
+  let db = ProjectDb::open(root)?;
+  let mut lines = Vec::new();
+  for id in runs {
+    let Some(run) = db.run(*id)? else {
+      continue;
+    };
+    lines.push(RunLine {
+      run: *id,
+      number: run.number().get(),
+      state: match run.status() {
+        RunStatus::Pending => RunState::Pending,
+        RunStatus::Running => RunState::Running,
+        RunStatus::Paused(_) => RunState::Paused,
+        RunStatus::WaitingForPerson(_) => RunState::Waiting,
+        RunStatus::Interrupted(_) => RunState::Interrupted,
+        RunStatus::Succeeded | RunStatus::Failed(_) | RunStatus::Cancelled => RunState::Ended,
+      },
+    });
+  }
+  Ok(lines)
+}
+
 fn resources(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByResource>, UsedByError> {
   let mut found = Vec::new();
   naming(db, target, (SharedResourceKind::Pipeline, names::pipeline), &mut found)?;
   naming(
     db,
     target,
-    (SharedResourceKind::Instruction, names::instruction),
+    (SharedResourceKind::Instruction, names::never::<Instruction>),
     &mut found,
   )?;
-  naming(db, target, (SharedResourceKind::Skill, names::skill), &mut found)?;
-  naming(db, target, (SharedResourceKind::Tool, names::tool), &mut found)?;
   naming(
     db,
     target,
-    (SharedResourceKind::AgentProfile, names::never::<AgentProfile>),
+    (SharedResourceKind::Skill, names::never::<Skill>),
+    &mut found,
+  )?;
+  naming(db, target, (SharedResourceKind::Tool, names::never::<Tool>), &mut found)?;
+  naming(
+    db,
+    target,
+    (SharedResourceKind::AgentProfile, names::profile),
     &mut found,
   )?;
   naming(
@@ -62,8 +122,7 @@ fn resources(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByResource>, 
   Ok(found)
 }
 
-/// Adds the resources of `kind`, other than `target`, whose latest version `names` `target` in its body or, when it is
-/// a cached team version, in its references.
+/// Adds the resources of `kind`, other than `target`, whose latest version `names` `target` in its body.
 fn naming<B: ResourceBody>(
   db: &ProjectDb,
   target: ResourceId,
@@ -77,7 +136,7 @@ fn naming<B: ResourceBody>(
     let Some(latest) = db.latest_version::<B>(resource.id())? else {
       continue;
     };
-    if names(latest.body(), target) || referenced::<B>(db, resource.id(), latest.number(), target)? {
+    if names(latest.body(), target) {
       found.push(UsedByResource {
         kind,
         id: resource.id(),
@@ -89,26 +148,24 @@ fn naming<B: ResourceBody>(
   Ok(())
 }
 
-/// Whether the cached team version `number` of `resource` has a reference to `target`; a version made here has none.
-fn referenced<B: ResourceBody>(
-  db: &ProjectDb,
-  resource: ResourceId,
-  number: VersionNumber,
-  target: ResourceId,
-) -> Result<bool, UsedByError> {
-  Ok(
-    db.cached_version::<B>(resource, number)?
-      .is_some_and(|cached| names::referenced(&cached.references, target)),
-  )
-}
-
 /// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot
 /// be read is logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
 fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError> {
+  runs_where(db, |run, snapshot| {
+    Ok(pins(db, (run, snapshot), (target.id(), target.kind())))
+  })
+}
+
+/// The runs that have not ended and that `pinned` says use the target, given the run's id and snapshot, by the task
+/// key's number and then the run id.
+fn runs_where(
+  db: &ProjectDb,
+  pinned: impl Fn(RunId, &RunSnapshot) -> Result<bool, StoreError>,
+) -> Result<Vec<UsedByRun>, UsedByError> {
   let mut found: Vec<(NonZeroU32, UsedByRun)> = Vec::new();
   for listed in db.unfinished_runs()? {
     let run = match listed {
-      Ok(run) if pins(db, run.snapshot(), target)? => run,
+      Ok(run) if pinned(run.id(), run.snapshot())? => run,
       Ok(_) => continue,
       Err(unreadable) => {
         tracing::warn!(

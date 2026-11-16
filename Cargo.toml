@@ -104,9 +104,11 @@ keyring-core = "1"
 # of a scroll container, off unless it asks (`middle_button_autoscroll`), on only in the chats (`ui::chat::follow`);
 # 0.58: a press or a wheel lands on what the next frame shows, and `VirtualizedList` keeps the first row in view where
 # it is when measured heights change (a tall row opened in a chat no longer moves it);
+# 0.59: a Markdown link only the pointer follows (`MarkdownLinkPresentation::pointer_only`), as every link of the
+# app's Markdown is: no Tab stop, and a press leaves the focus where it was;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.58.2", default-features = false, features = ["query"] }
+lurq = { version = "0.59.0", default-features = false, features = ["query"] }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"
@@ -242,9 +244,21 @@ zstd = { version = "0.13", default-features = false }
 [profile.dev.package."*"]
 opt-level = 2
 
+# The app crate's dev rlib with full debug info passes MSVC's 4 GiB library limit, so link.exe refuses it
+# ("invalid library format", LNK1120). Line tables keep file and line in backtraces and stay well under it.
+[profile.dev.package.orchester-app]
+debug = "line-tables-only"
+
 # Line tables only, the least debug info that still gives GlitchTip a frame's function, file and line from the
 # uploaded debug files. On Windows (MSVC) it lands in a `.pdb` beside each program, which no installer or zip
 # packs; on macOS `packed` keeps it out of the binaries too, in a `.dSYM` beside them.
 [profile.release]
 debug = "line-tables-only"
 split-debuginfo = "packed"
+
+# tools/install.ps1's build for this computer: the release build, but incremental and in many codegen units, so a small
+# change rebuilds in minutes instead of recompiling the app crate whole. CI's releases keep [profile.release].
+[profile.local-release]
+inherits = "release"
+incremental = true
+codegen-units = 256

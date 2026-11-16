@@ -11,14 +11,14 @@ use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   connection::mcp::McpServerSelection,
-  id::{OperationId, ResourceId, RunId, SecretId},
+  id::{OperationId, ResourceId, RunId},
   integration::base::RunBaseSource,
-  resource::{AgentProfile, StepKind, Tool, Version},
+  resource::{AgentProfile, StepKind, TeamTool, Version},
   revision::Revision,
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, RunStatus,
-    inputs::{BoundReference, InputsOrigin, RunInputs},
-    preflight,
+    inputs::{InputsOrigin, RunInputs},
+    preflight_team,
   },
   store::{ConnectionStore, McpServerStore, RunStore, SecretStore},
   time::Timestamp,
@@ -92,18 +92,19 @@ fn check(db: &ProjectDb, root: &Path, accepted: &AcceptedInputs) -> Result<NewRu
     snapshot,
     branch: BranchName::for_next_run(task.key(), earlier.len()),
     base,
-    // The branch the run merges into is its module's, which the server assigned.
+    // The branch the run merges into: its module's, which the server assigned, or, for a task in no module, the one
+    // this computer had checked out when it asked for the start.
     base_branch: Some(acceptance.branch.clone()),
-    base_source: RunBaseSource::Module {
-      module: acceptance.module,
-    },
+    base_source: acceptance
+      .module
+      .map_or(RunBaseSource::CheckedOut, |module| RunBaseSource::Module { module }),
     budget: limits.budget(),
     max_duration: limits.max_duration(),
   })
 }
 
 /// What keeps `inputs` from running on this computer: core's preflight of the accepted pipeline, its profiles on their
-/// bound connections and MCP servers and its tools, with each tool's secret looked up as the bindings bind it.
+/// bound connections and MCP servers and its tools, with the team secret each tool names looked up here by its name.
 fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightProblem>, StoreError> {
   let canonical = inputs.bundle().inputs();
   let connections = db.connections()?;
@@ -119,7 +120,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
       Some((pin.resource, Version::new(pin.version, pin.number, body, now)))
     })
     .collect();
-  let tools: BTreeMap<ResourceId, Version<Tool>> = canonical
+  let tools: BTreeMap<ResourceId, Version<TeamTool>> = canonical
     .tools()
     .iter()
     .map(|pinned| {
@@ -131,17 +132,15 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     })
     .collect();
   let secrets = db.secrets()?;
-  let mut problems: Vec<PreflightProblem> = preflight(PreflightInput {
+  let mut problems: Vec<PreflightProblem> = preflight_team(PreflightInput {
     pipeline: Some(canonical.pipeline().body()),
     profiles: &profiles,
     tools: &tools,
     connections: &connections,
+    chosen_here: &BTreeMap::new(),
     mcp_servers: &db.mcp_servers()?,
     secrets: &secrets,
-  })
-  .into_iter()
-  .filter(|problem| !matches!(problem, PreflightProblem::SecretMissing { .. }))
-  .collect();
+  });
   for step in canonical.pipeline().body().steps() {
     if let StepKind::Agent {
       profile: Some(profile), ..
@@ -163,7 +162,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     };
     let named = tools.get(tool).and_then(|version| version.body().secret());
     if let Some(named) = named
-      && !secrets.iter().any(|secret| secret.id() == bound_secret(inputs, named))
+      && !db.has_team_secret_value(named)?
     {
       problems.push(PreflightProblem::SecretMissing { step: step.key.clone() });
     }
@@ -184,19 +183,6 @@ fn without_team_mcp(inputs: &RunInputs, profile: AgentProfile) -> AgentProfile {
     .collect();
   let local = McpServerSelection::new(local).expect("ids taken from a selection stay distinct");
   profile.with_mcp_servers(local)
-}
-
-/// The secret of this project the bindings bind the publisher's secret `named` to; `named` itself when they bind none.
-fn bound_secret(inputs: &RunInputs, named: SecretId) -> SecretId {
-  inputs
-    .bindings()
-    .references
-    .iter()
-    .find_map(|reference| match reference {
-      BoundReference::Secret { named: bound, local } if *bound == named => Some(*local),
-      _ => None,
-    })
-    .unwrap_or(named)
 }
 
 /// Whether the repository at `root` has commit `commit`.

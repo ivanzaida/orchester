@@ -20,7 +20,7 @@ use orchester_store::{ProjectDb, StoreError, TeamStartStage};
 use support::{at, copied_at_version};
 
 /// The schema before `team_start_notes`. Migrations are append-only, so a later one still applies on open.
-const BEFORE_START_NOTES: u32 = 152;
+const BEFORE_START_NOTES: u32 = 160;
 
 /// A project linked to a server project, with the start `operation` of a team task recorded at `Requested`.
 fn started() -> (tempfile::TempDir, ProjectDb, OperationId, TaskId) {

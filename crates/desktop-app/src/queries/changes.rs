@@ -1,14 +1,14 @@
 //! Which queries a change touches: each kind of a project's change that `OutsideChanges` counts, each application
-//! setting's, and the other signals the window follows (the accounts', the update settings', a project's runs'). The
-//! map is plain data ([`touched`], [`app_touched`]), so it is tested apart from the window; [`invalidate`] and
-//! [`invalidate_app`] turn it into lurq's invalidations.
+//! setting's, and the other signals the window follows (the accounts', the update settings', a project's runs', a team
+//! project's configuration). The map is plain data ([`touched`], [`app_touched`]), so it is tested apart from the
+//! window; [`invalidate`] and [`invalidate_app`] turn it into lurq's invalidations.
 
 use std::path::Path;
 
 use lurq::query::QueryClient;
 use orchester_workspace::tasks::outside::{AppOutside, Outside};
 
-use super::{Session, app, project};
+use super::{Session, app, hub, project};
 use crate::screens::settings::Consent;
 
 /// A project's query, by what it reads.
@@ -30,6 +30,21 @@ pub enum ProjectRead {
   Sources,
   /// The code index's builds, which a run's start builds and its end may remove.
   IndexBuilds,
+  /// A team project's Agents hub: the team's resources and what this computer filled in.
+  TeamHub,
+  /// A local project's Agents hub: its resources, what uses them and how they stand.
+  LocalHub,
+  /// The Pipelines hub: its pipelines, the tasks that use them and how each stands on this computer.
+  PipelineHub,
+  /// What a local instruction's panel edits over: the instructions, the profiles and pipelines they name.
+  HubInstructions,
+  /// What a local skill's panel edits over: the skills, the profiles and pipelines their scopes name.
+  HubSkills,
+  /// What a local tool's panel edits over: the tools and their published versions.
+  HubTools,
+  /// What the form that makes a profile chooses from: the agent connections, the profiles, the pipelines' steps, the
+  /// repository's agent files and the project's instructions, skills and tools.
+  ProfileForm,
 }
 
 /// An application query, by what it reads.
@@ -45,12 +60,23 @@ pub enum AppRead {
   Accounts,
   /// The computer's *Services at once*, which Settings › General and every project's Runs › Limits show.
   ServiceSlots,
+  KeepsAwake,
 }
 
 /// What a project's runs starting, ending or changing state touches: the project's settings, whose rules *Approve for
 /// every run* adds as a run's request is answered, and the code index's builds, which the runner makes as a run starts.
 /// The project's loader follows the runs' state as it is published, so a move no tab rendered still reads them again.
-pub const RUNS: &[ProjectRead] = &[ProjectRead::Settings, ProjectRead::IndexBuilds];
+/// A local project's hub shows what the runs decide too: which profiles and servers they use, and so readiness.
+pub const RUNS: &[ProjectRead] = &[
+  ProjectRead::Settings,
+  ProjectRead::IndexBuilds,
+  ProjectRead::LocalHub,
+  ProjectRead::PipelineHub,
+];
+/// What a change of a team project's configuration touches: its hub. The configuration is read again whenever the
+/// project's cache took one of the team server's events, so this is how a resource published, archived or restored on
+/// the server, a member's role and the standings of what was sent from here reach the hub.
+pub const TEAM: &[ProjectRead] = &[ProjectRead::TeamHub];
 /// What a change of the person's accounts touches.
 pub const ACCOUNTS: &[AppRead] = &[AppRead::Accounts];
 /// What an update setting saved, or the update's state turning to another kind (a check's end), touches.
@@ -61,25 +87,68 @@ pub const fn touched(kind: Outside) -> &'static [ProjectRead] {
   match kind {
     // A profile's approval mode is what Runs › Approvals names as set to Autopilot; the code index's setting is one of
     // the project's settings (its builds are its tab's live state).
-    Outside::AutoMode | Outside::Limits | Outside::Runs | Outside::Profiles | Outside::CodeIndex => {
-      &[ProjectRead::Settings]
-    }
+    Outside::AutoMode | Outside::Limits | Outside::Runs | Outside::CodeIndex => &[ProjectRead::Settings],
+    // The hubs list the profiles; an instruction's and a skill's scope name them.
+    Outside::Profiles => &[
+      ProjectRead::Settings,
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::PipelineHub,
+      ProjectRead::HubInstructions,
+      ProjectRead::HubSkills,
+      ProjectRead::ProfileForm,
+    ],
+    // The repository's agent files are what a new profile's permissions are shown beside.
     Outside::ProjectSettings => &[
       ProjectRead::Settings,
       ProjectRead::Variables,
       ProjectRead::Memory,
       ProjectRead::Sources,
+      ProjectRead::ProfileForm,
     ],
-    // A connection's change may change the reviewer's account, the GitHub link and what the secrets are used by.
+    // A connection's change may change the reviewer's account, the GitHub link and what the secrets are used by. A
+    // program path, a secret value and *On here* filled in for the team's resources count as one too.
     Outside::Connections => &[
       ProjectRead::Settings,
       ProjectRead::Repository,
       ProjectRead::Connections,
       ProjectRead::Secrets,
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::PipelineHub,
+      ProjectRead::ProfileForm,
     ],
     Outside::Orchestrator => &[ProjectRead::Orchestrator],
     Outside::Estimates => &[ProjectRead::Estimates],
-    Outside::Tasks | Outside::Pipelines | Outside::Tools | Outside::Instructions | Outside::Skills => &[],
+    // A pipeline's steps use profiles and name an instruction's and a skill's scope.
+    Outside::Pipelines => &[
+      ProjectRead::LocalHub,
+      ProjectRead::PipelineHub,
+      ProjectRead::HubInstructions,
+      ProjectRead::HubSkills,
+      ProjectRead::ProfileForm,
+    ],
+    // A new profile's form offers the project's instructions, skills and tools.
+    Outside::Tools => &[
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::HubTools,
+      ProjectRead::ProfileForm,
+      ProjectRead::PipelineHub,
+    ],
+    Outside::Instructions => &[
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::HubInstructions,
+      ProjectRead::ProfileForm,
+    ],
+    Outside::Skills => &[
+      ProjectRead::TeamHub,
+      ProjectRead::LocalHub,
+      ProjectRead::HubSkills,
+      ProjectRead::ProfileForm,
+    ],
+    Outside::Tasks => &[],
   }
 }
 
@@ -92,6 +161,7 @@ pub const fn app_touched(kind: AppOutside) -> &'static [AppRead] {
     AppOutside::Browser => &[AppRead::Browser],
     AppOutside::Automation => &[AppRead::Automation],
     AppOutside::ServiceSlots => &[AppRead::ServiceSlots],
+    AppOutside::KeepsAwake => &[AppRead::KeepsAwake],
   }
 }
 
@@ -114,13 +184,14 @@ pub const OUTSIDE: [Outside; 14] = [
 ];
 
 /// Every application setting's change, for following them all.
-pub const APP_OUTSIDE: [AppOutside; 6] = [
+pub const APP_OUTSIDE: [AppOutside; 7] = [
   AppOutside::UsageThreshold,
   AppOutside::ErrorReports,
   AppOutside::DailyReport,
   AppOutside::Browser,
   AppOutside::Automation,
   AppOutside::ServiceSlots,
+  AppOutside::KeepsAwake,
 ];
 
 /// Invalidates the project at `root`'s query `read`: an entry a tab or the project's loader shows reads again behind
@@ -133,7 +204,8 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::Estimates => client.invalidate(project::estimates(session, root)),
     ProjectRead::Orchestrator => {
       client.invalidate(project::orchestrator_drives(session.clone(), root.clone()));
-      client.invalidate(project::orchestrator_watch(session, root));
+      client.invalidate(project::orchestrator_watch(session.clone(), root.clone()));
+      client.invalidate(project::orchestrator_lead_defaults(session, root));
     }
     ProjectRead::Memory => client.invalidate(project::memory_settings(session, root)),
     ProjectRead::Variables => client.invalidate(project::variables(session, root)),
@@ -142,6 +214,13 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::Secrets => client.invalidate(project::secrets::all()),
     ProjectRead::Sources => client.invalidate(project::project_sources(session, root)),
     ProjectRead::IndexBuilds => client.invalidate(project::index_builds(session, root)),
+    ProjectRead::TeamHub => client.invalidate(hub::team_hub(session, root)),
+    ProjectRead::LocalHub => client.invalidate(hub::local_hub(session, root)),
+    ProjectRead::PipelineHub => client.invalidate(hub::pipeline_hub(session, root)),
+    ProjectRead::HubInstructions => client.invalidate(hub::instructions(session, root)),
+    ProjectRead::HubSkills => client.invalidate(hub::skills(session, root)),
+    ProjectRead::HubTools => client.invalidate(hub::tools(session, root)),
+    ProjectRead::ProfileForm => client.invalidate(hub::profile_form(session, root)),
   }
 }
 
@@ -161,5 +240,6 @@ pub fn invalidate_app(client: &QueryClient, session: &Session, read: AppRead) {
     }
     AppRead::Accounts => client.invalidate(app::agent_accounts(session)),
     AppRead::ServiceSlots => client.invalidate(app::service_slots(session)),
+    AppRead::KeepsAwake => client.invalidate(app::keeps_awake(session)),
   }
 }

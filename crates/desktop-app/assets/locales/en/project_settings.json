@@ -2,6 +2,7 @@
   "project_settings": {
     "title": "Project settings",
     "general": "General",
+    "agentsHub": "Agents",
     "limits": "Limits",
     "environment": "Environment",
     "sources": "Sources",
@@ -80,7 +81,7 @@
     "reload": "Reload",
     "finishEditing": "Save or fix the changes in this section before opening another.",
     "reviewerUnavailable": "Manual's reviewer needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
-    "openConnections": "Open Connections",
+    "openConnections": "Open Accounts",
     "outsideTitle": "Changed outside this screen",
     "outsideDetail": "Your edits are kept. Reload to show the values stored now.",
     "project": "Project",
@@ -111,7 +112,7 @@
     "githubAccountDetail": "Pull requests are created only while gh is signed in as this account. Orchester never switches gh accounts.",
     "checkAgain": "Check again",
     "useAccount": "Use signed-in account",
-    "githubUnavailable": "Linking a repository is not built in this app yet. Manage GitHub in Connections.",
+    "githubUnavailable": "Linking a repository is not built in this app yet.",
     "agentFilesSection": "Agents and the repository",
     "agentFiles": "Repository agent files",
     "agentFilesDetail": "Whether agents may read the repository's own AGENTS.md, CLAUDE.md and skills folders besides Orchester's instructions and skills. A change applies to agents that start after it.",
@@ -124,24 +125,38 @@
     "none": "none",
     "claudeNone": "none · started without project settings",
     "filesNote": "Agents read these files as they are in the run's worktree, so they are not versioned with the run. Claude Code is started without project settings, so it loads neither CLAUDE.md nor .claude/skills. To keep them in Orchester instead, import them as drafts and turn this off.",
-    "import": "Import from repository",
-    "importUnavailable": "Repository import is not built in this app yet.",
     "baseMovedSection": "When the base branch moves",
     "baseMoved": "Tell working agents when the base branch moves",
     "baseMovedDetail": "When a merge, a commit or a pull moves the branch a run started from, the run's next agent that may write is told to merge it into its worktree, after its turn and never mid-edit. Moves within two minutes are one notice.",
     "baseMovedOn": "On · writing agents merge the moved base early",
     "baseMovedOff": "Off · agents are not told",
     "auto": "Approvals",
-    "allowAutopilot": "Allow Autopilot for agents in this project",
-    "allowAutopilotOn": "On · profiles set to Autopilot approve their own requests · only you can turn it on",
-    "allowAutopilotOff": "Off · every agent runs as Manual",
-    "allowAutopilotOffProfiles": {
-      "one": "Off · every agent runs as Manual · {{profiles}} is set to Autopilot",
-      "other": "Off · every agent runs as Manual · {{profiles}} are set to Autopilot"
+    "approveMode": "Approve mode",
+    "approveModeManual": "Manual",
+    "approveModeAutopilot": "Autopilot",
+    "approveModeDangerous": "Dangerous auto-approve",
+    "approveModeManualHint": "Every agent asks for what its allowed list does not cover, whatever its profile says",
+    "approveModeManualHintProfiles": {
+      "one": "Every agent asks for what its allowed list does not cover, whatever its profile says · {{profiles}} is set to Autopilot",
+      "other": "Every agent asks for what its allowed list does not cover, whatever its profile says · {{profiles}} are set to Autopilot"
     },
     "listSeparator": ", ",
     "listAnd": "{{rest}} and {{last}}",
-    "allowAutopilotDetail": "Autopilot approves an agent's tool requests at once; work outside the worktree, pushes to a remote and other branches still ask you. Off, every agent here runs as Manual: its allowed commands run, the reviewer judges the rest, then you. A run can switch itself to Manual, never back. Kept on this computer only.",
+    "approveModeAutopilotHint": "Profiles set to Autopilot approve their own requests · only you can choose it",
+    "approveModeDangerousHint": "Every tool request of every agent in this project is approved at once: no review, no hold, nobody asked · only you can choose it",
+    "approveModeDetail": "Manual: every agent here runs as Manual — its allowed commands run, the reviewer judges the rest, then you. Autopilot: agents whose profile is set to Autopilot approve their own requests; work outside the worktree, pushes to a remote and other branches still ask you. Dangerous auto-approve: every tool request of every agent is approved at once, with no allowed list, hold, reviewer or question; questions and plans still come to you. Only you move it up; anyone, automation included, moves it down. A run can switch itself to Manual, never back. Kept on this computer only.",
+    "dangerousFoot": "The hold rules, the reviewer and the approved rules are not used while Dangerous auto-approve is chosen.",
+    "dangerousDialog": {
+      "title": "Turn on Dangerous auto-approve mode?",
+      "text": "Every tool request of every agent in {{project}} will be approved at once. Nothing is reviewed or held and nobody is asked: not you, not the reviewer, not the Orchestrator. An agent, or text it read somewhere, can then:",
+      "push": "Push or force-push to any branch",
+      "delete": "Delete or overwrite files outside its worktree",
+      "credentials": "Read credentials and send them out",
+      "run": "Run any command, MCP tool or web page",
+      "after": "It stays on until you turn it off here. What it approved is listed in each run's Conversation as “Approved by Dangerous auto-approve mode”.",
+      "cancel": "Cancel",
+      "confirm": "Turn it on, I accept the risk"
+    },
     "on": "On",
     "off": "Off",
     "decision": {
@@ -225,11 +240,9 @@
     "environmentChanges": "Changes apply to the next agent or command that starts",
     "environmentChangesDetail": "An agent or command already running keeps the environment it started with.",
     "confirmEnvironment": "Change the environment for new agents and commands?",
-    "autoPersonOnly": "Only a person changes the reviewer: the change from automation was not saved.",
     "confirm": "Save this change",
     "keep": "Keep editing",
     "indexHeading": "Code index",
-    "memory": "Memory",
     "memoryOnlyYou": "Only you, here in the window",
     "memoryTaskHint": "Handoffs, decisions and warnings agents record while they work on one task",
     "memoryProjectHint": "Facts and decisions agents record for every task of {{project}}",
@@ -370,7 +383,6 @@
       "noLanguage": "Estimates unavailable · no language reviewer is available in this project. Add a Claude Code connection to estimate story points with a reason.",
       "unreadable": "This setting can't be read: {{reason}}",
       "notSaved": "Not saved: {{reason}}",
-      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
       "couldNotRun": "The last estimate couldn't run: {{reason}}"
     },
     "orchestrator": {
@@ -380,7 +392,6 @@
       "foot": "Off: the Orchestrator proposes each change in the chat and you apply it, and no turn starts by itself. Each project has its own; a new project starts with it off.",
       "unreadable": "This setting can't be read: {{reason}}",
       "notSaved": "Not saved: {{reason}}",
-      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
       "drive": {
         "label": "Let the Orchestrator drive",
         "hint": "It acts itself with Orchester's tools: runs, merges, answers, publishes, git",
@@ -404,15 +415,37 @@
           "invalid": "Whole minutes, {{min}} to {{max}} — or turn it off"
         }
       },
-      "alsoNeeded": "Also needed · set for this computer",
-      "alsoNeededFoot": "Set once in Settings for every project: it is about what may answer in your place on this computer.",
-      "answerApprovals": {
-        "label": "Let automation answer approvals",
-        "hint": "Answering agents' questions and messages acts only while this is on too · Settings › Automation",
-        "on": "On",
-        "off": "Off",
-        "open": "Open",
-        "unreadable": "Whether automation may answer approvals can't be read: {{reason}}"
+      "leading": {
+        "title": "Leading to the end",
+        "where": "What a new leading subscription takes · /watching changes it for one",
+        "foot": "A new project starts with {{runs}} runs, {{returns}} returns, {{raises}} raise by {{percent}} % and no budget. Subscriptions already made keep theirs.",
+        "invalid": "A whole number, {{min}} to {{max}}",
+        "runs": {
+          "label": "Runs of a task",
+          "hint": "How many times it may run one task again before the task is parked for you · {{min}} to {{max}}",
+          "unit": "runs"
+        },
+        "returns": {
+          "label": "Returns per run",
+          "hint": "Returns to an earlier step inside one run · {{min}} to {{max}}",
+          "unit": "returns"
+        },
+        "raises": {
+          "label": "Raises of a limit",
+          "hint": "How often it may raise a run's token or time limit, and by how much · {{min}} to {{max}}, up to {{percent}} %",
+          "times": "How often a run's limit may be raised",
+          "share": "By how much of the limit, in percent",
+          "by": "by",
+          "percent": "%",
+          "invalidShare": "A whole number of percent, {{min}} to {{max}}"
+        },
+        "budget": {
+          "label": "Budget",
+          "hint": "Tokens for the whole target; nothing new starts once it is used · empty: no budget",
+          "unit": "tokens",
+          "none": "None",
+          "invalid": "A whole number of tokens above 0 — or leave it empty for no budget"
+        }
       }
     },
     "limitsNote": "Apply to new runs",

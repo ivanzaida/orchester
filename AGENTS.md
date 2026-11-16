@@ -1,9 +1,13 @@
 Agent Instructions
 
 Orchester is a desktop application for orchestrating coding agents per project: tasks and runs, pipelines, agent
-profiles, instructions, tools, secrets and connections, all owned by a project. It is local-only today; a server will
-be added later, so domain logic must not depend on the desktop app.
+profiles, instructions, tools, secrets and connections, all owned by a project. A project lives on this computer only
+or is linked to a team server; domain logic must not depend on the desktop app.
 
+- Local and team projects behave the same (the person, 2026-11-13): `docs/design/local-and-team-parity.md` holds the
+  rule and the table of every difference that still exists. Build a feature for both kinds in the same change; one
+  that cannot be adds its row to that table with the task that closes it. Never scope a plan or a design to one kind,
+  and never leave a `team_project_unsupported` (or its like) without a row there.
 - Product and interaction design: `docs/design/orchester-workspace.md`. Open design issues:
   `docs/evidence/design-consistency-audit-2026-09-23.md`. All project data in the designs is illustrative fixture data;
   never ship it as real data or defaults.
@@ -88,7 +92,7 @@ Hard requirements:
    an explicit, visible "not supported on this platform yet" state — never a silent gap). Do not add Windows-only
    dependencies without their macOS counterpart. The macOS side (Unix socket transport and peer check, process groups,
    program search path, Library data location, `.app` bundle) is checked on a Mac: by CI's macOS job (clippy and
-   tests, `.github/workflows/ci.yml`; it runs on a release or by hand) or by a person. Do not run `cargo check`/`clippy
+   tests, `.github/workflows/ci.yml`; it runs by hand only, never on a release) or by a person. Do not run `cargo check`/`clippy
    --target aarch64-apple-darwin` on Windows: the crates' C dependencies (ring, SQLite, zstd) cannot build there
    without the Apple SDK, so it proves nothing. Name the `cfg(target_os = "macos")` code you added or changed instead,
    and list the macOS check as not run. Known gaps today: a macOS process group does not
@@ -131,6 +135,7 @@ Hard requirements:
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
    `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`,
    `crates/exec/src/local_git/stamps/windows.rs`, `crates/exec/src/disk_space/windows.rs`,
+   `crates/exec/src/awake/windows.rs`,
    `crates/exec/src/search_path/windows.rs`, `crates/exec/src/native_ui/windows/automation.rs`,
    `crates/exec/src/native_ui/windows/window.rs`, `crates/exec/src/native_ui/macos/cf.rs`,
    `crates/exec/src/native_ui/macos/ax.rs`, `crates/exec/src/native_ui/macos/window.rs`,
@@ -159,7 +164,11 @@ Hard requirements:
 16. Never send input to the desktop globally (`SendKeys`, global mouse/keyboard injection) and never capture the
     whole screen: other windows belong to the user. Drive the app through its embedded MCP server
     (`lurq_interact`, `lurq_set_value`, `lurq_screenshot`); a native dialog of your own process may be driven only
-    by targeting that dialog window explicitly. Stop and report if that is not possible.
+    by targeting that dialog window explicitly. Exception (the person, 2026-11-09): a step a QA copy refuses to
+    MCP input as person-only (signing in, joining a team, and the like) may be done as a person in a QA copy you
+    started yourself, by sending input to that copy's own window only (found by its pid, e.g. Windows UI Automation
+    or messages to its HWND), never to other windows, never with global injection, and never in the installed app.
+    Otherwise stop and report if it is not possible.
 17. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
     something a few lines of code can do; state why a new dependency is needed.
 18. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests

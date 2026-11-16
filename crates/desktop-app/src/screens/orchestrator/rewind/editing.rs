@@ -32,7 +32,6 @@ use crate::{
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
-    tinted_note::person_only,
   },
 };
 
@@ -154,21 +153,12 @@ impl Component for EditField {
   }
 }
 
-/// Why sending the edit without the dialog did nothing, while the dialog does not say it: `{id}-person-only` once
-/// synthetic input sent it, `{id}-error` once the conversation could not go back.
+/// Why sending the edit without the dialog did nothing, while the dialog does not say it: `{id}-error` once the
+/// conversation could not go back.
 fn why_not(ctx: &mut Ctx, props: &FieldProps) -> Option<Element> {
   let state = &props.env.state;
   if state.open.get() {
     return None;
-  }
-  if state.refused.get() {
-    return Some(
-      person_only(
-        format!("{}-person-only", props.id),
-        &ctx.t("orchestrator.rewind.personOnly"),
-      )
-      .into(),
-    );
   }
   let action = state.action.state().get();
   let rejected = action.is_rejected();

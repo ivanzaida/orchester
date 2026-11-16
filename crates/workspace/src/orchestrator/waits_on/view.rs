@@ -7,12 +7,13 @@
 use orchester_core::{
   id::{RunId, TaskId},
   run::Run,
-  store::{ConversationStore, TaskStore},
+  store::ConversationStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, RunWaitEnd, StoreError};
 
 use super::follow::{answered_since, waits_for_person};
+use crate::tasks::recorded::task_of;
 
 /// A run's latest wait on a task, with what its row and the task page name.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,7 +111,7 @@ pub fn read(db: &ProjectDb, run: &Run) -> Result<Option<RunWaitView>, StoreError
 
 /// Task `task`'s key and title; its id and no title once the project no longer keeps it.
 fn named(db: &ProjectDb, task: TaskId) -> Result<(String, String), StoreError> {
-  Ok(db.task(task)?.map_or_else(
+  Ok(task_of(db, task)?.map_or_else(
     || (task.to_string(), String::new()),
     |task| (task.key().to_string(), task.details().title.as_str().to_owned()),
   ))

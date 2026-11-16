@@ -20,13 +20,14 @@ fn domain_tools_are_listed_beside_lurqs_and_the_apps_with_their_scopes() {
     "run_task",
     "decide_approval",
     "add_project",
-    "add_cli_connection",
+    "set_profile_account",
+    "check_account",
     "add_mcp_server",
     "update_mcp_server",
     "remove_mcp_server",
     "set_mcp_server_enabled",
     "save_profile_draft",
-    "save_pipeline_draft",
+    "save_pipeline",
     "save_instruction_draft",
     "merge_run",
     "complete_run",
@@ -40,8 +41,16 @@ fn domain_tools_are_listed_beside_lurqs_and_the_apps_with_their_scopes() {
   let read_only = |name: &str| named(name).expect("listed")["annotations"]["readOnlyHint"] == true;
   assert!(read_only("list_projects") && read_only("get_pipeline"));
   assert!(!read_only("create_task") && !read_only("merge_run"));
-  let schema = &named("add_cli_connection").expect("listed")["inputSchema"];
-  assert_eq!(schema["required"], json!(["project", "kind", "name"]));
+  let schema = &named("set_profile_account").expect("listed")["inputSchema"];
+  assert_eq!(schema["required"], json!(["project", "profile", "account"]));
+  for gone in [
+    "add_cli_connection",
+    "set_connection_account",
+    "set_api_provider",
+    "pick_profile_connection",
+  ] {
+    assert!(named(gone).is_none(), "{gone} named an agent connection and is gone");
+  }
 }
 
 #[test]
@@ -134,7 +143,11 @@ fn domain_automation_answers_approvals_only_while_a_person_lets_it() {
   );
   assert_eq!(refused["code"], "automation_not_allowed");
   let connection = served.ok("list_connections", &json!({ "project": "Kontur" }));
-  assert!(connection["agents"].is_array());
+  assert!(connection["runs_on"].is_array());
+  assert!(
+    connection.get("agents").is_none(),
+    "no agent connection is listed: {connection}"
+  );
 }
 
 #[test]
@@ -176,9 +189,9 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
   );
   let unknown = served.refused(
     "save_profile_draft",
-    &json!({ "project": "Kontur", "role": "Builder", "connection": "nowhere", "model": "gpt-5.5" }),
+    &json!({ "project": "Kontur", "role": "Builder", "account": "nowhere", "model": "gpt-5.5" }),
   );
-  assert_eq!(unknown["code"], "connection_not_found");
+  assert_eq!(unknown["code"], "account_not_found");
   let environment = served.refused(
     "set_project_environment",
     &json!({ "project": "Kontur", "variables": [{ "name": "1BAD", "value": "x" }] }),
@@ -212,67 +225,64 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
 }
 
 #[test]
-fn domain_pipelines_are_made_saved_and_refused_as_the_editor_does() {
+fn domain_pipelines_are_published_or_refused_as_the_editor_does() {
   let (mut served, _) = Served::seeded("empty");
-  let empty = served.ok(
+  // A pipeline is stored only as published versions (D-032): one without steps is never made, whoever asks.
+  served.let_automation_widen(true);
+  let empty = served.refused(
     "create_pipeline",
     &json!({ "project": "Kontur", "name": "Hotfix", "from": "empty" }),
   );
-  assert_eq!(empty["pipeline"]["state"], "draft_only");
-  let taken = served.refused(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "hotfix", "from": "empty" }),
-  );
-  assert_eq!(taken["code"], "name_taken");
-  let starter = served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Delivery", "from": "starter" }),
-  );
-  let keys: Vec<&str> = starter["pipeline"]["steps"]
-    .as_array()
-    .expect("steps")
-    .iter()
-    .filter_map(|step| step["key"].as_str())
-    .collect();
+  assert_eq!(empty["code"], "not_publishable", "{empty}");
+  served.let_automation_widen(false);
+  let copy = json!({ "project": "Kontur", "name": "Hotfix", "from": "copy", "copy_of": "Quick fix" });
   assert_eq!(
-    keys,
-    [
-      "research",
-      "plan",
-      "implement",
-      "run-checks",
-      "review",
-      "create-pull-request"
-    ]
-  );
-  let cycle = served.refused(
-    "save_pipeline_draft",
-    &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
-      { "key": "a", "name": "A", "runs_after": ["b"] },
-      { "key": "b", "name": "B", "runs_after": ["a"] },
-    ] }),
-  );
-  assert_eq!(cycle["code"], "invalid_pipeline", "{cycle}");
-  let saved = served.ok(
-    "save_pipeline_draft",
-    &json!({ "project": "Kontur", "pipeline": "Hotfix", "description": "Small fixes", "steps": [
-      { "key": "fix", "name": "Fix", "budget": 50000 },
-    ] }),
-  );
-  assert_eq!(saved["pipeline"]["steps"][0]["budget"], 50000);
-  assert_eq!(saved["pipeline"]["description"], "Small fixes");
-  let first = json!({ "project": "Kontur", "pipeline": "Hotfix" });
-  assert_eq!(
-    served.refused("publish_pipeline", &first)["code"],
+    served.refused("create_pipeline", &copy)["code"],
     "person_only",
     "a pipeline's first version is a person's"
   );
   served.let_automation_widen(true);
-  let unassigned = served.refused("publish_pipeline", &first);
-  assert_eq!(unassigned["code"], "not_publishable");
+  let made = served.ok("create_pipeline", &copy);
+  assert_eq!(made["pipeline"]["state"], "published");
+  assert_eq!(made["pipeline"]["published_version"], 1);
+  let taken = served.refused("create_pipeline", &copy);
+  assert_eq!(taken["code"], "name_taken");
+  let cycle = served.refused(
+    "save_pipeline",
+    &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
+      { "key": "a", "name": "A", "profile": "Builder", "runs_after": ["b"] },
+      { "key": "b", "name": "B", "profile": "Builder", "runs_after": ["a"] },
+    ] }),
+  );
+  assert_eq!(cycle["code"], "invalid_pipeline", "{cycle}");
+  let unassigned = served.refused(
+    "save_pipeline",
+    &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
+      { "key": "fix", "name": "Fix" },
+      { "key": "check", "name": "Check" },
+    ] }),
+  );
+  assert_eq!(unassigned["code"], "not_publishable", "{unassigned}");
+  assert_eq!(
+    unassigned["reasons"].as_array().map(Vec::len),
+    Some(2),
+    "every step without a profile is named: {unassigned}"
+  );
+  let saved = served.ok(
+    "save_pipeline",
+    &json!({ "project": "Kontur", "pipeline": "Hotfix", "description": "Small fixes", "steps": [
+      { "key": "fix", "name": "Fix", "profile": "Builder", "budget": 50000 },
+    ] }),
+  );
+  assert_eq!(saved["pipeline"]["steps"][0]["budget"], 50000);
+  assert_eq!(saved["pipeline"]["description"], "Small fixes");
+  assert_eq!(
+    saved["pipeline"]["published_version"], 2,
+    "saving publishes the next version"
+  );
   served.let_automation_widen(false);
   let write = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
       { "key": "fix", "name": "Fix", "repository": "write" },
     ] }),
@@ -283,20 +293,21 @@ fn domain_pipelines_are_made_saved_and_refused_as_the_editor_does() {
   );
 }
 
-/// `save_pipeline_draft` keeps an agent step's choice of whether it merges the base branch when that moves (ORC-65);
+/// `save_pipeline` keeps an agent step's choice of whether it merges the base branch when that moves (ORC-65);
 /// a step that leaves it out follows the default rule, and a tool step cannot choose.
 #[test]
-fn domain_save_pipeline_draft_keeps_a_steps_choice_about_base_moves() {
+fn domain_save_pipeline_keeps_a_steps_choice_about_base_moves() {
   let (mut served, _) = Served::seeded("empty");
+  served.let_automation_widen(true);
   served.ok(
     "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Hotfix", "from": "empty" }),
+    &json!({ "project": "Kontur", "name": "Hotfix", "from": "copy", "copy_of": "Quick fix" }),
   );
   let saved = served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
-      { "key": "fix", "name": "Fix" },
-      { "key": "verify", "name": "Verify", "runs_after": ["fix"], "takes_base_moves": true },
+      { "key": "fix", "name": "Fix", "profile": "Builder" },
+      { "key": "verify", "name": "Verify", "profile": "Builder", "runs_after": ["fix"], "takes_base_moves": true },
     ] }),
   );
   let steps = &saved["pipeline"]["steps"];
@@ -313,10 +324,10 @@ fn domain_save_pipeline_draft_keeps_a_steps_choice_about_base_moves() {
   let opened = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Hotfix" }));
   assert_eq!(
     opened["pipeline"]["steps"][1]["takes_base_moves"], true,
-    "kept in the draft"
+    "kept in the version"
   );
   let tool = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
       { "key": "check", "name": "Check", "tool": "Check", "takes_base_moves": true },
     ] }),

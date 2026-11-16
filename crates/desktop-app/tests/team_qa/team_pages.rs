@@ -102,11 +102,13 @@ fn team_qa_pages_a_members_task_page_shows_its_claim_and_nothing_to_edit() {
     window.texts("task-module-field").is_none(),
     "the module is the server's"
   );
+  // The holder's one line names who cancels and reopens; the page's own read-only line steps aside for it.
   window.until("the Admins named", |window| {
     window
-      .texts("task-team-read-only-text")
+      .texts("task-team-lifecycle-lock-text")
       .is_some_and(|text| text.concat().contains("dana-k"))
   });
+  assert!(window.texts("task-team-read-only").is_none());
   window.press("task-more");
   window.until("the menu", |window| window.texts("task-more-panel").is_some());
   assert!(window.texts("task-edit").is_none(), "a member does not edit");

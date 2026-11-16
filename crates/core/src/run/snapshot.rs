@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
   id::{ResourceId, VersionId},
   resource::{
-    AgentProfile, Exclusion, Instruction, InstructionTarget, ModelId, Pipeline, Skill, Step, StepKey, StepKind, Tool,
+    AgentProfile, ChosenResources, Instruction, ModelId, Pipeline, Skill, Step, StepKey, StepKind, TeamTool, Tool,
     Version, VersionNumber,
   },
   source::{RunSources, SourceOrigin, SourcePath},
@@ -83,17 +83,32 @@ pub enum SnapshotError {
 }
 
 /// The latest published version of each referenced resource, by resource id. A resource that
-/// was never published is absent.
-#[derive(Clone, Copy, Debug)]
-pub struct PublishedVersions<'a> {
+/// was never published is absent. A snapshot reads only which version of a tool is the latest, so its tools are a local
+/// project's ([`PublishedVersions`]) or a team's ([`TeamPublishedVersions`], as the team server holds them).
+#[derive(Debug)]
+pub struct Published<'a, T> {
   pub profiles: &'a BTreeMap<ResourceId, Version<AgentProfile>>,
-  pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
+  pub tools: &'a BTreeMap<ResourceId, Version<T>>,
   pub instructions: &'a BTreeMap<ResourceId, Version<Instruction>>,
   pub skills: &'a BTreeMap<ResourceId, Version<Skill>>,
 }
 
-/// Everything a run pins: pipeline, per-step executors, the instructions, tools and skills that
-/// apply to it, and the sources its agents may read outside the worktree without asking.
+/// The published versions of a local project, whose tools name their secrets by id.
+pub type PublishedVersions<'a> = Published<'a, Tool>;
+
+/// The published versions of a team project, whose tools name their secrets by name.
+pub type TeamPublishedVersions<'a> = Published<'a, TeamTool>;
+
+impl<T> Clone for Published<'_, T> {
+  fn clone(&self) -> Self {
+    *self
+  }
+}
+
+impl<T> Copy for Published<'_, T> {}
+
+/// Everything a run pins: pipeline, per-step executors, the instructions, tools and skills its agents get, and the
+/// sources its agents may read outside the worktree without asking.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "SnapshotFields")]
 pub struct RunSnapshot {
@@ -193,12 +208,14 @@ impl RunSnapshot {
     })
   }
   /// Resolves `version` of the pipeline `pipeline` against the published versions it
-  /// references. Every step's profile or tool must be published; instructions and tools that
-  /// apply to the pipeline are pinned alongside.
-  pub fn build(
+  /// references. Every step's profile or tool must be published; the published instructions, skills and tools the
+  /// profiles of its steps choose are pinned alongside, each once (`docs/design/team-configuration.md`, "Decided
+  /// 2026-11-09"): nothing else reaches a local run's agents. Which step's agent gets which is decided per invocation,
+  /// from its profile version ([`crate::run::GivenBy::Profile`]).
+  pub fn build<T>(
     pipeline: ResourceId,
     version: &Version<Pipeline>,
-    published: PublishedVersions<'_>,
+    published: Published<'_, T>,
   ) -> Result<Self, SnapshotError> {
     let body = version.body();
     let steps = body
@@ -206,19 +223,23 @@ impl RunSnapshot {
       .iter()
       .map(|step| resolve_step(step, published))
       .collect::<Result<Vec<_>, _>>()?;
-    let instructions = published
-      .instructions
+    let profiles: Vec<&AgentProfile> = body
+      .steps()
       .iter()
-      .filter(|(_, instruction)| applies(pipeline, body, published, |target| instruction.body().reaches(target)))
-      .map(|(&id, instruction)| PinnedVersion::of(id, instruction))
+      .filter_map(|step| match &step.kind {
+        StepKind::Agent {
+          profile: Some(profile), ..
+        } => published.profiles.get(profile).map(Version::body),
+        _ => None,
+      })
       .collect();
-    let skills = published
-      .skills
-      .iter()
-      .filter(|(_, skill)| applies(pipeline, body, published, |target| skill.body().reaches(target)))
-      .map(|(&id, skill)| PinnedVersion::of(id, skill))
+    let instructions = chosen(&profiles, AgentProfile::instruction_resources, published.instructions)
+      .into_values()
       .collect();
-    let tools = pinned_tools(pipeline, body, &steps, published);
+    let skills = chosen(&profiles, AgentProfile::skills, published.skills)
+      .into_values()
+      .collect();
+    let tools = pinned_tools(&steps, chosen(&profiles, AgentProfile::tools, published.tools));
     Ok(Self {
       pipeline: PinnedVersion::of(pipeline, version),
       body: body.clone(),
@@ -322,7 +343,7 @@ impl RunSnapshot {
   }
 }
 
-fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSnapshot, SnapshotError> {
+fn resolve_step<T>(step: &Step, published: Published<'_, T>) -> Result<StepSnapshot, SnapshotError> {
   let unassigned = || SnapshotError::UnassignedStep(step.key.clone());
   let executor = match &step.kind {
     StepKind::Agent { profile, model, .. } => {
@@ -361,42 +382,22 @@ fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSna
   })
 }
 
-/// Whether an instruction or a skill reaches an agent of this pipeline (at some event): `reaches`
-/// admits a step whose published profile runs it. Which event an instruction is injected at, and
-/// which agents get a skill, is decided per invocation, from the pinned version.
-fn applies(
-  pipeline: ResourceId,
-  body: &Pipeline,
-  published: PublishedVersions<'_>,
-  reaches: impl Fn(InstructionTarget<'_>) -> Result<(), Exclusion>,
-) -> bool {
-  body.steps().iter().any(|step| {
-    let StepKind::Agent {
-      profile: Some(profile), ..
-    } = &step.kind
-    else {
-      return false;
-    };
-    published.profiles.get(profile).is_some_and(|version| {
-      let target = InstructionTarget {
-        pipeline,
-        step: &step.key,
-        profile: *profile,
-        role: version.body().role(),
-      };
-      reaches(target).is_ok()
-    })
-  })
+/// The latest published version of each resource one of `profiles` chooses in `list`, by resource id; one that has no
+/// published version is not pinned.
+fn chosen<B>(
+  profiles: &[&AgentProfile],
+  list: impl Fn(&AgentProfile) -> &ChosenResources,
+  published: &BTreeMap<ResourceId, Version<B>>,
+) -> BTreeMap<ResourceId, PinnedVersion> {
+  profiles
+    .iter()
+    .flat_map(|profile| list(profile).ids().iter().copied())
+    .filter_map(|id| published.get(&id).map(|version| (id, PinnedVersion::of(id, version))))
+    .collect()
 }
 
-/// Tools called by tool steps plus published tools whose access policy admits a step of this
-/// pipeline, each once.
-fn pinned_tools(
-  pipeline: ResourceId,
-  body: &Pipeline,
-  steps: &[StepSnapshot],
-  published: PublishedVersions<'_>,
-) -> Vec<PinnedVersion> {
+/// Tools called by tool steps plus the tools the steps' profiles choose, each once.
+fn pinned_tools(steps: &[StepSnapshot], chosen: BTreeMap<ResourceId, PinnedVersion>) -> Vec<PinnedVersion> {
   let mut tools: BTreeMap<ResourceId, PinnedVersion> = steps
     .iter()
     .filter_map(|step| match step.executor {
@@ -404,16 +405,8 @@ fn pinned_tools(
       StepExecutor::Agent { .. } | StepExecutor::Test => None,
     })
     .collect();
-  for (&id, version) in published.tools {
-    let allowed = body.steps().iter().any(|step| {
-      version
-        .body()
-        .access()
-        .is_some_and(|access| access.allows(pipeline, &step.key))
-    });
-    if allowed {
-      tools.entry(id).or_insert_with(|| PinnedVersion::of(id, version));
-    }
+  for (id, pinned) in chosen {
+    tools.entry(id).or_insert(pinned);
   }
   tools.into_values().collect()
 }

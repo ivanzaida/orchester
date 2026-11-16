@@ -218,6 +218,24 @@ impl Item {
   }
 }
 
+/// The chat `main` with History's `panel` at its right edge when it shows: the chat takes what is left beside it, so
+/// nothing of the chat, Send least of all, is under the panel.
+pub(super) fn beside(main: Element, panel: Option<Element>) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0))
+    .child(
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .height(Dimension::Pct(100.0))
+        .child(main),
+    )
+    .with_children(panel)
+    .into()
+}
+
 /// The panel over the conversations of the project `rows` name, `current` the one shown: History's list, or the
 /// archived ones while `state` says so; each list is searched by its own words. While the conversations are read
 /// (`history` none), the list is bones (`06 Orchestrator · History reading` `ipw6U`). The delete it asks about opens

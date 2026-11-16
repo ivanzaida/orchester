@@ -14,6 +14,7 @@ mod definitions;
 #[path = "../team_work/fixture.rs"]
 mod fixture;
 mod http;
+mod lifecycle;
 mod organize;
 mod pipelines;
 mod run;
@@ -26,7 +27,7 @@ use orchester_api::{
   v2::{AuthorityErrorCode, AuthorityRef, LocalEffect, PolicyRevision, Subject, TeamCommandValue},
 };
 use orchester_core::{
-  id::{IdempotencyKey, ModuleId, ProjectId, ServerId, TaskId},
+  id::{IdempotencyKey, ModuleId, ProjectId, ResourceId, ServerId, TaskId},
   name::Name,
   project::{Project, ProjectKey},
   run::CommitId,
@@ -44,6 +45,7 @@ use orchester_workspace::{
   },
   secrets::Vault,
   sharing::Servers,
+  team_config::{TeamConfig, TeamResource, TeamVersion},
   team_reads::TeamSession,
   workspace::Workspace,
 };
@@ -72,6 +74,8 @@ impl SecretVault for NoVault {
 struct Checkout {
   dir: TempDir,
   servers: Servers,
+  /// The workspace `servers` read the team's configuration into, which a test fills as a stream's read would.
+  workspace: Workspace,
   _data: TempDir,
 }
 
@@ -96,10 +100,11 @@ impl Checkout {
       .expect("data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
-    let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)), version);
+    let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(NoVault)), version);
     Self {
       dir,
       servers,
+      workspace,
       _data: data,
     }
   }
@@ -129,6 +134,31 @@ impl Checkout {
       .execute("DELETE FROM sharing", [])
       .expect("make the project local");
     self
+  }
+
+  /// The team's configuration as the stream would read it: `pipelines`, each with its latest version's body.
+  fn read_team(&self, pipelines: &[(ResourceId, &str, serde_json::Value)]) {
+    let resources = pipelines.iter().map(|(id, slug, body)| TeamResource {
+      id: *id,
+      kind: orchester_core::resource::ResourceKind::Pipeline,
+      name: name(slug),
+      slug: (*slug).to_owned(),
+      archived: false,
+      revision: revision(1),
+      updated: orchester_workspace::team_config::Changed {
+        by: "Alice Moreau".to_owned(),
+        at: orchester_core::time::Timestamp::from_unix_millis(0),
+      },
+      latest: Some(TeamVersion {
+        number: orchester_core::resource::VersionNumber::FIRST,
+        body: body.clone(),
+        published_by: "Dana".to_owned(),
+        published_at: orchester_core::time::Timestamp::from_unix_millis(1),
+      }),
+    });
+    self
+      .workspace
+      .keep_team_config_for_test(self.dir.path(), TeamConfig::new(resources));
   }
 
   fn db(&self) -> ProjectDb {
@@ -357,8 +387,7 @@ async fn actions_a_work_start_stays_pending_and_classes_follow_the_owner() {
     },
     base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
     read: revision(1),
-    module: ModuleId::generate(),
-    module_read: revision(1),
+    module: Some((ModuleId::generate(), revision(1))),
   });
   assert_eq!(
     dispatcher.classify(&start).expect("class"),

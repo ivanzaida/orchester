@@ -103,13 +103,10 @@ pub fn shared_limits(limits: TaskLimits) -> Option<SharedLimits> {
 }
 
 /// What a team task names `pipeline` by on the server (`docs/architecture/server.md` row 80): its resource id when it
-/// is one of the team's pipelines here; any other pipeline, a person's own local one, as none, never as an id the
-/// server lacks.
-pub fn team_pipeline_id(db: &ProjectDb, pipeline: Option<ResourceId>) -> Result<Option<String>, StoreError> {
-  let Some(id) = pipeline else {
-    return Ok(None);
-  };
-  Ok(TeamPipelines::of(db)?.contains(id).then(|| id.to_string()))
+/// is one of the team's `pipelines`; any other pipeline, a person's own local one, as none, never as an id the server
+/// lacks.
+pub fn team_pipeline_id(pipelines: &TeamPipelines, pipeline: Option<ResourceId>) -> Option<String> {
+  pipeline.filter(|id| pipelines.contains(*id)).map(|id| id.to_string())
 }
 
 /// What a task uploaded with the project names `pipeline` by when the project is shared (*Share*): the configuration
@@ -128,16 +125,12 @@ pub fn shared_pipeline_id(db: &ProjectDb, pipeline: Option<ResourceId>) -> Resul
 }
 
 /// A new task's content: `details` and its `organization`, in no module (its module is a move of its own, as locally).
-pub fn content(
-  db: &ProjectDb,
-  details: &TaskDetails,
-  organization: &TaskOrganization,
-) -> Result<TaskContent, StoreError> {
+pub fn content(pipelines: &TeamPipelines, details: &TaskDetails, organization: &TaskOrganization) -> TaskContent {
   let mut content = TaskContent {
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
-    pipeline: team_pipeline_id(db, details.pipeline)?,
+    pipeline: team_pipeline_id(pipelines, details.pipeline),
     limits: shared_limits(details.limits),
     workflow: organization.status(),
     priority: organization.priority(),
@@ -148,17 +141,17 @@ pub fn content(
     release: None,
   };
   content.set_organization(organization);
-  Ok(content)
+  content
 }
 
 /// The changes from `cached` (the task as the cache has it) to `details` and `status`: only the
 /// fields that differ.
 pub fn content_changes(
-  db: &ProjectDb,
+  pipelines: &TeamPipelines,
   cached: &Task,
   after: &TaskDetails,
   status: TaskStatus,
-) -> Result<TaskChanges, StoreError> {
+) -> TaskChanges {
   let before = cached.details();
   let mut changes = TaskChanges::default();
   if before.title != after.title {
@@ -171,7 +164,7 @@ pub fn content_changes(
     changes.criteria = Some(after.acceptance_criteria.clone());
   }
   if before.pipeline != after.pipeline {
-    changes.pipeline = Some(team_pipeline_id(db, after.pipeline)?);
+    changes.pipeline = Some(team_pipeline_id(pipelines, after.pipeline));
   }
   if before.limits != after.limits {
     changes.limits = Some(shared_limits(after.limits));
@@ -179,7 +172,7 @@ pub fn content_changes(
   if cached.status() != status {
     changes.status = Some(status);
   }
-  Ok(changes)
+  changes
 }
 
 /// `changes` with the organization fields that differ from `before` to `after`.

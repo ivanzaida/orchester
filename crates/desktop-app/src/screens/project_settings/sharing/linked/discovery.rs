@@ -133,18 +133,14 @@ impl DiscoveryRow {
       Ok(address) => {
         let (write, person) = (self.write.clone(), self.person.clone());
         let button = button.on_click(move || {
-          if person.allows(WRITE) {
+          if person.allows("write orchester.toml for a shared project") {
             write.run(address.clone());
           }
         });
         (button, None)
       }
     };
-    let reasons: Vec<Element> = reason
-      .map(|reason| reason_line("sharing-discovery-unavailable", &reason).into())
-      .into_iter()
-      .chain(self.person.reason(ctx, WRITE))
-      .collect();
+    let reasons = reason.map(|reason| Element::from(reason_line("sharing-discovery-unavailable", &reason)));
     row.control(button).under_all(reasons)
   }
 }

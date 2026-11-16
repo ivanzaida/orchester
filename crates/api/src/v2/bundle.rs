@@ -10,7 +10,9 @@
 //! Its hash is the SHA-256 of its canonical bytes ([`orchester_core::run::bundle::canonical`]). The server hashes the
 //! bundle it built and never accepts one a client wrote. The work's module, its branch and the base commit it starts
 //! from are S7's (`module_id`, `branch`, `base_commit`); the work itself is not in the bundle: a bundle binds to its
-//! claim, and S7's `work.start` attaches the work to it.
+//! claim, and S7's `work.start` attaches the work to it. A task in no module has a bundle without `module_id` and
+//! `branch` ([`MODULE_LESS_BUNDLE_SCHEMA`]): its run starts on the branch its computer has checked out, and merges
+//! into that branch.
 //!
 //! Reads: the bundle read answers an `ExecutionBundle`; a bundle file read answers one file's raw bytes by its
 //! `sha256`, at most [`MAX_BUNDLE_FILE_BYTES`], which the desktop checks with [`ExecutionBundle::check_file`].
@@ -41,10 +43,16 @@ use thiserror::Error;
 use super::{BundleRef, Subject};
 use crate::SharedLimits;
 
-/// The version of the bundle's shape, as [`BundleRef::schema_version`] names it. 2 added the task's number and each
-/// pinned version's label; 3 added the team MCP server versions the pinned profiles name, and the server ids a team
-/// profile lists. A side on another version refuses the bundle.
+/// The version of the shape of a bundle under a module, as [`BundleRef::schema_version`] names it. 2 added the task's
+/// number and each pinned version's label; 3 added the team MCP server versions the pinned profiles name, and the
+/// server ids a team profile lists. A side that reads no version of a bundle refuses it
+/// ([`ExecutionBundle::reads`]).
 pub const EXECUTION_BUNDLE_SCHEMA: u32 = 3;
+
+/// The version of a bundle whose task is in no module: schema 3 without `module_id` and `branch`. A bundle under a
+/// module stays schema 3, byte for byte, so a desktop that reads only 3 still runs every task in a module and
+/// refuses one in none as built in a schema it does not read.
+pub const MODULE_LESS_BUNDLE_SCHEMA: u32 = 4;
 
 /// `{resource_id, version}`: a pinned published version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -74,16 +82,23 @@ pub struct LocalBinding {
   pub model: ModelId,
 }
 
+/// The module a work is under, with the module's branch, which the work's runs merge into and only the module's
+/// delivery takes to base.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BundleModule {
+  pub module_id: ModuleId,
+  pub branch: BranchName,
+}
+
 /// What the server decides when it starts the work, besides the resolved inputs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BundleStart {
   pub project_id: ProjectId,
   pub subject: Subject,
   pub claim_id: ClaimId,
-  /// The module the work is under.
-  pub module_id: ModuleId,
-  /// The module's branch, which the work's runs merge into and only delivery takes to base.
-  pub branch: BranchName,
+  /// The module the work is under; `None` for a task in no module, whose run starts on the branch the executing
+  /// computer has checked out and merges into it.
+  pub module: Option<BundleModule>,
   /// The commit of the base branch the work starts from.
   pub base_commit: CommitId,
   /// The task's revision when the work started.
@@ -99,7 +114,7 @@ pub struct BundleStart {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ExecutionBundleError {
-  #[error("bundle schema {0} is not {EXECUTION_BUNDLE_SCHEMA}")]
+  #[error("bundle schema {0} is neither {EXECUTION_BUNDLE_SCHEMA} nor {MODULE_LESS_BUNDLE_SCHEMA}")]
   Schema(u32),
   #[error("agent profile {0} has no local binding")]
   MissingBinding(ResourceId),
@@ -166,6 +181,21 @@ impl ExecutionBundle {
     &self.start
   }
 
+  /// The schema this bundle is written in: [`EXECUTION_BUNDLE_SCHEMA`] under a module,
+  /// [`MODULE_LESS_BUNDLE_SCHEMA`] in none.
+  pub const fn schema_version(&self) -> u32 {
+    if self.start.module.is_some() {
+      EXECUTION_BUNDLE_SCHEMA
+    } else {
+      MODULE_LESS_BUNDLE_SCHEMA
+    }
+  }
+
+  /// Whether this side reads a bundle built in `schema`.
+  pub const fn reads(schema: u32) -> bool {
+    schema == EXECUTION_BUNDLE_SCHEMA || schema == MODULE_LESS_BUNDLE_SCHEMA
+  }
+
   /// One per pinned profile, in resource id order.
   pub fn bindings(&self) -> &[LocalBinding] {
     &self.bindings
@@ -184,7 +214,7 @@ impl ExecutionBundle {
   pub fn bundle_ref(&self) -> Result<BundleRef, CanonicalError> {
     Ok(BundleRef {
       sha256: self.sha256()?,
-      schema_version: EXECUTION_BUNDLE_SCHEMA,
+      schema_version: self.schema_version(),
     })
   }
 

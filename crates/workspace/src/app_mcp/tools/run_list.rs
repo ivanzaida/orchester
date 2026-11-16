@@ -9,11 +9,11 @@ use std::{
 
 use orchester_core::{
   id::{ProjectId, RunId, StepExecutionId},
-  run::RunNumber,
-  store::TaskStore,
+  run::{ListedRun, RunNumber},
   task::Task,
   tokens::TokenBudget,
 };
+use orchester_store::RunStoreError;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -23,7 +23,7 @@ use super::{
   across::{Across, across, needs_project},
   merge_queue::deliveries,
   tasks::find_task,
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -35,7 +35,9 @@ use crate::{
   tasks::{
     delivery::settle_records,
     history::{RunRecord, runs_of},
+    recorded::{self, task_of},
     slot_wait::{slot_waits, waiting_steps},
+    unreadable::Unreadable,
   },
 };
 
@@ -68,12 +70,24 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
       "`limit` is 1 to {MAX_LIMIT}, not {limit}"
     )));
   }
+  // A team task is the one its server read; this computer may have recorded no run of it.
+  let team = match (&args.project, &args.task) {
+    (Some(project), Some(named)) => team::read_task(services, project, named).await?,
+    _ => None,
+  };
   let reading = services.clone();
   let read = blocking(move || {
     let mut read = across(&reading, args.project.as_deref(), |_, db| {
-      let tasks = match &args.task {
-        Some(named) => vec![find_task(db, named)?],
-        None => db.tasks()?,
+      let (tasks, unrecorded) = match (&args.task, &team) {
+        (Some(_), Some(read)) => {
+          let task = task_of(db, read.task.id)?;
+          if task.is_none() {
+            team::refuse_unrecorded_runs(db, read.task.id)?;
+          }
+          (task.into_iter().collect(), Vec::new())
+        }
+        (Some(named), None) => (vec![find_task(db, named)?], Vec::new()),
+        (None, _) => (recorded::all(db)?, recorded::unrecorded_listed(db)?),
       };
       let tasks = tasks
         .into_iter()
@@ -82,12 +96,12 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
           Ok((task, runs))
         })
         .collect::<Result<Vec<_>, ToolError>>()?;
-      Ok((tasks, deliveries(db)?))
+      Ok((tasks, deliveries(db)?, unrecorded))
     })?;
     // Git tells the runs merged outside Orchester, as the task's Summary reads them: only for the runs given, and
     // once for each project.
     let given = newest(&read, limit);
-    read.each_mut(|open, (tasks, _)| {
+    read.each_mut(|open, (tasks, ..)| {
       let runs = tasks
         .iter_mut()
         .flat_map(|(_, runs)| runs.iter_mut())
@@ -97,21 +111,21 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
     Ok(read)
   })
   .await?;
-  let mut runs = read.items(|open, (tasks, deliveries)| {
+  let mut runs = read.items(|open, (tasks, deliveries, unrecorded)| {
     let waits = slot_waits(services.runners.status_of(&open.repo_root).as_ref(), &open.repo_root);
-    tasks
-      .iter()
-      .flat_map(|(task, runs)| {
-        let waits = &waits;
-        runs.iter().map(move |run| {
-          run_json(
-            open.project.id(),
-            (task, run, deliveries.get(&run.id)),
-            waits,
-            translate,
-          )
-        })
+    let listed = tasks.iter().flat_map(|(task, runs)| {
+      let waits = &waits;
+      runs.iter().map(move |run| {
+        run_json(
+          open.project.id(),
+          (task, run, deliveries.get(&run.id)),
+          waits,
+          translate,
+        )
       })
+    });
+    listed
+      .chain(unrecorded.iter().map(|run| unrecorded_json(run, translate)))
       .collect()
   });
   // Newest first across tasks and projects; a run that cannot be read has no time and comes last.
@@ -122,14 +136,18 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
 }
 
 /// A project's tasks with their runs, and the place of each run that joined the merge queue.
-type Listed = (Vec<(Task, Vec<RunRecord>)>, HashMap<RunId, Value>);
+type Listed = (
+  Vec<(Task, Vec<RunRecord>)>,
+  HashMap<RunId, Value>,
+  Vec<ListedRun<RunStoreError>>,
+);
 
 /// The `limit` runs of `read` the answer gives, newest first as it sorts them: the items' order, then by when they
 /// started, a run that cannot be read last.
 fn newest(read: &Across<Listed>, limit: usize) -> HashSet<RunId> {
   let mut runs: Vec<(RunId, Option<i64>)> = read
     .found()
-    .flat_map(|(_, (tasks, _))| tasks.iter().flat_map(|(_, runs)| runs.iter()))
+    .flat_map(|(_, (tasks, ..))| tasks.iter().flat_map(|(_, runs)| runs.iter()))
     .map(|run| (run.id, run.run.as_ref().map(|run| wire::time(run.created_at()))))
     .collect();
   runs.sort_by_key(|(_, created)| Reverse(*created));
@@ -158,6 +176,46 @@ fn run_json(
     "created_at": run.map(|run| wire::time(run.created_at())),
     "changed_at": record.at.map(wire::time),
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
+  })
+}
+
+/// A run of a team task that no record of this computer defines: its id, number, state and tokens as stored, and
+/// `unrecorded`, with no task, phase, detail, delivery or link, which all need the task's key. A run that cannot be
+/// read has its id, number and why alone, as an ordinary task's does.
+fn unrecorded_json(listed: &ListedRun<RunStoreError>, translate: &Translate) -> Value {
+  let run = match listed {
+    Ok(run) => run,
+    Err(unreadable) => {
+      let unreadable = Unreadable::of(unreadable);
+      return json!({
+        "id": unreadable.id.to_string(),
+        "number": unreadable.number.map(RunNumber::get),
+        "task": null,
+        "unrecorded": true,
+        "phase": null,
+        "status": null,
+        "delivery": null,
+        "detail": translate.text(&unreadable.title()),
+        "tokens": null,
+        "created_at": null,
+        "changed_at": null,
+        "link": null,
+      });
+    }
+  };
+  json!({
+    "id": run.id().to_string(),
+    "number": run.number().get(),
+    "task": null,
+    "unrecorded": true,
+    "phase": null,
+    "status": wire::run_status(run.status(), None),
+    "delivery": null,
+    "detail": null,
+    "tokens": { "used": run.used().get(), "budget": run.budget().map(TokenBudget::get) },
+    "created_at": wire::time(run.created_at()),
+    "changed_at": null,
+    "link": null,
   })
 }
 

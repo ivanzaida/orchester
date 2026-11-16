@@ -11,6 +11,7 @@ use orchester_core::{
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
+  orchestrator::parking::Parking,
   question::AskedQuestions,
   resource::{StepKey, VersionNumber},
   run::{
@@ -315,6 +316,8 @@ pub struct TaskDetail {
   pub led_in: LedIn,
   /// The latest run's latest wait on another task, and how it stands (ORC-784); `None` when it never waited on one.
   pub waits_on: Option<RunWaitView>,
+  /// The Orchestrator parked the task for the person (`crate::orchestrator::parking`).
+  pub parked: Option<Parking>,
   /// The archive of a team resource that stopped the latest run (A22 `pUu78`), with the resource and who archived it.
   pub archive_stop: Option<orchester_store::ArchiveStop>,
   /// Whether the resource of [`Self::archive_stop`] is still archived here; it is not once an admin restored it, and
@@ -369,10 +372,9 @@ impl TaskDetail {
 
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let mut db = ProjectDb::open(repo_root)?;
-    let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
+    let task = super::recorded::page_task_of(&db, task)?.ok_or(StoreError::TaskNotFound(task))?;
     let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let blocked_by = blocking_keys(&db, &task)?;
-    let missing_pipeline = db.missing_pipelines()?.remove(&task.id());
     let unsent_status = db.unsent_status(task.id())?;
     let shared = db.shared_task_info(task.id())?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
@@ -390,7 +392,6 @@ impl TaskDetail {
         latest_unreadable: Some(Unreadable::of(latest)),
         history,
         blocked_by,
-        missing_pipeline,
         unsent_status,
         shared,
         led_in,
@@ -441,11 +442,11 @@ impl TaskDetail {
       history,
       earlier_unreadable,
       blocked_by,
-      missing_pipeline,
       unsent_status,
       shared,
       led_in,
       waits_on,
+      parked: db.parked_task(task.id())?,
       ..Self::without_runs(task, conversation, requirements)
     })
   }
@@ -470,12 +471,15 @@ impl TaskDetail {
       history: Vec::new(),
       earlier_unreadable: Vec::new(),
       blocked_by: Vec::new(),
+      // A team task's pipeline that the team's configuration lacks is told by its team read (`team_detail`), from
+      // memory.
       missing_pipeline: None,
       unsent_status: None,
       shared: None,
       first_agent: None,
       led_in: LedIn::Nobody,
       waits_on: None,
+      parked: None,
       archive_stop: None,
       archived_still: false,
     }

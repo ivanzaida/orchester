@@ -1,18 +1,18 @@
 //! The window's new team MCP server (`Agents · New MCP server` A8 in `acFkz`): what its form holds, made into the
-//! team's body by the same rules `add_mcp_server` applies ([`team_mcp_body::new_server`]), and created as v1 with no
-//! draft. The version is the team's only once the team server takes it ([`crate::sharing::Servers::send_created`]);
-//! this creates it as the version that waits for the server. A person's decision to add a server is the window's to
-//! ask: an automation's input is refused by the caller unless a person lets automation change agent permissions.
+//! team's body by the same rules `add_mcp_server` applies ([`team_mcp_body::new_server`]), and created as v1 on the
+//! team server at once ([`crate::sharing::Servers::create_team`]). A person's decision to add a server is the window's
+//! to ask: an automation's input is refused by the caller unless a person lets automation change agent permissions.
 
-use orchester_core::{connection::mcp::McpServerName, id::ResourceId, resource::TeamMcpServer, time::Timestamp};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_core::{
+  connection::mcp::McpServerName,
+  resource::{ResourceKind, TeamMcpServer},
+};
 
 use super::{
   mcp_server_input::{SecretHeader, ServerFields},
   team_mcp_body::{Field, Refusal, new_server_at},
-  team_mcp_servers::{create_published_server, team_names},
 };
-use crate::{app_mcp::error::ToolError, messages::Message};
+use crate::{app_mcp::error::ToolError, messages::Message, team_config::TeamConfig};
 
 /// How the new server runs, as the form has it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,9 +58,15 @@ pub enum Invalid {
   Form(Vec<Message>),
 }
 
-/// The names of the team's MCP servers, which a new one may not take.
-pub fn team_mcp_names(root: &std::path::Path) -> Result<Vec<McpServerName>, StoreError> {
-  team_names(&ProjectDb::open(root)?)
+/// The names of the team's MCP servers in `config`, archived ones too, which a new one may not take.
+pub fn team_mcp_names(config: &TeamConfig) -> Vec<McpServerName> {
+  config
+    .resources(ResourceKind::McpServer)
+    .into_iter()
+    .chain(config.archived_of(ResourceKind::McpServer))
+    // A resource named otherwise than an MCP server is can clash with no MCP server's name.
+    .filter_map(|resource| McpServerName::new(resource.name.as_str()).ok())
+    .collect()
 }
 
 /// The team server `input` describes, its name not one of `taken`, as the tools make one.
@@ -137,14 +143,4 @@ fn invalid(refusal: Refusal) -> Invalid {
       Invalid::Form(reasons)
     }
   }
-}
-
-/// Creates `server` as v1 of a new team MCP server, waiting for the team server; refused unless the person may change
-/// the team's configuration.
-pub fn create_team_mcp_server(root: &std::path::Path, server: &TeamMcpServer) -> Result<ResourceId, StoreError> {
-  let mut db = ProjectDb::open(root)?;
-  if !db.may_change_configuration()? {
-    return Err(StoreError::NotAdmin);
-  }
-  create_published_server(&mut db, server, Timestamp::now())
 }

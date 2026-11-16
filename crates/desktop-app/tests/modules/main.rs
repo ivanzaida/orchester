@@ -6,6 +6,7 @@
 //! form, and the Delivery view beside Usage forecasting an open module (ORC-50). Needs `git`, as the seed does.
 
 mod base_branch;
+mod delivery;
 mod forms;
 mod harness;
 #[allow(

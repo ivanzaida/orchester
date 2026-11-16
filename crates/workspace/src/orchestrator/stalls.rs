@@ -2,21 +2,26 @@
 //! when a run an agent works on made no progress (no run event such as a step change, no transcript event such as a
 //! tool call, no agent launch, no decision on a tool request or answer to a question) for the project's *A run without
 //! progress for* minutes, a conversation keeps one *no progress* event for it ([`TaskEventKind::NoProgress`]), routed
-//! and starting its turn as a wait does. The event is kept by the run and the time of its last progress, so it is
-//! raised once per stall and progress again re-arms it; it stands until then, and reads as settled after
-//! ([`settled`]). A run that waits for a person (a step waiting for a message or a plan decision, a tool request or a
-//! question waiting for them, ORC-894), is queued (pending, or waiting for an agent slot or a workspace), paused, asked
-//! to pause or held on another task never stalls: its clock starts again once it no longer waits. With the setting off
-//! nothing is raised. No timer of its own: the follower reads the stalls each time it follows, and the app follows
-//! again by [`next_stall_in`].
+//! and starting its turn as a wait does. The event is kept by the run, the time of its last progress and the period
+//! of the stall, so it is raised once for each further period the run stays stalled, three times at most
+//! (`docs/plan/orchestrator-autonomy/OA-06-…`), and progress again re-arms it; each stands until then, and reads as
+//! settled after ([`settled`]). A run that waits for a person (a step waiting for a message or a plan decision, a tool
+//! request or a question waiting for them, ORC-894), is queued (pending, or waiting for an agent slot or a workspace),
+//! paused, asked to pause or held on another task never stalls: its clock starts again once it no longer waits. With
+//! the setting off nothing is raised. No timer of its own: the follower reads the stalls each time it follows, and the
+//! app follows again by [`next_stall_in`].
 
 use std::{collections::HashSet, path::Path};
 
 use orchester_core::{
   id::{ProjectId, RunId},
-  orchestrator::{AgentWait, TaskEvent, TaskEventKind, WaitKind, change::StepName, task_event::no_progress},
+  orchestrator::{
+    AgentWait, TaskEvent, TaskEventKind, WaitKind,
+    change::StepName,
+    task_event::{STALL_RAISES, stall_periods},
+  },
   run::{Run, TaskPhase},
-  store::{RunStore, TaskStore, WorkspaceStore},
+  store::{RunStore, WorkspaceStore},
   task::Task,
   time::Timestamp,
 };
@@ -26,36 +31,54 @@ use super::chat::StallSettled;
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
-  tasks::detail::run_store_error,
+  tasks::{detail::run_store_error, recorded::task_of},
 };
 
 const MINUTE_MILLIS: i64 = 60_000;
 
-/// The no-progress events of the project's runs that stall at `now`, each by the key it is kept by.
+/// The no-progress events of the project's runs that stall at `now`, each by the key it is kept by: for each run
+/// the event of the period its stall is in now, and those of its earlier periods that were `kept` when they came,
+/// which stand with it. A period nobody looked in is not raised afterwards: a run found stalled for an hour raises one
+/// event, not three.
 pub(super) fn current_stalls(
   db: &ProjectDb,
   project: ProjectId,
   now: Timestamp,
+  kept: impl Fn(&str) -> bool,
 ) -> Result<Vec<(String, AgentWait)>, StoreError> {
   let Some(minutes) = db.orchestrator_watch()?.no_progress_minutes() else {
     return Ok(Vec::new());
   };
   let mut stalls = Vec::new();
   for (task, run, last) in working(db)? {
-    // One event per stall: its key carries `last`, so the follower keeps it once and progress makes a new one.
-    let Some(kind) = no_progress(last, now, Some(minutes), None) else {
-      continue;
-    };
-    let at = Timestamp::from_unix_millis(last.unix_millis() + i64::from(minutes) * MINUTE_MILLIS);
-    let key = format!("stall:{}:{}", run.id(), last.unix_millis());
-    stalls.push((key, stalled_wait(project, (&task, &run), TaskEvent { kind, at })));
+    // One event per period of the stall: its key carries `last` and the period, so the follower keeps each once and
+    // progress makes new ones. The earlier periods' events stand with the latest.
+    let periods = stall_periods(last, now, Some(minutes));
+    for period in 1..=periods {
+      let stalled = minutes.saturating_mul(period);
+      let kind = TaskEventKind::NoProgress {
+        since: last,
+        minutes: stalled,
+      };
+      let at = Timestamp::from_unix_millis(last.unix_millis() + i64::from(stalled) * MINUTE_MILLIS);
+      // The first period keeps the key stalls had before they were raised again.
+      let key = match period {
+        1 => format!("stall:{}:{}", run.id(), last.unix_millis()),
+        _ => format!("stall:{}:{}:{period}", run.id(), last.unix_millis()),
+      };
+      if period < periods && !kept(&key) {
+        continue;
+      }
+      stalls.push((key, stalled_wait(project, (&task, &run), TaskEvent { kind, at })));
+    }
   }
   Ok(stalls)
 }
 
 /// When following the waits of the project at `root` again may raise a stall, after `now`: the soonest a run an agent
-/// works on reaches the set minutes without progress, or, for one that stalls already, the soonest it could stall
-/// again once it progressed; `None` while no agent works or the setting is off. Blocks on SQLite.
+/// works on reaches the set minutes without progress, or its next period without it; for one whose stall was raised
+/// as often as it is, the soonest it could stall again once it progressed. `None` while no agent works or the setting
+/// is off. Blocks on SQLite.
 pub fn next_stall_in(root: &Path, now: Timestamp) -> Result<Option<Timestamp>, Message> {
   let next = || {
     let db = ProjectDb::open_read_only(root)?;
@@ -67,8 +90,9 @@ pub fn next_stall_in(root: &Path, now: Timestamp) -> Result<Option<Timestamp>, M
       working(&db)?
         .into_iter()
         .map(|(_, _, last)| {
-          let due = last.unix_millis() + after;
-          Timestamp::from_unix_millis(if due > now.unix_millis() {
+          let periods = stall_periods(last, now, Some(minutes));
+          let due = last.unix_millis() + after * i64::from(periods + 1);
+          Timestamp::from_unix_millis(if periods < STALL_RAISES {
             due
           } else {
             now.unix_millis() + after
@@ -92,7 +116,7 @@ fn working(db: &ProjectDb) -> Result<Vec<(Task, Run, Timestamp)>, StoreError> {
     if held.contains(&run.id()) || run.pause_requested() || run.running_executions().is_empty() {
       continue;
     }
-    let Some(task) = db.task(run.task())? else {
+    let Some(task) = task_of(db, run.task())? else {
       continue;
     };
     if TaskPhase::of(&task, Some(&run), None) != TaskPhase::Running {

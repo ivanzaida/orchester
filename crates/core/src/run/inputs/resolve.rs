@@ -4,13 +4,13 @@
 
 use std::path::Path;
 
-use super::{BoundReference, InputsError, InputsOrigin, LocalBindings, ProfileBinding, RunInputs};
+use super::{InputsError, InputsOrigin, LocalBindings, ProfileBinding, RunInputs};
 use crate::{
   connection::{Connection, mcp::McpServerSelection},
-  id::{ConnectionId, ResourceId, SecretId, TaskId},
+  id::{ConnectionId, ResourceId, TaskId},
   permission::AgentPermissions,
   project::{ProjectKey, TaskKey},
-  resource::{AgentProfile, Instruction, StepKey, TeamMcpServer, Tool},
+  resource::{AgentProfile, Instruction, StepKey, TeamMcpServer, TeamTool},
   run::{PinnedVersion, bundle::PinnedBody},
   sharing::{ConnectionRole, TaskRevision},
   task::{Task, TaskDetails, TaskStatus, organization::TaskOrganization},
@@ -23,18 +23,14 @@ pub fn team_mcp_id(server: ResourceId) -> ConnectionId {
   ConnectionId::from_uuid(server.as_uuid())
 }
 
-/// The MCP servers the bindings bind, in their order, over all profiles. Which server a profile gives its agents is
-/// this computer's choice: a local bundle names none, and a team bundle names the team servers of its profiles
-/// (`CanonicalExecutionInputs::mcp_servers`), which this computer binds to a program and values of its own
-/// ([`LocalBindings::team_mcp`]).
+/// The MCP servers the bindings bind, in their order, over all profiles: the local servers an older run bound
+/// ([`LocalBindings::local_mcp`]), then the team servers of the profiles (`CanonicalExecutionInputs::mcp_servers`),
+/// which this computer binds to a program and values of its own ([`LocalBindings::team_mcp`]).
 pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection, InputsError> {
   let servers = bindings
-    .references
+    .local_mcp
     .iter()
-    .filter_map(|reference| match reference {
-      BoundReference::McpServer { local, .. } => Some(*local),
-      BoundReference::Connection { .. } | BoundReference::Secret { .. } => None,
-    })
+    .copied()
     .chain(bindings.team_mcp.iter().map(|bound| team_mcp_id(bound.server)))
     .collect();
   McpServerSelection::new(servers).map_err(InputsError::McpServers)
@@ -103,7 +99,7 @@ impl RunInputs {
     body(self.bundle.inputs().instructions(), pinned)
   }
 
-  pub fn tool(&self, pinned: PinnedVersion) -> Option<&Tool> {
+  pub fn tool(&self, pinned: PinnedVersion) -> Option<&TeamTool> {
     body(self.bundle.inputs().tools(), pinned)
   }
 
@@ -115,21 +111,6 @@ impl RunInputs {
       .iter()
       .find(|narrowed| narrowed.step == *step)
       .map(|narrowed| &narrowed.permissions)
-  }
-
-  /// The local connections the bindings run on: each profile's, and each connection reference's.
-  pub fn bound_connections(&self) -> Vec<ConnectionId> {
-    let references = self.bindings.references.iter().filter_map(|reference| match reference {
-      BoundReference::Connection { local, .. } => Some(*local),
-      BoundReference::McpServer { .. } | BoundReference::Secret { .. } => None,
-    });
-    self
-      .bindings
-      .profiles
-      .iter()
-      .map(|binding| binding.connection)
-      .chain(references)
-      .collect()
   }
 
   /// The program this computer runs the team MCP server selected as `id` with, and the pinned version of the server;
@@ -159,24 +140,6 @@ impl RunInputs {
       .collect()
   }
 
-  /// The local MCP servers the bindings bind for the run, over all its profiles.
-  pub fn bound_mcp_servers(&self) -> McpServerSelection {
-    mcp_servers(&self.bindings).expect("the bound MCP servers were checked when the inputs were made")
-  }
-
-  /// The local secrets the bindings name; their values are looked up when an agent or tool starts, never kept here.
-  pub fn bound_secrets(&self) -> Vec<SecretId> {
-    self
-      .bindings
-      .references
-      .iter()
-      .filter_map(|reference| match reference {
-        BoundReference::Secret { local, .. } => Some(*local),
-        BoundReference::Connection { .. } | BoundReference::McpServer { .. } => None,
-      })
-      .collect()
-  }
-
   /// The task `id` of the project keyed `project` as the run started it: its title, brief and criteria, the pinned
   /// pipeline at its version, the limits and what the run delivers. A team task is in its accepted module, at the
   /// revision the work started from.
@@ -196,7 +159,7 @@ impl RunInputs {
     match self.bundle.origin() {
       InputsOrigin::Local => task.with_revision(TaskRevision::FIRST),
       InputsOrigin::Team(accepted) => task
-        .with_module(Some(accepted.module))
+        .with_module(accepted.module)
         .with_revision(accepted.definition_revision),
     }
   }

@@ -206,7 +206,11 @@ fn window(state: State, account: Option<&str>) -> Result<(), Box<dyn Error>> {
         (State::Add, None) => None,
         (_, named) => Some(account_named(&workspace, named.unwrap_or(shown))?),
       };
-      Route::Accounts(AccountsView { account, panel })
+      Route::Accounts(AccountsView {
+        account,
+        provider: None,
+        panel,
+      })
     }
   };
   let start = match launch.start() {

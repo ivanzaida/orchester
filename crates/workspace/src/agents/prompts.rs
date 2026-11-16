@@ -1,86 +1,55 @@
-//! What else reaches a profile's prompts (*Also in this profile's prompts*, 01c, ORC-107): the published project rules
-//! that select its agents, the published rules of its role, and the published project and role skills. Pipeline and
-//! step rules and skills reach it only through the steps that run it, which *Used in pipelines* lists.
+//! What else reaches a profile's prompts (*Also in this profile's prompts*, 01c, ORC-107): the published instructions
+//! and skills it gives its agents (`docs/design/team-configuration.md`, "Decided 2026-11-09"), which nothing else gives
+//! them. One it gives that has no published version, or that the project no longer offers, reaches no prompt.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
-  name::Name,
-  resource::{AgentTargets, Instruction, InstructionScope, ResourceKind, Skill},
+  resource::{AgentProfile, ChosenResources, Instruction, ResourceKind, Skill},
   store::ResourceStore,
 };
 
-/// A published instruction or skill by its name, with where it applies.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Source {
-  name: Arc<str>,
-  scope: InstructionScope,
-  /// Which agents a rule selects; every one for a skill.
-  targets: AgentTargets,
-}
-
-/// The project's published rules and skills, read once for every profile the screen shows.
+/// The project's published instructions by name and skills by slug, read once for every profile the screen shows.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PromptSources {
-  rules: Vec<Source>,
-  skills: Vec<Source>,
+  instructions: BTreeMap<ResourceId, Arc<str>>,
+  skills: BTreeMap<ResourceId, Arc<str>>,
 }
 
-/// What reaches one profile's prompts besides its own role instructions.
+/// What reaches one profile's prompts besides its own role instructions, each in the order the profile gives them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProfilePrompts {
-  pub project_rules: Vec<Arc<str>>,
-  pub role_rules: Vec<Arc<str>>,
-  pub project_skills: Vec<Arc<str>>,
-  pub role_skills: Vec<Arc<str>>,
+  pub instructions: Vec<Arc<str>>,
+  pub skills: Vec<Arc<str>>,
 }
 
 impl PromptSources {
   pub fn load<S: ResourceStore>(store: &S) -> Result<Self, S::Error> {
     let mut sources = Self::default();
     for resource in store.resources(ResourceKind::Instruction)? {
-      if let Some(version) = store.latest_version::<Instruction>(resource.id())? {
-        sources.rules.push(Source {
-          name: resource.name().as_str().into(),
-          scope: version.body().scope().clone(),
-          targets: version.body().targets().clone(),
-        });
+      if store.latest_version::<Instruction>(resource.id())?.is_some() {
+        sources
+          .instructions
+          .insert(resource.id(), resource.name().as_str().into());
       }
     }
     for resource in store.resources(ResourceKind::Skill)? {
-      if let Some(version) = store.latest_version::<Skill>(resource.id())? {
-        sources.skills.push(Source {
-          name: resource.slug().as_str().into(),
-          scope: version.body().scope().clone(),
-          targets: AgentTargets::All,
-        });
+      if store.latest_version::<Skill>(resource.id())?.is_some() {
+        sources.skills.insert(resource.id(), resource.slug().as_str().into());
       }
     }
     Ok(sources)
   }
 
-  /// What reaches the agents of profile `id` with `role`.
-  pub fn for_profile(&self, id: ResourceId, role: &Name) -> ProfilePrompts {
-    let selects = |targets: &AgentTargets| match targets {
-      AgentTargets::All => true,
-      AgentTargets::Roles(roles) => roles.contains(role),
-      AgentTargets::Profiles(profiles) => profiles.contains(&id),
+  /// What reaches the agents of `profile`.
+  pub fn for_profile(&self, profile: &AgentProfile) -> ProfilePrompts {
+    let names = |given: &ChosenResources, published: &BTreeMap<ResourceId, Arc<str>>| -> Vec<Arc<str>> {
+      given.ids().iter().filter_map(|id| published.get(id).cloned()).collect()
     };
-    let names = |sources: &[Source], wanted: &dyn Fn(&Source) -> bool| -> Vec<Arc<str>> {
-      sources
-        .iter()
-        .filter(|source| wanted(source))
-        .map(|source| source.name.clone())
-        .collect()
-    };
-    let project = |source: &Source| source.scope == InstructionScope::Project && selects(&source.targets);
-    let of_role = |source: &Source| matches!(&source.scope, InstructionScope::AgentRole { role: of } if of == role);
     ProfilePrompts {
-      project_rules: names(&self.rules, &project),
-      role_rules: names(&self.rules, &of_role),
-      project_skills: names(&self.skills, &project),
-      role_skills: names(&self.skills, &of_role),
+      instructions: names(profile.instruction_resources(), &self.instructions),
+      skills: names(profile.skills(), &self.skills),
     }
   }
 }

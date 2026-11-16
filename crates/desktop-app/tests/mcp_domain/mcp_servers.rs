@@ -272,7 +272,7 @@ fn domain_mcp_servers_a_profile_chooses_are_not_removed() {
   served.ok(
     "save_profile_draft",
     &json!({
-      "project": "Kontur", "role": "Designer", "connection": "Codex · Kontur", "model": "gpt-5.5",
+      "project": "Kontur", "role": "Designer", "account": "default", "cli": "codex", "model": "gpt-5.5",
       "mcp_servers": ["pencil-design"],
     }),
   );
@@ -291,7 +291,7 @@ fn domain_profile_mcp_selection_checks_enabled_added_disabled_kept_removed_and_m
   served.let_automation_widen(true);
   served.ok("add_mcp_server", &pencil());
   let mut args = json!({
-    "project": "Kontur", "role": "Designer", "connection": "Codex · Kontur", "model": "gpt-5.5",
+    "project": "Kontur", "role": "Designer", "account": "default", "cli": "codex", "model": "gpt-5.5",
     "mcp_servers": ["pencil-design"],
   });
   served.ok("save_profile_draft", &args);

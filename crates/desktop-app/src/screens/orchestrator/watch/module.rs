@@ -5,7 +5,9 @@
 //! (`orchester_workspace::orchestrator::watch::watch_in`), off the UI thread and with no turn of its own, before the
 //! message is sent. A new conversation is kept with its command, and the screen shows it. What another conversation
 //! leads is kept nowhere: the conversation's line names it, and its card offers it. A command that applied nothing
-//! says why over the composer. `/watch-task` ([`super::task`]) applies its badge the same way.
+//! says why over the composer. `/watch-task` ([`super::task`]) applies its badge the same way. With *Lead to the end*
+//! chosen in the picker ([`super::mode`], `L03` `xE361`) the conversation leads them to the end instead
+//! (`orchester_workspace::orchestrator::watch::lead_in`).
 
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
@@ -25,12 +27,12 @@ use orchester_core::{
 use orchester_workspace::{
   background,
   messages::Message,
-  orchestrator::watch::{WatchError, watch_in},
+  orchestrator::watch::{WatchError, lead_in, watch_in},
   runner::Runners,
 };
 use parking_lot::Mutex;
 
-use super::picker::ModulePicker;
+use super::{mode::LeadChoice, picker::ModulePicker};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -51,11 +53,8 @@ pub(in crate::screens::orchestrator) const MODULE: &str = "watch-module";
 /// The keys of the picker's two rows that are no module.
 const WITHOUT_MODULE: &str = "without-module";
 const PROJECT: &str = "project";
-/// The app's key for a /watch synthetic input asked for, which only a person applies.
-const PERSON_ONLY: &str = "orchestrator.watch.personOnly";
-
 /// A /watch to apply: in the project at `root`, conversation `chat` (`new` when the command starts it) watches
-/// `targets` following `order`.
+/// `targets` following `order`, and leads them to the end when `lead` says so.
 #[derive(Clone)]
 pub(in crate::screens::orchestrator) struct Command {
   root: PathBuf,
@@ -63,6 +62,7 @@ pub(in crate::screens::orchestrator) struct Command {
   new: bool,
   targets: Vec<NamedTarget>,
   order: String,
+  lead: bool,
 }
 
 impl DevtoolsInspectable for Command {}
@@ -90,6 +90,9 @@ struct Queue {
 pub(in crate::screens::orchestrator) struct WatchAction {
   action: FutureAction<Command, Done, Message>,
   queue: Arc<Mutex<Queue>>,
+  /// Whether `/watch-module` and `/watch-task` follow what their pickers choose or lead it to the end.
+  pub(super) module_mode: LeadChoice,
+  pub(super) task_mode: LeadChoice,
 }
 
 impl WatchAction {
@@ -135,7 +138,12 @@ pub(in crate::screens::orchestrator) fn watch_action(ctx: &mut Ctx) -> WatchActi
       }
     }
   });
-  WatchAction { action, queue }
+  WatchAction {
+    action,
+    queue,
+    module_mode: LeadChoice::new(ctx),
+    task_mode: LeadChoice::new(ctx),
+  }
 }
 
 /// Applies `command` off the UI thread, and tells the runners its conversation changed.
@@ -146,10 +154,18 @@ async fn watch(runners: &Runners, command: Command) -> Result<Done, Message> {
     new,
     targets,
     order,
+    lead,
   } = command;
   let (at, id) = (root.clone(), chat.id());
-  background::run(move || watch_in(&at, &chat, &targets, &order).map_err(|error: WatchError| error.message()))
-    .await??;
+  background::run(move || {
+    let applied = if lead {
+      lead_in(&at, &chat, &targets, &order)
+    } else {
+      watch_in(&at, &chat, &targets, &order)
+    };
+    applied.map_err(|error: WatchError| error.message())
+  })
+  .await??;
   runners.chat_changed(&root);
   Ok(Done { chat: id, new })
 }
@@ -178,7 +194,8 @@ pub(in crate::screens::orchestrator) fn follow(ctx: &mut Ctx, view: &View, proje
 
 /// *Watch modules* in the slash menu: it takes the modules chosen in its picker, and its badge says *Watch*.
 pub(in crate::screens::orchestrator) fn module_command(ctx: &Ctx, view: &View, project: &ShownProject) -> SlashCommand {
-  let picker = ModulePicker::new(project, view.of.clone());
+  let mode = view.watching.module_mode.clone();
+  let picker = ModulePicker::new(project, view.of.clone(), mode.clone());
   SlashCommand {
     name: MODULE,
     icon: Icon::Eye,
@@ -186,11 +203,12 @@ pub(in crate::screens::orchestrator) fn module_command(ctx: &Ctx, view: &View, p
     detail: ctx.t("composer.slash.command.watchModule.detail"),
     does: Some(Does::Take(Taking {
       picker: Arc::new(picker),
-      apply: apply(view, project.open.repo_root.clone(), named_module),
+      apply: apply(view, project.open.repo_root.clone(), (named_module, mode.clone())),
       badge: Badge {
         icon: Icon::Eye,
         verb: ctx.t("composer.slash.command.watchModule.badge"),
       },
+      other_way: Some(mode.other_way(ctx)),
     })),
   }
 }
@@ -205,17 +223,19 @@ fn named_module(choice: &Choice) -> Option<NamedTarget> {
 /// The composer's send with the badge: the conversation the message goes to (the one shown, or the new one it
 /// starts) watches the targets the badge holds (`named`), with the message's words as their order. A conversation it
 /// starts is kept as the message's send keeps it, with the new conversation's *Plan only* switch, so whichever of the
-/// two writes it first, it plans as the person set it. Only a person's keys apply it: the order is kept as the
+/// two writes it first, it plans as the person set it. They are led to the end when `mode` says the picker chose it,
+/// and the choice goes back to *Follow* with the badge. Only a person's keys apply it: the order is kept as the
 /// person's own words, which the agent follows, and no subscription records who asked for it, so synthetic input (an
-/// MCP client's) is refused with a notice outside a QA copy (`mcp::qa_person`), and the badge and the message stay.
-pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
+/// MCP client's) is refused to it outside a QA copy (`mcp::qa_person`), and the badge and the message stay.
+pub(super) fn apply(
+  view: &View,
+  root: PathBuf,
+  (named, mode): (fn(&Choice) -> Option<NamedTarget>, LeadChoice),
+) -> Apply {
   let (of, action) = (view.of.clone(), view.watching.clone());
   let (plan_only, qa_person) = (view.plan_only.clone(), view.qa_person.clone());
   Arc::new(move |applied: Applied| {
-    if qa_person.refuses_input() {
-      tracing::warn!("synthetic input asked to watch; not taken");
-      let refused = Message::new(PERSON_ONLY);
-      action.state().set(FutureState::rejected(refused, None));
+    if qa_person.refuses("watch a module or a task from the Orchestrator's composer") {
       return false;
     }
     let targets: Vec<NamedTarget> = applied.choices.iter().filter_map(named).collect();
@@ -234,6 +254,7 @@ pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<Nam
       new,
       targets,
       order: applied.text,
+      lead: mode.take(),
     });
     true
   })
@@ -267,16 +288,11 @@ pub(super) fn target_of(key: &str) -> Option<WatchTarget> {
   }
 }
 
-/// A /watch that applied nothing: why, until the person dismisses it or applies one again. The refusal of synthetic
-/// input is the app's own words; the rest are `watch_in`'s.
+/// A /watch that applied nothing: why, in `watch_in`'s words, until the person dismisses it or applies one again.
 pub(in crate::screens::orchestrator) fn problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
   let state = view.watching.state();
   let error = state.get().error?;
-  let why = if error.key == PERSON_ONLY {
-    ctx.t(PERSON_ONLY)
-  } else {
-    message_text(ctx, &error)
-  };
+  let why = message_text(ctx, &error);
   let dismiss = ActionButton::new(
     "orchestrator-watch-dismiss",
     ButtonKind::Secondary,

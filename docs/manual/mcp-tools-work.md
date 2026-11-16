@@ -61,27 +61,46 @@ Each agent profile has an **approval mode** (`save_profile_draft`'s `permissions
 tool request at once, except work outside the run's worktree, its Sources and the agent's temp folders, pushes to a
 remote and refs other than the run's branch, which still come to the person; **Manual** runs the profile's allowed
 commands, asks the project's reviewer about the rest, and leaves what the reviewer denies or is unsure about to the
-person. A run's step is in Autopilot only when its profile says Autopilot, the project allows it (*Allow Autopilot for
-agents in this project*, Project settings › Runs) and the run was not switched to Manual. Decisions (questions, plans,
+person. A run's step is in Autopilot only when its profile says Autopilot, the project allows it (its *Approve mode*,
+Project settings › Runs, is not Manual) and the run was not switched to Manual. Decisions (questions, plans,
 limits, conflicts) always come to the person in both modes.
 
 ### `get_approvals` — read-only
 
 A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
-- `allow_autopilot` — *Allow Autopilot for agents in this project*.
+- `approve_mode` — the project's *Approve mode*: `manual`, `autopilot` or `dangerous_auto_approve` (every tool
+  request of the project's agents is approved at once).
+- `allow_autopilot` — whether Autopilot is allowed: `true` in `autopilot` and `dangerous_auto_approve`.
 - `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
   or `unavailable` with why the project has none.
 - `runs` — each run of the project that has not ended: `id`, `number`, `task`, `link`, and `approval_mode`: `{"mode":
   "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
-  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
+  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so; while the project is
+  in `dangerous_auto_approve`, `{"mode": "dangerous_auto_approve", "because": "project"}` for every run. Beside it,
+  `switched_to_manual`: whether the run switched itself to Manual, which applies again once the project leaves
+  Dangerous auto-approve.
+
+**Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
 
 ### `set_allow_autopilot` — changes data · person only to turn on
 
-Turns the project's *Allow Autopilot for agents in this project* on or off. `false` is always taken: every agent of
-the project then runs as Manual. `true` is refused as `person_only` whatever automation may do: only a person allows
-Autopilot, in Project settings › Runs (asking for it while it is on already changes nothing). Parameters: `project`,
+The former *Allow Autopilot* switch, kept for existing clients. `false` moves the project's Approve mode to `manual`
+(from `dangerous_auto_approve` too) and is always taken: every agent of the project then runs as Manual. `true` asks
+for `autopilot` and is refused as `person_only` from `manual` whatever automation may do: only a person allows
+Autopilot, in Project settings › Runs (asking for it while Autopilot is allowed already changes nothing). Parameters: `project`,
 `allow_autopilot` (boolean) — both required. Answers as `get_approvals`.
+
+### `set_approve_mode` — changes data · person only to move up
+
+Moves the project's *Approve mode*: `manual`, `autopilot` or `dangerous_auto_approve`. In `dangerous_auto_approve` every
+tool request of every agent of the project's runs is approved at once: no allowed list, hold rule, reviewer, person or
+Orchestrator is asked, and each answer is recorded as `dangerous_auto_approve` (`get_run`'s
+`requests[].answered.kind`). Moving it down, or asking for what it is already, is always taken; a move decided on a mode a person changed meanwhile is
+refused as `changed_outside`; moving it up is refused
+as `person_only` whatever automation may do: only a person moves it up, in Project settings › Runs (to
+`dangerous_auto_approve` through its confirmation). Parameters: `project`, `approve_mode` — both required. Answers as
+`get_approvals`.
 
 ### `set_reviewer` — changes data · gate AA, and AP for another reviewer
 
@@ -148,6 +167,13 @@ its next run takes as things stand (`null` = whatever the checkout has checked o
 `led_in` is the Orchestrator conversation the task's events go to, as its *Led in* shows it (see
 [`get_watches`](#get_watches--read-only)), or `null` when no subscription covers it.
 
+A team task also carries `closed` and `blocked`, as the team server records them: `closed` is `{how, at}` while the task is
+Done or Canceled (`how` is `{kind: "person", by}` for the person whose patch closed it, `{kind: "delivery", module, module_name}`
+when its module's accepted delivery marked it Done, or `{kind: "run", work}` when its work's success did); `blocked` is
+`{by, at}` while it has a `blocked_reason`: who set the current reason. `at` is in milliseconds. Each is `null` when the
+server has no record, as every server before this contract has none; the Summary then says only *Done*, *Canceled* or
+*Blocked*.
+
 Parameters: `project` (req.), `key` (req.: key or id).
 
 ### `create_task` — changes data
@@ -188,7 +214,8 @@ nowhere; nothing is saved).
 id or name, sent as its resource id; a pipeline of this computer's own (or any that is not the team's) is refused as
 `team_pipeline_required`: only the team's pipelines run team tasks, and its Admins create and publish them. A team
 project offers none of this computer's own pipelines (`list_pipelines`, `get_pipeline`). Limits are refused as
-`decision_required` (D6), a workflow status other than the default as `decision_required` (D4), and what the server
+`decision_required` (D6), a workflow status other than the default (Backlog) as `team_status_on_create` (a team task is
+moved on afterwards with `update_task`), and what the server
 keeps nowhere (`story_points`, `tags`, `blocked_by`, `no_automatic_merge`, `delivers`, `base_branch`) as
 `team_field_unsupported`; nothing is sent then.
 
@@ -213,8 +240,17 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
-- **Team project**: as `create_task` says; the change goes to the server's task route (Admins' today: a member gets
-  `not_admin`). Moving a team task to another team pipeline is a person's decision too (`person_only` unless AP is on).
+- **Team project**: as `create_task` says; the change goes to the server's task route, which allows an edit of the
+  details to Admins only (a member gets `not_admin`). Moving a team task to another team pipeline is a person's decision
+  too (`person_only` unless AP is on). The workflow status and `blocked_reason` are the task lifecycle (decision D4, one
+  `PATCH` of the task, decided on the caller's claim and role): `done` and `blocked_reason` (set, change, clear) are the
+  claim holder's or an Admin's; `canceled`, `backlog` and `todo` are an Admin's only, and `backlog` or `todo` reopens a
+  Done or Canceled task. Someone else gets `not_holder` (the change is a holder's) or `not_admin`. `done` and
+  `canceled` release the task's own claim and are refused as `stop_run_first` while its work runs; a closed task
+  cannot be claimed or started until an Admin reopens it. `in_progress`, `in_review` and Done to Canceled are no
+  lifecycle change and are refused as `team_status_not_offered`. A task also becomes Done by itself on the server (its
+  report/outside work succeeded, or its module's delivery was accepted); nothing in the tools sets that. A blank
+  `blocked_reason` is `invalid_organization` here and `missing_reason` from the server.
 
 ### `get_story_point_calibration` — read-only
 
@@ -227,7 +263,8 @@ its runs. These are the examples estimates read. The estimator's own requests ar
 
 Returns a **queued** task whose run never started to Draft (task list's *Return to drafts*) — only a task its group
 holds for good (a task of the group failed, the group's cap, refused by preflight or the runner, blocked or
-canceled). Parameters: `project`, `key` (both req.).
+canceled). Parameters: `project`, `key` (both req.). A team task has no queue or draft on the team server: refused as
+`team_no_queue`; an Admin moves it back to Backlog with `update_task` (`workflow_status: backlog`).
 
 ---
 
@@ -270,14 +307,66 @@ Makes a new open module in a **local** project (refused as `shared_task` in a sh
 | `target_date` | string \| null | no   | `YYYY-MM-DD`, not before the start.       |
 | `base_branch` | string \| null | no   | `checked_out` (default) or a branch name; a name only a remote has (`release` or `origin/release`) creates its local branch, tracking it. |
 
+| `own_branch` | boolean \| null | no | A local project only. `true` gives the module a branch of its own, `module/<slug>`. |
+| `acceptance_pipeline` | string \| null | no | A local project only, with `own_branch`: the published pipeline its acceptance runs on, by id or name. |
+| `deliver_when_accepted` | boolean \| null | no | A local project only, with `own_branch`: the conversation that leads the module may deliver it once accepted. |
+
 Put tasks in it with `create_task`/`update_task`'s `module`. Refusals: `branch_not_found` (the repository has the
-branch nowhere; nothing is made).
+branch nowhere; nothing is made), `invalid_module` (an acceptance pipeline or *Deliver when accepted* for a module
+without a branch of its own).
+
+**A module's own branch.** With `own_branch`, the module's tasks that set no base branch of their own start from
+`module/<slug>` and merge into it, beside the person's checkout, which is never touched by those merges. The branch
+is made at the tip of the module's base branch when the module's first task starts. The module's base branch is then
+where it is **delivered** (`deliver_module`). Its name is kept once chosen; a name a module or the repository has
+already gets `-2`, `-3`, … Taking the choice away (`update_module` with `own_branch: false`) leaves the branch in the
+repository.
 
 ### `update_module` — changes data
 
 Changes `name`, `description`, `start_date`, `target_date` (`null` = no date), `state` (`open` | `closed`) or
 `base_branch` (as `create_module` takes it; the next runs of its tasks that inherit theirs take it, runs that started
 keep theirs); fields left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
+`own_branch`, `acceptance_pipeline` (`null` = none) and `deliver_when_accepted` change a local module's own branch
+and how it is delivered, as `create_module` sets them. `get_module` gives `own_branch`: `null`, or the branch, the
+acceptance pipeline, *Deliver when accepted*, how many acceptances the module had and where the latest stands
+(`none`, `under_way`, `passed`, `not_passed`), its last delivery, and `waits_for`.
+
+### `deliver_module` — changes data
+
+Delivers a module that has a branch of its own: merges that branch, at its tip, into the module's base branch with a
+merge commit, as one whole. It is a call of its own in both kinds of project, apart from any run's merge.
+
+| Parameter | Type | Req. | Notes |
+|---|---|---|---|
+| `project` | string | yes | |
+| `module` | string | yes | Id or name. |
+| `authorization` | string \| null | no | A team project only: the operation id of the Admin's delivery authorization. |
+
+- **A local module.** Refused while a task of it has a run that has not ended (`runs_at_work`), when its branch holds
+  nothing its base lacks (`nothing_to_deliver`), for a module without a branch of its own (`no_own_branch`), and as
+  the merge refuses, with everything left as it was: `delivery_conflicts` (the base moved and the merge conflicts),
+  `uncommitted_in_the_way` (the person's checkout has changes the merge would overwrite), `integration_running`.
+  Returns `delivered`: `into`, `head`, `revision`, `at`.
+- **A team module.** The delivery is requested from the team server, under the module's claim, as `merge_run` of
+  one of its runs requests it; an Admin's authorization or the team's *automatic merge* decides it, and the tool
+  never authorizes.
+- **In a turn of the Orchestrator chat nobody asked for**, only for a module that conversation leads to the end, at
+  the step the module waits for: `not_led`, `not_due` otherwise.
+
+### `start_acceptance` — changes data
+
+Starts the acceptance of a local module that has a branch of its own and names an acceptance pipeline. Orchester
+makes one task in the module, on that pipeline, and starts it; its run starts from the module's branch and reviews
+the module's whole diff against its base branch. The task's brief is Orchester's: the module's tasks with their
+criteria, and every step automation accepted unverified. Parameters: `project`, `module` (req.).
+
+Refused while a task of the module is still open (`tasks_open`), while an acceptance is under way
+(`acceptance_under_way`), once the branch as it is now passed one (`already_accepted`), for a module without a branch
+of its own or an acceptance pipeline (`no_own_branch`, `no_acceptance_pipeline`), and for a team project
+(`team_project_unsupported`). The module is *accepted* once that task is done, until more work is merged into the
+module's branch. Findings are made tasks of the module by whoever reads the report; the acceptance is started again
+after them. Returns `acceptance`: the task's key and its run, or why the run did not start.
 
 ### `get_watches` — read-only
 
@@ -337,6 +426,15 @@ queue state, `null` if it never joined), what happened, tokens used and budget, 
 that cannot be read has no phase/state/tokens; its detail says why. While steps of a run wait for an agent slot, its
 detail ends by naming them (`… · Review waits for an agent slot`).
 
+**Team projects:** a team task's runs are listed from this computer's own records of them, with the task's key and
+title as the run recorded them when it started. A team task named by `task` (key or server id) is read from its team
+server first; one this computer ran nothing of lists no runs. A name the project has as a local task (made before the
+project was linked) is read here, signed in or not. A run of the old sharing stream that kept neither the inputs it
+started with nor a cached copy of its task has no key to be listed under: with no `task` it is listed with `task: null`
+and `unrecorded: true` (its id, number, state, tokens and time as stored; phase, detail, delivery and link are `null`;
+a run that cannot be read has its number and a `detail` saying so, and nothing else); asked for by `task` it is
+refused as `team_task_unrecorded`.
+
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
 | `project` | string \| null  | no   | Left out = every project.                     |
@@ -378,6 +476,10 @@ The complete state of a run:
   `worktree_removed`, `branch_deleted`) or `removed`; plus `since`, `resyncs`, `approved_at`, `checked_on`.
 - Links: the run links to its task's page; waits link to their cards on the task's Conversation.
 
+A run is named by its id or its number, whatever its task. **Team projects:** a team task's run is read from this
+computer's own records of it, without the task's definition (`task` is the key the run recorded when it started); a
+run that kept none, whose task has no copy here either, is refused as `team_task_unrecorded`.
+
 Parameters: `project` (req.), `run` (req.).
 
 ### `pause_run` / `resume_run` / `cancel_run` — changes data
@@ -385,6 +487,11 @@ Parameters: `project` (req.), `run` (req.).
 - `pause_run`: pauses a run at its agents' next checkpoint.
 - `resume_run`: resumes a paused run, or continues an interrupted one from its last checkpoint.
 - `cancel_run`: cancels a run that has not ended.
+
+**Team projects:** `resume_run` resumes a paused run under the claim its work started with and takes no claim of the old
+sharing stream; an interrupted run is not continued from here (`team_project_unsupported`, as `continue_run`) because
+a team task's work starts and goes on only through the team server. A run the team server fenced (taken over, membership
+removed, another device) is not resumed: `claim_fenced`, as the task page refuses it.
 
 Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_running`, `shutting_down`,
 `runner_unavailable`, `runner_reply_lost`, …
@@ -432,7 +539,8 @@ for a run that ended. Parameters: `project`, `run` — both required. Answers th
 Removes an ended run's worktree (task page's *Remove worktree*): committed work stays on the branches; only merged
 branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds
 uncommitted changes (a person decides that on the task page), when already removed, or `run_changed` when the run
-worked again in other worktrees since this was read. Parameters: `project`, `run`.
+worked again in other worktrees since this was read. A team task's run that kept no inputs, whose task has no copy
+here either, is refused first as `team_task_unrecorded`. Parameters: `project`, `run`.
 
 `get_changes`, `merge_run` and `complete_run` are in [setup › Ending a run's work](mcp-tools-setup.md#10-ending-a-runs-work).
 
@@ -445,6 +553,11 @@ worked again in other worktrees since this was read. Parameters: `project`, `run
 `hold_queue` holds **new starts** in the whole project, or — with `task` — in the reviewed group that task belongs
 to. Running runs go on; queued tasks wait and a start is refused until `release_queue` lets them go on. Both answer
 what holds now.
+
+**Team projects:** the task is read from its team server (a local task of the project is read here, signed in or
+not); its group is this computer's, so a team task in none is
+refused as `not_in_group`. A team task with no run on this computer is not part of this computer's hold queue:
+it is left out of what holds now.
 
 | Parameter | Type           | Req. | Description                                                        |
 |-----------|----------------|------|--------------------------------------------------------------------|
@@ -469,6 +582,10 @@ review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request 
 lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
 `reason`, `person`; absent while it waits) and `came_to_you`.
 
+**Team projects:** a team task's approvals name the task by the key its run recorded when it started; an unfinished run
+that recorded none and whose task has no copy here is listed in `runs` with `task: null`, `unrecorded: true` and no
+link.
+
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
 ### `decide_approval` — changes data · gate AA
@@ -488,6 +605,9 @@ Approves a waiting request once, or denies it. A denial may carry a `message` th
 Agents' questions waiting for an answer, oldest first: id, agent, when asked, whether the agent waits in its turn,
 the questions with suggested answers, run, task, link. Under `waiting_for_message`: steps of tasks' latest runs that
 wait for a message, each with what its agent wrote last (answer those with `send_message`).
+
+**Team projects:** a team task's questions name the task by the key its run recorded when it started; the waits of a
+run that recorded none and whose task has no copy here are listed with `task: null`, `unrecorded: true` and no link.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
@@ -509,7 +629,8 @@ question, or an empty answer.
 
 A plan a gated step proposed, as its card shows it: version, step, agent, time, whole text, whether the run waits on
 it, its decision (`approved`, or `changes_requested` with note; `decided_by`, when), the step's versions (no text),
-run and link. Refused as `no_plan` / `plan_not_found`.
+run and link. Refused as `no_plan` / `plan_not_found`, and as `team_task_unrecorded` for a team task's run that kept no
+inputs and whose task has no copy here.
 
 | Parameter | Type            | Req. | Description                                                                                  |
 |-----------|-----------------|------|----------------------------------------------------------------------------------------------|
@@ -542,6 +663,17 @@ as a follow-up of a run ready for review, as instructions that continue a failed
 resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps the
 message until a person raises the limit. Refused when no agent reads it and the task does not run again.
 
+On a **team project** the message to a **team run** (told by the run itself: its team record or its team inputs, not its
+task; a local task's run and a run of the old sharing stream behave as on a local project) goes to the run under the
+claim its work started with (no claim of the old sharing stream is taken). A run of the old sharing stream whose task
+has no definition here (no inputs kept, no cached copy) is refused as `team_task_unrecorded`; a team run whose start
+did not finish recording its team record, as `team_run_unrecorded`. A message that would run
+the task again (`team_run_again_unsupported`) or continue an interrupted
+run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
+server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
+message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
+is stored.
+
 | Parameter | Type                          | Req. | Description                                                                                       |
 |-----------|-------------------------------|------|---------------------------------------------------------------------------------------------------|
 | `project` | string                        | yes  |                                                                                                   |
@@ -558,6 +690,10 @@ orchestrator), plans (text, waiting or not, decision), `run_continued` entries (
 `restarted`; step, note, attempt, author), `base_moved` notices and how each step ended. Each entry has author, step,
 run, time, `cursor` and link. Texts are stored text with secrets redacted.
 
+**Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached; a task the
+project has as a local task is read here without the server) and the conversation is this computer's record of its runs; a team task nothing ran for here has no entries. A team task whose
+runs here recorded nothing of it is refused as `team_task_unrecorded`.
+
 | Parameter | Type            | Req. | Description                                                      |
 |-----------|-----------------|------|------------------------------------------------------------------|
 | `project` | string          | yes  |                                                                  |
@@ -571,9 +707,9 @@ run, time, `cursor` and link. Texts are stored text with secrets redacted.
 
 ### `duplicate_pipeline` — changes data · gate AP unless identical
 
-Copies a pipeline's latest published version into a new pipeline and publishes it as v1, optionally giving agent
-steps other published profiles. A copy that is not identical to its source (other profiles included) is
-`person_only` unless AP is on.
+Copies a pipeline's latest version into a new pipeline and publishes it as v1, or stores nothing when it is refused,
+optionally giving agent steps other published profiles. A copy that is not identical to its source (other profiles
+included) is `person_only` unless AP is on.
 
 | Parameter       | Type                 | Req. | Description                                                                         |
 |-----------------|----------------------|------|-------------------------------------------------------------------------------------|
@@ -639,6 +775,10 @@ Usage reads it, in tasks (no money estimates):
 - **Forecasts** — Monte Carlo over recently merged tasks for the queued tasks and each open module: 50% and 85%
   dates, remaining tasks, the history used; or `not_enough_history` / `nothing_left`.
 
+**Team projects:** nothing of this is computed from this computer's rows, which hold only part of a team's tasks, so the
+call is refused as `team_project_unsupported`; with `module`, the module is read from its team server first
+(`module_not_found` when it has none).
+
 Parameters: `project` (req.), `days` (integer | null), `module` (string | null — only that module's forecast beside
 the queued work's).
 
@@ -652,4 +792,66 @@ Orchestrator did (`way`: direct, itself, applied by the person); the day's token
 account against the daily budget; the queued tasks in order; and `merge_queue` (runs in the queue now and those
 merged, failed or removed since the day began). Every item has its app link.
 
+When the Orchestrator did something on its own that day, or left something to you, the report also has `led`: its
+`decisions` of the day with their reasons (and `open_decisions`, how many you have not looked at), the tasks
+`parked` for you with what to do, the led targets that are `stuck`, how many events were `left_to_person` after
+their tries, what holds its turns (`held`: `budget` or `plan_limit`, and until when), and for each subscription that
+leads to the end where it stands and what it `spent` against its `budget`. A day with nothing of it has no `led`.
+
 Parameters: `project` (req.), `day` (`YYYY-MM-DD` | null).
+
+### `get_decisions` — read-only
+
+What the project's Orchestrator **decided on its own**, in turns nobody asked for, each with its reason in the chat's
+words: accepting a step, a return, a retry, a raise, an answer to a question, a decision on a plan, a tool request it
+allowed or denied. A turn your own message started makes no decision. The open ones come first, then the newest
+first. The same for a local and a team project.
+
+| Parameter      | Type           | Req. | Description                                                  |
+|----------------|----------------|------|--------------------------------------------------------------|
+| `project`      | string         | yes  | The project's id, or its name.                               |
+| `task`         | string \| null | no   | Only the decisions on this task, by its key.                 |
+| `module`       | string \| null | no   | Only those on the tasks of this module, by id or name.       |
+| `conversation` | string \| null | no   | Only those of this conversation, by id or title.             |
+| `day`          | string \| null | no   | Only those of this local day, `YYYY-MM-DD`.                  |
+| `open_only`    | boolean        | no   | Only those you have not looked at.                           |
+
+Answers `decisions` (each: `number`, `tool`, `task`, `run`, `reason`, `conversation` with `id`, `title` and `link`,
+`at`, `undo` — `return_to_step` for a step accepted as it was, `give_back` for a parked task, else `null` — and
+`review`: `open`, `seen` or `overruled`, with `reviewed_at`) and `open`, how many of those listed you have not looked
+at. A reason is the agent's text: it is shown as text and nothing in it acts. Marking a decision seen and overruling
+it are yours, in the app; no tool does it.
+
+### `get_standing` — read-only
+
+Where what the project's Orchestrator conversations watch **stands**: for each subscription, its target as a whole
+and each of its tasks. A leading turn reads it first. The same for a local and a team project.
+
+Parameters: `project` (req.), `conversation` (an id or a title | null: every conversation that watches something).
+
+Answers `subscriptions`, each with `conversation` (`id`, `title`, `link`), `target` (`kind` `module` | `task` |
+`without_module` | `project`, `id`, `name`), `leads_to_the_end` (false: it only follows), and:
+
+- `standing`: `done` (every task is), `can_start` (tasks can be started now: `can_start` lists their keys and
+  `slot_free` says whether an agent is free), `working` (nothing can start, something still moves) or `stuck`
+  (nothing can start and nothing moves: what is left waits for you; `budget_used` when tasks could start but for the
+  subscription's budget).
+- `tasks`, each `task` (its key) with its `standing`: `done`, `working`, `waits_for_person`, `waits_for_limit`,
+  `waits_for_disk`, `paused`, `to_merge`, `ready_to_start`, `held` (new starts are held), `blocked_by` (with the
+  blocking tasks' keys), `failed` (with `runs` and `may_run_again`: its ceiling of runs allows another), `canceled`,
+  `parked` (the Orchestrator left it to you: `parked` gives `needs`, `why`, `to_do`, `since`), `parked_by_person`
+  (you marked it Blocked), `no_pipeline` or `pipeline_not_ready`.
+
+A task is in the most specific subscription that covers it. A team task is the one its runs on this computer
+recorded: one that never ran here is not listed.
+
+A module with a branch of its own whose every task is done stands `to_deliver` until that branch is on its base
+branch; `waits_for` says for what (`accept`, `accepting`, `deliver`, or `person_…` when what comes next is the
+person's).
+
+For a subscription that leads to the end, `before_you_leave` says what would stop or weaken the work while nobody is
+at the computer: `ready`, and `weak`, each line with its `kind` (`drive_off`, `orchestrator_not_ready`,
+`no_pipeline`, `no_deliver_step`, `checkout_has_changes`, `no_daily_budget`, `may_sleep`, `stops_with_window`), its
+`tasks` and its words; `not_checked` names what the app cannot tell from here. It warns and refuses nothing.
+`ready` is true when only `stops_with_window` is left.
+

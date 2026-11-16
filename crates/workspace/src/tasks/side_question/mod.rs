@@ -19,7 +19,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use self::{
   read::{has_transcript_in, run_stage_in, side_input_in, transcript_lines, unified_text},
-  send::{SentOn, send_on, send_on_as, send_on_in, send_way},
+  send::{SentOn, send_decision, send_on, send_on_as, send_on_in, send_way},
 };
 use crate::{
   background,

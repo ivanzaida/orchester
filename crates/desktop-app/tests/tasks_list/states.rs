@@ -3,7 +3,7 @@
 
 use orchester_app::{
   project::hold::ReadHold,
-  routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab},
+  routes::{ProjectPage, Route, TaskList, TaskListTab},
 };
 
 use crate::harness::Seeded;
@@ -14,7 +14,7 @@ fn looks_empty(seeded: &mut Seeded) -> bool {
 }
 
 #[test]
-fn tasks_a_project_without_tasks_shows_its_title_and_new_task_and_import() {
+fn tasks_a_project_without_tasks_shows_its_title_and_new_task() {
   let mut seeded = Seeded::new("empty");
   seeded.go(TaskList::default());
   seeded.until("the empty project", |seeded| seeded.shows("tasks-empty"));
@@ -23,19 +23,12 @@ fn tasks_a_project_without_tasks_shows_its_title_and_new_task_and_import() {
     [
       "No tasks yet",
       "A task is a piece of work a pipeline carries from brief to merge, in its own worktree.",
-      "New task",
-      "Import resources"
+      "New task"
     ]
   );
   assert_eq!(seeded.texts("tasks-header"), ["Tasks"], "only the title");
   assert!(!seeded.shows("tasks-views"), "no view to choose");
   assert!(!seeded.shows("tasks-search"));
-  seeded.click("tasks-empty-import");
-  assert_eq!(
-    seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Import(ImportTab::All))
-  );
-  seeded.go(TaskList::default());
   seeded.until("the empty project", |seeded| seeded.laid_out("tasks-empty-new-task"));
   seeded.click("tasks-empty-new-task");
   assert_eq!(

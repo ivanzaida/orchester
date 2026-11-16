@@ -6,12 +6,8 @@
 //! connection is renamed in place of its title (`rename`), and a check pressed here says how it goes and what it found
 //! under the head (`result`).
 
-mod agent;
-mod enforced;
 mod github;
 mod mcp;
-mod native;
-mod provider;
 mod rename;
 mod result;
 
@@ -20,7 +16,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
@@ -30,7 +26,6 @@ use lurq::{
 use orchester_core::{id::ConnectionId, time::Timestamp};
 use orchester_workspace::{connections::data::ProjectConnections, display, messages::Message, workspace::OpenProject};
 
-pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
 use super::{
   data::Entry,
   words::{CHECKING, Shown, Tone},
@@ -84,8 +79,6 @@ pub(super) enum Tested<'a> {
 /// What the page shows about the work on its connection.
 pub(super) struct Inspecting<'a> {
   pub listed: &'a ProjectConnections,
-  /// The person's agent accounts, which a CLI connection runs on one of.
-  pub accounts: &'a crate::services::accounts::Accounts,
   pub entry: Entry<'a>,
   pub open: &'a OpenProject,
   pub project: &'a str,
@@ -142,19 +135,18 @@ pub(super) struct Parts {
 /// The page of `inspecting.entry`.
 pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions) -> Element {
   let parts = match inspecting.entry {
-    Entry::Agent(connection) => agent::parts(ctx, connection, inspecting, actions),
     Entry::GitHub(connection) => github::parts(ctx, connection, inspecting, actions),
     Entry::Mcp(server) => mcp::parts(ctx, server, inspecting, actions),
   };
-  let crumb = back(
-    "connection-crumb",
-    (&ctx.t("project_settings.connections"), None),
-    actions.back.clone(),
-  );
+  // GitHub's page is General's; an MCP server's, the Agents hub's.
+  let parent = match inspecting.entry {
+    Entry::GitHub(_) => ctx.t("project_settings.general"),
+    Entry::Mcp(_) => ctx.t("project_settings.agentsHub"),
+  };
+  let crumb = back("connection-crumb", (&parent, None), actions.back.clone());
   // A native connection's page says its status in `text_secondary` whatever its tone, its dot and the sentence
   // under the head carrying the tone (05e–05k).
-  let native = matches!(inspecting.entry, Entry::Agent(connection) if connection.api().is_some());
-  let status = head_status(ctx, parts.status, parts.status_detail.as_deref(), native);
+  let status = head_status(ctx, parts.status, parts.status_detail.as_deref(), false);
   let mut head_actions = parts.actions;
   if !parts.menu.is_empty() {
     head_actions.push(more_menu(ctx, actions, parts.menu));
@@ -181,12 +173,8 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
       .child(question);
     groups.insert(after.min(groups.len()), question.into());
   }
-  // A native connection's page sets its parts 16 apart (`Pane` in 05e–05k), the others 28 (`AMOv8` in 05b).
-  let gap = if native {
-    SpacingSize::Lg
-  } else {
-    ExtraSpacing::Roomy.role()
-  };
+  // A page's parts are 28 apart (`AMOv8` in 05b).
+  let gap = ExtraSpacing::Roomy.role();
   Column::new()
     .id("connection-inspector")
     .width(Dimension::Pct(100.0))
@@ -221,12 +209,6 @@ fn title(name: &str) -> Text {
   Text::new(name)
     .id("connection-inspector-title")
     .variant(ProjectSettingsText::PageTitle.role())
-}
-
-/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`, the 6 `Dot` `IY1SX`); a check
-/// under way keeps its turning loader instead.
-pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
-  said_status(ctx, id, (status, detail), status.tone.word_color())
 }
 
 /// The page head's status (`Status` `l1Gh8O`), its word said in its tone when it asks for something, unless the page
@@ -297,10 +279,7 @@ fn sentence(id: &str, words: &str, tone: PaletteColor) -> Element {
 /// runner: checking while it runs, unavailable while other work does.
 fn check_button(inspecting: &Inspecting<'_>, (id, label): (&str, Arc<str>), actions: &Actions) -> ActionButton {
   let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label).icon(Icon::RefreshCw);
-  let work = match inspecting.entry {
-    Entry::Agent(connection) if connection.api().is_some() => Work::Test,
-    _ => Work::Check,
-  };
+  let work = Work::Check;
   match inspecting.running {
     Some(running) if running.is_check() => button.loading(),
     Some(_) => button.disabled(),
@@ -360,19 +339,6 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
   crate::screens::project_settings::kit::Group::new("connection-used-by-group", ctx.t("connections.usedBy"))
     .row(row)
     .into()
-}
-
-/// A row of a page's details: its label, its value at the end, in Geist Mono for a path or a command.
-fn detail_row(ctx: &mut Ctx, id: &str, (label, value): (&str, &str), mono: bool) -> Element {
-  let value = crate::screens::project_settings::kit::value(&format!("{id}-value"), value);
-  let value = if mono {
-    value
-      .variant(crate::theme::ExtraTypography::PropertyMono.role())
-      .color(PaletteColor::TextSecondary)
-  } else {
-    value
-  };
-  SettingRow::new(id.to_owned(), label).control(value).render(ctx)
 }
 
 /// The tone a page's sentence is said in: `warning` for a status that asks for something, else `text_muted`.

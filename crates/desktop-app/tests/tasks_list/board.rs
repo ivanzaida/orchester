@@ -10,7 +10,7 @@
 //! here, and Run again is refused by the missing runner; `mcp_domain`'s `board` queues a complete draft and asks with
 //! the real runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
 
-use orchester_app::routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab};
+use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
   store::{RunStore, TaskStore},
   task::{Task, TaskStatus, organization::WorkflowStatus},
@@ -88,7 +88,7 @@ fn tasks_board_the_layout_switch_shows_the_columns_and_is_kept_for_the_project()
   seeded
     .window
     .navigation()
-    .go(Route::Project(seeded.project, ProjectPage::Import(ImportTab::All)));
+    .go(Route::Project(seeded.project, ProjectPage::Pipelines));
   seeded.window.pass();
   seeded.go(TaskList::new(TaskListTab::All));
   seeded.until("the board again", |seeded| seeded.laid_out("tasks-board-columns"));
@@ -277,15 +277,19 @@ fn tasks_board_a_run_that_ended_dropped_on_todo_offers_don_t_move_move_to_todo_a
 }
 
 #[test]
-fn tasks_board_run_again_from_the_question_asks_the_runner_for_a_new_run() {
+fn tasks_board_run_again_from_the_question_asks_for_a_new_run() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   asked_to_run_again(&mut seeded, "KON-11");
-  // No runner serves the project: Run again asks it for the new run, which is refused and says so.
+  // Nothing can run in the scenario (its profiles name a connection that is not stored): Run again asks for the new
+  // run, which the start refuses before any runner, and the board says so.
   press(&mut seeded, "tasks-board-ask-confirm");
   seeded.until("the run refused", |seeded| seeded.laid_out("tasks-board-failed"));
   let said = seeded.text("tasks-board-failed-text");
   assert!(said.starts_with("KON-11 was not changed. "), "{said}");
-  assert!(said.contains("runner"), "{said}");
+  assert!(
+    said.contains("Feature delivery is not ready on this computer"),
+    "{said}"
+  );
   assert_eq!(
     status(&seeded, "KON-11"),
     WorkflowStatus::InProgress,

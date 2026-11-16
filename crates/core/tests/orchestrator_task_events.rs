@@ -180,3 +180,29 @@ fn task_event_is_kept_as_a_wait_that_reads_back_the_same() {
   assert_eq!(back, wait);
   assert_eq!(back.kind.run_end(), None, "an event is no run's end");
 }
+
+#[test]
+fn task_events_a_stall_counts_its_periods_three_at_most() {
+  use orchester_core::orchestrator::task_event::{STALL_RAISES, stall_periods};
+  let minutes = |count: i64| Timestamp::from_unix_millis(count * 60_000);
+  assert_eq!(
+    stall_periods(minutes(0), minutes(19), Some(20)),
+    0,
+    "the first period is not over"
+  );
+  assert_eq!(stall_periods(minutes(0), minutes(20), Some(20)), 1);
+  assert_eq!(stall_periods(minutes(0), minutes(59), Some(20)), 2);
+  assert_eq!(stall_periods(minutes(0), minutes(60), Some(20)), 3);
+  assert_eq!(
+    stall_periods(minutes(0), minutes(6_000), Some(20)),
+    STALL_RAISES,
+    "three times at most"
+  );
+  assert_eq!(stall_periods(minutes(0), minutes(6_000), None), 0, "off never counts");
+  assert_eq!(stall_periods(minutes(0), minutes(6_000), Some(0)), 0);
+  assert_eq!(
+    stall_periods(minutes(30), minutes(10), Some(20)),
+    0,
+    "progress after now"
+  );
+}

@@ -2,7 +2,8 @@
 //! line under its text while the pointer is on it, which puts its Markdown on the clipboard as it was kept and says
 //! *Copied*; the person's message has Copy under its bubble, before where it stands; a fenced code block has Copy in
 //! its head, which puts its code without the fence. A secret the runner redacted stays redacted in what is copied. How
-//! a message is split at its code blocks is `fences::pieces`'.
+//! a message is split at its code blocks is `fences::pieces`'. Both Copies are the pointer's only: a press leaves the
+//! focus where it was and Tab skips them.
 
 use std::sync::Arc;
 
@@ -248,4 +249,45 @@ fn conversation_copy_pieces_split_at_fenced_blocks_that_stand_alone() {
       code: "fn f() {}".to_owned(),
     })]
   );
+}
+
+/// The id of what has the focus.
+fn focused(window: &mut Window) -> Option<String> {
+  window
+    .tree
+    .focused_element()
+    .and_then(|element| element.id().map(str::to_owned))
+}
+
+#[test]
+fn conversation_copy_buttons_take_no_focus_from_a_press_or_tab() {
+  let (mut window, row, _) = says(&message(), true);
+  let code_copy = ids(&mut window, "conversation-text-")
+    .into_iter()
+    .find(|id| id.ends_with("-code-1-copy"))
+    .expect("the code block's Copy");
+  window.hover(&row);
+  for copy in [format!("{row}-copy"), code_copy] {
+    window.press(&copy);
+    window.pass();
+    assert_ne!(
+      focused(&mut window),
+      Some(copy),
+      "a press leaves the focus where it was"
+    );
+  }
+  for _ in 0..80 {
+    window
+      .tree
+      .key_down("Tab".to_owned(), "Tab".to_owned(), false, false, false);
+    window
+      .tree
+      .key_up("Tab".to_owned(), "Tab".to_owned(), false, false, false);
+    window.pass();
+    let stop = focused(&mut window);
+    assert!(
+      !stop.as_deref().is_some_and(|id| id.ends_with("-copy")),
+      "Tab skips a Copy: {stop:?}"
+    );
+  }
 }

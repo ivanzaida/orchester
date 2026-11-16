@@ -31,6 +31,7 @@ use orchester_workspace::{
 
 use super::{Page, actions, goto, reads::Shown, states, version};
 use crate::{
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route},
   services::Services,
@@ -387,7 +388,8 @@ fn copy(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
     "files.copyFile"
   };
   let clipboard = Copier::of(ctx);
-  let press = actions::copy(clipboard, page.view.refusal.clone(), (text.clone(), lines));
+  let gate = ctx.use_context::<InputGate>();
+  let press = actions::copy((clipboard, gate), page.view.refusal.clone(), (text.clone(), lines));
   Some(
     ActionButton::new("files-copy", ButtonKind::Ghost, ctx.t(key))
       .icon(Icon::Copy)
@@ -443,7 +445,7 @@ fn open(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   }
   let programs = Services::of(ctx).programs;
   let press = actions::open_in_editor(
-    programs,
+    (programs, ctx.use_context::<InputGate>()),
     page.view.refusal.clone(),
     (page.project.open.repo_root.clone(), page.at().clone(), file),
   );

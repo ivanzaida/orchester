@@ -77,15 +77,19 @@ fn snapshot(db: &mut ProjectDb) -> RunSnapshot {
   }])
   .expect("pipeline");
   let id = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &pipeline,
       now,
     )
     .expect("pipeline")
+    .0
     .id();
-  let version = db.publish_draft::<Pipeline>(id, now).expect("publish pipeline");
+  let version = db
+    .latest_version::<Pipeline>(id)
+    .expect("publish pipeline")
+    .expect("published");
   RunSnapshot::build(
     id,
     &version,

@@ -47,7 +47,7 @@ use orchester_workspace::{
     conversation::{
       Conversation, PanelState,
       composer::ComposerMode,
-      outgoing::{Context, offer},
+      outgoing::{Context, answers_question, offer},
     },
     detail::{RunView, TaskDetail},
   },
@@ -306,6 +306,7 @@ impl Composer {
       revision: composing.detail.task.revision(),
       lost: composing.lost,
       left,
+      answers_question: answers_question(&composing.detail, recipient),
     };
     let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));

@@ -28,8 +28,9 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, JoinWay, ModuleListTab, ModuleTab, NewConnection,
-    OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+    ChangeSource, ChangedFile, ConnectionsView, FilesView, JoinWay, MemoryView, ModuleListTab, ModuleTab,
+    NewConnection, OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
+    routes,
   },
   services::{
     Services,
@@ -68,7 +69,6 @@ const BUILT: &[Screen] = &[
   Screen::EditTask,
   Screen::Files,
   Screen::FirstDownload,
-  Screen::ImportResources,
   Screen::JoinTeam,
   Screen::Instructions,
   Screen::Memory,
@@ -126,7 +126,7 @@ impl Component for ScreensRoot {
     let router = ctx.router(routes());
     let navigation = Navigation::new(ctx.signal(TabSet::default()), router.clone());
     *ctx.props::<RouterSlot>().0.lock() = Some(router.clone());
-    let links = ChatLinks::new(navigation.clone());
+    let links = ChatLinks::new(navigation.clone(), None);
     Self {
       router,
       navigation,
@@ -317,7 +317,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::Instructions(Default::default())),
       placeholder("Instructions"),
     ),
-    (at(ProjectPage::Memory(None)), placeholder("Memory")),
+    (at(ProjectPage::Memory(MemoryView::default())), placeholder("Memory")),
     (at(ProjectPage::Skills(Default::default())), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets(Default::default())), placeholder("Environment")),
@@ -343,7 +343,6 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::Files(FilesView::new(Some("src/a b.rs"), Version::Base))),
       Vec::new(),
     ),
-    (at(ProjectPage::Import(ImportTab::Tools)), Vec::new()),
   ]);
   all.extend(module_screens());
   all

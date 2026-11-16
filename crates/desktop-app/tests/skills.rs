@@ -10,10 +10,9 @@ use std::{fs, path::PathBuf};
 
 use orchester_app::routes::{ProjectPage, Route, SkillsFilter};
 use orchester_core::{
-  agent_files::RepositoryAgentFiles,
   id::ResourceId,
   resource::{InstructionScope, Skill},
-  store::{ResourceStore, SettingsStore},
+  store::ResourceStore,
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::skills::{data::ProjectSkills, editor};
@@ -103,82 +102,6 @@ impl Skills {
   }
 }
 #[test]
-fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
-  let mut s = Skills::new();
-  let folder = s.repo.join(".claude/skills/checks");
-  fs::create_dir_all(&folder).expect("folder");
-  fs::write(
-    folder.join("SKILL.md"),
-    "---\nname: checks\ndescription: Check the project\n---\n# Checks\nRun cargo check.",
-  )
-  .expect("skill");
-  fs::write(folder.join("notes.md"), "Reference content").expect("reference");
-  fs::write(s.repo.join("AGENTS.md"), "Read the project rules.").expect("instructions");
-  fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
-  s.go(ProjectPage::Skills(Default::default()));
-  assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
-  let found = s.text("skills-repository-settings");
-  // By file and folder (`HMf2M` in 03): CLAUDE.md only points to AGENTS.md, so it is not named.
-  assert!(
-    found.contains("3 items") && found.contains("AGENTS.md and 1 skills folder"),
-    "{found}"
-  );
-  s.click("skills-import-open");
-  assert!(s.text("skills-import-review").contains("nothing to import"));
-  s.click("skill-import-item-2");
-  assert!(s.text("skill-import-source-text").contains("Run cargo check"));
-  assert!(s.text("skill-import-source").contains("notes.md"));
-  assert!(s.text("skill-import-source").contains("Check the project"));
-  let preview = s
-    .window
-    .tree
-    .get_element_by_id_mut("skill-import-source")
-    .and_then(|e| e.bounds())
-    .expect("preview bounds");
-  // The one import page (02c): the preview is the 384 side beside the 720 groups.
-  assert!(
-    (preview.width - 384.0).abs() < 1.0 && preview.height > 300.0,
-    "preview stays beside repository items: {preview:?}"
-  );
-  s.click("skill-import-create");
-  s.window.until("import result", |w| {
-    w.tree.get_element_by_id("skills-import-result").is_some()
-  });
-  // 03c: the page head counts the drafts, of how many items; what made no draft says why.
-  assert!(s.text("skill-import-result-title").contains("2 drafts created"));
-  assert!(
-    s.text("skill-import-result-sub")
-      .contains("2 of 3 items imported · 1 instruction, 1 skill")
-  );
-  assert!(s.text("skill-import-omitted").contains("CLAUDE.md"));
-  let on = orchester_workspace::project_settings::load_in(&s.repo)
-    .expect("settings")
-    .agent_files
-    .is_on();
-  let state = if on { "On" } else { "Off" };
-  assert!(
-    s.text("skill-import-agent-files")
-      .contains(&format!("Repository agent files · {state}"))
-  );
-  let entries = ProjectSkills::load_in(&s.repo).expect("read");
-  assert_eq!(entries.entries.len(), 1);
-  assert_eq!(entries.entries[0].body.files().len(), 1);
-  assert!(entries.entries[0].state.published().is_none());
-  assert_eq!(
-    fs::read_to_string(s.repo.join("AGENTS.md")).expect("file"),
-    "Read the project rules."
-  );
-  s.click("skill-import-review-skills");
-  s.window.until("library after import", |w| {
-    w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Draft v1"))
-  });
-  s.click(&format!("skill-row-{}", entries.entries[0].id));
-  // 03b: the reference files sit under the body, the origin beside them.
-  assert!(s.text("skill-files").contains("notes.md"));
-  assert!(s.text("skill-inspector").contains("Imported from"));
-  assert!(s.text("skill-origin-source").contains(".claude/skills/checks"));
-}
-#[test]
 fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   let mut s = Skills::new();
   s.go(ProjectPage::Skills(Default::default()));
@@ -245,25 +168,25 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   assert!(s.entry(id).state.has_draft());
 }
 #[test]
-fn skills_remove_is_asked_in_place_and_the_skill_leaves_the_library() {
+fn skills_archive_is_asked_in_place_and_the_skill_leaves_the_library() {
   let mut s = Skills::new();
   let id = s.seed("checks", true);
   s.go(ProjectPage::Skill(id));
   s.click("skill-more");
-  s.click("skill-remove");
+  s.click("skill-archive");
   s.window.until("asked in place", |w| {
     w.tree.tick_futures();
-    w.tree.get_element_by_id("hub-remove-confirm").is_some()
+    w.tree.get_element_by_id("team-hub-archive-confirm").is_some()
   });
   assert!(
-    s.text("hub-remove").contains("No agent gets this skill now"),
+    s.text("team-hub-archive-body").contains("leaves every list"),
     "{}",
-    s.text("hub-remove")
+    s.text("team-hub-archive-body")
   );
   let root = s.repo.clone();
-  // Remove takes the press once the question has read who the skill reaches.
-  s.window.until("removed", move |w| {
-    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-remove-confirm") {
+  // Archive takes the press once the question has read what uses the skill.
+  s.window.until("archived", move |w| {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("team-hub-archive-confirm") {
       confirm.click();
     }
     ProjectSkills::load_in(&root).expect("skills").entry(id).is_none()
@@ -315,30 +238,6 @@ fn skills_duplicate_name_is_not_saved_and_unsaved_departure_asks_in_place() {
   s.click("skill-leave-confirm");
   s.window
     .until("library", |w| w.tree.get_element_by_id("skills-list").is_some());
-}
-#[test]
-fn skills_repository_files_enabling_asks_and_off_applies_without_publishing() {
-  let mut s = Skills::new();
-  let mut db = ProjectDb::open(&s.repo).expect("db");
-  db.save_repository_agent_files(RepositoryAgentFiles::Off).expect("off");
-  s.go(ProjectPage::Skills(Default::default()));
-  s.click("skill-repository-files");
-  s.window.until("question armed", |w| {
-    w.tree.tick_futures();
-    w.tree.get_element_by_id("skill-files-confirm-confirm").is_some()
-  });
-  assert!(!db.repository_agent_files().expect("setting").is_on());
-  s.click("skill-files-confirm-confirm");
-  s.window
-    .until("setting on", |_| db.repository_agent_files().expect("setting").is_on());
-  s.window.until("on label", |w| {
-    w.texts("skill-repository-files-state")
-      .is_some_and(|t| t.join(" ").contains("On"))
-  });
-  s.click("skill-repository-files");
-  s.window.until("setting off", |_| {
-    !db.repository_agent_files().expect("setting").is_on()
-  });
 }
 #[test]
 fn skills_removing_a_reference_changes_only_the_draft() {
@@ -440,10 +339,20 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
   let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("draft"));
   let agent = edit.add_step(Name::new("Implement").expect("name"), None);
   let tool = edit.add_step(Name::new("Checks").expect("name"), None);
-  edit.update(&tool, |step| step.kind = StepKind::Tool { tool: None });
+  // A pipeline is stored only as published versions, whose steps all run something (D-032).
+  edit.update(&agent, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(orchester_core::id::ResourceId::generate());
+    }
+  });
+  edit.update(&tool, |step| {
+    step.kind = StepKind::Tool {
+      tool: Some(orchester_core::id::ResourceId::generate()),
+    }
+  });
   let mut db = ProjectDb::open(&s.repo).expect("db");
-  let pipeline = db
-    .create_resource(
+  let (pipeline, _) = db
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &edit.validate().expect("pipeline"),
@@ -481,17 +390,13 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
 
 #[test]
 fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_guard() {
-  use orchester_core::{
-    name::Name,
-    resource::{Pipeline, Slug},
-    time::Timestamp,
-  };
+  use orchester_core::{name::Name, resource::Slug, time::Timestamp};
   let mut s = Skills::new();
   let mut db = ProjectDb::open(&s.repo).expect("db");
-  db.create_resource(
+  db.create_published(
     Slug::new("delivery").expect("slug"),
     Name::new("Delivery").expect("name"),
-    &Pipeline::new(Vec::new()).expect("pipeline"),
+    &one_step(),
     Timestamp::now(),
   )
   .expect("pipeline");
@@ -596,4 +501,16 @@ fn skills_crumb_returns_to_the_library_filter_it_came_from() {
   s.click("skill-crumb");
   s.window.pass();
   assert_eq!(s.window.navigation().route_now(), library);
+}
+/// A pipeline of one step that runs a profile, as every stored pipeline's steps run something (D-032).
+pub(crate) fn one_step() -> orchester_core::resource::Pipeline {
+  use orchester_core::resource::{Pipeline, PipelineEdit, StepKind};
+  let mut edit = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline"));
+  let key = edit.add_step(orchester_core::name::Name::new("Build").expect("name"), None);
+  edit.update(&key, |step| {
+    if let StepKind::Agent { profile, .. } = &mut step.kind {
+      *profile = Some(orchester_core::id::ResourceId::generate());
+    }
+  });
+  edit.validate().expect("one step that runs a profile")
 }

@@ -19,27 +19,16 @@ use lurq::{
   core::Signal,
 };
 use orchester_core::{
-  connection::{ApiEndpoint, ApiProvider, BaseUrl, ConnectionAccount},
+  connection::ApiProvider,
   id::SecretId,
-  resource::ModelId,
   secret::{Environment, Secret, SecretKind, SecretValue},
 };
 use orchester_workspace::{
-  connections::{
-    api_provider::{ProviderDraft, RunsOn, base_url, model_id},
-    data::ProjectConnections,
-    native::KeySecret,
-  },
+  connections::{data::ProjectConnections, native::KeySecret},
   messages::Message,
   secrets::form::{NameCheck, check_name},
 };
 use zeroize::Zeroize;
-
-pub(super) use self::fields::{environment_key, off_provider_notice};
-use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  ui::message::message_text,
-};
 
 /// Whether the connection runs on an API provider rather than its CLI's own sign-in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,7 +63,7 @@ pub(super) struct Models(Vec<String>);
 impl DevtoolsInspectable for Models {}
 
 /// The *Runs on* fields as signals the page types into.
-pub(super) struct ProviderForm {
+pub(in crate::screens) struct ProviderForm {
   on: Signal<OnProvider>,
   url: Signal<String>,
   key: Signal<KeyChoice>,
@@ -88,8 +77,6 @@ pub(super) struct ProviderForm {
   model_error: Signal<Option<ModelProblem>>,
   /// Whether the fields were filled from the stored connection yet (Edit connection).
   seeded: Signal<bool>,
-  /// Whether automation's input tried to save the connection on a provider where only a person may.
-  refused: Signal<bool>,
   /// The fields of a native connection rather than of a CLI's API provider.
   native: bool,
 }
@@ -107,62 +94,46 @@ impl ProviderForm {
       model: ctx.signal(String::new()),
       model_error: ctx.signal(None),
       seeded: ctx.signal(false),
-      refused: ctx.signal(false),
       native: false,
     }
   }
 
-  /// The base URL, key and model fields of a native connection, the URL starting at `url`, its preset's.
-  pub(super) fn for_native(ctx: &mut Ctx, url: String) -> Self {
-    let mut form = Self::new(ctx);
-    form.native = true;
+  /// The base URL, key and model fields of an API account of the person's (Settings › Accounts, `Agents on accounts`
+  /// B2 `OfUhN`): always on a provider, with a key typed here that the app keeps, never a project's secret.
+  pub(in crate::screens) fn for_account(ctx: &mut Ctx) -> Self {
+    let form = Self::new(ctx);
     form.on.set(OnProvider(true));
+    form.key.set(KeyChoice::New);
+    form
+  }
+
+  /// [`Self::for_account`] for an account of Orchester's own agent: a native connection's fields, the URL starting
+  /// at `url`, its preset's.
+  pub(in crate::screens) fn for_native_account(ctx: &mut Ctx, url: String) -> Self {
+    let mut form = Self::for_account(ctx);
+    form.native = true;
     form.url.set(url);
     form
   }
 
-  /// Fills the fields once from a native connection's model API as stored (Edit connection).
-  pub(super) fn seed_native(&self, api: &ApiEndpoint) {
-    if self.seeded.get_untracked() {
-      return;
-    }
-    self.seeded.set(true);
-    self.url.set(api.base_url().as_str().to_owned());
-    self.key.set(KeyChoice::Existing(api.key()));
-    self.models.set(Models(
-      api
-        .models()
-        .models()
-        .iter()
-        .map(|model| model.id().as_str().to_owned())
-        .collect(),
-    ));
+  /// Empties the fields, the typed key first: what was added is the app's now, and the page starts over.
+  pub(in crate::screens) fn clear(&self) {
+    self.value.update(Zeroize::zeroize);
+    self.key_revision.update(|revision| *revision += 1);
+    self.url.set(String::new());
+    self.models.set(Models::default());
+    self.model.set(String::new());
+    self.model_error.set(None);
   }
 
   /// The model ids added, in order.
-  pub(super) fn model_ids(&self) -> Vec<String> {
+  pub(in crate::screens) fn model_ids(&self) -> Vec<String> {
     self.models.get().0
   }
 
   /// The base URL as typed.
-  pub(super) fn url(&self) -> Signal<String> {
+  pub(in crate::screens) fn url(&self) -> Signal<String> {
     self.url.clone()
-  }
-
-  /// A native connection's base URL, key and model ids (none is fine: the endpoint lists them once tested); `None`
-  /// while a field cannot be saved. A new key secret's value is read when saving ([`SaveGuard`]).
-  pub(super) fn native_parts(&self, listed: &ProjectConnections) -> Option<(BaseUrl, KeySecret, Vec<ModelId>)> {
-    let base_url = base_url(&self.url.get()).ok()?;
-    let models = self
-      .models
-      .get()
-      .0
-      .iter()
-      .map(|model| model_id(model))
-      .collect::<Result<Vec<_>, _>>()
-      .ok()?;
-    let key = self.key_secret(listed)?;
-    Some((base_url, key, models))
   }
 
   /// The key secret chosen, ready to save; `None` while none is, or the new one is not complete.
@@ -181,7 +152,7 @@ impl ProviderForm {
   }
 
   /// Fills the fields once from the provider the stored connection runs on, if any.
-  pub(super) fn seed(&self, provider: Option<&ApiProvider>) {
+  pub(in crate::screens) fn seed(&self, provider: Option<&ApiProvider>) {
     if self.seeded.get_untracked() {
       return;
     }
@@ -201,68 +172,11 @@ impl ProviderForm {
     self.on.get().0
   }
 
-  /// Whether the fields hold `current`, the provider the stored connection runs on, as it is.
-  pub(super) fn holds(&self, current: &ApiProvider) -> bool {
-    self.on()
-      && self.url.get().trim() == current.base_url().as_str()
-      && self.key.get() == KeyChoice::Existing(current.key())
-      && self
-        .models
-        .get()
-        .0
-        .iter()
-        .map(String::as_str)
-        .eq(current.model_ids().map(|model| model.as_str()))
-  }
-
   /// What the page's Save goes through: the person gate and the key typed for a new secret.
-  pub(super) fn save_guard(&self) -> SaveGuard {
+  pub(in crate::screens) fn save_guard(&self) -> SaveGuard {
     SaveGuard {
       value: self.value.clone(),
-      refused: self.refused.clone(),
     }
-  }
-
-  /// What the connection runs on; `None` while a field cannot be saved. On the sign-in it runs on `account`. A new
-  /// key secret's value is read when saving ([`SaveGuard`]).
-  pub(super) fn runs_on(&self, listed: &ProjectConnections, account: ConnectionAccount) -> Option<RunsOn> {
-    if !self.on() {
-      return Some(RunsOn::Account(account));
-    }
-    let (base_url, key, models) = self.native_parts(listed)?;
-    (!models.is_empty()).then_some(RunsOn::Provider(ProviderDraft { base_url, key, models }))
-  }
-
-  /// That automation's input tried to save the connection on a provider where only a person may; Save stays for the
-  /// person.
-  pub(super) fn refusal(&self, ctx: &Ctx) -> Option<Arc<str>> {
-    (self.on() && self.refused.get()).then(|| ctx.t("connections.apiProvider.personOnly"))
-  }
-
-  /// The first reason the provider cannot be saved, in field order, as the action bar says it (*Save unavailable: …*,
-  /// `UW2bO`); `None` on the sign-in or once it can.
-  pub(super) fn reason(&self, ctx: &Ctx, listed: &ProjectConnections) -> Option<Arc<str>> {
-    let reason = self.first_problem(ctx, listed)?;
-    Some(ctx.t_args("connections.apiProvider.reasons.unavailable", [("reason", &*reason)]))
-  }
-
-  fn first_problem(&self, ctx: &Ctx, listed: &ProjectConnections) -> Option<Arc<str>> {
-    if !self.on() {
-      return None;
-    }
-    if let Err(problem) = base_url(&self.url.get()) {
-      return Some(message_text(ctx, &problem));
-    }
-    if let Some(problem) = self.key_problem(ctx, &listed.secrets) {
-      return Some(problem);
-    }
-    if let KeyChoice::Existing(id) = self.key.get()
-      && active(listed, id).is_none()
-    {
-      return Some(ctx.t("connections.apiProvider.reasons.key"));
-    }
-    // A native connection's models may come from its endpoint once it is tested.
-    (!self.native && self.models.get().0.is_empty()).then(|| ctx.t("connections.apiProvider.reasons.models"))
   }
 
   /// Adds the model ids typed (several may be separated by commas or spaces), or says why one cannot be added.
@@ -287,26 +201,6 @@ impl ProviderForm {
   fn name_check(&self, secrets: &[Secret]) -> NameCheck {
     check_name(secrets, &self.secret_name.get(), Environment::NEW_SECRET)
   }
-
-  fn key_problem(&self, ctx: &Ctx, secrets: &[Secret]) -> Option<Arc<str>> {
-    match self.key.get() {
-      KeyChoice::None => Some(ctx.t("connections.apiProvider.reasons.key")),
-      KeyChoice::Existing(_) => None,
-      KeyChoice::New => {
-        let check = self.name_check(secrets);
-        if matches!(check, NameCheck::Empty) {
-          return Some(ctx.t("connections.apiProvider.reasons.secretName"));
-        }
-        if let Some(problem) = name_problem(ctx, &check) {
-          return Some(problem);
-        }
-        self
-          .value
-          .with(|value| value.trim().is_empty())
-          .then(|| ctx.t("connections.apiProvider.reasons.secretValue"))
-      }
-    }
-  }
 }
 
 impl Drop for ProviderForm {
@@ -323,48 +217,14 @@ fn active(listed: &ProjectConnections, id: SecretId) -> Option<&Secret> {
 /// What the page's Save goes through, shared with its click handler: the person gate and the key typed for a new
 /// secret.
 #[derive(Clone)]
-pub(super) struct SaveGuard {
+pub(in crate::screens) struct SaveGuard {
   value: Signal<String>,
-  refused: Signal<bool>,
 }
 
 impl SaveGuard {
-  pub(in super::super) fn typed_key(&self) -> Option<SecretValue> {
+  pub(in crate::screens) fn typed_key(&self) -> Option<SecretValue> {
     // Blank means no new credential; a new-secret save reports valueRequired if the field changed under its click.
     self.value.with(|value| SecretValue::new(value.clone()).ok())
-  }
-  /// What saving `runs_on` takes along, or `None` when it is not saved: running a connection on an API provider
-  /// widens what its agents send where, so automation's input saves one only where a person lets it, and the page
-  /// says so. The key typed for a new secret comes along when it creates one.
-  pub(super) fn admit(&self, runs_on: &RunsOn, gate: Option<&InputGate>) -> Option<Option<SecretValue>> {
-    let RunsOn::Provider(draft) = runs_on else {
-      return Some(None);
-    };
-    self.admit_key(&draft.key, gate)
-  }
-
-  /// What saving a connection with the key secret `key` takes along, or `None` when it is not saved: a model API
-  /// reached with a key gets what its agents send, so only a person saves one ([`Self::admit`]). The key typed for a
-  /// new secret comes along when it creates one.
-  pub(super) fn admit_key(&self, key: &KeySecret, gate: Option<&InputGate>) -> Option<Option<SecretValue>> {
-    if !input_may_decide(gate, Guarded::PermissionWidening) {
-      tracing::warn!("synthetic input saved a connection on an API key; not taken");
-      self.refused.set(true);
-      return None;
-    }
-    self.refused.set(false);
-    if !matches!(key, KeySecret::New(_)) {
-      return Some(None);
-    }
-    match self.value.with(|value| SecretValue::new(value.clone())) {
-      Ok(value) => Some(Some(value)),
-      // The form offers Save only once a key is typed (`runs_on`, `native_parts`), so a blank one is a field that
-      // changed under the click; nothing is saved, and the reason shows again.
-      Err(error) => {
-        tracing::warn!(%error, "the key typed for a new secret is blank; not saved");
-        None
-      }
-    }
   }
 }
 

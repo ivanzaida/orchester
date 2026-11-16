@@ -11,6 +11,8 @@ use super::typography::{mono, style};
 
 /// The confirmation's width (`Dialog` `MdjVb`).
 pub const ARCHIVE_DIALOG_WIDTH: f32 = 480.0;
+/// A local project's confirmation (`L11` `dS97b`): 460 wide.
+pub const LOCAL_ARCHIVE_DIALOG_WIDTH: f32 = 460.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArchiveText {

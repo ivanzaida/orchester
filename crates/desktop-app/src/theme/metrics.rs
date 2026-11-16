@@ -1,4 +1,19 @@
-use lurq::app::theme::{BorderSize, RadiusSize, SpacingSize, Theme};
+use lurq::{
+  app::theme::{BorderSize, RadiusSize, SpacingSize, Theme},
+  layout::scrollbar::ScrollBarStyle,
+};
+
+/// A text area's scrollbar is 2 in from the field's own right edge, as a scrolling panel's is.
+const TEXT_AREA_SCROLL_EDGE: f32 = 2.0;
+
+/// `base`, the theme's scrollbar, for a field's text area: lurq places a text input's bar inside its padding, so the
+/// bar is moved out over the text's right inset ([`ExtraSpacing::Loose`]) to the field's edge.
+pub fn text_area_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  ScrollBarStyle {
+    edge_inset: Some(TEXT_AREA_SCROLL_EDGE - ExtraSpacing::Loose.value()),
+    ..base.clone()
+  }
+}
 
 /// Design gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

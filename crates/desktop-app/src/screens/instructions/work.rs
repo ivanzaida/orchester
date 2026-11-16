@@ -208,7 +208,6 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
   };
   let activity = services.activity.start(spec);
   let published = matches!(change, Change::Publish(..));
-  let created = matches!(change, Change::Create(..));
   let root = project.repo_root.clone();
   let result = background::run(move || {
     let (saved, author) = match change {
@@ -225,21 +224,9 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
   .await
   .map_err(Failure::Other)
   .and_then(|result| result.map_err(Failure::from));
-  // A new instruction in a shared project is the team's only once its server takes it; one it refuses is taken back.
-  let result = match result {
-    Ok(entry) if created => crate::screens::hub::team::send_created(services, &project.repo_root, entry.id)
-      .await
-      .map(|()| entry)
-      .map_err(Failure::Other),
-    other => other,
-  };
   match &result {
     Ok(_) => activity.finish(),
     Err(error) => activity.fail(error.message().clone()),
-  }
-  // A version published in a shared project goes to its team server at once (02).
-  if published && result.is_ok() {
-    crate::screens::hub::team::send_published(services, &project.repo_root).await;
   }
   result.map(|entry| {
     // Every screen that shows the instructions reads them again; Instructions itself reads them again only so.

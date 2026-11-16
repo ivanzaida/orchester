@@ -159,7 +159,7 @@ fn task_base_branch_inherits_its_modules_named_by_default() {
   db.set_task_module(task.id(), Some(module.id()), ChangeActor::Person, Timestamp::now())
     .expect("in the module");
   drop(db);
-  form.window.projects().feed(form.project).saved();
+  form.until_tasks_read(|tasks| tasks.modules.iter().any(|read| read.id() == module.id()));
   form.edit("KON-1");
   assert_eq!(form.text("task-form-base-branch-value"), "release/2.0 · from module");
   open_menu(&mut form);

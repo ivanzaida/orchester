@@ -14,20 +14,20 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, EngineVendor},
   id::{StepExecutionId, TaskId},
   integration::WORKTREES_DIR,
-  permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
+  permission::{CommandPermission, LaunchPermissions, RepositoryAccess, category::CommandScope},
   resource::{AgentProfile, ModelId, VersionNumber},
   run::{
-    CameToPerson, PendingToolApproval, PinnedVersion, ProjectScope, Run, RunNumber, StepExecutor,
-    review::{Review, ReviewHold},
+    ApprovalSubject, CameToPerson, PendingToolApproval, PinnedVersion, ProjectScope, Run, RunNumber, StepExecutor,
+    review::{HoldRules, PushFacts, Review, ReviewHold, review_hold},
   },
   service::ServiceApproval,
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, RunStore},
   task::Task,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
-use super::changes::run_worktree;
+use super::{changes::run_worktree, pinned_profile::pinned_profile, recorded::task_of};
 use crate::messages::Message;
 
 /// What made a request ask, as the dialog names it beside its category (`Cv2MG` in `kpuQj`): the
@@ -162,20 +162,17 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
   let run = db.run(approval.run).ok().flatten();
   let step = run.as_ref().and_then(|run| step_of(run, &approval));
   // `.ok()`: an unreadable profile version only loses the provider-specific wording and the policy.
-  let version = step.as_ref().and_then(|step| {
-    db.version::<AgentProfile>(step.profile.resource, step.profile.number)
-      .ok()
-      .flatten()
-  });
-  let connection = version.as_ref().and_then(|version| connection(db, version.body()));
+  let pinned = step.as_ref().map(|step| step.profile);
+  let profile = pinned.and_then(|pinned| pinned_profile(db, approval.run, pinned).ok().flatten());
+  let connection = profile.as_ref().and_then(|profile| connection(db, profile));
   let model = step.as_ref().map(|step| step.model.clone());
   let launch = launched(db, &approval);
-  let asking = version.as_ref().map(|version| AskingPolicy {
+  let asking = profile.as_ref().zip(pinned).map(|(profile, pinned)| AskingPolicy {
     setting: launch
       .as_ref()
       .map(|launch| AskingSetting::of(launch.permissions().commands(), approval.command)),
-    profile: version.body().role().as_str().into(),
-    version: version.number(),
+    profile: profile.role().as_str().into(),
+    version: pinned.number,
   });
   // `.ok()`: an unreadable choice only shows Approve everything in this run as still to be chosen.
   let auto_approving = db.run_auto_approve(approval.run).ok().flatten() == Some(true);
@@ -183,18 +180,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
     .as_ref()
     .is_some_and(|launch| launch.permissions().repository() == RepositoryAccess::ReadOnly);
   let provider = connection.as_ref().map(AgentConnection::provider);
-  // The folders the agent may write to besides its worktree, as the runner classifies its commands.
-  let writable: Vec<PathBuf> = launch
-    .as_ref()
-    .and_then(|launch| launch.permissions().granted_folders())
-    .map(|folders| {
-      folders
-        .entries()
-        .iter()
-        .map(|folder| folder.lexical_path(repo_root))
-        .collect()
-    })
-    .unwrap_or_default();
+  let writable = writable_folders(launch.as_ref(), repo_root);
   let choices = ApprovalChoices::read(
     db,
     &approval,
@@ -209,7 +195,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
       provider == Some(AgentProvider::CodexCli),
     ),
   );
-  let task = run.as_ref().and_then(|run| db.task(run.task()).ok().flatten());
+  let task = run.as_ref().and_then(|run| task_of(db, run.task()).ok().flatten());
   // `.ok()`: an unreadable review only loses why auto mode left the request to the person.
   let review = db.tool_approval_review(approval.run, &approval.id).ok().flatten();
   // `.ok()`: an unreadable reason only loses the card's words for why it came to the person.
@@ -259,6 +245,59 @@ fn service_rules(db: &ProjectDb, approval: &PendingToolApproval) -> Vec<ServiceA
     .filter_map(|rule| rule.scope.service().cloned())
     .filter(|service| asked.contains(&service.name))
     .collect()
+}
+
+/// The hard rule of auto mode that holds `approval` for the person whatever a reviewer would say
+/// (`orchester_core::run::review::hold`): as recorded when auto mode held it, else as Orchester reads it now from the
+/// request, its run and the step's recorded permissions, in the worktree the asking agent works in under the project
+/// at `repo_root`. What cannot be read counts as the stricter: permissions not recorded hold the request, the
+/// worktree's branch is not known (any push holds unless the rule lets it without), no build output folder is known as
+/// ignored, and a command of an agent whose CLI is not known counts as a Codex escalation. `None` when no hard rule
+/// holds it.
+pub fn hard_hold(db: &ProjectDb, repo_root: &Path, approval: &PendingToolApproval) -> Option<ReviewHold> {
+  // `.ok()`: an unreadable review is read again below, from the request itself.
+  if let Some(Review::Held { hold }) = db.tool_approval_review(approval.run, &approval.id).ok().flatten() {
+    return Some(hold);
+  }
+  // `.ok()`: an unreadable run loses its branch and worktree, which only makes the rules stricter.
+  let run = db.run(approval.run).ok().flatten();
+  let launch = launched(db, approval);
+  let writable = writable_folders(launch.as_ref(), repo_root);
+  let worktree = agent_worktree(repo_root, run.as_ref(), approval);
+  let scope = CommandScope::on_host(&worktree, &writable).with_main_checkout(repo_root);
+  let subject = ApprovalSubject::of(approval, &scope);
+  let provider = run
+    .as_ref()
+    .and_then(|run| step_of(run, approval))
+    // `.ok()`: an unreadable profile version only makes the rules stricter, as an unreadable run does.
+    .and_then(|step| pinned_profile(db, approval.run, step.profile).ok().flatten())
+    .and_then(|profile| connection(db, &profile))
+    .map(|connection| connection.provider());
+  let rules = HoldRules {
+    permissions: launch.as_ref().map(LaunchPermissions::permissions),
+    push: PushFacts {
+      branch: run.as_ref().map(|run| run.branch().as_str()),
+      head: None,
+      origin_kept: false,
+    },
+    escalation: approval.command && provider.is_none_or(|provider| provider == AgentProvider::CodexCli),
+    build_output: &[],
+  };
+  review_hold(&subject, &rules)
+}
+
+/// The folders the agent may write to besides its worktree, as the runner classifies its commands.
+fn writable_folders(launch: Option<&LaunchPermissions>, repo_root: &Path) -> Vec<PathBuf> {
+  launch
+    .and_then(|launch| launch.permissions().granted_folders())
+    .map(|folders| {
+      folders
+        .entries()
+        .iter()
+        .map(|folder| folder.lexical_path(repo_root))
+        .collect()
+    })
+    .unwrap_or_default()
 }
 
 /// The worktree the asking agent works in, as the runner picks it (`execution::workspace`): the

@@ -6,6 +6,12 @@ use orchester_core::{module::ModuleState, task::organization::WorkflowStatus};
 
 use super::harness::{Seeded, details, module_with, with};
 
+/// Tab `tab`'s label and count, as a person reads them (the room its count keeps for one digit is not read).
+fn tab(seeded: &mut Seeded, tab: &str) -> String {
+  let label = seeded.text(&format!("modules-tab-{tab}-label"));
+  format!("{label} {}", seeded.text(&format!("modules-tab-{tab}-count")))
+}
+
 fn rows(seeded: &mut Seeded) -> Vec<String> {
   let mut rows: Vec<String> = seeded
     .ids("modules-row-")
@@ -36,8 +42,8 @@ fn modules_list_views_open_and_closed_modules_and_searches_them() {
   });
   let checkout = picked.expect("the module");
   seeded.open(ProjectPage::Modules(ModuleListTab::Open), "modules-row-1");
-  assert_eq!(seeded.text("modules-tab-open"), "Open 2");
-  assert_eq!(seeded.text("modules-tab-closed"), "Closed 1");
+  assert_eq!(tab(&mut seeded, "open"), "Open 2");
+  assert_eq!(tab(&mut seeded, "closed"), "Closed 1");
   let open = rows(&mut seeded);
   assert_eq!(open.len(), 2, "the open modules: {open:?}");
   assert!(
@@ -109,7 +115,7 @@ fn modules_list_without_modules_or_closed_ones_says_so() {
     seeded.text("modules-view-empty"),
     "No module is closed yet. A module moves here when its state is Closed."
   );
-  assert_eq!(seeded.text("modules-tab-closed"), "Closed 0");
+  assert_eq!(tab(&mut seeded, "closed"), "Closed 0");
 }
 
 #[test]

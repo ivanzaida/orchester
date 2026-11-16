@@ -4,21 +4,29 @@
 //! (`docs/design/team-configuration.md`, "What a computer fills in").
 
 use orchester_core::{
-  connection::{AgentProvider, Connection, ConnectionKind, REASONING_EFFORT},
+  connection::{AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, ResourceKind, TeamAgentProfile, TeamMcpServer},
+  resource::{TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
-  store::{ConnectionStore, ResourceStore},
+  store::ConnectionStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::readiness::team_profile_body;
+use super::{
+  runs_on::{self, RunsOnChoice},
+  team_body_edit::Latest,
+  team_sheets,
+};
+use crate::{
+  connections::data::agent_connections,
+  team_config::{TeamConfig, TeamResource},
+};
 
 /// A resource a profile uses.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Listed {
   pub id: ResourceId,
-  /// Its name; its id while this computer has no resource of it (archived, or not synced yet), so nothing is hidden.
+  /// Its name; its id while the team's configuration holds no resource of it, so nothing is hidden.
   pub name: String,
 }
 
@@ -26,7 +34,7 @@ pub struct Listed {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UsedServer {
   pub server: Listed,
-  /// The secrets its variables and secret headers name; none while this computer has no version of it.
+  /// The secrets its variables and secret headers name; none while its latest version cannot be read.
   pub secrets: Vec<SecretName>,
 }
 
@@ -37,6 +45,20 @@ pub struct ConnectionChoice {
   pub name: String,
   /// The CLI's version its last check found.
   pub version: Option<String>,
+  /// Its last check found the CLI signed out: a profile that runs on it is not ready until the person signs in.
+  pub signed_out: bool,
+}
+
+impl ConnectionChoice {
+  /// `connection` as its last check found it.
+  pub fn of(connection: &Connection) -> Self {
+    Self {
+      id: connection.id(),
+      name: connection.name().to_string(),
+      version: connection.version().map(str::to_owned),
+      signed_out: connection.status() == ConnectionStatus::SignInRequired,
+    }
+  }
 }
 
 /// One team profile as the panel shows it.
@@ -55,6 +77,11 @@ pub struct TeamProfileSheet {
   pub connections: Vec<ConnectionChoice>,
   /// The connection picked for it, while it is still one of [`Self::connections`].
   pub picked: Option<ConnectionId>,
+  /// [`Self::connections`] as the *Runs on* select offers them: who each runs as and the models it lists, so an
+  /// account is offered once and one that does not serve the team's model says so.
+  pub choices: Vec<RunsOnChoice>,
+  /// What an admin's edit starts from: its latest version.
+  pub edit: Option<Latest<TeamAgentProfile>>,
 }
 
 impl TeamProfileSheet {
@@ -70,42 +97,41 @@ impl TeamProfileSheet {
   }
 }
 
-/// A sheet for each team profile whose newest version is in the team's form; one that is not has none, and its
-/// readiness says why.
-pub(super) fn sheets(db: &ProjectDb) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
-  let waiting = db.waiting_publishes()?;
+/// A sheet for each team profile of `profiles` whose latest version is in the team's form; one that is not has none,
+/// and its readiness says why. What this computer filled in (the pick) is read from `db`.
+pub(crate) fn sheets(
+  (db, config): (&ProjectDb, &TeamConfig),
+  profiles: &[&TeamResource],
+) -> Result<Vec<(ResourceId, TeamProfileSheet)>, StoreError> {
   let connections = db.connections()?;
   let mut sheets = Vec::new();
-  for resource in db.resources(ResourceKind::AgentProfile)? {
-    let Some(version) = db.latest_version::<AgentProfile>(resource.id())? else {
+  for resource in profiles.iter().copied() {
+    let Some(Ok(team)) = resource.body::<TeamAgentProfile>() else {
       continue;
     };
-    let Ok(team) = team_profile_body(db, resource.id(), &version, &waiting)? else {
-      continue;
-    };
-    sheets.push((resource.id(), sheet(db, resource.id(), &team, &connections)?));
+    sheets.push((resource.id, sheet((db, config), resource.id, &team, &connections)?));
   }
   Ok(sheets)
 }
 
 fn sheet(
-  db: &ProjectDb,
+  (db, config): (&ProjectDb, &TeamConfig),
   profile: ResourceId,
   team: &TeamAgentProfile,
   connections: &[Connection],
 ) -> Result<TeamProfileSheet, StoreError> {
-  let named = |ids: &[ResourceId]| ids.iter().map(|id| listed(db, *id)).collect::<Result<Vec<_>, _>>();
-  let mut mcp_servers = Vec::new();
-  for server in team.mcp_servers() {
-    let secrets = match db.latest_version::<TeamMcpServer>(*server)? {
-      Some(found) => found.body().secrets(),
-      None => Vec::new(),
-    };
-    mcp_servers.push(UsedServer {
-      server: listed(db, *server)?,
-      secrets,
-    });
-  }
+  let named = |ids: &[ResourceId]| ids.iter().map(|id| listed(config, *id)).collect::<Vec<_>>();
+  let mcp_servers: Vec<UsedServer> = team
+    .mcp_servers()
+    .iter()
+    .map(|server| UsedServer {
+      server: listed(config, *server),
+      secrets: match config.resource(*server).and_then(|found| found.body::<TeamMcpServer>()) {
+        Some(Ok(body)) => body.secrets(),
+        _ => Vec::new(),
+      },
+    })
+    .collect();
   let mut secrets: Vec<SecretName> = Vec::new();
   let own = team.secrets().iter().cloned();
   for name in mcp_servers
@@ -120,11 +146,11 @@ fn sheet(
   let of_kind: Vec<ConnectionChoice> = connections
     .iter()
     .filter(|connection| matches!(connection.kind(), ConnectionKind::Agent(provider) if *provider == team.cli()))
-    .map(|connection| ConnectionChoice {
-      id: connection.id(),
-      name: connection.name().to_string(),
-      version: connection.version().map(str::to_owned),
-    })
+    .map(ConnectionChoice::of)
+    .collect();
+  let of_cli: Vec<AgentConnection> = agent_connections(connections.to_vec())
+    .into_iter()
+    .filter(|connection| connection.provider() == team.cli())
     .collect();
   let picked = db
     .connection_pick(profile)?
@@ -137,19 +163,22 @@ fn sheet(
       .settings()
       .iter()
       .find_map(|(key, value)| (key == REASONING_EFFORT).then(|| value.to_owned())),
-    instructions: named(team.instruction_resources())?,
+    instructions: named(team.instruction_resources()),
     mcp_servers,
-    tools: named(team.tools())?,
-    skills: named(team.skills())?,
+    tools: named(team.tools()),
+    skills: named(team.skills()),
     secrets,
     connections: of_kind,
     picked,
+    choices: runs_on::choices(&of_cli, None, |_| false),
+    edit: config
+      .resource(profile)
+      .and_then(|resource| team_sheets::latest_of(resource, team)),
   })
 }
 
-fn listed(db: &ProjectDb, id: ResourceId) -> Result<Listed, StoreError> {
-  let name = db
-    .resource(id)?
-    .map_or_else(|| id.to_string(), |found| found.name().to_string());
-  Ok(Listed { id, name })
+/// `id` with the name the team gives it, archived or not; its id for a resource the configuration does not hold.
+pub(super) fn listed(config: &TeamConfig, id: ResourceId) -> Listed {
+  let name = config.name(id).map_or_else(|| id.to_string(), str::to_owned);
+  Listed { id, name }
 }

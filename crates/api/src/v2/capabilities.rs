@@ -5,7 +5,7 @@ use orchester_core::{id::ProjectId, sharing::TaskRevision};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{DecisionId, Subject, page::nullable};
+use super::{DecisionId, LifecycleAction, Subject, page::nullable};
 
 /// The caller's standing in the workspace: a member, a workspace admin, or a server admin (who need not be a member).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct CommandKind(String);
 
 impl CommandKind {
   pub fn new(kind: String) -> Result<Self, ActionError> {
-    if [READ, EXPORT_SHARED, SERVER_ADMIN].contains(&kind.as_str()) {
+    if [READ, EXPORT_SHARED, SERVER_ADMIN].contains(&kind.as_str()) || LifecycleAction::from_wire(&kind).is_some() {
       return Err(ActionError::Reserved(kind));
     }
     let word = |word: &str| !word.is_empty() && word.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'_');
@@ -50,14 +50,17 @@ impl CommandKind {
   }
 }
 
-/// What an action is: a command, or one of the reads and admin actions that are no command. On the wire a string:
-/// the command's kind, `read`, `export.shared` or `server.admin`.
+/// What an action is: a command, or one of the reads, admin actions and task lifecycle changes that are no command. On
+/// the wire a string: the command's kind, `read`, `export.shared`, `server.admin` or a [`LifecycleAction`]'s name
+/// (`task.complete`, `task.cancel`, `task.reopen`, `task.triage`, `task.block`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Action {
   Read,
   ExportShared,
   ServerAdmin,
+  /// A change of a task's lifecycle, which travels in the task patch; its subject is the task.
+  Task(LifecycleAction),
   Command(CommandKind),
 }
 
@@ -67,6 +70,7 @@ impl Action {
       Self::Read => READ,
       Self::ExportShared => EXPORT_SHARED,
       Self::ServerAdmin => SERVER_ADMIN,
+      Self::Task(action) => action.as_str(),
       Self::Command(kind) => kind.as_str(),
     }
   }
@@ -80,7 +84,10 @@ impl TryFrom<String> for Action {
       READ => Ok(Self::Read),
       EXPORT_SHARED => Ok(Self::ExportShared),
       SERVER_ADMIN => Ok(Self::ServerAdmin),
-      _ => CommandKind::new(action).map(Self::Command),
+      _ => match LifecycleAction::from_wire(&action) {
+        Some(task) => Ok(Self::Task(task)),
+        None => CommandKind::new(action).map(Self::Command),
+      },
     }
   }
 }
@@ -104,6 +111,9 @@ pub enum DenialReason {
   ModuleRequired,
   DecisionRequired,
   ConfigurationInvalid,
+  /// The subject is not in a state the action applies to: a Done task cannot be marked Done, an open one cannot be
+  /// reopened. Told before who the caller is.
+  TransitionDenied,
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]

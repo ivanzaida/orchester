@@ -323,16 +323,10 @@ pub(super) fn automatic(
   write(connection, task, &value, ChangeActor::Orchester, at)
 }
 
+/// Fails unless the project records the task: its organization is read for a team task too, whose definition this
+/// computer may not keep, and is then the default.
 fn ensure_task(connection: &Connection, task: TaskId) -> Result<(), StoreError> {
-  let exists: bool = connection.query_row(
-    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1)",
-    [task.to_string()],
-    |row| row.get(0),
-  )?;
-  if !exists {
-    return Err(StoreError::TaskNotFound(task));
-  }
-  Ok(())
+  super::task_identities::ensure_known(connection, task)
 }
 
 /// The latest run of `task` that has not ended. An interrupted run whose worktree was removed never

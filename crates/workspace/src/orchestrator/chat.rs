@@ -14,13 +14,16 @@ use orchester_core::{
   attachment::Attachment,
   connection::{context_use::ContextUse, stream::TodoList},
   id::{ChatId, ChatMessageId, RunId},
-  orchestrator::{BlankTitle, Chat, ChatEntry, ChatTitle, EntryKind, TurnState},
+  orchestrator::{BlankTitle, Chat, ChatEntry, ChatTitle, EntryKind, TurnState, WatchTarget},
   run::RunStatus,
   time::Timestamp,
 };
 use orchester_store::{ChatDeletion, ChatListing, ProjectDb};
 
-use super::{waits_on::view::RunWaitView, watching::LeadCounts};
+use super::{
+  event_turns::EventTurns, requests::ChatRequest, settings::OrchestratorSetup, standing::ModuleNow,
+  waits_on::view::RunWaitView, watching::LeadCounts,
+};
 use crate::messages::{self, Message};
 
 /// The project's conversations, archived ones too, the one with the latest entry first, with what those that lead
@@ -150,9 +153,19 @@ pub struct ChatView {
   pub events: HashMap<i64, EventFacts>,
   /// How the waits its *waits on* rows name stand now, by the waiting run (ORC-784).
   pub waits_on: HashMap<RunId, RunWaitView>,
+  /// The tool requests it keeps as waits, by entry (2026-11-11).
+  pub requests: HashMap<i64, ChatRequest>,
   /// How full the context of the session its turns continue is; `None` while no turn's CLI reported it (unknown, not
   /// empty).
   pub context: Option<ContextUse>,
+  /// Where the turns its events start by themselves stand: tried again, left to the person, or held
+  /// ([`super::event_turns`]).
+  pub turns: EventTurns,
+  /// The lines of the watch commands that led their targets to the end, by entry (*Leading … to the end*), each
+  /// with the targets it is the latest such line of.
+  pub led_to_end: HashMap<i64, Vec<WatchTarget>>,
+  /// What the lines of its events of modules led to the end name of those modules as they are now, by entry.
+  pub modules_now: HashMap<i64, ModuleNow>,
 }
 
 /// What the line of an event of a task's run names beside its wait ([`super::events`]): the module its task is in, the
@@ -224,9 +237,25 @@ impl EndMoved {
   }
 }
 
+/// Whether the Orchestrator starts turns by itself in the project of `db` at `root`: *Let the Orchestrator drive* is
+/// on, and it has something to run on. A project with no switch of its own yet gets the app's when its follower first
+/// reads it, and starts nothing until then.
+fn starts_turns(db: &ProjectDb, root: &Path) -> Result<bool, Message> {
+  let drives = db
+    .orchestrator_drives()
+    .map_err(|error| messages::store_error(&error))?
+    .unwrap_or(false);
+  Ok(drives && OrchestratorSetup::load_in(root)?.readiness().is_ready())
+}
+
 impl ChatView {
   /// Conversation `chat` of the project at `root`; `None` when it is not kept. Blocks on SQLite.
   pub fn load_in(root: &Path, chat: ChatId) -> Result<Option<Self>, Message> {
+    Self::load_at(root, chat, Timestamp::now())
+  }
+
+  /// [`Self::load_in`] at `now`, which tells what holds the turns of its events and until when.
+  pub fn load_at(root: &Path, chat: ChatId, now: Timestamp) -> Result<Option<Self>, Message> {
     let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
     let Some(found) = db.chat(chat).map_err(|error| messages::store_error(&error))? else {
       return Ok(None);
@@ -241,6 +270,11 @@ impl ChatView {
     let events = super::events::event_facts(&db, &entries, &standing).map_err(|error| messages::store_error(&error))?;
     let waits_on = super::events::waits_on(&db, &entries).map_err(|error| messages::store_error(&error))?;
     let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
+    let requests = super::requests::chat_requests(&db, chat).map_err(|error| messages::store_error(&error))?;
+    let drives = || starts_turns(&db, root);
+    let turns = super::event_turns::read(&db, (chat, &entries), &standing, (now, drives))?;
+    let led_to_end = super::watch::led_to_end(&entries);
+    let modules_now = super::standing::modules_now(&db, &entries).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
       entries,
@@ -250,7 +284,11 @@ impl ChatView {
       moved,
       events,
       waits_on,
+      requests,
       context,
+      turns,
+      led_to_end,
+      modules_now,
     }))
   }
 

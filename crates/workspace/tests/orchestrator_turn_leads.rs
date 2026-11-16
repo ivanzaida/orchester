@@ -262,3 +262,37 @@ fn turn_leads_of_a_persons_turn_list_the_subscriptions_that_have_not_ended_with_
     "another conversation's is not either: {standing}"
   );
 }
+
+/// The bug of 2026-11-11: the turn of a run's success in a conversation that leads its module with an order to start
+/// work as it becomes ready merges the run and goes on to start what the order asks; the same turn without an order
+/// merges and stops.
+#[test]
+fn turn_leads_of_a_success_merged_under_an_order_start_what_became_ready() {
+  for (order, starts) in [("Start tasks as they become ready", true), ("", false)] {
+    let mut fixture = Fixture::new();
+    ready(&mut fixture);
+    let first = fixture.task("Profile frames", at(40));
+    let next = fixture.task("Flame chart", at(41));
+    let mut run = fixture.started_run(first, at(50));
+    let profiling = module(&mut fixture, "DevTools profiling", &[first, next]);
+    let leading = talking(&mut fixture, "Lead profiling", 10);
+    watch(&mut fixture, &leading, (WatchTarget::Module(profiling), order), 11);
+    fixture.succeed(&mut run, Timestamp::now());
+    let started = turn(&fixture);
+    assert_eq!(started.chat, leading.id());
+    let text = prompt(&fixture, started);
+    assert!(text.contains("Merge this run once with merge_run"), "{text}");
+    assert_eq!(
+      text.contains(
+        "Once merge_run has merged it, and only then, do what the order that applies to this turn (below) asks"
+      ),
+      starts,
+      "{text}"
+    );
+    assert_eq!(
+      text.contains("Start, resume, cancel or continue nothing else."),
+      !starts,
+      "{text}"
+    );
+  }
+}

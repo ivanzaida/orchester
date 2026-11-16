@@ -14,13 +14,13 @@ use orchester_app::{
   routes::{HubFilter, HubView},
 };
 use orchester_core::{id::ResourceId, secret::SecretName};
-use orchester_store::ProjectDb;
+use orchester_store::{ConnectionPick, ProjectDb};
 use serde_json::{Value, json};
 
 use super::{
   harness::Agents,
   team_hub::{open, team},
-  team_hub_profile::{builder_using, claude, show},
+  team_hub_profile::{builder_using, claude, claude_home, show},
 };
 
 const VALUE: &str = "ghp_not-a-real-token-9f2c";
@@ -126,7 +126,7 @@ fn team_hub_profile_fix_automation_cannot_set_a_path_or_save_a_value() {
   agents.stand_ins.choose(Some(program));
   let set_path = format!("team-hub-ready-mcp-{lint}-set-path");
   with_synthetic_input(|| agents.click(&set_path));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   for _ in 0..20 {
     agents.window.tree.tick_futures();
     agents.window.pass();
@@ -144,11 +144,10 @@ fn team_hub_profile_fix_automation_cannot_set_a_path_or_save_a_value() {
   });
   agents.set("team-hub-secret-value", VALUE);
   with_synthetic_input(|| agents.click("team-hub-secret-save"));
-  agents.until("the notice", |s| s.exists("team-hub-secret-save-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   assert!(agents.exists("team-hub-secret-dialog"), "the dialog stays");
+  assert_eq!(agents.value("team-hub-secret-value"), VALUE, "with what was typed");
   assert!(!kept(&agents), "automation kept no value");
-  let notice = agents.text("team-hub-secret-save-person-only");
-  assert!(!notice.contains(VALUE), "{notice}");
 }
 
 #[test]
@@ -164,7 +163,7 @@ fn team_hub_profile_fix_automation_cannot_switch_a_server_on() {
     .expect("off here");
   show(&mut agents, profile);
   with_synthetic_input(|| agents.click(&format!("team-hub-ready-mcp-{lint}-switch-on")));
-  agents.until("the notice", |s| s.exists("team-hub-fix-person-only"));
+  assert!(agents.refused().is_some(), "refused to the client that pressed it");
   for _ in 0..20 {
     agents.window.tree.tick_futures();
     agents.window.pass();
@@ -312,7 +311,7 @@ fn team_hub_profile_fix_a_panel_belongs_to_its_profile() {
     .outside
     .update(|counts| counts.profiles += 1);
   agents.until("the new profile is listed", |s| {
-    s.exists(&format!("team-hub-row-{other}")) && !s.exists("team-hub-reading")
+    s.exists(&format!("team-hub-row-{other}"))
   });
   agents.press_until("team-hub-ready-secret-GITHUB_TOKEN-add-value", "the dialog", |s| {
     s.exists("team-hub-secret-dialog")
@@ -349,7 +348,7 @@ fn other_profile(agents: &Agents) -> ResourceId {
     resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile},
   };
 
-  use super::team_hub::cached;
+  use super::team_hub::{cached, keep_team};
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let team = TeamAgentProfile::new(
     Name::new("Other").expect("name"),
@@ -362,12 +361,14 @@ fn other_profile(agents: &Agents) -> ResourceId {
     ),
   );
   let local = AgentProfile::from_team(&team, ConnectionId::generate());
-  cached(
+  let other = cached(
     &mut db,
     ("team-other", "Other"),
     serde_json::to_value(&team).expect("json"),
     &local,
-  )
+  );
+  keep_team(agents);
+  other
 }
 
 #[test]
@@ -375,7 +376,7 @@ fn team_hub_profile_fix_choosing_another_connection_after_a_pick_keeps_it() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  let home = claude(&agents.root, "Claude Home", "2.1.170");
+  let home = claude_home(&agents.root, "2.1.170");
   let ((profile, _), _) = builder_using(&agents, false);
   show(&mut agents, profile);
   let pick = |agents: &Agents| {
@@ -396,14 +397,18 @@ fn team_hub_profile_fix_choosing_another_connection_after_a_pick_keeps_it() {
     None,
     "choosing alone keeps nothing before the first pick"
   );
-  assert!(agents.text("team-hub-fix-use").contains("Use Claude Home for Builder"));
+  assert!(
+    agents
+      .text("team-hub-fix-use")
+      .contains("Use Claude Code · Claude Home for Builder")
+  );
   agents.click("team-hub-fix-use");
   agents.until("kept", |s| pick(s) == Some(home));
   agents.until("read back", |s| {
     s.text("team-hub-runs-on-sub") == "picked on this computer"
   });
   // After it, the select is the pick: choosing another keeps that one.
-  choose(&mut agents, "Claude Code · Claude 2");
+  choose(&mut agents, "Claude Code · Default");
   agents.until("the other is kept", |s| pick(s) == Some(first));
   agents.until("read back", |s| {
     s.text("team-hub-ready-connection-words").contains("Claude 2")
@@ -437,7 +442,11 @@ fn team_hub_profile_fix_buttons_wait_while_the_hub_is_read_again() {
     .feed(super::support::project_id())
     .outside
     .update(|counts| counts.profiles += 1);
-  agents.until("the reading mark", |s| s.exists("team-hub-reading"));
+  // The hub is read again from the next frame, and the read waits for the hold.
+  for _ in 0..5 {
+    agents.window.tree.tick_futures();
+    agents.window.pass();
+  }
   let program = agents.root.join("lint-mcp");
   std::fs::write(&program, "#!/bin/sh\n").expect("a program");
   agents.stand_ins.choose(Some(program));
@@ -452,12 +461,85 @@ fn team_hub_profile_fix_buttons_wait_while_the_hub_is_read_again() {
     !agents.exists("team-hub-secret-dialog"),
     "the link does nothing while reading"
   );
-  assert!(agents.exists("team-hub-reading"), "still the last answer");
   hold.set(false);
-  agents.until("current again", |s| !s.exists("team-hub-reading"));
+  for _ in 0..20 {
+    agents.window.tree.tick_futures();
+    agents.window.pass();
+    thread::sleep(Duration::from_millis(5));
+  }
   // Not read again by the press that came meanwhile: nothing was set.
   assert_eq!(
     agents.text(&format!("team-hub-ready-mcp-{lint}-words")),
     "Set its program path here"
   );
+}
+
+/// A pick made outside the panel (an MCP client's `pick_profile_connection`) shows in the select without reopening it
+/// (ORC-848 D5), and choosing in the select afterwards keeps that one as a pick made in the panel does.
+#[test]
+fn team_hub_profile_fix_the_select_follows_a_pick_made_elsewhere() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let first = claude(&agents.root, "Claude 2", "2.1.173");
+  let home = claude_home(&agents.root, "2.1.170");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(
+    agents.text("team-hub-pick").contains("Choose a Claude Code account"),
+    "{}",
+    agents.text("team-hub-pick")
+  );
+
+  let workspace = agents.window.launch.workspace().expect("workspace");
+  workspace
+    .pick_team_connection(
+      &agents.root,
+      profile,
+      ConnectionPick {
+        connection: home,
+        account: None,
+      },
+    )
+    .expect("a pick made by an MCP client");
+
+  agents.until("the select follows", |s| {
+    s.text("team-hub-pick").contains("Claude Home")
+  });
+  assert!(!agents.text("team-hub-pick").contains("Choose a Claude Code account"));
+  choose(&mut agents, "Claude Code · Default");
+  agents.until("the other is kept", |s| {
+    ProjectDb::open(&s.root)
+      .expect("database")
+      .connection_pick(profile)
+      .expect("pick")
+      .is_some_and(|pick| pick.connection == first)
+  });
+}
+
+/// Choosing the connection a profile runs on here is open to automation (the person's decision of 2026-11-11): an MCP
+/// client's press on *Use* keeps the pick, as a person's does, while the fixes that widen stay a person's.
+#[test]
+fn team_hub_profile_fix_automation_uses_a_connection() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let first = claude(&agents.root, "Claude 2", "2.1.173");
+  claude_home(&agents.root, "2.1.170");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(
+    agents
+      .text("team-hub-fix-use")
+      .contains("Use Claude Code · Default for Builder")
+  );
+
+  with_synthetic_input(|| agents.click("team-hub-fix-use"));
+
+  agents.until("the pick is kept", |s| {
+    ProjectDb::open(&s.root)
+      .expect("database")
+      .connection_pick(profile)
+      .expect("pick")
+      .is_some_and(|pick| pick.connection == first)
+  });
+  agents.until("the bar moves on", |s| !s.exists("team-hub-fix-use"));
 }

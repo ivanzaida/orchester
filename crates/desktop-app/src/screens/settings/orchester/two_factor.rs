@@ -115,18 +115,18 @@ pub(super) fn header(ctx: &mut Ctx, status: Option<&TwoFactorStatus>, answers: &
   )
   .icon(Icon::ExternalLink)
   .small()
-  .on_click(opener(ctx, answers, TURN_ON_HEADER));
+  .on_click(opener(ctx, answers));
   vec![off.into(), turn_on.into()]
 }
 
-/// Opens the cloud's security page in the browser when a person pressed `id`; says so in place when it cannot.
-/// Synthetic input is refused, and the panel says so under `id`.
-fn opener(ctx: &mut Ctx, answers: &Answers, id: &str) -> impl Fn() + Send + Sync + 'static {
+/// Opens the cloud's security page in the browser when a person pressed it; says so in place when it cannot.
+/// Synthetic input is refused to the client that sent it.
+fn opener(ctx: &mut Ctx, answers: &Answers) -> impl Fn() + Send + Sync + 'static {
   let services = Services::of(ctx);
   let (cloud, links, unopened) = (services.cloud, services.links, answers.unopened.clone());
-  let (person, id) = (answers.person.clone(), id.to_owned());
+  let person = answers.person.clone();
   move || {
-    if !person.allows(&id) {
+    if !person.allows("open the security page of Orchester Cloud") {
       return;
     }
     let url = match cloud.web_page(WebPage::Security) {
@@ -157,7 +157,7 @@ pub(super) const TURN_ON_HEADER: &str = "orchester-cloud-two-factor-turn-on";
 /// *Turn on two-factor authentication* ↗, the button `<id>-turn-on`.
 pub(super) fn turn_on(ctx: &mut Ctx, id: &str, answers: &Answers) -> ActionButton {
   let button = format!("{id}-turn-on");
-  let open = opener(ctx, answers, &button);
+  let open = opener(ctx, answers);
   ActionButton::new(button, ButtonKind::Primary, ctx.t("cloud.invites.twoFactor.turnOn"))
     .icon(Icon::ExternalLink)
     .on_click(open)
@@ -174,8 +174,8 @@ pub(super) fn sign_in_again(ctx: &Ctx, id: &str, to: &str, answers: &Answers) ->
   if answers.sign_in_again.state().get().is_pending() {
     return button.loading();
   }
-  let (answers, to, pressed) = (answers.clone(), to.to_owned(), format!("{id}-sign-in-again"));
-  button.on_click(move || answers.sign_in_again(&pressed, &to))
+  let (answers, to) = (answers.clone(), to.to_owned());
+  button.on_click(move || answers.sign_in_again(&to))
 }
 
 /// *Not now*: *Sign in again* takes *Accept*'s place.
@@ -264,12 +264,7 @@ pub(super) fn below(
     Some(key) => notice.note(ctx.t(key)),
     None => notice,
   };
-  let reasons = answers
-    .person
-    .reason(ctx, &format!("{id}-sign-in-again"))
-    .into_iter()
-    .chain(answers.person.reason(ctx, &format!("{id}-turn-on")));
-  Some(reasons.fold(notice, |notice, reason| notice.part(reason)).into())
+  Some(notice.into())
 }
 
 /// Why *Sign in again* or the security page did not go through, the parts' ids starting with `id`.
@@ -304,8 +299,8 @@ pub(super) fn recovery_warning(
     usize::try_from(left).unwrap_or(usize::MAX),
   );
   let button = format!("{id}-security");
-  let open = opener(ctx, answers, &button);
-  let open = ActionButton::new(button.clone(), ButtonKind::Secondary, ctx.t("cloud.recovery.open"))
+  let open = opener(ctx, answers);
+  let open = ActionButton::new(button, ButtonKind::Secondary, ctx.t("cloud.recovery.open"))
     .icon(Icon::ExternalLink)
     .on_click(open);
   let warning: Element = Callout::new(id.to_owned(), CalloutTone::Warning, title)
@@ -318,7 +313,6 @@ pub(super) fn recovery_warning(
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(warning)
-      .with_children(answers.person.reason(ctx, &button))
       .into(),
   )
 }

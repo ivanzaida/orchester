@@ -87,10 +87,10 @@ fn orchestrator_git_proposal_is_applied_only_by_a_person() {
     "what it loses"
   );
 
-  let (start, person_only) = (format!("{card}-start"), format!("{card}-person-only"));
+  let start = format!("{card}-start");
   screen.until("the refusal", |screen| {
     with_synthetic_input(|| screen.click(&start));
-    screen.exists(&person_only)
+    screen.window.refused_press().is_some()
   });
   assert_eq!(
     outcomes(&screen)[0],

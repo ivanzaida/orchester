@@ -1,45 +1,53 @@
 //! Approvals through Orchester's MCP server (`docs/design/approval-modes.md`): `get_approvals` reads a project's
-//! *Allow Autopilot for agents in this project*, which connection and model review Manual's requests, and the mode
-//! each run that has not ended answers its agents' requests in, with why; `set_allow_autopilot` turns the project's
-//! setting on or off, as Project settings does; `set_reviewer` chooses the reviewer; `set_run_manual` switches a run
-//! to Manual for itself, as its status line does. Allowing Autopilot is a person's alone, so automation's asking for
-//! it is refused; turning it off is always taken. The reviewer approves requests in the person's place, so automation
-//! chooses another one only while a person lets automation answer approvals and change agent permissions. Switching a
-//! run to Manual narrows what it does without a person: always taken, and never undone.
+//! *Approve mode* (and, as before, whether it allows Autopilot), which connection and model review Manual's requests,
+//! and the mode each run that has not ended answers its agents' requests in, with why; `set_approve_mode` moves the
+//! Approve mode and `set_allow_autopilot` keeps the former switch's meaning (off is Manual, on is Autopilot), as
+//! Project settings does; `set_reviewer` chooses the reviewer; `set_run_manual` switches a run to Manual for itself, as
+//! its status line does. Moving the Approve mode up is a person's alone, so automation's asking for it is refused;
+//! moving it down is always taken. The reviewer approves requests in the person's place, so automation chooses another
+//! one only while a person lets automation answer approvals and change agent permissions. Switching a run to Manual
+//! narrows what it does without a person: always taken, and never undone.
 //!
 //! Auto mode's tools (`get_auto_mode`, `set_auto_mode`, `set_run_auto_mode`) are retired: for one release they stay
 //! listed and answer `retired`, naming the tools that replace them ([`retired`]).
 
 use orchester_core::{
   connection::{AgentConnection, Connection, moves_to_another_account},
-  id::ProjectId,
+  id::{ConnectionId, ProjectId},
   resource::ModelId,
   run::{
-    Answerer,
+    Answerer, ApproveMode, ApproveModePersonOnly,
     review::{
       AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, resolve_reviewer, reviewer_kind,
     },
   },
-  store::{ConnectionStore, RunStore, TaskStore},
+  store::{ConnectionStore, RunStore},
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{runs::find_run, setup::widening::allowed};
+use super::{
+  runs::find_run,
+  setup::{
+    runs_on::{CliKind, account_connection},
+    widening::allowed,
+  },
+};
 use crate::{
   agents::form::effort_options,
   app_mcp::{
-    error::ToolError,
+    error::{Missing, ToolError},
     services::{Services, blocking},
   },
   links::{Link, TaskPage},
   messages::Message,
-  project_settings::{autopilot_person_only, decision_reviewer},
+  project_settings::{changed_meanwhile, decision_reviewer, person_only},
   tasks::{
     detail::run_store_error,
     outside::Outside,
+    recorded,
     run_approvals::{RunApprovalChange, apply_in, run_mode_in, unavailable_key},
   },
 };
@@ -68,9 +76,43 @@ pub struct GetApprovals {
 pub struct SetAllowAutopilot {
   /// The project's id, or its name.
   pub project: String,
-  /// *Allow Autopilot for agents in this project*: `false` is always taken; `true` only while it is on already, as
-  /// only a person allows Autopilot.
+  /// The former *Allow Autopilot* switch: `false` moves the Approve mode to Manual and is always taken; `true` asks
+  /// for Autopilot, taken only while Autopilot is allowed already (Autopilot or Dangerous auto-approve, which it
+  /// leaves as it is), as only a person moves the mode up.
   pub allow_autopilot: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct SetApproveMode {
+  /// The project's id, or its name.
+  pub project: String,
+  /// The *Approve mode* asked for: down (or what it is already) is always taken; up only a person chooses.
+  pub approve_mode: ApproveModeArg,
+}
+
+/// A project's *Approve mode*, from the safest up.
+#[derive(Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum ApproveModeArg {
+  /// Every agent runs as Manual, whatever its profile says.
+  Manual,
+  /// Agents whose profile is set to Autopilot approve their own requests.
+  Autopilot,
+  /// Every tool request of every agent is approved at once, nothing checked.
+  DangerousAutoApprove,
+}
+
+impl From<ApproveModeArg> for ApproveMode {
+  fn from(mode: ApproveModeArg) -> Self {
+    match mode {
+      ApproveModeArg::Manual => Self::Manual,
+      ApproveModeArg::Autopilot => Self::Autopilot,
+      ApproveModeArg::DangerousAutoApprove => Self::DangerousAutoApprove,
+    }
+  }
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -79,14 +121,18 @@ pub struct SetAllowAutopilot {
 pub struct SetReviewer {
   /// The project's id, or its name.
   pub project: String,
-  /// An agent connection's id or name: Claude Code, Codex, or a native one on the Anthropic API. Left out:
-  /// the default reviewer (the first Claude Code connection with Haiku 4.5).
-  pub connection: Option<String>,
-  /// A decision connection id or name; mutually exclusive with connection.
+  /// What a language reviewer runs on: a sign-in or an API provider of the person's, by its id or name
+  /// (list_accounts), of Claude Code, Codex, or Orchester's own agent on the Anthropic API; `default` is a CLI's
+  /// Default and needs `cli`. The project gets its connection on the account when it has none. Left out: the
+  /// default reviewer (the first Claude Code account with Haiku 4.5).
+  pub account: Option<String>,
+  /// The agent CLI whose account `account` names; needed for `default` and for a name two CLIs' accounts share.
+  pub cli: Option<CliKind>,
+  /// A decision connection id or name; mutually exclusive with account.
   pub decision_connection: Option<String>,
-  /// A model of that connection; its default when left out.
+  /// A model of that account; its default when left out.
   pub model: Option<String>,
-  /// A reasoning effort the model takes; the connection's default when left out.
+  /// A reasoning effort the model takes; the account's default when left out.
   pub effort: Option<String>,
   /// Decision reviewer threshold, 0.01–0.99 with at most two decimal places; defaults to 0.80.
   pub threshold: Option<f64>,
@@ -97,9 +143,10 @@ pub struct SetReviewer {
 #[schemars(crate = "rmcp::schemars")]
 pub struct Retired {}
 
-/// Refused unless a person lets automation answer approvals.
+/// Refused unless a person lets automation answer approvals, or the call is the Orchestrator chat's while it drives
+/// (the person's decision of 2026-11-13: the drive switch covers who reviews requests too).
 fn gate(services: &Services) -> Result<(), ToolError> {
-  if services.workspace.automation_answers_approvals()? {
+  if services.answers_allowed()? {
     return Ok(());
   }
   Err(ToolError::refused(
@@ -136,8 +183,7 @@ pub async fn set_run_manual(services: &Services, args: SetRunManual) -> Result<V
 pub async fn get_approvals(services: &Services, args: GetApprovals) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     approvals_json(&db, open.project.id())
   })
   .await
@@ -148,28 +194,65 @@ pub async fn set_allow_autopilot(services: &Services, args: SetAllowAutopilot) -
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    let current = db.allow_autopilot()?;
-    let autopilot = current
-      .changed(args.allow_autopilot, Answerer::Automation)
-      .map_err(|_| ToolError::refused("person_only", vec![autopilot_person_only()]))?;
-    // Nothing to write when nothing changes: a person's Off between this read and a write would be undone.
-    if autopilot != current {
-      db.save_allow_autopilot(autopilot)?;
-      services.changes.record(open.project.id(), Outside::AutoMode);
-    }
+    moved(&services, (&mut db, open.project.id()), |current| {
+      current.with_autopilot(args.allow_autopilot)
+    })?;
     approvals_json(&db, open.project.id())
   })
   .await
+}
+
+/// Moves the project's Approve mode down for anyone, up for no one but a person (refused as `person_only` here).
+pub async fn set_approve_mode(services: &Services, args: SetApproveMode) -> Result<Value, ToolError> {
+  let services = services.clone();
+  blocking(move || {
+    let open = services.project(&args.project)?;
+    let mut db = ProjectDb::open(&open.repo_root)?;
+    let to = ApproveMode::from(args.approve_mode);
+    moved(&services, (&mut db, open.project.id()), |_| to)?;
+    approvals_json(&db, open.project.id())
+  })
+  .await
+}
+
+/// Moves the Approve mode of `project`, whose database is `db`, to `to` as automation: refused as `person_only` up.
+fn moved(
+  services: &Services,
+  (db, project): (&mut ProjectDb, ProjectId),
+  to: impl FnOnce(ApproveMode) -> ApproveMode,
+) -> Result<(), ToolError> {
+  let current = db.approve_mode()?;
+  let mode = current
+    .changed(to(current), Answerer::Automation)
+    .map_err(|ApproveModePersonOnly(up)| ToolError::refused("person_only", vec![person_only(up)]))?;
+  if mode != current {
+    // One conditional write: a move decided on a mode a person changed meanwhile is refused, never made.
+    if !db.save_approve_mode_if(current, mode)? {
+      return Err(ToolError::refused(
+        "changed_outside",
+        vec![changed_meanwhile(db.approve_mode()?)],
+      ));
+    }
+    services.changes.record(project, Outside::AutoMode);
+  }
+  Ok(())
 }
 
 pub async fn set_reviewer(services: &Services, args: SetReviewer) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
+    // The project's connection on the account the reviewer is to run on, made now when it has none.
+    let language = match &args.account {
+      Some(named) if args.decision_connection.is_none() => {
+        Some(account_connection(&services, &open.repo_root, args.cli, named)?)
+      }
+      _ => None,
+    };
     let mut db = ProjectDb::open(&open.repo_root)?;
     let current = db.auto_mode_settings()?;
     let decisions = db.decision_connections()?;
-    let reviewer = reviewer_change(&services, &db, &current, &args, &decisions)?;
+    let reviewer = reviewer_change(&services, &db, &current, (&args, language), &decisions)?;
     if db.save_auto_mode_with_decision_if_current(&current, &AutoModeSettings { reviewer }, &decisions)?
       == orchester_store::AutoModeSave::ChangedOutside
     {
@@ -203,11 +286,11 @@ fn reviewer_change(
   services: &Services,
   db: &ProjectDb,
   current: &AutoModeSettings,
-  argument: &SetReviewer,
+  (argument, language): (&SetReviewer, Option<ConnectionId>),
   decisions: &[orchester_core::connection::DecisionConnection],
 ) -> Result<Option<ReviewerChoice>, ToolError> {
   let connections = db.connections()?;
-  let reviewer = chosen_reviewer(&connections, decisions, argument)?;
+  let reviewer = chosen_reviewer(&connections, decisions, (argument, language))?;
   let next = AutoModeSettings {
     reviewer: reviewer.clone(),
   };
@@ -245,12 +328,12 @@ fn moves_reviewer_account(connections: &[Connection], current: &AutoModeSettings
 fn chosen_reviewer(
   connections: &[Connection],
   decisions: &[orchester_core::connection::DecisionConnection],
-  argument: &SetReviewer,
+  (argument, language): (&SetReviewer, Option<ConnectionId>),
 ) -> Result<Option<ReviewerChoice>, ToolError> {
   if let Some(named) = &argument.decision_connection {
-    if argument.connection.is_some() || argument.effort.is_some() {
+    if argument.account.is_some() || argument.effort.is_some() {
       return Err(ToolError::InvalidArguments(
-        "decision reviewers take neither connection nor effort".into(),
+        "decision reviewers take neither account nor effort".into(),
       ));
     }
     let connection = decisions
@@ -282,18 +365,23 @@ fn chosen_reviewer(
       "only decision reviewers take a threshold".into(),
     ));
   }
-  chosen(connections, argument)
+  chosen(connections, argument, language)
 }
 
-/// The reviewer `argument` names among `connections`; `None` for the default one.
-fn chosen(connections: &[Connection], argument: &SetReviewer) -> Result<Option<ReviewerChoice>, ToolError> {
-  let Some(named) = &argument.connection else {
+/// The reviewer on `language`, the project's connection on the account `argument` names, among `connections`;
+/// `None` for the default one.
+fn chosen(
+  connections: &[Connection],
+  argument: &SetReviewer,
+  language: Option<ConnectionId>,
+) -> Result<Option<ReviewerChoice>, ToolError> {
+  let Some(language) = language else {
     return Ok(None);
   };
   let connection = connections
     .iter()
-    .find(|connection| connection.id().to_string() == *named || connection.name().as_str() == named)
-    .ok_or_else(|| ToolError::InvalidArguments(format!("no connection is named {named}")))?;
+    .find(|connection| connection.id() == language)
+    .ok_or_else(|| ToolError::not_found(Missing::Account, argument.account.as_deref().unwrap_or_default()))?;
   if reviewer_kind(connection).is_none() {
     return Err(unavailable(ReviewerUnavailable::Unsupported));
   }
@@ -325,6 +413,7 @@ fn approvals_json(db: &ProjectDb, project: ProjectId) -> Result<Value, ToolError
   let resolved = decision_reviewer::read(db)?;
   Ok(json!({ "approvals": {
     "allow_autopilot": db.allow_autopilot()?.is_on(),
+    "approve_mode": db.approve_mode()?,
     "reviewer": resolved,
     "runs": running(db, project)?,
   } }))
@@ -334,7 +423,7 @@ fn approvals_json(db: &ProjectDb, project: ProjectId) -> Result<Value, ToolError
 /// now. A run that cannot be read is left out: it cannot be working.
 fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> {
   let mut runs = Vec::new();
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     for run in db
       .runs_of_task(task.id())
       .map_err(run_store_error)?
@@ -349,7 +438,22 @@ fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> 
         "number": run.number().get(),
         "task": task.key().to_string(),
         "approval_mode": db.run_approval_mode(run.id())?,
+        "switched_to_manual": db.run_switched_to_manual(run.id())?,
         "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
+      }));
+    }
+  }
+  // A run of a team task that no record of this computer defines is listed without the task, which is what it says.
+  for run in recorded::unrecorded_runs(db)? {
+    if !run.status().is_terminal() {
+      runs.push(json!({
+        "id": run.id().to_string(),
+        "number": run.number().get(),
+        "task": null,
+        "unrecorded": true,
+        "approval_mode": db.run_approval_mode(run.id())?,
+        "switched_to_manual": db.run_switched_to_manual(run.id())?,
+        "link": null,
       }));
     }
   }

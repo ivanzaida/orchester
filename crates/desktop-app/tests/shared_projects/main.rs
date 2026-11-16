@@ -309,7 +309,7 @@ fn shared_projects_only_a_person_links() {
   window.set(FOLDER, &checkout.display().to_string());
   shows(&mut window, "join-team-link-check");
   with_synthetic_input(|| window.press(SUBMIT));
-  shows(&mut window, &format!("{SUBMIT}-person-only"));
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(!checkout.join(".orchester").exists(), "nothing was linked");
 }
 

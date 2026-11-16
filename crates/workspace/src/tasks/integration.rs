@@ -25,7 +25,7 @@ use orchester_core::{
   },
   revision::Revision,
   run::{BranchName, Run},
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
   time::Timestamp,
 };
 use orchester_exec::{
@@ -44,6 +44,7 @@ use super::{
   detail::run_store_error,
   local_integration::CheckoutHolder,
   merge_attempts::{Asked, Attempt},
+  recorded::{RunRoute, route_of_run, task_of},
   run::control_message,
   worktree_removal::{Unremoved, WorktreeRemover},
 };
@@ -301,6 +302,7 @@ pub fn merge_in_as(
   asked: Asked,
 ) -> Result<Merged, IntegrationProblem> {
   let repo_root = worktrees.root();
+  refuse_team_run(repo_root, run)?;
   // Held until the attempt is recorded, so that no other merge takes its open attempt for one the app left.
   let held = preflight::hold(repo_root);
   let mut attempt = Attempt::begin((repo_root, programs), run, asked);
@@ -370,11 +372,33 @@ fn merge_held(
   })
 }
 
+/// Refuses a run merged already or held back by a merge waiting in its worktree, then a team run with no team record,
+/// whose start never finished. A team run merges on this computer as a local run does, into the branch it started
+/// from: its module's branch, which only the module's delivery takes further, to the base
+/// (`docs/architecture/server.md`, *Module delivery*), or, for a task in no module, the branch this computer had
+/// checked out. The work was done here and the branches are this checkout's, so nothing is the server's to allow;
+/// who may press it for a task in no module is the screens' to say. Said before the checkout is held and an attempt
+/// begins, so that no press records a stopped merge attempt for a merge that was never possible; the first refusal
+/// keeps its wording for a run that is merged or held and also such a team run.
+fn refuse_team_run(repo_root: &Path, run: RunId) -> Result<(), IntegrationProblem> {
+  let db = ProjectDb::open(repo_root)?;
+  not_merged_or_held(&db, run)?;
+  let run = db
+    .run(run)
+    .map_err(run_store_error)?
+    .ok_or(IntegrationProblem::Store(Message::new("errors.storage")))?;
+  match route_of_run(&db, &run)? {
+    RunRoute::Local | RunRoute::Team => Ok(()),
+    RunRoute::TeamUnrecorded => Err(IntegrationProblem::Store(Message::new("localIntegration.teamRun"))),
+  }
+}
+
 /// Refuses `run` unless it may merge: not merged already nor held back by a merge waiting in its worktree, no local
-/// integration holding the checkout, its result not in Git already, and its task's latest run; its task.
+/// integration holding the checkout, its result not in Git already, and its task's latest run; its task, a team
+/// task's as its runs recorded it ([`task_of`]), since this computer keeps no definition of one.
 fn mergeable(repo_root: &Path, db: &ProjectDb, run: &Run) -> Result<orchester_core::task::Task, IntegrationProblem> {
   not_merged_or_held(db, run.id())?;
-  let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
+  let task = task_of(db, run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   if let Some(holder) = super::local_integration::checkout_holder(db, run.id())? {
     return Err(IntegrationProblem::HeldLocally(holder));
   }

@@ -107,6 +107,25 @@ pub fn create_tracking_branch(
     .map(drop)
 }
 
+/// Creates the local branch `branch` at `revision` in the repository at `repo`; the checkout stays on its branch.
+/// A branch that exists is never moved: git refuses, and that is the error.
+pub fn create_branch_at(
+  runner: &impl CommandRunner,
+  git: &Path,
+  (repo, branch, revision): (&Path, &BranchName, &Revision),
+) -> Result<(), GitError> {
+  Git::new(runner, git, repo)
+    .stdout(&[
+      "branch",
+      "--quiet",
+      "--no-track",
+      "--end-of-options",
+      branch.as_str(),
+      revision.as_str(),
+    ])
+    .map(drop)
+}
+
 /// A branch a person picks as a task's or a module's base branch among the repository's ([`branch_choices`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BranchPick {

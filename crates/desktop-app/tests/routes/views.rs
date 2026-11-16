@@ -5,10 +5,11 @@
 use std::num::NonZeroU32;
 
 use orchester_app::routes::{
-  AgentTab, HubFilter, HubView, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, ProjectPage,
-  ProjectSettingsTab, Route, SecretsPanel, SecretsView, SkillsFilter, StepPage,
+  AgentTab, HubFilter, HubView, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, PipelinesFilter,
+  PipelinesView, ProjectPage, ProjectSettingsTab, Route, SecretsPanel, SecretsView, SkillsFilter, StepPage,
 };
 use orchester_core::{
+  id::ConnectionId,
   resource::{StepKey, VersionNumber},
   secret::Environment,
 };
@@ -26,6 +27,7 @@ const PANELS: [InstructionsPanel; 4] = [
 pub(super) fn view_routes() -> Vec<Route> {
   let id = CONNECTION.parse().expect("a resource id");
   let secret = CONNECTION.parse().expect("a secret id");
+  let server: ConnectionId = CONNECTION.parse().expect("a connection id");
   let mut all = Vec::new();
   for panel in [
     SecretsPanel::Inspect,
@@ -45,8 +47,15 @@ pub(super) fn view_routes() -> Vec<Route> {
   }
   all.extend(SkillsFilter::ALL.map(|filter| at(ProjectPage::Skills(filter))));
   all.extend(HubFilter::ALL.map(|filter| at(ProjectPage::hub(HubView::new(filter, None)))));
+  all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::McpServers, server))));
+  all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::Archived, server))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::All, Some(id)))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::Tools, Some(id)))));
+  all.extend(PipelinesFilter::ALL.map(|filter| at(ProjectPage::pipelines(PipelinesView::new(filter, None)))));
+  all.push(at(ProjectPage::pipelines(PipelinesView::new(
+    PipelinesFilter::Archived,
+    Some(id),
+  ))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::Agent(id, tab))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::NewAgent(tab))));
   for tab in InstructionsTab::ALL {
@@ -60,7 +69,6 @@ pub(super) fn view_routes() -> Vec<Route> {
       all.push(at(ProjectPage::Instructions(InstructionsView::New(tab, panel))));
     }
   }
-  all.push(at(ProjectPage::Instructions(InstructionsView::Import)));
   let review = StepKey::new("review").expect("a step key");
   for view in [
     PipelineView::Steps,
@@ -140,10 +148,6 @@ fn views_have_their_documented_paths() {
         InstructionsView::default().with_panel(InstructionsPanel::Full),
       )),
       format!("{root}/instructions?panel=prompt"),
-    ),
-    (
-      at(ProjectPage::Instructions(InstructionsView::Import)),
-      format!("{root}/instructions?view=import"),
     ),
   ];
   for (route, path) in paths {
@@ -295,4 +299,81 @@ fn views_agents_hub_names_its_filter_and_resource() {
     format!("{root}?filter=tools&item={CONNECTION}")
   );
   assert!(Route::parse(&format!("{root}?filter=pipelines")).is_err());
+}
+
+/// The Pipelines hub of a local project keeps its tab and the pipeline its panel shows; opened on its first tab with
+/// nothing chosen it is the Pipelines route itself, and a tab it does not have names no view.
+#[test]
+fn views_pipelines_hub_names_its_tab_and_pipeline() {
+  let root = format!("/project/{PROJECT}/pipelines");
+  assert_eq!(ProjectPage::pipelines(PipelinesView::default()), ProjectPage::Pipelines);
+  assert_eq!(at(ProjectPage::Pipelines).path(), root);
+  let id = CONNECTION.parse().expect("a resource id");
+  assert_eq!(
+    at(ProjectPage::pipelines(PipelinesView::new(
+      PipelinesFilter::Archived,
+      None
+    )))
+    .path(),
+    format!("{root}?filter=archived")
+  );
+  let chosen = at(ProjectPage::pipelines(PipelinesView::new(
+    PipelinesFilter::Archived,
+    Some(id),
+  )));
+  assert_eq!(chosen.path(), format!("{root}?filter=archived&item={CONNECTION}"));
+  assert_eq!(Route::parse(&chosen.path()), Ok(chosen));
+  assert_eq!(
+    Route::parse(&format!("{root}?item={CONNECTION}")),
+    Ok(at(ProjectPage::pipelines(PipelinesView::new(
+      PipelinesFilter::All,
+      Some(id)
+    ))))
+  );
+  assert!(Route::parse(&format!("{root}?filter=profiles")).is_err());
+  assert!(Route::parse(&format!("{root}?item=not-an-id")).is_err());
+}
+
+/// The *Drafts* tab is gone with pipeline drafts (D-032): a route kept from before (the history, a link) that names it
+/// opens *All*, with the pipeline it named, and its path no longer names a tab.
+#[test]
+fn views_pipelines_hub_reads_the_gone_drafts_tab_as_all() {
+  let root = format!("/project/{PROJECT}/pipelines");
+  let id = CONNECTION.parse().expect("a resource id");
+  assert_eq!(PipelinesFilter::ALL, [PipelinesFilter::All, PipelinesFilter::Archived]);
+  assert_eq!(PipelinesFilter::from_name("drafts"), Some(PipelinesFilter::All));
+  let all = at(ProjectPage::pipelines(PipelinesView::new(
+    PipelinesFilter::All,
+    Some(id),
+  )));
+  assert_eq!(
+    Route::parse(&format!("{root}?filter=drafts&item={CONNECTION}")),
+    Ok(all.clone())
+  );
+  assert_eq!(all.path(), format!("{root}?item={CONNECTION}"));
+  assert_eq!(
+    Route::parse(&format!("{root}?filter=drafts")),
+    Ok(at(ProjectPage::Pipelines))
+  );
+}
+
+/// A local project's hub also has *Archived*, and names a local MCP server by its connection id, which is not a
+/// resource id: the two are different query parameters and neither is read as the other.
+#[test]
+fn views_agents_hub_of_a_local_project_names_a_server_and_the_archived_filter() {
+  let root = format!("/project/{PROJECT}/agents");
+  let server: ConnectionId = CONNECTION.parse().expect("a connection id");
+  assert_eq!(
+    at(ProjectPage::hub(HubView::new(HubFilter::Archived, None))).path(),
+    format!("{root}?filter=archived")
+  );
+  let on_server = at(ProjectPage::hub(HubView::on_server(HubFilter::McpServers, server)));
+  assert_eq!(
+    on_server.path(),
+    format!("{root}?filter=mcp_servers&server={CONNECTION}")
+  );
+  assert_eq!(Route::parse(&on_server.path()).expect("parsed"), on_server);
+  // A form that creates a server names no server.
+  let adding = at(ProjectPage::hub(HubView::adding(HubFilter::McpServers)));
+  assert_eq!(adding.path(), format!("{root}?filter=mcp_servers&new=1"));
 }

@@ -22,15 +22,15 @@ use crate::{
 };
 
 /// A shared task names one of the team's pipelines by its resource id (`docs/architecture/server.md` row 80; the
-/// column keeps its old name, `pipeline_slug`): it is that team pipeline here, or none when this computer has none of
-/// that id, and a value that is no team pipeline's id (a slug from before row 80) is none. A *Not shared* task keeps
-/// its own pipeline and the key it had before the project joined (`kept_key`).
-const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN \
-  (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.sharing = 'shared' \
-  AND resources.id = tasks.pipeline_slug) ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
+/// column keeps its old name, `pipeline_slug`): it is that id, whether or not the team's configuration read this
+/// session has that pipeline, which the workspace tells (`docs/design/team-configuration-live.md`); a value that is no
+/// resource id (a slug from before row 80) is none. A *Not shared* task keeps its own pipeline and the key it had
+/// before the project joined (`kept_key`).
+const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN pipeline_slug \
+  ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
   (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id), \
   COALESCE((SELECT choice FROM task_bases WHERE task_bases.task_id = tasks.id), 'inherit'), \
-  (SELECT branch FROM task_bases WHERE task_bases.task_id = tasks.id) \
+  (SELECT branch FROM task_bases WHERE task_bases.task_id = tasks.id), sharing IS 'shared' \
   FROM tasks";
 
 struct RunTaskSnapshot {
@@ -394,6 +394,8 @@ struct TaskRow {
   kept_key: Option<String>,
   module: Option<String>,
   base: (String, Option<String>),
+  /// The server's task: its pipeline is what it names, which need not be an id.
+  shared: bool,
 }
 
 impl TaskRow {
@@ -413,6 +415,7 @@ impl TaskRow {
       kept_key: row.get(11)?,
       module: row.get(12)?,
       base: (row.get(13)?, row.get(14)?),
+      shared: row.get(15)?,
     })
   }
 
@@ -422,11 +425,12 @@ impl TaskRow {
       title: Name::new(&self.title).map_err(|error| corrupt("task title", error))?,
       brief: self.brief,
       acceptance_criteria,
-      pipeline: self
-        .pipeline
-        .as_deref()
-        .map(|id| parse("pipeline id", id))
-        .transpose()?,
+      pipeline: match (self.pipeline.as_deref(), self.shared) {
+        // A shared task's value that is no resource id is a slug from before row 80: it names no team pipeline.
+        (Some(named), true) => named.parse().ok(),
+        (Some(id), false) => Some(parse("pipeline id", id)?),
+        (None, _) => None,
+      },
       limits,
     };
     let pipeline_version = self.pipeline_version.map(version_number).transpose()?;

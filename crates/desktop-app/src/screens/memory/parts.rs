@@ -1,5 +1,6 @@
 //! Small parts the Memory screens share: a group's heading (`Memory / Group heading` `CJvK7`), a record's tags and
-//! its latest-handoff flag, the glyph column, and a status label of a record no agent is given.
+//! its latest-handoff flag, the glyph column, a status label of a record no agent is given, and the notice of records
+//! that couldn't be read.
 
 use std::sync::Arc;
 
@@ -19,9 +20,9 @@ use crate::{
   routes::{ProjectPage, ProjectSettingsTab, Route, TaskView},
   theme::{ExtraRadius, ExtraSpacing, IconSize, MemoryText},
   ui::{
-    button::{ActionButton, ButtonKind},
     chip::TagChip,
     icon::{Icon, icon},
+    notice::{Notice, NoticeTone},
     pressable::opening,
   },
 };
@@ -126,20 +127,24 @@ pub fn conversation_link(ctx: &mut Ctx, (project, task): (ProjectId, &TaskKey), 
   link(id, words, navigation.to(route))
 }
 
-/// *Conversation ↗* at a source row's end, opening the conversation of task `task` of `project` (`i14UW` in 05c,
-/// `X71XlI` in 05e).
-pub fn conversation_button(ctx: &mut Ctx, (project, task): (ProjectId, &TaskKey), id: &str) -> Element {
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(project, ProjectPage::Task(task.clone(), TaskView::Conversation));
-  ActionButton::new(id, ButtonKind::Ghost, ctx.t("memory.inspector.conversation"))
-    .icon(Icon::ArrowUpRight)
-    .opens(navigation.to(route))
-    .into()
-}
-
 /// *Change in Project settings › Context ↗*: `project`'s Context, which holds the Memory group.
 pub fn settings_link(ctx: &mut Ctx, project: ProjectId, id: &str) -> Element {
   let navigation = Navigation::of(ctx);
   let route = Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::Context));
   link(id, &ctx.t("memory.settingsLink"), navigation.to(route))
+}
+
+/// *N records couldn't be read and are left out* (`GCHz6`).
+pub fn unreadable(ctx: &Ctx, count: usize) -> Element {
+  let title = if count == 1 {
+    ctx.t("memory.unreadable.one")
+  } else {
+    ctx.t_args("memory.unreadable.other", [("count", count.to_string())])
+  };
+  // What was read stays: information with the `danger` icon, not a red fill (`SsC16`).
+  Notice::new("memory-unreadable", NoticeTone::Info, title)
+    .icon(Icon::CircleAlert)
+    .mark(PaletteColor::Danger)
+    .body(ctx.t("memory.unreadable.body"))
+    .into()
 }

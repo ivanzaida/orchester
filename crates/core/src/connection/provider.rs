@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::context_use::CLAUDE_ALIASES;
+
 /// The agent providers Orchester knows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -38,6 +40,21 @@ pub enum WireApi {
 impl AgentProvider {
   /// The providers a connection can be added for in this version: the agent CLIs.
   pub const CLI: [Self; 2] = [Self::CodexCli, Self::ClaudeCodeCli];
+
+  /// The agent CLI that runs `model`, from the family its name says (`claude-…` or an alias of Claude Code's, `gpt-…`
+  /// or `codex-…` for Codex); `None` for a name of neither. A profile whose connection is gone has only its model to
+  /// say which CLI it was for.
+  pub fn cli_of_model(model: &str) -> Option<Self> {
+    let model = model.trim().to_ascii_lowercase();
+    let name = model.strip_suffix("[1m]").unwrap_or(&model);
+    if name.starts_with("claude-") || CLAUDE_ALIASES.contains(&name) {
+      Some(Self::ClaudeCodeCli)
+    } else if name.starts_with("gpt-") || name.starts_with("codex-") {
+      Some(Self::CodexCli)
+    } else {
+      None
+    }
+  }
 
   pub const fn runtime(self) -> AgentRuntime {
     match self {

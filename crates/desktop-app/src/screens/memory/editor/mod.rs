@@ -1,12 +1,13 @@
 //! A record's editor, open in the record's place (`Memory / Record editor · review` `t0jt2k`, `Memory / Record
-//! editor · edit` `MO5Mu`), or above the list for *New record*: its head names what is edited and by whom, then the
+//! editor · edit` `MO5Mu`), or above the list for *New record*; in the Agents hub's Memory filter it is the panel
+//! (Y3 `hnMhi`, [`panel`]): its head names what is edited and by whom, then the
 //! type, key, importance, text and tags, what approving replaces, the facts the person does not change (source and
 //! the agent's confidence; author and versions), and the footer's actions. *Review proposed record* saves the
 //! person's edits with the approval; *Edit* saves them in place, keeping the author; *New record* writes a person's
 //! record, active at once, to this task or the project. One component for the three: mode is a prop.
 
 mod fields;
-mod page;
+mod panel;
 mod replaces;
 
 use std::sync::Arc;
@@ -18,7 +19,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -108,6 +109,10 @@ pub struct RecordEditor {
   importance: Signal<ImportanceChoice>,
   pinned: Signal<bool>,
   save_to: Signal<SaveToChoice>,
+  /// The text's input, which has the focus when the editor opens in the Agents hub's panel (Y3 `p95FK`).
+  text_input: ElementRef,
+  /// The text's input is still to take the focus.
+  focus_text: Signal<bool>,
 }
 
 impl Component for RecordEditor {
@@ -127,6 +132,8 @@ impl Component for RecordEditor {
       importance: ctx.signal(ImportanceChoice(draft.importance)),
       pinned: ctx.signal(props.memory.as_ref().is_some_and(Memory::is_pinned)),
       save_to: ctx.signal(SaveToChoice(if task_tab { SaveTo::Task } else { SaveTo::Project })),
+      text_input: ElementRef::default(),
+      focus_text: ctx.signal(true),
     }
   }
 
@@ -134,9 +141,9 @@ impl Component for RecordEditor {
     let props = ctx.props::<EditorProps>().clone();
     let state = MemoryState::of(ctx);
     let id = editor_id(&props);
-    // On the project's page a record and a proposal are edited on their own page (05c, 05e).
-    if state.task.is_none() && props.mode != EditorMode::New {
-      return self.page(ctx, &state, &props, &id);
+    // The Agents hub's Memory filter edits a record, reviews a proposal and writes a new one in its panel (Y3).
+    if state.task.is_none() {
+      return self.panel(ctx, &state, &props, &id);
     }
     Column::new()
       .id(id.clone())
@@ -366,6 +373,8 @@ impl RecordEditor {
       importance: self.importance.clone(),
       pinned: self.pinned.clone(),
       save_to: self.save_to.clone(),
+      text_input: self.text_input.clone(),
+      focus_text: self.focus_text.clone(),
     }
   }
 }

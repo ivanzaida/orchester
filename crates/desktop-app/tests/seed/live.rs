@@ -48,6 +48,16 @@ fn seed_live_runs_the_fake_codex_by_its_absolute_path() {
   assert!(program.is_absolute());
   assert_eq!(program, std::path::absolute(&relative).expect("absolute"));
   assert_eq!(connection.status(), ConnectionStatus::Connected);
+  // The Orchestrator can be set to run on it: its catalogue offers the profiles' model.
+  let agent = orchester_core::connection::AgentConnection::try_from(connection.clone()).expect("an agent connection");
+  assert_eq!(
+    agent
+      .models()
+      .iter()
+      .map(|model| model.id().as_str())
+      .collect::<Vec<_>>(),
+    ["gpt-5.5"]
+  );
   let profiles = published::<AgentProfile>(&db);
   assert_eq!(
     profiles.keys().collect::<Vec<_>>(),
@@ -83,6 +93,7 @@ fn seed_live_pipelines_pass_the_run_preflight_and_its_drafts_are_ready() {
       profiles: &profiles,
       tools: &BTreeMap::new(),
       connections: &connections,
+      chosen_here: &BTreeMap::new(),
       mcp_servers: &mcp_servers,
       secrets: &secrets,
     });

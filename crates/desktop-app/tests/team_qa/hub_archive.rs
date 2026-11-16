@@ -94,9 +94,7 @@ fn team_qa_hub_archive_automation_can_open_the_confirmation_but_not_confirm_it()
   let (mut window, server, _) = on_archive();
   opened(&mut window);
   with_synthetic_input(|| window.press(CONFIRM));
-  window.until("why nothing was archived", |window| {
-    window.texts("team-hub-archive-confirm-person-only").is_some()
-  });
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(!archived_on(&server), "a press by automation archives nothing");
   assert!(
     window.texts("team-hub-archive-title").is_some(),
@@ -372,4 +370,18 @@ fn team_qa_hub_archive_a_profile_that_names_an_archived_server_says_so_in_the_hu
     "Names pencil-design, which the team archived",
     "not the 'cannot tell yet' of an undecided resource"
   );
+}
+
+/// A member reads the stopped card as A22 draws it: restoring is the admins', and this app has no restore, so its
+/// foot only says who the admins are, with no button.
+#[test]
+fn team_qa_hub_archive_a_members_stopped_card_names_the_admins_without_a_button() {
+  let (mut window, _server, _) = on_task(("team-archived", State::TeamArchived), "KON-12");
+  window.until("the card's foot", |window| window.texts("task-archived-foot").is_some());
+  assert!(
+    window.texts("task-archived-ask").is_none(),
+    "the foot has no restore request button"
+  );
+  let hint = window.text("task-archived-foot-hint");
+  assert!(hint.starts_with("Restore is admins only · "), "{hint}");
 }

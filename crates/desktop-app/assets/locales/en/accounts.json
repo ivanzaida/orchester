@@ -1,6 +1,110 @@
 {
   "accounts": {
     "addAccount": "Add account",
+    "addMenu": {
+      "signIn": "Sign in to another account",
+      "apiProvider": "Add an API provider"
+    },
+    "program": {
+      "change": "Change…",
+      "choose": "Choose program…",
+      "notFound": "{{cli}} was not found on this computer",
+      "notAnswering": "{{path}} does not answer as {{cli}}"
+    },
+    "api": {
+      "addProvider": "Add API provider",
+      "title": "Add an API provider",
+      "sub": "A model API with a key: an agent CLI on one of your choice, or Orchester's own agent on Anthropic's. Every project can then run a profile on it.",
+      "usedWith": "Used with",
+      "cli": "Agent",
+      "cliHint": "Claude Code speaks the Anthropic Messages API, Codex the OpenAI Responses API; Orchester's own agent calls the Anthropic API itself; a decision model reviews what agents ask to do",
+      "own": "Orchester's agent",
+      "anthropic": "Anthropic API",
+      "openai": "OpenAI API",
+      "modelApis": "Model APIs",
+      "modelApisOne": "1 API",
+      "modelApisOther": "{{count}} APIs",
+      "ownLine": "{{api}} · {{host}} · {{count}} models",
+      "ownLineOne": "{{api}} · {{host}} · 1 model",
+      "ownLineNone": "{{api}} · {{host}} · no models listed yet",
+      "decision": {
+        "used": "Decision model",
+        "url": "Base URL",
+        "urlHint": "Where the decision model's server answers. The key below is optional: a server on this computer may take none",
+        "urlPlaceholder": "http://127.0.0.1:8080/v1",
+        "line": "Decision model · {{host}} · {{count}} models",
+        "lineOne": "Decision model · {{host}} · {{count}} model",
+        "lineNone": "Decision model · {{host}} · no models listed yet",
+        "check": "Check",
+        "remove": "Remove",
+        "removeTitle": "Remove {{name}}?",
+        "removeBody": "Its key leaves the system keychain. A project that reviews with it keeps its copy, whose check then fails; the other projects lose theirs.",
+        "state": {
+          "notChecked": "Not checked",
+          "connected": "Connected",
+          "keyRefused": "Key refused",
+          "nothingAnswers": "Nothing answers",
+          "notDecisionApi": "Not a decision model's API"
+        }
+      },
+      "nameShownOwn": "Shown as {{name}}",
+      "nameShownOwnEmpty": "Shown as …",
+      "provider": "Provider",
+      "keyHint": "Typed once and kept in the system keychain",
+      "keyInfo": "The key goes to the system keychain with the account and is never shown again. Only the CLI's process gets it when a run starts.",
+      "personNote": "Adding a host and a key that agents run on is a person's change: only you can add it.",
+      "add": "Add provider",
+      "needs": {
+        "name": "Name it first",
+        "url": "Type its base URL, as https://…",
+        "key": "Type its API key",
+        "models": "Name at least one model"
+      },
+      "one": "1 API provider",
+      "other": "{{count}} API providers",
+      "group": "{{accounts}} · {{providers}}",
+      "line": "API provider · {{host}} · {{count}} models",
+      "lineOne": "API provider · {{host}} · {{count}} model",
+      "keySet": "Key set",
+      "keyMissing": "Key missing",
+      "state": {
+        "connected": "Connected",
+        "keyRejected": "Key rejected",
+        "billing": "Billing problem",
+        "unreachable": "Endpoint unreachable"
+      },
+      "usedWithLine": "{{state}} · used with {{agent}}",
+      "wire": {
+        "cli": "{{cli}} · {{api}}",
+        "messages": "Anthropic Messages API",
+        "responses": "OpenAI Responses API",
+        "own": "Orchester's agent · {{api}}"
+      },
+      "baseUrl": "Base URL",
+      "baseUrlHint": "Where {{agent}} sends its requests",
+      "apiKey": "API key",
+      "keyKept": "Set · kept in the system keychain",
+      "keyMissingHere": "Not in this computer's keychain · replace it to enter it again",
+      "models": "Models",
+      "noModels": "None listed yet",
+      "dataGoesTo": "Data goes to",
+      "dataGoesToValue": "{{host}} · agreed per project at its first run",
+      "test": "Test",
+      "edit": "Edit",
+      "editOwn": "The API of Orchester's own agent can't be changed here yet. Add another provider for another API.",
+      "editNote": "Every project's agents use the new base URL and models from their next start.",
+      "removeInUse": "A profile or a run is on it: Used by lists them. Choose another account for them first.",
+      "removeReading": "Reading what runs on it…",
+      "pageNote": "The … menu holds Rename, Edit and Remove. Edit changes the base URL and the models for every project at its agents' next start. Remove is refused while a profile runs on the provider, and lists them. The key is never shown: Replace key… takes a new one.",
+      "replaceKey": "Replace key…",
+      "replaceConfirm": "Replace key",
+      "newKey": "New API key",
+      "replaceTitle": "Replace the key of {{name}}",
+      "replaceBody": "The new key takes the place of the one kept in the system keychain. Every project that runs a profile on this account uses it from its next run.",
+      "remove": "Remove",
+      "removeTitle": "Remove {{name}}?",
+      "removeBody": "Its key leaves the system keychain, and no profile can be run on it any more. Runs that used it still name it."
+    },
     "add": {
       "title": "Add an account",
       "sub": "An account is a folder where a CLI keeps its own sign-in. Name it and choose its folder; then sign in with the CLI.",
@@ -35,7 +139,7 @@
       "afterBroughtHint": "Orchester checks at once who is signed in to it.",
       "afterBroughtInfo": "Such as a folder you set {{variable}} to. Orchester never deletes a folder it did not create."
     },
-    "note": "Accounts belong to you on this computer; every project can use them. Each is a folder where the CLI keeps its own sign-in. GitHub keeps using gh's signed-in account for now.",
+    "note": "Accounts and API providers belong to you on this computer; every project can use them. A sign-in is a folder where the CLI keeps it, outside every repository. A key is kept in the system keychain, never in a project. GitHub keeps using gh's signed-in account for now.",
     "reading": "Reading the accounts…",
     "loadFailed": "The accounts can't be read",
     "loadFailureDetail": "{{reason}}",
@@ -190,7 +294,7 @@
     "rename": {
       "save": "Save",
       "cancel": "Cancel",
-      "note": "Connections, runs and plan limits show the new name at once: they hold the account, not its name. The folder keeps its path."
+      "note": "Profiles, runs and plan limits show the new name at once: they hold the account, not its name. The folder keeps its path."
     },
     "remove": {
       "title": "Remove {{account}} from Orchester?",
@@ -209,20 +313,20 @@
       "running": "Run {{run}} is running on {{account}}. A run keeps its account to the end: its agents' sessions live in {{account}}'s folder.",
       "runningReason": "Remove after {{run}} ends, or stop that run first",
       "unreadableReason": "{{projects}} can't be read, so a run there may be on this account. Remove it once they open",
-      "defaultReason": "Default is {{program}}'s own folder, {{folder}}, which every {{program}} you start yourself uses. Orchester can't remove it; to stop runs using it, choose other accounts in your connections."
+      "defaultReason": "Default is {{program}}'s own folder, {{folder}}, which every {{program}} you start yourself uses. Orchester can't remove it; to stop runs using it, choose other accounts for your profiles."
     },
     "usedBy": {
       "title": "Connections",
       "group": "Used by",
       "meta": "{{count}} in {{projects}} projects",
       "metaOne": "{{count}} in 1 project",
-      "hint": "{{project}} · {{profiles}}",
-      "hintNoProfile": "{{project}} · no agent profile yet",
+      "profileHint": "{{project}} · agent profile",
+      "teamProfile": "A team's profile",
       "open": "Open",
       "profiles": "{{project}} · {{connection}} → {{profiles}}",
       "noProfile": "{{project}} · {{connection}} → no agent profile yet",
-      "empty": "No connection uses this account yet. Choose it as a connection's account in a project's Connections.",
-      "unreadable": "{{projects}} could not be read; their connections are not counted."
+      "empty": "No project runs a profile on this account yet. Choose it in a profile's Runs on.",
+      "unreadable": "{{projects}} could not be read; their profiles are not counted."
     },
     "time": {
       "today": "today, {{time}}",

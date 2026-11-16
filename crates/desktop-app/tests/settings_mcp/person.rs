@@ -1,5 +1,6 @@
-//! Only a person changes the server's settings: input lurq delivers as synthetic (an MCP client's) is not taken,
-//! and the row says so (`eM8tB`, *Input from automation not taken*).
+//! Only a person changes the server's settings: while they show, the input gate refuses an MCP client's window input
+//! (`Guarded::McpServer`), and synthetic input that reaches a control all the same is not taken and only logged: the
+//! row stays as it was.
 
 use lurq::app::events::with_synthetic_input;
 
@@ -12,20 +13,14 @@ fn settings_mcp_synthetic_input_changes_nothing() {
   shown.until("listening", Shown::listening);
   let token = shown.token();
   let gate = shown.link.input_gate();
+  assert!(gate.protecting(), "the gate refuses an MCP client's window input here");
   for (control, blocked) in [
     ("settings-mcp-enabled-switch", "settings-mcp-enabled-blocked"),
     ("settings-mcp-token-show", "settings-mcp-token-blocked"),
     ("settings-mcp-token-rotate", "settings-mcp-token-blocked"),
   ] {
     with_synthetic_input(|| shown.click(control));
-    assert!(
-      shown.texts(blocked).is_some(),
-      "{control}: the row says it was not taken"
-    );
-    assert!(shown.says(
-      blocked,
-      "A change brought by automation was not taken: only you change the MCP server's settings, here in the window."
-    ));
+    assert!(shown.texts(blocked).is_none(), "{control}: the row says nothing of it");
   }
   shown.tree.tick_futures();
   shown.pass();
@@ -43,7 +38,7 @@ fn settings_mcp_synthetic_input_changes_nothing() {
     .set_value(free_port().to_string());
   shown.pass();
   with_synthetic_input(|| shown.click("settings-mcp-use-port"));
-  assert!(shown.texts("settings-mcp-address-blocked").is_some());
+  assert!(shown.texts("settings-mcp-address-blocked").is_none());
   shown.tree.tick_futures();
   shown.pass();
   assert_eq!(
@@ -69,7 +64,11 @@ fn settings_mcp_the_route_asks_to_rotate_and_only_a_person_answers() {
     shown.says("settings-mcp-token-rotate-question", "Rotate the token?")
   });
   with_synthetic_input(|| shown.click("settings-mcp-token-rotate-confirm"));
-  assert!(shown.texts("settings-mcp-token-blocked").is_some(), "not taken");
+  assert!(shown.texts("settings-mcp-token-blocked").is_none(), "nothing said");
+  assert!(
+    shown.texts("settings-mcp-token-rotate-question").is_some(),
+    "still asked"
+  );
   shown.tree.tick_futures();
   shown.pass();
   assert_eq!(shown.token(), token, "not rotated");

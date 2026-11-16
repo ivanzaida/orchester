@@ -1,6 +1,6 @@
 //! The panel of a team profile (`Agents · Profile` `NDZXC` C1, `WPvZx` C2, `QOBF2` C3, ORC-832): what the team holds
-//! of it, the connection it runs on here (the only one of its kind, a pick among several, or none to add), what is
-//! missing and the pinned fix of the first missing part.
+//! of it, the account it runs on here (the only one of its CLI, a pick among several, or one the project has no
+//! connection on yet), what is missing and the pinned fix of the first missing part (`Agents on accounts` C3 `OTVQt`).
 //! `cargo test -p orchester-app --test agents team_hub_profile`.
 
 use std::{collections::BTreeMap, path::Path};
@@ -8,9 +8,10 @@ use std::{collections::BTreeMap, path::Path};
 use orchester_app::routes::{AccountsView, HubFilter, HubView, Route};
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionAccount, ConnectionCheck,
+    ModelCatalog, SignIn,
   },
-  id::{ConnectionId, ResourceId},
+  id::{AgentAccountId, ConnectionId, ResourceId},
   name::Name,
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile, TeamMcpServer},
   store::ConnectionStore,
@@ -22,10 +23,26 @@ use serde_json::json;
 use super::{
   harness::Agents,
   team_hub::{cached, open, team},
+  team_hub_other,
 };
 
 /// A Claude Code connection `name` whose last check found `version`.
 pub(super) fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
+  claude_signed(root, name, version, SignIn::SignedIn)
+}
+
+/// *Claude Home*: a Claude Code connection on a sign-in of its own, where [`claude`]'s is on the CLI's own. This
+/// computer's accounts do not list that sign-in, so it is offered by the connection's name.
+pub(super) fn claude_home(root: &Path, version: &str) -> ConnectionId {
+  connected(root, ("Claude Home", version), SignIn::SignedIn, true)
+}
+
+/// [`claude`] whose last check found the CLI as `sign_in` says.
+pub(super) fn claude_signed(root: &Path, name: &str, version: &str, sign_in: SignIn) -> ConnectionId {
+  connected(root, (name, version), sign_in, false)
+}
+
+fn connected(root: &Path, (name, version): (&str, &str), sign_in: SignIn, own_account: bool) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new(name).expect("name"),
@@ -34,12 +51,20 @@ pub(super) fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
     Timestamp::now(),
   )
   .expect("absolute program");
+  if own_account {
+    connection
+      .set_account(ConnectionAccount::Account {
+        id: AgentAccountId::generate(),
+        folder: root.to_path_buf(),
+      })
+      .expect("an agent CLI runs on an account");
+  }
   connection
     .record_check(ConnectionCheck {
       at: Timestamp::now(),
       result: CheckResult::Available {
         version: version.into(),
-        sign_in: SignIn::SignedIn,
+        sign_in,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,
           vec![CatalogModel::new(
@@ -105,7 +130,7 @@ pub(super) fn builder_using(agents: &Agents, with_program: bool) -> ((ResourceId
 
 pub(super) fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.until("the profile panel", |s| s.exists("team-hub-from-team-cli-value"));
+  agents.until("the profile panel", |s| s.exists("team-hub-from-team"));
 }
 
 #[test]
@@ -114,6 +139,8 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   team(&agents);
   claude(&agents.root, "Claude 2", "2.1.173");
   let (profile, _) = builder(&agents);
+  // An admin edits what the team holds in place (A26); the panel as it reads is a member's.
+  team_hub_other::as_member(&agents);
   show(&mut agents, profile);
   // What the team holds: the kind, never a connection, the model, the effort, the servers and the secrets by name.
   assert_eq!(agents.text("team-hub-from-team-cli-value"), "Claude Code");
@@ -121,15 +148,16 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   assert_eq!(agents.text("team-hub-from-team-effort-value"), "High");
   assert_eq!(agents.text("team-hub-from-team-mcp-value-0-label"), "gh");
   assert_eq!(agents.text("team-hub-from-team-secrets-value-0-label"), "GITHUB_TOKEN");
-  assert!(
-    !agents.exists("team-hub-from-team-tools"),
-    "a profile with no tool has no Tools row"
+  assert_eq!(
+    agents.text("team-hub-from-team-tools-value"),
+    "None",
+    "a profile with no tool says so as a value"
   );
-  // On this computer: the only connection of its kind, chosen without asking.
-  assert_eq!(agents.text("team-hub-runs-on-name"), "Claude Code · Claude 2");
+  // On this computer: the only account of its CLI, chosen without asking.
+  assert_eq!(agents.text("team-hub-runs-on-name"), "Claude Code · Default");
   assert_eq!(
     agents.text("team-hub-runs-on-only"),
-    "· the only Claude Code connection here"
+    "· the only Claude Code account here"
   );
   assert_eq!(agents.text("team-hub-runs-on-sub"), "chosen without asking");
   assert!(!agents.exists("team-hub-pick"));
@@ -153,25 +181,32 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
     "Builder runs here once nothing is missing"
   );
   assert!(agents.exists("team-hub-ready-secret-GITHUB_TOKEN-add-value"));
-  assert!(agents.exists("team-hub-edit"), "an admin has Edit in the head");
+  assert!(
+    !agents.exists("team-hub-more") && !agents.exists("team-hub-edit"),
+    "a member has no … menu in the head and no Edit"
+  );
 }
 
 #[test]
-fn team_hub_profile_with_several_connections_of_its_kind_asks_once_and_keeps_the_pick() {
+fn team_hub_profile_with_several_accounts_of_its_cli_asks_once_and_keeps_the_pick() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  claude(&agents.root, "Claude Home", "2.1.170");
+  claude_home(&agents.root, "2.1.170");
   let (profile, _) = builder(&agents);
   show(&mut agents, profile);
   assert!(agents.exists("team-hub-pick"));
-  assert_eq!(agents.text("team-hub-runs-on-sub"), "2 Claude Code connections here");
+  assert_eq!(agents.text("team-hub-runs-on-sub"), "choose the account it runs on");
   assert_eq!(
     agents.text("team-hub-ready-connection-words"),
-    "Choose a Claude Code connection here"
+    "Choose a Claude Code account here"
   );
-  // The connection is the first thing missing, so it is what the bar offers, naming the first listed.
-  assert!(agents.text("team-hub-fix-use").contains("Use Claude 2 for Builder"));
+  // The account is the first thing missing, so it is what the bar offers, naming the first listed.
+  assert!(
+    agents
+      .text("team-hub-fix-use")
+      .contains("Use Claude Code · Default for Builder")
+  );
   assert_eq!(
     agents.text("team-hub-actions-hint"),
     "Asked once per profile · kept on this computer"
@@ -196,29 +231,93 @@ fn team_hub_profile_with_several_connections_of_its_kind_asks_once_and_keeps_the
   );
 }
 
+/// The project has no Claude Code connection, and this computer has Claude Code's own sign-in: the account is offered,
+/// nothing is substituted before the person takes it, and *Use* makes the project's connection on it and keeps it
+/// (`Workspace::run_profile_on_account`). The project's Codex connection, of another kind, is never offered for it.
 #[test]
-fn team_hub_profile_with_no_connection_of_its_kind_says_what_to_add_and_substitutes_nothing() {
+fn team_hub_profile_with_no_connection_of_its_kind_is_run_on_an_account_and_substitutes_nothing() {
   let mut agents = Agents::new(true);
   team(&agents);
   let (profile, _) = builder(&agents);
   show(&mut agents, profile);
-  assert_eq!(
-    agents.text("team-hub-runs-on-none"),
-    "No Claude Code connection on this computer"
+  // This computer's accounts are read behind the panel's first frame.
+  agents.until("an account is there to run it", |s| {
+    s.exists("team-hub-pick") && !s.exists("team-hub-runs-on-none")
+  });
+  assert_eq!(agents.text("team-hub-runs-on-sub"), "choose the account it runs on");
+  assert!(
+    agents.text("team-hub-pick").contains("Choose a Claude Code account"),
+    "{}",
+    agents.text("team-hub-pick")
   );
-  assert_eq!(agents.text("team-hub-runs-on-sub"), "nothing is substituted");
   assert_eq!(
     agents.text("team-hub-ready-connection-words"),
-    "No Claude Code connection here"
+    "Choose a Claude Code account here"
   );
-  assert!(agents.text("team-hub-fix-add").contains("Add a Claude Code connection"));
-  assert_eq!(agents.text("team-hub-actions-hint"), "Opens Settings › Accounts");
-  agents.click("team-hub-fix-add");
+  assert!(
+    !agents.exists("team-hub-fix-add"),
+    "nothing to add: the account is this computer's"
+  );
+  assert!(
+    agents
+      .text("team-hub-fix-use")
+      .contains("Use Claude Code · Default for Builder")
+  );
+  let claude_connections = |s: &Agents| {
+    s.listed()
+      .connections
+      .iter()
+      .filter(|connection| connection.provider() == AgentProvider::ClaudeCodeCli)
+      .map(|connection| connection.id())
+      .collect::<Vec<_>>()
+  };
+  assert!(
+    claude_connections(&agents).is_empty(),
+    "nothing is made before the press"
+  );
+
+  agents.click("team-hub-fix-use");
+
+  agents.until("the project's connection on the account is the pick", |s| {
+    let made = claude_connections(s);
+    made.len() == 1
+      && ProjectDb::open(&s.root)
+        .expect("database")
+        .connection_pick(profile)
+        .expect("pick")
+        .is_some_and(|pick| pick.connection == made[0])
+  });
+}
+
+/// *Add an account…* in the select chooses nothing: it opens the accounts.
+#[test]
+fn team_hub_profile_add_an_account_opens_the_accounts() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let (profile, _) = builder(&agents);
+  show(&mut agents, profile);
+  let mut select = agents
+    .window
+    .tree
+    .get_element_by_id_mut("team-hub-pick")
+    .and_then(|element| element.as_select())
+    .expect("the select");
+  let add = select
+    .labels()
+    .iter()
+    .position(|option| &**option == "Add an account…")
+    .expect("the last option");
+  select.commit(add);
   agents.until("Settings › Accounts", |s| {
     s.window.navigation().route_now() == Route::Accounts(AccountsView::default())
   });
-  // The project's Codex connection, of another kind, is not substituted for it.
-  assert!(!agents.exists("team-hub-pick"));
+  assert_eq!(
+    ProjectDb::open(&agents.root)
+      .expect("database")
+      .connection_pick(profile)
+      .expect("pick"),
+    None
+  );
 }
 
 #[test]
@@ -232,6 +331,8 @@ fn team_hub_profile_pins_the_fix_of_the_first_missing_part_and_nothing_when_noth
     .expect("database")
     .set_team_mcp_on_here(server, false)
     .expect("off here");
+  // An admin has Save's bar where nothing is to fix (A26); a member has none.
+  team_hub_other::as_member(&agents);
   show(&mut agents, profile);
   assert_eq!(agents.text("team-hub-readiness-count"), "2 missing");
   assert!(agents.text("team-hub-fix-switch-on").contains("Switch on gh"));
@@ -256,4 +357,89 @@ fn team_hub_profile_pins_the_fix_of_the_first_missing_part_and_nothing_when_noth
   // Nothing to fix: no bar, and nothing disabled in its place.
   assert!(!agents.exists("team-hub-actions"));
   assert!(!agents.exists("team-hub-secret-dialog"));
+}
+
+/// A connection whose CLI is signed out is not ready (ORC-848 D11): the panel says so in *Ready here?*, the pinned
+/// action takes the person where to sign in, and a person's press opens it.
+#[test]
+fn team_hub_profile_a_signed_out_connection_is_not_ready_and_the_fix_is_to_sign_in() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  claude_signed(&agents.root, "Claude 2", "2.1.173", SignIn::SignedOut);
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+
+  agents.until("the sign-in fix", |s| s.exists("team-hub-fix-sign-in"));
+  assert_eq!(
+    agents.text("team-hub-ready-connection-words"),
+    "Claude Code is signed out here"
+  );
+  assert!(agents.text("team-hub-fix-sign-in").contains("Sign in to Claude Code"));
+  agents.click("team-hub-fix-sign-in");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Accounts(AccountsView::default())
+  );
+}
+
+#[test]
+fn team_hub_profile_a_signed_in_connection_stays_ready() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  claude(&agents.root, "Claude 2", "2.1.173");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(agents.text("team-hub-ready-connection-words").contains("Claude 2"));
+  assert!(!agents.exists("team-hub-fix-sign-in"));
+}
+
+/// The team's profile Reviewer on Claude Code, which can miss nothing but an account.
+fn reviewer(agents: &Agents) -> ResourceId {
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let team = TeamAgentProfile::new(
+    Name::new("Reviewer").expect("name"),
+    String::new(),
+    PromptText::new("Review the work.").expect("prompt"),
+    (
+      AgentProvider::ClaudeCodeCli,
+      ModelId::new("claude-opus-5-5").expect("model"),
+      ProviderSettings::default(),
+    ),
+  );
+  let local = AgentProfile::from_team(&team, ConnectionId::generate());
+  cached(
+    &mut db,
+    ("team-reviewer", "Reviewer"),
+    serde_json::to_value(&team).expect("json"),
+    &local,
+  )
+}
+
+/// Two profiles of one CLI wait for an account here: *Use for all 2* stands beside *Use*, says how many wait, and one
+/// press of it keeps the account for both, on the one connection the project gets on it.
+#[test]
+fn team_hub_profile_use_for_all_keeps_the_account_for_every_profile_of_the_cli_that_waits() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let (profile, _) = builder(&agents);
+  let reviewer = reviewer(&agents);
+  show(&mut agents, profile);
+  agents.until("the fix for all", |s| s.exists("team-hub-fix-use-all"));
+  assert!(
+    agents.text("team-hub-fix-use-all").contains("Use for all 2"),
+    "{}",
+    agents.text("team-hub-fix-use-all")
+  );
+  assert_eq!(
+    agents.text("team-hub-actions-hint"),
+    "2 Claude Code profiles wait for an account"
+  );
+
+  agents.click("team-hub-fix-use-all");
+
+  agents.until("both are picked on one connection", |s| {
+    let db = ProjectDb::open(&s.root).expect("database");
+    let picks = [profile, reviewer].map(|id| db.connection_pick(id).expect("pick").map(|pick| pick.connection));
+    picks[0].is_some() && picks[0] == picks[1]
+  });
 }

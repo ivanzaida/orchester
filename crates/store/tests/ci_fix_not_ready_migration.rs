@@ -1,4 +1,4 @@
-//! Migration 151, a Fix CI that waits because its pipeline is not ready here: a database before it, with Fix CI events
+//! Migration 159, a Fix CI that waits because its pipeline is not ready here: a database before it, with Fix CI events
 //! sent by hand and automatically and one that stopped, opens with every row kept, takes a `not_ready` event, and still
 //! refuses to change or delete one (the events are append-only).
 //! `cargo test -p orchester-store --test ci_fix_not_ready_migration ci_fix_not_ready_migration`.
@@ -15,7 +15,7 @@ use support::{at, copied_at_version, started_run};
 
 /// The schema before `run_ci_fix_events` took the kind `not_ready`. Migrations are append-only, so a later one still
 /// applies on open.
-const BEFORE_NOT_READY: u32 = 150;
+const BEFORE_NOT_READY: u32 = 158;
 
 fn event(kind: FixEventKind, millis: i64) -> FixEvent {
   FixEvent {

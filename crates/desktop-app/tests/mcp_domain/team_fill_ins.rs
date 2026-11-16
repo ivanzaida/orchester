@@ -11,25 +11,24 @@ use std::{
 use orchester_core::{
   account::AccountCli,
   blob::ContentHash,
-  connection::{DecisionConnection, DecisionServerUrl},
-  id::{AgentAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId, ServerId, UserId},
+  connection::AgentProvider,
+  id::{AgentAccountId, ConnectionId, ProjectId, ResourceId, ServerId, UserId},
   name::Name,
   project::ProjectKey,
   resource::{
-    AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, Slug, TeamMcpServer, TeamReviewer, VersionNumber,
+    AgentProfile, ModelId, PromptText, ProviderSettings, Resource, ResourceBody, Slug, TeamAgentProfile, TeamMcpServer,
+    VersionNumber,
   },
   secret::{SecretName, SecretValue},
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{
-  AppDb, CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink, VersionReference,
-};
+use orchester_store::{AppDb, CachedVersion, ProjectDb, ReferenceTarget, SharingLink};
 use orchester_workspace::tasks::outside::Outside;
 use serde_json::{Value, json};
 
-use super::{Served, accounts::add_account, vault::MemoryVault};
+use super::{Served, accounts::add_account, team_cache, vault::MemoryVault};
 
 const SECRET_VALUE: &str = "fake-value-7Qx2";
 
@@ -45,7 +44,7 @@ pub(super) struct Team {
   pub(super) program_server: ResourceId,
 }
 
-fn team() -> Team {
+pub(super) fn team() -> Team {
   team_as(MemberRole::Owner)
 }
 
@@ -71,8 +70,8 @@ pub(super) fn team_as(standing: MemberRole) -> Team {
     (&[], &HashMap::new()),
   )
   .expect("shared");
-  let codex_profile = team_resource(&mut db, "codex-builder", profile(), vec![role("codex_cli")]);
-  let claude_profile = team_resource(&mut db, "claude-builder", profile(), vec![role("claude_code_cli")]);
+  let codex_profile = team_profile(&mut db, "codex-builder", AgentProvider::CodexCli);
+  let claude_profile = team_profile(&mut db, "claude-builder", AgentProvider::ClaudeCodeCli);
   let program_server = team_resource(
     &mut db,
     "knowledge",
@@ -83,7 +82,7 @@ pub(super) fn team_as(standing: MemberRole) -> Team {
   // The team's resources were set up as its owner; the person then has the role the test asks for.
   db.record_sharing_state(Some(standing), None, None).expect("the role");
   drop(db);
-  Team {
+  let team = Team {
     served,
     repo: seeded.repo,
     app_database: seeded.app_database,
@@ -92,53 +91,63 @@ pub(super) fn team_as(standing: MemberRole) -> Team {
     codex_profile,
     claude_profile,
     program_server,
-  }
+  };
+  team.keep_team();
+  team
 }
 
-fn name(text: &str) -> Name {
+pub(super) fn name(text: &str) -> Name {
   Name::new(text).expect("valid name")
 }
 
-fn profile() -> AgentProfile {
-  AgentProfile::new(
+/// The team's profile `slug`, run by the CLI `provider`, at v1: the server's body in the team's form, which names the
+/// CLI kind, and a local body that names no connection of this computer.
+fn team_profile(db: &mut ProjectDb, slug: &str, provider: AgentProvider) -> ResourceId {
+  let team = TeamAgentProfile::new(
     name("Builder"),
     String::new(),
     PromptText::new("Build.").expect("prompt"),
-    ConnectionId::generate(),
-    ModelId::new("gpt-5.5").expect("model"),
-    ProviderSettings::default(),
-  )
+    (
+      provider,
+      ModelId::new("gpt-5.5").expect("model"),
+      ProviderSettings::default(),
+    ),
+  );
+  let local = AgentProfile::from_team(&team, ConnectionId::generate());
+  let server_body = serde_json::to_value(&team).expect("json");
+  cache_team(db, slug, (server_body, local), vec![ReferenceTarget::CliKind(provider)])
 }
 
-/// The reference a team profile's version has to the CLI kind `role`.
-fn role(role: &str) -> VersionReference {
-  VersionReference {
-    target: ReferenceTarget::Connection(ConnectionId::generate()),
-    name: role.to_owned(),
-    role: Some(role.to_owned()),
-  }
-}
-
-fn team_resource<B: ResourceBody>(
+/// The team's resource `slug` at v1, whose body is the team's form as the server sent it.
+pub(super) fn team_resource<B: ResourceBody>(
   db: &mut ProjectDb,
   slug: &str,
   body: B,
-  references: Vec<VersionReference>,
+  references: Vec<ReferenceTarget>,
 ) -> ResourceId {
-  let id = db
-    .create_resource(
-      Slug::new(slug).expect("slug"),
-      name(slug),
-      &body,
-      Timestamp::from_unix_millis(10),
-    )
-    .expect("resource")
-    .id();
-  db.set_resource_sharing(
-    id,
-    Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
-  )
-  .expect("shared");
+  let server_body = serde_json::to_value(&body).expect("json");
+  cache_team(db, slug, (server_body, body), references)
+}
+
+/// Caches the team's resource `slug` at v1 as the stream caches it: the server's body, and the local body this computer
+/// runs it by.
+fn cache_team<B: ResourceBody>(
+  db: &mut ProjectDb,
+  slug: &str,
+  (server_body, body): (Value, B),
+  references: Vec<ReferenceTarget>,
+) -> ResourceId {
+  // As a computer that syncs the team has it: the server's id, no draft of its own.
+  let resource = Resource::new(
+    ResourceId::generate(),
+    B::KIND,
+    Slug::new(slug).expect("slug"),
+    name(slug),
+    Timestamp::from_unix_millis(10),
+  );
+  let id = resource.id();
+  db.keep_shared_resource(&resource, TaskRevision::try_from(1).expect("revision"))
+    .expect("shared");
   let version = CachedVersion {
     number: VersionNumber::FIRST,
     published_at: Timestamp::from_unix_millis(20),
@@ -146,11 +155,10 @@ fn team_resource<B: ResourceBody>(
       id: UserId::generate(),
       name: "Olena".to_owned(),
     },
-    server_body: json!({}),
+    server_body,
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references,
     local_body: body,
-    waits_here: false,
   };
   db.cache_shared_version(id, &version).expect("cached");
   id
@@ -159,6 +167,12 @@ fn team_resource<B: ResourceBody>(
 impl Team {
   pub(super) fn db(&self) -> ProjectDb {
     ProjectDb::open(&self.repo).expect("the project database opens")
+  }
+
+  /// Keeps the team's resources cached in the project's database in the app's memory, as its stream would once it
+  /// read them from the team server, which these tests do not run.
+  pub(super) fn keep_team(&self) {
+    team_cache::keep_cached_team(&self.served.services().workspace, &self.repo);
   }
 
   /// How often the project's connections were counted as changed: what the screens read again on.
@@ -183,13 +197,36 @@ impl Team {
       .is_some()
   }
 
-  fn codex_connection(&mut self) -> String {
-    let listed = self.served.ok("list_connections", &json!({ "project": "Kontur" }));
-    listed["agents"]
-      .as_array()
-      .and_then(|connections| connections.iter().find(|c| c["provider"] == "codex_cli"))
-      .map(|connection| connection["id"].as_str().expect("an id").to_owned())
-      .unwrap_or_else(|| panic!("a Codex connection is listed: {listed}"))
+  /// Keeps the program of the project's Codex connection as this computer's Codex, as a person sets it in Settings
+  /// › Accounts: a connection Orchester makes for another account runs it.
+  fn codex_program_for_accounts(&self) {
+    use orchester_core::store::ConnectionStore;
+    let program = self
+      .db()
+      .connections()
+      .expect("the project's connections")
+      .iter()
+      .find_map(|connection| connection.executable().map(Path::to_path_buf))
+      .expect("the Codex connection has a program");
+    self
+      .served
+      .services()
+      .workspace
+      .set_agent_program(AccountCli::Codex, &program)
+      .expect("the program is kept");
+  }
+
+  pub(super) fn codex_connection(&mut self) -> String {
+    use orchester_core::store::ConnectionStore;
+    let connections = self.db().connections().expect("the project's connections");
+    connections
+      .iter()
+      .find(|connection| {
+        matches!(connection.kind(), orchester_core::connection::ConnectionKind::Agent(provider)
+          if *provider == orchester_core::connection::AgentProvider::CodexCli)
+      })
+      .map(|connection| connection.id().to_string())
+      .expect("the project has a Codex connection")
   }
 }
 
@@ -197,7 +234,7 @@ fn enable(server: ResourceId, enabled: bool) -> Value {
   json!({ "project": "Kontur", "server": server.to_string(), "enabled": enabled })
 }
 
-fn assert_person_only(error: &Value) {
+pub(super) fn assert_person_only(error: &Value) {
   assert_eq!(error["code"], "person_only", "{error}");
   assert!(
     error["reasons"].as_array().is_some_and(|reasons| reasons.len() > 1),
@@ -206,145 +243,38 @@ fn assert_person_only(error: &Value) {
 }
 
 #[test]
-fn domain_team_pick_profile_connection_keeps_the_pick_for_a_team_profile() {
+fn domain_team_set_profile_account_keeps_the_choice_for_a_team_profile() {
   let mut team = team();
   let connection = team.codex_connection();
-  let args =
-    |profile: ResourceId| json!({ "project": "Kontur", "profile": profile.to_string(), "connection": connection });
+  let args = |profile: &str, account: &str| json!({ "project": "Kontur", "profile": profile, "account": account });
+  let codex = team.codex_profile.to_string();
   let changes = team.connection_changes();
-  let picked = team.served.ok("pick_profile_connection", &args(team.codex_profile));
+  let picked = team.served.ok("set_profile_account", &args(&codex, "default"));
   assert_eq!(picked["profile"]["name"], "codex-builder");
-  assert_eq!(picked["connection"]["id"], connection);
+  assert_eq!(picked["account"]["default"], true, "{picked}");
   let kept = team
     .db()
     .connection_pick(team.codex_profile)
     .expect("read")
     .expect("a pick");
-  assert_eq!(kept.connection.to_string(), connection);
-  assert_eq!(kept.account, None);
+  assert_eq!(
+    kept.connection.to_string(),
+    connection,
+    "on the connection the project has on the account"
+  );
+  assert_eq!(kept.account, Some(AccountCli::Codex.default_account()));
   assert!(
     team.connection_changes() > changes,
     "the screens read the connections again"
   );
+  let listed = team.served.ok("list_connections", &json!({ "project": "Kontur" }));
+  assert!(
+    listed.get("agents").is_none(),
+    "no agent connection is listed: {listed}"
+  );
 
-  let refused = team
-    .served
-    .refused("pick_profile_connection", &args(team.claude_profile));
-  assert_eq!(refused["code"], "connection_does_not_fit", "{refused}");
-  assert_eq!(team.db().connection_pick(team.claude_profile).expect("read"), None);
-
-  let unknown = json!({ "project": "Kontur", "profile": "nobody", "connection": connection });
-  let refused = team.served.refused("pick_profile_connection", &unknown);
+  let refused = team.served.refused("set_profile_account", &args("nobody", "default"));
   assert_eq!(refused["code"], "profile_not_found", "{refused}");
-}
-
-#[test]
-fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
-  let mut team = team();
-  let connection = team.codex_connection();
-  let language = |cli: &str| -> TeamReviewer {
-    serde_json::from_value(json!({"kind": "language", "cli": cli, "model": "m-1", "effort": null})).expect("language")
-  };
-  let decision = |destinations: Value| -> TeamReviewer {
-    serde_json::from_value(
-      json!({"kind": "decision", "model": "d-1", "lowest_threshold": 0.8, "destinations": destinations}),
-    )
-    .expect("decision")
-  };
-  let mut db = team.db();
-  let codex = team_resource(&mut db, "codex-reviewer", language("codex_cli"), Vec::new());
-  let claude = team_resource(&mut db, "claude-reviewer", language("claude_code_cli"), Vec::new());
-  let listing = json!({"kind": "hosts", "hosts": ["api.typesafe.ai"]});
-  let decisions = team_resource(&mut db, "decisions", decision(listing), Vec::new());
-  let members_only = json!({"kind": "members_computers"});
-  let members = team_resource(&mut db, "members", decision(members_only), Vec::new());
-  let old = team_resource(&mut db, "old", language("codex_cli"), Vec::new());
-  make_old_form(&team, old);
-  let (local, hosted) = (
-    decision_connection(&mut db, "local", "http://127.0.0.1:8000"),
-    decision_connection(&mut db, "hosted", "https://api.typesafe.ai/v1"),
-  );
-  drop(db);
-  let args = |reviewer: ResourceId, connection: &str| json!({ "project": "Kontur", "reviewer": reviewer.to_string(), "connection": connection });
-
-  let picked = team.served.ok("pick_reviewer_connection", &args(codex, &connection));
-  assert_eq!(picked["reviewer"]["name"], "codex-reviewer");
-  assert_eq!(picked["connection"]["id"], connection);
-  assert_eq!(
-    team
-      .db()
-      .connection_pick(codex)
-      .expect("read")
-      .map(|pick| pick.connection.to_string()),
-    Some(connection.clone())
-  );
-  let refused = team
-    .served
-    .refused("pick_reviewer_connection", &args(claude, &connection));
-  assert_eq!(refused["code"], "connection_does_not_fit", "{refused}");
-  assert_eq!(team.db().connection_pick(claude).expect("read"), None);
-  let refused = team.served.refused(
-    "pick_reviewer_connection",
-    &json!({"project": "Kontur", "reviewer": "nobody", "connection": connection}),
-  );
-  assert_eq!(refused["code"], "reviewer_not_found", "{refused}");
-
-  team
-    .served
-    .ok("pick_reviewer_connection", &args(decisions, &local.to_string()));
-  assert_eq!(team.db().decision_pick(decisions).expect("read"), Some(local));
-  let refused = team
-    .served
-    .refused("pick_reviewer_connection", &args(decisions, &hosted.to_string()));
-  assert_person_only(&refused);
-  assert_eq!(
-    team.db().decision_pick(decisions).expect("read"),
-    Some(local),
-    "the pick stays"
-  );
-  let refused = team
-    .served
-    .refused("pick_reviewer_connection", &args(decisions, &connection));
-  assert_eq!(refused["code"], "connection_not_found", "{refused}");
-
-  let refused = team
-    .served
-    .refused("pick_reviewer_connection", &args(members, &hosted.to_string()));
-  assert_eq!(refused["code"], "server_not_allowed", "{refused}");
-  assert_eq!(team.db().decision_pick(members).expect("read"), None);
-  let refused = team.served.refused("pick_reviewer_connection", &args(old, &connection));
-  assert_eq!(refused["code"], "not_team_form", "{refused}");
-  assert_eq!(team.db().connection_pick(old).expect("read"), None);
-}
-
-/// Writes the body of the earlier form (it names a connection) over the newest version of `reviewer`, as a cache from
-/// before ORC-887 holds it.
-fn make_old_form(team: &Team, reviewer: ResourceId) {
-  let old = json!({
-    "kind": "language", "connection": {"kind": "connection", "name": "Team language", "role": "codex_cli"},
-    "model": "m-1", "effort": null
-  });
-  let stored = json!({"schema": <TeamReviewer as ResourceBody>::SCHEMA, "body": old}).to_string();
-  let database = rusqlite::Connection::open(team.repo.join(".orchester").join("orchester.db")).expect("database");
-  let changed = database
-    .execute(
-      "UPDATE shared_version_bodies SET local_body = ?1 \
-       WHERE version_id IN (SELECT id FROM resource_versions WHERE resource_id = ?2)",
-      rusqlite::params![stored, reviewer.to_string()],
-    )
-    .expect("the old form");
-  assert_eq!(changed, 1);
-}
-
-fn decision_connection(db: &mut ProjectDb, label: &str, url: &str) -> DecisionConnectionId {
-  let made = DecisionConnection::new(
-    DecisionConnectionId::generate(),
-    name(label),
-    DecisionServerUrl::new(url).expect("server"),
-    None,
-  );
-  db.create_decision_connection(&made).expect("a decision connection");
-  made.id()
 }
 
 /// The account the codex profile's pick keeps, `None` before any pick.
@@ -357,18 +287,20 @@ fn picked_account(team: &Team) -> Option<AgentAccountId> {
 }
 
 #[test]
-fn domain_team_pick_profile_connection_account_other_than_the_effective_one_is_a_persons_to_choose() {
+fn domain_team_set_profile_account_other_than_the_effective_one_is_a_persons_to_choose() {
   let mut team = team();
-  let connection = team.codex_connection();
   let (client, other) = (
     add_account(&team.app_database, AccountCli::Codex, "Client"),
     add_account(&team.app_database, AccountCli::Codex, "Other"),
   );
-  let pick = |account: &str| json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": account });
+  // The fake program the fixture's Codex connection runs is this computer's Codex, for the accounts' connections.
+  team.codex_program_for_accounts();
+  let pick =
+    |account: &str| json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": account });
 
-  // The connection runs on the CLI's Default, so Client is another account: a person's choice.
+  // The project's only Codex connection runs on the CLI's Default, so Client is another account: a person's choice.
   team.served.let_automation_widen(false);
-  let refused = team.served.refused("pick_profile_connection", &pick("Client"));
+  let refused = team.served.refused("set_profile_account", &pick("Client"));
   assert_person_only(&refused);
   assert_eq!(
     team.db().connection_pick(team.codex_profile).expect("read"),
@@ -377,57 +309,41 @@ fn domain_team_pick_profile_connection_account_other_than_the_effective_one_is_a
   );
 
   team.served.let_automation_widen(true);
-  let picked = team.served.ok("pick_profile_connection", &pick("Client"));
-  assert_eq!(picked["account"], client.id().to_string());
+  let picked = team.served.ok("set_profile_account", &pick("Client"));
+  assert_eq!(picked["account"]["id"], client.id().to_string());
   assert_eq!(picked_account(&team), Some(client.id()));
 
   // The same account again, and the pick's account is the one the profile runs on now: no widening.
   team.served.let_automation_widen(false);
-  team.served.ok("pick_profile_connection", &pick("client"));
+  team.served.ok("set_profile_account", &pick("client"));
   assert_eq!(picked_account(&team), Some(client.id()));
 
   // Another account than the earlier pick's is refused again, and the pick stays.
-  assert_person_only(&team.served.refused("pick_profile_connection", &pick("Other")));
+  assert_person_only(&team.served.refused("set_profile_account", &pick("Other")));
   assert_eq!(picked_account(&team), Some(client.id()));
   assert_ne!(client.id(), other.id());
 }
 
 #[test]
-fn domain_team_pick_profile_connection_account_of_the_connection_itself_is_not_gated() {
+fn domain_team_set_profile_account_the_clis_default_is_not_gated() {
   let mut team = team();
-  let connection = team.codex_connection();
   team.served.let_automation_widen(false);
-  let args = json!({
-    "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": "default",
-  });
-  team.served.ok("pick_profile_connection", &args);
+  let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": "default" });
+  team.served.ok("set_profile_account", &args);
   assert_eq!(picked_account(&team), Some(AccountCli::Codex.default_account()));
 }
 
 #[test]
-fn domain_team_pick_profile_connection_refuses_an_account_that_is_not_of_the_connections_cli() {
+fn domain_team_set_profile_account_refuses_an_account_that_is_not_of_the_profiles_cli() {
   let mut team = team();
-  let connection = team.codex_connection();
   add_account(&team.app_database, AccountCli::ClaudeCode, "Lab");
   team.served.let_automation_widen(true);
   for account in ["Lab", "nobody"] {
-    let args = json!({
-      "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": account,
-    });
-    let refused = team.served.refused("pick_profile_connection", &args);
+    let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": account });
+    let refused = team.served.refused("set_profile_account", &args);
     assert_eq!(refused["code"], "account_not_found", "{refused}");
     assert_eq!(team.db().connection_pick(team.codex_profile).expect("read"), None);
   }
-}
-
-#[test]
-fn domain_team_pick_profile_connection_refuses_a_project_that_is_not_the_teams() {
-  let (mut served, _) = Served::seeded_with("empty", Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")));
-  let listed = served.ok("list_connections", &json!({ "project": "Kontur" }));
-  let connection = listed["agents"][0]["id"].as_str().expect("an id").to_owned();
-  let args = json!({ "project": "Kontur", "profile": "anyone", "connection": connection });
-  let refused = served.refused("pick_profile_connection", &args);
-  assert_eq!(refused["code"], "team_project_required", "{refused}");
 }
 
 #[test]
@@ -491,9 +407,11 @@ fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_never_set_by_
   assert_eq!(team.connection_changes(), changes);
 
   team.served.let_automation_widen(true);
-  let made = team.served.ok("update_mcp_server", &named);
-  assert_eq!(made["server"]["launch"]["program"], "uvx", "{made}");
-  assert_eq!(made["server"]["published_version"], 2, "{made}");
+  let sent = team.served.refused("update_mcp_server", &named);
+  assert_eq!(
+    sent["code"], "team_server_not_reached",
+    "allowed, it gets as far as the team server, which this project's link names none of: {sent}"
+  );
   assert!(
     !team.program_set(team.program_server),
     "no tool sets the path on this computer"
@@ -521,4 +439,68 @@ fn domain_team_list_secrets_shows_names_and_that_a_value_is_set_never_the_value(
   assert_eq!(secrets[0]["team"], true);
   assert_eq!(secrets[0]["value_set"], true);
   assert!(!listed.to_string().contains(SECRET_VALUE), "no value is listed");
+}
+
+/// What an MCP client reads of a team project's profiles is what the window shows: the connection this computer picked
+/// for a team profile (ORC-848 D6), a profile as the server has it (not a draft beside v1, D7), and nothing of this
+/// computer's own that the team never published.
+#[test]
+fn domain_team_profiles_report_this_computers_pick_and_leave_out_a_local_draft() {
+  let mut team = team();
+  let mut db = team.db();
+  let designer = AgentProfile::new(
+    name("Designer"),
+    String::new(),
+    PromptText::new("Design.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  );
+  let local = db
+    .create_resource(
+      Slug::new("designer").expect("slug"),
+      name("Designer"),
+      &designer,
+      Timestamp::from_unix_millis(30),
+    )
+    .expect("a profile of this computer's own, never published")
+    .id();
+  drop(db);
+  let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "account": "default" });
+  team.served.ok("set_profile_account", &args);
+
+  let listed = team.served.ok("list_profiles", &json!({ "project": "Kontur" }));
+  let profiles = listed["profiles"].as_array().expect("profiles");
+  let ids: Vec<&str> = profiles.iter().filter_map(|profile| profile["id"].as_str()).collect();
+  assert!(
+    !ids.contains(&local.to_string().as_str()),
+    "a local draft is not the team's: {listed}"
+  );
+  let codex = profiles
+    .iter()
+    .find(|profile| profile["id"] == team.codex_profile.to_string())
+    .unwrap_or_else(|| panic!("the team's profile is listed: {listed}"));
+  assert_eq!(
+    codex["runs_on"]["account"]["default"], true,
+    "the choice is reported, by account: {codex}"
+  );
+  assert_eq!(
+    codex["state"]["state"], "published",
+    "the server's version, no draft: {codex}"
+  );
+  assert_eq!(codex["state"]["published_version"], 1);
+
+  let got = team.served.ok(
+    "get_profile",
+    &json!({ "project": "Kontur", "profile": team.codex_profile.to_string() }),
+  );
+  assert_eq!(got["profile"]["runs_on"]["account"]["default"], true, "{got}");
+  let unpicked = team.served.ok(
+    "get_profile",
+    &json!({ "project": "Kontur", "profile": team.claude_profile.to_string() }),
+  );
+  assert!(
+    unpicked["profile"]["runs_on"].is_null(),
+    "no pick, none reported: {unpicked}"
+  );
 }

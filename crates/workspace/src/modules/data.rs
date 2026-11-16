@@ -10,7 +10,7 @@ use std::{
 use chrono::NaiveDate;
 pub use orchester_core::module::progress::Progress;
 use orchester_core::{
-  id::{ModuleId, TaskId},
+  id::{ModuleId, ResourceId, TaskId},
   module::Module,
   store::TaskStore,
   task::Task,
@@ -21,6 +21,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   burndown::{Burndown, ChartDays, TaskTrack},
+  delivery::DeliveryView,
   measure::Measure,
 };
 use crate::delivery::{
@@ -85,6 +86,10 @@ pub struct ModulePage {
   pub progress: Progress,
   pub burndown: Burndown,
   pub forecast: Forecast,
+  /// Its own branch on the way to its base branch; `None` for a module without one.
+  pub delivery: Option<DeliveryView>,
+  /// The names of the project's published pipelines by id, which the module's acceptance pipeline is one of.
+  pub pipelines: Vec<(ResourceId, String)>,
 }
 
 impl ModulePage {
@@ -103,7 +108,12 @@ impl ModulePage {
       .map(|change| change.task)
       .chain(all.iter().filter(|task| task.module() == Some(id)).map(Task::id))
       .collect();
-    let tracked_tasks: Vec<&Task> = all.iter().filter(|task| tracked.contains(&task.id())).collect();
+    // Its acceptance tasks look at the module's work; they are not part of it.
+    let accepting: Vec<TaskId> = db.module_acceptances(id)?.into_iter().map(|(task, _)| task).collect();
+    let tracked_tasks: Vec<&Task> = all
+      .iter()
+      .filter(|task| tracked.contains(&task.id()) && !accepting.contains(&task.id()))
+      .collect();
     let measure = Measure::of(tracked_tasks.iter().copied());
     let mut tracks = Vec::with_capacity(tracked_tasks.len());
     for task in &tracked_tasks {
@@ -132,8 +142,15 @@ impl ModulePage {
       target: module.details().target(),
       today: local_date(now),
     };
-    let progress = Progress::of(&members, &measure);
+    let own: Vec<&Task> = members.iter().filter(|task| !accepting.contains(&task.id())).collect();
+    let progress = Progress::of(own, &measure);
+    let pipelines = crate::tasks::data::published_pipelines(db)?
+      .into_iter()
+      .map(|pipeline| (pipeline.id, pipeline.name.to_string()))
+      .collect();
     Ok(Some(Self {
+      delivery: DeliveryView::read(db, &module, &members)?,
+      pipelines,
       burndown: Burndown::of(&tracks, measure.unit, days),
       forecast: Forecast::of(progress.remaining(), &delivered, days.today, forecast::SEED),
       progress,

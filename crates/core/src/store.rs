@@ -26,8 +26,8 @@ use crate::{
   pull_request::{PullRequest, SyncAttempt, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
-    CommandEnvironment, Draft, DraftSaved, ModelId, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug,
-    Version, VersionNumber,
+    CommandEnvironment, Draft, DraftSaved, ModelId, Removal, Resource, ResourceBody, ResourceKind, Slug, Version,
+    VersionNumber,
   },
   revision::Revision,
   run::{
@@ -208,10 +208,8 @@ pub trait ResourceStore {
   fn slugs(&self, kind: ResourceKind) -> Result<Vec<Slug>, Self::Error>;
 
   /// Removes resource `id` (`crate::resource::Removal`), atomically with the reads that decide it: while steps of a
-  /// pipeline's latest version or draft run it, [`RemoveMode::Unused`] changes nothing and names them, and
-  /// [`RemoveMode::Reset`] first saves each such pipeline's draft without it, when those steps are exactly the ones
-  /// it lists; otherwise it too changes nothing and names them. Its versions stay.
-  fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, Self::Error>;
+  /// pipeline's latest version run it, nothing changes and the removal names them. Its versions stay.
+  fn remove_resource(&mut self, id: ResourceId, now: Timestamp) -> Result<Removal, Self::Error>;
 
   /// Stores `draft` as the resource's only draft, replacing an existing one. A draft that
   /// repeats the version it is based on ([`Draft::repeats`]) removes the stored draft instead.

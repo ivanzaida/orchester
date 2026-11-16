@@ -124,12 +124,11 @@ fn all_projects_a_move_is_asked_in_place_and_is_a_persons() {
   });
   assert_eq!(window.text("move-project-title"), "Move Ledger to this computer?");
   with_synthetic_input(|| window.press("move-project-confirm"));
-  window.until("who answers", |window| {
-    window
-      .tree
-      .get_element_by_id("move-project-confirm-person-only")
-      .is_some()
-  });
+  window.until("refused to the client", |window| window.refused_press().is_some());
+  assert!(
+    window.tree.get_element_by_id("move-project-question").is_some(),
+    "the question stays"
+  );
   assert_eq!(place(&mut window, ledger), "Your account", "automation moves nothing");
 
   window.press("move-project-keep");

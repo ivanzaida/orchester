@@ -1,19 +1,32 @@
-//! A stale editor must never overwrite another saved draft.
+//! A stale editor must never overwrite another saved draft. The mechanics are shared by every kind that holds drafts;
+//! an instruction stands for them (a pipeline holds none, D-032).
 #[path = "draft_matching/concurrency.rs"]
 mod concurrency;
+
+use std::collections::BTreeSet;
 
 use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{Draft, Pipeline, PipelineEdit, Slug},
+  resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
+fn instruction(text: &str) -> Instruction {
+  Instruction::new(
+    PromptText::new(text).expect("the fixture's instructions are a valid prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Project,
+  )
+  .expect("the fixture's instruction is valid")
+}
+
 #[test]
-fn pipeline_draft_matching_rejects_changed_body_without_overwriting() {
+fn draft_matching_rejects_changed_body_without_overwriting() {
   let folder = tempfile::tempdir().unwrap();
   std::fs::create_dir(folder.path().join(".git")).unwrap();
   let mut db = ProjectDb::create(
@@ -25,7 +38,7 @@ fn pipeline_draft_matching_rejects_changed_body_without_overwriting() {
     ),
   )
   .unwrap();
-  let original = Pipeline::new(vec![]).unwrap();
+  let original = instruction("Original.");
   let id = db
     .create_resource(
       Slug::new("test").unwrap(),
@@ -35,9 +48,7 @@ fn pipeline_draft_matching_rejects_changed_body_without_overwriting() {
     )
     .unwrap()
     .id();
-  let mut edit = PipelineEdit::new(original.clone());
-  edit.set_description("Other editor");
-  let external = edit.validate().unwrap();
+  let external = instruction("Other editor.");
   db.save_draft(id, &Draft::new(external.clone(), None, Timestamp::now()))
     .unwrap();
   let stale = db.save_draft_matching(
@@ -47,9 +58,8 @@ fn pipeline_draft_matching_rejects_changed_body_without_overwriting() {
     &Draft::new(original.clone(), None, Timestamp::now()),
   );
   assert!(matches!(stale, Err(StoreError::DraftChanged(_))));
-  assert_eq!(db.draft::<Pipeline>(id).unwrap().unwrap().body(), &external);
-  edit.set_description("Current editor");
-  let changed = edit.validate().unwrap();
+  assert_eq!(db.draft::<Instruction>(id).unwrap().unwrap().body(), &external);
+  let changed = instruction("Current editor.");
   db.save_draft_matching(
     id,
     &external,
@@ -57,5 +67,5 @@ fn pipeline_draft_matching_rejects_changed_body_without_overwriting() {
     &Draft::new(changed.clone(), None, Timestamp::now()),
   )
   .unwrap();
-  assert_eq!(db.draft::<Pipeline>(id).unwrap().unwrap().body(), &changed);
+  assert_eq!(db.draft::<Instruction>(id).unwrap().unwrap().body(), &changed);
 }

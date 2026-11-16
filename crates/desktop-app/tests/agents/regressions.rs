@@ -27,7 +27,7 @@ fn save_permissions(screen: &Agents, id: ResourceId, permissions: AgentPermissio
 }
 
 #[test]
-fn agents_network_summary_reports_effective_access_in_list_header_and_panel() {
+fn agents_network_summary_reports_effective_access_in_header_and_panel() {
   let mut screen = Agents::new(true);
   let id = screen.profile(false);
   let permissions = AgentPermissions::new(
@@ -43,8 +43,8 @@ fn agents_network_summary_reports_effective_access_in_list_header_and_panel() {
   } else {
     "Network off"
   };
-  assert!(screen.text(&format!("agent-{id}")).contains(expected));
-  screen.click(&format!("agent-{id}"));
+  screen.until("the row", |s| s.exists(&format!("local-hub-row-{id}")));
+  screen.open(id);
   screen.until("the profile's editor", |s| s.exists("agent-permission-summary"));
   assert!(screen.text("agent-permission-summary").contains(expected));
   if fallback {

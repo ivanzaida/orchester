@@ -6,24 +6,34 @@ use orchester_core::{
   secret::SecretName,
   sharing::{ConnectionProblem, Missing},
 };
+use orchester_workspace::readiness::{ReadinessStanding, Undecided};
 
-use crate::ui::icon::Icon;
+use crate::{
+  routes::HubFilter,
+  screens::team_hub::model::{Entry, Kind, Listing},
+  ui::icon::Icon,
+};
 
 /// A fix this computer takes by itself; a part this panel does not fix (a server this app cannot run, a keychain
 /// that cannot say, a reviewer's connection) has none, and no action stands in its place.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Fix {
-  /// Keep the connection the person chose among several as the profile's.
+pub(in crate::screens) enum Fix {
+  /// Keep the account, or the connection, the person chose as what the profile runs on here.
   UseConnection,
   /// Go where a connection of the CLI kind is added.
   AddConnection,
+  /// Go where the connection the profile runs on is signed in.
+  SignIn,
   SwitchOn(ResourceId),
   SetPath(ResourceId),
   AddValue(SecretName),
+  /// Open what the profile names that the team archived in the hub's *Archived*, where an admin restores it (A37
+  /// `AFbIb`).
+  OpenArchived(ResourceId),
 }
 
 impl Fix {
-  pub(super) fn of(part: &Missing) -> Option<Self> {
+  pub(in crate::screens) fn of(part: &Missing) -> Option<Self> {
     match part {
       Missing::Connection {
         problem: ConnectionProblem::PickNeeded,
@@ -33,6 +43,7 @@ impl Fix {
         problem: ConnectionProblem::NoneOfKind,
         ..
       } => Some(Self::AddConnection),
+      Missing::ConnectionSignIn { .. } => Some(Self::SignIn),
       Missing::McpOff { server } => Some(Self::SwitchOn(*server)),
       Missing::McpProgram { server, .. } => Some(Self::SetPath(*server)),
       Missing::Secret { name } => Some(Self::AddValue(name.clone())),
@@ -45,35 +56,104 @@ impl Fix {
   }
 
   /// The words at a row's end.
-  pub(super) const fn link_key(&self) -> &'static str {
+  pub(in crate::screens) const fn link_key(&self) -> &'static str {
     match self {
       Self::UseConnection => "team_hub.fix.link.use",
       Self::AddConnection => "team_hub.fix.link.add",
+      Self::SignIn => "team_hub.fix.link.signIn",
       Self::SwitchOn(_) => "team_hub.fix.link.switchOn",
       Self::SetPath(_) => "team_hub.fix.link.setPath",
       Self::AddValue(_) => "team_hub.fix.link.addValue",
+      Self::OpenArchived(_) => "team_hub.fix.link.openArchived",
     }
   }
 
   /// The glyph of the pinned action.
-  pub(super) const fn glyph(&self) -> Icon {
+  pub(in crate::screens) const fn glyph(&self) -> Icon {
     match self {
       Self::UseConnection => Icon::Check,
       Self::AddConnection => Icon::Plus,
+      Self::SignIn => Icon::LogIn,
       Self::SwitchOn(_) => Icon::Power,
       Self::SetPath(_) => Icon::FolderOpen,
       Self::AddValue(_) => Icon::KeyRound,
+      Self::OpenArchived(_) => Icon::Archive,
     }
   }
 
   /// What the id of the action's control says it is.
-  pub(super) const fn name(&self) -> &'static str {
+  pub(in crate::screens) const fn name(&self) -> &'static str {
     match self {
       Self::UseConnection => "use",
       Self::AddConnection => "add",
+      Self::SignIn => "sign-in",
       Self::SwitchOn(_) => "switch-on",
       Self::SetPath(_) => "set-path",
       Self::AddValue(_) => "add-value",
+      Self::OpenArchived(_) => "open-archived",
     }
+  }
+}
+
+/// What the profile `entry` names that the team archived, which keeps it from running on any computer: its id and its
+/// name (`docs/design/team-configuration.md`, edge case 8).
+pub(in crate::screens::team_hub) fn archived_named(entry: &Entry) -> Option<(ResourceId, &str)> {
+  match entry.standing.as_ref()? {
+    ReadinessStanding::Undecided(
+      Undecided::ChoosesArchivedMcpServer(id, name)
+      | Undecided::UsesArchivedTool(id, name)
+      | Undecided::UsesArchivedInstruction(id, name),
+    ) => Some((*id, name.as_str())),
+    _ => None,
+  }
+}
+
+/// The fix to offer first for `entry`: opening what it names that the team archived, else the fix of the first part
+/// its readiness misses. A profile the project has no connection for is run on an account instead of sending the
+/// person to add one, while this computer has an account of its CLI (`accounts`): the project gets its connection on
+/// the account then.
+pub(in crate::screens::team_hub) fn first(entry: &Entry, accounts: bool) -> Option<Fix> {
+  archived_named(entry).map_or_else(
+    || {
+      entry
+        .standing
+        .as_ref()
+        .and_then(|standing| standing.missing().first())
+        .and_then(Fix::of)
+        .map(|fix| match fix {
+          Fix::AddConnection if accounts => Fix::UseConnection,
+          other => other,
+        })
+    },
+    |(id, _)| Some(Fix::OpenArchived(id)),
+  )
+}
+
+/// The other profiles of `listing` that run with `entry`'s CLI and wait, as it does, for an account to be chosen on
+/// this computer: what *Use for all* sets with it.
+pub(in crate::screens::team_hub) fn also_waiting(listing: &Listing, entry: &Entry, accounts: bool) -> Vec<ResourceId> {
+  listing
+    .shown(HubFilter::All)
+    .filter(|other| other.kind == Kind::Profile && other.id != entry.id)
+    .filter(|other| entry.cli.is_some() && other.cli == entry.cli)
+    .filter(|other| first(other, accounts) == Some(Fix::UseConnection))
+    .map(|other| other.id)
+    .collect()
+}
+
+/// What a row of *Ready here?* shows of a fix: the words of its link and what its control is called in element ids. A
+/// team project's [`Fix`] and a local project's offer it alike, so one section draws both.
+pub(in crate::screens) trait Offer {
+  fn link_key(&self) -> &'static str;
+  fn name(&self) -> &'static str;
+}
+
+impl Offer for Fix {
+  fn link_key(&self) -> &'static str {
+    Self::link_key(self)
+  }
+
+  fn name(&self) -> &'static str {
+    Self::name(self)
   }
 }

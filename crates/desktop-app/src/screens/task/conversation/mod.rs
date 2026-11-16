@@ -45,7 +45,7 @@ use orchester_workspace::{
       outgoing::offer,
     },
     detail::RunView,
-    side_question::send_way,
+    side_question::{send_decision, send_way},
     timeline::{self as items, Item, ItemKind, load::Loaded},
     transcript::{Entry, EntryKind},
   },
@@ -190,6 +190,7 @@ fn side_pane(ctx: &mut Ctx, task: &TaskContext, conversation: &Conversation) -> 
     number: run.run.number().get(),
     agent: side_agent(ctx, run),
     sendable: send_way(&mode).is_some(),
+    decision: send_decision(&task.detail, conversation),
     running: run.run.status() == &RunStatus::Running,
     not_shared: task.detail.not_shared(),
   };

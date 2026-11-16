@@ -6,12 +6,7 @@
 
 use std::time::Duration;
 
-use orchester_core::{
-  connection::{DecisionCheckResult, DecisionConnection},
-  id::ProjectId,
-  resource::ModelId,
-  secret::{SecretValue, SecretVault, VaultKey},
-};
+use orchester_core::{connection::DecisionCheckResult, resource::ModelId, secret::SecretValue};
 use reqwest::{
   Client, StatusCode,
   header::{AUTHORIZATION, HeaderValue},
@@ -21,22 +16,6 @@ use serde::Deserialize;
 use super::DecisionError;
 
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
-
-pub(super) async fn check(
-  project: ProjectId,
-  vault: &dyn SecretVault,
-  connection: &DecisionConnection,
-) -> Result<(DecisionCheckResult, Option<Vec<ModelId>>), DecisionError> {
-  let key = match connection.key() {
-    Some(id) => match vault.read(&VaultKey::new(project, id)) {
-      Ok(key) => Some(key),
-      // Vault diagnostics may contain platform details; neither they nor values are returned or logged.
-      Err(_) => return Ok((DecisionCheckResult::KeyRefused, None)),
-    },
-    None => None,
-  };
-  check_with_key(connection.base_url(), key.as_ref()).await
-}
 
 pub(super) async fn check_with_key(
   url: &orchester_core::connection::DecisionServerUrl,

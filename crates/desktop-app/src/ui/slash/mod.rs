@@ -30,7 +30,7 @@ use parking_lot::Mutex;
 
 use self::argument::Arguing;
 pub use self::{
-  argument::{Applied, Apply, ArgumentPicker, Asked, Badge, Choice, Offer, PickerSearch, Taking},
+  argument::{Applied, Apply, ArgumentPicker, Asked, Badge, Choice, Offer, OtherWay, PickerSearch, Taking},
   chip::{SkillReach, plan_held, sent_chip, sent_command_chip, sent_skill_chip, with_chips},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,

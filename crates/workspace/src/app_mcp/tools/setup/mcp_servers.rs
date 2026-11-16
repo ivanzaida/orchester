@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 pub use super::mcp_server_input::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer};
 use super::{
   mcp_server_json::server_result,
-  team_fill_ins::{self, team_resource_named},
+  team_fill_ins::{self, team_named},
   team_mcp_servers, widening,
 };
 pub(super) use super::{
@@ -98,7 +98,9 @@ pub async fn set_mcp_server_enabled(services: &Services, args: SetMcpServerEnabl
   blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
-    if let Some(team) = team_resource_named(&db, ResourceKind::McpServer, &args.server)? {
+    if db.sharing()?.is_some()
+      && let Some(team) = team_named(&services, &open.repo_root, ResourceKind::McpServer, &args.server)?
+    {
       return team_fill_ins::switch_server(&services, &open.repo_root, &team, args.enabled);
     }
     let server = server_named(&db, &args.server)?;
@@ -129,7 +131,7 @@ pub(super) fn checked(
   secrets: &[Secret],
 ) -> Result<mcp::McpServerDraft, ToolError> {
   let taken: Vec<McpServerName> = db
-    .mcp_servers()?
+    .all_mcp_servers()?
     .into_iter()
     .filter(|server| Some(server.id()) != stored.map(McpServer::id))
     .map(|server| server.name().clone())
@@ -170,6 +172,11 @@ pub(super) fn save_refusal(error: &McpSaveError) -> ToolError {
     McpSaveError::Store(orchester_store::StoreError::ConnectionNotFound(_)) => "not_found",
     McpSaveError::InUse(_) => "in_use",
     McpSaveError::Changed(_) => "changed_meanwhile",
+    McpSaveError::SecretStore { .. } => "secret_store_refused",
+    McpSaveError::SecretGone(_) => "secret_gone",
+    McpSaveError::SecretNotTaken(_) => "secret_not_taken",
+    McpSaveError::NotRestored { .. } => "not_restored",
+    McpSaveError::NotRemoved { .. } => "not_removed",
     McpSaveError::Store(_) | McpSaveError::Server(_) => "project_data",
   };
   let mut reasons = vec![error.message()];

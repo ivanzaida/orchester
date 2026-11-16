@@ -112,7 +112,7 @@ pub async fn decide_approval(services: &Services, args: DecideApproval) -> Resul
   let decided = decision_name(args.decision);
   let reading = services.clone();
   let (project, request) = blocking(move || {
-    crate::decisions::DecisionKind::Approval.require(&reading.workspace)?;
+    reading.require(crate::decisions::DecisionKind::Approval)?;
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let request = db

@@ -83,7 +83,6 @@ fn team_resource<B: ResourceBody + Clone>(db: &mut ProjectDb, slug: &str, server
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: local.clone(),
-    waits_here: false,
   };
   db.cache_shared_version(id, &cached).expect("cached");
   id
@@ -204,14 +203,17 @@ fn team_mcp_readiness_a_profile_with_two_connections_of_its_kind_needs_a_pick_un
   assert_eq!(first["kind"], "connection", "{readiness}");
   assert_eq!(first["problem"], "pick_needed");
   assert_eq!(first["cli"], "codex_cli");
-  assert_eq!(first["fix"], json!({"tool": "pick_profile_connection", "gate": null}));
+  assert_eq!(first["fix"], json!({"tool": "set_profile_account", "gate": null}));
 
+  let args = kontur(json!({"profile": profile.to_string(), "account": "default"}));
+  checkout.call("set_profile_account", &args).expect("picked");
   let connections = checkout
     .call("list_connections", &kontur(json!({})))
     .expect("connections");
-  let chosen = connections["agents"][0]["id"].as_str().expect("a connection");
-  let args = kontur(json!({"profile": profile.to_string(), "connection": chosen}));
-  checkout.call("pick_profile_connection", &args).expect("picked");
+  assert_eq!(
+    connections["runs_on"][0]["runs_on"]["account"]["default"], true,
+    "{connections}"
+  );
   let readiness = profile_readiness(&checkout, profile);
   assert!(!kinds(&readiness).contains(&"connection".to_owned()), "{readiness}");
 }
@@ -236,7 +238,7 @@ fn team_mcp_readiness_a_profile_of_a_cli_this_computer_lacks_needs_a_connection_
     (Some("connection"), Some("none_of_kind"))
   );
   assert_eq!(part["cli"], "claude_code_cli");
-  assert_eq!(part["fix"]["tool"], "add_cli_connection");
+  assert_eq!(part["fix"]["tool"], "set_profile_account");
 }
 
 #[test]

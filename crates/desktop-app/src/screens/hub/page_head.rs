@@ -1,5 +1,5 @@
 //! An opened item's top (`Crumb` and `Page head` in 03b, 04b): the crumb back to its tab's list, then its tile, name
-//! and what it is, with the … menu holding Remove at the right.
+//! and what it is, with the … menu holding Archive at the right.
 use std::sync::Arc;
 
 use lurq::{
@@ -52,14 +52,14 @@ pub(crate) fn crumb(ctx: &Ctx, id: &str, (list, back): (&str, Open), here: Optio
 /// The … menu's width, as wide as the app menu's: without one its panel spans the window.
 pub(crate) const MORE_MENU_WIDTH: f32 = 208.0;
 
-/// The … menu: Remove.
+/// The … menu: Archive.
 pub(crate) struct More {
   pub open: Signal<bool>,
   pub anchor: ElementRef,
-  pub remove: Arc<dyn Fn() + Send + Sync>,
+  pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// The head of the item `id` names (`<id>-page-head`, `<id>-title`, `<id>-sub`, `<id>-more`, `<id>-remove`).
+/// The head of the item `id` names (`<id>-page-head`, `<id>-title`, `<id>-sub`, `<id>-more`, `<id>-archive`).
 pub(crate) fn head(ctx: &mut Ctx, id: &str, (glyph, title, sub): (Icon, &str, &str), more: Option<More>) -> Element {
   let sub = Text::new(sub).id(format!("{id}-sub")).variant(HubText::Hint.role());
   head_with(ctx, id, (glyph, title, sub.into()), (more, None))
@@ -74,10 +74,12 @@ pub(crate) fn head_with(
   (more, versions): (Option<More>, Option<Element>),
 ) -> Element {
   let menu = more.map(|more| {
-    let remove = more.remove.clone();
-    let item = MenuItem::new(format!("{id}-remove"), ctx.t("hub.remove.action"), move || remove())
-      .icon(Icon::Trash2)
-      .render(ctx, &more.open);
+    let archive = more.archive.clone();
+    let item = MenuItem::new(format!("{id}-archive"), ctx.t("local_hub.archive.action"), move || {
+      archive()
+    })
+    .icon(Icon::Trash2)
+    .render(ctx, &more.open);
     let open = more.open.clone();
     let button = IconButton::new(format!("{id}-more"), Icon::Ellipsis, ctx.t("hub.more"))
       .small()

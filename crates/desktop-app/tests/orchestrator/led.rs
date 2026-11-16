@@ -105,7 +105,7 @@ fn orchestrator_led_card_takes_it_here_for_a_person_only() {
   );
 
   with_synthetic_input(|| screen.click(&take));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert_eq!(
     leader(&screen, billing),
     Some(theirs.id()),
@@ -137,7 +137,7 @@ fn orchestrator_led_card_opens_that_conversation_and_moves_nothing() {
   screen.until("the card", |screen| screen.exists(&open));
 
   with_synthetic_input(|| screen.click(&open));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert_eq!(
     screen.route(),
     Route::Project(

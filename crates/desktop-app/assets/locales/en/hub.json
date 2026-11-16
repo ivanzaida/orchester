@@ -13,6 +13,14 @@
     "allSaved": "All changes saved",
     "more": "More actions",
     "crumbSeparator": "/",
+    "role": {
+      "title": "Role",
+      "name": "Role",
+      "responsibilities": "Responsibilities",
+      "responsibilitiesSub": "What it answers for",
+      "instructions": "Role instructions",
+      "instructionsSub": "First in the agent's prompt, before the instructions it is given"
+    },
     "discard": {
       "action": "Discard draft",
       "title": "Discard draft v{{version}}?",
@@ -20,26 +28,8 @@
       "confirm": "Discard draft",
       "keep": "Keep draft"
     },
-    "remove": {
-      "action": "Remove",
-      "title": "Remove {{name}}?",
-      "unused": "No pipeline step uses it. Finished runs keep showing the version they ran.",
-      "unusedInstruction": "No agent gets it from its next run on. Finished runs keep showing the version they ran.",
-      "unusedSkill": "No agent gets this skill now. Finished runs keep showing the version they ran.",
-      "inUseProfile": "Remove and reset deletes it and clears it from every user: each step below loses its profile, and its pipeline’s draft asks you to choose one.",
-      "inUseTool": "Remove and reset deletes it and clears it from every user: each step below loses its tool, and its pipeline’s draft asks you to choose one.",
-      "inUseSkillOne": "Remove and reset deletes it and clears it from every user: {{name}} no longer gets this skill.",
-      "inUseSkillOther": "Remove and reset deletes it and clears it from every user: the agents below no longer get this skill.",
-      "confirm": "Remove",
-      "reset": "Remove and reset",
-      "keep": "Keep it",
-      "stepPublished": "{{pipeline}} v{{version}} · {{number}} {{step}}",
-      "stepDraft": "{{pipeline}} · Draft v{{version}} · {{number}} {{step}}",
-      "reachRole": "{{name}} · Role scope",
-      "reachProject": "{{name}} · Project scope",
-      "reachPipeline": "{{name}} · Pipeline scope",
-      "reachStep": "{{pipeline}} · {{step}} · Step scope",
-      "removed": "Removed {{name}}"
+    "archive": {
+      "line": "Archived {{name}}"
     },
     "leave": {
       "title": "Leave with unsaved changes?",
@@ -49,6 +39,54 @@
     },
     "failure": {
       "stillWorks": "Runs keep going, and the other tabs that read their own data still open."
+    },
+    "new": {
+      "profiles": "New agent",
+      "mcpServers": "New MCP server",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool",
+      "any": "New"
+    },
+    "filter": {
+      "all": "All",
+      "profiles": "Profiles",
+      "mcpServers": "MCP servers",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "memory": "Memory",
+      "archived": "Archived"
+    },
+    "empty": {
+      "all": {
+        "title": "Nothing here yet",
+        "detail": "No agents yet. Start with an agent profile."
+      },
+      "profiles": {
+        "title": "No agent profiles yet",
+        "detail": "A profile is a role, its model and what it may do; pipelines run them."
+      },
+      "mcpServers": {
+        "title": "No MCP servers yet",
+        "detail": "Add a server the project's runs can use."
+      },
+      "instructions": {
+        "title": "No instructions yet",
+        "detail": "Text added to runs: to every run, a role, a pipeline or a step."
+      },
+      "skills": {
+        "title": "No skills yet",
+        "detail": "Instructions and files an agent loads when its task calls for them."
+      },
+      "tools": {
+        "title": "No tools yet",
+        "detail": "Commands and requests agents may run, with their approvals."
+      },
+      "archived": {
+        "title": "Nothing archived",
+        "detail": "Archiving takes a resource out of the lists and pickers. It shows up here, and Restore brings it back."
+      }
     }
   }
 }

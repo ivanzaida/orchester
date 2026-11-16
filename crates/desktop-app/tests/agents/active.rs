@@ -64,7 +64,7 @@ fn agents_active_run_keeps_pinned_identity_metadata_and_task_navigation() {
   );
 }
 
-fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
+pub(super) fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
   let steps = ["Other", "Implement"].map(|title| Step {
     key: StepKey::new(&title.to_lowercase()).expect("key"),
     name: Name::new(title).expect("name"),
@@ -82,16 +82,18 @@ fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
   });
   let body = Pipeline::new(steps.into()).expect("pipeline");
   let resource = db
-    .create_resource(
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Delivery").expect("name"),
       &body,
       Timestamp::now(),
     )
-    .expect("pipeline resource");
+    .expect("pipeline resource")
+    .0;
   let version = db
-    .publish_draft::<Pipeline>(resource.id(), Timestamp::now())
-    .expect("publish");
+    .latest_version::<Pipeline>(resource.id())
+    .expect("publish")
+    .expect("published");
   RunSnapshot::build(
     resource.id(),
     &version,
@@ -110,7 +112,7 @@ fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
   .expect("snapshot")
 }
 
-fn running(db: &mut ProjectDb, snapshot: RunSnapshot, started: Timestamp) -> Run {
+pub(super) fn running(db: &mut ProjectDb, snapshot: RunSnapshot, started: Timestamp) -> Run {
   let created = Timestamp::from_unix_millis(1_700_000_000_000);
   let task = db
     .create_tasks(
@@ -174,15 +176,12 @@ fn republish(db: &mut ProjectDb, run: &Run, profile: ResourceId) {
   steps.reverse();
   steps[0].name = Name::new("Renamed step").expect("name");
   let pinned = run.snapshot().pipeline();
-  db.save_draft(
+  db.publish_pipeline_edit(
     pinned.resource,
-    &Draft::new(
-      Pipeline::new(steps).expect("pipeline"),
-      Some(pinned.number),
-      Timestamp::now(),
-    ),
+    &Pipeline::new(steps).expect("pipeline"),
+    pinned.number,
+    None,
+    Timestamp::now(),
   )
-  .expect("save pipeline");
-  db.publish_draft::<Pipeline>(pinned.resource, Timestamp::now())
-    .expect("publish pipeline");
+  .expect("publish pipeline");
 }

@@ -3,7 +3,12 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::SecretId, memory::MemorySettings, orchestrator::WatchSettings, resource::CommandEnvironment};
+use orchester_core::{
+  id::SecretId,
+  memory::MemorySettings,
+  orchestrator::{Ceilings, WatchSettings},
+  resource::CommandEnvironment,
+};
 use orchester_store::StoreError;
 use orchester_workspace::{
   background,
@@ -83,6 +88,15 @@ pub async fn orchestrator_watch(session: Session, root: PathBuf) -> Result<Watch
   .await
 }
 
+/// The ceilings a new subscription that leads its target to the end takes (Orchestrator › Leading to the end).
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn orchestrator_lead_defaults(session: Session, root: PathBuf) -> Result<Ceilings, Message> {
+  stored((session, root), "orchestrator lead defaults", |_, root| {
+    orchestrator_settings::lead_defaults_in(root)
+  })
+  .await
+}
+
 /// How agents' records are saved and how many each agent gets (Context › Memory).
 #[lurq::query(stale_time = "24h", gc_time = "24h")]
 pub async fn memory_settings(session: Session, root: PathBuf) -> Result<MemorySettings, Message> {
@@ -98,8 +112,8 @@ pub async fn variables(session: Session, root: PathBuf) -> Result<CommandEnviron
 /// The project's connections and MCP servers (Connections), with their last checks as stored.
 #[lurq::query(stale_time = "24h", gc_time = "24h")]
 pub async fn connections(session: Session, root: PathBuf) -> Result<ProjectConnections, Message> {
-  stored((session, root), "connections", |_, root| {
-    ProjectConnections::load_in(root)
+  stored((session, root), "connections", |services, root| {
+    Ok(ProjectConnections::load_in(root)?.with_api_accounts(&services.workspace.api_accounts()?))
   })
   .await
 }

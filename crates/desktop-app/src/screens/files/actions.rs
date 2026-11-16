@@ -1,28 +1,29 @@
 //! *Copy* and *Open in editor*, a person's actions only: synthetic input (an MCP client driving the window)
-//! pressing either is refused and the page says so, so automation never gets a file's text onto the
-//! clipboard or a program started through the viewer. *Open in editor* opens the file on disk with the
+//! pressing either is refused to the client and the page stays as it was, so automation never gets a file's text onto
+//! the clipboard or a program started through the viewer. *Open in editor* opens the file on disk with the
 //! system's default program, off the UI thread; the workspace decides what may be opened
 //! ([`open_target`]).
 
 use std::{path::PathBuf, sync::Arc, thread};
 
-use lurq::{app::events::is_synthetic_input, core::Signal};
+use lurq::core::Signal;
 use orchester_exec::{external, programs::Programs};
 use orchester_workspace::files::{FilePath, FileText, LineRange, OpenError, OpenWith, Version, open_target};
 
 use super::Refusal;
-use crate::ui::code_box::Copier;
+use crate::{
+  mcp::input_gate::{InputGate, persons_press},
+  ui::code_box::Copier,
+};
 
 /// Copies `lines` of `text`, or all of it, when a person asked.
 pub fn copy(
-  clipboard: Copier,
+  (clipboard, gate): (Copier, Option<InputGate>),
   refusal: Signal<Option<Refusal>>,
   (text, lines): (Arc<FileText>, Option<LineRange>),
 ) -> impl Fn() + Send + Sync + 'static {
   move || {
-    if is_synthetic_input() {
-      tracing::warn!("synthetic input pressed Copy in the code viewer; not copied");
-      refusal.set(Some(Refusal::PersonOnly));
+    if !persons_press(gate.as_ref(), "copy a file's text from the code viewer") {
       return;
     }
     refusal.set(None);
@@ -38,14 +39,12 @@ pub fn copy(
 
 /// Opens `path` at `at` of the project at `root` with its default program, when a person asked.
 pub fn open_in_editor(
-  programs: Programs,
+  (programs, gate): (Programs, Option<InputGate>),
   refusal: Signal<Option<Refusal>>,
   (root, at, path): (PathBuf, Version, FilePath),
 ) -> impl Fn() + Send + Sync + 'static {
   move || {
-    if is_synthetic_input() {
-      tracing::warn!("synthetic input pressed Open in editor in the code viewer; not opened");
-      refusal.set(Some(Refusal::PersonOnly));
+    if !persons_press(gate.as_ref(), "open a file in its default program") {
       return;
     }
     refusal.set(None);

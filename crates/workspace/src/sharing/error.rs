@@ -6,7 +6,7 @@ use orchester_api::{
   ErrorCode,
   client::{ClientError, ServerAddress},
 };
-use orchester_core::{id::ResourceId, resource::VersionNumber, secret::VaultError};
+use orchester_core::{id::ResourceId, secret::VaultError};
 use orchester_store::StoreError;
 use thiserror::Error;
 
@@ -19,6 +19,10 @@ pub enum SharingError {
   Client(#[from] ClientError),
   #[error("the database failed: {0}")]
   Store(#[from] StoreError),
+  /// A team task names a pipeline while the team's configuration is being read, or could not be read this session:
+  /// which pipelines are the team's cannot be told, so nothing was sent.
+  #[error(transparent)]
+  TeamNotRead(#[from] crate::team_config::TeamNotRead),
   #[error("the keychain failed: {0}")]
   Vault(#[from] VaultError),
   /// This computer has no token the server accepts: the person signs in again.
@@ -82,14 +86,6 @@ pub enum SharingError {
   /// it, or the server answered `403 not_admin`. Nothing was sent.
   #[error("only an admin changes the team's configuration")]
   NotAdmin,
-  /// Someone published `latest` from the same version meanwhile: the admin decides whether to edit on top of it or to
-  /// publish theirs as the next version anyway.
-  #[error("version {latest} was published from the same version meanwhile")]
-  VersionConflict { latest: VersionNumber },
-  /// Only a person does this: *Use v<N> here* and binding a reference widen what agents may do here, so automation is
-  /// refused and nothing changed.
-  #[error("only a person does this; nothing was changed")]
-  PersonOnly,
   /// A body to send the team names MCP servers of this computer that are not team resources, or (of a kind whose body
   /// is not in the team's form yet) connections or secrets of this computer, which a team resource never holds
   /// (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
@@ -104,16 +100,14 @@ pub enum SharingError {
   /// are theirs. Nothing was sent.
   #[error("resource {resource} has writable folders of this computer ({})", folders.join(", "))]
   WritableFoldersStay { resource: ResourceId, folders: Vec<String> },
+  /// A tool to send the team uses a secret this project does not have, so the team cannot be told its name. Nothing
+  /// was sent.
+  #[error("tool {resource} uses a secret this project does not have")]
+  ToolSecretGone { resource: ResourceId },
   /// Share would upload what the team cannot take in the form it is in ([`ShareRefusal`]): every resource to fix is
   /// listed, and nothing was sent.
   #[error("{} resources cannot be shared as they are", refusals.len())]
   ShareRefused { refusals: Vec<ShareRefusal> },
-  /// The chosen local connection cannot run a reference of the required kind.
-  #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
-  ConnectionKindMismatch {
-    expected: Option<String>,
-    actual: orchester_core::sharing::ConnectionRole,
-  },
 }
 
 impl From<Message> for SharingError {
@@ -148,13 +142,14 @@ impl SharingError {
     match self {
       Self::Client(error) => client_message(error, address),
       Self::Store(error) => messages::store_error(error),
+      Self::TeamNotRead(error) => error.message(),
       Self::Vault(error) => messages::vault_error(error),
       Self::SignedOut => Message::new("servers.errors.signedOut"),
       Self::Interrupted => messages::interrupted(),
       Self::Offline => Message::new("sharing.errors.offline").with("server", address.host().to_owned()),
       Self::NotMember => Message::new("sharing.errors.notMember"),
       Self::ServerMissing => Message::new("sharing.errors.serverMissing"),
-      Self::InvalidAnswer(_) | Self::ConnectionKindMismatch { .. } => Message::new("sharing.errors.invalidAnswer"),
+      Self::InvalidAnswer(_) => Message::new("sharing.errors.invalidAnswer"),
       Self::KeptChanging => Message::new("sharing.errors.keptChanging"),
       Self::ShareInProgress => Message::new("sharing.errors.shareInProgress"),
       Self::NoPasswords => Message::new("servers.errors.noPasswords"),
@@ -171,16 +166,13 @@ impl SharingError {
       Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
       Self::UnprovenServer => Message::new("sharing.errors.unprovenServer"),
       Self::NotAdmin => Message::new("sharing.errors.notAdmin"),
-      Self::VersionConflict { latest } => {
-        Message::new("sharing.errors.versionConflict").with("version", latest.get().to_string())
-      }
-      Self::PersonOnly => Message::new("sharing.errors.personOnly"),
       Self::LocalEntitiesNamed { names, .. } => {
         Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
       }
       Self::PipelineNamesNonTeam { name, .. } => {
         Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
       }
+      Self::ToolSecretGone { .. } => Message::new("sharing.errors.toolSecretGone"),
       // The names only: each refusal's reason is a message of its own ([`ShareRefusal::message`]), said by the caller.
       Self::ShareRefused { refusals } => Message::new("sharing.errors.shareRefused").with(
         "resources",

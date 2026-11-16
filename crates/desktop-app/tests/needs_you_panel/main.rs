@@ -32,7 +32,7 @@ use lurq::{
   app::events::{MouseButton, with_synthetic_input},
   node::element::ElementRef,
 };
-use orchester_app::routes::{MemoryTab, ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::routes::{MemoryTab, MemoryView, ProjectPage, Route, TaskTab, TaskView};
 use orchester_core::{
   id::ResourceId,
   memory::{
@@ -373,7 +373,7 @@ fn needs_you_panel_opens_the_memory_page_on_the_records_waiting_for_approval() {
   click(&mut window, &format!("{item}-action"));
   assert_eq!(
     window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Memory(Some(MemoryTab::Waiting)))
+    Route::Project(seeded.project, ProjectPage::Memory(MemoryView::on(MemoryTab::Waiting)))
   );
   window.until("the panel to close", |window| window.texts("needs-you-panel").is_none());
   window.until("the records waiting for approval", |window| {

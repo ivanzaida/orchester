@@ -11,7 +11,7 @@ use std::{fs, num::NonZeroU32, path::Path};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   connection::AgentProvider,
-  id::{IdempotencyKey, RunId},
+  id::{IdempotencyKey, ResourceId, RunId},
   name::Name,
   resource::{InstructionScope, Skill, SkillFile, SkillFilePath, Slug},
   run::RunStatus,
@@ -21,7 +21,7 @@ use orchester_core::{
 use orchester_ipc::AttachSession;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, git, killed_mid_run, project, reported, scheduler, threads, wait_for};
+use self::support::{Setup, git, given::give_builder, killed_mid_run, project, reported, scheduler, threads, wait_for};
 
 /// Commits a repository skill for Codex, so every worktree of a run has it.
 fn commit_repository_skill(root: &Path) {
@@ -43,8 +43,8 @@ fn set_agent_files(root: &Path, setting: RepositoryAgentFiles) {
     .expect("save the setting");
 }
 
-/// Publishes a skill of `scope` with one reference file.
-fn publish_skill(root: &Path, slug: &str, scope: InstructionScope) {
+/// Publishes a skill of `scope` with one reference file; its id.
+fn publish_skill(root: &Path, slug: &str, scope: InstructionScope) -> ResourceId {
   let mut db = ProjectDb::open(root).expect("open");
   let content = db.put_blob("text/markdown", b"cargo test").expect("blob");
   let file = SkillFile {
@@ -69,6 +69,7 @@ fn publish_skill(root: &Path, slug: &str, scope: InstructionScope) {
     .expect("create")
     .id();
   db.publish_draft::<Skill>(id, Timestamp::now()).expect("publish");
+  id
 }
 
 async fn run_to_success(root: &Path, task: orchester_core::id::TaskId) -> RunId {
@@ -134,14 +135,10 @@ async fn agent_files_off_reach_codex_on_new_and_resumed_sessions() {
 async fn agent_files_skills_are_placed_outside_the_worktree_and_listed_for_codex() {
   let project = project(&Setup::new("Say hello."));
   let root = project.repo.path();
-  publish_skill(root, "run-checks", InstructionScope::Project);
-  publish_skill(
-    root,
-    "review-rules",
-    InstructionScope::AgentRole {
-      role: Name::new("Reviewer").expect("role"),
-    },
-  );
+  let checks = publish_skill(root, "run-checks", InstructionScope::Project);
+  // The Builder does not give it, whatever its scope says.
+  publish_skill(root, "review-rules", InstructionScope::Project);
+  give_builder(root, &[checks]);
   let run = run_to_success(root, project.task).await;
   let db = ProjectDb::open(root).expect("open");
   let execution = db.invocations(run).expect("invocations")[0].execution;
@@ -186,7 +183,8 @@ async fn agent_files_claude_reads_the_skills_folder_and_never_loads_project_sett
     ..Setup::new("Append one line.")
   });
   let root = project.repo.path();
-  publish_skill(root, "run-checks", InstructionScope::Project);
+  let checks = publish_skill(root, "run-checks", InstructionScope::Project);
+  give_builder(root, &[checks]);
   set_agent_files(root, RepositoryAgentFiles::Off);
   let run = run_to_success(root, project.task).await;
   let db = ProjectDb::open(root).expect("open");

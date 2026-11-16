@@ -13,7 +13,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
@@ -33,6 +32,7 @@ use super::{
   preview::{Preview, Shown},
 };
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };
@@ -74,8 +74,6 @@ enum NotOpened {
   No,
   /// Its program did not start.
   Failed(Arc<str>),
-  /// Synthetic input pressed to open it.
-  PersonOnly(Arc<str>),
 }
 
 impl NotOpened {
@@ -84,7 +82,6 @@ impl NotOpened {
     match self {
       Self::No => None,
       Self::Failed(name) => Some(("attachments.openFailed", name)),
-      Self::PersonOnly(name) => Some(("attachments.openPersonOnly", name)),
     }
   }
 }
@@ -94,6 +91,7 @@ impl DevtoolsInspectable for NotOpened {}
 struct SentAttachments {
   open: Signal<Opened>,
   failed: Signal<NotOpened>,
+  gate: Option<InputGate>,
 }
 
 impl Component for SentAttachments {
@@ -103,6 +101,7 @@ impl Component for SentAttachments {
     Self {
       open: ctx.signal(Opened::default()),
       failed: ctx.signal(NotOpened::default()),
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -196,11 +195,11 @@ impl SentAttachments {
       chip = chip.thumbnail(ImageSource::File(path.clone()), image_key(attachment.id()));
     }
     let chip = if attachment.media().kind() == AttachmentKind::Pdf {
-      let (failed, name) = (self.failed.clone(), Arc::<str>::from(name));
+      let (failed, name, gate) = (self.failed.clone(), Arc::<str>::from(name), self.gate.clone());
       chip.opens(
         ctx.t_args("attachments.open", [("name", name.to_string())]),
         move || {
-          open_file(path.clone(), name.clone(), failed.clone());
+          open_file(path.clone(), name.clone(), (failed.clone(), gate.as_ref()));
         },
       )
     } else {
@@ -233,25 +232,23 @@ impl SentAttachments {
       _ => Shown::Image(ImageSource::File(path.clone()), image_key(attachment.id())),
     };
     let close = self.open.clone();
-    let failed = self.failed.clone();
+    let (failed, gate) = (self.failed.clone(), self.gate.clone());
     Preview::new(
       format!("{}-attachment-preview", props.id),
       (&name, attachment.media(), attachment.size()),
       shown,
       move || close.set(Opened::default()),
     )
-    .opens(move || open_file(path.clone(), name.clone(), failed.clone()))
+    .opens(move || open_file(path.clone(), name.clone(), (failed.clone(), gate.as_ref())))
     .render(ctx)
   }
 }
 
 /// Hands the project's copy at `path` to its default program off the UI thread, when a person asked: synthetic input
-/// (an MCP client driving the window) starts no program, and `failed` says so. One that does not open is named in
-/// `failed`.
-fn open_file(path: PathBuf, name: Arc<str>, failed: Signal<NotOpened>) {
-  if is_synthetic_input() {
-    tracing::warn!("synthetic input pressed to open an attached file; not opened");
-    failed.set(NotOpened::PersonOnly(name));
+/// (an MCP client driving the window) starts no program and is refused to the client. One that does not open is named
+/// in `failed`.
+fn open_file(path: PathBuf, name: Arc<str>, (failed, gate): (Signal<NotOpened>, Option<&InputGate>)) {
+  if !persons_press(gate, "open an attached file in its default program") {
     return;
   }
   failed.set(NotOpened::No);

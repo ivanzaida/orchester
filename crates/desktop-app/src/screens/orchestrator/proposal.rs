@@ -2,9 +2,9 @@
 //! delivery v3?` in `3 · Decisions` `bxJZp`): nothing ran, and it waits for the person as a decision card
 //! ([`super::decision`]): *Start <task> on <pipeline>?* with the task, the task's title and the opening of its brief,
 //! its acceptance criteria behind *Show them*, and *Start*, *Dismiss* and *Open <task>*. Only a person starts it:
-//! lurq's synthetic input (an MCP client driving the window) is refused in the handler, visibly, as the other
-//! person-only controls refuse it; *Dismiss* starts nothing and stays open to automation. While a person's start is
-//! carried out it is an event line with the loader.
+//! lurq's synthetic input (an MCP client driving the window) is refused in the handler, to the client that sent it, as
+//! the other person-only controls refuse it; *Dismiss* starts nothing and stays open to automation. While a person's
+//! start is carried out it is an event line with the loader.
 
 use std::sync::Arc;
 
@@ -38,7 +38,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     message::message_text,
-    tinted_note::{person_only, tinted_note},
+    tinted_note::tinted_note,
   },
 };
 
@@ -60,8 +60,6 @@ impl DevtoolsInspectable for ProposalProps {}
 
 pub(super) struct StartProposal {
   decide: DecideAction,
-  /// Synthetic input tried *Start*.
-  refused: Signal<bool>,
   /// The acceptance criteria are shown.
   criteria_open: Signal<bool>,
   /// Whether *Start* takes synthetic input as the person's: in a QA copy only.
@@ -74,7 +72,6 @@ impl Component for StartProposal {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       decide: card::decide_action(ctx),
-      refused: ctx.signal(false),
       criteria_open: ctx.signal(false),
       qa_person: QaPerson::of(ctx),
     }
@@ -100,10 +97,6 @@ impl Component for StartProposal {
         .time(Some(time))
         .render(ctx);
     }
-    let refused = self
-      .refused
-      .get()
-      .then(|| person_only(format!("{id}-person-only"), &ctx.t("orchestrator.proposal.personOnly")));
     let failed = state.error.as_ref().map(|error| {
       tinted_note(
         format!("{id}-error"),
@@ -116,7 +109,6 @@ impl Component for StartProposal {
       .child(decision::head(ctx, id, (Icon::Play, &title), Some(&props.task), &time))
       .child(asked(ctx, id, (&props.task, &props.start)))
       .with_children(self.criteria(ctx, id, &props.start.criteria))
-      .with_children(refused)
       .with_children(failed)
       .child(actions)
       .into()
@@ -145,19 +137,15 @@ impl StartProposal {
     } else {
       let (decide, dismissing) = (self.decide.clone(), deciding(Decision::Dismiss));
       let dismiss = dismiss.on_click(move || decide.run(dismissing.clone()));
-      let (decide, starting, refused, qa_person) = (
+      let (decide, starting, qa_person) = (
         self.decide.clone(),
         deciding(Decision::Accept { widens: Vec::new() }),
-        self.refused.clone(),
         self.qa_person.clone(),
       );
       let start = start.on_click(move || {
-        if qa_person.refuses_input() {
-          tracing::warn!("synthetic input reached the start of a run the Orchestrator proposed; not taken");
-          refused.set(true);
-          return;
+        if !qa_person.refuses("start a run the Orchestrator proposed") {
+          decide.run(starting.clone());
         }
-        decide.run(starting.clone());
       });
       (dismiss, start)
     };

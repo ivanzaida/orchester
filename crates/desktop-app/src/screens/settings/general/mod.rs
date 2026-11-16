@@ -1,14 +1,16 @@
 //! Settings › General (`01 · General` `l838Ty` in the new `orchester.pen`, with *Privacy* as `01b` `Z322E` and
 //! *Updates* as `wSMNG` draw them): *Appearance* with the window's theme and the honest note under it (`theme`), *Plan
 //! limits* with the warning threshold every project's Usage draws (`threshold`), *Services* with the computer's
-//! *Services at once* (`services`), *Privacy* with whether error reports are sent (`error_reports`), *Updates* with
-//! where this copy's update stands, its channel and whether it installs by itself (`updates`), and *This computer*: the
-//! app's version, whether it is a release or a development build and the channel it follows, and where its application
-//! database and its log are, each with Copy. What a row is for is in its (i) tooltip. A change saves as it is made, off
-//! the UI thread, and the header's save state follows it (`super::save_state`). Nothing here widens what agents may do,
-//! so no control is a person's alone.
+//! *Services at once* (`services`), *Privacy* with whether error reports are sent (`error_reports`), *Work* with
+//! whether the computer is kept awake while agents work (`keep_awake`, built without a frame of its own:
+//! `docs/plan/orchestrator-autonomy/frames.md` F), *Updates* with where this copy's update stands, its channel and
+//! whether it installs by itself (`updates`), and *This computer*: the app's version, whether it is a release or a
+//! development build and the channel it follows, and where its application database and its log are, each with Copy.
+//! What a row is for is in its (i) tooltip. A change saves as it is made, off the UI thread, and the header's save
+//! state follows it (`super::save_state`). Nothing here widens what agents may do, so no control is a person's alone.
 
 mod error_reports;
+mod keep_awake;
 mod services;
 mod theme;
 mod threshold;
@@ -55,6 +57,10 @@ pub fn tab(ctx: &mut Ctx, show: Option<GeneralShow>) -> Element {
     .child(
       SettingGroup::new("settings-privacy", ctx.t("settings.general.privacy.title"))
         .row(ctx.mount_keyed::<error_reports::ErrorReportsRow>("settings-error-reports", ())),
+    )
+    .child(
+      SettingGroup::new("settings-work", ctx.t("settings.general.work.title"))
+        .row(ctx.mount_keyed::<keep_awake::KeepAwakeRow>("settings-keep-awake", ())),
     )
     .child(ctx.mount_keyed::<updates::UpdatesGroup>("settings-updates-group", updates::Shown(updates)))
     .child(ctx.mount_keyed::<ThisComputer>("settings-computer", ()));

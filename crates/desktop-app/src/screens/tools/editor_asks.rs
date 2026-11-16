@@ -1,6 +1,6 @@
 //! What a tool's page asks and offers in place: the draft bar's Discard draft, Publish and Create draft, the widening
 //! question at the field and before publishing (which only the person answers), a draft older than the latest
-//! version (*Keep this draft* or *Start from vN*), a change made elsewhere with Reload, and Discard draft and Remove.
+//! version (*Keep this draft* or *Start from vN*), a change made elsewhere with Reload, and Discard draft and Archive.
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
@@ -8,6 +8,7 @@ use orchester_core::resource::{ResourceKind, Tool};
 use orchester_workspace::{
   agents::data::VersionState,
   connections::mcp::Allowed,
+  local_archive::Archivable,
   messages::Message,
   tasks::outside::Outside,
   tools::{
@@ -27,7 +28,8 @@ use crate::{
   routes::{ProjectPage, Route},
   screens::{
     connections::widen::{WidenConfirm, WidenLook, WidenProps},
-    hub::{discard, removal},
+    hub::discard,
+    local_hub::archive,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -112,8 +114,6 @@ impl ToolEditor {
     }
     let label = match next_version(Some(&entry)) {
       None => ctx.t("tools.versionLimit"),
-      // *Publish for the team* in a shared project (02).
-      Some(_) if crate::screens::hub::team::of(&p.project).is_some() => crate::screens::hub::team::publish_label(ctx),
       Some(v) => ctx.t_args("tools.publish", [("version", v.get().to_string())]),
     };
     let publish = ActionButton::new("tool-publish", ButtonKind::Primary, label).icon(Icon::Upload);
@@ -273,19 +273,21 @@ impl ToolEditor {
     ))
   }
 
-  /// Remove, asked under the head; the list opens once it is removed.
-  pub(super) fn remove_question(&self, ctx: &mut Ctx, p: &EditorProps, entry: Option<&ToolEntry>) -> Option<Element> {
-    let entry = entry.filter(|_| self.ask.get() == Ask::Remove)?;
+  /// Archive, asked under the head; the list opens once it is archived.
+  pub(super) fn archive_question(&self, ctx: &mut Ctx, p: &EditorProps, entry: Option<&ToolEntry>) -> Option<Element> {
+    let entry = entry.filter(|_| self.ask.get() == Ask::Archive)?;
     let (keep, navigation, project) = (self.ask.clone(), Navigation::of(ctx), p.project.open.project.id());
-    Some(removal::question(
+    Some(archive::confirm::question(
       ctx,
-      removal::RemoveProps {
-        project: p.project.clone(),
-        resource: entry.id,
+      archive::confirm::Props {
+        root: p.project.open.repo_root.clone(),
+        project,
+        what: Archivable::Resource(entry.id),
         kind: ResourceKind::Tool,
         name: entry.name.clone(),
+        local: true,
         on_keep: Arc::new(move || keep.set(Ask::Nothing)),
-        on_removed: Arc::new(move || navigation.replace(Route::Project(project, ProjectPage::Tools))),
+        on_archived: Arc::new(move || navigation.replace(Route::Project(project, ProjectPage::Tools))),
       },
     ))
   }

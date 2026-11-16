@@ -221,7 +221,7 @@ impl Policy {
       .hide_label()
       .on_change(move |wanted| {
         // One change at a time: a second on the same revision would come back as someone else's.
-        if person.allows(SWITCH) {
+        if person.allows("change a team project's automatic merge") {
           change.run_if_idle(PolicyAction {
             read,
             automatic_merge: wanted,
@@ -232,12 +232,10 @@ impl Policy {
       .then(|| state.data.clone())
       .flatten()
       .and_then(|acted| conflict(ctx, (action, &self.kept, &self.person), policy, &acted));
-    let refused = [SWITCH, AGAIN].into_iter().find_map(|id| self.person.reason(ctx, id));
     row
       .hint(ctx.t("sharing.policy.mergeHint"))
       .control(switch)
       .under_all(conflict)
-      .under_all(refused)
       .render(ctx)
   }
 }
@@ -274,7 +272,7 @@ fn conflict(
   };
   let (change, read, person) = (action.clone(), current.revision, person.clone());
   let again = ActionButton::new(AGAIN, ButtonKind::Secondary, ctx.t(again)).on_click(move || {
-    if person.allows(AGAIN) {
+    if person.allows("send a team project's policy again") {
       change.run_if_idle(PolicyAction {
         read,
         automatic_merge: !now,

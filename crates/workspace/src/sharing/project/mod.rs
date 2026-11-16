@@ -4,6 +4,7 @@
 //! ([`store::RemoteTaskStore`]). While the server cannot be reached, or the person is no longer a
 //! member, nothing is sent: the change fails at once and the list stays read-only.
 
+mod archive_pipeline;
 mod archive_resource;
 mod authority;
 mod automatic;
@@ -25,12 +26,12 @@ mod make_local;
 mod members;
 mod modules;
 pub(super) mod organization;
-mod restore_resource;
 mod share;
 pub mod share_task;
 pub mod state;
 pub mod store;
 mod sync;
+mod team_pipeline;
 mod team_reports;
 pub mod work;
 
@@ -44,7 +45,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
-  archive_resource::NotArchived,
+  archive_resource::{NotArchived, NotRestored},
   authority::TeamAdmins,
   claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},
@@ -53,8 +54,8 @@ pub use self::{
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
   members::{MemberChange, MembersRead, ProjectMembers},
-  restore_resource::NotRestored,
   share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
+  team_pipeline::NotTaken,
 };
 use super::{Behalf, Connection, ServerEntry, Servers, SharingError};
 

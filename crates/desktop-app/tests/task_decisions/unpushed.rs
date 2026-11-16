@@ -13,7 +13,6 @@ use super::{
 };
 
 const TITLE: &str = "task-pull-request-unpushed-title";
-const PERSON_ONLY: &str = "task-pull-request-unpushed-person-only";
 
 /// Makes a bare `origin` whose `main` holds none of the local `main`'s commits, only one of its own; how many
 /// commits the run's branch carries from where it started and from the local `main`, which `origin` lacks, and
@@ -66,8 +65,8 @@ fn choose_create(window: &mut super::support::Window) {
   }
 }
 
-/// Presses `id` as an MCP client's `lurq_interact` does (lurq marks the input synthetic), until the card says that
-/// only a person decides: *Create anyway* can be pressed once whether a pull request can be created is read again.
+/// Presses `id` as an MCP client's `lurq_interact` does (lurq marks the input synthetic), until it is refused to the
+/// client: *Create anyway* can be pressed once whether a pull request can be created is read again.
 fn press_synthetic(page: &mut Page, id: &str) {
   page
     .window
@@ -76,7 +75,7 @@ fn press_synthetic(page: &mut Page, id: &str) {
         with_synthetic_input(|| button.click());
       }
       window.pass();
-      window.texts(PERSON_ONLY).is_some()
+      window.refused_press().is_some()
     });
 }
 
@@ -114,21 +113,9 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
   ask(&mut page);
   for id in ["task-pull-request-anyway", "task-pull-request-unpushed-cancel"] {
     press_synthetic(&mut page, id);
-    assert_eq!(
-      page.text(PERSON_ONLY),
-      "Only a person decides this in the window: window automation can't create it anyway or put this away."
-    );
     assert!(page.has(TITLE), "{id} by window automation leaves the question");
   }
   assert_eq!(fake.pushes(), 0);
-  // A person's new press asks anew, without the refusal of the question before.
-  page.window.until("a new question without the refusal", |window| {
-    if window.texts(PERSON_ONLY).is_some() {
-      choose_create(window);
-    }
-    window.pass();
-    window.texts(PERSON_ONLY).is_none() && window.texts(TITLE).is_some()
-  });
   assert_eq!(fake.pushes(), 0);
   page.window.until("Create anyway to push the run's branch", |window| {
     if let Some(mut button) = window.tree.get_element_by_id_mut("task-pull-request-anyway") {

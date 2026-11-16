@@ -1,4 +1,5 @@
-//! Published and draft pipeline uses, and the versions active runs pinned.
+//! The pipeline steps that use a profile, in each pipeline's latest version (a pipeline holds no draft, D-032), and
+//! the versions active runs pinned.
 use std::sync::Arc;
 
 use orchester_core::{
@@ -11,13 +12,14 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use crate::tasks::pinned_profile::pinned_profile;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineUse {
   pub profile: ResourceId,
   pub pipeline: ResourceId,
   pub name: Arc<str>,
   pub version: u32,
-  pub draft: bool,
   pub position: usize,
   pub step: Arc<str>,
   pub model: Option<ModelId>,
@@ -65,24 +67,14 @@ impl Usage {
       .collect();
     let mut usage = Self::default();
     for resource in db.resources(ResourceKind::Pipeline)? {
-      let latest = db.latest_version::<Pipeline>(resource.id())?;
-      if let Some(version) = &latest {
+      if let Some(version) = db.latest_version::<Pipeline>(resource.id())? {
         usage.steps.extend(pipeline_steps(
           db,
           &resource,
           version.number().get(),
-          false,
           version.body(),
           &running,
         )?);
-      }
-      if let Some(draft) = db.draft::<Pipeline>(resource.id())? {
-        let next = latest
-          .as_ref()
-          .map_or(1, |version| version.number().get().saturating_add(1));
-        usage
-          .steps
-          .extend(pipeline_steps(db, &resource, next, true, draft.body(), &running)?);
       }
     }
     for run in running {
@@ -96,7 +88,6 @@ fn pipeline_steps(
   db: &ProjectDb,
   resource: &Resource,
   version: u32,
-  draft: bool,
   body: &Pipeline,
   running: &[Run],
 ) -> Result<Vec<PipelineUse>, StoreError> {
@@ -114,29 +105,24 @@ fn pipeline_steps(
     };
     let published = db.latest_version::<AgentProfile>(*profile)?;
     let effective = published.as_ref().map(|v| v.body());
-    let count = if draft {
-      0
-    } else {
-      running
-        .iter()
-        .filter(|run| {
-          let pinned = run.snapshot().pipeline();
-          pinned.resource == id
-            && pinned.number.get() == version
-            && executing(run, &step.key)
-            && run
-              .snapshot()
-              .step(&step.key)
-              .is_some_and(|s| matches!(s.executor(),StepExecutor::Agent { profile: p, .. } if p.resource == *profile))
-        })
-        .count()
-    };
+    let count = running
+      .iter()
+      .filter(|run| {
+        let pinned = run.snapshot().pipeline();
+        pinned.resource == id
+          && pinned.number.get() == version
+          && executing(run, &step.key)
+          && run
+            .snapshot()
+            .step(&step.key)
+            .is_some_and(|s| matches!(s.executor(),StepExecutor::Agent { profile: p, .. } if p.resource == *profile))
+      })
+      .count();
     uses.push(PipelineUse {
       profile: *profile,
       pipeline: id,
       name: name.into(),
       version,
-      draft,
       position: index + 1,
       step: step.name.as_str().into(),
       model: model.clone().or_else(|| effective.map(|p| p.model().clone())),
@@ -159,9 +145,11 @@ fn executing(run: &Run, key: &StepKey) -> bool {
 fn active_uses(db: &ProjectDb, run: &Run) -> Result<Vec<ActiveUse>, StoreError> {
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   let pinned = run.snapshot().pipeline();
-  let resource = db
-    .resource(pinned.resource)?
-    .ok_or(StoreError::ResourceNotFound(pinned.resource))?;
+  // A team project's database keeps no copy of the team's pipelines, so it cannot name the one a team run pins: the
+  // run is listed with none of its steps here, where the team's hub reads what uses a team profile from its server.
+  let Some(resource) = db.resource(pinned.resource)? else {
+    return Ok(Vec::new());
+  };
   let started_at = db
     .events(run.id())
     .map_err(crate::tasks::detail::run_store_error)?
@@ -187,9 +175,7 @@ fn active_uses(db: &ProjectDb, run: &Run) -> Result<Vec<ActiveUse>, StoreError> 
     uses.push(ActiveUse {
       profile: profile.resource,
       version: profile.number,
-      profile_name: db
-        .version::<AgentProfile>(profile.resource, profile.number)?
-        .map(|version| version.body().role().as_str().into()),
+      profile_name: pinned_profile(db, run.id(), *profile)?.map(|body| body.role().as_str().into()),
       position: index + 1,
       started_at,
       task: task.key().clone(),

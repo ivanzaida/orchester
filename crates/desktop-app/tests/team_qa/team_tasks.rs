@@ -18,6 +18,7 @@ use super::{on_the_tasks_list, prepared, tasks_route, team::State};
 
 const ROW: &str = "task-row-KON-12";
 const LOCK: &str = "tasks-team-read-only-text";
+const ADMIN_LINE: &str = "tasks-team-admin-line-text";
 const UNAVAILABLE: &str = "tasks-team-unavailable-title";
 
 /// The list on `state`, once the server's tasks show.
@@ -48,12 +49,18 @@ fn team_qa_tasks_a_member_reads_the_servers_tasks_without_new_task() {
   });
   assert_eq!(
     window.text(LOCK),
-    "Only Admins change team tasks, modules and tags: dana-k (Admin) and olha (Server admin). You read, run and claim."
+    "You read, run, claim and close what you hold. Only Admins create, cancel, reopen or move tasks: dana-k (Admin) and olha (Server admin)."
+  );
+  let line = window.text("tasks-team-line");
+  assert!(
+    line.starts_with("Team project on ") && line.ends_with(" · Read from the server · You're a member"),
+    "the list names the team and the role (T7 `lCoNt`): {line}"
   );
   assert!(
-    window.texts("tasks-team-line").is_none(),
-    "the list draws no team line (01 `QdL7N`)"
+    window.texts("tasks-team-settings").is_none(),
+    "the list's line has no Sharing settings"
   );
+  assert!(window.texts(ADMIN_LINE).is_none(), "a member has no Admin line");
   assert_eq!(count(&mut window, TaskListTab::All), "24");
   assert_eq!(count(&mut window, TaskListTab::Active), "18");
   assert_eq!(count(&mut window, TaskListTab::Backlog), "3");
@@ -73,7 +80,7 @@ fn team_qa_tasks_the_sidebar_and_the_status_bar_follow_the_servers_reads() {
 }
 
 #[test]
-fn team_qa_tasks_an_admin_has_new_task_and_no_lock_line() {
+fn team_qa_tasks_an_admin_has_new_task_and_names_the_admins() {
   let (window, server) = prepared(State::Member);
   server.stand_as(Standing::Admin);
   window.navigation().go(tasks_route());
@@ -81,6 +88,20 @@ fn team_qa_tasks_an_admin_has_new_task_and_no_lock_line() {
   window.until("the server's tasks", |window| window.texts(ROW).is_some());
   assert!(window.texts("tasks-new-task").is_some(), "an Admin creates tasks");
   assert!(window.texts(LOCK).is_none());
+  window.until("the Admins named", |window| {
+    window
+      .texts(ADMIN_LINE)
+      .is_some_and(|text| text.concat().contains("dana-k"))
+  });
+  assert_eq!(
+    window.text(ADMIN_LINE),
+    "Admins of this team: bohdan (Admin), dana-k (Admin) and olha (Server admin). Closing a task ends the claim on it."
+  );
+  let line = window.text("tasks-team-line");
+  assert!(
+    line.starts_with("Team project on ") && line.ends_with(" · Read from the server · You're an Admin"),
+    "T8 `vdSWS`: {line}"
+  );
   assert_eq!(role_on_the_board(&mut window), "You're an Admin");
 }
 
@@ -164,11 +185,11 @@ fn team_qa_tasks_a_members_board_has_no_quick_add() {
     window.texts("tasks-board-quick-add").is_none(),
     "a member adds no draft"
   );
-  assert!(window.text(LOCK).contains("and move cards"), "{}", window.text(LOCK));
+  assert!(window.text(LOCK).contains("tasks and cards"), "{}", window.text(LOCK));
 }
 
 #[test]
-fn team_qa_tasks_a_members_row_menu_only_opens_and_copies_the_key() {
+fn team_qa_tasks_a_members_row_menu_offers_only_what_their_claim_allows() {
   let (mut window, _server) = listed(State::Member);
   // The row's actions show under the pointer once the row has its place, which can take a pass after it shows.
   window.until("the row's menu", |window| {
@@ -185,7 +206,9 @@ fn team_qa_tasks_a_members_row_menu_only_opens_and_copies_the_key() {
   window.until("its rows", |window| window.texts("task-more-KON-12-panel").is_some());
   assert!(window.texts("task-more-KON-12-open").is_some());
   assert!(window.texts("task-more-KON-12-copy").is_some());
-  for change in ["done", "cancel", "reopen", "delete"] {
+  // KON-12 is the member's own: they close or block it (decision D4); Cancel, Reopen and Delete are not theirs.
+  assert!(window.texts("task-more-KON-12-done").is_some());
+  for change in ["cancel", "reopen-todo", "reopen-backlog", "delete"] {
     let id = format!("task-more-KON-12-{change}");
     assert!(window.texts(&id).is_none(), "a member has no {change}");
   }

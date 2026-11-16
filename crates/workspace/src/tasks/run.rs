@@ -286,6 +286,7 @@ pub fn check(
     profiles: &latest::<AgentProfile>(db, ResourceKind::AgentProfile)?,
     tools: &latest::<Tool>(db, ResourceKind::Tool)?,
     connections: &connections,
+    chosen_here: &db.connection_picks()?,
     mcp_servers: &db.mcp_servers()?,
     secrets: &db.secrets()?,
   }))

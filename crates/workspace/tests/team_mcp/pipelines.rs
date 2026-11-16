@@ -54,7 +54,6 @@ fn cache(db: &mut ProjectDb, id: ResourceId, body: &Pipeline) {
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references: Vec::new(),
     local_body: body.clone(),
-    waits_here: false,
   };
   db.cache_shared_version(id, &version).expect("its version");
 }
@@ -64,16 +63,15 @@ fn own_pipeline(db: &mut ProjectDb, slug: &str, id: Option<ResourceId>) -> Resou
   let Some(id) = id else {
     let body = crate::fixture::one_step(ResourceId::generate(), "Say hello.");
     let created = db
-      .create_resource(
+      .create_published(
         Slug::new(slug).expect("slug"),
         name(slug),
         body.body(),
         Timestamp::now(),
       )
       .expect("a pipeline")
+      .0
       .id();
-    db.publish_draft::<Pipeline>(created, Timestamp::now())
-      .expect("published");
     return created;
   };
   team_pipeline(db, id, slug);

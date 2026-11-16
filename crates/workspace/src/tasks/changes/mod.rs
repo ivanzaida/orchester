@@ -41,10 +41,12 @@ use crate::{
 
 mod count;
 mod follow;
+mod taken;
 
 pub use self::{
   count::listed_files,
   follow::{Follower, Refresh},
+  taken::{RunChangesView, run_changes_view_in, run_taken_in},
 };
 
 /// The `git` program, looked up on the `PATH` like the runner does.

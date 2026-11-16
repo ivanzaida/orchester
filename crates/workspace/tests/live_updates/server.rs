@@ -6,6 +6,7 @@
 //! session can be revoked, streams dropped or refused for a while, and every other request refused.
 
 mod publishing;
+mod releases;
 mod resources;
 mod runs;
 
@@ -378,6 +379,9 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     }
     ("PATCH", ["tasks", task]) => change(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("POST", ["tasks", task, "claim"]) => claim(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
+    ("DELETE", ["tasks", task, "claim"]) => {
+      releases::release(shared, &user, task.parse().expect("a task id"), &mut stream)
+    }
     ("PUT", ["tasks", task, "run"]) => {
       runs::run(shared, &user, task.parse().expect("a task id"), &request, &mut stream)
     }

@@ -1,0 +1,203 @@
+{
+  "local_hub": {
+    "local": "Local",
+    "reading": "Reading…",
+    "loadFailed": "The agents of this project couldn't be read",
+    "group": {
+      "needs": "Needs you",
+      "ready": "Ready",
+      "off": "Off",
+      "archived": "Archived"
+    },
+    "line": {
+      "archived": "Archived {{date}}, {{time}}",
+      "draft": "Draft · not published yet",
+      "connectionNone": "No {{cli}} connection",
+      "connectionPick": "Choose a {{cli}} account",
+      "connectionSignIn": "Sign in to {{cli}}",
+      "many": "{{count}} things missing",
+      "off": "Off",
+      "offRuns": "Off · {{names}} run without it",
+      "on": "On",
+      "onUsed": "On · used by {{names}}",
+      "programHere": "Set its program path",
+      "programOf": "Set the program path of {{server}}",
+      "ready": "Ready",
+      "runsOn": "{{cli}} · {{account}}",
+      "saveRefused": "Couldn't save · unsaved changes",
+      "secret": "Secret {{name}} has no value",
+      "undecided": "Can't tell yet whether it is ready",
+      "unsaved": "Unsaved changes · {{rest}}"
+    },
+    "chip": {
+      "archived": "Archived",
+      "off": "Off",
+      "ready": "Ready",
+      "unsaved": "Unsaved changes",
+      "draft": "Unpublished edits",
+      "chooseConnection": "Choose a connection",
+      "addConnection": "Add a connection",
+      "needsProgram": "Needs the program path",
+      "needsSecret": "Needs a secret value"
+    },
+    "panel": {
+      "connection": "Runs on",
+      "mcpServers": "MCP servers",
+      "usedBy": "used by {{names}}",
+      "givenBy": {
+        "one": "given by 1 profile",
+        "other": "given by {{count}} profiles"
+      },
+      "wasUsedBy": "was used by {{names}}"
+    },
+    "readiness": {
+      "title": "Ready?",
+      "missing": "{{count}} missing"
+    },
+    "mcp": {
+      "cancel": "Cancel",
+      "gone": "This MCP server is no longer in the project.",
+      "on": "On",
+      "onHint": "Runs may use it",
+      "onlyHere": "Only on this computer",
+      "takesSecret": "{{name}} ← secret {{secret}}",
+      "fix": {
+        "setPath": "Set program path",
+        "setPathHint": "Asked once",
+        "addValue": "Add a value for {{name}}",
+        "addValueHint": "Kept in the OS secret store"
+      },
+      "save": "Save",
+      "added": "added {{date}}",
+      "runsAs": "Runs as",
+      "asProgram": "A program on this computer",
+      "asRemote": "A remote server (HTTP)",
+      "programNone": "Not set · nothing is guessed or found by name",
+      "programSub": "Path to the program",
+      "choose": "Choose…",
+      "found": "found",
+      "moved": "found, but outside what a run may start",
+      "pathTo": "path to {{program}}",
+      "changedSub": "changed, not saved yet",
+      "tools": "Run without asking",
+      "toolsNone": "None · each use asks",
+      "editingTitle": "Editing {{name}} · not saved yet",
+      "editingBody": "{{fields}} changed · Save applies them to this project at once; Cancel puts back what was saved",
+      "secretChanged": "{{name}} value",
+      "refusedTitle": "Couldn't save {{name}}: {{reason}}",
+      "refusedBody": "Nothing was saved, not even the other fields. Your edits stay in the form.",
+      "refusedSecretBody": "Nothing was saved, not even the other fields. Your edits stay in the form; allow Orchester to use the system's secret store, then Save again.",
+      "allowThenSave": "Allow access, then Save again",
+      "notReadyProgram": "Not ready: set the program path. Runs whose pipeline uses {{name}} don't start until then.",
+      "notReadySecret": "Not ready: {{secret}} has no value. Runs whose pipeline uses {{name}} don't start until then."
+    },
+    "archive": {
+      "action": "Archive",
+      "more": "More"
+    },
+    "archived": {
+      "nothingTitle": "Pick an archived resource",
+      "nothingDetail": "Archived resources are hidden from lists and pickers, and the runs that pinned them were stopped. Pick one to see what archiving did and to restore it.",
+      "restore": "Restore {{name}}",
+      "restoreHint": "Back in lists and pickers at once · stopped runs stay stopped",
+      "run": "{{key}} · {{title}}",
+      "stoppedOne": "Archiving stopped the run that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; that run stays stopped, so run it again to use it.",
+      "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
+      "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
+      "title": "Archived: hidden from lists and pickers",
+      "readOnly": "· read-only until it is restored"
+    },
+    "profile": {
+      "title": "Profile",
+      "connection": "Connection",
+      "effortDefault": "CLI default",
+      "none": "None",
+      "version": "{{version}} · published {{date}}",
+      "add": "Add",
+      "nothingToAdd": "There is nothing else of this kind to give",
+      "addConnection": "Add an account…",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools"
+    },
+    "runsOn": {
+      "label": "Runs on",
+      "choose": "Choose an account",
+      "sub": "The account changes at once · a model or effort waits for Save",
+      "value": "{{cli}} · {{name}} · {{model}}",
+      "valueEffort": "{{cli}} · {{name}} · {{model}} · {{effort}}",
+      "unchosen": "Choose an account · {{model}}",
+      "unchosenEffort": "Choose an account · {{model}} · {{effort}}",
+      "placeholder": "Choose an account and a model",
+      "reading": "reading its models…",
+      "connecting": "Making the project's connection on the account…",
+      "tip": "{{cli}} · {{name}}",
+      "who": "{{cli}} · {{plan}} plan",
+      "provider": "{{cli}} · {{host}}",
+      "notSignedIn": "not signed in",
+      "limitReached": "limit reached",
+      "sentTo": "Prompts, repository content and command output are sent to {{host}}."
+    },
+    "edit": {
+      "widenTitle": "Allow these changes to the agent profile?",
+      "allow": "Allow and continue",
+      "keep": "Keep editing",
+      "makes": "Save makes {{version}} · runs keep the version they started on",
+      "invalid": "Fix what is marked above to save"
+    },
+    "ready": {
+      "ready": "Ready",
+      "noCli": "Its connection is gone, and {{model}} names no agent CLI to choose another of",
+      "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
+      "noneOfKind": "No {{cli}} connection on this computer",
+      "onlyOne": "It runs on nothing here · {{name}} is the only account of its CLI",
+      "pickAmong": "{{count}} {{cli}} accounts · choose one",
+      "serverOff": "Off · its runs go without it",
+      "noValue": "No value set",
+      "valueSet": "Value set"
+    },
+    "secret": {
+      "field": "Value",
+      "placeholder": "Paste the value",
+      "blank": "Enter a value.",
+      "keep": "Use this value",
+      "cancel": "Cancel",
+      "title": "Replace the value of {{name}}",
+      "what": "The value goes to the system's secret store when you Save the server, and is never shown. Cancel puts nothing in it.",
+      "whatCreate": "The value goes to the system's secret store when you Create the server, and is never shown. Cancel puts nothing in it.",
+      "dots": "••••••••••••",
+      "none": "No value set",
+      "replace": "Replace",
+      "set": "Set value",
+      "never": "secret value · never shown",
+      "typed": "new value · not saved yet",
+      "refused": "not stored · the secret store refused it",
+      "missing": "no value yet"
+    },
+    "leave": {
+      "title": "Discard the unsaved changes to {{name}}?",
+      "what": "Opening another entry now puts {{name}} back as it was saved. Save it first to keep the changes.",
+      "keep": "Keep editing",
+      "discard": "Discard changes"
+    },
+    "given": {
+      "usedBy": "Used by",
+      "usedBySub": "The agent profiles that give it to their agents",
+      "none": "No agent profile gives it, so no agent gets it"
+    },
+    "tool": {
+      "title": "Tool",
+      "widenTitle": "Allow these changes to the tool?",
+      "execution": "A command tool runs its program with your rights, network access and no sandbox, on files agents wrote. Allow it only for a command you would let agents run that way."
+    },
+    "instruction": {
+      "title": "Instruction"
+    },
+    "skill": {
+      "title": "Skill"
+    },
+    "text": {
+      "gone": "It is no longer in this project."
+    }
+  }
+}

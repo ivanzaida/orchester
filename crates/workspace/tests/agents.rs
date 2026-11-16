@@ -23,7 +23,7 @@ use orchester_core::{
     capability::{PermissionOption, PermissionProblem},
   },
   project::{Project, ProjectKey},
-  resource::{AgentProfile, Draft, ModelId, PublishError, ResourceKind, VersionNumber},
+  resource::{AgentProfile, ChosenResources, Draft, ModelId, PublishError, ResourceKind, VersionNumber},
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
@@ -36,6 +36,7 @@ use tempfile::TempDir;
 
 static READ_ONLY: AgentPermissions = AgentPermissions::before_permissions();
 static NO_MCP_SERVERS: McpServerSelection = McpServerSelection::none();
+static NONE_GIVEN: ChosenResources = ChosenResources::EMPTY;
 
 fn project_db() -> (TempDir, ProjectDb) {
   let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
@@ -108,6 +109,9 @@ fn form<'a>(
     effort,
     permissions: &READ_ONLY,
     mcp_servers: &NO_MCP_SERVERS,
+    instruction_resources: &NONE_GIVEN,
+    skills: &NONE_GIVEN,
+    tools: &NONE_GIVEN,
   }
 }
 
@@ -165,6 +169,9 @@ fn profile_form_reports_each_problem() {
     effort: None,
     permissions: &READ_ONLY,
     mcp_servers: &NO_MCP_SERVERS,
+    instruction_resources: &NONE_GIVEN,
+    skills: &NONE_GIVEN,
+    tools: &NONE_GIVEN,
   }
   .profile()
   .expect_err("invalid form");

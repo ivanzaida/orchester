@@ -23,7 +23,6 @@ use orchester_core::{
 };
 use orchester_workspace::{
   decisions::DecisionKind,
-  messages::Message,
   tasks::{detail::RunView, return_work},
 };
 
@@ -35,7 +34,7 @@ use super::{
   step_label,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, answerer},
+  mcp::input_gate::{Guarded, InputGate, press_answerer},
   navigation::pointed::PointedCard,
   theme::{ExtraSpacing, ExtraTypography, TaskText},
   ui::{
@@ -81,8 +80,6 @@ pub struct ReturnEnded {
   target: Signal<Target>,
   note: Signal<String>,
   asked: Signal<Option<Returning>>,
-  /// Window input pressed *Return to … with note* while the person does not let automation decide for them.
-  person_only: Signal<bool>,
   gate: Option<InputGate>,
   pointing: Pointing,
 }
@@ -95,7 +92,6 @@ impl Component for ReturnEnded {
       target: ctx.signal(Target(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
-      person_only: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
       pointing: Pointing::new(ctx),
     }
@@ -152,12 +148,6 @@ impl Component for ReturnEnded {
           .as_ref()
           .map(|reason| reason_line("task-return-ended-reason", reason)),
       )
-      .with_children(self.person_only.get().then(|| {
-        field_error(
-          "task-return-ended-person-only",
-          &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
-        )
-      }))
       .with_children(refused.map(|refused| field_error("task-return-ended-refused", &message_text(ctx, &refused))));
     self.pointing.ring(card)
   }
@@ -234,18 +224,19 @@ impl ReturnEnded {
     let returned = |by| return_work::command(parts.run, step.clone(), (note.clone(), None), (None, by));
     let (person, automation) = (returned(Answerer::Person), returned(Answerer::Automation));
     let (action, asked) = (action.clone(), self.asked.clone());
-    let (gate, person_only) = (self.gate.clone(), self.person_only.clone());
+    let gate = self.gate.clone();
     button.on_click(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
       if action.state().get_untracked().is_pending() {
         return;
       }
-      let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
-        tracing::warn!("synthetic input returned an ended run without consent; not taken");
-        person_only.set(true);
+      let Some(by) = press_answerer(
+        gate.as_ref(),
+        Guarded::Decision(DecisionKind::Stuck),
+        "return an ended run to an earlier step",
+      ) else {
         return;
       };
-      person_only.set(false);
       asked.set(Some(Returning));
       let command = if by == Answerer::Automation {
         &automation

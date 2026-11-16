@@ -22,7 +22,15 @@ pub struct NamedTarget {
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum WatchCommand {
   /// `/watch-task` or `/watch-module` with its chips and the order typed after them (blank: the project's default).
-  Watch { targets: Vec<NamedTarget>, order: String },
+  /// `to_end` when the person had it lead its targets to the end ([`super::WatchMode::Lead`]): chosen in the command's
+  /// picker, or with the words for it at the start of the order. A command kept before the entry held it leads to the
+  /// end only by those words.
+  Watch {
+    targets: Vec<NamedTarget>,
+    order: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    to_end: bool,
+  },
   /// `/unwatch` of these targets.
   Unwatch { targets: Vec<NamedTarget> },
   /// `/unwatch` of everything the conversation watches.

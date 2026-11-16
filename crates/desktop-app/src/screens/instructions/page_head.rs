@@ -1,5 +1,5 @@
 //! The top of an instruction's page (`02b Instruction` `Sn37u`): the crumb back to Instructions, the page head with the
-//! rule's name, scope and owner and the … menu with Remove, and the draft bar — what the rule is now (*Draft written
+//! rule's name, scope and owner and the … menu with Archive, and the draft bar — what the rule is now (*Draft written
 //! by automation · Published v3* when automation saved it), what publishing does, Discard draft and Publish.
 use std::sync::Arc;
 
@@ -21,7 +21,6 @@ use crate::{
     draft_bar::{DraftBar, Standing},
     page_head::MORE_MENU_WIDTH,
     parts::tile,
-    team,
   },
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
@@ -52,27 +51,22 @@ pub fn crumb(ctx: &Ctx, selection: &Selection, new: bool) -> Element {
     .into()
 }
 
-/// The … menu under the head: Remove.
+/// The … menu under the head: Archive.
 pub struct More {
   pub open: Signal<bool>,
   pub anchor: ElementRef,
-  pub remove: Arc<dyn Fn() + Send + Sync>,
+  pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet. In a
-/// shared project `shared`, the team's version and where it stands here, takes the line's place (`Sub` `Du8OB` in 02),
-/// and a member has `versions` at its end in the menu's place (`Versions` `EGuXw` in 03).
-pub fn head(
-  ctx: &mut Ctx,
-  (title, sub, sub_id): (&str, &str, &str),
-  more: Option<More>,
-  (shared, versions): (Option<Row>, Option<Element>),
-) -> Element {
+/// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet.
+pub fn head(ctx: &mut Ctx, (title, sub, sub_id): (&str, &str, &str), more: Option<More>) -> Element {
   let menu = more.map(|more| {
-    let remove = more.remove.clone();
-    let item = MenuItem::new("instruction-remove", ctx.t("hub.remove.action"), move || remove())
-      .icon(Icon::Trash2)
-      .render(ctx, &more.open);
+    let archive = more.archive.clone();
+    let item = MenuItem::new("instruction-archive", ctx.t("local_hub.archive.action"), move || {
+      archive()
+    })
+    .icon(Icon::Trash2)
+    .render(ctx, &more.open);
     let open = more.open.clone();
     let button = IconButton::new("instruction-more", Icon::Ellipsis, ctx.t("hub.more"))
       .small()
@@ -86,13 +80,10 @@ pub fn head(
       .child(button)
       .child(menu_at_end(more.anchor, more.open, panel))
   });
-  let sub: Element = match shared {
-    Some(shared) => shared.into(),
-    None => Text::new(sub)
-      .id(sub_id.to_owned())
-      .variant(HubText::Hint.role())
-      .into(),
-  };
+  let sub: Element = Text::new(sub)
+    .id(sub_id.to_owned())
+    .variant(HubText::Hint.role())
+    .into();
   Row::new()
     .id("instruction-page-head")
     .width(Dimension::Pct(100.0))
@@ -112,7 +103,6 @@ pub fn head(
         .child(sub),
     )
     .with_children(menu)
-    .with_children(versions)
     .into()
 }
 
@@ -124,8 +114,6 @@ pub struct Now {
   pub invalid: bool,
   pub automated: bool,
   pub saved_at: Option<orchester_core::time::Timestamp>,
-  /// The project is shared: a draft stays on this computer until it is published for the team (02).
-  pub shared: bool,
 }
 
 pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
@@ -152,9 +140,6 @@ pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
     (Standing::Draft, words::automation_version(ctx, state))
   } else {
     match state {
-      VersionState::Draft { published } if now.shared => {
-        (Standing::Draft, team::draft_status(ctx, published, &saved()))
-      }
       VersionState::Published(_) => (Standing::Published, words::version(ctx, state)),
       VersionState::StaleDraft { .. } => (Standing::Attention, words::version(ctx, state)),
       VersionState::Draft { published: None } => (Standing::Draft, ctx.t("instructions.newDraft")),
@@ -171,11 +156,7 @@ pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
       ),
     }
   };
-  let sub = if now.shared && matches!(state, VersionState::Draft { .. }) {
-    team::draft_sub(ctx, None, version + 1)
-  } else {
-    words::footer(ctx, tab, state)
-  };
+  let sub = words::footer(ctx, tab, state);
   // `instruction-save`: its status keeps the id the rule's save state had (`instruction-save-status`).
   let mut draft = DraftBar::new("instruction-save", standing, status).sub(sub);
   for action in actions {

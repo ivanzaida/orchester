@@ -10,17 +10,20 @@ use orchester_core::{
   name::Name,
   resource::{
     AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceBody, Skill, Slug,
-    TeamMcpServer, VersionNumber,
+    TeamAgentProfile, TeamCounterparts, TeamMcpServer, VersionNumber,
   },
   sharing::{MemberRole, SharedPerson, TaskRevision},
-  store::ResourceStore,
+  store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{AppDb, CachedVersion, ProjectDb, ResourceSharing, SharingLink, StoredServer};
 use orchester_workspace::tools::{data::create_tool, form::CommandText};
 use serde_json::{Value, json};
 
-use super::{harness::Agents, support::project_id};
+use super::{
+  harness::Agents,
+  support::{project_id, team_cache},
+};
 
 /// Links the project as its owner and caches the team's resources: the skill `review-diff` and the instruction
 /// `Project rules` (always ready), the MCP server `github` nobody decided on here (needs the person) and `playwright`
@@ -83,8 +86,8 @@ pub(super) fn team_as(agents: &Agents, role: Option<MemberRole>) -> [ResourceId;
     (body.clone(), serde_json::from_value(body).expect("a team MCP server"))
   };
   let ids = [
-    cached(&mut db, ("review-diff", "review-diff"), json!({}), &skill),
-    cached(&mut db, ("project-rules", "Project rules"), json!({}), &rules),
+    cached(&mut db, ("review-diff", "review-diff"), json!(skill), &skill),
+    cached(&mut db, ("project-rules", "Project rules"), json!(rules), &rules),
     cached(&mut db, ("github", "github"), remote("github").0, &remote("github").1),
     cached(
       &mut db,
@@ -97,7 +100,15 @@ pub(super) fn team_as(agents: &Agents, role: Option<MemberRole>) -> [ResourceId;
   if role != Some(MemberRole::Owner) {
     db.record_sharing_state(role, None, None).expect("the role");
   }
+  keep_team(agents);
   ids
+}
+
+/// Keeps the team's resources cached in the project's database in the window's memory, as its stream would once it
+/// read them from the team server, which these tests do not run.
+pub(super) fn keep_team(agents: &Agents) {
+  let workspace = agents.window.launch.workspace().expect("the session");
+  team_cache::keep_cached_team(workspace, &agents.root);
 }
 
 /// The team's `body` at v1, cached the way the stream keeps it.
@@ -140,7 +151,6 @@ fn share<B: ResourceBody + Clone>(db: &mut ProjectDb, id: ResourceId, server_bod
       hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
       references: Vec::new(),
       local_body: body.clone(),
-      waits_here: false,
     },
   )
   .expect("cached");
@@ -168,20 +178,33 @@ pub(super) fn team_with_profile_and_tool(agents: &Agents, role: Option<MemberRol
   team_as(agents, Some(MemberRole::Owner));
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let body = db.latest_version::<AgentProfile>(profile).expect("read").expect("v1");
+  let connections = db.connections().expect("connections");
+  let team = TeamAgentProfile::from_local(
+    body.body(),
+    TeamCounterparts {
+      connections: &connections,
+      local_mcp_servers: &[],
+      team_mcp_servers: &[],
+    },
+  )
+  .expect("the team's form");
   share(
     &mut db,
     profile,
-    serde_json::to_value(body.body()).expect("body"),
+    serde_json::to_value(&team).expect("body"),
     body.body(),
   );
   share(&mut db, tool, serde_json::to_value(&command).expect("body"), &command);
   if role != Some(MemberRole::Owner) {
     db.record_sharing_state(role, None, None).expect("the role");
   }
+  keep_team(agents);
   (profile, tool)
 }
 
+/// Opens the hub at `view`, the team's resources cached so far kept in memory ([`keep_team`]).
 pub(super) fn open(agents: &mut Agents, view: HubView) {
+  keep_team(agents);
   agents
     .window
     .navigation()
@@ -237,15 +260,29 @@ fn team_hub_keeps_the_filter_and_the_chosen_resource_in_the_route() {
 }
 
 #[test]
-fn team_hub_pins_edit_for_an_admin_where_the_kind_has_an_editor() {
+fn team_hub_links_to_no_editor_page_and_edits_an_mcp_server_in_its_panel() {
   let mut agents = Agents::new(true);
   let [skill, _, github, _] = team(&agents);
   open(&mut agents, HubView::new(HubFilter::All, Some(skill)));
-  assert!(agents.exists("team-hub-actions") && agents.exists("team-hub-edit"));
-  // An MCP server is edited in its panel (Edit in its head, ORC-836); its bar stays the fix of what this computer
-  // lacks (nobody has decided on `github` here: switching it on).
+  // A skill's panel has its … menu and no Edit to the old editor's page: an admin edits it in place, under Save
+  // and Cancel (A28 `qfrbn`).
+  assert!(agents.exists("team-hub-more"));
+  assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
+  assert!(agents.exists("team-hub-edit-save"));
+  // An MCP server is edited in its panel in place too, with no Edit; while nothing is changed its bar stays the fix
+  // of what this computer lacks (nobody has decided on `github` here: switching it on).
   open(&mut agents, HubView::new(HubFilter::All, Some(github)));
-  assert!(agents.exists("team-hub-fix-switch-on") && agents.exists("team-hub-edit"));
+  assert!(agents.exists("team-hub-fix-switch-on") && !agents.exists("team-hub-edit"));
+  assert!(agents.exists("team-new-mcp-runs-as"), "the form is in place");
+  // In the panel its keys are the panel's, as wide as every other row of the hub's (170), not the create form's 190.
+  let key = agents
+    .window
+    .tree
+    .get_element_by_id_mut("team-new-mcp-runs-as-row-key")
+    .and_then(|key| key.bounds())
+    .expect("the key is laid out")
+    .width;
+  assert!((key - 170.0).abs() < 0.5, "{key}");
 }
 
 #[test]
@@ -256,8 +293,21 @@ fn team_hub_says_so_when_the_filter_holds_nothing() {
     project_id(),
     ProjectPage::hub(HubView::new(HubFilter::Tools, None)),
   ));
-  agents.until("empty", |s| s.exists("team-hub-empty"));
+  agents.until("empty", |s| s.exists("team-hub-empty-body"));
   assert_eq!(agents.text("team-hub-filter-tools-count"), "0");
+  // One state across the body for an admin: what the kind is, and *New tool*, which opens its form.
+  assert!(!agents.exists("team-hub-master-detail"));
+  assert_eq!(agents.text("team-hub-empty-title"), "No tools yet");
+  assert_eq!(
+    agents.text("team-hub-empty-detail"),
+    "Commands and requests agents may run, with their approvals."
+  );
+  assert_eq!(agents.text("team-hub-empty-new"), "New tool");
+  agents.click("team-hub-empty-new");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Tools)))
+  );
 }
 
 #[test]
@@ -271,18 +321,40 @@ fn team_hub_rows_show_what_a_server_is_and_its_version_under_the_kind_s_filter()
   open(&mut agents, HubView::default());
   assert_eq!(agents.text(&format!("team-hub-row-{github}-tag")), "mcp");
   assert!(!agents.exists(&format!("team-hub-row-{github}-version")));
-  // Instructions and skills need nothing of a computer: no tag, no version, and the list says why.
+  // Instructions and skills need nothing of a computer: no tag, no version, and no note under the list.
   open(&mut agents, HubView::new(HubFilter::Instructions, None));
   assert!(!agents.exists(&format!("team-hub-row-{rules}-tag")));
   assert!(!agents.exists(&format!("team-hub-row-{rules}-version")));
-  assert_eq!(
-    agents.text("team-hub-note-text"),
-    "Instructions have nothing to fill in on a computer, so they are always ready here."
-  );
+  assert!(!agents.exists("team-hub-note-text"));
   open(&mut agents, HubView::new(HubFilter::Skills, None));
   assert!(!agents.exists(&format!("team-hub-row-{skill}-version")));
+  assert!(!agents.exists("team-hub-note-text"));
+}
+
+#[test]
+fn team_hub_panel_says_why_a_profile_cannot_be_told_ready() {
+  let mut agents = Agents::new(true);
+  let profile = agents.profile(true);
+  team(&agents);
+  // The team holds the profile as it was published before the team's form of profiles, which this computer cannot
+  // read what it asks of: the panel says why instead of standing empty under its chips.
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let body = db.latest_version::<AgentProfile>(profile).expect("read").expect("v1");
+  share(
+    &mut db,
+    profile,
+    serde_json::to_value(body.body()).expect("body"),
+    body.body(),
+  );
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   assert_eq!(
-    agents.text("team-hub-note-text"),
-    "Skills have nothing to fill in on a computer, so they are always ready here."
+    agents.text("team-hub-chip-here"),
+    "Can't tell yet whether it is ready here"
+  );
+  assert!(agents.text("team-hub-readiness").starts_with("Ready here?"));
+  assert!(
+    agents
+      .text("team-hub-undecided-text")
+      .starts_with("Its latest version was published before the team's form of its kind"),
   );
 }

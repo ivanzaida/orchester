@@ -13,7 +13,6 @@ pub enum Panel {
   Library(SkillsFilter),
   New,
   Edit(ResourceId),
-  Import,
 }
 impl Panel {
   fn page(self) -> ProjectPage {
@@ -21,14 +20,12 @@ impl Panel {
       Self::Library(filter) => ProjectPage::Skills(filter),
       Self::New => ProjectPage::NewSkill,
       Self::Edit(id) => ProjectPage::Skill(id),
-      Self::Import => ProjectPage::ImportSkills,
     }
   }
   pub fn of(page: &ProjectPage) -> Self {
     match page {
       ProjectPage::NewSkill => Self::New,
       ProjectPage::Skill(id) => Self::Edit(*id),
-      ProjectPage::ImportSkills => Self::Import,
       ProjectPage::Skills(filter) => Self::Library(*filter),
       _ => Self::Library(SkillsFilter::default()),
     }

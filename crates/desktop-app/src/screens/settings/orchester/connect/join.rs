@@ -324,10 +324,7 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
   if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
     column = column.child(field_error("orchester-connect-join-error", &reason.text(ctx)));
   }
-  column
-    .child(join_button(ctx, page, found))
-    .with_children(page.person.reason(ctx, JOIN))
-    .into()
+  column.child(join_button(ctx, page, found)).into()
 }
 
 /// *Join Kontur team*, with what was asked; unavailable until the check code is compared.
@@ -364,7 +361,7 @@ fn join_button(ctx: &Ctx, page: &ConnectPage, found: &Found) -> Row {
     Some(request) => {
       let (run, person) = (join.run.clone(), page.person.clone());
       go.on_click(move || {
-        if person.allows(JOIN) {
+        if person.allows("join a team server") {
           run.run(request.clone());
         }
       })

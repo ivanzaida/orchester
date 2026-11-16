@@ -30,9 +30,10 @@ fn moved() -> Vec<(String, Option<Place>)> {
     ("/orchestrator/settings", Some(Place::Orchestrator)),
     ("/review", Some(Place::Review)),
     ("/review/KON-12", Some(Place::Review)),
-    ("/pull-requests", Some(Place::Review)),
-    ("/pull-requests?tab=merged", Some(Place::Review)),
-    ("/pull-requests/142", Some(Place::Review)),
+    // The Pull requests page is gone (ORC-803): its routes open the project's Overview.
+    ("/pull-requests", Some(Place::Overview)),
+    ("/pull-requests?tab=merged", Some(Place::Overview)),
+    ("/pull-requests/142", Some(Place::Overview)),
     ("/files", Some(Place::Files)),
     ("/files/src/main.rs", Some(Place::Files)),
     ("/pipelines", Some(Place::Pipelines)),

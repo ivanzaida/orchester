@@ -5,6 +5,11 @@
 //! its name, its kind, since when and the order it follows quoted, and *Stop watching*; under it a 34 high row per task
 //! with something going on: its key and run, its title, its status, its note and the link where the person answers
 //! it; then its other open tasks counted (30 high). The list is read from the live state, never from an agent.
+//! Between the total and the list, *Before you leave* for each target the conversation leads to the end (`L02`
+//! `HpcQJ` on the board `Orchestrator autonomy · frames to approve`; `super::super::watch`). A subscription that leads
+//! its target to the end says so in the total (*leads Webhooks v2 to the end and follows 1 module and 1 task*), has
+//! how it is taken before *Stop leading* on its head row ([`super::lead`]) and its ceilings in a row under it
+//! ([`super::ceilings`]), and a task of it that was run again says which run it is on (*run again 2 of 3*).
 
 use std::sync::Arc;
 
@@ -13,19 +18,26 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Button, Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{orchestrator::WatchTarget, time::Timestamp};
 use orchester_workspace::{
   display,
-  orchestrator::watching::{Going, WatchOrder, WatchedSubscription, WatchedTask, Watching},
+  messages::Message,
+  orchestrator::watching::{Going, LeadCounts, WatchOrder, WatchedSubscription, WatchedTask, Watching},
 };
 
 use super::{
-  super::{data::Read, timeline::TurnRow},
+  super::{
+    data::Read,
+    timeline::{TurnEnv, TurnRow},
+    watch::leaving_cards,
+  },
   Live,
+  ceilings::{self, CeilingsProps},
+  lead::{self, ModeProps},
 };
 use crate::{
   navigation::Navigation,
@@ -47,14 +59,14 @@ use crate::{
 /// A subscription's head row (`mRauZ`), a task's row (`fzdsr`) and the row that counts the rest (`DMq1Y`).
 const HEAD_HEIGHT: f32 = 36.0;
 const TASK_HEIGHT: f32 = 34.0;
-const REST_HEIGHT: f32 = 30.0;
+pub(super) const REST_HEIGHT: f32 = 30.0;
 
 /// The row of `row`, a kept `/watching`, keyed `key`: the command and the answer from the live state.
 pub(in crate::screens::orchestrator) fn row(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Column {
   let id = format!("orchestrator-watching-{key}");
   let time = row.turn.at.map(display::clock).unwrap_or_default();
   let command = command(ctx, &id, &time);
-  let answer = answer(ctx, &id, &time, &row.env.watching);
+  let answer = answer(ctx, &id, &time, &row.env);
   Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -76,8 +88,9 @@ fn command(ctx: &mut Ctx, id: &str, time: &str) -> Element {
   own_bubble(ctx, &id, Some((chip, words)), (None, Some(applied))).into()
 }
 
-/// Orchester's answer: the total and the list, from the live state.
-fn answer(ctx: &mut Ctx, id: &str, time: &str, live: &Live) -> Element {
+/// Orchester's answer: the total, what would stop what it leads to the end, and the list, from the live state.
+fn answer(ctx: &mut Ctx, id: &str, time: &str, env: &TurnEnv) -> Element {
+  let live = &env.watching;
   let id = format!("{id}-answer");
   let body = Column::new()
     .width(Dimension::Pct(100.0))
@@ -85,8 +98,20 @@ fn answer(ctx: &mut Ctx, id: &str, time: &str, live: &Live) -> Element {
   let body = match &live.read {
     Some(Read::Ready(watching)) => {
       let total = total(ctx, watching);
-      let list = (!watching.subscriptions.is_empty()).then(|| list(ctx, &id, watching, live));
-      body.child(words(&format!("{id}-total"), &total)).with_children(list)
+      let led: Vec<(WatchTarget, Arc<str>)> = watching
+        .subscriptions
+        .iter()
+        .filter(|watched| watched.lead.is_some())
+        .map(|watched| (watched.target.target, message_text(ctx, &watched.target.name)))
+        .collect();
+      // Under the total, with their own room over each: none of it shows while nothing is led to the end.
+      let leaving = leaving_cards(ctx, (&id, ExtraSpacing::Loose.role()), env, led);
+      let said = Column::new()
+        .width(Dimension::Pct(100.0))
+        .child(words(&format!("{id}-total"), &total))
+        .with_children(leaving);
+      let list = (!watching.subscriptions.is_empty()).then(|| list(ctx, &id, watching, env));
+      body.child(said).with_children(list)
     }
     Some(Read::Failed(why)) => {
       let reason = message_text(ctx, why);
@@ -112,22 +137,37 @@ fn words(id: &str, said: &str) -> Text {
     .width(Dimension::Pct(100.0))
 }
 
-/// *This conversation leads 2 modules and 1 task. 1 thing waits for you, 1 run is stopped at a limit.*
+/// *This conversation leads 2 modules and 1 task. 1 thing waits for you, 1 run is stopped at a limit.*; with a target
+/// led to the end, *This conversation leads Webhooks v2 to the end and follows 1 module and 1 task. …*.
 fn total(ctx: &Ctx, watching: &Watching) -> Arc<str> {
   let total: Vec<Arc<str>> = watching.total.iter().map(|part| message_text(ctx, part)).collect();
   let total = joined(ctx, &total, false);
-  let leads: Vec<Arc<str>> = watching
-    .counts
-    .parts()
+  let parts =
+    |counts: &LeadCounts| -> Vec<Arc<str>> { counts.parts().iter().map(|part| message_text(ctx, part)).collect() };
+  let led: Vec<Arc<str>> = watching
+    .subscriptions
     .iter()
-    .map(|part| message_text(ctx, part))
+    .filter(|watched| watched.lead.is_some())
+    .map(|watched| message_text(ctx, &watched.target.name))
     .collect();
+  let leads = parts(&watching.counts);
   if leads.is_empty() {
     return ctx.t_args("orchestrator.watching.only", [("total", total)]);
   }
+  if led.is_empty() {
+    return ctx.t_args(
+      "orchestrator.watching.total",
+      [("leads", joined(ctx, &leads, true)), ("total", total)],
+    );
+  }
+  let led = joined(ctx, &led, true);
+  let follows = parts(&watching.follows);
+  if follows.is_empty() {
+    return ctx.t_args("orchestrator.watching.totalLed", [("led", led), ("total", total)]);
+  }
   ctx.t_args(
-    "orchestrator.watching.total",
-    [("leads", joined(ctx, &leads, true)), ("total", total)],
+    "orchestrator.watching.totalLedAndFollows",
+    [("led", led), ("follows", joined(ctx, &follows, true)), ("total", total)],
   )
 }
 
@@ -150,26 +190,33 @@ fn joined(ctx: &Ctx, parts: &[Arc<str>], and: bool) -> Arc<str> {
 }
 
 /// The bordered list, grouped per subscription.
-fn list(ctx: &mut Ctx, id: &str, watching: &Watching, live: &Live) -> Element {
+fn list(ctx: &mut Ctx, id: &str, watching: &Watching, env: &TurnEnv) -> Element {
+  let live = &env.watching;
   let mut rows: Vec<Element> = Vec::new();
   let mut before: Option<&WatchOrder> = None;
   for (at, watched) in watching.subscriptions.iter().enumerate() {
     let same = before == Some(&watched.order) && watched.order != WatchOrder::None;
     rows.push(head(ctx, (id, at), (watched, same), live));
+    if let Some(led) = watched.lead {
+      let props = CeilingsProps {
+        id: format!("{id}-ceilings-{at}"),
+        project: env.project,
+        target: watched.target.target,
+        name: message_text(ctx, &watched.target.name),
+        led,
+        busy: live.changing,
+        change: live.change.clone(),
+      };
+      rows.push(ceilings::row(ctx, props));
+    }
     for task in &watched.tasks {
       rows.push(task_row(ctx, id, task));
     }
+    if let Some(why) = &watched.unreadable {
+      rows.push(meta_line(ctx, format!("{id}-unreadable-{at}"), why));
+    }
     if let Some(rest) = &watched.rest {
-      rows.push(
-        line(Line::Under, REST_HEIGHT)
-          .id(format!("{id}-rest-{at}"))
-          .child(
-            Text::new(&message_text(ctx, rest))
-              .variant(WatchingText::Meta.role())
-              .nowrap(),
-          )
-          .into(),
-      );
+      rows.push(meta_line(ctx, format!("{id}-rest-{at}"), rest));
     }
     before = Some(&watched.order);
   }
@@ -183,9 +230,21 @@ fn list(ctx: &mut Ctx, id: &str, watching: &Watching, live: &Live) -> Element {
     .into()
 }
 
+/// A row under a subscription's head that says `said` in 11 `text_muted`: the rest counted, or why it waits.
+fn meta_line(ctx: &Ctx, id: String, said: &Message) -> Element {
+  line(Line::Under, REST_HEIGHT)
+    .id(id)
+    .child(
+      Text::new(&message_text(ctx, said))
+        .variant(WatchingText::Meta.role())
+        .nowrap(),
+    )
+    .into()
+}
+
 /// What a row of the list is.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Line {
+pub(super) enum Line {
   /// The list's first row, a subscription's head: the list's outline is its top.
   First,
   /// A later subscription's head.
@@ -196,7 +255,7 @@ enum Line {
 
 /// A row of the list, `height` high: a head row on `surface_raised`, a row under it in past the head's icon; each after
 /// the first ruled off by a `border` line over it.
-fn line(kind: Line, height: f32) -> Row {
+pub(super) fn line(kind: Line, height: f32) -> Row {
   let start = if kind == Line::Under {
     WatchingSpacing::Indent.role()
   } else {
@@ -221,28 +280,42 @@ fn line(kind: Line, height: f32) -> Row {
 }
 
 /// Subscription `at`'s head row: its icon, name, kind, since when and order, and *Stop watching*; its order is *same
-/// order* when it follows the one before it (`same`).
+/// order* when it follows the one before it (`same`). One that leads its target to the end has how it is taken before
+/// *Stop leading*.
 fn head(ctx: &mut Ctx, (id, at): (&str, usize), (watched, same): (&WatchedSubscription, bool), live: &Live) -> Element {
   let row_id = format!("{id}-subscription-{at}");
   let target = watched.target.target;
   let meta = head_meta(ctx, watched, same);
-  let stop = {
+  let leads = watched.lead.is_some();
+  let stop: Element = {
     let stop = live.stop.clone();
-    action(
-      &format!("{row_id}-stop"),
-      &ctx.t("orchestrator.watching.stop"),
-      Press::run(move || stop(target)),
-    )
+    let words = ctx.t(if leads {
+      "orchestrator.lead.stop"
+    } else {
+      "orchestrator.watching.stop"
+    });
+    action(&format!("{row_id}-stop"), &words, Press::run(move || stop(target))).into()
   };
   let stop = if live.stopping {
     Row::new().opacity(DISABLED_OPACITY).child(stop).into()
   } else {
     stop
   };
+  let mode = leads.then(|| {
+    let props = ModeProps {
+      id: format!("{row_id}-mode"),
+      target,
+      name: message_text(ctx, &watched.target.name),
+      busy: live.changing,
+      change: live.change.clone(),
+    };
+    lead::control(ctx, props)
+  });
   let kind = if at == 0 { Line::First } else { Line::Head };
   line(kind, HEAD_HEIGHT)
     .id(row_id.clone())
     .describe("target", target_name(target))
+    .describe("mode", if leads { "lead" } else { "follow" })
     .child(icon(target_icon(target), IconSize::Base, PaletteColor::TextSecondary))
     .child(
       Text::new(&message_text(ctx, &watched.target.name))
@@ -260,6 +333,7 @@ fn head(ctx: &mut Ctx, (id, at): (&str, usize), (watched, same): (&WatchedSubscr
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
+    .with_children(mode)
     .child(stop)
     .into()
 }
@@ -309,8 +383,17 @@ fn task_row(ctx: &mut Ctx, id: &str, task: &WatchedTask) -> Element {
     None => task.key.clone(),
   };
   let status = StatusChip::new(format!("{row_id}-status"), status(task.going)).render(ctx);
-  let note = task.note.as_ref().map(|note| {
-    Text::new(&message_text(ctx, note))
+  // *run again 2 of 3 · its plan waits for you*: which run a task led to the end is on, then what it waits for.
+  let said = match (&task.again, &task.note) {
+    (Some(again), Some(note)) => Some(ctx.t_args(
+      "orchestrator.watching.notes",
+      [("first", message_text(ctx, again)), ("second", message_text(ctx, note))],
+    )),
+    (Some(only), None) | (None, Some(only)) => Some(message_text(ctx, only)),
+    (None, None) => None,
+  };
+  let note = said.map(|note| {
+    Text::new(&note)
       .id(format!("{row_id}-note"))
       .variant(WatchingText::Meta.role())
       .nowrap()
@@ -321,11 +404,12 @@ fn task_row(ctx: &mut Ctx, id: &str, task: &WatchedTask) -> Element {
   let link = task.action.as_ref().and_then(|word| {
     let route = Route::parse(&task.link).ok()?;
     let words = ctx.t_args("orchestrator.watching.open", [("action", message_text(ctx, word))]);
-    Some(action(
+    let open = action(
       &format!("{row_id}-open"),
       &words,
       Press::Open(Navigation::of(ctx).to(route)),
-    ))
+    );
+    Some(Element::from(open))
   });
   line(Line::Under, TASK_HEIGHT)
     .id(row_id.clone())
@@ -354,7 +438,7 @@ fn task_row(ctx: &mut Ctx, id: &str, task: &WatchedTask) -> Element {
 }
 
 /// A text action at a row's end, named `id`: `words` in 12 `text_secondary`, on `hover` under the pointer.
-fn action(id: &str, words: &str, press: Press) -> Element {
+pub(super) fn action(id: &str, words: &str, press: Press) -> Button {
   pressed(press)
     .id(id.to_owned())
     .describe("a11y_name", words.to_owned())
@@ -363,7 +447,19 @@ fn action(id: &str, words: &str, press: Press) -> Element {
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)
     .child(Text::new(words).variant(WatchingText::Action.role()).nowrap())
-    .into()
+}
+
+/// [`action`] in the meta's 11.5 `text_muted`: a note that leads somewhere, beside buttons (`Note` in `Parts ·
+/// Ceilings` b).
+pub(super) fn note_action(id: &str, words: &str, press: Press) -> Button {
+  pressed(press)
+    .id(id.to_owned())
+    .describe("a11y_name", words.to_owned())
+    .flex_shrink(0.0)
+    .rounded(ExtraRadius::Link.role())
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .cursor(CursorIcon::Pointer)
+    .child(Text::new(words).variant(WatchingText::Meta.role()).nowrap())
 }
 
 /// A target's icon on its head row and in the `/unwatch` picker: a module's `boxes`, a task's `square-check`, the tasks

@@ -126,8 +126,7 @@
       "newConnection": "Add connection",
       "editConnection": "Edit connection",
       "projectSettings": "Project settings",
-      "files": "Files",
-      "importResources": "Import resources"
+      "files": "Files"
     },
     "notFound": {
       "title": "Nothing here",
@@ -138,6 +137,7 @@
       "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
     },
     "status": {
+      "dangerous": "Dangerous auto-approve",
       "runner": {
         "starting": "Runner starting",
         "online": "Runner online",

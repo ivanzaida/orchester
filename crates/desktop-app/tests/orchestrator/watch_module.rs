@@ -316,6 +316,19 @@ fn orchestrator_watch_module_one_badge_names_two_modules_and_counts_the_rest() {
 }
 
 #[test]
+fn orchestrator_watch_module_a_pressed_row_is_picked_and_closes_the_picker() {
+  let Kontur {
+    mut screen, webhooks, ..
+  } = kontur();
+  open_picker(&mut screen);
+  screen.until("the modules", |screen| screen.exists(&row(webhooks)));
+  screen.click(&row(webhooks));
+  screen.until("Webhooks v2 in the badge, the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == "Watch · Webhooks v2"
+  });
+}
+
+#[test]
 fn orchestrator_watch_module_typed_after_picking_is_a_message_and_enter_sends_it_with_the_watch() {
   let Kontur {
     mut screen,
@@ -414,10 +427,11 @@ fn orchestrator_watch_module_refuses_synthetic_enter_and_keeps_the_badge_and_the
   screen.set(INPUT, "Ask before merging.");
 
   with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
-  let problem = "orchestrator-watch-problem";
-  screen.until("the person-only notice", |screen| {
-    screen.exists(problem) && screen.text(problem).contains("Only you can start watching")
-  });
+  assert!(screen.window.refused_press().is_some(), "refused to the client");
+  assert!(
+    !screen.exists("orchestrator-watch-problem"),
+    "the chat says nothing of it"
+  );
   assert!(!watched(&screen, webhooks), "synthetic input watches nothing");
   assert!(screen.exists(BADGE), "the badge stays");
   assert!(screen.text(INPUT).contains("Ask before merging."), "and the message");

@@ -1,6 +1,5 @@
 {
   "overview": {
-    "importResources": "Import resources",
     "openOrchestrator": "Open Orchestrator",
     "newTask": "New task",
     "separator": " · ",
@@ -134,12 +133,10 @@
     "start": {
       "head": "Set up {{project}} to run tasks",
       "done": "{{count}} of 4 done",
-      "connections": "Project settings › Connections ↗",
+      "connections": "Settings › Accounts ↗",
       "agents": "Agents ↗",
       "pipelines": "Pipelines ↗",
       "newTask": "New task ↗",
-      "import": "Agent files already in the repository (CLAUDE.md, AGENTS.md, skills) come in as drafts.",
-      "importLink": "Import resources ↗",
       "reading": "Reading the agents, pipelines and connections…"
     },
     "runner": {
@@ -158,6 +155,51 @@
     "unreadable": {
       "title": "Latest run can't be read",
       "open": "Open task ↗"
+    },
+    "away": {
+      "parked": {
+        "title": {
+          "one": "1 parked for you",
+          "other": "{{count}} parked for you"
+        },
+        "order": "by the Orchestrator · oldest first",
+        "what": "{{task}} parked — {{needs}}",
+        "words": "{{why}} {{toDo}}",
+        "giveBack": "Give it back",
+        "open": "Open ↗"
+      },
+      "needs": {
+        "decision": "a decision is needed",
+        "approval": "an approval is needed",
+        "signIn": "a sign-in is needed",
+        "tool": "a tool did not answer",
+        "ceiling": "a ceiling is reached",
+        "other": "it needs you"
+      },
+      "decided": {
+        "title": {
+          "one": "1 decided without you",
+          "other": "{{count}} decided without you"
+        },
+        "order": "newest first",
+        "allSeen": "Mark all seen",
+        "seen": "Seen",
+        "overrule": "Overrule…",
+        "conversation": "Conversation ↗",
+        "noModule": "No module",
+        "quote": "About your decision «{{what}}» ({{reason}}): "
+      },
+      "did": {
+        "continued": "Continued {{task}}",
+        "ran": "Ran {{task}}",
+        "answered": "Answered a question of {{task}}",
+        "plan": "Decided the plan of {{task}}",
+        "approval": "Answered a request of {{task}}",
+        "parked": "Parked {{task}}",
+        "acceptance": "Started the acceptance of {{task}}",
+        "delivered": "Delivered {{task}}",
+        "other": "{{tool}} {{task}}"
+      }
     }
   }
 }

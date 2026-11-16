@@ -1,6 +1,8 @@
 //! The theme's roles resolve to the variables and type roles of `data/orchester2.pen` (accent graphite),
 //! in dark and light mode, and the mode switches while the app runs.
 
+#[path = "theme/agent_picker.rs"]
+mod agent_picker;
 #[path = "theme/appearance.rs"]
 mod appearance;
 #[path = "theme/archive.rs"]
@@ -11,16 +13,20 @@ mod browser;
 mod cards;
 #[path = "theme/ci.rs"]
 mod ci;
+#[path = "theme/conversation.rs"]
+mod conversation;
 #[path = "theme/decision_test.rs"]
 mod decision_test;
 #[path = "theme/dialog.rs"]
 mod dialog;
+#[path = "theme/flow.rs"]
+mod flow;
 #[path = "theme/hub.rs"]
 mod hub;
-#[path = "theme/import.rs"]
-mod import;
 #[path = "theme/instructions.rs"]
 mod instructions;
+#[path = "theme/leading.rs"]
+mod leading;
 #[path = "theme/local_integration.rs"]
 mod local_integration;
 #[path = "theme/modules.rs"]
@@ -35,6 +41,8 @@ mod pipelines;
 mod projects;
 #[path = "theme/run_services.rs"]
 mod run_services;
+#[path = "theme/runs_on_picker.rs"]
+mod runs_on_picker;
 #[path = "theme/service_cards.rs"]
 mod service_cards;
 #[path = "theme/services.rs"]
@@ -45,8 +53,12 @@ mod side_question;
 mod skills;
 #[path = "theme/startup.rs"]
 mod startup;
+#[path = "theme/step_strip.rs"]
+mod step_strip;
 #[path = "theme/task_form.rs"]
 mod task_form;
+#[path = "theme/team_state.rs"]
+mod team_state;
 #[path = "theme/test_results.rs"]
 mod test_results;
 #[path = "theme/watching.rs"]
@@ -444,7 +456,7 @@ fn theme_kit_spacing_radii_and_sizes_follow_the_design() {
   );
   assert_eq!(
     IconSize::ALL.map(IconSize::size),
-    [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0]
+    [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0, 20.0]
   );
   assert_eq!((DISABLED_OPACITY, SHORTCUT_OPACITY), (0.5, 0.6));
 }
@@ -564,32 +576,5 @@ fn theme_agents_active_task_role_matches_rx5w5() {
     assert_eq!(style.weight, FontWeight::Normal);
     assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
     assert_eq!(&*style.font_family, "Geist");
-  }
-}
-
-/// A quiet approval row of the Conversation (`Event Â· switched to Manual` `ARwiU`, ORC-353): its lead in 12
-/// `text_secondary` 1.3, its detail in 12 `text_muted` 1.4, 36 in past a message's avatar, in both modes.
-#[test]
-fn theme_conversation_approval_row_follows_the_design() {
-  use theme::{ConversationSpacing, ConversationText};
-  for mode in [Mode::Dark, Mode::Light] {
-    let app = themed(mode);
-    let theme = app.theme();
-    for (role, line_height, color) in [
-      (ConversationText::ApprovalLead, 1.3, PaletteColor::TextSecondary),
-      (ConversationText::ApprovalDetail, 1.4, PaletteColor::TextMuted),
-    ] {
-      let style = theme.typography_style(role.role());
-      assert_eq!(
-        (style.font_size, style.weight, style.line_height, &*style.font_family),
-        (12.0, FontWeight::Normal, line_height, "Geist"),
-        "{role:?}"
-      );
-      assert_eq!(style.color, theme.palette_color(color), "{role:?} in {}", mode.name());
-    }
-    assert_eq!(
-      theme.spacing_value(ConversationSpacing::ApprovalRow.role()),
-      Dimension::Px(36.0)
-    );
   }
 }

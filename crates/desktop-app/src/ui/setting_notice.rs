@@ -24,6 +24,7 @@ use crate::theme::{ExtraSpacing, ExtraTypography, IconSize, SettingsText};
 
 const fn colors(tone: NoticeTone) -> (PaletteColor, PaletteColor, Icon) {
   match tone {
+    NoticeTone::Neutral => (PaletteColor::SurfaceRaised, PaletteColor::TextMuted, Icon::Info),
     NoticeTone::Info => (PaletteColor::InfoMuted, PaletteColor::Info, Icon::Info),
     NoticeTone::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, Icon::TriangleAlert),
     NoticeTone::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, Icon::CircleAlert),
@@ -33,6 +34,7 @@ const fn colors(tone: NoticeTone) -> (PaletteColor, PaletteColor, Icon) {
 
 const fn tone_name(tone: NoticeTone) -> &'static str {
   match tone {
+    NoticeTone::Neutral => "neutral",
     NoticeTone::Info => "info",
     NoticeTone::Warning => "warning",
     NoticeTone::Danger => "danger",

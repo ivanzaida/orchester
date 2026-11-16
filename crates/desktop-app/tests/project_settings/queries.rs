@@ -31,21 +31,23 @@ fn settings_queries_update_project_limits_shows_in_the_open_limits() {
 #[test]
 fn settings_queries_set_allow_autopilot_shows_in_the_open_runs() {
   let mut page = Settings::new(false);
-  page.tab("runs", "settings-auto-allow-autopilot-row");
-  page.click("settings-allow-autopilot");
+  page.tab("runs", "settings-auto-approve-mode-row");
+  page.click("settings-approve-mode-autopilot");
   page.until("Autopilot allowed", |p| {
     p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  assert!(page.switch_on("settings-allow-autopilot"));
-  // Automation may always stop allowing Autopilot.
+  let autopilot = page.text("settings-auto-approve-mode-hint");
+  // Automation may always stop allowing Autopilot: the Approve mode moves down to Manual.
   call(
     &page,
     "set_allow_autopilot",
     json!({"project": "Kontur", "allow_autopilot": false}),
   )
   .expect("off");
-  page.until("the switch off", |p| !p.switch_on("settings-allow-autopilot"));
+  page.until("Manual shown", |p| {
+    p.text("settings-auto-approve-mode-hint") != autopilot
+  });
   assert!(!page.db().allow_autopilot().expect("read").is_on());
 }
 
@@ -73,7 +75,7 @@ fn settings_queries_a_tab_shown_before_shows_its_settings_in_its_first_frame() {
   page.tab("context", "settings-agent-files");
   page.tab("environment", "settings-environment-edit");
   for (tab, ready) in [
-    ("runs", "settings-auto-allow-autopilot-row"),
+    ("runs", "settings-auto-approve-mode-row"),
     ("orchestrator", "settings-orchestrator-publish-drafts"),
     ("context", "settings-agent-files"),
     ("environment", "settings-environment-edit"),
@@ -82,7 +84,7 @@ fn settings_queries_a_tab_shown_before_shows_its_settings_in_its_first_frame() {
     page.tab(tab, ready);
   }
   for (tab, ready) in [
-    ("runs", "settings-auto-allow-autopilot-row"),
+    ("runs", "settings-auto-approve-mode-row"),
     ("orchestrator", "settings-orchestrator-publish-drafts"),
     ("context", "settings-agent-files"),
     ("environment", "settings-environment-edit"),

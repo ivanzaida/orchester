@@ -119,11 +119,9 @@ fn recorded_run(approval_gate: bool, limits: TaskLimits) -> (TempDir, ProjectDb,
     budget: None,
   };
   let pipeline = Pipeline::new(vec![step]).expect("pipeline");
-  let delivery = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
-    .expect("pipeline")
-    .id();
-  let version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish");
+  let (delivery, version) = db
+    .published_pipeline_for_test("delivery", "Delivery", &pipeline, at(4))
+    .expect("publish");
   let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
   let published = PublishedVersions {
     profiles: &profiles,

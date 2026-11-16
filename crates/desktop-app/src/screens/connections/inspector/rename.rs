@@ -24,7 +24,7 @@ use orchester_workspace::{
 
 use super::{Actions, Inspecting, title};
 use crate::{
-  screens::connections::{add_agent::naming::problem_among, data::Saved},
+  screens::connections::{data::Saved, naming::problem_among},
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},

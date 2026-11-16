@@ -1,4 +1,4 @@
-//! User-facing messages for what blocks publishing a pipeline, for field values that cannot be
+//! User-facing messages for what blocks saving a pipeline, for field values that cannot be
 //! used, and for failed saves and publishes. Steps are named by their names, not their keys.
 
 use orchester_core::resource::{
@@ -109,7 +109,6 @@ pub fn publish_error(error: &StoreError) -> Message {
       Message::new("pipelines.problems.notPublishable")
     }
     StoreError::Publish(PublishError::VersionLimit) => Message::new("pipelines.problems.versionLimit"),
-    StoreError::NoDraft(_) => Message::new("pipelines.problems.noDraft"),
     other => messages::store_error(other),
   }
 }

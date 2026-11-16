@@ -265,6 +265,8 @@ pub enum ClickOnly {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Publishing {
+  /// Only read from proposals kept before pipelines lost their drafts (D-032): a pipeline is always a published
+  /// version, no tool publishes one, and applying such a proposal is refused as changed since it was proposed.
   Pipeline,
   Profile,
   Instruction,
@@ -281,7 +283,7 @@ impl Publishing {
     Self::Tool,
   ];
 
-  /// The tool that publishes it (`publish_pipeline`, …).
+  /// The tool that publishes it (`publish_profile`, …); for a pipeline, the name its tool had.
   pub const fn tool(self) -> &'static str {
     match self {
       Self::Pipeline => "publish_pipeline",
@@ -314,8 +316,11 @@ impl Publishing {
     }
   }
 
-  /// The kind published by tool `name`; `None` for a tool that publishes nothing.
+  /// The kind published by tool `name`; `None` for a tool that publishes nothing, `publish_pipeline` included.
   pub fn of_tool(name: &str) -> Option<Self> {
-    Self::ALL.into_iter().find(|kind| kind.tool() == name)
+    Self::ALL
+      .into_iter()
+      .filter(|kind| *kind != Self::Pipeline)
+      .find(|kind| kind.tool() == name)
   }
 }

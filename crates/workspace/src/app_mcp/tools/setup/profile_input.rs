@@ -5,7 +5,9 @@
 //! MCP servers on a connection whose agents Orchester runs itself, and the Codex sandbox off only for a Codex
 //! connection of a local project. Permissions and MCP servers broader than the profile's latest published version
 //! (before its first: the most restrictive its CLI enforces, no server) are a person's decision ([`widening`]), the
-//! Codex sandbox turned off among them; narrowing them is always taken.
+//! Codex sandbox turned off among them; narrowing them is always taken. The profile also chooses the project's
+//! instructions, skills and tools its agents are given (`docs/design/team-configuration.md`, "Decided 2026-11-09"):
+//! nothing else gives an agent of a local run one.
 
 use std::path::Path;
 
@@ -21,8 +23,8 @@ use orchester_core::{
     WritableFolders,
     browser::{AllowedSites, BrowserAccess},
   },
-  resource::{AgentProfile, ModelId, RepositoryAccess},
-  store::McpServerStore,
+  resource::{AgentProfile, ChosenResources, ModelId, RepositoryAccess, Resource},
+  store::{ConnectionStore, McpServerStore, ResourceStore},
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -30,9 +32,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  connections::agent_named,
-  created::{settle, with_waiting},
   profiles::{profile_named, profile_with_revision, publish_error},
+  runs_on::{self, CliKind},
   widening,
 };
 use crate::{
@@ -40,6 +41,8 @@ use crate::{
     data::{ProfileChange, ProjectAgents, apply_in},
     folders::with_folder,
     form::{ModelSelection, ProfileForm, effort_options, listed_models},
+    local_edit::GivenKind,
+    local_given::is_check,
     permissions::{not_enforceable, with_command, with_site},
     servers,
   },
@@ -68,8 +71,11 @@ pub struct SaveProfileDraft {
   /// The role instructions every prompt of the agent carries; may use {{variables}}.
   #[serde(default)]
   pub instructions: String,
-  /// The agent connection it runs on, by its id or name.
-  pub connection: String,
+  /// What it runs on: a sign-in or an API provider of the person's, by its id or its name (list_accounts);
+  /// `default` is a CLI's Default and needs `cli`. The project gets its connection on the account when it has none.
+  pub account: String,
+  /// The agent CLI whose account `account` names; needed for `default` and for a name two CLIs' accounts share.
+  pub cli: Option<CliKind>,
   /// The model id, one list_models gives or another the CLI runs.
   pub model: String,
   /// A reasoning effort the model lists; left out, the CLI's default.
@@ -80,6 +86,14 @@ pub struct SaveProfileDraft {
   /// MCP servers of the project its agents get, by id or name.
   #[serde(default)]
   pub mcp_servers: Vec<String>,
+  /// The project's instructions its agents are given (not the role `instructions` above), by id, slug or name; no
+  /// instruction reaches an agent any other way. Left out, a profile being changed keeps its own and a new one gets
+  /// none.
+  pub instruction_resources: Option<Vec<String>>,
+  /// The project's skills its agents are offered, by id, slug or name. Left out, kept as for instruction_resources.
+  pub skills: Option<Vec<String>>,
+  /// The project's tools its agents may call, by id, slug or name. Left out, kept as for instruction_resources.
+  pub tools: Option<Vec<String>>,
   /// The profile's `revision` as get_profile or the last save returned it: the draft is saved only while it
   /// is unchanged, else refused as draft_changed. Left out, the save goes over a change saved meanwhile.
   pub expected_revision: Option<String>,
@@ -193,7 +207,7 @@ impl From<Approvals> for ApprovalMode {
 
 pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> Result<Value, ToolError> {
   let blocked = services.clone();
-  let (open, id, created) = blocking(move || {
+  let (open, id) = blocking(move || {
     let open = blocked.project(&args.project)?;
     let root = open.repo_root.clone();
     let agents = ProjectAgents::load_in(&root)?;
@@ -203,7 +217,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       .as_deref()
       .map(|named| profile_named(&agents, named))
       .transpose()?;
-    let connection = agent_named(&db, &args.connection)?;
+    let connection = account_connection(&blocked, &root, &args)?;
     let permissions = match &args.permissions {
       Some(given) => permissions(given, &root, existing.map(|entry| entry.profile.permissions()))?,
       None => existing.map_or_else(
@@ -216,38 +230,42 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
     offered(&connection, &permissions, &args)?;
     let project_servers = db.mcp_servers()?;
     let servers = mcp_servers(&project_servers, &args.mcp_servers)?;
-    let profile = form(&args, &connection, &permissions, &servers)?;
+    let given = given(&db, &args, existing.map(|entry| &entry.profile))?;
+    let profile = form(&args, &connection, (&permissions, &servers), &given)?;
     servers::check(&project_servers, existing.map(|entry| &entry.profile), &profile)
       .map_err(|reason| refused("mcp_server_not_offered", reason))?;
     let id = existing.map(|entry| entry.id);
     widening::check_profile(&blocked, &db, (id, &profile), connection.provider())?;
-    let (id, created) = match existing {
+    let id = match existing {
       Some(entry) => {
         save_draft_expecting_in(&root, entry.id, profile, args.expected_revision.as_deref())?;
-        (entry.id, false)
+        entry.id
       }
       None if args.expected_revision.is_some() => {
         return Err(ToolError::InvalidArguments(
           "expected_revision names a profile's draft; a new profile has none".into(),
         ));
       }
-      None => (create_published(&blocked, &root, &profile, &connection)?, true),
+      None => create_published(&blocked, &root, &profile, &connection)?,
     };
-    Ok((open, id, created))
+    Ok((open, id))
   })
   .await?;
-  let waiting = if created {
-    settle(services, open.repo_root.clone(), id).await
-  } else {
-    Ok(None)
-  };
-  // After a refused creation took the profile back, so a screen that reads on this does not see it.
   services
     .changes
     .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
-  let waiting = waiting?;
-  let profile = blocking(move || profile_with_revision(&open, id)).await?;
-  Ok(with_waiting(json!({ "profile": profile }), "profile", waiting))
+  let reading = services.clone();
+  let profile = blocking(move || profile_with_revision(&reading, &open, id)).await?;
+  Ok(json!({ "profile": profile }))
+}
+
+/// The project's connection on the account the arguments name, made now when it has none.
+fn account_connection(services: &Services, root: &Path, args: &SaveProfileDraft) -> Result<AgentConnection, ToolError> {
+  let id = runs_on::account_connection(services, root, args.cli, &args.account)?;
+  ProjectDb::open(root)?
+    .connection(id)?
+    .and_then(|connection| AgentConnection::try_from(connection).ok())
+    .ok_or_else(|| ToolError::not_found(Missing::Account, &args.account))
 }
 
 /// A new profile created as v1, with no draft: published as Publish does, so it is refused where publishing is, and its
@@ -273,8 +291,8 @@ fn create_published(
 fn form(
   args: &SaveProfileDraft,
   connection: &AgentConnection,
-  permissions: &AgentPermissions,
-  servers: &McpServerSelection,
+  (permissions, servers): (&AgentPermissions, &McpServerSelection),
+  [instructions, skills, tools]: &[ChosenResources; 3],
 ) -> Result<AgentProfile, ToolError> {
   let model = args.model.trim();
   let listed = ModelId::new(model)
@@ -301,6 +319,9 @@ fn form(
     effort: args.effort.as_deref(),
     permissions,
     mcp_servers: servers,
+    instruction_resources: instructions,
+    skills,
+    tools,
   }
   .profile()
   .map_err(|errors| {
@@ -441,6 +462,56 @@ fn mcp_servers(servers: &[McpServer], named: &[String]) -> Result<McpServerSelec
     let reason = Message::new("appMcp.errors.mcpServersInvalid").with("max", McpServerSelection::MAX.to_string());
     refused("invalid_mcp_servers", reason)
   })
+}
+
+/// The instructions, skills and tools the profile gives its agents: each list given, resolved among the project's
+/// resources of its kind that are not archived, a tool only when an agent can call it as a check; one left out is
+/// `kept`'s, a new profile's empty.
+fn given(
+  db: &ProjectDb,
+  args: &SaveProfileDraft,
+  kept: Option<&AgentProfile>,
+) -> Result<[ChosenResources; 3], ToolError> {
+  let list = |named: Option<&Vec<String>>, kind: GivenKind| -> Result<ChosenResources, ToolError> {
+    let Some(named) = named else {
+      return Ok(kept.map_or(ChosenResources::EMPTY, |profile| kind.of(profile).clone()));
+    };
+    let resources = db.resources(kind.resource_kind())?;
+    let ids = named
+      .iter()
+      .map(|name| {
+        resources
+          .iter()
+          .find(|found| {
+            found.id().to_string() == *name
+              || found.slug().as_str() == name
+              || found.name().as_str().to_lowercase() == name.to_lowercase()
+          })
+          .map(Resource::id)
+          .ok_or_else(|| ToolError::not_found(missing(kind), name))
+      })
+      .collect::<Result<Vec<ResourceId>, _>>()?;
+    for (name, id) in named.iter().zip(&ids) {
+      if kind == GivenKind::Tool && !is_check(db, *id)? {
+        let reason = Message::new("appMcp.errors.toolNotCheck").with("tool", name.clone());
+        return Err(refused("tool_not_a_check", reason));
+      }
+    }
+    ChosenResources::new(ids).map_err(|_| refused("invalid_given", Message::new("appMcp.errors.givenTwice")))
+  };
+  Ok([
+    list(args.instruction_resources.as_ref(), GivenKind::Instruction)?,
+    list(args.skills.as_ref(), GivenKind::Skill)?,
+    list(args.tools.as_ref(), GivenKind::Tool)?,
+  ])
+}
+
+const fn missing(kind: GivenKind) -> Missing {
+  match kind {
+    GivenKind::Instruction => Missing::Instruction,
+    GivenKind::Skill => Missing::Skill,
+    GivenKind::Tool => Missing::Tool,
+  }
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {

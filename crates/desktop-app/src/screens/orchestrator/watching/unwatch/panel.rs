@@ -235,6 +235,7 @@ fn row(
     )
     .child(end)
     .with_children(added);
+  let row = search.pickable(row, at);
   if focused {
     search.keep_in_view(row.background(ExtraColor::Hover.role()))
   } else {

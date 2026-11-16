@@ -1,7 +1,7 @@
 //! Where a thing waiting for the person leads, the same from the Overview's *Needs you* cards and from the
 //! Needs you panel (`Needs you · where each item leads` `icGHG`): where `attention` says it is decided, as the
 //! route of its task's page and the decision card of the Summary the page brings into view and rings, or as the
-//! project's Memory page for its memory records.
+//! Agents hub's Memory filter for its memory records.
 
 use orchester_core::{id::ProjectId, project::TaskKey};
 use orchester_workspace::{
@@ -14,7 +14,7 @@ use super::{
   pointed::{Pointed, PointedCard},
   press::OpenIn,
 };
-use crate::routes::{MemoryTab, ProjectPage, Route, TaskTab, TaskView};
+use crate::routes::{MemoryTab, MemoryView, ProjectPage, Route, TaskTab, TaskView};
 
 /// A page to open for an item, and the card on it to point at.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,14 +26,14 @@ pub struct Destination {
 impl Destination {
   /// Where `item` of `project` leads: a request or a question to its task's Conversation, a plan, a limit and a
   /// decision after retries to their card of the Summary, the rest to the Summary; the project's memory records to
-  /// its Memory page's *Waiting for approval* tab (`CIThk`); why not, where it leads nowhere
+  /// the Agents hub's Memory filter on *Waiting for approval* (Y1 `tsfxN`); why not, where it leads nowhere
   /// ([`Decided::Unavailable`]).
   pub fn of(project: ProjectId, item: &NeedItem) -> Result<Self, Message> {
     let (view, card) = match item.decided() {
       Decided::Unavailable(reason) => return Err(reason),
       Decided::Memory => {
         return Ok(Self {
-          route: Route::Project(project, ProjectPage::Memory(Some(MemoryTab::Waiting))),
+          route: Route::Project(project, ProjectPage::Memory(MemoryView::on(MemoryTab::Waiting))),
           pointed: None,
         });
       }

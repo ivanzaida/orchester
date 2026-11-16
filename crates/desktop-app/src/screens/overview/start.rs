@@ -1,8 +1,8 @@
 //! A new project's getting-started list (`Start` `ru9Gh` in 03 `ArvFR`): in the digest's frame, its head *Set up Kontur
 //! to run tasks* with *N of 4 done*, then a 60 high line per step (`orchester_workspace::overview::start`): a
 //! `circle-check` in `success` once done, else a `circle-dashed`; the step in 13/500 (`text_secondary` once done) over
-//! what was found in 12 `text_muted`; and the link to where it is done. Under the list, the Import resources hint. What
-//! is done is read off the UI thread, again whenever a screen or automation saved agents, pipelines or connections.
+//! what was found in 12 `text_muted`; and the link to where it is done. What is done is read off the UI thread, again
+//! whenever a screen or automation saved agents, pipelines or connections.
 
 use std::path::PathBuf;
 
@@ -30,7 +30,8 @@ use super::{
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
-  routes::{ConnectionsView, ImportTab, ProjectPage, Route},
+  routes::{AccountsView, ProjectPage, Route},
+  services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::LastFailure,
@@ -87,13 +88,21 @@ impl Component for GettingStarted {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<StartProps>().clone();
-    let read = ctx.future((props.repo_root.clone(), props.revision), |(repo_root, _)| async move {
-      background::run(move || ProjectReadiness::load_in(&repo_root))
+    let workspace = Services::of(ctx).workspace;
+    let read = ctx.future((props.repo_root.clone(), props.revision), move |(repo_root, _)| {
+      let workspace = workspace.clone();
+      async move {
+        background::run(move || {
+          // The person's API accounts: a connection on one of them holds no secret of the project.
+          let accounts: Vec<_> = workspace.api_accounts()?.iter().map(|account| account.id()).collect();
+          ProjectReadiness::load_in(&repo_root, &accounts)
+        })
         .await?
         .map_err(|error| {
           tracing::error!(%error, "cannot read whether the project is ready to run");
           messages::store_error(&error)
         })
+      }
     });
     let state = read.state().get();
     let failed = self.last.follow(&state);
@@ -128,9 +137,7 @@ impl Component for GettingStarted {
     Column::new()
       .id("overview-start")
       .width(Dimension::Px(WIDTH))
-      .spacing(SpacingSize::Lg)
       .child(list)
-      .child(import_hint(ctx, props.project))
   }
 }
 
@@ -190,35 +197,16 @@ fn step_line(ctx: &mut Ctx, project: ProjectId, line: &StartLine) -> Row {
 /// Where a step is done, and its link's words.
 fn destination(ctx: &mut Ctx, project: ProjectId, step: StartStep) -> (std::sync::Arc<str>, Open) {
   let (key, page) = match step {
-    StartStep::Connect => (
-      "overview.start.connections",
-      ProjectPage::Connections(ConnectionsView::default()),
-    ),
+    // Agents run on the person's accounts, which are the app's: Settings › Accounts.
+    StartStep::Connect => {
+      return (
+        ctx.t("overview.start.connections"),
+        Navigation::of(ctx).to(Route::Accounts(AccountsView::default())),
+      );
+    }
     StartStep::Profile => ("overview.start.agents", ProjectPage::Agents),
     StartStep::Pipeline => ("overview.start.pipelines", ProjectPage::Pipelines),
     StartStep::Task => ("overview.start.newTask", ProjectPage::NewTask),
   };
   (ctx.t(key), Navigation::of(ctx).to(Route::Project(project, page)))
-}
-
-/// *Agent files already in the repository … come in as drafts.* with *Import resources ↗*.
-fn import_hint(ctx: &mut Ctx, project: ProjectId) -> Row {
-  let open = Navigation::of(ctx).to(Route::Project(project, ProjectPage::Import(ImportTab::All)));
-  Row::new()
-    .id("overview-start-import")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .child(icon(Icon::Download, IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      muted(&ctx.t("overview.start.import"))
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .child(link(
-      "overview-start-import-open",
-      &ctx.t("overview.start.importLink"),
-      Press::Open(open),
-    ))
 }

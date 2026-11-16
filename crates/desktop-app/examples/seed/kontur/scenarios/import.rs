@@ -5,8 +5,8 @@
 //! notes style written for it; Implementation standards is a project rule; Preview host is an HTTP tool whose token is
 //! the secret PREVIEW_HOST_API_KEY.
 //!
-//! `import-done`: the same, after Preview release v3 and Preview host were imported into Kontur with every default
-//! choice, so PREVIEW_HOST_API_KEY is left unresolved (`06b` `ky5kJ`).
+//! `import-done`: the same, after Preview host was imported into Kontur with every default choice, so
+//! PREVIEW_HOST_API_KEY is left unresolved. Preview release is not offered: pipelines are not imported.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -32,7 +32,6 @@ use crate::kontur::{Kontur, SeedError, catalogue, files, git, name};
 /// Personal website as an import reads it, and the resources an import into Kontur selects.
 struct Website {
   catalog: Catalog,
-  preview: ResourceId,
   host: ResourceId,
 }
 
@@ -40,18 +39,12 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   prepare(kontur).map(drop)
 }
 
-/// [`seed`], then Preview release and Preview host imported into Kontur an hour ago, with every default choice.
+/// [`seed`], then Preview host imported into Kontur an hour ago, with every default choice.
 pub fn done(kontur: &mut Kontur) -> Result<(), SeedError> {
   let website = prepare(kontur)?;
   let target = Catalog::read(kontur.db.project().clone(), &kontur.db)?;
-  let selection = [website.preview, website.host].map(|id| {
-    let pick = website
-      .catalog
-      .resource(id)
-      .expect("Personal website has it")
-      .default_pick();
-    (id, pick)
-  });
+  let host = website.catalog.resource(website.host).expect("Personal website has it");
+  let selection = [(website.host, host.default_pick())];
   let plan = Plan::new(&website.catalog, &target, &selection, &Choices::default());
   let batch = plan
     .batch(&website.catalog, IdempotencyKey::generate(), kontur.ago(60))
@@ -100,7 +93,7 @@ fn personal_website(kontur: &Kontur) -> Result<Website, SeedError> {
   );
   let mut db = ProjectDb::create(&folder, project.clone())?;
   let now = kontur.ago(2 * 24 * 60);
-  let (preview, host) = website_catalogue(&mut db, &folder, now)?;
+  let host = website_catalogue(&mut db, &folder, now)?;
   let catalog = Catalog::read(project.clone(), &db)?;
   drop(db);
   let mut apps = AppDb::open(&kontur.app_database)?;
@@ -108,15 +101,11 @@ fn personal_website(kontur: &Kontur) -> Result<Website, SeedError> {
   let owner = apps.cloud_account()?.map(|account| account.account);
   // Opened a day before Kontur, which stays the project the app opens.
   apps.register_project(&project, &folder, kontur.ago(24 * 60), owner.as_ref())?;
-  Ok(Website { catalog, preview, host })
+  Ok(Website { catalog, host })
 }
 
-/// Writes Personal website's catalogue: Preview release's id, then Preview host's.
-fn website_catalogue(
-  db: &mut ProjectDb,
-  folder: &std::path::Path,
-  now: Timestamp,
-) -> Result<(ResourceId, ResourceId), SeedError> {
+/// Writes Personal website's catalogue; Preview host's id.
+fn website_catalogue(db: &mut ProjectDb, folder: &std::path::Path, now: Timestamp) -> Result<ResourceId, SeedError> {
   let codex = catalogue::recorded_connection(
     db,
     (
@@ -151,12 +140,12 @@ fn website_catalogue(
   ]);
   let versions = ["First release.", "Builds before it deploys.", "Deploys a preview."]
     .map(|description| preview.clone().with_description(description.to_owned()));
-  let preview = publish(db, "Preview release", versions.to_vec(), now)?;
+  let preview = publish_pipeline(db, "Preview release", versions.to_vec(), now)?;
   let checks = pipeline(&[
     ("Review", Executor::Agent(reviewer)),
     ("Check links", Executor::Tool(links)),
   ]);
-  let checks = publish(db, "Content checks", vec![checks], now)?;
+  let checks = publish_pipeline(db, "Content checks", vec![checks], now)?;
   // Deploy preview v2: only Preview release may call it.
   let guarded = Tool::new(
     "",
@@ -195,7 +184,7 @@ fn website_catalogue(
       now,
     )?
     .id();
-  Ok((preview, host))
+  Ok(host)
 }
 
 /// A staging policy that lets `callers` call the tool, after asking every call.
@@ -308,4 +297,22 @@ fn secret(title: &str, environment: Environment, now: Timestamp) -> Secret {
     },
     now,
   )
+}
+
+/// Creates pipeline `title` as the first of `bodies` and publishes each next one as an edit of the version before:
+/// version N is the Nth. A pipeline holds no draft (D-032).
+fn publish_pipeline(
+  db: &mut ProjectDb,
+  title: &str,
+  bodies: Vec<Pipeline>,
+  now: Timestamp,
+) -> Result<ResourceId, SeedError> {
+  let mut bodies = bodies.into_iter();
+  let first = bodies.next().expect("every pipeline has a first version");
+  let slug = Slug::from_name(title).expect("the seed's names have letters");
+  let (resource, mut version) = db.create_published(slug, name(title), &first, now)?;
+  for body in bodies {
+    version = db.publish_pipeline_edit(resource.id(), &body, version.number(), None, now)?;
+  }
+  Ok(resource.id())
 }

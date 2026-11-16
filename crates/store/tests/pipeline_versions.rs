@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, time::Duration};
 
 use orchester_core::{
   id::IdempotencyKey,
-  resource::{AgentProfile, Draft, Pipeline, ResourceKind, VersionNumber},
+  resource::{AgentProfile, Pipeline, ResourceKind, VersionNumber},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, RunNumber, RunSnapshot},
   store::{ResourceStore, RunStore},
@@ -25,9 +25,9 @@ fn pipeline_versions_list_the_runs_that_pinned_each_version() {
   let mut steps = v1.body().steps().to_vec();
   steps[0].approval_gate = true;
   let gated = Pipeline::new(steps).expect("valid pipeline");
-  db.save_draft(delivery, &Draft::new(gated, Some(v1.number()), at(8)))
-    .expect("save draft");
-  let v2 = db.publish_draft::<Pipeline>(delivery, at(9)).expect("publish v2");
+  let v2 = db
+    .publish_pipeline_edit(delivery, &gated, v1.number(), None, at(9))
+    .expect("publish v2");
   let builder = db.resources(ResourceKind::AgentProfile).expect("profiles")[0].id();
   let profile = db
     .latest_version::<AgentProfile>(builder)

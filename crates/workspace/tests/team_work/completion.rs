@@ -1,5 +1,5 @@
-//! A team run's success and merge are its own records: they never change its task here, and never make it Done (D4
-//! is open), whose status the team server keeps.
+//! A team run's success and merge are its own records: they never change its task here, and never make it Done on this
+//! computer (D4: the team server marks it Done by itself when it accepts the delivery, and keeps its status).
 
 use orchester_core::{
   integration::{MergeKind, RunMerge},

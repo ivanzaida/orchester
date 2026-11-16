@@ -107,8 +107,8 @@ impl TeamJoins {
       if run.state().get_untracked().is_pending() {
         return;
       }
-      pressed.set(Some(button.clone()));
-      if person.allows(&button) {
+      if person.allows("join a team server or answer an invite") {
+        pressed.set(Some(button.clone()));
         run.run_if_idle(Asked {
           button: button.clone(),
           ask: ask.clone(),
@@ -316,13 +316,10 @@ fn invite_actions(ctx: &mut Ctx, joins: &TeamJoins, id: &str, invite: &CloudInvi
   vec![accept.into(), decline.into()]
 }
 
-/// Under the section whose buttons start with `section`: why synthetic input did nothing, and what the last join of
-/// one of its buttons came to, once it ended.
+/// Under the section whose buttons start with `section`: what the last join of one of its buttons came to, once it
+/// ended.
 fn answered(ctx: &mut Ctx, joins: &TeamJoins, section: &str, email: &str) -> Vec<Element> {
   let mut parts = Vec::new();
-  if let Some(button) = joins.pressed.get().filter(|button| button.starts_with(section)) {
-    parts.extend(joins.person.reason(ctx, &button));
-  }
   let state = joins.run.state().get();
   if state.is_pending() {
     return parts;

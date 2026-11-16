@@ -16,7 +16,7 @@ fn team_run_inputs_team_mcp_bindings_round_trip_with_the_program_path_and_no_val
     vec![(server, Some(std::path::PathBuf::from("/opt/docs-mcp")))],
   ] {
     let operation = OperationId::generate();
-    let original = team.inputs(accepted(task, operation), Vec::new());
+    let original = team.inputs(accepted(task, operation));
     let mut bindings = original.bindings().clone();
     bindings.team_mcp = programs
       .iter()

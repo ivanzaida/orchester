@@ -6,9 +6,13 @@ use lurq::{components::Row, node::Element};
 use orchester_workspace::agents::team_text::{Added, TeamSkillSheet};
 
 use super::{added_row, from_team, used_by_row};
-use crate::screens::team_hub::rows;
+use crate::screens::team_hub::rows::{self, FromTeam};
 
-pub(super) fn sections(ctx: &lurq::app::ctx::Ctx, sheet: &TeamSkillSheet) -> Vec<Element> {
+pub(in crate::screens::team_hub) fn sections(
+  ctx: &lurq::app::ctx::Ctx,
+  sheet: &TeamSkillSheet,
+  note: FromTeam,
+) -> Vec<Element> {
   let mut rows = Vec::new();
   if !sheet.description.is_empty() {
     rows.push(rows::row(
@@ -22,8 +26,8 @@ pub(super) fn sections(ctx: &lurq::app::ctx::Ctx, sheet: &TeamSkillSheet) -> Vec
   if !matches!(sheet.added, Added::Project) {
     rows.push(added_row(ctx, &sheet.added));
   }
-  rows.push(used_by_row(ctx, &sheet.used_by));
-  vec![from_team(ctx, rows).into()]
+  rows.push(used_by_row(ctx, &sheet.used_by, None));
+  vec![from_team(ctx, note, rows).into()]
 }
 
 /// *Files*: `SKILL.md` and its reference files, each in a tag.

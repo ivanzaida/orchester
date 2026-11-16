@@ -28,11 +28,10 @@
 //! [`FilesView`]). Review is `/project/<id>/review`, the tasks whose run finished, and a task's review
 //! `/project/<id>/review/<key>`. A task's merge attempts of one run are `/project/<id>/tasks/<key>/merge/<run>`. The
 //! Pull requests, Merge queue and Merges pages are gone: `/project/<id>/pull-requests`, `/project/<id>/merge-queue`,
-//! `/project/<id>/merges` and what is under them, with any query, open the project's Overview. Import resources is
-//! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). The Skills
+//! `/project/<id>/merges` and what is under them, with any query, open the project's Overview. The Skills
 //! library, an agent profile, Instructions, a pipeline's page and Memory keep their tab,
 //! filter, item and panel in the query too ([`SkillsFilter`], [`AgentTab`],
-//! [`InstructionsView`], [`PipelineView`], [`MemoryTab`]);
+//! [`InstructionsView`], [`PipelineView`], [`MemoryView`]);
 //! `/project/<id>/settings?tab=sharing&ask=make-local` opens Sharing with *Make local*'s question. A tab, source
 //! or kind left out of the query is the one the screen opens on.
 //!
@@ -52,7 +51,6 @@ mod agents;
 mod connections;
 mod error;
 mod files;
-mod import;
 mod instructions;
 mod join;
 mod join_team;
@@ -63,6 +61,7 @@ mod orchestrator;
 mod overview;
 mod page;
 mod pipeline;
+mod pipelines_hub;
 mod project_settings;
 mod query;
 mod screen;
@@ -89,17 +88,17 @@ pub use self::{
   connections::{ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
-  import::ImportTab,
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
   join_team::JoinWay,
-  memory::MemoryTab,
+  memory::{MemoryTab, MemoryView},
   modules::{ModuleListTab, ModuleTab},
   orchester::{ConnectStep, OrchesterAsk, OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
   pipeline::{PipelineTab, PipelineView, StepPage},
+  pipelines_hub::{PipelinesFilter, PipelinesView},
   project_settings::ProjectSettingsTab,
   screen::Screen,
   secrets::{SecretsPanel, SecretsView},
@@ -131,8 +130,6 @@ const MERGES: &str = "merges";
 const MERGE: &str = "merge";
 /// Review's segment: its list, and a task's review under it.
 const REVIEW: &str = "review";
-/// Import resources' segment.
-const IMPORT: &str = "import";
 const ORCHESTRATOR: &str = "orchestrator";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
@@ -158,6 +155,9 @@ const INVITE_PATTERN: &str = "/settings/invite";
 const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
+/// New pipeline's and a pipeline's routes under the Pipelines layout (`table`): the patterns after the screen's own.
+const NEW_PIPELINE_REST: &str = "/new";
+const PIPELINE_REST: &str = "/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 /// A file of the code viewer: its path is the rest of the address, however many segments it has.
 const FILE_PATTERN: &str = "/project/:project/files/**path";
@@ -238,6 +238,7 @@ pub enum Route {
   Invite(JoinTarget),
   Project(ProjectId, ProjectPage),
 }
+impl lurq::app::component::DevtoolsInspectable for Route {}
 
 impl Route {
   /// A pipeline's list, creation page and editor belong to one sidebar screen, with distinct paths.

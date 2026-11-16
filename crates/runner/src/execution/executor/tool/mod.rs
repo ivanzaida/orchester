@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   connection::{invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  resource::{CommandAction, CommandEnvironment, ToolAction},
+  resource::{CommandAction, CommandEnvironment},
   run::{Invocation, StepExecutor, StepFailure, StepStatus, ToolCommand},
   time::Timestamp,
 };
@@ -144,8 +144,11 @@ impl RunTask {
       })
       .ok_or_else(|| problem("the step is not a tool step"))?;
     let read = |error: &dyn std::error::Error| problem(&error.to_string());
-    let body = self.resolver.tool(&*self.link, pinned).map_err(|error| read(&error))?;
-    let ToolAction::Command(action) = body.action() else {
+    let Some(action) = self
+      .resolver
+      .command(&*self.link, pinned)
+      .map_err(|error| read(&error))?
+    else {
       return Err(problem("the tool is not a command tool"));
     };
     let (_, name) = self
@@ -154,7 +157,7 @@ impl RunTask {
       .map_err(|error| read(&error))?;
     Ok(PinnedCommand {
       tool: name.as_str().to_owned(),
-      action: action.clone(),
+      action,
     })
   }
 

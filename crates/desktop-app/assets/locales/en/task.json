@@ -68,12 +68,15 @@
     },
     "merge": {
       "label": "Merge",
+      "deliver": "Merge and deliver",
       "tryAgain": "Try again",
       "resolve": "Resolve",
       "recordMerge": "Record merge",
       "putFilesBack": "Put files back",
       "noBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
       "noBranchShort": "No branch to merge into",
+      "admin": "This team task is in no module, so its run merges into the base branch itself. A member merges it only while the team's Automatic merge is on; put the task in a module to deliver it on an Admin's authorization.",
+      "adminShort": "An Admin's, or Automatic merge",
       "waits": {
         "anotherMerge": "Merge waits until another run's merge in this project is done.",
         "pullRequest": "Merge waits until the run's pull request is created.",
@@ -136,6 +139,7 @@
         "manualRun": "Manual · this run",
         "manualProject": "Manual · project",
         "manualProfile": "Manual · profile",
+        "dangerous": "Dangerous auto-approve",
         "switchToManual": "Switch to Manual for this run"
       }
     },
@@ -236,7 +240,7 @@
       "runAgainBlocked": "Blocked by unfinished tasks",
       "runAgainChanged": "The latest run changed",
       "runAgainActive": "Run #{{run}} is active",
-      "runAgainUnpublished": "{{pipeline}} isn't published",
+      "runAgainUnpublished": "{{pipeline}} isn't available",
       "runAgainDailyBudget": "Today's token budget is used"
     },
     "formerKey": "was {{key}}",
@@ -281,6 +285,16 @@
       "changed": "Last change",
       "changedValue": "{{by}} · {{time}}",
       "note": "Briefs, criteria and messages written before the join still say {{former}}; Orchester doesn't rewrite them. Searching {{former}} finds this task."
+    },
+    "parked": {
+      "decision": "Parked for you — a decision is needed",
+      "approval": "Parked for you — an approval is needed",
+      "signIn": "Parked for you — a sign-in is needed",
+      "tool": "Parked for you — a tool did not answer",
+      "ceiling": "Parked for you — a ceiling is reached",
+      "other": "Parked for you",
+      "words": "{{why}} {{toDo}}",
+      "giveBack": "Give it back"
     }
   }
 }

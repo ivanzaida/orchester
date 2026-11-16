@@ -204,7 +204,11 @@ fn repository_files(kontur: &Kontur) -> Result<(), SeedError> {
 }
 
 /// Creates `title`'s resource with the first of `bodies` and publishes each in turn, three days ago.
-fn publish<B: ResourceBody>(kontur: &mut Kontur, title: &str, bodies: Vec<B>) -> Result<ResourceId, SeedError> {
+pub(super) fn publish<B: ResourceBody>(
+  kontur: &mut Kontur,
+  title: &str,
+  bodies: Vec<B>,
+) -> Result<ResourceId, SeedError> {
   let at = kontur.ago(3 * 24 * 60);
   let mut bodies = bodies.into_iter();
   let first = bodies.next().expect("every resource has a first version");
@@ -250,7 +254,7 @@ fn pipeline(kontur: &Kontur, title: &str) -> Result<ResourceId, SeedError> {
     .ok_or_else(|| SeedError::Invalid(format!("the Agents fixture needs {title}")))
 }
 
-fn instruction(text: &str, scope: InstructionScope) -> Result<Instruction, SeedError> {
+pub(super) fn instruction(text: &str, scope: InstructionScope) -> Result<Instruction, SeedError> {
   Instruction::new(
     PromptText::new(text).map_err(|error| SeedError::Invalid(error.to_string()))?,
     AgentTargets::All,
@@ -260,11 +264,11 @@ fn instruction(text: &str, scope: InstructionScope) -> Result<Instruction, SeedE
   .map_err(|error| SeedError::Invalid(error.to_string()))
 }
 
-fn skill(description: &str, body: &str, scope: InstructionScope) -> Result<Skill, SeedError> {
+pub(super) fn skill(description: &str, body: &str, scope: InstructionScope) -> Result<Skill, SeedError> {
   Skill::new(description.into(), body.into(), Vec::new(), scope).map_err(|error| SeedError::Invalid(error.to_string()))
 }
 
-fn slug(title: &str) -> Slug {
+pub(super) fn slug(title: &str) -> Slug {
   Slug::from_name(title).expect("the seed's names have letters")
 }
 

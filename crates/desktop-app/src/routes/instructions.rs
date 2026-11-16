@@ -1,5 +1,5 @@
-//! What Instructions shows (`fePhH`): its scope tab and the rule open in it, a new rule, or the import page
-//! (`/project/<id>/instructions?tab=roles&rule=…`, `&rule=new`, `?view=import`), with the panel beside a
+//! What Instructions shows (`fePhH`): its scope tab and the rule open in it, or a new rule
+//! (`/project/<id>/instructions?tab=roles&rule=…`, `&rule=new`), with the panel beside a
 //! rule (`&panel=preview`; left out, the tab's own).
 
 use orchester_core::id::ResourceId;
@@ -10,10 +10,8 @@ use super::{
 };
 
 const RULE: &str = "rule";
-const VIEW: &str = "view";
 const PANEL: &str = "panel";
 const NEW: &str = "new";
-const IMPORT: &str = "import";
 
 /// A scope tab of Instructions; Project rules is the one it opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -80,12 +78,11 @@ impl InstructionsPanel {
   }
 }
 
-/// A rule of a tab (`None`: the tab's first), a new rule in a tab, or the import page; a rule with its panel.
+/// A rule of a tab (`None`: the tab's first) or a new rule in a tab, with its panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum InstructionsView {
   Rule(InstructionsTab, Option<ResourceId>, InstructionsPanel),
   New(InstructionsTab, InstructionsPanel),
-  Import,
 }
 
 // The view a person left Instructions for, held while unsaved edits are asked about.
@@ -108,28 +105,25 @@ impl InstructionsView {
     Self::New(tab, InstructionsPanel::Hidden)
   }
 
-  /// The scope tab a rule or a new rule is in; the import page has none.
-  pub const fn tab(self) -> Option<InstructionsTab> {
+  /// The scope tab a rule or a new rule is in.
+  pub const fn tab(self) -> InstructionsTab {
     match self {
-      Self::Rule(tab, ..) | Self::New(tab, _) => Some(tab),
-      Self::Import => None,
+      Self::Rule(tab, ..) | Self::New(tab, _) => tab,
     }
   }
 
-  /// The panel beside a rule or a new rule; the import page has none.
-  pub const fn panel(self) -> Option<InstructionsPanel> {
+  /// The panel beside a rule or a new rule.
+  pub const fn panel(self) -> InstructionsPanel {
     match self {
-      Self::Rule(.., panel) | Self::New(_, panel) => Some(panel),
-      Self::Import => None,
+      Self::Rule(.., panel) | Self::New(_, panel) => panel,
     }
   }
 
-  /// The same rule with `panel` beside it; the import page as it is.
+  /// The same rule with `panel` beside it.
   pub const fn with_panel(self, panel: InstructionsPanel) -> Self {
     match self {
       Self::Rule(tab, rule, _) => Self::Rule(tab, rule, panel),
       Self::New(tab, _) => Self::New(tab, panel),
-      Self::Import => Self::Import,
     }
   }
 
@@ -152,21 +146,10 @@ impl InstructionsView {
           (PANEL, (shown != InstructionsPanel::Hidden).then(|| shown.name())),
         ],
       ),
-      Self::Import => with_query(instructions, &[(VIEW, Some(IMPORT))]),
     }
   }
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {
-    match params.take(VIEW)? {
-      None => {}
-      Some(view) if view == IMPORT => return Ok(Self::Import),
-      Some(value) => {
-        return Err(RouteError::InvalidParam {
-          param: VIEW.to_owned(),
-          value,
-        });
-      }
-    }
     let tab = params.take_or_default(TAB, InstructionsTab::from_name)?;
     let view = match params.take(RULE)? {
       None => Self::rule(tab, None),

@@ -390,7 +390,7 @@ pub enum Command {
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
   RemoveWorktrees { run: RunId, request: RemovalRequest },
-  /// A request of a task page's Services tab about a run's services (protocol 53). Answered with [`Reply::Services`]
+  /// A request of a task page's Services tab about a run's services (protocol 54). Answered with [`Reply::Services`]
   /// once carried out, or [`Rejection::Failed`] with why not.
   Services(ServiceCommand),
 }

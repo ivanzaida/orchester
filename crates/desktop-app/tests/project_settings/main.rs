@@ -1,5 +1,5 @@
 //! Project settings in the real headless window: states, autosaves and person-only questions.
-mod bindings;
+mod dangerous;
 mod decision_reviewer;
 mod domain;
 mod environment;
@@ -14,9 +14,13 @@ mod import_draft;
 mod index;
 mod layout;
 mod limits;
+mod limits_mcp;
+#[path = "../files/mcp_client.rs"]
+mod mcp_client;
 mod memory;
 mod navigation_status;
 mod orchestrator;
+mod orchestrator_leading;
 mod orchestrator_watching;
 mod queries;
 mod reads;

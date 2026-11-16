@@ -15,7 +15,7 @@ use orchester_core::{
   resource::{
     AgentProfile, AgentTargets, CommandAction, CommandArg, CommandProgram, InjectionEvent, Instruction,
     InstructionScope, ModelId, Pipeline, PipelineSources, PromptText, ProviderSettings, RepositoryAccess, Skill,
-    SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamAgentProfile, Tool, Version, VersionNumber,
+    SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamTool, Tool, Version, VersionNumber,
   },
   run::{
     PublishedVersions, RunSnapshot,
@@ -181,7 +181,7 @@ impl Config {
     let bodies = PinnedBodies {
       profiles: &profiles,
       instructions: &instructions,
-      tools: &tools,
+      tools: &team_tools(&tools),
       skills: &skills,
       mcp_servers: &[],
       labels: &labels,
@@ -266,7 +266,7 @@ fn execution_bundle_inputs_pin_a_team_profile_as_the_local_one_it_came_from() {
   let bodies = PinnedBodies {
     profiles: &team,
     instructions: &listed(&config.instructions, false),
-    tools: &listed(&config.tools, false),
+    tools: &team_tools(&listed(&config.tools, false)),
     skills: &listed(&config.skills, false),
     mcp_servers: &[],
     labels: &config.labels(),
@@ -361,7 +361,7 @@ fn execution_bundle_inputs_label_each_pinned_version_as_it_was() {
   let bodies = PinnedBodies {
     profiles: &execution_profiles(&config.profiles, false),
     instructions: &listed(&config.instructions, false),
-    tools: &listed(&config.tools, false),
+    tools: &team_tools(&listed(&config.tools, false)),
     skills: &listed(&config.skills, false),
     mcp_servers: &[],
     labels: &unlabelled,
@@ -544,7 +544,7 @@ fn execution_bundle_inputs_need_every_pinned_body_and_bounded_files() {
   let bodies = PinnedBodies {
     profiles: &execution_profiles(&config.profiles, false),
     instructions: &[],
-    tools: &config.tools.values().cloned().collect::<Vec<_>>(),
+    tools: &team_tools(&config.tools.values().cloned().collect::<Vec<_>>()),
     skills: &config.skills.values().cloned().collect::<Vec<_>>(),
     mcp_servers: &[],
     labels: &config.labels(),
@@ -560,4 +560,15 @@ fn execution_bundle_inputs_need_every_pinned_body_and_bounded_files() {
       .to_string()
       .contains("more than a bundle file may have")
   );
+}
+
+/// `tools`, commands of this computer, as the team holds them: a command names no secret, so it is the same tool.
+fn team_tools(tools: &[Version<Tool>]) -> Vec<Version<TeamTool>> {
+  tools
+    .iter()
+    .map(|version| {
+      let team = TeamTool::from_local(version.body(), |_| None).expect("a command names no secret");
+      Version::new(version.id(), version.number(), team, version.published_at())
+    })
+    .collect()
 }

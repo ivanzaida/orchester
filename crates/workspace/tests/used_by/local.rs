@@ -2,9 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use orchester_api::SharedResourceKind::{
-  Instruction as InstructionKind, Pipeline as PipelineKind, Skill as SkillKind, Tool as ToolKind,
-};
+use orchester_api::SharedResourceKind::{AgentProfile as AgentProfileKind, Pipeline as PipelineKind};
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   name::Name,
@@ -13,8 +11,7 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandProgram, DeliverStep, DeniedBehavior, Draft, InjectionEvent, Instruction, InstructionScope, ModelId,
-    Pipeline, PromptText, ProviderSettings, RemoveMode, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind, Tool,
-    ToolAction,
+    Pipeline, PromptText, ProviderSettings, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind, Tool, ToolAction,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, StepFailure},
@@ -111,18 +108,16 @@ impl Local {
   }
 
   /// A resource of `body` with its v1 published.
-  fn publish<B: orchester_core::resource::ResourceBody>(
+  fn publish<B: orchester_core::resource::ResourceBody + Clone>(
     &mut self,
     (slug, label): (&str, &str),
     body: &B,
   ) -> ResourceId {
     let now = self.now();
-    let resource = self
+    let (resource, _) = self
       .db
-      .create_resource(Slug::new(slug).expect("slug"), name(label), body, now)
-      .expect("resource");
-    let now = self.now();
-    self.db.publish_draft::<B>(resource.id(), now).expect("v1");
+      .create_published(Slug::new(slug).expect("slug"), name(label), body, now)
+      .expect("v1");
     resource.id()
   }
 
@@ -141,6 +136,21 @@ impl Local {
       .expect("draft");
     let now = self.now();
     self.db.publish_draft::<B>(resource, now).expect("next version");
+  }
+
+  /// Pipeline `resource`'s next version, with `body`: a pipeline holds no draft, its edit publishes at once.
+  fn republish_pipeline(&mut self, resource: ResourceId, body: &Pipeline) {
+    let latest = self
+      .db
+      .latest_version::<Pipeline>(resource)
+      .expect("read")
+      .expect("published")
+      .number();
+    let now = self.now();
+    self
+      .db
+      .publish_pipeline_edit(resource, body, latest, None, now)
+      .expect("next version");
   }
 
   fn tool(&mut self, slug: &str, label: &str) -> ResourceId {
@@ -244,12 +254,9 @@ fn used_by_local_lists_the_resources_whose_latest_version_names_it_by_name_then_
   // Only the latest version counts: v1 ran the tool, v2 runs another.
   let other_tool = local.tool("lint", "Lint");
   let moved_on = local.publish(("moved", "Moved on"), &pipeline_running(tool));
-  local.republish(moved_on, pipeline_running(other_tool));
+  local.republish_pipeline(moved_on, &pipeline_running(other_tool));
   let removed = local.publish(("gone", "Gone"), &pipeline_running(tool));
-  local
-    .db
-    .remove_resource(removed, RemoveMode::Unused, at(100))
-    .expect("removed");
+  local.db.remove_resource(removed, at(100)).expect("removed");
   let own = instruction_for(InstructionScope::Pipeline { pipeline: delivery }, "Be brief");
   local.publish(("style", "Style"), &own);
   // An id in the text of an instruction names nothing.
@@ -279,13 +286,14 @@ fn used_by_local_lists_the_resources_whose_latest_version_names_it_by_name_then_
     "by name without regard to case; the tool is no user of itself, a removed pipeline and a version that no longer \
      names it are left out"
   );
+  // An instruction's or a skill's scope decides nothing in a local project, so it names nothing either.
   assert_eq!(
     shown(&local.used_by(delivery).expect("the pipeline's users")).0,
-    [(InstructionKind, "Style", 1)]
+    Vec::new()
   );
   assert_eq!(
     shown(&local.used_by(alpha).expect("the pipeline's users")).0,
-    [(SkillKind, "Ship", 1)]
+    Vec::new()
   );
   assert_eq!(
     shown(&local.used_by(removed).expect("a removed resource answers")),
@@ -339,7 +347,7 @@ fn used_by_local_refuses_a_resource_the_project_does_not_have() {
 }
 
 #[test]
-fn used_by_local_names_an_agent_profile_by_a_step_the_deliver_integrator_and_an_instruction_target() {
+fn used_by_local_names_an_agent_profile_by_a_step_and_the_deliver_integrator_and_not_by_an_instruction_target() {
   let mut local = Local::new();
   let profile = local.profile("builder", "Builder");
   let other = local.profile("reviewer", "Reviewer");
@@ -366,17 +374,53 @@ fn used_by_local_names_an_agent_profile_by_a_step_the_deliver_integrator_and_an_
   let used = local.used_by(profile).expect("the profile's users");
   assert_eq!(
     shown(&used).0,
-    [
-      (InstructionKind, "Brief", 1),
-      (PipelineKind, "Implement", 1),
-      (PipelineKind, "Ship", 1)
-    ],
-    "a step's agent, the Deliver step's integrator and an instruction's targets name a profile"
+    [(PipelineKind, "Implement", 1), (PipelineKind, "Ship", 1)],
+    "a step's agent and the Deliver step's integrator name a profile; an instruction's targets decide nothing here"
   );
 }
 
+/// A local profile names the instructions, skills and tools it gives its agents
+/// (`docs/design/team-configuration.md`, "Decided 2026-11-09").
 #[test]
-fn used_by_local_names_a_pipeline_by_the_callers_of_a_tools_access_policy() {
+fn used_by_local_names_an_instruction_skill_and_tool_by_the_profiles_that_give_them() {
+  let mut local = Local::new();
+  let tool = local.tool("deploy", "Deploy");
+  let brief = local.publish(
+    ("brief", "Brief"),
+    &instruction_for(InstructionScope::Project, "Be brief"),
+  );
+  let skill = Skill::new(
+    "Ship".to_owned(),
+    "How to ship".to_owned(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("skill");
+  let ship = local.publish(("ship", "Ship"), &skill);
+  let builder = local.profile("builder", "Builder");
+  local.profile("reviewer", "Reviewer");
+  let chosen = |id| orchester_core::resource::ChosenResources::new(vec![id]).expect("one");
+  let giving = local
+    .db
+    .latest_version::<AgentProfile>(builder)
+    .expect("read")
+    .expect("published")
+    .body()
+    .clone()
+    .with_given(chosen(brief), chosen(ship), chosen(tool));
+  local.republish(builder, giving);
+
+  for resource in [brief, ship, tool] {
+    assert_eq!(
+      shown(&local.used_by(resource).expect("its users")).0,
+      [(AgentProfileKind, "Builder", 2)],
+      "only the profile that gives it, in its latest version"
+    );
+  }
+}
+
+#[test]
+fn used_by_local_names_no_pipeline_by_the_callers_of_a_tools_access_policy() {
   let mut local = Local::new();
   let tool = local.tool("deploy", "Deploy");
   let pipeline = local.publish(("delivery", "Delivery"), &pipeline_running(tool));
@@ -392,13 +436,11 @@ fn used_by_local_names_a_pipeline_by_the_callers_of_a_tools_access_policy() {
   let guarded = Tool::new("", ToolAction::Command(status_action()), Some(access)).expect("tool");
   local.publish(("guarded", "Guarded"), &guarded);
 
-  assert_eq!(
-    shown(&local.used_by(pipeline).expect("the pipeline's users")).0,
-    [(ToolKind, "Guarded", 1)]
-  );
-  assert_eq!(
-    shown(&local.used_by(other).expect("the pipeline's users")).0,
-    Vec::new(),
-    "a pipeline the policy does not list is not named"
-  );
+  for pipeline in [pipeline, other] {
+    assert_eq!(
+      shown(&local.used_by(pipeline).expect("the pipeline's users")).0,
+      Vec::new(),
+      "a tool's callers decide nothing for a local run, so they name nothing"
+    );
+  }
 }

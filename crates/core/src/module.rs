@@ -16,6 +16,8 @@ pub mod burndown;
 pub mod measure;
 pub mod progress;
 
+pub mod delivery;
+
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -121,6 +123,8 @@ pub struct Module {
   created_at: Timestamp,
   /// Kept on this computer only, outside a shared module's revision ([`crate::integration::base`]).
   base: BaseChoice,
+  /// Its own branch, when it has one ([`delivery`]); kept on this computer, as its base branch is.
+  own: Option<delivery::OwnBranch>,
 }
 
 impl Module {
@@ -130,6 +134,7 @@ impl Module {
       details,
       created_at,
       base: BaseChoice::CheckedOut,
+      own: None,
     }
   }
 
@@ -149,9 +154,24 @@ impl Module {
     self.created_at
   }
 
-  /// The base branch the module's tasks that have none of their own take.
+  /// The base branch the module's tasks that have none of their own take; for a module with a branch of its own,
+  /// the branch it is delivered into.
   pub const fn base(&self) -> &BaseChoice {
     &self.base
+  }
+
+  /// The module's own branch, when it has one.
+  pub const fn own_branch(&self) -> Option<&delivery::OwnBranch> {
+    self.own.as_ref()
+  }
+
+  /// The branch the module's tasks that have none of their own start from and merge into: its own branch when it
+  /// has one, else its base branch.
+  pub fn run_base(&self) -> BaseChoice {
+    match &self.own {
+      Some(own) => BaseChoice::Branch(own.branch.clone()),
+      None => self.base.clone(),
+    }
   }
 
   /// The module with `details` in place of its own.
@@ -164,6 +184,12 @@ impl Module {
   #[must_use]
   pub fn with_base(self, base: BaseChoice) -> Self {
     Self { base, ..self }
+  }
+
+  /// The module with `own` as its own branch, or with none.
+  #[must_use]
+  pub fn with_own_branch(self, own: Option<delivery::OwnBranch>) -> Self {
+    Self { own, ..self }
   }
 }
 

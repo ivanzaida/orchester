@@ -1,6 +1,7 @@
 //! The Memory screens with no record (`tasks` scenario): the task's memory says what agents keep and which step works
 //! (`Empty · no records yet` `e8oWP4`), with no toolbar, as its own *New record* stands in the state, and its Summary's
-//! link says it has no notes; each tab of the project's page says it has no records (`ejSHj`); and a task's Summary
+//! link says it has no notes; each status of the Agents hub's Memory filter says it has no records across its body
+//! (Y4 `i7aEec`); and a task's Summary
 //! says in its Output that runs keep no artifacts yet.
 
 use orchester_app::routes::MemoryTab;
@@ -44,21 +45,24 @@ fn memory_empty_project_tabs_say_they_have_no_records() {
     (MemoryTab::Rejected, "No rejected records"),
   ] {
     page.memory_tab(tab);
-    assert_eq!(page.text("memory-empty-label"), title, "{tab:?}");
-    assert!(page.has("memory-empty-rows"), "{tab:?} says so in one row in its box");
-    assert!(!page.has("memory-search"), "{tab:?} hides its search");
+    assert_eq!(page.text("memory-empty-title"), title, "{tab:?}");
+    assert!(page.has("memory-empty-body"), "{tab:?} says so across the body (Y4)");
+    assert!(
+      page.has("memory-search"),
+      "{tab:?} keeps the search beside the statuses"
+    );
     assert_eq!(
       page.has("memory-empty-new"),
       tab == MemoryTab::Active,
-      "only Active's row has New record"
+      "only Active's state has New record"
     );
   }
-  let rejected = page.text("memory-empty");
   assert!(
-    rejected.ends_with("So are proposals an agent replaced with a newer one before anyone decided."),
-    "{rejected}"
+    page
+      .text("memory-empty-detail")
+      .ends_with("So are proposals an agent replaced with a newer one before anyone decided."),
   );
-  assert!(!page.has("memory-panel"), "no side panel");
+  assert!(!page.has("memory-panel"), "no panel");
 }
 
 #[test]

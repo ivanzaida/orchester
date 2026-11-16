@@ -7,9 +7,12 @@ use orchester_core::connection::mcp::McpServerName;
 use orchester_workspace::app_mcp::setup::{Header, NewTeamMcpServer, Runs, team_mcp_server};
 
 use super::{Fields, INSIDE, Marks, PROGRAM_RUN, RUNS, RUNS_AS, WORKTREE, fields, lines_text};
-use crate::screens::team_hub::{
-  create::fields::Shown,
-  model::{Kind, Listing},
+use crate::screens::{
+  hub::profile_form::Offer,
+  team_hub::{
+    create::{fields::Shown, mode::Mode},
+    model::{Kind, Listing},
+  },
 };
 
 /// What an edit's rows need besides the fields.
@@ -83,12 +86,19 @@ impl Fields {
     let checked = team_mcp_server(&input, &others);
     let invalid = checked.as_ref().err().map(|invalid| (**invalid).clone());
     let first = ElementRef::default();
+    let taken: Vec<String> = view
+      .listing
+      .shown(Kind::McpServer.filter())
+      .map(|entry| entry.name.clone())
+      .collect();
     let shown = Shown {
-      kind: Kind::McpServer,
-      listing: view.listing,
+      mode: Mode::Team,
+      taken: &taken,
       tried: true,
       locked: view.locked,
-      agents: None,
+      offer: &Offer::default(),
+      connections: None,
+      pipelines: &[],
       first: &first,
       refused_name: None,
       published: Some(view.published),
@@ -97,6 +107,7 @@ impl Fields {
     let program = matches!(input.runs, Runs::Program { .. });
     let mut rows = vec![fields::row(
       ctx,
+      shown.key(),
       &RUNS_AS,
       marks.on(None, marks.runs).as_ref(),
       fields::choice(ctx, &RUNS_AS, &self.runs, &RUNS, view.locked),

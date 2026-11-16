@@ -128,7 +128,7 @@ what is local by nature: connections, program paths, secret values.
 Rows 30, 52, 74, 75 and 80 of `docs/architecture/server.md` (resource bodies with foreign references, local
 pipelines in a team project, the reference bindings of *On this computer*, slug-taking), which ORC-847 rewrote; the
 decisions of 2026-11-06 are rows 81–92 there and those of 2026-11-07 rows 93 to 95. The code that binds references
-and hides local resources by slug is removed by ORC-845.
+and hides local resources by slug was removed by ORC-845.
 
 ## Decided 2026-11-07 (the person)
 
@@ -138,3 +138,14 @@ and hides local resources by slug is removed by ORC-845.
    switched off is *Off here*.
 3. A team reviewer names its CLI kind like a team agent profile, and each computer picks the connection it runs on
    (row 95 of `docs/architecture/server.md`; built as ORC-887).
+
+## Decided 2026-11-09 (the person)
+
+A local agent profile owns what its agents are given: besides its MCP servers it chooses the project's instructions,
+skills and tools (`AgentProfile::instruction_resources`, `skills`, `tools`), and nothing else gives a local run's agent
+one. An instruction's scope and targets, a skill's scope and a tool's callers no longer decide who gets it in a local
+project (the scope still places an instruction in its prompt part), and creating one asks for none. The project
+migration `profile_given` filled every local profile's versions and draft in place with what reached its agents before.
+A team run still goes by the scopes, targets and callers of the bodies its bundle pins: the bundle's `ExecutionProfile`
+carries no such lists, which needs a contract change (bundle schema 4) before team runs can follow the team profile's
+`tools`, `skills` and `instruction_resources`.

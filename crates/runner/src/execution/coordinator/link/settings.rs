@@ -6,7 +6,7 @@ use std::ops::Deref;
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   code_index::CodeIndexSetting,
-  run::{EffectiveMode, review::AutoModeSettings},
+  run::{ApproveMode, EffectiveMode, review::AutoModeSettings},
   store::{SettingsStore, WorkspaceStore},
 };
 use orchester_store::ProjectDb;
@@ -15,8 +15,8 @@ use super::{LocalLink, answered, read_failed};
 use crate::execution::executor::link::{
   LinkError,
   settings::{
-    AgentFilesRequest, ApprovalModeRequest, AutoModeRequest, CodeIndexRequest, QaAppsAtOnce, QaAppsRequest,
-    SettingsLink, WarmFolders, WarmFoldersRequest,
+    AgentFilesRequest, ApprovalModeRequest, ApproveModeRequest, AutoModeRequest, CodeIndexRequest, QaAppsAtOnce,
+    QaAppsRequest, SettingsLink, WarmFolders, WarmFoldersRequest,
   },
 };
 
@@ -38,6 +38,10 @@ impl<D: Deref<Target = ProjectDb>> SettingsLink for LocalLink<D> {
         .approval_mode(request.run, request.profile)
         .map_err(|error| read_failed(&error))
     })
+  }
+
+  fn approve_mode(&self, request: &ApproveModeRequest) -> Result<ApproveMode, LinkError> {
+    answered(request, || self.0.approve_mode().map_err(|error| read_failed(&error)))
   }
 
   fn auto_mode(&self, request: &AutoModeRequest) -> Result<AutoModeSettings, LinkError> {

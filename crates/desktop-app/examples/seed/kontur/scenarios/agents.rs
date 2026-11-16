@@ -1,7 +1,7 @@
 //! Agents QA states: saved Builder draft, stale Reviewer draft, empty variants, and a repairable read error.
 use orchester_core::{
   connection::{AgentProvider, SignIn},
-  resource::{AgentProfile, Draft, Pipeline, PromptText, ResourceKind},
+  resource::{AgentProfile, Draft, PromptText, ResourceKind},
   store::ResourceStore,
 };
 
@@ -60,23 +60,6 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
       kontur.db.publish_draft::<AgentProfile>(resource.id(), kontur.ago(3))?;
     }
     kontur.db.save_draft(resource.id(), &draft)?;
-  }
-  // Usage includes the saved pipeline draft as well as its published version.
-  for resource in kontur.db.resources(ResourceKind::Pipeline)? {
-    if let Some(version) = kontur.db.latest_version::<Pipeline>(resource.id())? {
-      kontur.db.save_draft(
-        resource.id(),
-        &Draft::new(
-          version
-            .body()
-            .clone()
-            .with_description("Draft workflow under review.".into()),
-          Some(version.number()),
-          kontur.ago(1),
-        ),
-      )?;
-      break;
-    }
   }
   super::agents_cases::seed(kontur)
 }

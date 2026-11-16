@@ -19,10 +19,6 @@ fn connections_and_secrets_routes_are_project_settings_tabs() {
       format!("{root}?selected={CONNECTION}"),
     ),
     (
-      ProjectPage::NewConnection(NewConnection::AgentProvider),
-      format!("{root}/new"),
-    ),
-    (
       ProjectPage::NewConnection(NewConnection::McpServer),
       format!("{root}/new?kind=mcp_server"),
     ),

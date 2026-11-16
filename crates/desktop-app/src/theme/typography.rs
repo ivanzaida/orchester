@@ -173,10 +173,21 @@ pub enum IconSize {
   Lg,
   /// 18: an empty state's glyph (`WOjtr`).
   Xl,
+  /// 20: the glyph of a panel that has nothing picked, with no tile of its own (`hpojF` in L13 `MXma9`).
+  Panel,
 }
 
 impl IconSize {
-  pub const ALL: [Self; 7] = [Self::Xs, Self::Sm, Self::Base, Self::Md, Self::Nav, Self::Lg, Self::Xl];
+  pub const ALL: [Self; 8] = [
+    Self::Xs,
+    Self::Sm,
+    Self::Base,
+    Self::Md,
+    Self::Nav,
+    Self::Lg,
+    Self::Xl,
+    Self::Panel,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -191,6 +202,7 @@ impl IconSize {
       Self::Nav => "icon_nav",
       Self::Lg => "icon_lg",
       Self::Xl => "icon_xl",
+      Self::Panel => "icon_panel",
     }
   }
 
@@ -203,6 +215,7 @@ impl IconSize {
       Self::Nav => 15.0,
       Self::Lg => 16.0,
       Self::Xl => 18.0,
+      Self::Panel => 20.0,
     }
   }
 }
@@ -237,56 +250,55 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       palette.get(ExtraColor::AccentText.role()),
     ),
     mono: mono(style(12.0, FontWeight::Normal, 1.5, 0.0, primary)),
-    extra: extras.chain(icons).chain(screens(palette)).collect(),
+    extra: extras
+      .chain(icons)
+      .chain(super::startup::typography(palette))
+      .chain(super::settings::typography(palette))
+      .chain(super::accounts::typography(palette))
+      .chain(super::orchester::typography(palette))
+      .chain(super::sign_in::typography(palette))
+      .chain(super::task::typography(palette))
+      .chain(super::decisions::typography(palette))
+      .chain(super::shell::typography(palette))
+      .chain(super::code::typography(palette))
+      .chain(super::files::typography(palette))
+      .chain(super::task_form::typography(palette))
+      .chain(super::conversation::typography(palette))
+      .chain(super::cards::typography(palette))
+      .chain(super::lifecycle::typography(palette))
+      .chain(super::local_integration::typography(palette))
+      .chain(super::connections::typography(palette))
+      .chain(super::context::typography(palette))
+      .chain(super::secrets::typography(palette))
+      .chain(super::projects::typography(palette))
+      .chain(super::agents::typography(palette))
+      .chain(super::instructions::typography(palette))
+      .chain(super::skills::typography(palette))
+      .chain(super::orchestrator::typography(palette))
+      .chain(super::overview::typography(palette))
+      .chain(super::needs_you::typography(palette))
+      .chain(super::usage::typography(palette))
+      .chain(super::memory::typography(palette))
+      .chain(super::delivery::typography(palette))
+      .chain(super::merge_attempt::typography(palette))
+      .chain(super::review::typography(palette))
+      .chain(super::sources::typography(palette))
+      .chain(super::project_settings::typography(palette))
+      .chain(super::hub::typography(palette))
+      .chain(super::archive::typography(palette))
+      .chain(super::failure::typography(palette))
+      .chain(super::groups::typography(palette))
+      .chain(super::pipelines::typography(palette))
+      .chain(super::date_picker::typography(palette))
+      .chain(super::browser::typography(palette))
+      .chain(later_areas(palette))
+      .collect(),
   }
 }
 
-/// The type roles of the app's screens and parts, each module's own.
-fn screens(palette: &ThemePalette) -> Vec<(Arc<str>, TextStyle)> {
-  super::startup::typography(palette)
-    .chain(super::settings::typography(palette))
-    .chain(super::accounts::typography(palette))
-    .chain(super::orchester::typography(palette))
-    .chain(super::sign_in::typography(palette))
-    .chain(super::task::typography(palette))
-    .chain(super::decisions::typography(palette))
-    .chain(super::shell::typography(palette))
-    .chain(super::code::typography(palette))
-    .chain(super::files::typography(palette))
-    .chain(super::task_form::typography(palette))
-    .chain(super::conversation::typography(palette))
-    .chain(super::cards::typography(palette))
-    .chain(super::lifecycle::typography(palette))
-    .chain(super::local_integration::typography(palette))
-    .chain(super::connections::typography(palette))
-    .chain(super::context::typography(palette))
-    .chain(super::secrets::typography(palette))
-    .chain(super::projects::typography(palette))
-    .chain(super::agents::typography(palette))
-    .chain(super::instructions::typography(palette))
-    .chain(super::skills::typography(palette))
-    .chain(super::orchestrator::typography(palette))
-    .chain(super::overview::typography(palette))
-    .chain(super::needs_you::typography(palette))
-    .chain(super::usage::typography(palette))
-    .chain(super::memory::typography(palette))
-    .chain(super::delivery::typography(palette))
-    .chain(super::merge_attempt::typography(palette))
-    .chain(super::review::typography(palette))
-    .chain(super::sources::typography(palette))
-    .chain(super::project_settings::typography(palette))
-    .chain(super::services::typography(palette))
-    .chain(super::run_services::typography(palette))
-    .chain(super::test_results::typography(palette))
-    .chain(super::import::typography(palette))
-    .chain(super::hub::typography(palette))
-    .chain(super::archive::typography(palette))
-    .chain(super::failure::typography(palette))
-    .chain(super::groups::typography(palette))
-    .chain(super::pipelines::typography(palette))
-    .chain(super::date_picker::typography(palette))
-    .chain(super::browser::typography(palette))
-    .chain(super::dialog::typography(palette))
+/// The roles of the areas added after the first ones, in the order they were added.
+fn later_areas(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
+  super::dialog::typography(palette)
     .chain(super::todo_list::typography(palette))
     .chain(super::slash::typography(palette))
     .chain(super::permissions::typography(palette))
@@ -294,7 +306,15 @@ fn screens(palette: &ThemePalette) -> Vec<(Arc<str>, TextStyle)> {
     .chain(super::side_question::typography(palette))
     .chain(super::ci::typography(palette))
     .chain(super::watching::typography(palette))
-    .collect()
+    .chain(super::leading::typography(palette))
+    .chain(super::team_state::typography(palette))
+    .chain(super::runs_on_picker::typography(palette))
+    .chain(super::flow::typography(palette))
+    .chain(super::step_strip::typography(palette))
+    .chain(super::agent_picker::typography(palette))
+    .chain(super::services::typography(palette))
+    .chain(super::run_services::typography(palette))
+    .chain(super::test_results::typography(palette))
 }
 
 /// `sans` in Geist Mono without ligatures: a command, a key or a figure shows each character as typed

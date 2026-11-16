@@ -115,6 +115,7 @@ icons! {
   Crosshair => '\u{e0ac}',
   Database => '\u{e0ad}',
   DatabaseZap => '\u{e50b}',
+  DoorOpen => '\u{e3d6}',
   Download => '\u{e0b2}',
   Ellipsis => '\u{e0b6}',
   Equal => '\u{e1bd}',
@@ -279,12 +280,14 @@ icons! {
   Smartphone => '\u{e163}',
   Sparkle => '\u{e47e}',
   Sparkles => '\u{e412}',
+  Split => '\u{e440}',
   Square => '\u{e167}',
   SquareCheck => '\u{e559}',
   // The font's `edit`, which lucide renamed `square-pen`.
   SquarePen => '\u{e172}',
   SquarePlus => '\u{e173}',
   SquareTerminal => '\u{e20a}',
+  Star => '\u{e176}',
   Sun => '\u{e178}',
   Table => '\u{e17d}',
   Tag => '\u{e17f}',
@@ -373,12 +376,11 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::Skills => Icon::GraduationCap,
     Screen::Tools => Icon::Wrench,
     Screen::Secrets => Icon::KeyRound,
-    Screen::Connections => Icon::Plug,
+    Screen::Connections => Icon::SlidersHorizontal,
     Screen::NewConnection => Icon::Plus,
     Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
     Screen::Files => Icon::FolderTree,
-    Screen::ImportResources => Icon::Download,
   }
 }
 

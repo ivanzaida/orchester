@@ -159,6 +159,13 @@ run again`, `orchester-runner --features test-agent --test instructions instruct
 cards); the Artifacts tab still says runs keep no artifacts; no notification for *Ready to complete* or *Committed
 nothing*; no form field for a task's own choice (MCP only).
 
+## O · The Orchestrator leads tasks and modules with nobody at the computer
+
+What is missing for it and the tasks that close it are in `docs/plan/orchestrator-autonomy/` (its `README.md` is the
+tracker: findings, the person's decisions, tasks OA-01 … OA-36 with their status, their order, and the edge cases
+each settles). It holds for local and team projects alike: `docs/design/local-and-team-parity.md` is the rule and
+the table of what a team project still does differently, which the plan's block G closes.
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still
@@ -239,6 +246,14 @@ A run row whose id or task id cannot be parsed still fails the whole listing
 (`crates/store/src/project_db/runs/load.rs`), because it cannot say which run it is. Decide with the store owner
 whether such a row is reported as a project-level "unreadable rows" error that still lists the others. **needs
 decision**.
+
+### AT1 · Agent testing in a team's configuration (needs the server's contract)
+
+Services, stacks, test suites and the flaky-test quarantine are kept on each member's computer in a team project too
+(`docs/design/local-and-team-parity.md`, *Agent testing*). The team server's contract takes none of their kinds
+(`docs/cloud-api.md`), and a team pipeline's version with a Test step was never sent to a server. Change the contract
+here first (`orchester-api`, `docs/cloud-api.md`), then the server in `orchester-platform`; both rows of the table
+leave it with this task.
 
 ## M · MCP servers
 
@@ -418,6 +433,69 @@ mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note'
 label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
+
+### Agents run on accounts · a project without agent connections (decided 2026-11-13, design first)
+
+Decided by the person on 2026-11-13 (`docs/design/agent-accounts.md`, *Agents run on accounts*): a project holds no
+agent connections, a profile chooses one of the app's accounts or API providers as this computer's choice, API
+providers and their keys are app-wide, and the Connections tab of Project settings goes away. A module, in this
+order; each step after the first waits for the one before it.
+
+Branch `module/agents-on-accounts` (2026-11-13). Built there, with no screen changed: the parts of steps 2 and 3 that
+the old screens do not stand on. Of step 2, API accounts and the agent CLIs' programs in the application database
+with the key in the OS keychain, and adding, renaming, changing and re-keying one (`Workspace::add_api_account` …);
+of step 3, the pick beside a local profile, what makes it (`Workspace::run_profile_on_account`, which also makes the
+project's connection on the account) and everything that reads it: the runner at each agent start, the check before
+a run, readiness, the hub's list and *Used by*. The note's *As built so far* says how. Left of step 2: connections
+take their key from an API account, existing keys move, rows follow the app's side, removal. Left of step 3: the
+hub's select makes a pick instead of a version. Both change what the old connection forms save, so they go in with
+step 4. Tests: `-p orchester-core --test api_accounts`, `--test agent_profile agent_profile_runs_on`,
+`-p orchester-store --test api_accounts`, `--test team_fill_ins fill_in_local`,
+`-p orchester-workspace --test api_accounts`, `--test runs_on`,
+`-p orchester-runner --features test-agent --test runs_on_here`.
+
+Built on the branch since (2026-11-14 and 15), steps 2 to 5; `docs/design/agent-accounts.md`, *As built so far* and
+*MCP tools*, says how. Step 2: API accounts, the model APIs of Orchester's own agent and the decision model's
+servers are the app's, with their keys in the OS keychain; a project's own keys become the app's when it opens
+(`Workspace::adopt_project_keys`: the same API and key is one account, two CLIs on one key an account each); the
+project secret that held a key is not archived. Step 3: the account is a pick beside the profile, in a local project
+as in a team one; a version still names the connection it was published on. Step 4: Settings › Accounts with each
+CLI's program, the *Add account* menu and an API provider's page; one *Runs on* field and picker for a profile; no
+Connections tab, and the pages of agent connections with their add and edit forms are removed (GitHub's page opens
+from General, an MCP server's from the Agents hub, a decision model's from Runs). Step 5: the tools name accounts
+(`list_accounts`, `check_account`, `list_models`, `set_profile_account`, `set_reviewer_account`; `save_profile_draft`
+and `set_reviewer` take `account`), and `docs/manual/` follows.
+**Left:** the person's approval of the board (step 1) and an independent design verification of each board (step 4's
+done-when); the macOS check (no platform code was added); the tool list checked against the app in `docs/evidence/`.
+
+1. **Design (UI, in Pencil, the person's document).** Settings › Accounts with the CLI's program path and check, the
+   sign-ins and the API providers (add, edit, check, remove, *Used by* across projects); the profile's choice of an
+   account for local and team profiles alike, with its model select and *Missing on this computer*; Project settings
+   without Connections, GitHub in the repository's settings, MCP servers in the Agents hub; the data-location
+   acknowledgement, still per project. It also answers the note's *To settle in the design*.
+   **Done when:** the boards exist in `crates/desktop-app/design/orchester.pen` and the person approved them.
+2. **Providers and keys in the app (non-UI).** API providers, native API connections and the decision model's server
+   in `orchester.db`, keys in the OS secret store under an app key (Windows and macOS), never in a project secret.
+   Migration of every project's providers: merged when base URL and key value are the same, else kept apart and named
+   after the project; the project secret that held a key is archived only when nothing else names it.
+   **Done when:** a project made before the change runs the same agents after it without the person entering a key
+   again; no key value is in a log, an error, `Debug` output or the MCP tree; the store and workspace tests cover the
+   migration, both merge outcomes and a key missing from the secret store.
+3. **The profile's account as this computer's choice (non-UI).** A local profile version names the CLI kind and the
+   model, like a team profile; the account or provider it runs on here is kept beside it and changes without a new
+   version. The project's record of what a run ran on is made by Orchester on that choice. A run takes the program
+   path, folder, URL, models and key from the app at its start. Existing profile versions migrate with their
+   connection's account as the choice.
+   **Done when:** local and team projects pass the same tests for choosing, changing and missing an account; a run
+   started after a provider's URL changed in Settings uses the new URL; runs made before the change still name what
+   they ran on.
+4. **Screens (UI).** The boards of step 1 in `crates/desktop-app`; the Connections route and its add and edit forms
+   for agent connections are removed, not hidden.
+   **Done when:** an independent design verification reports no blocking or major mismatch for each board.
+5. **MCP tools and the manual (non-UI).** The tools that name agent connections are replaced by ones that name
+   accounts and providers, with the same person-only rules for what widens an agent's reach; `docs/manual/` follows.
+   **Done when:** a project can be set up over MCP from nothing without a connection being named, and
+   `docs/evidence/` holds the tool list checked against the app.
 
 ### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
 
@@ -1021,6 +1099,50 @@ but no run uses them: a run gets its reviewer from the project's own `AutoModeSe
   Define working behavior and data sources before adding controls; do not add inert placeholders.
   Evidence: `.tmp/verify/u9/report.md`.
 
+### S12 · Closing team tasks (D4) and the MCP tools on team projects (non-UI first, then UI)
+
+D4 is decided (2026-11-08, `docs/architecture/server.md` row 96, `docs/design/team-authority.md`): Done by the
+claim's holder or an Admin; Cancel, reopen and Backlog ↔ Todo by an Admin only; Done by itself when the server accepts
+the delivery of the task's work. Today every lifecycle change of a team task is refused (`decision_required` D4), so a
+team task can never be closed. Order:
+
+1. **Contract** (`orchester-api`, `docs/cloud-api.md`) — built on branch `claude/d4-contract`: no new route; the
+   lifecycle is the `workflow` and `blocked_reason` of the existing task patch, decided by `v2::LifecycleAction` /
+   `LifecycleRequest`, reported as the capability actions `task.complete`, `task.cancel`, `task.reopen`, `task.triage`
+   and `task.block` (new `DenialReason::transition_denied`), refused with the existing `not_admin`, `not_holder`,
+   `revision_conflict` and `organization` (`stop_run_first`); closing releases the claim; Done by itself on a succeeded
+   report/outside run and on an accepted module delivery; the events are the existing `task.changed`, `task.claim` and
+   the S11 scopes (`docs/cloud-api.md` "Team authority task lifecycle"). The stand-in implements it
+   (`crates/api/tests/team_lifecycle`). Move the pin in `ivanzaida/orchester-platform` after the merge.
+2. **Server** (platform repository): the patch's check by the caller's claim and role, the claim release, the capability
+   actions, Done on a succeeded report and on an accepted delivery, from that contract; open questions in
+   `docs/architecture/server.md` "Team authority S12 contract".
+3. **App and MCP:** `update_task` `workflow_status`, `create_task`'s status and `return_to_draft` take the team path
+   instead of refusing D4; *Mark as done*, *Cancel task* and reopen on the task page and the Tasks list for a team
+   task, by capability (needs a design step first: D4 was drawn as "no Done action"). Update
+   `docs/manual/mcp-tools-work.md` (the D4 refusal) and the tools' descriptions. **Built** (branch `claude/d4-app`): the
+   dispatcher and the MCP tools (`update_task`'s `workflow_status` and `blocked_reason` through the task patch;
+   `team_status_not_offered`, `team_status_on_create`, `team_no_queue`, `not_holder`, `stop_run_first`), the task page
+   (Mark as done, Cancel task, Mark as blocked, Clear blocked, Reopen, the Done, Canceled and Blocked lines, one lock
+   line for a member) and the Tasks list's row menu. **Not built:** the board card's menu and drag by capability, the
+   status chip (the page is not yet the Task - v2 layout). **Built from the contract's records** (branch
+   `claude/d4-closed-by-app`): the cards name who closed or blocked a task and when, and *Done · delivered with module*
+   and *Done · its run succeeded* (`TaskRead`'s `closed` and `blocked`, which `get_task` carries; a task without a record
+   keeps the plain word). Not built: T11d's *Marking it done ended your claim.*, as the record does not say whether the
+   closer held the claim. The server sends the records only to desktops from 0.6.0, which this app's version
+   (`Cargo.toml`) has not reached yet.
+4. **Team tasks in the other MCP tools** (found 2026-11-08, independent of D4): tools that look a team task up in this
+   computer's cached copy of shared tasks instead of the team server answer `task_not_found` or leave team runs out
+   when the copy is missing — `get_run` (`app_mcp/tools/runs.rs` `read_run` needs the task row), `send_message` in
+   every mode (`TaskDetail::load_in`), `get_conversation`, `list_runs`, `get_approvals`, `hold_queue` /
+   `release_queue` with a task, `get_delivery` with a team module; a run named by its number is never found for a
+   team task without the copy (`find_run`). `resume_run` takes the old v1 claim and continues an interrupted run
+   locally while `continue_run` is refused for team projects. Resolve team tasks through the server as `get_task`
+   does, and give each tool an answer or an explicit refusal.
+
+Decided as well (2026-11-08): closing releases the claim; report and outside work is Done when its run succeeds; the
+manual Blocked is set and cleared by the claim's holder or an Admin. Work in `module/team-lifecycle` (both repositories).
+
 ## Later
 
 - **macOS:** build, install and smoke-test on a Mac (`docs/stable-build.md`, macOS section). All macOS code is only
@@ -1028,6 +1150,117 @@ but no run uses them: a run gets its reviewer from the project's own `AutoModeSe
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Agents · v2 (`acFkz`) finished on master, 2026-11-11 (outside Orchester):
+- **Team tool secrets by name.** A team tool names its secret by `SecretName`, never by a computer's id (`TeamTool`, `89c31e17e`). Publishing converts the id to its name, each computer fills the value in by name (person-only), and the runner checks it by name. An old by-id body reads honestly, and an admin publishes it again by name. The team server reads the form from 0.11.2 (`orchester-platform` `f47328a`, tag `server-v0.11.2`; desktops from 0.6.0).
+- **Memory in the hub.** Memory is a filter of the Agents hub after Tools (Section Y `Xxl1u`, Y1–Y6): status sub-filter, list and panel, and the old Memory page's shell gone (`claude/memory-hub`, last `63efe46b2`). Scenarios `memory`, `tasks` and `team-memory-member`.
+- **A22.** The stopped card has no *Ask an admin to restore it* (`41ac7da69`).
+- **Choosing a profile's connection** is open to the person, external MCP clients and the driving Orchestrator, and out of reach of run agents; tests pin it (`0b9bd86ca`).
+- **The team hub's Archived** (A36 `qvMZD`, M7 `Ml7HN`, A37 `AFbIb`, A22, `claude/team-archived`, 2026-11-12): every team resource the team archived, read-only, with an admin's *Restore* (`Servers::restore_resource`, the `PATCH` with `archived: false`; pending until the hub reads it again, a refusal said in place); a member reads the lock line. *Open →* on a profile's *Ready here?* row, its pinned *Open <name>* and the stopped card's resource row open it there by route. The team's configuration keeps the answer of an archive or a restore, and follows the revision and who changed it from the stream. QA states `team-archived` (member) and `team-archived-admin`.
+- **HTTP and database tool forms** (A32–A35, L20–L24), branch `claude/tool-http-db`, implemented 2026-11-12 and
+  waiting for design verification: a new tool makes an HTTP request or a database query with its *Access*, in both
+  hubs; an admin and a local panel edit one in place; the team's form names its secret, the local one picks the
+  project's; an admin's edit fills the secret's value here from its box. QA states `team-tools` and `local-hub-tools`.
+  Orchester's MCP server still makes and changes only command tools and says so.
+
+Not built (no design): the connection options' CLI mark and account · plan line (waits for lurq's glyph). Gap: a run agent that reads the app MCP token could not be told from an external client.
+
+Pipelines · v2, a local project's Pipelines hub · module branch `module/pipelines-v2`, in master since `e21081337`
+(tasks `docs/plan/pipelines-v2/`, decisions `docs/design/pipelines-v2.md`; PV2-02 and PV2-19 canceled; every task is
+done):
+
+- PV2-01 · Core: move steps and run them in parallel · `claude/pv2-01-step-order` → `310ce4f39`.
+- PV2-03 · The compact *Runs on* picker as a shared component · `claude/pv2-03-runs-on-picker` → `c37c1caad`.
+- PV2-04 · The page: filter, grouped list, panel, Save bar · `claude/pv2-04-page-shell` → `27cde7e2c`.
+- PV2-05 · Steps drawn as the flow they run in · `claude/pv2-05-steps-flow` → `1b2aa8df7`.
+- PV2-06 · Reorder steps in the flow: drag, ⋯ menu, keys · `claude/pv2-06-reorder` → `915de1fb7`.
+- PV2-07 · A step in the panel: strip, groups, Instructions · `claude/pv2-07-step-panel` → `c3419c6ec`.
+- PV2-08 · The step's *Agent* field and Agent picker · `claude/pv2-08-agent-field` → `a1f38d70e`.
+- PV2-09 · Pipeline settings, Ready? and Needs you · `claude/pv2-09-ready` → `75aa67e32`.
+- PV2-10 · Edit in place: Save makes vN, Cancel puts it back · `claude/pv2-10-save-and-cancel` → `cca2e89e9`.
+- PV2-11 · Versions list, a version read-only, Restore · `claude/pv2-11-versions` → `a3f14fb18`.
+- PV2-12 · The pipeline's ⋯: Rename, Duplicate, Archive; Archived tab · `claude/pv2-12-menu-archive` →
+  `824561513`.
+- PV2-13 · Loading, none yet, empty tabs, read failure · `claude/pv2-13-page-states` → `ba2db9eea`.
+- PV2-15 · The orchestrator chat adopts the compact picker · `claude/pv2-15-orchestrator-picker` → `e0c34aa8a`.
+- PV2-16 · Design: the orchestrator's picker states with the compact picker · in Pencil (not saved yet, PV2-00).
+- PV2-17 · Readiness and save polish · `claude/pv2-17b-step-flow` → `238b0c2e6`, `claude/pv2-17a-ready-save` →
+  `1f2dc0057`.
+- PV2-18 · The rest of a step in the panel · `claude/pv2-18-step-rest` → `0b8c6f23b`.
+- PV2-19 · A draft is always saved; Save says what publishing would refuse · canceled: merged as
+  `claude/pv2-19-save-refusals` → `531f3d1ae` with its follow-up `5b309b469` (the stale-narrowing test, one wording for
+  a gone profile), then reversed by D-032 (pipelines have no drafts) and replaced by PV2-27 … PV2-31.
+- PV2-20 · The step head's ⋯ menu · `claude/pv2-20-step-head-menu` → `a85e24fb5`.
+- PV2-21 · Tests that drove the old step editor of a local project run against the hub · `claude/pv2-21-tests-on-hub`
+  → `20dba64d2`.
+- PV2-23 · The Deliver step in the step panel (P15, P15b): *Mode*, *Merge*, *Conflicts*, *Check*, *Remove step* and *Add
+  Deliver step* · `claude/pv2-23-deliver-step`, in batch B (`claude/pv2-batch-b`).
+- PV2-22 · New pipeline and *Duplicate* in the hub (P14–P14c): an unsaved panel that starts from the starter, a copy
+  (named *… copy*, selected) or nothing; *Create v1* stores v1 only when it can publish and opens it ·
+  `claude/pv2-22-new-duplicate`, in batch C (`claude/pv2-batch-c`).
+- PV2-24 · Flows the hub could not draw (P16–P16c): a step that waits for part of a stage is drawn with its *Waits for*
+  row and saved (D-048); steps with no order get *Make it a line* · `claude/pv2-24-branched-flows`, in batch C.
+- PV2-25 · The pipeline's slug in the hub's settings (P17); *Who can use it* dropped · `claude/pv2-25-slug`, in batch
+  B → `881617d7b`.
+- PV2-26 · Map: where pipeline drafts live, and the split into PV2-27 … PV2-33 · research, no branch.
+- PV2-27 · Store: a pipeline is created published; the migration deletes pipeline drafts · with PV2-28 →
+  `7fd9db19c`.
+- PV2-28 · Workspace: saving a pipeline publishes it or refuses with every reason · `claude/pv2-28-save-publishes` →
+  `7fd9db19c`, `claude/pv2-28-workspace-tests` → `c703fd068`.
+- PV2-29 · MCP: `save_pipeline` replaces `save_pipeline_draft` and `publish_pipeline` · and PV2-30 · the Orchestrator
+  changes pipelines only while it drives · `claude/pv2-29-30-mcp-chat` → `e7efc84d1`.
+- PV2-31 · The hub without drafts: no Drafts tab or draft words, Save off with why, the leave question for a
+  never-saved pipeline · `claude/pv2-31-hub-no-drafts` → `c20d0bcef`.
+- PV2-32 · The team pipeline page: one Save that publishes · `claude/pv2-32-team-one-save` → `c831895c2`,
+  `16c75837c`.
+- PV2-33 · Pipelines leave Import resources · `claude/pv2-33-hide-import` → `9f0f9af6a`.
+- PV2-34 · A team pipeline's Save, Create v1, Duplicate and rename wait for the team server; nothing is stored or lost
+  on a refusal (D-042, D-043, D-047) · `claude/pv2-34-team-save-sync` → `9c9de7600`.
+- Batch A (PV2-27 … PV2-34) into master with the module: `0f4c27ad6` → master `e21081337` (D-045, D-047).
+- PV2-14 · Retire the old Pipelines page of local projects: part 1 → `01168167b` (links from other pages open the hub,
+  these docs and plan); the rest on `claude/pv2-14-retire` — every route of the old page a local project is asked for
+  opens the hub under the hub's own route, the docs say what the hub does; with PV2-22 and PV2-24 in, the Steps tab
+  and New pipeline do too, and a local project reaches no route of the old page, whose code stays for team projects
+  (batch C).
+- N-013 · Cleanup after the reviews: a link to an archived pipeline opens Archived; Alt ↑ / Alt ↓ at the line's ends
+  say why; 64 unused `pipelines.*` keys removed · `claude/pv2-n013`, in batch C. Left open: the step name is read three
+  times in the accessibility tree (lurq cannot hide decorative nodes), the old page's summary labels clip, and a
+  refused Alt move in the open step's head is silent.
+- Batch C into master: a member of a team reads its pipelines (no *Add step*), a pipeline the team server no longer
+  has is said in words, and the old page's tests run on a team project.
+- One Pipelines page for a local and a team project (D-051) · `claude/team-pipeline-hub`: the hub reads a team's
+  pipelines from memory and sends Save, *Create v1*, rename, *Archive* and *Restore* to the team server; a member reads
+  them; the page a team project had (`screens/pipelines/`), its tests, its strings and the workspace functions only it
+  called are removed.
+- A team run reads without the team's profiles in the database (2026-11-13, found by starting a team task on the
+  stable): a version of a resource the database has no row of reads as none, not as an error, which had failed the
+  task feed, the task page and `get_run` once a team run started; a step's agent, permissions and approvals take the
+  profile the run pinned from the run's own inputs (`tasks::pinned_profile`).
+- A team task's run merges into its module's branch from the task page and Review (2026-11-13, the person's decision
+  after *Approve and merge* refused ORC-971's run): the local merge refused every team run, though only the base is
+  the module delivery's (`docs/architecture/server.md`, *Module delivery*), so no button took a finished team run
+  anywhere. It now takes a team run that started on its module's branch into that branch, as it takes a local run into
+  its base; the base stays the module's delivery, asked for on the module's page. A team run with no team record, or
+  one that started outside a module's branch, is still refused. The merge reads a team task from its runs' records.
+- Review's file list cuts a long file name with an ellipsis before the file's added and removed lines, which it ran
+  over.
+- *Merge and deliver* on the *Ready to merge* card of a team task's run on its module's branch (2026-11-13, the
+  person's decision): the merge, then the module's delivery asked for in the same press: the module's claim taken
+  here, the delivery requested, and, when it would wait for an Admin and a person who is one pressed it, authorized
+  and asked again (`team::deliver_next`); an MCP client's press never authorizes. What it came to is an operation in
+  the status bar. Verified on the stable with ORC-970: merged into `module/qa-checks`, the delivery waited for an
+  Admin, and *Authorize* on the module's page delivered it to `master`.
+- *Authorize* shows for an Admin on a team server that does not list `delivery.authorize` among a module's
+  capabilities (the real server did not; the stand-in server did, so the tests passed): while the command is not
+  listed, the person's role decides. The stand-in lists capabilities as the real server does.
+- A team task in no module (2026-11-13, the person's decision; the contract's part): the execution bundle of such a
+  task is schema 4, without `module_id` and `branch` (`docs/cloud-api.md`); the desktop and `run_task` start it on
+  the branch the checkout has checked out (`team_work::checked_out_tip`, `TeamStartRequest::base_branch`), the runner
+  makes its run on that branch (`RunBaseSource::CheckedOut`), and the local merge takes it into that branch. An Admin
+  merges it; a member only while the team's Automatic merge is on (the task page's *Merge*; the Review page's
+  *Approve and merge* does not ask yet). The team server's side is in the platform repository
+  (`claude/task-without-module`); until a server with it is deployed, a start of such a task is refused
+  `module_required`, which the page now says as the server's rule.
 
 ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 

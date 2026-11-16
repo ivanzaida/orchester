@@ -8,7 +8,10 @@ use orchester_core::{
 use orchester_store::StoreError;
 use thiserror::Error;
 
-use crate::messages::{self, Message};
+use crate::{
+  messages::{self, Message},
+  team_config::Unreached,
+};
 
 #[derive(Debug, Error)]
 pub enum FillInError {
@@ -59,9 +62,20 @@ pub enum FillInError {
   /// A remote MCP server runs somewhere else, so it has no program on this computer.
   #[error("MCP server {0} is a remote server and has no program here")]
   RemoteServer(ResourceId),
+  /// The team's configuration is being read from its team server, so what is named cannot be told the team's yet.
+  #[error("the team's configuration is being read")]
+  TeamReading,
+  /// The team server could not be reached and nothing of the team's configuration was read this session.
+  #[error("the team server cannot be reached")]
+  TeamUnreachable(Unreached),
 }
 
 impl FillInError {
+  /// A secret's value that was typed blank is refused where it is typed, before anything is sent here.
+  pub fn blank_value_message() -> Message {
+    Message::new("teamFillIns.errors.valueBlank")
+  }
+
   /// What to tell the person.
   pub fn message(&self) -> Message {
     match self {
@@ -81,6 +95,8 @@ impl FillInError {
       Self::ProgramNotAbsolute => Message::new("teamFillIns.errors.programNotAbsolute"),
       Self::ProgramNotAFile => Message::new("teamFillIns.errors.programNotAFile"),
       Self::RemoteServer(_) => Message::new("teamFillIns.errors.remoteServer"),
+      Self::TeamReading => Message::new("teamConfig.reading"),
+      Self::TeamUnreachable(unreached) => unreached.reason.clone(),
     }
   }
 }

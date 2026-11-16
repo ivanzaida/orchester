@@ -59,12 +59,7 @@ pub(super) fn again(
     ctx.t("cloud.invites.twoFactor.notNow"),
   )
   .opens(navigation.to(Route::Orchester(OrchesterView::default())));
-  let reasons: Vec<Element> = answers
-    .person
-    .reason(ctx, &format!("{AGAIN}-sign-in-again"))
-    .into_iter()
-    .chain(two_factor::failed(ctx, AGAIN, answers))
-    .collect();
+  let reasons = two_factor::failed(ctx, AGAIN, answers);
   let notice = SettingNotice::new(AGAIN, NoticeTone::Warning)
     .title(ctx.t("cloud.invites.twoFactor.refusedTitle"))
     .body(ctx.t("cloud.invites.twoFactor.refusedBody"))

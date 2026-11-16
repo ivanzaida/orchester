@@ -12,6 +12,7 @@ use orchester_core::{
   task::{Task, TaskDetails},
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::tasks::data::ProjectTasks;
 
 use crate::{
   kontur::{self, SeedRequest, scenarios},
@@ -39,6 +40,10 @@ impl Form {
     })
     .expect("the scenario seeds");
     let launch = data.launch();
+    // A team scenario's resources are the team's configuration a stream would read into memory; these tests run none.
+    if let Some(workspace) = launch.workspace() {
+      crate::support::team_cache::keep_cached_team(workspace, &seeded.repo);
+    }
     Self {
       window: Window::of(data, launch),
       project: seeded.project,
@@ -230,6 +235,17 @@ impl Form {
 }
 
 impl Form {
+  /// Tells the window the project's tasks were saved and waits until the tasks it shows are ones read since, `read`
+  /// holding of them. The feed keeps the tasks last read while it reads again, and a read already under way when the
+  /// database changed ends with the earlier data, so a form opened at once would start from that.
+  pub fn until_tasks_read(&mut self, read: impl Fn(&ProjectTasks) -> bool) {
+    let feed = self.window.projects().feed(self.project);
+    feed.saved();
+    self.window.until("the project's tasks read again", |_| {
+      feed.tasks.get().ready().is_some_and(&read)
+    });
+  }
+
   /// Changes the task `key` in the project's database, as automation or another app would, and has the
   /// window read the project's tasks again.
   pub fn change_elsewhere(&mut self, key: &str, change: impl FnOnce(&mut TaskDetails)) {
@@ -243,8 +259,13 @@ impl Form {
       .saved()
       .expect("no conflict");
     assert!(saved.revision().get() > task.revision().get());
-    self.window.projects().feed(self.project).saved();
-    self.window.pass();
+    let (id, revision) = (task.id(), saved.revision());
+    self.until_tasks_read(|tasks| {
+      tasks
+        .tasks
+        .iter()
+        .any(|read| read.id() == id && read.revision() == revision)
+    });
   }
 
   /// Changes the task `key` in the project's database without telling the window, as another app on

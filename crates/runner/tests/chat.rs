@@ -1,7 +1,8 @@
 //! The Orchestrator chat's turns, end to end against `orchester-fake-claude` (`tests/support/fake_claude_chat.rs`):
 //! a message the desktop kept is answered by Claude Code started read-only in the project folder with only the
-//! chat's domain tools, the next turn resumes its session, a turn can be stopped, and how a turn fails is kept. The
-//! turns on Codex are in `chat_codex.rs`.
+//! chat's domain tools, the next turn resumes its session, a turn can be stopped, and how a turn fails is kept; a turn
+//! that fails at its account's plan limit keeps the limit until the account answers again (OA-03). The turns on Codex
+//! are in `chat_codex.rs`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test chat`.
 
 mod support;
@@ -9,7 +10,7 @@ mod support;
 use std::{fs, num::NonZeroU32, path::Path};
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionAccount},
+  connection::{AgentConnection, AgentProvider, ConnectionAccount},
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId},
   limits::ProjectLimits,
@@ -415,6 +416,53 @@ async fn chat_tokens_count_toward_the_daily_budget_and_a_used_one_refuses_a_turn
       .turn
       .is_thinking(),
     "no turn ran: the desktop forgets the message"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_that_fails_at_its_accounts_plan_limit_keeps_the_limit_until_the_account_answers_again() {
+  let project = claude();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let refused = keep(root, chat, "Hit the plan limit");
+  scheduler
+    .answer_in_chat(refused, tools())
+    .await
+    .expect("the turn starts");
+  assert!(
+    matches!(
+      ended(root, &mut events, refused).await,
+      TurnState::Failed(TurnFailure::Failed { .. })
+    ),
+    "the turn itself fails as any turn the CLI refused"
+  );
+  let db = ProjectDb::open(root).expect("open");
+  let connection = AgentConnection::try_from(db.connections().expect("connections").remove(0)).expect("an agent's");
+  let account = connection
+    .account()
+    .id(AgentProvider::ClaudeCodeCli)
+    .expect("its account");
+  let limit = db
+    .orchestrator_hold(account)
+    .expect("read")
+    .expect("the plan limit is kept");
+  assert!(
+    limit.resets.is_some_and(|resets| resets > Timestamp::now()),
+    "with the reset the CLI named: {limit:?}"
+  );
+
+  let answered = keep(root, chat, "What is running?");
+  scheduler
+    .answer_in_chat(answered, tools())
+    .await
+    .expect("the turn starts");
+  assert_eq!(ended(root, &mut events, answered).await, TurnState::Answered);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(
+    db.orchestrator_hold(account).expect("read"),
+    None,
+    "an account that answers is at no limit"
   );
 }
 

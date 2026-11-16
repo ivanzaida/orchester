@@ -92,6 +92,27 @@ pub fn find_agent(provider: AgentProvider) -> Option<ProgramLookup> {
   })
 }
 
+/// The newest installed copy of the agent CLI of `provider` on the search path with the version it reported;
+/// `None` when the search path has none, and for a native provider.
+pub fn newest_agent(provider: AgentProvider) -> Option<connection::Installed> {
+  let program = provider.program_name()?;
+  let ProgramLookup::Found(found) = SearchPath::current().lookup(program) else {
+    return None;
+  };
+  connection::rank_installed(provider, found, &RUNNER).into_iter().next()
+}
+
+/// The copy of the agent CLI of `provider` at `executable`, asked for its version now.
+pub fn installed_at(provider: AgentProvider, executable: PathBuf) -> connection::Installed {
+  connection::rank_installed(provider, vec![executable.clone()], &RUNNER)
+    .into_iter()
+    .next()
+    .unwrap_or(connection::Installed {
+      executable,
+      version: None,
+    })
+}
+
 /// The copy among `found` (installed copies, as [`detect_agent`] lists them) that `program` names, as
 /// the file system resolves both: through links, a junction or another spelling of the same path.
 pub fn found_copy<'a>(found: &'a [PathBuf], program: &Path) -> Option<&'a Path> {

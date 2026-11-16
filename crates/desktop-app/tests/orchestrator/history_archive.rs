@@ -139,16 +139,15 @@ fn history_delete_is_a_persons_alone() {
   screen.until("the question", |screen| {
     screen.exists("orchestrator-history-delete-confirm")
   });
-  assert!(!screen.exists("orchestrator-history-delete-person-only"));
+  assert!(screen.window.refused_press().is_none());
   with_synthetic_input(|| screen.click("orchestrator-history-delete-confirm"));
-  screen.until("the refusal", |screen| {
-    screen.exists("orchestrator-history-delete-person-only")
-  });
-  assert_eq!(
-    screen.text("orchestrator-history-delete-person-only"),
-    "Only a person deletes a conversation: input from an MCP client is not taken here."
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
+  assert!(
+    !screen.exists("orchestrator-history-delete-person-only"),
+    "nothing in the window says it"
   );
   with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
+  assert!(screen.window.refused_press().is_some(), "Enter is refused too");
   // A delete that started would be under way by now: its background work had time to run and was polled.
   std::thread::sleep(std::time::Duration::from_millis(200));
   screen.until("a pass", |_| true);

@@ -1,6 +1,13 @@
 {
   "connections": {
     "title": "Connections",
+    "moved": {
+      "title": "Connections moved",
+      "body": "A project's agents run on your accounts now, which every project shares: sign-ins and API providers are in Settings › Accounts. GitHub is under Project settings › General, and MCP servers are in the Agents hub.",
+      "accounts": "Open Settings › Accounts",
+      "general": "Project settings › General",
+      "reading": "Reading the project's connections…"
+    },
     "description": "Agent providers, GitHub and MCP servers this project uses. Each agent profile chooses its connection and model.",
     "add": "Add connection",
     "addAgent": "Add agent provider",
@@ -17,15 +24,12 @@
       "all": "All connections",
       "agentProviders": "Agent providers",
       "github": "GitHub",
-      "mcpServers": "MCP servers",
       "unknownCount": "—"
     },
     "menu": {
       "agent": "Agent provider",
       "agentDetail": "Codex CLI, Claude Code CLI, Anthropic API or OpenAI API",
-      "github": "GitHub connection",
-      "mcp": "MCP server",
-      "mcpDetail": "A program on this computer, or a remote server"
+      "github": "GitHub connection"
     },
     "columns": {
       "connection": "CONNECTION",
@@ -36,8 +40,7 @@
     "type": {
       "provider": "Provider",
       "native": "Native",
-      "github": "GitHub",
-      "mcp": "MCP"
+      "github": "GitHub"
     },
     "usage": {
       "one": "1 agent",
@@ -61,8 +64,7 @@
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
-      "github": "Pull requests and the Create pull request tool reach GitHub only through gh. Its accounts are shared by every project on this computer; {{project}} records the one it expects.",
-      "mcp": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. Each agent profile chooses which of them its agents get."
+      "github": "Pull requests and the Create pull request tool reach GitHub only through gh. Its accounts are shared by every project on this computer; {{project}} records the one it expects."
     },
     "ownership": "Connections belong to {{project}}. A CLI connection runs on one of your accounts, which every project shares; {{project}} records which account each connection runs on.",
     "emptyTitle": "No connections yet",
@@ -382,9 +384,6 @@
       "emptyShort": "Pull requests need gh signed in on this computer; Orchester uses it as it is."
     },
     "mcp": {
-      "add": "Add MCP server",
-      "emptyTitle": "No MCP servers yet",
-      "emptyDetail": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. An agent profile chooses which of them its agents get.",
       "row": {
         "stdio": "Program · {{program}}",
         "http": "Remote MCP · {{host}}"
@@ -526,13 +525,10 @@
         "keep": "Keep it off"
       },
       "editShort": "Edit",
-      "emptyDetailShort": "A program on this computer or a remote server that agents may use.",
       "noVariables": "None",
       "notUsedShort": "no profile chooses it yet",
       "openSecrets": "Open Secrets",
       "removeServer": "Remove server",
-      "rowUnused": "{{what}} · no profile chooses it yet",
-      "rowUsed": "{{what}} · used by {{profiles}}",
       "runsAs": "Runs as",
       "sendsGroup": "Sends",
       "serverGroup": "Server",
@@ -632,7 +628,6 @@
         "models": "Enter at least one model the provider serves.",
         "unavailable": "Save unavailable: {{reason}}"
       },
-      "personOnly": "Only a person saves a connection on an API provider here: input from an MCP client is taken only while you let automation change agent permissions.",
       "model": "Model id",
       "addModel": "Add model",
       "removeModel": "Remove model",
@@ -677,13 +672,16 @@
       "apiProvider": "A CLI on an API provider",
       "apiProviderDetail": "Claude Code or Codex on a compatible API such as DeepSeek's, with a key from Secrets"
     },
+    "accountsNote": {
+      "title": "Agent CLIs run on your accounts",
+      "body": "Sign-ins and API providers are added once, in Settings › Accounts, and every project can use them. A Claude Code or Codex connection listed here is the one Orchester keeps for an account a profile was offered: there is nothing to add or tend for it.",
+      "open": "Open Accounts"
+    },
     "groups": {
       "add": "Add",
-      "addMcp": "Add MCP server",
       "addProvider": "Add provider",
       "agentProviders": "Agent providers",
-      "github": "GitHub",
-      "mcpServers": "MCP servers"
+      "github": "GitHub"
     }
   }
 }

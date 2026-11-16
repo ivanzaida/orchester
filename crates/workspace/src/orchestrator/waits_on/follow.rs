@@ -9,12 +9,12 @@ use orchester_core::{
   id::{RunId, TaskId},
   orchestrator::{TaskEvent, TaskEventKind},
   run::{Run, RunWaitsOn, WaitsOnChange},
-  store::{ConversationStore, MergeStore, RunStore, TaskStore},
+  store::{ConversationStore, MergeStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::{KeptRunWait, ProjectDb, RunWaitEnd, StoreError};
 
-use crate::tasks::detail::run_store_error;
+use crate::tasks::{detail::run_store_error, recorded::task_of};
 
 /// Ends each active wait of the project in `db` that something ended, at `now`. Writes only for a wait that ends.
 pub(in crate::orchestrator) fn settle(db: &mut ProjectDb, now: Timestamp) -> Result<(), StoreError> {
@@ -44,7 +44,7 @@ fn end_of(db: &ProjectDb, kept: &KeptRunWait) -> Result<Option<RunWaitEnd>, Stor
       branch: wait.base().clone(),
     });
   }
-  if let Some(task) = db.task(wait.waited())? {
+  if let Some(task) = task_of(db, wait.waited())? {
     changes.push(WaitsOnChange::StatusChanged {
       task: task.id(),
       status: task.organization().status(),

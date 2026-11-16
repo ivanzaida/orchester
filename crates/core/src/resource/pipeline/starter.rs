@@ -3,8 +3,8 @@
 //! requested changes return to Implement, up to [`STARTER_RETRIES`] times.
 //!
 //! Step names and instructions are user-facing text, so the caller supplies them (translated).
-//! Profiles and tools are chosen by the caller too; any left unset makes a draft that says what
-//! is missing and cannot be published until it is chosen.
+//! Profiles and tools are chosen by the caller too; any left unset makes an unsaved edit that says what is missing
+//! and cannot be saved, which publishes it, until it is chosen.
 
 use std::{collections::BTreeSet, num::NonZeroU32};
 

@@ -16,7 +16,7 @@ use orchester_core::{
   },
   revision::Revision,
   run::{Run, RunStatus},
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
@@ -46,6 +46,7 @@ use crate::{
     local_integration::{CheckoutHolder, IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, checkout_holder},
     merge_attempts::{self, Asked},
     outside::Outside,
+    recorded::{task_of, team_run_on_base},
   },
 };
 
@@ -54,12 +55,11 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
   let (open, run, link, checkpointed) = {
     let services = services.clone();
     blocking(move || {
-      let open = services.project(&args.project)?;
-      let db = ProjectDb::open(&open.repo_root)?;
+      let (open, db) = services.read_project(&args.project)?;
       let run = find_run(&db, &args.run)?;
       // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
       // link alone.
-      let link = match db.task(run.task()) {
+      let link = match task_of(&db, run.task()) {
         Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
         Err(_) => None,
       };
@@ -154,8 +154,11 @@ pub struct MergeRun {
   pub authorization: Option<String>,
 }
 
-/// `merge_run`: a local project's run merged into its base branch; a team project's run has its module's delivery
-/// requested instead ([`team::merge_run`]).
+/// `merge_run`: a run merged into the branch it started from. A local run's is its base branch (a local task's run in
+/// a team project too). A team task's run that succeeded merges into its module's branch, unless a merge of it is
+/// recorded already, and then its module's delivery to the base is requested ([`team::merge_run`]); the run of a team
+/// task in no module merges into the base branch itself, which an Admin's computer does, or a member's while the team's
+/// Automatic merge is on ([`team::may_merge_on_base`]).
 pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translate) -> Result<Value, ToolError> {
   let authorization = args
     .authorization
@@ -168,41 +171,99 @@ pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translat
       })
     })
     .transpose()?;
-  if let Some(team) = team::of(services, &args.project).await? {
+  let named = InRun {
+    project: args.project.clone(),
+    run: args.run.clone(),
+  };
+  // What its branch took in from other branches would land with it: that merge is the person's.
+  super::merge_taken::refuse_taken_in(services, (&args.project, &args.run)).await?;
+  if let Some(team) = team::of_run(services, (&args.project, &args.run)).await? {
+    let (root, run) = (team.open.repo_root.clone(), args.run.clone());
+    let (on_base, unmerged) = blocking(move || {
+      let db = ProjectDb::open(&root)?;
+      let run = find_run(&db, &run)?;
+      // A run that succeeded and has no merge recorded has work its branch still holds alone.
+      let unmerged = matches!(run.status(), RunStatus::Succeeded) && db.run_merge(run.id())?.is_none();
+      Ok((team_run_on_base(&db, &run)?, unmerged))
+    })
+    .await?;
+    if on_base {
+      team::may_merge_on_base(services, &team).await?;
+      return merge_at(services, (named, None, Runs::Team), translate).await;
+    }
+    // The module's delivery takes what its branch holds: a run still at work, or merged already, adds nothing to it
+    // now, and the delivery says so itself (`team_work_running`).
+    if unmerged {
+      merge_at(services, (named, None, Runs::Team), translate).await?;
+    }
     return team::merge_run(services, &team, (&args.run, authorization), translate).await;
   }
   if authorization.is_some() {
     return Err(ToolError::InvalidArguments(
-      "`authorization` cites a team module delivery's authorization; a local project's merge_run takes none".to_owned(),
+      "`authorization` cites a team module delivery's authorization; a local run's merge_run takes none".to_owned(),
     ));
   }
-  let args = InRun {
-    project: args.project,
-    run: args.run,
-  };
-  merge_at(services, (args, None), translate).await
+  merge_at(services, (named, None, Runs::Local), translate).await
 }
 
-/// `merge_run` of run `run` of `project`, only while the run's branch is at `expected`, the commit a person reviewed
-/// in a proposal of the Orchestrator chat: a branch that moved since is refused and nothing is merged.
+/// Which runs a merge takes: a local `merge_run`'s takes local runs only; one that found the run to be a team task's
+/// takes that run.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Runs {
+  Local,
+  Team,
+}
+
+/// The merge of run `run` of `project` into the branch it started from, only while the run's branch is at `expected`,
+/// the commit a proposal of the Orchestrator chat showed or the chat itself checked: a branch that moved since is
+/// refused and nothing is merged. A team task's run merges as a local one does, into its module's branch, and its
+/// module's delivery is not asked for; the run of a team task in no module lands on the base branch itself, which
+/// this computer may do only as [`team::may_merge_on_base`] says.
 pub(crate) async fn merge_proposed(
   services: &Services,
   translate: &Translate,
   (project, run): (String, String),
   expected: Revision,
 ) -> Result<Value, ToolError> {
-  merge_at(services, (InRun { project, run }, Some(expected)), translate).await
+  let runs = match team::of_run(services, (&project, &run)).await? {
+    Some(team) => {
+      let (root, named) = (team.open.repo_root.clone(), run.clone());
+      let on_base = blocking(move || {
+        let db = ProjectDb::open(&root)?;
+        Ok(team_run_on_base(&db, &find_run(&db, &named)?)?)
+      })
+      .await?;
+      if on_base {
+        team::may_merge_on_base(services, &team).await?;
+      }
+      Runs::Team
+    }
+    None => Runs::Local,
+  };
+  merge_at(services, (InRun { project, run }, Some(expected), runs), translate).await
+}
+
+/// The reason the team server holds the task of run `run` of `project` blocked now ([`team::blocked_reason`]); `None`
+/// while it does not, and for a local run, whose task this computer keeps.
+pub(crate) async fn team_blocked_reason(
+  services: &Services,
+  (project, run): (&str, &str),
+) -> Result<Option<String>, ToolError> {
+  match team::of_run(services, (project, run)).await? {
+    Some(team) => team::blocked_reason(services, &team, run).await,
+    None => Ok(None),
+  }
 }
 
 async fn merge_at(
   services: &Services,
-  (args, expected): (InRun, Option<Revision>),
+  (args, expected, runs): (InRun, Option<Revision>, Runs),
   translate: &Translate,
 ) -> Result<Value, ToolError> {
   let separator: Arc<str> = translate.text(&Message::new("common.listSeparator")).into();
   let started = {
     let services = services.clone();
-    blocking(move || start(&services, &args, (separator, expected))).await?
+    blocking(move || start(&services, &args, (separator, expected, runs))).await?
   };
   let (mut updates, run, root) = started;
   let ended = updates
@@ -246,15 +307,15 @@ type Started = (watch::Receiver<ProjectJobState>, RunId, PathBuf);
 fn start(
   services: &Services,
   args: &InRun,
-  (separator, expected): (Arc<str>, Option<Revision>),
+  (separator, expected, runs): (Arc<str>, Option<Revision>, Runs),
 ) -> Result<Started, ToolError> {
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
-  // A team task's run goes into its module's branch, and only the module's delivery takes it to the base branch.
-  if team::linked(&db)? {
+  let run = find_run(&db, &args.run)?;
+  // A caller that took the run for a local one is refused when it is a team task's (told by the run itself).
+  if runs == Runs::Local && team::is_team_run(&db, &run)? {
     return Err(team::merge_refused());
   }
-  let run = find_run(&db, &args.run)?;
   ready(&db, &run, (&open.repo_root, &services.programs))?;
   let jobs = services.jobs.of(open.project.id());
   let holder = checkout_holder(&db, run.id())?;
@@ -293,9 +354,8 @@ fn start(
   if busy {
     return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
   }
-  let task = db
-    .task(run.task())?
-    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  // A team task's as its runs recorded it: this computer keeps no definition of one.
+  let task = task_of(&db, run.task())?.ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
   let branch = run
     .base_branch()
     .ok_or_else(|| refused("no_base_branch", "appMcp.errors.noBaseBranch"))?

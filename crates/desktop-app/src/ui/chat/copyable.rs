@@ -127,7 +127,7 @@ impl Component for CopyableRow {
         pointer: self.pointer.clone(),
       },
     );
-    let head = head((&props.name, &props.meta, mark));
+    let head = head(&props.id, (&props.name, &props.meta, mark));
     // The line stands outside the row, which clips what leaves it, so it can start before the text. It is as high as
     // its buttons before they are mounted, so the row's height never changes under a list that measured it.
     let indent = AVATAR_SIZE + ExtraSpacing::Loose.value() - LINE_OUTDENT;

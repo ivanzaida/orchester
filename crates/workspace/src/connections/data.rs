@@ -7,12 +7,13 @@ use std::{
 };
 
 use orchester_core::{
-  account::AgentAccount,
+  account::{AgentAccount, ApiAccount},
   connection::{
     AgentConnection, AgentProvider, ApiProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionError,
-    GitHubConnection, mcp::McpServer,
+    ConnectionStatus, GitHubConnection,
+    mcp::{McpServer, McpServerName},
   },
-  id::{ConnectionId, ResourceId},
+  id::{ApiAccountId, ConnectionId, ResourceId},
   name::Name,
   repository::RepositoryLink,
   resource::ModelId,
@@ -32,7 +33,6 @@ use super::{
 use crate::{
   agents::data::profiles,
   messages::{self, Message},
-  sharing::sync::refresh_team_profiles,
 };
 
 /// A profile that runs on a connection, or gives its agents an MCP server, for the read-only "Used by"
@@ -53,6 +53,9 @@ pub struct ProjectConnections {
   pub connections: Arc<Vec<AgentConnection>>,
   pub github: Arc<Vec<GitHubConnection>>,
   pub mcp: Arc<Vec<McpServer>>,
+  /// The id and name of every MCP server of the project, the archived ones too: a name an archived server holds is
+  /// taken until it is restored.
+  pub mcp_names: Arc<Vec<(ConnectionId, McpServerName)>>,
   pub decisions: Arc<Vec<orchester_core::connection::DecisionConnection>>,
   /// The project's secrets that are not archived.
   pub secrets: Arc<Vec<Secret>>,
@@ -63,21 +66,25 @@ pub struct ProjectConnections {
   pub model_uses: Arc<Vec<ModelUse>>,
   pub link: Option<Arc<RepositoryLink>>,
   pub launches: Arc<Vec<(ConnectionId, Launch)>>,
+  /// The person's API accounts on this computer, by id: a connection that is the project's copy of one names its id
+  /// as its key's. Empty until [`Self::with_api_accounts`] says them, which the project's database does not.
+  pub api_accounts: Arc<Vec<ApiAccountId>>,
 }
 
 impl ProjectConnections {
   pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
-    // A profile runs on the connection its current content names (its draft if it has one); it gives its agents
-    // the MCP servers its draft or its latest published version names (`mcp::server_uses`), the rule removal uses.
-    let mut uses: Vec<ProfileUse> = profiles(store)?
-      .into_iter()
-      .map(|entry| ProfileUse {
-        connection: entry.profile.connection(),
+    // A profile runs on the connection chosen here for it, else the one its current content names (its draft if it
+    // has one); it gives its agents the MCP servers its draft or its latest published version names
+    // (`mcp::server_uses`), the rule removal uses.
+    let mut uses: Vec<ProfileUse> = Vec::new();
+    for entry in profiles(store)? {
+      uses.push(ProfileUse {
+        connection: store.connection_here(entry.id, entry.profile.connection())?,
         profile: entry.id,
         role: entry.profile.role().as_str().into(),
         model: entry.profile.model().clone(),
-      })
-      .collect();
+      });
+    }
     uses.extend(server_uses(store)?.into_iter().map(|used| ProfileUse {
       connection: used.server,
       profile: used.profile,
@@ -115,6 +122,13 @@ impl ProjectConnections {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
       mcp: Arc::new(store.mcp_servers()?),
+      mcp_names: Arc::new(
+        store
+          .all_mcp_servers()?
+          .iter()
+          .map(|server| (server.id(), server.name().clone()))
+          .collect(),
+      ),
       decisions: Arc::new(decisions),
       secrets: Arc::new(secrets),
       archived_keys: Arc::new(archived_keys),
@@ -122,11 +136,24 @@ impl ProjectConnections {
       model_uses: Arc::new(model_uses::load(store)?),
       link: store.repository_link()?.map(Arc::new),
       launches: Arc::new(launches),
+      api_accounts: Arc::default(),
     })
   }
 
   pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
     Self::load(&ProjectDb::open(repo_root)?)
+  }
+
+  /// The connections on a computer whose person has the API accounts `accounts`.
+  #[must_use]
+  pub fn with_api_accounts(mut self, accounts: &[ApiAccount]) -> Self {
+    self.api_accounts = Arc::new(accounts.iter().map(ApiAccount::id).collect());
+    self
+  }
+
+  /// How `connection` stands: *Key missing* when its key is neither a secret of the project nor an API account's.
+  pub fn status_of(&self, connection: &AgentConnection) -> ConnectionStatus {
+    connection.status_here(&self.secrets, &self.api_accounts)
   }
 
   pub fn connection(&self, id: ConnectionId) -> Option<&AgentConnection> {
@@ -265,8 +292,7 @@ pub fn save_on_account_in(
 }
 
 /// Adds or updates the connection in `draft` with its check. `account` and `provider`, when given, replace what it
-/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account). The team profiles of
-/// the project run on the connections as they are now ([`refresh_team_profiles`]).
+/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account).
 pub(super) fn save_with(
   store: &mut ProjectDb,
   draft: ConnectionDraft,
@@ -287,7 +313,6 @@ pub(super) fn save_with(
     runs_on(&mut connection, account, provider)?;
     connection.record_check(draft.check)?;
     store.create_connection(&connection)?;
-    refresh_team_profiles(store)?;
     return Ok(connection.id());
   };
   let stored = store.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
@@ -297,7 +322,6 @@ pub(super) fn save_with(
   runs_on(&mut connection, account, provider)?;
   connection.record_check(draft.check)?;
   store.save_connection(&connection)?;
-  refresh_team_profiles(store)?;
   Ok(id)
 }
 

@@ -125,8 +125,6 @@ pub(super) struct Words {
   pub(super) settled: Option<Arc<str>>,
   pub(super) effect: Arc<str>,
   pub(super) accept: Option<Accept>,
-  /// What a refused click by automation says.
-  pub(super) person_only: &'static str,
 }
 
 /// Why the chat did something without asking, as the chip after the line's target names it.
@@ -274,7 +272,6 @@ fn publish(ctx: &Ctx, view: &View, (of, version, name): (Publishing, u32, &str))
       glyph: Icon::Upload,
       kind: ButtonKind::Primary,
     }),
-    person_only: "orchestrator.change.personOnly.publish",
   }
 }
 
@@ -313,7 +310,6 @@ fn cancel(ctx: &Ctx, view: &View, number: u32) -> Words {
       glyph: Icon::CircleStop,
       kind: ButtonKind::Danger,
     }),
-    person_only: "orchestrator.change.personOnly.cancel",
   }
 }
 
@@ -376,7 +372,6 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
       glyph: Icon::GitMerge,
       kind: ButtonKind::Primary,
     }),
-    person_only: "orchestrator.change.personOnly.merge",
   }
 }
 
@@ -392,7 +387,6 @@ fn merged_outside(ctx: &Ctx, view: &View, (number, into): (u32, &str)) -> Words 
     settled: Some(ctx.t("orchestrator.change.merge.outsideState")),
     effect: ctx.t_args("orchestrator.change.merge.effectOutside", args),
     accept: None,
-    person_only: "orchestrator.change.personOnly.merge",
   }
 }
 
@@ -424,6 +418,5 @@ fn start(ctx: &Ctx, view: &View) -> Words {
     settled: None,
     effect,
     accept: None,
-    person_only: "orchestrator.proposal.personOnly",
   }
 }

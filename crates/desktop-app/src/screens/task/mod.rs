@@ -17,6 +17,7 @@
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
 mod archived;
+mod archived_foot;
 pub(crate) mod cards;
 pub(crate) mod changes;
 mod ci;
@@ -29,10 +30,12 @@ mod memory;
 pub(crate) mod merge;
 mod not_ready;
 mod orchestrated;
+mod parked;
 mod pause_wait;
 mod queue_words;
 mod read;
 mod reading;
+mod removal;
 mod services;
 mod sharing;
 pub(crate) mod summary;
@@ -55,7 +58,6 @@ use orchester_core::{
 };
 use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
-pub use self::context::TaskContext;
 pub(crate) use self::conversation::{links, step_label};
 use self::{
   changes::{ChangesReads, FileCount, Follow},
@@ -65,6 +67,10 @@ use self::{
   },
   read::{ReadAgain, TaskRead},
   summary::{EventWords, SummaryProps, TaskSummary, Version},
+};
+pub use self::{
+  context::TaskContext,
+  removal::{Removal, RemovalPlace},
 };
 use crate::{
   navigation::Navigation,
@@ -265,43 +271,6 @@ struct FrameProps {
 }
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
-
-/// Whose *Remove worktree* confirmation is open, and where: under the header when the header's button
-/// opened it for the latest run, in the run's row of *Runs of this task* when the row's did. One at a
-/// time.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Removal {
-  pub run: Option<RunId>,
-  pub place: RemovalPlace,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum RemovalPlace {
-  #[default]
-  Header,
-  Row,
-}
-
-impl lurq::app::component::DevtoolsInspectable for Removal {}
-
-impl Removal {
-  pub const fn closed() -> Self {
-    Self {
-      run: None,
-      place: RemovalPlace::Header,
-    }
-  }
-
-  /// Open for `run` at `place`.
-  pub const fn of(run: RunId, place: RemovalPlace) -> Self {
-    Self { run: Some(run), place }
-  }
-
-  /// Open for `run` at `place` now.
-  pub fn shows(self, run: RunId, place: RemovalPlace) -> bool {
-    self.run == Some(run) && self.place == place
-  }
-}
 
 /// What the frame shares with its parts while it shows one task.
 #[derive(Clone)]
@@ -509,6 +478,7 @@ impl Component for TaskFrame {
     };
     let services_reader = services::reader(ctx, &task);
     let take_over = team_controls::take_over_dialog(ctx, &task);
+    let blocking = team_controls::blocking_dialog(ctx, &task);
     let body = tab(ctx, &props.view, task);
     Column::new()
       .id("task-frame")
@@ -519,8 +489,7 @@ impl Component for TaskFrame {
       .child(body)
       .with_children(reader)
       .with_children(readers)
-      .with_children(take_over)
-      .with_children(services_reader)
+      .with_children(take_over.into_iter().chain(blocking).chain(services_reader))
       .into()
   }
 }

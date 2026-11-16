@@ -107,6 +107,9 @@ pub fn ask_panel(ctx: &Ctx, (state, closer): (&BoardState, &Closer), asked: &Ask
 
 /// The person confirmed `asked`.
 pub fn answer(state: &BoardState, closer: &Closer, asked: &Ask) {
+  if matches!(asked, Ask::BulkDelete(_)) && !state.may_delete() {
+    return;
+  }
   state.asked.set(None);
   match asked.clone() {
     Ask::StartsNow { task, .. } => state.change(vec![change(&task, ChangeKind::Queue)]),

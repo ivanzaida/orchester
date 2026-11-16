@@ -41,14 +41,12 @@ fn skill(description: &str) -> Skill {
 fn skills_offered_are_the_published_ones_at_their_latest_version_never_a_draft() {
   let repo = project();
   let root = repo.path();
-  editor::save_in(root, None, "draft-only", &skill("Never published")).expect("draft");
-  let notes = editor::save_in(root, None, "release-notes", &skill("Release notes v1")).expect("draft");
-  let notes = editor::publish_in(root, &notes).expect("v1");
+  // A new skill is created as its first version (ORC-816): a draft is one over a version.
+  let notes = editor::save_in(root, None, "release-notes", &skill("Release notes v1")).expect("v1");
   let notes = editor::save_in(root, Some(&notes), "release-notes", &skill("Release notes v2")).expect("draft");
   let notes = editor::publish_in(root, &notes).expect("v2");
   editor::save_in(root, Some(&notes), "release-notes", &skill("Not published yet")).expect("draft over v2");
-  let checks = editor::save_in(root, None, "checks", &skill("  Checks to run  ")).expect("draft");
-  editor::publish_in(root, &checks).expect("v1");
+  editor::save_in(root, None, "checks", &skill("  Checks to run  ")).expect("v1");
 
   let offered = published_in(root).expect("read");
   let shown: Vec<(&str, &str, u32)> = offered
@@ -80,8 +78,7 @@ fn skills_are_taken_by_every_agent_this_version_runs() {
 fn a_chosen_skill_is_kept_with_its_message_at_the_version_chosen() {
   let repo = project();
   let root = repo.path();
-  let notes = editor::save_in(root, None, "release-notes", &skill("Release notes v1")).expect("draft");
-  let notes = editor::publish_in(root, &notes).expect("v1");
+  let notes = editor::save_in(root, None, "release-notes", &skill("Release notes v1")).expect("v1");
   let notes = editor::save_in(root, Some(&notes), "release-notes", &skill("Release notes v2")).expect("draft");
   editor::publish_in(root, &notes).expect("v2");
   let mut offered = published_in(root).expect("read").remove(0);

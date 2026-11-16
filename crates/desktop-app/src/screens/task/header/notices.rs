@@ -15,7 +15,7 @@ use crate::ui::{
 
 pub fn notices(
   ctx: &Ctx,
-  detail: &TaskDetail,
+  (detail, team): (&TaskDetail, bool),
   stale: Option<&Message>,
   refused: Option<(RunControl, Message)>,
 ) -> Vec<Element> {
@@ -47,14 +47,15 @@ pub fn notices(
     .into_iter()
     .chain(refused)
     .chain(unreadable)
-    .chain(blocked(ctx, detail))
+    .chain(blocked(ctx, detail, team))
     .collect()
 }
 
 /// Blocked (`Picker · Not blocked` names the flag): why, and while linked blocking tasks have not
-/// finished, that the run neither starts nor goes on until they do.
-fn blocked(ctx: &Ctx, detail: &TaskDetail) -> Option<Element> {
-  let reason = detail.task.organization().blocked_reason();
+/// finished, that the run neither starts nor goes on until they do. A team task's reason is told once, in its state
+/// card on the Summary, so here a team task says only what it waits for.
+fn blocked(ctx: &Ctx, detail: &TaskDetail, team: bool) -> Option<Element> {
+  let reason = detail.task.organization().blocked_reason().filter(|_| !team);
   if reason.is_none() && detail.blocked_by.is_empty() {
     return None;
   }

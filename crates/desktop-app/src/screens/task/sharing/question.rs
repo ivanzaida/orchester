@@ -142,7 +142,6 @@ impl Component for ShareQuestion {
       )
       .with_children(lines)
       .child(self.buttons(ctx, next.as_deref(), state.is_pending()))
-      .with_children(self.person.reason(ctx, SHARE))
       .with_children(failure.map(|reason| field_error("task-share-failed", &reason.text(ctx))))
   }
 }
@@ -160,7 +159,7 @@ impl ShareQuestion {
     } else {
       let (action, person) = (self.share.clone(), self.person.clone());
       share.on_click(move || {
-        if person.allows(SHARE) {
+        if person.allows("share a task on a team server") {
           action.run(());
         }
       })

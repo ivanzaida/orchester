@@ -98,11 +98,10 @@ fn project_settings_context_memory_refuses_an_mcp_clients_input() {
   let mut page = context();
   let before = stored(&page);
   with_synthetic_input(|| page.choose("settings-memory-project-select", "Save automatically"));
-  page.until("the person-only note", |p| p.exists("settings-memory-person-only"));
+  assert!(page.window.refused_press().is_some(), "refused to the client");
   assert!(
-    page
-      .text("settings-memory-person-only")
-      .contains("Only a person changes these settings")
+    !page.exists("settings-memory-person-only"),
+    "nothing in the window says it"
   );
   assert_eq!(
     page.text("settings-memory-project-select"),
@@ -127,14 +126,17 @@ fn project_settings_context_memory_refuses_a_limit_typed_before_a_refused_choice
   let before = stored(&page);
   with_synthetic_input(|| page.set("settings-memory-tokens-field", "20000"));
   with_synthetic_input(|| page.choose("settings-memory-project-select", "Save automatically"));
-  page.until("the person-only note", |p| p.exists("settings-memory-person-only"));
+  assert!(page.window.refused_press().is_some(), "refused to the client");
   page.until("the select put back", |p| {
     p.text("settings-memory-project-select") == "Save after approval"
   });
   for _ in 0..5 {
     page.window.pass();
   }
-  assert!(page.exists("settings-memory-person-only"), "the note stays");
+  assert!(
+    !page.exists("settings-memory-person-only"),
+    "nothing in the window says it"
+  );
   assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
   assert_eq!(stored(&page), before, "the typed limit is not stored");
   // A person's choice after it saves its policy alone; saves run one at a time, so a save of the limit would be in.

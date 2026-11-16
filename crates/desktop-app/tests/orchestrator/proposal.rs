@@ -94,7 +94,7 @@ fn orchestrator_run_waits_for_the_person_and_only_a_person_starts_it() {
   );
   let start = format!("{card}-start");
   with_synthetic_input(|| screen.click(&start));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert_eq!(runs(&screen, &key), 0, "automation's input does not start it");
   assert!(outcomes(&screen)[0].is_proposed());
 

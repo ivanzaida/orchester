@@ -27,9 +27,11 @@ use orchester_workspace::tasks::{
 use super::{
   phrase::Phrase,
   row::{ItemProps, ListItem, NeedAction, ROW_HEIGHT, RowProps},
+  team::menu::RowTeam,
 };
 use crate::{
   navigation::waiting::Destination,
+  team::lifecycle::Offered,
   theme::{ExtraSpacing, IconSize, TasksSpacing, list_scrollbar},
   ui::{
     icon::{Icon, icon},
@@ -79,14 +81,22 @@ pub(super) struct GroupLine {
 }
 
 /// What the rows are built from: the project and its tasks as read, the task a Create just added, whether the
-/// project is shared, and whether the person is a member of the team project, who changes none of its tasks.
+/// project is shared, and for a team project what it offers the person (decision D4).
 pub(super) struct Source<'a> {
   pub project: ProjectId,
   pub tasks: &'a ProjectTasks,
   pub needs: &'a HashMap<orchester_core::id::TaskId, NeedItem>,
   pub highlight: Option<&'a str>,
   pub shared: bool,
-  pub member: bool,
+  /// A team project's, whose rows' menus offer what each task allows the person.
+  pub team: Option<TeamSource<'a>>,
+}
+
+/// What a team project's list reads of what the person may do with its tasks.
+pub(super) struct TeamSource<'a> {
+  pub offered: &'a HashMap<orchester_core::id::TaskId, Offered>,
+  /// Who changes the team's tasks, as the members read named them; empty until read, or for an Admin.
+  pub admins: Arc<str>,
 }
 
 /// The list's items: each group's header line and, unless it is folded, its rows; a flat view's rows alone.
@@ -114,7 +124,13 @@ pub(super) fn items(ctx: &Ctx, source: &Source<'_>, grouped: &[Grouped], folded:
         age: age(ctx, now, row.created_at),
         highlighted: source.highlight == Some(&*row.key),
         shared: source.shared,
-        member: source.member,
+        team: source.team.as_ref().map(|team| RowTeam {
+          key: row.key.clone(),
+          id: row.id,
+          organization: row.organization.clone(),
+          offered: team.offered.get(&row.id).cloned(),
+          admins: team.admins.clone(),
+        }),
         row: row.clone(),
       }))
     }));

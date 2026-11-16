@@ -130,8 +130,13 @@ fn domain_window_input_publishes_an_instruction_only_under_the_persons_switch() 
       .iter()
       .any(|entry| &*entry.name == "Steer" && entry.state.published().is_some_and(|number| number.get() == 2))
   };
-  s.click_by_client("instruction-publish")
-    .expect("the click is delivered");
+  let refused = s
+    .click_by_client("instruction-publish")
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("publish an instruction"),
+    "it names the action: {refused}"
+  );
   for _ in 0..10 {
     s.pass();
   }

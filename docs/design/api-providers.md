@@ -182,10 +182,16 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
 
 ## Decisions taken here, with the alternative
 
+Decisions 1 and 2 were reversed by the person on 2026-11-13: providers become app-wide and a profile chooses one
+directly (`agent-accounts.md`, *Agents run on accounts*). Not built yet, so the rest of this note still describes
+the app.
+
 1. **Per project, key in a project secret** (as native connections). Alternative: app-wide providers like accounts
    (Settings › Accounts, key in the OS secret store under an app key), chosen by connections in every project.
+   *Reversed 2026-11-13: the alternative is taken.*
 2. **On the connection** (program + provider = connection, like program + account). Alternative: on the agent
-   profile.
+   profile. *Reversed 2026-11-13: project agent connections go away; the profile's choice on this computer names the
+   provider.*
 3. **Bearer token for Claude Code** (`ANTHROPIC_AUTH_TOKEN`). Alternative: a per-connection choice of `x-api-key`
    (`ANTHROPIC_API_KEY`) for gateways that read only that header.
 4. **Models typed** in v1. Alternative: fetch with the runner's `GET /models` check.

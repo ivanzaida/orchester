@@ -277,3 +277,30 @@ fn card_approval_autopilot_rows_of_a_step_show_three_and_how_many_more() {
     "nothing more to show"
   );
 }
+
+/// What the project's Dangerous auto-approve mode approved is a quiet row of its own, its `triangle-alert` in `danger`,
+/// never one of Autopilot's (`dangerous-auto-approve`).
+#[test]
+fn card_approval_rows_name_dangerous_auto_approve_mode() {
+  let (mut window, ..) = opened_in("dangerous-auto-approve", "Ship the retry release", "cards-approval-");
+  window.until("the three rows", |window| leads(window).len() == 3);
+  let mut asked = Vec::new();
+  for lead in leads(&mut window) {
+    assert_eq!(text(&mut window, &lead), "Approved by Dangerous auto-approve mode");
+    let row = lead.strip_suffix("-lead").expect("a lead").to_owned();
+    asked.push(text(&mut window, &format!("{row}-asked")));
+    assert!(
+      glyphs(&mut window, &row).contains(&Icon::TriangleAlert.glyph().to_string()),
+      "{row}: its triangle"
+    );
+  }
+  asked.sort();
+  assert_eq!(
+    asked,
+    [
+      "cargo test -p webhooks",
+      "git push --force origin main",
+      "rm -rf ../shared-cache"
+    ]
+  );
+}

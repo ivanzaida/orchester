@@ -37,6 +37,7 @@ impl Clock for SettableClock {
 /// A server that cannot be reached `failures` times, then refuses the token.
 struct Unreachable {
   failures: Mutex<usize>,
+  configs: TeamConfigs,
 }
 
 impl Source for Unreachable {
@@ -70,6 +71,18 @@ impl Source for Unreachable {
   fn changed(&self) {}
 
   fn state(&self, _: SyncState) {}
+
+  fn configs(&self) -> &TeamConfigs {
+    &self.configs
+  }
+
+  fn unreached(&self, _: &SharingError) -> Message {
+    Message::new("sharing.errors.offline")
+  }
+
+  async fn retried(&self) {
+    std::future::pending::<()>().await;
+  }
 }
 
 fn seconds(waits: &[f64]) -> Vec<Duration> {
@@ -84,6 +97,7 @@ async fn live_updates_reconnects_wait_one_second_doubling_to_sixty_with_jitter()
     let clock = SettableClock::new(jitter);
     let source = Unreachable {
       failures: Mutex::new(8),
+      configs: TeamConfigs::default(),
     };
     assert_eq!(follow(&source, &workspace.root, &clock).await, Stopped::SignedOut);
     let expected: Vec<f64> = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0]
@@ -104,20 +118,21 @@ async fn live_updates_a_stream_that_opened_starts_the_waits_over() {
     let (clock, root, member) = (clock.clone(), workspace.root.clone(), Member::of(&server, ALICE));
     tokio::spawn(async move { follow(&member, &root, &*clock).await })
   };
-  seen_within(LIVE, "the snapshot after three refusals", || {
+  seen_within(SETTLED, "the snapshot after three refusals", || {
     workspace.link().cursor == server.cursor()
   })
   .await;
   assert_eq!(clock.waits(), seconds(&[1.0, 2.0, 4.0]));
   server.drop_streams();
-  seen_within(LIVE, "the reconnect", || server.connects().len() == 5).await;
+  seen_within(SETTLED, "the reconnect", || server.connects().len() == 5).await;
+  reading_events(&server, || workspace.task(server.task_ids()[0])).await;
   assert_eq!(
     clock.waits(),
     seconds(&[1.0, 2.0, 4.0, 1.0]),
     "the dropped stream had opened"
   );
   server.revoke(ALICE);
-  let stopped = tokio::time::timeout(LIVE, following).await.expect("stopped");
+  let stopped = tokio::time::timeout(SETTLED, following).await.expect("stopped");
   assert_eq!(stopped.expect("the stream's task"), Stopped::NotMember);
 }
 
@@ -132,14 +147,14 @@ async fn live_updates_the_state_moves_through_live_reconnecting_offline_and_not_
     let (clock, root, member) = (clock.clone(), workspace.root.clone(), member.clone());
     tokio::spawn(async move { follow(&*member, &root, &*clock).await })
   };
-  seen_within(LIVE, "the snapshot", || workspace.link().cursor == server.cursor()).await;
+  seen_within(SETTLED, "the snapshot", || workspace.link().cursor == server.cursor()).await;
   assert_eq!(member.states(), [SyncState::Live], "live once the stream connects");
 
   // The stream drops, then six connects are refused before the seventh opens: the wait reaches a minute at the
   // seventh failure in a row, the drop counting as the first.
   server.refuse_streams(6);
   server.drop_streams();
-  seen_within(LIVE, "live again after six refusals", || {
+  seen_within(SETTLED, "live again after six refusals", || {
     server.connects().len() == 8 && member.states().last() == Some(&SyncState::Live)
   })
   .await;
@@ -155,8 +170,9 @@ async fn live_updates_the_state_moves_through_live_reconnecting_offline_and_not_
   );
   assert_eq!(states[8..], [SyncState::Live], "live again once it connects");
 
+  reading_events(&server, || workspace.task(server.task_ids()[0])).await;
   server.revoke(ALICE);
-  let stopped = tokio::time::timeout(LIVE, following).await.expect("stopped");
+  let stopped = tokio::time::timeout(SETTLED, following).await.expect("stopped");
   assert_eq!(stopped.expect("the stream's task"), Stopped::NotMember);
   assert_eq!(member.states().last(), Some(&SyncState::NotMember), "revoked");
 }

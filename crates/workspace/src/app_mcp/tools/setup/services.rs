@@ -166,13 +166,8 @@ async fn list_services(services: &Services, args: InProjects, translate: &Transl
 async fn get_service(services: &Services, args: InService) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let id = entry_named(
-      &entries::<Service, _>(&ProjectDb::open(&open.repo_root)?)?,
-      &args.service,
-      Missing::Service,
-    )?
-    .id;
+    let (open, db) = services.read_project(&args.project)?;
+    let id = entry_named(&entries::<Service, _>(&*db)?, &args.service, Missing::Service)?.id;
     Ok(json!({ "service": service_json(&open.repo_root, id)? }))
   })
   .await

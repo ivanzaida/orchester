@@ -16,6 +16,9 @@ mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;
+mod pipelines_branched;
+mod pipelines_new;
+mod pipelines_unordered;
 mod plan_only;
 #[allow(
   dead_code,
@@ -33,7 +36,6 @@ mod runner_programs;
 mod scenario_names;
 mod settings;
 mod shared_config;
-mod shared_here;
 mod storage;
 mod team;
 

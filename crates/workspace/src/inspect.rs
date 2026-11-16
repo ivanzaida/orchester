@@ -18,13 +18,12 @@ macro_rules! markers {
     impl $inspect for crate::agents::hub::HubCounts {}
     impl $inspect for crate::agent_testing::listing::ProjectServices {}
     impl $inspect for crate::agents::team_hub::TeamHub {}
-    impl $inspect for crate::agents::team_mcp_conflict::Based {}
-    impl $inspect for crate::agents::team_mcp_edit::Saved {}
+    impl $inspect for crate::agents::local_hub::LocalHub {}
+    impl $inspect for crate::agents::role::RoleText {}
     impl $inspect for crate::agents::team_mcp_edit::EditError {}
     impl $inspect for crate::app_mcp::setup::NewTeamMcpServer {}
+    impl $inspect for crate::local_archive::Archivable {}
     impl $inspect for crate::sharing::team_edit::EditRefused {}
-    impl $inspect for crate::sharing::team_edit::Edited {}
-    impl $inspect for crate::removal::Users {}
     impl $inspect for crate::agents::form::ModelSelection {}
     impl $inspect for crate::clock::Clock {}
     impl $inspect for crate::close::CloseFlow {}
@@ -104,6 +103,7 @@ macro_rules! markers {
     impl $inspect for crate::pipelines::library::LibraryEntry {}
     impl $inspect for crate::pipelines::library::StartFrom {}
     impl $inspect for crate::pipelines::problems::ProblemView {}
+    impl $inspect for crate::pipelines::write::Stored {}
     impl $inspect for crate::readiness::ProjectReadiness {}
     impl $inspect for crate::plan_limits::Connections {}
     impl $inspect for crate::plan_limits::Readings {}
@@ -131,6 +131,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::cloud::Reach {}
     impl $inspect for crate::sharing::cloud::SignIn {}
     impl $inspect for crate::sharing::project::FirstDownload {}
+    impl $inspect for crate::sharing::project::NotRestored {}
     impl $inspect for crate::sharing::project::clone::CloneEnd {}
     impl $inspect for crate::sharing::project::clone::CloneRefusal {}
     impl $inspect for crate::sharing::project::clone::Destination {}
@@ -145,7 +146,6 @@ macro_rules! markers {
     impl $inspect for crate::sharing::project::lookup::Lookup {}
     impl $inspect for crate::sharing::project::state::ProjectSharing {}
     impl $inspect for crate::sharing::team::TeamConfiguration {}
-    impl $inspect for crate::sharing::compare::ConflictComparison {}
     impl $inspect for crate::sharing::compare::HistoryEntry {}
     impl $inspect for crate::skills::data::ProjectSkills {}
     impl $inspect for crate::skills::offered::OfferedSkill {}

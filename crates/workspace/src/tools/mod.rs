@@ -4,5 +4,6 @@
 pub mod data;
 pub mod editor;
 pub mod form;
+pub mod local_edit;
 pub mod program;
 pub mod widening;

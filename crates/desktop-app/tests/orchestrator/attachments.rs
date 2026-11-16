@@ -150,7 +150,13 @@ fn orchestrator_a_synthetic_press_on_a_sent_pdf_opens_no_program() {
   let files = format!("orchestrator-message-{message}-attachments");
   let chip = format!("orchestrator-message-{message}-attachment-{}", attached[0].id());
   with_synthetic_input(|| screen.click(&chip));
-  screen.until("the refusal", |screen| {
-    screen.text(&format!("{files}-failed")).contains("Only a person")
-  });
+  assert_eq!(
+    screen.window.refused_press(),
+    Some("open an attached file in its default program"),
+    "refused to the client"
+  );
+  assert!(
+    !screen.exists(&format!("{files}-failed")),
+    "the message says nothing of it"
+  );
 }

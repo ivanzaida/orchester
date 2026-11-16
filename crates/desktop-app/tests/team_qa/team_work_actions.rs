@@ -258,7 +258,7 @@ fn team_qa_work_an_admin_authorizes_the_delivery_that_waits_and_it_is_delivered(
   // client presses until the button takes the press.
   window.until("the press to be refused", |window| {
     with_synthetic_input(|| window.press("module-team-authorize"));
-    window.texts("module-team-authorize-person-only").is_some()
+    window.refused_press().is_some()
   });
   assert_eq!(
     asked(&server, "delivery.authorize"),
@@ -312,9 +312,7 @@ fn team_qa_work_a_tasks_take_over_takes_no_mcp_press() {
   window.press("task-team-take-over");
   window.until("the question", |window| window.texts("task-take-over-title").is_some());
   with_synthetic_input(|| window.press("task-take-over-confirm"));
-  window.until("the press to be refused", |window| {
-    window.texts("task-take-over-confirm-person-only").is_some()
-  });
+  window.until("the press to be refused", |window| window.refused_press().is_some());
   assert!(
     window.texts("task-take-over-title").is_some(),
     "the question stays open"
@@ -326,9 +324,7 @@ fn team_qa_work_a_tasks_take_over_takes_no_mcp_press() {
 fn team_qa_work_a_modules_take_over_takes_no_mcp_press() {
   let (mut window, server) = on(State::ModuleWork, module_route(WEBHOOKS), "module-team-take-over");
   with_synthetic_input(|| window.press("module-team-take-over"));
-  window.until("the press to be refused", |window| {
-    window.texts("module-team-take-over-person-only").is_some()
-  });
+  window.until("the press to be refused", |window| window.refused_press().is_some());
   assert_eq!(asked(&server, "claim.take_over"), 0);
   assert!(window.texts("module-team-refused").is_none());
 }
@@ -338,9 +334,7 @@ fn team_qa_work_the_automatic_merge_switch_takes_no_mcp_press() {
   let (mut window, server) = on(State::AdminWork, sharing(), "sharing-policy-merge-switch");
   let before = server.policy();
   with_synthetic_input(|| window.press("sharing-policy-merge-switch"));
-  window.until("the press to be refused", |window| {
-    window.texts("sharing-policy-merge-switch-person-only").is_some()
-  });
+  window.until("the press to be refused", |window| window.refused_press().is_some());
   assert_eq!(server.policy(), before, "the policy is as it was");
   assert!(window.texts("sharing-policy-conflict").is_none());
 }

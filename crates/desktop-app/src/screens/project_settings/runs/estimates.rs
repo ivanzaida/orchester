@@ -16,7 +16,6 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    events::{InputSource, input_source},
   },
   core::Signal,
   node::Element,
@@ -32,6 +31,7 @@ use super::super::{
   kit::{Group, SettingRow, Tone},
 };
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   queries::{self, Session, project},
   screens::reviewer_trouble,
   services::Services,
@@ -59,9 +59,8 @@ impl lurq::app::component::DevtoolsInspectable for Props {}
 pub(super) struct Estimates {
   /// What the person last chose; `None` until they do.
   saved: Signal<Option<bool>>,
-  /// A change the row did not take because synthetic input brought it.
-  blocked: Signal<bool>,
   save: SaveAction,
+  gate: Option<InputGate>,
 }
 
 impl Component for Estimates {
@@ -85,8 +84,8 @@ impl Component for Estimates {
     });
     Self {
       saved: ctx.signal(None),
-      blocked: ctx.signal(false),
       save,
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -129,12 +128,6 @@ impl Component for Estimates {
         &ctx.t_args(key, [("reason", &*reason)]),
       ))
     });
-    let blocked = self.blocked.get().then(|| {
-      Element::from(field_error(
-        &format!("{ID}-blocked"),
-        &ctx.t("project_settings.estimates.blocked"),
-      ))
-    });
     let row = SettingRow::new(ID, ctx.t("project_settings.estimates.label"));
     // Why the last estimate gave no points, in the hint's place while estimates are on.
     let row = match could_not_run(ctx, &root, shown) {
@@ -149,27 +142,20 @@ impl Component for Estimates {
     } else {
       switch.into()
     };
-    let row = row
-      .info(info)
-      .control(control)
-      .under_all(problem)
-      .under_all(blocked)
-      .render(ctx);
+    let row = row.info(info).control(control).under_all(problem).render(ctx);
     Element::from(Group::new("settings-estimates", ctx.t("project_settings.estimates.title")).row(row))
   }
 }
 
 impl Estimates {
-  /// `switch`, saving what a person chooses; synthetic input never changes it.
+  /// `switch`, saving what a person chooses; synthetic input never changes it, and is refused to the client that sent
+  /// it.
   fn listen(&self, switch: Toggle) -> Toggle {
-    let (saved, blocked, save) = (self.saved.clone(), self.blocked.clone(), self.save.clone());
+    let (saved, gate, save) = (self.saved.clone(), self.gate.clone(), self.save.clone());
     switch.on_change(move |chosen| {
-      if input_source() == InputSource::Synthetic {
-        tracing::warn!("synthetic input reached Let Orchester estimate story points; not taken");
-        blocked.set(true);
+      if !persons_press(gate.as_ref(), "change whether Orchester estimates story points") {
         return;
       }
-      blocked.set(false);
       saved.set(Some(chosen));
       save.run(chosen);
     })

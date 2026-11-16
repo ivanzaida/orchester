@@ -19,14 +19,15 @@ use super::{
   standing::{ReadinessStanding, Undecided},
   team,
 };
+use crate::team_config::TeamConfig;
 
 /// What the read needs besides the project's database.
 pub(super) struct Setting<'a> {
   pub(super) repo_root: &'a Path,
   pub(super) vault: &'a dyn SecretVault,
-  /// The program paths set for the team server's MCP servers when the project is shared with one; `None` for a local
-  /// project.
-  pub(super) team_programs: Option<McpPrograms>,
+  /// For a team project, the program paths set for its team server's MCP servers and its configuration as the server
+  /// was read; `None` for a local project.
+  pub(super) team: Option<(McpPrograms, &'a TeamConfig)>,
 }
 
 /// The resources of the project, before they are checked against this computer.
@@ -39,7 +40,7 @@ struct Gathered {
 }
 
 fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessError> {
-  let Some(programs) = setting.team_programs else {
+  let Some((programs, config)) = setting.team else {
     return Ok(Gathered {
       servers: Vec::new(),
       profiles: local::profiles(db, setting.repo_root)?,
@@ -49,12 +50,12 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
       programs: McpPrograms::default(),
     });
   };
-  let servers = needs::servers(db)?;
-  let needed: Vec<_> = servers.iter().map(|server| server.need.clone()).collect();
+  let servers = needs::servers(config);
+  let needed: Vec<_> = servers.iter().filter_map(|server| server.need.clone()).collect();
   Ok(Gathered {
-    profiles: team::profiles(db, &needed)?,
-    reviewers: team::reviewers(db)?,
-    tools: team::tools(db)?,
+    profiles: team::profiles(db, config, &needed)?,
+    reviewers: team::reviewers(db, config)?,
+    tools: team::tools(config),
     servers,
     programs,
   })
@@ -62,6 +63,7 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
 
 pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadiness, ReadinessError> {
   let vault = setting.vault;
+  let config = setting.team.as_ref().map(|(_, config)| *config);
   let gathered = gather(db, setting)?;
   let server_ids: Vec<ResourceId> = gathered.servers.iter().map(|server| server.entry.resource).collect();
   let mut here = facts::with_programs(facts::base(db, vault)?, &gathered.programs, &server_ids);
@@ -95,7 +97,10 @@ pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadin
     .iter()
     .flat_map(|entry| entry.found.iter().copied())
     .fold(here, |here, found| found.add_to(here));
-  let pipelines = pipelines(db, &entries)?;
+  let pipelines = match config {
+    Some(config) => team_pipelines(config, &entries),
+    None => pipelines(db, &entries)?,
+  };
   entries.sort_by_key(|entry| kind_rank(entry.kind));
   Ok(ProjectReadiness {
     resources: entries.into_iter().map(|entry| resource(entry, &here)).collect(),
@@ -147,7 +152,33 @@ struct PipelineEntry {
   needs: Result<Needs, Undecided>,
 }
 
+/// The team's pipelines, each read from its latest version; one whose latest version is not a pipeline this computer
+/// reads is undecided.
+fn team_pipelines(config: &TeamConfig, entries: &[Entry]) -> Vec<PipelineEntry> {
+  let archived: Vec<(ResourceId, String)> = [ResourceKind::AgentProfile, ResourceKind::Tool]
+    .into_iter()
+    .flat_map(|kind| config.archived_of(kind))
+    .map(|resource| (resource.id, resource.name.as_str().to_owned()))
+    .collect();
+  let mut pipelines = Vec::new();
+  for resource in config.resources(ResourceKind::Pipeline) {
+    let (Some(number), Some(body)) = (resource.number(), resource.body::<Pipeline>()) else {
+      continue;
+    };
+    pipelines.push(PipelineEntry {
+      resource: resource.id,
+      name: resource.name.as_str().to_owned(),
+      number,
+      needs: body
+        .map_err(|_| Undecided::NotTeamForm)
+        .and_then(|pipeline| union(&pipeline, (entries, &archived))),
+    });
+  }
+  pipelines
+}
+
 fn pipelines(db: &ProjectDb, entries: &[Entry]) -> Result<Vec<PipelineEntry>, ReadinessError> {
+  let archived = archived_executors(db)?;
   let mut pipelines = Vec::new();
   for resource in db.resources(ResourceKind::Pipeline)? {
     let Some(version) = db.latest_version::<Pipeline>(resource.id())? else {
@@ -157,7 +188,7 @@ fn pipelines(db: &ProjectDb, entries: &[Entry]) -> Result<Vec<PipelineEntry>, Re
       resource: resource.id(),
       name: resource.name().as_str().to_owned(),
       number: version.number(),
-      needs: union(version.body(), entries),
+      needs: union(version.body(), (entries, &archived)),
     });
   }
   Ok(pipelines)
@@ -166,7 +197,7 @@ fn pipelines(db: &ProjectDb, entries: &[Entry]) -> Result<Vec<PipelineEntry>, Re
 /// The needs of every profile or tool `pipeline` runs, in step order and then the integrator. One that is undecided, or
 /// that this computer has no version of, decides the pipeline: it cannot start, and the first such member is named
 /// ([`Undecided::Member`]). The other members' missing parts are not read while one is undecided.
-fn union(pipeline: &Pipeline, entries: &[Entry]) -> Result<Needs, Undecided> {
+fn union(pipeline: &Pipeline, (entries, archived): (&[Entry], &[(ResourceId, String)])) -> Result<Needs, Undecided> {
   let integrator = pipeline.deliver().and_then(|deliver| deliver.integrator());
   let executors = pipeline
     .steps()
@@ -178,11 +209,33 @@ fn union(pipeline: &Pipeline, entries: &[Entry]) -> Result<Needs, Undecided> {
     let entry = entries
       .iter()
       .find(|entry| entry.resource == executor)
-      .ok_or(Undecided::RunsUnknown(executor))?;
+      .ok_or_else(|| unlisted(executor, archived))?;
     parts.push(entry.needs.clone().map_err(|why| Undecided::Member {
       id: executor,
       why: Box::new(why),
     })?);
   }
   Ok(Needs::union(parts))
+}
+
+/// The profiles and tools of a local project archived here, which a step may still name: a pipeline keeps naming what
+/// is archived.
+fn archived_executors(db: &ProjectDb) -> Result<Vec<(ResourceId, String)>, ReadinessError> {
+  let mut archived = Vec::new();
+  for kind in [ResourceKind::AgentProfile, ResourceKind::Tool] {
+    for (resource, _) in db.archived_local_resources(kind)? {
+      archived.push((resource.id(), resource.name().as_str().to_owned()));
+    }
+  }
+  Ok(archived)
+}
+
+/// Why a step's executor has no entry: it was archived (and is named), or this computer has no version of it.
+fn unlisted(executor: ResourceId, archived: &[(ResourceId, String)]) -> Undecided {
+  archived
+    .iter()
+    .find(|(id, _)| *id == executor)
+    .map_or(Undecided::RunsUnknown(executor), |(id, name)| {
+      Undecided::RunsArchived(*id, name.clone())
+    })
 }

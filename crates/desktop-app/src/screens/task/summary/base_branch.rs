@@ -110,10 +110,9 @@ fn next_base(task: &TaskContext, tasks: Option<&ProjectTasks>) -> Option<(BaseCh
     Some(id) => Some(tasks?.modules.iter().find(|module| module.id() == id)?),
     None => None,
   };
-  Some(resolve(
-    stored.base(),
-    module.map(|module| (module.id(), module.base())),
-  ))
+  // A module with a branch of its own starts its tasks from it (`Module::run_base`).
+  let based = module.map(|module| (module.id(), module.run_base()));
+  Some(resolve(stored.base(), based.as_ref().map(|(id, base)| (*id, base))))
 }
 
 fn module_name(tasks: Option<&ProjectTasks>, id: ModuleId) -> Option<String> {

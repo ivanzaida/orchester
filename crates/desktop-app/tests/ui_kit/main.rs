@@ -4,6 +4,7 @@
 //! tooltip. lurq does not read a laid-out element's corner radius back, so radii are checked as the
 //! theme roles the controls use, resolved to the design's values.
 
+mod agent_picker;
 mod blank_line;
 mod blocks;
 mod buttons;
@@ -22,6 +23,9 @@ mod markdown_code_scroll;
 mod markdown_link_layout;
 mod mention_links;
 mod prompt_input;
+mod runs_on_picker;
+mod runs_on_picker_areas;
+mod runs_on_picker_own;
 mod slash_argument;
 mod textarea_focus;
 mod todo_list;

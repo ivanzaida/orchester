@@ -4,7 +4,8 @@
 //! icon and verb in 12/500 `text_secondary`, a `·` in `text_muted`, its first two choices in 12 `text_primary`, then
 //! *+N* for the rest on a round `hover` pill in 11 `text_secondary` (P3 `iIfbM`), and a 12 `x` in `text_muted` that
 //! removes the badge; 5 apart on a round `surface_raised` pill in a `border_strong` stroke, 3 over and under, 9 before
-//! and 6 after. A press on it opens its picker again.
+//! and 6 after. A press on it opens its picker again. A command that takes its choices in one of two ways names the
+//! way chosen: *Lead to the end · Orchestrator watch, Docs* with a `flag` (`yyiQa` in `L03` `xE361`).
 
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ use lurq::{
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::Arguing;
+use super::{Arguing, Badge};
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, SlashText},
   ui::{
@@ -55,6 +56,7 @@ fn one(ctx: &Ctx, id: &str, field: &SlashField, badge: &Arguing) -> Element {
   let badge_id = format!("{id}-badge-{}", badge.command);
   let name = format!("/{}", badge.command);
   let reopen = (field.clone(), badge.command);
+  let shown = field.badge_of(badge);
   let pill = Row::new()
     .id(format!("{badge_id}-pill"))
     .padding(
@@ -69,15 +71,15 @@ fn one(ctx: &Ctx, id: &str, field: &SlashField, badge: &Arguing) -> Element {
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
     .rounded(ExtraRadius::Full.role())
-    .child(icon(badge.badge.icon, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(shown.icon, IconSize::Sm, PaletteColor::TextSecondary))
     .child(
-      Text::new(&badge.badge.verb)
+      Text::new(&shown.verb)
         .id(format!("{badge_id}-verb"))
         .variant(SlashText::BadgeVerb.role())
         .nowrap(),
     )
     .with_children(targets(ctx, &badge_id, badge))
-    .child(remove(ctx, (&badge_id, field), badge));
+    .child(remove(ctx, (&badge_id, field), (badge.command, &shown)));
   pressable(move || reopen.0.set_picking(Some(reopen.1)))
     .id(badge_id)
     .describe(
@@ -132,8 +134,8 @@ fn targets(ctx: &Ctx, badge_id: &str, badge: &Arguing) -> Vec<Element> {
 }
 
 /// The badge's `x`, `{badge_id}-remove`.
-fn remove(ctx: &Ctx, (badge_id, field): (&str, &SlashField), badge: &Arguing) -> Button {
-  let (field, command) = (field.clone(), badge.command);
+fn remove(ctx: &Ctx, (badge_id, field): (&str, &SlashField), (command, shown): (&'static str, &Badge)) -> Button {
+  let field = field.clone();
   Button::empty()
     .id(format!("{badge_id}-remove"))
     .align_items(Alignment::Center)
@@ -141,7 +143,7 @@ fn remove(ctx: &Ctx, (badge_id, field): (&str, &SlashField), badge: &Arguing) ->
     .cursor(CursorIcon::Pointer)
     .describe(
       "a11y_name",
-      ctx.t_args("composer.argument.remove", [("name", &*badge.badge.verb)]),
+      ctx.t_args("composer.argument.remove", [("name", &*shown.verb)]),
     )
     .on_click(move |event: MouseEvent| {
       event.stop_propagation();

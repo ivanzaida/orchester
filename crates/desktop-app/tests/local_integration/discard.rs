@@ -41,10 +41,9 @@ fn phase(page: &Page) -> Option<LocalPhase> {
     .map(|operation| operation.phase())
 }
 
+/// Whether a press was refused to the client that made it, the page saying nothing of it.
 fn refused(window: &mut Window) -> bool {
-  window
-    .texts("local-work-error")
-    .is_some_and(|texts| texts.join(" ").contains("Only a person can discard"))
+  window.refused_press().is_some() && window.texts("local-work-error").is_none()
 }
 
 #[test]

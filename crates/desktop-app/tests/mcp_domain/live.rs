@@ -79,26 +79,17 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
   // The runs start whatever this computer's disk has free: the guard keeps 1 GB here instead of 50.
   let kept = served.ok("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 1 }));
   assert_eq!(kept["disk_guard"]["keep_free_gb"], 1);
-  let fake_codex =
-    json!({ "project": "Kontur", "kind": "codex", "name": "Codex · Kontur", "program": fake.display().to_string() });
-  let refused = served.refused("add_cli_connection", &fake_codex);
-  assert_eq!(
-    refused["code"], "person_only",
-    "a program not on the search path is a person's choice"
-  );
-  // A person lets automation set the project up, the fake CLI and write access included.
+  // A person chooses the fake CLI as Codex's program in Settings › Accounts and lets automation set the project
+  // up, write access included; no tool takes a program.
+  served
+    .services()
+    .workspace
+    .set_agent_program(orchester_core::account::AccountCli::Codex, fake)
+    .expect("the program is kept");
   served.let_automation_widen(true);
-  let connection = served.ok("add_cli_connection", &fake_codex);
-  assert_eq!(connection["check"]["verified"], true, "{connection}");
-  assert_eq!(connection["connection"]["status"], "connected");
-  let models = served.ok(
-    "list_models",
-    &json!({ "project": "Kontur", "connection": "Codex · Kontur" }),
-  );
-  assert_eq!(models["models"][0]["id"], "gpt-5.5");
   let offered = served.refused(
     "save_profile_draft",
-    &json!({ "project": "Kontur", "role": "Builder", "connection": "Codex · Kontur", "model": "gpt-5.5", "effort": "extreme" }),
+    &json!({ "project": "Kontur", "role": "Builder", "account": "default", "cli": "codex", "model": "gpt-5.5", "effort": "extreme" }),
   );
   assert_eq!(offered["code"], "effort_not_offered");
   let profile = served.ok(
@@ -107,7 +98,7 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
       "project": "Kontur",
       "role": "Builder",
       "responsibilities": "Implements the task.",
-      "connection": "Codex · Kontur",
+      "account": "default", "cli": "codex",
       "model": "gpt-5.5",
       "effort": "medium",
       "permissions": { "repository": "write", "commands": "any_in_worktree", "network": "on" },
@@ -117,22 +108,61 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
     profile["profile"]["state"]["state"], "published",
     "created as v1: {profile}"
   );
+  assert_eq!(profile["profile"]["runs_on"]["account"]["default"], true, "{profile}");
+  let models = served.ok(
+    "list_models",
+    &json!({ "project": "Kontur", "account": "default", "cli": "codex" }),
+  );
+  assert_eq!(models["models"][0]["id"], "gpt-5.5");
+  let connections = served.ok("list_connections", &json!({ "project": "Kontur" }));
+  assert_eq!(connections["runs_on"][0]["status"], "connected", "{connections}");
   assert_eq!(profile["profile"]["state"]["published_version"], 1);
-  served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Delivery", "from": "empty" }),
-  );
-  served.ok(
-    "save_pipeline_draft",
-    &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [
-      { "key": "implement", "name": "Implement", "profile": "Builder", "repository": "write", "instructions": "Append one line." },
-    ] }),
-  );
-  let pipeline = served.ok(
-    "publish_pipeline",
-    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
-  );
+  delivery(repo);
+  let pipeline = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Delivery" }));
   assert_eq!(pipeline["pipeline"]["published_version"], 1, "{pipeline}");
+}
+
+/// Delivery as its first version: Implement, on Builder, writes. `create_pipeline` makes only the starter, a copy, or
+/// an empty pipeline, which is never stored (D-032), so the fixture creates it as the editor would.
+fn delivery(repo: &Path) {
+  use orchester_core::{
+    name::Name,
+    permission::StepPermissions,
+    resource::{Pipeline, PromptText, RepositoryAccess, ResourceKind, Step, StepKey, StepKind},
+    store::ResourceStore,
+    time::Timestamp,
+  };
+  let mut db = ProjectDb::open(repo).expect("the project's database");
+  let builder = db
+    .resources(ResourceKind::AgentProfile)
+    .expect("profiles")
+    .into_iter()
+    .find(|profile| profile.name().as_str() == "Builder")
+    .expect("Builder")
+    .id();
+  let step = Step {
+    key: StepKey::new("implement").expect("key"),
+    name: Name::new("Implement").expect("name"),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::Write,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new("Append one line.").expect("instructions"),
+    depends_on: Default::default(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  };
+  let body = Pipeline::new(vec![step]).expect("a pipeline");
+  orchester_workspace::pipelines::library::create_here(
+    &mut db,
+    Name::new("Delivery").expect("name"),
+    &body,
+    Timestamp::now(),
+  )
+  .expect("Delivery v1");
 }
 
 /// Creates and runs a task with `brief` on Delivery; its key.
@@ -240,7 +270,7 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
   });
   served.ok("save_tool_draft", &check);
   served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [
       { "key": "implement", "name": "Implement", "profile": "Builder", "repository": "write", "instructions": "Append one line." },
       {
@@ -252,11 +282,11 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
       },
     ] }),
   );
-  let pipeline = served.ok(
-    "publish_pipeline",
-    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
+  let pipeline = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Delivery" }));
+  assert_eq!(
+    pipeline["pipeline"]["published_version"], 2,
+    "saving published it: {pipeline}"
   );
-  assert_eq!(pipeline["pipeline"]["published_version"], 2, "{pipeline}");
   let key = run(&mut served, "Say hello.");
   served.until("the run to be ready for review", |served| {
     let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));

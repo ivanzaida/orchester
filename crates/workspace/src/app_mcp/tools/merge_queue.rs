@@ -8,13 +8,13 @@ use std::collections::HashMap;
 use orchester_core::{
   id::RunId,
   merge_queue::{Blocked, Left, QueueEntry, QueueState, lanes},
-  store::TaskStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 use serde_json::{Value, json};
 
 use super::wire;
+use crate::tasks::recorded;
 
 /// `entry`, at `place` among the runs of its lane in the queue while it is in it, as the reads give it.
 pub(super) fn entry_json(entry: &QueueEntry, place: Option<usize>) -> Value {
@@ -85,7 +85,7 @@ pub(super) fn queue_of_day(db: &ProjectDb, day_start: Timestamp) -> Result<Value
     .iter()
     .filter(|entry| entry.state.in_queue() || entry.since >= day_start)
   {
-    let task = db.task(entry.task)?.map(|task| task.key().to_string());
+    let task = recorded::task_of(db, entry.task)?.map(|task| task.key().to_string());
     let mut shown = entry_json(entry, places.get(&entry.run).copied());
     shown["run"] = json!(entry.run.to_string());
     shown["task"] = json!(task);

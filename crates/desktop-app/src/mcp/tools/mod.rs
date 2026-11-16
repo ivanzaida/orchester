@@ -119,6 +119,9 @@ pub fn route_json(route: &Route) -> Value {
       if let Some(account) = view.account {
         params.insert("account".to_owned(), json!(account.to_string()));
       }
+      if let Some(provider) = view.provider {
+        params.insert("provider".to_owned(), json!(provider.to_string()));
+      }
       if view.panel != AccountsPanel::Account {
         params.insert("panel".to_owned(), json!(view.panel.name()));
       }
@@ -181,7 +184,6 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   };
   match page {
     ProjectPage::Overview(tab) => insert("tab", tab.name()),
-    ProjectPage::Import(tab) => insert("tab", tab.name()),
     ProjectPage::Orchestrator(OrchestratorChat::New) => insert("chat", "new"),
     ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)) => insert("chat", &chat.to_string()),
     ProjectPage::Tasks(list) => {
@@ -194,7 +196,6 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) | ProjectPage::TaskReview(key) => insert("key", &key.to_string()),
-    ProjectPage::Memory(Some(tab)) => insert("tab", tab.name()),
     ProjectPage::Usage(query) => {
       let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {
@@ -224,7 +225,6 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     ProjectPage::Agent(id, _) => insert("agent", &id.to_string()),
     ProjectPage::NewSkill => insert("skill", "new"),
     ProjectPage::Skill(id) => insert("skill", &id.to_string()),
-    ProjectPage::ImportSkills => insert("skill", "import"),
     ProjectPage::NewTool => insert("tool", "new"),
     ProjectPage::Tool(tool, tab) => {
       insert("tool", &tool.to_string());
@@ -256,12 +256,25 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   }
 }
 
-/// The parameters `navigate` takes back for the places of Modules and the code viewer.
+/// The parameters `navigate` takes back for the places of Modules, the code viewer and the Agents hub.
 fn other_params(page: &ProjectPage) -> impl Iterator<Item = (&'static str, String)> {
   module_params(page)
     .into_iter()
     .chain(files_params(page))
     .chain(hub_params(page))
+    .chain(memory_params(page))
+}
+
+/// The parameters `navigate` takes back for the Agents hub's Memory filter: its status `tab` and the `record` its
+/// panel shows.
+fn memory_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  let ProjectPage::Memory(view) = page else {
+    return Vec::new();
+  };
+  let mut params: Vec<(&'static str, String)> =
+    view.tab.map(|tab| ("tab", tab.name().to_owned())).into_iter().collect();
+  params.extend(view.record.map(|record| ("record", record.to_string())));
+  params
 }
 
 /// The parameters `navigate` takes back for the Agents hub of a team project: its `filter` and the `item` its panel
@@ -271,7 +284,9 @@ fn hub_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
     return Vec::new();
   };
   let mut params = vec![("filter", view.filter.name().to_owned())];
+  params.extend(view.adding.then(|| ("view", "new".to_owned())));
   params.extend(view.item.map(|item| ("item", item.to_string())));
+  params.extend(view.server.map(|server| ("server", server.to_string())));
   params
 }
 

@@ -1,7 +1,9 @@
 //! *Delete this record?*, in the record's place (`Question · Delete this record?` `n2UhqG` in 05c `CF0R7`), in the
 //! hub's danger tone ([`crate::screens::hub::question`]): what deleting does (it stops reaching agents, the
 //! invocations that were given it show *Deleted record*, its earlier versions go with it, it cannot be undone), that
-//! deprecating keeps it, then *Delete record*, *Deprecate instead* and *Cancel*. Only a person deletes records.
+//! deprecating keeps it, then *Delete record*, *Deprecate instead* and *Cancel*. Only a person deletes records. In the
+//! Agents hub's Memory filter it is a modal over the window (*Delete…* asks in a modal, Y2 `oIgSL`) saying the same:
+//! confirmations are modals (`orchester-ui`), and no frame draws this one, so it is the app's dialog with these words.
 
 use lurq::{
   app::{
@@ -10,6 +12,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -26,6 +29,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
+    dialog::{Dialog, Tone},
     field::field_error,
     icon::Icon,
     message::message_text,
@@ -37,17 +41,29 @@ pub struct DeleteProps {
   pub memory: Memory,
   /// How many earlier versions go with it.
   pub earlier: usize,
+  /// It asks in a modal over the window (the Agents hub), not in the record's place (a task's tab).
+  pub modal: bool,
 }
 
 impl DevtoolsInspectable for DeleteProps {}
 
-pub struct DeleteConfirm;
+pub struct DeleteConfirm {
+  /// The modal shows; *Cancel*, Esc and the scrim close it, and with it the question.
+  open: Signal<bool>,
+}
 
 impl Component for DeleteConfirm {
   type Props = DeleteProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    let open = ctx.signal(true);
+    let state = MemoryState::of(ctx);
+    ctx.watch(&open, move |open: &bool| {
+      if !*open {
+        state.close();
+      }
+    });
+    Self { open }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -56,6 +72,9 @@ impl Component for DeleteConfirm {
     let memory = &props.memory;
     let id = format!("memory-delete-{}", memory.id());
     let given = given_count(ctx, &state, memory);
+    if props.modal {
+      return self.dialog(ctx, &state, (&props, &id), &given);
+    }
     let mut confirm = Column::new()
       .id(id.clone())
       .width(Dimension::Pct(100.0))
@@ -88,8 +107,82 @@ impl Component for DeleteConfirm {
       confirm = confirm.child(field_error(&format!("{id}-given-error"), &message_text(ctx, reason)));
     }
     confirm = confirm.with_children(state.failure_note(ctx, &id, Some(memory.id())));
-    confirm.child(actions(ctx, &state, memory, &id))
+    confirm.child(actions(ctx, &state, memory, &id)).into()
   }
+}
+
+impl DeleteConfirm {
+  /// The question as a modal: what deleting does and that deprecating keeps the record, why it could not be read how
+  /// many invocations were given it, why the last press did nothing, then *Cancel*, *Deprecate instead* on an active
+  /// record and *Delete record*.
+  fn dialog(
+    &self,
+    ctx: &Ctx,
+    state: &MemoryState,
+    (props, id): (&DeleteProps, &str),
+    given: &Result<usize, Option<Message>>,
+  ) -> Element {
+    let memory = &props.memory;
+    let mut dialog = Dialog::new(
+      id,
+      Icon::Trash2,
+      ctx.t("memory.delete.title"),
+      ctx.t("memory.editor.cancel"),
+    )
+    .tone(Tone::Danger)
+    .what(explanation(ctx, given.as_ref().ok().copied(), props.earlier));
+    if memory.status() == MemoryStatus::Active {
+      dialog = dialog.part(
+        Text::new(&ctx.t("memory.delete.deprecateHint"))
+          .id(format!("{id}-hint"))
+          .variant(TypographyStyle::Description)
+          .width(Dimension::Pct(100.0)),
+      );
+    }
+    if let Err(Some(reason)) = given {
+      dialog = dialog.part(field_error(&format!("{id}-given-error"), &message_text(ctx, reason)));
+    }
+    let failure = state.failure_note(ctx, id, Some(memory.id())).map(Element::from);
+    let mut dialog = dialog.under(failure);
+    for action in dialog_actions(ctx, state, memory, id) {
+      dialog = dialog.action(action);
+    }
+    dialog.render(ctx, &self.open)
+  }
+}
+
+/// *Deprecate instead* on an active record and *Delete record*, the modal's actions after its *Cancel*.
+fn dialog_actions(ctx: &Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Vec<ActionButton> {
+  let (record, revision) = (memory.id(), memory.revision());
+  let busy = state.busy();
+  let held = |button: ActionButton| if busy { button.disabled() } else { button };
+  let mut actions = Vec::new();
+  if memory.status() == MemoryStatus::Active {
+    let deprecate = state.clone();
+    actions.push(held(
+      ActionButton::new(
+        format!("{id}-deprecate"),
+        ButtonKind::Secondary,
+        ctx.t("memory.delete.deprecateInstead"),
+      )
+      .icon(Icon::Archive)
+      .on_click(move || deprecate.write(Write::Change(record, revision, Change::Deprecate))),
+    ));
+  }
+  let delete = state.clone();
+  let confirm = ActionButton::new(
+    format!("{id}-confirm"),
+    ButtonKind::Danger,
+    ctx.t("memory.delete.confirm"),
+  )
+  .icon(Icon::Trash2)
+  .on_click(move || delete.write(Write::Delete(record, revision)));
+  actions.push(if state.pending_for(Some(record)) {
+    confirm.loading()
+  } else {
+    held(confirm)
+  });
+  actions
 }
 
 /// How many invocations were given `memory`; `Err(None)` while it is read, `Err(Some(why))` when it cannot be.

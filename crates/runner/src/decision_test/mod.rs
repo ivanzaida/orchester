@@ -9,10 +9,10 @@ use std::{
 };
 
 use orchester_core::{
-  id::IdempotencyKey,
+  id::{ApiAccountId, IdempotencyKey},
   resource::ModelId,
   run::review::{DecisionTestReport, DecisionTestStatus, Probability},
-  secret::SecretVault,
+  secret::{SecretVault, VaultKey},
   store::SecretStore,
 };
 use orchester_ipc::DecisionTestTarget;
@@ -61,15 +61,14 @@ pub async fn test_in(
     }
     let key = match connection.key() {
       Some(id) => {
-        let secret = db
-          .secret(id)?
-          .filter(|secret| !secret.is_archived())
-          .ok_or(DecisionTestError::KeyUnavailable)?;
-        Some(
-          vault
-            .read(&secret.vault_key(db.project().id()))
-            .map_err(|_| DecisionTestError::KeyUnavailable)?,
-        )
+        // No secret of the project by this id: the connection is the project's copy of a decision model server of
+        // the person's, whose key the app keeps under the server's id, as an API account's.
+        let entry = match db.secret(id)? {
+          Some(secret) if secret.is_archived() => return Err(DecisionTestError::KeyUnavailable),
+          Some(secret) => secret.vault_key(db.project().id()),
+          None => VaultKey::api_account(ApiAccountId::from_uuid(id.as_uuid())),
+        };
+        Some(vault.read(&entry).map_err(|_| DecisionTestError::KeyUnavailable)?)
       }
       None => None,
     };

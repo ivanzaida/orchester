@@ -145,7 +145,9 @@ impl From<&SharingError> for DownloadFailure {
       SharingError::ServerMissing => Self::ServerMissing,
       SharingError::InvalidAnswer(_) => Self::InvalidAnswer,
       SharingError::CertificateChanged => Self::Certificate,
-      SharingError::Store(_) | SharingError::Vault(_) | SharingError::Interrupted => Self::Local,
+      SharingError::Store(_) | SharingError::Vault(_) | SharingError::Interrupted | SharingError::TeamNotRead(_) => {
+        Self::Local
+      }
       SharingError::KeptChanging
       | SharingError::ShareInProgress
       | SharingError::NoPasswords
@@ -156,12 +158,10 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::ProjectChanged
       | SharingError::AccountProject
       | SharingError::NotAdmin
-      | SharingError::VersionConflict { .. }
-      | SharingError::PersonOnly
-      | SharingError::ConnectionKindMismatch { .. }
       | SharingError::LocalEntitiesNamed { .. }
       | SharingError::PipelineNamesNonTeam { .. }
       | SharingError::WritableFoldersStay { .. }
+      | SharingError::ToolSecretGone { .. }
       | SharingError::ShareRefused { .. }
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }

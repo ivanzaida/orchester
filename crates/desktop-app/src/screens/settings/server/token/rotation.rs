@@ -49,9 +49,8 @@ impl TokenRow {
   /// *Rotate the token?* in place under the row: what rotating does, *Rotate token* and *Keep current token*.
   fn confirmation(&self, ctx: &Ctx, rotate: Change<()>, pending: bool) -> Element {
     let store = ctx.t(STORE_KEY);
-    let (confirming, blocked, reveal, left, rotated) = (
+    let (confirming, reveal, left, rotated) = (
       self.confirming.clone(),
-      self.blocked.clone(),
       self.reveal.clone(),
       self.left.clone(),
       self.rotated.clone(),
@@ -66,7 +65,7 @@ impl TokenRow {
       confirm.loading()
     } else {
       confirm.on_click(move || {
-        if refused(&blocked) {
+        if refused() {
           return;
         }
         reveal.hide();
@@ -114,9 +113,9 @@ impl TokenRow {
     again = if pending {
       again.disabled()
     } else {
-      let (rotate, blocked) = (rotate.clone(), self.blocked.clone());
+      let rotate = rotate.clone();
       again.on_click(move || {
-        if !refused(&blocked) {
+        if !refused() {
           rotate.run(());
         }
       })
@@ -156,9 +155,8 @@ impl TokenRow {
     if props.server.is_none() || again.state().get().is_pending() {
       try_again = try_again.disabled();
     } else {
-      let blocked = self.blocked.clone();
       try_again = try_again.on_click(move || {
-        if !refused(&blocked) {
+        if !refused() {
           again.run(());
         }
       });

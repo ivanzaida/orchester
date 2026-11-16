@@ -7,6 +7,7 @@
 //! it.
 
 pub mod browser_qa;
+pub mod pipeline_edit;
 pub mod signed_in;
 mod stand_in_console;
 pub mod stand_ins;
@@ -105,6 +106,16 @@ impl Data {
   /// so the runner's own reading of runs' files answers in-process ([`runs_read_in_process`]).
   pub fn launch(&self) -> Launch {
     runs_read_in_process(self.launch_with(self.no_runner()))
+  }
+
+  /// [`Self::launch`] with a secret store that refuses every value it is given.
+  pub fn launch_refusing_secrets(&self) -> Launch {
+    runs_read_in_process(signed_in::launch_with_vault(
+      &self.database(),
+      self.no_runner(),
+      self.runtime.handle(),
+      signed_in::refusing_keychain(),
+    ))
   }
 
   /// [`Self::launch`] with the runner program `runner`.
@@ -223,6 +234,16 @@ impl Window {
 
   pub fn navigation(&self) -> Navigation {
     self.link.navigation().expect("the window attached its navigation")
+  }
+
+  /// The person-only press the window refused to synthetic input since this was last asked: the action an MCP
+  /// client's tool call names in its error.
+  pub fn refused_press(&self) -> Option<&'static str> {
+    self
+      .link
+      .input_gate()
+      .take_refused_press()
+      .map(crate::mcp::input_gate::RefusedPress::action)
   }
 
   pub fn projects(&self) -> Projects {

@@ -11,6 +11,9 @@ use rusqlite::Connection;
 
 use self::support::{copied_at_version, started_run};
 
+/// The schema before Drive's migration; migrations are append only, so later ones still apply on open.
+const BEFORE_DRIVE: u32 = 154;
+
 #[test]
 fn orchestrator_drives_is_unset_until_written_then_on_or_off() {
   let (_repo, mut db, ..) = started_run();
@@ -43,7 +46,7 @@ fn orchestrator_drives_migration_turns_it_on_where_answer_agents_was_on() {
   let database = repo.path().join(".orchester").join("orchester.db");
   let latest = schema_version(&database);
   for (answers, expected) in [(Some(true), Some(true)), (Some(false), Some(false)), (None, None)] {
-    let old = copied_at_version(&database, latest - 1);
+    let old = copied_at_version(&database, BEFORE_DRIVE);
     let path = old.path().join(".orchester").join("orchester.db");
     Connection::open(&path)
       .expect("open the old database")

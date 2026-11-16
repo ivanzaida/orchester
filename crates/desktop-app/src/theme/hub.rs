@@ -12,12 +12,6 @@ use lurq::{
 
 use super::typography::{mono, style};
 
-/// The list and the panel of the team's Agents hub while its read is under way again: what shows is the last answer.
-pub const HUB_READING_OPACITY: f32 = 0.6;
-
-/// The width of the menu All's New opens (`Menu` in `t4mtQL`).
-pub const HUB_NEW_MENU_WIDTH: f32 = 220.0;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubText {
   /// 17/600 `text_primary`: an opened item's title in its page head (`WeZzq` in `O355d`).
@@ -32,6 +26,9 @@ pub enum HubText {
   Value,
   /// Geist Mono 12.5 `text_primary`, 1.5: an inline text area's lines, e.g. role instructions (`MC25H` in `CdDMo`).
   Area,
+  /// 12.5 `text_primary`, 1.45: a panel text area's lines that are words, e.g. a role's responsibilities and role
+  /// instructions (`ZhO90`, `alHbk` in L17 `b7Tbxb`).
+  Prose,
   /// 12 `text_muted`, 1.4: a row's hint, a group's count, a note (`zZmp4`, `B4SPLh`, `q3R6l`).
   Hint,
   /// 12 `text_secondary`: a row's status beside its dot (`PChrl` in `B6JYf`).
@@ -83,6 +80,9 @@ pub enum HubText {
   EmptyTitle,
   /// 12.5 `text_muted`, 1.45: what a member's empty state says under it (`Text` `dxKHH` in M5 `ITxzr`).
   EmptyDetail,
+  /// Geist Mono 12 `text_muted`, 1.4: why the team server could not be reached, and when (`Reason` `ELTm3` in A25
+  /// `Zhcif`).
+  Reason,
   /// 12 `text_secondary`, 1.4: a field's name in the comparison of a conflict (`Text` `CgI3H` in A19 `DV8OI`).
   CompareField,
   /// Geist Mono 11.5 `text_muted`, 1.35: the base's value under the field's name (`Text` `dwkJy` in A19).
@@ -93,13 +93,14 @@ pub enum HubText {
 }
 
 impl HubText {
-  pub const ALL: [Self; 30] = [
+  pub const ALL: [Self; 32] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
     Self::BarStatus,
     Self::Value,
     Self::Area,
+    Self::Prose,
     Self::Hint,
     Self::Status,
     Self::Kind,
@@ -121,6 +122,7 @@ impl HubText {
     Self::NoticeTitle,
     Self::EmptyTitle,
     Self::EmptyDetail,
+    Self::Reason,
     Self::CompareField,
     Self::CompareBase,
     Self::CompareCell,
@@ -138,6 +140,7 @@ impl HubText {
       Self::BarStatus => "hub_bar_status",
       Self::Value => "hub_value",
       Self::Area => "hub_area",
+      Self::Prose => "hub_prose",
       Self::Hint => "hub_hint",
       Self::Status => "hub_status",
       Self::Kind => "hub_kind",
@@ -159,6 +162,7 @@ impl HubText {
       Self::NoticeTitle => "hub_notice_title",
       Self::EmptyTitle => "hub_empty_title",
       Self::EmptyDetail => "hub_empty_detail",
+      Self::Reason => "hub_reason",
       Self::CompareField => "hub_compare_field",
       Self::CompareBase => "hub_compare_base",
       Self::CompareCell => "hub_compare_cell",
@@ -173,6 +177,7 @@ impl HubText {
       Self::BarStatus => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Area => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
+      Self::Prose => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_primary),
       Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
       Self::Status => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
@@ -194,6 +199,7 @@ impl HubText {
       Self::NoticeTitle => style(12.5, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary),
       Self::EmptyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::EmptyDetail => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::Reason => mono(style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted)),
       Self::CompareField => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::CompareBase => mono(style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
       Self::CompareCell => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary)),
@@ -233,8 +239,6 @@ pub enum HubSpacing {
   Indent,
   /// 44: a block under a radio row from the box's side, past the radio and its gap (`A6i2K3`, `clbbm` in 07).
   Nested,
-  /// 4: over and under the note under a list's last group (`e1C14P`).
-  NoteY,
   /// 16: the head's Team line to New (`Header` `NRqwv`).
   NewGap,
   /// 56: a panel's pinned actions (`Actions` `x3uhYJ` in `t4mtQL`, `o8tFHR` in `NDZXC`, `WpN6M` in `SpRvd`, `hDhr8` in
@@ -253,6 +257,8 @@ pub enum HubSpacing {
   CompareY,
   /// 12: a row of the comparison from its sides and its cells apart (`Compare · head` `fEqfS` in A19).
   CompareSide,
+  /// 4: the gap over the action of an empty state, on top of the 10 either side of it (`Action gap` `BAEia` in P6).
+  ActionGap,
 }
 
 impl HubSpacing {
@@ -272,7 +278,6 @@ impl HubSpacing {
     Self::SubY,
     Self::Indent,
     Self::Nested,
-    Self::NoteY,
     Self::NewGap,
     Self::Actions,
     Self::Key,
@@ -281,6 +286,7 @@ impl HubSpacing {
     Self::CompareResult,
     Self::CompareY,
     Self::CompareSide,
+    Self::ActionGap,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -304,7 +310,6 @@ impl HubSpacing {
       Self::SubY => "hub_sub_y",
       Self::Indent => "hub_indent",
       Self::Nested => "hub_nested",
-      Self::NoteY => "hub_note_y",
       Self::NewGap => "hub_new_gap",
       Self::Actions => "hub_actions",
       Self::Key => "hub_key",
@@ -313,6 +318,7 @@ impl HubSpacing {
       Self::CompareResult => "hub_compare_result",
       Self::CompareY => "hub_compare_y",
       Self::CompareSide => "hub_compare_side",
+      Self::ActionGap => "hub_action_gap",
     }
   }
 
@@ -329,7 +335,6 @@ impl HubSpacing {
       Self::FieldGap | Self::NewGap => 16.0,
       Self::SubY => 7.0,
       Self::Nested => 44.0,
-      Self::NoteY => 4.0,
       Self::Actions => 56.0,
       Self::Key => 170.0,
       Self::KeyForm => 190.0,
@@ -337,6 +342,7 @@ impl HubSpacing {
       Self::CompareResult => 150.0,
       Self::CompareY => 9.0,
       Self::CompareSide => 12.0,
+      Self::ActionGap => 4.0,
     }
   }
 }

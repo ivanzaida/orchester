@@ -87,8 +87,6 @@ impl DevtoolsInspectable for OpenedFrom {}
 /// What the page says after a press it did not carry out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refusal {
-  /// Synthetic input pressed *Copy* or *Open in editor*.
-  PersonOnly,
   /// *Open in editor* found, as it opened, that the file does not open ([`orchester_workspace::files::open_with`]).
   NotOpened(orchester_workspace::files::Refusal),
   /// The file could not be opened.
@@ -98,7 +96,6 @@ pub enum Refusal {
 impl Refusal {
   pub const fn key(self) -> &'static str {
     match self {
-      Self::PersonOnly => "files.personOnly",
       Self::NotOpened(refusal) => actions::refusal_key(refusal),
       Self::OpenFailed => "files.openFailed",
     }

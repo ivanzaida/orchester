@@ -45,7 +45,7 @@ fn seed_team_scenarios_leave_the_marker_of_their_state() {
     let tasks = seed.db().tasks().expect("tasks").len();
     let expected = match state {
       State::Claims => 6,
-      State::TeamRunning | State::NotReadyAfterRun | State::TeamArchived => 1,
+      State::TeamRunning | State::NotReadyAfterRun | State::TeamArchived | State::TeamArchivedAdmin => 1,
       state if state.runs_here() => 2,
       _ => 0,
     };
@@ -236,4 +236,42 @@ fn seed_team_offer_registers_ledger_as_a_local_project() {
     .find(|project| project.name.as_str() == "Ledger")
     .expect("Ledger is registered");
   assert!(ledger.repo_root.join(".git").is_dir(), "a repository of its own");
+}
+
+/// A team resource is cached as a computer that syncs the team has it: at the server's version and with no draft of
+/// its own. A seed that made it as a person's new resource left a draft based on nothing, which read as stale beside
+/// v1 (ORC-848 D7).
+#[test]
+fn seed_team_hub_resources_are_the_servers_at_v1_with_no_draft() {
+  use orchester_core::{
+    resource::{AgentProfile, ResourceKind, VersionNumber},
+    store::ResourceStore,
+  };
+  use orchester_workspace::agents::data::{ProjectAgents, VersionState};
+
+  let seed = Seed::of("team-hub");
+  let db = seed.db();
+  let team: Vec<_> = db
+    .resources(ResourceKind::AgentProfile)
+    .expect("profiles")
+    .into_iter()
+    .filter(|resource| {
+      matches!(
+        db.resource_sharing(resource.id()).expect("sharing"),
+        Some(orchester_store::ResourceSharing::Shared(_))
+      )
+    })
+    .collect();
+  assert!(!team.is_empty(), "the hub has team profiles");
+  let listed = ProjectAgents::load_in(&seed.seeded.repo).expect("agents");
+  for resource in team {
+    let entry = listed.profile(resource.id()).expect("listed");
+    assert_eq!(
+      entry.state,
+      VersionState::Published(VersionNumber::FIRST),
+      "{} is the server's v1, not a draft",
+      resource.name()
+    );
+    assert!(db.draft::<AgentProfile>(resource.id()).expect("read").is_none());
+  }
 }

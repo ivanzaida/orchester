@@ -34,7 +34,7 @@ This manual describes the current app (`crates/desktop-app`, binary `orchester`,
 3. **Add project**: choose the top folder of a git repository.
 4. **Project settings › Connections › Add provider**: a Claude Code or Codex CLI connection.
 5. **Agents › New agent**: create and publish profiles (e.g. Explorer, Planner, Builder, Reviewer).
-6. **Pipelines › New pipeline › Starter · Feature delivery**: assign the profiles and publish it.
+6. **Pipelines › New pipeline › Feature delivery**: choose each step's agent, then **Create v1**.
 7. **Tasks › New task**: a title, the outcome, acceptance criteria and the *Pipeline* chip → **Create & run**.
 8. Follow it in the task's **Conversation**; answer what waits for you (the **N need you** pill); merge from the
    **Summary** when it is ready.
@@ -72,13 +72,12 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `set_repository_agent_files` | AP to turn on | Whether agents load `AGENTS.md`/`CLAUDE.md` |
 | `get_storage` | RO | The disk guard and, while it holds, what could be cleaned |
 | `set_keep_free` | | The free space the disk guard keeps |
-| `list_connections` | RO | Agent connections, GitHub, MCP servers |
-| `add_cli_connection` | AP for unusual programs / API providers | Add a Claude Code or Codex connection |
-| `set_api_provider` | AP for new hosts/keys | Run a CLI connection on an API provider, or back on its sign-in |
-| `check_connection` | | Check a connection again |
-| `list_models` | RO | A connection's models and efforts |
-| `list_accounts` | RO | CLI accounts and plan limits |
-| `set_connection_account` | AP | The account a connection runs on |
+| `list_accounts` | RO | Sign-ins, API providers, decision servers, each CLI's program, plan limits |
+| `check_account` | | Check a sign-in, an API provider or a decision server again |
+| `list_models` | RO | An account's models and efforts |
+| `set_profile_account` | AP for another account / an API provider | The account a profile runs on here |
+| `list_connections` | RO | What each profile runs on, GitHub, MCP servers, decision models |
+| `check_connection` | | Check the GitHub connection again |
 | `add_mcp_server` | AP | Add an MCP server for agents |
 | `update_mcp_server` | AP for widening | Change an MCP server |
 | `remove_mcp_server` | | Remove an MCP server |
@@ -89,9 +88,8 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `save_profile_draft` | AP for widening | Save a profile draft |
 | `publish_profile` | AP for broader/re-worded | Publish a profile |
 | `get_pipeline` | RO | A pipeline with its steps and problems |
-| `create_pipeline` | | New pipeline from the starter, empty or a copy |
-| `save_pipeline_draft` | AP for weakening | Replace a pipeline's steps |
-| `publish_pipeline` | AP unless no weaker | Publish a pipeline |
+| `create_pipeline` | AP (a first version) | New pipeline from the starter, a copy or the steps given, published as v1 |
+| `save_pipeline` | AP unless no weaker | Publish a pipeline's steps as its next version |
 | `share_pipeline` | Admin · AP | Make one of your own local pipelines a team pipeline (team project) |
 | `list_instructions` / `get_instruction` | RO | Instructions |
 | `save_instruction_draft` | | Save an instruction draft |
@@ -117,8 +115,9 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `list_projects` | RO | All projects |
 | `set_code_index` | | Turn the code index on or off |
 | `update_project_limits` | | Budgets, time limit, agent and QA slots |
-| `get_approvals` | RO | Allow Autopilot, the reviewer, running runs' approval modes |
-| `set_allow_autopilot` | person only to turn on | Allow Autopilot in the project, or stop |
+| `get_approvals` | RO | Approve mode, Allow Autopilot, the reviewer, running runs' approval modes |
+| `set_allow_autopilot` | person only to turn on | The former switch: Autopilot or Manual |
+| `set_approve_mode` | person only to move up | Approve mode: manual, autopilot or dangerous_auto_approve |
 | `set_reviewer` | AA; AP for another reviewer | Manual's reviewer |
 | `get_auto_mode` / `set_auto_mode` / `set_run_auto_mode` | retired | Answer `retired`, naming the tools above |
 | `list_tasks` / `get_task` | RO | Tasks |

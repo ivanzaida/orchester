@@ -100,10 +100,14 @@ fn snapshot(db: &mut ProjectDb) -> RunSnapshot {
   };
   let pipeline = Pipeline::new(vec![step("implement", "Implement", builder), verify]).expect("pipeline");
   let delivery = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
+    .create_published(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
     .expect("pipeline")
+    .0
     .id();
-  let version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish");
+  let version = db
+    .latest_version::<Pipeline>(delivery)
+    .expect("publish")
+    .expect("published");
   let published = PublishedVersions {
     profiles: &profiles,
     tools: &BTreeMap::new(),

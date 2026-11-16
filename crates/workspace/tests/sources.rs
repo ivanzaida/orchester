@@ -226,17 +226,15 @@ fn published_pipeline(
   edit.update(&key, |step| step.kind = StepKind::Tool { tool: Some(tool) });
   drafted::add(&mut edit, &Listing::Step(key), step_source.clone());
   let body = edit.validate().expect("valid");
-  let pipeline = db
-    .create_resource(
+  let (pipeline, version) = db
+    .create_published(
       Slug::new("delivery").expect("slug"),
       Name::new("Feature delivery").expect("name"),
       &body,
       now,
     )
-    .expect("pipeline")
-    .id();
-  let version = db.publish_draft::<Pipeline>(pipeline, now).expect("published").number();
-  (pipeline, version)
+    .expect("pipeline");
+  (pipeline.id(), version.number())
 }
 
 #[test]
@@ -248,10 +246,8 @@ fn sources_of_a_pipeline_draft_are_its_own_and_its_steps() {
   drafted::add(&mut edit, &Listing::Step(implement.clone()), source(guide.path()));
   assert_eq!(edit.sources().pipeline(), [source(tokens.path())]);
   assert_eq!(edit.sources().step(&implement), [source(guide.path())]);
-  let read_back = drafted::steps_read_back(&edit).expect("a step lists one");
-  assert_eq!(read_back.key, "sources.steps.oneOnStep");
   drafted::remove(&mut edit, &Listing::Step(implement.clone()), &source(guide.path()));
-  assert!(drafted::steps_read_back(&edit).is_none());
+  assert!(edit.sources().step(&implement).is_empty());
   edit.remove_step(&implement);
   let body = edit.validate().expect("valid");
   assert_eq!(

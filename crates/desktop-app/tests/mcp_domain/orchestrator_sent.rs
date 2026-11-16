@@ -115,12 +115,6 @@ fn sent_directly_names_the_orchestrator_and_how_it_went_out() {
   let (task, run) = task_run(&db, ASKING);
   let scope = chat(&served, &mut db);
   allow(&served, &seeded.repo);
-  // The message answers the agent's question: automation decides it only with the person's consent.
-  served
-    .services()
-    .workspace
-    .set_automation_answers_approvals(true)
-    .expect("decision consent");
   let message = json!({ "project": "Kontur", "run": run.id().to_string(), "text": TEXT });
   chat_call(&mut served, &scope, "send_message", message).expect("sent at once");
   let stored = sent(&db, task.id(), TEXT).expect("the message");
@@ -243,10 +237,17 @@ fn sent_proposal_refused_to_synthetic_input_and_dismissed_never_reads_as_sent() 
   open_conversation(&mut served, seeded.project, &key);
   let row = format!("conversation-proposal-{}-{seq}", scope.chat);
   served.until("the proposal's row", |served| served.shows(&format!("{row}-apply")));
-  served
+  let refused = served
     .click_by_client(&format!("{row}-apply"))
-    .expect("the press reaches the window");
-  served.until("the refusal", |served| served.shows(&format!("{row}-person-only")));
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("apply what the Orchestrator proposed"),
+    "it names the action: {refused}"
+  );
+  assert!(
+    !served.shows(&format!("{row}-person-only")),
+    "the row says nothing of it"
+  );
   assert!(sent(&db, task.id(), TEXT).is_none(), "synthetic input applies nothing");
   assert_eq!(actions(&db, &scope)[0].outcome, ActionOutcome::Waits);
 

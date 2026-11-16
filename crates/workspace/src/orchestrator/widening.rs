@@ -6,7 +6,7 @@ use orchester_core::{
   connection::AgentConnection,
   id::ResourceId,
   orchestrator::change::Publishing,
-  resource::{AgentProfile, Pipeline, Tool, Version},
+  resource::{AgentProfile, Tool, Version},
   store::{ConnectionStore, ResourceStore},
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -17,16 +17,8 @@ use crate::messages::Message;
 pub(super) fn of_draft(db: &ProjectDb, kind: Publishing, resource: ResourceId) -> Result<Vec<Message>, StoreError> {
   match kind {
     Publishing::Profile => profile(db, resource),
-    Publishing::Pipeline => {
-      let Some(draft) = db.draft::<Pipeline>(resource)? else {
-        return Ok(Vec::new());
-      };
-      let latest = db.latest_version::<Pipeline>(resource)?;
-      Ok(crate::pipelines::widening::publish_reasons(
-        latest.as_ref().map(Version::body),
-        draft.body(),
-      ))
-    }
+    // A pipeline holds no draft (D-032): saving it publishes at once, so there is no draft to publish.
+    Publishing::Pipeline => Ok(Vec::new()),
     Publishing::Tool => {
       let Some(draft) = db.draft::<Tool>(resource)? else {
         return Ok(Vec::new());

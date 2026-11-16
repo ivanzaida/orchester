@@ -1,5 +1,5 @@
 //! Whether this computer is ready for the versions an execution bundle pins, which the team server may have pinned
-//! newer than the ones cached here when readiness was read before the start. The same rule as [`super::read`], over the
+//! newer than the ones in memory when readiness was read before the start. The same rule as [`super::read`], over the
 //! pinned profiles (the CLI the bundle binds each to, the MCP servers it names) and the pinned versions of those MCP
 //! servers, against what this computer has now.
 

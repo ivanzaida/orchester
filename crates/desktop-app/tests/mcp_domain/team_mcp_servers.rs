@@ -4,14 +4,14 @@
 //! cannot hold, is refused with a code of its own (a key in a URL's query too); an update of the program's name widens
 //! like any other change; a remove reads what
 //! uses the server first and archives nothing while that cannot be read. These tests run without a team server (the
-//! project's link names none), so what reaches the server is `workspace`'s `team_mcp` tests.
+//! project's link names none), so a change let through is refused as not reaching it, and nothing is kept here; what
+//! reaches the server is `workspace`'s `team_mcp` tests.
 
 use orchester_core::{
   resource::{ResourceKind, TeamMcpServer},
   sharing::MemberRole,
   store::ResourceStore,
 };
-use orchester_store::PublishState;
 use serde_json::{Value, json};
 
 use super::team_fill_ins::{Team, team_as};
@@ -75,17 +75,11 @@ fn domain_team_mcp_server_add_is_a_persons_unless_automation_may_widen() {
   assert_eq!(servers(&team), 1, "nothing was created");
 
   // Let through the gate, it has no team server to reach: this project's link names none this computer is signed in
-  // to, so the new server is kept as v1 waiting to be sent (as an unreachable server keeps it), and the answer says so.
+  // to, so nothing is made, and nothing waits to be sent.
   team.served.let_automation_widen(true);
-  let made = team.served.ok("add_mcp_server", &npx("docs"));
-  assert_eq!(
-    made["server"]["waiting_for_server"]["code"], "team_server_unreachable",
-    "{made}"
-  );
-  assert_eq!(servers(&team), 2, "the server is kept, waiting for the team server");
-  let waiting = team.db().waiting_publishes().expect("the outbox");
-  assert_eq!(waiting.len(), 1, "{waiting:?}");
-  assert!(waiting[0].created && waiting[0].state == PublishState::Waiting);
+  let refused = team.served.refused("add_mcp_server", &npx("docs"));
+  assert_eq!(refused["code"], "team_server_not_reached", "{refused}");
+  assert_eq!(servers(&team), 1, "nothing was kept here");
 }
 
 #[test]
@@ -156,11 +150,14 @@ fn domain_team_mcp_server_refuses_a_key_in_the_url_and_says_where_a_secret_goes(
   assert_eq!(servers(&team), 1, "nothing was created");
   assert_eq!(latest(&team), 1, "nothing was published");
 
-  let plain = team.served.ok("add_mcp_server", &remote("https://mcp.example.org/x"));
+  let plain = team
+    .served
+    .refused("add_mcp_server", &remote("https://mcp.example.org/x"));
   assert_eq!(
-    plain["server"]["waiting_for_server"]["code"], "team_server_unreachable",
-    "a clean URL gets as far as the team server: {plain}"
+    plain["code"], "team_server_not_reached",
+    "a clean URL gets as far as the team server, which this project's link names none of: {plain}"
   );
+  assert_eq!(servers(&team), 1, "nothing is kept here");
 }
 
 #[test]
@@ -180,16 +177,11 @@ fn domain_team_mcp_server_update_publishes_the_next_version_when_it_changes_some
   assert_eq!(team.served.refused("update_mcp_server", &secret)["code"], "person_only");
   assert_eq!(latest(&team), 1, "a refused change publishes nothing");
 
-  // Allowed, it is taken, kept here as v2 and, with no team server to number it, waits to be sent.
+  // Allowed, it is sent to the team server, which this project's link names none of: nothing is kept here.
   team.served.let_automation_widen(true);
-  let named = team.served.ok("update_mcp_server", &secret);
-  assert_eq!(named["server"]["published_version"], 2, "{named}");
-  assert_eq!(named["server"]["launch"]["variable_names"], json!(["TOKEN"]), "{named}");
-  assert_eq!(
-    named["server"]["waiting_for_server"]["code"], "team_server_unreachable",
-    "{named}"
-  );
-  assert_eq!(latest(&team), 2);
+  let named = team.served.refused("update_mcp_server", &secret);
+  assert_eq!(named["code"], "team_server_not_reached", "{named}");
+  assert_eq!(latest(&team), 1);
   assert!(!named.to_string().contains("s3cret"));
 
   // A name stays the one it was made with.
@@ -206,7 +198,7 @@ fn domain_team_mcp_server_update_publishes_the_next_version_when_it_changes_some
   team.served.let_automation_widen(false);
   let remote = change(json!({ "url": "https://mcp.example.org/x" }));
   assert_eq!(team.served.refused("update_mcp_server", &remote)["code"], "person_only");
-  assert_eq!(latest(&team), 2, "a refused change publishes nothing");
+  assert_eq!(latest(&team), 1, "a refused change publishes nothing");
 }
 
 #[test]
@@ -227,15 +219,14 @@ fn domain_team_mcp_server_update_that_widens_is_a_persons_unless_automation_may_
   assert_eq!(latest(&team), 1, "nothing was published");
 
   team.served.let_automation_widen(true);
-  let published = team
+  let sent = team
     .served
-    .ok("update_mcp_server", &change(json!({ "args": ["--root", "/"] })));
-  assert_eq!(published["server"]["published_version"], 2, "{published}");
+    .refused("update_mcp_server", &change(json!({ "args": ["--root", "/"] })));
   assert_eq!(
-    published["server"]["launch"]["args"],
-    json!(["--root", "/"]),
-    "{published}"
+    sent["code"], "team_server_not_reached",
+    "let through, it goes to the team server: {sent}"
   );
+  assert_eq!(latest(&team), 1, "nothing is kept here");
 }
 
 #[test]

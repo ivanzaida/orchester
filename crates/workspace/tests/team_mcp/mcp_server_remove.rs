@@ -23,7 +23,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing};
 use orchester_workspace::sharing::NotArchived;
 use serde_json::json;
 
@@ -80,7 +80,7 @@ fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_repo
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let id = held_servers(&checkout)[0];
 
   checkout
     .runtime
@@ -99,7 +99,7 @@ fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_repo
   });
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let id = held_servers(&checkout)[0];
   let refused = checkout
     .runtime
     .block_on(checkout.servers.archive_resource(checkout.root(), id, Answerer::Person))
@@ -109,34 +109,6 @@ fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_repo
     NotArchived::Refused {
       code: "not_admin".to_owned()
     }
-  );
-}
-
-#[test]
-fn team_mcp_a_remove_of_a_server_the_team_server_has_not_received_says_so() {
-  let (server, seen) = start(Answers::default());
-  let checkout = admin(&server);
-  server.set_down(true);
-  checkout.call("add_mcp_server", &docs()).expect("kept here, unsent");
-  server.set_down(false);
-
-  let refused = checkout
-    .call("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }))
-    .expect_err("refused");
-
-  assert_eq!(refused["error"]["code"], "team_mcp_server_not_sent", "{refused}");
-  let updated = json!({ "project": "Kontur", "server": "docs", "args": ["--other"] });
-  assert_eq!(
-    checkout.refused("update_mcp_server", &updated),
-    "team_mcp_server_not_sent"
-  );
-  assert!(
-    seen.lock().calls.is_empty(),
-    "the team server was not asked about a server it never saw"
-  );
-  assert_eq!(
-    checkout.db().resources(ResourceKind::McpServer).expect("servers").len(),
-    1
   );
 }
 
@@ -167,6 +139,8 @@ fn team_mcp_a_remove_answers_nothing_while_what_uses_it_cannot_be_read() {
   assert_eq!(seen.lock().calls, ["create"]);
 }
 
+/// A run binds a team MCP server only through its inputs, as the team server accepted them: a run whose profile here
+/// once chose it by a cached reference, with no inputs, is not named.
 #[test]
 fn team_mcp_a_remove_names_the_runs_of_this_computer_that_would_stop_and_stops_none() {
   let (server, seen) = start(Answers {
@@ -197,8 +171,8 @@ fn team_mcp_a_remove_names_the_runs_of_this_computer_that_would_stop_and_stops_n
   assert_eq!(refused["error"]["code"], "person_only", "{refused}");
   assert_eq!(
     refused["error"]["preview"]["runs_stopping_here"],
-    json!([{ "run": run.to_string(), "task": task.to_string() }]),
-    "{refused}"
+    json!([]),
+    "run {run} of {task} binds no team MCP server in its inputs: {refused}"
   );
   assert_eq!(seen.lock().calls, ["used-by"]);
   let state = checkout
@@ -254,16 +228,11 @@ fn pin_run(db: &mut ProjectDb, server: ResourceId) -> (RunId, TaskId) {
     },
     server_body: json!({}),
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references: vec![VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::McpServer,
-        id: server,
-      },
-      name: String::new(),
-      role: None,
+    references: vec![ReferenceTarget::TeamResource {
+      kind: ResourceKind::McpServer,
+      id: server,
     }],
     local_body: published.body().clone(),
-    waits_here: false,
   };
   db.cache_shared_version(builder, &confirmed)
     .expect("the team version is cached");
@@ -285,10 +254,14 @@ fn pin_run(db: &mut ProjectDb, server: ResourceId) -> (RunId, TaskId) {
   };
   let pipeline = Pipeline::new(vec![step]).expect("pipeline");
   let delivery = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
+    .create_published(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
     .expect("pipeline")
+    .0
     .id();
-  let version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish");
+  let version = db
+    .latest_version::<Pipeline>(delivery)
+    .expect("publish")
+    .expect("published");
   let (tools, instructions, skills) = (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
   let published = PublishedVersions {
     profiles: &profiles,
@@ -343,7 +316,7 @@ fn team_mcp_an_archive_asked_by_automation_is_refused_before_anything_is_sent() 
   });
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let id = held_servers(&checkout)[0];
 
   let refused = checkout
     .runtime
@@ -356,6 +329,21 @@ fn team_mcp_an_archive_asked_by_automation_is_refused_before_anything_is_sent() 
 
   assert_eq!(refused, NotArchived::PersonOnly);
   assert_eq!(seen.lock().calls, ["create"], "nothing was read or archived");
-  let still = checkout.db().resources(ResourceKind::McpServer).expect("servers");
-  assert_eq!(still.len(), 1, "the server is as it was");
+  assert_eq!(held_servers(&checkout).len(), 1, "the server is as it was");
+}
+
+/// The team's MCP servers as the checkout's memory holds them: the team server made them, not this computer.
+fn held_servers(checkout: &Checkout) -> Vec<ResourceId> {
+  checkout
+    .workspace
+    .team_read(checkout.root())
+    .config()
+    .map(|config| {
+      config
+        .resources(ResourceKind::McpServer)
+        .iter()
+        .map(|server| server.id)
+        .collect()
+    })
+    .unwrap_or_default()
 }

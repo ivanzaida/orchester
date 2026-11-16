@@ -8,21 +8,26 @@ use std::time::Duration;
 
 pub mod change;
 pub mod chat;
+pub mod decision;
 mod failure;
 pub mod fork;
 pub mod git;
+pub mod hold;
 pub mod instructions;
 pub mod leads;
 pub mod mcp;
 pub mod merging;
+pub mod parking;
 pub mod plan;
 pub mod proposal;
 pub mod report;
 pub mod resume;
+pub mod retry;
 pub mod rewind;
 pub mod run_git;
 pub mod sent;
 pub mod settings;
+pub mod standing;
 pub mod task_event;
 pub mod wait;
 pub mod watch;
@@ -30,19 +35,22 @@ pub mod watch;
 pub use self::{
   chat::{
     ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
-    CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn, WaitsOnRow,
+    CompactionState, EntryKind, HeldWork, Queued, SessionChange, ToolAnswer, TurnFailure, TurnState, WaitTurn,
+    WaitsOnRow,
   },
+  hold::{Held, PlanHold, UNKNOWN_RESET},
   leads::{Lead, Leads},
-  merging::{MergeLeft, Merging},
+  merging::{AcceptedUnverified, MergeLeft, Merging},
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
+  retry::{FailedTry, NextTry, RETRY_AFTER, retry_note},
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
   task_event::{TaskEvent, TaskEventKind},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
-  watch::{Claim, Subscription, Subscriptions, WatchTarget},
+  watch::{Ceilings, Claim, Subscription, Subscriptions, WatchMode, WatchTarget},
 };
 
 /// The agentic turns one answer on Claude Code may take at most (`--max-turns`): reading, searching and calling tools,

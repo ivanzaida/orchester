@@ -3,8 +3,9 @@
 //! settings and sessions; Orchester starts the CLI with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set to it. Each CLI has a
 //! fixed Default account, the CLI's own folder, which leaves the variable as the environment has it. Orchester never
 //! reads, stores or shows a credential: it runs only the CLI's status command and opens its login in a terminal the
-//! person sees.
+//! person sees. The model APIs reached with a key are app-wide too ([`ApiAccount`]).
 
+mod api;
 mod check;
 mod folder;
 mod removal;
@@ -17,6 +18,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub use self::{
+  api::{ApiAccount, ApiAccountError, ApiSetup},
   check::{
     AccountCheck, AccountCheckResult, AccountIdentity, AccountState, CheckedProgram, SignInMethod,
     parse_claude_identity,
@@ -53,6 +55,15 @@ impl AccountCli {
     match self {
       Self::ClaudeCode => AgentProvider::ClaudeCodeCli,
       Self::Codex => AgentProvider::CodexCli,
+    }
+  }
+
+  /// The CLI's own name as its maker writes it, the same in every language: what a project's connection on one of
+  /// its accounts is named after.
+  pub const fn product(self) -> &'static str {
+    match self {
+      Self::ClaudeCode => "Claude Code",
+      Self::Codex => "Codex",
     }
   }
 
@@ -299,6 +310,27 @@ pub fn same_sign_in<'a>(account: &AgentAccount, accounts: &'a [AgentAccount]) ->
     .iter()
     .filter(|other| other.id != account.id && other.cli == account.cli)
     .find(|other| signed_in_email(other) == Some(email))
+}
+
+/// `accounts` as the person has them, in their order: an account is who is signed in, so the folders of one CLI
+/// whose CLI reports the same signed-in email are one account, in the place of the first of them (the person's
+/// decision of 2026-11-14). A folder nobody is signed in to, or whose CLI does not say who, stands alone.
+pub fn by_sign_in<'a>(accounts: impl IntoIterator<Item = &'a AgentAccount>) -> Vec<Vec<&'a AgentAccount>> {
+  let mut groups: Vec<Vec<&AgentAccount>> = Vec::new();
+  for account in accounts {
+    let same = signed_in_email(account).and_then(|email| {
+      groups.iter_mut().find(|group| {
+        group
+          .iter()
+          .any(|other| other.cli == account.cli && signed_in_email(other) == Some(email))
+      })
+    });
+    match same {
+      Some(group) => group.push(account),
+      None => groups.push(vec![account]),
+    }
+  }
+  groups
 }
 
 fn signed_in_email(account: &AgentAccount) -> Option<&str> {

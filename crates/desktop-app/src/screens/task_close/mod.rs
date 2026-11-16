@@ -7,7 +7,7 @@
 //! the others yet: they
 //! follow Run again's confirmation in place and the Memory page's *Delete this record?* (`YdVse`). A shared project's
 //! tasks are its team server's, which keeps no deletion: *Delete task* is unavailable there, with why. Only a person
-//! deletes a task: an MCP client's press is refused, and the confirmation says so.
+//! deletes a task: an MCP client's press is refused to it, and the confirmation stays as it was.
 
 mod confirm;
 mod delete;
@@ -18,7 +18,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
   },
   components::Row,
   core::{ElementRef, Signal},
@@ -44,6 +43,10 @@ pub use self::{
   delete::confirmation_in,
 };
 use crate::{
+  mcp::{
+    input_gate::{InputGate, persons_press},
+    is_synthetic_input,
+  },
   navigation::{Navigation, press::OpenIn},
   project::ProjectFeed,
   routes::Route,
@@ -57,7 +60,7 @@ use crate::{
 
 /// The *More actions* menu's width (no frame yet): room for *Delete task…* and, in a shared project, why it is
 /// unavailable on a few lines under it.
-const MENU_WIDTH: f32 = 260.0;
+pub const MENU_WIDTH: f32 = 260.0;
 
 /// The task a menu or a confirmation is about.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -134,9 +137,8 @@ pub struct Closer {
   asked: Signal<Asked>,
   /// The delete confirmation's choice to remove unmerged work too; off each time it opens.
   unmerged: Signal<bool>,
-  /// An MCP client pressed Delete: refused, which the confirmation says.
-  person_only: Signal<bool>,
   action: Action,
+  gate: Option<InputGate>,
   root: PathBuf,
 }
 
@@ -157,8 +159,8 @@ impl Closer {
     Self {
       asked,
       unmerged: ctx.signal(false),
-      person_only: ctx.signal(false),
       action,
+      gate: ctx.use_context::<InputGate>(),
       root: project.repo_root,
     }
   }
@@ -256,18 +258,14 @@ impl Closer {
   /// Opens the delete confirmation of `subject` in place, its choice off.
   pub fn ask_delete(&self, subject: Subject) {
     self.unmerged.set(false);
-    self.person_only.set(false);
     self.asked.set(Asked::Delete(subject));
   }
 
-  /// Deletes `subject`, a person's press only.
+  /// Deletes `subject`, a person's press only: automation's is refused to it.
   fn delete(&self, subject: Subject) {
-    if is_synthetic_input() {
-      tracing::warn!("synthetic input asked to delete a task; not taken");
-      self.person_only.set(true);
+    if !persons_press(self.gate.as_ref(), "delete a task") {
       return;
     }
-    self.person_only.set(false);
     self.run(Request::Delete(subject, self.unmerged.get_untracked()));
   }
 
@@ -437,6 +435,15 @@ impl MenuPlace {
   pub fn is_open(&self) -> bool {
     self.open.get()
   }
+
+  /// Runs `reset` whenever the menu closes, whichever way: a choice, the button, Esc or a press outside.
+  pub fn on_closed(&self, ctx: &mut Ctx, reset: impl Fn() + Send + Sync + 'static) {
+    ctx.watch(&self.open, move |open| {
+      if !*open {
+        reset();
+      }
+    });
+  }
 }
 
 /// The *More actions* button (`…`) of the task `key`, as `id`, with its menu of `rows` while it is open, at the end of
@@ -446,7 +453,7 @@ impl MenuPlace {
 pub fn more_menu(
   ctx: &mut Ctx,
   place: &MenuPlace,
-  (key, id): (&str, &str),
+  (key, id, width): (&str, &str, f32),
   rows: impl FnOnce(&mut Ctx, &Signal<bool>) -> Vec<Element>,
 ) -> Element {
   let open = place.open.clone();
@@ -458,7 +465,7 @@ pub fn more_menu(
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let panel = menu_panel(&format!("{id}-panel"))
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(Dimension::Px(width))
       .with_children(rows(ctx, &place.open));
     menu_at_end(place.anchor.clone(), place.open.clone(), panel)
   });

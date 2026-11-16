@@ -161,7 +161,8 @@ pub struct Plan {
 
 impl Plan {
   /// The plan for copying `selection` from `source` into `target` with `choices`. Selected ids
-  /// the source does not have are skipped; a pick the resource does not have is its default.
+  /// the source does not have, and resources an import does not offer ([`CatalogResource::is_offered`]), are
+  /// skipped; a pick the resource does not have is its default.
   pub fn new(source: &Catalog, target: &Catalog, selection: &[(ResourceId, Pick)], choices: &Choices) -> Self {
     let mut builder = Builder {
       source,
@@ -171,7 +172,7 @@ impl Plan {
       index: HashMap::new(),
     };
     for &(id, pick) in selection {
-      if let Some(resource) = source.resource(id) {
+      if let Some(resource) = source.resource(id).filter(|resource| resource.is_offered()) {
         builder.add(
           Entity::Resource(id),
           Role::Selected,
@@ -280,6 +281,7 @@ impl Builder<'_> {
     for uuid in references::values(&content.to_value()) {
       match source.entity(uuid) {
         Some(Entity::Resource(dependency)) if dependency == id => {}
+        Some(Entity::Resource(dependency)) if source.resource(dependency).is_some_and(|entry| !entry.is_offered()) => {}
         Some(entity) => {
           let pick = self.pick_of(entity);
           self.add(entity, Role::Dependency, pick, Some(id));

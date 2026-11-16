@@ -27,6 +27,9 @@ image = { workspace = true, features = ["jpeg"] }
 # Shared servers: the HTTP client of the server's API (`sharing`); the check of a downloaded update's signature
 # (`app_updates`).
 orchester-api = { workspace = true, features = ["client", "identity", "release-signature"] }
+# The model API check of an API account from Settings, with no project open (`accounts::api_check`): the same
+# model-list request a project's runner makes for a native connection.
+orchester-agent = { workspace = true, features = ["http"] }
 orchester-core.workspace = true
 orchester-exec.workspace = true
 # Removes the codebase indexes of run worktrees it removes.

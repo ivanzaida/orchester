@@ -14,7 +14,6 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::TeamProfileError,
   sharing::{ConnectionProblem, LocalProgramProblem, Missing, ProgramProblem},
 };
 use orchester_store::ProjectDb;
@@ -39,7 +38,7 @@ pub(in crate::app_mcp) fn read(
     .readiness_in(db, repo_root, services.vault.get())
     .map_err(|error| match error {
       ReadinessError::Store(error) => ToolError::from(error),
-      other @ ReadinessError::NotATeamProject => ToolError::from(other),
+      other => ToolError::from(other),
     })
 }
 
@@ -77,14 +76,19 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       ConnectionProblem::NoneOfKind => part_of(
         "connection",
         json!({ "cli": cli, "problem": "none_of_kind" }),
-        fix(Some("add_cli_connection"), None),
+        fix(Some("set_profile_account"), None),
       ),
       ConnectionProblem::PickNeeded => part_of(
         "connection",
         json!({ "cli": cli, "problem": "pick_needed" }),
-        fix(Some("pick_profile_connection"), None),
+        fix(Some("set_profile_account"), None),
       ),
     },
+    Missing::ConnectionSignIn { cli, connection, .. } => part_of(
+      "connection_sign_in",
+      json!({ "cli": cli, "connection": connection.to_string() }),
+      fix(None, Some("person")),
+    ),
     Missing::McpOff { server } => part_of(
       "mcp_off",
       json!({ "server": server_json(*server, all) }),
@@ -99,7 +103,7 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       ConnectionProblem::PickNeeded => part_of(
         "decision_connection",
         json!({ "reviewer": reviewer.to_string(), "problem": "pick_needed" }),
-        fix(Some("pick_reviewer_connection"), None),
+        fix(Some("set_reviewer_account"), None),
       ),
     },
     Missing::McpUnsupported { server, why } => part_of(
@@ -162,10 +166,6 @@ fn undecided_json(why: &Undecided) -> Value {
   let mut part = json!({ "kind": "undecided", "fix": fix(None, None) });
   match why {
     Undecided::NotTeamForm => part["why"] = json!("not_team_form"),
-    Undecided::CannotBePublished(error) => {
-      part["why"] = json!("cannot_be_published");
-      part["reason"] = json!(publish_reason(error));
-    }
     Undecided::ChoosesMcpServer(server) => {
       part["why"] = json!("chooses_mcp_server");
       part["server"] = json!(server.to_string());
@@ -189,14 +189,23 @@ fn undecided_json(why: &Undecided) -> Value {
       part["why"] = json!("runs_unknown");
       part["resource"] = json!(id.to_string());
     }
+    Undecided::RunsArchived(id, name) => {
+      part["why"] = json!("runs_archived");
+      part["resource"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
+    Undecided::ChoosesArchivedLocalMcpServer(id, name) => {
+      part["why"] = json!("chooses_archived_mcp_server");
+      part["server"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
     Undecided::ConnectionGone(connection) => {
       part["why"] = json!("connection_gone");
       part["fix"] = fix(Some("save_profile_draft"), None);
       part["connection"] = json!(connection.to_string());
     }
-    Undecided::TeamToolSecretById(secret) => {
+    Undecided::TeamToolSecretById => {
       part["why"] = json!("team_tool_secret_by_id");
-      part["secret"] = json!(secret.to_string());
     }
     Undecided::SecretGone(secret) => {
       part["why"] = json!("secret_gone");
@@ -214,14 +223,4 @@ fn undecided_json(why: &Undecided) -> Value {
     }
   }
   part
-}
-
-fn publish_reason(error: &TeamProfileError) -> &'static str {
-  match error {
-    TeamProfileError::Duplicate { .. } => "duplicate",
-    TeamProfileError::TooMany { .. } => "too_many",
-    TeamProfileError::Connection(_) => "connection",
-    TeamProfileError::LocalMcpServer(_) => "local_mcp_server",
-    TeamProfileError::WritableFolders { .. } => "writable_folders",
-  }
 }

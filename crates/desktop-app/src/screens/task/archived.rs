@@ -27,9 +27,9 @@ use orchester_core::{
   resource::{ResourceKind, VersionNumber},
 };
 use orchester_store::{ArchiveStop, Archived};
-use orchester_workspace::{background, display, readiness::archive_blocks_profiles, used_by::profile_cli};
+use orchester_workspace::{display, readiness::archive_blocks_profiles};
 
-use super::{TaskContext, not_ready::rows_box, summary::team_run};
+use super::{TaskContext, archived_foot, not_ready::rows_box, summary::team_run};
 use crate::{
   navigation::{Navigation, link::Open},
   routes::{HubFilter, HubView, ProjectPage, Route},
@@ -84,9 +84,13 @@ pub fn status_words(ctx: &Ctx, task: &TaskContext) -> Option<Arc<str>> {
 /// which this run pinned.*
 pub fn event_words(ctx: &Ctx, task: &TaskContext) -> Option<Arc<str>> {
   let resource = task.detail.archive_stop.as_ref()?.resource.as_str();
+  let (event, no_step) = match task.team {
+    Some(_) => ("summary.archived.event", "summary.archived.eventNoStep"),
+    None => ("summary.archived.eventLocal", "summary.archived.eventNoStepLocal"),
+  };
   Some(match stopped_step(ctx, task) {
-    Some(step) => ctx.t_args("summary.archived.event", [("step", &*step), ("resource", resource)]),
-    None => ctx.t_args("summary.archived.eventNoStep", [("resource", resource)]),
+    Some(step) => ctx.t_args(event, [("step", &*step), ("resource", resource)]),
+    None => ctx.t_args(no_step, [("resource", resource)]),
   })
 }
 
@@ -107,7 +111,7 @@ struct ArchivedCard;
 impl Component for ArchivedCard {
   type Props = Props;
 
-  fn create(_ctx: &mut Ctx) -> Self {
+  fn create(_: &mut Ctx) -> Self {
     Self
   }
 
@@ -117,7 +121,15 @@ impl Component for ArchivedCard {
     let navigation = Navigation::of(ctx);
     let project = task.project.open.project.id();
     let resource = stop.resource.as_str();
-    let (body, need, glyph) = explain(ctx, &stop, run);
+    let (body, need, glyph) = explain(ctx, &stop, (run, task.team.is_some()));
+    // A team's archived resource opens in the hub's Archived with it picked, where an admin restores it (A22, A36).
+    let open = stop.archived.as_ref().filter(|_| task.team.is_some()).map(|archived| {
+      let route = Route::Project(
+        project,
+        ProjectPage::hub(HubView::new(HubFilter::Archived, Some(archived.id))),
+      );
+      open_link(ctx, "task-archived-resource", navigation.to(route))
+    });
     let words = |key: &str| {
       let (run, at) = (run.to_string(), display::clock(stop.stopped_at));
       ctx.t_args(
@@ -134,7 +146,7 @@ impl Component for ArchivedCard {
           .variant(TypographyStyle::Description)
           .color(PaletteColor::Danger),
       ),
-      None,
+      open,
     )];
     for (index, profile) in still.iter().enumerate() {
       let open = navigation.to(Route::Project(
@@ -174,12 +186,14 @@ impl Component for ArchivedCard {
           .variant(ExtraTypography::Lead.role()),
       )
       .child(rows_box(rows))
+      .with_children(archived_foot::foot(ctx, &task))
   }
 }
 
 /// What the card says of the stop: its body, what the first row says of the resource, and that row's glyph. A stop
-/// recorded before the confirmation named the resource says only its name and when.
-fn explain(ctx: &Ctx, stop: &ArchiveStop, run: u32) -> (Arc<str>, Arc<str>, Icon) {
+/// recorded before the confirmation named the resource says only its name and when. In a local project the person
+/// archived it, not a team: it says *you*, and names no server's person.
+fn explain(ctx: &Ctx, stop: &ArchiveStop, (run, team): (u32, bool)) -> (Arc<str>, Arc<str>, Icon) {
   let at = display::clock(stop.stopped_at);
   let resource = stop.resource.as_str();
   let words = |key: &str, extra: &[(&str, &str)]| {
@@ -191,12 +205,16 @@ fn explain(ctx: &Ctx, stop: &ArchiveStop, run: u32) -> (Arc<str>, Arc<str>, Icon
   match &stop.archived {
     Some(archived) => {
       let kind = ctx.t(kind_key(archived.kind));
-      let (body, need) = match archived.by.as_deref() {
-        Some(who) => (
+      let (body, need) = match (team, archived.by.as_deref()) {
+        (false, _) => (
+          words("summary.archived.bodyLocal", &[("kind", &kind)]),
+          words("summary.archived.archivedLocal", &[("kind", &kind)]),
+        ),
+        (true, Some(who)) => (
           words("summary.archived.body", &[("who", who), ("kind", &kind)]),
           words("summary.archived.archivedBy", &[("who", who), ("kind", &kind)]),
         ),
-        None => (
+        (true, None) => (
           words("summary.archived.bodyUnnamed", &[("kind", &kind)]),
           words("summary.archived.archivedUnnamed", &[("kind", &kind)]),
         ),
@@ -249,7 +267,7 @@ fn still_using(ctx: &mut Ctx, task: &TaskContext, stop: &ArchiveStop) -> Vec<Pro
             .filter(|used| used.kind == SharedResourceKind::AgentProfile)
           {
             profiles.push(Profile {
-              cli: cli_of(&root, used.id).await,
+              cli: services.workspace.team_profile_cli(&root, used.id),
               id: used.id,
               name: used.name,
               version: used.version,
@@ -264,20 +282,6 @@ fn still_using(ctx: &mut Ctx, task: &TaskContext, stop: &ArchiveStop) -> Vec<Pro
   state.data.unwrap_or_default()
 }
 
-/// The CLI `profile` runs; a profile whose CLI cannot be read keeps the plain glyph, so the row still says it.
-async fn cli_of(root: &std::path::Path, profile: ResourceId) -> Option<AgentProvider> {
-  let owned = root.to_owned();
-  match background::run(move || profile_cli(&owned, profile)).await {
-    Ok(Ok(cli)) => cli,
-    Ok(Err(error)) => {
-      tracing::warn!(%error, %profile, "cannot read the CLI of a profile that names an archived resource");
-      None
-    }
-    // The blocking pool is shutting down with the window.
-    Err(_) => None,
-  }
-}
-
 /// A profile that still names the resource: its name and version, why it cannot run, and where to change it.
 fn profile_row(ctx: &Ctx, (index, profile): (usize, &Profile), (resource, last): (&str, bool), open: Open) -> Element {
   let id = format!("task-archived-profile-{index}");
@@ -289,9 +293,7 @@ fn profile_row(ctx: &Ctx, (index, profile): (usize, &Profile), (resource, last):
     ],
   );
   let need = ctx.t_args("summary.archived.stillUses", [("resource", resource)]);
-  let link = opening(open)
-    .id(format!("{id}-open"))
-    .child(Text::new(&ctx.t("summary.archived.open")).variant(TypographyStyle::Button));
+  let link = open_link(ctx, &id, open);
   let glyph: Element = match profile.cli {
     Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Md),
     None => icon(Icon::Bot, IconSize::Md, PaletteColor::TextSecondary).into(),
@@ -301,8 +303,16 @@ fn profile_row(ctx: &Ctx, (index, profile): (usize, &Profile), (resource, last):
     (glyph, last),
     Text::new(&name).variant(CardsText::Decided.role()),
     Some(Text::new(&need).variant(TypographyStyle::Description)),
-    Some(link.into()),
+    Some(link),
   )
+}
+
+/// *Open →* at the end of the row `id`, which opens `open`.
+fn open_link(ctx: &Ctx, id: &str, open: Open) -> Element {
+  opening(open)
+    .id(format!("{id}-open"))
+    .child(Text::new(&ctx.t("summary.archived.open")).variant(TypographyStyle::Button))
+    .into()
 }
 
 /// One row of the list: its `glyph`, what it is about, what is the matter with it and, at the end, where to look; every

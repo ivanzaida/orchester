@@ -10,6 +10,7 @@
 //! that need them come next and must find them here rather than add near-duplicates.
 
 mod accounts;
+mod agent_picker;
 pub mod agents;
 mod archive;
 pub mod badge;
@@ -28,12 +29,13 @@ mod delivery;
 mod dialog;
 mod failure;
 mod files;
+mod flow;
 mod fonts;
 mod form;
 mod groups;
 mod hub;
-mod import;
 pub mod instructions;
+mod leading;
 mod lifecycle;
 mod local_integration;
 mod markdown;
@@ -53,6 +55,7 @@ mod projects;
 mod review;
 mod run_model;
 mod run_services;
+mod runs_on_picker;
 mod secrets;
 mod service_cards;
 mod services;
@@ -65,9 +68,11 @@ pub mod skills;
 mod slash;
 mod sources;
 mod startup;
+mod step_strip;
 mod task;
 mod task_form;
 mod tasks;
+mod team_state;
 mod test_results;
 mod todo_list;
 mod typography;
@@ -83,7 +88,8 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
-  archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText},
+  agent_picker::{AgentPickerText, agent_picker_scrollbar},
+  archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText, LOCAL_ARCHIVE_DIALOG_WIDTH},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},
   chat_links::ChatLinkLooks,
@@ -99,32 +105,34 @@ pub use self::{
   dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, NARROW_DIALOG_WIDTH},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
+  flow::{DRAGGED_OPACITY, FlowText},
   fonts::mono_space,
   groups::GroupText,
-  hub::{HUB_NEW_MENU_WIDTH, HUB_READING_OPACITY, HubSpacing, HubText},
-  import::{ImportSpacing, ImportText},
+  hub::{HubSpacing, HubText},
+  leading::{CEILINGS_FORM_WIDTH, LeadingSpacing, LeadingText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   markdown::{blank_line_between_blocks, code_lines},
   memory::{MemorySpacing, MemoryText},
   merge_attempt::{AttemptSpacing, AttemptText},
-  metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  metrics::{ControlHeight, ExtraRadius, ExtraSpacing, text_area_scrollbar},
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{
     LEADS_HINT_OPACITY, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar,
-    picker_scrollbar, watch_list_scrollbar,
+    watch_list_scrollbar,
   },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   permissions::{PermissionsSpacing, PermissionsText},
-  pipelines::{PipelinesSpacing, PipelinesText},
-  project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
+  pipelines::{PIPELINE_HUB_LIST_NARROW, PIPELINES_BONE_FADE, PipelinesText},
+  project_settings::{ProjectSettingsSpacing, ProjectSettingsText, UNUSED_ROWS_OPACITY},
   projects::{ProjectsSpacing, ProjectsText},
   review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
   run_model::ModelText,
   run_services::RunServicesText,
+  runs_on_picker::{RUNS_ON_UNAVAILABLE_OPACITY, RunsOnPickerText, runs_on_picker_scrollbar},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   service_cards::ServiceCardsText,
   services::{ServicesSpacing, ServicesText},
@@ -136,12 +144,14 @@ pub use self::{
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
+  step_strip::{StripSpacing, StripText, chip_radius, strip_scrollbar},
   task::{NOT_READY_ROW_HEIGHT, TaskRadius, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
     SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar, skeleton_line,
   },
+  team_state::TeamStateText,
   test_results::TestsText,
   todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
@@ -172,7 +182,7 @@ pub fn install(app: &mut App, mode: Mode) {
   let theme = app.theme();
   apply(theme, mode);
   metrics::install(theme);
-  pipelines::install(theme);
+  step_strip::install(theme);
   agents::install(theme);
   instructions::install(theme);
   startup::install(theme);
@@ -203,7 +213,6 @@ pub fn install(app: &mut App, mode: Mode) {
   delivery::install(theme);
   merge_attempt::install(theme);
   review::install(theme);
-  import::install(theme);
   hub::install(theme);
   failure::install(theme);
   modules::install(theme);
@@ -214,6 +223,7 @@ pub fn install(app: &mut App, mode: Mode) {
   permissions::install(theme);
   side_question::install(theme);
   watching::install(theme);
+  leading::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

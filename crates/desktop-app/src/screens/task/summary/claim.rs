@@ -182,19 +182,38 @@ fn strip(ctx: &mut Ctx, task: &TaskContext, line: &Line<'_>) -> Strip {
       ctx.t("summary.team.claim.elsewhereDetail"),
     ),
     Line::OtherStale(claim) => other_stale(ctx, task, claim),
-    Line::Other(claim) => {
-      let (time, threshold) = (moment(ctx, claim.renewed), minutes(claim.renewed, claim.stale_at));
-      let title = ctx.t_args(
-        "summary.team.claim.otherTitle",
-        [("holder", claim.holder.name.as_str())],
-      );
-      let detail = ctx.t_args(
-        "summary.team.claim.otherDetail",
-        [("time", time.as_str()), ("minutes", threshold.as_str())],
-      );
-      Strip::new(id, (Icon::User, PaletteColor::TextSecondary), title, detail)
-    }
+    Line::Other(claim) => other(ctx, task, claim),
   }
+}
+
+/// Someone else's healthy claim: its holder and renewal; for an Admin, who may close the task for the holder, that
+/// closing ends the claim either way (`o4K8uq` T2).
+fn other(ctx: &Ctx, task: &TaskContext, claim: &TeamClaim) -> Strip {
+  let (time, threshold) = (moment(ctx, claim.renewed), minutes(claim.renewed, claim.stale_at));
+  let holder = claim.holder.name.as_str();
+  let title = ctx.t_args("summary.team.claim.otherTitle", [("holder", holder)]);
+  let admin = task
+    .team
+    .as_ref()
+    .is_some_and(|team| team.task.abilities.lifecycle.cancel);
+  let detail = if admin {
+    let acquired = moment(ctx, claim.acquired);
+    ctx.t_args(
+      "summary.team.claim.otherAdminDetail",
+      [("holder", holder), ("time", acquired.as_str())],
+    )
+  } else {
+    ctx.t_args(
+      "summary.team.claim.otherDetail",
+      [("time", time.as_str()), ("minutes", threshold.as_str())],
+    )
+  };
+  Strip::new(
+    "task-team-claim",
+    (Icon::User, PaletteColor::TextSecondary),
+    title,
+    detail,
+  )
 }
 
 /// This computer's claim while its work renews it, or before any run does.

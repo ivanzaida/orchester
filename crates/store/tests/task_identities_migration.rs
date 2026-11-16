@@ -15,16 +15,16 @@ use orchester_core::{
   store::{ConversationStore, RunStore, TaskStore},
   task::identity::{TaskOwner, TeamTaskRef},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ProjectMigration};
 use rusqlite::Connection;
 use support::{at, copied_at_version, started_run};
-
-/// The migrations this change appends: task identities and run inputs.
-const ADDED: u32 = 2;
 
 fn database(repo: &Path) -> std::path::PathBuf {
   repo.join(".orchester").join("orchester.db")
 }
+
+/// The table a later migration, the bindings' removal, drops: not this migration's to keep.
+const DROPPED_LATER: &str = "reference_bindings";
 
 fn schema_version(connection: &Connection) -> u32 {
   connection
@@ -77,7 +77,10 @@ fn task_identities_migration_keeps_every_row_of_a_local_project() {
   let latest = schema_version(&Connection::open(database(repo.path())).expect("open"));
   drop(db);
 
-  let old = copied_at_version(&database(repo.path()), latest - ADDED);
+  let old = copied_at_version(
+    &database(repo.path()),
+    ProjectDb::version_before(ProjectMigration::TaskIdentities),
+  );
   let before = {
     let connection = Connection::open(database(old.path())).expect("open");
     connection
@@ -92,7 +95,7 @@ fn task_identities_migration_keeps_every_row_of_a_local_project() {
   let connection = Connection::open(database(old.path())).expect("open");
   assert_eq!(schema_version(&connection), latest);
   let after = row_counts(&connection);
-  for (table, count) in &before {
+  for (table, count) in before.iter().filter(|(table, _)| *table != DROPPED_LATER) {
     assert_eq!(after.get(table), Some(count), "{table} keeps its rows");
   }
   assert_eq!(after["task_identities"], before["tasks"]);
@@ -146,9 +149,11 @@ fn task_identities_migration_gives_shared_tasks_their_server_identity() {
     )
     .expect("another task")
     .remove(0);
-  let latest = schema_version(&Connection::open(database(repo.path())).expect("open"));
   drop(db);
-  let old = copied_at_version(&database(repo.path()), latest - ADDED);
+  let old = copied_at_version(
+    &database(repo.path()),
+    ProjectDb::version_before(ProjectMigration::TaskIdentities),
+  );
   let (server, project) = (ServerId::generate(), ProjectId::generate());
   {
     let connection = Connection::open(database(old.path())).expect("open");

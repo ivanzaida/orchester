@@ -6,6 +6,7 @@
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
 pub mod disk;
+pub mod given;
 pub mod hold;
 pub mod native;
 pub mod pending;
@@ -310,10 +311,10 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   }
   let pipeline = Pipeline::new(steps).expect("pipeline");
   let delivery = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, now)
+    .create_published(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, now)
     .expect("pipeline")
+    .0
     .id();
-  db.publish_draft::<Pipeline>(delivery, now).expect("publish pipeline");
   let budget = setup.budget.map(|tokens| TokenBudget::new(tokens).expect("above zero"));
   let details = TaskDetails {
     title: name("Say hello"),

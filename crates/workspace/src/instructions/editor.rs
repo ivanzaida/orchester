@@ -113,6 +113,29 @@ pub fn publish_in(root: &Path, expected: &InstructionEntry) -> Result<Instructio
   ))
 }
 
+/// Publishes `body` as the next version of the instruction `expected` at once, as the Agents hub's Save does: saved as
+/// its draft over exactly `expected`, then published, if every variable it uses has a value at each of its events. All
+/// or nothing: the draft the save made is thrown away when the publication is refused; a draft `expected` already had
+/// stays, holding `body`.
+pub fn save_and_publish_in(
+  root: &Path,
+  expected: &InstructionEntry,
+  body: Instruction,
+) -> Result<InstructionEntry, WriteError> {
+  if let Some(unavailable) = missing(body.text(), body.events()).first() {
+    return Err(WriteError::Unavailable(*unavailable));
+  }
+  let drafted = save_in(root, expected, body)?;
+  let published = publish_in(root, &drafted);
+  if published.is_err() && !expected.state.has_draft() {
+    // The refusal is what the person is told; a draft that could not be thrown away is listed, and its panel shows it.
+    if let Err(error) = ProjectDb::open(root).and_then(|mut db| db.discard_draft_matching(drafted.id, &drafted.body)) {
+      tracing::error!(%error, "cannot discard the draft of an instruction whose publication was refused");
+    }
+  }
+  published
+}
+
 fn ensure_same(
   expected: &InstructionEntry,
   draft: Option<Draft<Instruction>>,

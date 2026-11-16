@@ -1,5 +1,5 @@
 //! The secrets (`Secrets` `PQJo1` in `S06` `EnL2D`; `06 Secrets` `bVh1e`, nothing yet `08` `aalCu`): one group, its
-//! count at its heading's right, the environments as segments with Import from project and Add secret at their end
+//! count at its heading's right, the environments as segments with Add secret at their end
 //! over its rows (`Toolbar` `jSvl2`). With an environment chosen its secrets are the group's rows; with All each
 //! environment that has any is a group of its own under the toolbar, its count after its title. Each secret is a row
 //! with its kind's glyph, its name, what uses it, its masked value with when it was set, and the … that opens it
@@ -121,7 +121,7 @@ const READING: [(f32, f32, f32); 4] = [
 ];
 
 /// The list while the secrets are read (`12 · Project settings · Secrets · loading` `IHhqs`): the heading, the
-/// environments, Import from project and Add secret work, the key glyph and the note stay; an environment's name and
+/// environments and Add secret work, the key glyph and the note stay; an environment's name and
 /// count and each secret's name, use line and set date are bones, the lower rows fading. *Reading the secrets…*
 /// (`secrets.reading`) names it.
 pub(super) fn reading(ctx: &mut Ctx, view: &View) -> Element {
@@ -174,7 +174,7 @@ fn listing(group: Group) -> Element {
     .into()
 }
 
-/// The environments as segments, then Import from project and Add secret; 12 over the rows under it (`jSvl2`).
+/// The environments as segments, then Add secret; 12 over the rows under it (`jSvl2`).
 fn toolbar(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Row {
   let segment = |environment: Option<Environment>, id: &str, label: Arc<str>| {
     let choice = view.environment.clone();
@@ -203,19 +203,13 @@ fn toolbar(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Row {
     .child(segmented("secrets-environment", segments, Focus::Pointer))
     .child(Spacer::new().flex(1.0))
     .child(
-      ActionButton::new("secrets-import", ButtonKind::Ghost, ctx.t("secrets.importFromProject"))
-        .icon(Icon::Download)
-        .compact()
-        .opens(view.import()),
-    )
-    .child(
       ActionButton::new("secrets-add", ButtonKind::Secondary, ctx.t("secrets.add"))
         .icon(Icon::Plus)
         .on_click(move || add.open(SecretsPanel::Add, None)),
     )
 }
 
-/// No secret at all (`Empty · No secrets yet` `MSVAy`): one quiet row with Add secret and Import.
+/// No secret at all (`Empty · No secrets yet` `MSVAy`): one quiet row with Add secret.
 fn project_empty(ctx: &Ctx, view: &View) -> EmptyRow {
   let add = view.clone();
   EmptyRow::new(
@@ -228,12 +222,6 @@ fn project_empty(ctx: &Ctx, view: &View) -> EmptyRow {
     ActionButton::new("secrets-empty-add", ButtonKind::Primary, ctx.t("secrets.add"))
       .icon(Icon::Plus)
       .on_click(move || add.open(SecretsPanel::Add, None)),
-  )
-  .action(
-    ActionButton::new("secrets-empty-import", ButtonKind::Ghost, ctx.t("secrets.import"))
-      .icon(Icon::Download)
-      .compact()
-      .opens(view.import()),
   )
 }
 

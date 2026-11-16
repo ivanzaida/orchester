@@ -4,9 +4,10 @@
 
 use orchester_core::{
   connection::{AgentConnection, mcp::McpServer},
-  id::{ProjectId, ResourceId},
+  id::{ConnectionId, ProjectId, ResourceId},
   permission::{AgentPermissions, CommandPermission},
   resource::{AgentProfile, PublishError},
+  store::ResourceStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
@@ -20,12 +21,14 @@ use super::{
     readiness_json,
   },
   connections::agent_by_id,
+  runs_on::Accounts,
   widening,
 };
 use crate::{
   agents::{
     data::{ProfileEntry, ProjectAgents, VersionState, publish_checked_in},
     form::stored_effort,
+    local_edit::GivenKind,
   },
   app_mcp::{
     error::{Missing, ToolError},
@@ -52,23 +55,32 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
   let services = services.clone();
   let read = blocking(move || {
     across(&services, args.project.as_deref(), |open, db| {
+      let agents = ProjectAgents::load(db)?;
+      let listed = listed_profiles(db, &agents)?;
+      let mut picks = std::collections::BTreeMap::new();
+      for (id, _) in &listed {
+        picks.insert(*id, db.connection_pick(*id)?.and_then(|pick| pick.account));
+      }
+      let accounts = Accounts::load(&services)?;
       Ok((
-        ProjectAgents::load(db)?,
+        agents,
+        listed,
         readiness_json::read(&services, db, &open.repo_root)?,
+        (accounts, picks),
       ))
     })
   })
   .await?;
-  Ok(read.json("profiles", translate, |open, (agents, readiness)| {
-    agents
-      .profiles
+  Ok(read.json("profiles", translate, |open, (agents, listed, readiness, (accounts, picks))| {
+    listed
       .iter()
-      .map(|entry| {
-        let connection = agent_by_id(&agents.connections, entry.profile.connection());
+      .filter_map(|(id, here)| Some((agents.profile(*id)?, here)))
+      .map(|(entry, here)| {
+        let connection = here.and_then(|here| agent_by_id(&agents.connections, here));
         json!({
           "id": entry.id.to_string(),
           "role": entry.profile.role().as_str(),
-          "connection": connection.map(|connection| connection.name().as_str()),
+          "runs_on": connection.map(|connection| accounts.runs_on_json(connection, picks.get(&entry.id).copied().flatten())),
           "model": entry.profile.model().as_str(),
           "effort": stored_effort(&entry.profile),
           "state": state_json(entry.state),
@@ -83,10 +95,9 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
 pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, db) = services.read_project(&args.project)?;
     let id = profile_named(&ProjectAgents::load_in(&open.repo_root)?, &args.profile)?.id;
-    let mut profile = profile_with_revision(&open, id)?;
-    let db = ProjectDb::open_read_only(&open.repo_root)?;
+    let mut profile = profile_with_revision(&services, &open, id)?;
     let readiness = readiness_json::read(&services, &db, &open.repo_root)?;
     profile["readiness"] = readiness_json::resource_of(&readiness, id);
     Ok(json!({ "profile": profile }))
@@ -97,13 +108,20 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
 /// Profile `id` of `open` as get_profile shows it, with its revision ([`crate::drafts::draft_revision`]) read
 /// before the profile: a save made meanwhile shows in the profile, so a save on that revision is refused rather
 /// than going over what was not shown.
-pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Result<Value, ToolError> {
+pub(super) fn profile_with_revision(
+  services: &Services,
+  open: &OpenProject,
+  id: ResourceId,
+) -> Result<Value, ToolError> {
   let revision = revision_of::<AgentProfile>(&ProjectDb::open(&open.repo_root)?, id)?;
   let agents = ProjectAgents::load_in(&open.repo_root)?;
   let entry = agents
     .profile(id)
     .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-  let mut value = profile_json(&agents, entry, open.project.id());
+  let db = ProjectDb::open(&open.repo_root)?;
+  let here = connection_here(&db, &agents, entry)?;
+  let mut value = profile_json(&db, &agents, (entry, here), open.project.id())?;
+  value["runs_on"] = runs_on(services, &db, entry.id, here)?;
   value["revision"] = json!(revision);
   Ok(value)
 }
@@ -139,9 +157,58 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     let entry = agents
       .profile(id)
       .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
+    let here = connection_here(&db, &agents, entry)?;
+    let mut profile = profile_json(&db, &agents, (entry, here), open.project.id())?;
+    profile["runs_on"] = runs_on(&services, &db, id, here)?;
+    Ok(json!({ "profile": profile }))
   })
   .await
+}
+
+/// The profiles a project lists, each with the connection it runs on here. A team project offers only the team's
+/// resources (`docs/design/team-configuration.md`, edge cases 2 and 3): a profile of this computer's own that was never
+/// published stays out, as it does from the hub.
+pub(super) fn listed_profiles(
+  db: &ProjectDb,
+  agents: &ProjectAgents,
+) -> Result<Vec<(ResourceId, Option<ConnectionId>)>, StoreError> {
+  let team = db.sharing()?.is_some();
+  let mut listed = Vec::new();
+  for entry in agents.profiles.iter() {
+    if team && entry.state.published().is_none() {
+      continue;
+    }
+    listed.push((
+      entry.id,
+      connection_here(db, agents, entry)?.map(|connection| connection.id()),
+    ));
+  }
+  Ok(listed)
+}
+
+/// The connection `entry` runs on here: for a team profile the one this computer picked for it, which the window shows
+/// too, else the connection its body names.
+pub(super) fn connection_here<'a>(
+  db: &ProjectDb,
+  agents: &'a ProjectAgents,
+  entry: &ProfileEntry,
+) -> Result<Option<&'a AgentConnection>, StoreError> {
+  let picked = db
+    .connection_pick(entry.id)?
+    .and_then(|pick| agent_by_id(&agents.connections, pick.connection));
+  Ok(picked.or_else(|| agent_by_id(&agents.connections, entry.profile.connection())))
+}
+
+/// What profile `id` runs on here, by account, as `list_connections` says it; null while it runs on nothing here.
+fn runs_on(
+  services: &Services,
+  db: &ProjectDb,
+  id: ResourceId,
+  here: Option<&AgentConnection>,
+) -> Result<Value, ToolError> {
+  let picked = db.connection_pick(id)?.and_then(|pick| pick.account);
+  let accounts = Accounts::load(services)?;
+  Ok(json!(here.map(|connection| accounts.runs_on_json(connection, picked))))
 }
 
 /// The profile of `agents` named by its id or, ignoring case, its role.
@@ -159,10 +226,15 @@ pub(super) fn profile_named<'a>(agents: &'a ProjectAgents, named: &str) -> Resul
     .ok_or_else(|| ToolError::not_found(Missing::Profile, named))
 }
 
-/// A profile of `project` as `get_profile` shows it, with its link.
-pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry, project: ProjectId) -> Value {
+/// A profile of `project` as `get_profile` shows it, with its link: the instructions, skills and tools it gives its
+/// agents each `{id, name}`, which nothing else gives them, as `save_profile_draft` takes them.
+pub(super) fn profile_json(
+  db: &ProjectDb,
+  agents: &ProjectAgents,
+  (entry, connection): (&ProfileEntry, Option<&AgentConnection>),
+  project: ProjectId,
+) -> Result<Value, StoreError> {
   let profile = &entry.profile;
-  let connection: Option<&AgentConnection> = agent_by_id(&agents.connections, profile.connection());
   let servers: Vec<Value> = profile
     .mcp_servers()
     .ids()
@@ -178,24 +250,34 @@ pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry, project
     .filter(|step| step.profile == entry.id)
     .map(|step| json!({ "pipeline": &*step.pipeline, "step": &*step.step }))
     .collect();
-  json!({
+  let given = |kind: GivenKind| -> Result<Vec<Value>, StoreError> {
+    kind
+      .of(profile)
+      .ids()
+      .iter()
+      .map(|id| {
+        let name = db.resource(*id)?.map(|resource| resource.name().as_str().to_owned());
+        Ok(json!({ "id": id.to_string(), "name": name }))
+      })
+      .collect()
+  };
+  Ok(json!({
     "id": entry.id.to_string(),
     "role": profile.role().as_str(),
     "responsibilities": profile.responsibilities(),
     "instructions": profile.instructions().as_str(),
-    "connection": connection.map(|connection| json!({
-      "id": connection.id().to_string(),
-      "name": connection.name().as_str(),
-      "provider": connection.provider(),
-    })),
+    "agent": connection.map(AgentConnection::provider),
     "model": profile.model().as_str(),
     "effort": stored_effort(profile),
     "permissions": permissions_json(profile.permissions()),
     "mcp_servers": servers,
+    "instruction_resources": given(GivenKind::Instruction)?,
+    "skills": given(GivenKind::Skill)?,
+    "tools": given(GivenKind::Tool)?,
     "state": state_json(entry.state),
     "used_by_steps": steps,
     "link": Link::Profile(project, entry.id).path(),
-  })
+  }))
 }
 
 /// Permissions as `save_profile_draft` takes them.

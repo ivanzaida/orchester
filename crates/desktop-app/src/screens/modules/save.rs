@@ -3,7 +3,8 @@
 //! changed since. A module's page keeps what it last wrote ([`Written`]), so a second change made before the page reads
 //! again goes over that and not over the read it replaced. The base branch a form chose is taken in the repository
 //! before anything is written (a remote one creates its local branch; one that is gone refuses the save) and is set
-//! once the details are, on this computer only.
+//! once the details are, on this computer only; so is what a form changed of the module's own branch
+//! (`super::form_delivery`).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -24,6 +25,7 @@ use orchester_workspace::{
   messages::Message,
   modules::{
     base::{ModuleBasePick, save_module_base_in, take_module_base_in},
+    delivery::{OwnChange, change_own_in},
     last_write::LastWrite,
   },
   sharing::Servers,
@@ -40,6 +42,8 @@ pub struct SaveModule {
   pub details: ModuleDetails,
   /// The base branch a form chose in place of the module's; `None` leaves it.
   pub base: Option<ModuleBasePick>,
+  /// What a form changed of the module's own branch; `None` leaves it.
+  pub own: Option<OwnChange>,
 }
 
 /// The module as written, and the one it was written over (none for a new one).
@@ -125,6 +129,9 @@ fn write(args: &SaveModule, (servers, programs): (&Servers, &Programs)) -> Resul
   }
   .map_err(|error| refused(&error))?;
   drop(writer);
+  if let Some(change) = &args.own {
+    module = change_own_in(&args.root, programs, &module, change).map_err(Refused)?;
+  }
   if let Some(after) = base {
     let before = args
       .module

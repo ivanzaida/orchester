@@ -15,8 +15,8 @@
       "forkedOn": "· forked {{date}}"
     },
     "leads": {
-      "label": "Leads",
       "more": "+{{count}}",
+      "toTheEnd": "to the end",
       "moreTip": "Also leads {{targets}}",
       "stop": "Stop watching {{name}}",
       "since": {
@@ -29,7 +29,12 @@
         "none": "No order of its own · your switches decide"
       },
       "hint": "× stops watching · /unwatch does the same",
-      "stopFailed": "Not stopped · {{reason}}"
+      "stopFailed": "Not stopped · {{reason}}",
+      "popover": {
+        "title": "This conversation leads",
+        "sinceToday": "since {{time}}",
+        "sinceOn": "since {{date}}"
+      }
     },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
@@ -49,7 +54,7 @@
     },
     "composer": {
       "placeholder": "Ask the Orchestrator…",
-      "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex connection and a model for it.",
+      "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex account and a model for it.",
       "setUp": "Set up the Orchestrator",
       "readable": "Conversations stay readable; you can send once it is set up.",
       "loading": "Loading…",
@@ -88,33 +93,24 @@
       "cli": "{{cli}} · {{model}}",
       "provider": "{{provider}} · {{model}}",
       "railSignIn": "{{cli}} · {{name}}",
-      "railSignedOut": "{{cli}} · {{name}}: not signed in, sign in in Connections",
+      "railSignedOut": "{{cli}} · {{name}}: not signed in, sign in in Settings › Accounts",
       "railProvider": "{{name}} · {{host}}",
-      "who": "{{cli}} · {{email}} · {{plan}} plan",
-      "whoNoPlan": "{{cli}} · {{email}}",
-      "limitUntil": "{{cli}} · {{email}} · limit until {{time}}",
-      "signedOut": "{{cli}} · not signed in: sign in in Connections",
-      "use": "{{used}}% of 5h",
-      "useUnknown": "5h use not read",
+      "who": "{{cli}} · {{plan}} plan",
+      "whoNoPlan": "{{cli}}",
+      "limitUntil": "{{cli}} · limit until {{time}}",
+      "signedOut": "{{cli}} · not signed in: sign in in Settings › Accounts",
+      "connecting": "reading its models…",
       "limitReached": "limit reached",
       "providerWho": "{{cli}} · {{host}}",
-      "today": "{{tokens}} today",
-      "noPlanLimit": "no plan limit",
+      "providerUse": "{{tokens}} today · no plan limit",
       "key": "Its key: secret {{secret}}",
       "keyGone": "Its key's secret is missing",
-      "search": "Search models…",
-      "searchOrType": "Search or type a model…",
-      "noMatch": "No models match",
-      "useTyped": "Use {{model}}",
-      "effort": "Effort",
-      "effortDefault": "Default",
-      "effortDefaultDetail": "the CLI's own",
-      "typeEffort": "Type an effort…",
-      "typeEffortHint": "The provider lists no efforts: type the value it takes, Enter uses it. Empty is Default.",
-      "sentTo": "Prompts, repository content and command output go to {{host}} under its terms. Orchester reads no plan limits there.",
+      "sentTo": "Prompts, repository content and command output go to {{host}} under its terms.",
       "overDraft": "Choosing here publishes a new version and replaces the draft saved in Orchestrator settings.",
-      "newSession": "Another account starts a new session: earlier messages aren't remembered.",
-      "settings": "Settings ↗"
+      "newSession": "Choosing it starts a new session: earlier messages aren't remembered.",
+      "newSessionStarted": "A new session started: earlier messages aren't remembered.",
+      "noAccount": "No account to run the Orchestrator on yet. Add one in Settings › Accounts.",
+      "accounts": "Accounts ↗"
     },
     "suggestions": {
       "plan": "Plan tasks from a scope file",
@@ -151,7 +147,6 @@
       "change": "Change it",
       "dismiss": "Dismiss",
       "onlyYou": "Only you can approve",
-      "personOnly": "Only you can approve a plan: automation driving the window was not taken.",
       "changingChip": "Changing: Plan · {{steps}} steps · {{time}}",
       "stopChanging": "Stop changing the plan",
       "approved": "Plan approved · {{steps}} steps",
@@ -235,7 +230,6 @@
       "staysNone": "The Orchestrator made no task, run or change after {{time}}: nothing is left behind.",
       "staysItem": "{{what}} {{task}}",
       "failed": "Nothing was dropped: {{reason}}",
-      "personOnly": "Only a person edits or rewinds the conversation: input from an MCP client is not taken here.",
       "lineBefore": {
         "one": "Rewound to before your message of {{time}} · 1 message dropped",
         "other": "Rewound to before your message of {{time}} · {{count}} messages dropped"
@@ -301,7 +295,88 @@
       "conflict": "{{task}}'s merge conflict",
       "merged": "{{task}} merged",
       "closed": "{{task}} closed",
-      "waited": "What {{task}} waits on"
+      "waited": "What {{task}} waits on",
+      "canStart": "work can start",
+      "stuck": "stuck",
+      "accept": "acceptance can start",
+      "deliver": "can be delivered",
+      "deliveryWaits": "delivery waits for you"
+    },
+    "turnState": {
+      "triedAgain": "Couldn't answer — trying again at {{time}} · {{next}} of {{of}}",
+      "thinking": "Orchestrator is thinking · {{number}} of {{of}}",
+      "left": {
+        "one": "Left to you after 1 try",
+        "other": "Left to you after {{count}} tries"
+      },
+      "tryAgain": "Try again",
+      "refused": "— not tried again: {{reason}}",
+      "heldBudget": "Held until {{time}} — today's budget is used",
+      "heldPlan": "Held until {{time}} — the account's plan limit is reached",
+      "heldPlanUnnamed": "Held — the account's plan limit is reached · trying again at {{time}}",
+      "header": "Orchestrator is held until {{time}}",
+      "headerUnnamed": "Orchestrator is held · trying again at {{time}}",
+      "day": "{{date}} {{time}}",
+      "why": {
+        "timeLimit": "— the answer took longer than {{minutes}} minutes",
+        "failed": "— {{reason}}",
+        "interrupted": "— Orchester or its runner closed",
+        "cannotStart": "— its CLI couldn't be started",
+        "notSignedIn": "— its CLI isn't signed in",
+        "connectionGone": "— its connection is gone",
+        "accountNone": "— the connection has no account to sign in with",
+        "accountFolderMissing": "— the account's folder {{folder}} is gone"
+      }
+    },
+    "standing": {
+      "canStart": "— nothing they depend on is open",
+      "stuck": "— nothing else can start",
+      "stuckBudget": "— its budget is used",
+      "accept": "— {{pipeline}}",
+      "deliver": "— {{branch}} into {{base}}",
+      "deliverCheckout": "— {{branch}} into the branch your checkout has",
+      "noAcceptance": "— no acceptance pipeline is chosen",
+      "acceptanceCeiling": "— its acceptance did not pass",
+      "notAllowed": "— Deliver when accepted is off",
+      "needsYou": "Needs you ↗",
+      "module": "Module ↗"
+    },
+    "leaving": {
+      "title": "Before you leave",
+      "count": {
+        "one": "1 thing can stop {{target}} while you are away",
+        "other": "{{count}} things can stop {{target}} while you are away"
+      },
+      "checkAgain": "Check again",
+      "unreadable": "— it can't be checked: {{reason}}",
+      "driveOff": "Let the Orchestrator drive is off",
+      "orchestratorNotReady": "The Orchestrator has nothing it can run on",
+      "noPipeline": {
+        "one": "{{tasks}} has no pipeline",
+        "other": "{{tasks}} have no pipeline"
+      },
+      "noDeliverStep": "{{pipeline}} has no Deliver step — its merges are not checked after merging",
+      "noDeliverStepOf": "The pipeline of {{tasks}} has no Deliver step — its merges are not checked after merging",
+      "checkoutHasChanges": "Your checkout has local changes — a merge that touches them will wait for you",
+      "noDailyBudget": "The project has no daily budget — nothing bounds what is spent",
+      "maySleep": "The computer may go to sleep",
+      "stopsWithWindow": "Closing the window stops the work",
+      "notChecked": {
+        "servers": "Not checked: whether the tasks' MCP servers answer"
+      },
+      "link": {
+        "projectSettings": "Project settings ↗",
+        "orchestratorSettings": "Orchestrator settings ↗",
+        "task": "{{task}} ↗",
+        "pipeline": "Pipeline ↗",
+        "settings": "Settings ↗"
+      },
+      "ready": "Ready to leave",
+      "readyAside": "— nothing found that would stop {{target}} · {{unchecked}}",
+      "readyAsideAll": "— nothing found that would stop {{target}}",
+      "unchecked": {
+        "servers": "not checked: whether the tasks' MCP servers answer"
+      }
     },
     "decision": {
       "showDetails": "Show details",
@@ -331,7 +406,7 @@
       "failed": "The answer failed",
       "failedBody": "{{reason}} · Your message is kept.",
       "retry": "Retry",
-      "openConnections": "Open Connections",
+      "openConnections": "Open Accounts",
       "pickAccount": "Pick account",
       "earlier": "This answer failed: {{reason}}",
       "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
@@ -401,11 +476,71 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "lead": {
+      "follow": "Follow",
+      "toTheEnd": "Lead to the end",
+      "what": "What it does with them",
+      "meaning": {
+        "follow": "Tells you and answers agents; you start, merge and deliver.",
+        "lead": "Starts its tasks, runs failed ones again and leaves you what it cannot do."
+      },
+      "menu": {
+        "name": "How {{name}} is taken: {{mode}}",
+        "follow": "Tells you and answers agents; you start, merge and deliver",
+        "lead": "Starts its tasks, runs failed ones again and leaves you what it cannot do"
+      },
+      "stop": "Stop leading",
+      "ceilings": {
+        "runs": "Runs of a task",
+        "returns": "Returns per run",
+        "raises": "Raises",
+        "raisesValue": "{{times}} by {{percent}} %",
+        "budget": "Budget",
+        "budgetValue": "{{used}} of {{most}} tokens",
+        "budgetNone": "none",
+        "change": "Change…",
+        "groupSeparator": ",",
+        "form": {
+          "title": "Ceilings · {{name}}",
+          "runs": {
+            "label": "Runs of a task",
+            "hint": "How many times it may run one task again · {{min}} to {{max}}"
+          },
+          "returns": {
+            "label": "Returns per run",
+            "hint": "Returns to an earlier step inside one run · {{min}} to {{max}}"
+          },
+          "raises": {
+            "label": "Raises of a limit",
+            "hint": "How often it may raise a run's limit, and by how much · {{min}} to {{max}}, up to {{percent}} %",
+            "times": "How often a run's limit may be raised",
+            "share": "By how much of the limit, in percent",
+            "by": "by",
+            "percent": "%",
+            "percentMost": "Up to {{max}} %",
+            "percentLeast": "At least {{min}} %"
+          },
+          "budget": {
+            "label": "Budget",
+            "hint": "Tokens for the whole target · empty: no budget",
+            "hintUsed": "Tokens for the whole target · empty: no budget · used {{used}}",
+            "invalid": "A number of tokens, or empty for no budget",
+            "unit": "tokens"
+          },
+          "bounds": "From {{min}} to {{max}}",
+          "note": "This subscription only · defaults in Project settings ↗",
+          "cancel": "Cancel",
+          "save": "Save"
+        }
+      }
+    },
     "watching": {
       "applied": "Applied {{time}}",
       "from": "Orchester",
       "meta": "{{time}} · the live state, no agent turn",
       "total": "This conversation leads {{leads}}. {{total}}.",
+      "totalLed": "This conversation leads {{led}} to the end. {{total}}.",
+      "totalLedAndFollows": "This conversation leads {{led}} to the end and follows {{follows}}. {{total}}.",
       "only": "{{total}}.",
       "and": "{{rest}} and {{last}}",
       "comma": "{{rest}}, {{next}}",
@@ -419,9 +554,9 @@
       },
       "stop": "Stop watching",
       "keyRun": "{{key}} · #{{run}}",
+      "notes": "{{first}} · {{second}}",
       "open": "{{action}} ↗",
       "failed": "Not applied",
-      "personOnly": "Only a person stops watching here: input from an MCP client is not taken, and the subscription goes on.",
       "dismiss": "Dismiss"
     },
     "context": {
@@ -436,6 +571,11 @@
       "placeholderCompacting": "Ask the Orchestrator — send it once compacting ends…",
       "sendWaits": "The conversation is being compacted: send once it's done.",
       "notStarted": "The conversation wasn't compacted"
+    },
+    "request": {
+      "allowedOnce": "Allowed once: {{reason}}",
+      "told": "Told {{agent}}: “{{words}}”",
+      "denied": "Denied: {{reason}}"
     },
     "wait": {
       "what": {
@@ -453,6 +593,14 @@
         "reading": "Orchestrator is reading",
         "answered": "Answered by the Orchestrator",
         "answeredByYou": "Answered by you",
+        "allowed": "Allowed by the Orchestrator",
+        "denied": "Denied by the Orchestrator",
+        "allowedByYou": "Allowed once by you",
+        "deniedByYou": "Denied by you",
+        "allowedSimilarByYou": "Allowed similar by you",
+        "allowedRunByYou": "Allowed all in this run by you",
+        "alwaysAllowedByYou": "Always allowed by you",
+        "allowedProjectByYou": "Allowed for this project by you",
         "gone": "No longer waits"
       },
       "effectAnswering": "Let the Orchestrator drive is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
@@ -460,7 +608,8 @@
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
-      "effectApproval": "Approving a tool request is yours, on its card in the task's Conversation: the Orchestrator doesn't decide it, whatever Let the Orchestrator answer agents says.",
+      "effectApproval": "Approving this tool request is yours, on its card in the task's Conversation: Let the Orchestrator drive was off when it came.",
+      "effectApprovalRead": "Let the Orchestrator drive is on, so the Orchestrator reads the request and approves it once or denies it when it is sure; otherwise it tells you what it recommends, and the request waits for you on its card.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
     },
     "watch": {
@@ -479,6 +628,12 @@
         "more": "{{first}}, {{next}}"
       },
       "leading": "Leading {{targets}}",
+      "toEnd": "{{target}} to the end",
+      "toEndCounted": {
+        "one": "{{target}} to the end · {{count}} task",
+        "other": "{{target}} to the end · {{count}} tasks"
+      },
+      "leadingToEndAside": "— it starts them, merges them and parks what needs you",
       "atRequest": "at your request",
       "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
       "nowLedIn": "{{target}} is now led in «{{title}}»",
@@ -503,7 +658,6 @@
         "stoppedAtLimit": "{{task}} stopped at a limit ↗"
       },
       "failed": "Nothing was watched",
-      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The badge and your message stay.",
       "dismiss": "Dismiss",
       "picker": {
         "count": "{{shown}} of {{total}}",
@@ -606,12 +760,14 @@
         "move": "↑ ↓",
         "enter": "Enter",
         "shiftEnter": "Shift Enter",
+        "tab": "Tab",
         "esc": "Esc"
       },
       "hint": {
         "move": "Move",
         "pick": "Pick and close",
         "addAnother": "Add another",
+        "mode": "Follow or lead",
         "close": "Close"
       },
       "led": {
@@ -619,7 +775,6 @@
         "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
         "open": "Open that conversation",
         "take": "Take it here",
-        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
         "taken": "{{target}} is now led here",
         "takenFrom": "— taken from «{{title}}», which got a line saying so",
         "left": "{{target}} stays led in «{{title}}»",
@@ -652,7 +807,6 @@
       "showCriteria": "{{count}} · Show them",
       "hideCriteria": "{{count}} · Hide them",
       "criterion": "• {{criterion}}",
-      "personOnly": "Only a person starts a run the Orchestrator proposed: input from automation is refused here.",
       "dismissedTitle": "Start {{task}} · dismissed"
     },
     "historyPanel": {
@@ -733,8 +887,7 @@
         "enterDeletes": "deletes",
         "cancel": "Cancel",
         "confirm": "Delete conversation",
-        "failed": "Not deleted: {{reason}}",
-        "personOnly": "Only a person deletes a conversation: input from an MCP client is not taken here."
+        "failed": "Not deleted: {{reason}}"
       }
     },
     "settings": {
@@ -800,28 +953,14 @@
       "note": "A reply already under way finishes on the version it started with; a published change applies from the next reply.",
       "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
       "noConnection": {
-        "title": "No connection in {{project}} can run the Orchestrator",
-        "body": "It needs an agent connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
-        "open": "Open connections"
+        "title": "No account {{project}} has can run the Orchestrator",
+        "body": "It needs an account of yours that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
+        "open": "Open Accounts"
       },
       "saveFailed": "Not saved: {{reason}}"
     },
     "change": {
       "approvedInChat": "You approved it in the chat: “{{words}}”",
-      "personOnly": {
-        "publish": "Only a person publishes a draft the Orchestrator proposed: input from automation is refused here.",
-        "cancel": "Only a person cancels a run the Orchestrator proposed: input from automation is refused here.",
-        "merge": "Only a person merges a run the Orchestrator proposed: input from automation is refused here.",
-        "answer": "Only a person sends an answer the Orchestrator proposed: input from automation is refused here.",
-        "message": "Only a person sends a message the Orchestrator proposed: input from automation is refused here.",
-        "continue": "Only a person decides how a run goes on that the Orchestrator proposed: input from automation is refused here.",
-        "pause": "Only a person pauses a run the Orchestrator proposed to pause: input from automation is refused here.",
-        "resume": "Only a person resumes a run the Orchestrator proposed to resume: input from automation is refused here.",
-        "release": "Only a person releases new starts the Orchestrator proposed to release: input from automation is refused here.",
-        "repository": "Only a person makes the git repository the Orchestrator proposed: input from automation is refused here.",
-        "git": "Only a person runs a git operation the Orchestrator proposed: input from automation is refused here.",
-        "mcp": "Only a person applies a change to an MCP server the Orchestrator proposed: input from automation is refused here."
-      },
       "mcp": {
         "addWaits": "Add the MCP server {{server}}?",
         "addDone": "Added the MCP server {{server}}",
@@ -1077,6 +1216,7 @@
         "pipelineSteps": "steps added or removed",
         "pipelineSources": "other sources",
         "pipelineStep": "step {{step}} less strict",
+        "pipelineStopsWaiting": "step {{step}} stops waiting for {{waited}}",
         "approvalGate": "step {{step}} without approval",
         "stepToolCalls": "step {{step}} tool calls not asked about",
         "program": "program {{program}} in place of {{before}}",
@@ -1198,7 +1338,9 @@
         "blockedByTasks": "unfinished tasks block the task ({{tasks}})",
         "held": "new starts are held for its group or the project",
         "optedOut": "the task says Don't merge automatically",
-        "deliveredByQueue": "its pipeline ends in a Deliver step, so the merge queue delivers it"
+        "deliveredByQueue": "its pipeline ends in a Deliver step, so the merge queue delivers it",
+        "teamDelivery": "it is a team task's run, delivered with its module by a person",
+        "teamUnrecorded": "it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here"
       },
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
       "effectQueued": "Let the Orchestrator drive is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",

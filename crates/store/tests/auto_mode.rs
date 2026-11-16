@@ -221,7 +221,7 @@ fn decision_reviewer_setting_migrates_the_previously_accepted_schema() {
     name::Name,
     run::review::Probability,
   };
-  use orchester_store::ProjectDb;
+  use orchester_store::{ProjectDb, ProjectMigration};
 
   let (repo, mut db, ..) = started_run();
   let connection = DecisionConnection::new(
@@ -249,11 +249,15 @@ fn decision_reviewer_setting_migrates_the_previously_accepted_schema() {
     .expect("JSON settings");
   drop(raw);
 
-  // a51326fe3 applied settings as migration 122, after the common prefix of 121 migrations.
-  let old = support::copied_at_version(&current, 121);
+  // a51326fe3 applied the settings column as the decision reviewer's migration, right after the schema before it.
+  let before = ProjectDb::version_before(ProjectMigration::DecisionReviewer);
+  let old = support::copied_at_version(&current, before);
   let raw = rusqlite::Connection::open(old.path().join(".orchester/orchester.db")).expect("old database");
   raw
-    .execute_batch("ALTER TABLE decision_reviewer_connection ADD COLUMN settings TEXT; PRAGMA user_version = 122;")
+    .execute_batch(&format!(
+      "ALTER TABLE decision_reviewer_connection ADD COLUMN settings TEXT; PRAGMA user_version = {};",
+      before + 1
+    ))
     .expect("previously accepted migration");
   raw
     .execute("UPDATE decision_reviewer_connection SET settings = ?1", [json])

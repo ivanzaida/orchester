@@ -31,6 +31,8 @@ pub enum AnswerKind {
   Reviewer,
   /// A person, automation in their place, or a rule a person made.
   Person,
+  /// The project's *Dangerous auto-approve mode*: approved at once, nothing checked and nobody asked.
+  DangerousAutoApprove,
 }
 
 impl AnswerKind {

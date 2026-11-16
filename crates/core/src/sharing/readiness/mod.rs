@@ -75,6 +75,13 @@ pub enum Missing {
     cli: AgentProvider,
     problem: ConnectionProblem,
   },
+  /// The connection the profile runs on is one whose CLI needs signing in, and its last check found it signed out: it
+  /// is not ready until the person signs in (Connections shows how).
+  ConnectionSignIn {
+    profile: ResourceId,
+    cli: AgentProvider,
+    connection: ConnectionId,
+  },
   /// A team decision reviewer has no decision connection here.
   DecisionConnection {
     reviewer: ResourceId,
@@ -130,7 +137,7 @@ impl Readiness {
 impl Missing {
   const fn rank(&self) -> u8 {
     match self {
-      Self::Connection { .. } | Self::DecisionConnection { .. } => 0,
+      Self::Connection { .. } | Self::ConnectionSignIn { .. } | Self::DecisionConnection { .. } => 0,
       Self::McpOff { .. } => 1,
       Self::McpUnsupported { .. } => 2,
       Self::McpProgram { .. } => 3,
@@ -156,11 +163,19 @@ pub fn readiness(needs: &Needs, here: &Here) -> Readiness {
 
 fn lacking(need: &Need, here: &Here) -> Option<Missing> {
   match need {
-    Need::Connection { profile, cli } => connection_problem(*profile, *cli, here).map(|problem| Missing::Connection {
-      profile: *profile,
-      cli: *cli,
-      problem,
-    }),
+    Need::Connection { profile, cli } => match connection_problem(*profile, *cli, here) {
+      Ok(()) => None,
+      Err(Unready::Problem(problem)) => Some(Missing::Connection {
+        profile: *profile,
+        cli: *cli,
+        problem,
+      }),
+      Err(Unready::SignedOut(connection)) => Some(Missing::ConnectionSignIn {
+        profile: *profile,
+        cli: *cli,
+        connection,
+      }),
+    },
     Need::DecisionConnection { reviewer } => {
       decision_connection_problem(*reviewer, here).map(|problem| Missing::DecisionConnection {
         reviewer: *reviewer,
@@ -218,22 +233,31 @@ fn local_program_problem(server: ConnectionId, here: &Here) -> Option<LocalProgr
   }
 }
 
+/// Why the connection of a profile or reviewer is not ready.
+enum Unready {
+  Problem(ConnectionProblem),
+  /// The connection it would run on needs signing in.
+  SignedOut(ConnectionId),
+}
+
 /// A pick of a connection of the kind wins; without one a single connection of the kind is used, several need a pick
-/// and none need one added.
-fn connection_problem(profile: ResourceId, cli: AgentProvider, here: &Here) -> Option<ConnectionProblem> {
+/// and none need one added. The connection it would run on has to be signed in.
+fn connection_problem(profile: ResourceId, cli: AgentProvider, here: &Here) -> Result<(), Unready> {
   let mut of_kind = here.connections.iter().filter(|(_, kind)| *kind == cli);
   let picked = here
     .picks
     .get(&profile)
-    .is_some_and(|pick| here.connections.iter().any(|(id, kind)| id == pick && *kind == cli));
-  if picked {
-    return None;
+    .filter(|pick| here.connections.iter().any(|(id, kind)| id == *pick && *kind == cli));
+  let runs_on = match (picked, of_kind.next(), of_kind.next()) {
+    (Some(pick), ..) => *pick,
+    (None, None, _) => return Err(Unready::Problem(ConnectionProblem::NoneOfKind)),
+    (None, Some((only, _)), None) => *only,
+    (None, Some(_), Some(_)) => return Err(Unready::Problem(ConnectionProblem::PickNeeded)),
+  };
+  if here.signed_out.contains(&runs_on) {
+    return Err(Unready::SignedOut(runs_on));
   }
-  match (of_kind.next(), of_kind.next()) {
-    (None, _) => Some(ConnectionProblem::NoneOfKind),
-    (Some(_), None) => None,
-    (Some(_), Some(_)) => Some(ConnectionProblem::PickNeeded),
-  }
+  Ok(())
 }
 
 /// As [`connection_problem`], for the decision connections of this computer.

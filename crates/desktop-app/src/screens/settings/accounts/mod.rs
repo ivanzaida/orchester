@@ -6,10 +6,16 @@
 //! tab is mounted, the app's MCP server refuses window input (`mcp::input_gate`).
 
 mod add;
+mod api;
+mod api_rows;
+mod decision;
 mod details;
 mod facts;
 mod limits;
 mod list;
+mod program;
+mod provider;
+mod provider_rows;
 mod remove;
 mod sign_in;
 mod state;
@@ -27,7 +33,11 @@ use lurq::{
   core::{ElementRef, Signal},
   node::Element,
 };
-use orchester_core::{account::AgentAccount, id::AgentAccountId, time::Timestamp};
+use orchester_core::{
+  account::AgentAccount,
+  id::{AgentAccountId, ApiAccountId},
+  time::Timestamp,
+};
 use orchester_workspace::{accounts::AccountUses, messages::Message};
 
 pub(super) use self::list::reading;
@@ -125,6 +135,18 @@ struct Work {
   opened: Signal<Opened>,
   checking: Signal<Ids>,
   pub draft: add::Draft,
+  /// *Add an API provider*: what is typed so far, and its action.
+  pub api: api::Draft,
+  /// The decision model servers: the base URL typed for a new one, and what their rows do.
+  pub servers: decision::Servers,
+  /// What an API provider's page asks over the window: *Replace key…* and *Remove*.
+  pub api_rows: api_rows::ApiRows,
+  /// An API provider's page: its menu, the name being typed and the fields of *Edit*.
+  pub provider: provider::Page,
+  /// Asks for a CLI's program and keeps it.
+  pub program: program::ChooseAction,
+  /// The menu *Add account* opens: whether it is open, and the button it opens at.
+  pub add_menu: (Signal<bool>, ElementRef),
   pub rename: Signal<String>,
   pub removal: remove::Choice,
   /// The account page's *…* menu: whether it is open, and the button it opens at.
@@ -197,6 +219,8 @@ pub struct AccountsTab {
   started: Signal<bool>,
   /// Reads what uses the shown account again after each change.
   again: Again,
+  /// What the tab showed last: another page starts without the menus of the one before.
+  shown: parking_lot::Mutex<Option<AccountsView>>,
   _protected: Protected,
 }
 
@@ -217,6 +241,12 @@ impl Component for AccountsTab {
       opened: ctx.signal(Opened::default()),
       checking: ctx.signal(Ids::default()),
       draft: add::Draft::new(ctx),
+      api: api::Draft::new(ctx),
+      servers: decision::Servers::new(ctx),
+      api_rows: api_rows::ApiRows::new(ctx),
+      provider: provider::Page::new(ctx),
+      program: program::choose(ctx),
+      add_menu: (ctx.signal(false), ElementRef::default()),
       rename: ctx.signal(String::new()),
       removal: remove::Choice::new(ctx),
       more: (ctx.signal(false), ElementRef::default()),
@@ -226,12 +256,23 @@ impl Component for AccountsTab {
       work,
       started: ctx.signal(false),
       again: Again::live(),
+      shown: parking_lot::Mutex::new(None),
       _protected: gate.protect(Guarded::Accounts),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    if self
+      .shown
+      .lock()
+      .replace(props.view)
+      .is_some_and(|before| before != props.view)
+    {
+      self.work.more.0.set(false);
+      self.work.add_menu.0.set(false);
+      self.work.provider.more.0.set(false);
+    }
     if !self.started.get() {
       self.started.set(true);
       let checked = props.accounts.iter().map(AgentAccount::id).collect();
@@ -259,8 +300,14 @@ impl Component for AccountsTab {
         .flatten(),
     };
     let (uses, reading) = uses(ctx, (selected, &self.again), props.revision.get());
+    // An API provider's page shows when the route names one and no sign-in.
+    if let Some(provider) = props.view.provider.filter(|_| selected.is_none()) {
+      let pane = self.provider(ctx, provider, &props);
+      return frame::column("settings-provider-scroll", pane);
+    }
     let (scroll, pane) = match (props.view.panel, selected) {
       (AccountsPanel::Add, _) => ("settings-accounts-add-scroll", add::page(ctx, &self.work)),
+      (AccountsPanel::AddApi, _) => ("settings-accounts-add-api-scroll", api::page(ctx, &self.work)),
       (AccountsPanel::SignIn, Some(_)) => (
         "settings-accounts-sign-in-scroll",
         sign_in::page(ctx, &parts, &self.work),
@@ -269,9 +316,32 @@ impl Component for AccountsTab {
         "settings-account-scroll",
         details::page(ctx, &parts, &self.work, (uses.as_ref(), reading)),
       ),
-      (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts)),
+      (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts, &self.work)),
     };
     frame::column(scroll, pane)
+  }
+}
+
+impl AccountsTab {
+  /// The page of the API provider `id`, with what runs on it read behind its last read after every change.
+  fn provider(&self, ctx: &mut Ctx, id: ApiAccountId, props: &Props) -> lurq::components::Column {
+    let api = crate::services::accounts::api_listed(ctx);
+    let here = crate::services::accounts::on_this_computer(ctx);
+    let session = Session::of(ctx);
+    let query = ctx.query(app::api_account_uses(session, id));
+    self.again.follow(props.revision.get(), &query);
+    let uses = query.data().map(|uses| AccountUses::clone(&uses));
+    let rows = provider_rows::Rows {
+      navigation: Navigation::of(ctx),
+      missing: here.map(|here| here.keys_missing),
+    };
+    let account = api.0.iter().find(|account| account.id() == id);
+    provider::page(
+      ctx,
+      &self.work,
+      (account, &rows, props.view.panel),
+      (uses.as_ref(), query.fetching()),
+    )
   }
 }
 
@@ -296,6 +366,8 @@ fn uses(
 fn follow(ctx: &mut Ctx, work: &Work) {
   let revision = ctx.props::<Props>().revision.clone();
   let navigation = Navigation::of(ctx);
+  let to_list = navigation.clone();
+  let (shown, gone) = (navigation.clone(), navigation.clone());
   let sign_in = work.clone();
   let bump = revision.clone();
   ctx.watch(&work.change.state(), move |state| {
@@ -314,6 +386,41 @@ fn follow(ctx: &mut Ctx, work: &Work) {
       Changed::Removed => AccountsView::default(),
     };
     navigation.replace(Route::Accounts(view));
+  });
+  // An API provider that was added is in the list, and its page starts over with no key in it.
+  let (bump, added, servers) = (revision.clone(), work.api.clone(), work.servers.clone());
+  ctx.watch(&work.api.add.state(), move |state| {
+    if state.is_fulfilled() {
+      added.clear();
+      servers.url.set(String::new());
+      bump.update(|revision| *revision += 1);
+      to_list.replace(Route::Accounts(AccountsView::default()));
+    }
+  });
+  // A provider renamed or edited shows its page as it is now; one removed, the list.
+  let (bump, page) = (revision.clone(), work.provider.clone());
+  ctx.watch(&work.provider.change.state(), move |state| {
+    if let Some(provider::Changed(provider)) = state.data.filter(|_| state.is_fulfilled()) {
+      page.close();
+      bump.update(|revision| *revision += 1);
+      shown.replace(Route::Accounts(AccountsView::of_provider(
+        provider,
+        AccountsPanel::Account,
+      )));
+    }
+  });
+  let bump = revision.clone();
+  ctx.watch(&work.api_rows.remove.state(), move |state| {
+    if state.is_fulfilled() {
+      bump.update(|revision| *revision += 1);
+      gone.replace(Route::Accounts(AccountsView::default()));
+    }
+  });
+  let bump = revision.clone();
+  ctx.watch(&work.provider.test.state(), move |state| {
+    if !state.is_pending() {
+      bump.update(|revision| *revision += 1);
+    }
   });
   let bump = revision.clone();
   ctx.watch(&work.check.state(), move |state| {

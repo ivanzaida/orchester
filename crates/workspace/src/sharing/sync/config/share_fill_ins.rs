@@ -24,10 +24,7 @@ use orchester_core::{
 };
 use orchester_store::{AppDb, ConnectionPick, ProjectDb};
 
-use super::{
-  refresh_profile,
-  share_mcp::{FillSource, LocalProgram, McpPlan, PlannedServer},
-};
+use super::share_mcp::{FillSource, LocalProgram, McpPlan, PlannedServer};
 use crate::{
   sharing::{NotSet, ShareNote, SharingError},
   tasks::outside::Outside,
@@ -199,8 +196,6 @@ fn set(
   match fill_in {
     FillIn::Pick { profile, pick, .. } => {
       db.set_connection_pick(*profile, *pick)?;
-      // The version the sharer kept still holds the local body it was published with; the pick makes it the team's.
-      refresh_profile(db, *profile)?;
     }
     FillIn::On { server, .. } => db.set_team_mcp_on_here(*server, true)?,
     FillIn::Secret { name, value } => db.set_team_secret_value(vault, name, value)?,
@@ -266,7 +261,7 @@ fn basic_part(credential: &str) -> &str {
     .map_or(credential, |_| &credential[BASIC.len()..])
 }
 
-/// The connection of each profile's newest published version, which the profile keeps running on.
+/// The connection each published profile runs on here, which it keeps running on.
 fn picks(db: &ProjectDb) -> Result<Vec<FillIn>, SharingError> {
   let connections = db.connections()?;
   let mut picks = Vec::new();
@@ -274,7 +269,7 @@ fn picks(db: &ProjectDb) -> Result<Vec<FillIn>, SharingError> {
     let Some(newest) = db.latest_version::<AgentProfile>(profile.id())? else {
       continue;
     };
-    let connection = newest.body().connection();
+    let connection = db.connection_here(profile.id(), newest.body().connection())?;
     let agent = connections
       .iter()
       .any(|found| found.id() == connection && matches!(found.kind(), ConnectionKind::Agent(_)));

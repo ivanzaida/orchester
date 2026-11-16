@@ -34,6 +34,7 @@ use crate::{
   background,
   sharing::{ProjectAddress, ServerEntry, Servers, SharingError},
   tasks::detail::run_store_error,
+  team_reads::listed::TeamPipelines,
   workspace::OpenProject,
 };
 
@@ -425,7 +426,10 @@ fn upload(
       continue;
     }
     revisions.insert(task.id(), task.revision());
-    tasks.push(share::upload_task(&db, &task, &names, share::UploadAs::Import)?);
+    // A project joining has read none of the team's configuration: the tasks it keeps name its own pipelines, which are
+    // none of the team's, so they go up naming none.
+    let none = TeamPipelines::default();
+    tasks.push(share::upload_task(&db, &task, &names, share::UploadAs::Import(&none))?);
   }
   Ok(Upload {
     import: TasksImport {

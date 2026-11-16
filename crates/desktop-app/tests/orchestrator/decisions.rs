@@ -5,7 +5,7 @@
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route, TaskList};
 use orchester_core::{
   orchestrator::{ActionOutcome, ChatAction, EntryKind},
-  resource::Pipeline,
+  resource::Instruction,
   run::RunStatus,
   store::{ResourceStore, RunStore},
   time::Timestamp,
@@ -79,16 +79,17 @@ fn orchestrator_decision_ends_when_its_card_goes_away() {
 #[test]
 fn orchestrator_claim_an_earlier_session_left_is_settled_at_start() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  let builder = screen.builder();
-  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
-  let hotfix = screen.pipeline(builder, ("hotfix", "Hotfix"));
-  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  screen.pipeline_draft((hotfix, builder), "Read README.md twice.");
+  // Instructions stand for every kind a chat proposes to publish (a pipeline holds no draft, D-032).
+  let delivery = screen.delivery();
+  let checklist = screen.instruction(delivery, ("Review checklist", "Run the suite once."));
+  let style = screen.instruction(delivery, ("Style guide", "Keep functions short."));
+  screen.instruction_draft((checklist, delivery), "Run the suite twice.");
+  screen.instruction_draft((style, delivery), "Keep functions shorter.");
   screen.go(OrchestratorChat::New);
-  let publish = |name: &str| format!(r#"Call publish_pipeline {{"project":"Kontur","pipeline":"{name}"}}"#);
-  call(&mut screen, &publish("Delivery"), 1);
-  call(&mut screen, &publish("Hotfix"), 2);
-  call(&mut screen, &publish("Delivery"), 3);
+  let publish = |name: &str| format!(r#"Call publish_instruction {{"project":"Kontur","instruction":"{name}"}}"#);
+  call(&mut screen, &publish("Review checklist"), 1);
+  call(&mut screen, &publish("Style guide"), 2);
+  call(&mut screen, &publish("Review checklist"), 3);
   let services = screen.window.launch.services().expect("launched services");
   let start = services.session_start;
   let earlier = Timestamp::from_unix_millis(start.unix_millis() - 60_000);
@@ -100,7 +101,7 @@ fn orchestrator_claim_an_earlier_session_left_is_settled_at_start() {
   db.claim_chat_action((chat, seqs[1]), earlier).expect("claim");
   // A claim of this session is under way: it is left alone.
   db.claim_chat_action((chat, seqs[2]), Timestamp::now()).expect("claim");
-  db.publish_draft::<Pipeline>(delivery, Timestamp::now())
+  db.publish_draft::<Instruction>(checklist, Timestamp::now())
     .expect("published meanwhile");
 
   screen.window.data.runtime.block_on(recover::recover_all(

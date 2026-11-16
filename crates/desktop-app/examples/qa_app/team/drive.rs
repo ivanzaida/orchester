@@ -55,6 +55,8 @@ pub fn to(
     | State::Claims
     | State::ModuleWork
     | State::AdminWork
+    | State::ClosedAdmin
+    | State::ClosedMember
     | State::VersionRefused
     | State::TeamRunning
     | State::EditConflict
@@ -68,19 +70,16 @@ pub fn to(
     | State::TeamEditRejects
     | State::TeamEditPublished
     | State::TeamEditRefusedAdmin
-    | State::TeamEditWaiting
-    | State::TeamEditRejected
     | State::TeamEditVariables
-    | State::TeamCreateNameTaken
-    | State::TeamEditNewer
-    | State::TeamEditConflicting
-    | State::TeamEditConflictClean
-    | State::TeamEditArchived
+    | State::TeamHub
+    | State::TeamHubMember
+    | State::TeamHubDown
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure
     | State::TeamArchive
-    | State::TeamArchived => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::TeamArchived
+    | State::TeamArchivedAdmin => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

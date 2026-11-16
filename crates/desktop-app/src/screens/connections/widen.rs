@@ -13,7 +13,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -23,7 +22,10 @@ use lurq::{
 use orchester_workspace::messages::Message;
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected, input_may_decide},
+  mcp::{
+    input_gate::{Guarded, InputGate, Protected, may_press},
+    is_synthetic_input,
+  },
   theme::{ConnectionsText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -106,17 +108,19 @@ impl Component for WidenConfirm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<WidenProps>().clone();
     let (keep, confirm) = self.buttons(ctx, &props, ButtonKind::Secondary);
-    match props.look {
-      WidenLook::Reviewer => reviewer_question(&props, (keep, confirm.icon(Icon::Check))),
-      WidenLook::Card => card_question(&props, (keep, confirm)),
-      WidenLook::Band => question(&props, (keep, confirm)),
+    let asked: Element = match props.look {
+      WidenLook::Reviewer => reviewer_question(&props, (keep, confirm.icon(Icon::Check))).into(),
+      WidenLook::Card => card_question(&props, (keep, confirm)).into(),
+      WidenLook::Band => question(&props, (keep, confirm)).into(),
       WidenLook::Box => crate::screens::project_settings::kit::question(
         &props.id,
         &props.title,
         &props.reasons,
         vec![confirm.into(), keep.into()],
-      ),
-    }
+      )
+      .into(),
+    };
+    Column::new().width(Dimension::Pct(100.0)).child(asked)
   }
 }
 
@@ -245,10 +249,15 @@ fn locks_input(props: &WidenProps) -> bool {
   !(props.look == WidenLook::Card && props.automation == Guarded::ApprovalWidening)
 }
 
+/// The handler of a press on the question, refused to automation where its consent does not cover it: the gate
+/// refuses such input while the question shows, and this refuses what reached the handler all the same.
 fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -> Handler {
   Arc::new(move || {
-    if !input_may_decide(gate.as_ref(), policy) {
-      tracing::warn!("synthetic input reached a protected permission decision; not taken");
+    if !may_press(
+      gate.as_ref(),
+      policy,
+      "answer a question about what a change lets agents do",
+    ) {
       return;
     }
     if is_synthetic_input() {

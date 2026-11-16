@@ -150,6 +150,25 @@ impl Needs {
     )
   }
 
+  /// A local MCP server on its own: the program a run starts, when it starts one (`program`, by id and name), and the
+  /// value of each project secret its variables and headers take, which has to be set here.
+  pub fn local_mcp_server(
+    program: Option<(ConnectionId, McpServerName)>,
+    secrets: impl IntoIterator<Item = (SecretId, SecretName)>,
+  ) -> Self {
+    Self(
+      program
+        .map(|(server, name)| Need::LocalMcpProgram { server, name })
+        .into_iter()
+        .chain(
+          secrets
+            .into_iter()
+            .map(|(secret, name)| Need::LocalSecret { secret, name }),
+        )
+        .collect(),
+    )
+  }
+
   /// A tool: only the team secret values it is given. A tool body does not name its secrets by name yet, so the
   /// caller gives them.
   pub fn tool(secrets: Vec<SecretName>) -> Self {

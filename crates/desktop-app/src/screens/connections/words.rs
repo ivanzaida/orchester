@@ -1,15 +1,10 @@
 //! What Connections calls things: each status as an icon and a word in its tone (`Status cell` `xy4z6`,
 //! the states of `uBsQM` and `O1jDI`), the providers' names, and the line under a connection's name.
 
-use std::path::Path;
+use lurq::app::theme::PaletteColor;
+use orchester_core::connection::{ConnectionStatus, GitHubState};
 
-use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::connection::{AgentConnection, AgentProvider, ConnectionAccount, ConnectionStatus, GitHubState};
-
-use crate::{
-  screens::project_settings::kit::Glyph,
-  ui::{agent_mark::AgentMark, icon::Icon},
-};
+use crate::{screens::project_settings::kit::Glyph, ui::icon::Icon};
 
 /// The tone a status is said in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,19 +56,6 @@ impl Shown {
 /// While a check runs (`Checking…` in `uBsQM`).
 pub(super) const CHECKING: Shown = Shown::of(Icon::LoaderCircle, Tone::Busy, "connections.status.checking");
 
-/// A CLI connection on no account (its account was removed with *No account*): runs on it don't start, whatever its
-/// last check said, until a person chooses one.
-const NO_ACCOUNT: Shown = Shown::of(Icon::CircleAlert, Tone::Warning, "connections.status.noAccount");
-
-/// The status of `connection`, whose last check says `status`: *No account* first for a CLI connection without one.
-pub(crate) fn connection_status(connection: &AgentConnection, status: ConnectionStatus) -> Shown {
-  if connection.account() == &ConnectionAccount::Unassigned {
-    NO_ACCOUNT
-  } else {
-    agent_status(status)
-  }
-}
-
 pub(crate) const fn agent_status(status: ConnectionStatus) -> Shown {
   use ConnectionStatus as S;
   use Tone as C;
@@ -120,88 +102,6 @@ pub(super) const fn mcp_status(enabled: bool) -> Shown {
   }
 }
 
-/// The provider's name, e.g. "Claude Code CLI".
-pub(crate) const fn provider_key(provider: AgentProvider) -> &'static str {
-  match provider {
-    AgentProvider::CodexCli => "connections.provider.codex",
-    AgentProvider::ClaudeCodeCli => "connections.provider.claude",
-    AgentProvider::AnthropicApi => "connections.provider.anthropicApi",
-    AgentProvider::OpenAiApi => "connections.provider.openaiApi",
-  }
-}
-
-/// The company whose models the provider runs, e.g. "Anthropic".
-pub(super) const fn vendor_key(provider: AgentProvider) -> &'static str {
-  match provider {
-    AgentProvider::CodexCli | AgentProvider::OpenAiApi => "connections.provider.openai",
-    AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi => "connections.provider.anthropic",
-  }
-}
-
-/// The glyph of an agent connection (`Agent marks` `z7PmEL`): the mark of the maker whose models it runs (Claude Code,
-/// Codex, the Anthropic and OpenAI APIs), or Lucide's cloud for a CLI on an API provider such as DeepSeek. GitHub shows
-/// its mark and an MCP server, a program or a remote one, Lucide's plug, as `05` `QNxAo` draws them.
-pub(super) fn agent_glyph(connection: &AgentConnection) -> Glyph {
-  AgentMark::of_connection(connection).map_or(Glyph::Icon(Icon::Cloud), Glyph::Mark)
-}
-
 pub(super) const GITHUB_GLYPH: Glyph = Glyph::GitHub;
 
 pub(crate) const MCP_GLYPH: Icon = Icon::Plug;
-
-/// What the agent connection is, under its name: the vendor, the CLI and its version once checked
-/// (`Anthropic · Claude Code CLI 2.1.89`), a native connection's provider and endpoint host, or the CLI and the
-/// host of the API provider it runs on, after its version once checked (`Claude Code CLI 2.1.89 · api.deepseek.com`).
-pub(super) fn agent_line(ctx: &Ctx, connection: &AgentConnection) -> String {
-  let provider = ctx.t(provider_key(connection.provider()));
-  if let Some(api) = connection.api_provider() {
-    let host = api.base_url().host();
-    return match checked_version(connection) {
-      Some(version) => ctx.t_args(
-        "connections.row.apiProviderVersion",
-        [("program", &*provider), ("version", version), ("host", host)],
-      ),
-      None => ctx.t_args("connections.row.apiProvider", [("program", &*provider), ("host", host)]),
-    }
-    .to_string();
-  }
-  if let Some(api) = connection.api() {
-    return ctx
-      .t_args(
-        "connections.row.native",
-        [("provider", &*provider), ("host", api.base_url().host())],
-      )
-      .to_string();
-  }
-  let vendor = ctx.t(vendor_key(connection.provider()));
-  match checked_version(connection) {
-    Some(version) => ctx
-      .t_args(
-        "connections.row.agent",
-        [("vendor", &*vendor), ("program", &*provider), ("version", version)],
-      )
-      .to_string(),
-    None => ctx
-      .t_args(
-        "connections.row.agentUnchecked",
-        [("vendor", &*vendor), ("program", &*provider)],
-      )
-      .to_string(),
-  }
-}
-
-/// The CLI's version as its last check read it.
-pub(super) fn checked_version(connection: &AgentConnection) -> Option<&str> {
-  match &connection.last_check()?.result {
-    orchester_core::connection::CheckResult::Available { version, .. } => Some(version),
-    _ => None,
-  }
-}
-
-/// The file name of `program`, as a row names an MCP program (`Program · npx`).
-pub(super) fn program_name(program: &str) -> &str {
-  Path::new(program)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .unwrap_or(program)
-}

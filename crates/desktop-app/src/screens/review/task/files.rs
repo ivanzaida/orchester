@@ -1,9 +1,10 @@
 //! The run's files beside its diff (`Files` `qCQrx` in 09i): 240 wide, its head (*Files* in 13/600, their count, and
 //! *3 of 7 viewed* at its end, *2 conflicting* in `danger` in its place while the merge conflicts), then a 30-high row
 //! per file, 10 at its sides: a mark (*Viewed*'s check in `success`, a file with open threads `info`'s speech mark,
-//! else the file's own), its name in 12, and its added and removed lines in Geist Mono 11 in `success` and `danger`.
-//! The chosen file's row is on `hover` in `text_primary`; choosing one scrolls the diff to it and unfolds it. A row's
-//! tooltip names the file's path and its threads (*2 comments · 1 question*).
+//! else the file's own), its name in 12, cut with an ellipsis where it would reach its lines, and its added and
+//! removed lines in Geist Mono 11 in `success` and `danger`. The chosen file's row is on `hover` in `text_primary`;
+//! choosing one scrolls the diff to it and unfolds it. A row's tooltip names the file's path and its threads
+//! (*2 comments · 1 question*).
 
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, ScrollVertical, Text, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -183,6 +184,7 @@ fn row(ctx: &mut Ctx, env: &Env, (at, path): (usize, Arc<str>), shown: &Shown) -
         PaletteColor::TextSecondary
       })
       .nowrap()
+      .text_overflow(TextOverflow::Elipsis)
       .flex_shrink(1.0)
       .min_width(Dimension::Px(0.0)),
   )

@@ -10,9 +10,9 @@ use orchester_core::{
   connection::{AgentProvider, invocation::Platform, stream::InvocationOutcome},
   id::ResourceId,
   permission::{AgentPermissions, LaunchPermissions, capability::EnforcedPermissions},
-  resource::{AgentProfile, StepKey, StepKind, Version, VersionNumber},
+  resource::{AgentProfile, StepKey, StepKind, VersionNumber},
   revision::Revision,
-  run::{Invocation, Run, RunEventKind},
+  run::{Invocation, PinnedVersion, Run, RunEventKind},
   store::{McpServerStore, ResourceStore, RunStore},
   time::Timestamp,
 };
@@ -113,15 +113,16 @@ impl InvocationPolicy {
   }
 }
 
-/// What the run's step `step`, on the pinned profile version `version` of `profile_id`, runs with.
+/// What the run's step `step`, on the pinned version `pinned` of its profile, whose body is `profile`, runs with.
 pub fn run_permissions(
   db: &ProjectDb,
   (run, invocations): (&Run, &[Invocation]),
   step: &StepKey,
-  (profile_id, version): (ResourceId, &Version<AgentProfile>),
+  (pinned, profile): (PinnedVersion, &AgentProfile),
   provider: Option<AgentProvider>,
 ) -> Result<Option<RunPermissions>, StoreError> {
-  let profile_permissions = version.body().permissions().clone();
+  let profile_id = pinned.resource;
+  let profile_permissions = profile.permissions().clone();
   let Some(permissions) = run.step_permissions(step, &profile_permissions) else {
     return Ok(None);
   };
@@ -140,7 +141,7 @@ pub fn run_permissions(
     .unwrap_or_default();
   let latest = db
     .latest_version::<AgentProfile>(profile_id)?
-    .map_or(version.number(), |latest| latest.number());
+    .map_or(pinned.number, |latest| latest.number());
   let invocation = latest_invocation(run, invocations, step);
   let state = change_state(db, (run, invocations), step, profile_id)?;
   // Without a provider (the profile's connection cannot be read) `enforced` is `None`, so a run
@@ -164,7 +165,7 @@ pub fn run_permissions(
     permissions,
     network_stays_on,
     unconfined_commands,
-    profile: version.number(),
+    profile: pinned.number,
     profile_id,
     base,
     profile_permissions,
@@ -172,7 +173,7 @@ pub fn run_permissions(
     state,
     can_apply_now: run.can_apply_permissions_now(profile_id),
     draft: latest.get().saturating_add(1),
-    mcp_servers: mcp_servers(db, version.body())?,
+    mcp_servers: mcp_servers(db, profile)?,
     tool_approvals_required: matches!(run.snapshot().body().step(step).map(|step| &step.kind),
       Some(StepKind::Agent { permissions, .. }) if permissions.interactive_tool_approvals),
   }))

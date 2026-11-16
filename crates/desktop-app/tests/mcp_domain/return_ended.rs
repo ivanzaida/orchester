@@ -42,15 +42,7 @@ fn returns_from_the_page(scenario: &str, state: &str, by: Answerer) {
   served.set_by_client("task-return-ended-note", NOTE);
   // Returning a run decides for the person: a client's press waits for their leave. The button takes presses once the
   // run's worktree was read, so the client presses until one is taken.
-  served.until("the refusal", |served| {
-    if served.shows("task-return-ended-person-only") {
-      return true;
-    }
-    served
-      .click_by_client("task-return-ended-button")
-      .expect("the press reaches the button");
-    false
-  });
+  refused_to_the_client(&mut served);
   assert_eq!(
     wait_for(&mut served, &seeded, run.id(), |_| true).attempts().len(),
     run.attempts().len(),
@@ -135,4 +127,23 @@ fn domain_return_ended_the_person_returns_a_failed_run_from_its_summary() {
 #[test]
 fn domain_return_ended_automation_returns_a_run_only_with_the_persons_leave() {
   returns_from_the_page("task-states", "failed", Answerer::Automation);
+}
+
+/// Presses the return as a client until the button takes the press, which is then refused to the client as its tool
+/// call's error, the card saying nothing of it.
+fn refused_to_the_client(served: &mut Served) {
+  let mut refused = None;
+  served.until("the refusal", |served| {
+    refused = served.click_by_client("task-return-ended-button").err();
+    refused.is_some()
+  });
+  let refused = refused.expect("refused to the client that pressed");
+  assert!(
+    refused.to_string().contains("return an ended run to an earlier step"),
+    "it names the action: {refused}"
+  );
+  assert!(
+    !served.shows("task-return-ended-person-only"),
+    "the card says nothing of it"
+  );
 }

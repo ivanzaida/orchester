@@ -26,12 +26,22 @@ pub fn locked(id: &str, words: &str) -> Row {
 /// [`locked`] without the 2 over and under it, for a page whose design spaces the line itself (the Agents hub's
 /// `Read-only line` `O4b6B` in M2 `dijUt`).
 pub fn flat(id: &str, words: &str) -> Row {
+  marked(id, Icon::Lock, words)
+}
+
+/// [`locked`] with a `shield-check` in place of the lock: a line that says what Admins are, not what a member cannot do
+/// (Tasks' Admin line, T8 `vdSWS`).
+pub fn shielded(id: &str, words: &str) -> Row {
+  marked(id, Icon::ShieldCheck, words).padding(Padding::vertical(ExtraSpacing::Tight.role()))
+}
+
+fn marked(id: &str, glyph: Icon, words: &str) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))
@@ -43,18 +53,32 @@ pub fn flat(id: &str, words: &str) -> Row {
 
 /// `dana-k (Admin) and olha (Server admin)`; empty when nobody is named.
 pub fn admin_names(ctx: &Ctx, admins: &TeamAdmins) -> String {
-  let named = |key: &str, name: &str| ctx.t_args(key, [("name", name)]).to_string();
-  let all: Vec<String> = admins
+  let with_roles = admins
     .admins
     .iter()
-    .map(|name| named("tasks.team.admin", name))
-    .chain(
-      admins
-        .server_admins
-        .iter()
-        .map(|name| named("tasks.team.serverAdmin", name)),
-    )
+    .map(|name| ctx.t_args("tasks.team.admin", [("name", name.as_ref())]).to_string())
+    .chain(admins.server_admins.iter().map(|name| {
+      ctx
+        .t_args("tasks.team.serverAdmin", [("name", name.as_ref())])
+        .to_string()
+    }));
+  listed(ctx, &with_roles.collect::<Vec<_>>())
+}
+
+/// `dana-k and olha`: the names without their roles, where a line names who can close the task (`g9S4k`, `tlw0r`);
+/// empty when nobody is named.
+pub fn plain_names(ctx: &Ctx, admins: &TeamAdmins) -> String {
+  let names: Vec<String> = admins
+    .admins
+    .iter()
+    .chain(&admins.server_admins)
+    .map(ToString::to_string)
     .collect();
+  listed(ctx, &names)
+}
+
+/// `all` as a sentence's list: `a, b and c`.
+fn listed(ctx: &Ctx, all: &[String]) -> String {
   match all.split_last() {
     Some((last, rest)) if !rest.is_empty() => ctx
       .t_args(

@@ -1,24 +1,26 @@
 //! What the panels of a team tool, instruction and skill show (ORC-834): what the team holds of them, which profiles
-//! use them and who published the version this computer uses. A tool names its secret by id, never a value.
+//! use them and who published the version this computer uses. A tool names its secret by name, never a value; one
+//! published before that form names it by id, which the sheet does not hold.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId, SecretId},
+  id::{ResourceId, SecretId},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    DatabaseQuery, DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction,
-    InstructionScope, ModelId, PromptText, ProviderSettings, RequestTarget, Skill, SkillFile, SkillFilePath,
-    TeamAgentProfile, Tool, ToolAction,
+    AccessPolicy, AccessWindow, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram, DatabaseQuery,
+    DeniedBehavior, FieldName, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope,
+    ModelId, PromptText, ProviderSettings, RequestTarget, ResourceKind, Skill, SkillFile, SkillFilePath,
+    TeamAgentProfile, TeamTool, Tool, ToolAction,
   },
+  secret::SecretName,
 };
 use orchester_workspace::agents::{
   team_text::{Added, Reaches, SKILL_DOCUMENT},
   team_tool::{ArgumentPlace, ToolRuns, ToolSecret},
 };
 
-use crate::support::{MemoryVault, Team, cached, name, team_resource};
+use crate::support::{MemoryVault, Team, hub, name};
 
 fn policy(approval: ApprovalMode) -> AccessPolicy {
   AccessPolicy::new(
@@ -49,12 +51,11 @@ fn builder(team: &Team, (instruction, skill, tool): (ResourceId, ResourceId, Res
   .expect("skills")
   .with_tools(vec![tool])
   .expect("tools");
-  let local = AgentProfile::from_team(&body, ConnectionId::generate());
-  let mut db = team.db();
-  let id = team_resource(&mut db, "team-builder", local.clone(), Vec::new());
-  let mut version = cached(local, Vec::new());
-  version.server_body = serde_json::to_value(&body).expect("json");
-  db.cache_shared_version(id, &version).expect("cached");
+  team.keep(
+    "team-builder",
+    ResourceKind::AgentProfile,
+    serde_json::to_value(&body).expect("json"),
+  );
 }
 
 /// An HTTP tool with one argument that holds the project secret `secret` by id.
@@ -95,22 +96,29 @@ fn database_tool() -> Tool {
 }
 
 #[test]
-fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_names_by_id() {
+fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_needs_by_name() {
   let team = Team::new();
-  let mut db = team.db();
   let secret = SecretId::generate();
   let (http_id, command_id, database_id) = (
-    team_resource(&mut db, "sentry", http_tool(secret), Vec::new()),
-    team_resource(&mut db, "cargo", command_tool(), Vec::new()),
-    team_resource(&mut db, "orders", database_tool(), Vec::new()),
+    team.team_resource("sentry", &by_name(&http_tool(secret), "SENTRY_TOKEN")),
+    team.team_resource("cargo", &command_tool()),
+    team.team_resource("orders", &by_name(&database_tool(), "ORDERS_DB")),
   );
-  let hub = team
-    .workspace
-    .team_hub(&team.root, &MemoryVault::default())
-    .expect("hub");
+  let hub = hub(&team, &MemoryVault::default());
   let sheet = hub.tool(http_id).expect("a sheet");
   assert_eq!(sheet.description, "Issues");
-  assert_eq!(sheet.secret, ToolSecret::ById(secret));
+  assert_eq!(sheet.secret, ToolSecret::Named(secret_name("SENTRY_TOKEN")));
+  assert!(
+    sheet.edit.is_none(),
+    "an HTTP tool in the team's form is not published again by name"
+  );
+  assert!(
+    sheet
+      .latest
+      .as_ref()
+      .is_some_and(|latest| latest.body.secret() == Some(&secret_name("SENTRY_TOKEN"))),
+    "an admin edits it in the team's form"
+  );
   assert_eq!(sheet.approval, Some(ApprovalMode::Never));
   let ToolRuns::Http { method, url, arguments } = &sheet.runs else {
     panic!("an HTTP tool: {:?}", sheet.runs)
@@ -131,9 +139,9 @@ fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_names_by_id() {
   );
   let sheet = hub.tool(command_id).expect("a sheet");
   assert_eq!(
-    (sheet.secret, sheet.approval, &sheet.runs),
+    (&sheet.secret, sheet.approval, &sheet.runs),
     (
-      ToolSecret::None,
+      &ToolSecret::None,
       None,
       &ToolRuns::Command {
         line: "cargo check".into(),
@@ -148,14 +156,39 @@ fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_names_by_id() {
       query: "select 1".into()
     }
   );
+  assert_eq!(sheet.secret, ToolSecret::Named(secret_name("ORDERS_DB")));
   assert_eq!(sheet.approval, Some(ApprovalMode::EveryCall));
   assert!(hub.tool(ResourceId::generate()).is_none());
 }
 
 #[test]
+fn team_fill_ins_other_a_tool_published_before_the_team_form_names_its_secret_by_id_and_holds_no_id() {
+  let team = Team::new();
+  let tool = http_tool(SecretId::generate());
+  let id = team.team_resource("sentry", &tool);
+  let hub = hub(&team, &MemoryVault::default());
+  let sheet = hub.tool(id).expect("a sheet");
+  assert_eq!(sheet.secret, ToolSecret::ById);
+  assert_eq!(
+    sheet.edit.as_ref().map(|latest| &latest.body),
+    Some(&tool),
+    "an admin publishes it again from the version it holds"
+  );
+  assert!(sheet.latest.is_none(), "it is not in the team's form");
+}
+
+fn secret_name(text: &str) -> SecretName {
+  SecretName::new(text).expect("a secret name")
+}
+
+/// `local` in the team's form, its secret named `secret`.
+fn by_name(local: &Tool, secret: &str) -> TeamTool {
+  TeamTool::from_local(local, |_| Some(secret_name(secret))).expect("a team tool")
+}
+
+#[test]
 fn team_fill_ins_other_instruction_and_skill_sheets_list_where_they_are_added_and_who_uses_them() {
   let team = Team::new();
-  let mut db = team.db();
   let rules = Instruction::new(
     PromptText::new("Be careful.").expect("prompt"),
     AgentTargets::Roles(BTreeSet::from([name("Builder")])),
@@ -186,16 +219,13 @@ fn team_fill_ins_other_instruction_and_skill_sheets_list_where_they_are_added_an
     CommandAction::new(CommandProgram::new("cargo").expect("program"), Vec::new()),
   );
   let (rules_id, handoff_id, skill_id, tool_id) = (
-    team_resource(&mut db, "rules", rules, Vec::new()),
-    team_resource(&mut db, "handoff", handoff, Vec::new()),
-    team_resource(&mut db, "review", skill, Vec::new()),
-    team_resource(&mut db, "cargo", tool, Vec::new()),
+    team.team_resource("rules", &rules),
+    team.team_resource("handoff", &handoff),
+    team.team_resource("review", &skill),
+    team.team_resource("cargo", &tool),
   );
   builder(&team, (rules_id, skill_id, tool_id));
-  let hub = team
-    .workspace
-    .team_hub(&team.root, &MemoryVault::default())
-    .expect("hub");
+  let hub = hub(&team, &MemoryVault::default());
   let sheet = hub.instruction(rules_id).expect("a sheet");
   assert_eq!(sheet.text, "Be careful.");
   assert_eq!(sheet.added, Added::Project);

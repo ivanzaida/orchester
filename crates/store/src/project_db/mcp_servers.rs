@@ -33,6 +33,15 @@ struct Settings {
   exempt_tools: ExemptTools,
 }
 
+impl ProjectDb {
+  /// Every server of the project, the archived ones too: what names the servers a profile still chooses and the names
+  /// that are taken, and what restoring puts back.
+  pub fn all_mcp_servers(&self) -> Result<Vec<McpServer>, StoreError> {
+    let rows = stored(&self.connection, "ORDER BY name", [])?;
+    Ok(rows.into_iter().filter_map(|row| row.into_server().ok()).collect())
+  }
+}
+
 impl McpServerStore for ProjectDb {
   type Error = StoreError;
 
@@ -117,8 +126,13 @@ impl McpServerStore for ProjectDb {
       .transpose()
   }
 
+  /// The servers that are not archived: what pickers, tools and runs see.
   fn mcp_servers(&self) -> Result<Vec<McpServer>, StoreError> {
-    let rows = stored(&self.connection, "ORDER BY name", [])?;
+    let rows = stored(
+      &self.connection,
+      "WHERE id NOT IN (SELECT server_id FROM archived_mcp_servers) ORDER BY name",
+      [],
+    )?;
     // A row that cannot be read back is left out, not lost: `unreadable_mcp_servers` reports it.
     Ok(rows.into_iter().filter_map(|row| row.into_server().ok()).collect())
   }

@@ -11,8 +11,9 @@
 //! as every other change that stops work is ([`PersonOnly`], and the workspace refuses automation again); only an
 //! admin of the team has *Archive*.
 
-mod dialog;
-mod words;
+pub(in crate::screens) mod dialog;
+mod tasks;
+pub(in crate::screens) mod words;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -42,11 +43,8 @@ use crate::{
   },
 };
 
-/// The id the person-only check of the confirmation's *Archive* is made under.
-pub(super) const CONFIRM: &str = "team-hub-archive-confirm";
-
 #[derive(Clone, PartialEq)]
-pub(super) struct Props {
+pub(in crate::screens) struct Props {
   pub root: PathBuf,
   pub resource: ResourceId,
   pub name: Arc<str>,
@@ -78,7 +76,7 @@ impl DevtoolsInspectable for Used {}
 
 /// Why what uses the resource is not known.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct ReadFailed {
+pub(in crate::screens) struct ReadFailed {
   /// The team server could not be reached.
   pub not_reached: bool,
 }
@@ -86,7 +84,7 @@ impl DevtoolsInspectable for ReadFailed {}
 
 /// Why the resource was not archived.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Failed {
+pub(in crate::screens) enum Failed {
   /// The team server refused it with its error `code`.
   Refused(String),
   Said(Message),
@@ -234,18 +232,25 @@ impl ArchiveMenu {
       .map(|used| used.runs.clone())
       .unwrap_or_default();
     let confirm: dialog::Confirm = Arc::new(move || {
-      if person.allows(CONFIRM) {
+      if person.allows("archive a team resource and stop the runs that use it") {
         action.run(shown.clone());
       }
     });
     dialog::dialog(
       ctx,
-      props,
-      dialog::State {
+      &dialog::DialogProps {
+        name: props.name.clone(),
+        blocks_profiles: props.blocks_profiles,
+        local: false,
+        versioned: true,
+      },
+      &dialog::State {
         read,
+        lines: Vec::new(),
+        tasks: None,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
-        person_refused: self.person.reason(ctx, CONFIRM),
+        stopped: None,
       },
       (&self.open, &self.retry, confirm),
     )

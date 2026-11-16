@@ -6,8 +6,9 @@
 //! `text_secondary` with a 14 `check` once it is a chip, *Led in «…» ↗* with a 12 `messages-square`, which opens that
 //! conversation, and the `Kbd` *Enter* while it has the focus, on `hover`; what has nothing left to watch behind one
 //! quiet row while the search is empty (an `archive` and *12 finished modules · type to find them* in 11.5
-//! `text_muted`); then the keys. While the catalog is read the search and the head show over three bone rows; a
-//! catalog that cannot be read says so in the picker, with *Try again*.
+//! `text_muted`); then how the command takes what is chosen, *Follow* or *Lead to the end* ([`super::mode`], `L03`
+//! `xE361`), and the keys, *Tab Follow or lead* among them. While the catalog is read the search and the head show
+//! over three bone rows; a catalog that cannot be read says so in the picker, with *Try again*.
 
 use std::{ops::Range, sync::Arc};
 
@@ -23,6 +24,7 @@ use lurq::{
 use orchester_core::id::{ChatId, ProjectId};
 use orchester_workspace::messages::Message;
 
+use super::mode::LeadChoice;
 use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
@@ -58,8 +60,17 @@ pub(in crate::screens::orchestrator) const PICK_KEYS: [(&str, &str); 4] = [
   ("shiftEnter", "addAnother"),
   ("esc", "close"),
 ];
-/// The keys while there is no row: *Esc Close*.
-const CLOSE_KEY: [(&str, &str); 1] = [("esc", "close")];
+/// The keys of a /watch picker while there are rows (`Keys` `Q5K7v7` in `L03` `xE361`): [`PICK_KEYS`] with *Tab Follow
+/// or lead* before *Esc Close*.
+const WATCH_KEYS: [(&str, &str); 5] = [
+  ("move", "move"),
+  ("enter", "pick"),
+  ("shiftEnter", "addAnother"),
+  ("tab", "mode"),
+  ("esc", "close"),
+];
+/// The keys while there is no row: *Tab Follow or lead* and *Esc Close*.
+const WATCH_CLOSE_KEYS: [(&str, &str); 2] = [("tab", "mode"), ("esc", "close")];
 
 /// Which picker a panel is: it names the panel's elements and its head.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,8 +188,12 @@ pub(super) fn heading(
     .into()
 }
 
-/// While the catalog is read: the search field and the head over three bone rows, and *Esc Close*.
-pub(super) fn reading(ctx: &mut Ctx, (id, picker): (&str, Picker), search: &PickerSearch) -> Element {
+/// While the catalog is read: the search field and the head over three bone rows, then the way and the keys.
+pub(super) fn reading(
+  ctx: &mut Ctx,
+  (id, picker): (&str, Picker),
+  (search, mode): (&PickerSearch, &LeadChoice),
+) -> Element {
   let mut content = vec![
     search_field(ctx, (id, picker), search, None),
     heading(ctx, (id, picker, "section"), None, None),
@@ -190,7 +205,7 @@ pub(super) fn reading(ctx: &mut Ctx, (id, picker): (&str, Picker), search: &Pick
       .child(bone(*meta, META_BONE))
       .into()
   }));
-  content.push(footer(ctx, (id, picker), false));
+  content.extend(footer(ctx, (id, picker), false, mode));
   frame((id, picker), content)
 }
 
@@ -198,7 +213,7 @@ pub(super) fn reading(ctx: &mut Ctx, (id, picker): (&str, Picker), search: &Pick
 pub(super) fn unreadable(
   ctx: &mut Ctx,
   (id, picker, project, why): (&str, Picker, &str, &Message),
-  search: &PickerSearch,
+  (search, mode): (&PickerSearch, &LeadChoice),
   retry: Arc<dyn Fn() + Send + Sync>,
 ) -> Element {
   let prefix = picker.prefix();
@@ -233,12 +248,12 @@ pub(super) fn unreadable(
     .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
     .child(words)
     .child(again);
-  let content = vec![
+  let mut content = vec![
     search_field(ctx, (id, picker), search, None),
     heading(ctx, (id, picker, "section"), None, None),
     unreadable.into(),
-    footer(ctx, (id, picker), false),
   ];
+  content.extend(footer(ctx, (id, picker), false, mode));
   frame((id, picker), content)
 }
 
@@ -384,12 +399,16 @@ pub(super) fn led_in(ctx: &Ctx, led: LedIn<'_>, color: PaletteColor) -> Element 
     .into()
 }
 
-/// The keys ([`PICK_KEYS`]) while there are rows (`rows`), *Esc Close* alone otherwise. The badge is applied by the
-/// composer's send, with no keys of its own (ORC-890).
-pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Element {
+/// What ends a /watch picker: how the command takes what is chosen (`mode`), then the keys, all of them while there
+/// are rows (`rows`), *Tab* and *Esc* alone otherwise. The badge is applied by the composer's send, with no keys of
+/// its own (ORC-890).
+pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool, mode: &LeadChoice) -> [Element; 2] {
   let prefix = picker.prefix();
-  let hints: &[(&str, &str)] = if rows { &PICK_KEYS } else { &CLOSE_KEY };
-  keys(ctx, (&format!("{id}-{prefix}"), &format!("{prefix}-key")), hints)
+  let hints: &[(&str, &str)] = if rows { &WATCH_KEYS } else { &WATCH_CLOSE_KEYS };
+  [
+    mode.row(ctx, (id, picker)),
+    keys(ctx, (&format!("{id}-{prefix}"), &format!("{prefix}-key")), hints),
+  ]
 }
 
 /// A picker's keys under a `border` line, named `{id}-keys`: each cap (`orchestrator.watch.keys.*`, named `cap_id`)

@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_workspace::readiness::NotReadyPart;
 
-use crate::routes::{ConnectionsView, HubFilter, HubView, ProjectPage, SecretsPanel, SecretsView};
+use crate::routes::{HubFilter, HubView, ProjectPage, SecretsPanel, SecretsView};
 
 /// What a row's fix says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,6 +20,7 @@ pub enum Fix {
   AddValue,
   Choose,
   AddConnection,
+  SignIn,
   SwitchOn,
 }
 
@@ -31,18 +32,27 @@ impl Fix {
       Self::AddValue => "summary.notReady.fix.addValue",
       Self::Choose => "summary.notReady.fix.choose",
       Self::AddConnection => "summary.notReady.fix.addConnection",
+      Self::SignIn => "summary.notReady.fix.signIn",
       Self::SwitchOn => "summary.notReady.fix.switchOn",
     }
   }
 }
 
+/// Where a fix is made: a page of the project, or Settings › Accounts, where the person's accounts are added and
+/// signed in for every project.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Opens {
+  Page(ProjectPage),
+  Accounts,
+}
+
 /// The fix of `part` and the page it opens; nothing for a part only a team Admin or the keychain can settle, which the
 /// card's Agents button leads to.
-pub fn of(part: &NotReadyPart) -> Option<(Fix, ProjectPage)> {
+pub fn of(part: &NotReadyPart) -> Option<(Fix, Opens)> {
   let NotReadyPart::Missing(part) = part else {
     return None;
   };
-  let hub = |filter, item| ProjectPage::hub(HubView::new(filter, item));
+  let hub = |filter, item| Opens::Page(ProjectPage::hub(HubView::new(filter, item)));
   match &part.missing {
     Missing::Connection {
       problem: ConnectionProblem::NoneOfKind,
@@ -51,7 +61,8 @@ pub fn of(part: &NotReadyPart) -> Option<(Fix, ProjectPage)> {
     | Missing::DecisionConnection {
       problem: ConnectionProblem::NoneOfKind,
       ..
-    } => Some((Fix::AddConnection, ProjectPage::Connections(ConnectionsView::default()))),
+    } => Some((Fix::AddConnection, Opens::Accounts)),
+    Missing::ConnectionSignIn { .. } => Some((Fix::SignIn, Opens::Accounts)),
     Missing::Connection { profile, .. } => Some((Fix::Choose, hub(HubFilter::Profiles, Some(*profile)))),
     Missing::DecisionConnection { reviewer, .. } => Some((Fix::Choose, hub(HubFilter::All, Some(*reviewer)))),
     Missing::McpOff { server } => Some((Fix::SwitchOn, hub(HubFilter::McpServers, Some(*server)))),
@@ -68,15 +79,15 @@ pub fn of(part: &NotReadyPart) -> Option<(Fix, ProjectPage)> {
         orchester_core::sharing::LocalProgramProblem::NotFound => Fix::SetPath,
         orchester_core::sharing::LocalProgramProblem::Moved => Fix::ChooseFile,
       };
-      Some((fix, ProjectPage::EditConnection(*server)))
+      Some((fix, Opens::Page(ProjectPage::EditConnection(*server))))
     }
     Missing::LocalSecret { secret, .. } => Some((
       Fix::AddValue,
-      ProjectPage::Secrets(SecretsView {
+      Opens::Page(ProjectPage::Secrets(SecretsView {
         secret: Some(*secret),
         panel: SecretsPanel::Replace,
         ..SecretsView::default()
-      }),
+      })),
     )),
     Missing::McpUnsupported { .. } | Missing::SecretUnreadable { .. } => None,
   }

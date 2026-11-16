@@ -55,13 +55,12 @@ impl TaskForm {
       brief: &self.fields.brief,
       title_input: &self.title_input,
     };
-    let project = props.project.open.project.id();
     composer
       .child(title(ctx, view, &brief))
       .child(outcome(ctx, view, &brief))
       .child(criteria(ctx, view, &self.fields.criteria))
       .child(self.properties(ctx, props, view, separator))
-      .with_children(plan_line(ctx, view, project))
+      .with_children(plan_line(ctx, view, &props.project))
   }
 
   /// The chips in their two rows.

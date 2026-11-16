@@ -15,6 +15,7 @@ mod change;
 pub mod created;
 mod ended;
 pub mod ending;
+mod lead;
 pub mod line;
 pub mod stop;
 mod summary;
@@ -27,6 +28,9 @@ pub use self::{
   created::{Created, CreatedWatch, created_task, created_task_watch, event_subscription},
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
+  lead::{
+    Ceiling, CeilingReached, Ceilings, CeilingsError, LEAD_TO_THE_END, WatchMode, asked_to_lead, own_returns, raises,
+  },
   line::{AtRequest, LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
   stop::{LeftOpen, OpenWork},
   summary::WatchSummary,
@@ -87,11 +91,14 @@ pub struct Subscription {
   target: WatchTarget,
   order: String,
   since: Timestamp,
+  /// Whether it only follows its target or leads it to the end; one kept before there was a choice follows.
+  #[serde(default)]
+  mode: WatchMode,
 }
 
 impl Subscription {
   /// `chat` watches `target` from `since` on, following `order`, the person's text; a blank one takes the project's
-  /// default order.
+  /// default order. It follows its target ([`WatchMode::Follow`]) until the person has it lead ([`Self::in_mode`]).
   pub fn new(chat: ChatId, target: WatchTarget, order: impl Into<String>, since: Timestamp) -> Self {
     let order = order.into().trim().to_owned();
     Self {
@@ -99,6 +106,29 @@ impl Subscription {
       target,
       order,
       since,
+      mode: WatchMode::Follow,
+    }
+  }
+
+  /// The subscription taking its target's work as `mode` says: only the person chooses that it leads to the end.
+  #[must_use]
+  pub const fn in_mode(mut self, mode: WatchMode) -> Self {
+    self.mode = mode;
+    self
+  }
+
+  pub const fn mode(&self) -> WatchMode {
+    self.mode
+  }
+
+  /// The subscription as it leads a target `led` led until now: a target led to the end stays so, with its ceilings,
+  /// whichever conversation leads it now and whatever its order. The command that takes a target over or renews its
+  /// order says nothing of how it is led; only stopping it and watching it again makes it followed.
+  #[must_use]
+  pub fn succeeding(self, led: Option<&Self>) -> Self {
+    match led {
+      Some(led) => self.in_mode(led.mode),
+      None => self,
     }
   }
 
@@ -177,9 +207,12 @@ impl Subscriptions {
   /// The conversation an event of `task`, in `module` (`None`: it has none), goes to: the most specific
   /// subscription that covers it. `None`: no subscription does.
   pub fn leading(&self, task: TaskId, module: Option<ModuleId>) -> Option<ChatId> {
-    self
-      .first_of(WatchTarget::of_task(task, module))
-      .map(Subscription::chat)
+    self.leader_of(task, module).map(Subscription::chat)
+  }
+
+  /// The subscription that leads `task`, in `module` (`None`: it has none): the most specific one that covers it.
+  pub fn leader_of(&self, task: TaskId, module: Option<ModuleId>) -> Option<&Subscription> {
+    self.first_of(WatchTarget::of_task(task, module))
   }
 
   /// What a /watch of `target` by `chat` means; `task_module` is the module of a task target (`None`: it has none)

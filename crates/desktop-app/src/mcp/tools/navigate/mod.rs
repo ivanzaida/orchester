@@ -5,7 +5,7 @@ mod task_merge;
 use lurq::mcp::{McpTool, Scope};
 use modules::{agent_page, module_page, new_task_page};
 use orchester_core::{
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, MemoryId, ProjectId},
   project::{TaskKey, TaskKeyError},
 };
 use orchester_workspace::{
@@ -24,7 +24,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, FilesView, HubFilter, ImportTab, InstructionsView, MemoryTab, ModuleListTab, ModuleTab,
+    ChangeSource, ChangedFile, FilesView, HubFilter, InstructionsView, MemoryTab, ModuleListTab, ModuleTab,
     NewConnection, OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, SecretsView, SkillsFilter, TaskList,
     TaskListTab, TaskTab, TaskView,
   },
@@ -42,7 +42,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   with its own certificate stays at compare, which only a person answers); invite `server` and `project` (the \
   project's slug there); automation `ask` rotate-token (Rotate the token?). Opening a page or a question is \
   navigation; answering it stays a person's. Every other screen takes `project`, the project's id (a \
-  UUID, as app_state reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the \
+  UUID, as app_state reports it). overview and memory also take `tab`; tasks `tab`, `q` (the \
   search) and `highlight` (a task key, as after Create), and shows the list or the board as last chosen for the \
   project (press tasks-layout-list or tasks-layout-board to switch); edit_task `key`; task `key`, `tab` (summary, \
   conversation or changes), `run` (a run's number: that run's merge attempts under the task, which no `tab`, `view` or `file` goes with), `view` for what a tab opens in \
@@ -59,7 +59,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
   `agent` (a profile's id, or new) or, for a team project's hub, `filter` and `item`, skills takes \
-  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; review is the list of tasks whose run finished and, with `key`, \
+  `skill` (a skill id, or new), tools takes tool (a tool id, or new), and its page's tab; review is the list of tasks whose run finished and, with `key`, \
   a task's review; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); usage takes `query`, the \
@@ -67,8 +67,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), `view` new for New module, or `module`: new for New module, a module's id \
   for its page on `tab` (summary or burndown), with `view` edit for Edit module (a `tab` or `view` that names nothing \
-  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list, from \
-  whose rows a pipeline's page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
+  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list: in \
+  a local project the Pipelines hub, whose rows open a pipeline's panel there; in a team project the list whose rows \
+  open a pipeline's page on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
   screen opens on. \
   Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
@@ -93,13 +94,12 @@ pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; memory {}; import_resources {}; modules {}, a module's page {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; memory {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     SETTINGS_TABS.join(", "),
     MemoryTab::ALL.map(MemoryTab::name).join(", "),
-    ImportTab::ALL.map(ImportTab::name).join(", "),
     ModuleListTab::ALL.map(ModuleListTab::name).join(", "),
     ModuleTab::ALL.map(ModuleTab::name).join(", "),
   );
@@ -130,14 +130,16 @@ fn schema() -> Value {
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings Ã¢â‚¬Âº Connections." },
       "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings Ã¢â‚¬Âº Connections." },
       "agent": { "type": "string", "description": "agents: a profile's id for its page, or new; omitted opens the list." },
-      "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
+      "skill": { "type": "string", "description": "skills: the skill id, or new; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the toolÃ¢â‚¬â„¢s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
       "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
-      "filter": { "type": "string", "enum": HubFilter::ALL.map(HubFilter::name), "description": "agents of a team project: the kinds its hub lists, all (the default), profiles, mcp_servers, instructions, skills or tools." },
-      "item": { "type": "string", "description": "agents of a team project: the id of the resource the hub's panel shows; the first of the list when left out." },
+      "filter": { "type": "string", "enum": HubFilter::ALL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills, tools or memory (the memory screen), and archived (what the project archived; a team project's is what the team archived)." },
+      "item": { "type": "string", "description": "agents: the id of the resource the hub's panel shows; the first of the list when left out." },
+      "record": { "type": "string", "description": "memory: the id of the record the Agents hub's Memory filter shows in its panel; the first of the status's list when left out." },
+      "server": { "type": "string", "description": "agents of a local project: the id of the local MCP server the hub's panel shows (its connection id), in place of `item`." },
       "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
       "id": { "type": "string", "description": "project_settings with tab services and view service, stack or suite: its resource id." },
       "query": {
@@ -147,7 +149,7 @@ fn schema() -> Value {
       "view": {
         "type": "string",
         "enum": views,
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run; with tab services: a page under it (new-service, new-stack, new-suite, import, flaky, or service, stack or suite with `id`). modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module.",
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run; with tab services: a page under it (new-service, new-stack, new-suite, import, flaky, or service, stack or suite with `id`). modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module. agents: new, with `filter` of a kind, opens the form that makes one.",
       },
       "period": {
         "type": "string",
@@ -223,7 +225,6 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::EditConnection => ProjectPage::EditConnection(connection(args, "connection")?),
     Screen::ProjectSettings => project_settings_page(args)?,
     Screen::Files => ProjectPage::Files(files_view(args)?),
-    Screen::ImportResources => return import_route(args),
   };
   Ok(Route::Project(project(args)?, page))
 }
@@ -251,13 +252,6 @@ fn only_params(screen: Screen, args: &Map<String, Value>) -> Result<(), ToolErro
   }
 }
 
-/// Import resources of `project` on the kind tab `tab` names, or All.
-fn import_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
-  let names = ImportTab::ALL.map(ImportTab::name);
-  let tab = tab(args, ImportTab::from_name, &names)?;
-  Ok(Route::Project(project(args)?, ProjectPage::Import(tab)))
-}
-
 /// The parameters besides `route` that `screen` takes.
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
@@ -265,12 +259,12 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::JoinTeam => join_team::PARAMS,
     Screen::FirstDownload => &["project"],
     Screen::Settings => settings_route::PARAMS,
-    Screen::Overview | Screen::ImportResources => &["project", "tab"],
+    Screen::Overview => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => task_merge::PARAMS,
     Screen::Connections => &["project", "selected", "decision"],
-    Screen::Memory => &["project", "tab"],
+    Screen::Memory => &["project", "tab", "record"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
@@ -281,7 +275,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view", "id"],
-    Screen::Agents => &["project", "agent", "filter", "item"],
+    Screen::Agents => &["project", "agent", "filter", "item", "server", "view"],
     Screen::Review => &["project", "key"],
     Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => &["project"],
   }
@@ -295,11 +289,18 @@ fn review_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   }
 }
 
-/// Memory on its tab, or on the one it chooses when left out; `settings`, the tab it had, opens Project settings ›
-/// Context.
+/// The Agents hub's Memory filter on its status, or on the one it chooses when left out, with `record` in its panel;
+/// `settings`, the tab the Memory page had, opens Project settings › Context.
 fn memory_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   let name = string(args, "tab")?;
-  MemoryTab::page(name).ok_or_else(|| ToolError::UnknownTab {
+  let record = match string(args, "record")? {
+    Some(record) => Some(record.parse::<MemoryId>().map_err(|error| ToolError::InvalidParam {
+      param: "record",
+      reason: error.to_string(),
+    })?),
+    None => None,
+  };
+  MemoryTab::page(name, record).ok_or_else(|| ToolError::UnknownTab {
     name: name.unwrap_or_default().to_owned(),
     known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
   })
@@ -536,7 +537,6 @@ fn skills_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   match string(args, "skill")? {
     None => Ok(ProjectPage::Skills(SkillsFilter::default())),
     Some("new") => Ok(ProjectPage::NewSkill),
-    Some("import") => Ok(ProjectPage::ImportSkills),
     Some(id) => id
       .parse()
       .map(ProjectPage::Skill)

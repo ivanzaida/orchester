@@ -320,7 +320,6 @@ impl LocalPage {
         &self.resolver,
         request,
         (self.work.state().get().is_pending(), false),
-        task,
       ));
     }
     body.into()

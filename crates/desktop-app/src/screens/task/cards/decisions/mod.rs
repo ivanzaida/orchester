@@ -148,8 +148,8 @@ impl Decisions {
   /// Sends `given` for `card` to the runner of `project`, as the command `command` makes of it for who gives it,
   /// unless an answer is on its way (a second press, or Enter held, must not cancel the first). The person
   /// gives what their own input gives. An MCP client's input answers only where automation may through
-  /// Orchester's MCP server, under the person's consent ([`input_gate::answerer`]), and never more widely than
-  /// once: the answer is then automation's, else the card says that only a person gives it here.
+  /// Orchester's MCP server, under the person's consent ([`input_gate::press_answerer`]), and never more widely than
+  /// once: the answer is then automation's, else it is refused to the client and the card stays as it was.
   pub(super) fn answer(
     &self,
     (run, key): Card<'_>,
@@ -168,21 +168,23 @@ impl Decisions {
       Given::ApprovePlan => DecisionKind::Plan,
       _ => DecisionKind::Approval,
     };
-    let by = input_gate::answerer(self.gate.as_ref(), Guarded::Decision(kind));
-    let (by, stage) = match by {
-      Some(Answerer::Automation) if wider => (Answerer::Automation, Stage::Refused(Refused::WiderPersonOnly)),
-      Some(by) => (by, Stage::Sending),
-      None => (Answerer::Automation, Stage::Refused(Refused::PersonOnly)),
+    let gate = self.gate.as_ref();
+    let Some(by) = input_gate::press_answerer(gate, Guarded::Decision(kind), "answer an agent's request") else {
+      return;
     };
-    let refused = stage != Stage::Sending;
-    if refused {
-      tracing::warn!("synthetic input gave an answer only a person gives here; not taken");
-    }
-    kept::set_outcome((run, key), Outcome { given, by, stage });
-    self.kept.update(|kept| *kept += 1);
-    if refused {
+    if by == Answerer::Automation && wider {
+      input_gate::refuse_press(gate, Guarded::Person, "give a wider answer than approving once");
       return;
     }
+    kept::set_outcome(
+      (run, key),
+      Outcome {
+        given,
+        by,
+        stage: Stage::Sending,
+      },
+    );
+    self.kept.update(|kept| *kept += 1);
     self.send.run(Sending {
       run,
       key: key.clone(),

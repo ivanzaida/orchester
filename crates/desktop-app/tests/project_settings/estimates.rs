@@ -28,13 +28,15 @@ fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on()
       .text(&format!("{SWITCH}-hint"))
       .contains("counts toward the daily budget")
   );
-  page.until("automation's change refused", |p| {
+  page.until("automation's change refused to it", |p| {
     lurq::app::events::with_synthetic_input(|| p.click(SWITCH));
-    p.exists(&format!("{SWITCH}-blocked"))
+    p.window.refused_press().is_some()
   });
+  assert!(!page.exists(&format!("{SWITCH}-blocked")), "the row says nothing of it");
+  assert!(!page.switch_on(SWITCH), "the switch stays off");
   assert!(!page.db().estimates_story_points().expect("read"));
   press_until(&mut page, true);
-  assert!(!page.exists(&format!("{SWITCH}-blocked")));
+  assert!(page.window.refused_press().is_none());
   let app = AppDb::open(&page.window.data.database()).expect("the application database");
   assert!(
     !app.estimates_story_points().expect("read"),

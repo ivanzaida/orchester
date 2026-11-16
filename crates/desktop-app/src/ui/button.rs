@@ -78,6 +78,8 @@ pub struct ActionButton {
   bounded: bool,
   /// Drawn pressed while what it opened shows.
   held: bool,
+  /// The menu it opened shows: the `surface_raised` fill in a `border_strong` stroke.
+  menu_open: bool,
   /// What it sets applies something now, e.g. a filter.
   applied: bool,
   /// What it holds is refused: its outline in `danger`.
@@ -113,6 +115,7 @@ impl ActionButton {
       roomy: false,
       bounded: false,
       held: false,
+      menu_open: false,
       applied: false,
       invalid: false,
       stacked: false,
@@ -289,6 +292,13 @@ impl ActionButton {
     self
   }
 
+  /// The menu it opened shows: `surface_raised` inside a `border_strong` stroke, its content as it was, 28 high all the
+  /// same (`Versions` open in `Pipelines · v2` P12 `nSr5q`; closed, a ghost button).
+  pub fn menu_open(mut self, open: bool) -> Self {
+    self.menu_open = open;
+    self
+  }
+
   /// What it sets applies something now (`Filter · 2` `Dn5JJ` in the Tasks list's redesign): `accent_muted` inside a
   /// `border_strong` stroke, its content `text_primary`.
   pub fn applied(mut self, applied: bool) -> Self {
@@ -382,6 +392,25 @@ impl ActionButton {
       .with_children(self.lead().map(|lead| icon(lead, glyph, color.clone())))
       .child(Text::new(&self.label).variant(label).color(color).nowrap())
   }
+}
+
+/// `button` as wide as the widest of `sizes`, each laid out as a button with its own words: a slot whose label changes
+/// with what is open keeps one width, so nothing beside it moves (the Agents hub's New of each kind). The sizers take
+/// no height and show nothing.
+pub fn as_wide_as_widest(id: &str, button: ActionButton, sizes: impl IntoIterator<Item = ActionButton>) -> Column {
+  let sizers = sizes.into_iter().map(|size| {
+    Row::new()
+      .height(Dimension::Px(0.0))
+      .clip()
+      .opacity(0.0)
+      .pointer_events_none()
+      .child(size.room())
+  });
+  Column::new()
+    .id(id.to_owned())
+    .align_items(Alignment::Stretch)
+    .with_children(sizers)
+    .child(button.fill_width())
 }
 
 impl ActionButton {
@@ -492,6 +521,12 @@ impl From<ActionButton> for Element {
     }
     if button.held {
       frame = frame.background(ExtraColor::Pressed.role()).describe("held", "true");
+    }
+    if button.menu_open {
+      frame = frame
+        .background(PaletteColor::SurfaceRaised)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .describe("menu_open", "true");
     }
     if button.applied {
       frame = frame

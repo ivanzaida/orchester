@@ -13,6 +13,7 @@ pub fn routes() -> Vec<Route> {
     Route::Accounts(AccountsView::default()),
     Route::Accounts(AccountsView {
       account: None,
+      provider: None,
       panel: AccountsPanel::Add,
     }),
     Route::Orchester(OrchesterView::default()),

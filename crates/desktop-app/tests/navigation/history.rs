@@ -85,6 +85,7 @@ fn closing_a_panel_drops_its_entry_when_the_tab_came_from_where_it_returns() {
   let list = Route::Accounts(AccountsView::default());
   let adding = Route::Accounts(AccountsView {
     account: None,
+    provider: None,
     panel: orchester_app::routes::AccountsPanel::Add,
   });
   tabs.go(list.clone());
@@ -234,31 +235,25 @@ fn server(window: &Window, name: &str) -> ConnectionId {
 }
 
 #[test]
-fn connections_and_opened_connections_are_history() {
+fn opened_connections_are_history() {
   let mut window = Window::open();
   let first = server(&window, "kontur-docs");
   let second = server(&window, "kontur-search");
-  let connections = |view| project(ProjectPage::Connections(view));
-  window.navigation().go(connections(ConnectionsView::default()));
-  let row = |id: ConnectionId| format!("connection-row-{id}-row");
-  window.until("the connections", |window| window.texts(&row(second)).is_some());
-  window.press(&row(second));
-  let opened_second = connections(ConnectionsView::of(second));
-  assert_eq!(now(&window), opened_second);
-  window.until("the connection's page", |window| {
+  let opened = |id| project(ProjectPage::Connections(ConnectionsView::of(id)));
+  window.navigation().go(opened(second));
+  window.until("the server's page", |window| {
+    window.texts("connection-crumb-back").is_some()
+  });
+  window.navigation().go(opened(first));
+  assert_eq!(now(&window), opened(first));
+  back(&mut window);
+  assert_eq!(now(&window), opened(second));
+  forward(&mut window);
+  assert_eq!(now(&window), opened(first));
+  // An MCP server's page is the Agents hub's: its crumb goes there.
+  window.until("the server's page", |window| {
     window.texts("connection-crumb-back").is_some()
   });
   window.press("connection-crumb-back");
-  assert_eq!(now(&window), connections(ConnectionsView::default()));
-  window.until("the connections", |window| window.texts(&row(first)).is_some());
-  window.press(&row(first));
-  assert_eq!(now(&window), connections(ConnectionsView::of(first)));
-  back(&mut window);
-  assert_eq!(now(&window), connections(ConnectionsView::default()));
-  back(&mut window);
-  assert_eq!(now(&window), opened_second);
-  back(&mut window);
-  assert_eq!(now(&window), connections(ConnectionsView::default()));
-  forward(&mut window);
-  assert_eq!(now(&window), opened_second);
+  assert_eq!(now(&window), project(ProjectPage::Agents));
 }

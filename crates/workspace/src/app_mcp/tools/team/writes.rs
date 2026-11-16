@@ -3,10 +3,11 @@
 //! `not_admin` and nothing is saved here. Only what the team server holds of a task is sent. Its pipeline is one of the
 //! team's, sent by its resource id (`docs/architecture/server.md` row 80, decided 2026-11-05); a person's own local
 //! pipeline, or anything else that is not a team pipeline here, is refused `team_pipeline_required`, and moving a task
-//! from one pipeline to another is a person's decision, as on a local project. Limits or a workflow status change wait
-//! for team-authority decisions (D6, D4) and are refused before anything is sent; what the server does not hold of a
-//! team task (story points, tags and blocking tasks by name, Don't merge automatically, delivers, the base branch) is
-//! refused rather than kept on this computer.
+//! from one pipeline to another is a person's decision, as on a local project. Limits wait for a team-authority
+//! decision (D6) and are refused before anything is sent. A workflow status or blocked reason change is the task
+//! lifecycle (D4): the same patch, which the server allows the claim's holder (Done, Blocked) or an Admin, and a create
+//! carries no status. What the server does not hold of a team task (story points, tags and blocking tasks by name,
+//! Don't merge automatically, delivers, the base branch) is refused rather than kept on this computer.
 //!
 //! The server takes a task's details, its organization and its module on separate routes, so one call may send up to
 //! three changes, each on the revision the one before it left. Once one is saved, a later refusal does not undo it:
@@ -15,7 +16,7 @@
 
 use orchester_api::{
   SharedTask,
-  v2::{DecisionId, TeamCommandValue},
+  v2::{DecisionId, LifecycleAction, TeamCommandValue},
 };
 use orchester_core::{
   id::{ModuleId, ResourceId},
@@ -46,7 +47,7 @@ use crate::{
     },
   },
   messages::Message,
-  tasks::{data::published_pipelines, form::title_error},
+  tasks::{form::title_error, team_pipelines::team_published_pipelines},
   team_reads::listed::TeamPipelines,
 };
 
@@ -114,9 +115,9 @@ pub(in crate::app_mcp::tools) async fn create_task(
   }
   let status = args.workflow_status.map_or_else(WorkflowStatus::default, Into::into);
   if status != WorkflowStatus::default() {
-    return Err(action_refused(ActionError::DecisionRequired(DecisionId::D4)));
+    return Err(action_refused(ActionError::StatusOnCreate(status)));
   }
-  let (pipeline, _) = pipelines(team, args.pipeline.clone(), None).await?;
+  let (pipeline, _) = pipelines((services, team), args.pipeline.clone(), None).await?;
   let details = TaskDetails {
     title: title(&args.title)?,
     brief: args.brief.clone().unwrap_or_default(),
@@ -172,7 +173,7 @@ pub(in crate::app_mcp::tools) async fn update_task(
     None => None,
   };
   let task = find(&team.reads(services).await?, &args.key).await?.task;
-  let (chosen, current) = pipelines(team, args.pipeline.clone(), task.content.pipeline.clone()).await?;
+  let (chosen, current) = pipelines((services, team), args.pipeline.clone(), task.content.pipeline.clone()).await?;
   // Another pipeline runs the task with other steps, profiles and approvals: a person decides that, as on a local
   // project. A task without one may get any team pipeline.
   if let Some(chosen) = chosen
@@ -267,7 +268,7 @@ fn edited_details(
 /// task's `current` pipeline is here, read together. A `named` pipeline that is not the team's, a person's own local
 /// one included, is refused: only the team's pipelines run a team task, and its Admins make them.
 async fn pipelines(
-  team: &Team,
+  (services, team): (&Services, &Team),
   named: Option<String>,
   current: Option<String>,
 ) -> Result<(Option<ResourceId>, Option<ResourceId>), ToolError> {
@@ -275,13 +276,15 @@ async fn pipelines(
     return Ok((None, None));
   }
   let root = team.open.repo_root.clone();
+  // The team's pipelines as this session read them from the team server; refused while it cannot be read.
+  let config = services.workspace().team_read(&root).loaded()?;
   blocking(move || {
     let db = ProjectDb::open(&root)?;
-    let pipelines = TeamPipelines::of(&db)?;
+    let pipelines = TeamPipelines::of(&config);
     let chosen = match named {
       Some(named) => {
         // A team project offers only the team's pipelines: a person's own local one is none of these.
-        let published = published_pipelines(&db)?;
+        let published = team_published_pipelines(&db, &config)?;
         let chosen = pipeline_named(&published, &named).map_err(|_| team_pipeline_required(&named))?;
         Some(chosen.id)
       }
@@ -293,15 +296,19 @@ async fn pipelines(
 }
 
 /// The organization read of `task` and as `args` change it; `None` when they change nothing of it. A workflow status
-/// change is refused (D4) before any change of the call is sent.
+/// change the lifecycle does not have (D4: In progress, In review, Done to Canceled) is refused before any change of
+/// the call is sent; who may make the others the team server decides, by the caller's claim and role.
 fn organized(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskOrganization, TaskOrganization)>, ToolError> {
   if args.workflow_status.is_none() && args.priority.is_none() && args.blocked_reason.is_none() {
     return Ok(None);
   }
   let base = task.content.organization().core().map_err(organization_refused)?;
   let status = args.workflow_status.map_or(base.status(), Into::into);
-  if status != base.status() {
-    return Err(action_refused(ActionError::DecisionRequired(DecisionId::D4)));
+  if status != base.status() && LifecycleAction::of_workflow(base.status(), status).is_none() {
+    return Err(action_refused(ActionError::WorkflowNotOffered {
+      from: base.status(),
+      to: status,
+    }));
   }
   let edited = TaskOrganization::new(
     status,

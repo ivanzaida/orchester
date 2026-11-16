@@ -23,6 +23,7 @@ pub(super) struct ProgramFile {
 #[derive(Clone, Debug, Default)]
 pub struct Here {
   pub(super) connections: Vec<(ConnectionId, AgentProvider)>,
+  pub(super) signed_out: HashSet<ConnectionId>,
   pub(super) picks: HashMap<ResourceId, ConnectionId>,
   pub(super) decision_connections: Vec<DecisionConnectionId>,
   pub(super) decision_picks: HashMap<ResourceId, DecisionConnectionId>,
@@ -45,6 +46,14 @@ impl Here {
   #[must_use]
   pub fn with_connection(mut self, connection: ConnectionId, cli: AgentProvider) -> Self {
     self.connections.push((connection, cli));
+    self
+  }
+
+  /// The connection `connection`, which [`Self::with_connection`] added, is one whose last check found its CLI signed
+  /// out: a profile that would run on it is not ready.
+  #[must_use]
+  pub fn with_signed_out(mut self, connection: ConnectionId) -> Self {
+    self.signed_out.insert(connection);
     self
   }
 

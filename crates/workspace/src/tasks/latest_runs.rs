@@ -6,9 +6,9 @@ use std::{collections::BTreeMap, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{RunId, StepExecutionId, TaskId},
-  resource::{AgentProfile, StepKey},
+  resource::StepKey,
   run::{Run, RunStatus, StepExecutor, TaskPhase, can_run_again_after},
-  store::{ConversationStore, ResourceStore, RunStore},
+  store::{ConversationStore, RunStore},
   task::Task,
   task_group::GroupHold,
 };
@@ -21,6 +21,7 @@ use super::{
   delivery::Unmerged,
   detail::run_store_error,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
+  pinned_profile::pinned_profile,
   project_runs::{ProjectRuns, RunEnds},
   run_approvals,
   unreadable::Unreadable,
@@ -156,9 +157,9 @@ fn awaited(db: &ProjectDb, run: &Run) -> Result<Vec<AwaitedStep>, StoreError> {
   let mut roles = BTreeMap::new();
   for step in run.snapshot().steps() {
     if let StepExecutor::Agent { profile, .. } = step.executor()
-      && let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)?
+      && let Some(body) = pinned_profile(db, run.id(), *profile)?
     {
-      roles.insert(step.key().clone(), Arc::<str>::from(version.body().role().as_str()));
+      roles.insert(step.key().clone(), Arc::<str>::from(body.role().as_str()));
     }
   }
   let role = |step: &StepKey| roles.get(step).cloned();

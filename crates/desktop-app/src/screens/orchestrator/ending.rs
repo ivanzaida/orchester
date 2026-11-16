@@ -3,7 +3,9 @@
 //! what stopping does in its tooltip); stopped or cut short, a centered divider (`Stopped` `LWHoS`: a `border` line at
 //! each side of the words in 11.5 `text_muted` and *Ask again* in 12/500 `text_secondary`, which sends the person's
 //! words once more); failed, the danger line with *Retry* ([`super::failure`]), or for an earlier turn a divider. A
-//! turn a wait started has no words of the person's to send again, so it ends with its divider alone.
+//! turn a wait started has no words of the person's to send again, so it ends with its divider alone; while it is
+//! tried again, left to the person or held, its row says that instead ([`super::wait::turn_state`]), and the working
+//! line of a later try says which try it is.
 
 use std::sync::Arc;
 
@@ -17,7 +19,7 @@ use lurq::{
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::orchestrator::{TurnFailure, TurnState};
-use orchester_workspace::display;
+use orchester_workspace::{display, orchestrator::event_turns::EventTurn};
 
 use super::{
   failure::{earlier, failure_line},
@@ -60,7 +62,7 @@ pub(super) fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
       let again = ask_again(ctx, row);
       vec![divider("orchestrator-stopped", &words, again)]
     }
-    TurnState::Failed(TurnFailure::Interrupted) => {
+    TurnState::Failed(TurnFailure::Interrupted) if row.turn.turn_state.is_none() => {
       let again = ask_again(ctx, row);
       vec![divider(
         "orchestrator-interrupted",
@@ -69,7 +71,16 @@ pub(super) fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
       )]
     }
     TurnState::Failed(failure) if row.last && !row.turn.on_its_own() => vec![failure_line(ctx, row, failure)],
-    TurnState::Failed(failure) => vec![divider("orchestrator-failed", &earlier(ctx, failure), None)],
+    // An event whose failed turn is tried again or left to the person says so under its row instead.
+    TurnState::Failed(_) if row.turn.turn_state.is_some() => Vec::new(),
+    // An earlier answer that failed is one of many such lines: its id names its message.
+    TurnState::Failed(failure) => {
+      let id = row.turn.message.map_or_else(
+        || "orchestrator-failed".to_owned(),
+        |message| format!("orchestrator-failed-{message}"),
+      );
+      vec![divider(&id, &earlier(ctx, failure), None)]
+    }
   }
 }
 
@@ -94,7 +105,8 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Element {
     .align_items(Alignment::Center)
     .child(icon(Icon::LoaderCircle, IconSize::Base, PaletteColor::TextSecondary))
     .child(
-      Text::new(&ctx.t("orchestrator.thinking"))
+      Text::new(&working(ctx, row))
+        .id("orchestrator-thinking-words")
         .variant(OrchestratorText::Line.role())
         .color(PaletteColor::TextSecondary)
         .nowrap(),
@@ -102,6 +114,18 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Element {
     .child(Spacer::new().flex(1.0))
     .child(button)
     .into()
+}
+
+/// What the working line says: *Orchestrator is thinking*, with which try it is from an event's second on
+/// (`tkjdw` b: *· 2 of 4*).
+fn working(ctx: &Ctx, row: &TurnRow) -> Arc<str> {
+  match row.turn.turn_state {
+    Some(EventTurn::Trying { number, of }) => ctx.t_args(
+      "orchestrator.turnState.thinking",
+      [("number", number.to_string()), ("of", of.to_string())],
+    ),
+    _ => ctx.t("orchestrator.thinking"),
+  }
 }
 
 /// *Ask again* for the newest turn a person's message started, what it does in its tooltip; `None` for any other.

@@ -13,6 +13,8 @@
 mod fixture;
 #[path = "../actions/http.rs"]
 mod http;
+#[path = "../support/team_cache.rs"]
+mod team_cache;
 #[path = "../team_work/team_commands.rs"]
 mod team_commands;
 #[path = "../team_work/team_deliveries.rs"]
@@ -24,15 +26,25 @@ mod bundle_missing;
 mod bundle_schema;
 mod created;
 mod delivery;
+mod led_module;
+mod local_task;
 mod mcp_server_remove;
 mod mcp_servers;
+mod module_branch;
 mod not_ready;
+mod orchestrator;
 mod pipelines;
 mod readiness;
 mod reads;
 mod ready;
+mod run_routes;
+mod runs;
 mod share;
+mod team_controls;
+mod team_runs;
 mod tools;
+mod unrecorded;
+mod watch_ends;
 
 use std::{
   collections::HashMap,
@@ -227,13 +239,15 @@ impl Checkout {
     self.call_rendering(name, args, |message| message.key.to_owned())
   }
 
-  /// [`Self::call`], with each message rendered by `render` (to read its placeholders' values).
+  /// [`Self::call`], with each message rendered by `render` (to read its placeholders' values). The tool reads the
+  /// team's configuration as a stream caught up with the project's cache would hold it ([`team_cache`]).
   fn call_rendering(
     &self,
     name: &str,
     args: &Value,
     render: impl Fn(&orchester_workspace::messages::Message) -> String + Copy + Send + Sync + 'static,
   ) -> Result<Value, Value> {
+    team_cache::keep_cached_team(&self.workspace, self.root());
     let translate = Translate::new(render);
     let Value::Object(args) = args.clone() else {
       panic!("arguments are an object");

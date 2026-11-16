@@ -4,17 +4,29 @@
 //! `tests/settings_general.rs`.
 
 use orchester_app::queries::changes::{
-  ACCOUNTS, APP_OUTSIDE, AppRead, OUTSIDE, ProjectRead, RUNS, UPDATES, app_touched, touched,
+  ACCOUNTS, APP_OUTSIDE, AppRead, OUTSIDE, ProjectRead, RUNS, TEAM, UPDATES, app_touched, touched,
 };
 use orchester_workspace::tasks::outside::{AppOutside, Outside, OutsideChanges};
+
+/// The Agents and Pipelines hubs' reads, which a change no settings tab shows may touch.
+const HUB: [ProjectRead; 7] = [
+  ProjectRead::TeamHub,
+  ProjectRead::LocalHub,
+  ProjectRead::PipelineHub,
+  ProjectRead::HubInstructions,
+  ProjectRead::HubSkills,
+  ProjectRead::HubTools,
+  ProjectRead::ProfileForm,
+];
 
 #[test]
 fn settings_queries_limits_auto_mode_and_autopilot_read_the_project_settings_again() {
   // `update_project_limits`, `set_allow_autopilot` and the approval settings' tools record these kinds; a profile's
   // approval mode is named in Runs › Approvals.
-  for kind in [Outside::Limits, Outside::AutoMode, Outside::Runs, Outside::Profiles] {
+  for kind in [Outside::Limits, Outside::AutoMode, Outside::Runs] {
     assert_eq!(touched(kind), &[ProjectRead::Settings], "{kind:?}");
   }
+  assert!(touched(Outside::Profiles).contains(&ProjectRead::Settings));
 }
 
 #[test]
@@ -57,7 +69,7 @@ fn settings_queries_orchestrator_switches_and_estimates_read_only_their_own() {
 }
 
 #[test]
-fn settings_queries_changes_no_settings_tab_shows_read_nothing() {
+fn settings_queries_changes_no_settings_tab_shows_read_no_setting() {
   for kind in [
     Outside::Tasks,
     Outside::Pipelines,
@@ -65,8 +77,84 @@ fn settings_queries_changes_no_settings_tab_shows_read_nothing() {
     Outside::Instructions,
     Outside::Skills,
   ] {
-    assert!(touched(kind).is_empty(), "{kind:?}");
+    let reads = touched(kind);
+    assert!(reads.iter().all(|read| HUB.contains(read)), "{kind:?}: {reads:?}");
   }
+  assert!(touched(Outside::Tasks).is_empty());
+}
+
+#[test]
+fn settings_queries_the_hub_reads_again_what_it_followed() {
+  // The kinds each of the Agents hub's reads followed as a future's dependencies.
+  let expected: [(ProjectRead, &[Outside]); 7] = [
+    (
+      ProjectRead::TeamHub,
+      &[
+        Outside::Connections,
+        Outside::Tools,
+        Outside::Profiles,
+        Outside::Instructions,
+        Outside::Skills,
+      ],
+    ),
+    (
+      ProjectRead::LocalHub,
+      &[
+        Outside::Connections,
+        Outside::Tools,
+        Outside::Profiles,
+        Outside::Instructions,
+        Outside::Skills,
+        Outside::Pipelines,
+      ],
+    ),
+    (
+      ProjectRead::PipelineHub,
+      &[
+        Outside::Connections,
+        Outside::Tools,
+        Outside::Profiles,
+        Outside::Pipelines,
+      ],
+    ),
+    (
+      ProjectRead::HubInstructions,
+      &[Outside::Instructions, Outside::Profiles, Outside::Pipelines],
+    ),
+    (
+      ProjectRead::HubSkills,
+      &[Outside::Skills, Outside::Profiles, Outside::Pipelines],
+    ),
+    (ProjectRead::HubTools, &[Outside::Tools]),
+    (
+      ProjectRead::ProfileForm,
+      &[
+        Outside::Connections,
+        Outside::Profiles,
+        Outside::Pipelines,
+        Outside::ProjectSettings,
+        Outside::Tools,
+        Outside::Instructions,
+        Outside::Skills,
+      ],
+    ),
+  ];
+  for (read, kinds) in expected {
+    for kind in OUTSIDE {
+      assert_eq!(
+        touched(kind).contains(&read),
+        kinds.contains(&kind),
+        "{read:?} on {kind:?}"
+      );
+    }
+  }
+  // A local hub shows what the runs decide; a team's hub follows its configuration, which the server's events change.
+  assert!(RUNS.contains(&ProjectRead::LocalHub) && !RUNS.contains(&ProjectRead::TeamHub));
+  assert!(
+    RUNS.contains(&ProjectRead::PipelineHub),
+    "a pipeline's readiness follows the runs too"
+  );
+  assert_eq!(TEAM, &[ProjectRead::TeamHub]);
 }
 
 #[test]
@@ -101,6 +189,7 @@ fn settings_queries_each_application_setting_reads_its_own_query() {
     (AppOutside::Browser, AppRead::Browser),
     (AppOutside::Automation, AppRead::Automation),
     (AppOutside::ServiceSlots, AppRead::ServiceSlots),
+    (AppOutside::KeepsAwake, AppRead::KeepsAwake),
   ];
   for (kind, read) in expected {
     assert_eq!(app_touched(kind), &[read], "{kind:?}");
@@ -112,7 +201,15 @@ fn settings_queries_accounts_updates_and_runs_read_what_they_change() {
   assert_eq!(ACCOUNTS, &[AppRead::Accounts]);
   assert_eq!(UPDATES, &[AppRead::Updates]);
   // A run's request answered *for every run* adds a rule to the project's settings; a run's start builds its index.
-  assert_eq!(RUNS, &[ProjectRead::Settings, ProjectRead::IndexBuilds]);
+  assert_eq!(
+    RUNS,
+    &[
+      ProjectRead::Settings,
+      ProjectRead::IndexBuilds,
+      ProjectRead::LocalHub,
+      ProjectRead::PipelineHub
+    ]
+  );
 }
 
 #[test]

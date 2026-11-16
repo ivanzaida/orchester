@@ -25,6 +25,8 @@ pub enum ShareRefusalReason {
   PipelineNamesNonTeam { name: String },
   /// A profile has writable folders, which are paths of this computer.
   WritableFolders { folders: Vec<String> },
+  /// A tool uses a secret the project does not have, so its name cannot be given to the team.
+  ToolSecretGone,
   /// A local MCP server (`server`) cannot be a team MCP server.
   McpServer { server: String, problem: TeamMcpProblem },
 }
@@ -37,6 +39,7 @@ impl ShareRefusalReason {
       SharingError::LocalEntitiesNamed { names, .. } => Ok(Self::LocalEntities { names }),
       SharingError::PipelineNamesNonTeam { name, .. } => Ok(Self::PipelineNamesNonTeam { name }),
       SharingError::WritableFoldersStay { folders, .. } => Ok(Self::WritableFolders { folders }),
+      SharingError::ToolSecretGone { .. } => Ok(Self::ToolSecretGone),
       other => Err(other),
     }
   }
@@ -100,6 +103,7 @@ impl ShareRefusal {
       ShareRefusalReason::WritableFolders { folders } => {
         Message::new("sharing.errors.shareRefusal.writableFolders").with("folders", folders.join(", "))
       }
+      ShareRefusalReason::ToolSecretGone => Message::new("sharing.errors.shareRefusal.toolSecretGone"),
       ShareRefusalReason::McpServer { problem, .. } => mcp_message(problem),
     }
     .with("resource", resource)

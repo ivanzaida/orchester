@@ -11,8 +11,9 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::super::model::{Kind, ROW_TALL};
+use super::super::model::Kind;
 use crate::{
+  screens::hub::agent_row::ROW_HEIGHT,
   theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -45,12 +46,23 @@ pub(super) const fn title_key(kind: Kind) -> &'static str {
   }
 }
 
+/// The key of the local form's section: what the fields are of (`Profile`, `Server`, `Instruction`, `Skill`, `Tool`).
+pub(super) const fn section_key(kind: Kind) -> &'static str {
+  match kind {
+    Kind::Profile => "local_new.section.profile",
+    Kind::McpServer => "local_new.section.mcp",
+    Kind::Tool => "local_new.section.tool",
+    Kind::Instruction => "local_new.section.instruction",
+    Kind::Skill => "local_new.section.skill",
+  }
+}
+
 /// The group *New* and its row, over the list's groups.
-pub(in crate::screens::team_hub) fn new_row(ctx: &Ctx, kind: Kind) -> Element {
+pub(in crate::screens) fn new_row(ctx: &Ctx, kind: Kind) -> Element {
   let row = inert(Button::empty())
     .id("team-hub-row-new")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW_TALL))
+    .height(Dimension::Px(ROW_HEIGHT))
     .padding(Padding::new().left(ExtraSpacing::Inset.role()).right(SpacingSize::Lg))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)

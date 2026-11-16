@@ -352,12 +352,11 @@ fn plain_http(ctx: &Ctx, page: &ConnectPage, address: Option<&ServerAddress>) ->
       )
       .on_change(move |on| {
         // Sending to another computer in the clear is a person's choice.
-        if person.allows(ALLOW_PLAIN) {
+        if person.allows("allow plain HTTP to another computer") {
           allow.set(on);
         }
       }),
     )
-    .with_children(page.person.reason(ctx, ALLOW_PLAIN))
     .into()
 }
 
@@ -515,7 +514,7 @@ fn compare(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Element {
     .icon(Icon::Check)
     .on_click(move || {
       // Only a person compares the code with the server's console; synthetic input never confirms it.
-      if person.confirms_code(MATCHES) {
+      if person.confirms_code() {
         join.confirm(chosen.clone().confirm());
         stage.set(Stage::Join);
       }
@@ -533,7 +532,6 @@ fn compare(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Element {
     "orchester-connect-check",
     &presented.check_code(),
     std::iter::once(Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into())
-      .chain(page.person.reason(ctx, MATCHES))
       .chain([
         Text::new(&ctx.t_args("sharing.connect.compare.person", [("server", name)]))
           .variant(ExtraTypography::Note.role())

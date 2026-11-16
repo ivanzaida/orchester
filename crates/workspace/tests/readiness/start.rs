@@ -27,7 +27,7 @@ fn readiness_start_a_ready_pipeline_hands_over_the_program_paths_set_here() {
   fixture.connection(CLAUDE, "claude");
   let docs = fixture.team_server("knowledge", program(&["KNOWLEDGE_TOKEN"]));
   let builder = fixture.team_profile("builder", &profile(CLAUDE, &[docs], &[]));
-  let delivery = fixture.team_resource("delivery", pipeline(&[Some(builder)], None));
+  let delivery = fixture.team_resource("delivery", &pipeline(&[Some(builder)], None));
   let work = fixture.workspace.clone();
   work
     .switch_team_mcp_on_here(&fixture.root, docs, true, Answerer::Person)
@@ -61,7 +61,7 @@ fn readiness_start_a_pipeline_that_is_not_ready_lists_each_part_with_its_fix_and
   let docs = fixture.team_server("knowledge", program(&["KNOWLEDGE_TOKEN"]));
   let issues = fixture.team_server("issues", remote("ISSUES_KEY"));
   let builder = fixture.team_profile("builder", &profile(CLAUDE, &[docs, issues], &[]));
-  let delivery = fixture.team_resource("delivery", pipeline(&[Some(builder)], None));
+  let delivery = fixture.team_resource("delivery", &pipeline(&[Some(builder)], None));
   fixture
     .workspace
     .set_team_secret_value(
@@ -116,7 +116,7 @@ fn readiness_start_a_servers_secret_is_set_on_the_server_not_on_either_profile_t
   let docs = fixture.team_server("knowledge", program(&["KNOWLEDGE_TOKEN"]));
   let first = fixture.team_profile("builder", &profile(CLAUDE, &[docs], &[]));
   let second = fixture.team_profile("checker", &profile(CLAUDE, &[docs], &[]));
-  let delivery = fixture.team_resource("delivery", pipeline(&[Some(first), Some(second)], None));
+  let delivery = fixture.team_resource("delivery", &pipeline(&[Some(first), Some(second)], None));
 
   let refusal = not_ready(&fixture, &fixture.vault, delivery);
   let owners: Vec<_> = refusal
@@ -135,7 +135,7 @@ fn readiness_start_a_servers_secret_is_set_on_the_server_not_on_either_profile_t
 
   // A secret only a profile names is set on the profile.
   let own = fixture.team_profile("reviewer", &profile(CLAUDE, &[], &["DEPLOY_KEY"]));
-  let alone = fixture.team_resource("alone", pipeline(&[Some(own)], None));
+  let alone = fixture.team_resource("alone", &pipeline(&[Some(own)], None));
   let refusal = not_ready(&fixture, &fixture.vault, alone);
   let deploy = refusal.parts().iter().find_map(|part| match part {
     NotReadyPart::Missing(part) if part.name == "DEPLOY_KEY" => Some(part.owner),
@@ -169,7 +169,7 @@ fn ready_with_remote(fixture: &Fixture, server: Value) -> ResourceId {
   fixture.connection(CLAUDE, "claude");
   let issues = fixture.team_server("issues", server);
   let builder = fixture.team_profile("builder", &profile(CLAUDE, &[issues], &[]));
-  let delivery = fixture.team_resource("delivery", pipeline(&[Some(builder)], None));
+  let delivery = fixture.team_resource("delivery", &pipeline(&[Some(builder)], None));
   fixture
     .workspace
     .switch_team_mcp_on_here(&fixture.root, issues, true, Answerer::Person)

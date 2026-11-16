@@ -211,8 +211,13 @@ impl Fixture {
 
   fn refused_then_consent(&mut self, button: &str, refusal: &str) {
     let before = (self.plan_by(), self.stuck_by());
-    self.press(button, Answerer::Automation);
-    self.app.until("synthetic decision refused", |app| app.shows(refusal));
+    self.app.until(button, |app| app.shows(button));
+    let refused = self
+      .app
+      .click_by_client(button)
+      .expect_err("refused to the client that pressed");
+    assert!(refused.to_string().contains("person_only"), "{refused}");
+    assert!(!self.app.shows(refusal), "the card says nothing of it");
     assert_eq!((self.plan_by(), self.stuck_by()), before);
     self.consent();
   }
@@ -321,8 +326,7 @@ fn person_decisions_composer_question_and_continuation_keep_the_decider() {
       f.app.until("composer", |app| app.shows("composer-input"));
       f.app.set_by_client("composer-input", "Keep the current behavior.");
       if by == Answerer::Automation {
-        f.press("composer-send", by);
-        f.app.until("refusal", |app| app.shows("composer-failed"));
+        f.refused_then_consent("composer-send", "composer-failed");
         assert!(
           f.db()
             .messages(f.db().run(f.run).expect("run").expect("run").task())
@@ -330,7 +334,6 @@ fn person_decisions_composer_question_and_continuation_keep_the_decider() {
             .iter()
             .all(|message| message.body().as_str() != "Keep the current behavior.")
         );
-        f.consent();
       }
       f.press("composer-send", by);
       let db = f.db();

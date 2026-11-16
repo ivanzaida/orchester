@@ -170,7 +170,7 @@ impl Component for CloneOption {
       .filter(|destination| destination.allows() && !state.is_pending())
       .map(|_| self.starter(ctx, &target, &project));
     let button = clone_view::start_button(ctx, state.is_pending(), start);
-    parts.push(clone_view::actions(button, self.person.reason(ctx, clone_view::START)));
+    parts.push(clone_view::actions(button));
     if state.is_pending() {
       parts.push(clone_view::waiting(ctx));
     }
@@ -216,7 +216,7 @@ impl CloneOption {
     let (run, person, into) = (self.clone.clone(), self.person.clone(), self.into.clone());
     let (server, project) = (target.server, project.clone());
     move || {
-      if !person.allows(clone_view::START) {
+      if !person.allows("clone a shared project onto this computer") {
         return;
       }
       run.run_if_idle(Ask::Start(Box::new(CloneRequest {

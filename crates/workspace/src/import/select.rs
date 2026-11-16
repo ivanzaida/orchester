@@ -10,13 +10,14 @@ use orchester_core::{
 use super::{data::Catalogs, review};
 
 /// The source's resources of `kind` (every kind: `None`) whose name holds `search`, ignoring case and the
-/// spaces around it.
+/// spaces around it. Pipelines, and what is written for one, are not offered ([`CatalogResource::is_offered`]).
 pub fn shown<'a>(catalogs: &'a Catalogs, kind: Option<ResourceKind>, search: &str) -> Vec<&'a CatalogResource> {
   let search = search.trim().to_lowercase();
   catalogs
     .source
     .resources()
     .iter()
+    .filter(|entry| entry.is_offered())
     .filter(|entry| kind.is_none_or(|kind| entry.resource().kind() == kind))
     .filter(|entry| search.is_empty() || entry.resource().name().as_str().to_lowercase().contains(&search))
     .collect()
@@ -109,7 +110,11 @@ fn summary(catalogs: &Catalogs, entry: &CatalogResource, dependencies: usize) ->
 }
 
 fn users(catalogs: &Catalogs, id: ResourceId) -> Users {
-  let users: Vec<&CatalogResource> = catalogs.source.users(Entity::Resource(id)).collect();
+  let users: Vec<&CatalogResource> = catalogs
+    .source
+    .users(Entity::Resource(id))
+    .filter(|user| user.is_offered())
+    .collect();
   match users.as_slice() {
     [] => Users::Nobody,
     [user] => Users::One(user.resource().name().as_str().to_owned()),

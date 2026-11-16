@@ -22,7 +22,8 @@ impl Workspace {
     let mut db = ProjectDb::open(repo_root)?;
     if on {
       team::require_person(by)?;
-      team::require_resource(&db, server, ResourceKind::McpServer)?;
+      team::server_of(&db)?;
+      team::require_resource(&*team::config(self, repo_root)?, server, ResourceKind::McpServer)?;
       db.set_team_mcp_on_here(server, true)?;
     } else {
       // Kept as a choice: a server switched off is "off here", one nobody decided on needs the person.

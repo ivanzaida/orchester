@@ -73,16 +73,14 @@ fn decisions_reach_person_limits_tab_refuses_a_clients_daily_budget_raise_until_
   page.tab("limits", "settings-default-budget");
   page.set("settings-daily-budget", "");
   with_synthetic_input(|| page.leave());
-  page.until("the client's removal refused", |p| {
-    p.exists("settings-limits-person-only")
-  });
+  page.until("the client's removal refused", |p| p.window.refused_press().is_some());
   assert_eq!(daily(&page), Some(20_000_000), "nothing saved");
   // Lowering it takes no consent.
   page.set("settings-daily-budget", "10000000");
   with_synthetic_input(|| page.leave());
   page.saved();
   assert_eq!(daily(&page), Some(10_000_000));
-  assert!(!page.exists("settings-limits-person-only"));
+  assert!(page.window.refused_press().is_none());
   // The person's own edit removes it.
   page.set("settings-daily-budget", "");
   page.leave();
@@ -96,7 +94,7 @@ fn decisions_reach_person_limits_tab_refuses_a_clients_daily_budget_raise_until_
   with_synthetic_input(|| page.leave());
   page.saved();
   assert_eq!(daily(&page), Some(40_000_000), "with the person's consent");
-  assert!(!page.exists("settings-limits-person-only"));
+  assert!(page.window.refused_press().is_none());
 }
 
 #[test]

@@ -134,19 +134,25 @@
       }
     },
     "permissions": {
+      "dangerous": {
+        "note": "{{project}} is in Dangerous auto-approve: every tool request of every agent is approved at once, with no review and nobody asked. This run's own choices come back once the project leaves it.",
+        "settings": "Approve mode in Project settings"
+      },
       "chip": {
         "manual": "Manual",
         "autopilot": "Autopilot",
         "everything": "Everything in this run",
         "manualRun": "Manual · this run",
         "manualProject": "Manual · project",
+        "dangerous": "Dangerous auto-approve",
         "profileManual": "· profile: Manual",
         "profileAutopilot": "· profile: Autopilot",
         "name": "Permissions of Run {{run}}",
         "tip": {
           "manual": "{{agent}}’s profile is Manual: requests off its allowed list go to the reviewer, then to you",
           "autopilot": "{{agent}}’s profile is Autopilot and {{project}} allows it: requests inside the worktree are approved at once",
-          "projectOff": "{{agent}}’s profile is Autopilot, but {{project}} doesn’t allow Autopilot: requests off its allowed list go to the reviewer, then to you"
+          "projectOff": "{{agent}}’s profile is Autopilot, but {{project}} doesn’t allow Autopilot: requests off its allowed list go to the reviewer, then to you",
+          "dangerous": "{{project}} is in Dangerous auto-approve: every tool request of {{agent}} is approved at once, whatever its profile and this run say"
         }
       },
       "menu": {
@@ -269,7 +275,7 @@
         "model": "Model",
         "effortNone": "Not offered by this connection",
         "note": "This connection serves one model, so this step can’t switch. To escalate, give {{agent}}’s profile another connection and restart the step.",
-        "link": "Connections"
+        "link": "Accounts"
       },
       "event": {
         "changedStep": "Model changed for this step",
@@ -317,7 +323,7 @@
       "noExitCode": "no exit code",
       "noExitCodeTook": "no exit code · {{took}}",
       "notSignedIn": "The agent CLI is not signed in",
-      "notSignedInDetail": "Sign in to the CLI in your own terminal, check the connection again in Connections, then run the task again. Orchester never signs in for you.",
+      "notSignedInDetail": "Sign in to the CLI in your own terminal, check the account again in Settings › Accounts, then run the task again. Orchester never signs in for you.",
       "openInChanges": "open in Changes ↗",
       "outputOmitted": "{{size}} of earlier output was not kept",
       "outputTrimmed": "{{count}} earlier lines are not shown",
@@ -426,14 +432,14 @@
       "returnedToResolveByOrchestrator": "The Orchestrator returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}"
     },
     "mcp": {
-      "disabled": "The server is turned off in Connections.",
+      "disabled": "The server is turned off in the Agents hub.",
       "failedToStart": "The agent’s CLI reported that the server did not start.",
       "missing": "The profile chooses a server this project no longer has.",
       "moreThanOneSecretHeader": "This team server takes more than one secret header, and an agent is given one header per server here; the agent works without it.",
       "notSupportedByConnection": "Agents Orchester runs itself can’t use MCP servers yet; the agent works without it.",
       "notUnicode": "A path of the server is not valid Unicode.",
       "programNotFound": "{{program}} was not found on the PATH or in the worktree.",
-      "programMoved": "{{program}} now leads into the project’s repository or off this computer, so it was not started. Choose its program again on the Connections page.",
+      "programMoved": "{{program}} now leads into the project’s repository or off this computer, so it was not started. Choose its program again in the server's panel, in the Agents hub.",
       "reservedVariable": "{{variable}} is a variable Codex itself needs, so a secret cannot be handed over in it.",
       "scriptArgument": "Argument {{position}} would be changed by cmd.exe on its way through the server’s command script.",
       "secretArchived": "A variable takes its value from {{secret}}, which is archived.",
@@ -677,7 +683,6 @@
         "choice": "Answer: {{choice}}",
         "ownWords": "In its words: “{{text}}”",
         "dismiss": "Dismiss",
-        "personOnly": "Only a person can apply the Orchestrator’s proposal; nothing was sent.",
         "dismissed": "The Orchestrator’s proposal was dismissed · nothing was sent",
         "stale": "The Orchestrator’s proposal no longer applies · nothing was sent",
         "refused": "The Orchestrator’s proposal could not be applied · nothing was sent: {{reason}}"

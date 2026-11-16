@@ -33,6 +33,7 @@ fn short_key(key: &str) -> Option<&'static str> {
     "appMcp.widens.pipelineSteps" => "orchestrator.change.widens.pipelineSteps",
     "appMcp.widens.pipelineSources" => "orchestrator.change.widens.pipelineSources",
     "appMcp.widens.pipelineStep" => "orchestrator.change.widens.pipelineStep",
+    "appMcp.widens.pipelineStopsWaiting" => "orchestrator.change.widens.pipelineStopsWaiting",
     "appMcp.widens.approvalGate" => "orchestrator.change.widens.approvalGate",
     "appMcp.widens.stepToolCalls" => "orchestrator.change.widens.stepToolCalls",
     "appMcp.projectTools.widens.program" => "orchestrator.change.widens.program",

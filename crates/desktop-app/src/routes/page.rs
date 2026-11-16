@@ -13,9 +13,9 @@ use orchester_workspace::{
 };
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, IMPORT, ImportTab, InstructionsView, JoinTarget,
-  MERGE, MERGE_QUEUE, MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR,
-  OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, InstructionsView, JoinTarget, MERGE, MERGE_QUEUE,
+  MERGES, MODULES, MemoryView, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat,
+  OverviewTab, PULL_REQUESTS, PipelineView, PipelinesView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
   SecretsView, ServicesPage, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
@@ -64,9 +64,14 @@ pub enum ProjectPage {
   Usage(Box<UsageQuery>),
   /// The Delivery view beside Usage, over its period.
   Delivery(DeliveryPeriod),
+  /// The Pipelines page on its first tab, with its first pipeline open.
   Pipelines,
+  /// The Pipelines hub on a tab or with a pipeline open, never the one [`Self::Pipelines`] is.
+  PipelinesHub(PipelinesView),
   /// New pipeline, starting from the starter.
   NewPipeline,
+  /// New pipeline as a link to it with the empty start reads: an empty pipeline can never be saved (D-040), so it opens
+  /// on the starter as [`Self::NewPipeline`] does.
   NewEmptyPipeline,
   /// New pipeline with *Copy a pipeline* chosen, copying this one (a library row's *Duplicate*).
   CopyPipeline(ResourceId),
@@ -82,13 +87,12 @@ pub enum ProjectPage {
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
   Instructions(InstructionsView),
-  /// The Memory page on its tab; `None` on the one it opens on.
-  Memory(Option<MemoryTab>),
+  /// The Agents hub's Memory filter on its status and record ([`MemoryView`]).
+  Memory(MemoryView),
   /// The Skills library with its filter.
   Skills(SkillsFilter),
   NewSkill,
   Skill(ResourceId),
-  ImportSkills,
   Tools,
   NewTool,
   Tool(ResourceId, ToolTab),
@@ -112,8 +116,6 @@ pub enum ProjectPage {
   Join(JoinTarget),
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
-  /// Import resources on its kind tab.
-  Import(ImportTab),
 }
 
 impl ProjectPage {
@@ -160,7 +162,7 @@ impl ProjectPage {
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions(InstructionsView::default()),
-      Screen::Memory => Self::Memory(None),
+      Screen::Memory => Self::Memory(MemoryView::default()),
       Screen::Skills => Self::Skills(SkillsFilter::default()),
       Screen::Tools => Self::Tools,
       Screen::Secrets => Self::Secrets(SecretsView::default()),
@@ -168,13 +170,23 @@ impl ProjectPage {
       Screen::NewConnection => Self::NewConnection(NewConnection::default()),
       Screen::ProjectSettings => Self::Settings(ProjectSettingsTab::default()),
       Screen::Files => Self::Files(FilesView::default()),
-      Screen::ImportResources => Self::Import(ImportTab::default()),
     })
   }
 
-  /// The Agents hub on `view`: [`Self::Agents`] for the view it opens on.
+  /// The Pipelines hub on `view`: [`Self::Pipelines`] for the view it opens on.
+  pub fn pipelines(view: PipelinesView) -> Self {
+    if view == PipelinesView::default() {
+      Self::Pipelines
+    } else {
+      Self::PipelinesHub(view)
+    }
+  }
+
+  /// The Agents hub on `view`: [`Self::Agents`] for the view it opens on, [`Self::Memory`] for its Memory filter.
   pub fn hub(view: HubView) -> Self {
-    if view == HubView::default() {
+    if view.filter == super::HubFilter::Memory {
+      Self::Memory(view.memory)
+    } else if view == HubView::default() {
       Self::Agents
     } else {
       Self::AgentsHub(view)
@@ -194,6 +206,7 @@ impl ProjectPage {
       Self::Review | Self::TaskReview(_) => Screen::Review,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines
+      | Self::PipelinesHub(_)
       | Self::NewPipeline
       | Self::NewEmptyPipeline
       | Self::CopyPipeline(_)
@@ -202,7 +215,7 @@ impl ProjectPage {
       Self::Agents | Self::AgentsHub(_) | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
       Self::Memory(_) => Screen::Memory,
-      Self::Skills(_) | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
+      Self::Skills(_) | Self::NewSkill | Self::Skill(_) => Screen::Skills,
       Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
       Self::Secrets(_) => Screen::Secrets,
       Self::Connections(_) => Screen::Connections,
@@ -212,7 +225,6 @@ impl ProjectPage {
         Screen::ProjectSettings
       }
       Self::Files(_) => Screen::Files,
-      Self::Import(_) => Screen::ImportResources,
     }
   }
 
@@ -238,7 +250,6 @@ impl ProjectPage {
       Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
-      Self::ImportSkills => with_query(format!("{project_root}/skills"), &[("skill", Some("import"))]),
       Self::NewTool => with_query(format!("{project_root}/tools"), &[("tool", Some("new"))]),
       Self::Tool(id, tab) => with_query(
         format!("{project_root}/tools"),
@@ -252,12 +263,13 @@ impl ProjectPage {
       ),
       Self::Pipeline(id, view) => view.path(format!("{project_root}/pipelines/{id}"), None),
       Self::PipelineVersion(id, version, view) => view.path(format!("{project_root}/pipelines/{id}"), Some(*version)),
+      Self::PipelinesHub(view) => view.path(segment(Screen::Pipelines)),
       Self::AgentsHub(view) => view.path(segment(Screen::Agents)),
       Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
       Self::Secrets(view) => view.path(segment(Screen::Secrets)),
-      Self::Memory(tab) => with_query(segment(Screen::Memory), &[MemoryTab::param(*tab)]),
+      Self::Memory(view) => view.path(segment(Screen::Memory)),
       Self::Settings(tab) => with_query(segment(Screen::ProjectSettings), &[tab.param()]),
       Self::Usage(query) => super::usage::path(project_root, query),
       Self::Delivery(period) => delivery_path(project_root, *period),
@@ -265,7 +277,6 @@ impl ProjectPage {
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
-      Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
       Self::TaskMerge(key, number) => format!("{tasks}/{key}/{MERGE}/{}", number.get()),
       Self::TaskReview(key) => format!("{}/{key}", segment(Screen::Review)),
       Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Services(_) | Self::Join(_) => {
@@ -316,10 +327,10 @@ impl ProjectPage {
       ["skills"] => match params.take("skill")?.as_deref() {
         None => SkillsFilter::take(params).map(Self::Skills),
         Some("new") => Ok(Self::NewSkill),
-        Some("import") => Ok(Self::ImportSkills),
         Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
       },
       ["tools"] => tools(params),
+      ["pipelines"] => PipelinesView::take(params).map(Self::pipelines),
       ["pipelines", NEW] => new_pipeline(params),
       ["pipelines", id] => {
         let id = id.parse().map_err(|_| RouteError::NoScreen)?;
@@ -342,8 +353,7 @@ impl ProjectPage {
       }
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
-      [IMPORT] => ImportTab::take(params).map(Self::Import),
-      ["memory"] => MemoryTab::take(params),
+      ["memory"] => MemoryView::take(params),
       [SETTINGS] => settings(params),
       // The Pull requests page is gone (ORC-803); an address in a tab's history, whatever its query, opens the
       // Overview.

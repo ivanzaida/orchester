@@ -91,6 +91,20 @@ impl Workspace {
     Ok(())
   }
 
+  /// Whether the app keeps the computer awake while agents work (Settings › General); off until a person turns it
+  /// on.
+  pub fn keeps_awake(&self) -> Result<bool, StoreError> {
+    self.db.lock().keeps_awake()
+  }
+
+  /// Keeps a person's choice of *Keep the computer awake while agents work*; the app holds or lets go at its next
+  /// look (`crate::awake`).
+  pub fn set_keeps_awake(&self, keeps: bool) -> Result<(), StoreError> {
+    self.db.lock().set_keeps_awake(keeps)?;
+    self.changes.record_app(AppOutside::KeepsAwake);
+    Ok(())
+  }
+
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
     self.db.lock().daily_report_schedule()

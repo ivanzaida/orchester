@@ -1,3 +1,4 @@
+mod archived;
 mod children;
 mod columns;
 mod create;
@@ -71,6 +72,15 @@ impl ProjectDb {
         })
       })
       .collect()
+  }
+
+  /// The run numbered `number`, whatever task it belongs to: a team task's run names an identity this computer keeps
+  /// no definition of, so no list of tasks reaches it.
+  pub fn run_with_number(&self, number: RunNumber) -> Result<Option<Run>, RunStoreError> {
+    load_runs(&self.connection, "WHERE number = ?1", params![i64::from(number.get())])?
+      .pop()
+      .transpose()
+      .map_err(|unreadable| unreadable.error)
   }
 
   /// Runs stopped at their account's plan limit, ordered by number; each waits for the limit's reset or a person.

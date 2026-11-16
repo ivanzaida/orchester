@@ -62,9 +62,13 @@ fn snapshot(db: &mut ProjectDb) -> RunSnapshot {
   }])
   .expect("pipeline");
   let resource = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(3))
-    .expect("pipeline");
-  let version = db.publish_draft::<Pipeline>(resource.id(), at(4)).expect("publish");
+    .create_published(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(3))
+    .expect("pipeline")
+    .0;
+  let version = db
+    .latest_version::<Pipeline>(resource.id())
+    .expect("publish")
+    .expect("published");
   let tools = BTreeMap::from([(tool.id(), tool_version)]);
   let published = PublishedVersions {
     profiles: &BTreeMap::new(),

@@ -9,9 +9,9 @@
 //! seed's `team-*` scenarios leave beside the database ([`team::State`]) sets up a stand-in team server on loopback
 //! that answers while the window is open ([`team`]); where a person's press is part of the state, the window opens
 //! there ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Its MCP client
-//! counts as the person for the Orchestrator's person-only actions (`orchester_app::mcp::qa_person`), so a verifier
-//! applies a /watch, stops one and takes a led target as a person does. Fixture data for QA, never shipped: an example
-//! is no part of the app's program.
+//! counts as the person for every input it sends the window (`orchester_app::mcp::qa_person`), so a verifier reaches
+//! what a person's press reaches: Settings, the questions only a person answers, the Orchestrator's own actions.
+//! Fixture data for QA, never shipped: an example is no part of the app's program.
 //!
 //!   qa_app [--signed-in | --signed-out] [--settings] [--join-team]
 
@@ -34,7 +34,7 @@ use orchester_app::{
   app_log, clipboard,
   error_reports::{self, Environment},
   startup::{Launch, WindowPosition},
-  test_support::signed_in,
+  test_support::{pipeline_edit, signed_in},
   window,
 };
 use orchester_workspace::{accounts::trash::FolderTrash, app_paths};
@@ -72,6 +72,27 @@ impl Arguments {
   }
 }
 
+/// The QA copy's secret store, in memory: it keeps what it is given, or refuses every value when a scenario asks.
+fn keychain(refusing: bool) -> orchester_workspace::secrets::Vault {
+  if refusing {
+    signed_in::refusing_keychain()
+  } else {
+    signed_in::keychain()
+  }
+}
+
+/// What the QA copy tells whoever started it.
+fn say(cloud: &AccountCloud, (sign_in, settings): (bool, bool), team_server: Option<&TeamServer>) {
+  println!(
+    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nteam {}",
+    cloud.url(),
+    signed_in::account_cloud::EMAIL,
+    sign_in,
+    settings,
+    team_server.map_or_else(|| "none".to_owned(), TeamServer::url),
+  );
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
   let log = app_log::install();
   let Arguments {
@@ -87,19 +108,22 @@ fn main() -> Result<(), Box<dyn Error>> {
   // A team scenario joins with a code, which needs no sign-in: its server is this computer's.
   let team_state = team::State::beside(&location.database)?;
   let runtime = Runtime::new()?;
+  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
+  let asked = |file: &str| location.database.with_file_name(file).exists();
+  let keychain = keychain(asked(qa_app_asks::SECRET_STORE_REFUSES));
   let launch = Launch::begin_with_vault(
     &location.database,
     app_paths::runner_path()?,
     runtime.handle(),
-    (log, signed_in::keychain()),
+    (log, keychain),
   );
   // Kept to the end of `main`.
   let _reports = as_qa_copy(&launch, &location.database);
+  // The panel edit the seed's `pipelines-unordered` asks for: steps with no order, which no version can hold.
+  pipeline_edit::arm_from_marker(&location.database)?;
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
-  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
-  let asked = |file: &str| location.database.with_file_name(file).exists();
   let sign_in = sign_in || asked(qa_app_asks::SIGN_IN);
   // Kept to the end of `main`, as the other team server is.
   let _joined = match launch.services() {
@@ -139,14 +163,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   let clones = (team_state == Some(team::State::Clones))
     .then(|| team_clone::StandIn::new(&location.database))
     .transpose()?;
-  println!(
-    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nteam {}",
-    cloud.url(),
-    signed_in::account_cloud::EMAIL,
-    sign_in,
-    shown.is_some(),
-    team_server.as_ref().map_or_else(|| "none".to_owned(), TeamServer::url),
-  );
+  say(&cloud, (sign_in, shown.is_some()), team_server.as_ref());
   match (team_state.filter(|state| state.drives()), &team_server) {
     (Some(state), Some(server)) => team_window::open(&runtime, &launch, position, (state, server, clones.as_ref()))?,
     _ => window::open_showing(&runtime, &launch, position, shown),
@@ -174,6 +191,9 @@ fn as_qa_copy(launch: &Launch, database: &Path) -> Option<error_reports::Reports
   if let Some(services) = launch.services() {
     services.qa_person.count_mcp_client_as_person();
   }
+  // And for the whole window (the person's decision of 2026-11-15): every input of the verifier's MCP client is the
+  // person's here, so a QA copy is tested whole through its MCP server.
+  orchester_app::mcp::qa_person::count_every_input_as_the_persons();
   reports
 }
 

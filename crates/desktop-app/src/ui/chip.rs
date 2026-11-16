@@ -1,7 +1,8 @@
 //! Chips. A tag (`Chip` `jI8af`) is its name in 11/500 `text_secondary` on a `surface_raised` pill
 //! inside a `border` stroke, 2 over and under it and 8 at its sides; a removable one ends in an 11
-//! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`). A badge (`Badge`
-//! `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
+//! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`); one that says what something is
+//! leads with an 11 `text_secondary` glyph, 4 before the name (`Chip · Decision` `HWxlV` in Y1 `tsfxN`). A badge
+//! (`Badge` `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
 //! under them and 8 at their sides (`Saved` in `success`, `New` in `info`); a cut one keeps to its room.
 
 use std::sync::Arc;
@@ -40,6 +41,8 @@ pub struct TagChip {
   mono: bool,
   /// A form's pill under the field that adds it, 24 tall (`Pill · deepseek-v4-pro` `TnP0h`).
   pill: bool,
+  /// The glyph before the name.
+  glyph: Option<Icon>,
 }
 
 impl TagChip {
@@ -50,7 +53,15 @@ impl TagChip {
       remove: None,
       mono: false,
       pill: false,
+      glyph: None,
     }
+  }
+
+  /// `glyph` before the name: what the chip says something is, e.g. a memory record's type.
+  #[must_use]
+  pub const fn glyph(mut self, glyph: Icon) -> Self {
+    self.glyph = Some(glyph);
+    self
   }
 
   /// The name in Geist Mono: an identifier such as a tool's name.
@@ -88,6 +99,11 @@ impl From<TagChip> for Element {
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Full.role())
       .describe("tag", chip.name.clone())
+      .with_children(
+        chip
+          .glyph
+          .map(|glyph| icon(glyph, IconSize::Xs, PaletteColor::TextSecondary)),
+      )
       .child(
         Text::new(&chip.name)
           .id(format!("{}-label", chip.id))
@@ -145,11 +161,16 @@ impl BadgeTone {
 
 /// A badge saying `word` in `tone`.
 pub fn badge(id: &str, tone: BadgeTone, word: &str) -> Row {
+  badge_in(id, tone, word, TypographyStyle::FieldLabel)
+}
+
+/// [`badge`] with its word in `style`, e.g. 11/500 where a panel draws it 19 high (`Chip · Active` `cwhcK` in Y2).
+pub fn badge_in(id: &str, tone: BadgeTone, word: &str, style: TypographyStyle) -> Row {
   let color = tone.colors().0;
   badge_frame(id, tone).child(
     Text::new(word)
       .id(format!("{id}-label"))
-      .variant(TypographyStyle::FieldLabel)
+      .variant(style)
       .color(color)
       .nowrap(),
   )
@@ -170,9 +191,9 @@ pub fn cut_badge(ctx: &mut Ctx, id: &str, tone: BadgeTone, word: &str) -> Row {
     )
 }
 
-/// A badge's pill and its dot, before its word.
-fn badge_frame(id: &str, tone: BadgeTone) -> Row {
-  let (color, fill) = tone.colors();
+/// A badge's pill, before what it holds.
+fn pill(id: &str, tone: BadgeTone) -> Row {
+  let (_, fill) = tone.colors();
   Row::new()
     .id(id.to_owned())
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Fine.role()))
@@ -180,13 +201,32 @@ fn badge_frame(id: &str, tone: BadgeTone) -> Row {
     .align_items(Alignment::Center)
     .background(fill)
     .rounded(ExtraRadius::Full.role())
+}
+
+/// A badge's pill and its dot, before its word.
+fn badge_frame(id: &str, tone: BadgeTone) -> Row {
+  pill(id, tone).child(
+    Row::new()
+      .id(format!("{id}-dot"))
+      .width(Dimension::Px(DOT_SIZE))
+      .height(Dimension::Px(DOT_SIZE))
+      .flex_shrink(0.0)
+      .rounded(ExtraRadius::Full.role())
+      .background(tone.colors().0),
+  )
+}
+
+/// A state's badge: a 12 `glyph` (`<id>-glyph`) and `word` (`<id>-label`), 6 apart, in `tone` (`Badge` `sNWem` in T11a
+/// `ujJ6U`).
+pub fn state_badge(id: &str, tone: BadgeTone, glyph: Icon, word: &str) -> Row {
+  let color = tone.colors().0;
+  pill(id, tone)
+    .child(icon(glyph, IconSize::Sm, tone.colors().0).id(format!("{id}-glyph")))
     .child(
-      Row::new()
-        .id(format!("{id}-dot"))
-        .width(Dimension::Px(DOT_SIZE))
-        .height(Dimension::Px(DOT_SIZE))
-        .flex_shrink(0.0)
-        .rounded(ExtraRadius::Full.role())
-        .background(color),
+      Text::new(word)
+        .id(format!("{id}-label"))
+        .variant(TypographyStyle::FieldLabel)
+        .color(color)
+        .nowrap(),
     )
 }

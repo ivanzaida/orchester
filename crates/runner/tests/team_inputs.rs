@@ -9,6 +9,8 @@ mod connection_kinds;
 #[path = "team_inputs/mcp.rs"]
 mod mcp;
 mod support;
+#[path = "team_inputs/tool_secret.rs"]
+mod tool_secret;
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -26,9 +28,9 @@ use orchester_core::{
   orchester_tools::ProjectTool,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step,
-    StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, Version, VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, ChosenResources, CommandAction, CommandArg,
+    CommandProgram, Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
+    Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, TeamTool, Tool, ToolAction, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
@@ -79,8 +81,9 @@ fn link(root: &std::path::Path) -> (ServerId, ProjectId) {
   (server, server_project)
 }
 
-/// The team's Builder profile, version 1, as the server published it: on the publisher's connection.
-fn builder() -> Version<AgentProfile> {
+/// The team's Builder profile, version 1, as the server published it: on the publisher's connection, its agents given
+/// the check `tool`, so the snapshot this stand-in for the server builds pins it.
+fn builder(tool: ResourceId) -> Version<AgentProfile> {
   let settings =
     ProviderSettings::new(BTreeMap::from([(REASONING_EFFORT.to_owned(), "low".to_owned())])).expect("settings");
   let body = AgentProfile::new(
@@ -95,7 +98,12 @@ fn builder() -> Version<AgentProfile> {
     RepositoryAccess::Write,
     CommandPermission::AnyInWorktree,
     NetworkAccess::Off,
-  ));
+  ))
+  .with_given(
+    ChosenResources::EMPTY,
+    ChosenResources::EMPTY,
+    ChosenResources::new(vec![tool]).expect("one tool"),
+  );
   Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
 }
 
@@ -152,6 +160,12 @@ fn check(pipeline: ResourceId) -> Version<Tool> {
   Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
 }
 
+/// The check as the team holds it: a command names no secret, so it is the same tool.
+fn team_check(check: &Version<Tool>) -> Version<TeamTool> {
+  let team = TeamTool::from_local(check.body(), |_| None).expect("a command names no secret");
+  Version::new(check.id(), check.number(), team, check.published_at())
+}
+
 /// The team's Builder profile, its two-step pipeline (Implement, then Review) and a check, published on the server
 /// only: no resource row of any is on this computer.
 fn team(setup: &Setup) -> Team {
@@ -164,7 +178,7 @@ fn team_pinning(setup: &Setup, servers: Vec<TeamMcpServer>) -> Team {
   let root = project.repo.path();
   let (server, server_project) = link(root);
   let (profile, pipeline, tool) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
-  let profile_version = builder();
+  let profile_version = builder(tool);
   let pipeline_version = delivery(profile);
   let tool_version = check(pipeline);
   let profiles = BTreeMap::from([(profile, profile_version.clone())]);
@@ -215,7 +229,7 @@ fn team_pinning(setup: &Setup, servers: Vec<TeamMcpServer>) -> Team {
     labels: &labels,
     profiles: &[(profile_version.id(), execution_profile)],
     instructions: &[],
-    tools: &[tool_version],
+    tools: &[team_check(&tool_version)],
     skills: &[],
     mcp_servers: &pinned_servers,
   };
@@ -280,7 +294,7 @@ impl Team {
       work: WorkId::generate(),
       claim: ClaimId::generate(),
       operation,
-      module: ModuleId::generate(),
+      module: Some(ModuleId::generate()),
       branch: BranchName::new("main").expect("branch"),
       base_commit: CommitId::new(base).expect("commit"),
       bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),
@@ -305,8 +319,8 @@ impl Team {
         required_cli,
         mcp_servers: team_mcp.iter().map(|bound| team_mcp_id(bound.server)).collect(),
       }],
-      references: Vec::new(),
       team_mcp,
+      local_mcp: Vec::new(),
     };
     let inputs = RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs");
     ProjectDb::open(self.root())

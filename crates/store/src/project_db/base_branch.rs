@@ -20,17 +20,15 @@ use crate::{
 };
 
 impl ProjectDb {
-  /// The base branch a new run of `task` takes and where it came from: the task's, else its module's as stored now,
-  /// else the checked-out branch ([`resolve`]).
+  /// The base branch a new run of `task` takes and where it came from: the task's, else its module's as stored now
+  /// (the module's own branch when it has one, else its base branch), else the checked-out branch ([`resolve`]).
   pub fn next_run_base(&self, task: &Task) -> Result<(BaseChoice, RunBaseSource), StoreError> {
     let module = match task.module() {
       Some(id) => modules::load(&self.connection, id)?,
       None => None,
     };
-    Ok(resolve(
-      task.base(),
-      module.as_ref().map(|module| (module.id(), module.base())),
-    ))
+    let module = module.map(|module| (module.id(), module.run_base()));
+    Ok(resolve(task.base(), module.as_ref().map(|(id, base)| (*id, base))))
   }
   /// Sets the base branch of task `id`, read at `read`. A local task changed meanwhile is not changed and comes back
   /// as the conflict; its revision rises as for any edit. A shared task keeps its server revision: its base branch is

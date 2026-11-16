@@ -33,10 +33,12 @@ pub use self::{
   },
   error::ActionError,
   outcome::{
-    Accepted, ActionOutcome, Current, Definition, LocalResult, PipelineRefusal, Receipt, Refusal, TeamOutcome,
+    Accepted, ActionOutcome, Current, Definition, LifecycleRefusal, LocalResult, PipelineRefusal, Receipt, Refusal,
+    TeamOutcome,
   },
 };
 use self::{
+  command::TeamPipelineCheck,
   ownership::{ProjectOwner, project_owner},
   route::{TeamRoute, team_route},
   team::Operations,
@@ -86,7 +88,11 @@ impl Dispatcher {
       return local::run(&mut writer, intent.operation(), intent.action()).map(ActionOutcome::Local);
     };
     let session = self.session()?;
-    let outcome = match team_route(&db, link, intent.operation(), intent.action())? {
+    let pipelines = TeamPipelineCheck {
+      servers: &self.servers,
+      root: &self.root,
+    };
+    let outcome = match team_route((&db, &pipelines), link, intent.operation(), intent.action())? {
       TeamRoute::Command(request) => {
         let mut operations = Operations {
           db: &mut db,

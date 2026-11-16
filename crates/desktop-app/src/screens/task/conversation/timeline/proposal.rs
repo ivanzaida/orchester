@@ -4,9 +4,9 @@
 //! for you in the Orchestrator chat*, and the card's action (*Send message*, *Run again with this message*, *Send
 //! answer*, ...), *Dismiss* and *Open in Orchestrator chat*. The action and *Dismiss* decide the chat's own proposal,
 //! as its card does, so deciding in either place decides both; only a person applies it: lurq's synthetic input is
-//! refused in the handler, visibly, and *Dismiss* stays open to automation, as on the card. Once dismissed, refused or
-//! stale, it leaves a muted line that says nothing was sent. Which proposals there are and where each stands are
-//! `orchester_workspace::tasks::conversation::orchestrator`'s.
+//! refused in the handler, to the client that sent it, and *Dismiss* stays open to automation, as on the card. Once
+//! dismissed, refused or stale, it leaves a muted line that says nothing was sent. Which proposals there are and where
+//! each stands are `orchester_workspace::tasks::conversation::orchestrator`'s.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -14,11 +14,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -37,6 +35,7 @@ use super::super::super::{
   orchestrated::open_chat,
 };
 use crate::{
+  mcp::input_gate::{InputGate, persons_press},
   theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -65,8 +64,7 @@ impl DevtoolsInspectable for ProposalProps {}
 
 pub(super) struct ProposalRow {
   decide: DecideAction,
-  /// Synthetic input tried *Apply*.
-  refused: Signal<bool>,
+  gate: Option<InputGate>,
 }
 
 impl Component for ProposalRow {
@@ -75,7 +73,7 @@ impl Component for ProposalRow {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       decide: decide_action(ctx),
-      refused: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -174,20 +172,15 @@ impl ProposalRow {
       let (apply, dismiss) = if self.decide.state().get().is_pending() {
         (apply.loading(), dismiss.disabled())
       } else {
-        let (decide, refused, applying) = (
+        let (decide, gate, applying) = (
           self.decide.clone(),
-          self.refused.clone(),
+          self.gate.clone(),
           deciding(Decision::Accept { widens: Vec::new() }),
         );
         let apply = apply.on_click(move || {
-          if is_synthetic_input() {
-            tracing::warn!(
-              "synthetic input reached a proposal of the Orchestrator in a task's conversation; not taken"
-            );
-            refused.set(true);
-            return;
+          if persons_press(gate.as_ref(), "apply what the Orchestrator proposed") {
+            decide.run(applying.clone());
           }
-          decide.run(applying.clone());
         });
         let (decide, dismissing) = (self.decide.clone(), deciding(Decision::Dismiss));
         (apply, dismiss.on_click(move || decide.run(dismissing.clone())))
@@ -197,19 +190,9 @@ impl ProposalRow {
     row.child(open_chat(ctx, id, (props.project.id, proposal.chat))).into()
   }
 
-  /// A refused click of synthetic input, and why the last decision failed.
+  /// Why the last decision failed.
   fn notes(&self, ctx: &Ctx, id: &str) -> Vec<Element> {
     let mut notes = Vec::new();
-    if self.refused.get() {
-      notes.push(
-        tinted_note(
-          format!("{id}-person-only"),
-          (Icon::Hand, PaletteColor::Warning),
-          &ctx.t("conversation.orchestrator.proposal.personOnly"),
-        )
-        .into(),
-      );
-    }
     if let Some(error) = self.decide.state().get().error {
       notes.push(
         tinted_note(

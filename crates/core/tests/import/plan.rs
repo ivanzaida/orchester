@@ -14,89 +14,65 @@ fn entities(plan: &Plan) -> Vec<(Entity, Role, Choice)> {
 }
 
 #[test]
-fn import_plan_follows_what_a_copied_pipeline_refers_to() {
+fn import_plan_follows_what_a_copied_resource_refers_to() {
   let source = source();
   let target = target(Vec::new());
-  let selection = [(source.pipeline, Pick::Published(version(3)))];
+  let selection = [
+    (source.builder, Pick::Published(version(2))),
+    (source.deploy, Pick::Published(version(2))),
+  ];
 
   let plan = Plan::new(&source.catalog, &target.catalog, &selection, &Choices::default());
 
   assert_eq!(
     entities(&plan),
     vec![
-      (Entity::Resource(source.pipeline), Role::Selected, Choice::Copy),
-      (Entity::Resource(source.builder), Role::Dependency, Choice::Copy),
-      (Entity::Resource(source.deploy), Role::Dependency, Choice::Copy),
-      (Entity::Resource(source.rules), Role::PipelineInstruction, Choice::Copy),
+      (Entity::Resource(source.builder), Role::Selected, Choice::Copy),
+      (Entity::Resource(source.deploy), Role::Selected, Choice::Copy),
       (Entity::Connection(source.codex), Role::Dependency, Choice::Unresolved),
       (Entity::Secret(source.key), Role::Dependency, Choice::Unresolved),
     ],
-    "the tool's allowed callers are no dependency: Nightly is not in the plan"
+    "the tool's allowed callers are no dependency: neither pipeline is in the plan"
   );
-  let builder = plan.item(Entity::Resource(source.builder)).expect("builder");
-  assert_eq!(builder.pick(), Some(Pick::Published(version(2))));
-  assert_eq!(builder.used_by(), [source.pipeline]);
+  let codex = plan.item(Entity::Connection(source.codex)).expect("codex");
+  assert_eq!(codex.used_by(), [source.builder]);
   assert!(
     plan.is_ready(),
     "unresolved connections and secrets do not keep the import from starting"
   );
   let counts = plan.counts();
-  assert_eq!((counts.copies, counts.reused, counts.unresolved), (4, 0, 2));
+  assert_eq!((counts.copies, counts.reused, counts.unresolved), (2, 0, 2));
 }
 
 #[test]
-fn import_plan_reuses_the_target_resource_of_the_same_slug_by_default() {
+fn import_plan_does_not_take_pipelines_or_their_instructions() {
   let source = source();
-  let own = codex("Codex");
-  let target = target(vec![draft("builder", "Builder", profile("Builder", own.id()))]);
-  let existing = target.catalog.resources()[0].resource().id();
-  let selection = [(source.pipeline, Pick::Published(version(3)))];
+  let target = target(Vec::new());
+  let selection = [
+    (source.pipeline, Pick::Published(version(3))),
+    (source.nightly, Pick::Draft),
+    (source.rules, Pick::Published(version(1))),
+    (source.deploy, Pick::Published(version(2))),
+  ];
 
   let plan = Plan::new(&source.catalog, &target.catalog, &selection, &Choices::default());
 
-  let builder = plan.item(Entity::Resource(source.builder)).expect("builder");
-  assert_eq!(builder.choice(), Choice::Use(Entity::Resource(existing)));
-  assert_eq!(builder.resolution(), &Resolution::Use(Entity::Resource(existing)));
-  assert!(
-    builder.options().contains(&Choice::Copy),
-    "the user may still copy it under another name"
-  );
-  assert!(
-    plan.item(Entity::Connection(source.codex)).is_none(),
-    "only Builder refers to the connection, and it is not copied"
-  );
-  assert!(
-    plan.item(Entity::Secret(source.key)).is_some(),
-    "Deploy preview is copied, so its secret still needs a mapping"
-  );
-}
-
-#[test]
-fn import_plan_drops_what_a_reused_resource_refers_to() {
-  let source = source();
-  let own = codex("Codex");
-  let target = target(vec![draft(
-    "main-builder",
-    "Main builder",
-    profile("Builder", own.id()),
-  )]);
-  let existing = target.catalog.resources()[0].resource().id();
-  let selection = [(source.pipeline, Pick::Published(version(3)))];
-  let builder = Entity::Resource(source.builder);
-  let mut choices = Choices::default();
-
-  let copied = Plan::new(&source.catalog, &target.catalog, &selection, &choices);
-  assert_eq!(copied.item(builder).map(|item| item.choice()), Some(Choice::Copy));
-  assert!(copied.item(Entity::Connection(source.codex)).is_some());
-
-  choices.choose(builder, Choice::Use(Entity::Resource(existing)));
-  let plan = Plan::new(&source.catalog, &target.catalog, &selection, &choices);
-
   assert_eq!(
-    plan.item(builder).map(|item| item.resolution()),
-    Some(&Resolution::Use(Entity::Resource(existing)))
+    entities(&plan),
+    vec![
+      (Entity::Resource(source.deploy), Role::Selected, Choice::Copy),
+      (Entity::Secret(source.key), Role::Dependency, Choice::Unresolved),
+    ],
+    "a pipeline, a pipeline's rules and the tool's access for pipelines are left out"
   );
-  assert!(plan.item(Entity::Connection(source.codex)).is_none());
+  let only_pipelines = [
+    (source.pipeline, Pick::Draft),
+    (source.nightly, Pick::Draft),
+    (source.rules, Pick::Draft),
+  ];
+  let plan = Plan::new(&source.catalog, &target.catalog, &only_pipelines, &Choices::default());
+  assert!(plan.items().is_empty());
+  assert!(!plan.is_ready());
 }
 
 #[test]
@@ -183,23 +159,23 @@ fn import_plan_requires_a_rename_when_the_target_has_the_name() {
 fn import_plan_names_each_copy_once() {
   let source = source();
   let target = target(Vec::new());
-  let selection = [(source.pipeline, Pick::Published(version(3)))];
-  let pipeline = Entity::Resource(source.pipeline);
+  let reviewer = Entity::Resource(source.reviewer);
+  let builder = Entity::Resource(source.builder);
   let mut choices = Choices::default();
-  choices.choose(Entity::Resource(source.nightly), Choice::Copy);
-  choices.choose(pipeline, Choice::Rename);
-  choices.rename(pipeline, "Nightly".to_owned());
-  let selection = [selection[0], (source.nightly, Pick::Draft)];
+  choices.choose(builder, Choice::Rename);
+  choices.rename(builder, "Reviewer".to_owned());
+  let selection = [
+    (source.builder, Pick::Published(version(2))),
+    (source.reviewer, Pick::Draft),
+  ];
 
   let plan = Plan::new(&source.catalog, &target.catalog, &selection, &choices);
 
-  assert_eq!(plan.item(pipeline).and_then(|item| item.problem()), None);
+  assert_eq!(plan.item(builder).and_then(|item| item.problem()), None);
   assert_eq!(
-    plan
-      .item(Entity::Resource(source.nightly))
-      .and_then(|item| item.problem()),
+    plan.item(reviewer).and_then(|item| item.problem()),
     Some(&Problem::NameTaken),
-    "the renamed Preview release already takes the name"
+    "the renamed Builder already takes the name"
   );
 }
 
@@ -216,21 +192,6 @@ fn import_plan_gives_copies_a_free_slug() {
     panic!("copied: {:?}", plan.items()[0].resolution());
   };
   assert_eq!((copied.as_str(), slug.as_str()), ("Builder", "builder-2"));
-}
-
-#[test]
-fn import_plan_can_leave_out_a_pipeline_instruction() {
-  let source = source();
-  let target = target(Vec::new());
-  let selection = [(source.pipeline, Pick::Draft)];
-  let mut choices = Choices::default();
-  choices.choose(Entity::Resource(source.rules), Choice::LeaveOut);
-
-  let plan = Plan::new(&source.catalog, &target.catalog, &selection, &choices);
-
-  let rules = plan.item(Entity::Resource(source.rules)).expect("rules");
-  assert_eq!(rules.resolution(), &Resolution::LeftOut);
-  assert_eq!(plan.items()[0].pick(), Some(Pick::Draft));
 }
 
 #[test]

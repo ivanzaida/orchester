@@ -30,7 +30,10 @@ powershell -File tools/install.ps1
 ```
 
 - Builds `orchester-app` and `orchester-runner` in one release build into
-  `%LOCALAPPDATA%\Orchester\build` (not the repository's `target/`) and copies `orchester.exe`
+  `orchester-build` beside the repository (e.g. `H:\projects\orchester-build`: on the repository's drive, not the
+  system drive, and not the repository's `target/`), with the `local-release` profile
+  (`Cargo.toml`: the release profile made incremental, in 256 codegen units, so a small change rebuilds in
+  minutes; CI's releases keep `release`), and copies `orchester.exe`
   and `orchester-runner.exe` into `%LOCALAPPDATA%\Orchester\app`. Fonts, icons and locales are
   compiled into the executables; at runtime they need only the Visual C++ runtime, which the MSVC
   toolchain has already installed (the programs CI releases have it linked in).
@@ -151,9 +154,9 @@ A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When an agent
 needs is still not found, the start page warns of it with the folders it searched, *Choose the
 claude file…*, whose file becomes that connection's program and is offered in *Add connection*, and
 *Check again*, which reads the login shell again; on Windows it says the same of the `PATH`. The app
-MCP tool `add_cli_connection` names the folders it searched too, and a CLI installed elsewhere can
-be added there by its file path (`program`): the app's *Connections* does not offer choosing a file
-in this version. Starting the program itself from a terminal,
+MCP tool `list_accounts` says where each CLI's program is (`programs`), and a CLI installed elsewhere is
+chosen in Settings › Accounts, on the CLI's line (*Change…*, *Choose program…*): no tool takes a
+program. Starting the program itself from a terminal,
 `~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on, and the
 login shell is not asked then.
 
@@ -469,7 +472,7 @@ fixed address instead (see *The new app's MCP server* below).
   named in the reason), `version_required`, `invalid_version`, `blank_note`, `note_not_taken` or a runner
   rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
-  agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
+  agent steps, and publishes it as v1 or stores nothing, as Duplicate and Save do), `set_code_index`
   (*Use code index* in Project settings › Context, off until a person turns it on; `list_projects` shows each
   project's setting) and
   `update_project_limits` (Project settings › Runs › Limits: the token budgets, the default time limit,
@@ -534,25 +537,25 @@ on approving risky requests or granting wider approval. Free-text answers and co
 A native acceptance of an Orchestrator proposal is the person's decision; automatic answers still require consent.
 
 **The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
-`127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
-how the app was started (below). It hosts lurq's window tools, the app's
-own (`app_state`, `navigate`, `set_theme`, `update_state`, and `hold_reads` and `set_update_state` in debug
-builds) and Orchester's domain tools:
-every tool of Orchester's MCP server above, and the setup tools that only this app serves, which set a
-project up end to end without its configuration screens: `add_project` and `get_project`;
+`127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept
+depend on how the app was started (below). It hosts lurq's window tools, the app's own (`app_state`,
+`navigate`, `set_theme`, `update_state`, and `hold_reads` and `set_update_state` in debug builds) and
+Orchester's domain tools: every tool of Orchester's MCP server above, and the setup tools that only this app
+serves, which set a project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
-`update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
-saved), `check_connection` and `list_models`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
+`update_project_limits`); `list_accounts`, `check_account`, `list_models` and `set_profile_account` (what a profile runs on, by
+account), `list_connections` and `check_connection`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
 and `remove_mcp_server` (Connections › MCP servers); `list_profiles`, `get_profile`, `save_profile_draft` and
-`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, empty, or a copy),
-`save_pipeline_draft` and `publish_pipeline`; `list_tools`, `get_tool`, `save_tool_draft` and `publish_tool`
-(command tools, which pipeline steps call; HTTP and database tools are listed by kind and description only,
-and no tool is removed or archived in this version); `list_instructions`, `save_instruction_draft` and
-`publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into main*). Each checks its
-input with the rules of the screen it stands for and takes only what that screen offers; no tool takes or
-returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
-`data` scope that is always granted, apart from window control (`navigate`, `set_theme`, lurq's input),
-which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on` allow it.
+`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, a copy, or the steps given, published
+as v1) and `save_pipeline` (publishes the next version: a pipeline has no drafts); `list_tools`, `get_tool`,
+`save_tool_draft` and `publish_tool` (command tools, which pipeline steps call; HTTP and database tools are
+listed by kind and description only, and no tool is removed or archived in this version); `list_instructions`,
+`save_instruction_draft` and `publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into
+main*). Each checks its input with the rules of the screen it stands for and takes only what that screen
+offers; no tool takes or returns a secret's value. Tools that read are in lurq's Observe scope. Tools that
+change data are in a `data` scope that is always granted, apart from window control (`navigate`, `set_theme`,
+lurq's input), which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on`
+allow it.
 
 **Update states in a QA copy.** A QA copy never updates itself, so `update_state` always answers
 `not_this_copy` (reason `qa`). To see the other states on screen, debug builds (QA copies included) serve
@@ -603,11 +606,27 @@ and deleting a conversation take a synthetic press as a person's; and a message 
 the person's. The gate is one place, `orchester_app::mcp::qa_person::QaPerson`, held by the session's services: off
 on every start, it is turned on only by `examples/qa_app` before its window opens. The installed app, `tools/run.ps1`
 and every other start never turn it on, so there these presses are still refused and say so; it is no environment
-variable or setting another program could set. It widens nothing else: Settings, permission and approval questions,
-the access token and pairing codes, sharing and sign-in, secrets, and the task pages' person-only controls keep their
-refusals in a QA copy too. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
+variable or setting another program could set. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
 presses apply, in one that does not they are refused, and only `examples/qa_app` turns it on. The seed's
 `orchestrator-leads` scenario has subscriptions standing for these states (the design-verification skill names them).
+`orchestrator-leading` has a conversation that leads a module to the end, with events whose turns failed (tried
+again, left to the person with *Try again*), and `orchestrator-held-budget`, `orchestrator-held-plan` and
+`orchestrator-held-plan-unnamed` the same events held by a used daily budget or by the plan limit of the
+Orchestrator's account.
+
+**In a QA copy the MCP client is the person for the whole window (the person, 2026-11-15).** The same program,
+`examples/qa_app`, also makes every window input of its MCP client count as the person's
+(`orchester_app::mcp::qa_person::count_every_input_as_the_persons`), so a QA copy can be tested whole through its MCP
+server: Settings (accounts and API providers, *Let automation change agent permissions*, the MCP server's own
+rows), permission and approval questions, sharing and sign-in, and the task pages' person-only controls take its
+presses as a person's, window input is not refused while one of them shows, and what it does is recorded as the
+person's. Looking at the window while a secret shows in it (the access token, a pairing code) stays refused. The app
+tells a person's input from automation's in one place, `orchester_app::mcp::qa_person::is_synthetic_input` and
+`input_source`, never through lurq's own functions, except where automation's input must stay automation's even in
+a QA copy: copy, cut and paste on a page of the browser window, and a web link in a chat, which automation never
+opens in the person's own browser. The switch is the program's, off on every start; the installed app,
+`tools/run.ps1` and every other start never turn it on, and it is no environment variable or setting.
+`tests/qa_every_input.rs` covers it.
 
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn
@@ -754,18 +773,18 @@ window control allows, and the switch takes no change that turns it on while an 
 applied, nor any before it was shown for one pass; turning it off is always taken. `navigate` may still
 show Settings, and looking at the window stays allowed.
 
-Pipelines follow the same rule. With the setting off, `publish_pipeline` and `duplicate_pipeline` publish
-only a version provably no weaker than the pipeline's latest published one: the same steps, wiring,
-failure routes, profiles and tools, and each step's approval gate, asking about tool calls, write access,
-commands and network the same or stricter. A pipeline's first version and anything else need a person, so
-every version a task can run is one a person published, allowed, or could not object to. A version is
-weaker also when a step gets more retries, a larger step budget or none, other instructions or another model;
-the pipeline's description may change. Accepted behaviour, as the user decided: automation may create a
-task on any published pipeline with the setting off, since every published version is one a person
-published, allowed, or could not object to. Only moving an existing task to another pipeline
-(`update_task`) is a person's decision, refused as `person_only` while the setting is off; a task without a
-pipeline may get any published one.
-`duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
+Pipelines follow the same rule. With the setting off, `save_pipeline` and `duplicate_pipeline` publish only a
+version provably no weaker than the pipeline's latest published one: the same steps, wiring, failure routes,
+profiles and tools, and each step's approval gate, asking about tool calls, write access, commands and network
+the same or stricter. A pipeline's first version, which `create_pipeline` publishes, has nothing to be
+compared with: it and anything else need a person, so every version a task can run is one a person published,
+allowed, or could not object to. A version is weaker also when a step gets more retries, a larger step budget
+or none, other instructions or another model; the pipeline's description may change. Accepted behaviour, as
+the user decided: automation may create a task on any published pipeline with the setting off, since every
+published version is one a person published, allowed, or could not object to. Only moving an existing task to
+another pipeline (`update_task`) is a person's decision, refused as `person_only` while the setting is off; a
+task without a pipeline may get any published one. `duplicate_pipeline` is shared with the deprecated
+desktop's server, which follows the rule too.
 
 Command tools through the tools: `save_tool_draft` takes the program as a name found on the search path (the
 tool's own `PATH` variable, else the project's, else the app's; relative folders are skipped) or as the absolute
@@ -787,10 +806,9 @@ save_tool_draft     {"project": "Orchester", "name": "Check",
                                    "-Tests", "changed"],
                      "timeout_secs": 10800}
 publish_tool        {"project": "Orchester", "tool": "Check"}
-save_pipeline_draft {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
+save_pipeline       {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
                      {"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
                       "on_failure": {"return_to": "implement", "retries": 2}}]}
-publish_pipeline    {"project": "Orchester", "pipeline": "Orchester change"}
 ```
 
 `-Tests changed` makes the check run tests as well (`tools/check-tests.ps1`): every test binary of the crates the

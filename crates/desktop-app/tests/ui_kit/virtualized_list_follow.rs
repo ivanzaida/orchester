@@ -154,19 +154,15 @@ fn virtualized_list_at_its_end_shows_the_end_of_a_last_row_that_grows() {
   assert!(gap < 1.0, "the list stays at the grown row's end: {gap} short of it");
 }
 
-/// lurq keeps the rows in view where they were when a new one comes and nothing asks for the end: following is the
-/// app's (`ui::chat::follow`), which asks on every arrival.
+/// A list at its end stays there when a new row comes, though nothing asks for the end: lurq follows it (since 0.59);
+/// the app's following (`ui::chat::follow`) also asks on every arrival.
 #[test]
-fn virtualized_list_at_its_end_not_asked_keeps_a_new_row_under_the_view() {
+fn virtualized_list_at_its_end_not_asked_stays_at_its_end_under_a_new_row() {
   let (mut kit, feed) = at_end();
-  let before = feed.scroll.scroll_y();
   change(&feed, |rows| rows.push(Line(50, 1500.0)));
   frames(&mut kit);
-  let after = feed.scroll.scroll_y();
-  assert!(
-    (after - before).abs() < 1.0,
-    "the rows in view stay: {before} then {after}"
-  );
+  let gap = gap_to_end(&feed);
+  assert!(gap < 1.0, "the list stays at its end: {gap} short of it");
 }
 
 /// The rows a chat shows through `ui::chat::follow::Follow`, and the signal that redraws it.

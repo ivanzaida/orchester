@@ -14,7 +14,7 @@ use orchester_core::{
   integration::{Leftovers, clean_up_recorded, leftovers},
   limits::ProjectLimits,
   name::Name,
-  resource::{Pipeline, Slug, StepKind},
+  resource::{Pipeline, StepKind},
   run::{InterruptCause, Run, RunAgainBlock, RunStatus},
   store::{ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
   time::Timestamp,
@@ -76,10 +76,15 @@ async fn run_again_after_a_failed_run_starts_the_next_run_from_the_first_step() 
   let mut steps = v1.body().steps().to_vec();
   steps[0].name = Name::new("Implement revised").expect("step name");
   let now = Timestamp::now();
-  let mut draft = v1.to_draft(now);
-  draft.edit(Pipeline::new(steps).expect("pipeline"), now);
-  db.save_draft(pipeline, &draft).expect("save draft");
-  let v2 = db.publish_draft::<Pipeline>(pipeline, now).expect("publish v2");
+  let v2 = db
+    .publish_pipeline_edit(
+      pipeline,
+      &Pipeline::new(steps).expect("pipeline"),
+      v1.number(),
+      None,
+      now,
+    )
+    .expect("publish v2");
   drop(db);
 
   let again = scheduler
@@ -131,11 +136,14 @@ async fn run_again_after_a_cancelled_run_starts_once_per_request() {
   };
   *profile = Some(ResourceId::generate());
   let now = Timestamp::now();
-  let mut draft = v1.to_draft(now);
-  draft.edit(Pipeline::new(steps).expect("pipeline"), now);
-  db.save_draft(pipeline, &draft).expect("save draft");
-  db.publish_draft::<Pipeline>(pipeline, now)
-    .expect("publish invalid-for-run v2");
+  db.publish_pipeline_edit(
+    pipeline,
+    &Pipeline::new(steps).expect("pipeline"),
+    v1.number(),
+    None,
+    now,
+  )
+  .expect("publish invalid-for-run v2");
   drop(db);
   assert_eq!(
     scheduler.run_again(key, project.task, first, None).await,
@@ -183,32 +191,22 @@ async fn run_again_needs_a_published_pipeline() {
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;
   wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
-  // The task names a pipeline that was never published, as an edit outside Orchester could.
-  let mut db = ProjectDb::open(root).expect("open");
-  let task = db.task(project.task).expect("read").expect("task");
-  let published = task.details().pipeline.expect("a pipeline");
-  let body = db
-    .latest_version::<Pipeline>(published)
-    .expect("read")
-    .expect("published")
-    .body()
-    .clone();
-  let draft = db
-    .create_resource(
-      Slug::new("draft").expect("slug"),
-      Name::new("Draft").expect("name"),
-      &body,
-      Timestamp::now(),
+  // The task names a pipeline with no version, as an edit outside Orchester could make: Orchester stores a pipeline
+  // only as a published version.
+  let unpublished = ResourceId::generate();
+  let raw = Connection::open(root.join(".orchester/orchester.db")).expect("open raw database");
+  raw
+    .execute(
+      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'pipeline', 'unpublished', 'Unpublished', 0)",
+      [unpublished.to_string()],
     )
-    .expect("draft pipeline")
-    .id();
-  Connection::open(root.join(".orchester/orchester.db"))
-    .expect("open raw database")
+    .expect("a pipeline with no version");
+  raw
     .execute(
       "UPDATE tasks SET pipeline_id = ?1 WHERE id = ?2",
-      [draft.to_string(), project.task.to_string()],
+      [unpublished.to_string(), project.task.to_string()],
     )
-    .expect("point the task at the draft");
+    .expect("point the task at it");
   assert_eq!(
     scheduler
       .run_again(IdempotencyKey::generate(), project.task, first, None)

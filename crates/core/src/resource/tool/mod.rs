@@ -12,7 +12,9 @@ pub use self::{
     CommandAction, CommandArg, CommandEnvironment, CommandError, CommandProgram, CommandTimeout, ExitCodes,
     OutputLimit, ProgramLocation, VariableName,
   },
-  http::{FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, RequestTarget, ResponseSource},
+  http::{
+    FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, HttpUrl, RequestTarget, ResponseSource,
+  },
   launch::NO_CURRENT_DIRECTORY_IN_EXE_PATH,
 };
 use crate::id::SecretId;
@@ -166,6 +168,12 @@ impl Tool {
 
   pub const fn access(&self) -> Option<&AccessPolicy> {
     self.access.as_ref()
+  }
+
+  /// Whether an agent can call it, as a check (`run_check`): a command with access rules, whose approval mode says when
+  /// a person approves a call. Only a check is something a profile can give its agents.
+  pub const fn is_check(&self) -> bool {
+    matches!(self.action, ToolAction::Command(_)) && self.access.is_some()
   }
 
   /// The secret the tool sends or connects with; command tools hold none.

@@ -251,7 +251,7 @@ impl CodeForm {
         unsent.set(Some(entry.id));
         return;
       }
-      if person.allows(VERIFY) {
+      if person.allows("verify the code of a sign-in to Orchester Cloud") {
         unsent.set(None);
         action.run_if_idle((entry.clone(), typed));
       }
@@ -304,7 +304,6 @@ pub(crate) fn step(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, host: &str) ->
     .with_children(refused(ctx, refusal.as_ref(), paused))
     .child(verify_button(ctx, form, entry, paused.is_some()))
     .with_children(checking)
-    .with_children(form.person.reason(ctx, VERIFY))
     .child(faded(links(ctx, form, entry, held)));
   let submit = form.submitter(entry);
   Column::new()

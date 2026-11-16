@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_api::v2::AuthorityErrorCode;
-use orchester_workspace::team_work::ClaimEnd;
+use orchester_workspace::{actions::LifecycleRefusal, team_work::ClaimEnd};
 
 use super::TeamAsk;
 use crate::{
@@ -36,6 +36,13 @@ pub(super) fn acted_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, acted: &A
     Acted::NeedsVersion(required) => {
       return Some(ctx.t_args("summary.team.refused.needsVersion", [("version", required.as_str())]));
     }
+    Acted::Lifecycle(refusal) => match refusal {
+      LifecycleRefusal::NotHolder => "summary.team.refused.notHolder",
+      LifecycleRefusal::NotAdmin => "summary.team.refused.notAdmin",
+      LifecycleRefusal::NotAdminWithDetails => "summary.team.refused.notAdminWithDetails",
+      LifecycleRefusal::StopRunFirst => "summary.team.refused.stopRunFirst",
+      LifecycleRefusal::MissingReason => "summary.team.refused.missingReason",
+    },
     Acted::Changed(_) => "summary.team.refused.changed",
     Acted::Unavailable => "summary.team.refused.unavailable",
     Acted::SignedOut => "summary.team.refused.signedOut",
@@ -54,6 +61,7 @@ pub(super) fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started
   Some(match stop {
     Stop::Claim(acted) => return acted_words(ctx, task, ask, acted),
     Stop::NotReady => ctx.t("summary.team.refused.notReady"),
+    Stop::NoBranch => ctx.t("summary.team.refused.noBranch"),
     // A start refused as invalid is the server's own reason, not an agent at work.
     Stop::Refused(AuthorityErrorCode::Invalid, _) => ctx.t("summary.team.refused.other"),
     Stop::Refused(code, claim) => {
@@ -110,7 +118,8 @@ fn refused_words(ctx: &Ctx, code: AuthorityErrorCode) -> Arc<str> {
     AuthorityErrorCode::DecisionRequired => "summary.team.refused.decision",
     AuthorityErrorCode::Forbidden => "summary.team.refused.forbidden",
     AuthorityErrorCode::MembershipRevoked => "summary.team.refused.removed",
-    AuthorityErrorCode::ModuleRequired => "summary.team.refused.notReady",
+    // A team server from before tasks started in no module still asks for one.
+    AuthorityErrorCode::ModuleRequired => "summary.team.refused.moduleRequired",
     AuthorityErrorCode::Unavailable | AuthorityErrorCode::RateLimited | AuthorityErrorCode::Unauthenticated => {
       "summary.team.refused.unavailable"
     }

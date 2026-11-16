@@ -33,7 +33,8 @@ use orchester_core::{
   permission::LaunchPermissions,
   resource::{AgentProfile, ModelId, Step},
   run::{
-    AssembledPrompt, CodeIndexPrompt, InvocationEngine, InvocationPrompt, PinnedVersion, ProfileInfo, WorkingTools,
+    AssembledPrompt, CodeIndexPrompt, GivenBy, InvocationEngine, InvocationPrompt, PinnedVersion, ProfileInfo,
+    WorkingTools,
   },
   usage::UsedProvider,
 };
@@ -189,6 +190,8 @@ struct StepAgent<'a> {
   body: &'a AgentProfile,
   connection: &'a AgentConnection,
   here: &'a OnComputer,
+  /// Whether the profile's lists or the pinned bodies' scopes decide what its agents get.
+  given: GivenBy,
 }
 
 impl<'a> StepAgent<'a> {
@@ -197,6 +200,7 @@ impl<'a> StepAgent<'a> {
       id: self.profile.resource,
       version: self.profile.number,
       body: self.body,
+      given: self.given,
     }
   }
 }
@@ -271,6 +275,7 @@ impl RunTask {
       body: &body,
       connection: &connection,
       here: &here,
+      given: self.resolver.given(),
     };
     if connection.provider().is_native() {
       self.native_start(execution, continuation, (invocation, worktree), index, agent)

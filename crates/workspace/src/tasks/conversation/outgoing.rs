@@ -46,6 +46,17 @@ pub enum Way {
   StopTurn,
 }
 
+impl Way {
+  /// What follows the stored message when it is sent this way in `mode`; `None` where the mode has no such way.
+  pub const fn then_in(self, mode: &ComposerMode) -> Option<Then> {
+    match self {
+      Self::Primary => mode.then(),
+      Self::Second => mode.then_later(),
+      Self::StopTurn => mode.then_stopping(),
+    }
+  }
+}
+
 /// What a mode answers or changes, which its context line names and the person can leave.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Context {
@@ -102,11 +113,7 @@ impl Action {
   }
   /// What sending `way` to `to` does in `mode`; `None` where it sends nothing.
   pub fn of(mode: &ComposerMode, way: Way, to: Recipient) -> Option<Self> {
-    let then = match way {
-      Way::Primary => mode.then(),
-      Way::Second => mode.then_later(),
-      Way::StopTurn => mode.then_stopping(),
-    };
+    let then = way.then_in(mode);
     let action = match (mode, way) {
       (ComposerMode::PlanChanges { version, .. }, Way::Primary) => return Some(Self::PlanChanges(*version)),
       (ComposerMode::Steer(working), Way::Primary) if working.mid_turn => Self::SendNow,
@@ -199,6 +206,33 @@ pub fn after_turn_run(detail: &TaskDetail, reads: bool, message: MessageId) -> O
   (run == latest && reads).then_some(run)
 }
 
+/// The decision sending `way` to `recipient` in `mode` takes on the task `detail`: what the action answers, or a
+/// free-text question a message answers ([`answers_question`]); `None` for none.
+pub fn decision_kind_of(
+  detail: &TaskDetail,
+  (mode, recipient): (&ComposerMode, Recipient),
+  way: Way,
+) -> Option<crate::decisions::DecisionKind> {
+  let action = Action::of(mode, way, recipient)?;
+  action
+    .decision_kind()
+    .or_else(|| answers_question(detail, recipient).then_some(crate::decisions::DecisionKind::Question))
+}
+
+/// Whether sending `detail`'s undelivered message `message` again after its agent's turn answers a free-text question
+/// ([`answers_question`]), a decision automation takes only under the person's consent ([`super::send_after_turn_as`]).
+pub fn resend_answers_question(detail: &TaskDetail, message: MessageId) -> bool {
+  detail
+    .messages
+    .iter()
+    .find(|stored| stored.id() == message)
+    .and_then(|stored| match stored.sender() {
+      orchester_core::conversation::Sender::Person { recipient, .. } => Some(*recipient),
+      _ => None,
+    })
+    .is_some_and(|recipient| answers_question(detail, recipient))
+}
+
 /// Whether a message queued now for `recipient` answers a free-text question an agent of the latest run waits
 /// on: the runner resumes that agent's step with it. A question with suggested answers holds its step.
 pub fn answers_question(detail: &TaskDetail, recipient: Recipient) -> bool {
@@ -240,10 +274,7 @@ impl Prepared {
 
   /// The decision sending actually takes, even after leaving the question's context line.
   pub fn decision_kind(&self, way: Way) -> Option<crate::decisions::DecisionKind> {
-    let action = Action::of(&self.mode, way, self.recipient)?;
-    action
-      .decision_kind()
-      .or_else(|| answers_question(&self.detail, self.recipient).then_some(crate::decisions::DecisionKind::Question))
+    decision_kind_of(&self.detail, (&self.mode, self.recipient), way)
   }
 
   /// Refuses sending `way` unless it does what the person pressed, `expected`.
@@ -320,12 +351,7 @@ fn store_as(
   (key, way): (IdempotencyKey, Way),
   ((text, attachments, skill), by_orchestrator, by): (Carried<'_>, Option<ChatId>, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
-  let then = match way {
-    Way::Primary => prepared.mode.then(),
-    Way::Second => prepared.mode.then_later(),
-    Way::StopTurn => prepared.mode.then_stopping(),
-  };
-  let then = match (then, way) {
+  let then = match (way.then_in(&prepared.mode), way) {
     (Some(then), _) => then,
     (None, Way::Second | Way::StopTurn) => return Err(OutgoingError::NoSecondWay),
     (None, Way::Primary) => return Err(OutgoingError::Closed(prepared.conversation.closed_reason())),

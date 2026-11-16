@@ -386,3 +386,38 @@ fn secrets_replacement_checks_current_bindings_before_touching_the_vault() {
   );
   assert_eq!(vault.0.load(Ordering::SeqCst), 2);
 }
+
+#[test]
+fn secret_used_by_an_archived_server_still_shows_the_use() {
+  let (repo, mut db) = project_db();
+  let shared = secret("SHARED_TOKEN");
+  db.create_secret(&shared).expect("secret metadata");
+  let server = McpServerText {
+    name: "docs".to_owned(),
+    program: std::env::current_exe()
+      .expect("test executable")
+      .to_string_lossy()
+      .into_owned(),
+    variables: format!("TOKEN={}", secret_reference(&shared)),
+    ..McpServerText::new_server()
+  };
+  let server_id = save_in(
+    repo.path(),
+    None,
+    server.draft(&[], std::slice::from_ref(&shared)).expect("valid server"),
+  )
+  .expect("save server");
+  db.archive_mcp_server(server_id, Timestamp::from_unix_millis(5))
+    .expect("archived");
+
+  let data = ProjectSecrets::load(&db).expect("read secrets and uses");
+
+  assert_eq!(
+    data.use_counts(shared.id()),
+    UseCounts {
+      tools: 0,
+      mcp_servers: 1
+    },
+    "restoring the server brings the secret's use back, so the secret is not unused meanwhile"
+  );
+}

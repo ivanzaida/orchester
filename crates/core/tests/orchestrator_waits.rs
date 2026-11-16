@@ -38,6 +38,7 @@ fn orchestrator_wait_turn_is_one_of_a_wait() {
       message,
       state: orchester_core::orchestrator::TurnState::Thinking,
       ended: None,
+      taken_with: None,
     }),
   };
   assert_eq!(started.turn().map(|(id, _)| id), Some(message));

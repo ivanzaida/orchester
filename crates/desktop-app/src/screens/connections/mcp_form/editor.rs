@@ -236,13 +236,13 @@ impl McpEditor {
   }
 }
 
-/// The names of the project's other servers.
+/// The names of the project's other servers, the archived ones too.
 fn taken(listed: &ProjectConnections, editing: Option<ConnectionId>) -> Vec<McpServerName> {
   listed
-    .mcp
+    .mcp_names
     .iter()
-    .filter(|server| Some(server.id()) != editing)
-    .map(|server| server.name().clone())
+    .filter(|(id, _)| Some(*id) != editing)
+    .map(|(_, name)| name.clone())
     .collect()
 }
 

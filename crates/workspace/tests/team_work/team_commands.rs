@@ -174,7 +174,8 @@ fn start(state: &mut State, token: &str, body: &Value) -> Result<Value, Refused>
     .iter()
     .filter_map(|expected| expected["kind"].as_str())
     .collect();
-  if !(kinds.contains(&"task") && kinds.contains(&"module")) {
+  // The task's revision, and its module's exactly when it is in one.
+  if !kinds.contains(&"task") || kinds.contains(&"module") == state.in_no_module {
     return Err((422, "invalid"));
   }
   let authority = &body["command"]["authority"];

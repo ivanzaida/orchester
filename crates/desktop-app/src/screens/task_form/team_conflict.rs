@@ -309,7 +309,7 @@ fn refused(ctx: &Ctx, stop: &TeamStop, key: &str) -> Element {
     Stop::Unkept => "task_form.team.refused.unkept",
     Stop::Acted(Acted::Refused(AuthorityErrorCode::Forbidden)) => "task_form.team.refused.notAdmin",
     Stop::Acted(Acted::Refused(AuthorityErrorCode::DecisionRequired)) => "task_form.team.refused.decision",
-    Stop::Acted(Acted::Refused(_)) => "task_form.team.refused.other",
+    Stop::Acted(Acted::Refused(_) | Acted::Lifecycle(_)) => "task_form.team.refused.other",
     Stop::Acted(Acted::PipelineRefused(PipelineRefusal::NotFound)) => "task_form.team.refused.pipelineNotFound",
     Stop::Acted(Acted::PipelineRefused(PipelineRefusal::Archived)) => "task_form.team.refused.pipelineArchived",
     Stop::Acted(Acted::Unavailable) => "task_form.team.refused.unavailable",

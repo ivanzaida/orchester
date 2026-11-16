@@ -4,7 +4,7 @@
 //! project folder, which acts through Orchester's domain tools with the same checks as the app
 //! (`orchester_workspace::orchestrator`). The screen shows the conversation the route names, the latest one by
 //! default, or a new one (`start`); its one-line header (`header`), the turns (`timeline`) in a 760 column, the
-//! composer with what the Orchestrator runs on (`composer`, `runs_on`), and History over the chat's right edge
+//! composer with what the Orchestrator runs on (`composer`, `runs_on`), and History at the chat's right edge
 //! (`history`). Each conversation's draft is kept for as long as the app runs (`draft`). Sending keeps the draft until
 //! its message is kept, and a failed send keeps it with *Retry*, which sends the same message once.
 
@@ -22,7 +22,7 @@ pub(in crate::screens) mod data;
 mod decision;
 mod delivery;
 mod digest;
-mod draft;
+pub(crate) mod draft;
 mod ending;
 mod env;
 mod export;
@@ -63,9 +63,8 @@ use lurq::{
     ctx::Ctx,
     events::KeyboardEvent,
   },
-  components::{Column, Stack},
+  components::Column,
   core::{ElementRef, Signal},
-  layout::StackAlignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -183,8 +182,8 @@ struct View {
   watching: watch::WatchAction,
   /// `/watching` and *Stop watching* in its answer (ORC-775).
   what_i_watch: watching::WhatIWatch,
-  /// The header, which a Leads chip's tooltip hangs under (`leads`).
-  head: ElementRef,
+  /// The header and its free room, which the Leads fit and hang their tooltips and list under (`leads`).
+  head: leads::HeadRefs,
   /// Whether the screen's person-only actions take synthetic input as the person's: in a QA copy only.
   qa_person: QaPerson,
   /// A stall of a run stands in the conversation shown, as it was last read (`data::read`, ORC-894).
@@ -235,7 +234,7 @@ impl Component for OrchestratorScreen {
       export: export::ChatExport::new(ctx),
       watching: watch::watch_action(ctx),
       what_i_watch: watching::WhatIWatch::new(ctx),
-      head: ElementRef::new(),
+      head: leads::HeadRefs::new(),
       qa_person: QaPerson::of(ctx),
       stalled: ctx.signal(false),
     };
@@ -292,7 +291,7 @@ impl Component for OrchestratorScreen {
     view.hold_started(&reads);
     view.what_i_watch.hold(&reads);
     let chat = match &reads.shown {
-      Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
+      Shown::Chat(shown) => Named::Chat(shown),
       // The conversation the first message started is named as new until it is read, as it was when it was sent.
       Shown::Loading if view.started_read(&reads).is_some() => Named::New,
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
@@ -310,7 +309,7 @@ impl Component for OrchestratorScreen {
     let more = kept.map(|shown| view.export.more(ctx, (&props.project, shown)));
     let head = header::header(ctx, view, (&props.project, chat), more);
     let main = body::main(ctx, view, (&props.project, &reads));
-    // History opens over the chat's right edge, under the header.
+    // History stands at the chat's right edge, under the header, and the chat takes what is left beside it.
     let panel = view.history.get().then(|| {
       // While the conversations are read the list is bones; a failed reading lists none.
       let none = History::default();
@@ -335,15 +334,7 @@ impl Component for OrchestratorScreen {
       .height(Dimension::Pct(100.0))
       .on_key_down(escape(view))
       .child(head)
-      .child(
-        Stack::new()
-          .width(Dimension::Pct(100.0))
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0))
-          .stack_align(StackAlignment::TopEnd)
-          .child(main)
-          .with_children(panel),
-      )
+      .child(history::beside(main, panel))
       .with_children(asked)
       .with_children(exported)
   }

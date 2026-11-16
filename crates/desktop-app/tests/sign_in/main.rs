@@ -255,12 +255,10 @@ fn sign_in_synthetic_input_cannot_sign_in() {
   window.set("sign-in-email", EMAIL);
   window.set("sign-in-password", PASSWORD);
   with_synthetic_input(|| window.press("sign-in-submit"));
-  shows(&mut window, "sign-in-submit-person-only");
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(
-    window
-      .text("sign-in-submit-person-only")
-      .contains("Only a person does this here"),
-    "the app's person-only reason"
+    !has(&mut window, "sign-in-submit-person-only"),
+    "nothing in the window says it"
   );
   let services = window.launch.services().expect("services").clone();
   assert!(!services.cloud.is_signed_in());
@@ -283,7 +281,7 @@ fn sign_in_advanced_refuses_synthetic_input() {
     .scroll_into_view();
   window.pass();
   with_synthetic_input(|| window.press("orchester-advanced-use"));
-  shows(&mut window, "orchester-advanced-use-person-only");
+  window.until("refused to the client", |window| window.refused_press().is_some());
   assert!(
     services.cloud.address().expect("address").default,
     "the build's cloud stays"

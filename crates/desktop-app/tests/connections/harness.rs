@@ -2,16 +2,17 @@
 //! driven by element id as a person would, and what Connections stored, read back from the project's
 //! database.
 
-use std::{path::PathBuf, time::Duration};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 use orchester_app::routes::{ConnectionsView, NewConnection, ProjectPage, Route};
 use orchester_core::{
   connection::mcp::McpServer,
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, ProjectId, ServerId},
+  sharing::MemberRole,
   store::McpServerStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, SharingLink};
 
 use crate::{
   kontur::{self, SeedRequest, scenarios},
@@ -55,17 +56,35 @@ impl Seeded {
     }
   }
 
+  /// The window on `scenario` with the project linked to a team (as its owner), the way a team's project is opened:
+  /// the pages a local project replaces by the Agents hub's forms stay what they were.
+  pub fn shared(scenario: &str) -> Self {
+    Self::changed(scenario, |repo| {
+      let mut db = ProjectDb::open(repo).expect("the project's database opens");
+      let link = SharingLink {
+        server: ServerId::generate(),
+        project: ProjectId::generate(),
+        key: db.project().key().clone(),
+        role: Some(MemberRole::Owner),
+        joined_at: Timestamp::now(),
+        cursor: 0,
+        last_synced_at: Timestamp::now(),
+        removed_at: None,
+        address: None,
+      };
+      db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
+    })
+  }
+
   pub fn go(&mut self, page: ProjectPage) {
     self.window.navigation().go(Route::Project(self.project, page));
     self.window.pass();
   }
 
-  /// Project settings › Connections, once the connections are read.
+  /// Away from a connection's page: the tab's old address, which opens Project settings on General.
   pub fn list(&mut self) {
     self.go(ProjectPage::Connections(ConnectionsView::default()));
-    self.until("the connections", |seeded| {
-      seeded.exists("connections-list") || seeded.exists("connections-empty")
-    });
+    self.until("Project settings", |seeded| seeded.exists("settings-tab-general"));
   }
 
   /// The page of connection `id`, once it shows.
@@ -149,11 +168,23 @@ impl Seeded {
     }
   }
 
-  /// The row of connection `id` in Connections, which opens its page.
-  pub fn row(id: ConnectionId) -> String {
-    format!("connection-row-{id}-row")
-  }
-
   /// Why the form's Save cannot be used, if it says.
   pub const REASON: &str = "connection-form-actions-reason";
+}
+
+/// Chooses `label` in the select `id`.
+pub fn choose(seeded: &mut Seeded, id: &str, label: &str) {
+  let mut select = seeded
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("{id} is a select"));
+  let index = select
+    .labels()
+    .iter()
+    .position(|value| value.as_ref() == label)
+    .unwrap_or_else(|| panic!("{label} among {:?}", select.labels()));
+  select.commit(index);
+  seeded.window.pass();
 }

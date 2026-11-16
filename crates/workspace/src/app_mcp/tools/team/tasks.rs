@@ -108,7 +108,8 @@ fn listed(project: orchester_core::id::ProjectId, read: &TaskRead) -> Value {
   })
 }
 
-/// A task as `get_task` gives it: what the team server holds of it, at its revision.
+/// A task as `get_task` gives it: what the team server holds of it, at its revision. `closed` and `blocked` are the
+/// server's records of who closed it or set its reason, `null` when it has none (an older server sends none).
 fn detail(project: orchester_core::id::ProjectId, read: &TaskRead) -> Value {
   let task = &read.task;
   let content = &task.content;
@@ -134,6 +135,8 @@ fn detail(project: orchester_core::id::ProjectId, read: &TaskRead) -> Value {
     "assignee": read.assignee,
     "claim": read.effective_claim,
     "work": read.work,
+    "closed": read.closed,
+    "blocked": read.blocked,
     "capabilities": read.capabilities,
     "team": true,
     "link": task_link(project, &task.key, TaskPage::Summary),

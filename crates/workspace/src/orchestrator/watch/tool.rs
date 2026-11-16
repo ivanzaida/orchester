@@ -214,6 +214,8 @@ fn refusal(error: WatchError) -> ToolError {
     WatchError::NotWatched => "not_watched",
     WatchError::LedElsewhere { .. } => "led_elsewhere",
     WatchError::AlreadyHere => "already_here",
+    // No tool of the agent's changes a ceiling, so none of them is refused this way; the code names it all the same.
+    WatchError::NotLedToEnd => "not_led_to_end",
   };
   ToolError::refused(code, vec![error.message()])
 }

@@ -72,7 +72,6 @@
     "openExecutable": "A file that may be executed does not open from here.",
     "openComma": "A file whose path has a comma does not open from here: Windows Explorer could read it as two.",
     "openUnsupported": "Opening a file is not supported on this platform yet.",
-    "personOnly": "Only a person’s click does this; automation cannot.",
     "openFailed": "The file could not be opened; the app’s log says why.",
     "selection": {
       "one": "Line {{first}} selected",

@@ -1,7 +1,8 @@
 //! `return_to_draft`: takes a queued task whose run never started back to Draft and to Backlog, as a card dropped on
 //! the board's Backlog column does, through the same workspace function. A task of a reviewed group goes back only
 //! when its group holds it for good (after a task of the group failed, at the group's cap, refused by preflight or by
-//! the runner, blocked or canceled), as the Tasks selection bar's *Return to drafts* takes it.
+//! the runner, blocked or canceled), as the Tasks selection bar's *Return to drafts* takes it. A team task has no queue
+//! or draft on the team server, so there it is refused (`team_no_queue`).
 
 use orchester_core::{
   store::TaskStore,
@@ -33,9 +34,10 @@ pub struct ReturnToDraft {
 }
 
 pub async fn return_to_draft(services: &Services, args: ReturnToDraft) -> Result<Value, ToolError> {
-  // A team task's queue and workflow status are lifecycle transitions whose owner is open (D4): nothing changes here.
+  // The queue and Draft are this computer's: the team server holds only a task's workflow status, which an Admin
+  // moves back to Backlog with `update_task` (decision D4).
   if team::of(services, &args.project).await?.is_some() {
-    return Err(team::decision_required(orchester_api::v2::DecisionId::D4));
+    return Err(team::no_queue());
   }
   let services = services.clone();
   blocking(move || {

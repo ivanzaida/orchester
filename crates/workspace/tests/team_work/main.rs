@@ -24,6 +24,7 @@ mod fixture;
 mod heartbeat;
 mod here;
 mod last_start;
+mod no_module;
 mod reports;
 mod start;
 mod start_alone;
@@ -272,9 +273,9 @@ impl Checkout {
         },
         base_commit: CommitId::new(&"a".repeat(40)).expect("commit"),
         read: TaskRevision::FIRST,
-        module: server.module,
-        module_read: TaskRevision::FIRST,
+        module: Some((server.module, TaskRevision::FIRST)),
       },
+      base_branch: None,
       programs: McpPrograms::default(),
     }
   }
@@ -383,10 +384,11 @@ impl StoreRunner {
       snapshot,
       branch: BranchName::new("orchester/kon-7-run-1").expect("branch"),
       base: Revision::new(acceptance.base_commit.as_str()).expect("revision"),
+      // As the runner makes it: on its module's branch, or, in no module, on the branch the start was asked on.
       base_branch: Some(acceptance.branch),
-      base_source: RunBaseSource::Module {
-        module: acceptance.module,
-      },
+      base_source: acceptance
+        .module
+        .map_or(RunBaseSource::CheckedOut, |module| RunBaseSource::Module { module }),
       budget: None,
       max_duration: None,
     };

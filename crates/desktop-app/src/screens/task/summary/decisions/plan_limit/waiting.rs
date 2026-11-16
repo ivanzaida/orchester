@@ -28,7 +28,7 @@ use super::{
   card::{account_name, reset_time},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, may_press},
   services::accounts::Accounts,
   theme::{DecisionText, ExtraTypography, IconSize},
   ui::{
@@ -134,11 +134,9 @@ impl WaitingCard<'_> {
       let (run, gate) = (self.run.id(), self.gate.cloned());
       let (asked, action) = (self.asked.clone(), self.action.clone());
       button.on_click(move || {
-        if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+        if may_press(gate.as_ref(), Guarded::PermissionWidening, super::TRY_NOW) {
           asked.set(Some(Continuing));
           action.run((Continuing, try_now(run)));
-        } else {
-          tracing::warn!("synthetic input tried a waiting run now; not taken");
         }
       })
     };
@@ -243,11 +241,9 @@ impl WaitingCard<'_> {
     let (run, connection, gate) = (self.run.id(), chosen.id(), self.gate.cloned());
     let (asked, action) = (self.asked.clone(), self.action.clone());
     button.on_click(move || {
-      if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+      if may_press(gate.as_ref(), Guarded::PermissionWidening, super::CONTINUE_ON) {
         asked.set(Some(Continuing));
         action.run((Continuing, continue_on(run, connection)));
-      } else {
-        tracing::warn!("synthetic input started a waiting run on another account; not taken");
       }
     })
   }

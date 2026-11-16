@@ -4,13 +4,16 @@
 //! is ([`server_owners`]), the application's own settings ([`settings`], Settings › Browser's in [`browser`], the
 //! computer's *Services at once* in [`service_slots`]), among them the Usage dashboard's warning threshold, and its
 //! updates' ([`updates`]), the person's agent CLI accounts ([`accounts`]) and the plan limits read of them outside runs
-//! ([`plan_reads`]).
+//! ([`plan_reads`]), the API accounts ([`api_accounts`]) and the program of each agent CLI ([`agent_programs`]).
 
 mod accounts;
+mod agent_programs;
+mod api_accounts;
 mod browser;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
+mod decision_servers;
 mod mcp_programs;
 mod owners;
 mod plan_reads;
@@ -95,10 +98,12 @@ CREATE TABLE ui_state (
   updates::MIGRATION,
   settings::BROWSER_WINDOW_MIGRATION,
   browser::MIGRATION,
-  service_slots::MIGRATION,
-  // Master's `mcp_programs` comes after ours on this branch: application databases already migrated by Agent testing
-  // builds hold `service_slots` at 33, so master's migration cannot take 33 here.
   mcp_programs::MIGRATION,
+  api_accounts::MIGRATION,
+  agent_programs::MIGRATION,
+  decision_servers::MIGRATION,
+  settings::KEEPS_AWAKE_MIGRATION,
+  service_slots::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

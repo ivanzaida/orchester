@@ -445,9 +445,13 @@ fn pipelines(db: &mut ProjectDb, program: &Path) -> BTreeMap<&'static str, RunSn
         .expect("pipeline")
         .with_deliver(deliver);
       let resource = db
-        .create_resource(Slug::new(way).expect("slug"), name(way), &pipeline, at(2))
-        .expect("pipeline");
-      let version = db.publish_draft::<Pipeline>(resource.id(), at(2)).expect("publish");
+        .create_published(Slug::new(way).expect("slug"), name(way), &pipeline, at(2))
+        .expect("pipeline")
+        .0;
+      let version = db
+        .latest_version::<Pipeline>(resource.id())
+        .expect("publish")
+        .expect("published");
       (
         way,
         RunSnapshot::build(resource.id(), &version, published).expect("snapshot"),

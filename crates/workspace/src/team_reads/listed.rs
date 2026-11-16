@@ -1,57 +1,65 @@
 //! A team project's tasks as the screens list them (P6): each [`TaskRead`] as core's [`Task`], so the lists built for a
 //! local project's tasks show the server's, with what a row says beside the task itself. A team task names one of the
 //! team's pipelines by its resource id (the person's decision of 2026-11-05, `docs/architecture/server.md` row 80);
-//! [`TeamPipelines`] says which of the team's pipelines this computer has, and a task whose pipeline is none of them is
+//! [`TeamPipelines`] says which of the team's pipelines this session read, and a task whose pipeline is none of them is
 //! kept with no pipeline and what it names among the missing ones.
 
-use std::{
-  collections::{HashMap, HashSet},
-  path::Path,
-};
+use std::collections::{HashMap, HashSet};
 
 use orchester_api::v2::TaskRead;
 use orchester_core::{
   id::{ResourceId, TaskId},
   project::TaskKey,
-  resource::{Pipeline, ResourceKind},
-  store::ResourceStore,
+  resource::ResourceKind,
   task::{Task, TaskDetails},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, ResourceSharing, StoreError};
 
-use crate::sharing::{SharingError, project::convert};
+use crate::{
+  sharing::{SharingError, project::convert},
+  team_config::TeamConfig,
+};
 
-/// The team's pipelines this computer has: each one the server shares, not archived, with a version this computer
-/// accepted. A team task may name only these; a person's own local pipelines never run a team task.
+/// The team's pipelines as this session read them from the team server: each one not archived and with a published
+/// version. A team task may name only these; a person's own local pipelines never run a team task.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct TeamPipelines(HashSet<ResourceId>);
+pub struct TeamPipelines {
+  /// `None` while the team's configuration has not been read this session ([`Self::unread`]).
+  read: Option<HashSet<ResourceId>>,
+}
 
 impl TeamPipelines {
-  /// The team's pipelines of the project at `repo_root`. Blocking.
-  pub fn read(repo_root: &Path) -> Result<Self, StoreError> {
-    Self::of(&ProjectDb::open(repo_root)?)
+  /// The team's pipelines in `config`, the team's configuration read this session.
+  pub fn of(config: &TeamConfig) -> Self {
+    let read = config
+      .resources(ResourceKind::Pipeline)
+      .into_iter()
+      .filter(|resource| resource.number().is_some())
+      .map(|resource| resource.id)
+      .collect();
+    Self { read: Some(read) }
   }
 
-  /// The team's pipelines of the project of `db`.
-  pub fn of(db: &ProjectDb) -> Result<Self, StoreError> {
-    let mut team = HashSet::new();
-    for resource in db.resources(ResourceKind::Pipeline)? {
-      let shared = matches!(db.resource_sharing(resource.id())?, Some(ResourceSharing::Shared(_)));
-      if shared && db.latest_version::<Pipeline>(resource.id())?.is_some() {
-        team.insert(resource.id());
-      }
-    }
-    Ok(Self(team))
+  /// The team's pipelines while its configuration is being read, or could not be read: which pipelines are the team's
+  /// cannot be told yet, so a task's list shows the pipeline each task names and says none is missing, rather than wait
+  /// or call every one missing. Nothing may be *sent* naming a pipeline from this: the writers read [`Self::of`].
+  pub fn unread() -> Self {
+    Self { read: None }
   }
 
+  /// Whether `pipeline` is one of the team's; `false` while the configuration is not read.
   pub fn contains(&self, pipeline: ResourceId) -> bool {
-    self.0.contains(&pipeline)
+    self.read.as_ref().is_some_and(|read| read.contains(&pipeline))
   }
 
-  /// The team pipeline a team task's `pipeline` names, as the server keeps it: its resource id.
+  /// The team pipeline a team task's `pipeline` names, as the server keeps it: its resource id. While the
+  /// configuration is not read, the id the task names, if it is one.
   pub fn id(&self, pipeline: &str) -> Option<ResourceId> {
-    pipeline.parse().ok().filter(|id| self.contains(*id))
+    let id = pipeline.parse().ok()?;
+    match &self.read {
+      Some(read) => read.contains(&id).then_some(id),
+      None => Some(id),
+    }
   }
 }
 

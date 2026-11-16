@@ -9,7 +9,6 @@ use std::{
 use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
-  events::input_source,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -28,14 +27,15 @@ use orchester_workspace::{
 
 use super::TaskContext;
 use crate::{
-  mcp::input_gate::{InputGate, LocalInput},
+  mcp::{
+    input_gate::{InputGate, LocalInput},
+    input_source,
+  },
   services::Services,
 };
 
 #[derive(Clone)]
 pub enum Action {
-  Refused,
-  AuthorityRefused,
   BusyRefused,
   Refresh,
   ReviewCommit(Vec<LocalPath>),
@@ -51,8 +51,6 @@ pub enum Action {
   /// Discards the selected paths' changes: to the Recycle Bin / Trash, or back to HEAD with the person's version
   /// there first. Only a person's press decides it.
   Discard(Vec<LocalPath>),
-  /// Window automation pressed *Discard selected*, which only a person may.
-  DiscardRefused,
   Sync,
   Merge {
     exact: Box<CheckedResult>,
@@ -165,7 +163,7 @@ impl Action {
   /// What the page says when the action's origin may not decide it.
   const fn refusal(&self) -> &'static str {
     match self {
-      Self::Discard(_) | Self::DiscardRefused => "local_integration.error.discardPerson",
+      Self::Discard(_) => "local_integration.error.discardPerson",
       _ => "local_integration.error.approval",
     }
   }
@@ -178,12 +176,6 @@ pub fn action(ctx: &mut Ctx) -> Work {
     async move {
       if matches!(request.action, Action::BusyRefused) {
         return Err(Problem("local_integration.error.foreign").into());
-      }
-      if matches!(request.action, Action::AuthorityRefused) {
-        return Err(Problem("local_integration.error.authority").into());
-      }
-      if matches!(request.action, Action::Refused | Action::DiscardRefused) {
-        return Err(Problem(request.action.refusal()).into());
       }
       let task = request.task.clone();
       let run = task
@@ -274,8 +266,6 @@ fn execute(
 ) -> Result<Outcome, IntegrationError> {
   match action {
     Action::Refresh => session.refresh()?,
-    Action::Refused | Action::DiscardRefused => return Err(LocalError::ApprovalRequired.into()),
-    Action::AuthorityRefused => return Err(LocalError::AuthorityChanged.into()),
     Action::BusyRefused => return Err(LocalError::ForeignOperation.into()),
     Action::ReviewCommit(paths) => {
       session.review_current()?;

@@ -98,10 +98,16 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   );
   // Returning a run decides for the person: an MCP client's press is refused until a person lets automation answer,
   // as `continue_run` is, and then recorded as automation's.
-  served
+  let refused = served
     .click_by_client("merge-attempt-ask-agent")
-    .expect("the press reaches the button");
-  served.until("the refusal", |served| served.shows("merge-attempt-not-done"));
+    .expect_err("refused to the client that pressed");
+  assert!(
+    refused
+      .to_string()
+      .contains("ask an agent to resolve a merge's conflicts"),
+    "it names the action: {refused}"
+  );
+  assert!(!served.shows("merge-attempt-not-done"), "the page says nothing of it");
   assert_eq!(
     stored(&seeded, run.id()).attempts().len(),
     run.attempts().len(),

@@ -24,38 +24,63 @@ use crate::screens::team_hub::{
 };
 
 /// How one part stands.
-pub(super) enum State {
+pub(in crate::screens) enum State<F = Fix> {
   Ready(Arc<str>),
   Missing {
     words: Arc<str>,
-    fix: Option<Fix>,
+    fix: Option<F>,
     /// Nothing can stand in for it: the glyph is `danger`, not `warning`.
     blocking: bool,
   },
 }
 
-pub(super) struct Part {
+pub(in crate::screens) struct Part<F = Fix> {
   /// What the part's controls are called in element ids.
   pub id: String,
   pub label: Arc<str>,
-  pub state: State,
+  pub state: State<F>,
 }
 
 /// The connection, then each MCP server, then each secret of the profile, as `entry`'s standing says they are.
-pub(super) fn parts(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &TeamProfileSheet) -> Vec<Part> {
+/// `accounts` says this computer has an account of the profile's CLI, which a project with no connection for it can
+/// be run on.
+pub(super) fn parts(
+  ctx: &Ctx,
+  (listing, entry): (&Listing, &Entry),
+  sheet: &TeamProfileSheet,
+  accounts: bool,
+) -> Vec<Part> {
   let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
-  let mut parts = vec![connection(ctx, sheet, missing)];
-  parts.extend(sheet.mcp_servers.iter().map(|used| server(ctx, listing, used, missing)));
+  let mut parts = vec![connection(ctx, sheet, missing, accounts)];
+  parts.extend(
+    sheet
+      .mcp_servers
+      .iter()
+      .map(|used| server(ctx, (listing, entry), used, missing)),
+  );
   parts.extend(sheet.secrets.iter().map(|name| secret(ctx, name, missing)));
   parts
 }
 
-fn connection(ctx: &Ctx, sheet: &TeamProfileSheet, missing: &[Missing]) -> Part {
+fn connection(ctx: &Ctx, sheet: &TeamProfileSheet, missing: &[Missing], accounts: bool) -> Part {
   let cli = ctx.t(cli_key(sheet.cli));
+  let signed_out = missing
+    .iter()
+    .any(|part| matches!(part, Missing::ConnectionSignIn { .. }));
   let state = match missing.iter().find_map(|part| match part {
     Missing::Connection { problem, .. } => Some(*problem),
     _ => None,
   }) {
+    _ if signed_out => State::Missing {
+      words: ctx.t_args("team_hub.ready.signedOut", [("cli", &*cli)]),
+      fix: Some(Fix::SignIn),
+      blocking: true,
+    },
+    Some(ConnectionProblem::NoneOfKind) if accounts => State::Missing {
+      words: ctx.t_args("team_hub.ready.accountNeeded", [("cli", &*cli)]),
+      fix: Some(Fix::UseConnection),
+      blocking: false,
+    },
     Some(ConnectionProblem::NoneOfKind) => State::Missing {
       words: ctx.t_args("team_hub.ready.noneOfKind", [("cli", &*cli)]),
       fix: Some(Fix::AddConnection),
@@ -94,8 +119,19 @@ fn connection_words(ctx: &Ctx, sheet: &TeamProfileSheet, cli: &str) -> Arc<str> 
   }
 }
 
-fn server(ctx: &Ctx, listing: &Listing, used: &UsedServer, missing: &[Missing]) -> Part {
+fn server(ctx: &Ctx, (listing, entry): (&Listing, &Entry), used: &UsedServer, missing: &[Missing]) -> Part {
   let id = used.server.id;
+  if super::fix::archived_named(entry).is_some_and(|(archived, _)| archived == id) {
+    return Part {
+      id: format!("mcp-{id}"),
+      label: ctx.t_args("team_hub.ready.mcpServer", [("name", used.server.name.as_str())]),
+      state: State::Missing {
+        words: ctx.t_args("team_hub.ready.archived", [("profile", entry.name.as_str())]),
+        fix: Some(Fix::OpenArchived(id)),
+        blocking: false,
+      },
+    };
+  }
   let problem = missing.iter().find(|part| of_server(part, id)).or_else(|| {
     missing
       .iter()
@@ -131,7 +167,7 @@ const fn secret_of(part: &Missing) -> Option<&SecretName> {
 /// A missing part of a server or a secret, in words that fit its row.
 fn problem_state(ctx: &Ctx, listing: &Listing, server: ResourceId, part: &Missing) -> State {
   let words = match part {
-    Missing::McpOff { .. } if listing.find(server).is_some_and(|found| found.here == Group::OffHere) => {
+    Missing::McpOff { .. } if listing.find(server).is_some_and(|found| found.group == Group::OffHere) => {
       ctx.t("team_hub.ready.switchedOff")
     }
     Missing::McpOff { .. } => ctx.t("team_hub.line.mcpUndecided"),
@@ -147,6 +183,7 @@ fn problem_state(ctx: &Ctx, listing: &Listing, server: ResourceId, part: &Missin
     Missing::Secret { name } => ctx.t_args("team_hub.line.secret", [("name", name.to_string())]),
     Missing::SecretUnreadable { name } => ctx.t_args("team_hub.line.secretUnreadable", [("name", name.to_string())]),
     Missing::Connection { .. }
+    | Missing::ConnectionSignIn { .. }
     | Missing::DecisionConnection { .. }
     | Missing::LocalMcpProgram { .. }
     | Missing::LocalSecret { .. } => ctx.t("team_hub.ready.ready"),

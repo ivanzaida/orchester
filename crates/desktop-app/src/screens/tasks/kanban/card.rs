@@ -1,7 +1,8 @@
 //! A card of the board (`KON-12` `l5gcS` in `01 Board` `ntozw`): `surface_panel` in a `border` stroke, radius 6, 8
 //! over and 9 under its parts, 10 at its sides, 5 between them. Its key and its age (mono 11 `text_muted`), its title
 //! in 13/500, its run chip (the run's status in the list's words with the step it is at, 12/500 in its tone, on
-//! `warning_muted` while it needs input, and the mark of who runs its agent), its readiness phrase (11.5, in its tone),
+//! `warning_muted` while it needs input, and the mark of who runs its agent; a closed task no run speaks for says
+//! its Done or Canceled there and has no readiness line), its readiness phrase (11.5, in its tone),
 //! and its chips: priority, points, module and tags, each 20 high in a `border` stroke, radius 4. Display options
 //! turn each of them but the title off. A selected card is `accent_muted` in an `accent` stroke with its check; the
 //! card a drag lifted leaves its place as an outline.
@@ -72,6 +73,8 @@ pub struct CardModel {
   pub run: Option<RunLine>,
   pub readiness: Arc<str>,
   pub readiness_color: PaletteColor,
+  /// The task is closed and no run speaks for it: its run chip says so and there are no readiness words.
+  pub closed: bool,
   pub age: Arc<str>,
   pub module: Option<Arc<str>>,
   pub points: Option<Arc<str>>,
@@ -99,12 +102,26 @@ pub struct CardSource<'a> {
 impl CardModel {
   pub fn of(ctx: &Ctx, source: &CardSource<'_>, row: &TaskRow) -> Self {
     let need = source.needs.get(&row.id);
+    // A closed task no run speaks for has the glyph and word of its closed status in the run chip's place, as the
+    // other cards of the Done column have their run's (*Done*, *Canceled*), and no readiness line: the draft's
+    // *Ready to queue* is not true of it.
     let phrase = Phrase::of(ctx, row, need, source.tasks);
     Self {
       project: source.project,
-      run: run_line(ctx, row),
+      run: if phrase.closed {
+        Some(RunLine {
+          glyph: phrase.glyph,
+          words: phrase.words,
+          color: phrase.glyph_color,
+          filled: false,
+          agent: None,
+        })
+      } else {
+        run_line(ctx, row)
+      },
       readiness: message_text(ctx, &row.detail),
       readiness_color: phrase.color,
+      closed: phrase.closed,
       age: age(ctx, source.now, row.created_at),
       module: row.module.and_then(|id| {
         source
@@ -259,7 +276,7 @@ pub fn content(
     .as_ref()
     .filter(|_| display.shows(Property::Run))
     .map(|run| run_chip(ctx, key, run, display.shows(Property::Agent)));
-  let readiness = display.shows(Property::Readiness).then(|| {
+  let readiness = (display.shows(Property::Readiness) && !card.closed).then(|| {
     Text::new(&card.readiness)
       .id(format!("task-state-{key}"))
       .variant(ExtraTypography::Note.role())
@@ -292,7 +309,7 @@ fn run_chip(ctx: &Ctx, key: &str, run: &RunLine, agent: bool) -> Row {
     .height(Dimension::Px(CHIP_HEIGHT))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(run.glyph, IconSize::Sm, run.color.clone()))
+    .child(icon(run.glyph, IconSize::Sm, run.color.clone()).id(format!("task-run-{key}-icon")))
     .child(
       Text::new(&run.words)
         .id(format!("task-run-{key}-label"))

@@ -9,11 +9,14 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  id::{ResourceId, RunId, TaskId},
+  computer::ComputerError,
+  id::{ConnectionId, ResourceId, RunId, TaskId},
   name::Name,
   permission::AgentPermissions,
-  resource::{AgentProfile, Instruction, Skill, SkillFile, Slug, StepKey, Tool, VersionNumber},
-  run::{PinnedVersion, Run, bundle::file_sha256, inputs::RunInputs},
+  resource::{
+    AgentProfile, CommandAction, Instruction, Skill, SkillFile, Slug, StepKey, Tool, ToolAction, VersionNumber,
+  },
+  run::{GivenBy, PinnedVersion, Run, bundle::file_sha256, inputs::RunInputs},
   task::Task,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -23,6 +26,7 @@ use super::link::{
   LinkError,
   resources::{Pinned, ResourceLink, blob, pinned_version, resource_names},
 };
+use crate::computer::ComputerResources;
 
 /// Why a pinned body, label or file of a run cannot be resolved.
 #[derive(Debug, Error)]
@@ -64,6 +68,16 @@ impl RunResolver {
     }
   }
 
+  /// How the run decides what its agents get: a local run made without inputs by what each step's profile version
+  /// chooses; one made from inputs (every team run) by the pinned bodies' scopes, since the inputs' profiles carry no
+  /// lists.
+  pub(in crate::execution) const fn given(&self) -> GivenBy {
+    match self {
+      Self::Inputs(_) => GivenBy::Scope,
+      Self::Published => GivenBy::Profile,
+    }
+  }
+
   /// The slug and name of pinned resource `resource`, a `what`.
   pub(in crate::execution) fn label(
     &self,
@@ -88,6 +102,21 @@ impl RunResolver {
     }
   }
 
+  /// The connection `computer` runs the agent profile version `pinned`, whose content is `body`, on: the one the
+  /// run's inputs bound when it was made from inputs, else the computer's own choice for the profile, which a person
+  /// may change while the run goes on.
+  pub(in crate::execution) fn runs_on(
+    &self,
+    computer: &dyn ComputerResources,
+    pinned: &PinnedVersion,
+    body: &AgentProfile,
+  ) -> Result<ConnectionId, ComputerError> {
+    match self {
+      Self::Inputs(_) => Ok(body.connection()),
+      Self::Published => computer.profile_connection(pinned.resource, body.connection()),
+    }
+  }
+
   /// The agent profile version `pinned` as the run's agents run it.
   pub(in crate::execution) fn profile(
     &self,
@@ -107,12 +136,26 @@ impl RunResolver {
     })
   }
 
-  pub(in crate::execution) fn tool(
+  /// The command tool version `pinned` runs; `None` for an HTTP or database tool.
+  pub(in crate::execution) fn command(
     &self,
     link: &(impl ResourceLink + ?Sized),
     pinned: PinnedVersion,
-  ) -> Result<Tool, ResolveError> {
-    self.body(link, pinned, "tool", |inputs| inputs.tool(pinned).cloned())
+  ) -> Result<Option<CommandAction>, ResolveError> {
+    let missing = || ResolveError::VersionMissing {
+      what: "tool",
+      number: pinned.number,
+    };
+    match self {
+      Self::Inputs(inputs) => Ok(inputs.tool(pinned).ok_or_else(missing)?.command().cloned()),
+      Self::Published => {
+        let tool = pinned_version::<Tool>(link, &pinned)?.ok_or_else(missing)?;
+        Ok(match tool.action() {
+          ToolAction::Command(command) => Some(command.clone()),
+          ToolAction::Http(_) | ToolAction::DatabaseQuery(_) => None,
+        })
+      }
+    }
   }
 
   pub(in crate::execution) fn skill(

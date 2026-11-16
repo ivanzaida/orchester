@@ -1,0 +1,150 @@
+//! The Pipelines hub of a local project (`Workspace::pipeline_hub`, Pipelines v2 P1): each pipeline with its latest
+//! version's steps, the tasks that use it and its version; the ones that cannot run as they are, which need the person;
+//! what was archived. A pipeline is stored only as published versions (D-032), so every one listed has a version.
+
+use orchester_core::{
+  connection::AgentProvider,
+  id::{ConnectionId, IdempotencyKey, ResourceId},
+  resource::Pipeline,
+  store::{ResourceStore, TaskStore},
+  task::{TaskDetails, TaskLimits},
+  time::Timestamp,
+};
+use orchester_workspace::{
+  pipelines::hub::{HubError, PipelineHub},
+  readiness::Group,
+};
+
+use crate::support::{Fixture, at, name, pipeline, profile_on};
+
+const CLAUDE: AgentProvider = AgentProvider::ClaudeCodeCli;
+
+fn hub(fixture: &Fixture) -> PipelineHub {
+  fixture
+    .workspace
+    .pipeline_hub(&fixture.root, &fixture.vault)
+    .expect("the hub")
+}
+
+fn use_pipeline(fixture: &Fixture, pipeline: ResourceId, tasks: usize) {
+  let details = (0..tasks)
+    .map(|number| TaskDetails {
+      title: name(&format!("Task {number}")),
+      brief: String::new(),
+      acceptance_criteria: Vec::new(),
+      pipeline: Some(pipeline),
+      limits: TaskLimits::NONE,
+    })
+    .collect();
+  fixture
+    .db()
+    .create_tasks(IdempotencyKey::generate(), details, Timestamp::now())
+    .expect("tasks");
+}
+
+#[test]
+fn readiness_pipeline_hub_groups_by_whether_a_pipeline_can_run_as_it_is() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let lost = fixture.own("lost", &profile_on(ConnectionId::generate(), &[]));
+  let ready = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
+  let stuck = fixture.own("stuck", &pipeline(&[Some(builder), Some(lost)], None));
+  use_pipeline(&fixture, ready, 3);
+
+  let read = hub(&fixture);
+  assert_eq!(read.pipelines().len(), 2);
+  let group = |id| read.pipelines().iter().find(|found| found.id == id).expect("listed");
+
+  let delivery = group(ready);
+  assert_eq!(delivery.group(), Group::Ready);
+  assert_eq!((delivery.step_count, delivery.used_by), (2, 3));
+  assert_eq!(delivery.version.get(), 1);
+  assert_eq!(delivery.published_at, at(11));
+
+  let stuck = group(stuck);
+  assert_eq!(stuck.group(), Group::NeedsYouHere, "what its steps run is not ready");
+}
+
+#[test]
+fn readiness_pipeline_hub_leaves_an_archived_pipeline_out_of_the_list_and_lists_it_apart() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let kept = fixture.own("kept", &pipeline(&[Some(builder)], None));
+  let old = fixture.own("old", &pipeline(&[Some(builder)], None));
+  assert_eq!(hub(&fixture).archived().len(), 0);
+
+  fixture.db().archive_local_resource(old, at(30)).expect("archived");
+
+  let read = hub(&fixture);
+  assert_eq!(read.pipelines().len(), 1);
+  assert_eq!(read.pipelines()[0].id, kept);
+  let archived = read.archived();
+  assert_eq!(archived.len(), 1);
+  assert_eq!(archived[0].id, old);
+  assert_eq!(archived[0].at, at(30));
+  assert!(archived[0].latest.is_some(), "it keeps the version it had");
+}
+
+#[test]
+fn readiness_pipeline_hub_carries_each_pipelines_steps_as_the_flow_they_run_in() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let published = fixture.own("delivery", &pipeline(&[Some(builder), Some(builder)], None));
+
+  let read = hub(&fixture);
+  let found = read
+    .pipelines()
+    .iter()
+    .find(|found| found.id == published)
+    .expect("listed");
+  let drawn = found
+    .flow
+    .flow
+    .as_ref()
+    .expect("two steps that wait for nothing are drawn");
+  assert_eq!(drawn.stages.len(), 1, "steps that wait for nothing run side by side");
+  assert_eq!(drawn.stages[0].cards.len(), 2);
+  assert!(drawn.stages[0].cards.iter().all(|card| !card.runs.needs_you()));
+  let latest = fixture
+    .db()
+    .latest_version::<Pipeline>(published)
+    .expect("read")
+    .expect("published");
+  assert_eq!(
+    *found.body,
+    *latest.body(),
+    "an edit of the panel starts from the latest version"
+  );
+}
+
+#[test]
+fn readiness_pipeline_hub_counts_the_latest_versions_steps_deliver_not_among_them() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "work");
+  let builder = fixture.own("builder", &profile_on(connection, &[]));
+  let id = fixture.own(
+    "delivery",
+    &pipeline(&[Some(builder), Some(builder), Some(builder)], Some(builder)),
+  );
+
+  let read = hub(&fixture);
+  let found = read.pipelines().iter().find(|found| found.id == id).expect("listed");
+  let drawn = found.flow.flow.as_ref().expect("drawn");
+  assert_eq!(drawn.stages.iter().map(|stage| stage.cards.len()).sum::<usize>(), 3);
+  assert_eq!(
+    (found.step_count, drawn.len()),
+    (3, 3),
+    "the list's count and the panel's are the steps, Deliver not among them"
+  );
+  assert!(drawn.deliver.is_some());
+}
+
+#[test]
+fn readiness_pipeline_hub_a_pipeline_that_vanishes_while_it_is_read_fails_the_read_in_words() {
+  let error = HubError::Unreadable(ResourceId::generate());
+  assert_eq!(error.message().key, "pipelines.flow.unreadable");
+  assert!(error.to_string().contains("no version"));
+}

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  components::{Column, Row, Text, TextOverflow},
+  components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -32,9 +32,6 @@ const DOT: f32 = 6.0;
 pub(crate) enum Tone {
   Success,
   Warning,
-  Danger,
-  /// A version published here that waits for the team server (`MaHFt` in 01 `cHvkL`).
-  Info,
   Muted,
 }
 
@@ -43,8 +40,6 @@ impl Tone {
     match self {
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
-      Self::Danger => PaletteColor::Danger,
-      Self::Info => PaletteColor::Info,
       Self::Muted => PaletteColor::TextMuted,
     }
   }
@@ -108,7 +103,7 @@ pub(crate) fn tile(glyph: Icon, page: bool) -> Row {
 }
 
 /// [`tile`] with its glyph in `color`, e.g. an import result's check in `success` (`zEejx` in 03c).
-pub(crate) fn tile_in(glyph: Icon, page: bool, color: PaletteColor) -> Row {
+fn tile_in(glyph: Icon, page: bool, color: PaletteColor) -> Row {
   let side = if page { PAGE_TILE } else { TILE };
   Row::new()
     .width(Dimension::Px(side))
@@ -163,7 +158,6 @@ pub(crate) struct Entry {
   code: bool,
   chevron: bool,
   dense: bool,
-  one_line: bool,
 }
 
 impl Entry {
@@ -181,15 +175,7 @@ impl Entry {
       code: false,
       chevron: true,
       dense: false,
-      one_line: false,
     }
-  }
-
-  /// The hint keeps to one line, cut at its end: a team row's publisher and state leave it little room (`QPjYG` in 01
-  /// `cHvkL`).
-  pub(crate) const fn one_line(mut self) -> Self {
-    self.one_line = true;
-    self
   }
 
   /// The row is the one chosen, filled with `hover` (`Db46B` in 02b's sources, `pHCCx` in 02d).
@@ -276,11 +262,6 @@ impl From<Entry> for Element {
           .id(format!("{}-hint", entry.id))
           .variant(HubText::Hint.role())
           .width(Dimension::Pct(100.0));
-        let hint = if entry.one_line {
-          hint.nowrap().text_overflow(TextOverflow::Elipsis)
-        } else {
-          hint
-        };
         match color {
           Some(color) => hint.color(color),
           None => hint,
@@ -400,12 +381,6 @@ pub(crate) fn note(id: &str, glyph: Icon, text: &str) -> Row {
 
 /// A status: a dot in `tone` and its `text`, 6 apart.
 pub(crate) fn status(id: &str, tone: Tone, text: &str) -> Row {
-  status_in(id, tone, text, false)
-}
-
-/// [`status`] with its words in the dot's color too, when `colored`: *Missing on this computer* (`SsaIw` in 06c).
-pub(crate) fn status_in(id: &str, tone: Tone, text: &str, colored: bool) -> Row {
-  let words = Text::new(text).variant(HubText::Status.role()).nowrap();
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
@@ -418,7 +393,7 @@ pub(crate) fn status_in(id: &str, tone: Tone, text: &str, colored: bool) -> Row 
         .rounded(ExtraRadius::Full.role())
         .background(tone.color()),
     )
-    .child(if colored { words.color(tone.color()) } else { words })
+    .child(Text::new(text).variant(HubText::Status.role()).nowrap())
 }
 
 /// Quiet words at a row's end, e.g. *3 pipelines* (`UOYXm` in `fYNhS`).

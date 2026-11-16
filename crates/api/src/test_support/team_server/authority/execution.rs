@@ -6,7 +6,7 @@
 
 use serde_json::{Value, json};
 
-use super::{Authority, AuthorityClaim, AuthorityTask, Person, commands::Refused, listing};
+use super::{Authority, AuthorityClaim, AuthorityTask, Person, commands::Refused, lifecycle, listing};
 
 /// How the stand-in fails to give a `work.start` a bundle the desktop can use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,6 +38,9 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
     Some(BundleFault::Unavailable) => return Err((503, "unavailable")),
     _ => {}
   }
+  if lifecycle::closed(authority, named["subject"]["id"].as_str().unwrap_or_default()) {
+    return Err((409, "transition_denied"));
+  }
   let (task, claim) = held(authority, named)?;
   if task.work == Some("running") {
     return Err((409, "transition_denied"));
@@ -47,7 +50,7 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
   let mut work = listing::work_read((&id, task.number), claim, "running");
   authority.reported.retain(|reported| *reported != id);
   match fault {
-    Some(BundleFault::Newer) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA + 1),
+    Some(BundleFault::Newer) => work["bundle"]["schema_version"] = json!(crate::v2::MODULE_LESS_BUNDLE_SCHEMA + 1),
     Some(BundleFault::Older) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA - 1),
     Some(BundleFault::Unreadable | BundleFault::Missing | BundleFault::Unavailable) | None => {}
   }
@@ -74,13 +77,21 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
     (Some("cancelled"), _) => "cancelled",
     _ => return Err((422, "invalid")),
   };
+  let artifacts = if state == "succeeded" {
+    lifecycle::artifacts(&command["artifacts"])?
+  } else {
+    Vec::new()
+  };
   task.work = Some(state);
   if state == "cancelled" {
     task.claim = None;
   }
   let mut work = listing::work_read((&id, task.number), claim, state);
   if !authority.reported.contains(&id) {
-    authority.reported.push(id);
+    authority.reported.push(id.clone());
+  }
+  if state == "succeeded" {
+    lifecycle::succeeded(authority, &id, &artifacts);
   }
   work["runs"] = json!([command["run_id"]]);
   let bundle = work["bundle"].clone();

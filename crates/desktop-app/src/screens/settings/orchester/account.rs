@@ -114,7 +114,7 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &CloudPanel) -> Element {
     confirm.loading()
   } else {
     confirm.on_click(move || {
-      if person.allows(SIGN_OUT_CONFIRM) {
+      if person.allows("sign out of Orchester Cloud") {
         action.run(());
       }
     })
@@ -131,10 +131,7 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &CloudPanel) -> Element {
     .body(ctx.t("cloud.account.signOutConfirm.body"))
     .action(confirm)
     .action(stay);
-  match panel.person.reason(ctx, SIGN_OUT_CONFIRM) {
-    Some(reason) => notice.part(reason).into(),
-    None => notice.into(),
-  }
+  notice.into()
 }
 
 /// *This computer*: the device, when it signed in, and the other devices, not in this app yet; what signing out does

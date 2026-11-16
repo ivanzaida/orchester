@@ -2,12 +2,12 @@
 //! 10 apart, centred: a 13 `messages-square` in `warning` (2 down in its box), the title in 12.5/500 `text_primary`
 //! and under it, 3 apart, since when and what taking it means in 11.5/1.5 `text_muted`; then *Open that conversation*
 //! as a ghost with `external-link` and *Take it here* as the primary with `arrow-down-to-line`. Both are the person's:
-//! lurq's synthetic input (an MCP client driving the window) is refused in the handler, visibly, as the other
-//! person-only cards refuse it. *Take it here* moves the subscription here (`take_over_in`); *Open that conversation*
-//! keeps the line the card settles into (`leave_there_in`) and opens it. A choice is carried out on the session's
-//! runtime, so it is kept even when the card goes away first. Chosen, the card is a line in its place (`JZzui` in
-//! `DE2n1`): a 13 icon in `text_muted`, what became of the target in 12.5 `text_secondary`, what it adds in 12
-//! `text_muted`, and *Open ↗* to the other conversation.
+//! lurq's synthetic input (an MCP client driving the window) is refused in the handler, to the client that sent it, as
+//! the other person-only cards refuse it. *Take it here* moves the subscription here (`take_over_in`); *Open that
+//! conversation* keeps the line the card settles into (`leave_there_in`) and opens it. A choice is carried out on the
+//! session's runtime, so it is kept even when the card goes away first. Chosen, the card is a line in its place
+//! (`JZzui` in `DE2n1`): a 13 icon in `text_muted`, what became of the target in 12.5 `text_secondary`, what it adds in
+//! 12 `text_muted`, and *Open ↗* to the other conversation.
 
 use std::path::PathBuf;
 
@@ -18,7 +18,6 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -45,7 +44,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::Press,
-    tinted_note::{person_only, tinted_note},
+    tinted_note::tinted_note,
   },
 };
 
@@ -113,8 +112,6 @@ fn choose_action(ctx: &mut Ctx) -> ChooseAction {
 
 pub(super) struct LedCardView {
   choose: ChooseAction,
-  /// Synthetic input pressed one of the card's buttons.
-  refused: Signal<bool>,
   /// Whether the buttons take synthetic input as the person's: in a QA copy only.
   qa_person: QaPerson,
 }
@@ -125,7 +122,6 @@ impl Component for LedCardView {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       choose: choose_action(ctx),
-      refused: ctx.signal(false),
       qa_person: QaPerson::of(ctx),
     }
   }
@@ -191,10 +187,6 @@ impl LedCardView {
       .child(words)
       .child(open)
       .child(take);
-    let refused = self
-      .refused
-      .get()
-      .then(|| person_only(format!("{id}-person-only"), &ctx.t("orchestrator.watch.led.personOnly")));
     let failed = self.choose.state().get().error.map(|why| {
       tinted_note(
         format!("{id}-error"),
@@ -206,7 +198,6 @@ impl LedCardView {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(card)
-      .with_children(refused)
       .with_children(failed)
       .into()
   }
@@ -239,17 +230,17 @@ impl LedCardView {
     let (taking, leaving) = (choosing(Choice::Take), choosing(Choice::Leave));
     let navigation = Navigation::of(ctx);
     let there = conversation(props.project, props.card.led.chat);
-    let (choose, refused) = (self.choose.clone(), (self.refused.clone(), self.qa_person.clone()));
+    let (choose, qa_person) = (self.choose.clone(), self.qa_person.clone());
     let open = open.on_click(move || {
-      if refuses(&refused) {
+      if refuses(&qa_person) {
         return;
       }
       choose.run(leaving.clone());
       navigation.go(there.clone());
     });
-    let (choose, refused) = (self.choose.clone(), (self.refused.clone(), self.qa_person.clone()));
+    let (choose, qa_person) = (self.choose.clone(), self.qa_person.clone());
     let take = take.on_click(move || {
-      if refuses(&refused) {
+      if refuses(&qa_person) {
         return;
       }
       choose.run(taking.clone());
@@ -259,14 +250,9 @@ impl LedCardView {
 }
 
 /// Whether the press being delivered is lurq's synthetic input, which a card of the person's does not take outside a
-/// QA copy (`mcp::qa_person`): then `refused` says so under the card.
-fn refuses((refused, qa_person): &(Signal<bool>, QaPerson)) -> bool {
-  if !qa_person.refuses_input() {
-    return false;
-  }
-  tracing::warn!("synthetic input reached the card of a target another conversation leads; not taken");
-  refused.set(true);
-  true
+/// QA copy (`mcp::qa_person`): then it is refused to the client that sent it.
+fn refuses(qa_person: &QaPerson) -> bool {
+  qa_person.refuses("choose where a target another conversation leads is watched")
 }
 
 /// Conversation `chat` of `project`.

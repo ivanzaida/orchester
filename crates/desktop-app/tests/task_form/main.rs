@@ -17,6 +17,7 @@ mod harness;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod merging;
+mod pipeline_link;
 mod readiness;
 mod sources;
 #[path = "../support/mod.rs"]
@@ -78,8 +79,7 @@ fn form_limits_start_with_the_project_defaults_and_name_them_default() {
     .db()
     .save_project_limits(&defaults)
     .expect("the defaults are stored");
-  form.window.projects().feed(form.project).saved();
-  form.window.pass();
+  form.until_tasks_read(|tasks| tasks.limits.default_run_budget().is_some());
   form.new_task();
   assert_eq!(form.text("task-form-limits-value"), "Default");
   form.open("task-form-limits");
@@ -326,7 +326,7 @@ fn form_a_task_that_ran_has_no_create_and_run() {
 fn form_without_published_pipelines_still_creates_a_draft() {
   let mut form = Form::bare();
   form.new_task();
-  assert_eq!(form.text("task-form-pipeline-value"), "None published");
+  assert_eq!(form.text("task-form-pipeline-value"), "None yet");
   form.open("task-form-pipeline");
   assert!(form.exists("task-form-pipeline-none"));
   assert!(form.exists("task-form-manage-pipelines"));
@@ -335,7 +335,7 @@ fn form_without_published_pipelines_still_creates_a_draft() {
   let reasons = form.reasons();
   assert_eq!(reasons.len(), 1, "{reasons:?}");
   assert!(
-    reasons[0].contains("no published pipeline in this project"),
+    reasons[0].contains("create a pipeline first: this project has none"),
     "{reasons:?}"
   );
   form.click("task-form-create");

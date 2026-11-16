@@ -31,7 +31,6 @@ pub struct PlanDecision {
   shown: Signal<Shown>,
   note: Signal<String>,
   asked: Signal<Option<Choice>>,
-  person_only: Signal<bool>,
   /// Opens a link of the plan in the browser; kept so the plan's Markdown is laid out only when its text
   /// changes.
   on_link: LinkHandler,
@@ -46,7 +45,6 @@ impl Component for PlanDecision {
       shown: ctx.signal(Shown(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
-      person_only: ctx.signal(false),
       on_link: crate::ui::chat::links(ctx),
       pointing: Pointing::new(ctx),
     }
@@ -71,7 +69,6 @@ impl Component for PlanDecision {
       asked: &self.asked,
       action: &action,
       gate: ctx.use_context(),
-      person_only: &self.person_only,
       online: props.online,
       earlier: shown.version != review.waiting().version,
     }

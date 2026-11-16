@@ -88,6 +88,8 @@ pub struct LeadChip {
   pub target: TargetView,
   pub since: Timestamp,
   pub order: WatchOrder,
+  /// The conversation leads it to the end (`docs/plan/orchestrator-autonomy/OA-09-…`), and does not only follow it.
+  pub to_the_end: bool,
 }
 
 /// What a conversation leads: its targets in the order they were kept, with their counts.
@@ -140,6 +142,7 @@ impl WatchReads {
           target: self.target_view(subscription.target()),
           since: subscription.since(),
           order: self.order(subscription),
+          to_the_end: subscription.mode().ceilings().is_some(),
         })
         .collect(),
       counts: LeadCounts::of(self.subscriptions.of_chat(chat)),

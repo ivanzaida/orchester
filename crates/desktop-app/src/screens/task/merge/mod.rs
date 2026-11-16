@@ -17,7 +17,7 @@ use lurq::{
 use orchester_core::id::RunId;
 use orchester_workspace::{messages::Message, tasks::integration_jobs::JobState};
 
-pub use self::action::{MergeAction, action};
+pub use self::action::{MergeAction, action, deliver};
 use super::{
   TaskContext,
   summary::{Waiting, waiting},

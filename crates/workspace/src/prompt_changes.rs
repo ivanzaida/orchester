@@ -31,18 +31,6 @@ pub const fn agent_files_change_prompts(before: bool, asked: bool) -> bool {
   asked && !before
 }
 
-/// What the window says where an MCP client's input asked to turn the repository's agent files on without the
-/// person's consent.
-pub fn agent_files_person_only() -> Message {
-  Message::new("appMcp.prompts.agentFilesPersonOnly")
-}
-
-/// What the window says where an MCP client's input asked to remove a profile, instruction, skill or tool without the
-/// person's consent: an instruction's or skill's removal takes its text out of agents' prompts, and a profile's or
-/// tool's resets the pipeline steps that run it.
-pub fn removal_person_only() -> Message {
-  Message::new("appMcp.prompts.removalPersonOnly")
-}
 /// What `new` changes in its agents' prompts over `latest`, the profile's latest published version (before the first:
 /// any responsibilities or role instructions).
 pub fn profile(latest: Option<&AgentProfile>, new: &AgentProfile) -> Vec<Message> {

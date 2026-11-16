@@ -38,7 +38,9 @@ mod invocation_providers;
 mod invocation_records;
 mod joining;
 mod limits;
+mod local_archive;
 mod local_integration;
+mod local_rename;
 mod mcp_servers;
 mod memory;
 mod merge_attempts;
@@ -46,20 +48,25 @@ mod merge_queue;
 mod merges;
 mod message_records;
 mod messages;
+mod module_branches;
 mod modules;
 mod native;
 mod new_resources;
 mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
+mod orchestrator_decisions;
 mod orchestrator_fork;
+mod orchestrator_holds;
 mod orchestrator_leads;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
+mod orchestrator_retries;
 mod orchestrator_rewind;
 mod orchestrator_sent;
 mod orchestrator_settings;
+mod orchestrator_standing;
 mod orchestrator_subscriptions;
 mod orchestrator_switches;
 mod orchestrator_titles;
@@ -69,7 +76,9 @@ mod orchestrator_watch_summaries;
 mod organization;
 mod organized_drafts;
 mod owned_records;
+mod parked_tasks;
 mod permission_events;
+mod pipeline_publishes;
 mod plan_limits;
 mod plans;
 mod project_rules;
@@ -81,7 +90,6 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
-mod reference_bindings;
 mod removal_records;
 mod removals;
 mod repository;
@@ -107,7 +115,6 @@ mod shared_events;
 mod shared_members;
 mod shared_modules;
 mod shared_publishes;
-mod shared_standing;
 mod shared_tasks;
 mod shared_versions;
 mod sharing;
@@ -124,7 +131,6 @@ mod task_groups;
 mod task_identities;
 mod task_snapshots;
 mod tasks;
-mod team_copies;
 mod team_deliveries;
 mod team_fill_ins;
 mod team_leaving;
@@ -151,6 +157,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
+pub(crate) use self::connections::{parse_provider, provider_text};
 pub use self::{
   approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
@@ -166,10 +173,12 @@ pub use self::{
   message_records::MessageRecord,
   notice_records::NoticeRecord,
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_decisions::DecisionsRead,
   orchestrator_fork::ChatFork,
   orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_retries::FailedWait,
   orchestrator_rewind::ChatRewind,
   orchestrator_subscriptions::{KeptSubscription, WatchStart},
   orchestrator_titles::ChatDeletion,
@@ -179,9 +188,7 @@ pub use self::{
   },
   question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
-  reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   removal_records::RemovalRecord,
-  removals::DraftChange,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
@@ -191,10 +198,8 @@ pub use self::{
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
   shared_modules::{CachedModule, CachedModuleChange},
-  shared_publishes::{PublishState, WaitingPublish},
-  shared_standing::{ConfirmedVersion, SharedStanding, WaitingVersion},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
-  shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
+  shared_versions::{CachedVersion, ReferenceTarget, ResourceSharing},
   sharing::SharingLink,
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
@@ -299,6 +304,19 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// The schema version right before `migration`, wherever the list placed it: a test rewinds to it with
+  /// [`ProjectDb::create_at_version`] and then lets the migrations from `migration` on run over its rows, however many
+  /// are appended or inserted after it.
+  #[cfg(feature = "test-support")]
+  pub fn version_before(migration: ProjectMigration) -> u32 {
+    let sql = schema::named(migration);
+    let position = schema::MIGRATIONS
+      .iter()
+      .position(|listed| *listed == sql)
+      .expect("a named migration is in the list");
+    u32::try_from(position).expect("fewer than 2^32 migrations")
+  }
+
   /// Replaces the timeout with a fixture's lock-wait observer for deterministic concurrency tests.
   #[cfg(feature = "test-support")]
   pub fn set_busy_handler_for_test(&self, callback: fn(i32) -> bool) -> Result<(), StoreError> {
@@ -335,4 +353,38 @@ pub enum ProjectMigration {
   LocalIntegration,
   /// Retained content that also keeps editor drafts.
   EditorDrafts,
+  /// The rebuild of `resources` for the team reviewer's kind.
+  TeamReviewer,
+  /// The team tasks' pipeline slug turned into the pipeline's id.
+  TeamPipelineIds,
+  /// Local profiles choosing what reached their agents before.
+  ProfileGiven,
+  /// The outbox of the team's configuration dropped.
+  TeamOutbox,
+  /// A local project's drafts of its published profiles, instructions, skills and tools dropped.
+  LocalDrafts,
+  /// Pipeline drafts deleted, and every pipeline with no version with what names it.
+  PipelineDrafts,
+  /// The `permissions` rebuild of tool approvals: a request permissions decided.
+  PermittedDecisions,
+  /// The automation rebuild of tool approvals, which follows the `permissions` one.
+  AutomationAnswers,
+  /// Auto mode's settings and the rebuild of tool approvals for its answers.
+  AutoMode,
+  /// The project's base branch moved to its tasks and modules.
+  BaseSources,
+  /// The disk guard: the free space a project keeps.
+  DiskGuard,
+  /// Approval modes, which replace auto mode's settings.
+  ApprovalModes,
+  /// The decision reviewer's JSON settings.
+  DecisionReviewer,
+  /// Tasks' identities on a team server.
+  TaskIdentities,
+  /// The attempts table rebuilt for a run returned to a step after it ended; the run resolutions table follows it.
+  ReturnedAfterEnd,
+  /// What an archive stop names: the resource, its kind and who archived it.
+  ArchiveStopsArchived,
+  /// A shared project's copy of the team's configuration dropped.
+  TeamCache,
 }

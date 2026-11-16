@@ -4,8 +4,8 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    Draft, DraftSaved, PublishError, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version,
-    VersionNumber, publish,
+    Draft, DraftSaved, PublishError, Removal, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
+    publish,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -26,17 +26,14 @@ mod kind;
 pub(in crate::project_db) use self::kind::{kind_text, parse_kind};
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
-/// The resources of kind `?1` the project offers (`docs/architecture/server.md` row 80, the person's decisions of
-/// 2026-11-05 and 2026-11-06): none removed (a team resource archived on the server is removed here); in a team
-/// project only the team's (`sharing = 'shared'`), an Admin's new resource until the server has it (no version yet, or
-/// versions waiting for the server none of which it refused), a resource created here whose first version is still
-/// unnumbered (even refused: the person's own work, kept for them to see and decide on, e.g. with a later version or a
-/// draft over it), and every resource of a kind that is never the team's (`?2`). A person's own resources of a team
-/// project, kept *Not shared* at Join or published here and refused by the server, stay in the database as they are
-/// and are offered nowhere ([`ProjectDb::kept_resources`] reads them).
-const OFFERED: &str = "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) AND (?2   OR NOT EXISTS (SELECT 1 FROM sharing) OR sharing IS 'shared'   OR NOT EXISTS (SELECT 1 FROM resource_versions WHERE resource_versions.resource_id = resources.id)   OR EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id AND shared_publishes.created = 1)   OR (EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id)     AND NOT EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id       AND shared_publishes.refused IS NOT NULL)))";
+/// The resources of kind `?1` the project offers (`docs/design/team-configuration.md`, edge cases 2 and 3): none
+/// removed (a team resource archived on the server is removed here); in a team project only the team's (`sharing =
+/// 'shared'`, the copy the stream keeps), and every resource of a kind that is never the team's (`?2`). A person's own
+/// resources of a team project, kept *Not shared* at Join, stay in the database as they are and are offered nowhere
+/// ([`ProjectDb::kept_resources`] reads them).
+const OFFERED: &str = "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) AND (?2 OR NOT EXISTS (SELECT 1 FROM sharing) OR sharing IS 'shared')";
 
-/// A cached version of a shared resource reads as its local body, which this computer's bindings rewrite.
+/// A cached version of a shared resource reads as its local body, which a team profile's connection pick rewrites.
 const SELECT_VERSIONS: &str = "SELECT id, number, COALESCE(local_body, body), published_at FROM resource_versions \
                                LEFT JOIN shared_version_bodies ON version_id = id";
 
@@ -219,6 +216,7 @@ impl ResourceStore for ProjectDb {
     body: &B,
     now: Timestamp,
   ) -> Result<Resource, StoreError> {
+    super::new_resources::ensure_holds_drafts(B::KIND)?;
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
     let resource = super::new_resources::insert::<B>(&transaction, slug, name, now)?;
@@ -254,8 +252,8 @@ impl ResourceStore for ProjectDb {
     )
   }
 
-  fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, StoreError> {
-    super::removals::remove(&mut self.connection, id, &mode, now)
+  fn remove_resource(&mut self, id: ResourceId, now: Timestamp) -> Result<Removal, StoreError> {
+    super::removals::remove(&mut self.connection, id, now)
   }
 
   fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, StoreError> {
@@ -266,7 +264,9 @@ impl ResourceStore for ProjectDb {
   }
 
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(None);
+    }
     load_draft(&self.connection, resource)
   }
 
@@ -277,12 +277,16 @@ impl ResourceStore for ProjectDb {
   /// The version this computer uses ([`used_here`]): a teammate's version that waits for the person's *Use v<N> here*
   /// is left out, so runs, preflight, editors and publishing keep the one before it.
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(None);
+    }
     used_here(&self.connection, resource)
   }
 
   fn versions<B: ResourceBody>(&self, resource: ResourceId) -> Result<Vec<Version<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(Vec::new());
+    }
     load_versions(
       &self.connection,
       "WHERE resource_id = ?1 ORDER BY number",
@@ -295,7 +299,9 @@ impl ResourceStore for ProjectDb {
     resource: ResourceId,
     number: VersionNumber,
   ) -> Result<Option<Version<B>>, StoreError> {
-    check_kind::<B>(&self.connection, resource)?;
+    if !holds::<B>(&self.connection, resource)? {
+      return Ok(None);
+    }
     let mut found = load_versions(
       &self.connection,
       "WHERE resource_id = ?1 AND number = ?2",
@@ -326,9 +332,8 @@ fn publish_checked<B: ResourceBody>(
   publish_prepared(connection, resource, draft, latest, now)
 }
 
-/// Publishes `draft`, based on `latest`, the version used here, after the newest version this computer has: a
-/// teammate's version that waits keeps its number, and this one supersedes it. In a shared project the callers checked
-/// that the person is an admin, and the version waits for the server's number ([`super::shared_publishes`]).
+/// Publishes `draft`, based on `latest`, the version used here, after the newest version this computer has. In a shared
+/// project the callers checked that the person is an admin ([`super::shared_publishes`]).
 pub(super) fn publish_prepared<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
@@ -363,8 +368,6 @@ pub(super) fn publish_prepared<B: ResourceBody>(
     "DELETE FROM resource_drafts WHERE resource_id = ?1",
     [resource.to_string()],
   )?;
-  super::shared_versions::stop_waiting(connection, resource, version.number())?;
-  shared_publishes::record(connection, resource, &version, latest)?;
   Ok(version)
 }
 
@@ -373,6 +376,7 @@ pub(super) fn save_draft<B: ResourceBody>(
   resource: ResourceId,
   draft: &Draft<B>,
 ) -> Result<DraftSaved, StoreError> {
+  super::new_resources::ensure_holds_drafts(B::KIND)?;
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
   shared_publishes::ensure_may_change(connection, resource)?;
@@ -405,6 +409,19 @@ pub(super) fn save_draft<B: ResourceBody>(
     ],
   )?;
   Ok(DraftSaved::Stored)
+}
+
+/// Whether the database holds `resource`, for a read of its draft or versions: `false` for one it has no row of, which
+/// has none here. A team project's database keeps no copy of the team's resources
+/// (`docs/design/team-configuration-live.md`), so a run's step may pin a profile, and a task a pipeline, that it does
+/// not hold: reading its version answers that there is none, as for a version it does not have. Fails for a resource
+/// that holds bodies of another kind than `B`.
+fn holds<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<bool, StoreError> {
+  match check_kind::<B>(connection, resource) {
+    Ok(()) => Ok(true),
+    Err(StoreError::ResourceNotFound(_)) => Ok(false),
+    Err(error) => Err(error),
+  }
 }
 
 /// Fails unless `resource` exists and holds bodies of type `B`.

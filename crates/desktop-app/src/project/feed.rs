@@ -28,7 +28,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners, state::RunnerState},
-  sharing::project::FirstDownload,
+  sharing::{Servers, project::FirstDownload},
   tasks::{
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobState},
@@ -360,7 +360,11 @@ impl Component for FeedLoader {
     // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
     let settled = answers::answers(ctx, (runners.clone(), root.clone())).settled();
     self.feed.answering.get();
-    let read = tasks(ctx, (root.clone(), saved, states, settled), (&hold, &services.programs));
+    let read = tasks(
+      ctx,
+      (root.clone(), saved, states, settled),
+      (&hold, &services.programs, &services.servers),
+    );
     let tasks = answered(&runners, &root, (read.tasks, read.settled));
     let running = tasks.ready().is_some_and(runs_now);
     publish(&self.feed.running, running);
@@ -539,19 +543,26 @@ struct Read {
 /// window settled, and why the last reading failed: `None` while a reading of tasks already shown is under way,
 /// which keeps what the previous reading said until this one ends. A failed reading keeps the tasks last read, so
 /// no page or form showing them is replaced; only a failed first reading leaves no tasks to show.
-fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64, u64), (hold, programs): (&ReadHold, &Programs)) -> Read {
-  let (hold, programs) = (hold.clone(), programs.clone());
+fn tasks(
+  ctx: &mut Ctx,
+  deps: (PathBuf, u64, u64, u64),
+  (hold, programs, servers): (&ReadHold, &Programs, &Servers),
+) -> Read {
+  let (hold, programs, servers) = (hold.clone(), programs.clone(), servers.clone());
   let state = settled_read(ctx, "project tasks", deps, move |(repo_root, _, _, settled)| {
-    let (hold, programs) = (hold.clone(), programs.clone());
+    let (hold, programs, servers) = (hold.clone(), programs.clone(), servers.clone());
     async move {
       hold.released().await;
-      background::run(move || ProjectTasks::load(&repo_root, &programs))
-        .await?
-        .map(|tasks| Reading { tasks, settled })
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the project's tasks");
-          messages::store_error(&error)
-        })
+      // A team project's pipelines are the team's as this session read them; a change of them counts in `saved`.
+      background::run(move || {
+        ProjectTasks::load(&repo_root, &programs)?.with_team_pipelines(&repo_root, servers.team_read(&repo_root))
+      })
+      .await?
+      .map(|tasks| Reading { tasks, settled })
+      .map_err(|error| {
+        tracing::error!(%error, "cannot read the project's tasks");
+        messages::store_error(&error)
+      })
     }
   });
   let reading = state.is_pending();

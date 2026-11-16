@@ -10,7 +10,6 @@ use orchester_core::{
   id::ResourceId,
   resource::{TeamMcpLaunch, TeamMcpServer},
   secret::SecretName,
-  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{McpServerProgram, ProjectDb, StoreError};
@@ -20,6 +19,7 @@ use super::{
   team_profile::TeamProfileSheet,
   team_sheets,
 };
+use crate::team_config::{TeamConfig, TeamResource};
 
 /// Who published the version this computer uses, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,40 +74,33 @@ pub struct TeamMcpSheet {
   pub program: Option<ProgramPath>,
   /// The person's choice to use it here: on, off, or `None` while nobody has decided.
   pub switch: Option<bool>,
-  /// `None` while the server has not confirmed the version this computer uses.
+  /// Who published its latest version.
   pub published: Option<Published>,
   /// What an admin's edit starts from; `None` for a server the edit form cannot hold.
   pub edit: Option<McpEdit>,
 }
 
-/// A sheet for each team MCP server that has a version cached here, and each archived one that keeps a draft.
-/// `profiles` are the team's profile sheets by resource, which say who uses it; `programs` the paths this computer set
-/// for the team server.
+/// A sheet for each team MCP server of `servers` whose latest version is one this computer reads. `profiles` are the
+/// team's profile sheets by resource, which say who uses it; `programs` the paths this computer set for the team
+/// server.
 pub(super) fn sheets(
-  db: &ProjectDb,
+  (db, config): (&ProjectDb, &TeamConfig),
+  servers: &[&TeamResource],
   programs: &[McpServerProgram],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Result<Vec<(ResourceId, TeamMcpSheet)>, StoreError> {
   let mut sheets = Vec::new();
-  // An archived server whose draft is kept here is shown too: the draft stays to copy, discard or publish once the
-  // server is restored.
-  let mut resources = db.resources(orchester_core::resource::ResourceKind::McpServer)?;
-  resources.extend(
-    db.archived_with_draft(orchester_core::resource::ResourceKind::McpServer)?
-      .into_iter()
-      .map(|(resource, _)| resource),
-  );
-  for resource in resources {
-    let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? else {
+  for resource in servers.iter().copied() {
+    let (Some(number), Some(Ok(body))) = (resource.number(), resource.body::<TeamMcpServer>()) else {
       continue;
     };
-    let body = version.body();
-    let published = team_sheets::published::<TeamMcpServer>(db, resource.id(), version.number())?;
-    let used_by = team_sheets::used_by(db, profiles, |sheet| {
-      sheet.mcp_servers.iter().any(|used| used.server.id == resource.id())
-    })?;
+    let body = &body;
+    let used_by = team_sheets::used_by(config, profiles, |sheet| {
+      sheet.mcp_servers.iter().any(|used| used.server.id == resource.id)
+    });
+    let resource = resource.id;
     sheets.push((
-      resource.id(),
+      resource,
       TeamMcpSheet {
         runs: runs(body.launch()),
         exempt_tools: body
@@ -120,14 +113,14 @@ pub(super) fn sheets(
         secrets: body.secrets(),
         program: programs
           .iter()
-          .find(|set| set.resource == resource.id())
+          .find(|set| set.resource == resource)
           .map(|set| ProgramPath {
             path: set.program.clone(),
             set_at: set.set_at,
           }),
-        switch: db.team_mcp_switch(resource.id())?,
-        published,
-        edit: team_mcp_edit::of(db, resource.id())?,
+        switch: db.team_mcp_switch(resource)?,
+        published: config.resource(resource).and_then(team_sheets::published),
+        edit: team_mcp_edit::of_latest((number, body)),
       },
     ));
   }

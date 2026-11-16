@@ -50,6 +50,32 @@ impl SecretVault for MemoryKeychain {
   }
 }
 
+/// A secret store that refuses every value it is given, as a locked one does, and holds none: for a QA copy that has to
+/// reach a refusal without a person ([`crate::test_support`]'s `Agents · MCP server · save refused`).
+#[derive(Default)]
+pub struct RefusingKeychain;
+
+impl SecretVault for RefusingKeychain {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied(
+      "this QA copy's secret store refuses every value".to_owned(),
+    ))
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::NotFound)
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Ok(())
+  }
+}
+
+/// A keychain that refuses every value.
+pub fn refusing_keychain() -> Vault {
+  Vault::with(Arc::new(RefusingKeychain))
+}
+
 /// A new keychain in memory.
 pub fn keychain() -> Vault {
   Vault::with(Arc::new(MemoryKeychain::default()))
@@ -69,8 +95,13 @@ pub fn launch_signed_in(database: &Path, runner: PathBuf, runtime: &Handle, clou
 /// does not exist, what the desktop asks of a run's worktrees (removing them, resolving a merge by hand) is carried out
 /// in this process with the session's programs, through the messages the runner would read and answer.
 pub fn launch(database: &Path, runner: PathBuf, runtime: &Handle) -> Launch {
+  launch_with_vault(database, runner, runtime, keychain())
+}
+
+/// [`launch`] with `vault` in place of the keychain in memory, e.g. [`refusing_keychain`].
+pub fn launch_with_vault(database: &Path, runner: PathBuf, runtime: &Handle, vault: Vault) -> Launch {
   let no_runner = !runner.exists();
-  let launch = Launch::begin_with_vault(database, runner, runtime, (None, keychain()));
+  let launch = Launch::begin_with_vault(database, runner, runtime, (None, vault));
   if let Some(services) = launch.services().filter(|_| no_runner) {
     services
       .runners

@@ -20,38 +20,46 @@ pub(super) struct Phrase {
 
 impl Phrase {
   pub fn of(ctx: &Ctx, state: &ReviewState) -> Self {
-    let (key, color, glyph) = match state {
-      ReviewState::CommentsNotSent { .. } => ("review.state.commentsNotSent", PaletteColor::Info, eye()),
-      ReviewState::ChangedSinceReview { .. } => ("review.state.changed", PaletteColor::Warning, eye()),
-      ReviewState::Ready => ("review.state.ready", PaletteColor::Info, eye()),
+    let (keys, color, glyph) = match state {
+      ReviewState::CommentsNotSent { .. } => (
+        ("review.state.commentsNotSent.one", "review.state.commentsNotSent.other"),
+        PaletteColor::Info,
+        eye(),
+      ),
+      ReviewState::ChangedSinceReview { .. } => (
+        ("review.state.changed", "review.state.changed"),
+        PaletteColor::Warning,
+        eye(),
+      ),
+      ReviewState::Ready => (("review.state.ready", "review.state.ready"), PaletteColor::Info, eye()),
       ReviewState::Conflicts { .. } => (
-        "review.state.conflicts",
+        ("review.state.conflicts.named", "review.state.conflicts.unnamed"),
         PaletteColor::Danger,
         (Icon::GitCompareArrows, PaletteColor::Danger),
       ),
       ReviewState::ImplementOn { .. } => (
-        "review.state.implementOn",
+        ("review.state.implementOn.one", "review.state.implementOn.other"),
         PaletteColor::TextSecondary,
         (Icon::LoaderCircle, PaletteColor::TextMuted),
       ),
       ReviewState::ResolvingConflicts { .. } => (
-        "review.state.resolving",
+        ("review.state.resolving.named", "review.state.resolving.unnamed"),
         PaletteColor::TextSecondary,
         (Icon::LoaderCircle, PaletteColor::TextMuted),
       ),
       ReviewState::Merged { .. } => (
-        "review.state.merged",
+        ("review.state.merged.named", "review.state.merged.unnamed"),
         PaletteColor::Success,
         (Icon::GitMerge, PaletteColor::Success),
       ),
       ReviewState::Merging { .. } => (
-        "review.state.merging",
+        ("review.state.merging.named", "review.state.merging.unnamed"),
         PaletteColor::TextSecondary,
         (Icon::GitMerge, PaletteColor::TextSecondary),
       ),
     };
     Self {
-      words: words(ctx, key, state),
+      words: words(ctx, keys, state),
       color,
       glyph: glyph.0,
       glyph_color: glyph.1,
@@ -64,26 +72,27 @@ const fn eye() -> (Icon, PaletteColor) {
   (Icon::Eye, PaletteColor::Info)
 }
 
-/// The line's words: `key`'s own, `key.named` with the base branch's name or, as the run recorded none, `key.unnamed`.
-fn words(ctx: &Ctx, key: &str, state: &ReviewState) -> Arc<str> {
+/// The line's words by its two keys, named in full: the words for one thing and for any other count, the words with
+/// the base branch's name and as the run recorded none, or (both the same) its only words.
+fn words(ctx: &Ctx, (first, second): (&str, &str), state: &ReviewState) -> Arc<str> {
   match state {
-    ReviewState::CommentsNotSent { count } => count_words(ctx, key, *count),
-    ReviewState::ImplementOn { comments } => count_words(ctx, key, *comments),
+    ReviewState::CommentsNotSent { count } => count_words(ctx, (first, second), *count),
+    ReviewState::ImplementOn { comments } => count_words(ctx, (first, second), *comments),
     ReviewState::Conflicts { base, .. }
     | ReviewState::ResolvingConflicts { base }
     | ReviewState::Merged { base }
     | ReviewState::Merging { base } => match base {
-      Some(base) => ctx.t_args(&format!("{key}.named"), [("base", base.to_string())]),
-      None => ctx.t(&format!("{key}.unnamed")),
+      Some(base) => ctx.t_args(first, [("base", base.to_string())]),
+      None => ctx.t(second),
     },
-    ReviewState::ChangedSinceReview { .. } | ReviewState::Ready => ctx.t(key),
+    ReviewState::ChangedSinceReview { .. } | ReviewState::Ready => ctx.t(first),
   }
 }
 
-/// `key`'s words for `count` things, which the key's `.one` and `.other` tell apart.
-fn count_words(ctx: &Ctx, key: &str, count: usize) -> Arc<str> {
-  let form = if count == 1 { "one" } else { "other" };
-  ctx.t_args(&format!("{key}.{form}"), [("count", count.to_string())])
+/// The words for `count` things: `one`'s for one, `other`'s for any other count.
+fn count_words(ctx: &Ctx, (one, other): (&str, &str), count: usize) -> Arc<str> {
+  let key = if count == 1 { one } else { other };
+  ctx.t_args(key, [("count", count.to_string())])
 }
 
 /// `files` files changed.

@@ -16,6 +16,7 @@ mod claim;
 mod decisions;
 mod empty;
 mod led_in;
+mod lifecycle;
 mod live;
 mod merge_row;
 mod notice;
@@ -26,6 +27,7 @@ mod run;
 mod run_account;
 mod run_facts;
 pub(crate) mod runs;
+mod state_words;
 mod steps;
 mod team;
 pub(in crate::screens::task) mod team_run;
@@ -125,8 +127,11 @@ impl Component for TaskSummary {
     let not_ready = super::not_ready::shown(ctx, task);
     // A run that an archive of a team resource stopped says which resource and who archived it (`archived`).
     let archived = super::archived::shown(ctx, task);
+    // A task the Orchestrator parked says what the person is to do, over everything else of its own (`parked`).
+    let parked = super::parked::shown(ctx, task);
     let column = team::top(ctx, task)
       .into_iter()
+      .chain(parked)
       .chain(archived)
       .chain(not_ready)
       .chain(column)

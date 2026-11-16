@@ -32,7 +32,7 @@ fn merge(run: &Run) -> Value {
 }
 
 /// The turn `run`'s success started by itself in `scope`'s conversation, to merge it on its own, thinking now.
-fn turn_of_success(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): (&Seeded, &Run)) {
+pub(super) fn turn_of_success(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): (&Seeded, &Run)) {
   let wait = AgentWait {
     kind: WaitKind::Ended(RunEnd::Succeeded),
     task: "KON".to_owned(),

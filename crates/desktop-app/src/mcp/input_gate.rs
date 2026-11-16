@@ -8,6 +8,7 @@
 //! answer without a sign-in, and signing in stays a person's ([`Guarded::Sharing`]).
 
 mod local;
+mod press;
 use std::{
   borrow::Cow,
   sync::{
@@ -31,6 +32,7 @@ use lurq::mcp::{
 use orchester_core::run::Answerer;
 use orchester_workspace::{app_mcp, decisions::DecisionKind};
 use parking_lot::Mutex;
+pub use press::{RefusedPress, may_press, persons_press, press_answerer, refuse_press};
 
 use super::clients::SessionMark;
 
@@ -113,21 +115,23 @@ pub enum Guarded {
   StepAccept,
   /// An answer on the person's behalf, under the same per-kind policy as the domain MCP tools.
   Decision(DecisionKind),
+  /// A press only a person makes and no setting opens to automation, refused in its handler alone
+  /// ([`persons_press`]).
+  Person,
 }
 
 /// Whether the input being delivered may take a decision classified as `policy`: a person's (OS input) always; lurq's
 /// synthetic input only while no person-only control is mounted and the stored consent covers `policy`. Read in the
 /// handler, while lurq delivers the input.
 pub fn input_may_decide(gate: Option<&InputGate>, policy: Guarded) -> bool {
-  !lurq::app::events::is_synthetic_input()
-    || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
+  !crate::mcp::is_synthetic_input() || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
 }
 
 /// Who gives an answer classified as `policy` with the input being delivered: the person with OS input; automation
 /// with lurq's synthetic input (an MCP client's), where [`input_may_decide`] lets it; `None` when only a person gives
 /// it. Read in the handler, while lurq delivers the input.
 pub fn answerer(gate: Option<&InputGate>, policy: Guarded) -> Option<Answerer> {
-  if !lurq::app::events::is_synthetic_input() {
+  if !crate::mcp::is_synthetic_input() {
     return Some(Answerer::Person);
   }
   input_may_decide(gate, policy).then_some(Answerer::Automation)
@@ -159,6 +163,10 @@ struct Counts {
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
   tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
+  /// The window-input call delivering input now, and the person-only press refused meanwhile ([`press`]).
+  calls: Mutex<press::Calls>,
+  /// One forwarded window-input call at a time, so a refused press is answered to the call that delivered it.
+  input_turn: tokio::sync::Mutex<()>,
 }
 
 #[derive(Default)]
@@ -224,7 +232,8 @@ impl InputGate {
       | Guarded::McpServer
       | Guarded::Accounts
       | Guarded::CheckCode
-      | Guarded::Sharing => false,
+      | Guarded::Sharing
+      | Guarded::Person => false,
     }
   }
 
@@ -237,7 +246,7 @@ impl InputGate {
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
       // Only their handlers refuse: they lock no window input, whoever marks them.
-      Guarded::StepAccept | Guarded::Decision(_) | Guarded::CheckCode | Guarded::Sharing => return,
+      Guarded::StepAccept | Guarded::Decision(_) | Guarded::CheckCode | Guarded::Sharing | Guarded::Person => return,
     };
     if add {
       *count += 1;
@@ -324,6 +333,11 @@ impl InputGate {
 
   /// Whether a protected control is mounted.
   pub fn protecting(&self) -> bool {
+    // A QA copy's MCP client counts as the person for the whole window (`super::qa_person`): nothing is kept from
+    // its input.
+    if super::qa_person::counts_every_input() {
+      return false;
+    }
     let controls = self.0.controls.lock();
     controls.settings > 0
       || controls.server > 0
@@ -448,9 +462,18 @@ impl ServerHandler for GuardedTools {
       let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refusal() });
       return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
+    let _turn = self.gate.0.input_turn.lock().await;
+    let call = self.gate.begin_call();
     // Only calls that go on to the window count, so refused calls cannot keep a person's change out.
     self.gate.0.in_flight.fetch_add(1, Ordering::SeqCst);
     let _in_flight = InFlight(self.gate.clone());
-    self.tools.call_tool(request, context).await
+    let tool = request.name.clone();
+    let answer = self.tools.call_tool(request, context).await;
+    let Some(refused) = self.gate.end_call(call) else {
+      return answer;
+    };
+    tracing::info!(%tool, action = refused.action(), "a person-only press refused to a client");
+    let refusal = serde_json::json!({ "code": "person_only", "action": refused.action(), "message": refused.words() });
+    Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into())
   }
 }

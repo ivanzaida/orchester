@@ -14,8 +14,11 @@ use orchester_workspace::agents::usage::PipelineUse;
 use super::editor::Props;
 use crate::{
   navigation::Navigation,
-  routes::{PipelineView, ProjectPage, Route},
-  screens::hub::parts::{Entry, boxed, group, head, note, quiet},
+  routes::Route,
+  screens::{
+    hub::parts::{Entry, boxed, group, head, note, quiet},
+    pipeline_link,
+  },
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -84,11 +87,7 @@ fn use_row(
 ) -> Element {
   let position = format!("{:02}", step.position);
   let title = ctx.t_args(
-    if step.draft {
-      "agents.useDraftTitle"
-    } else {
-      "agents.useTitle"
-    },
+    "agents.useTitle",
     [
       ("pipeline", step.name.to_string()),
       ("version", step.version.to_string()),
@@ -108,9 +107,7 @@ fn detail(ctx: &Ctx, step: &PipelineUse) -> Arc<str> {
     .model
     .as_ref()
     .map_or_else(|| ctx.t("agents.chooseConnection"), |m| m.as_str().into());
-  let runs = if step.draft {
-    ctx.t("agents.draftNoRuns")
-  } else if step.running == 0 {
+  let runs = if step.running == 0 {
     ctx.t("agents.noRuns")
   } else {
     ctx.t_args("agents.runningCount", [("count", step.running.to_string())])
@@ -160,10 +157,7 @@ fn open_pipeline(
     Some(reason) => button.unavailable(ctx.t(reason)).into(),
     None => {
       let navigation = Navigation::of(ctx);
-      let route = Route::Project(
-        props.project.open.project.id(),
-        ProjectPage::Pipeline(step.pipeline, PipelineView::default()),
-      );
+      let route = Route::Project(props.project.open.project.id(), pipeline_link::page(step.pipeline));
       button.opens(navigation.to(route)).into()
     }
   }

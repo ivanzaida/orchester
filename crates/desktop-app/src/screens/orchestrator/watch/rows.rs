@@ -7,7 +7,7 @@
 //! While the search is empty the modules with nothing left to watch hide behind *12 finished modules · type to find
 //! them*; one the search finds is faded to half and says so. Under the head *Also* the tasks without a module
 //! (`inbox`) and everything in the project (`folder-kanban`, *What no other subscription takes*, its *Led in* in
-//! `text_muted`); then the keys.
+//! `text_muted`); then how the command takes them and the keys.
 
 use std::sync::Arc;
 
@@ -25,7 +25,10 @@ use orchester_core::{
 };
 use orchester_workspace::mentions::watch::{Leader, modules::ModuleEntry};
 
-use super::panel::{self, LedIn, Picker};
+use super::{
+  mode::LeadChoice,
+  panel::{self, LedIn, Picker},
+};
 use crate::{
   navigation::Navigation,
   theme::{DISABLED_OPACITY, ExtraColor, IconSize},
@@ -61,6 +64,8 @@ pub(super) struct Shown<'a> {
   pub(super) counts: Counts,
   /// Opens the conversation a *Led in* names.
   pub(super) navigation: Navigation,
+  /// Whether the command follows what is chosen or leads it to the end.
+  pub(super) mode: &'a LeadChoice,
 }
 
 /// The panel with its search, its rows and the keys.
@@ -107,7 +112,7 @@ pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> 
     content.push(panel::heading(ctx, (shown.id, PICKER, "also"), Some(also), None));
     content.extend((modules..shown.offered.len()).map(|at| row(ctx, shown, at, search)));
   }
-  content.push(panel::footer(ctx, (shown.id, PICKER), true));
+  content.extend(panel::footer(ctx, (shown.id, PICKER), true, shown.mode));
   panel::frame((shown.id, PICKER), content)
 }
 
@@ -145,7 +150,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize, search: &PickerSearch) -> Elemen
   if entry.faded.is_some() {
     row.opacity(DISABLED_OPACITY).into()
   } else {
-    row.into()
+    search.pickable(row, at).into()
   }
 }
 

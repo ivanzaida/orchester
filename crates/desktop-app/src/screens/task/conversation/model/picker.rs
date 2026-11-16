@@ -26,7 +26,7 @@ use orchester_workspace::tasks::run_model::{OfferedModel, StepModel, change::Mod
 use super::{Asked, ChipProps, Chosen, Draft, Failed, RunModel, choice_words, effort_word};
 use crate::{
   navigation::Navigation,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AccountsView, Route},
   theme::{ExtraColor, ExtraSpacing, IconSize, ModelText},
   ui::{
     agent_mark::AgentMark,
@@ -483,10 +483,7 @@ fn fixed(ctx: &mut Ctx, props: &ChipProps) -> Vec<Element> {
       .variant(ModelText::Label.role())
       .nowrap(),
   );
-  let open = Navigation::of(ctx).to(Route::Project(
-    props.project,
-    ProjectPage::Connections(ConnectionsView::default()),
-  ));
+  let open = Navigation::of(ctx).to(Route::Accounts(AccountsView::default()));
   let link = ActionButton::new(
     "conversation-model-connections",
     ButtonKind::Ghost,

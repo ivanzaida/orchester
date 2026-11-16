@@ -5,13 +5,12 @@
 use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::ResourceId,
-  resource::{Pipeline, Slug},
-  store::ResourceStore,
+  resource::Slug,
   task::{TaskLimits, organization::TaskOrganization},
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::{ProjectDb, ResourceSharing};
+use orchester_store::ProjectDb;
 use orchester_workspace::actions::{Action, ActionError, Intent, PipelineRefusal, Refusal, TaskAction, TeamOutcome};
 
 use crate::{
@@ -20,20 +19,21 @@ use crate::{
   team,
 };
 
-/// A pipeline `slug` published here; one of the team's when `team`, else this computer's own.
-fn pipeline(db: &mut ProjectDb, slug: &str, team: bool) -> ResourceId {
+/// A pipeline `slug` published here, this computer's own.
+fn pipeline(db: &mut ProjectDb, slug: &str) -> ResourceId {
   let now = Timestamp::now();
   let body = crate::fixture::one_step(ResourceId::generate(), "Sign in.");
-  let id = db
-    .create_resource(Slug::new(slug).expect("slug"), name(slug), body.body(), now)
+  db.create_published(Slug::new(slug).expect("slug"), name(slug), body.body(), now)
     .expect("a pipeline")
-    .id();
-  db.publish_draft::<Pipeline>(id, now).expect("published");
-  if team {
-    db.set_resource_sharing(id, Some(ResourceSharing::Shared(revision(1))))
-      .expect("the team's");
-  }
-  id
+    .0
+    .id()
+}
+
+/// A pipeline of the team's, `slug`, with its id and its body as the server keeps it.
+fn team_pipeline(slug: &str) -> (ResourceId, &str, serde_json::Value) {
+  let body = crate::fixture::one_step(ResourceId::generate(), "Sign in.");
+  let value = serde_json::to_value(body.body()).expect("a pipeline serializes");
+  (ResourceId::generate(), slug, value)
 }
 
 fn create_with(pipeline: Option<ResourceId>, limits: TaskLimits) -> Action {
@@ -49,12 +49,10 @@ fn create_with(pipeline: Option<ResourceId>, limits: TaskLimits) -> Action {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn actions_a_team_task_names_a_team_pipeline_by_its_id() {
   let server = TeamServer::start();
-  let checkout = Checkout::local();
-  let (delivery, review) = {
-    let mut db = checkout.db();
-    (pipeline(&mut db, "delivery", true), pipeline(&mut db, "review", true))
-  };
-  let checkout = checkout.link(&server);
+  let checkout = Checkout::linked(&server);
+  let (delivery, review) = (team_pipeline("delivery"), team_pipeline("review"));
+  checkout.read_team(&[delivery.clone(), review.clone()]);
+  let (delivery, review) = (delivery.0, review.0);
   let (dispatcher, _generation) = checkout.team(&server, ADMIN);
 
   let intent = Intent::new(create_with(Some(delivery), TaskLimits::NONE));
@@ -79,8 +77,9 @@ async fn actions_a_team_task_names_a_team_pipeline_by_its_id() {
 async fn actions_a_local_pipeline_or_limits_are_refused_before_anything_is_sent() {
   let server = TeamServer::start();
   let checkout = Checkout::local();
-  let own = pipeline(&mut checkout.db(), "own-delivery", false);
+  let own = pipeline(&mut checkout.db(), "own-delivery");
   let checkout = checkout.link(&server);
+  checkout.read_team(&[team_pipeline("delivery")]);
   let (dispatcher, _generation) = checkout.team(&server, ADMIN);
 
   let refused = dispatcher
@@ -125,9 +124,10 @@ async fn actions_a_local_pipeline_or_limits_are_refused_before_anything_is_sent(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn actions_the_servers_pipeline_refusal_is_named() {
   let server = TeamServer::start();
-  let checkout = Checkout::local();
-  let archived = pipeline(&mut checkout.db(), "delivery", true);
-  let checkout = checkout.link(&server);
+  let checkout = Checkout::linked(&server);
+  let archived = team_pipeline("delivery");
+  checkout.read_team(std::slice::from_ref(&archived));
+  let archived = archived.0;
   let (dispatcher, _generation) = checkout.team(&server, ADMIN);
   server.archive_pipeline(&archived.to_string());
   let task = server.add_task("Sign in");

@@ -15,7 +15,6 @@ use orchester_core::{
   orchestrator::{ActionOutcome, ChatAction, WaitsOnRow},
   project::TaskKey,
   run::{Run, RunWaitsOn, WaitReason, WaitingRun, WaitsOnError},
-  store::TaskStore,
   task::Task,
   time::Timestamp,
 };
@@ -37,6 +36,7 @@ use crate::{
   app_mcp::{Missing, ToolError, Translate, blocking, find_run, find_task},
   messages::Message,
   runner::Runners,
+  tasks::recorded::task_of,
 };
 
 /// The tool's name.
@@ -136,9 +136,7 @@ async fn keep_wait(scope: &ChatScope, arguments: JsonObject) -> Result<Kept, Too
 fn keep_in(db: &mut ProjectDb, scope: &ChatScope, asked: &WaitOnTask) -> Result<Kept, ToolError> {
   let run = find_run(db, &asked.run)?;
   let number = run.number().get();
-  let task = db
-    .task(run.task())?
-    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  let task = task_of(db, run.task())?.ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
   let waited = waited_task(db, &asked.task)?;
   let refused = |error: WaitsOnError| refusal(db, &error, number);
   let waits_for = waits_for(&run).ok_or_else(|| refused(WaitsOnError::NotWaitingForPerson))?;
@@ -209,8 +207,7 @@ fn refusal(db: &ProjectDb, error: &WaitsOnError, number: u32) -> ToolError {
     ),
     WaitsOnError::AlreadyWaits(waited) => {
       // A task that cannot be read is named by its id.
-      let key = db
-        .task(waited)
+      let key = task_of(db, waited)
         .ok()
         .flatten()
         .map_or_else(|| waited.to_string(), |task| task.key().to_string());

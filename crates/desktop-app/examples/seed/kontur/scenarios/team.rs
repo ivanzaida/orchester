@@ -15,7 +15,6 @@ pub mod state;
 use std::fs;
 
 use orchester_core::{
-  connection::{AgentProvider, SignIn},
   id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
   resource::ResourceKind,
@@ -27,6 +26,7 @@ use orchester_store::{AppDb, ArchiveStop, Archived, ProjectDb};
 use rusqlite::{Connection, params};
 
 use self::state::{FILE, State};
+use super::team_computer;
 use crate::kontur::{
   Kontur, SeedError, files, git, io_error as io, name,
   shapes::{self, Shape},
@@ -208,7 +208,7 @@ pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// says when run 8 ended beside when Take over was pressed (`Status line` `g9ufW`, ORC-840b).
 pub fn not_ready_after_run(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
-  claude_connection(kontur)?;
+  team_computer::claude_connection(kontur)?;
   git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
   Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
   with_runs(
@@ -256,26 +256,10 @@ pub fn start_past_failure(kontur: &mut Kontur) -> Result<(), SeedError> {
 fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.
-  claude_connection(kontur)?;
+  team_computer::claude_connection(kontur)?;
   // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
   git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
   write_marker(kontur, state)
-}
-
-/// The Claude Code connection `Claude · Kontur`, which the team's profiles run on without asking.
-fn claude_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let bin = kontur.repo.join(".orchester").join("qa-bin");
-  let program = bin.join("claude");
-  fs::create_dir_all(&bin).map_err(io(&bin))?;
-  fs::write(&program, "").map_err(io(&program))?;
-  let at = kontur.ago(4);
-  super::connections::cli(
-    kontur,
-    ("Claude · Kontur", AgentProvider::ClaudeCodeCli, program),
-    ("2.1.89", SignIn::SignedIn, &["claude-sonnet-5-5"]),
-    at,
-  )
-  .map(|_| ())
 }
 
 /// The team's resources of `team-hub` for a copy that joins the stand-in team server as an Admin, which holds the
@@ -317,20 +301,6 @@ pub fn edit_refused_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
   edit_in(kontur, State::TeamEditRefusedAdmin)
 }
 
-/// As [`edit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the outbox, with
-/// *Cancel sending* (`team-edit-waiting`, A16 `x3ywL`). The program path is set, so the row says only *Waiting to send
-/// · v2*.
-pub fn edit_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditWaiting)
-}
-
-/// As [`edit`], a version that waited and that the server rejected once it answered: the outbox holds it refused, with
-/// the reason, the form of the refused version and *Publish for the team* (`team-edit-rejected`, A17 `rJbPm`). The
-/// program path is set, so the row says only *Your draft on v1 · publish refused*.
-pub fn edit_rejected(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditRejected)
-}
-
 /// As [`edit`], `pencil-design` needing the variable `PENCIL_TOKEN`: the edit form has *Variables it needs* (A13
 /// `WMtxm`).
 pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -344,40 +314,18 @@ pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
   write_marker(kontur, State::TeamEditVariables)
 }
 
-/// As [`edit`], a new MCP server `figma-local` that waited and that the server refused as the name being taken once it
-/// answered: taken back whole, and the hub says what and why (`team-create-name-taken`, A15 `dLqHC`).
-pub fn create_name_taken(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamCreateNameTaken)
-}
-
-/// As [`edit`], with a draft of `pencil-design` kept on v1 and olha's v2 published meanwhile and read here: one quiet
-/// line says so, with *View changes* (`team-edit-newer`, A18 `bk4i9`). The QA app makes it without a press.
-pub fn edit_newer(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditNewer)
-}
-
-/// As [`edit_newer`], after a *Publish for the team* that the server answered with the conflict: the page compares v1,
-/// olha's v2 and the draft field by field, the arguments both changed (`team-edit-conflicting`, A19 `DV8OI`; *Discard
-/// my draft* opens A20 `CAPhQ`). The QA app makes it without a press.
-pub fn edit_conflicting(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditConflicting)
-}
-
-/// As [`edit_conflicting`], with no field both changed, so *Rebase my draft* needs no pick
-/// (`team-edit-conflict-clean`).
-pub fn edit_conflict_clean(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditConflictClean)
-}
-
-/// As [`edit`], olha archived `pencil-design` while the draft was kept and the *Publish for the team* that followed was
-/// refused: the draft stays, *Restore* is the way back (`team-edit-archived`, A21 `yqYj9`). The QA app makes it without
-/// a press.
-pub fn edit_archived(kontur: &mut Kontur) -> Result<(), SeedError> {
-  edit_in(kontur, State::TeamEditArchived)
+/// As [`edit`], `orders-report` in the team's form, naming the team secret `ORDERS_DB` (`team-tools`): an admin edits
+/// a team HTTP tool (`sentry-issues`, A33 `t2RMXK`) and database query (`orders-report`, A35 `YBG4T`) in place, and
+/// *New tool* makes either (A32 `gLLEv`, A34 `WUuEj`).
+pub fn tools(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources_by_name(kontur)?;
+  team_computer::forms_computer(kontur)?;
+  write_marker(kontur, State::TeamEdit)
 }
 
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
+  team_computer::forms_computer(kontur)?;
   write_marker(kontur, state)
 }
 
@@ -387,6 +335,7 @@ fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
 /// `team-hub-archive`); confirming it is a person's.
 pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
+  team_computer::forms_computer(kontur)?;
   write_marker(kontur, State::TeamArchive)
 }
 
@@ -395,6 +344,17 @@ pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// computer's lists as the server's archive does. The task's Summary says which resource and who archived it, and
 /// Builder, which still names it, cannot run.
 pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  archived_as(kontur, State::TeamArchived)
+}
+
+/// [`archived`] for an Admin (`team-archived-admin`, A36 `qvMZD`, A37 `AFbIb`): the hub's *Archived* offers *Restore
+/// pencil-design*.
+pub fn archived_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
+  archived_as(kontur, State::TeamArchivedAdmin)
+}
+
+/// [`archived`], marked as `state`.
+fn archived_as(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
   with_runs(
@@ -430,7 +390,7 @@ pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
       by: Some("dana-k".to_owned()),
     }),
   })?;
-  write_marker(kontur, State::TeamArchived)
+  write_marker(kontur, state)
 }
 
 /// KON-12 moved from the catalogue's pipeline, which a team project does not offer, to the team's Team delivery
@@ -563,9 +523,21 @@ fn origin(kontur: &Kontur) -> Result<(), SeedError> {
 }
 
 /// The catalogue and the marker naming `state`.
-fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+pub(super) fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   kontur.catalogue()?;
   write_marker(kontur, state)
+}
+
+/// Leaves the marker by which the QA app serves the Agents hub's team from a stand-in team server, as a member's when
+/// `member` (`team-hub`, `team-hub-member`).
+pub(super) fn served(kontur: &Kontur, member: bool) -> Result<(), SeedError> {
+  write_marker(kontur, if member { State::TeamHubMember } else { State::TeamHub })
+}
+
+/// Leaves the marker by which the QA app joins the Agents hub's team on a stand-in team server that stops answering
+/// before this computer read anything of it (`team-hub-down`).
+pub(super) fn down(kontur: &Kontur) -> Result<(), SeedError> {
+  write_marker(kontur, State::TeamHubDown)
 }
 
 fn write_marker(kontur: &Kontur, state: State) -> Result<(), SeedError> {

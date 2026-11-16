@@ -5,7 +5,6 @@
 //! task with the real runner and the fake Codex. Needs `git`.
 
 mod accounts;
-mod accounts_window;
 mod api_providers;
 mod approval_answers;
 mod approval_settings;
@@ -19,6 +18,7 @@ mod codex_sandbox;
 mod completion;
 mod connections_window;
 mod context_use;
+mod dangerous_auto_approve;
 mod decisions_reach_person;
 mod delivery;
 mod drafts;
@@ -40,19 +40,24 @@ mod merged_outside;
 mod modules;
 mod native_connections;
 mod orchestrator_approval;
+mod orchestrator_approval_turn;
 mod orchestrator_auto_merge;
+mod orchestrator_ceilings;
 mod orchestrator_chat;
 mod orchestrator_contention;
 mod orchestrator_continue;
 mod orchestrator_continued;
+mod orchestrator_decisions;
 mod orchestrator_git;
 mod orchestrator_guard;
 mod orchestrator_interrupted;
 mod orchestrator_moves;
+mod orchestrator_parking;
 mod orchestrator_report_turn;
 mod orchestrator_resolve;
 mod orchestrator_sent;
 mod orchestrator_sent_as;
+mod orchestrator_unattended;
 mod person_decisions;
 mod pipeline_permissions;
 mod reads;
@@ -65,8 +70,11 @@ mod skills_window;
 mod slot_waits;
 mod story_points;
 mod task_organization;
+#[path = "../../../workspace/tests/support/team_cache.rs"]
+mod team_cache;
 mod team_fill_ins;
 mod team_mcp_servers;
+mod team_reviewer_picks;
 mod todo_lists;
 mod tools;
 mod tools_window;
@@ -378,7 +386,7 @@ impl Drop for Served {
   }
 }
 
-/// A file that is not a CLI, with the Unix permission `mode`: `add_cli_connection` checks a chosen program file
+/// A file that is not a CLI, with the Unix permission `mode`: `add_cli_connection` would run a chosen program file
 /// exists before its gate.
 fn write_program(path: &Path, #[cfg_attr(windows, expect(unused_variables))] mode: u32) {
   std::fs::write(path, "not a program").expect("the file is written");

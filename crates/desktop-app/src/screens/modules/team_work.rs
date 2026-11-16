@@ -199,13 +199,10 @@ impl Component for ModuleWork {
       .spacing(ExtraSpacing::Loose.role())
       .child(heading)
       .with_children(lines::refusal(ctx, &view))
-      .with_children(lines::person_only(ctx, &view, &[lines::AGAIN]))
       .child(lines::claim(ctx, &view))
-      .with_children(lines::person_only(ctx, &view, &[lines::TAKE_OVER]))
       .with_children(lines::conflict(ctx, &view))
       .child(lines::branch(ctx, &view))
       .child(delivery::delivery(ctx, &view))
-      .with_children(lines::person_only(ctx, &view, &[delivery::AUTHORIZE]))
       .with_children(lines::branch_dialog(ctx, &view))
   }
 }

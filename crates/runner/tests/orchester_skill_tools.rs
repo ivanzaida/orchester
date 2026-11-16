@@ -22,9 +22,9 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, TestProject, git, project, reported, scheduler_with, wait_for};
+use self::support::{Setup, TestProject, git, given::give_builder, project, reported, scheduler_with, wait_for};
 
-/// Publishes the project skill `run-checks` with the reference file `references/checks.md`.
+/// Publishes the project skill `run-checks` with the reference file `references/checks.md`, which the Builder gives.
 fn publish_skill(root: &Path) {
   let mut db = ProjectDb::open(root).expect("open");
   let content = db.put_blob("text/markdown", b"cargo test").expect("blob");
@@ -50,6 +50,8 @@ fn publish_skill(root: &Path) {
     .expect("create")
     .id();
   db.publish_draft::<Skill>(id, Timestamp::now()).expect("publish");
+  drop(db);
+  give_builder(root, &[id]);
 }
 
 /// Commits the repository skill `deploy` under `.agents/skills`, where Codex finds it, with a reference file.

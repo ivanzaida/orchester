@@ -10,6 +10,8 @@
 //!   choosing Autopilot stops that, back to Autopilot. It is offered only while the profile says Autopilot, the project
 //!   allows it and the run was not switched to Manual; otherwise it is unavailable with the first reason that applies,
 //!   or left out while the run approves everything already: then nothing is wider, and the menu's foot says why.
+//! - While the project is in Dangerous auto-approve the chip says so and the menu offers no way: every request is
+//!   approved at once, and the run's own choices come back once the project leaves it.
 //! - *Approve everything in this run* widens: a person's alone
 //!   ([`orchester_core::run::RunPermissionChange::asked_by`]).
 
@@ -32,6 +34,8 @@ pub enum ChipMode {
   ManualRun,
   /// Manual, as the project does not allow Autopilot.
   ManualProject,
+  /// The project approves every request at once (Dangerous auto-approve), whatever the run and its profile say.
+  Dangerous,
 }
 
 /// Why *Autopilot* cannot be chosen for the run, the first that applies.
@@ -75,9 +79,20 @@ impl PermissionsMenu {
   /// The chip and the menu of a run that keeps `approvals`.
   pub const fn of(approvals: &RunApprovals) -> Self {
     let mode = approvals.mode;
+    // No per-run choice changes anything while the project approves every request: the menu offers none.
+    if let EffectiveMode::DangerousAutoApprove(_) = mode {
+      return Self {
+        chip: ChipMode::Dangerous,
+        profile: ApprovalMode::Autopilot,
+        manual: Offer::Hidden,
+        autopilot: Offer::Hidden,
+        everything: Offer::Hidden,
+        nothing_wider: None,
+      };
+    }
     let everything = approvals.approves_everything();
     let not_autopilot = match mode {
-      EffectiveMode::Autopilot => None,
+      EffectiveMode::Autopilot | EffectiveMode::DangerousAutoApprove(_) => None,
       EffectiveMode::Manual(ManualBecause::Run) => Some(NotAutopilot::Switched),
       EffectiveMode::Manual(ManualBecause::Profile) => Some(NotAutopilot::ProfileManual),
       EffectiveMode::Manual(ManualBecause::Project) => Some(NotAutopilot::ProjectOff),
@@ -88,6 +103,7 @@ impl PermissionsMenu {
       (false, EffectiveMode::Manual(ManualBecause::Profile)) => ChipMode::Manual,
       (false, EffectiveMode::Manual(ManualBecause::Run)) => ChipMode::ManualRun,
       (false, EffectiveMode::Manual(ManualBecause::Project)) => ChipMode::ManualProject,
+      (false, EffectiveMode::DangerousAutoApprove(_)) => ChipMode::Dangerous,
     };
     let profile = match mode {
       EffectiveMode::Manual(ManualBecause::Profile) => ApprovalMode::Manual,

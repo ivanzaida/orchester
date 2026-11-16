@@ -42,11 +42,14 @@ mod initial;
 mod invocation_permissions;
 mod joining;
 mod list;
+mod local_archive;
+mod local_drafts;
 mod local_integration;
 mod mcp;
 mod memory;
 mod merge_attempts;
 mod merge_queue;
+mod module_branches;
 mod modules;
 mod native_commands;
 mod native_conversations;
@@ -55,6 +58,8 @@ mod optional_limits;
 mod orchestrator;
 mod orchestrator_accounts;
 mod orchestrator_archive;
+mod orchestrator_decisions;
+mod orchestrator_holds;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_run_ends;
@@ -64,20 +69,25 @@ mod orchestrator_subscriptions;
 mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_todos;
+mod orchestrator_tries;
 mod orchestrator_waits;
 mod orchestrator_watch;
 mod organization;
+mod parked_tasks;
 mod permission_events;
 mod permitted_decisions;
+mod pipeline_drafts;
 mod plan_decided_by;
 mod plan_limits;
 mod plan_only;
+mod profile_given;
 mod project_approval_rules;
 mod pull_request_syncs;
 mod qa_slots;
 mod questions;
 mod queue_holds;
 mod recovery;
+mod remove_bindings;
 mod removed_resources;
 mod reported_windows;
 mod request_answers;
@@ -108,11 +118,13 @@ mod task_edits;
 mod task_groups;
 mod task_identities;
 mod task_pipeline_pin;
+mod team_cache;
 mod team_delivery;
 mod team_delivery_waits;
 mod team_fill_ins;
 mod team_mcp_server;
 mod team_operations;
+mod team_outbox;
 mod team_pipeline_ids;
 mod team_references;
 mod team_reviewer;
@@ -137,5 +149,22 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
   match migration {
     super::ProjectMigration::LocalIntegration => local_integration::MIGRATION,
     super::ProjectMigration::EditorDrafts => editor_drafts::MIGRATION,
+    super::ProjectMigration::TeamReviewer => team_reviewer::MIGRATION,
+    super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
+    super::ProjectMigration::ProfileGiven => profile_given::MIGRATION,
+    super::ProjectMigration::TeamOutbox => team_outbox::MIGRATION,
+    super::ProjectMigration::LocalDrafts => local_drafts::MIGRATION,
+    super::ProjectMigration::PipelineDrafts => pipeline_drafts::MIGRATION,
+    super::ProjectMigration::PermittedDecisions => permitted_decisions::MIGRATION,
+    super::ProjectMigration::AutomationAnswers => automation_answers::MIGRATION,
+    super::ProjectMigration::AutoMode => auto_mode::MIGRATION,
+    super::ProjectMigration::BaseSources => base_sources::MIGRATION,
+    super::ProjectMigration::DiskGuard => disk_guard::MIGRATION,
+    super::ProjectMigration::ApprovalModes => approval_modes::MIGRATION,
+    super::ProjectMigration::DecisionReviewer => decision_reviewer::MIGRATION,
+    super::ProjectMigration::TaskIdentities => task_identities::MIGRATION,
+    super::ProjectMigration::ReturnedAfterEnd => returned_after_end::MIGRATION,
+    super::ProjectMigration::ArchiveStopsArchived => archive_stops::ARCHIVED_MIGRATION,
+    super::ProjectMigration::TeamCache => team_cache::MIGRATION,
   }
 }

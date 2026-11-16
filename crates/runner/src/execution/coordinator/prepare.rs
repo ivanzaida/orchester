@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, StepExecutionId, TaskId},
   integration::{
-    base::{BaseChoice, RunBaseError, set_branch_tip},
+    base::{BaseChoice, RunBaseError, RunBaseSource, create_branch_at, set_branch_tip},
     checked_out_branch,
   },
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool, Version},
@@ -110,6 +110,7 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
     profiles: &published.profiles,
     tools: &published.tools,
     connections: &connections,
+    chosen_here: &db.connection_picks().map_err(store)?,
     mcp_servers: &mcp_servers,
     secrets: &secrets,
   });
@@ -118,7 +119,10 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
   }
   let pipeline = pipeline.expect("the preflight rejects a pipeline without a published version");
   let (choice, base_source) = db.next_run_base(&task).map_err(store)?;
-  let (base, base_branch) = run_base(&choice, root)?;
+  let (base, base_branch) = match own_branch_to_make(db, base_source, root)? {
+    Some(made) => made,
+    None => run_base(&choice, root)?,
+  };
   let (project_sources, task_sources) = (
     db.project_sources().map_err(store)?,
     db.task_sources(task_id).map_err(store)?,
@@ -154,6 +158,9 @@ pub(super) fn record(
     .map_err(|error| match error {
       RunStoreError::TaskNotQueued(_) => Rejection::TaskNotQueued,
       RunStoreError::TaskChangedMeanwhile(_) => Rejection::TaskChangedMeanwhile,
+      RunStoreError::UsesArchived(name) => Rejection::Failed {
+        detail: format!("the run would use {name}, which was archived"),
+      },
       other => read_failed("cannot record the run", other),
     })?;
   let resolved = resolve_task(db, &run)?;
@@ -221,6 +228,7 @@ pub(in crate::execution) fn finish_recorded(
   }
   if resolver.team().is_none() {
     check_readiness(db, run.task())?;
+    make_own_branch(db, &run, root)?;
   }
   match place.make() {
     Ok(branch) => record_branch(db, &mut run, branch)?,
@@ -388,6 +396,52 @@ fn run_base(choice: &BaseChoice, root: &Path) -> Result<(Revision, BranchName), 
       Err(RunBaseError::Git(error)) => Err(failed("cannot read the base branch", &error)),
     },
   }
+}
+
+/// The module's own branch a run whose base came from `source` starts on, when the repository does not have it yet,
+/// with the commit it is made at: the tip of the module's base branch, or the checkout's `HEAD` when the module set
+/// none (`docs/plan/orchestrator-autonomy/OA-17-…`). The check makes nothing: the branch is made when the run starts
+/// ([`make_own_branch`]). `None` for any other run, and once the branch is there.
+fn own_branch_to_make(
+  db: &ProjectDb,
+  source: RunBaseSource,
+  root: &Path,
+) -> Result<Option<(Revision, BranchName)>, Rejection> {
+  let RunBaseSource::Module { module } = source else {
+    return Ok(None);
+  };
+  let module = db
+    .module(module)
+    .map_err(|error| failed("cannot read the run's module", &error))?;
+  let Some(module) = module else {
+    return Ok(None);
+  };
+  let Some(own) = module.own_branch() else {
+    return Ok(None);
+  };
+  match set_branch_tip(&ProcessRunner::new(GIT_TIMEOUT), Path::new("git"), (root, &own.branch)) {
+    Ok(_) => Ok(None),
+    Err(RunBaseError::Missing(_)) => run_base(module.base(), root).map(|(from, _)| Some((from, own.branch.clone()))),
+    Err(RunBaseError::Git(error)) => Err(failed("cannot read the module's branch", &error)),
+  }
+}
+
+/// Makes the module's own branch `run` starts on, at the commit the run recorded as its base, when the repository
+/// does not have it: the first run of a module that has a branch of its own makes it. A branch that is there is left
+/// where it is.
+fn make_own_branch(db: &ProjectDb, run: &Run, root: &Path) -> Result<(), Rejection> {
+  if own_branch_to_make(db, run.base_source(), root)?.is_none() {
+    return Ok(());
+  }
+  let Some(branch) = run.base_branch() else {
+    return Ok(());
+  };
+  create_branch_at(
+    &ProcessRunner::new(GIT_TIMEOUT),
+    Path::new("git"),
+    (root, branch, run.base()),
+  )
+  .map_err(|error| failed("cannot make the module's branch", &error))
 }
 
 /// `HEAD` of the user's checkout: the run starts from what the user has checked out.

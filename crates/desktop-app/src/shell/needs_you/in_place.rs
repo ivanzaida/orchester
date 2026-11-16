@@ -6,6 +6,8 @@
 //! it until a reading succeeds, so no answer goes from what may no longer hold; when the request is not on the
 //! task's latest run, that it is answered in the conversation. *Open conversation* follows, unless the card carries it
 //! in its own answers row. Once the item no longer waits, a note takes the card's place and says how it went (`note`).
+//! The Orchestrator's conversation shows the same card, framed as on the task's Conversation tab, under a tool
+//! request's wait it left to the person (`framed`, 2026-11-11, `ICzi3` d): its line carries *Open ↗* there.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -47,20 +49,23 @@ use crate::{
 
 /// Which card answers which item.
 #[derive(Clone)]
-pub(super) struct InPlaceProps {
-  pub(super) id: String,
-  pub(super) project: ProjectId,
-  pub(super) task: TaskId,
+pub(crate) struct InPlaceProps {
+  pub(crate) id: String,
+  pub(crate) project: ProjectId,
+  pub(crate) task: TaskId,
   /// The card's key in its run's timeline.
-  pub(super) key: Arc<str>,
+  pub(crate) key: Arc<str>,
   /// "03 Implement", the step its run is on.
-  pub(super) step: Option<(usize, Arc<str>)>,
+  pub(crate) step: Option<(usize, Arc<str>)>,
   /// The project's waiting requests and questions, by id: a change reads the run's requests again.
-  pub(super) waiting: Arc<[Arc<str>]>,
+  pub(crate) waiting: Arc<[Arc<str>]>,
   /// The item, once it no longer waits: its note takes the card's place.
-  pub(super) gone: Option<NeedItem>,
+  pub(crate) gone: Option<NeedItem>,
   /// Opens the card in its task's conversation.
-  pub(super) conversation: Open,
+  pub(crate) conversation: Open,
+  /// The card with its own frame and head, as on the task's Conversation tab, without *Open conversation*: the
+  /// Orchestrator's conversation's; else bare inside the Needs you item.
+  pub(crate) framed: bool,
 }
 
 /// What opens the conversation is the same for one item, so it does not count.
@@ -73,6 +78,7 @@ impl PartialEq for InPlaceProps {
       && self.step == other.step
       && self.waiting == other.waiting
       && self.gone == other.gone
+      && self.framed == other.framed
   }
 }
 
@@ -84,7 +90,7 @@ struct Read(Arc<InPlace>);
 
 impl DevtoolsInspectable for Read {}
 
-pub(super) struct InPlaceCard {
+pub(crate) struct InPlaceCard {
   /// Why the last reading that ended failed, until one succeeds; a reading under way keeps it.
   failed: Mutex<Option<Message>>,
 }
@@ -162,7 +168,7 @@ impl Component for InPlaceCard {
     // The panel expands one item at a time, so its decisions follow that item's run, as a tab's follow its own.
     ctx
       .use_context::<Decisions>()
-      .expect("the Needs you panel provides its decisions before its cards")
+      .expect("the Needs you panel and the Orchestrator's request card provide their decisions before their cards")
       .follow_runner(lost);
     let Some(item) = read.card(&props.key, lost) else {
       let not_here = Text::new(&ctx.t("needs_you.notHere"))
@@ -178,19 +184,22 @@ impl Component for InPlaceCard {
       step: props.step.as_ref().map(|(number, name)| step_label(ctx, *number, name)),
       step_label,
       links: links(ctx),
-      in_panel: true,
-      conversation: hosts.then(|| props.conversation.clone()),
+      in_panel: !props.framed,
+      conversation: (hosts && !props.framed).then(|| props.conversation.clone()),
     };
     let card = cards::card(ctx, place, &item);
-    if hosts {
+    if hosts || props.framed {
       return card;
     }
     with_conversation(ctx, &props, card)
   }
 }
 
-/// `content`, then *Open conversation*.
+/// `content`, then *Open conversation*; `content` alone in a framed card, whose line opens the conversation.
 fn with_conversation(ctx: &Ctx, props: &InPlaceProps, content: Element) -> Element {
+  if props.framed {
+    return content;
+  }
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())

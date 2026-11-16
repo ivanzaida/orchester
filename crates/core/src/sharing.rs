@@ -29,7 +29,7 @@ pub use self::{
     ConnectionProblem, Here, LocalProgramProblem, McpNeed, McpUnsupported, Missing, Needs, NeedsError, ProgramProblem,
     Readiness, readiness,
   },
-  references::{Binding, BindingKindError, LocalEntities, Reference, ReferenceKind, named, resolve},
+  references::{LocalEntities, Reference, ReferenceKind, named},
   similar::similar_titles,
   widens::{SharedBody, VersionWidening, widens},
 };

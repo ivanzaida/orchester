@@ -1,12 +1,12 @@
 //! A message's actions, in both chats (`06 · Message actions` `XPDAX`, ORC-706, as Claude desktop draws them): one
 //! line of icon buttons with no box, stroke or fill around it, `control_height_sm` square and 2 apart, radius 6, each a
 //! 14 glyph in `text_secondary`; under the pointer the `hover` fill and `text_primary`. Copy is always there, and a
-//! message may offer more around it ([`super::toolbar`]). The line shows while the pointer is on the message or the
-//! keyboard is on one of its buttons (with the focus ring), and keeps its room either way, so nothing moves when it
-//! shows. A button's tooltip hangs under it while the pointer or the keyboard is on it: its label, or why it cannot be
-//! used now. Copy puts the message's Markdown on the clipboard as it was kept, its secrets already redacted, without
-//! its name and time; then for 2 s its glyph is a `check` in `success` and its tooltip says *Copied*, or a
-//! `triangle-alert` in `danger` says *Couldn't copy*.
+//! message may offer more around it ([`super::toolbar`]). The line shows while the pointer is on the message and keeps
+//! its room either way, so nothing moves when it shows. Its buttons are the pointer's only, as every toolbar's
+//! (`ui::pressable`): Tab skips them and a press leaves the focus where it was. A button's tooltip hangs under it
+//! while the pointer is on it: its label, or why it cannot be used now. Copy puts the message's Markdown on the
+//! clipboard as it was kept, its secrets already redacted, without its name and time; then for 2 s its glyph is a
+//! `check` in `success` and its tooltip says *Copied*, or a `triangle-alert` in `danger` says *Couldn't copy*.
 
 use std::{sync::Arc, time::Duration};
 
@@ -28,7 +28,7 @@ use crate::{
   ui::{
     clipboard::Clipboard,
     icon::{Icon, icon},
-    pressable::{Focus, Press, inert},
+    pressable::{Press, inert},
     tooltip::Tooltip,
   },
 };
@@ -119,8 +119,7 @@ struct MessageActions {
   reset: Timeout,
   /// The button the pointer is on.
   pointed: Signal<Option<Action>>,
-  /// Each action's button, by [`Action::index`], which its tooltip hangs from and which tells whether the keyboard
-  /// is on it.
+  /// Each action's button, by [`Action::index`], which its tooltip hangs from.
   anchors: [ElementRef; 4],
 }
 
@@ -142,7 +141,7 @@ impl Component for MessageActions {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<MessageActionsProps>().clone();
     let copied = self.copied.get();
-    let shown = props.hovered || self.pointed.get().or(self.keyboard()).is_some();
+    let shown = props.hovered || self.pointed.get().is_some();
     let buttons: Vec<Element> = Action::ALL
       .into_iter()
       .filter_map(|action| self.action(ctx, &props, action))
@@ -163,19 +162,11 @@ impl Component for MessageActions {
 }
 
 impl MessageActions {
-  /// The button whose tooltip shows: the one the pointer or else the keyboard is on, or Copy while it says what came of
-  /// its last press and the pointer is on the message (`hovered`).
+  /// The button whose tooltip shows: the one the pointer is on, or Copy while it says what came of its last press and
+  /// the pointer is on the message (`hovered`).
   fn tipped(&self, hovered: bool) -> Option<Action> {
     let told = (hovered && self.copied.get() != Copied::Not).then_some(Action::Copy);
-    self.pointed.get().or(self.keyboard()).or(told)
-  }
-
-  /// The button the keyboard is on, with its focus ring: a press with the pointer focuses a button too, but only the
-  /// keyboard's focus keeps the line shown once the pointer leaves the message.
-  fn keyboard(&self) -> Option<Action> {
-    Action::ALL
-      .into_iter()
-      .find(|action| self.anchors[action.index()].focus_visible())
+    self.pointed.get().or(told)
   }
 
   /// The button of `action`; `None` for one the message does not offer.
@@ -203,18 +194,18 @@ impl MessageActions {
     });
     let glyph = icon(glyph, IconSize::Md, color).id(format!("{}-copy-icon", props.id));
     let button = self.button(props, Action::Copy, (&words, &words), glyph);
-    press.on(Focus::Keyboard.apply(button)).into()
+    press.on(button).into()
   }
 
-  /// The button of `action`, which `choice` makes: pressed with the pointer or the keyboard, or at half saying why
-  /// it cannot be made now.
+  /// The button of `action`, which `choice` makes: pressed with the pointer, or at half saying why it cannot be made
+  /// now.
   fn choice(&self, props: &MessageActionsProps, action: Action, choice: &ToolbarChoice) -> Element {
     let label = &choice.label;
     match &choice.choose {
       Ok(choose) => {
         let glyph = icon(action.icon(), IconSize::Md, self.color(action));
         let button = self.button(props, action, (label, label), glyph);
-        let pressed = Press::Run(choose.clone()).on(Focus::Keyboard.apply(button));
+        let pressed = Press::Run(choose.clone()).on(button);
         pressed.describe("state", "enabled").into()
       }
       Err(why) => {
@@ -235,9 +226,10 @@ impl MessageActions {
   }
 
   /// The button of `action` with `glyph`, named `name`, saying `tip` in its tooltip while that shows: the `hover` fill
-  /// under the pointer; the line knows whether the pointer or the keyboard is on it. The tooltip is the button's own
-  /// child, out of the layout and always laid out, seen only while it shows: a press under the pointer reaches the
-  /// button it began on even when the pointer's arrival redraws the line in the same frame.
+  /// under the pointer, which alone presses it (never a Tab stop, no focus ring); the line knows whether the pointer
+  /// is on it. The tooltip is the button's own child, out of the layout and always laid out, seen only while it shows:
+  /// a press under the pointer reaches the button it began on even when the pointer's arrival redraws the line in the
+  /// same frame.
   fn button(
     &self,
     props: &MessageActionsProps,
@@ -266,6 +258,7 @@ impl MessageActions {
       .rounded(RadiusSize::Md)
       .ref_element(anchor)
       .describe("a11y_name", name.clone())
+      .focusable(false)
       .cursor(CursorIcon::Pointer)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .active_style(Style::new().background(ExtraColor::Pressed.role()))

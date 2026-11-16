@@ -1,8 +1,8 @@
 //! A record waiting for approval on a task's Memory tab (`Memory / Proposal row` `LdHs2`): on `surface_raised`, what
 //! it says with its meta line and tags, the record it would replace (*Supersedes 1 active record · key by author*),
 //! *Waits for your approval*, and *Reject*, *Edit* (which opens *Review proposed record* in its place) and *Approve*
-//! after the note that agents do not receive it until then. The project page's queue lists its proposals as rows
-//! instead ([`super::queue_row`]).
+//! after the note that agents do not receive it until then. The Agents hub's Memory filter lists its proposals as the
+//! hub's rows instead ([`super::hub`]).
 
 use lurq::{
   app::{
@@ -30,20 +30,8 @@ use crate::{
   },
 };
 
-/// Where a proposal is listed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Listed {
-  /// The task's Memory tab: one task's proposals.
-  Task,
-  /// The project's page: every scope's proposals in one queue.
-  Queue,
-}
-
 /// `memory`, a proposal, among `records` of its scope (which hold the record it would replace).
-pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins: &Origins, listed: Listed) -> Element {
-  if listed == Listed::Queue {
-    return super::queue_row::row(ctx, (memory, records), origins);
-  }
+pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins: &Origins) -> Element {
   let state = MemoryState::of(ctx);
   let id = format!("memory-proposal-{}", memory.id());
   let head = Row::new()
@@ -104,13 +92,7 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
 }
 
 /// *Supersedes 1 active record · key by author*, when the proposal names an active record it would replace.
-pub(super) fn supersedes(
-  ctx: &Ctx,
-  memory: &Memory,
-  records: &[Memory],
-  origins: &Origins,
-  id: &str,
-) -> Option<Element> {
+fn supersedes(ctx: &Ctx, memory: &Memory, records: &[Memory], origins: &Origins, id: &str) -> Option<Element> {
   let replaced = records.iter().find(|record| {
     Some(record.id()) == memory.supersedes() && record.status() == orchester_core::memory::MemoryStatus::Active
   })?;

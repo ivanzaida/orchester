@@ -149,7 +149,7 @@ fn orchestrator_plan_is_approved_by_a_person_only_and_carried_out() {
   let card = planned(&mut screen);
   let approve = format!("{card}-approve");
   with_synthetic_input(|| screen.click(&approve));
-  screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
+  screen.until("the refusal", |screen| screen.window.refused_press().is_some());
   assert!(plans(&screen)[0].1.waits(), "automation's input approves nothing");
 
   screen.click(&approve);

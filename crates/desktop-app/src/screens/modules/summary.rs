@@ -29,6 +29,7 @@ use orchester_workspace::{
 };
 
 use super::{
+  delivery::{DeliveryProps, ModuleDelivery},
   page::body_padding,
   properties::{ModuleProperties, PropertiesProps},
   save::Written,
@@ -83,13 +84,33 @@ impl Component for ModuleSummary {
     let props = ctx.props::<SummaryProps>().clone();
     let page = props.page.clone();
     let project = props.project.open.project.id();
+    let (acceptances, acceptance) = match &page.delivery {
+      Some(view) => (
+        view.acceptances.as_slice(),
+        view.own.acceptance.and_then(|pipeline| {
+          let named = page.pipelines.iter().find(|(id, _)| *id == pipeline);
+          named.map(|(_, name)| Arc::<str>::from(name.as_str()))
+        }),
+      ),
+      None => (&[][..], None),
+    };
+    let delivery = page.delivery.is_some().then(|| {
+      ctx.mount_keyed::<ModuleDelivery>(
+        "module-delivery-component",
+        DeliveryProps {
+          project: props.project.clone(),
+          page: page.clone(),
+        },
+      )
+    });
     let column = Column::new()
       .id("module-summary-column")
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(TaskSpacing::Sections.role())
+      .with_children(delivery)
       .child(description(ctx, &page.module))
-      .child(tasks::section(ctx, project, &page.tasks, &self.toggled))
+      .child(tasks::section(ctx, project, (&page.tasks, acceptances), &self.toggled))
       .child(burndown_line(
         ctx,
         (project, page.module.id()),
@@ -102,6 +123,7 @@ impl Component for ModuleSummary {
         module: Arc::new(page.module.clone()),
         led_in: props.led_in,
         written: props.written,
+        acceptance,
       },
     );
     let body = Row::new()

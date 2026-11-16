@@ -284,9 +284,7 @@ impl UploadPage {
           .child(text)
           .child(Spacer::new().width(Dimension::Px(0.0)))
           .child(actions),
-      )
-      .with_children(self.person.reason(ctx, CONFIRM))
-      .with_children(self.person.reason(ctx, REVIEW));
+      );
     Column::new()
       .id("sharing-upload-head")
       .width(Dimension::Pct(100.0))
@@ -324,7 +322,7 @@ impl UploadPage {
     }
     let (link, person) = (self.link.clone(), self.person.clone());
     button.on_click(move || {
-      if person.allows(CONFIRM) {
+      if person.allows("link a project and upload it to a team server") {
         link.run(());
       }
     })
@@ -340,7 +338,7 @@ impl UploadPage {
     }
     let (review, person) = (self.review.clone(), self.person.clone());
     button.on_click(move || {
-      if person.allows(REVIEW) {
+      if person.allows("review what a link uploads again") {
         review.run(());
       }
     })

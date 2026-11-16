@@ -143,14 +143,13 @@ pub struct PolicyAction {
 }
 
 /// Starts a team task's work under the task's claim `authority`, from the base branch at `base_commit`, on the task
-/// read at `read` in `module` read at `module_read`.
+/// read at `read`, in `module` (its id and the revision it was read at) when it is in one.
 #[derive(Clone, Debug)]
 pub struct WorkAction {
   pub authority: AuthorityRef,
   pub base_commit: CommitId,
   pub read: TaskRevision,
-  pub module: ModuleId,
-  pub module_read: TaskRevision,
+  pub module: Option<(ModuleId, TaskRevision)>,
 }
 
 /// The delivery of `module`'s `branch` under the module's claim `claim`, from `source_commit` onto the base at

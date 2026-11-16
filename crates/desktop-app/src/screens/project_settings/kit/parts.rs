@@ -26,7 +26,6 @@ use crate::{
     ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText, SettingsText,
   },
   ui::{
-    agent_mark::AgentMark,
     code_box::CodeBox,
     icon::{Icon, icon},
     pressable::opening,
@@ -38,13 +37,12 @@ const TILE: f32 = 28.0;
 /// An opened item's tile (`Tile` `AFO61`).
 const HEAD_TILE: f32 = 36.0;
 
-/// What an item's tile shows: a Lucide glyph in `text_secondary`, the GitHub mark in it (`ui::github_mark`, `yov2r` in
-/// `14`), or the mark of the maker of an agent's models in its own color (`ui::agent_mark`).
+/// What an item's tile shows: a Lucide glyph in `text_secondary`, or the GitHub mark in it (`ui::github_mark`,
+/// `yov2r` in `14`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Glyph {
   Icon(Icon),
   GitHub,
-  Mark(AgentMark),
 }
 
 impl From<Icon> for Glyph {
@@ -58,16 +56,8 @@ impl Glyph {
     match self {
       Self::Icon(glyph) => icon(glyph, size, PaletteColor::TextSecondary).into(),
       Self::GitHub => crate::ui::github_mark::github_mark(ctx, size, PaletteColor::TextSecondary),
-      Self::Mark(mark) => mark.render(ctx, size),
     }
   }
-}
-
-/// An item's 28 tile on `surface_raised` inside a `border` stroke, radius 6, its 14 glyph or mark.
-pub(crate) fn tile(ctx: &Ctx, glyph: impl Into<Glyph>) -> Row {
-  square(TILE, RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .child(glyph.into().render(ctx, IconSize::Md))
 }
 
 /// An empty row's 28 tile: only its `border` stroke, its 14 glyph `text_muted` (`Tile` `Uagnp`).

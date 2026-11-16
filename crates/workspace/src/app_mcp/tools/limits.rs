@@ -4,7 +4,8 @@
 //! *Services at once*, which the same tool changes: an application setting that every project's runner reads.
 //! Limits answer no tool request in a person's place, so, like the code index, changing them needs
 //! no permission beyond the server's token, except raising or removing the daily budget: that lets runs the day's
-//! budget stopped go on, a person's decision ([`DecisionKind::Limit`]) automation takes only with their consent.
+//! budget stopped go on, a person's decision (`crate::decisions::DecisionKind::Limit`) an outside client takes only
+//! with their consent, and the Orchestrator chat while it drives ([`Services::answers_allowed`]).
 
 use std::path::Path;
 
@@ -28,7 +29,7 @@ use crate::{
     LimitsErrors, ReadLimits, agent_slots, budget_error, computer_service_slots, qa_slots, service_slots, time_limit,
     whole_minutes,
   },
-  decisions::{DecisionKind, not_allowed},
+  decisions::not_allowed,
   messages::Message,
   tasks::{
     outside::Outside,
@@ -76,7 +77,7 @@ pub async fn update_project_limits(services: &Services, args: UpdateProjectLimit
   blocking(move || {
     let open = services.project(&args.project)?;
     let root = open.repo_root;
-    let may_raise = DecisionKind::Limit.read_consent(&services.workspace)?;
+    let may_raise = services.answers_allowed()?;
     let computer = match args.computer_service_slots {
       Some(count) => computer_service_slots(count),
       None => Ok(services.workspace.service_slots()?),

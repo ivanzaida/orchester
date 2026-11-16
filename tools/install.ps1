@@ -13,8 +13,9 @@
 param(
     # Where orchester.exe, orchester-runner.exe and the application database live.
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Orchester\app"),
-    # Cargo target directory of the release build; outside the repository so agent builds never touch it.
-    [string]$BuildDir = (Join-Path $env:LOCALAPPDATA "Orchester\build"),
+    # Cargo target directory of the release build: beside the repository, on its drive rather than the system
+    # drive, and outside it so agent builds never touch it.
+    [string]$BuildDir = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "orchester-build"),
     # Copies the dev build's application database (target/debug/orchester.db) into the install
     # directory. Refused when the install directory already has one: it is never overwritten.
     [switch]$ImportDevData,
@@ -82,12 +83,13 @@ if ($ImportDevData) { Assert-CanImportDevData }
 
 Push-Location $repositoryRoot
 try {
-    # One build of both: the app and its runner must match.
+    # One build of both: the app and its runner must match. The local-release profile (Cargo.toml) is the release
+    # build made incremental, so a small change rebuilds in minutes.
     # ORCHESTER_APP_INSTALLED_BUILD makes this orchester-app the installed app: the fixed MCP address and the token
     # in the secret store (docs/stable-build.md). Only this script and package-macos.sh set it.
     $env:ORCHESTER_APP_INSTALLED_BUILD = "1"
     try {
-        cargo build --release --locked --target-dir $BuildDir -p orchester-app -p orchester-runner
+        cargo build --profile local-release --locked --target-dir $BuildDir -p orchester-app -p orchester-runner
     }
     finally {
         Remove-Item Env:ORCHESTER_APP_INSTALLED_BUILD
@@ -111,7 +113,7 @@ $hadDatabase = Test-Path -LiteralPath (Join-Path $InstallDir "orchester.db") -Pa
 $replaced = @()
 try {
     foreach ($program in $programs) {
-        Copy-Item -LiteralPath (Join-Path $BuildDir "release\$program") -Destination (Join-Path $InstallDir "$program.new") -Force
+        Copy-Item -LiteralPath (Join-Path $BuildDir "local-release\$program") -Destination (Join-Path $InstallDir "$program.new") -Force
     }
     Assert-NotInUse
     foreach ($program in $programs) {

@@ -14,7 +14,7 @@ mod batch;
 mod catalog;
 mod plan;
 mod record;
-/// Also the walk of shared versions' references ([`crate::sharing::resolve`]).
+/// Also the walk of a body's local references ([`crate::sharing::named`]).
 pub(crate) mod references;
 
 pub use self::{

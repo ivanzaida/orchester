@@ -7,9 +7,8 @@
 
 use orchester_core::{
   orchestrator::{ActionOutcome, EntryKind},
-  resource::{Draft, Pipeline, PromptText},
   run::InterruptCause,
-  store::{RunStore, TaskStore},
+  store::RunStore,
   task_group::{HoldActor, HoldScope},
   time::Timestamp,
 };
@@ -117,7 +116,7 @@ fn chat_message_to_an_agent_that_waits_is_sent_at_once() {
 }
 
 #[test]
-fn chat_turn_on_its_own_proposes_pausing_resuming_releasing_and_publishing() {
+fn chat_turn_on_its_own_proposes_pausing_resuming_and_releasing() {
   let (mut served, seeded, db, scope) = switched_off();
   let own = ChatScope {
     on_its_own: true,
@@ -125,22 +124,7 @@ fn chat_turn_on_its_own_proposes_pausing_resuming_releasing_and_publishing() {
   };
   let (_, running) = task_run(&db, &titled(&seeded, "running"));
   let (_, paused) = task_run(&db, &titled(&seeded, "paused"));
-  let pipeline = db
-    .tasks()
-    .expect("tasks")
-    .into_iter()
-    .find_map(|task| task.details().pipeline)
-    .expect("a task on a pipeline");
   let mut drafts = ProjectDb::open(&seeded.repo).expect("the project's data");
-  drafts
-    .update_draft::<Pipeline>(pipeline, |_, latest| {
-      let latest = latest.expect("the pipeline is published");
-      let mut steps = latest.body().steps().to_vec();
-      steps[0].instructions = PromptText::new("Read the README first.").expect("prompt");
-      let body = Pipeline::new(steps).expect("the same steps");
-      Ok(Draft::new(body, Some(latest.number()), Timestamp::now()))
-    })
-    .expect("a draft to publish");
   // New starts automation held, so there is something to release.
   drafts
     .set_queue_hold((HoldScope::Project, HoldActor::Automation), true, Timestamp::now())
@@ -155,10 +139,6 @@ fn chat_turn_on_its_own_proposes_pausing_resuming_releasing_and_publishing() {
       json!({ "project": "Kontur", "run": paused.id().to_string() }),
     ),
     ("release_queue", json!({ "project": "Kontur" })),
-    (
-      "publish_pipeline",
-      json!({ "project": "Kontur", "pipeline": pipeline.to_string() }),
-    ),
   ] {
     let told = chat_call(&mut served, &own, tool, arguments).unwrap_or_else(|error| panic!("{tool}: {error:?}"));
     assert_eq!(told["waits_for_person"], true, "{tool}: {told}");

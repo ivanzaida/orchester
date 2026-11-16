@@ -16,7 +16,11 @@ use orchester_workspace::tasks::{
   needs_you::WaitingKind,
 };
 
-use crate::ui::{icon::Icon, message::message_text};
+use crate::ui::{
+  icon::Icon,
+  message::message_text,
+  status::{workflow_key, workflow_look},
+};
 
 /// What a row says about where its task stands.
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +29,8 @@ pub(crate) struct Phrase {
   pub glyph_color: PaletteColor,
   pub words: Arc<str>,
   pub color: PaletteColor,
+  /// It says the task's closed status ([`closed`]) rather than where a run or a wait stands.
+  pub closed: bool,
 }
 
 impl Phrase {
@@ -32,7 +38,7 @@ impl Phrase {
   pub(super) fn of(ctx: &Ctx, row: &TaskRow, need: Option<&NeedItem>, tasks: &ProjectTasks) -> Self {
     match need {
       Some(need) => waits(ctx, need, tasks),
-      None => stands(ctx, row),
+      None => closed(ctx, row).unwrap_or_else(|| stands(ctx, row)),
     }
   }
 }
@@ -92,6 +98,7 @@ fn waits(ctx: &Ctx, need: &NeedItem, tasks: &ProjectTasks) -> Phrase {
     glyph_color: color.clone(),
     words,
     color,
+    closed: false,
   }
 }
 
@@ -158,7 +165,34 @@ fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
     glyph_color,
     words,
     color,
+    closed: false,
   }
+}
+
+/// A task closed as Done or Canceled that no run speaks for: its status as the workflow says it, in the glyph and
+/// words of the Done and Canceled status everywhere else, never *Ready to queue* or an open circle. A task whose run
+/// speaks (a merged one, a failed one) says that instead. A closed task waits for nothing, so one submitted without a
+/// run reads closed too; one its group will not start says that ([`ReadinessKind::Held`]).
+fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
+  let status = row.organization.status();
+  let unspoken = matches!(
+    row.readiness,
+    ReadinessKind::Ready
+      | ReadinessKind::Missing
+      | ReadinessKind::Blocked
+      | ReadinessKind::Run(TaskPhase::Draft | TaskPhase::Queued)
+  );
+  if !status.is_closed() || !unspoken {
+    return None;
+  }
+  let (glyph, glyph_color) = workflow_look(status);
+  Some(Phrase {
+    glyph,
+    glyph_color,
+    words: ctx.t(workflow_key(status)),
+    color: PaletteColor::TextMuted,
+    closed: true,
+  })
 }
 
 fn step_args(step: &CurrentStep) -> [(&'static str, String); 2] {

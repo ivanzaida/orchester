@@ -58,7 +58,8 @@ pub(crate) fn next_run_providers(
     let Some(version) = db.latest_version::<AgentProfile>(profile)? else {
       continue;
     };
-    if let Some(provider) = reached(db, version.body().connection())?.provider
+    let runs_on = db.connection_here(profile, version.body().connection())?;
+    if let Some(provider) = reached(db, runs_on)?.provider
       && !providers.contains(&provider)
     {
       providers.push(provider);

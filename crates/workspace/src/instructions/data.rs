@@ -94,7 +94,7 @@ pub struct StepChoice {
   pub role: Option<Name>,
 }
 
-/// A pipeline and its steps, as its draft or latest version has them.
+/// A pipeline and its steps, as its latest version has them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineChoice {
   pub id: ResourceId,
@@ -195,17 +195,14 @@ pub(crate) fn profiles(db: &ProjectDb) -> Result<Vec<ProfileChoice>, StoreError>
   Ok(profiles)
 }
 
-/// The project's pipelines with the steps of their draft, or else of their latest version.
+/// The project's pipelines with the steps of their latest version (a pipeline holds no draft, D-032).
 pub(crate) fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut pipelines = Vec::new();
   let profiles = profiles(db)?;
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
     let latest = db.latest_version::<Pipeline>(id)?;
-    let body = match db.draft::<Pipeline>(id)? {
-      Some(draft) => Some(draft.body().clone()),
-      None => latest.as_ref().map(|version| version.body().clone()),
-    };
+    let body = latest.as_ref().map(|version| version.body().clone());
     if let Some(body) = body {
       pipelines.push(PipelineChoice {
         id,

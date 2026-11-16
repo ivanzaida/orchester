@@ -28,6 +28,7 @@ use orchester_core::id::ProjectId;
 use orchester_store::StoreError;
 use orchester_workspace::workspace::{self, OpenProject, Workspace};
 
+pub(crate) use self::{closed::shared_changes, waits::try_again};
 pub use self::{
   feed::{ProjectFeed, TasksState},
   host::ProjectsHost,

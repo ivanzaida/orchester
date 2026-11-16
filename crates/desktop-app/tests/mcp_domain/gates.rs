@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{Served, write_program};
+use super::Served;
 
 /// Kontur seeded empty, its Codex connection's program any file the seed records as checked.
 fn served() -> Served {
@@ -32,7 +32,7 @@ impl Served {
 }
 
 fn profile(role: &str, permissions: Option<Value>) -> Value {
-  let mut args = json!({ "project": "Kontur", "role": role, "connection": "Codex · Kontur", "model": "gpt-5.5" });
+  let mut args = json!({ "project": "Kontur", "role": role, "account": "default", "cli": "codex", "model": "gpt-5.5" });
   if let Some(permissions) = permissions {
     args["permissions"] = permissions;
   }
@@ -251,57 +251,6 @@ fn domain_loading_the_repositorys_agent_files_again_needs_a_person() {
 }
 
 #[test]
-fn domain_a_cli_of_automations_choosing_needs_a_person_before_it_runs() {
-  let mut served = served();
-  let program = served.folder.path().join("my-codex.exe");
-  write_program(&program, 0o755);
-  let args = cli_args(&program);
-  assert_person_only(&served.refused("add_cli_connection", &args));
-  served.let_automation_widen(true);
-  assert_eq!(
-    served.refused("add_cli_connection", &args)["code"],
-    "not_verified",
-    "checked once a person lets it"
-  );
-}
-
-/// A chosen file that cannot be a program is refused for what it is, before any gate and without running anything.
-#[test]
-fn domain_a_chosen_cli_file_is_checked_before_anything_runs() {
-  let mut served = served();
-  let missing = served.folder.path().join("no-such-codex.exe");
-  let refused = served.refused("add_cli_connection", &cli_args(&missing));
-  assert_eq!(refused["code"], "program_not_found", "{refused}");
-  assert!(refused.to_string().contains("There is no file at"), "{refused}");
-  let folder = served.folder.path().to_path_buf();
-  assert_eq!(
-    served.refused("add_cli_connection", &cli_args(&folder))["code"],
-    "program_not_a_file"
-  );
-  #[cfg(unix)]
-  {
-    let program = served.folder.path().join("codex-not-executable");
-    write_program(&program, 0o644);
-    assert_eq!(
-      served.refused("add_cli_connection", &cli_args(&program))["code"],
-      "program_not_executable"
-    );
-  }
-  #[cfg(windows)]
-  assert_eq!(
-    served.refused(
-      "add_cli_connection",
-      &cli_args(Path::new(r"\\server.invalid\share\codex.exe"))
-    )["code"],
-    "program_not_local"
-  );
-}
-
-fn cli_args(program: &Path) -> Value {
-  json!({ "project": "Kontur", "kind": "codex", "name": "Mine", "program": program.display().to_string() })
-}
-
-#[test]
 fn domain_only_harmless_variables_change_without_a_person() {
   let mut served = served();
   let set = |variables: Value| json!({ "project": "Kontur", "variables": variables });
@@ -323,6 +272,16 @@ fn domain_only_harmless_variables_change_without_a_person() {
   served.ok("set_project_environment", &set(json!([])));
 }
 
+/// Makes pipeline `name` as a copy of Quick fix, its first version, which a person lets automation publish.
+fn copied(served: &mut Served, name: &str) {
+  served.let_automation_widen(true);
+  served.ok(
+    "create_pipeline",
+    &json!({ "project": "Kontur", "name": name, "from": "copy", "copy_of": "Quick fix" }),
+  );
+  served.let_automation_widen(false);
+}
+
 #[test]
 fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
   let mut served = served();
@@ -333,18 +292,16 @@ fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
     &profile("Writer", Some(permissions(&base, "write", "any_in_worktree"))),
   );
   served.let_automation_widen(false);
-  served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Narrow", "from": "empty" }),
-  );
+  copied(&mut served, "Narrow");
+  served.let_automation_widen(true);
   let save = |step: Value| json!({ "project": "Kontur", "pipeline": "Narrow", "steps": [step] });
   let refused = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Writer", "narrow": { "only_commands": ["cargo test"] } })),
   );
   assert_eq!(refused["code"], "invalid_step", "{refused}");
   let refused = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Probe", "repository": "write" })),
   );
   assert_eq!(
@@ -352,17 +309,17 @@ fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
     "a read-only profile's step cannot write"
   );
   let refused = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Nobody" })),
   );
   assert_eq!(refused["code"], "invalid_step", "only published profiles");
   let saved = served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &save(json!({ "key": "fix", "name": "Fix", "profile": "Writer", "repository": "write", "narrow": { "ask_before_tool_calls": true } })),
   );
   assert_eq!(saved["pipeline"]["steps"][0]["narrow"]["ask_before_tool_calls"], true);
   let cycle = served.refused(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Narrow", "steps": [
       { "key": "a", "name": "Alpha", "runs_after": ["b"] },
       { "key": "b", "name": "Beta", "runs_after": ["a"] },
@@ -388,28 +345,20 @@ fn domain_pipeline_tools_tell_the_feed() {
       .sum::<u64>()
   };
   let before = counted(&project);
-  served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Told", "from": "empty" }),
-  );
+  copied(&mut served, "Told");
   assert_eq!(counted(&project), before + 1, "create_pipeline");
+  served.let_automation_widen(true);
   served.ok(
-    "save_pipeline_draft",
+    "save_pipeline",
     &json!({ "project": "Kontur", "pipeline": "Told", "steps": [{ "key": "fix", "name": "Fix", "profile": "Builder" }] }),
   );
-  assert_eq!(counted(&project), before + 2, "save_pipeline_draft");
-  served.let_automation_widen(true);
-  served.ok("publish_pipeline", &json!({ "project": "Kontur", "pipeline": "Told" }));
-  assert_eq!(counted(&project), before + 3, "publish_pipeline");
+  assert_eq!(counted(&project), before + 2, "save_pipeline");
 }
 
 #[test]
-fn domain_automation_publishes_only_a_pipeline_no_weaker_than_the_last() {
+fn domain_automation_saves_only_a_pipeline_no_weaker_than_the_last() {
   let mut served = served();
-  served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Strict", "from": "empty" }),
-  );
+  copied(&mut served, "Strict");
   let steps = |plan_gate: bool, ask: bool, after_plan: bool| {
     json!({ "project": "Kontur", "pipeline": "Strict", "steps": [
       { "key": "plan", "name": "Plan", "profile": "Planner", "approval_gate": plan_gate },
@@ -422,27 +371,14 @@ fn domain_automation_publishes_only_a_pipeline_no_weaker_than_the_last() {
       },
     ] })
   };
-  let publish = json!({ "project": "Kontur", "pipeline": "Strict" });
-  served.ok("save_pipeline_draft", &steps(true, true, true));
-  assert_person_only(&served.refused("publish_pipeline", &publish));
   served.let_automation_widen(true);
-  served.ok("publish_pipeline", &publish);
+  served.ok("save_pipeline", &steps(true, true, true));
   served.let_automation_widen(false);
   let mut renamed = steps(true, true, true);
   renamed["steps"][1]["name"] = json!("Build it");
-  served.ok("save_pipeline_draft", &renamed);
-  served.ok("publish_pipeline", &publish);
-  served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(true, true, false));
-  served.let_automation_widen(false);
-  assert_person_only(&served.refused("publish_pipeline", &publish));
-  served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(true, false, true));
-  served.let_automation_widen(false);
-  assert_person_only(&served.refused("publish_pipeline", &publish));
-  served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(true, true, true));
-  served.let_automation_widen(false);
+  served.ok("save_pipeline", &renamed);
+  assert_person_only(&served.refused("save_pipeline", &steps(true, true, false)));
+  assert_person_only(&served.refused("save_pipeline", &steps(true, false, true)));
   let copy = json!({ "project": "Kontur", "pipeline": "Strict", "name": "Strict copy" });
   served.ok("duplicate_pipeline", &copy);
   let mut swapped = json!({ "project": "Kontur", "pipeline": "Strict", "name": "Swapped" });
@@ -453,14 +389,11 @@ fn domain_automation_publishes_only_a_pipeline_no_weaker_than_the_last() {
 #[test]
 fn domain_dropping_a_steps_approval_needs_a_person() {
   let mut served = served();
-  served.ok(
-    "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Gated", "from": "empty" }),
-  );
+  copied(&mut served, "Gated");
   let steps = |plan_gate: bool, ask: bool, with_plan: bool| {
     let mut steps = Vec::new();
     if with_plan {
-      steps.push(json!({ "key": "plan", "name": "Plan", "approval_gate": plan_gate }));
+      steps.push(json!({ "key": "plan", "name": "Plan", "profile": "Planner", "approval_gate": plan_gate }));
     }
     steps.push(json!({
       "key": "build",
@@ -471,15 +404,17 @@ fn domain_dropping_a_steps_approval_needs_a_person() {
     }));
     json!({ "project": "Kontur", "pipeline": "Gated", "steps": steps })
   };
-  served.ok("save_pipeline_draft", &steps(true, true, true));
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(false, true, true)));
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, false, true)));
-  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, true, false)));
+  served.let_automation_widen(true);
+  served.ok("save_pipeline", &steps(true, true, true));
+  served.let_automation_widen(false);
+  assert_person_only(&served.refused("save_pipeline", &steps(false, true, true)));
+  assert_person_only(&served.refused("save_pipeline", &steps(true, false, true)));
+  assert_person_only(&served.refused("save_pipeline", &steps(true, true, false)));
   let mut renamed = steps(true, true, true);
   renamed["steps"][1]["name"] = json!("Build it");
-  served.ok("save_pipeline_draft", &renamed);
+  served.ok("save_pipeline", &renamed);
   served.let_automation_widen(true);
-  served.ok("save_pipeline_draft", &steps(false, false, true));
+  served.ok("save_pipeline", &steps(false, false, true));
 }
 
 #[test]

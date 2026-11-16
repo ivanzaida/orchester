@@ -1,5 +1,5 @@
 //! The top of a profile's page (`Top` `WSnxI` in 01b): the crumb back to Profiles, the page head with the CLI's mark,
-//! the profile's name, its permissions in a few words and what enforces them, and the … menu with Remove; then the
+//! the profile's name, its permissions in a few words and what enforces them, and the … menu with Archive; then the
 //! draft bar (`W0sRO`) with Discard draft and Publish. 01e draws a profile whose connection cannot enforce it
 //! (Publish unavailable: *Change the connection to publish*) and a stale draft.
 use std::sync::Arc;
@@ -14,13 +14,12 @@ use lurq::{
 use orchester_core::{permission::ApprovalMode, resource::AgentProfile};
 use orchester_workspace::agents::data::{ProfileEntry, ProjectAgents, VersionState};
 
-use super::{AgentsNav, Shown, entries, fields::Fields, permissions::mode_name, policy_panel};
+use super::{AgentsNav, entries, fields::Fields, permissions::mode_name, policy_panel};
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
     page_head::MORE_MENU_WIDTH,
     parts::{Tone, status, tile},
-    team,
   },
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
@@ -33,7 +32,7 @@ use crate::{
 
 /// ← Profiles.
 pub fn crumb(ctx: &Ctx, nav: &AgentsNav) -> Element {
-  opening(nav.to(Shown::List))
+  opening(nav.agents())
     .id("agent-crumb")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -42,23 +41,15 @@ pub fn crumb(ctx: &Ctx, nav: &AgentsNav) -> Element {
     .into()
 }
 
-/// The … menu under the head: Remove.
+/// The … menu under the head: Archive.
 pub struct More {
   pub open: Signal<bool>,
   pub anchor: ElementRef,
-  pub remove: Arc<dyn Fn() + Send + Sync>,
+  pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// The page head; in a shared project `shared`, the team's version and where it stands here, says what the
-/// permissions say otherwise (`Sub` `Du8OB` in 02), and a member has `versions` at its end in the menu's place
-/// (`Versions` `EGuXw` in 03). `glyph` stands in the tile for the connection's own mark: the team's API connection
-/// missing on this computer (04).
-pub fn head(
-  ctx: &mut Ctx,
-  (fields, listed): (&Fields, &ProjectAgents),
-  (more, glyph): (Option<More>, Option<Icon>),
-  (shared, versions): (Option<Row>, Option<Element>),
-) -> Element {
+/// The page head: the profile's role over what its permissions say.
+pub fn head(ctx: &mut Ctx, (fields, listed): (&Fields, &ProjectAgents), more: Option<More>) -> Element {
   let role = fields.role.get();
   let title = if role.trim().is_empty() {
     ctx.t("agents.new")
@@ -72,18 +63,16 @@ pub fn head(
       .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
       .child(status(id, tone, &text))
   };
-  let sub = shared.unwrap_or_else(|| {
-    let (summary, enforced) = policy_panel::summary(ctx, fields, listed);
-    Row::new()
-      .id("agent-permission-summary")
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Center)
-      .child(Text::new(&summary).variant(HubText::Hint.role()))
-      .with_children(enforced.map(|enforced| separated("agent-enforced", enforced)))
-  });
+  let (summary, enforced) = policy_panel::summary(ctx, fields, listed);
+  let sub = Row::new()
+    .id("agent-permission-summary")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(Text::new(&summary).variant(HubText::Hint.role()))
+    .with_children(enforced.map(|enforced| separated("agent-enforced", enforced)));
   let menu = more.map(|more| {
-    let remove = more.remove.clone();
-    let item = MenuItem::new("agent-remove", ctx.t("hub.remove.action"), move || remove())
+    let archive = more.archive.clone();
+    let item = MenuItem::new("agent-archive", ctx.t("local_hub.archive.action"), move || archive())
       .icon(Icon::Trash2)
       .render(ctx, &more.open);
     let open = more.open.clone();
@@ -104,10 +93,7 @@ pub fn head(
     .width(Dimension::Pct(100.0))
     .spacing(lurq::app::theme::SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(tile(
-      glyph.unwrap_or_else(|| entries::provider_glyph(fields.connection(listed))),
-      true,
-    ))
+    .child(tile(entries::provider_glyph(fields.connection(listed)), true))
     .child(
       Column::new()
         .flex(1.0)
@@ -117,7 +103,6 @@ pub fn head(
         .child(sub),
     )
     .with_children(menu)
-    .with_children(versions)
     .into()
 }
 
@@ -130,8 +115,6 @@ pub struct Bar<'a> {
   pub publishable: bool,
   /// Turning Autopilot on waits for the person to allow it: the bar names the change (07b).
   pub autopilot_waits: bool,
-  /// The project is shared: a draft stays on this computer until it is published for the team (02).
-  pub shared: bool,
   pub actions: Vec<Element>,
 }
 
@@ -151,11 +134,6 @@ pub fn bar(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, bar: Bar<'_>) -> 
     |at| ctx.t_args("agents.savedAt", [("time", orchester_workspace::display::clock(at))]),
   );
   let (standing, status, sub) = match state {
-    VersionState::Draft { published: base } if bar.shared => (
-      Standing::Draft,
-      team::draft_status(ctx, base, &saved),
-      team::draft_sub(ctx, changes(ctx, fields, listed, bar.published).as_deref(), version + 1),
-    ),
     VersionState::Published(_) => (
       Standing::Published,
       ctx.t_args("agents.published", [("version", version.to_string())]),

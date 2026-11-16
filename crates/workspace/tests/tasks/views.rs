@@ -71,8 +71,13 @@ fn task_views_facets_keep_a_task_with_any_chosen_value_of_each_facet() {
   assert!(rows(&urgent, "incomplete").is_empty(), "the search narrows them too");
 }
 
+/// The row of the task titled *To queue*, the second of [`stored_tasks`].
+fn to_queue(rows: &[TaskRow]) -> TaskId {
+  rows.iter().find(|row| &*row.title == "To queue").expect("the task").id
+}
+
 #[test]
-fn task_views_hold_each_task_once_and_needs_you_whatever_its_status() {
+fn task_views_hold_each_task_once_and_needs_you_whatever_its_open_status() {
   let tasks = stored_tasks();
   let data = ProjectTasks {
     tasks: Arc::new(vec![
@@ -88,20 +93,13 @@ fn task_views_hold_each_task_once_and_needs_you_whatever_its_status() {
   let active = grouped(ListView::Active, &rows, (&data, &nothing), TaskSort::Manual);
   assert_eq!(active.len(), 1);
   assert_eq!(active[0].group, Some(Group::ReadyToStart), "a draft is ready to start");
-  let waiting = HashSet::from([rows[1].id]);
+  let waiting = HashSet::from([to_queue(&rows)]);
   let counts = ListView::ALL.map(|view| view.count(&rows, &waiting));
   assert_eq!(
     counts,
-    [1, 2, 0, 0, 2],
-    "a Done task that waits for the person is Needs you's and Active's"
+    [0, 1, 0, 1, 2],
+    "a Done task is Done's only, even while something of it waits (ORC-150)"
   );
-  let active = grouped(ListView::Active, &rows, (&data, &waiting), TaskSort::Manual);
-  assert_eq!(active[0].group, Some(Group::NeedsYou), "Needs you comes first");
-  assert_eq!(titles(&active[0].rows), ["To queue"]);
-  let needs_you = grouped(ListView::NeedsYou, &rows, (&data, &waiting), TaskSort::Manual);
-  assert_eq!(needs_you.len(), 1);
-  assert_eq!(needs_you[0].group, None, "Needs you is flat");
-  assert_eq!(titles(&needs_you[0].rows), ["To queue"], "only what waits");
   let all = grouped(ListView::All, &rows, (&data, &waiting), TaskSort::Manual);
   let groups: Vec<Option<Group>> = all.iter().map(|part| part.group).collect();
   assert_eq!(
@@ -114,6 +112,35 @@ fn task_views_hold_each_task_once_and_needs_you_whatever_its_status() {
   let done = grouped(ListView::Done, &rows, (&data, &nothing), TaskSort::Manual);
   assert_eq!(done.len(), 1);
   assert_eq!(done[0].group, None, "Done is flat");
+
+  let data = ProjectTasks {
+    tasks: Arc::new(vec![
+      organized(&tasks[0], WorkflowStatus::Todo, Priority::Low),
+      organized(&tasks[1], WorkflowStatus::Backlog, Priority::High),
+    ]),
+    ..ProjectTasks::default()
+  };
+  let rows = browse::faceted(&data, ("", ", "), &Facets::default(), TaskSort::Manual);
+  let counts = ListView::ALL.map(|view| view.count(&rows, &nothing));
+  assert_eq!(
+    counts,
+    [0, 1, 1, 0, 2],
+    "a Backlog task that waits for no one is Backlog's"
+  );
+  let waiting = HashSet::from([to_queue(&rows)]);
+  let counts = ListView::ALL.map(|view| view.count(&rows, &waiting));
+  assert_eq!(
+    counts,
+    [1, 2, 0, 0, 2],
+    "a Backlog task that waits for the person is Needs you's and Active's"
+  );
+  let active = grouped(ListView::Active, &rows, (&data, &waiting), TaskSort::Manual);
+  assert_eq!(active[0].group, Some(Group::NeedsYou), "Needs you comes first");
+  assert_eq!(titles(&active[0].rows), ["To queue"]);
+  let needs_you = grouped(ListView::NeedsYou, &rows, (&data, &waiting), TaskSort::Manual);
+  assert_eq!(needs_you.len(), 1);
+  assert_eq!(needs_you[0].group, None, "Needs you is flat");
+  assert_eq!(titles(&needs_you[0].rows), ["To queue"], "only what waits");
 }
 
 /// A team server is asked for each view's statuses and counts by status (ORC-716): every task a view keeps is in one of

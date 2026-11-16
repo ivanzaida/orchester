@@ -50,10 +50,21 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   screen.until("Hold new starts again", |screen| screen.exists("tasks-queue-hold"));
   screen.click("tasks-queue-hold");
   screen.until("held from Tasks", |screen| held(screen));
-  // Automation driving the window is held to automation's rule: it does not release the person's hold.
+  // Automation driving the window is held to automation's rule: it does not release the person's hold. The press is
+  // refused to it, and Tasks says nothing of it.
   screen.until("Release", |screen| screen.exists("tasks-queue-release"));
   lurq::app::events::with_synthetic_input(|| screen.click("tasks-queue-release"));
-  screen.until("the refusal", |screen| screen.exists("tasks-queue-error"));
+  assert_eq!(
+    screen.window.refused_press(),
+    Some("release new starts a person held"),
+    "refused to the client"
+  );
+  for _ in 0..5 {
+    screen.window.tree.tick_futures();
+    screen.window.pass();
+  }
+  assert!(!screen.exists("tasks-queue-error"), "Tasks says nothing of it");
+  assert!(screen.exists("tasks-queue-release"), "Release stays");
   assert!(held(&screen), "still held");
 
   // A person's hold is the person's to release: the agent's release is refused and changes nothing.
@@ -241,7 +252,9 @@ fn tasks_show_held_groups_under_the_views_and_keep_the_header() {
     "the group's line is under the views"
   );
   assert!(screen.text("tasks-queue-group-0").contains("KON-1, KON-2"));
-  screen.click("tasks-queue-release-group-0");
+  // Automation held the group, so a client's press releases it as well as a person's.
+  lurq::app::events::with_synthetic_input(|| screen.click("tasks-queue-release-group-0"));
+  assert_eq!(screen.window.refused_press(), None, "not a person's hold");
   screen.until("released", |screen| {
     screen.db().queue_holds().expect("holds").groups.is_empty()
   });
@@ -282,9 +295,19 @@ fn orchestrator_hold_card_names_the_group_its_tasks_and_resumes() {
   // Once a person holds it too, automation driving the window cannot resume it; the person can.
   db_person_hold(&screen, group);
   lurq::app::events::with_synthetic_input(|| screen.click(&resume));
-  screen.until("the refusal", |screen| {
-    screen.exists(&format!("orchestrator-action-{turn}-0-error"))
-  });
+  assert_eq!(
+    screen.window.refused_press(),
+    Some("release new starts a person held"),
+    "refused to the client"
+  );
+  for _ in 0..5 {
+    screen.window.tree.tick_futures();
+    screen.window.pass();
+  }
+  assert!(
+    !screen.exists(&format!("orchestrator-action-{turn}-0-error")),
+    "the card says nothing of it"
+  );
   assert!(screen.db().queue_holds().expect("holds").groups.contains(&group));
   screen.click(&resume);
   screen.until("resumed", |screen| {

@@ -15,7 +15,6 @@ use lurq::{
     ctx::{Ctx, FutureAction},
   },
   components::Column,
-  core::Signal,
   node::Element,
 };
 use orchester_core::{id::RunId, resource::WithoutCommits, run::CompletedBy, time::Timestamp};
@@ -44,8 +43,6 @@ impl DevtoolsInspectable for Completing {}
 pub type CompleteAction = FutureAction<(RunId, CompletedBy, bool), Completing, Message>;
 
 pub struct CompleteRun {
-  /// Window input pressed *Complete anyway* while the person does not let automation decide for them.
-  person_only: Signal<bool>,
   gate: Option<InputGate>,
 }
 
@@ -54,7 +51,6 @@ impl Component for CompleteRun {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      person_only: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
     }
   }
@@ -71,7 +67,6 @@ impl Component for CompleteRun {
       (None, WithoutCommits::Flagged) => {
         let gated = card::Gated {
           gate: self.gate.as_ref(),
-          person_only: &self.person_only,
         };
         card::flagged(ctx, (&props, run), &action, &gated)
       }

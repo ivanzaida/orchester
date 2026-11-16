@@ -1,10 +1,11 @@
 //! Skills and the repository's own agent files at an agent's start (ORC-15,
 //! `orchester_core::agent_files`).
 //!
-//! - Orchester's skills: the versions the run pinned that reach the agent (by scope), read from the run's own inputs or
-//!   through the coordinator link ([`RunResolver`]), are written to a folder of the step execution's own in the
-//!   execution root (`crate::execution_root`), `.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name
-//!   and description, and the reference files from the project's blobs, each checked against its content hash), outside
+//! - Orchester's skills: the versions the run pinned that reach the agent (those its profile chooses; by scope for a
+//!   run made from inputs, `orchester_core::run::GivenBy`), read from the run's own inputs or through the coordinator
+//!   link ([`RunResolver`]), are written to a folder of the step execution's own in the execution root
+//!   (`crate::execution_root`), `.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name and
+//!   description, and the reference files from the project's blobs, each checked against its content hash), outside
 //!   every worktree. It is written again at each start of the execution, so what an agent changed there does not last,
 //!   and kept afterwards: a resumed session reads the paths it was told when it started. Both CLIs can read it: Codex's
 //!   sandbox reads the whole disk, and Claude Code is given the folder with `--add-dir`.
@@ -32,7 +33,7 @@ use orchester_core::{
   connection::{AgentProvider, stream::RunnerProblem},
   id::StepExecutionId,
   orchester_tools::StepSkills,
-  resource::{InstructionTarget, SKILL_FILE, Skill, SkillFilePath, Slug, Step},
+  resource::{SKILL_FILE, Skill, SkillFilePath, Slug, Step},
   run::{ProfileInfo, SkillListing},
 };
 
@@ -90,12 +91,7 @@ impl RunTask {
     step: &Step,
     profile: ProfileInfo<'_>,
   ) -> Result<PlacedSkills, RunnerProblem> {
-    let target = InstructionTarget {
-      pipeline: self.run.snapshot().pipeline().resource,
-      step: &step.key,
-      profile: profile.id,
-      role: profile.body.role(),
-    };
+    let target = profile.at(self.run.snapshot().pipeline().resource, &step.key);
     let mut reaching = Vec::new();
     for pin in self.run.snapshot().skills() {
       let (slug, _) = self
@@ -106,7 +102,7 @@ impl RunTask {
         .resolver
         .skill(&*self.link, *pin)
         .map_err(|error| problem(error.to_string()))?;
-      if skill.reaches(target).is_ok() {
+      if profile.gets_skill(target, pin.resource, &skill).is_ok() {
         reaching.push((slug, skill));
       }
     }

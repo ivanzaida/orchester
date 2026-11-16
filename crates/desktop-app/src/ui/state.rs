@@ -285,7 +285,16 @@ pub fn glyph_tile(id: &str, glyph: Icon) -> Row {
   sized_tile(id, (glyph, PaletteColor::TextSecondary), GLYPH_TILE)
 }
 
+/// A tile whose 16 `warning` glyph says the state is a trouble, not an empty list (`Tile` `S3nJRi` in A25 `Zhcif`).
+pub fn warning_tile(id: &str, glyph: Icon) -> Row {
+  tile(id, icon(glyph, IconSize::Lg, PaletteColor::Warning), GLYPH_TILE)
+}
+
 fn sized_tile(id: &str, (glyph, color): (Icon, PaletteColor), size: f32) -> Row {
+  tile(id, icon(glyph, IconSize::Xl, color), size)
+}
+
+fn tile(id: &str, glyph: impl Into<Element>, size: f32) -> Row {
   Row::new()
     .width(Dimension::Px(size))
     .height(Dimension::Px(size))
@@ -294,7 +303,7 @@ fn sized_tile(id: &str, (glyph, color): (Icon, PaletteColor), size: f32) -> Row 
     .rounded(ExtraRadius::Tile.role())
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Xl, color))
+    .child(glyph)
     .id(format!("{id}-glyph"))
 }
 

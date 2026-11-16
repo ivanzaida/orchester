@@ -19,7 +19,7 @@ use orchester_core::tokens::regroup;
 
 use super::{COMPACT_AREA_HEIGHT, FieldInput, Lines, TEXT_AREA_MAX_LINES, UnitLook};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsText},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsText, text_area_scrollbar},
   ui::{
     field::field_error,
     icon::{Icon, icon},
@@ -142,6 +142,7 @@ fn value_style(props: &FieldInput) -> TypographyStyle {
 impl FieldBox {
   fn input(&self, ctx: &Ctx, props: &FieldInput) -> TextInput {
     let theme = ctx.theme();
+    let scrollbar = theme.scrollbar().clone();
     let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
     let value = value_style(props);
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
@@ -218,7 +219,8 @@ impl FieldBox {
         .padding(Padding::symmetric(
           ExtraSpacing::Loose.role(),
           ExtraSpacing::TextArea.role(),
-        )),
+        ))
+        .scrollbar(text_area_scrollbar(&scrollbar)),
     }
   }
 }

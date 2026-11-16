@@ -170,6 +170,8 @@ pub struct Workspace {
   browser_folders: browser::BrowserFolders,
   /// The changes made to settings and project data, which this workspace's setting writers count themselves.
   pub(crate) changes: OutsideChanges,
+  /// The configuration of each team project, read from its team server this session ([`crate::team_config`]).
+  pub(crate) team: crate::team_config::TeamConfigs,
 }
 
 impl PartialEq for Workspace {
@@ -191,7 +193,41 @@ impl Workspace {
       account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
       browser_folders: browser::BrowserFolders::default(),
       changes: OutsideChanges::default(),
+      team: crate::team_config::TeamConfigs::default(),
     }
+  }
+
+  /// How the configuration of the team project at `repo_root` stands this session, as its team server was read.
+  pub fn team_read(&self, repo_root: &Path) -> crate::team_config::TeamRead {
+    self.team.read(repo_root)
+  }
+
+  /// Keeps `config` as the configuration of the team project at `repo_root`, as a read of its team server would: for a
+  /// test with no team server to read.
+  #[cfg(feature = "test-support")]
+  pub fn keep_team_config_for_test(&self, repo_root: &Path, config: crate::team_config::TeamConfig) {
+    self.team.fill(repo_root, config);
+  }
+
+  /// Adds `resource` to the configuration kept for the team project at `repo_root`, as the stream's event for it would:
+  /// for a test with no team server to publish it. Whether a configuration was there to add it to.
+  #[cfg(feature = "test-support")]
+  pub fn keep_team_resource_for_test(&self, repo_root: &Path, resource: crate::team_config::TeamResource) -> bool {
+    self.team.update(repo_root, |config| {
+      config.keep(resource);
+      true
+    })
+  }
+
+  /// Says the team server of the project at `repo_root` cannot be reached for `reason`, as a failed read would: for a
+  /// test with no team server to fail.
+  #[cfg(feature = "test-support")]
+  pub fn team_unreached_for_test(&self, repo_root: &Path, reason: crate::messages::Message) {
+    let unreached = crate::team_config::Unreached {
+      reason,
+      at: orchester_core::time::Timestamp::now(),
+    };
+    self.team.unreached(repo_root, unreached);
   }
 
   /// The changes this workspace's setting writers count, which the session's screens and MCP tools count theirs in.
@@ -296,6 +332,14 @@ impl Workspace {
     // The project opens all the same; its connections follow the removal the next time it opens.
     if let Err(error) = self.follow_accounts(repo_root) {
       tracing::warn!(%error, "cannot move a project's connections off removed accounts");
+    }
+    // The project opens all the same; its connections on API accounts follow what changed the next time it opens.
+    if let Err(error) = self.follow_api_accounts(repo_root) {
+      tracing::warn!(%error, "cannot bring a project's connections up to date with the API accounts");
+    }
+    // The project opens all the same; it gets its copies of the decision model servers the next time it opens.
+    if let Err(error) = self.follow_decision_servers(repo_root) {
+      tracing::warn!(%error, "cannot give a project the decision model servers");
     }
     // The project opens all the same, its estimates off; the copy is tried again the next time it opens.
     if let Err(error) = db.copy_estimates_story_points(|| self.db.lock().estimates_story_points()) {

@@ -59,8 +59,9 @@ fn step_outputs_migration_reads_money_step_budgets_as_none_and_keeps_them() {
     .expect("read")
     .expect("published version");
   assert_eq!(version.body().steps()[0].budget, None);
-  let draft = db.draft::<Pipeline>(pipeline).expect("read").expect("draft");
-  assert_eq!(draft.body().steps()[0].budget, None);
+  // The pipeline's draft goes with every pipeline draft when the database opens at the latest schema (D-032), with
+  // the money budget it was read from.
+  assert!(db.draft::<Pipeline>(pipeline).expect("read").is_none());
   // Runs pinned the version before; their snapshots still read.
   assert!(db.run(RUN.parse().expect("fixture id")).expect("read").is_some());
   drop(db);
@@ -78,21 +79,12 @@ fn step_outputs_migration_reads_money_step_budgets_as_none_and_keeps_them() {
     .expect("rows");
   assert_eq!(
     kept,
-    [
-      (
-        "draft".to_owned(),
-        PIPELINE.to_owned(),
-        "implement".to_owned(),
-        1_000_000,
-        "EUR".to_owned()
-      ),
-      (
-        "version".to_owned(),
-        PIPELINE_VERSION.to_owned(),
-        "implement".to_owned(),
-        2_500_000,
-        "USD".to_owned()
-      ),
-    ]
+    [(
+      "version".to_owned(),
+      PIPELINE_VERSION.to_owned(),
+      "implement".to_owned(),
+      2_500_000,
+      "USD".to_owned()
+    )]
   );
 }

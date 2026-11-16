@@ -15,6 +15,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use super::recorded::{self, task_of};
 use crate::messages::{self, Message};
 
 /// The holds on new starts as the Tasks screen shows them.
@@ -24,6 +25,15 @@ pub struct HeldQueue {
   pub project: bool,
   /// The groups whose new starts are held, each with its tasks' keys in their reviewed order.
   pub groups: Vec<HeldGroup>,
+  /// The holds a person set, which only a person releases ([`hold_in`]).
+  pub by_person: Vec<HoldScope>,
+}
+
+impl HeldQueue {
+  /// Whether a person set the hold on `scope`, so automation does not release it.
+  pub fn held_by_person(&self, scope: HoldScope) -> bool {
+    self.by_person.contains(&scope)
+  }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,7 +51,7 @@ pub fn held_in(db: &ProjectDb) -> Result<HeldQueue, StoreError> {
       Some(group) => group
         .tasks()
         .iter()
-        .filter_map(|task| db.task(*task).ok().flatten())
+        .filter_map(|task| task_of(db, *task).ok().flatten())
         .map(|task| task.key().to_string())
         .collect(),
       None => Vec::new(),
@@ -51,6 +61,7 @@ pub fn held_in(db: &ProjectDb) -> Result<HeldQueue, StoreError> {
   Ok(HeldQueue {
     project: holds.project,
     groups,
+    by_person: holds.by_person,
   })
 }
 
@@ -70,11 +81,11 @@ pub fn held_work(db: &ProjectDb, group: Option<IdempotencyKey>) -> Result<HeldWo
         .unwrap_or_default();
       let mut tasks = Vec::new();
       for id in ids {
-        tasks.extend(db.task(id)?);
+        tasks.extend(task_of(db, id)?);
       }
       tasks
     }
-    None => db.tasks()?,
+    None => recorded::all(db)?,
   };
   let mut waiting = Vec::new();
   for task in tasks {

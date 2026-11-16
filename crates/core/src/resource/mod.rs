@@ -7,6 +7,7 @@
 //! is used is decided when a run snapshots its configuration, not inside a body.
 
 mod agent_profile;
+mod chosen;
 mod instruction;
 mod lifecycle;
 mod pipeline;
@@ -16,6 +17,7 @@ mod skill;
 mod team_agent_profile;
 mod team_mcp_server;
 mod team_reviewer;
+mod team_tool;
 mod test_suite;
 mod tool;
 mod variable;
@@ -25,6 +27,7 @@ use serde::{Serialize, de::DeserializeOwned};
 pub(crate) use self::test_suite::glob_matches;
 pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
+  chosen::{ChosenResources, ChosenResourcesError},
   instruction::{
     AgentTargets, Exclusion, InjectionEvent, Instruction, InstructionError, InstructionScope, InstructionTarget,
   },
@@ -32,14 +35,15 @@ pub use self::{
     Draft, DraftSaved, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish,
   },
   pipeline::{
-    DeliverChange, DeliverMode, DeliverStep, Deliverable, EditProblem, FailureRoute, MergeMethod, Pipeline,
-    PipelineChange, PipelineEdit, PipelineError, PipelineSources, PipelineSourcesError, RepositoryAccess,
-    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, TeamExecutors,
-    TeamPipelineError, UnknownDeliverable, Weaker, WithoutCommits, changes, feature_delivery, takes_base_moves,
-    takes_base_moves_by_default, weaker_than,
+    DeliverChange, DeliverMode, DeliverStep, Deliverable, EditProblem, FailureRoute, FlowError, MergeMethod, MoveError,
+    MoveOffer, ParallelChoice, PartWait, Pipeline, PipelineChange, PipelineEdit, PipelineError, PipelineSources,
+    PipelineSourcesError, RepositoryAccess, StarterAssignments, StarterStep, StarterStepText, Step, StepChange,
+    StepKey, StepKind, StepMoves, TeamExecutors, TeamPipelineError, UnknownDeliverable, WaitChoice, Waited, Weaker,
+    WithoutCommits, changes, feature_delivery, flow_units, part_waits, takes_base_moves, takes_base_moves_by_default,
+    weaker_than,
   },
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
-  removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
+  removal::{Removal, StepUser, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   team_agent_profile::{TeamAgentProfile, TeamCounterparts, TeamProfileError},
   team_mcp_server::{
@@ -47,6 +51,7 @@ pub use self::{
     TeamMcpServerError,
   },
   team_reviewer::{ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer},
+  team_tool::{TeamDatabaseQuery, TeamHttpRequest, TeamTool, TeamToolAction, TeamToolError},
   test_suite::{
     ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteProcess, SuiteVariable,
     SuiteVariables, TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,
@@ -54,7 +59,7 @@ pub use self::{
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandEnvironment, CommandError, CommandProgram, CommandTimeout, DatabaseQuery, DeniedBehavior, ExitCodes,
-    FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, NO_CURRENT_DIRECTORY_IN_EXE_PATH,
+    FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, HttpUrl, NO_CURRENT_DIRECTORY_IN_EXE_PATH,
     OutputLimit, ProgramLocation, RequestTarget, ResponseSource, Tool, ToolAction, ToolError, ToolKind, VariableName,
   },
   variable::{UnknownVariable, Variable, VariableGroup, VariableType},
@@ -103,10 +108,14 @@ impl ResourceBody for AgentProfile {
   /// *Ask before running commands* keeps asking (Manual with no list of its own), and *Any command in the
   /// worktree* stays as it was, Manual too, until a person switches it to Autopilot. A version of any schema with the
   /// old *Approve automatically (don't ask me)* on reads as Autopilot, and is stored without it; the shape is the same.
-  const SCHEMA: u32 = 5;
+  /// 6: the instructions, skills and tools the profile gives its agents (2026-11-09,
+  /// `docs/design/team-configuration.md`), each left out while empty, so profiles of schema 5 have the same shape.
+  /// The project migration that brought them filled them in for every local profile with what reached its agents
+  /// before.
+  const SCHEMA: u32 = 6;
 
   fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {
-    if matches!(schema, 3 | 4) {
+    if matches!(schema, 3..=5) {
       return Some(body);
     }
     let fields = body.as_object_mut()?;

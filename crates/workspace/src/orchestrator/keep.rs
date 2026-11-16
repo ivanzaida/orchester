@@ -3,7 +3,6 @@
 
 use orchester_core::{
   orchestrator::{ActionOutcome, ChatAction},
-  store::TaskStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -13,7 +12,7 @@ use serde_json::Value;
 use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, Translate, find_run, find_task},
-  tasks::hold,
+  tasks::{hold, recorded::task_of},
 };
 
 /// Which task a call names: its key, or the run it names, read when the action is kept.
@@ -106,7 +105,7 @@ fn task_key(db: &ProjectDb, named: Named) -> Option<String> {
     // A run, or its task, that cannot be found or read names no task: the action is kept without one.
     Named::Run(named) => {
       let run = find_run(db, &named).ok()?;
-      Some(db.task(run.task()).ok()??.key().to_string())
+      Some(task_of(db, run.task()).ok()??.key().to_string())
     }
   }
 }

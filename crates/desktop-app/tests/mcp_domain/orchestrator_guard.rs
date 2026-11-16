@@ -2,11 +2,16 @@
 //! seeded Kontur: while it does not drive, in a turn a wait or a run's end started by itself, `merge_run` and
 //! `run_task` only propose, even with Autopilot allowed, and while it drives they are carried out; `resume_run`
 //! refuses a run stopped at a limit or interrupted while it does not drive; and a hold or a release of new starts that
-//! would change nothing is refused.
+//! would change nothing is refused. While it drives, a turn nobody asked for starts only a task its conversation leads
+//! (`not_led`). The project's daily budget it changes when a person's message asked, with no second switch, and never
+//! in a turn nobody asked for; another client still needs *Let automation answer approvals* to raise it (OA-11).
 
 use orchester_core::{
   id::IdempotencyKey,
-  orchestrator::ActionOutcome,
+  orchestrator::{
+    ActionOutcome, ChatAction, Subscription, WatchTarget,
+    change::{Change, ProposedChange},
+  },
   resource::Pipeline,
   run::{AllowAutopilot, InterruptCause, RunLimit},
   store::{MergeStore, ResourceStore, RunStore, TaskStore},
@@ -23,7 +28,8 @@ use serde_json::json;
 
 use super::{
   Served,
-  orchestrator_chat::{actions, chat, chat_call, task_run},
+  orchestrator_auto_merge::turn_of_success,
+  orchestrator_chat::{actions, allow, chat, chat_call, task_run},
 };
 
 /// What the seed's run that succeeded and waits to be merged belongs to.
@@ -40,7 +46,7 @@ fn refusal(error: &ToolError) -> &str {
 fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
-  let (_, run) = task_run(&db, READY);
+  let (ready_task, run) = task_run(&db, READY);
   let scope = chat(&served, &mut db);
   served
     .services()
@@ -51,13 +57,10 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
     on_its_own: true,
     ..scope
   };
-  let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
-  let told = chat_call(&mut served, &scope, "merge_run", merge).expect("merged");
-  assert_eq!(told.get("waits_for_person"), None, "{told}");
-  assert!(db.run_merge(run.id()).expect("read").is_some(), "merged");
-  let kept = actions(&db, &scope).pop().expect("it");
-  assert_eq!(kept.outcome, ActionOutcome::Done);
-  assert!(kept.on_its_own, "kept as done on its own");
+  // The turn of the run's success, in a conversation that leads its task with an order to start what becomes ready.
+  let order = "Start tasks as they become ready";
+  watch(&mut db, &scope, ready_task.id(), order);
+  turn_of_success(&mut db, &scope, (&seeded, &run));
   let draft = db
     .tasks()
     .expect("tasks")
@@ -65,12 +68,63 @@ fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
     .find(|task| task.details().title.as_str() == "Drop the legacy sync worker")
     .expect("the ready draft");
   let start = json!({ "project": "Kontur", "key": draft.key().to_string() });
+  // A task this conversation does not lead is not started in a turn nobody asked for; nor anything before the merge.
+  watch(&mut db, &scope, draft.id(), order);
+  let early = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not merged yet");
+  assert_eq!(refusal(&early), "not_merge_turn");
+  // Another run's merge in the same turn does not open its starts: only the merge of the run whose success started it.
+  let (other_task, other) = task_run(&db, "Sync contacts with HubSpot");
+  let mut elsewhere = ChatAction::new("merge_run", Some(other_task.key().to_string()), ActionOutcome::Done);
+  elsewhere.change = Some(Box::new(ProposedChange {
+    subject: other_task.details().title.as_str().to_owned(),
+    change: Change::Merge {
+      run: other.id(),
+      number: other.number().get(),
+      checkpoint: None,
+      into: None,
+    },
+  }));
+  db.add_chat_action(scope.chat, &elsewhere, Timestamp::now())
+    .expect("kept");
+  let other_merged = chat_call(&mut served, &scope, "run_task", start.clone()).expect_err("not this turn's run");
+  assert_eq!(refusal(&other_merged), "not_merge_turn");
+  let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
+  let told = chat_call(&mut served, &scope, "merge_run", merge).expect("merged");
+  assert_eq!(told.get("waits_for_person"), None, "{told}");
+  assert!(db.run_merge(run.id()).expect("read").is_some(), "merged");
+  let kept = actions(&db, &scope).pop().expect("it");
+  assert_eq!(kept.outcome, ActionOutcome::Done);
+  assert!(kept.on_its_own, "kept as done on its own");
   // Without Autopilot too: this session has no runner, so the tool answers as it does for any client, never a card.
   let started = chat_call(&mut served, &scope, "run_task", start);
   assert!(
     !matches!(&started, Ok(told) if told["waits_for_person"] == true),
     "not proposed: {started:?}"
   );
+  for code in ["not_led", "not_merge_turn", "already_ran"] {
+    assert!(
+      !matches!(&started, Err(ToolError::Refused { code: refused, .. }) if refused == code),
+      "a task it leads goes to the tool: {started:?}"
+    );
+  }
+  // A task with a run already is the person's to run again; one this conversation does not lead is not started.
+  let (ran, _) = task_run(&db, "Sync contacts with HubSpot");
+  let again = json!({ "project": "Kontur", "key": ran.key().to_string() });
+  let not_led = chat_call(&mut served, &scope, "run_task", again.clone()).expect_err("not led here");
+  assert_eq!(refusal(&not_led), "not_led");
+  watch(&mut db, &scope, ran.id(), order);
+  let refused = chat_call(&mut served, &scope, "run_task", again).expect_err("it ran already");
+  assert_eq!(refusal(&refused), "already_ran");
+  assert!(
+    matches!(&actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Refused { code, .. } if code == "already_ran"),
+    "the refusal is kept"
+  );
+}
+
+/// `scope`'s conversation watches task `task` with `order`.
+fn watch(db: &mut ProjectDb, scope: &ChatScope, task: orchester_core::id::TaskId, order: &str) {
+  let led = Subscription::new(scope.chat, WatchTarget::Task(task), order, Timestamp::now());
+  db.start_subscription(&led).expect("the person watches it here");
 }
 
 #[test]
@@ -134,6 +188,45 @@ fn chat_resumes_no_run_stopped_at_a_limit_or_interrupted() {
       .all(|action| matches!(&action.outcome, ActionOutcome::Refused { code, .. } if code == "person_only")),
     "each refusal is kept"
   );
+}
+
+#[test]
+fn chat_changes_the_daily_budget_when_a_person_asks_and_never_in_a_turn_nobody_asked_for() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  allow(&served, &seeded.repo);
+  let asked = chat(&served, &mut db);
+  let budget = |tokens: u64| json!({ "project": "Kontur", "daily_budget": tokens });
+  chat_call(&mut served, &asked, "update_project_limits", budget(1_000_000)).expect("set");
+  // *Let automation answer approvals* is off: the drive switch is the chat's whole consent.
+  chat_call(&mut served, &asked, "update_project_limits", budget(2_000_000)).expect("raised, as the person asked");
+  let on_its_own = ChatScope {
+    on_its_own: true,
+    ..asked.clone()
+  };
+  for tokens in [3_000_000, 500_000] {
+    let refused = chat_call(&mut served, &on_its_own, "update_project_limits", budget(tokens))
+      .expect_err("the daily budget is the person's in a turn nobody asked for");
+    assert_eq!(refusal(&refused), "person_only", "{tokens}");
+  }
+  let other = json!({ "project": "Kontur", "agent_slots": 3 });
+  chat_call(&mut served, &on_its_own, "update_project_limits", other).expect("the other limits are not the budget");
+  let refused = served.refused("update_project_limits", &budget(4_000_000));
+  assert_eq!(refused["code"], "automation_not_allowed", "another client: {refused}");
+}
+
+#[test]
+fn chat_chooses_the_reviewer_while_it_drives_with_no_second_switch_and_another_client_does_not() {
+  let (mut served, seeded) = Served::seeded("empty");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  allow(&served, &seeded.repo);
+  let scope = chat(&served, &mut db);
+  let default = json!({ "project": "Kontur" });
+  // *Let automation answer approvals* is off: the drive switch covers who reviews requests too.
+  let kept = chat_call(&mut served, &scope, "set_reviewer", default.clone()).expect("the chat's consent is the switch");
+  assert_eq!(kept["approvals"]["allow_autopilot"], false, "{kept}");
+  let refused = served.refused("set_reviewer", &default);
+  assert_eq!(refused["code"], "automation_not_allowed", "another client: {refused}");
 }
 
 /// Holds the project's new starts as `actor`, as Tasks or the chat holds them.

@@ -17,7 +17,6 @@ pub(crate) use self::{
   group::Group,
   parts::{
     EmptyRow, Glyph, back, back_through, command_box, command_line, entity_head, outlined_tile, page_head, question,
-    tile,
   },
   row::{SettingRow, Tone, mono_value, value},
 };

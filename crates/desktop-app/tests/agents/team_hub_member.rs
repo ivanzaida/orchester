@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
+use orchester_app::routes::{HubFilter, HubView, MemoryView, ProjectPage, Route};
 use orchester_core::{
   id::{ResourceId, UserId},
   sharing::MemberRole,
@@ -17,9 +17,9 @@ use orchester_store::{AppDb, ProjectDb, ServerAdmin, SharedMember};
 use super::{
   harness::Agents,
   support::project_id,
-  team_hub::{open, team, team_as, team_with_profile_and_tool},
+  team_hub::{keep_team, open, team, team_as, team_with_profile_and_tool},
   team_hub_mcp::{Switch, program_body, program_file, remote_body, server, show, switch_of, team_server},
-  team_hub_profile::{builder, claude, show as show_profile},
+  team_hub_profile::{builder, claude, claude_home, show as show_profile},
 };
 
 const LOCK: &str = "Only team admins change this: dana-k (Admin) and olha (Server admin).";
@@ -114,6 +114,17 @@ fn team_hub_member_a_profile_and_a_tool_name_the_admins_too() {
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   assert_eq!(lock(&mut agents), LOCK);
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-new"));
+  // The role is the team's too: read-only, as the rest of *From the team*.
+  assert_eq!(
+    agents.text("team-hub-role-name-value"),
+    agents.text("team-hub-panel-title"),
+    "the member reads its role"
+  );
+  assert!(
+    !agents.exists("team-hub-role-name-input"),
+    "its role is values, not locked fields"
+  );
+  assert_eq!(agents.text("team-hub-from-team-skills-value"), "None");
   open(&mut agents, HubView::new(HubFilter::Tools, Some(tool)));
   assert_eq!(lock(&mut agents), LOCK);
   assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-actions"));
@@ -158,18 +169,14 @@ fn team_hub_member_an_admin_has_no_line_and_the_members_head_says_what_they_are(
   name_the_admins(&agents);
   open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
   assert!(!agents.exists("team-hub-member-lock") && !agents.exists("team-hub-member-role"));
-  assert_eq!(
-    agents.text("team-hub-filter-hint"),
-    "Skills are the team's; each computer fills in only what is local"
-  );
+  // The head says *Team*, and no server's address after it.
+  assert_eq!(agents.text("team-hub-team-label"), "Team");
+  assert!(!agents.exists("team-hub-team-host"));
   let mut agents = Agents::new(true);
   let [skill, ..] = team_as(&agents, Some(MemberRole::Member));
   open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
+  assert_eq!(agents.text("team-hub-team-label"), "Team");
   assert_eq!(agents.text("team-hub-member-role"), "· member");
-  assert_eq!(
-    agents.text("team-hub-filter-hint"),
-    "Skills are the team's; you fill in only what is local"
-  );
 }
 
 #[test]
@@ -181,19 +188,25 @@ fn team_hub_member_a_kind_with_nothing_published_is_one_empty_state_and_no_new()
     project_id(),
     ProjectPage::hub(HubView::new(HubFilter::Tools, None)),
   ));
-  agents.until("the empty state", |s| s.exists("team-hub-member-empty"));
+  agents.until("the empty state", |s| s.exists("team-hub-empty-body"));
   assert_eq!(agents.text("team-hub-empty-title"), "No tools yet");
+  assert!(agents.exists("team-hub-empty-admins"));
   assert!(!agents.exists("team-hub-list") && !agents.exists("team-hub-new"));
+  assert!(
+    !agents.exists("team-hub-empty-new"),
+    "a member's empty state has no action"
+  );
   assert_eq!(agents.text("team-hub-filter-tools-count"), "0");
-  // An admin keeps the generic state, which ORC-835 gives the kind's New.
+  // An admin's state says what the kind is, with its New, and names no admins.
   let mut agents = Agents::new(true);
   team(&agents);
   agents.window.navigation().go(Route::Project(
     project_id(),
     ProjectPage::hub(HubView::new(HubFilter::Tools, None)),
   ));
-  agents.until("empty", |s| s.exists("team-hub-empty"));
-  assert!(!agents.exists("team-hub-member-empty"));
+  agents.until("empty", |s| s.exists("team-hub-empty-body"));
+  assert_eq!(agents.text("team-hub-empty-new"), "New tool");
+  assert!(!agents.exists("team-hub-empty-admins"));
 }
 
 /// Takes every resource of [`team_as`] off the team, so no kind holds anything.
@@ -202,6 +215,7 @@ fn publish_nothing(agents: &Agents, resources: [ResourceId; 4]) {
   for resource in resources {
     db.set_resource_sharing(resource, None).expect("local");
   }
+  keep_team(agents);
 }
 
 #[test]
@@ -223,7 +237,7 @@ fn team_hub_member_every_kind_with_nothing_published_says_an_admin_adds_it_insid
       ProjectPage::hub(HubView::new(filter, None)),
     ));
     agents.until(title, |s| {
-      s.exists("team-hub-member-empty") && s.text("team-hub-empty-title") == title
+      s.exists("team-hub-empty-body") && s.text("team-hub-empty-title") == title
     });
     assert!(
       agents
@@ -236,10 +250,39 @@ fn team_hub_member_every_kind_with_nothing_published_says_an_admin_adds_it_insid
       "{filter:?}"
     );
     assert!(
-      !agents.exists("team-hub-list") && !agents.exists("team-hub-new"),
+      !agents.exists("team-hub-list") && !agents.exists("team-hub-new") && !agents.exists("team-hub-empty-new"),
       "{filter:?}"
     );
   }
+}
+
+/// An admin's empty MCP servers tab says what a team server is (A24 `OZ056`); the other kinds say what the kind is, in
+/// the same words as a local project's.
+#[test]
+fn team_hub_member_an_admins_empty_mcp_servers_say_the_teams_runs_use_them() {
+  let mut agents = Agents::new(true);
+  let resources = team(&agents);
+  publish_nothing(&agents, resources);
+  for (filter, detail) in [
+    (
+      HubFilter::McpServers,
+      "Add a server the team's runs can use. Once published it is here for everyone; each computer sets its program path.",
+    ),
+    (
+      HubFilter::Tools,
+      "Commands and requests agents may run, with their approvals.",
+    ),
+  ] {
+    agents.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::hub(HubView::new(filter, None)),
+    ));
+    agents.until("the empty state", |s| {
+      s.exists("team-hub-empty-body") && s.text("team-hub-empty-detail") == detail
+    });
+    assert!(agents.exists("team-hub-empty-new"), "{filter:?}");
+  }
+  assert_eq!(agents.text("team-hub-empty-title"), "No tools yet");
 }
 
 #[test]
@@ -268,7 +311,7 @@ fn team_hub_member_the_connection_pick_is_theirs_and_is_kept() {
   let mut agents = Agents::new(true);
   team(&agents);
   let first = claude(&agents.root, "Claude 2", "2.1.173");
-  claude(&agents.root, "Claude Home", "2.1.170");
+  claude_home(&agents.root, "2.1.170");
   let (profile, _) = builder(&agents);
   become_member(&agents);
   show_profile(&mut agents, profile);
@@ -338,4 +381,31 @@ fn team_hub_member_an_item_with_nothing_to_fill_in_has_no_bar_and_a_ready_one_ne
   open(&mut agents, HubView::new(HubFilter::McpServers, Some(playwright)));
   agents.until("its bar", |s| s.exists("team-hub-actions"));
   assert!(agents.exists("team-hub-fix-switch-on") && !agents.exists("team-hub-edit"));
+}
+
+/// A member's hub has Memory after Tools: this computer's memory of the project, which it says is not shared with the
+/// team, and *New record*, as every person writes their own computer's memory (Y5 `Fnu7A`).
+#[test]
+fn team_hub_member_memory_is_this_computers_and_says_so() {
+  let mut agents = Agents::new(true);
+  team_as(&agents, Some(MemberRole::Member));
+  keep_team(&agents);
+  agents
+    .window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Memory(MemoryView::default())));
+  agents.until("the memory", |s| {
+    s.exists("memory-tabs") && s.exists("team-hub-filter-memory")
+  });
+  assert!(
+    agents
+      .text("memory-not-shared-text")
+      .contains("not shared with the team: it is never published"),
+  );
+  assert!(agents.exists("memory-new"), "a member writes this computer's memory");
+  assert!(!agents.exists("team-hub-new"), "and makes no team resource");
+  assert!(
+    agents.exists("team-hub-filter-archived"),
+    "a team's hub has Archived too, a member's as well (M7 `Ml7HN`)"
+  );
 }

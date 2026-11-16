@@ -11,7 +11,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{Removal, RemoveMode, ResourceKind, VersionNumber},
+  resource::{Removal, ResourceKind, VersionNumber},
   run::ProjectRule,
   service::{Service, ServiceApproval},
   store::ResourceStore,
@@ -23,7 +23,6 @@ use super::data::{Entry, create, entries, service_slug};
 use crate::{
   drafts::{revision_of, save_draft_expecting_in},
   messages::{Message, store_error},
-  removal,
 };
 
 /// A service as its page opens it, with the project's services (it among them), each its draft if it has one,
@@ -167,7 +166,11 @@ pub fn publish_in(root: &Path, id: ResourceId, expected: &Service) -> Result<Ver
 /// Deletes service `id`; its versions stay for the runs that started it. No pipeline step names a service, so the
 /// store finds none using it; if one ever did, nothing is deleted and that is said.
 pub fn delete_in(root: &Path, id: ResourceId) -> Result<(), Message> {
-  match removal::remove_in(root, id, RemoveMode::Unused)? {
+  let mut db = ProjectDb::open(root).map_err(|error| store_error(&error))?;
+  match db
+    .remove_resource(id, Timestamp::now())
+    .map_err(|error| store_error(&error))?
+  {
     Removal::Removed => Ok(()),
     Removal::InUse(_) => Err(Message::new("services.editor.errors.inUse")),
   }

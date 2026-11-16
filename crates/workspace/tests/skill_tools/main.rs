@@ -12,9 +12,9 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{Pipeline, PipelineEdit, Slug, StepKind},
+  resource::{Pipeline, PipelineEdit, StepKind},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
-  store::{BlobStore, ResourceStore},
+  store::BlobStore,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -29,6 +29,7 @@ use orchester_workspace::{
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::Workspace,
 };
+mod given;
 mod publishing;
 
 use serde_json::{Value, json};
@@ -157,15 +158,15 @@ impl Desktop {
   fn tool_pipeline(&self) {
     let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
     let key = edit.add_step(Name::new("Checks").expect("name"), None);
-    edit.update(&key, |step| step.kind = StepKind::Tool { tool: None });
+    edit.update(&key, |step| {
+      step.kind = StepKind::Tool {
+        tool: Some(orchester_core::id::ResourceId::generate()),
+      }
+    });
+    let body = edit.validate().expect("a step that runs a tool");
     self
       .db()
-      .create_resource(
-        Slug::new("delivery").expect("slug"),
-        Name::new("Delivery").expect("name"),
-        &edit.validate().expect("draft"),
-        Timestamp::now(),
-      )
+      .published_pipeline_for_test("delivery", "Delivery", &body, Timestamp::now())
       .expect("pipeline");
   }
 }

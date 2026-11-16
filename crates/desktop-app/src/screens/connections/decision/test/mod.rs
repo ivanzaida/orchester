@@ -231,7 +231,7 @@ impl TestSection {
       if start.state().get_untracked().is_pending() {
         return;
       }
-      let writer = if lurq::app::events::is_synthetic_input() {
+      let writer = if crate::mcp::is_synthetic_input() {
         Writer::Automation
       } else {
         Writer::Person

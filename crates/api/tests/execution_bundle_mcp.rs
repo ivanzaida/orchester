@@ -10,7 +10,8 @@ use std::{
 use orchester_api::{
   SharedLimits,
   v2::{
-    BundleStart, EXECUTION_BUNDLE_SCHEMA, ExecutionBundle, ExecutionBundleError, ResourceLabel, Subject, TaskAtStart,
+    BundleModule, BundleStart, EXECUTION_BUNDLE_SCHEMA, ExecutionBundle, ExecutionBundleError, ResourceLabel, Subject,
+    TaskAtStart,
   },
 };
 use orchester_core::{
@@ -54,8 +55,10 @@ fn start() -> BundleStart {
     project_id: ProjectId::generate(),
     subject: Subject::Task { id: TaskId::generate() },
     claim_id: ClaimId::generate(),
-    module_id: ModuleId::generate(),
-    branch: BranchName::new("module/sign-in").expect("branch"),
+    module: Some(BundleModule {
+      module_id: ModuleId::generate(),
+      branch: BranchName::new("module/sign-in").expect("branch"),
+    }),
     base_commit: CommitId::new("0123456789abcdef0123456789abcdef01234567").expect("commit"),
     definition_revision: TaskRevision::try_from(1).expect("revision"),
     task_number: NonZeroU32::new(7).expect("a task number"),
@@ -286,5 +289,5 @@ fn execution_bundle_mcp_wire_refuses_the_schema_before_it() {
     refused.contains(&ExecutionBundleError::Schema(2).to_string()),
     "{refused}"
   );
-  assert!(refused.contains("schema 2 is not 3"), "{refused}");
+  assert!(refused.contains("schema 2 is neither 3 nor 4"), "{refused}");
 }

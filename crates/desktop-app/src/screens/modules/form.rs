@@ -4,7 +4,8 @@
 //! property chips of the task form (`task_form::chips`): State for a module that exists, Start date and Target date,
 //! each opening its control under it, the dates the date picker (`ui::date_picker`) with the other date ruling its
 //! range, and the Base branch (02 `eyrnI`, `super::form_base`). Under them a save the module refused says why (another
-//! module's name, a change made meanwhile, a branch that is gone). The action bar at the panel's bottom has Cancel and
+//! module's name, a change made meanwhile, a branch that is gone), and then *Delivery*, the module's own branch
+//! (`super::form_delivery`). The action bar at the panel's bottom has Cancel and
 //! *Create module* or *Save changes*, which turns its loader while it saves; a saved module's page takes the form's
 //! place.
 
@@ -31,6 +32,7 @@ use orchester_workspace::modules::{
 use super::{
   form_base::BasePick,
   form_chips as chips,
+  form_delivery::{self, AcceptancePick, OwnPick},
   save::{self, SaveModule},
 };
 use crate::{
@@ -83,6 +85,9 @@ pub struct Fields {
   pub target: Signal<Day>,
   pub state: Signal<StatePick>,
   pub base: Signal<BasePick>,
+  /// The module's own branch and whether it is delivered once accepted, and its acceptance pipeline.
+  pub own: Signal<OwnPick>,
+  pub acceptance: Signal<AcceptancePick>,
 }
 
 pub struct ModuleFormPage {
@@ -106,6 +111,7 @@ impl Component for ModuleFormPage {
     let save = save::action(ctx);
     follow_save(ctx, &save, &props);
     let details = props.module.as_ref().map(|module| module.details().clone());
+    let (own, acceptance) = form_delivery::read(props.module.as_deref());
     let fields = Fields {
       name: ctx.signal(
         details
@@ -125,6 +131,8 @@ impl Component for ModuleFormPage {
         details.as_ref().map(ModuleDetails::state).unwrap_or_default(),
       )),
       base: ctx.signal(BasePick(read_base(props.module.as_deref()))),
+      own: ctx.signal(own),
+      acceptance: ctx.signal(acceptance),
     };
     Self {
       fields,
@@ -156,7 +164,12 @@ impl Component for ModuleFormPage {
       .child(self.name(ctx, &errors))
       .child(self.description(ctx))
       .child(chips::row(ctx, &props, &self.fields, &self.chips))
-      .with_children(self.refused(ctx, &errors));
+      .with_children(self.refused(ctx, &errors))
+      .child(form_delivery::group(
+        ctx,
+        &props,
+        (&self.fields.own, &self.fields.acceptance),
+      ));
     let page = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(
@@ -277,11 +290,16 @@ impl ModuleFormPage {
     let (save, tried) = (self.save.clone(), self.tried.clone());
     let picked = self.fields.base.get().0;
     let base = (picked != read_base(self.base.as_deref())).then_some(picked);
+    let own = form_delivery::change(
+      self.base.as_deref(),
+      (self.fields.own.get(), self.fields.acceptance.get()),
+    );
     let args = details.map(|details| SaveModule {
       root: props.project.open.repo_root.clone(),
       module: self.base.clone(),
       details,
       base,
+      own: own.clone(),
     });
     let mut submit = ActionButton::new("module-editor-save", ButtonKind::Primary, ctx.t(label))
       .icon(glyph)

@@ -89,7 +89,6 @@ pub struct ConnectBlock {
   cli: Signal<Cli>,
   scope: Signal<ClaudeScope>,
   copied: Signal<Copied>,
-  blocked: Signal<bool>,
 }
 
 impl Component for ConnectBlock {
@@ -100,7 +99,6 @@ impl Component for ConnectBlock {
       cli: ctx.signal(Cli::Claude),
       scope: ctx.signal(ClaudeScope::User),
       copied: ctx.signal(Copied::Not),
-      blocked: ctx.signal(false),
     }
   }
 
@@ -119,19 +117,10 @@ impl Component for ConnectBlock {
         .render(ctx);
     };
     let cli = self.cli.get();
-    let mut below = match cli {
+    let below = match cli {
       Cli::Claude => self.claude(ctx, &props, port),
       Cli::Codex => self.codex(ctx, &props, port),
     };
-    if self.blocked.get() {
-      below.push(
-        field_error(
-          "settings-mcp-connect-blocked",
-          &ctx.t("settings.automation.server.blocked"),
-        )
-        .into(),
-      );
-    }
     let control = Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
@@ -178,14 +167,9 @@ impl ConnectBlock {
     )
     .icon(Icon::Copy);
     let runtime = Services::of(ctx).runtime;
-    let (server, copied, blocked, scope) = (
-      props.server.clone(),
-      self.copied.clone(),
-      self.blocked.clone(),
-      self.scope.clone(),
-    );
+    let (server, copied, scope) = (props.server.clone(), self.copied.clone(), self.scope.clone());
     button.on_click(move || {
-      if refused(&blocked) {
+      if refused() {
         return;
       }
       let (command, copied_as) = match cli {
@@ -350,13 +334,13 @@ impl ConnectBlock {
     (shown, full): (String, impl Fn(&str) -> String + Send + Sync + 'static),
   ) -> Element {
     let runtime = Services::of(ctx).runtime;
-    let (server, copied, blocked) = (props.server.clone(), self.copied.clone(), self.blocked.clone());
+    let (server, copied) = (props.server.clone(), self.copied.clone());
     CommandRow::new(
       id.to_owned(),
       shown,
       ctx.t("settings.automation.connect.copy"),
       move || {
-        if refused(&blocked) {
+        if refused() {
           return false;
         }
         let done = server

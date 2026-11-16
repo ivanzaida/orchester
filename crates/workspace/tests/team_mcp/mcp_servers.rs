@@ -1,18 +1,14 @@
-//! The MCP server tools in a team project against a fake team server: a new server is created as v1 once the server
-//! accepts it and taken back when it refuses; an update publishes the next version, which waits in the outbox while the
-//! server cannot be reached and never replaces an unpublished draft; a URL with a query or a fragment, which would
-//! carry a key to every member, is refused and nothing is stored or sent. A member changes none of it. Removing is in
+//! The MCP server tools in a team project against a fake team server (`docs/design/team-configuration-live.md`): a new
+//! server is created on the team server as v1, and an update publishes the next version there, at once; the server's
+//! answer is what the team's configuration in memory holds next, and nothing is written to the project's database.
+//! A refusal, and a server that cannot be reached, leave nothing changed. A URL with a query or a fragment, which would
+//! carry a key to every member, is refused and nothing is sent. A member changes none of it. Removing is in
 //! [`super::mcp_server_remove`].
 
 use std::sync::Arc;
 
-use orchester_core::{
-  id::ResourceId,
-  resource::{Draft, ResourceKind, TeamMcpServer},
-  store::ResourceStore,
-  time::Timestamp,
-};
-use orchester_store::PublishState;
+use orchester_core::{id::ResourceId, resource::ResourceKind, store::ResourceStore};
+use orchester_workspace::team_config::TeamConfig;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -144,30 +140,37 @@ fn change(fields: Value) -> Value {
   args
 }
 
+/// The team's configuration as the checkout's memory holds it.
+fn held(checkout: &Checkout) -> std::sync::Arc<TeamConfig> {
+  checkout
+    .workspace
+    .team_read(checkout.root())
+    .config()
+    .cloned()
+    .expect("the team's configuration was read")
+}
+
+/// How many MCP servers the team has, as memory holds it.
 fn count(checkout: &Checkout) -> usize {
-  checkout
-    .db()
-    .resources(ResourceKind::McpServer)
-    .expect("the servers")
-    .len()
+  held(checkout).resources(ResourceKind::McpServer).len()
 }
 
-/// The id of the team MCP server `docs` of the checkout.
-fn docs_id(checkout: &Checkout) -> ResourceId {
-  checkout
-    .db()
-    .resources(ResourceKind::McpServer)
-    .expect("the servers")
-    .remove(0)
-    .id()
+/// The team MCP server `docs` of the checkout, and its latest version's number, as memory holds it.
+fn docs_held(checkout: &Checkout) -> (ResourceId, u32) {
+  let held = held(checkout);
+  let server = held.resources(ResourceKind::McpServer)[0];
+  (server.id, server.number().expect("a version").get())
 }
 
-fn versions(checkout: &Checkout) -> usize {
-  checkout
-    .db()
-    .versions::<TeamMcpServer>(docs_id(checkout))
-    .expect("versions")
-    .len()
+/// Nothing of the team's MCP servers is in the project's database: the server holds them.
+fn none_written(checkout: &Checkout) {
+  assert!(
+    checkout
+      .db()
+      .resources(ResourceKind::McpServer)
+      .expect("the servers")
+      .is_empty()
+  );
 }
 
 #[test]
@@ -194,16 +197,8 @@ fn team_mcp_a_new_mcp_server_is_created_as_v1_once_the_server_accepts_it() {
     "the body holds names only"
   );
   assert_eq!(count(&checkout), 1);
-  assert_eq!(versions(&checkout), 1);
-  assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
-  let id = docs_id(&checkout);
-  assert!(
-    checkout
-      .db()
-      .draft::<TeamMcpServer>(id)
-      .expect("a draft read")
-      .is_none()
-  );
+  assert_eq!(docs_held(&checkout).1, 1);
+  none_written(&checkout);
 }
 
 #[test]
@@ -216,29 +211,24 @@ fn team_mcp_a_new_mcp_server_the_team_server_refuses_is_not_created() {
 
   let refused = checkout.call("add_mcp_server", &docs()).expect_err("refused");
 
-  assert_eq!(refused["error"]["code"], "team_server_refused", "{refused}");
+  assert_eq!(refused["error"]["code"], "not_admin", "{refused}");
   assert_eq!(seen.lock().calls, ["create"]);
   assert_eq!(count(&checkout), 0, "nothing shows as created");
-  assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
+  none_written(&checkout);
 }
 
 #[test]
-fn team_mcp_a_new_mcp_server_made_offline_waits_in_the_outbox() {
+fn team_mcp_a_new_mcp_server_is_not_made_while_the_team_server_cannot_be_reached() {
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   server.set_down(true);
 
-  let made = checkout.call("add_mcp_server", &docs()).expect("created");
+  let refused = checkout.call("add_mcp_server", &docs()).expect_err("refused");
 
-  assert_eq!(
-    made["server"]["waiting_for_server"]["code"], "team_server_unreachable",
-    "{made}"
-  );
+  assert_eq!(refused["error"]["code"], "team_unreachable", "{refused}");
   assert!(seen.lock().calls.is_empty());
-  assert_eq!(count(&checkout), 1);
-  let waiting = checkout.db().waiting_publishes().expect("the outbox");
-  assert_eq!(waiting.len(), 1);
-  assert_eq!(waiting[0].state, PublishState::Waiting);
+  assert_eq!(count(&checkout), 0, "there is no outbox");
+  none_written(&checkout);
 }
 
 #[test]
@@ -296,29 +286,31 @@ fn team_mcp_an_update_publishes_the_next_version_on_the_team_server() {
     seen.published[0]["body"]["launch"]["args"],
     json!(["-y", "@acme/docs", "--lang", "en"])
   );
-  assert_eq!(versions(&checkout), 2);
-  assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
+  drop(seen);
+  assert_eq!(
+    docs_held(&checkout).1,
+    2,
+    "memory holds the version the server numbered"
+  );
+  none_written(&checkout);
 }
 
 #[test]
-fn team_mcp_an_update_made_offline_waits_and_one_the_server_refuses_stays_unsent() {
+fn team_mcp_an_update_is_refused_offline_and_when_the_server_refuses_it() {
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
 
   server.set_down(true);
-  let waiting = checkout
+  let refused = checkout
     .call("update_mcp_server", &change(json!({ "args": ["--other"] })))
-    .expect("kept here");
-  assert_eq!(
-    waiting["server"]["waiting_for_server"]["code"], "team_server_unreachable",
-    "{waiting}"
-  );
-  assert_eq!(checkout.db().waiting_publishes().expect("the outbox").len(), 1);
+    .expect_err("refused");
+  assert_eq!(refused["error"]["code"], "team_unreachable", "{refused}");
   assert_eq!(seen.lock().calls, ["create"]);
+  assert_eq!(docs_held(&checkout).1, 1, "nothing waits to be sent");
 
   let (server, seen) = start(Answers {
-    publish: Some((403, "not_admin")),
+    publish: Some((409, "archived")),
     ..Answers::default()
   });
   let checkout = admin(&server);
@@ -328,14 +320,8 @@ fn team_mcp_an_update_made_offline_waits_and_one_the_server_refuses_stays_unsent
     .expect_err("refused");
   assert_eq!(refused["error"]["code"], "team_server_refused", "{refused}");
   assert_eq!(seen.lock().calls, ["create", "publish"]);
-  let outbox = checkout.db().waiting_publishes().expect("the outbox");
-  assert_eq!(
-    outbox[0].state,
-    PublishState::Refused {
-      code: "not_admin".to_owned()
-    },
-    "the version stays here, unsent, for a person to decide"
-  );
+  assert_eq!(docs_held(&checkout).1, 1, "the team's version stays as it was");
+  none_written(&checkout);
 }
 
 #[test]
@@ -357,7 +343,6 @@ fn team_mcp_a_url_with_a_key_in_it_is_refused_and_nothing_is_stored_or_sent() {
   }
   assert_eq!(count(&checkout), 0);
   assert!(seen.lock().calls.is_empty(), "nothing reached the team server");
-  assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
 
   checkout
     .call("add_mcp_server", &remote("https://mcp.example.org/x"))
@@ -369,46 +354,6 @@ fn team_mcp_a_url_with_a_key_in_it_is_refused_and_nothing_is_stored_or_sent() {
   assert_eq!(seen.lock().calls, ["create"], "the update was not sent");
   assert!(seen.lock().created[0].to_string().contains("secret_headers"));
   assert!(!seen.lock().created[0].to_string().contains('?'));
-}
-
-#[test]
-fn team_mcp_an_update_does_not_replace_an_unpublished_draft_that_differs() {
-  let (server, seen) = start(Answers::default());
-  let checkout = admin(&server);
-  checkout.call("add_mcp_server", &docs()).expect("created");
-  let id = docs_id(&checkout);
-  let mut db = checkout.db();
-  let published = db
-    .latest_version::<TeamMcpServer>(id)
-    .expect("read")
-    .expect("a version");
-  let work: TeamMcpServer = serde_json::from_value(json!({
-    "name": "docs",
-    "launch": { "kind": "program", "program": "npx", "args": ["--someone-elses-work"] },
-  }))
-  .expect("a body");
-  let at = Timestamp::from_unix_millis(5);
-  db.save_draft(id, &Draft::new(work.clone(), Some(published.number()), at))
-    .expect("a draft");
-
-  let refused = checkout.refused("update_mcp_server", &change(json!({ "args": ["--other"] })));
-
-  assert_eq!(refused, "draft_changed");
-  assert_eq!(seen.lock().calls, ["create"]);
-  assert_eq!(versions(&checkout), 1);
-  let kept = db
-    .draft::<TeamMcpServer>(id)
-    .expect("read")
-    .expect("the draft is still there");
-  assert_eq!(kept.body(), &work);
-
-  // A draft that holds what is published is nobody's work: it is replaced.
-  db.save_draft(id, &Draft::new(published.body().clone(), Some(published.number()), at))
-    .expect("a draft equal to the published version");
-  let made = checkout
-    .call("update_mcp_server", &change(json!({ "args": ["--other"] })))
-    .expect("published");
-  assert_eq!(made["server"]["published_version"], 2, "{made}");
 }
 
 #[test]

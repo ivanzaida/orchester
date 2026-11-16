@@ -1,12 +1,9 @@
-//! Project settings › Connections (`05 Connections` `dk46o`, nothing yet `07` `WYCDL`): the project's agent providers,
-//! GitHub and MCP servers as groups of rows, each row opening its connection's page (`05b` `PGwka`,
-//! [`super::inspector`]); Add provider and Add MCP server at their groups' heads; an MCP server's switch in its row,
-//! its question asked in place under the group. Its other states: the connections being read, and reading failing.
-//! Work on a connection reads them all again once done.
+//! Project settings › Connections (`05 Connections` `dk46o`, nothing yet `07` `WYCDL`): the project's agent providers
+//! and GitHub as groups of rows, each row opening its connection's page (`05b` `PGwka`, [`super::inspector`]); Add
+//! provider at its group's head. MCP servers live in the Agents hub, not here. Its other states: the connections being
+//! read, and reading failing. Work on a connection reads them all again once done.
 
-mod empty;
-mod reading;
-mod rows;
+mod moved;
 
 use std::sync::Arc;
 
@@ -24,19 +21,16 @@ use parking_lot::Mutex;
 
 use super::{
   data::{self, Entry},
-  inspector::{self, Actions, Asks, Confirm, Inspecting, Tested},
+  inspector::{self, Actions, Confirm, Inspecting, Tested},
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   queries::{self, Again},
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{ConnectionsView, ProjectPage, ProjectSettingsTab, Route},
   screens::project_settings::kit,
-  services::{
-    Services,
-    accounts::{self, Accounts},
-  },
+  services::Services,
   ui::{message::message_text, state::load_error},
 };
 
@@ -80,8 +74,6 @@ pub struct ConnectionsScreen {
   more: (Signal<bool>, ElementRef),
   /// A connection page's question asked in place, and the one its last render showed.
   question: (ElementRef, Mutex<Asking>),
-  /// Counts the empty page's Check again: each looks for the CLIs again.
-  recheck: Signal<u64>,
   /// What the tab showed last.
   shown: Mutex<Option<ConnectionsView>>,
 }
@@ -100,7 +92,6 @@ impl Component for ConnectionsScreen {
       renaming: ctx.signal(false),
       more: (ctx.signal(false), ctx.element_ref()),
       question: (ctx.element_ref(), Mutex::new(Asking(None))),
-      recheck: ctx.signal(0),
       shown: Mutex::new(None),
     };
     let work = screen.work.clone();
@@ -122,11 +113,10 @@ impl Component for ConnectionsScreen {
     let query = data::load(ctx, project.open.repo_root.clone());
     self.again.follow(self.revision.get(), &query);
     let loaded = queries::state(&query);
-    let accounts = accounts::listed(ctx);
     let Some(listed) = loaded.data else {
       return kit::scroll(match loaded.error {
         Some(error) if !loaded.is_pending() => self.failed(ctx, &error),
-        _ => reading::groups(ctx, &project),
+        _ => crate::ui::state::loading("connections-loading", &ctx.t("connections.moved.reading")).into(),
       });
     };
     // Set only while the latest reading failed: `listed` is then an earlier one.
@@ -135,19 +125,10 @@ impl Component for ConnectionsScreen {
       .selected()
       .and_then(|id| data::entries(&listed).into_iter().find(|entry| entry.id() == id));
     if let Some(entry) = chosen {
-      return kit::scroll(self.page(ctx, &project, (&listed, &accounts), entry, (&work, unread)));
+      return kit::scroll(self.page(ctx, &project, &listed, entry, (&work, unread)));
     }
-    if data::entries(&listed).is_empty() && listed.decisions.is_empty() {
-      return kit::scroll(empty::page(ctx, &project, &self.recheck));
-    }
-    let asks = self.asks(&project, &listed);
-    kit::scroll(rows::groups(
-      ctx,
-      &project,
-      &listed,
-      (&accounts, &asks),
-      (self.running.get().0, self.asking.get().0),
-    ))
+    // Nothing with a page is named: an agent connection's page is gone, and the tab's list with it.
+    kit::scroll(moved::page(ctx, &project))
   }
 }
 
@@ -171,10 +152,8 @@ impl ConnectionsScreen {
         && let Route::Project(project, ProjectPage::Connections(view)) = navigation.route_now()
         && view.selected() == Some(done.id)
       {
-        navigation.replace(Route::Project(
-          project,
-          ProjectPage::Connections(ConnectionsView::default()),
-        ));
+        // A removed MCP server's page goes back to the Agents hub, where its row was.
+        navigation.replace(Route::Project(project, ProjectPage::Agents));
       }
     });
   }
@@ -208,10 +187,9 @@ impl ConnectionsScreen {
         .find(|(named, _)| *named == id)
         .map_or("", |(_, name)| name.as_str());
       let spec = match piece {
-        Work::Check | Work::Test | Work::UseActiveAccount => operations::connection_check(&open, name),
+        Work::Check | Work::UseActiveAccount => operations::connection_check(&open, name),
         Work::SetEnabled(enabled) => operations::mcp_server_switch(&open, name, enabled),
         Work::Remove => operations::mcp_server_remove(&open, name),
-        Work::SetAccount(_) => operations::connection_save(&open, name),
       };
       running.set(Running(Some((id, piece))));
       // The real clock, as the check's own time is: a check read back older than this is not this one's.
@@ -226,25 +204,12 @@ impl ConnectionsScreen {
     })
   }
 
-  /// What the list's switches and questions do, each on the server it is about.
-  fn asks(&self, project: &ShownProject, listed: &ProjectConnections) -> rows::ListAsks {
-    let start = self.starter(project, listed);
-    let asking = self.asking.clone();
-    Arc::new(move |id: ConnectionId| {
-      let asking = asking.clone();
-      Asks {
-        start: start.clone(),
-        confirm: Arc::new(move |confirm| asking.set(Asking(confirm.map(|confirm| (id, confirm))))),
-      }
-    })
-  }
-
   /// The page of `entry`, with the work on it. `unread` is why the latest reading of the connections failed.
   fn page(
     &self,
     ctx: &mut Ctx,
     project: &ShownProject,
-    (listed, accounts): (&ProjectConnections, &Accounts),
+    listed: &ProjectConnections,
     entry: Entry<'_>,
     (work, unread): (&WorkAction, Option<&Message>),
   ) -> Element {
@@ -269,7 +234,6 @@ impl ConnectionsScreen {
     let before = std::mem::replace(&mut *self.question.1.lock(), asked);
     let inspecting = Inspecting {
       listed,
-      accounts,
       entry,
       open: &project.open,
       project: project.open.project.name().as_str(),
@@ -302,7 +266,11 @@ impl ConnectionsScreen {
       agents: navigation.to(Route::Project(project_id, ProjectPage::Agents)),
       back: navigation.to(Route::Project(
         project_id,
-        ProjectPage::Connections(ConnectionsView::default()),
+        if listed.github_connection(inspected).is_some() {
+          ProjectPage::Settings(ProjectSettingsTab::General)
+        } else {
+          ProjectPage::Agents
+        },
       )),
       renaming: self.renaming.clone(),
       more: self.more.clone(),

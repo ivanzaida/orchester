@@ -9,7 +9,7 @@ use std::{sync::atomic::Ordering, time::Duration};
 
 use orchester_core::{
   connection::{AgentProvider, DecisionConnection, DecisionServerUrl, stream::AgentEvent},
-  id::{DecisionConnectionId, IdempotencyKey},
+  id::{ApiAccountId, DecisionConnectionId, IdempotencyKey, SecretId},
   name::Name,
   permission::{AgentPermissions, LaunchPermissions, OutsideCommands},
   resource::ModelId,
@@ -17,6 +17,7 @@ use orchester_core::{
     PendingToolApproval,
     review::{DecisionTestStatus, ReviewEnd, ReviewRecord},
   },
+  secret::VaultKey,
   store::{ActivityStore, TaskStore},
 };
 use orchester_runner::decision_test::{DecisionTestError, test_in};
@@ -361,4 +362,50 @@ async fn decision_test_stale_endpoint_or_key_is_refused_before_sending() {
     assert!(original.bodies.lock().is_empty());
     assert!(replacement.bodies.lock().is_empty());
   }
+}
+
+/// A connection that is the project's copy of a decision model server of the person's names the server's id as its
+/// key's, and the project holds no secret by it: the test reads the key from the server's own keychain entry, which
+/// the app keeps for every project (`docs/design/agent-accounts.md`, "Agents run on accounts"), and is refused while
+/// that entry is empty.
+#[tokio::test]
+async fn decision_test_reads_the_key_of_the_persons_decision_server() {
+  let server = server::Server::new(Duration::from_millis(1), false).await;
+  let (repo, mut db) = history(2, true);
+  let id = DecisionConnectionId::generate();
+  let connection = DecisionConnection::new(
+    id,
+    Name::new("Decision").expect("name"),
+    DecisionServerUrl::new(&server.url).expect("url"),
+    Some(SecretId::from_uuid(id.as_uuid())),
+  );
+  db.create_decision_connection(&connection).expect("connection");
+  let entry = VaultKey::api_account(ApiAccountId::from_uuid(id.as_uuid()));
+
+  let empty = vault::MemoryVault::with(vec![]);
+  let refused = test_in(
+    repo.path(),
+    empty.as_ref(),
+    IdempotencyKey::generate(),
+    (&connection).into(),
+    model(),
+    false,
+  )
+  .await;
+  assert!(matches!(refused, Err(DecisionTestError::KeyUnavailable)), "{refused:?}");
+  assert!(server.bodies.lock().is_empty(), "nothing is sent without the key");
+
+  let kept = vault::MemoryVault::with(vec![(entry, "sk-decision-runner-test")]);
+  let report = test_in(
+    repo.path(),
+    kept.as_ref(),
+    IdempotencyKey::generate(),
+    (&connection).into(),
+    model(),
+    false,
+  )
+  .await
+  .expect("the key is the server's");
+  assert_eq!(report.status, DecisionTestStatus::Completed);
+  assert_eq!(report.tested, 2);
 }

@@ -36,10 +36,13 @@ drive*, and says what changed.**
    (names and use only), connections, accounts, models, usage and pull requests. Cross-project reads are allowed
    ("what is running everywhere"); changes stay in the chat's own project. A step that waits for a message always
    shows what its agent wrote last (`get_run`, `list_questions`), so a wait is never unreadable.
-2. **Drafts are free.** It saves drafts of tasks, pipelines, agent profiles, instructions, skills and tools without
-   asking. A draft reaches no agent's prompt.
-3. **Publishing needs the person, or the person's switch.** Publishing a pipeline, profile, instruction, skill or
-   tool is proposed in the chat as a card the person applies with a click. A person-only switch in Project settings ›
+2. **Drafts are free.** It saves drafts of tasks, agent profiles, instructions, skills and tools without asking. A
+   draft reaches no agent's prompt. A pipeline has no drafts (D-032): saving one publishes its next version, so the
+   chat creates, saves and duplicates pipelines only while *Let the Orchestrator drive* is on; while it is off those
+   tools are refused as `drive_only`, the chat says what to change and the person saves it in Pipelines (D-033,
+   PV2-30). There is no pipeline proposal card; one kept from before opens the pipeline and is refused on *Apply*.
+3. **Publishing needs the person, or the person's switch.** Publishing a profile, instruction, skill or tool is
+   proposed in the chat as a card the person applies with a click. A person-only switch in Project settings ›
    Orchestrator, *Let the Orchestrator publish drafts*, lets the chat publish directly. Synthetic input
    cannot flip it (the same rule as *Let automation change agent permissions*). Widening what agents may do stays
    behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat. For every
@@ -68,7 +71,38 @@ drive*, and says what changed.**
      one). With *Let the Orchestrator drive* on (ORC-909 replaced the six switches), the wait also starts one
      Orchestrator turn by itself in its conversation: at most one per wait, never while another turn of that
      conversation runs (it waits for that turn to end; a turn of another conversation does not hold it), whoever raised
-     it, and none for a tool request, which stays the person's.
+     it, a tool request too (decided by the person on 2026-11-11, replacing "none for a tool request, which stays the
+     person's": its turn approves that one request once or denies it with a reason when it is sure, and otherwise
+     leaves it to the person with its recommendation; `decide_approval` there decides only that request,
+     `not_this_request` for another, and keeps its own rules: Allow once or Deny with words only). While the chat
+     drives, the drive switch is its consent to answer, not *Let automation answer approvals* (the person's decision of
+     2026-11-11; since 2026-11-13 the same holds for its every answer and decision, decision 14; other MCP clients still need it). The chat may allow a
+     request a hard rule of auto mode holds (the person's decision of 2026-11-11): the hold
+     (`orchester_workspace::tasks::approvals::hard_hold`: a push, a destructive change, a write outside the worktree and
+     the step's folders, a secret, a Codex escalation, permissions not recorded; read the stricter where a fact cannot
+     be read) reaches it as information, the `hold` of each request in the chat's `list_approvals`, and its prompt says
+     a hold is a reason to look harder, not a refusal: reading outside the folders is normally fine; a push, rewriting
+     history, deleting outside the worktree or touching credentials only when the task plainly needs it, otherwise deny
+     or leave it to the person. The independent review of 2026-11-11 raised that the command text comes from the agent
+     and a prompt-injected command could steer the model into allowing it; the person accepted that risk. The core
+     rule that only a person approves what auto-approval leaves to a person still holds for the chat, as for any
+     automation (`ApprovalAnswer::given_by`, `crates/core/src/run/answer/mod.rs`; `auto_verdict`,
+     `answer/auto.rs`; enforced by the runner, `crates/runner/src/execution/executor/step/answer.rs`). It covers
+     command requests only, in these categories: a command not read to the end (`Unknown`), rewriting history (a
+     `git push` counts), deleting outside the temporary folder, a write outside the worktree, reading credentials,
+     installing software, and any network category; the chat's `approve_once` there is refused `person_only`, its
+     prompt says so, and lifting it is a separate decision. It covers neither MCP tool requests, which auto-approval
+     approves and the chat may allow whatever they do (its prompt tells it to judge an MCP tool that acts outside the
+     worktree as carefully as a push), nor the holds that are not person-only: a Codex command outside its sandbox, a
+     write in a step that only reads, network turned off for the step, a project program, the browser, a command too
+     long to read, permissions not recorded. One auto mode's reviewer still judges is refused
+     `reviewer_judging`. The chat gives a one-sentence
+     `reason`, kept with what was asked as its answer (`ChatAction::tool_answer`). The conversation shows the request in
+     the states of `Orchestrator WIP` `mPw5l` (`ICzi3`): being read, allowed or denied by the Orchestrator with its
+     answer nested, waiting for the person with the Orchestrator's words and the Conversation tab's own card under
+     them, and answered by the person. Requests that wait together in one conversation are read in one turn, with
+     the other events that wait there, five at most (2026-11-14, `docs/plan/orchestrator-autonomy/OA-07-…`): the
+     turn decides any request among the events that started it.
      In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.
@@ -85,8 +119,10 @@ drive*, and says what changed.**
      the Orchestrator merge runs* and *answer agents* on too, and the switch's row says so. With all three on, the turn
      a task's run success starts by itself (below) merges the run with `merge_run`, directly, only when all of these
      hold (one rule, `orchester_workspace::orchestrator::auto_merge`): it is the task's latest run and succeeded, and
-     every step of its pipeline passed — a step a person accepted as it was counts as passed, one automation accepted
-     does not; the task is not marked Blocked and no unfinished task blocks it (ORC-58); new starts are not held for
+     every step of its pipeline passed — a step accepted as it was counts as passed, whoever accepted it (the
+     person's decision of 2026-11-11, "full autonomy": before, one automation accepted did not count, and the run was
+     left to the person); the turn that merges such a run tells the person which step it accepted unverified and what
+     was left unverified, with the link; the task is not marked Blocked and no unfinished task blocks it (ORC-58); new starts are not held for
      its reviewed group or the project (`hold_queue`); the task does not say *Don't merge automatically*, a task
      organization flag set in the task form or with `create_task`/`update_task` (`no_automatic_merge`); and the run is
      not the chat's own doing in a loop (`raised_by_own`: such an end starts no turn). A shared project's server does
@@ -96,7 +132,14 @@ drive*, and says what changed.**
      `scoped_integration_required`).
      The rule is read when the end is kept (the entry says whether the turn merges the run or why it is left to the
      person, `merging`) and again when the turn calls `merge_run`: a run it leaves to the person by then is refused
-     (`left_to_person`), naming why. One automatic merge attempt per run end: the turn merges only the run whose
+     (`left_to_person`), naming why. A team run (told by its team record) is merged by the same rule since 2026-11-13 (OA-29,
+     `docs/design/local-and-team-parity.md`): into the branch it started from, its module's, never the base; its
+     module's delivery to the base is not asked for by that merge. The run of a team task in no module lands on the
+     base branch itself, which this computer may do only as an Admin's, or while the team's Automatic merge is on
+     (`admin_required` otherwise). A team task's *Blocked* mark is the server's and this computer's records do not
+     hold it, so before a merge nobody asked for the chat asks the server and leaves a blocked task's run to the
+     person (`left_to_person`); a server that cannot be read refuses the merge. The kept entry's `merging` cannot
+     tell either refusal and says `merges`. `team_delivery` stays readable in entries kept before. A team run created with team inputs whose team record was never written (its start did not finish recording) is left to the person too (`merging` says `team_unrecorded`): it can be neither merged nor delivered from here. A run of the old sharing stream has neither record nor inputs and is judged as a local run. One automatic merge attempt per run end: the turn merges only the run whose
      success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_run` of that run that
      was carried out or refused counts as the attempt, and so does one refused before it named a run (an unknown run,
      say): it errs towards leaving the run to the person. A `merge_failed` at conflicts
@@ -231,7 +274,8 @@ drive*, and says what changed.**
      continuation
      does not count there, since a success turn only tells the person and proposes. Each wait or end starts one turn
      at most.
-   - **Never from the chat:** answering approvals, deciding plans, widening permissions, secret values and deleting
+   - **Never from the chat:** answering approvals (but the one request whose wait started a turn while it drives,
+     above, 2026-11-11), deciding plans, widening permissions, secret values and deleting
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
    the place in the app.
@@ -280,7 +324,7 @@ project.
 | Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links); both report why the runner stopped a run (`status.runner_failure`, ORC-75) | `pause_run`, `resume_run` (existing; a run a pause stopped, and with *Let the Orchestrator continue interrupted runs* a run a crash, the runner going away, *Quit now* or the database staying busy (`runner_failure` `storage_contention`) interrupted, from its last checkpoint; never a run at a limit, canceled, failed by the runner for any other or an unknown reason, or without its worktree; both, and `release_queue`, only proposed in a turn Orchester started, but for the interrupted run whose end started the turn, continued once under both that switch and *answer agents*, not while the database is under contention) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started but for the run whose success started it: merged once with *Let the Orchestrator merge finished runs on its own* when the chat's rule lets it, else refused `left_to_person`, ORC-69; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*; a message that moves a run is always proposed) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
-| Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |
+| Pipelines | `list_pipelines`, `get_pipeline` (existing) | `create_pipeline`, `save_pipeline`, `duplicate_pipeline` (PV2-29: a pipeline is always a published version, D-032; each publishes a version or is refused with nothing stored; PV2-30: only while the chat drives, refused as `drive_only` otherwise) | — (no pipeline drafts to publish; `publish_pipeline` is gone) |
 | Agents | `list_profiles`, `get_profile` (existing) | `save_profile_draft` (existing) | `publish_profile` |
 | Instructions | `list_instructions` (existing); `get_instruction` (new: text, versions, where it applies) | `save_instruction_draft` (existing) | `publish_instruction` |
 | Skills | `list_skills`, `get_skill` (existing; ORC-79: `draft_by_automation`, and `get_skill`'s `revision`) | `save_skill_draft` (ORC-79: a new skill under `name`, its slug made unique as the Skills editor makes it, or a skill's draft replaced by id, name or slug; description, body, where it applies (project, `agent_role` with `role`, `pipeline`, `step` with `pipeline` and `step`) and reference files (`path` inside the skill's folder, never absolute or with `.`/`..`, not `SKILL.md`; text `content`, or none to keep the skill's file; at most 100 of at most 1024 KiB), checked by the editor's own rules (`skills::editor`): `invalid_name`, `name_taken`, `scope_unavailable`, `invalid_files`, `unknown_role`; with `expected_revision` refused as `draft_changed` over another save. Always open; the draft is marked as automation's (`draft_by_automation`, the Skills editor's *Draft written by automation*) until a person saves it or it is published) | `publish_skill` (ORC-79: the next version, as Publish; refused for `blank_description`, `blank_body`, `stale_draft`, `no_draft`, `scope_unavailable`, `draft_changed`; for any MCP client `person_only` unless *Let automation change agent permissions* is on, the person applies the chat's proposal, or *Let the Orchestrator publish drafts* is on — the skill's description reaches every prompt and its body and files every agent it applies to; the card names the skill and its version) |
@@ -295,7 +339,8 @@ project.
 | Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |
 | Proposals | `apply_proposal` without `proposal` lists the proposals that wait (ORC-96, the chat's own) | — | `apply_proposal` with `proposal`: applies a waiting proposal the person's message in the turn approves, as the card's *Apply*, recorded as theirs; never what only a click applies; decision 13 |
 
-Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
+Deciding approvals (`decide_approval`; since decision 14 and 2026-11-11 the chat has it while it drives, for the
+request whose wait started its turn) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
 widening what agents may do (but as a card the person applies: a publication, decision 3, or an MCP server's change,
 decision 11), secret values, project setup (but the proposed first commit of decision 8), connections' changes but
@@ -606,7 +651,7 @@ What may be approved in the chat, by kind (`Change::click_only`, and the publica
 | Answer, message (`answer_question`, `send_message`, also one that moves a run) | yes | checked again as sent (`sent_as`) |
 | How a stopped run goes on (`continue_run`: `allow_retry`, `return_to`, `resolve_conflicts`) | yes | the case that started it; still refused once the run went on |
 | Pause, resume, release (`pause_run`, `resume_run`, `release_queue`) | yes | checked again; an interrupted run stays under its own rule |
-| Publication of an instruction or a skill, or of a pipeline, profile or tool that widens nothing | yes | the person reads the card's diff before they say so |
+| Publication of an instruction or a skill, or of a profile or tool that widens nothing | yes | the person reads the card's diff before they say so |
 | Publication that widens what agents may do | **click only** | widening agent permissions stays a click |
 | MCP server narrowing (off, removal, dropped exemptions) | yes | it narrows what agents may do |
 | MCP server added, widened or turned on | **click only** | it widens what agents may do |
@@ -632,16 +677,95 @@ project with none of its own; the application-wide values are no longer shown or
   `init_repository`, the git writes and the `mcp_*` tools are carried out at once and kept in the conversation as the
   chat's own actions, recorded as automation's. What a person's *Let automation …* switch allows another client the
   chat's switch allows for the stopped run's decisions (`continue_run`) and for what a publication changes in agents'
-  prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*,
-  and `decide_approval`, `decide_plan`, `answer_question` and `send_message` still need *Let automation answer
-  approvals*, as for any client. What can lose work in git stays `git_propose`, a click-only card.
-- **It is woken for everything.** A wait of an agent, a run's stop (a limit, a step waiting for a decision), end or
+  prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*.
+  *Let automation answer approvals* is for outside MCP clients only (decided by the person on 2026-11-13, OA-11 of
+  `docs/plan/orchestrator-autonomy/`): while it drives, the chat's `answer_question`, `send_message`, `decide_plan`,
+  `decide_approval`, `continue_run`, `complete_run` and raising the daily budget are carried out without it
+  (`app_mcp::Services::require`). So are choosing the reviewer (`set_reviewer`) and publishing a profile that
+  approves by itself (decided by the person on 2026-11-13: the drive switch covers them too); what widens what agents
+  may do still needs *Let automation change agent permissions*. One limit stays its own: in a turn Orchester started by itself the chat
+  does not change the project's daily budget (`update_project_limits` with `daily_budget` is refused `person_only`),
+  since that budget bounds what is spent while nobody watches; in a turn a person's message started it raises it
+  with no second switch. What can lose work in git stays `git_propose`, a click-only card.
+- **It is woken for everything.** A wait of an agent (a tool request too, since 2026-11-11), a run's stop (a limit, a step waiting for a decision), end or
   success, a stall, a merge conflict and a waited task's merge or close start an Orchestrator turn by themselves, whoever
   started the run and whatever raised them — the rule that the chat's own answer, message, decision, resume or start
   raised no turn (`raised_by_own`) is gone — and no per-run or per-step limit stops them. The turn of an interruption
   continues the run, still unless it was interrupted again within 10 minutes or the database is under contention, which
   only protects the run and the database from a loop; the turn of a success merges the run by the rule of decision 5
-  (a task's own *Don't merge automatically* keeps it), or says why it is left to the person.
+  (a task's own *Don't merge automatically* keeps it), or says why it is left to the person. Once it merged the run,
+  where an order of the conversation applies (`docs/design/orchestrator-watch.md`), the same turn does what the order
+  asks of the work the conversation leads that can start now: an order to start tasks as they become ready starts,
+  once each, the tasks of what it leads that the merge unblocked or that an agent slot refused before; a refusal such
+  as `no_agent_slot` is told to the person and not retried in the turn, and the next merged success comes back to it
+  (2026-11-11). Without such an order it merges and stops. In any turn Orchester started by itself, `run_task` starts
+  only a task the turn's conversation leads (`not_led` otherwise); the other turns' prompts start nothing.
+- **A turn that failed is tried again** (2026-11-13, `docs/plan/orchestrator-autonomy/`, OA-01). "At most one turn per
+  wait" (decision 5) means one that completed: a turn Orchester started by itself that failed in a way that may pass
+  (it could not start, the CLI failed, the runner or the app closed under it, it ran past its time) leaves its wait
+  open, and its next turn starts in the same entry after 1, then 5, then 15 minutes, only while the wait still stands
+  and the chat drives. The next turn is told how the earlier one ended and to read the state before it acts; the
+  tools refuse what was already done. After the fourth failure, or at once for a failure only the person can lift
+  (not signed in, the connection gone, the account), no further turn starts by itself and the wait is the person's,
+  where it shows outside the chat. A turn the person stopped did not fail and is not tried again. A daily report's
+  turn and a watching's summary are not tried again (`orchester_core::orchestrator::retry`,
+  `orchester_workspace::orchestrator::turns`; the app's follower wakes at the time a try is due).
+- **A used budget and a plan limit hold the turns Orchester starts** (2026-11-13, OA-03). While the project's daily
+  budget is used (counted as for a run: today starts at local midnight, and the chat's own turns count), or the
+  account the Orchestrator runs on is at its plan limit, no turn starts by itself: waits, run ends and reports are
+  kept and wait, and their turns start at the reset, when the app's follower wakes. The plan limit is what the turn's
+  CLI reported (Claude Code's `rate_limit_event`, Codex's `usageLimitExceeded`): the runner keeps it with the reset
+  the CLI named (`orchestrator_plan_holds`), and forgets it when a turn on that account answers; a limit whose reset
+  the CLI did not name holds for an hour from the report, then the next turn is tried. The turn that hit the limit
+  itself ends failed as before and is tried again after the reset (it counts as one of its event's tries). A turn the
+  runner refused because the budget was used in the meantime is taken back, not failed. A person's own message is
+  not held: it is refused or fails as before, with its reason (`orchester_core::orchestrator::hold`,
+  `orchester_workspace::orchestrator::held`).
+- **A turn Orchester started compacts a nearly full session first** (2026-11-13, OA-05). When the conversation's
+  session filled 70 % of its window, as the context meter has it, the runner compacts it before the turn's CLI starts
+  (`chat/compact_first.rs`): the same compaction as the person's *Compact*, kept as the same event, in the turn's
+  place in the conversation. Whatever it comes to, the turn runs after it. A person's own message is never compacted
+  under, nor a session whose size nothing reported.
+- **A subscription that leads to the end has ceilings** (2026-11-13, OA-09; the person's defaults). A subscription
+  follows its target, as every subscription did, or leads it to the end, which only the person chooses (no window
+  offers it yet: OA-10). For a task led to the end, in a turn Orchester started by itself, the chat's tools hold:
+  `continue_run`'s `allow_retry`, `return_to` and `resolve_conflicts`, and a `send_message` that continues a run or
+  follows it up, while automation returned or retried the run fewer than 4 times; a `send_message` that runs the task
+  again while the task had fewer than 3 runs; `raise_limits` and `raise_step_budget` once per run (whoever raised
+  before counts), each to at most half more than the limit and never to none; and all of these, and `run_task`, only
+  while the subscription's work spent less than its budget, when it has one. Past a ceiling the call is refused
+  `ceiling_reached`, naming it, and the chat leaves the task to the person. Accepting a step and resuming are not
+  counted. A turn a person's message started is not bound, nor a task that is only followed
+  (`orchester_core::orchestrator::watch::Ceilings`, `orchester_workspace::orchestrator::ceilings`). A target led to
+  the end stays so when another conversation takes it over or its order is renewed.
+- **A target led to the end is carried by its standing** (2026-11-14, OA-12 … OA-15). One rule says where a watched
+  target and each of its tasks stand (`orchester_core::orchestrator::standing`; `get_standing` tells it). For a
+  subscription that leads to the end the follower raises, once per state, *work can start* (tasks can start and an
+  agent is free) and *stuck* (nothing can start and nothing moves), each an entry of the leading conversation that
+  starts a turn by itself. A conversation that leads a task to the end starts it in any turn Orchester started, and
+  runs it again after a failure, with its reason, while its ceiling of runs allows (`ceiling_reached` past it); one
+  that only follows keeps the rule of decision 14 (the turn of a success it merged under an order, a task with no
+  run). `park_task` leaves a task the chat cannot move to the person with what they are to do: it reads as parked,
+  nothing starts it (`parked`), the events of its run are tried no more, and it ends when its run moves or the
+  person gives it back.
+- **Leading to the end is chosen by the person's own command, for now** (2026-11-14, until OA-10's window): a
+  `/watch-module` or `/watch-task` whose order begins with *lead to the end* has its targets led, within the default
+  ceilings, with what follows as the order. The agent's `watch` tool never chooses it.
+- **A leading turn is told to move the work, not to report** (2026-11-14, OA-18, OA-21, OA-06). The prompt of a turn
+  an event started carries a leading note when the subscription the event came through leads its task to the end:
+  read where the target stands, decide what is the task's to decide in a stated order of precedence, park what is
+  not, never wait in words, give a reason. It says what to do about a request only the person may allow (deny it
+  when the task plainly does not need it, else park the task as an approval), about a failure (return the run, or
+  run the task again within its ceiling, else park) and about a stall. A run that stays stalled raises its event
+  again each further period, three times at most; for a task led to the end the turns go in steps: write to the
+  agents, then stop the run and continue it from its checkpoint, then park.
+- **What the chat decides on its own carries its reason** (2026-11-14, OA-22). In a turn Orchester started by
+  itself, `continue_run` (every choice but `resume`), `answer_question` and `decide_plan` take a one-sentence
+  `reason` and are refused `reason_required` without one, before anything else is asked; `decide_approval` had its
+  reason already. Done, the call is kept as a decision of the project beside its action (the tool, the task and run,
+  the reason, the conversation, and what undoes it where something does), open until the person marks it seen or
+  overrules it, which only they do. `get_decisions` lists them, the open ones first. A turn a person's message
+  started makes none (`orchester_core::orchestrator::decision`, `orchester_workspace::orchestrator::decisions`).
 - **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
   tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
   otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run
@@ -651,3 +775,7 @@ project with none of its own; the application-wide values are no longer shown or
   and a git write is refused `write_off`; nothing starts a turn by itself, so a wait, a run's end and the daily report
   only keep their entries. In a turn a day's report or a watching that ended started, the chat changes nothing
   whichever way the switch is (`report_turn`).
+- **A watch on a team task** ends on the status the team server reports (`docs/design/orchestrator-watch.md`, *Team
+  tasks*), read in the background while such a watch exists and never from a stored copy; the summary turn it starts is
+  the same as for a local task's (`report_turn`). While the server's answer cannot be read (signed out, unreachable) the
+  watch waits, and `/watching` and `get_watches` say so.

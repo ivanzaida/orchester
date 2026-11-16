@@ -14,13 +14,13 @@ use orchester_core::{
     },
   },
   project::TaskKey,
-  store::{RunStore, TaskStore},
+  store::RunStore,
 };
 use orchester_exec::local_git::IntegrationLease;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{IntegrationError, settle::wait_while};
-use crate::tasks::detail::run_store_error;
+use crate::tasks::{detail::run_store_error, recorded};
 
 /// The local integration that holds the shared checkout.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,7 +94,7 @@ fn task_of(db: &ProjectDb, run: RunId) -> Result<TaskKey, StoreError> {
     .run(run)
     .map_err(run_store_error)?
     .ok_or(StoreError::RunNotFound(run))?;
-  let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
+  let task = recorded::task_of(db, run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   Ok(task.key().clone())
 }
 

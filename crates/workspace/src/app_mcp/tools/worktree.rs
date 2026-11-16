@@ -11,17 +11,17 @@ use std::{
 
 use orchester_core::{
   id::RunId,
-  store::{RunStore, TaskStore, WorktreeStore},
+  store::{RunStore, WorktreeStore},
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Translate, runs::find_run};
+use super::{Translate, runs::find_run, team};
 use crate::{
   app_mcp::{
-    error::{Missing, ToolError},
+    error::ToolError,
     services::{Services, blocking},
   },
   messages::Message,
@@ -31,6 +31,7 @@ use crate::{
     integration::leftovers_in,
     integration_jobs::{RemoveArgs, Remover},
     outside::Outside,
+    recorded::task_of,
     worktree_left::not_removed,
   },
 };
@@ -86,6 +87,10 @@ pub async fn remove_worktree(
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
     let run = find_run(&db, &args.run)?;
+    // The removal names its task, which a team task's run that kept no inputs cannot: refused before anything is read.
+    let Some(task) = task_of(&db, run.task())? else {
+      return Err(team::task_missing(&db, run.task())?);
+    };
     if run.status().has_live_work() {
       return Err(refused("run_not_ended", "appMcp.errors.runNotEnded"));
     }
@@ -117,9 +122,6 @@ pub async fn remove_worktree(
     if left.loses_files() && !(finishing && only_forgotten) {
       return Err(refused("uncommitted_changes", "appMcp.errors.uncommittedChanges"));
     }
-    let task = db
-      .task(run.task())?
-      .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
     let count = left.worktrees.len();
     let (answer, outcome) = mpsc::channel();
     let (changes, removed, project) = (services.changes.clone(), jobs.clone(), open.project.id());

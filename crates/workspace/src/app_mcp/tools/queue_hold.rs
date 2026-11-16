@@ -8,7 +8,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::tasks::find_task;
+use super::{tasks::find_task, team};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -34,6 +34,11 @@ pub struct QueueHold {
 
 /// Holds (`held`) or releases new starts where `args` say; what holds now.
 pub async fn set_queue_hold(services: &Services, args: QueueHold, held: bool) -> Result<Value, ToolError> {
+  // A team task is the one its server read: its group is found by its id, whether or not this computer keeps the task.
+  let team = match &args.task {
+    Some(named) => team::read_task(services, &args.project, named).await?,
+    None => None,
+  };
   let services = services.clone();
   blocking(move || {
     let project = services.project(&args.project)?;
@@ -41,8 +46,14 @@ pub async fn set_queue_hold(services: &Services, args: QueueHold, held: bool) ->
       None => HoldScope::Project,
       Some(named) => {
         let db = ProjectDb::open(&project.repo_root)?;
-        let task = find_task(&db, named)?;
-        let group = hold::group_of(&db, task.id())?.ok_or_else(|| not_in_group(&task.key().to_string()))?;
+        let (id, key) = match &team {
+          Some(read) => (read.task.id, read.task.key.clone()),
+          None => {
+            let task = find_task(&db, named)?;
+            (task.id(), task.key().to_string())
+          }
+        };
+        let group = hold::group_of(&db, id)?.ok_or_else(|| not_in_group(&key))?;
         HoldScope::Group(group)
       }
     };

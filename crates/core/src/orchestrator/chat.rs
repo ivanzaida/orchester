@@ -10,6 +10,7 @@ use super::{
   proposal::ProposedStart,
   report::DailyReport,
   rewind::RewoundTo,
+  standing::StandingEvent,
   wait::AgentWait,
   watch::{CreatedWatch, WatchCommand, WatchLine, WatchSummary},
 };
@@ -33,6 +34,19 @@ pub struct ChatSession {
   pub id: String,
   pub connection: ConnectionId,
   pub account: AgentAccountId,
+}
+
+impl ChatSession {
+  /// Why a turn on `connection` and its `account` cannot resume this session; `None` when it can.
+  pub fn change(&self, connection: ConnectionId, account: AgentAccountId) -> Option<SessionChange> {
+    if self.connection != connection {
+      Some(SessionChange::Connection)
+    } else if self.account != account {
+      Some(SessionChange::Account)
+    } else {
+      None
+    }
+  }
 }
 
 /// Why a turn starts a new session where the conversation had one.
@@ -190,14 +204,7 @@ impl Chat {
   /// Why a turn on `connection` and its `account` cannot resume the conversation's session; `None` when it has none
   /// yet or resumes it.
   pub fn session_change(&self, connection: ConnectionId, account: AgentAccountId) -> Option<SessionChange> {
-    let session = self.session.as_ref()?;
-    if session.connection != connection {
-      Some(SessionChange::Connection)
-    } else if session.account != account {
-      Some(SessionChange::Account)
-    } else {
-      None
-    }
+    self.session.as_ref()?.change(connection, account)
   }
 }
 
@@ -370,6 +377,21 @@ pub struct ChatAction {
   /// its row *KON-41 · #17 waits on KON-52*.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub waits_on: Option<WaitsOnRow>,
+  /// For `decide_approval` (2026-11-11): the tool request the chat answered itself, with what it asked and why.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub tool_answer: Option<ToolAnswer>,
+}
+
+/// The chat's own answer to an agent's tool request: the request's id, what it asked (a command, or an MCP server's
+/// tool), whether it was allowed once or denied, the chat's reason, and the words a denial told the agent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolAnswer {
+  pub request: String,
+  pub asked: String,
+  pub allowed: bool,
+  pub reason: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub told: Option<String>,
 }
 
 impl ChatAction {
@@ -395,6 +417,7 @@ impl ChatAction {
       approved_in: None,
       watch: None,
       waits_on: None,
+      tool_answer: None,
     }
   }
 }
@@ -497,6 +520,12 @@ pub enum EntryKind {
     summary: Box<WatchSummary>,
     turn: Option<WaitTurn>,
   },
+  /// An event of a target the conversation leads to the end ([`StandingEvent`]: work can start, or the target is
+  /// stuck), and the turn it started by itself, once it started one.
+  Standing {
+    event: Box<StandingEvent>,
+    turn: Option<WaitTurn>,
+  },
   /// A plan the Orchestrator answered with in a turn that plans, and where it stands ([`super::plan`]).
   Plan(Box<ChatPlan>),
 }
@@ -508,6 +537,16 @@ pub struct WaitTurn {
   pub message: ChatMessageId,
   pub state: TurnState,
   pub ended: Option<Timestamp>,
+  /// The turn that took this event with it, the one an older event of the conversation started
+  /// ([`super::instructions::together_prompt`]); `None` for the event that started its turn.
+  pub taken_with: Option<ChatMessageId>,
+}
+
+impl WaitTurn {
+  /// The turn that answers this event: the one that took it, or its own.
+  pub fn answered_by(&self) -> ChatMessageId {
+    self.taken_with.unwrap_or(self.message)
+  }
 }
 
 impl EntryKind {
@@ -525,7 +564,10 @@ impl EntryKind {
       }
       | Self::WatchEnded {
         turn: Some(started), ..
-      } => Some((started.message, &started.state)),
+      }
+      | Self::Standing {
+        turn: Some(started), ..
+      } => Some((started.answered_by(), &started.state)),
       _ => None,
     }
   }

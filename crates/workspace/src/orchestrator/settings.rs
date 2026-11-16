@@ -7,8 +7,8 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
-  id::ConnectionId,
-  orchestrator::{OrchestratorSettings, WatchSettings, runs_orchestrator},
+  id::{AgentAccountId, ConnectionId},
+  orchestrator::{Ceilings, OrchestratorSettings, WatchSettings, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
@@ -183,6 +183,13 @@ impl OrchestratorSetup {
     Some(self.connection(settings.connection())?.provider())
   }
 
+  /// The account `connection`'s CLI runs as, which the conversation's session is kept under; `None` for a connection
+  /// the project does not have or one with no account assigned.
+  pub fn account(&self, connection: ConnectionId) -> Option<AgentAccountId> {
+    let found = self.connection(connection)?;
+    found.account().id(found.provider())
+  }
+
   /// What `connection`'s CLI runs on; `None` for a connection the project does not have.
   pub fn runs_on(&self, connection: ConnectionId) -> Option<RunsOn> {
     let found = self.connection(connection)?;
@@ -251,6 +258,21 @@ pub fn save_watch_in(root: &Path, watch: &WatchSettings) -> Result<(), Message> 
 /// it. Blocks on SQLite.
 pub fn watch_in(root: &Path) -> Result<WatchSettings, StoreError> {
   ProjectDb::open(root)?.orchestrator_watch()
+}
+
+/// The ceilings a new subscription that leads to the end takes in the project at `root` (Project settings ›
+/// Orchestrator › *Leading to the end*). Blocks on SQLite.
+pub fn lead_defaults_in(root: &Path) -> Result<Ceilings, StoreError> {
+  ProjectDb::open(root)?.lead_defaults()
+}
+
+/// Keeps `ceilings` as what a new leading subscription of the project at `root` takes, at once and without versions.
+/// They bound what the Orchestrator does without the person, so only a person sets them: no tool of an agent's
+/// reaches this. The subscriptions that lead already keep theirs. Blocks on SQLite.
+pub fn save_lead_defaults_in(root: &Path, ceilings: &Ceilings) -> Result<(), Message> {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  db.save_lead_defaults(ceilings)
+    .map_err(|error| messages::store_error(&error))
 }
 
 /// Why the Orchestrator cannot run on `connection`: not on a provider it does not run on. A connection on an API

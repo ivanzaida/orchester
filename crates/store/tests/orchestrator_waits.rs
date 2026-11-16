@@ -2,16 +2,21 @@
 //! wait, and the turn a wait starts by itself, which starts only while no turn of its conversation thinks, once, and
 //! reads as the wait's prompt; messages and answers the chat sent are named its, with their conversation and how they
 //! went out (ORC-45); the answers and messages it proposed for a run are read back; and the migration that makes the
-//! conversation's entries hold waits keeps the entries it had.
+//! conversation's entries hold waits keeps the entries it had. A wait whose turn failed gets its next turn in the same
+//! entry, which keeps the failed ones and tells the next turn how the last ended (`orchestrator::retry`).
+//! A turn nothing answered and nothing failed is taken back from its wait, and the plan limit kept of an account is
+//! read back until it is forgotten (`orchestrator::hold`).
 //! `cargo test -p orchester-store --test orchestrator_waits waits`.
 
 mod support;
 
 use orchester_core::{
+  connection::stream::{TodoItem, TodoState},
   conversation::{AgentMessage, Message, MessageBody, Recipient},
-  id::{ChatId, ChatMessageId, IdempotencyKey, RunId},
+  id::{AgentAccountId, ChatId, ChatMessageId, IdempotencyKey, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, FromOrchestrator, SentWay, TurnFailure, TurnState, WaitKind,
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, FailedTry, FromOrchestrator, PlanHold, SentWay, TurnFailure,
+    TurnState, WaitKind,
     change::{Change, ProposedChange},
   },
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
@@ -127,6 +132,137 @@ fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
     db.chat_turn(turn).expect("read").expect("the turn").turn,
     TurnState::Failed(TurnFailure::Interrupted)
   );
+}
+
+#[test]
+fn waits_whose_turn_failed_get_their_next_turn_in_the_same_entry_and_keep_the_failed_ones() {
+  let (_repo, mut db, run, _execution) = started_run();
+  let chat = Chat::named(ChatId::generate(), "Plan", at(10));
+  db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(11))
+    .expect("kept");
+  let seq = db.automatic_waits_without_turn().expect("waits")[0].seq;
+  let first = ChatMessageId::generate();
+  assert!(db.start_wait_turn((chat.id(), seq), first).expect("started"));
+  assert!(
+    !db
+      .retry_wait_turn((chat.id(), seq), ChatMessageId::generate())
+      .expect("refused"),
+    "a turn that thinks did not fail"
+  );
+  let planned = TodoItem {
+    text: "Read the run".to_owned(),
+    state: TodoState::InProgress,
+  };
+  db.keep_chat_todo(first, &[planned], at(15)).expect("kept");
+  let timed_out = TurnFailure::TimeLimit { minutes: 10 };
+  db.end_chat_turn(first, &TurnState::Failed(timed_out.clone()), at(20))
+    .expect("ended");
+  let failed = db.automatic_waits_failed().expect("failed");
+  assert_eq!(failed.len(), 1);
+  assert_eq!((failed[0].kept.chat, failed[0].kept.seq), (chat.id(), seq));
+  let first_try = FailedTry {
+    failure: timed_out,
+    ended: Some(at(20)),
+  };
+  assert_eq!((&failed[0].last, failed[0].earlier.len()), (&first_try, 0));
+  assert!(db.automatic_waits_without_turn().expect("waits").is_empty());
+
+  let person = ChatMessageId::generate();
+  db.keep_chat_message(&chat, (person, &body("How is ORC-1?")), at(21))
+    .expect("kept");
+  let second = ChatMessageId::generate();
+  assert!(
+    !db.retry_wait_turn((chat.id(), seq), second).expect("refused"),
+    "the person's turn thinks: the wait waits for it"
+  );
+  assert_eq!(
+    db.chat_todos(chat.id()).expect("todos").len(),
+    1,
+    "a turn that was not given leaves the failed one's todo list"
+  );
+  db.end_chat_turn(person, &TurnState::Answered, at(22)).expect("ended");
+  assert!(
+    db.retry_wait_turn((chat.id(), seq), second).expect("started again"),
+    "though the failed turn kept a todo list, which names it by its message"
+  );
+  assert!(
+    db.chat_todos(chat.id()).expect("todos").is_empty(),
+    "the failed turn's list went with it"
+  );
+  assert!(db.automatic_waits_failed().expect("failed").is_empty());
+  assert!(matches!(
+    &db.chat_entries(chat.id()).expect("entries")[0].kind,
+    EntryKind::Wait { turn: Some(started), .. } if started.message == second && started.state == TurnState::Thinking
+  ));
+  assert!(
+    db.chat_turn(first).expect("read").is_none(),
+    "the failed turn is no turn any more"
+  );
+  let prompt = db.chat_turn(second).expect("read").expect("the turn").text;
+  assert!(
+    prompt
+      .as_str()
+      .starts_with("An earlier turn Orchester started for this same event ran longer than"),
+    "the next turn is told how the last ended: {}",
+    prompt.as_str()
+  );
+  assert!(prompt.as_str().contains("waits for a message"), "{}", prompt.as_str());
+
+  // A turn no runner answers ends without a time, and is kept after the first.
+  db.interrupt_chat_turns(&[], None).expect("interrupted");
+  let failed = db.automatic_waits_failed().expect("failed");
+  let cut_short = FailedTry {
+    failure: TurnFailure::Interrupted,
+    ended: None,
+  };
+  assert_eq!(
+    (&failed[0].last, failed[0].earlier.as_slice()),
+    (&cut_short, &[first_try][..])
+  );
+}
+
+#[test]
+fn waits_give_back_a_turn_nothing_answered_and_keep_an_accounts_plan_limit_until_it_is_forgotten() {
+  let (_repo, mut db, run, _execution) = started_run();
+  let chat = Chat::named(ChatId::generate(), "Plan", at(10));
+  db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(11))
+    .expect("kept");
+  let seq = db.automatic_waits_without_turn().expect("waits")[0].seq;
+  let turn = ChatMessageId::generate();
+  assert!(db.start_wait_turn((chat.id(), seq), turn).expect("started"));
+  assert!(db.release_wait_turn(turn).expect("taken back"));
+  assert_eq!(
+    db.automatic_waits_without_turn().expect("waits").len(),
+    1,
+    "it has no turn"
+  );
+  assert!(
+    db.automatic_waits_failed().expect("failed").is_empty(),
+    "and none that failed"
+  );
+  assert!(db.chat_turn(turn).expect("read").is_none());
+  let again = ChatMessageId::generate();
+  assert!(db.start_wait_turn((chat.id(), seq), again).expect("started again"));
+  db.end_chat_turn(again, &TurnState::Answered, at(12)).expect("ended");
+  assert!(!db.release_wait_turn(again).expect("read"), "a turn that ended stays");
+
+  let account = AgentAccountId::generate();
+  assert_eq!(db.orchestrator_hold(account).expect("read"), None);
+  let first = PlanHold {
+    since: at(20),
+    resets: None,
+  };
+  db.hold_orchestrator(account, first).expect("kept");
+  assert_eq!(db.orchestrator_hold(account).expect("read"), Some(first));
+  let later = PlanHold {
+    since: at(30),
+    resets: Some(at(90)),
+  };
+  db.hold_orchestrator(account, later).expect("kept over the first");
+  assert_eq!(db.orchestrator_hold(account).expect("read"), Some(later));
+  assert_eq!(db.orchestrator_hold(AgentAccountId::generate()).expect("read"), None);
+  db.release_orchestrator(account).expect("forgotten");
+  assert_eq!(db.orchestrator_hold(account).expect("read"), None);
 }
 
 #[test]

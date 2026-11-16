@@ -5,38 +5,6 @@ use orchester_workspace::instructions::{editor, publication::Unavailable};
 use super::{harness::Instructions, preview::seed_preview};
 
 #[test]
-fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
-  let mut screen = Instructions::new();
-  std::fs::write(screen.root.join("AGENTS.md"), "Keep changes small.\n").expect("private fixture");
-  std::fs::write(screen.root.join("CLAUDE.md"), "@AGENTS.md").expect("private fixture");
-  screen.go();
-  screen.click("instructions-import");
-  screen.until("review", |s| s.exists("instruction-import-create"));
-  // A page of its own under the hub's tabs (02c): the list is not beside it, the preview is.
-  assert!(!screen.exists("instruction-library") && !screen.exists("instructions-empty"));
-  assert!(
-    screen
-      .text("instruction-import-title")
-      .contains("Import from repository")
-  );
-  assert!(
-    screen
-      .text("instruction-import-instructions-title")
-      .contains("Instructions · each becomes a draft project instruction")
-  );
-  let review = screen.text("instruction-import-page");
-  assert!(review.contains("Draft project instruction AGENTS · v1"));
-  assert!(review.contains("Project · change it in the editor"));
-  assert!(review.contains("All agents · Agent start"));
-  assert!(review.contains("Reference files"));
-  assert!(screen.text("instruction-import-source").contains("1 line · read only"));
-  assert!(screen.text("instruction-import-selection").contains("1 of 2 selected"));
-  screen.click("instruction-import-cancel");
-  screen.until("return", |s| s.exists("instructions-empty"));
-  assert!(screen.listed().entries.is_empty());
-}
-
-#[test]
 fn instructions_missing_value_locks_publication_and_rechecks_the_event_in_workspace() {
   let mut screen = Instructions::new();
   seed_preview(&screen);

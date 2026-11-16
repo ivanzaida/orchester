@@ -2,6 +2,7 @@
 mod actions;
 mod harness;
 mod other_states;
+mod pipeline_link;
 mod reads;
 mod refresh;
 mod states;

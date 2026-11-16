@@ -4,9 +4,7 @@
 //! ([`crate::sharing::sync`]) keeps the cache in step otherwise; this full read runs only when the person asks
 //! (*Try now*, *Check again*). A server that answers `404` for the project
 //! no longer has the person as a member (10.44); the cache then says since when, and a member again is followed by its
-//! stream once more. The workflow statuses this computer's runs reached go to the server then ([`super::automatic`]),
-//! and so do the versions of the team's configuration published here that wait ([`RemoteResourceStore`]); the stream
-//! sends those too each time it connects.
+//! stream once more. The workflow statuses this computer's runs reached go to the server then ([`super::automatic`]).
 
 use std::time::Instant;
 
@@ -17,7 +15,7 @@ use orchester_store::{CachedModule, ProjectDb};
 use super::{ProjectServer, convert, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
-  sharing::{ProjectAddress, SharingError, send_lane::send_turn, sync::RemoteResourceStore},
+  sharing::{ProjectAddress, SharingError},
 };
 
 /// What a sync found on the server.
@@ -66,7 +64,7 @@ impl ProjectServer {
     self.store_parts(&tags, cached, hint).await?;
     self.servers.download_parts_read(&self.repo_root, round);
     self.read_tasks(round).await?;
-    let (server, servers) = (self.clone(), self.servers.clone());
+    let server = self.clone();
     // A link made before API 3 learns the project's address, its identity since, from the server; one on another
     // server is not kept, and the tasks are synced all the same. This repeats at every read, so it is not a warning.
     let address = match self.link.address {
@@ -77,8 +75,7 @@ impl ProjectServer {
       Some(_) => None,
     };
     let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
-    let (taken, sent) = background::run(move || -> Result<_, SharingError> {
-      let publishing = server.clone();
+    background::run(move || -> Result<_, SharingError> {
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
       store.db.cache_module_changes(&changes)?;
       store
@@ -88,18 +85,9 @@ impl ProjectServer {
         store.db.record_project_address(&address)?;
       }
       super::automatic::send(&mut store)?;
-      let lane = servers.send_lane(publishing.repo_root());
-      let _sending = send_turn(&lane);
-      let db = ProjectDb::open(publishing.repo_root())?;
-      let mut taken = Vec::new();
-      let sent = RemoteResourceStore::new(db, publishing)?.send_waiting(&mut taken);
-      Ok((taken, sent))
+      Ok(())
     })
     .await??;
-    self.servers.note_taken_back(&self.repo_root, taken);
-    // The versions the send took back are told whatever else it said, so none goes unnoticed; a failed send is then the
-    // pass's answer, and nothing after it (the screens' re-read) runs.
-    sent?;
     self.servers.shared_changed();
     Ok(Synced::Read)
   }

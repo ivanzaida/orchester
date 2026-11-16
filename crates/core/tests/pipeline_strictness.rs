@@ -151,8 +151,8 @@ fn strictness_names_every_weaker_step() {
   );
   assert_eq!(
     weaker_than(&old, &changed(&steps, "build", |step| step.depends_on.clear())),
-    build,
-    "rewired"
+    stops_waiting("build", &["plan"]),
+    "rewired: it no longer waits for the gated plan"
   );
   let mut fewer = steps;
   fewer.remove(0);
@@ -238,4 +238,114 @@ fn strictness_counts_other_sources() {
     .expect("sources of the pipeline");
   assert_eq!(weaker_than(&old, &reads_more), [Weaker::Sources]);
   assert!(weaker_than(&reads_more, &reads_more.clone()).is_empty());
+}
+
+/// What a step that no longer waits for the steps `waited_for` is weaker by.
+fn stops_waiting(step: &str, waited_for: &[&str]) -> Vec<Weaker> {
+  vec![Weaker::StopsWaiting {
+    step: key(step),
+    waited_for: waited_for.iter().map(|waited| key(waited)).collect(),
+  }]
+}
+
+fn tool(value: &str, depends_on: &[&str]) -> Step {
+  let mut step = agent(value, ResourceId::generate(), depends_on);
+  step.kind = StepKind::Tool {
+    tool: Some(ResourceId::generate()),
+  };
+  step
+}
+
+/// Two plain steps, `first` then `second`, and the same two the other way round.
+fn plain(profile: ResourceId, order: [&str; 2]) -> Pipeline {
+  pipeline(vec![
+    agent(order[0], profile, &[]),
+    agent(order[1], profile, &[order[0]]),
+  ])
+}
+
+#[test]
+fn strictness_a_swap_of_two_plain_steps_is_not_weaker() {
+  let profile = ResourceId::generate();
+  assert!(weaker_than(&plain(profile, ["x", "y"]), &plain(profile, ["y", "x"])).is_empty());
+}
+
+#[test]
+fn strictness_a_step_that_stops_waiting_for_an_approval_gated_step_is_weaker() {
+  let profile = ResourceId::generate();
+  let mut gated = agent("plan", profile, &[]);
+  gated.approval_gate = true;
+  let old = pipeline(vec![gated.clone(), agent("build", profile, &["plan"])]);
+  // Build now runs first and the gated plan waits for it.
+  let mut after = gated;
+  after.depends_on = [key("build")].into_iter().collect();
+  let new = pipeline(vec![agent("build", profile, &[]), after]);
+  assert_eq!(weaker_than(&old, &new), stops_waiting("build", &["plan"]));
+}
+
+#[test]
+fn strictness_a_step_that_stops_waiting_for_a_tool_step_is_weaker() {
+  let profile = ResourceId::generate();
+  let checks = tool("checks", &[]);
+  let old = pipeline(vec![checks.clone(), agent("build", profile, &["checks"])]);
+  let mut after = checks;
+  after.depends_on = [key("build")].into_iter().collect();
+  let new = pipeline(vec![agent("build", profile, &[]), after]);
+  assert_eq!(weaker_than(&old, &new), stops_waiting("build", &["checks"]));
+}
+
+#[test]
+fn strictness_waiting_for_a_gated_step_it_did_not_wait_for_is_not_weaker() {
+  let profile = ResourceId::generate();
+  let mut gated = agent("plan", profile, &[]);
+  gated.approval_gate = true;
+  let old = pipeline(vec![gated.clone(), agent("build", profile, &[])]);
+  let new = pipeline(vec![gated, agent("build", profile, &["plan"])]);
+  assert!(weaker_than(&old, &new).is_empty());
+}
+
+#[test]
+fn strictness_waiting_for_the_gate_through_another_step_or_directly_is_no_weaker() {
+  let profile = ResourceId::generate();
+  let mut gated = agent("plan", profile, &[]);
+  gated.approval_gate = true;
+  let through = pipeline(vec![
+    gated.clone(),
+    agent("mid", profile, &["plan"]),
+    agent("build", profile, &["mid"]),
+  ]);
+  let direct = pipeline(vec![
+    gated.clone(),
+    agent("mid", profile, &["plan"]),
+    agent("build", profile, &["plan"]),
+  ]);
+  assert!(
+    weaker_than(&through, &direct).is_empty(),
+    "build still waits for the gated plan, now directly"
+  );
+  assert!(
+    weaker_than(&direct, &through).is_empty(),
+    "and the other way round, through mid"
+  );
+  let unwired = pipeline(vec![
+    gated,
+    agent("mid", profile, &["plan"]),
+    agent("build", profile, &[]),
+  ]);
+  assert_eq!(weaker_than(&through, &unwired), stops_waiting("build", &["plan"]));
+}
+
+#[test]
+fn strictness_names_both_a_step_that_stops_waiting_and_the_other_way_it_got_weaker() {
+  let profile = ResourceId::generate();
+  let mut gated = agent("plan", profile, &[]);
+  gated.approval_gate = true;
+  let old = pipeline(vec![gated.clone(), agent("build", profile, &["plan"])]);
+  let mut build = agent("build", profile, &[]);
+  build.instructions = PromptText::new("Other words.").expect("valid prompt");
+  let new = pipeline(vec![gated, build]);
+  assert_eq!(
+    weaker_than(&old, &new),
+    [stops_waiting("build", &["plan"])[0].clone(), Weaker::Step(key("build"))]
+  );
 }

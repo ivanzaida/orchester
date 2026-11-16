@@ -1,10 +1,15 @@
 //! The Orchestrator's header (`Header` `s9sEw6` in `01 Conversation` `wRSL4`): one 52-high line over a `border` line,
 //! 24 in at its start and 16 at its end, 8 apart: the conversation's title (14/600) and, in 12 `text_muted`, when it
-//! started (*· today 16:02*); for a kept conversation that leads something, its *Leads* chips (`X93D8T`, the header
-//! `Zbwg0` of 04 `OKtX2`, `super::leads`) after the room left; at its end *New* (a ghost with `square-pen`), the
-//! History toggle (a `panel-right` icon button, on the `pressed` fill while History is open) and, for a kept
-//! conversation, its … with Copy and Export (07c `ovxpJ`, `super::export`). Orchestrator settings open from the
-//! composer's runs-on chip and its picker.
+//! started (*· today 16:02*); for a kept conversation that leads something, what it leads right after that (an `eye`
+//! and its chips, `X93D8T`, screen A `gTvFf`, `super::leads`); then the free room, and at its end only actions: *New*
+//! (a ghost with `square-pen`), the History toggle (a `panel-right` icon button, on the `pressed` fill while History is
+//! open) and, for a kept conversation, its … with Copy and Export (07c `ovxpJ`, `super::export`). Orchestrator settings
+//! open from the composer's runs-on chip and its picker.
+//!
+//! While the turns of the conversation's events are held (`tkjdw` g on the board `Orchestrator autonomy · frames to
+//! approve`, OA-03), one quiet line says so in the free room, a 12 `pause` and *Orchestrator is held until 00:00* in
+//! 12 `text_muted`, 6 apart: it takes only room nothing else uses, so it never moves or folds a Leads chip, and goes
+//! when a turn starts.
 
 use lurq::{
   app::{
@@ -15,18 +20,21 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{orchestrator::Chat, time::Timestamp};
-use orchester_workspace::display;
+use orchester_core::time::Timestamp;
+use orchester_workspace::{
+  display,
+  orchestrator::{chat::ChatView, event_turns::Hold},
+};
 
-use super::{View, leads};
+use super::{View, leads, rewind, wait::turn_state::held_line};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
-  theme::OrchestratorText,
+  theme::{ExtraSpacing, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    icon::{Icon, icon},
     icon_button::IconButton,
   },
 };
@@ -41,8 +49,9 @@ pub(super) enum Named<'a> {
   New,
   /// One being opened, with its title when History has it: loading never looks like a new conversation.
   Opening(Option<&'a str>),
-  /// A kept one, and whether it is a fork (ORC-334), which says when it was forked (11 `RT5T7`).
-  Chat(&'a Chat, bool),
+  /// A kept one, as it was read: a fork (ORC-334) says when it was forked (11 `RT5T7`), and one whose events' turns
+  /// are held says so.
+  Chat(&'a ChatView),
 }
 
 /// The header of conversation `chat`; `more` is its … (`export`), once the conversation is kept.
@@ -56,12 +65,16 @@ pub(super) fn header(
     Named::New => ctx.t("orchestrator.newTitle"),
     Named::Opening(Some(title)) => title.into(),
     Named::Opening(None) => ctx.t("orchestrator.loading.title"),
-    Named::Chat(chat, _) => chat.title().into(),
+    Named::Chat(shown) => shown.chat.title().into(),
   };
   let meta = match chat {
     Named::New => None,
     Named::Opening(_) => Some(ctx.t("orchestrator.loading.meta")),
-    Named::Chat(chat, forked) => Some(started(ctx, chat.started(), forked)),
+    Named::Chat(shown) => Some(started(
+      ctx,
+      shown.chat.started(),
+      rewind::forked::is_fork(&shown.entries),
+    )),
   };
   let history = view.history.clone();
   let mut toggle = IconButton::new("orchestrator-history", Icon::PanelRight, ctx.t("orchestrator.history"))
@@ -69,17 +82,33 @@ pub(super) fn header(
   if view.history.get() {
     toggle = toggle.active();
   }
-  // The room after the meta: a kept conversation's Leads take it, as far as they fit.
-  let room = match chat {
-    Named::Chat(chat, _) => {
+  // After the meta, a kept conversation's Leads, as many chips as the free room after them leaves.
+  let leads = match chat {
+    Named::Chat(shown) => {
       let saves = project.feed.saves.get();
-      leads::leads(ctx, (&project.open.repo_root, saves), chat, &view.head)
+      Some(leads::leads(
+        ctx,
+        (&project.open.repo_root, saves),
+        &shown.chat,
+        &view.head,
+      ))
     }
-    Named::New | Named::Opening(_) => Row::new().flex(1.0).into(),
+    Named::New | Named::Opening(_) => None,
   };
+  let held = match chat {
+    Named::Chat(shown) => shown.turns.held().map(|hold| held(ctx, hold)),
+    Named::New | Named::Opening(_) => None,
+  };
+  let room = Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .align_items(Alignment::Center)
+    .clip()
+    .ref_element(view.head.room.clone())
+    .with_children(held);
   Row::new()
     .id("orchestrator-header")
-    .ref_element(view.head.clone())
+    .ref_element(view.head.line.clone())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEIGHT))
     .flex_shrink(0.0)
@@ -105,6 +134,7 @@ pub(super) fn header(
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
     )
+    .with_children(leads)
     .child(room)
     .child(new_conversation(ctx, project, chat))
     .child(toggle.render(ctx))
@@ -112,12 +142,35 @@ pub(super) fn header(
     .into()
 }
 
+/// The quiet line of a conversation whose events' turns are held as `hold` says: it gives way before anything else
+/// of the header does.
+fn held(ctx: &Ctx, hold: Hold) -> Row {
+  Row::new()
+    .id("orchestrator-held")
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .padding(Padding::new().left(ExtraSpacing::Snug.role()))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Pause, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(
+      Text::new(&held_line(ctx, hold))
+        .id("orchestrator-held-words")
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
+}
+
 /// *New*: nothing to leave while the conversation shown is a new one.
 fn new_conversation(ctx: &mut Ctx, project: &ShownProject, chat: Named<'_>) -> ActionButton {
   let button =
     ActionButton::new("orchestrator-new", ButtonKind::Ghost, ctx.t("orchestrator.new")).icon(Icon::SquarePen);
   match chat {
-    Named::Opening(_) | Named::Chat(..) => {
+    Named::Opening(_) | Named::Chat(_) => {
       let navigation = Navigation::of(ctx);
       button.opens(navigation.to(Route::Project(
         project.open.project.id(),

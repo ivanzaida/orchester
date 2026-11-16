@@ -1,54 +1,13 @@
 //! Decision model servers, with secret references only and versioned check/test records.
 
-use orchester_core::{
-  connection::{DecisionCheck, DecisionConnection, DecisionServerUrl, DecisionTest},
-  id::{DecisionConnectionId, SecretId},
-  name::Name,
-  resource::ModelId,
-};
+use orchester_core::{connection::DecisionConnection, id::DecisionConnectionId, name::Name};
 use rusqlite::{Connection, OptionalExtension, Params, params};
-use serde::{Deserialize, Serialize};
 
 use super::ProjectDb;
 use crate::{
-  StoreError,
-  rows::{corrupt, decode_json, encode_json, parse},
+  StoreError, decision_settings,
+  rows::{corrupt, parse},
 };
-
-const WHAT: &str = "decision connection settings";
-const SCHEMA: u32 = 1;
-
-#[derive(Serialize, Deserialize)]
-struct Settings {
-  base_url: DecisionServerUrl,
-  key: Option<SecretId>,
-  models: Vec<ModelId>,
-  last_check: Option<DecisionCheck>,
-  last_test: Option<DecisionTest>,
-}
-
-impl Settings {
-  fn of(connection: &DecisionConnection) -> Self {
-    Self {
-      base_url: connection.base_url().clone(),
-      key: connection.key(),
-      models: connection.models().to_vec(),
-      last_check: connection.last_check().cloned(),
-      last_test: connection.last_test().cloned(),
-    }
-  }
-
-  fn into_connection(self, id: DecisionConnectionId, name: Name) -> DecisionConnection {
-    let mut connection = DecisionConnection::new(id, name, self.base_url, self.key).with_models(self.models);
-    if let Some(check) = self.last_check {
-      connection.record_check(check);
-    }
-    if let Some(test) = self.last_test {
-      connection.record_test(test);
-    }
-    connection
-  }
-}
 
 impl ProjectDb {
   pub fn create_decision_connection(&mut self, connection: &DecisionConnection) -> Result<(), StoreError> {
@@ -59,7 +18,7 @@ impl ProjectDb {
       params![
         connection.id().to_string(),
         connection.name().as_str(),
-        encode_json(WHAT, SCHEMA, &Settings::of(connection))?
+        decision_settings::encode(connection)?
       ],
     )?;
     transaction.commit()?;
@@ -74,7 +33,7 @@ impl ProjectDb {
       params![
         connection.id().to_string(),
         connection.name().as_str(),
-        encode_json(WHAT, SCHEMA, &Settings::of(connection))?
+        decision_settings::encode(connection)?
       ],
     )?;
     if changed == 0 {
@@ -93,10 +52,10 @@ impl ProjectDb {
     let changed = self.connection.execute(
       "UPDATE decision_connections SET settings = ?1 WHERE id = ?2 AND name = ?3 AND settings = ?4",
       params![
-        encode_json(WHAT, SCHEMA, &Settings::of(checked))?,
+        decision_settings::encode(checked)?,
         expected.id().to_string(),
         expected.name().as_str(),
-        encode_json(WHAT, SCHEMA, &Settings::of(expected))?
+        decision_settings::encode(expected)?
       ],
     )?;
     Ok(changed != 0)
@@ -114,10 +73,10 @@ impl ProjectDb {
       "UPDATE decision_connections SET name = ?1, settings = ?2 WHERE id = ?3 AND name = ?4 AND settings = ?5",
       params![
         edited.name().as_str(),
-        encode_json(WHAT, SCHEMA, &Settings::of(edited))?,
+        decision_settings::encode(edited)?,
         expected.id().to_string(),
         expected.name().as_str(),
-        encode_json(WHAT, SCHEMA, &Settings::of(expected))?
+        decision_settings::encode(expected)?
       ],
     )?;
     transaction.commit()?;
@@ -212,11 +171,11 @@ pub(super) fn load(
   rows
     .into_iter()
     .map(|(id, name, settings)| {
-      let settings: Settings = decode_json(WHAT, SCHEMA, &settings)?;
-      Ok(settings.into_connection(
+      decision_settings::decode(
         parse("decision connection id", &id)?,
         Name::new(&name).map_err(|error| corrupt("decision connection name", error))?,
-      ))
+        &settings,
+      )
     })
     .collect()
 }

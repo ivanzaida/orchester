@@ -18,7 +18,7 @@ use orchester_core::{
     invocation::{account_environment, agent_environment},
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
-  id::{AgentAccountId, SecretId},
+  id::{AgentAccountId, ApiAccountId, SecretId},
   permission::{AgentPermissions, RepositoryAccess, category::CommandPart},
   resource::{CommandEnvironment, ModelId},
   run::{
@@ -524,13 +524,27 @@ fn native(
   }
 }
 
-/// The value of the project secret `id` holding a native reviewer's API key, read on the review's computer; why not is
-/// logged, never the value.
+/// The native reviewer's API key, read on the review's computer: the value of the project secret `id`, or of the
+/// person's API account by that id when the project holds no such secret; why not is logged, never the value.
 fn api_key(keys: &ReviewerSources, id: SecretId) -> Option<SecretValue> {
+  // The app's key first, where there is one by the id (`connection_check::api_key`).
+  if let Ok(value) = keys.computer.api_account_key(ApiAccountId::from_uuid(id.as_uuid())) {
+    return Some(value);
+  }
   let secret = match keys.computer.secret(id) {
     Ok(Some(secret)) if !secret.is_archived() => secret,
-    Ok(_) => {
-      tracing::warn!(%id, "the native reviewer's API key is missing or archived");
+    // No secret of the project by this id: the connection is the project's copy of an API account of the person's,
+    // whose key the app keeps under the account's id.
+    Ok(None) => {
+      return keys
+        .computer
+        .api_account_key(ApiAccountId::from_uuid(id.as_uuid()))
+        .inspect_err(|error| tracing::warn!(%id, %error, "the native reviewer's API key is missing"))
+        // `.ok()`: the error is logged above, and a reviewer without its key fails every review.
+        .ok();
+    }
+    Ok(Some(_)) => {
+      tracing::warn!(%id, "the native reviewer's API key is archived");
       return None;
     }
     Err(error) => {

@@ -88,6 +88,9 @@ fn chat_report_turn_only_proposes_while_it_does_not_drive_and_changes_nothing_wh
 
   let held = chat_call(&mut served, &scope, "hold_queue", json!({ "project": "Kontur" })).expect_err("refused");
   assert_eq!(refusal(&held), "report_turn");
+  let start = json!({ "project": "Kontur", "key": task.key().to_string() });
+  let started = chat_call(&mut served, &scope, "run_task", start).expect_err("refused");
+  assert_eq!(refusal(&started), "report_turn");
   assert!(!db.queue_holds().expect("holds").project, "nothing held");
   let title = task.details().title.as_str().to_owned();
   let update = json!({ "project": "Kontur", "key": task.key().to_string(), "title": "Renamed by a report" });
