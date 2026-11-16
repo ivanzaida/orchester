@@ -244,6 +244,9 @@ with the run; when it fails, the run returns to the writing step with **only the
 file:line, excerpt, artifacts), not the raw output. Review and Verify get the stored result and may run single tests
 with `run_tests(filter)` instead of re-running everything.
 
+A person makes one in the Pipelines hub: a step's Agent picker lists *Test suites of the changed areas* after the
+project's tools, and choosing it makes the step a Test step (`save_pipeline` takes `"tests": true` for the same).
+
 ## Flaky tests and quarantine
 
 A test that is flaky again and again is listed as *watched*; the person moves it to *quarantine* (or back). A
