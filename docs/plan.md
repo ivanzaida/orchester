@@ -251,9 +251,10 @@ decision**.
 
 Services, stacks, test suites and the flaky-test quarantine are kept on each member's computer in a team project too
 (`docs/design/local-and-team-parity.md`, *Agent testing*). The team server's contract takes none of their kinds
-(`docs/cloud-api.md`), and a team pipeline's version with a Test step was never sent to a server. Change the contract
-here first (`orchester-api`, `docs/cloud-api.md`), then the server in `orchester-platform`; both rows of the table
-leave it with this task.
+(`docs/cloud-api.md`). A team pipeline's version with a Test step is taken from team server 0.11.4 on (its pin of
+the shared crates knows the step; done 2026-11-16), and runs the suites of the computer the run is on. What is left:
+change the contract here first (`orchester-api`, `docs/cloud-api.md`) so a team shares the services and suites, then
+the server in `orchester-platform`; both rows of the table leave it with this task.
 
 ## M · MCP servers
 
