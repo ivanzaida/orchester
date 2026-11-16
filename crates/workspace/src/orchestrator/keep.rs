@@ -2,7 +2,8 @@
 //! names as people read it, how it went, and for a hold of new starts what it held.
 
 use orchester_core::{
-  orchestrator::{ActionOutcome, ChatAction},
+  id::ModuleId,
+  orchestrator::{ActionOutcome, ChatAction, about::ActionAbout},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -27,6 +28,36 @@ pub(super) fn named_task(arguments: &JsonObject) -> Option<Named> {
     .or_else(|| text("task"))
     .map(Named::Task)
     .or_else(|| text("run").map(Named::Run))
+}
+
+/// What tool `name`, called with `arguments`, acted on besides a task, for its line: the module of a module's tool
+/// (its name and id from the tool's answer `result` when it gave one, else as the call named it), or that a change of
+/// a task closed it.
+pub(super) fn about(name: &str, arguments: &JsonObject, result: Option<&Value>) -> Option<ActionAbout> {
+  let text = |field: &str| arguments.get(field).and_then(Value::as_str);
+  match name {
+    "update_task" => match text("workflow_status")? {
+      "canceled" => Some(ActionAbout::TaskClosed { canceled: true }),
+      "done" => Some(ActionAbout::TaskClosed { canceled: false }),
+      _ => None,
+    },
+    "create_module" | "update_module" | "start_acceptance" | "deliver_module" => {
+      let told = result.and_then(|result| result.get("module"));
+      let told_name = told.and_then(|module| module.get("name")).and_then(Value::as_str);
+      let told_id = told
+        .and_then(|module| module.get("id").or(Some(module)))
+        .and_then(Value::as_str);
+      let named = told_name.or_else(|| text("name")).or_else(|| text("module"))?;
+      Some(ActionAbout::Module {
+        name: named.to_owned(),
+        id: told_id
+          .or_else(|| text("module"))
+          .and_then(|id| id.parse::<ModuleId>().ok()),
+        closed: name == "update_module" && text("state") == Some("closed"),
+      })
+    }
+    _ => None,
+  }
 }
 
 /// The key of the task a created task's result names.

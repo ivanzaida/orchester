@@ -380,6 +380,9 @@ pub struct ChatAction {
   /// For `decide_approval` (2026-11-11): the tool request the chat answered itself, with what it asked and why.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub tool_answer: Option<ToolAnswer>,
+  /// What it acted on besides a task: a module, or that it closed its task.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub about: Option<super::about::ActionAbout>,
 }
 
 /// The chat's own answer to an agent's tool request: the request's id, what it asked (a command, or an MCP server's
@@ -418,6 +421,7 @@ impl ChatAction {
       watch: None,
       waits_on: None,
       tool_answer: None,
+      about: None,
     }
   }
 }

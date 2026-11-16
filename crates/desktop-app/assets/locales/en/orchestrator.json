@@ -434,12 +434,21 @@
     },
     "action": {
       "createTask": {
-        "done": "Created a draft",
+        "done": "Created",
         "refused": "Create task · not done"
       },
       "updateTask": {
         "done": "Changed",
+        "canceled": "Canceled",
+        "markedDone": "Marked done",
         "refused": "Change {{task}} · not done"
+      },
+      "module": {
+        "created": "Created module",
+        "changed": "Changed module",
+        "closed": "Closed module",
+        "accepting": "Started the acceptance of",
+        "delivered": "Delivered"
       },
       "runTask": {
         "done": "Started",

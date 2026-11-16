@@ -10,7 +10,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{ActionOutcome, ChatAction, watch::CreatedWatch},
+  orchestrator::{ActionOutcome, ChatAction, about::ActionAbout, watch::CreatedWatch},
   project::TaskKey,
   time::Timestamp,
 };
@@ -19,7 +19,7 @@ use orchester_workspace::display;
 use super::line::{Chip, ChipTone, Line, LineLink, Tone};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskList, TaskView},
+  routes::{ModuleTab, ProjectPage, Route, TaskList, TaskView},
   ui::{icon::Icon, pressable::Press},
 };
 
@@ -62,6 +62,30 @@ pub(super) fn words(tool: &str) -> (&'static str, &'static str) {
   }
 }
 
+/// What a done line says when the action tells what it acted on ([`ActionAbout`]): the module it made, changed,
+/// closed, accepted or delivered, or that it closed its task; `None` to say it by the tool alone ([`words`]).
+fn about_words(action: &ChatAction) -> Option<&'static str> {
+  match (action.about.as_ref()?, action.tool.as_str()) {
+    (ActionAbout::TaskClosed { canceled: true }, _) => Some("orchestrator.action.updateTask.canceled"),
+    (ActionAbout::TaskClosed { canceled: false }, _) => Some("orchestrator.action.updateTask.markedDone"),
+    (ActionAbout::Module { .. }, "create_module") => Some("orchestrator.action.module.created"),
+    (ActionAbout::Module { closed: true, .. }, "update_module") => Some("orchestrator.action.module.closed"),
+    (ActionAbout::Module { .. }, "update_module") => Some("orchestrator.action.module.changed"),
+    (ActionAbout::Module { .. }, "start_acceptance") => Some("orchestrator.action.module.accepting"),
+    (ActionAbout::Module { .. }, "deliver_module") => Some("orchestrator.action.module.delivered"),
+    (ActionAbout::Module { .. }, _) => None,
+  }
+}
+
+/// The module an action acted on, as its line names it, and its page when the action told its id.
+fn module_of(action: &ChatAction, project: ProjectId) -> Option<(&str, Option<Route>)> {
+  let Some(ActionAbout::Module { name, id, .. }) = &action.about else {
+    return None;
+  };
+  let route = id.map(|module| Route::Project(project, ProjectPage::Module(module, ModuleTab::default())));
+  Some((name.as_str(), route))
+}
+
 /// The line of `action`, taken at `at` in project `project`, without its time when `listed` in its answer's list
 /// (`Actions` `J0N1u`); `id` names it.
 pub(super) fn line(
@@ -71,11 +95,20 @@ pub(super) fn line(
   project: ProjectId,
 ) -> Element {
   let (done, refused) = words(&action.tool);
-  let task = action.task.as_deref().unwrap_or_default();
+  let done = about_words(action).unwrap_or(done);
+  let module = module_of(action, project);
+  let task = action
+    .task
+    .as_deref()
+    .or(module.as_ref().map(|(name, _)| *name))
+    .unwrap_or_default();
   let args = [("task", task), ("tool", action.tool.as_str())];
   let time = (!listed).then(|| display::clock(action.settled.unwrap_or(at)));
   let navigation = Navigation::of(ctx);
-  let open = task_route(project, task).map(|route| LineLink {
+  let page = module
+    .and_then(|(_, route)| route)
+    .or_else(|| task_route(project, task));
+  let open = page.map(|route| LineLink {
     label: ctx.t("orchestrator.line.open"),
     press: Press::Open(navigation.to(route)),
   });
