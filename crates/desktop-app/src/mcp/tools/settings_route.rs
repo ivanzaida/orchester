@@ -10,12 +10,12 @@ use serde_json::{Map, Value, json};
 
 use super::{ToolError, string};
 use crate::routes::{
-  AccountsPanel, AccountsView, ConnectStep, JoinTarget, OrchesterAsk, OrchesterPanel, OrchesterView, Route, UpdatesShow,
+  AccountsPanel, AccountsView, ConnectStep, JoinTarget, OrchesterAsk, OrchesterView, Route, UpdatesShow,
 };
 
 /// The parameters besides `route` that settings takes.
 pub const PARAMS: &[&str] = &[
-  "tab", "account", "provider", "panel", "server", "step", "ask", "invite", "project",
+  "tab", "account", "provider", "panel", "server", "step", "address", "ask", "invite", "project",
 ];
 
 /// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`. `updates` and `whats-new` are General
@@ -80,6 +80,10 @@ pub fn properties() -> Map<String, Value> {
       "enum": steps,
       "description": "settings tab connect, with `server`: the step Connect a server opens on; a server with its own certificate stays at compare, which only a person answers.",
     },
+    "address": {
+      "type": "string",
+      "description": "settings tab connect, without `server`: the address Connect a server starts with, as typed.",
+    },
     "ask": {
       "type": "string",
       "enum": ["rotate-token", "sign-out", "decline"],
@@ -104,7 +108,7 @@ pub fn route(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route
     "automation" => &["ask"],
     "accounts" => &["account", "provider", "panel"],
     "orchester" => &["server", "ask", "invite"],
-    "connect" => &["server", "step"],
+    "connect" => &["server", "step", "address"],
     "invite" => &["server", "project"],
     _ => &[],
   };
@@ -273,7 +277,7 @@ fn orchester(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Orche
   })
 }
 
-/// *Connect a server*: empty, or at the address of `server` on `step`.
+/// *Connect a server*: empty, at the address of `server` on `step`, or starting with `address` as typed.
 fn connect(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<OrchesterView, ToolError> {
   let server = string(args, "server")?.map(|named| server(named, lookup)).transpose()?;
   let step = match string(args, "step")? {
@@ -286,12 +290,17 @@ fn connect(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Orchest
   if step != ConnectStep::Address && server.is_none() {
     return Err(ToolError::Missing { param: "server" });
   }
+  let address = string(args, "address")?;
+  if address.is_some() && server.is_some() {
+    return Err(ToolError::InvalidParam {
+      param: "address",
+      reason: "the page starts at the address of `server`".to_owned(),
+    });
+  }
   Ok(OrchesterView {
     server,
-    panel: OrchesterPanel::Connect,
     step,
-    ask: None,
-    at: None,
+    ..address.map_or_else(OrchesterView::connect, OrchesterView::connect_at)
   })
 }
 

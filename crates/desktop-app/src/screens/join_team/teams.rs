@@ -297,7 +297,7 @@ fn invite_actions(ctx: &mut Ctx, joins: &TeamJoins, id: &str, invite: &CloudInvi
   } else if invite.needs_two_factor {
     ActionButton::new(button, ButtonKind::Secondary, ctx.t("startup.join.invites.accept"))
       .icon(Icon::Check)
-      .opens(navigation.to(Route::Orchester(invites)))
+      .opens(navigation.to(Route::Orchester(invites.clone())))
   } else {
     let ask = joins.asker(&button, Ask::Invite(invite.clone()));
     ActionButton::new(button, ButtonKind::Secondary, ctx.t("startup.join.invites.accept"))

@@ -57,7 +57,7 @@ pub enum GeneralShow {
 }
 
 /// The open tab of Settings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
   /// Settings › General (`l838Ty`), with *Plan limits* or *Updates* in view when a route says so.
   General(Option<GeneralShow>),
@@ -77,7 +77,7 @@ pub enum SettingsTab {
 
 impl SettingsTab {
   /// Whether the header says if every change was saved: the tabs whose changes save as they are made.
-  const fn saves_as_made(self) -> bool {
+  const fn saves_as_made(&self) -> bool {
     matches!(
       self,
       Self::General(_) | Self::Notifications | Self::Automation | Self::Browser
@@ -139,7 +139,7 @@ struct SettingsScreen {
   /// What the open tab's saves did, for the header.
   saves: SaveState,
   /// The tab the saves are of: another tab starts them again.
-  saves_of: Mutex<Option<SettingsTab>>,
+  saves_of: Mutex<Option<std::mem::Discriminant<SettingsTab>>>,
 }
 
 impl Component for SettingsScreen {
@@ -156,7 +156,7 @@ impl Component for SettingsScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props { tab, rotation, invite } = ctx.props::<Props>().clone();
-    self.follow_tab(tab);
+    self.follow_tab(&tab);
     ctx.provide(self.saves.clone());
     ctx.provide(crate::ui::skeleton::FromFirstFrame);
     let session = Session::of(ctx);
@@ -169,8 +169,8 @@ impl Component for SettingsScreen {
       SettingsTab::Notifications => notifications::tab(ctx),
       SettingsTab::Automation => automation::tab(ctx, rotation),
       SettingsTab::Browser => browser::tab(ctx),
-      SettingsTab::Orchester(view) => {
-        ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view })
+      SettingsTab::Orchester(ref view) => {
+        ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view: view.clone() })
       }
       SettingsTab::Invite => {
         let target = invite.expect("only `invite` opens the landing, and it names the project");
@@ -209,10 +209,10 @@ impl SettingsScreen {
   }
 
   /// Forgets the saves of the tab that was shown when another one opens.
-  fn follow_tab(&self, tab: SettingsTab) {
-    let same = |shown: SettingsTab| std::mem::discriminant(&shown) == std::mem::discriminant(&tab);
+  fn follow_tab(&self, tab: &SettingsTab) {
+    let tab = std::mem::discriminant(tab);
     let mut saves_of = self.saves_of.lock();
-    if !saves_of.is_some_and(same) {
+    if *saves_of != Some(tab) {
       *saves_of = Some(tab);
       self.saves.clear();
     }

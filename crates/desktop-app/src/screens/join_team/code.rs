@@ -153,7 +153,7 @@ fn refused(ctx: &mut Ctx, join: &CodeJoin, refusal: Option<&CodeRefusal>) -> Vec
         ctx.t("startup.join.code.settings.open"),
       )
       .icon(Icon::ArrowRight)
-      .opens(Navigation::of(ctx).to(Route::Orchester(OrchesterView::connect())));
+      .opens(Navigation::of(ctx).to(Route::Orchester(OrchesterView::connect_at(&join.address.get()))));
       let callout = Callout::new(
         format!("{ID}-needs-settings"),
         CalloutTone::Warning,
