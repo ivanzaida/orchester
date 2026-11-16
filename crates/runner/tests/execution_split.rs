@@ -431,7 +431,12 @@ const STORES: &[&str] = &["ProjectDb", "AppDb", "KeychainVault"];
 /// - `connection_check.rs`: reads the project's id for the API key's keychain entry.
 /// - `step/native/drive.rs`, `step/start/native.rs`: write a native agent's conversation and its items.
 /// - `step/run_records.rs`: Orchester's run tools (`get_task`, `get_run`) read the run's records.
-/// - `step/qa_app/task.rs`: reads the invocation a QA app note belongs to.
+/// - `step/runner_note.rs`: reads the invocation a QA app or service note belongs to.
+/// - `run_data.rs`: reads the runs whose per-run data (service containers and data folders) goes when they end.
+/// - `step/service/launch.rs`, `step/suite/mod.rs`: read the project's published services, stacks and test suites.
+/// - `step/service/slots.rs`: reads the computer's *Services at once* from the application database, and the project's
+///   share of them from its limits.
+/// - `step/test_step.rs`: reads the project's quarantined tests and records the flaky outcomes a Test step found.
 /// - `step/worker/mod.rs`: the worker reads the run and its invocation while it follows the agent.
 /// - `step/worker/review/estimate.rs`: auto mode's reviewer records what its estimate used.
 /// - `resolver.rs`: a run's execution inputs (team authority §7) and its task as it started are read from the project
@@ -446,9 +451,15 @@ const STORE_USES: &[(&str, &str)] = &[
   ("run.rs", "ProjectDb"),
   ("run_git.rs", "ProjectDb"),
   ("step/native/drive.rs", "ProjectDb"),
-  ("step/qa_app/task.rs", "ProjectDb"),
+  ("run_data.rs", "ProjectDb"),
   ("step/run_records.rs", "ProjectDb"),
+  ("step/runner_note.rs", "ProjectDb"),
+  ("step/service/launch.rs", "ProjectDb"),
+  ("step/service/slots.rs", "AppDb"),
+  ("step/service/slots.rs", "ProjectDb"),
   ("step/start/native.rs", "ProjectDb"),
+  ("step/suite/mod.rs", "ProjectDb"),
+  ("step/test_step.rs", "ProjectDb"),
   ("step/worker/mod.rs", "ProjectDb"),
   ("step/worker/review/estimate.rs", "ProjectDb"),
   ("worktree_removal.rs", "ProjectDb"),

@@ -1,4 +1,5 @@
-//! The real `orchester-runner` and the fake agent CLIs, for tests outside the runner crate that start them.
+//! The real `orchester-runner`, the fake agent CLIs and the stand-in program of their services
+//! (`orchester-test-command`), for tests outside the runner crate that start them.
 //!
 //! Each test process builds them once, always with the same command (`cargo build -p orchester-runner --features
 //! test-agent --bins`), and starts copies in a folder of its own, `<target>/debug/test-programs/<test>-<pid>/`,
@@ -32,7 +33,12 @@ use std::{
 use serde_json::Value;
 
 /// The programs the build makes that the tests start, in the order of [`Programs`]' fields.
-const NAMES: [&str; 3] = ["orchester-runner", "orchester-fake-codex", "orchester-fake-claude"];
+const NAMES: [&str; 4] = [
+  "orchester-runner",
+  "orchester-fake-codex",
+  "orchester-fake-claude",
+  "orchester-test-command",
+];
 /// How many times programs swapped while they were copied may make the build and the copies start over.
 const ATTEMPTS: usize = 5;
 /// The folder beside the built programs that holds every test process's copies.
@@ -59,6 +65,8 @@ pub struct Programs {
   pub runner: PathBuf,
   pub fake_codex: PathBuf,
   pub fake_claude: PathBuf,
+  /// The stand-in program of the services a fake agent starts, beside the fakes.
+  pub test_command: PathBuf,
   /// Locked while the process runs, so no other test process removes the copies; the OS releases it at exit.
   _in_use: File,
 }
@@ -77,11 +85,12 @@ impl Programs {
     for _ in 0..ATTEMPTS {
       let copies = copy_into(&built, &folder);
       if built.iter().all(Built::unchanged) {
-        let [runner, fake_codex, fake_claude] = copies;
+        let [runner, fake_codex, fake_claude, test_command] = copies;
         return Self {
           runner,
           fake_codex,
           fake_claude,
+          test_command,
           _in_use: in_use,
         };
       }
@@ -118,7 +127,7 @@ fn stamp(path: &Path) -> (u64, SystemTime) {
 }
 
 /// Builds the programs and notes them as Cargo reports each.
-fn cargo_build() -> [Built; 3] {
+fn cargo_build() -> [Built; NAMES.len()] {
   let mut cargo = Command::new(env!("CARGO"));
   cargo
     .args([
@@ -146,7 +155,7 @@ fn cargo_build() -> [Built; 3] {
   }
   let mut child = cargo.spawn().expect("run cargo");
   let messages = BufReader::new(child.stdout.take().expect("cargo's piped output"));
-  let mut built: [Option<Built>; 3] = Default::default();
+  let mut built: [Option<Built>; NAMES.len()] = Default::default();
   for line in messages.lines() {
     let message: Value = serde_json::from_str(&line.expect("cargo's output")).expect("a cargo message");
     if let Some((index, path)) = program_built(&message) {
@@ -176,7 +185,7 @@ fn program_built(message: &Value) -> Option<(usize, PathBuf)> {
   Some((index, PathBuf::from(message["executable"].as_str()?)))
 }
 
-fn copy_into(built: &[Built; 3], folder: &Path) -> [PathBuf; 3] {
+fn copy_into(built: &[Built; NAMES.len()], folder: &Path) -> [PathBuf; NAMES.len()] {
   built.each_ref().map(|Built { path, .. }| {
     let copy = folder.join(path.file_name().expect("a program's file name"));
     fs::copy(path, &copy).unwrap_or_else(|error| panic!("copy {}: {error}", path.display()));

@@ -111,7 +111,7 @@ pub(super) fn one_step(
 fn narrowing(agents: &Agents, pipeline: ResourceId, key: &StepKey) -> StepPermissions {
   match &stored(agents, pipeline).step(key).expect("the step").kind {
     StepKind::Agent { permissions, .. } => permissions.clone(),
-    StepKind::Tool { .. } => panic!("an agent step"),
+    StepKind::Tool { .. } | StepKind::Test => panic!("an agent step"),
   }
 }
 

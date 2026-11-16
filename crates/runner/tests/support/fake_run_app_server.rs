@@ -79,11 +79,7 @@ fn respond(mut stream: TcpStream, folder: &Path) -> std::io::Result<()> {
     }
     "tools/call" => {
       assert!(session);
-      let mut calls = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(folder.join("calls"))?;
-      writeln!(calls, "{}", request["params"]["name"].as_str().expect("tool"))?;
+      record(folder, &request["params"])?;
       if request["params"]["name"] == "redirect" {
         let port = stream.local_addr()?.port();
         write!(
@@ -93,7 +89,7 @@ fn respond(mut stream: TcpStream, folder: &Path) -> std::io::Result<()> {
         )?;
         return Ok(());
       }
-      tool_result(&request["params"])
+      tool_result(&request["params"], folder)
     }
     _ => panic!("unexpected MCP method"),
   };
@@ -121,7 +117,19 @@ fn respond(mut stream: TcpStream, folder: &Path) -> std::io::Result<()> {
   )
 }
 
-fn tool_result(params: &Value) -> Value {
+/// Notes the tool a call names in `calls`, and a lurq tool's call with its arguments, which show what each `ui_*` call
+/// asked of the app, in `lurq-calls`.
+fn record(folder: &Path, params: &Value) -> std::io::Result<()> {
+  let append = |file: &str| fs::OpenOptions::new().create(true).append(true).open(folder.join(file));
+  let name = params["name"].as_str().expect("tool");
+  writeln!(append("calls")?, "{name}")?;
+  if name.starts_with("lurq_") {
+    writeln!(append("lurq-calls")?, "{name} {}", params["arguments"])?;
+  }
+  Ok(())
+}
+
+fn tool_result(params: &Value, folder: &Path) -> Value {
   match params["name"].as_str().expect("tool") {
     "navigate" => json!({"content":[{"type":"text","text":format!("navigated {TOKEN}")}],
       "structuredContent":{"route":params["arguments"]["route"],"credential":TOKEN,"nested":{TOKEN:[TOKEN]}},
@@ -137,6 +145,56 @@ fn tool_result(params: &Value) -> Value {
       json!({"content":[{"type":"image","mimeType":"image/png","data":STANDARD.encode(png.into_inner())}],"isError":false})
     }
     "bad_image" => json!({"content":[{"type":"image","mimeType":"image/png","data":"not base64"}]}),
+    name if name.starts_with("lurq_") => lurq_result(name, &params["arguments"], folder),
     _ => panic!("unknown stand-in tool"),
+  }
+}
+
+/// The lurq tools the `mcp` UI driver calls, answered as lurq answers them: JSON as pretty text and structured
+/// content, the log as text. Its window holds a Save button, a Title field and a Priority select; an element named
+/// `Saved` is shown from the fourth `lurq_inspect` on, so a wait for it looks more than once.
+fn lurq_result(name: &str, arguments: &Value, folder: &Path) -> Value {
+  let json = |value: Value| {
+    json!({"content":[{"type":"text","text":serde_json::to_string_pretty(&value).expect("JSON")}],
+      "structuredContent":value,"isError":false})
+  };
+  let node =
+    |reference: &str, role: &str, name: &str| json!({"ref":reference,"role":role,"name":name,"actions":["invoke"]});
+  match name {
+    "lurq_windows" => json(json!({"windows":[{"id":"main","name":"main","title":"Orchester QA","focused":false}]})),
+    "lurq_inspect" => {
+      let inspected = fs::read_to_string(folder.join("calls"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| *line == "lurq_inspect")
+        .count();
+      let elements = [
+        node("ref_2", "button", "Save"),
+        node("ref_3", "textbox", "Title"),
+        node("ref_4", "combobox", "Priority"),
+      ];
+      match arguments["query"].as_str() {
+        Some("Saved") if inspected >= 4 => {
+          json(json!({"window":"main","matches":[node("ref_9", "status", "Saved")],"truncated":false}))
+        }
+        Some(query) => {
+          let matches: Vec<&Value> = elements
+            .iter()
+            .filter(|element| element["name"].as_str().is_some_and(|name| name.contains(query)))
+            .collect();
+          json(json!({"window":"main","matches":matches,"truncated":false}))
+        }
+        None => json(json!({"window":"main","truncated":false,"tree":
+          {"ref":"ref_1","role":"window","name":"Orchester QA","state":{},"children":elements}})),
+      }
+    }
+    "lurq_act" | "lurq_interact" | "lurq_set_value" => {
+      let mut answered = arguments.clone();
+      answered["ok"] = json!(true);
+      json(answered)
+    }
+    "lurq_wait" => json(json!({"ok":true,"idle":true})),
+    "lurq_logs" => json!({"content":[{"type":"text","text":"INFO app ready\nINFO saved the task"}],"isError":false}),
+    _ => panic!("unknown stand-in lurq tool"),
   }
 }

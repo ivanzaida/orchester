@@ -354,6 +354,8 @@ pub(super) fn dropped_note(
       [("cli", ctx.t(cli_key(*cli)).to_string())],
     ),
     (None, Executor::Tool(_)) => ctx.t("pipeline_hub.stepFlow.overrideDroppedTool"),
-    (None, Executor::Profile(_) | Executor::Unset) => ctx.t("pipeline_hub.stepFlow.overrideDroppedPlain"),
+    (None, Executor::Profile(_) | Executor::Unset | Executor::Tests) => {
+      ctx.t("pipeline_hub.stepFlow.overrideDroppedPlain")
+    }
   })
 }

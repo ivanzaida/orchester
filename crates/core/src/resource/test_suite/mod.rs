@@ -3,6 +3,7 @@
 //! the services or stacks it needs. Its name and slug are the resource's.
 
 mod command;
+mod launch;
 mod paths;
 mod report;
 mod stored;
@@ -10,8 +11,10 @@ mod variables;
 
 use thiserror::Error;
 
+pub(crate) use self::paths::glob_matches;
 pub use self::{
   command::{SuiteCommand, TestFilter},
+  launch::SuiteProcess,
   paths::{ArtifactGlob, SuitePath},
   report::{ReportFormat, ReportOutput, TestReport},
   variables::{SuiteVariable, SuiteVariables},

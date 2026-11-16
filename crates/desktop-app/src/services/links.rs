@@ -1,9 +1,10 @@
-//! Where the app opens web pages (*Create an account*, *Forgot password*, *Open server admin*): the system browser.
-//! A QA copy started with `ORCHESTER_APP_RECORD_LINKS` set, or a test that asks for it ([`Links::record_instead`]),
-//! only records what it would have opened, so an unattended run never opens a browser on the person's desktop; the
-//! record is what a test checks.
+//! Where the app opens web pages (*Create an account*, *Forgot password*, *Open server admin*): the system browser;
+//! and files a run kept (a Test step's screenshots and traces): their default program. A QA copy started with
+//! `ORCHESTER_APP_RECORD_LINKS` set, or a test that asks for it ([`Links::record_instead`]), only records what it
+//! would have opened, so an unattended run never opens a browser or a program on the person's desktop; the record is
+//! what a test checks.
 
-use std::{env, io, sync::Arc};
+use std::{env, io, path::Path, sync::Arc};
 
 use orchester_workspace::sharing::ServerEntry;
 use parking_lot::Mutex;
@@ -41,6 +42,23 @@ impl Links {
       return Ok(());
     }
     orchester_exec::external::open_url(url)
+  }
+
+  /// Hands the file or folder at `path` to its default program, or records it (as its path). A press of automation
+  /// driving the window opens nothing: it would start a program on the person's desktop.
+  pub fn open_file(&self, path: &Path) -> io::Result<()> {
+    if let Some(recorded) = self.recorded.lock().as_mut() {
+      tracing::info!(path = %path.display(), "a file was recorded instead of opened");
+      recorded.push(path.to_string_lossy().into_owned());
+      return Ok(());
+    }
+    if lurq::app::events::is_synthetic_input() {
+      return Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        "automation pressed to open a file; only a person's press opens one",
+      ));
+    }
+    orchester_exec::external::open_path(path)
   }
 
   /// Opens `url`, a page of `server`'s (*Manage members and invites*), in the browser, or records it. A page of a

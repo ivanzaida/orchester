@@ -2,13 +2,14 @@
 //! it; and a denied command as a problem row (`Problem row` `IxIMv`: *Command denied · cargo publish
 //! --dry-run*, *Builder was told: “Denied by the person reviewing this run. Continue without it.”*).
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
   connection::stream::{CommandStatus, MemoryNotSavedReason, QaSlotHolder, QuestionRefusal, RunnerProblem},
   run::DecidedBy,
+  service::{ServiceCrash, ServiceStartFailure},
   tokens::compact_tokens,
 };
 use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, command_preview};
@@ -124,13 +125,7 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       ),
       "conversation.problem.memoryUnreadableDetail",
     ),
-    RunnerProblem::CodexSettingsIgnored { folder } => (
-      ctx.t("conversation.problem.codexSettingsIgnored"),
-      Some(ctx.t_args(
-        "conversation.problem.codexSettingsIgnoredDetail",
-        [("folder", folder.as_str())],
-      )),
-    ),
+    RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::CodexSandboxSetupFailed { code, message } => codex_sandbox_setup(ctx, code, message),
     RunnerProblem::StderrLeftOut { lines } => counted(
       ctx,
@@ -142,11 +137,66 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       "conversation.problem.stderrLeftOutDetail",
     ),
     RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
+    RunnerProblem::ServiceCrashed(crash) => service_crashed(ctx, crash),
+    RunnerProblem::ServiceStartFailed(failure) => service_start_failed(ctx, failure),
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
-    | RunnerProblem::WaitingForQaSlot { .. } => note(ctx, problem),
+    | RunnerProblem::WaitingForQaSlot { .. }
+    | RunnerProblem::WaitingForServiceSlots { .. } => note(ctx, problem),
   }
+}
+
+/// A start that failed for a reason the person can act on, and its last lines. In the chat it is its card
+/// (`timeline::service`); this is its plain row.
+fn service_start_failed(ctx: &Ctx, failure: &ServiceStartFailure) -> (Arc<str>, Option<Arc<str>>) {
+  let title = ctx.t_args(
+    "conversation.problem.serviceStartFailed",
+    [("service", failure.service.as_str())],
+  );
+  (
+    title,
+    (!failure.lines.is_empty()).then(|| failure.lines.join("\n").into()),
+  )
+}
+
+/// A service that crashed after it was ready: how it ended and how long it had run, then the services Orchester
+/// stopped with it and its last lines. In the chat it is its card (`timeline::service`); this is its plain row.
+fn service_crashed(ctx: &Ctx, crash: &ServiceCrash) -> (Arc<str>, Option<Arc<str>>) {
+  let seconds = format!("{:.1}", Duration::from_millis(crash.uptime_ms).as_secs_f64());
+  let service = crash.service.as_str();
+  let title = match crash.exit_code {
+    Some(code) => ctx.t_args(
+      "conversation.problem.serviceCrashed",
+      [
+        ("service", service),
+        ("code", code.to_string().as_str()),
+        ("seconds", seconds.as_str()),
+      ],
+    ),
+    None => ctx.t_args(
+      "conversation.problem.serviceCrashedBySignal",
+      [("service", service), ("seconds", seconds.as_str())],
+    ),
+  };
+  let mut body: Vec<Arc<str>> = Vec::new();
+  if !crash.stopped.is_empty() {
+    let stopped = crash.stopped.join(&*ctx.t("conversation.list.separator"));
+    body.push(ctx.t_args(
+      "conversation.problem.serviceCrashedStopped",
+      [("services", stopped.as_str())],
+    ));
+  }
+  body.extend(crash.lines.iter().map(|line| Arc::from(line.as_str())));
+  (title, (!body.is_empty()).then(|| body.join("\n").into()))
+}
+
+/// The repository's own Codex settings in `folder`, which Codex did not load for the agent.
+fn codex_settings_ignored(ctx: &Ctx, folder: &str) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("conversation.problem.codexSettingsIgnored"),
+    Some(ctx.t_args("conversation.problem.codexSettingsIgnoredDetail", [("folder", folder)])),
+  )
 }
 
 /// Codex's sandbox that could not be set up: Codex's `message`, which names the stage, and its `code`, then where
@@ -222,13 +272,30 @@ fn qa_slot_holders(ctx: &Ctx, holders: &[QaSlotHolder]) -> Arc<str> {
 }
 
 /// What happened around the agent that is no failure: a native conversation with its model compacted, a request
-/// retried, its earlier reasoning dropped; or a start that waits for a QA slot.
+/// retried, its earlier reasoning dropped; or a start that waits for a QA slot or for service slots.
 fn note(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
   match problem {
     RunnerProblem::WaitingForQaSlot { holders } => (
       ctx.t("conversation.problem.waitingForQaSlot"),
       Some(qa_slot_holders(ctx, holders)),
     ),
+    RunnerProblem::WaitingForServiceSlots(wait) => {
+      let key = if wait.slots == 1 {
+        "conversation.problem.waitingForServiceSlots.one"
+      } else {
+        "conversation.problem.waitingForServiceSlots.other"
+      };
+      (
+        ctx.t_args(key, [("count", wait.slots.to_string().as_str())]),
+        Some(ctx.t_args(
+          "conversation.problem.waitingForServiceSlotsDetail",
+          [
+            ("share", wait.share.to_string().as_str()),
+            ("limit", wait.limit.to_string().as_str()),
+          ],
+        )),
+      )
+    }
     RunnerProblem::ContextCompacted { before, after } => (
       ctx.t("conversation.problem.contextCompacted"),
       Some(ctx.t_args(

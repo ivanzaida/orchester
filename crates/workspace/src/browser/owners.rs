@@ -67,7 +67,7 @@ fn working_profile(run: &Run) -> Option<orchester_core::id::ResourceId> {
     .or_else(|| executions.last())?;
   match run.snapshot().step(execution.step())?.executor() {
     StepExecutor::Agent { profile, .. } => Some(profile.resource),
-    StepExecutor::Tool { .. } => None,
+    StepExecutor::Tool { .. } | StepExecutor::Test => None,
   }
 }
 

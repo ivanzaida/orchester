@@ -91,6 +91,8 @@
       "toolUnavailable": "This tool can't run as a step yet",
       "toolDecides": "Its exit code decides the step",
       "toolDecidesAfter": "· its exit code decides the step",
+      "tests": "Test suites of the changed areas",
+      "testsDecide": "Failed tests fail the step",
       "runsOn": "{{cli}} · {{connection}} · {{model}}",
       "runsOnConnection": "{{connection}} · {{model}}",
       "modelOverride": "· model: {{model}}"
@@ -239,6 +241,7 @@
       "canWrite": "can write",
       "profileModel": "{{profile}} · {{model}}",
       "tool": "Tool · {{tool}}",
+      "tests": "Test suites of the changed areas",
       "failure": "changes requested → {{number}}",
       "failureTool": "fails → {{number}}",
       "chooseProfile": "Choose profile",

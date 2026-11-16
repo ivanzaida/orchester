@@ -33,10 +33,12 @@ use crate::{
 /// *Step*: *Agent* and *Instructions*; a tool that cannot run here says why in place of *Instructions*.
 pub(super) fn step(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Element {
   let mut rows = vec![agent_row(ctx, open, step)];
-  rows.push(match executor::unavailable_tool(open, step) {
-    Some(tool) => executor::tool_notice(ctx, tool),
-    None => instructions_row(ctx, open, step),
-  });
+  match executor::unavailable_tool(open, step) {
+    Some(tool) => rows.push(executor::tool_notice(ctx, tool)),
+    // A Test step is given no instructions: Orchester runs the suites itself.
+    None if Executor::of(step) == Executor::Tests => {}
+    None => rows.push(instructions_row(ctx, open, step)),
+  }
   rows::section(
     "pipeline-hub-step-group",
     &ctx.t("pipeline_hub.step.group"),
@@ -54,7 +56,7 @@ fn agent_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> lurq::components::R
   let started = open.edit.started_step(&step.key).map(|started| {
     let cli = match Executor::of(&started) {
       Executor::Profile(id) => open.assignables.profile(id).and_then(|profile| profile.provider),
-      Executor::Tool(_) | Executor::Unset => None,
+      Executor::Tool(_) | Executor::Unset | Executor::Tests => None,
     };
     (started, cli)
   });

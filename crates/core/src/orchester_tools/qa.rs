@@ -1,19 +1,41 @@
-//! `start_qa_app`: a QA copy of the app the run's worktree builds, started by the runner from the worktree's
+//! The QA app: a QA copy of the app the run's worktree builds, started by the runner from the worktree's
 //! [`QA_APP_SCRIPT`] on a seeded scenario, off-screen and without focus as the script places it, and kept for the
-//! step: `call_run_app` without a pid calls it, through the exact discovery file the script names. Each open QA app
-//! holds one of the computer's QA slots, and a project's runs use as many as its *QA apps at once*
-//! ([`crate::limits::QaSlots`]): a start while all of them are held waits until one app stops. The runner stops the
-//! app when the agent's turn ends, and with it frees its slot.
+//! step. It is the built-in service [`QA_SERVICE`] (`docs/architecture/agent-testing.md`, "Agent tools"), with the
+//! `mcp` UI driver ([`QA_SERVICE_DRIVER`]): `start_service("desktop-qa")` starts it on [`QA_SERVICE_SCENARIO`], and
+//! `start_qa_app(scenario)` is its alias with a scenario of the agent's choice. The `ui_*` tools see and use it
+//! ([`super::ui`]); `call_run_app` without a pid calls one of its MCP tools, through the exact discovery file the
+//! script names. Each open QA app holds one of the computer's service slots for QA apps, and a project's runs use as
+//! many as its *QA apps at once* ([`crate::limits::QaSlots`]): a start while all of them are held waits until one app
+//! stops. The runner stops the app when the agent's turn ends, and with it frees its slot.
 
 use std::{num::NonZeroU32, path::PathBuf};
 
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{resource::StepKey, run::RunNumber};
+use crate::{
+  resource::StepKey,
+  run::RunNumber,
+  service::{ServiceName, UiDriver},
+};
 
 /// The script that builds and starts a QA copy of the app, relative to the worktree.
 pub const QA_APP_SCRIPT: &str = "tools/qa-app.ps1";
+
+/// The built-in service kind the QA app is: every step that may start a QA app is offered it by this name, beside the
+/// project's own services.
+pub const QA_SERVICE: &str = "desktop-qa";
+
+/// The UI driver of [`QA_SERVICE`]: the app's own MCP server, reached through the run's relay.
+pub const QA_SERVICE_DRIVER: UiDriver = UiDriver::Mcp;
+
+/// The scenario `start_service("desktop-qa")` starts the QA app on, `start_service` taking no scenario.
+pub const QA_SERVICE_SCENARIO: &str = "tasks";
+
+/// Whether `name` is the built-in [`QA_SERVICE`].
+pub fn is_qa_service(name: &ServiceName) -> bool {
+  name.as_str() == QA_SERVICE
+}
 
 /// The longest scenario name, as the script's scenarios are short kebab-case names.
 const MAX_SCENARIO_CHARS: usize = 64;
@@ -54,6 +76,15 @@ impl QaAppStart {
       fake_agents,
       no_runner,
     })
+  }
+
+  /// The start `start_service("desktop-qa")` makes: [`QA_SERVICE_SCENARIO`], with the copy's runner and real agents.
+  pub fn of_service() -> Self {
+    Self {
+      scenario: QA_SERVICE_SCENARIO.to_owned(),
+      fake_agents: false,
+      no_runner: false,
+    }
   }
 
   pub fn scenario(&self) -> &str {

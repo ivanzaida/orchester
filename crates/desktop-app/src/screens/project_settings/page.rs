@@ -18,7 +18,7 @@ use super::{Section, Shown, Status};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{Route, Screen},
+  routes::{Route, Screen, ServicesPage},
   theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
     icon::{Icon, icon},
@@ -59,7 +59,15 @@ pub fn settings(
       )
     })
     .collect::<Vec<_>>();
-  let save = shown.autosaves().then(|| save_status(ctx, status));
+  let save = match shown {
+    // Import draft says it isn't saved until its drafts are (`Saved` `N0GBnO` in `DFWRJ`).
+    Shown::Services(ServicesPage::Import) => Some(status_line(
+      ctx,
+      (Icon::CircleDashed, PaletteColor::TextMuted),
+      "project_settings.notSavedYet",
+    )),
+    _ => shown.autosaves().then(|| save_status(ctx, status)),
+  };
   let header = Row::new()
     .id("project-settings-header")
     .width(Dimension::Pct(100.0))
@@ -100,7 +108,7 @@ const fn at_root(shown: Shown) -> bool {
     Shown::Tab(_) => true,
     Shown::Connections(view) => view.is_root(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
-    Shown::Rules | Shown::Storage | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
+    Shown::Rules | Shown::Storage | Shown::Services(_) | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
   }
 }
 

@@ -107,7 +107,7 @@ impl Answering<'_> {
 
   /// Sends `given`, by whoever's input pressed it ([`Decisions::answer`]); nothing while another answer is on its
   /// way.
-  fn press(&self, given: Given, open: OpenProject) -> impl Fn() + Send + Sync + 'static {
+  pub(super) fn press(&self, given: Given, open: OpenProject) -> impl Fn() + Send + Sync + 'static {
     let (decisions, (run, key)) = (self.decisions.clone(), (self.card.0, self.card.1.clone()));
     let (request, approval) = (self.request.run, self.request.id.clone());
     move || {
@@ -133,7 +133,7 @@ impl Answering<'_> {
   }
 
   /// `given`'s button.
-  fn button(&self, ctx: &Ctx, given: Given, (kind, glyph, key): (ButtonKind, Icon, &str)) -> ActionButton {
+  pub(super) fn button(&self, ctx: &Ctx, given: Given, (kind, glyph, key): (ButtonKind, Icon, &str)) -> ActionButton {
     let id = match given {
       Given::Deny => "deny",
       _ => "approve",
@@ -241,7 +241,7 @@ fn came_answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
 }
 
 /// Why the answers wait while another answer of the tab is on its way.
-fn held_line(ctx: &Ctx, answering: &Answering<'_>) -> Option<Element> {
+pub(super) fn held_line(ctx: &Ctx, answering: &Answering<'_>) -> Option<Element> {
   (answering.decisions.busy() && answering.sending().is_none()).then(|| held(ctx, answering.id))
 }
 
@@ -453,16 +453,25 @@ const fn wider_name(given: Given) -> &'static str {
   }
 }
 
-/// What *Approve for every run of this project* covers, for a request it is offered ([`ProjectScope`]).
+/// What *Approve for every run of this project* covers, for a request it is offered ([`ProjectScope`]): the QA script,
+/// or each service a start runs by its name.
 fn project_covers(ctx: &Ctx, request: &PendingToolApproval) -> Option<Arc<str>> {
-  let scope = ProjectScope::of_request(request)?;
+  let scopes = ProjectScope::of_request(request);
+  let first = scopes.first()?;
+  if let Some(script) = first.short_script() {
+    return Some(ctx.t_args(
+      "cards.approval.projectCovers",
+      [("server", first.server()), ("tool", first.tool()), ("script", script)],
+    ));
+  }
+  let services: Vec<&str> = scopes
+    .iter()
+    .filter_map(ProjectScope::service)
+    .map(|service| service.name.as_str())
+    .collect();
   Some(ctx.t_args(
-    "cards.approval.projectCovers",
-    [
-      ("server", scope.server()),
-      ("tool", scope.tool()),
-      ("script", scope.short_script()),
-    ],
+    "cards.approval.projectCoversServices",
+    [("server", first.server()), ("services", services.join(", ").as_str())],
   ))
 }
 

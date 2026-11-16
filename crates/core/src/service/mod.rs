@@ -6,29 +6,52 @@
 //! Both are versioned resources ([`crate::resource::ResourceBody`]) with drafts and published versions; publishing
 //! checks their needs against the published services ([`PublishNeeds`]).
 
+mod approval;
+pub mod cdp;
+mod crash;
 mod definition;
 mod error;
 mod folder;
+mod launch;
+mod log;
 mod name;
 mod needs;
 mod placeholder;
 mod publish;
 mod readiness;
+mod run_data;
 mod seed;
+mod slots;
 mod stack;
+mod start_failure;
+mod status;
 mod stored;
 mod value;
 
 pub use self::{
+  approval::{ServiceApproval, start_target, started_by},
+  crash::{CRASH_LINES, ServiceCrash, exited},
   definition::{RunData, Service, UiDriver, UiStart},
   error::ServiceError,
   folder::{OwnedPath, RelativeFolder, RunFolder},
+  launch::ServiceProcess,
+  log::{
+    DEFAULT_TAIL, LogLine, LogStream, MAX_EXCERPT_BYTES, MAX_LINE_BYTES, MAX_LOG_BYTES, MAX_LOG_LINES, MAX_TAIL,
+    ServiceLog,
+  },
   name::{ServiceName, StackName},
   needs::{NeedsError, StartPlan},
   placeholder::{FilledSeedRequest, Placeholder, PlaceholderError, PlaceholderPlace, RunValues, check_placeholders},
   publish::PublishNeeds,
   readiness::{HttpPath, LogPattern, Readiness, ReadyCheck, ReadyTimeout},
+  run_data::{
+    CONTAINER_PROJECT_LABEL, CONTAINER_RUN_LABEL, CONTAINER_SERVICE_LABEL, ContainerName, ContainerProcess,
+    ContainerStart, container_notes_folder, run_data_folder,
+  },
   seed::{Capture, CapturePath, Seed, SeedHeader, SeedRequest, SeedRequests},
+  slots::{ServiceSlotHolder, ServiceSlotWait, SlotStep, SlotUse},
   stack::Stack,
+  start_failure::{ReadyAsked, ServiceStartFailure, StartFailureCause},
+  status::{ServicePhase, ServiceState, ServiceStatus},
   value::{ServiceValue, ServiceVariables},
 };

@@ -17,9 +17,10 @@ use orchester_core::{
   permission::{CommandPermission, LaunchPermissions, RepositoryAccess, category::CommandScope},
   resource::{AgentProfile, ModelId, VersionNumber},
   run::{
-    ApprovalSubject, CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor,
+    ApprovalSubject, CameToPerson, PendingToolApproval, PinnedVersion, ProjectScope, Run, RunNumber, StepExecutor,
     review::{HoldRules, PushFacts, Review, ReviewHold, review_hold},
   },
+  service::ServiceApproval,
   store::{ActivityStore, ConnectionStore, RunStore},
   task::Task,
 };
@@ -97,6 +98,10 @@ pub struct ShownApproval {
   /// Why it came to the person by the run's approval mode, as its card says it; `None` while the reviewer judges it
   /// and for a request recorded before reasons were.
   pub came_to_person: Option<CameToPerson>,
+  /// For a start of services, what the project's active *Approve for every run* rules approve of the services it
+  /// runs, one fingerprint each, so its card says which changed since and which never ran; empty for any other
+  /// request.
+  pub service_rules: Vec<ServiceApproval>,
 }
 
 impl ShownApproval {
@@ -215,8 +220,31 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
     choices,
     asking,
     auto_approving,
+    service_rules: service_rules(db, &approval),
     approval,
   }
+}
+
+/// What the project's active rules approve of the services a start of services runs, as [`ShownApproval`] keeps it;
+/// empty for any other request.
+fn service_rules(db: &ProjectDb, approval: &PendingToolApproval) -> Vec<ServiceApproval> {
+  let asked: Vec<String> = ProjectScope::of_request(approval)
+    .iter()
+    .filter_map(ProjectScope::service)
+    .map(|service| service.name.clone())
+    .collect();
+  if asked.is_empty() {
+    return Vec::new();
+  }
+  // `.ok()`: unreadable rules only lose what the card says of each service's approval; the request stays decidable.
+  db.project_approval_rules()
+    .ok()
+    .unwrap_or_default()
+    .into_iter()
+    .filter(|rule| rule.is_active())
+    .filter_map(|rule| rule.scope.service().cloned())
+    .filter(|service| asked.contains(&service.name))
+    .collect()
 }
 
 /// The hard rule of auto mode that holds `approval` for the person whatever a reviewer would say

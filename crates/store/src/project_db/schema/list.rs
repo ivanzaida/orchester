@@ -476,4 +476,6 @@ CREATE TABLE run_merges (
   super::orchestrator_tries::TOGETHER_MIGRATION,
   super::module_branches::MIGRATION,
   super::orchestrator_watch::LEAD_DEFAULTS_MIGRATION,
+  super::flaky_tests::MIGRATION,
+  super::service_slots::MIGRATION,
 ];

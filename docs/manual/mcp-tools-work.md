@@ -48,6 +48,11 @@ saved) unless a person turned on *Let automation answer approvals*; lowering it 
 | `daily_budget`                | integer \| null | no   | Tokens all runs of the project may use per day; `null` = no limit.                           |
 | `agent_slots`                 | integer \| null | no   | Agents working at once across runs, **1–16**. Applied at once by the runner: more lets queued work start; fewer stops no agent and holds new work. |
 | `qa_slots`                    | integer \| null | no   | QA apps (`start_qa_app`) runs may have open at once, **1–16**. Applies from the next start; a start beyond it waits until one closes. |
+| `service_slots`               | integer \| null | no   | The project's share of *Services at once*: services its runs may run at once (each service, each of a stack's, a test suite's own process), **1 to the computer's limit**; default 4. Applies from the next start; a start beyond it waits until enough stop. |
+| `computer_service_slots`      | integer \| null | no   | The computer's *Services at once*, an application setting for every project, **1–32**; default 8. A share above it counts as it. Applies from the next start. |
+
+The limits it returns, and `list_projects` and `get_project` show, carry both: `service_slots` (the project's share)
+and `computer_service_slots` (the computer's limit).
 
 ### Approval modes
 

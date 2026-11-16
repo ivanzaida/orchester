@@ -52,6 +52,7 @@ fn qa_rule(blob: &str) -> ProjectScope {
     tool: "start_qa_app".to_owned(),
     reach: ToolReach::Script { blob: blob.to_owned() },
   })
+  .pop()
   .expect("a project rule")
 }
 
@@ -78,14 +79,15 @@ fn owned_record_rules_round_trip_and_answer_the_rule() {
   // The same scope while one is active answers that one, as the direct write does.
   assert_eq!(db.write_rule(&similar).expect("again"), RuleAnswer::Run(rule));
   let project = sent(&RuleRecord::Project {
-    scope: qa_rule("3f2a1b9c"),
+    scopes: vec![qa_rule("3f2a1b9c")],
     run: run.id(),
     request: "invocation:qa".to_owned(),
     at: at(11),
   });
-  let RuleAnswer::Project(project_rule) = sent(&db.write_rule(&project).expect("written")) else {
+  let RuleAnswer::Project(project_rules) = sent(&db.write_rule(&project).expect("written")) else {
     panic!("a project's rule answers its id");
   };
+  let project_rule = project_rules[0];
   let counted = sent(&RuleRecord::ProjectAnswered { rule: project_rule });
   assert_eq!(sent(&db.write_rule(&counted).expect("counted")), RuleAnswer::Counted);
   let rules = db.approval_rules(run.id()).expect("rules");
@@ -97,10 +99,10 @@ fn owned_record_rules_round_trip_and_answer_the_rule() {
       project_rules[0].answered,
       project_rules[0].scope.script()
     ),
-    (project_rule, 1, "3f2a1b9c")
+    (project_rule, 1, Some("3f2a1b9c"))
   );
-  // Only a rule of `start_qa_app` kept to a script arrives as a project's rule.
-  let other = r#"{"kind":"project","scope":{"kind":"similar_mcp_tool","server":"pencil","tool":"x"},"#.to_owned()
+  // Only a rule of `start_qa_app` kept to a script, or a service's, arrives as a project's rule.
+  let other = r#"{"kind":"project","scopes":[{"kind":"similar_mcp_tool","server":"pencil","tool":"x"}],"#.to_owned()
     + &format!(r#""run":"{}","request":"r","at":1}}"#, run.id());
   assert!(serde_json::from_str::<RuleRecord>(&other).is_err());
   assert_eq!(
@@ -108,8 +110,8 @@ fn owned_record_rules_round_trip_and_answer_the_rule() {
     RuleAnswer::Run(ApprovalRuleId::new(3))
   );
   assert_eq!(
-    sent(&RuleAnswer::Project(ProjectRuleId::new(4))),
-    RuleAnswer::Project(ProjectRuleId::new(4))
+    sent(&RuleAnswer::Project(vec![ProjectRuleId::new(4)])),
+    RuleAnswer::Project(vec![ProjectRuleId::new(4)])
   );
 }
 

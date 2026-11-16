@@ -13,8 +13,9 @@ use std::{fmt, fs, io, path::Path};
 
 #[cfg(target_os = "macos")]
 use macos as platform;
+
 #[cfg(target_os = "windows")]
-use windows as platform;
+use self::windows as platform;
 
 /// Moves `path`, a file or a folder, to the Recycle Bin / Trash, refused before anything moves when its volume's bin
 /// would not keep it.

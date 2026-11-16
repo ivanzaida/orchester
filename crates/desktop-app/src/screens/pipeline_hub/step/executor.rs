@@ -71,6 +71,11 @@ pub(super) fn key(ctx: &mut Ctx, open: &Open<'_>, step: &Step, label: Text) -> K
       sub: Some(Sub::quiet(ctx.t("pipeline_hub.stepEdit.toolDecides"))),
       lead: Some(ExtraSpacing::Tight),
     },
+    Executor::Tests => Key {
+      label: label.into(),
+      sub: Some(Sub::quiet(ctx.t("pipeline_hub.agent.testsDecide"))),
+      lead: Some(ExtraSpacing::Tight),
+    },
     Executor::Unset => Key {
       label: on_line(label),
       sub: None,

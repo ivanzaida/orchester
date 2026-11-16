@@ -21,6 +21,12 @@ mod fake_app_tools;
 #[path = "fake_browser_tools.rs"]
 mod fake_browser_tools;
 
+#[path = "fake_cdp_tools.rs"]
+mod fake_cdp_tools;
+
+#[path = "fake_native_tools.rs"]
+mod fake_native_tools;
+
 #[path = "fake_process_tools.rs"]
 mod fake_process_tools;
 
@@ -28,6 +34,9 @@ mod fake_process_tools;
 mod fake_skill_calls;
 #[path = "fake_tool_calls.rs"]
 mod fake_tool_calls;
+
+#[path = "fake_web_tools.rs"]
+mod fake_web_tools;
 
 const KEY: &str = "mcp_servers.Orchester.";
 /// How long the fake waits for the tools of Orchester's server; Codex waits 30 seconds. A relay the runner
@@ -145,7 +154,9 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     return;
   }
   if prompt.contains("Use the process tools") {
-    fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
+    fake_process_tools::exercise(worktree, |tool, arguments| {
+      report_call(server, tool, arguments);
+    });
     return;
   }
   if prompt.contains("Use the browser tools") {
@@ -161,12 +172,7 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     report_call(server, "start_qa_app", &json!({"scenario": scenario}));
     report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
     if prompt.contains("Then read outside") {
-      let notes = fake_tool_calls::repository_folder(worktree, "deps-a").join("notes.txt");
-      report_call(
-        server,
-        "read_external_file",
-        &json!({"filename": notes.to_string_lossy()}),
-      );
+      read_outside(server, worktree);
       report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
       if prompt.contains("Then start again") {
         report_call(server, "start_qa_app", &json!({"scenario": scenario}));
@@ -174,12 +180,197 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     }
     return;
   }
+  if prompt.contains("Start the service ") || prompt.contains("Start the stack ") {
+    services(server, worktree, prompt);
+    return;
+  }
+  if prompt.contains("Run the suite ") {
+    suites(server, prompt);
+    return;
+  }
   for (tool, arguments) in calls(prompt, worktree) {
     report_call(server, tool, &arguments);
   }
 }
 
-fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) {
+/// The name after `lead` in `prompt`, up to the next `.`.
+fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
+  prompt.split(lead).nth(1).and_then(|rest| rest.split('.').next())
+}
+
+/// "Start the service <name>." calls `start_service`, "Start the stack <name>." `start_stack`; with "Then start the
+/// service <other>." it then calls `start_service` of that one; with "Then drive its UI" it then calls the `ui_*` tools
+/// on it ([`drive_ui`]); with "Copy the native fixture.", "Then drive the native window" and "Then open its UI" it puts
+/// the fixture window in the worktree before the start and drives or opens it after ([`fake_native_tools`]); with
+/// "Then drive the web page" it drives the browser driver's fixture page ([`fake_web_tools`]); with "Copy the launcher
+/// fixture.", "Then drive the app window" and "Then open the UI of <other>." it puts the launcher in the worktree
+/// before the start and drives the app's window or opens the other service after ([`fake_cdp_tools`]); with
+/// "Then read outside" it then reads
+/// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
+/// service is no longer ready; with "Then wait for a crash notice" it calls `service_status` until an answer carries a
+/// notice ([`crash_notice`]); with "Then look at the service" it calls `service_status` and `service_logs`; and with
+/// "Then stop the service" it calls `stop_service`, then `service_status` again when it also looks.
+fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
+  let stack = named_after(prompt, "Start the stack ");
+  let name = named_after(prompt, "Start the service ").unwrap_or("web");
+  let named = json!({"name": name});
+  let look = prompt.contains("Then look at the service");
+  if prompt.contains("Copy the native fixture.") {
+    fake_native_tools::copy_fixture(worktree);
+  }
+  if prompt.contains("Copy the launcher fixture.") {
+    fake_cdp_tools::copy_launcher(worktree);
+  }
+  match stack {
+    Some(stack) => report_call(server, "start_stack", &json!({"name": stack})),
+    None => report_call(server, "start_service", &named),
+  };
+  if let Some(other) = named_after(prompt, "Then start the service ") {
+    report_call(server, "start_service", &json!({"name": other}));
+  }
+  if prompt.contains("Then drive its UI") {
+    drive_ui(server, name);
+  }
+  if prompt.contains("Then drive the native window") {
+    fake_native_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
+  }
+  if prompt.contains("Then drive the web page") {
+    fake_web_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
+  }
+  if prompt.contains("Then drive the app window") {
+    fake_cdp_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
+  }
+  if prompt.contains("Then open its UI") {
+    report_call(server, "ui_open", &json!({"service": name}));
+  }
+  if let Some(other) = named_after(prompt, "Then open the UI of ") {
+    report_call(server, "ui_open", &json!({"service": other}));
+  }
+  if prompt.contains("Then read outside") {
+    read_outside(server, worktree);
+  }
+  if prompt.contains("Then wait for it to end") {
+    for _ in 0..80 {
+      let ready = server
+        .call("service_status", &named)
+        .is_some_and(|(text, _)| text.contains(r#""state":"ready""#));
+      if !ready {
+        break;
+      }
+      thread::sleep(Duration::from_millis(250));
+    }
+  }
+  if prompt.contains("Then wait for a crash notice") {
+    crash_notice(server, &named);
+  }
+  if look {
+    report_call(server, "service_status", &named);
+    report_call(server, "service_logs", &json!({"name": name, "tail": 50}));
+  }
+  if prompt.contains("Then stop the service") {
+    report_call(server, "stop_service", &named);
+    if look {
+      report_call(server, "service_status", &named);
+    }
+  }
+}
+
+/// "Then drive its UI": a snapshot before any `ui_open`, which is refused, then `ui_open` of the service, a snapshot of
+/// the whole tree and one of a query, each `ui_act` action, a screenshot, the log, a wait for it to render and one for
+/// an element that shows only after a few looks, and the service's status and log through the service tools.
+fn drive_ui(server: &mut Prompt, name: &str) {
+  report_call(server, "ui_snapshot", &json!({}));
+  report_call(server, "ui_open", &json!({"service": name}));
+  report_call(server, "ui_snapshot", &json!({}));
+  report_call(server, "ui_snapshot", &json!({"query": "Save"}));
+  report_call(server, "ui_act", &json!({"ref": "ref_2", "action": "click"}));
+  report_call(
+    server,
+    "ui_act",
+    &json!({"ref": "ref_3", "action": "type", "text": "Fix login"}),
+  );
+  report_call(server, "ui_act", &json!({"action": "key", "text": "Enter"}));
+  report_call(server, "ui_act", &json!({"ref": "ref_3", "action": "scroll"}));
+  report_call(
+    server,
+    "ui_act",
+    &json!({"ref": "ref_4", "action": "select", "text": "High"}),
+  );
+  report_call(server, "ui_screenshot", &json!({}));
+  report_call(server, "ui_logs", &json!({"lines": 5}));
+  report_call(server, "ui_wait", &json!({"condition": "idle"}));
+  report_call(
+    server,
+    "ui_wait",
+    &json!({"condition": "element", "query": "Saved", "timeout_ms": 10000}),
+  );
+  report_call(server, "service_status", &json!({"name": name}));
+  report_call(server, "service_logs", &json!({"name": name}));
+}
+
+/// Calls `service_status` of `named` until its answer carries Orchester's notices after it, as text blocks after the
+/// first, and reports each notice's lines as `orchester-notice| <line>`; `orchester-notice: none` when none came.
+fn crash_notice(server: &mut Prompt, named: &Value) {
+  for _ in 0..120 {
+    let notices: Vec<String> = server
+      .call_result("service_status", named)
+      .map(|result| {
+        result["content"]
+          .as_array()
+          .into_iter()
+          .flatten()
+          .skip(1)
+          .filter_map(|block| block["text"].as_str().map(str::to_owned))
+          .collect()
+      })
+      .unwrap_or_default();
+    if !notices.is_empty() {
+      for line in notices.iter().flat_map(|notice| notice.lines()) {
+        eprintln!("orchester-notice| {line}");
+      }
+      return;
+    }
+    thread::sleep(Duration::from_millis(250));
+  }
+  eprintln!("orchester-notice: none");
+}
+/// Reads `deps-a/notes.txt` of the repository, outside the worktree, which asks.
+fn read_outside(server: &mut Prompt, worktree: &Path) {
+  let notes = fake_tool_calls::repository_folder(worktree, "deps-a").join("notes.txt");
+  report_call(
+    server,
+    "read_external_file",
+    &json!({"filename": notes.to_string_lossy()}),
+  );
+}
+
+/// "Run the suite <name>." calls `run_tests` of that suite, "Run the suite <name> with filter <filter>." narrowed by
+/// the filter, each such sentence once, in order; with "Then read the output of <test>." it then calls `test_output`
+/// of that test of the last run `run_tests` answered.
+fn suites(server: &mut Prompt, prompt: &str) {
+  let mut last_run = None;
+  for sentence in prompt
+    .split("Run the suite ")
+    .skip(1)
+    .filter_map(|rest| rest.split('.').next())
+  {
+    let (suite, filter) = match sentence.split_once(" with filter ") {
+      Some((suite, filter)) => (suite, Some(filter)),
+      None => (sentence, None),
+    };
+    let answer = report_call(server, "run_tests", &json!({"suite": suite, "filter": filter}));
+    let run = answer
+      .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+      .and_then(|answer| answer["run"].as_str().map(str::to_owned));
+    last_run = run.or(last_run);
+  }
+  if let (Some(test), Some(run)) = (named_after(prompt, "Then read the output of "), last_run) {
+    report_call(server, "test_output", &json!({"run": run, "test": test}));
+  }
+}
+
+/// Calls `tool` with `arguments` and reports its answer; the answer's text, when it came.
+fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) -> Option<String> {
   match server.call(tool, arguments) {
     Some((text, failed)) => {
       eprintln!(
@@ -190,7 +381,11 @@ fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) {
       for line in text.lines() {
         eprintln!("orchester-answer| {line}");
       }
+      Some(text)
     }
-    None => eprintln!("orchester-call: {tool} no answer"),
+    None => {
+      eprintln!("orchester-call: {tool} no answer");
+      None
+    }
   }
 }

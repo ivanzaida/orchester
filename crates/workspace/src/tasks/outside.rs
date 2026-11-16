@@ -115,6 +115,8 @@ pub enum AppOutside {
   Browser,
   /// What automation may do, or whether agents may control the window.
   Automation,
+  /// The computer's *Services at once*.
+  ServiceSlots,
   /// Whether the computer is kept awake while agents work.
   KeepsAwake,
 }
@@ -127,6 +129,7 @@ pub struct AppOutsideCounts {
   pub daily_report: u64,
   pub browser: u64,
   pub automation: u64,
+  pub service_slots: u64,
   pub keeps_awake: u64,
 }
 
@@ -139,6 +142,7 @@ impl AppOutsideCounts {
       AppOutside::DailyReport => self.daily_report,
       AppOutside::Browser => self.browser,
       AppOutside::Automation => self.automation,
+      AppOutside::ServiceSlots => self.service_slots,
       AppOutside::KeepsAwake => self.keeps_awake,
     }
   }
@@ -150,6 +154,7 @@ impl AppOutsideCounts {
       AppOutside::DailyReport => &mut self.daily_report,
       AppOutside::Browser => &mut self.browser,
       AppOutside::Automation => &mut self.automation,
+      AppOutside::ServiceSlots => &mut self.service_slots,
       AppOutside::KeepsAwake => &mut self.keeps_awake,
     };
     *count += 1;

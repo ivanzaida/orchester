@@ -14,7 +14,8 @@ pub enum PlaceholderError {
   /// Such as `{{host}}` or `{{services.web.host}}`.
   #[error(
     "{place}: `{placeholder}` is not a placeholder of a service; they are `{{{{port}}}}`, `{{{{url}}}}`, \
-     `{{{{run}}}}`, `{{{{services.<name>.url}}}}`, `{{{{services.<name>.port}}}}` and `{{{{seed.<name>}}}}`"
+     `{{{{run}}}}`, `{{{{data}}}}`, `{{{{services.<name>.url}}}}`, `{{{{services.<name>.port}}}}` and \
+     `{{{{seed.<name>}}}}`"
   )]
   UnknownField {
     place: PlaceholderPlace,
@@ -31,6 +32,9 @@ pub enum PlaceholderError {
   /// Captures exist only after the seed request that makes them, so arguments, variables and readiness have none.
   #[error("{place} uses `seed.{capture}`, which no earlier seed request captures")]
   UnknownCapture { place: PlaceholderPlace, capture: String },
+  /// `{{data}}` is the folder of the run's own files, which only a service whose per-run data is a run folder has.
+  #[error("{place} uses `{{{{data}}}}`, but this service's per-run data is not a run folder")]
+  NoRunFolder { place: PlaceholderPlace },
   /// The run's values lack what the placeholder stands for.
   #[error("{place}: the run has no value for `{placeholder}`")]
   NoValue {

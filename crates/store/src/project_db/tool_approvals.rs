@@ -77,12 +77,12 @@ impl ProjectDb {
           .as_deref()
           .map(|decided_by| parse::<DecidedBy>("approval answer", decided_by))
           .transpose()?;
-        let for_project = decided_by == Some(DecidedBy::PersonSimilar)
-          && ProjectScope::of_request(&request).is_some_and(|scope| {
-            project_rules
-              .iter()
-              .any(|rule| rule.made_in == run && rule.made_by == request.id && rule.scope == scope)
-          });
+        let for_project = decided_by == Some(DecidedBy::PersonSimilar) && {
+          let scopes = ProjectScope::of_request(&request);
+          project_rules
+            .iter()
+            .any(|rule| rule.made_in == run && rule.made_by == request.id && scopes.contains(&rule.scope))
+        };
         let note = decided
           .note
           .map(|note| DenialNote::new(&note).map_err(|error| corrupt("denial message", error)))

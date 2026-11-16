@@ -6,7 +6,7 @@
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   code_index::CodeIndexSetting,
-  limits::{AgentSlots, ProjectLimits, QaSlots},
+  limits::{AgentSlots, ProjectLimits, QaSlots, ServiceSlots},
   resource::CommandEnvironment,
   store::SettingsStore,
   workspaces::KeepFree,
@@ -86,11 +86,11 @@ impl ProjectDb {
 }
 
 fn read_limits(connection: &Connection) -> Result<ProjectLimits, StoreError> {
-  type LimitsRow = (Option<i64>, i64, Option<i64>, i64, bool, i64);
+  type LimitsRow = (Option<i64>, i64, Option<i64>, i64, bool, i64, i64);
   let row: Option<LimitsRow> = connection
     .query_row(
-      "SELECT default_run_budget, daily_budget, default_time_limit_ms, agent_slots, daily_budget_unlimited, qa_slots \
-       FROM project_limits",
+      "SELECT default_run_budget, daily_budget, default_time_limit_ms, agent_slots, daily_budget_unlimited, qa_slots, \
+       service_slots FROM project_limits",
       [],
       |row| {
         Ok((
@@ -100,11 +100,12 @@ fn read_limits(connection: &Connection) -> Result<ProjectLimits, StoreError> {
           row.get(3)?,
           row.get(4)?,
           row.get(5)?,
+          row.get(6)?,
         ))
       },
     )
     .optional()?;
-  let Some((default, daily, time_limit, slots, unlimited, qa)) = row else {
+  let Some((default, daily, time_limit, slots, unlimited, qa, services)) = row else {
     return Ok(ProjectLimits::DEFAULT);
   };
   let slots = u64::try_from(slots)
@@ -113,6 +114,9 @@ fn read_limits(connection: &Connection) -> Result<ProjectLimits, StoreError> {
   let qa = u64::try_from(qa)
     .map_err(|error| corrupt("QA slots", error))
     .and_then(|qa| QaSlots::new(qa).map_err(|error| corrupt("QA slots", error)))?;
+  let services = u64::try_from(services)
+    .map_err(|error| corrupt("service slots", error))
+    .and_then(|services| ServiceSlots::new(services).map_err(|error| corrupt("service slots", error)))?;
   let limits = ProjectLimits::new(
     optional_budget_value("default run budget", default)?,
     budget_value("daily project budget", daily)?,
@@ -124,6 +128,7 @@ fn read_limits(connection: &Connection) -> Result<ProjectLimits, StoreError> {
     limits
       .with_agent_slots(slots)
       .with_qa_slots(qa)
+      .with_service_slots(services)
       .with_daily_budget_limit(daily),
   )
 }
@@ -131,11 +136,12 @@ fn read_limits(connection: &Connection) -> Result<ProjectLimits, StoreError> {
 fn write_limits(connection: &Connection, limits: &ProjectLimits) -> Result<(), StoreError> {
   connection.execute(
     "INSERT INTO project_limits (id, default_run_budget, daily_budget, default_time_limit_ms, agent_slots, \
-     daily_budget_unlimited, qa_slots) \
-     VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (id) DO UPDATE SET \
+     daily_budget_unlimited, qa_slots, service_slots) \
+     VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (id) DO UPDATE SET \
      default_run_budget = excluded.default_run_budget, daily_budget = excluded.daily_budget, \
      default_time_limit_ms = excluded.default_time_limit_ms, agent_slots = excluded.agent_slots, \
-     daily_budget_unlimited = excluded.daily_budget_unlimited, qa_slots = excluded.qa_slots",
+     daily_budget_unlimited = excluded.daily_budget_unlimited, qa_slots = excluded.qa_slots, \
+     service_slots = excluded.service_slots",
     params![
       optional_budget_column("default run budget", limits.default_run_budget())?,
       tokens_column("daily project budget", limits.daily_budget().get())?,
@@ -143,6 +149,7 @@ fn write_limits(connection: &Connection, limits: &ProjectLimits) -> Result<(), S
       limits.agent_slots().get().get(),
       limits.daily_budget_limit().is_none(),
       limits.qa_slots().get().get(),
+      limits.service_slots().get().get(),
     ],
   )?;
   Ok(())

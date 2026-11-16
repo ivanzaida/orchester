@@ -9,7 +9,8 @@
     "tabs": {
       "summary": "Summary",
       "conversation": "Conversation",
-      "changes": "Changes"
+      "changes": "Changes",
+      "services": "Services"
     },
     "listSeparator": ", ",
     "page": {

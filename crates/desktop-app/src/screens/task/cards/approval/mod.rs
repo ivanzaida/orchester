@@ -10,7 +10,8 @@
 //! *Back*. While auto mode's reviewer judges it, it is a quiet row until the person chooses to answer it
 //! ([`reviewing`]). Once it is answered, or its agent stopped waiting, it is a quiet row that says how, by whom and
 //! when ([`decided`]), with a denial's message; as soon as the runner takes the person's answer, before the run is
-//! read again. One the run's approval mode approved without the person is a quiet row of its own ([`quiet`]).
+//! read again. One the run's approval mode approved without the person is a quiet row of its own ([`quiet`]). A start
+//! of services that waits is a card of its own in the chat ([`services`], `hvQDS`), with the same answers' plumbing.
 
 mod answers;
 mod came;
@@ -23,6 +24,7 @@ mod quiet;
 mod request;
 mod review;
 mod reviewing;
+mod services;
 mod shell;
 mod words;
 
@@ -96,6 +98,8 @@ struct ApprovalView {
   answer_myself: Signal<bool>,
   /// A request that came to the person shows its other answers under *Approve* and *Deny*.
   more: Signal<bool>,
+  /// A start of services shows the modal that confirms *Approve for every run while unchanged*.
+  confirm_every_run: Signal<bool>,
   folded: Signal<bool>,
   hint: Signal<Option<Arc<str>>>,
 }
@@ -113,6 +117,7 @@ impl Component for ApprovalView {
       focus_field: Arc::default(),
       answer_myself: ctx.signal(false),
       more: ctx.signal(false),
+      confirm_every_run: ctx.signal(false),
       folded: ctx.signal(false),
       hint: ctx.signal(None),
     }
@@ -162,6 +167,11 @@ impl Component for ApprovalView {
       Stage::Refused(refused) => Some(refusal(ctx, &id, &refused, &request.agent)),
       Stage::Sending | Stage::Taken(_) => None,
     });
+    // The panel's item says what it is: there a start of services is the request it asks as.
+    if let Some(asked) = services::asked(request).filter(|_| !place.in_panel) {
+      let at = (&place, &asked[..]);
+      return services::card(ctx, &answering, at, &self.confirm_every_run, failed);
+    }
     if !place.in_panel && review::left_to_person(shown.as_ref().and_then(|shown| shown.review.as_ref())) {
       return shell::card(ctx, self, &place, &answering, editing, failed);
     }

@@ -10,6 +10,7 @@ mod connection_specs;
 mod connections;
 pub(super) mod created;
 mod decision_connections;
+mod flaky_tests;
 mod given_by;
 mod instructions;
 mod mcp_preview;
@@ -34,6 +35,7 @@ mod project;
 mod project_tools;
 pub(super) mod runs_on;
 mod secrets;
+mod service_import;
 mod service_input;
 mod services;
 mod skill_input;
@@ -233,15 +235,19 @@ const SPECS: &[Spec] = &[
                   budget (left out: no step budget). A command step names a published command tool (publish_tool) as \
                   `tool`, runs after the steps it checks, and may return to one of them when the program fails, e.g. \
                   {\"key\": \"check\", \"name\": \"Check\", \"tool\": \"Check\", \"runs_after\": [\"implement\"], \
-                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. Refused as invalid_pipeline when the \
+                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. A Test step sets `tests: true` \
+                  and no profile or tool: Orchester runs the published test suites whose services own a path the \
+                  run changed, plus those marked always, lint then unit then e2e, and returns only the failed tests \
+                  to the step its on_failure names. Refused as invalid_pipeline when the \
                   steps do not form a pipeline, as not_publishable with every reason when it has no steps, a step has \
                   no profile or tool or cannot run here, or the version \
                   limit is reached, as unchanged when they equal the latest version, and as version_changed when a \
                   version was published since it was read. Unless a person turned on Let automation change agent \
                   permissions, a save that widens what agents may do is refused as person_only, with every reason: \
                   dropping an approval gate, or asking about tool calls, that the latest version has (a step removed \
-                  with it included); a step that calls a tool the latest version does not call under its key, since \
-                  it runs a program on this computer; and anything not provably as strict as the latest version (the \
+                  with it included); a step that calls a tool, or a Test step, the latest version does not have \
+                  under its key, since it runs programs on this computer; and anything not provably as strict as the \
+                  latest version (the \
                   same steps, wiring, failure routes, profiles and tools, each step's approval, asking about tool \
                   calls, write access, commands and network the same or stricter). So every version a task can run is \
                   one a person saved, allowed, or could not object to. `delivers` changes what its runs deliver \
@@ -381,6 +387,8 @@ pub fn listed() -> Vec<Tool> {
     .chain(team_fill_ins::SPECS)
     .chain(team_mcp_list::SPECS)
     .chain(services::SPECS)
+    .chain(service_import::SPECS)
+    .chain(flaky_tests::SPECS)
     .chain(storage::SPECS)
     .map(tool)
     .collect()
@@ -416,6 +424,12 @@ pub async fn call(
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(service_import::SPECS) {
+    return Some(service_import::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(flaky_tests::SPECS) {
+    return Some(flaky_tests::call(services, name, Value::Object(arguments)).await);
   }
   if named(storage::SPECS) {
     return Some(storage::call(services, name, Value::Object(arguments)).await);

@@ -1,7 +1,8 @@
 //! The `{{…}}` placeholders of a service (`docs/architecture/agent-testing.md`, "Service"): `{{port}}`, `{{url}}`
-//! and `{{run}}` of the service's own start, `{{services.<name>.url}}` and `{{services.<name>.port}}` of a service
-//! it needs, and `{{seed.<name>}}`, a value an earlier seed request captured. Placeholders are data references,
-//! never expressions, and they are filled only into plain text: a secret stays a name, which the runner resolves.
+//! and `{{run}}` of the service's own start, `{{data}}`, the folder of its run's own files when its per-run data is
+//! one, `{{services.<name>.url}}` and `{{services.<name>.port}}` of a service it needs, and `{{seed.<name>}}`, a
+//! value an earlier seed request captured. Placeholders are data references, never expressions, and they are filled
+//! only into plain text: a secret stays a name, which the runner resolves.
 
 mod check;
 mod error;
@@ -28,6 +29,9 @@ pub enum Placeholder {
   Url,
   /// `{{run}}`: the run's id.
   Run,
+  /// `{{data}}`: the folder of the run's own files for this service, which its per-run data names
+  /// ([`crate::service::RunData::RunFolder`]).
+  Data,
   /// `{{services.<name>.url}}`
   ServiceUrl(ServiceName),
   /// `{{services.<name>.port}}`
@@ -54,6 +58,7 @@ impl Placeholder {
       ["port"] => Ok(Self::Port),
       ["url"] => Ok(Self::Url),
       ["run"] => Ok(Self::Run),
+      ["data"] => Ok(Self::Data),
       ["services", name, field @ ("url" | "port")] => {
         let name = ServiceName::new(name).map_err(|_| PlaceholderError::UnknownService {
           place: place.clone(),
@@ -85,6 +90,7 @@ impl fmt::Display for Placeholder {
       Self::Port => f.write_str("{{port}}"),
       Self::Url => f.write_str("{{url}}"),
       Self::Run => f.write_str("{{run}}"),
+      Self::Data => f.write_str("{{data}}"),
       Self::ServiceUrl(name) => write!(f, "{{{{services.{name}.url}}}}"),
       Self::ServicePort(name) => write!(f, "{{{{services.{name}.port}}}}"),
       Self::Seed(name) => write!(f, "{{{{seed.{name}}}}}"),

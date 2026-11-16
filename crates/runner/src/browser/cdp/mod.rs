@@ -71,6 +71,12 @@ impl SessionId {
   }
 }
 
+impl From<&str> for SessionId {
+  fn from(id: &str) -> Self {
+    Self(id.to_owned())
+  }
+}
+
 impl fmt::Display for TargetId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_str(&self.0)

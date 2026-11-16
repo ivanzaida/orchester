@@ -65,28 +65,39 @@ fn weakened_gates(base: &[Step], steps: &[Step]) -> Vec<Message> {
   reasons
 }
 
-/// The steps of `steps` that call a tool the latest published version (`base`) does not call under the same key: each
-/// runs a program on this computer, which a person decides.
+/// The steps of `steps` that call a tool, or run the test suites, where the latest published version (`base`) does
+/// not under the same key: each runs programs on this computer, which a person decides.
 fn added_tool_steps(base: &[Step], steps: &[Step], assignables: &Assignables) -> Vec<Message> {
-  let calls = |step: &Step| match step.kind {
-    StepKind::Tool { tool } => tool,
+  let runs = |step: &Step| match step.kind {
+    StepKind::Tool { tool } => tool.map(Runs::Tool),
+    StepKind::Test => Some(Runs::Tests),
     StepKind::Agent { .. } => None,
   };
   steps
     .iter()
-    .filter_map(|step| Some((step, calls(step)?)))
-    .filter(|(step, tool)| {
+    .filter_map(|step| Some((step, runs(step)?)))
+    .filter(|(step, what)| {
       !base
         .iter()
-        .any(|before| before.key == step.key && calls(before) == Some(*tool))
+        .any(|before| before.key == step.key && runs(before) == Some(*what))
     })
-    .map(|(step, tool)| {
-      let name = assignables
-        .tool(tool)
-        .map_or_else(|| tool.to_string(), |choice| choice.name.to_string());
-      Message::new("appMcp.projectTools.widens.toolStep")
-        .with("step", step.name.as_str().to_owned())
-        .with("tool", name)
+    .map(|(step, what)| match what {
+      Runs::Tool(tool) => {
+        let name = assignables
+          .tool(tool)
+          .map_or_else(|| tool.to_string(), |choice| choice.name.to_string());
+        Message::new("appMcp.projectTools.widens.toolStep")
+          .with("step", step.name.as_str().to_owned())
+          .with("tool", name)
+      }
+      Runs::Tests => Message::new("appMcp.projectTools.widens.testStep").with("step", step.name.as_str().to_owned()),
     })
     .collect()
+}
+
+/// What a step runs on this computer besides an agent.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Runs {
+  Tool(orchester_core::id::ResourceId),
+  Tests,
 }

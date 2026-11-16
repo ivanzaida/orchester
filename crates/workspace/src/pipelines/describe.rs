@@ -34,6 +34,7 @@ pub fn executor_line(step: &Step, assignables: &Assignables) -> Message {
       Some(tool) => Message::new("pipelines.step.tool").with("tool", tool.name.to_string()),
       None => Message::new("pipelines.step.unpublishedTool"),
     },
+    StepKind::Test => Message::new("pipelines.step.tests"),
   }
 }
 

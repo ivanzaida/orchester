@@ -31,6 +31,7 @@ mod message;
 mod pipe_owner;
 mod rejection;
 pub mod run_files;
+pub mod services;
 mod transport;
 mod work;
 mod worktree;

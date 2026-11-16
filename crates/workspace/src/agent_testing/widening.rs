@@ -9,6 +9,8 @@ use crate::messages::Message;
 
 /// A new service, which runs its program whenever a run starts it.
 pub const NEW_SERVICE: &str = "appMcp.services.widens.newService";
+/// New services the import makes, by their `names`.
+pub const IMPORTED_SERVICES: &str = "appMcp.services.widens.imported";
 /// A service's first version, which runs can start from then on.
 pub const FIRST_VERSION: &str = "appMcp.services.widens.firstVersion";
 

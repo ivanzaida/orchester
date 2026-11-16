@@ -35,7 +35,7 @@ pub fn published(db: &ProjectDb) -> Result<Vec<ReviewAgent>, ReviewRefusal> {
   )
 }
 
-/// The profile and model the pipeline gives `run`'s step `key`, as the run pinned them; `None` for a tool step.
+/// The profile and model the pipeline gives `run`'s step `key`, as the run pinned them; `None` for a tool or test step.
 pub(super) fn pinned(run: &Run, key: &StepKey) -> Option<(ResourceId, Arc<str>)> {
   run
     .snapshot()
@@ -44,6 +44,6 @@ pub(super) fn pinned(run: &Run, key: &StepKey) -> Option<(ResourceId, Arc<str>)>
     .find(|step| step.key() == key)
     .and_then(|step| match step.executor() {
       StepExecutor::Agent { profile, model, .. } => Some((profile.resource, model.as_str().into())),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     })
 }

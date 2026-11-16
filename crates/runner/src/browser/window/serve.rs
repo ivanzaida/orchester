@@ -367,7 +367,8 @@ fn rejection(error: &BrowserError) -> Rejection {
     | BrowserError::NotOpened { .. }
     | BrowserError::NoHistory(_)
     | BrowserError::Element(_)
-    | BrowserError::StaleRef(_) => Rejection::Failed {
+    | BrowserError::StaleRef(_)
+    | BrowserError::AppPort { .. } => Rejection::Failed {
       detail: error.to_string(),
     },
   }

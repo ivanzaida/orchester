@@ -113,6 +113,7 @@ fn ancestors<'a>(pipeline: &'a Pipeline, key: &StepKey) -> HashSet<&'a StepKey> 
 fn kind_no_weaker(old: &StepKind, new: &StepKind) -> bool {
   match (old, new) {
     (StepKind::Tool { tool: before }, StepKind::Tool { tool: after }) => before == after,
+    (StepKind::Test, StepKind::Test) => true,
     (
       StepKind::Agent {
         profile: before,

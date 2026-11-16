@@ -1,8 +1,11 @@
 //! *Approved for every run* (`12` `wQy6o`), a page under Runs: the rules *Approve for every run of this project* made
 //! (the person's decision of 2026-10-18), what each approves, how often it answered and when it was approved, and
 //! *Revoke*, after which the tool asks again from its next request on. Revoking only narrows what runs may do, so it
-//! takes any input. Only Orchester's `start_qa_app` makes such a rule: *Add rule* stays unavailable with why, and the
-//! page says how a rule is added.
+//! takes any input. Only Orchester's `start_qa_app` and its service starts make such rules, one per service, which
+//! names the service's program, arguments and variables, never their values: *Add rule* stays unavailable with why,
+//! and the page says how a rule is added.
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::Component,
@@ -129,24 +132,17 @@ impl Rules {
   /// One rule: what it approves, how often it answered and when it was approved, and its *Revoke*.
   fn rule(&self, ctx: &mut Ctx, props: &TabProps, rule: &ProjectRule, busy: bool) -> Element {
     let id = format!("settings-auto-rule-{}", rule.id.get());
-    let (month, day) = display::month_day(rule.created_at);
-    let month = message_text(ctx, &Message::new(display::MONTH_KEYS[month])).to_string();
-    let answered = rule.answered.to_string();
-    // lurq's i18n has no plural rules: one answer has words of its own.
-    let key = if rule.answered == 1 {
-      "project_settings.ruleDetailOnce"
-    } else {
-      "project_settings.ruleDetail"
+    let detail = detail(ctx, rule);
+    let label = match rule.scope.service() {
+      Some(service) => ctx.t_args(
+        "project_settings.ruleLabelService",
+        [("service", service.name.as_str())],
+      ),
+      None => ctx.t_args(
+        "project_settings.ruleLabel",
+        [("server", rule.scope.server()), ("tool", rule.scope.tool())],
+      ),
     };
-    let detail = ctx.t_args(
-      key,
-      [
-        ("script", rule.scope.short_script()),
-        ("answered", answered.as_str()),
-        ("month", month.as_str()),
-        ("day", day.to_string().as_str()),
-      ],
-    );
     let revoke = ActionButton::new(
       format!("{id}-revoke"),
       ButtonKind::Ghost,
@@ -165,20 +161,59 @@ impl Rules {
       );
       revoke.on_click(move || start())
     };
-    SettingRow::new(
-      id,
-      ctx.t_args(
-        "project_settings.ruleLabel",
-        [("server", rule.scope.server()), ("tool", rule.scope.tool())],
-      ),
-    )
-    .item()
-    .small_label()
-    .lead(icon(Icon::ShieldCheck, IconSize::Md, PaletteColor::Success))
-    .hint(detail)
-    .control(revoke)
-    .render(ctx)
+    SettingRow::new(id, label)
+      .item()
+      .small_label()
+      .lead(icon(Icon::ShieldCheck, IconSize::Md, PaletteColor::Success))
+      .hint(detail)
+      .control(revoke)
+      .render(ctx)
   }
+}
+
+/// What `rule` covers, how often it answered and when it was approved: the QA script's blob, or a service's program
+/// and arguments, the names of its variables (never their values) and its fingerprint.
+fn detail(ctx: &mut Ctx, rule: &ProjectRule) -> Arc<str> {
+  let (month, day) = display::month_day(rule.created_at);
+  let month = message_text(ctx, &Message::new(display::MONTH_KEYS[month])).to_string();
+  let (answered, day) = (rule.answered.to_string(), day.to_string());
+  // lurq's i18n has no plural rules: one answer has words of its own, and so does a service without variables.
+  let once = rule.answered == 1;
+  let Some(service) = rule.scope.service() else {
+    let key = if once {
+      "project_settings.ruleDetailOnce"
+    } else {
+      "project_settings.ruleDetail"
+    };
+    // A rule that is not a service's is a `start_qa_app` rule, which always names its script.
+    let script = rule.scope.short_script().unwrap_or_default();
+    return ctx.t_args(
+      key,
+      [
+        ("script", script),
+        ("answered", answered.as_str()),
+        ("month", month.as_str()),
+        ("day", day.as_str()),
+      ],
+    );
+  };
+  let key = match (service.variables.is_empty(), once) {
+    (false, false) => "project_settings.ruleDetailService",
+    (false, true) => "project_settings.ruleDetailServiceOnce",
+    (true, false) => "project_settings.ruleDetailServicePlain",
+    (true, true) => "project_settings.ruleDetailServicePlainOnce",
+  };
+  ctx.t_args(
+    key,
+    [
+      ("command", service.command_line().as_str()),
+      ("variables", service.variables.join(", ").as_str()),
+      ("fingerprint", service.short_fingerprint()),
+      ("answered", answered.as_str()),
+      ("month", month.as_str()),
+      ("day", day.as_str()),
+    ],
+  )
 }
 
 /// How a rule is added (`KzZHm`): the answer a `start_qa_app` request offers in a task's Conversation, as it looks
