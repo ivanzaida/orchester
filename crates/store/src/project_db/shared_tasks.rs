@@ -45,8 +45,9 @@ pub struct SharedTaskInfo {
 
 impl ProjectDb {
   /// Shares the project (*Share*, the first person): records `link`, makes the server project's
-  /// `tags` the project's tags and writes the uploaded `tasks` as the server confirmed them, in one
-  /// transaction.
+  /// `tags` the project's tags and writes the uploaded `tasks` as the server confirmed them, and the project takes
+  /// the server project's key, under which the server numbers its tasks (a project made on the server beforehand
+  /// may have another key than this one had), in one transaction.
   /// Links the project to its server project and caches what the server confirmed. Returns the
   /// tasks as they were here, read in the same transaction, whose revision is no longer the one
   /// `uploaded` read: a change made while sharing (a run's), which the caller sends on top.
@@ -73,7 +74,9 @@ impl ProjectDb {
     for task in tasks {
       write_cached(&transaction, task, None)?;
     }
+    transaction.execute("UPDATE project SET key = ?1", [link.key.as_str()])?;
     transaction.commit()?;
+    self.project = super::load_project(&self.connection)?;
     Ok(changed)
   }
 

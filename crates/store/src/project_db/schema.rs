@@ -106,6 +106,7 @@ mod service_slots;
 mod services;
 mod shared_configuration;
 mod shared_members;
+mod shared_project_key;
 mod shared_publishes;
 mod sharing;
 mod side_questions;
@@ -166,5 +167,6 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
     super::ProjectMigration::ReturnedAfterEnd => returned_after_end::MIGRATION,
     super::ProjectMigration::ArchiveStopsArchived => archive_stops::ARCHIVED_MIGRATION,
     super::ProjectMigration::TeamCache => team_cache::MIGRATION,
+    super::ProjectMigration::SharedProjectKey => shared_project_key::MIGRATION,
   }
 }
