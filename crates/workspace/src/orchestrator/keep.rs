@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use super::tools::ChatScope;
 use crate::{
-  app_mcp::{ToolError, Translate, find_run, find_task},
+  app_mcp::{ToolError, Translate, blocking, find_module, find_run, find_task},
   tasks::{hold, recorded::task_of},
 };
 
@@ -58,6 +58,29 @@ pub(super) fn about(name: &str, arguments: &JsonObject, result: Option<&Value>) 
     }
     _ => None,
   }
+}
+
+/// `about` with a module the call named by its id called by its name: a call that was refused gave no answer to read
+/// the name from, and a line that says an id names nothing to a person. The id stays when the project cannot be read
+/// or has no such module: the line then says what the call said.
+pub(super) async fn by_name(scope: &ChatScope, about: Option<ActionAbout>) -> Option<ActionAbout> {
+  let Some(ActionAbout::Module { name, id, closed }) = about else {
+    return about;
+  };
+  if name.parse::<ModuleId>().is_err() {
+    return Some(ActionAbout::Module { name, id, closed });
+  }
+  let (root, named) = (scope.root.clone(), name.clone());
+  let found = blocking(move || {
+    let module = find_module(&ProjectDb::open(&root)?, &named)?;
+    Ok(module.name().as_str().to_owned())
+  })
+  .await;
+  Some(ActionAbout::Module {
+    name: found.unwrap_or(name),
+    id,
+    closed,
+  })
 }
 
 /// The key of the task a created task's result names.

@@ -10,7 +10,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ModuleId, ProjectId},
   name::Name,
-  orchestrator::{Chat, Subscription, TurnMode, TurnState, WatchSettings, WatchTarget},
+  orchestrator::{Chat, EntryKind, Subscription, TurnMode, TurnState, WatchSettings, WatchTarget, about::ActionAbout},
   project::{Project, ProjectKey},
   run::Answerer,
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
@@ -263,5 +263,44 @@ fn conversation_leads_are_read_only_and_only_the_chat_gets_them() {
     desktop.db().chat_subscriptions(desktop.scope.chat).expect("read").len(),
     1,
     "reading changed nothing"
+  );
+}
+
+/// A call that names its module by id and is refused has no answer to read the module's name from: the line of the
+/// action still names the module as people do, not by its id.
+#[test]
+fn conversation_leads_an_action_on_a_module_named_by_its_id_says_its_name() {
+  let desktop = Desktop::new();
+  let webhooks = desktop.module("Webhooks");
+  // The chat delivers a module only where the project lets it drive.
+  desktop.db().set_orchestrator_drives(true).expect("drives");
+  let Value::Object(arguments) = json!({ "project": "Kontur", "module": webhooks.to_string() }) else {
+    unreachable!("an object");
+  };
+  let translate = Translate::new(|message| message.key.to_owned());
+  let refused = desktop.runtime.block_on(tools::call(
+    (&desktop.services, &translate, &desktop.runners),
+    &desktop.scope,
+    "deliver_module",
+    arguments,
+  ));
+  assert!(refused.is_err(), "a module with no branch of its own is not delivered");
+  let about = desktop
+    .db()
+    .chat_entries(desktop.scope.chat)
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Action(action) if action.tool == "deliver_module" => action.about,
+      _ => None,
+    })
+    .next_back();
+  assert_eq!(
+    about,
+    Some(ActionAbout::Module {
+      name: "Webhooks".to_owned(),
+      id: Some(webhooks),
+      closed: false
+    })
   );
 }

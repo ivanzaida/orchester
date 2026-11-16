@@ -33,6 +33,7 @@ use orchester_workspace::{
 
 use super::{team_work_delivery as delivery, team_work_lines as lines};
 use crate::{
+  project::ProjectFeed,
   screens::settings::orchester::PersonOnly,
   services::Services,
   team::{
@@ -51,6 +52,9 @@ pub struct WorkProps {
   pub module: Arc<TeamModule>,
   pub source: TeamSource,
   pub standing: Standing,
+  /// The project's data: an ask that ended changed where the module stands, which the conversation that leads it
+  /// follows.
+  pub feed: ProjectFeed,
 }
 
 impl lurq::app::component::DevtoolsInspectable for WorkProps {}
@@ -241,11 +245,11 @@ impl ModuleWork {
   fn action(&self, ctx: &mut Ctx, props: &WorkProps, recorded: Recorded) -> WorkControl {
     let services = Services::of(ctx);
     let (acting, programs) = (Acting::of(&services), services.programs.clone());
-    let (props, answered) = (props.clone(), self.answered.clone());
+    let (props, answered, feed) = (props.clone(), self.answered.clone(), props.feed.clone());
     let (changing, kept) = (self.changing.clone(), self.kept.clone());
     ctx.future_action(move |ask: ModuleAsk| {
       let (acting, programs, props, recorded) = (acting.clone(), programs.clone(), props.clone(), recorded.clone());
-      let (answered, changing) = (answered.clone(), changing.clone());
+      let (answered, changing, feed) = (answered.clone(), changing.clone(), feed.clone());
       kept.set(false);
       async move {
         let answer = carry_out(ask, (&acting, programs), &props, &recorded).await;
@@ -257,6 +261,8 @@ impl ModuleWork {
           changing.set(false);
         }
         answered.update(|count| *count += 1);
+        // A claim, a branch or a delivery asked for, authorized, made or failed: the project's followers read it.
+        feed.saved();
         Ok(answer)
       }
     })

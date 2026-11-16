@@ -93,7 +93,7 @@ pub(super) async fn act_and_keep(
     on_its_own: kept.on_its_own,
     tool_answer: kept.tool_answer,
     watch,
-    about: keep::about(name, arguments, result.as_ref().ok()),
+    about: keep::by_name(scope, keep::about(name, arguments, result.as_ref().ok())).await,
     ..ChatAction::new(name, None, outcome)
   };
   keep::keep(scope, (named, held), action).await;
