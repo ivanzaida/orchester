@@ -438,7 +438,7 @@ pub fn tester(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> R
   let (profile, version) = publish(db, "Tester", vec![body], now)?;
   let step = agent_step(("test", "Test"), profile, RepositoryAccess::Write, &[]);
   let pipeline = Pipeline::new(vec![step]).expect("a one-step pipeline is valid");
-  let (id, pipeline) = publish(db, "Test the services", vec![pipeline], now)?;
+  let (id, pipeline) = publish_pipeline(db, "Test the services", vec![pipeline], now)?;
   let snapshot = RunSnapshot::build(
     id,
     &pipeline,

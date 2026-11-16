@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{Profiles, Published, SeedError, agent_step, name, pinned, publish};
+use super::{Profiles, Published, SeedError, agent_step, name, pinned, publish_pipeline};
 
 /// How often the Test step sends the failed tests back before the run waits for a person.
 const RETRIES: u32 = 2;
@@ -56,6 +56,6 @@ pub fn tested(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> R
     &["test"],
   );
   let pipeline = Pipeline::new(vec![explore, plan, implement, test, review]).expect("the tested pipeline is valid");
-  let (id, version) = publish(db, "Feature delivery", vec![pipeline], now)?;
+  let (id, version) = publish_pipeline(db, "Feature delivery", vec![pipeline], now)?;
   pinned(id, &version, &profiles, &BTreeMap::new())
 }
