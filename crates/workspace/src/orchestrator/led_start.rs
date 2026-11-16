@@ -142,30 +142,38 @@ fn merged_its_run(
   db.ordered_when(chat, wait, at)
 }
 
-/// A task the start rule is asked about: its id, its key and the module it is in now.
-struct Named {
-  id: TaskId,
-  key: String,
-  module: Option<ModuleId>,
+/// A task the chat's own tools are asked about: its id, its key, the module it is in now, and why it is marked
+/// Blocked when it is.
+pub(super) struct Named {
+  pub(super) id: TaskId,
+  pub(super) key: String,
+  pub(super) module: Option<ModuleId>,
+  /// A stored task's own mark; a team task's as the team server's last reading holds it, which is all this computer
+  /// knows of one that never ran here.
+  pub(super) blocked: Option<String>,
 }
 
 impl Named {
   /// The task `named` by its key or its id: a task the project's records define (a stored task, or a team task as its
   /// runs recorded it), else a team task the team server's last reading saw, which never ran here.
-  fn find(db: &ProjectDb, named: &str) -> Result<Self, ToolError> {
+  pub(super) fn find(db: &ProjectDb, named: &str) -> Result<Self, ToolError> {
     let lowered = named.to_lowercase();
     let is = |key: &str, id: TaskId| key.to_lowercase() == lowered || id.to_string() == named;
     let recorded = recorded::all(db)?
       .into_iter()
       .find(|task| is(&task.key().to_string(), task.id()));
+    let reading = reading_of(db);
     if let Some(task) = recorded {
+      let seen = reading.seen().into_iter().find(|(id, _)| *id == task.id());
+      let own = task.organization().blocked_reason().map(str::to_owned);
       return Ok(Self {
         id: task.id(),
         key: task.key().to_string(),
         module: module_now(db, &task),
+        blocked: seen.and_then(|(_, seen)| seen.blocked.clone()).or(own),
       });
     }
-    reading_of(db)
+    reading
       .seen()
       .into_iter()
       .find(|(id, seen)| is(&seen.key.to_string(), *id))
@@ -173,6 +181,7 @@ impl Named {
         id,
         key: seen.key.to_string(),
         module: seen.module,
+        blocked: seen.blocked.clone(),
       })
       .ok_or_else(|| ToolError::not_found(Missing::Task, named))
   }
