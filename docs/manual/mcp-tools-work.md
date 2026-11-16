@@ -325,7 +325,9 @@ keep theirs); fields left out stay. Its tasks and history stay. Parameters: `pro
 `own_branch`, `acceptance_pipeline` (`null` = none) and `deliver_when_accepted` change a local module's own branch
 and how it is delivered, as `create_module` sets them. `get_module` gives `own_branch`: `null`, or the branch, the
 acceptance pipeline, *Deliver when accepted*, how many acceptances the module had and where the latest stands
-(`none`, `under_way`, `passed`, `not_passed`), its last delivery, and `waits_for`.
+(`none`, `under_way`, `passed`, `not_passed`), its last delivery, and `waits_for`: what it waits for once its every
+task is done (`work` while nothing is merged into its branch yet, then `accept`, `accepting`, `deliver`, `delivered`,
+or `person_…` when what comes next is the person's).
 
 ### `deliver_module` — changes data
 
