@@ -93,6 +93,8 @@ pub struct DeliveryReport {
 pub struct TeamDelivery {
   pub operation: OperationId,
   pub request: String,
+  /// When it was recorded, before its request was sent.
+  pub requested_at: Timestamp,
   pub stage: TeamDeliveryStage,
   /// The delivery as the server last answered it, from [`TeamDeliveryStage::Accepted`] on.
   pub delivery: Option<String>,
@@ -293,7 +295,7 @@ const fn out_of_order(delivery: &TeamDelivery) -> StoreError {
 }
 
 const SELECT: &str = "SELECT operation_id, request, stage, delivery, refusal, merge_commit, failure, \
-                      report_operation_id, report_request FROM team_deliveries";
+                      report_operation_id, report_request, created_at FROM team_deliveries";
 
 fn load(connection: &Connection, operation: OperationId) -> Result<Option<TeamDelivery>, StoreError> {
   connection
@@ -312,6 +314,7 @@ fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamDelivery, StoreError>> {
   let (delivery, refusal, commit, failure): (Option<String>, Option<String>, Option<String>, Option<String>) =
     (row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?);
   let report: (Option<String>, Option<String>) = (row.get(7)?, row.get(8)?);
+  let requested_at: i64 = row.get(9)?;
   Ok((|| {
     let merge = match (commit, failure) {
       (Some(commit), None) => Some(DeliveryMerge::Merged {
@@ -332,6 +335,7 @@ fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamDelivery, StoreError>> {
     Ok(TeamDelivery {
       operation: parse("team delivery operation", &operation)?,
       request,
+      requested_at: Timestamp::from_unix_millis(requested_at),
       stage: TeamDeliveryStage::parse(&stage)?,
       delivery,
       refusal,

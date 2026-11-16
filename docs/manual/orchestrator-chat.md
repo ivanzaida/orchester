@@ -372,7 +372,10 @@ Each is a line of the conversation with the turn it started under it: *Work can 
 — nothing they depend on is open*; *Webhooks v2 is stuck: 3 left for you — nothing else can start*, with *Needs you
 ↗* to the Overview's waiting list; for a module with a branch of its own, *… its acceptance can start* with the
 acceptance pipeline's name, *… it can be delivered* with the branch and where it goes, and *… its delivery waits for
-you* with why and *Module ↗*.
+you* with why and *Module ↗*. A team module is led the same way to its delivery: once its every task is done and its
+work is merged into its branch here, the conversation asks the team server for the delivery; an Admin's
+authorization or the team's automatic merge decides it, and while it waits for an Admin the conversation says so
+once and asks nothing again.
 
 A subscription that only follows gets neither, and starts tasks only as before: in the turn of a success it merged
 under an order.

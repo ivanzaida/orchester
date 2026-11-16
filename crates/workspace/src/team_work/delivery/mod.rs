@@ -37,7 +37,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, TeamDelivery, TeamDeliveryStage};
 use serde::{Deserialize, Serialize};
 
-pub use self::state::{DeliveryStatus, TeamDeliveryState};
+pub use self::state::{Asked, DeliveryStatus, TeamDeliveryState, newest_of};
 use super::TeamWorkError;
 use crate::actions::{DeliveryAction, DeliveryStep, Dispatcher};
 

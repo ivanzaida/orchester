@@ -176,8 +176,10 @@ impl Reads {
         .is_err(),
       Some(_) | None => false,
     };
-    // A module with a branch of its own is not done until that branch is on its base branch.
+    // A module with a branch of its own is not done until that branch is on its base branch; a team module's branch
+    // is its server's, and so is its delivery.
     let delivery = match subscription.target() {
+      WatchTarget::Module(id) if db.sharing()?.is_some() => Some(super::team_delivery::step(db, id)?),
       WatchTarget::Module(id) => match db.module(id)? {
         Some(module) => Some(crate::modules::delivery::facts(db, &module)?.step()),
         None => None,

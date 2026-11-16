@@ -119,6 +119,8 @@ impl Stands {
       DeliveryStep::Deliver | DeliveryStep::Person(PersonsDelivery::NotAllowed) => Self::Accepted,
       DeliveryStep::Person(PersonsDelivery::NoAcceptance) => Self::NoAcceptance,
       DeliveryStep::Person(PersonsDelivery::AcceptanceCeiling) => Self::Ceiling,
+      // A team module's delivery, which its own card shows (`team_work_delivery`): never a step of a local module.
+      DeliveryStep::Person(PersonsDelivery::TeamDecides | PersonsDelivery::TeamRefused) => Self::Nothing,
     }
   }
 

@@ -212,3 +212,32 @@ fn delivery_the_acceptance_brief_lists_the_tasks_their_criteria_and_what_was_lef
   assert_eq!(acceptance_title("Webhooks v2"), "Accept the module Webhooks v2");
   assert_eq!(ACCEPTANCE_CRITERIA.len(), 3);
 }
+
+#[test]
+fn delivery_a_team_modules_delivery_that_was_just_asked_for_raises_nothing_more() {
+  let waits = |why| Raised::DeliveryWaits { why };
+  let decides = waits(PersonsDelivery::TeamDecides);
+  let refused = waits(PersonsDelivery::TeamRefused);
+  assert_eq!(decides.state(), "delivery_waits:person_team_decides");
+  assert_eq!(refused.state(), "delivery_waits:person_team_refused");
+  // Whoever asked for the delivery was answered by the team's server: the answer is not told again.
+  let asked = Raised::Deliver.state();
+  assert!(!decides.raises_after(Some(&asked)));
+  assert!(!refused.raises_after(Some(&asked)));
+  // What happens later, on the server or in the merge, is.
+  assert!(refused.raises_after(Some(&decides.state())));
+  assert!(decides.raises_after(None));
+  assert!(
+    Raised::Deliver.raises_after(Some(&decides.state())),
+    "work merged since"
+  );
+  // A local module's delivery that is the person's is told after its acceptance passed, as before.
+  assert!(waits(PersonsDelivery::NotAllowed).raises_after(Some(&asked)));
+  let told = standing_prompt(&StandingEvent {
+    target: WatchTarget::Module(ModuleId::generate()),
+    name: Some("Webhooks v2".to_owned()),
+    raised: decides,
+    automatic: true,
+  });
+  assert!(told.contains("waits for an Admin's authorization"), "{told}");
+}

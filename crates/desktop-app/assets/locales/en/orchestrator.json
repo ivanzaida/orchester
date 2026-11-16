@@ -338,6 +338,8 @@
       "noAcceptance": "— no acceptance pipeline is chosen",
       "acceptanceCeiling": "— its acceptance did not pass",
       "notAllowed": "— Deliver when accepted is off",
+      "teamDecides": "— an Admin of the team authorizes it",
+      "teamRefused": "— the team's server refused it, or its merge failed",
       "needsYou": "Needs you ↗",
       "module": "Module ↗"
     },

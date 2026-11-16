@@ -94,7 +94,16 @@ pub(super) fn end_closed(
     team,
     undelivered: HashSet::new(),
   };
-  let work = work.with_undelivered(db)?;
+  // Only a conversation that leads a module to the end waits for its delivery.
+  let led: HashSet<ModuleId> = closable
+    .iter()
+    .filter(|subscription| subscription.mode().ceilings().is_some())
+    .filter_map(|subscription| match subscription.target() {
+      WatchTarget::Module(id) => Some(id),
+      WatchTarget::Task(_) | WatchTarget::WithoutModule | WatchTarget::Project => None,
+    })
+    .collect();
+  let work = work.with_undelivered(db, &led)?;
   let mut ended = false;
   for subscription in closable {
     let Some(summary) = work.summary(subscription, automatic) else {
@@ -126,11 +135,18 @@ struct Work {
 type Ended = (String, Option<String>, String, EndReason);
 
 impl Work {
-  /// `self` with the modules whose own branch is still to be delivered, read from `db`.
-  fn with_undelivered(mut self, db: &ProjectDb) -> Result<Self, StoreError> {
-    for module in &self.modules {
-      if module.own_branch().is_some() && crate::modules::delivery::facts(db, module)?.step() != DeliveryStep::Delivered
-      {
+  /// `self` with those of the modules `led` whose own branch is still to be delivered, read from `db`: a local
+  /// module's, and a team module's, whose branch is its server's.
+  fn with_undelivered(mut self, db: &ProjectDb, led: &HashSet<ModuleId>) -> Result<Self, StoreError> {
+    for module in self.modules.iter().filter(|module| led.contains(&module.id())) {
+      let step = if self.linked {
+        super::team_delivery::step(db, module.id())?
+      } else if module.own_branch().is_some() {
+        crate::modules::delivery::facts(db, module)?.step()
+      } else {
+        DeliveryStep::Delivered
+      };
+      if step != DeliveryStep::Delivered {
         self.undelivered.insert(module.id());
       }
     }

@@ -374,7 +374,7 @@ impl Raised {
         format!("stuck:{}:{budget_used}", left.join(","))
       }
       Self::Accept => "accept".to_owned(),
-      Self::Deliver => "deliver".to_owned(),
+      Self::Deliver => DELIVER.to_owned(),
       Self::DeliveryWaits { why } => format!("delivery_waits:{}", DeliveryStep::Person(*why).name()),
     }
   }
@@ -382,10 +382,21 @@ impl Raised {
   /// Whether it is worth an event after `previous`, the state kept for the same subscription last
   /// ([`Self::state`]): any change but work that only went from waiting to under way. The turn that started some of
   /// what could start chose to leave the rest, so what can start is raised again once something new can start or
-  /// something under way ends, not once the tasks it started are under way.
+  /// something under way ends, not once the tasks it started are under way. A team module's delivery that was just
+  /// asked for raises nothing either: whoever asked was answered that the team's server keeps it waiting, or refused
+  /// it.
   pub fn raises_after(&self, previous: Option<&str>) -> bool {
     let state = self.state();
     if previous == Some(state.as_str()) {
+      return false;
+    }
+    let asked = matches!(
+      self,
+      Self::DeliveryWaits {
+        why: PersonsDelivery::TeamDecides | PersonsDelivery::TeamRefused
+      }
+    );
+    if asked && previous == Some(DELIVER) {
       return false;
     }
     let (Self::CanStart { tasks, under_way }, Some((could_start, was_under_way))) =
@@ -415,6 +426,9 @@ fn keys(listed: &str) -> Vec<&str> {
 
 /// The state kept while a standing raises nothing ([`Raised::state`] otherwise).
 pub const QUIET: &str = "quiet";
+
+/// The state of [`Raised::Deliver`].
+const DELIVER: &str = "deliver";
 
 /// An event of a target a conversation leads to the end, as the conversation keeps it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
