@@ -15,10 +15,10 @@ use orchester_api::{
   test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::routes::{
-  JoinTarget, JoinWay, OrchesterView, ProjectPage, ProjectSettingsTab, Route, TaskList, TaskListTab,
+  JoinTarget, JoinWay, OrchesterPanel, OrchesterView, ProjectPage, ProjectSettingsTab, Route, TaskList, TaskListTab,
 };
-use orchester_core::id::ServerId;
-use orchester_workspace::sharing::{CodeRequest, Trust, team_join::JoinOutcome};
+use orchester_core::{id::ServerId, secret::VaultKey};
+use orchester_workspace::sharing::{CodeRequest, SharingError, Trust, team_join::JoinOutcome};
 use support::{
   Data, Window, add_project, project_id,
   signed_in::{self, account_cloud::EMAIL},
@@ -312,6 +312,67 @@ fn joined_team(window: &Window) -> (TeamServer, ServerId) {
     panic!("not joined: {outcome:?}");
   };
   (team, joined.id)
+}
+
+/// *Connect a server* opened for `server`, as its page's *With a code* opens it, with what answers at its address.
+fn joining_again(window: &mut Window, server: ServerId) {
+  // Away first, so the page reads the servers anew.
+  window.navigation().go(Route::Settings);
+  window.until("the page left", |window| {
+    window.tree.get_element_by_id("orchester-connect-address").is_none()
+  });
+  window.navigation().go(Route::Orchester(OrchesterView {
+    server: Some(server),
+    panel: OrchesterPanel::Connect,
+    ..OrchesterView::default()
+  }));
+  shows(window, "orchester-connect-address");
+  window.until("the server's address in the field", |window| {
+    window
+      .tree
+      .get_element_by_id_mut("orchester-connect-address")
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| !input.value().is_empty())
+  });
+  window.press("orchester-connect-continue");
+  shows(window, "orchester-connect-found");
+}
+
+#[test]
+fn local_use_a_server_whose_sign_in_ended_is_joined_again_with_a_code() {
+  let mut window = fresh();
+  sign_in(&mut window);
+  let (_team, server) = joined_team(&window);
+  let services = window.launch.services().expect("services").clone();
+
+  joining_again(&mut window, server);
+  shows(&mut window, "orchester-connect-already");
+  assert!(
+    window.tree.get_element_by_id("orchester-connect-step-join").is_none(),
+    "nothing to join while this computer is signed in there"
+  );
+
+  services
+    .vault
+    .get()
+    .delete(&VaultKey::server_token(server))
+    .expect("the token is gone");
+  let entry = services
+    .servers
+    .entries()
+    .expect("the servers")
+    .into_iter()
+    .find(|entry| entry.stored.id == server)
+    .expect("the server joined");
+  let asked = window.data.runtime.block_on(services.servers.me(&entry));
+  assert!(matches!(asked, Err(SharingError::SignedOut)), "{asked:?}");
+
+  joining_again(&mut window, server);
+  shows(&mut window, "orchester-connect-code");
+  assert!(
+    window.tree.get_element_by_id("orchester-connect-already").is_none(),
+    "a sign-in that ended is not a connection"
+  );
 }
 
 fn join_route(server: ServerId) -> Route {
