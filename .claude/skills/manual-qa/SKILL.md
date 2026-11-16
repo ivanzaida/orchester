@@ -12,8 +12,8 @@ have proves nothing about that step, and hides the bugs on the way to it.
 ## The rules
 
 1. **Only the window.** Act through the app's window tools: `lurq_read_tree`, `lurq_screenshot`, `lurq_interact`
-   (`click`, `type`, `key`, `scroll`), `lurq_set_value`. Reach screens through the sidebar, tabs and *Jump to*, as a
-   person does.
+   (`click`, `double_click`, `type`, `key`, `paste`, `wheel`, `scroll_to`, `drag`), `lurq_set_value`. Reach screens
+   through the sidebar, tabs and *Jump to*, as a person does.
 2. **No domain tools that change anything.** Never call the app's MCP tools that make or change data or act on work:
    `add_project`, `create_module`, `update_module`, `create_task`, `update_task`, `run_task`, `merge_run`,
    `deliver_module`, `start_acceptance`, `create_pipeline`, and their like. Make data through the app's forms, or ask
@@ -43,7 +43,13 @@ have proves nothing about that step, and hides the bugs on the way to it.
   `{"action": "key", "key": "Escape"}`.
 - Elements are found by their `#id` in `lurq_read_tree`; refs change with every frame, so read the tree right before
   each press. Long lists are virtualized: scroll before you conclude something is missing.
+- A press lands on coordinates: an element under the fold (a long form's last switch, its *Publish*) is not pressed
+  until `lurq_interact` `scroll_to` with its ref brought it into the window. An open select's options have no ids:
+  read their boxes in the tree and click an option by `x` and `y`.
 - A refusal answered `person_only` means you are not in a QA copy (or the place keeps its own refusal): stop and say so.
+- A QA copy keeps its sign-ins in memory: after a restart it is signed out of the team server. Its entry in
+  Settings › Orchester Cloud then offers *Join again* › *With a code*, which only says *You're already connected*
+  (a known fault); *Sign out…* in the entry's menu first, then *With a code* with a fresh code, joins again.
 
 ## A local project
 
@@ -74,9 +80,15 @@ Run a team server of your own from the latest images on Docker Hub, never the pe
 3. `docker compose -p orchester-qa -f compose.private.yaml up -d` (check that port 8740 is free first). The server's
    log (`docker compose -p orchester-qa -f compose.private.yaml logs server`) prints the certificate's check code and
    the setup code, which makes the first admin.
-4. In the QA copy, join the server through the window with that code, as the team's first admin, then share a
-   scratch repository as the team's project and make the team's pipelines and module there, through the window or the
-   chat.
+4. What the server's operator does in its admin is not the app under test and is done over the server's API: the
+   first admin (`POST /api/v1/auth/code` with the setup code and `kind: "admin_web"`), and a project
+   (`POST /api/v1/projects` as that admin). A code entered in an app needs an identity the server can check: start
+   the QA copy `--signed-in` (its stand-in cloud signs with the test root of `orchester-api`'s `cloud_keys`) and pin
+   that root on the server (`orchester-server cloud pin <root public key>`). Then, in the QA copy, join with an
+   account code (`orchester-server account-code <username>`) through Settings › Orchester Cloud › *Connect a server*,
+   comparing the check code with the server's log; add the scratch repository as a project and link it in Project
+   settings › Sharing; make the team's profile and pipeline in the Agents and Pipelines hubs, and the module and its
+   tasks through the chat.
 5. Run the same flow as on the local project. Where the team path differs by design, the row in
    `docs/design/local-and-team-parity.md` says so; anything else that differs is a finding.
 6. When done: `docker compose -p orchester-qa -f compose.private.yaml down -v`.
