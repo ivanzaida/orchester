@@ -319,7 +319,8 @@ fn target_name(db: &ProjectDb, target: WatchTarget) -> Result<Option<String>, St
 }
 
 /// Raises, in the conversation of each subscription that leads to the end, the event its standing raises now, when
-/// its state changed since the last look: work can start, or the target is stuck. Not while a turn of that
+/// its state changed since the last look in a way worth one ([`Raised::raises_after`]): work can start, or the target
+/// is stuck. Not while a turn of that
 /// conversation thinks: what it does moves the target (an acceptance it makes is a task that can start until its run
 /// starts, a moment later), and the look after it ended reads where it left it. `drives`: the person's switch,
 /// which decides whether the event starts a turn by itself. Whether it kept one. Reads nothing while no subscription
@@ -351,10 +352,15 @@ pub(super) fn raise(
       parking.map(|(_, parking)| parking.to_do.as_str().to_owned())
     });
     let state = raised.as_ref().map_or_else(|| QUIET.to_owned(), Raised::state);
-    if db.standing_state(subscription)?.as_deref() == Some(state.as_str()) {
+    let previous = db.standing_state(subscription)?;
+    if previous.as_deref() == Some(state.as_str()) {
       continue;
     }
-    let event = raised.map(|raised| StandingEvent {
+    // A state not worth an event is still kept, so the next look reads against it.
+    let worth = raised
+      .as_ref()
+      .is_some_and(|raised| raised.raises_after(previous.as_deref()));
+    let event = raised.filter(|_| worth).map(|raised| StandingEvent {
       target: subscription.target(),
       name: led.name.clone(),
       raised,

@@ -362,6 +362,9 @@ also gets events of the target as a whole, each once per state:
   `run_task`, also a task whose run failed, with its reason, while its ceiling of runs allows another. This is what
   starts the first tasks after you chose to have the target led, and the next when an agent frees or a blocker is
   merged.
+  It is raised again when another task can start or one that was under way ends, and not when the tasks the turn just
+  started are under way: a turn that started one and kept the rest back (they would change the same files) is asked
+  again once that one ends.
 - **Stuck**: nothing can start and nothing moves; everything left is parked, waits for you, or is past a ceiling.
   The turn tells you once what each task waits for and what to do; you are told again only when that changes.
 
