@@ -48,8 +48,8 @@ have proves nothing about that step, and hides the bugs on the way to it.
   read their boxes in the tree and click an option by `x` and `y`.
 - A refusal answered `person_only` means you are not in a QA copy (or the place keeps its own refusal): stop and say so.
 - A QA copy keeps its sign-ins in memory: after a restart it is signed out of the team server. Its entry in
-  Settings › Orchester Cloud then offers *Join again* › *With a code*, which only says *You're already connected*
-  (a known fault); *Sign out…* in the entry's menu first, then *With a code* with a fresh code, joins again.
+  Settings › Orchester Cloud then offers *Join again* › *With a code*: compare the check code, then join with a
+  fresh account code.
 
 ## A local project
 
