@@ -22,6 +22,7 @@
 //! Each state the server answers is kept for the screens ([`TeamDeliveryState`]). The MCP tool `merge_run` of a team
 //! task's run requests its module's delivery (P7b); the screens adopt it in P6.
 
+mod failure;
 mod state;
 mod steps;
 
@@ -37,7 +38,10 @@ use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, TeamDelivery, TeamDeliveryStage};
 use serde::{Deserialize, Serialize};
 
-pub use self::state::{Asked, DeliveryStatus, TeamDeliveryState, newest_of};
+pub use self::{
+  failure::MergeFailure,
+  state::{Asked, DeliveryStatus, TeamDeliveryState, newest_of},
+};
 use super::TeamWorkError;
 use crate::actions::{DeliveryAction, DeliveryStep, Dispatcher};
 

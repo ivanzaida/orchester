@@ -59,7 +59,8 @@ pub use self::{
   branch::{BranchNotFound, branch_tip, checked_out_tip, start_tip},
   bundle_missing::bundle_missing_message,
   delivery::{
-    DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
+    DeliveryProgress, DeliveryStatus, MergeFailure, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest,
+    TeamDeliveryState,
   },
   error::TeamWorkError,
   heartbeat::Heartbeat,

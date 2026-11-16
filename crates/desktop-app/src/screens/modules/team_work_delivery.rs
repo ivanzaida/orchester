@@ -24,6 +24,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
+    message::message_text,
   },
 };
 
@@ -195,8 +196,10 @@ fn recorded(ctx: &Ctx, view: &View<'_>, delivery: &ShownDelivery) -> Element {
     ("base", delivery.base_branch.to_string()),
     ("baseCommit", short(delivery.base_commit.as_str())),
   ];
-  let detail = match &delivery.status {
-    DeliveryStatus::Refused(error) => refused_words(ctx, error.code()),
+  let detail = match (&delivery.status, &delivery.why) {
+    (DeliveryStatus::Refused(error), _) => refused_words(ctx, error.code()),
+    // A merge that failed here says why, and what to do, in place of that it failed.
+    (DeliveryStatus::Failed, Some(why)) if delivery.merge_failed => message_text(ctx, why),
     _ => ctx.t_args(detail, named.clone()),
   };
   let strip = Strip::new(ID, glyph, ctx.t_args(title, named), detail).tone(tone);

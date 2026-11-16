@@ -28,7 +28,8 @@ use orchester_exec::programs::Programs;
 use orchester_workspace::{
   actions::{Action, ClaimAction, ModuleAction},
   background,
-  team_work::{DeliveryStatus, TeamDeliveryState},
+  messages::Message,
+  team_work::{DeliveryStatus, MergeFailure, TeamDeliveryState},
 };
 
 use super::{team_work_delivery as delivery, team_work_lines as lines};
@@ -96,6 +97,8 @@ pub struct ShownDelivery {
   pub base_commit: CommitId,
   /// The merge here failed.
   pub merge_failed: bool,
+  /// Why it failed, in words the person can act on.
+  pub why: Option<Message>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ShownDelivery {}
@@ -109,6 +112,10 @@ impl From<&TeamDeliveryState> for ShownDelivery {
       source_commit: state.source_commit.clone(),
       base_commit: state.base_commit.clone(),
       merge_failed: matches!(state.merge, Some(orchester_store::DeliveryMerge::Failed { .. })),
+      why: match &state.merge {
+        Some(orchester_store::DeliveryMerge::Failed { failure }) => Some(MergeFailure::read(failure).message()),
+        Some(orchester_store::DeliveryMerge::Merged { .. }) | None => None,
+      },
     }
   }
 }

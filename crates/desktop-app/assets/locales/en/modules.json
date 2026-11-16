@@ -199,6 +199,8 @@
         "claimDetail": "Picked up {{picked}}; the claim covers all {{tasks}} tasks · last renewed {{time}}. Its tasks' runs don't renew it.",
         "staleTitle": "{{holder}}'s module claim is stale",
         "staleDetail": "No renewal for {{age}} min; the stale threshold is {{minutes}} min. A take over would claim all {{tasks}} tasks for you.",
+        "staleYoursTitle": "Your module claim is stale",
+        "staleYoursDetail": "No renewal for {{age}} min; the stale threshold is {{minutes}} min. It was taken before this computer signed in again, or on another computer, so nothing renews it here. A take over claims all {{tasks}} tasks again.",
         "claim": "Claim",
         "release": "Release",
         "takeOver": "Take over",

@@ -7,7 +7,7 @@ use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
 use super::PendingDelivery;
-use crate::test_support::team_server::USER;
+use crate::test_support::team_server::{TeamServer, USER};
 
 /// The server's claim staleness threshold.
 pub const STALE_AFTER_MINUTES: i64 = 15;
@@ -137,5 +137,20 @@ impl AuthorityModule {
       None => json!({"kind": "not_enough_history"}),
     };
     json!({"remaining": remaining, "history_days": 14, "history_delivered": 6, "outlook": outlook})
+  }
+}
+
+impl TeamServer {
+  /// The claim on the module at `index` of those [`TeamServer::authority_modules`] set was last renewed `minutes`
+  /// ago, and is `stale` or not; committed as one batch. Nothing changes for a module without a claim.
+  pub fn module_claim_aged(&self, index: usize, minutes: i64, stale: bool) {
+    let mut state = self.state.lock();
+    let modules = state.authority.modules.iter_mut().flatten();
+    let Some(claim) = modules.into_iter().nth(index).and_then(|module| module.claim.as_mut()) else {
+      return;
+    };
+    claim.renewed_minutes_ago = minutes;
+    claim.stale = stale;
+    state.authority.commit(vec![json!({"kind": "module_list"})]);
   }
 }
