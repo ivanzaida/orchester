@@ -23,7 +23,6 @@ use crate::{
     icon::{Icon, icon},
     menu::{MenuItem, menu_panel},
     pressable::{inert, pressable},
-    tooltip::Tooltip,
   },
 };
 
@@ -45,7 +44,8 @@ pub(super) struct Ways {
 }
 
 /// The split send button, with the menu over it while `open` holds; its chevron is `anchor`. Without `ways` nothing is
-/// written yet: the button is faded, as the task composer's, and its tooltip says why (`empty`).
+/// written yet: the button is faded, as the task composer's, and says why (`empty`) only to the clients that read the
+/// window.
 pub(super) fn split(
   ctx: &mut Ctx,
   (ways, empty): (Option<&Ways>, &Arc<str>),
@@ -68,13 +68,13 @@ pub(super) fn split(
     None => inert(Button::empty()).describe("state", "disabled"),
   }
   .id("orchestrator-send")
-  .describe("a11y_name", label.clone())
+  .describe("a11y_name", label)
   .child(face);
-  let tip = match ways {
-    Some(_) => Tooltip::new("orchestrator-send", label),
-    None => Tooltip::new("orchestrator-send", empty.clone()),
+  // No tooltip on Send (the person, 2026-11-16): why it cannot send is for the clients that read the window.
+  let square = match ways {
+    Some(_) => square,
+    None => square.describe("reason", empty.clone()),
   };
-  let square = tip.wrap(ctx, square);
   let line = ctx.theme().border_size_value(BorderSize::Sm);
   let divider = Row::new()
     .size(Dimension::Px(line), Dimension::Px(DIVIDER_HEIGHT))
