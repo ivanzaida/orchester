@@ -260,13 +260,17 @@ fn without_deliver_step(db: &ProjectDb, tasks: &[String]) -> Result<(Vec<String>
   Ok((without, pipelines))
 }
 
-/// Whether the work of `target` merges into the branch the person's checkout has: a module with neither a branch of
-/// its own nor a base branch set, and any target that is no module.
+/// Whether the work of `target` merges into the branch the person's checkout has: a local module with neither a
+/// branch of its own nor a base branch set, and any target that is no module. A team module's work merges into the
+/// module's branch, which is its server's (`crate::team_work`), whatever this computer's copy of the module says.
 fn lands_in_checkout(db: &ProjectDb, target: WatchTarget) -> Result<bool, StoreError> {
   Ok(match target {
-    WatchTarget::Module(id) => db
-      .module(id)?
-      .is_none_or(|module| module.run_base() == BaseChoice::CheckedOut),
+    WatchTarget::Module(id) => {
+      db.sharing()?.is_none()
+        && db
+          .module(id)?
+          .is_none_or(|module| module.run_base() == BaseChoice::CheckedOut)
+    }
     WatchTarget::Task(_) | WatchTarget::WithoutModule | WatchTarget::Project => true,
   })
 }

@@ -10,7 +10,9 @@ use orchester_core::{
   orchestrator::{Ceilings, Chat, Subscription, TurnState, WatchMode, WatchTarget, standing::TargetStanding},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::orchestrator::{
+  leaving::{AppSet, Weak, leaving_of},
   standing::{Led, standing_in},
   watching::WatchReads,
 };
@@ -106,4 +108,33 @@ fn team_mcp_a_led_module_has_the_team_task_that_never_ran_here_to_start() {
   seen.lock().task_fields = json!({ "workflow": "done" });
   refreshed(&checkout);
   assert_eq!(stands(&checkout).standing.target, TargetStanding::Done);
+}
+
+#[test]
+fn team_mcp_a_led_module_merges_into_its_own_branch_whatever_the_checkout_holds() {
+  let (server, _seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let target = module_watch(&checkout, server.module);
+  let chat = leading(&checkout, target);
+  std::fs::write(checkout.root().join("notes.txt"), "not committed").expect("a file of the person's");
+
+  let app = AppSet {
+    drives: true,
+    keeps_awake: true,
+  };
+  let told = |chat, target| -> Vec<&'static str> {
+    let left = leaving_of((checkout.root(), &Programs::processes()), (chat, target), app)
+      .expect("read")
+      .expect("it leads the target");
+    left.weak.iter().map(Weak::name).collect()
+  };
+  let module = told(chat, target);
+  assert!(
+    !module.contains(&"checkout_has_changes"),
+    "a team module's work never merges into the checked-out branch: {module:?}"
+  );
+  // A team task in no module merges into the branch the checkout has, as a local one does.
+  let rest = leading(&checkout, WatchTarget::WithoutModule);
+  let loose = told(rest, WatchTarget::WithoutModule);
+  assert!(loose.contains(&"checkout_has_changes"), "{loose:?}");
 }
