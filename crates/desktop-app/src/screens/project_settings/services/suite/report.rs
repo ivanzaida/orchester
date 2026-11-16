@@ -287,10 +287,13 @@ fn service_picks(ctx: &mut Ctx, fields: &SuiteFields, view: &View, commit: &Comm
     .into()
 }
 
-/// The services that start before the suite, numbered, an arrow between them, and the slots they take (`kNqkC`).
+/// The services that start before the suite, numbered, an arrow between them, and the slots they take (`kNqkC`). A
+/// chain longer than the field goes on to the next line, so the slots are never cut.
 fn chain(ctx: &Ctx, started: &[Arc<str>]) -> Element {
   let mut row = Row::new()
     .id("settings-suite-chain")
+    .width(Dimension::Pct(100.0))
+    .wrap()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center);
   for (at, name) in started.iter().enumerate() {
