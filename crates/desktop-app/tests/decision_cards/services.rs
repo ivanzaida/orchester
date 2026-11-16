@@ -141,9 +141,6 @@ fn service_slots_busy_says_what_the_start_waits_for_and_who_holds_the_slots() {
   assert_eq!(text(&mut window, &format!("{card}-change")), "Change Services at once");
 }
 
-/// What the card says when input from an MCP client gives a wider answer.
-const WIDER_PERSON_ONLY: &str = "Only a person gives a wider answer: automation approves a request once or denies it.";
-
 #[test]
 fn service_start_approval_is_one_card_for_the_service_and_its_needs() {
   let (mut window, card) = card("Start the team web app", "cards-approval-");
@@ -223,9 +220,9 @@ fn service_start_approval_for_every_run_confirms_in_a_modal_only_a_person_confir
   click(&mut window, &every_run);
   window.until("the modal again", |window| window.texts(&modal).is_some());
   with_synthetic_input(|| click(&mut window, &format!("{modal}-confirm")));
-  let refused = format!("{card}-refused");
-  window.until("why the client's answer was not taken", |window| {
-    window.texts(&refused).is_some()
-  });
-  assert_eq!(text(&mut window, &refused), WIDER_PERSON_ONLY);
+  assert_eq!(
+    window.refused_press(),
+    Some("give a wider answer than approving once"),
+    "a wider answer is refused to the client"
+  );
 }

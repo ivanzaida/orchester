@@ -86,7 +86,8 @@ pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> R
 async fn list_flaky_tests(services: &Services, args: InProject) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    // Refused for a project this version has not opened yet: a read leaves its data as it is.
+    let (open, _) = services.read_project(&args.project)?;
     let tests = flaky::read(&open.repo_root, Timestamp::now())?;
     Ok(json!({
       "tests": tests.iter().map(test_json).collect::<Vec<_>>(),

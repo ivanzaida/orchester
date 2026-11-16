@@ -205,8 +205,10 @@ fn run_services_approve_starts_the_service_and_its_needs_through_the_runner() {
     says(&mut window, &format!("{card}-title")),
     "Start service team-web and what it needs: team-server, cloud-api, postgres"
   );
-  assert!(says(&mut window, &format!("{card}-program-team-server")).ends_with("changed: arguments"));
-  assert!(says(&mut window, &format!("{card}-program-team-web")).ends_with("first start"));
+  let team_server = says(&mut window, &format!("{card}-program-team-server"));
+  assert!(team_server.ends_with("changed: arguments"), "{team_server}");
+  let team_web = says(&mut window, &format!("{card}-program-team-web"));
+  assert!(team_web.ends_with("first start"), "{team_web}");
   window.press(&format!("{card}-approve"));
   let said = decided(&mut window, &card);
   assert!(said.starts_with("Approved once · by you at "), "{said}");

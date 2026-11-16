@@ -85,7 +85,8 @@ pub(super) async fn call(
 async fn list(services: &Services, args: InProject, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let proposals = blocking(move || {
-    let open = services.project(&args.project)?;
+    // Refused for a project this version has not opened yet: a read leaves its data as it is.
+    let (open, _) = services.read_project(&args.project)?;
     propose_in(&open.repo_root).map_err(|reason| ToolError::refused("checkout_unreadable", vec![reason]))
   })
   .await?;
