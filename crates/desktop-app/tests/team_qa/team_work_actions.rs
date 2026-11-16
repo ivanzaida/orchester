@@ -228,6 +228,21 @@ fn team_qa_work_ask_for_delivery_waits_for_an_admin_while_automatic_merge_is_off
   );
 }
 
+/// The delivery line and the branch's line name the branch a delivery asked for here lands on, the one the checkout
+/// has checked out, not `main` (found in QA on 2026-11-16, where the repository's base is `master`).
+#[test]
+fn team_qa_work_the_delivery_names_the_branch_the_checkout_has_checked_out() {
+  let (mut window, _server) = prepared(State::ModuleWork);
+  let root = window.data.repo("repo-kontur");
+  own_repository(&root);
+  git(&root, &["checkout", "--quiet", "-b", "trunk"]);
+  window.navigation().go(module_route(BILLING));
+  let title = says(&mut window, "module-team-delivery-title", "Delivery to trunk");
+  assert_eq!(title, "Delivery to trunk: not requested");
+  let branch = window.text("module-team-branch-detail");
+  assert!(branch.contains("only module delivery takes it to trunk."), "{branch}");
+}
+
 #[test]
 fn team_qa_work_ask_again_asks_once_more_after_a_refused_delivery() {
   let (mut window, server) = on(State::ModuleWork, module_route(BILLING), "module-team-delivery-ask");

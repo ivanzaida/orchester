@@ -187,6 +187,15 @@ fn stale(ctx: &Ctx, view: &View<'_>, claim: &TeamClaim) -> Strip {
   with(strip, take_over)
 }
 
+/// The branch the module's delivery lands on here, as the lines name it: the one the checkout has checked out, as a
+/// delivery asked for here takes it ([`super::team_work::Recorded`]), else its base branch in words.
+pub fn base_named(ctx: &Ctx, view: &View<'_>) -> String {
+  view.recorded.checked_out.as_ref().map_or_else(
+    || ctx.t("modules.team.work.baseUnknown").to_string(),
+    ToString::to_string,
+  )
+}
+
 /// The module's branch, with *Change* for an Admin.
 pub fn branch(ctx: &Ctx, view: &View<'_>) -> Element {
   let module = &view.props.module;
@@ -200,7 +209,7 @@ pub fn branch(ctx: &Ctx, view: &View<'_>) -> Element {
     "module-team-branch",
     (Icon::GitBranch, PaletteColor::TextSecondary),
     title,
-    ctx.t(key),
+    ctx.t_args(key, [("base", base_named(ctx, view).as_str())]),
   );
   let change = module.abilities.branch.then(|| {
     let (open, typed, current) = (view.changing.clone(), view.branch.clone(), module.branch.clone());
@@ -349,7 +358,10 @@ pub fn branch_dialog(ctx: &mut Ctx, view: &View<'_>) -> Option<Element> {
       dialog::line(
         "module-team-branch-merges",
         Icon::GitMerge,
-        &ctx.t("modules.team.work.branchMerges"),
+        &ctx.t_args(
+          "modules.team.work.branchMerges",
+          [("base", base_named(ctx, view).as_str())],
+        ),
       ),
       dialog::line(
         "module-team-branch-locked",

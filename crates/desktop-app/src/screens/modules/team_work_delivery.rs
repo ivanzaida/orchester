@@ -13,7 +13,7 @@ use orchester_workspace::team_work::DeliveryStatus;
 
 use super::{
   team_work::{ModuleAsk, ShownDelivery},
-  team_work_lines::{View, refused_words, with},
+  team_work_lines::{View, base_named, refused_words, with},
 };
 use crate::{
   screens::settings::orchester::moment,
@@ -226,6 +226,7 @@ fn offered(ctx: &Ctx, view: &View<'_>, offers: Offers) -> Option<ActionButton> {
 /// No delivery recorded here: the holder on this computer asks for it; anyone else reads whose it is to ask.
 fn not_requested(ctx: &Ctx, view: &View<'_>) -> Strip {
   let module = &view.props.module;
+  let base = base_named(ctx, view);
   let id = "module-team-delivery";
   let glyph = (Icon::GitPullRequest, PaletteColor::TextMuted);
   let holder = module.claim.as_ref().filter(|claim| !claim.stale);
@@ -243,7 +244,7 @@ fn not_requested(ctx: &Ctx, view: &View<'_>) -> Strip {
       Strip::new(
         id,
         glyph,
-        ctx.t("modules.team.work.notRequestedTitle"),
+        ctx.t_args("modules.team.work.notRequestedTitle", [("base", base.as_str())]),
         ctx.t("modules.team.work.yoursToAsk"),
       )
       .action(ask)
@@ -253,20 +254,20 @@ fn not_requested(ctx: &Ctx, view: &View<'_>) -> Strip {
       glyph,
       ctx.t_args(
         "modules.team.work.theirsTitle",
-        [("holder", claim.holder.name.as_str())],
+        [("holder", claim.holder.name.as_str()), ("base", base.as_str())],
       ),
       ctx.t("modules.team.work.theirsDetail"),
     ),
     Some(claim) => Strip::new(
       id,
       glyph,
-      ctx.t("modules.team.work.notRequestedTitle"),
+      ctx.t_args("modules.team.work.notRequestedTitle", [("base", base.as_str())]),
       ctx.t_args("modules.team.work.holderAsks", [("holder", claim.holder.name.as_str())]),
     ),
     None => Strip::new(
       id,
       glyph,
-      ctx.t("modules.team.work.notRequestedTitle"),
+      ctx.t_args("modules.team.work.notRequestedTitle", [("base", base.as_str())]),
       ctx.t("modules.team.work.nobodyAsks"),
     ),
   }
