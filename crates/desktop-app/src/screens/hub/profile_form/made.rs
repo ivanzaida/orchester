@@ -29,14 +29,14 @@ pub(super) fn made(
   ctx: &Ctx,
   form: &Form<'_>,
   (text, given): (&RoleText, &Given),
-  runs: &Runs,
+  (runs, permissions): (&Runs, AgentPermissions),
 ) -> Result<Made, Arc<str>> {
   if let Some(why) = text.errors().as_ref().and_then(RoleErrors::first) {
     return Err(message_text(ctx, why));
   }
   match form.scope {
     Scope::Local => local(ctx, form, (text, given), runs),
-    Scope::Team => team(ctx, form.base, (text, given), runs),
+    Scope::Team => team(ctx, form.base, (text, given), (runs, permissions)),
   }
 }
 
@@ -111,17 +111,12 @@ fn team(
   ctx: &Ctx,
   base: Option<&TeamAgentProfile>,
   (text, given): (&RoleText, &Given),
-  runs: &Runs,
+  (runs, permissions): (&Runs, AgentPermissions),
 ) -> Result<Made, Arc<str>> {
   let cli = runs.cli.ok_or_else(|| required(ctx))?;
   let model = runs.model.clone().ok_or_else(|| required(ctx))?;
   let role = Name::new(&text.role).expect("a role without errors has a name");
   let instructions = PromptText::new(&text.instructions).expect("a role without errors has a prompt");
-  let kept = base.filter(|base| base.cli() == cli);
-  let permissions = kept.map_or_else(
-    || AgentPermissions::most_restrictive(cli, Platform::current()),
-    |base| base.permissions().clone(),
-  );
   let secrets = base.map_or_else(Vec::new, |base| base.secrets().to_vec());
   let at = |kind: ListKind| given.0[kind.at()].clone();
   TeamAgentProfile::new(

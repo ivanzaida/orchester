@@ -6,6 +6,7 @@
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, Connection, ConnectionKind, ConnectionStatus, REASONING_EFFORT},
   id::{ConnectionId, ResourceId},
+  permission::AgentPermissions,
   resource::{TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
   store::ConnectionStore,
@@ -71,6 +72,8 @@ pub struct TeamProfileSheet {
   pub mcp_servers: Vec<UsedServer>,
   pub tools: Vec<Listed>,
   pub skills: Vec<Listed>,
+  /// What its agents may do: the team's, the same on every computer.
+  pub permissions: AgentPermissions,
   /// The secrets it needs by name: those of the MCP servers it uses, then its own.
   pub secrets: Vec<SecretName>,
   /// The connections of this computer of its CLI kind.
@@ -167,6 +170,7 @@ fn sheet(
     mcp_servers,
     tools: named(team.tools()),
     skills: named(team.skills()),
+    permissions: team.permissions().clone(),
     secrets,
     connections: of_kind,
     picked,

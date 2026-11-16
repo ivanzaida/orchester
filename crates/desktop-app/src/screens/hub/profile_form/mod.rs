@@ -8,6 +8,7 @@
 //! Where it is decides only what is local by nature: a team's profile runs on a CLI kind and gives the team's
 //! resources; a local one names its connection and gives the project's.
 
+pub(in crate::screens) mod access;
 mod connect;
 mod held;
 pub(in crate::screens) mod here;
@@ -26,6 +27,7 @@ use lurq::{
 use orchester_core::{
   connection::{REASONING_EFFORT, mcp::McpServerSelection},
   id::ResourceId,
+  permission::AgentPermissions,
   resource::{AgentProfile, TeamAgentProfile},
 };
 use orchester_workspace::agents::role::{RoleErrors, RoleText};
@@ -157,6 +159,8 @@ pub(in crate::screens) struct ProfileFields {
   /// The effort chosen; empty is the CLI's default.
   effort: Signal<String>,
   given: Signal<Given>,
+  /// What the person chose of what a team profile's agents may do ([`access`]).
+  access: Signal<access::Chosen>,
   /// The menu of the field of what it runs with.
   menu: Menu,
 }
@@ -170,6 +174,7 @@ impl ProfileFields {
       model: ctx.signal(String::new()),
       effort: ctx.signal(String::new()),
       given: ctx.signal(Given::default()),
+      access: ctx.signal(access::Chosen::default()),
       menu: Menu::new(ctx),
     }
   }
@@ -196,6 +201,8 @@ impl ProfileFields {
       body.tools().to_vec(),
       body.skills().to_vec(),
     ]));
+    // The version's own permissions are the form's base: nothing is chosen over them yet.
+    self.access.set(access::Chosen::default());
   }
 
   /// The form as `form` has it.
@@ -214,14 +221,25 @@ impl ProfileFields {
     let runs = Runs::of(self, form, &who);
     let role = self.role_section(ctx, form, &text);
     let mut rows = runs.rows(ctx, self, (form, &who));
+    let permissions = self.permissions(form, &runs);
+    if form.scope == Scope::Team {
+      rows.extend(access::rows(ctx, form, &self.access, (&permissions, runs.cli)));
+    }
     rows.extend(ListKind::ALL.map(|kind| self.list_row(ctx, form, (kind, &given))));
-    let made = made::made(ctx, form, (&text, &given), &runs);
+    let made = made::made(ctx, form, (&text, &given), (&runs, permissions));
     Drawn {
       role,
       rows,
       made,
       waits: runs.waits(),
     }
+  }
+
+  /// What a team profile's agents may do as the fields have it: the permissions the form starts from (the edited
+  /// version's while its CLI stays) with what was chosen here.
+  fn permissions(&self, form: &Form<'_>, runs: &Runs) -> AgentPermissions {
+    let kept = form.base.filter(|base| Some(base.cli()) == runs.cli);
+    self.access.get().over(access::base(kept, runs.cli), runs.cli)
   }
 
   /// *Role*: the hub's section over the role as typed. A new profile's empty name says it is required only once Create
