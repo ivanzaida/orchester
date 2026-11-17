@@ -66,21 +66,6 @@ fn team_mcp_a_fenced_run_that_was_interrupted_is_refused_as_fenced() {
 }
 
 #[test]
-fn team_mcp_a_message_to_an_interrupted_team_run_is_refused_before_it_is_stored() {
-  let team = interrupted();
-  let message = json!({"project": "Kontur", "run": team.run.to_string(), "text": "Carry on."});
-
-  // The fixture's run has no worktree, so the composer runs the task again with the message, which a team task does
-  // only through the team server.
-  assert_eq!(
-    team.checkout.refused("send_message", &message),
-    "team_run_again_unsupported"
-  );
-  assert_eq!(team.messages(), 0, "nothing was stored");
-  assert!(no_task_rows(&team));
-}
-
-#[test]
 fn team_mcp_a_message_to_a_team_run_caches_no_task_row_and_takes_no_claim() {
   let team = started();
   let message = json!({"project": "Kontur", "run": team.run.to_string(), "text": "Use the webhooks module."});

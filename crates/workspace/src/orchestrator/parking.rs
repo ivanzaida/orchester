@@ -29,12 +29,12 @@ use serde_json::{Value, json};
 use super::{
   decisions, guard,
   keep::{self, Named},
-  led_start,
   own_project::in_own_project,
+  team_task,
   tools::ChatScope,
 };
 use crate::{
-  app_mcp::{ToolError, Translate, blocking},
+  app_mcp::{Services, ToolError, Translate, blocking},
   messages::{self, Message},
   runner::Runners,
   tasks::detail::run_store_error,
@@ -96,7 +96,7 @@ pub struct ParkTask {
 /// Parks the task `arguments` name in `scope`, and keeps the action, done or refused, in the conversation; in a turn
 /// nobody asked for, the parking is kept as a decision too. `runners` tell the chat it changed.
 pub(super) async fn call(
-  (translate, runners): (&Translate, &Runners),
+  (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
   mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
@@ -113,7 +113,7 @@ pub(super) async fn call(
   let parked = match in_own_project(scope, &mut arguments) {
     Ok(()) => {
       arguments.remove("project");
-      park(scope, arguments.clone()).await
+      park(services, scope, arguments.clone()).await
     }
     Err(refused) => Err(refused),
   };
@@ -130,7 +130,7 @@ pub(super) async fn call(
   parked
 }
 
-async fn park(scope: &ChatScope, arguments: JsonObject) -> Result<Value, ToolError> {
+async fn park(services: &Services, scope: &ChatScope, arguments: JsonObject) -> Result<Value, ToolError> {
   if guard::in_report_turn(scope).await? {
     return Err(ToolError::refused(
       "report_turn",
@@ -145,11 +145,11 @@ async fn park(scope: &ChatScope, arguments: JsonObject) -> Result<Value, ToolErr
     })
   };
   let (why, to_do) = (words("why", &asked.why)?, words("to_do", &asked.to_do)?);
+  // A team task that never ran here, and that nothing watches, is parked too: it is found as the start finds it.
+  let task = team_task::found(services, scope, &asked.task).await?;
   let scope = scope.clone();
   blocking(move || {
     let mut db = ProjectDb::open(&scope.root)?;
-    // A team task that never ran here is parked too: it is found as the start's rule finds it.
-    let task = led_start::Named::find(&db, &asked.task)?;
     let key = task.key.clone();
     let leads = db.active_subscriptions()?.leading(task.id, task.module) == Some(scope.chat);
     if scope.on_its_own && !leads {

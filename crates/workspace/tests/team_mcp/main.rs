@@ -24,6 +24,7 @@ mod team_server;
 
 mod bundle_missing;
 mod bundle_schema;
+mod chat_named;
 mod chat_task;
 mod created;
 mod delivery;
@@ -38,6 +39,7 @@ mod pipelines;
 mod readiness;
 mod reads;
 mod ready;
+mod run_again;
 mod run_routes;
 mod runs;
 mod share;

@@ -12,8 +12,9 @@ use std::path::Path;
 use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject, TeamCommandValue};
 use orchester_core::{
   command::CommandRunner,
-  id::{ClaimId, OperationId},
+  id::{ClaimId, ModuleId, OperationId, RunId, TaskId},
   run::{BranchName, CommitId},
+  sharing::TaskRevision,
 };
 use serde_json::{Value, json};
 
@@ -33,7 +34,7 @@ use crate::{
     services::blocking,
   },
   messages::Message,
-  readiness::{NotReadyHere, StartReadiness},
+  readiness::{McpPrograms, NotReadyHere, StartReadiness},
   runner::RunRequestError,
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
@@ -48,6 +49,29 @@ pub(in crate::app_mcp::tools) async fn run_task(
   team: &Team,
   key: &str,
 ) -> Result<Value, ToolError> {
+  let checked = check_start(services, team, key).await?;
+  let run = start_checked(services, team, checked).await?;
+  Ok(json!({ "run": { "id": run.to_string() }, "team": true }))
+}
+
+/// A team task's start as far as this computer checks it before it asks the team server for anything: the task and
+/// its module as the server reads them now, the base its work builds on, and the programs its ready pipeline runs.
+pub(in crate::app_mcp::tools) struct CheckedStart {
+  task: TaskId,
+  read: TaskRevision,
+  module: Option<(ModuleId, TaskRevision)>,
+  base_commit: CommitId,
+  base_branch: Option<BranchName>,
+  programs: McpPrograms,
+}
+
+/// Checks the start of team task `key` of `team`: refused as `run_task` refuses it (no pipeline, a pipeline this
+/// computer lacks or that is not ready here, a branch it cannot build on) before anything is claimed or asked for.
+pub(in crate::app_mcp::tools) async fn check_start(
+  services: &Services,
+  team: &Team,
+  key: &str,
+) -> Result<CheckedStart, ToolError> {
   let project = team.reads(services).await?;
   let task = find(&project, key).await?;
   let Some(named) = task.task.content.pipeline.clone() else {
@@ -71,7 +95,6 @@ pub(in crate::app_mcp::tools) async fn run_task(
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
   let (workspace, vault) = (services.workspace().clone(), services.vault.clone());
-  let start_vault = vault.clone();
   let branch = module.as_ref().map(|(_, _, branch)| branch.clone());
   // Only the team's pipelines, as this session read them, run a team task: a person's own local pipeline never does,
   // even with the same id.
@@ -91,14 +114,39 @@ pub(in crate::app_mcp::tools) async fn run_task(
     }
   })
   .await?;
+  Ok(CheckedStart {
+    task: task.task.id,
+    read: task.task.revision,
+    module: module.map(|(module, read, _)| (module, read)),
+    base_commit,
+    base_branch,
+    programs,
+  })
+}
+
+/// Starts the team task's work `checked` names through the team server: its claim, then `work.start`, and the run of
+/// the accepted inputs. The run started, or why it did not (a start recorded to be carried on later is refused as
+/// waiting, with the claim it keeps).
+pub(in crate::app_mcp::tools) async fn start_checked(
+  services: &Services,
+  team: &Team,
+  checked: CheckedStart,
+) -> Result<RunId, ToolError> {
+  let CheckedStart {
+    task: id,
+    read,
+    module,
+    base_commit,
+    base_branch,
+    programs,
+  } = checked;
+  let start_vault = services.vault.clone();
   let dispatcher = team.dispatcher(services).await?;
   let runner = ProjectRunner::new(
     services.runners.clone(),
     team.open.repo_root.clone(),
     team.open.project.name().as_str().to_owned(),
   );
-  let (id, read) = (task.task.id, task.task.revision);
-  let module = module.map(|(module, read, _)| (module, read));
   let outcome = on_worker(move || async move {
     // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
     // this one takes while its own start is not recorded yet.
@@ -199,10 +247,10 @@ pub(super) async fn acquire(
   }
 }
 
-/// The tool's answer for where the start stands.
-async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError> {
+/// The run the start started, or why it started none.
+async fn started(team: &Team, outcome: StartOutcome) -> Result<RunId, ToolError> {
   match outcome {
-    StartOutcome::Started(run) => Ok(json!({ "run": { "id": run.to_string() }, "team": true })),
+    StartOutcome::Started(run) => Ok(run),
     StartOutcome::Waiting(_) => Err(ToolError::refused(
       "team_start_waiting",
       vec![Message::new("appMcp.errors.teamStartWaiting")],

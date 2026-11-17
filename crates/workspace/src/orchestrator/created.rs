@@ -11,21 +11,28 @@ use orchester_core::{
 use orchester_store::{ProjectDb, WatchStart};
 use serde_json::{Value, json};
 
-use super::{guard::thinking_waits, team_status::module_now, tools::ChatScope};
-use crate::app_mcp::{ToolError, blocking, find_task};
+use super::{guard::thinking_waits, led_start::Named, team_task, tools::ChatScope};
+use crate::app_mcp::{Services, ToolError, blocking};
 
 /// The tool whose task comes back to the conversation that created it.
 pub(super) const CREATE_TASK: &str = "create_task";
 /// What became of the subscription of the task `created`, the answer of `create_task` in `scope`, which then tells
 /// the agent too; `None` when nothing changed. A watch that cannot be read or kept is logged: the task stays created.
-pub(super) async fn watch_created(scope: &ChatScope, created: &mut Value) -> Option<CreatedWatch> {
+pub(super) async fn watch_created(services: &Services, scope: &ChatScope, created: &mut Value) -> Option<CreatedWatch> {
   let key = created.pointer("/task/key").and_then(Value::as_str)?.to_owned();
   let (root, chat, on_its_own) = (scope.root.clone(), scope.chat, scope.on_its_own);
-  let watched = blocking(move || {
-    let mut db = ProjectDb::open(&root)?;
-    watch(&mut db, (chat, on_its_own), &key)
-  })
-  .await;
+  // A team task the chat made a moment ago is in no record here yet: the team server is asked for it, which records
+  // its identity, so a watch on it is read with the next reading.
+  let watched = match team_task::found(services, scope, &key).await {
+    Ok(task) => {
+      blocking(move || {
+        let mut db = ProjectDb::open(&root)?;
+        watch(&mut db, (chat, on_its_own), &task)
+      })
+      .await
+    }
+    Err(error) => Err(error),
+  };
   let watch = match watched {
     Ok(watch) => watch?,
     Err(error) => {
@@ -39,35 +46,28 @@ pub(super) async fn watch_created(scope: &ChatScope, created: &mut Value) -> Opt
   Some(watch)
 }
 
-/// Reads and keeps what the task `key` that `chat` created means for what it watches; `on_its_own`: an event started
-/// the turn, whose subscription gives the order.
+/// Reads and keeps what `task`, which `chat` created, means for what it watches; `on_its_own`: an event started the
+/// turn, whose subscription gives the order.
 fn watch(
   db: &mut ProjectDb,
   (chat, on_its_own): (orchester_core::id::ChatId, bool),
-  key: &str,
+  task: &Named,
 ) -> Result<Option<CreatedWatch>, ToolError> {
   let subscriptions = db.active_subscriptions()?;
   if subscriptions.of_chat(chat).next().is_none() {
     return Ok(None);
   }
-  let task = find_task(db, key)?;
   let event_task = if on_its_own {
-    // Of a turn that took several events, the oldest: the one that started it.
+    // Of a turn that took several events, the oldest: the one that started it. A team task's event names the task as
+    // its runs recorded it.
     thinking_waits(&db.chat_entries(chat)?)
       .first()
-      .and_then(|wait| find_task(db, &wait.task).ok())
+      .and_then(|wait| Named::find(db, &wait.task).ok())
   } else {
     None
   };
-  let turn_of =
-    event_task.and_then(|event| event_subscription(&subscriptions, chat, event.id(), module_now(db, &event)));
-  let created = created_task(
-    &subscriptions,
-    chat,
-    turn_of,
-    (task.id(), module_now(db, &task)),
-    Timestamp::now(),
-  );
+  let turn_of = event_task.and_then(|event| event_subscription(&subscriptions, chat, event.id, event.module));
+  let created = created_task(&subscriptions, chat, turn_of, (task.id, task.module), Timestamp::now());
   match created {
     Created::Unchanged => Ok(None),
     Created::Watch(subscription) => match db.start_subscription(&subscription)? {

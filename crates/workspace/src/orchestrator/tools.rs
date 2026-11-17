@@ -264,10 +264,10 @@ pub async fn call(
     return approval::call((services, translate, runners), scope, arguments).await;
   }
   if name == WAIT_ON_TASK {
-    return waits_on::call((translate, runners), scope, arguments).await;
+    return waits_on::call((services, translate, runners), scope, arguments).await;
   }
   if name == PARK_TASK {
-    return parking::call((translate, runners), scope, arguments).await;
+    return parking::call((services, translate, runners), scope, arguments).await;
   }
   if read_only {
     own_project_by_id(scope, &mut arguments);
