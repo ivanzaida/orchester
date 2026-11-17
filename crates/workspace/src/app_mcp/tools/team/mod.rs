@@ -5,8 +5,8 @@
 //! modules: a server that cannot be reached, a signed-out session or a refusal is the tool's refusal. A project without
 //! a link to a server is local, and its tools keep their own paths.
 
-mod again;
 mod acceptance;
+mod again;
 mod bundle_missing;
 mod deliver;
 mod figures;
@@ -25,8 +25,8 @@ use orchester_core::{
 use orchester_store::{MergedDoneState, ProjectDb, SharingLink, TeamFence};
 
 pub(super) use self::{
-  again::NextRun,
   acceptance::start_acceptance,
+  again::NextRun,
   deliver::{deliver_module, merge_run},
   figures::read as delivery_figures,
   modules::{create_module, get_module, list_modules, update_module},
