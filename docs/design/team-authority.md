@@ -132,7 +132,13 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
 
 - **D1** — decided for tasks: only Running work renews, so a run waiting for a person or in review isn't renewed
   (drawn in 02g, 02h). Still open: what renews a module claim. Drawn: the module line only says its tasks' runs
-  don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't.
+  don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't. **Changed
+  2026-11-17 (OA-31; decided by the implementing agent on 2026-11-17, to confirm with the person),** on the person's
+  rule that team work goes on as local work does (`docs/design/local-and-team-parity.md`): the holder's heartbeat also
+  renews work started through `work.start` that succeeded and waits to be merged or delivered, or is paused at a
+  limit, and a module claim its holder names (the desktop names it while the module's delivery goes on). Work that
+  waits for a person as the server sees it (`awaiting_human`) still is not renewed. The frames 02g, 02h and the module
+  line (04) are not redrawn yet.
 - **D4** — completing a task outside a run, manual blocked and reopen. Drawn first (on `BZc66`): a succeeded run never
   marks the task Done; there is no Done action. **Decided** (the person, 2026-11-08, `docs/architecture/server.md` row 96): the person
   holding the task's claim or an Admin marks it Done; only an Admin cancels it, reopens a Done or Canceled task, or

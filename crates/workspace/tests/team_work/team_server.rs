@@ -119,8 +119,12 @@ pub struct State {
   pub in_no_module: bool,
   /// Whether the work waits for a person: the heartbeat answers `decision_required [D1]`.
   pub waits_for_person: bool,
+  /// The server is older than OA-31's renewal: its heartbeat renews running work only, and no module claim.
+  pub running_only: bool,
   pub works_made: usize,
   pub heartbeats: usize,
+  /// The module claim renewals the heartbeat made.
+  pub module_renewals: usize,
   pub reports_sent: usize,
   /// The `delivery.request` and `delivery.report` commands carried out, not their repeats.
   pub delivery_requests: usize,
@@ -172,8 +176,10 @@ impl TeamServer {
       bundle_missing: None,
       in_no_module: false,
       waits_for_person: false,
+      running_only: false,
       works_made: 0,
       heartbeats: 0,
+      module_renewals: 0,
       reports_sent: 0,
       delivery_requests: 0,
       delivery_reports: 0,
@@ -224,6 +230,11 @@ impl TeamServer {
 
   pub fn wait_for_person(&self, waits: bool) {
     self.state.lock().waits_for_person = waits;
+  }
+
+  /// Makes the server one older than OA-31's renewal, which renews running work only.
+  pub fn renew_running_only(&self) {
+    self.state.lock().running_only = true;
   }
 }
 
@@ -345,13 +356,30 @@ fn file_read(state: &State, token: &str, (sha256, file): (&str, &str)) -> Result
   }
 }
 
-/// `POST …/heartbeat {authorities}`: renews the current ones while their work runs (D1).
+/// `POST …/heartbeat {authorities}`: renews the current ones while their work is the holder's to carry on (running,
+/// succeeded, paused at a limit), and the module's current claim (OA-31); an older server ([`State::running_only`])
+/// renews running work only and refuses a module authority `decision_required [D1]`.
 fn heartbeat(state: &mut State, request: &Request) -> (u16, Value) {
   state.heartbeats += 1;
   let authorities = request.json()["authorities"].as_array().expect("authorities").clone();
   let (mut renewed, mut lost) = (Vec::new(), Vec::new());
   for authority in authorities {
     let claim: ClaimId = serde_json::from_value(authority["claim_id"].clone()).expect("a claim id");
+    if authority["subject"]["kind"] == "module" {
+      if !holds_module(state, &request.token, claim) {
+        lost.push(authority);
+        continue;
+      }
+      if state.running_only {
+        return (
+          409,
+          json!({"code": "decision_required", "details": {"decisions": ["D1"]}}),
+        );
+      }
+      state.module_renewals += 1;
+      renewed.push(subject_claim_read(&authority["subject"], claim));
+      continue;
+    }
     let work = authority["work_id"].as_str().map(str::to_owned);
     let latest = state.works.iter().rev().find(|known| known.claim == claim);
     let current = holds(state, &request.token, claim)
@@ -368,7 +396,12 @@ fn heartbeat(state: &mut State, request: &Request) -> (u16, Value) {
         json!({"code": "decision_required", "details": {"decisions": ["D1"]}}),
       );
     }
-    if latest.is_none_or(|latest| latest.state != "running") {
+    let renews: &[&str] = if state.running_only {
+      &["running"]
+    } else {
+      &["running", "succeeded", "paused"]
+    };
+    if latest.is_none_or(|latest| !renews.contains(&latest.state.as_str())) {
       return (409, refusal(None, "transition_denied"));
     }
     renewed.push(claim_read(state, claim));

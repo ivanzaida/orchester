@@ -22,10 +22,11 @@
 //!   (`claim_lost`, `membership_revoked`, `session_mismatch`, or a newer run carrying the work on) fence the run: it
 //!   reports nothing more, and its run, worktree and unsent reports stay here. A run goes on executing during an
 //!   outage; what waits is only its reports.
-//! - **Heartbeat** ([`heartbeat`], OA-31). The claim of each run whose work the server sees running is renewed: one at
-//!   work, waiting for a person, paused by a person or interrupted here. Work the server saw succeed or pause at a
-//!   limit renews nothing (D1), and the server's `decision_required` is an outcome, not a failure to retry. A run whose
-//!   authority the server took away is cancelled here ([`fenced`]).
+//! - **Heartbeat** ([`heartbeat`], OA-31). The claim of each task whose work this computer holds is renewed: work at
+//!   work, waiting for a person, paused by a person or interrupted here, and work the server saw succeed (until it is
+//!   merged here and its Done answered) or pause at a limit; so is the module claim of a delivery that goes on. An
+//!   older server that renews running work only is sent the running claims alone, and the server's `decision_required`
+//!   is an outcome, not a failure to retry. A run whose authority the server took away is cancelled here ([`fenced`]).
 //! - **Done after the merge** ([`done`], OA-30). Once a team run's work is merged here, its task is set Done on the
 //!   server by the holder, as a local task's merge sets it Done; a refusal is kept with the run.
 //!

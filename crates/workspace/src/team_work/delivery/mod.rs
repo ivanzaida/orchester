@@ -38,6 +38,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, TeamDelivery, TeamDeliveryStage};
 use serde::{Deserialize, Serialize};
 
+pub(super) use self::state::held_module_claims;
 pub use self::{
   failure::MergeFailure,
   state::{Asked, DeliveryStatus, TeamDeliveryState, newest_of},

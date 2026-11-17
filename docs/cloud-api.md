@@ -916,7 +916,7 @@ The routes of authorized work, as the team server serves them (its `http/workspa
 | --- | --- | --- |
 | `GET /api/v2/projects/{p}/bundles/{sha256}` | | `ExecutionBundle`; `409 claim_lost` once no claim it was built for is the caller's in this session, and for a hash the workspace does not have |
 | `GET /api/v2/projects/{p}/bundles/{sha256}/files/{file}` | | the file's raw bytes (`application/octet-stream`, at most `MAX_BUNDLE_FILE_BYTES`); refused as the bundle is, `404 not_found` for a file it does not pin |
-| `POST /api/v2/projects/{p}/heartbeat` | `ExactHeartbeat {authorities:[AuthorityRef]}`, at most 256 | `Renewed {renewed:[ClaimRead],lost:[AuthorityRef]}`; `409 decision_required [D1]` while a named claim's work waits for a person or for review, `409 transition_denied` while it is not running; either renews nothing |
+| `POST /api/v2/projects/{p}/heartbeat` | `ExactHeartbeat {authorities:[AuthorityRef]}`, at most 256 | `Renewed {renewed:[ClaimRead],lost:[AuthorityRef]}`. A task's claim renews while its latest work is `running`, `succeeded` (waiting to be merged or delivered) or `paused` at a limit, and a module's claim whenever its holder names it from its session (OA-31, decided 2026-11-17); `409 decision_required [D1]` while a named claim's work waits for a person, `409 transition_denied` while it failed, was cancelled or never started; either renews nothing. A server older than OA-31 renews `running` work only and refuses a module authority `decision_required [D1]` |
 | `POST /api/v2/projects/{p}/commands` | `work.report {authority,run_id,event_id,sequence,outcome,artifacts}` | `{kind:"work",work:WorkRead,bundle:BundleRef,effects:[]}`, decided as the server's `docs/work-reports.md` orders it |
 
 The desktop's team work (`orchester_workspace::team_work`) uses them so:
@@ -972,10 +972,15 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   more, and its run, worktree and unsent reports stay on this computer. Other refusals are kept with their report.
   A run's local status and its server acceptance (the work as the server last answered its reports, by revision) are
   kept apart (`team_runs`).
-- **Heartbeat** (OA-31). Every minute, each claim with a run whose work the server last answered as running is named
-  once, by its exact authority with `work_id` `null` (the server's `docs/claim-authority.md`): a run at work, waiting
-  for a person, paused or interrupted here reports nothing that ends the work, so its claim is renewed. Work the server
-  saw succeed or pause at a limit is not named (it renews none); when nothing is named, nothing is sent.
+- **Heartbeat** (OA-31). Every minute, each claim of work this computer holds is named once, by its exact authority
+  with `work_id` `null` (the server's `docs/claim-authority.md`): a run at work, waiting for a person, paused or
+  interrupted here reports nothing that ends the work; work the server saw succeed is named until its run is merged
+  here and the server answered the Done the merge asks for (which releases the claim); work it saw pause at a limit is
+  named while the run may go on. A claim is named by its newest run here: one whose newest run failed or was cancelled
+  is not. The module claim of each module whose newest delivery is requested, waits for an Admin or has its merge or
+  report under way here is named too. When nothing is named, nothing is sent. A server older than this renewal
+  refuses the whole heartbeat for kept work or a module claim (`decision_required` or `transition_denied`): the
+  running claims are then sent again alone, so they are renewed as before, and the others go stale as they did.
   `decision_required` is returned as such, not retried as a failure; a lost authority fences its runs, and a fenced run
   that still works here is cancelled through its runner.
 - **Done after a merge** (OA-30). A team run merged here records its task's Done (`team_merged_done`); the holder's
