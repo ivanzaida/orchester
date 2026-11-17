@@ -38,6 +38,10 @@ impl TeamRunner for Gated {
       gated.inner.start_accepted_run(operation).await
     }
   }
+
+  fn cancel_run(&self, run: RunId) -> impl Future<Output = Result<(), RunRequestError>> + Send {
+    self.inner.cancel_run(run)
+  }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

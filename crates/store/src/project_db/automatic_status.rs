@@ -150,8 +150,8 @@ impl ProjectDb {
   /// recorded here would ([`orchester_core::store::MergeStore::save_run_merge`]). Its claim's end reads the run merged
   /// from git, which can be before Orchester's own merge writes its record, or without one for a merge made outside
   /// Orchester; the Done must wait before the claim is completed, or it is no longer the person's to send (ORC-750).
-  /// Nothing is recorded for a run whose merge is recorded (it recorded the Done itself), a team run (whether it makes
-  /// its task Done is open, D4) or a run of a local task.
+  /// Nothing is recorded for a run whose merge is recorded (it recorded the Done itself), a team run (its merge
+  /// records the Done its holder's desktop sends through the team server, OA-30) or a run of a local task.
   ///
   /// The Done changes from the In review the passed run left, not from the status the cache has when the claim ends:
   /// a teammate's status, cached since, must still win. A status of the task still waiting keeps the status it changed

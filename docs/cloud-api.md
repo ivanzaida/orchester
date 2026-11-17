@@ -972,9 +972,15 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   more, and its run, worktree and unsent reports stay on this computer. Other refusals are kept with their report.
   A run's local status and its server acceptance (the work as the server last answered its reports, by revision) are
   kept apart (`team_runs`).
-- **Heartbeat.** Only runs at work here (running, no step waiting for a person) are named, with their work's
-  authority; when none is, nothing is sent. `decision_required` is returned as such, not retried as a failure; a lost
-  authority fences its run. Nothing calls the team work yet: the screens adopt it in P6, automation in P7.
+- **Heartbeat** (OA-31). Every minute, each claim with a run whose work the server last answered as running is named
+  once, by its exact authority with `work_id` `null` (the server's `docs/claim-authority.md`): a run at work, waiting
+  for a person, paused or interrupted here reports nothing that ends the work, so its claim is renewed. Work the server
+  saw succeed or pause at a limit is not named (it renews none); when nothing is named, nothing is sent.
+  `decision_required` is returned as such, not retried as a failure; a lost authority fences its runs, and a fenced run
+  that still works here is cancelled through its runner.
+- **Done after a merge** (OA-30). A team run merged here records its task's Done (`team_merged_done`); the holder's
+  desktop sends it after the run's reports as the task patch of *Mark as done* (`workflow: done`, on the revision read),
+  which the server records as the holder's and which releases the task's claim. A refusal is kept with the run.
 
 ## Team authority P4 module delivery
 

@@ -2,9 +2,11 @@
 //! monitor and the live event streams (`docs/architecture/server.md`, "Claims", "Live updates", "The sync engine"):
 //! every minute, the workflow statuses that could not be sent yet are tried again ([`super::automatic`]), one
 //! heartbeat request per server names the claims the person holds in the projects this computer shares there, what
-//! they lost is written to the cache, the claims of runs that ended are ended ([`super::claim_ends`]), and the work
-//! reports of team runs are sent ([`super::team_reports`]). A run change sends the workflow statuses and the work
-//! reports at once too, at most [`RUN_ROUNDS_PER_MINUTE`] times a minute; it does not end claims (ORC-896). The caches
+//! they lost is written to the cache, the claims of runs that ended are ended ([`super::claim_ends`]), and the team
+//! runs' work is carried on ([`super::team_reports`]): their reports, the exact heartbeat of their claims, the stop of
+//! the fenced ones and the Done of the merged ones. A run change sends the workflow statuses and carries the team work
+//! on at once too, but for the heartbeat, at most [`RUN_ROUNDS_PER_MINUTE`] times a minute; it does not end claims
+//! (ORC-896). The caches
 //! follow the servers through the streams ([`crate::sharing::sync`]), so nothing reads them every minute: a full read
 //! is left only for a person's request to sync now (*Check again*, *Try now*), which sends no heartbeat and so keeps to
 //! the server's limit of 12 heartbeats a minute.
@@ -23,9 +25,10 @@ use tokio::{
   time::{sleep, sleep_until},
 };
 
-use super::{ProjectServer, claim_ends, convert};
+use super::{ProjectServer, claim_ends, convert, team_reports::TeamRound};
 use crate::{
   background,
+  runner::Runners,
   sharing::{Servers, SharingError},
 };
 
@@ -45,10 +48,10 @@ const RUN_ROUNDS_PER_MINUTE: u32 = 12;
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it
 /// drops. `runs` changes whenever a runner reports a run change: the workflow statuses runs reached
-/// are sent then, between the minute's heartbeats, and the work reports of team runs. The claims of runs that ended
-/// are ended by the minute's round alone. Git, through `programs`, tells which runs a person merged without
-/// Orchester.
-pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Programs) {
+/// are sent then, between the minute's heartbeats, and the team runs' work is carried on ([`super::team_reports`]),
+/// whose fenced runs `runners` stop. The claims of runs that ended are ended by the minute's round alone. Git, through
+/// `programs`, tells which runs a person merged without Orchester.
+pub async fn run(servers: Servers, runners: Runners, mut runs: watch::Receiver<u64>, programs: Programs) {
   let mut requests = servers.subscribe_sync();
   requests.borrow_and_update();
   let mut next_beat = tokio::time::Instant::now();
@@ -58,7 +61,7 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
     tokio::select! {
       () = sleep_until(next_beat) => {
         next_beat = tokio::time::Instant::now() + INTERVAL;
-        servers.keep_claims(&programs).await;
+        servers.keep_claims(&programs, &runners).await;
       }
       changed = requests.changed() => {
         if changed.is_err() {
@@ -77,7 +80,7 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
         next_round = tokio::time::Instant::now() + INTERVAL / RUN_ROUNDS_PER_MINUTE;
         runs.borrow_and_update();
         servers.send_automatic_statuses().await;
-        servers.report_all_team_work().await;
+        servers.carry_all_team_work(&runners).await;
       }
     }
   }
@@ -86,21 +89,21 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
 impl Servers {
   /// The minute's round over every shared project of the workspace: the workflow statuses that wait, sent while the
   /// claims they need are still held, then by server the heartbeat and the end of the claims whose runs ended.
-  pub async fn keep_claims(&self, programs: &Programs) {
+  pub async fn keep_claims(&self, programs: &Programs, runners: &Runners) {
     self.send_automatic_statuses().await;
     for projects in self.shared_by_server().await.values() {
       self.heartbeat(projects, programs).await;
       for project in projects {
         claim_ends::end_claims_of(project, programs).await;
       }
-      self.report_team_work(projects).await;
+      self.carry_team_work(projects, runners, TeamRound::Minute).await;
     }
   }
 
-  /// The work reports of every shared project's team runs, sent when a run changed.
-  async fn report_all_team_work(&self) {
+  /// The team work of every shared project, carried on when a run changed: reports, stops and Done, no heartbeat.
+  async fn carry_all_team_work(&self, runners: &Runners) {
     for projects in self.shared_by_server().await.values() {
-      self.report_team_work(projects).await;
+      self.carry_team_work(projects, runners, TeamRound::RunChanged).await;
     }
   }
 

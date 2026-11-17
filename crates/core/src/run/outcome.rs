@@ -1,5 +1,5 @@
 //! What a run reports to its team server about the authorized work it carries out (S9 `work.report`), the rule that
-//! orders those reports, and when its work renews its claim (D1). An execution success is not permission to mark the
+//! orders those reports, and when an agent of a run is at work. An execution success is not permission to mark the
 //! task Done: the human-wait and task-completion effects wait for the team-authority decisions D1, D4 and D8 and have
 //! no outcome here.
 
@@ -78,9 +78,10 @@ impl ExecutionOutcome {
   }
 }
 
-/// Whether `run`'s work renews its team claim now (D1): only while it runs and none of its steps waits for a person
-/// (an approval, a plan or a message). A paused, waiting, interrupted or ended run renews nothing.
-pub fn renews_claim(run: &Run) -> bool {
+/// Whether an agent of `run` is at work now: it runs and none of its steps waits for a person (an approval, a plan or
+/// a message). A paused, waiting, interrupted or ended run is not. A team claim's renewal does not follow this: it
+/// follows the server's work, which waits and pauses go on under (`orchester_workspace::team_work`, OA-31).
+pub fn at_work(run: &Run) -> bool {
   run.status() == &RunStatus::Running
     && !run.current_attempt().is_some_and(|attempt| {
       attempt

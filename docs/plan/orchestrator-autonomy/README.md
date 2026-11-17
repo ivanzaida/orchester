@@ -81,9 +81,12 @@ Each line is what the code does today; the task that changes it is at its end.
 - A team task's run merges into its module's branch since `b4abf405d` on master (OA-27, done there); the chat still
   can neither merge nor start nor continue a team run in a turn it started. → OA-29
 - A module subscription does not lead a team task's events: the task reads as having no module. → OA-28
-- A merged team task stays in Backlog until someone marks it Done, so its watch never ends. → OA-30
-- A claim goes stale 15 minutes after its run starts to wait or is in review, and a run that lost its claim keeps
-  executing. → OA-31
+- A merged team task stayed in Backlog until someone marked it Done, so its watch never ended. → OA-30, built
+  2026-11-17 (the holder's desktop sets it Done after the merge).
+- A claim goes stale 15 minutes after its run's work is reported succeeded (in review, not delivered) or paused at a
+  limit, and a module's claim 15 minutes after it was taken: the server renews neither. → OA-31 (the rest). Built
+  2026-11-17: the exact heartbeat runs (nothing called it before, so no team claim was renewed at all) and renews a
+  claim while the server sees its work running, waits and pauses included; a run whose claim was lost is cancelled.
 - A team module's branch must be made by hand; its delivery cannot be asked for by the chat. → OA-33, OA-32
 - Limits, dependencies between tasks and forecasts are refused for team tasks. → OA-34, OA-35, OA-36
 
@@ -174,8 +177,8 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-27](OA-27-team-run-merges-into-its-module.md) | A team task's run merges into its module's branch | core + workspace | OA-16 | done on master (`b4abf405d`) |
 | [OA-28](OA-28-subscriptions-lead-team-tasks.md) | Subscriptions lead team tasks by their module, and `/watching` answers | workspace | — | done; three edges left (its file) |
 | [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | done but a message that runs a team task again |
-| [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | needs decision |
-| [OA-31](OA-31-claims-while-work-is-led.md) | A claim holds while its work is led, and a run that lost it stops | contract + workspace + runner | — | needs decision (contract) |
+| [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | done but showing a refusal on the task page and a Done recorded as automation's (2026-11-17, `claude/team-lifecycle`) |
+| [OA-31](OA-31-claims-while-work-is-led.md) | A claim holds while its work is led, and a run that lost it stops | contract + workspace + runner | — | in progress: the desktop's side built (2026-11-17, `claude/team-lifecycle`); renewal after success and of module claims needs the server's contract (D1, D8), and the chat's event for a lost claim is open |
 | [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | done as one tool; a team module has no acceptance yet |
 | [OA-33](OA-33-module-branch-is-made.md) | A module's branch is made when its first task starts, in both kinds | workspace + runner | OA-17 | done |
 | [OA-34](OA-34-limits-of-team-runs.md) | A team run's limits are raised as a local run's are | contract + workspace | OA-29 | needs decision (contract) |

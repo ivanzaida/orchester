@@ -53,7 +53,7 @@ research keeps only its third question.
 
 - **The rule** is the workspace's (`orchester_workspace::awake::work_under_way`): work is under way in a project
   while a run of it runs with no step waiting for a person (the test a team claim's renewal uses,
-  `orchester_core::run::renews_claim`), or a turn of its Orchestrator chat thinks. A run that waits, is paused,
+  `orchester_core::run::at_work`), or a turn of its Orchestrator chat thinks. A run that waits, is paused,
   stopped at a limit, interrupted or ended is not at work.
 - **The hold** is the app's (`crates/desktop-app/src/awake.rs`): each project's follower looks after every change of
   its runs and conversations, and the app holds the system awake while any open project works and the setting is on,

@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// The run finished successfully, as the runner records it.
-fn succeed(checkout: &Checkout, run: RunId) {
+pub(crate) fn succeed(checkout: &Checkout, run: RunId) {
   for pass in [false, true] {
     checkout.change_run(run, |run, now| {
       let execution = run.current_attempt().expect("attempt").executions()[0].id();

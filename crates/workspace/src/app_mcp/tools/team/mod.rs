@@ -19,7 +19,7 @@ use orchester_core::{
   run::Run,
   store::RunStore,
 };
-use orchester_store::{ProjectDb, SharingLink};
+use orchester_store::{MergedDoneState, ProjectDb, SharingLink, TeamFence};
 
 pub(super) use self::{
   deliver::{deliver_module, merge_run},
@@ -225,6 +225,20 @@ pub(super) fn refuse_fenced(db: &ProjectDb, run: RunId) -> Result<(), ToolError>
 /// The refusal to work on a run the team server fenced, as the task page words it.
 fn fenced_refusal() -> ToolError {
   ToolError::refused("claim_fenced", vec![crate::messages::run_fenced()])
+}
+
+/// What the team server made of team run `run` (`get_run`'s `team`): its fence and the Done its merge asked for;
+/// `null` for a run that is no team run.
+pub(super) fn run_state(db: &ProjectDb, run: RunId) -> Result<serde_json::Value, ToolError> {
+  let Some(team) = db.team_run(run)? else {
+    return Ok(serde_json::Value::Null);
+  };
+  let done = db.merged_done(run)?.map(|done| match done.state {
+    MergedDoneState::Pending => serde_json::json!({ "state": "pending" }),
+    MergedDoneState::Sent => serde_json::json!({ "state": "sent" }),
+    MergedDoneState::NotSent { reason } => serde_json::json!({ "state": "not_sent", "reason": reason }),
+  });
+  Ok(serde_json::json!({ "fence": team.fence.map(TeamFence::text), "done": done }))
 }
 
 /// A tool whose subject the team server owns and this version does not read or change there yet: refused for a team

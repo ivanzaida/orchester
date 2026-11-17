@@ -479,4 +479,5 @@ CREATE TABLE run_merges (
   super::flaky_tests::MIGRATION,
   super::service_slots::MIGRATION,
   super::shared_project_key::MIGRATION,
+  super::team_done::MIGRATION,
 ];

@@ -130,7 +130,12 @@ pub(super) const SPECS: &[Spec] = &[
                   approvals, questions, messages and plans link to their cards on the task's Conversation. A team task's run \
                   is read from this computer's own records of it, without the task's definition: task is the key the run \
                   recorded when it started (a run that kept none, whose task has no copy here either, is refused as \
-                  team_task_unrecorded).",
+                  team_task_unrecorded). team (null for a run that is no team run) says what the team server made of \
+                  it: fence (claim_lost, membership_revoked, session_mismatch or superseded once the server took its \
+                  authority away; such a run reports nothing more and is stopped here; null otherwise) and done, the \
+                  Done its merge asked the server to set on its task (null before the run is merged here): state \
+                  pending, sent, or not_sent with reason (the server's refusal code such as not_holder, or canceled \
+                  when the task was canceled meanwhile), which a person then settles on the task.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },

@@ -2,8 +2,9 @@
 //! loopback with the server's routes and shapes ([`team_server`], [`team_commands`], [`team_deliveries`]): a start
 //! recovers once from a crash or an outage at each boundary and never makes a second work or run ([`start`]); work
 //! reports wait in order across an outage and a restart, with the outcomes as decided and local success apart from
-//! server acceptance ([`reports`]); a takeover fences the run and keeps its output here; the heartbeat renews only
-//! running work ([`heartbeat`]); and a module's delivery merges only on the receipt's effect and reports it once,
+//! server acceptance ([`reports`]); a takeover fences the run, stops it and keeps its output here ([`lost_claim`]); the
+//! heartbeat renews the claims of work the server sees running ([`heartbeat`]); a merged run's task is set Done on the
+//! server ([`done`]); and a module's delivery merges only on the receipt's effect and reports it once,
 //! across lost answers, outages and a crash ([`delivery`], P4c), and recovers from its edge cases
 //! ([`delivery_recovery`]). Runs are recorded by a stand-in for the runner that keeps them as the runner does; the
 //! runner's own tests start the real one (`crates/runner/tests/team_start.rs`).
@@ -19,11 +20,13 @@ mod claim_end;
 mod completion;
 mod delivery;
 mod delivery_recovery;
+mod done;
 mod fill_ins;
 mod fixture;
 mod heartbeat;
 mod here;
 mod last_start;
+mod lost_claim;
 mod no_module;
 mod reports;
 mod start;
@@ -351,6 +354,7 @@ struct StoreRunner {
   root: PathBuf,
   hiccups: Arc<Mutex<VecDeque<Hiccup>>>,
   asked: Arc<Mutex<usize>>,
+  cancelled: Arc<Mutex<usize>>,
 }
 
 impl StoreRunner {
@@ -359,11 +363,17 @@ impl StoreRunner {
       root: root.to_path_buf(),
       hiccups: Arc::new(Mutex::new(hiccups.iter().copied().collect())),
       asked: Arc::new(Mutex::new(0)),
+      cancelled: Arc::new(Mutex::new(0)),
     }
   }
 
   fn asked(&self) -> usize {
     *self.asked.lock()
+  }
+
+  /// How many runs it was asked to cancel.
+  fn cancelled(&self) -> usize {
+    *self.cancelled.lock()
   }
 
   fn record(&self, operation: OperationId) -> RunId {
@@ -418,6 +428,19 @@ impl TeamRunner for StoreRunner {
         Some(Hiccup::Refuses) => Err(RunRequestError::Rejected(Rejection::Busy)),
         None => Ok(runner.record(operation)),
       }
+    }
+  }
+
+  /// Records the run cancelled, as the runner does once its agent ended.
+  fn cancel_run(&self, run: RunId) -> impl Future<Output = Result<(), RunRequestError>> + Send {
+    let runner = self.clone();
+    async move {
+      *runner.cancelled.lock() += 1;
+      let mut db = ProjectDb::open(&runner.root).expect("open");
+      let mut current = db.run(run).expect("read").expect("the run");
+      let events = current.cancel(Timestamp::now()).expect("cancelled");
+      db.append_events(&current, &events).expect("recorded");
+      Ok(())
     }
   }
 }
