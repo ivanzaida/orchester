@@ -64,7 +64,7 @@ pub struct TeamAcceptance {
   own: Signal<OwnPick>,
   acceptance: Signal<AcceptancePick>,
   kept: Signal<Kept>,
-  save: FutureAction<Choose, AcceptanceChoice, Refused>,
+  save: FutureAction<Choose, Kept, Refused>,
 }
 
 impl Component for TeamAcceptance {
@@ -76,6 +76,7 @@ impl Component for TeamAcceptance {
       background::run(move || choose_in(&choose.root, choose.module, choose.choice))
         .await
         .map_err(Refused)?
+        .map(|choice| Kept(Some(choice)))
         .map_err(Refused)
     });
     let own = ctx.signal(OwnPick {
@@ -144,11 +145,13 @@ impl TeamAcceptance {
     let key = (props.project.open.repo_root.clone(), props.module);
     let read = ctx
       .future(key, |(root, module): (PathBuf, ModuleId)| async move {
-        background::run(move || choice_in(&root, module)).await?
+        background::run(move || choice_in(&root, module))
+          .await?
+          .map(|choice| Kept(Some(choice)))
       })
       .state()
       .get();
-    let Some(choice) = read.data.filter(|_| self.kept.get_untracked().0.is_none()) else {
+    let Some(Kept(Some(choice))) = read.data.filter(|_| self.kept.get_untracked().0.is_none()) else {
       return;
     };
     // The fields first and what was kept last: until it is set, their changes are the stored choice, not the person's,
@@ -169,7 +172,7 @@ struct Keep {
   own: Signal<OwnPick>,
   acceptance: Signal<AcceptancePick>,
   kept: Signal<Kept>,
-  save: FutureAction<Choose, AcceptanceChoice, Refused>,
+  save: FutureAction<Choose, Kept, Refused>,
 }
 
 impl Keep {
