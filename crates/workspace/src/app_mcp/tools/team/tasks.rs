@@ -99,6 +99,7 @@ fn listed(project: orchester_core::id::ProjectId, read: &TaskRead) -> Value {
     "priority": Rank::from(task.content.priority),
     "tags": task.content.tags,
     "blocked_reason": task.content.blocked_reason,
+    "story_points": task.content.story_points,
     "module": task.content.module.map(|module| module.to_string()),
     "assignee": read.assignee,
     "claim": read.effective_claim,
@@ -127,6 +128,8 @@ fn detail(project: orchester_core::id::ProjectId, read: &TaskRead) -> Value {
     "module": content.module.map(|module| module.to_string()),
     "blocked_reason": content.blocked_reason,
     "blocked_by": content.blocking,
+    "story_points": content.story_points,
+    "no_automatic_merge": content.no_automatic_merge,
     "pipeline": { "id": content.pipeline },
     "limits": content.limits.as_ref().map(|limits| json!({
       "budget_tokens": limits.budget_tokens,

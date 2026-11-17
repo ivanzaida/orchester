@@ -9,7 +9,7 @@ use orchester_core::{
   name::Name,
   run::{BranchName, CommitId},
   sharing::TaskRevision,
-  task::{TaskDetails, organization::TaskOrganization},
+  task::{TaskDetails, estimate::StoryPoints, organization::TaskOrganization},
 };
 
 /// One action and the operation id it keeps on every retry. The id is made once per intent: sending the same intent
@@ -55,9 +55,12 @@ pub enum Action {
 /// A task's definition: its details as the task form saves them, its organization, and its module.
 #[derive(Clone, Debug)]
 pub enum TaskAction {
+  /// A new task, in `module` when one is named: a team task is made there at once, which the holder of that module's
+  /// claim may do as an Admin may (OA-32).
   Create {
     details: TaskDetails,
     organization: TaskOrganization,
+    module: Option<ModuleId>,
   },
   /// The details read as `base` at `read`, changed to `edited`.
   Edit {
@@ -78,6 +81,13 @@ pub enum TaskAction {
     task: TaskId,
     read: TaskRevision,
     module: Option<ModuleId>,
+  },
+  /// A team task's story points on the task read at `read`, or none (OA-35): its server keeps them as a detail of the
+  /// task. A local task's points are kept with who set them (`task_write`'s estimate), not through an action.
+  Points {
+    task: TaskId,
+    read: TaskRevision,
+    points: Option<StoryPoints>,
   },
 }
 
@@ -193,8 +203,8 @@ pub enum ActionClass {
 }
 
 impl Action {
-  /// Whether the action exists only for a team project: claims, assignment, the policy, work, delivery and module
-  /// branches.
+  /// Whether the action exists only for a team project: claims, assignment, the policy, work, delivery, module
+  /// branches and a team task's story points.
   pub const fn team_only(&self) -> bool {
     matches!(
       self,
@@ -204,6 +214,7 @@ impl Action {
         | Self::Work(_)
         | Self::Delivery(_)
         | Self::Module(ModuleAction::AssignBranch { .. })
+        | Self::Task(TaskAction::Points { .. })
     )
   }
 

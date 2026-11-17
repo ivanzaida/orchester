@@ -227,3 +227,24 @@ fn team_mcp_a_led_module_whose_work_is_merged_waits_for_its_delivery_until_the_t
   checkout.call("deliver_module", &module).expect("delivered");
   assert_eq!(stands(&checkout).standing.target, TargetStanding::Done);
 }
+
+/// A team task the server says is blocked by another (OA-35) waits for it, as a local one does, until the server holds
+/// that task Done.
+#[test]
+fn team_mcp_a_led_module_waits_for_the_tasks_that_block_one_of_its_tasks() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let target = module_watch(&checkout, server.module);
+  leading(&checkout, target);
+  let blocker = orchester_core::id::TaskId::generate();
+  seen.lock().more_tasks =
+    vec![json!({"id": blocker, "number": 8, "key": "KON-8", "workflow": "in_review", "blocking": []})];
+  seen.lock().task_fields = json!({ "blocking": [{"task": blocker, "gate": "merge"}] });
+  refreshed(&checkout);
+  let led = stands(&checkout);
+  assert!(named(&led).contains(&("KON-7", "blocked_by")), "{:?}", named(&led));
+
+  seen.lock().more_tasks[0]["workflow"] = json!("done");
+  refreshed(&checkout);
+  assert!(named(&stands(&checkout)).contains(&("KON-7", "ready_to_start")));
+}

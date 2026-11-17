@@ -98,15 +98,23 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
   Ok(json!({"kind": "work", "work": work, "bundle": bundle, "effects": []}))
 }
 
-/// `POST …/heartbeat {authorities}`: renews each named claim the person holds whose work runs; the others are lost.
-/// Work that waits for a person refuses the whole heartbeat, `409 decision_required [D1]`, and work in any other state
-/// but running `409 transition_denied`.
+/// `POST …/heartbeat {authorities}`: renews each named claim the person holds whose work this computer still holds
+/// (running, succeeded and waiting to be merged or delivered, paused at a limit), and each module claim the person
+/// holds; the others are lost. Work that waits for a person refuses the whole heartbeat, `409 decision_required [D1]`,
+/// and work that failed, was cancelled or never started `409 transition_denied`.
 pub(super) fn heartbeat(authority: &mut Authority, body: &str) -> (u16, Value) {
   let Ok(body) = serde_json::from_str::<Value>(body) else {
     return (422, json!({"code": "invalid", "details": {}}));
   };
   let (mut renewed, mut lost) = (Vec::new(), Vec::new());
   for named in body["authorities"].as_array().into_iter().flatten() {
+    if named["subject"]["kind"] == "module" {
+      match module_renewed(authority, named) {
+        Some(read) => renewed.push(read),
+        None => lost.push(named.clone()),
+      }
+      continue;
+    }
     let Ok((task, claim)) = held(authority, named) else {
       lost.push(named.clone());
       continue;
@@ -118,7 +126,7 @@ pub(super) fn heartbeat(authority: &mut Authority, body: &str) -> (u16, Value) {
       continue;
     }
     match task.work {
-      Some("running") => {}
+      Some("running" | "succeeded" | "paused") => {}
       Some("awaiting_human") => {
         return (
           409,
@@ -136,6 +144,23 @@ pub(super) fn heartbeat(authority: &mut Authority, body: &str) -> (u16, Value) {
     renewed.push(fresh.wire(&json!({"kind": "task", "id": id}), task.number));
   }
   (200, json!({"renewed": renewed, "lost": lost}))
+}
+
+/// The module claim `named` names, renewed, when it is the person's current one; `None` when it is lost.
+fn module_renewed(authority: &mut Authority, named: &Value) -> Option<Value> {
+  let index = super::commands::module_index(authority, &named["subject"]["id"])?;
+  let number = super::work::module_number(index);
+  let module = authority.modules.as_mut()?.get_mut(index)?;
+  let claim = module.claim.filter(|claim| {
+    claim.holder == Person::You && named["claim_id"] == claim.id(number) && named["work_id"].is_null()
+  })?;
+  let fresh = AuthorityClaim {
+    renewed_minutes_ago: 0,
+    stale: false,
+    ..claim
+  };
+  module.claim = Some(fresh);
+  Some(fresh.wire(&named["subject"], number))
 }
 
 /// The task the authority `named` names, with the person's claim of it when its id is the one named; `409 claim_lost`

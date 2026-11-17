@@ -117,29 +117,6 @@ fn team_mcp_continue_run_of_a_local_run_in_a_team_project_is_decided_as_a_local_
 }
 
 #[test]
-fn team_mcp_continue_run_of_a_team_run_is_decided_as_its_page_offers_and_its_limits_are_its_admins() {
-  let team = crate::team_runs::started();
-  let run = team.run.to_string();
-
-  // The run works: its page offers no resume, and that is the refusal, not one for being a team run's.
-  let resume = json!({"project": "Kontur", "run": run, "choice": {"kind": "resume"}});
-  assert_eq!(team.checkout.refused("continue_run", &resume), "not_stopped_at_limit");
-  let raise = json!({
-    "project": "Kontur",
-    "run": run,
-    "choice": {"kind": "raise_limits", "budget_tokens": null, "time_limit_minutes": null},
-  });
-  // Automation without the person's consent gets the person-only refusal first, before any run is looked up.
-  assert_eq!(team.checkout.refused("continue_run", &raise), "automation_not_allowed");
-  team
-    .checkout
-    .workspace
-    .set_automation_answers_approvals(true)
-    .expect("the switch");
-  assert_eq!(team.checkout.refused("continue_run", &raise), "decision_required");
-}
-
-#[test]
 fn team_mcp_a_local_task_wins_a_key_the_server_task_has_too_and_the_server_task_is_read_by_its_id() {
   let (server, seen) = server();
   // The server's one task is keyed KON-1 as well, as a task of the team made after the local draft was.

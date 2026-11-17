@@ -243,14 +243,15 @@ pub(crate) async fn merge_proposed(
   merge_at(services, (InRun { project, run }, Some(expected), runs), translate).await
 }
 
-/// The reason the team server holds the task of run `run` of `project` blocked now ([`team::blocked_reason`]); `None`
-/// while it does not, and for a local run, whose task this computer keeps.
-pub(crate) async fn team_blocked_reason(
+/// Why the team server's task of run `run` of `project` leaves its merge to the person now ([`team::merge_left`]):
+/// *Don't merge automatically*, its Blocked mark or its unfinished blocking tasks there; `None` while none holds, and
+/// for a local run, whose task this computer keeps.
+pub(crate) async fn team_merge_left(
   services: &Services,
   (project, run): (&str, &str),
-) -> Result<Option<String>, ToolError> {
+) -> Result<Option<orchester_core::orchestrator::MergeLeft>, ToolError> {
   match team::of_run(services, (project, run)).await? {
-    Some(team) => team::blocked_reason(services, &team, run).await,
+    Some(team) => team::merge_left(services, &team, run).await,
     None => Ok(None),
   }
 }

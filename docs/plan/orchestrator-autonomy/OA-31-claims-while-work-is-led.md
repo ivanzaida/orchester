@@ -1,10 +1,10 @@
 # OA-31 · A claim holds while its work is led, and a run that lost it stops
 
-- **Status:** in progress: the desktop's side built (2026-11-17); the renewal after success and of module claims needs
-  the server's contract (D1, D8), and the chat's event for a lost claim is open (*Left*)
+- **Status:** in progress: the desktop's side built (2026-11-17), the renewal after success, at a limit and of module
+  claims in the contract and the server (2026-11-17); the chat's event for a lost claim is open (*Left*)
 - **Kind:** contract + workspace + runner
 - **Depends on:** —
-- **Branch:** `claude/team-lifecycle`
+- **Branch:** `claude/team-lifecycle`, `claude/team-contract` (platform: `claude/claims-and-fields`)
 - **Tokens:** —
 
 ## Goal
@@ -64,14 +64,32 @@ all, whatever its run did, and the heartbeat named its claim with the work's id,
 - Tests: `crates/workspace/tests/team_work/heartbeat.rs` (renewed while a step waits and while paused; not named once
   succeeded or at a limit), `lost_claim.rs` (the run stopped, its reports ended).
 
+## Built (2026-11-17), the contract and the server
+
+Decided by the implementing agent on 2026-11-17 on the person's demand that a team project's Orchestrator keep its
+work as a local one does (`docs/design/local-and-team-parity.md`, *The rule*); D1's text for tasks ("only Running
+work renews") is replaced by this for work started through `work.start`. To confirm with the person.
+
+- **The contract** (`orchester-api` `v2::heartbeat`, `docs/cloud-api.md`, "Team authority P4 work"): a task's claim
+  renews while its latest work is `running`, `succeeded` (waiting to be merged or delivered) or `paused` at a limit;
+  `awaiting_human` stays `decision_required [D1]`, `failed` and `cancelled` `transition_denied`. A module claim
+  renews whenever its holder names it from the session that acquired it. No type changed; the stand-in team server
+  (`test_support`) follows the rule.
+- **The server** (platform `claude/claims-and-fields`): `renewal` and the heartbeat in
+  `sharing/claim_authority.rs`, `module_claims::renew` and schema 39 (`module_claims.heartbeat_at`); take-over,
+  release and fencing are as they were.
+- **The desktop** (`team_work/heartbeat.rs`): a claim is named by its newest run here: running work as before, work
+  the server saw succeed until its run is merged here and its Done answered (OA-30), work paused at a limit; and the
+  module claim of each module whose newest delivery goes on (requested, waiting for an Admin, merging, reporting). An
+  older server refuses the whole heartbeat for those (`decision_required` or `transition_denied`): the running
+  claims are then sent again alone.
+- Tests: `crates/workspace/tests/team_work/heartbeat.rs` (kept in review until the Done, at a limit, a module claim
+  while its delivery waits, an older server); the server's `tests/sharing/work_report_effects.rs`,
+  `module_takeover.rs` and `tests/acceptance/ownership.rs`.
+
 ## Left
 
-- **The server's contract (the platform's).** A claim whose work is reported succeeded and waits to be merged or
-  delivered, or is paused at a limit, is renewed by nothing: the server's heartbeat renews only `running` work
-  (`renewal`, `crates/server/src/sharing/claim_authority.rs`). A module claim is never renewed (D1, "no module renewal
-  yet"): it goes stale 15 minutes after it was taken, and only the D2 rule (no take-over while a task's work runs) holds
-  it. Both need the contract to say what renews them, here first (`orchester-api`, `docs/cloud-api.md`), then the
-  server; the desktop would then name those claims too. No route was invented for it.
+- **An older team server** (0.11.4 or older) still renews running work only; the person updates it.
 - **The chat's event.** A cancel is no run end the Orchestrator follows (`orchestrator/run_ends.rs`), so the
   conversation that led the run learns of the lost claim only when it next reads the run (`get_run`'s `team.fence`,
   the `claim_fenced` refusals). An end of its own needs its words in the app's run-end card (a design).

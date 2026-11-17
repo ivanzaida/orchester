@@ -2,6 +2,7 @@ use orchester_core::sharing::{WorkspaceRole, may_administer_workspace, may_read_
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::LimitRaises;
 use crate::Delta;
 
 /// Optimistic concurrency token for workspace policy, independent of task revisions.
@@ -46,11 +47,15 @@ impl From<PolicyRevision> for u64 {
   }
 }
 
-/// Effective persisted policy. New workspaces start at revision 1 with automatic merge off.
+/// Effective persisted policy. New workspaces start at revision 1 with automatic merge off and no raise of a run's
+/// limits by its holder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspacePolicy {
   pub revision: PolicyRevision,
   pub automatic_merge: bool,
+  /// The Admin's ceiling on raises of a team run's limits by the claim's holder (OA-34); `None`, left out, is off.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub limit_raises: Option<LimitRaises>,
 }
 
 impl Default for WorkspacePolicy {
@@ -58,6 +63,7 @@ impl Default for WorkspacePolicy {
     Self {
       revision: PolicyRevision::FIRST,
       automatic_merge: false,
+      limit_raises: None,
     }
   }
 }
@@ -85,12 +91,21 @@ pub struct WorkspacePolicyResponse {
   pub capabilities: WorkspaceCapabilities,
 }
 
-/// Replace automatic_merge only if revision still matches; authorize before applying in one transaction.
+/// Replace automatic_merge, and the ceiling of limit raises when named, only if revision still matches; authorize
+/// before applying in one transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspacePolicyChanges {
   pub revision: PolicyRevision,
   pub automatic_merge: bool,
+  /// The ceiling of limit raises (OA-34), `null` to turn it off; left out, it stays as it is. A server older than it
+  /// refuses it.
+  #[serde(
+    default,
+    deserialize_with = "crate::tasks::present",
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub limit_raises: Option<Option<LimitRaises>>,
 }
 
 /// HTTP 409 on the versioned surface; current policy lets a caller review and retry.

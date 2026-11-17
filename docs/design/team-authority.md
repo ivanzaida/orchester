@@ -132,7 +132,13 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
 
 - **D1** — decided for tasks: only Running work renews, so a run waiting for a person or in review isn't renewed
   (drawn in 02g, 02h). Still open: what renews a module claim. Drawn: the module line only says its tasks' runs
-  don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't.
+  don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't. **Changed
+  2026-11-17 (OA-31; decided by the implementing agent on 2026-11-17, to confirm with the person),** on the person's
+  rule that team work goes on as local work does (`docs/design/local-and-team-parity.md`): the holder's heartbeat also
+  renews work started through `work.start` that succeeded and waits to be merged or delivered, or is paused at a
+  limit, and a module claim its holder names (the desktop names it while the module's delivery goes on). Work that
+  waits for a person as the server sees it (`awaiting_human`) still is not renewed. The frames 02g, 02h and the module
+  line (04) are not redrawn yet.
 - **D4** — completing a task outside a run, manual blocked and reopen. Drawn first (on `BZc66`): a succeeded run never
   marks the task Done; there is no Done action. **Decided** (the person, 2026-11-08, `docs/architecture/server.md` row 96): the person
   holding the task's claim or an Admin marks it Done; only an Admin cancels it, reopens a Done or Canceled task, or
@@ -147,7 +153,13 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
   2026-11-05, `docs/architecture/server.md` row 80): a team task's pipeline is one of the team's pipelines, chosen by
   its resource id; only admins create and publish team pipelines, and a person's own local pipelines are not used for
   team tasks (hidden in a team project). Whoever may edit the task chooses it; the server's task route decides who
-  that is (its Admins today). Still open: the default pipeline and the limits (refused as D6).
+  that is (its Admins today). Still open: the default pipeline and the limits (refused as D6). **Decided for raising a
+  run's limits** (OA-34; decided by the implementing agent on 2026-11-17 by the option OA-34 proposed, to confirm with
+  the person): a workspace Admin sets in its policy a ceiling of the raises the claim's holder may make of a run's
+  limits (`limit_raises`: 1 to 3 raises of a run, each limit by 1 to 50 % at most; off by default); the holder's
+  computer asks the team server with `work.raise_limits` before it raises the run, and the server keeps and counts each
+  raise. With no ceiling the limits stay the Admin's (`decision_required [D6]`). A task's own limits, set on the task,
+  stay open.
 - **D8** — offline continuation, human waits and delivery after an outage. Drawn: running work goes on and reports
   wait; what the server does with a claim that went stale during the outage is named as open.
 

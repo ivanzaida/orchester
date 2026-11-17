@@ -43,9 +43,18 @@ pub(in crate::test_support::team_server) fn answer(
 }
 
 /// The fields of a task's content a change sets when it names them: absent or `null` leaves them.
-const SET: [&str; 7] = ["title", "brief", "criteria", "workflow", "priority", "tags", "blocking"];
+const SET: [&str; 8] = [
+  "title",
+  "brief",
+  "criteria",
+  "workflow",
+  "priority",
+  "tags",
+  "blocking",
+  "no_automatic_merge",
+];
 /// The fields a change may set to `null`: present, they take what it gives.
-const NULLABLE: [&str; 3] = ["module", "release", "blocked_reason"];
+const NULLABLE: [&str; 4] = ["module", "release", "blocked_reason", "story_points"];
 
 /// A task's definition as changed here: its revision, the fields as changed, who changed it last and when.
 #[derive(Clone, Debug)]

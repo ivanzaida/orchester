@@ -1,6 +1,7 @@
 //! `run_task` of a team task: its work starts through the team server, never from this computer's queue. The task is
 //! read from the server, claimed for this session (`claim.acquire`, which answers the claim already held), and its
-//! module read for the branch its work builds on; the branch's commit here is the start's base. Before anything is
+//! module read for the branch its work builds on; the branch's commit here is the start's base. A task blocked by tasks
+//! the server does not hold Done is refused as a local blocked task is (OA-35). Before anything is
 //! claimed, the pipeline must be ready on this computer ([`crate::readiness`]): one that is not is refused as
 //! `not_ready_here` with the missing parts, and no claim is taken, no work is asked for and no attempt is counted.
 //! `work.start` goes through [`crate::team_work`], which keeps the start before each boundary, checks the versions the
@@ -21,7 +22,7 @@ use serde_json::{Value, json};
 use super::{
   Team,
   bundle_missing::{self, claim_message},
-  on_worker,
+  on_worker, organized,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
   tasks::find,
@@ -74,6 +75,11 @@ pub(in crate::app_mcp::tools) async fn check_start(
 ) -> Result<CheckedStart, ToolError> {
   let project = team.reads(services).await?;
   let task = find(&project, key).await?;
+  // A task waits for the tasks that block it, as a local one does (OA-35): the server's, read there now.
+  let left = organized::unfinished(&project, &task.task.content.blocking).await?;
+  if !left.is_empty() {
+    return Err(organized::blocked(&left));
+  }
   let Some(named) = task.task.content.pipeline.clone() else {
     return Err(ToolError::refused(
       "task_incomplete",

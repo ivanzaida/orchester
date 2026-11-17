@@ -103,7 +103,14 @@ impl Reads {
       let of_task = read.facts(
         task,
         runs,
-        (held, blockers.iter().filter_map(|id| keys.get(id).cloned()).collect()),
+        (
+          held,
+          blockers
+            .iter()
+            .filter_map(|id| keys.get(id).cloned())
+            .chain(team.unfinished_blockers(task.id()))
+            .collect(),
+        ),
       )?;
       running += usize::from(of_task.phase == TaskPhase::Running);
       facts.insert(task.id(), of_task);
@@ -127,7 +134,7 @@ impl Reads {
           } else {
             seen.blocked.as_ref().map(|_| Parked::ByPerson)
           },
-          blockers: Vec::new(),
+          blockers: team.unfinished_blockers(id),
           low_disk: false,
           held: holds.project,
         },

@@ -916,7 +916,7 @@ The routes of authorized work, as the team server serves them (its `http/workspa
 | --- | --- | --- |
 | `GET /api/v2/projects/{p}/bundles/{sha256}` | | `ExecutionBundle`; `409 claim_lost` once no claim it was built for is the caller's in this session, and for a hash the workspace does not have |
 | `GET /api/v2/projects/{p}/bundles/{sha256}/files/{file}` | | the file's raw bytes (`application/octet-stream`, at most `MAX_BUNDLE_FILE_BYTES`); refused as the bundle is, `404 not_found` for a file it does not pin |
-| `POST /api/v2/projects/{p}/heartbeat` | `ExactHeartbeat {authorities:[AuthorityRef]}`, at most 256 | `Renewed {renewed:[ClaimRead],lost:[AuthorityRef]}`; `409 decision_required [D1]` while a named claim's work waits for a person or for review, `409 transition_denied` while it is not running; either renews nothing |
+| `POST /api/v2/projects/{p}/heartbeat` | `ExactHeartbeat {authorities:[AuthorityRef]}`, at most 256 | `Renewed {renewed:[ClaimRead],lost:[AuthorityRef]}`. A task's claim renews while its latest work is `running`, `succeeded` (waiting to be merged or delivered) or `paused` at a limit, and a module's claim whenever its holder names it from its session (OA-31, decided 2026-11-17); `409 decision_required [D1]` while a named claim's work waits for a person, `409 transition_denied` while it failed, was cancelled or never started; either renews nothing. A server older than OA-31 renews `running` work only and refuses a module authority `decision_required [D1]` |
 | `POST /api/v2/projects/{p}/commands` | `work.report {authority,run_id,event_id,sequence,outcome,artifacts}` | `{kind:"work",work:WorkRead,bundle:BundleRef,effects:[]}`, decided as the server's `docs/work-reports.md` orders it |
 
 The desktop's team work (`orchester_workspace::team_work`) uses them so:
@@ -972,10 +972,15 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   more, and its run, worktree and unsent reports stay on this computer. Other refusals are kept with their report.
   A run's local status and its server acceptance (the work as the server last answered its reports, by revision) are
   kept apart (`team_runs`).
-- **Heartbeat** (OA-31). Every minute, each claim with a run whose work the server last answered as running is named
-  once, by its exact authority with `work_id` `null` (the server's `docs/claim-authority.md`): a run at work, waiting
-  for a person, paused or interrupted here reports nothing that ends the work, so its claim is renewed. Work the server
-  saw succeed or pause at a limit is not named (it renews none); when nothing is named, nothing is sent.
+- **Heartbeat** (OA-31). Every minute, each claim of work this computer holds is named once, by its exact authority
+  with `work_id` `null` (the server's `docs/claim-authority.md`): a run at work, waiting for a person, paused or
+  interrupted here reports nothing that ends the work; work the server saw succeed is named until its run is merged
+  here and the server answered the Done the merge asks for (which releases the claim); work it saw pause at a limit is
+  named while the run may go on. A claim is named by its newest run here: one whose newest run failed or was cancelled
+  is not. The module claim of each module whose newest delivery is requested, waits for an Admin or has its merge or
+  report under way here is named too. When nothing is named, nothing is sent. A server older than this renewal
+  refuses the whole heartbeat for kept work or a module claim (`decision_required` or `transition_denied`): the
+  running claims are then sent again alone, so they are renewed as before, and the others go stale as they did.
   `decision_required` is returned as such, not retried as a failure; a lost authority fences its runs, and a fenced run
   that still works here is cancelled through its runner.
 - **Done after a merge** (OA-30). A team run merged here records its task's Done (`team_merged_done`); the holder's
@@ -1198,6 +1203,76 @@ Admin closes them. Tests: `crates/api/tests/team_lifecycle`.
 
 **Not changed here.** The desktop still refuses these changes for a team task (`decision_required` D4) until its actions
 and MCP tools take this path (S12 step 3).
+
+## Team task organization (OA-35)
+
+Decided by the implementing agent on 2026-11-17 on the person's rule that a team task is organized as a local one
+(`docs/design/local-and-team-parity.md`), to confirm with the person. A team task keeps, beside the tags and blocking
+tasks it already had (`TaskContent.tags`, `.blocking` with their gate), its story points and *Don't merge
+automatically*:
+
+- `TaskContent.story_points: StoryPoints?` (1, 2, 3, 5, 8, 13 or 21; another value is a malformed request) and
+  `TaskContent.no_automatic_merge: bool`, so `SharedTask` and `TaskRead` carry them too, and `Organization` (the
+  organization history's `from` and `to`) carries `no_automatic_merge`. Each is **left out when none or off**, so a
+  reader or a server older than the fields reads every task it read before.
+- `TaskChanges.story_points: StoryPoints | null` (present: set or cleared) and `TaskChanges.no_automatic_merge: bool`,
+  left out when unchanged. A server older than them refuses a patch that names them (`deny_unknown_fields`).
+- Who changes them: the task route's rule for every field that is no lifecycle action (`LifecycleRequest::of` counts
+  them as *other*): a workspace Admin, or the server admin; a member is `403 not_admin`. `task.create` (an Admin's)
+  takes them in its content.
+- The server keeps them in `tasks.story_points` and `tasks.no_automatic_merge` (its schema 39), none and off for every
+  task made before; its organization history records `no_automatic_merge` as part of the organization.
+
+The desktop's `create_task` and `update_task` of a team task take `story_points`, `blocked_by` (a blocking task by its
+key or server id among the team's tasks, gate `merge`), `tags` (by name among the team's tags, ignoring case; one the
+team lacks is made there first with `POST …/tags`, an Admin's) and `no_automatic_merge`, and return them; points go as a
+change of their own after the details and the organization. The Orchestrator reads them for a team task as for a local
+one: `run_task` refuses a task whose blocking tasks the server does not hold Done (`invalid_organization`, the local
+refusal), a merge nobody asked for is left to the person for *Don't merge automatically*, a Blocked mark or blocking
+tasks not Done (`MergeLeft::OptedOut`, `MarkedBlocked`, `BlockedByTasks`, read from the server), and where a led module
+stands lists a task blocked by a task of the same reading that is not Done as `blocked_by`. The stand-in team server
+(`test_support`) keeps both fields on its task patch.
+
+## Tasks made and moved by a module's holder (OA-32)
+
+Decided by the implementing agent on 2026-11-17, to confirm with the person, so that a member's computer that leads a
+team module can make its acceptance task and the tasks of its findings (OA-32), as a local one does:
+
+- `task.create` is a workspace Admin's, as before, **or** the command of a member who holds the claim of the module its
+  `content.module` names, from the session that acquired that claim; the task joins the module's claim as any task made
+  in a claimed module does. A member who holds no module claim of the workspace is `403 forbidden` before the command
+  is decided (and so is the replay of such a receipt once the claim is gone); one who holds another module's claim, or
+  names no module, is `403 forbidden` when it is decided.
+- The task's route (`PATCH …/tasks/{task}`): a patch whose only change is `module` set to a module (`actor` aside;
+  `TaskChanges::only_moves_into`) is the holder's of that module's claim from the session that acquired it, as an
+  Admin's; every other rule of the move stays (a task claimed by someone else cannot join, one under another module's
+  claim cannot leave it). Any other patch keeps the lifecycle and Admin rules: a member's is `403 not_admin`. The team's
+  web app has no session that holds a module claim, so its moves stay an Admin's.
+- The desktop sends a team task's module in `task.create` (`TaskAction::Create { module }`) instead of a move after it.
+
+## Team run limit raises (OA-34)
+
+D6 for a run's limits, decided by the implementing agent on 2026-11-17 by the option OA-34 proposed, to confirm with
+the person: the holder of a team task's claim may raise a run's limits within a ceiling the workspace's Admin sets,
+the ceiling the Orchestrator keeps for a local run it leads (OA-09); with none the limits stay the Admin's.
+
+- **The ceiling.** `WorkspacePolicy.limit_raises: LimitRaises?` (`{per_run: 1..=3, percent: 1..=50}`), left out while
+  off, which is the default. `WorkspacePolicyChanges.limit_raises`: a ceiling sets it, `null` turns it off, left out it
+  stays as it is; the policy route's rule (an Admin's, on the policy's revision). A server older than the field refuses
+  a change that names it, and reads as no ceiling.
+- **The raise.** `work.raise_limits {authority, run_id, raise}` on `POST /api/v2/projects/{p}/commands`, under the work's
+  exact authority (`work_id` named, as `work.report`), with `raise: LimitRaise` naming each limit it raises,
+  `{budget_tokens?, max_duration_ms?, step_budget_tokens?}`, each `{from, to}` with `0 < from < to` (tokens, or
+  milliseconds); at least one. It answers `{kind:"limits_raised", work_id, run_id, raises, effects:[]}`, `raises` being
+  the run's raises with this one. Refusals, in this order: fencing as `work.report` (`claim_lost`, `session_mismatch`,
+  `404`); work that is not `paused` at its limit, `409 transition_denied`; no ceiling, `409 decision_required [D6]`;
+  one raise more than `per_run` for the same work and run, or a limit above `from + from × percent / 100`, `422
+  invalid` (`LimitRaises::allows`). The server keeps each raise with who made it and when, and audits it.
+- **The desktop.** `continue_run`'s raise of a team run sends the run's queued reports, then the raise, each limit from
+  what the run had; it raises the run only once the server kept the raise. A limit lifted altogether is refused
+  `raise_beyond_ceiling` before anything is sent, and a limit added or lowered is no raise (nothing is asked). The
+  server's `invalid` is `raise_beyond_ceiling`, its `decision_required` the tool's `decision_required` as before. The
+  stand-in team server of the workspace tests keeps the ceiling and the raises.
 
 ## Team authority releases
 

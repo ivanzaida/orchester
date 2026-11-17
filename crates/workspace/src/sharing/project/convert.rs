@@ -139,6 +139,8 @@ pub fn content(pipelines: &TeamPipelines, details: &TaskDetails, organization: &
     blocked_reason: None,
     module: None,
     release: None,
+    story_points: None,
+    no_automatic_merge: false,
   };
   content.set_organization(organization);
   content

@@ -166,8 +166,8 @@ fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   );
   let budget = json!({"project": "Kontur", "key": "KON-7", "budget_tokens": 1000});
   assert_eq!(checkout.refused("update_task", &budget), "decision_required");
-  let points = json!({"project": "Kontur", "key": "KON-7", "story_points": 3});
-  assert_eq!(checkout.refused("update_task", &points), "team_field_unsupported");
+  let delivers = json!({"project": "Kontur", "key": "KON-7", "delivers": "report"});
+  assert_eq!(checkout.refused("update_task", &delivers), "team_field_unsupported");
   assert_eq!(seen.lock().task_edits, 2, "only the Done reached the server");
   let draft = json!({"project": "Kontur", "key": "KON-7"});
   assert_eq!(checkout.refused("return_to_draft", &draft), "team_no_queue");

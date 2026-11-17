@@ -11,6 +11,7 @@
 
 #![allow(dead_code, reason = "each test binary uses some of the server")]
 
+use orchester_api::v2::LimitRaise;
 use orchester_core::id::{ClaimId, WorkId};
 use serde_json::{Value, json};
 
@@ -60,6 +61,7 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
       state.delivery_reports += 1;
       team_deliveries::report(state, token, command)
     }
+    "work.raise_limits" => raise_limits(state, token, command),
     _ => return None,
   };
   Some(match result {
@@ -74,6 +76,9 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
       let mut refused = refusal(Some(operation), code);
       if let (true, Some(details)) = (code == "bundle_missing", &state.bundle_missing) {
         refused["details"] = details.clone();
+      }
+      if code == "decision_required" {
+        refused["details"] = json!({"decisions": ["D6"]});
       }
       (status, refused)
     }
@@ -274,6 +279,36 @@ fn report(state: &mut State, token: &str, command: &Value) -> Result<Value, Refu
     "bundle": {"sha256": work.bundle, "schema_version": 1}, "effects": []});
   state.events.insert(event, (command.clone(), answer.clone()));
   Ok(answer)
+}
+
+/// `work.raise_limits` (OA-34): the holder's raise of a run of the task's latest work, which must be paused at its
+/// limit, within the workspace's ceiling (`State::limit_raises`; none is `decision_required [D6]`, beyond it
+/// `invalid`). Each raise kept is counted for its work and run.
+fn raise_limits(state: &mut State, token: &str, command: &Value) -> Result<Value, Refused> {
+  let claim: ClaimId = serde_json::from_value(command["authority"]["claim_id"].clone()).expect("a claim id");
+  let work_id: WorkId = serde_json::from_value(command["authority"]["work_id"].clone()).expect("a work id");
+  let latest = state.works.iter().rev().find(|work| work.claim == claim);
+  if !holds(state, token, claim) || latest.is_none_or(|latest| latest.id != work_id) {
+    return Err((409, "claim_lost"));
+  }
+  if latest.is_some_and(|latest| latest.state != "paused") {
+    return Err((409, "transition_denied"));
+  }
+  let Some(ceiling) = state.limit_raises else {
+    return Err((409, "decision_required"));
+  };
+  let raise: LimitRaise = serde_json::from_value(command["raise"].clone()).map_err(|_| (422, "invalid"))?;
+  let run = command["run_id"].as_str().expect("a run id").to_owned();
+  let raised = state
+    .raises
+    .iter()
+    .filter(|kept| **kept == (work_id, run.clone()))
+    .count();
+  ceiling
+    .allows(u32::try_from(raised).expect("a few raises"), &raise)
+    .map_err(|_| (422, "invalid"))?;
+  state.raises.push((work_id, run.clone()));
+  Ok(json!({"kind": "limits_raised", "work_id": work_id, "run_id": run, "raises": raised + 1, "effects": []}))
 }
 
 fn work_read(state: &State, work: &Work) -> Value {

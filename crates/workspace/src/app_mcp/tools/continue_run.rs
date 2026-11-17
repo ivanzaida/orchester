@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use orchester_api::v2::DecisionId;
+use orchester_api::v2::{LimitRaise, RaisedLimit};
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
@@ -135,12 +135,13 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
 /// is still used up. A team task's run (told by the run itself) goes on under the claim its work started with, as
-/// from its task's page: one the team server fenced is refused, and so is raising its limits, which are its Admin's
-/// (D6). A local task's run in a team project continues as a local run.
+/// from its task's page: one the team server fenced is refused, and a raise of its limits is asked of the team server
+/// first, within the ceiling its Admin set (OA-34; none, the limits stay the Admin's: D6). A local task's run in a team
+/// project continues as a local run.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
-  let (project, run, request, team) = blocking(move || {
+  let (project, run, (request, raise), team) = blocking(move || {
     let decision = match args.choice {
       Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept | Choice::ResolveConflicts { .. } => {
         Some(DecisionKind::Stuck)
@@ -155,10 +156,19 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
     let (run, team) = team_checked(&project.repo_root, &args)?;
     let jobs = reading.jobs.of(project.project.id());
     let worktrees = reading.run_worktrees(&project.repo_root, project.project.name().as_str());
-    let (run, request) = request(&project.repo_root, (&run, &args), (&worktrees, &jobs, by))?;
-    Ok((project, run, request, team))
+    let (run, request, raise) = request(&project.repo_root, (&run, &args), (&worktrees, &jobs, by))?;
+    Ok((project, run, (request, raise), team))
   })
   .await?;
+  if team {
+    match raise {
+      TeamRaise::Nothing => {}
+      TeamRaise::Raises(raise) => {
+        team::raise_limits(services, (&project.project.id().to_string(), run.id), raise).await?
+      }
+      TeamRaise::Lifts => return Err(team::beyond_ceiling()),
+    }
+  }
   let (servers, runners) = (&services.servers, &services.runners);
   let (claim, command) = match request {
     // A team run resumes under the claim its work started with, and takes none of the old sharing stream.
@@ -185,17 +195,13 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
 }
 
 /// The run `args` names in the project at `root`, and whether it is a team task's run (told by the run itself: a local
-/// task's run in a team project continues as a local run). A team run goes on under the claim its work started with:
-/// raising its limits is refused, they are its Admin's (D6), and so is any choice for a run the team server fenced
-/// (`claim_fenced`).
+/// task's run in a team project continues as a local run). A team run goes on under the claim its work started with;
+/// any choice for a run the team server fenced is refused (`claim_fenced`).
 fn team_checked(root: &Path, args: &ContinueRun) -> Result<(Run, bool), ToolError> {
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &args.run)?;
   if !team::is_team_run(&db, &run)? {
     return Ok((run, false));
-  }
-  if matches!(args.choice, Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. }) {
-    return Err(team::decision_required(DecisionId::D6));
   }
   team::refuse_fenced(&db, run.id())?;
   Ok((run, true))
@@ -226,7 +232,7 @@ pub(crate) fn offered(
 ) -> Result<Offered, ToolError> {
   // Who would decide does not change what is offered.
   let run = find_run(&ProjectDb::open(root)?, &args.run)?;
-  let (named, request) = request(root, (&run, args), (worktrees, jobs, Answerer::Person))?;
+  let (named, request, _) = request(root, (&run, args), (worktrees, jobs, Answerer::Person))?;
   let (target, conflicts) = match request {
     Request::Command(
       Command::DecideStuckRunAs {
@@ -248,14 +254,14 @@ pub(crate) fn offered(
   })
 }
 
-/// The run `args` names in the project at `root` and what continuing it asks of the runner, decided by `by`; a
-/// refusal when its task page would not offer the choice now. The worktree of a run that ended is read among
-/// `worktrees`; `jobs` hold what the run's last merge stopped at.
+/// The run `args` names in the project at `root`, what continuing it asks of the runner, decided by `by`, and what it
+/// raises of the run's limits; a refusal when its task page would not offer the choice now. The worktree of a run that
+/// ended is read among `worktrees`; `jobs` hold what the run's last merge stopped at.
 fn request(
   root: &Path,
   (run, args): (&Run, &ContinueRun),
   (worktrees, jobs, by): (&RunWorktrees, &IntegrationJobs, Answerer),
-) -> Result<(Named, Request), ToolError> {
+) -> Result<(Named, Request, TeamRaise), ToolError> {
   let number = run.number().get().to_string();
   let detail = TaskDetail::load_in(root, run.task())?;
   // Only a task's latest run can be stopped at a limit; its page offers the choices.
@@ -274,12 +280,17 @@ fn request(
     id: run.id(),
     task: run.task(),
   };
+  let mut raised = TeamRaise::Nothing;
   let request = match (view.run.status(), &args.choice) {
     (_, Choice::ResolveConflicts { step, note }) => {
       let asked = (step.as_deref(), note.as_deref());
       resolve_conflicts((root, worktrees, jobs), (&detail, view), asked, (by, &number))?
     }
-    (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => at_limit(view, (*limit, choice), &number)?,
+    (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => {
+      let (request, raise) = at_limit(view, (*limit, choice), &number)?;
+      raised = raise;
+      request
+    }
     (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRunAs {
       run: run.id(),
       expected: view.run.last_sequence(),
@@ -307,15 +318,19 @@ fn request(
       ));
     }
   };
-  Ok((named, request))
+  Ok((named, request, raised))
 }
 
-/// What continuing a run stopped at `limit` with `choice` asks.
-fn at_limit(view: &RunView, (limit, choice): (RunLimit, &Choice), number: &str) -> Result<Request, ToolError> {
+/// What continuing a run stopped at `limit` with `choice` asks, and what it raises of the run's limits.
+fn at_limit(
+  view: &RunView,
+  (limit, choice): (RunLimit, &Choice),
+  number: &str,
+) -> Result<(Request, TeamRaise), ToolError> {
   let not_offered = || refused("choice_not_offered", "appMcp.errors.choiceNotOffered", number);
   let used = raise::budget_use(view, limit);
   let raise = match (limit, choice) {
-    (RunLimit::DailyBudget, Choice::Resume) => return Ok(Request::Resume),
+    (RunLimit::DailyBudget, Choice::Resume) => return Ok((Request::Resume, TeamRaise::Nothing)),
     (
       RunLimit::Tokens | RunLimit::Time,
       Choice::RaiseLimits {
@@ -352,7 +367,67 @@ fn at_limit(view: &RunView, (limit, choice): (RunLimit, &Choice), number: &str) 
     }
     _ => return Err(not_offered()),
   };
-  Ok(Request::Command(raise.command(view.id())))
+  Ok((
+    Request::Command(raise.command(view.id())),
+    team_raise(view, limit, raise),
+  ))
+}
+
+/// What `raise` asks of a team run's limits (OA-34), for its team server's ceiling.
+#[derive(Clone, Copy)]
+enum TeamRaise {
+  /// Nothing above what the run had: each limit kept, lowered or added.
+  Nothing,
+  Raises(LimitRaise),
+  /// A limit lifted altogether, which no ceiling allows.
+  Lifts,
+}
+
+/// One limit from `from` to `to`, in its unit.
+enum Changed {
+  Kept,
+  Raised(RaisedLimit),
+  Lifted,
+}
+
+fn changed(from: Option<u64>, to: Option<u64>) -> Changed {
+  match (from, to) {
+    (Some(_), None) => Changed::Lifted,
+    (Some(from), Some(to)) => RaisedLimit::new(from, to).map_or(Changed::Kept, Changed::Raised),
+    (None, _) => Changed::Kept,
+  }
+}
+
+/// What `raise` of `view`'s run, stopped at `limit`, raises: its token budget and time limit (in milliseconds), or
+/// its step's budget, each from what the run had.
+fn team_raise(view: &RunView, limit: RunLimit, raise: Raise) -> TeamRaise {
+  let ms = |limit: std::time::Duration| u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
+  let limits = match raise {
+    Raise::Limits(limits) => [
+      changed(
+        view.run.budget().map(|budget| budget.get()),
+        limits.budget.map(|budget| budget.get()),
+      ),
+      changed(view.run.max_duration().map(ms), limits.max_duration.map(ms)),
+      Changed::Kept,
+    ],
+    Raise::StepBudget(budget) => {
+      let had = raise::budget_use(view, limit).and_then(|(_, budget)| budget);
+      [
+        Changed::Kept,
+        Changed::Kept,
+        changed(had.map(|budget| budget.get()), budget.map(|budget| budget.get())),
+      ]
+    }
+  };
+  if limits.iter().any(|limit| matches!(limit, Changed::Lifted)) {
+    return TeamRaise::Lifts;
+  }
+  let [budget, time, step] = limits.map(|limit| match limit {
+    Changed::Raised(raised) => Some(raised),
+    Changed::Kept | Changed::Lifted => None,
+  });
+  LimitRaise::new(budget, time, step).map_or(TeamRaise::Nothing, TeamRaise::Raises)
 }
 
 /// The decision a run waiting after its step used up its retries or broke again takes with `choice`.

@@ -1,13 +1,15 @@
 //! A task as an S10 read gives it: every public field of a shared task ([`SharedTask`]), then its assignee, its work,
 //! its effective claim and the caller's capabilities on it. The workflow status stays apart from the work's execution
 //! state. Every field is sent; one without a value is `null`, and an unknown field is refused. `closed` and `blocked`
-//! came later: a server leaves them out when it has no record, and so does an older one.
+//! came later: a server leaves them out when it has no record, and so does an older one. `story_points` and
+//! `no_automatic_merge` (OA-35) came later too, left out when the task has none or it is off.
 
 use orchester_core::{
   id::{ModuleId, ReleaseId, TagId, TaskId},
   sharing::TaskRevision,
   task::{
     TaskStatus,
+    estimate::StoryPoints,
     organization::{Priority, WorkflowStatus},
   },
 };
@@ -81,6 +83,10 @@ struct TaskReadWire {
   closed: Option<TaskClosure>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   blocked: Option<Attribution>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  story_points: Option<StoryPoints>,
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  no_automatic_merge: bool,
 }
 
 impl From<TaskReadWire> for TaskRead {
@@ -98,6 +104,8 @@ impl From<TaskReadWire> for TaskRead {
       blocked_reason: wire.blocked_reason,
       module: wire.module,
       release: wire.release,
+      story_points: wire.story_points,
+      no_automatic_merge: wire.no_automatic_merge,
     };
     Self {
       task: SharedTask {
@@ -170,6 +178,8 @@ impl From<TaskRead> for TaskReadWire {
       capabilities: read.capabilities,
       closed: read.closed,
       blocked: read.blocked,
+      story_points: content.story_points,
+      no_automatic_merge: content.no_automatic_merge,
     }
   }
 }

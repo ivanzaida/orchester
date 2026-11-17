@@ -2,8 +2,9 @@
 //! a run changes. Each change of a team run's outcome (cancelled, failed, succeeded, paused at a limit) is reported in
 //! order, so the server learns that a run ended and its work no longer runs; a run whose authority the server took
 //! away is stopped (OA-31); the task of a run merged here is set Done (OA-30). The minute's round also renews the
-//! claims of the work the server sees running (OA-31): one heartbeat per team project a minute, within the server's
-//! limit. A project with no team run to carry on and no Done to send needs no session and sends nothing.
+//! claims of the work this computer holds and of its modules' deliveries (OA-31): one heartbeat per team project a
+//! minute (two against a server that renews running work only), within the server's limit. A project with no team run
+//! to carry on and no Done to send needs no session and sends nothing.
 
 use std::path::Path;
 

@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// The run's work merged into its module's branch, as Orchester records it.
-fn merge(checkout: &Checkout, run: RunId) {
+pub(crate) fn merge(checkout: &Checkout, run: RunId) {
   let merge = RunMerge {
     run,
     into: BranchName::new(MODULE_BRANCH).expect("branch"),

@@ -6,24 +6,28 @@
 //! from one pipeline to another is a person's decision, as on a local project. Limits wait for a team-authority
 //! decision (D6) and are refused before anything is sent. A workflow status or blocked reason change is the task
 //! lifecycle (D4): the same patch, which the server allows the claim's holder (Done, Blocked) or an Admin, and a create
-//! carries no status. What the server does not hold of a team task (story points, tags and blocking tasks by name,
-//! Don't merge automatically, delivers, the base branch) is refused rather than kept on this computer.
+//! carries no status. Story points, the tasks that block it, its tags and *Don't merge automatically* are the server's
+//! as its other details (OA-35): a blocking task is named by its key among the team's tasks, a tag by its name among
+//! the team's tags (made there when the team has none of it), and a member's change of them is `not_admin`. What the
+//! server does not hold of a team task (delivers, the base branch) is refused rather than kept on this computer.
 //!
-//! The server takes a task's details, its organization and its module on separate routes, so one call may send up to
-//! three changes, each on the revision the one before it left. Once one is saved, a later refusal does not undo it:
-//! the tool answers the task as saved, with the changes `not_saved` and why, so a client never sends the saved part
-//! again (a second task, for a create).
+//! A new task is made in its module at once, which the holder of the module's claim may do as an Admin may (OA-32). The
+//! server takes a task's details, its organization, its story points and its module as separate changes, so one
+//! call may send up to four, each on the revision the one before it left. Once one is saved, a later refusal does not
+//! undo it: the tool answers the task as saved, with the changes `not_saved` and why, so a client never sends the saved
+//! part again (a second task, for a create).
 
 use orchester_api::{
   SharedTask,
   v2::{DecisionId, LifecycleAction, TeamCommandValue},
 };
 use orchester_core::{
-  id::{ModuleId, ResourceId},
+  id::{ModuleId, ResourceId, TagId},
   name::Name,
   task::{
     TaskDetails, TaskLimits,
-    organization::{OrganizationError, TaskOrganization, WorkflowStatus},
+    estimate::StoryPoints,
+    organization::{BlockingTask, OrganizationError, TaskOrganization, WorkflowStatus},
   },
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -32,7 +36,7 @@ use serde_json::{Value, json};
 use super::{
   Team,
   modules::module_named,
-  on_worker,
+  on_worker, organized,
   outcome::{accepted, action_refused, team_pipeline_required},
   tasks::find,
 };
@@ -44,7 +48,7 @@ use crate::{
     services::blocking,
     tools::{
       setup::widening,
-      task_write::{CreateTask, UpdateTask, pipeline_named},
+      task_write::{CreateTask, UpdateTask, pipeline_named, story_points},
       wire::{Rank, Workflow},
     },
   },
@@ -57,6 +61,7 @@ use crate::{
 enum Change {
   Details(TaskDetails, TaskDetails),
   Organization(TaskOrganization, TaskOrganization),
+  Points(StoryPoints),
   Module(Option<ModuleId>),
 }
 
@@ -77,6 +82,11 @@ impl Change {
         base,
         edited,
       },
+      Self::Points(points) => TaskAction::Points {
+        task,
+        read,
+        points: Some(points),
+      },
       Self::Module(module) => TaskAction::Move { task, read, module },
     }
   }
@@ -86,6 +96,7 @@ impl Change {
     match self {
       Self::Details(..) => "details",
       Self::Organization(..) => "organization",
+      Self::Points(_) => "story_points",
       Self::Module(_) => "module",
     }
   }
@@ -103,10 +114,6 @@ pub(in crate::app_mcp::tools) async fn create_task(
   args: &CreateTask,
 ) -> Result<Value, ToolError> {
   let unsupported = [
-    ("story_points", args.story_points.is_some()),
-    ("tags", !args.tags.is_empty()),
-    ("blocked_by", !args.blocked_by.is_empty()),
-    ("no_automatic_merge", args.no_automatic_merge),
     ("delivers", args.delivers.is_some()),
     ("base_branch", args.base_branch.is_some()),
   ];
@@ -119,6 +126,7 @@ pub(in crate::app_mcp::tools) async fn create_task(
   if status != WorkflowStatus::default() {
     return Err(action_refused(ActionError::StatusOnCreate(status)));
   }
+  let points = story_points(args.story_points)?;
   let (pipeline, _) = pipelines((services, team), args.pipeline.clone(), None).await?;
   let details = TaskDetails {
     title: title(&args.title)?,
@@ -127,32 +135,55 @@ pub(in crate::app_mcp::tools) async fn create_task(
     pipeline,
     limits: TaskLimits::NONE,
   };
-  let organization = TaskOrganization::new(
-    status,
-    args.priority.map(Into::into).unwrap_or_default(),
-    args.blocked_reason.clone(),
-    Vec::new(),
-    Vec::new(),
-  )
-  .map_err(organization_refused)?;
+  let project = team.reads(services).await?;
+  let blocking = organized::blockers(&project, &args.blocked_by).await?;
   let module = match args.module.as_deref() {
-    Some(named) => Some(module_named(&team.reads(services).await?, named).await?),
+    Some(named) => Some(module_named(&project, named).await?),
     None => None,
   };
+  // Checked with no tags first, so a refused organization makes no tag on the server.
+  let organization = new_organization(args, status, (blocking, Vec::new()))?;
+  let organization = organization.with_tags(organized::tags(services, team, &args.tags).await?);
   let dispatcher = team.dispatcher(services).await?;
   let (task, not_saved) = on_worker(move || async move {
-    let created = match carry_out(&dispatcher, TaskAction::Create { details, organization }).await? {
+    let create = TaskAction::Create {
+      details,
+      organization,
+      module,
+    };
+    let created = match carry_out(&dispatcher, create).await? {
       Accepted::Command(receipt) => match receipt.result {
         TeamCommandValue::Task { task, .. } => *task,
         _ => return Err(not_a_task()),
       },
       Accepted::Definition(_) => return Err(not_a_task()),
     };
-    let moves = module.map(|module| Change::Module(Some(module)));
-    apply(&dispatcher, (created, true), moves.into_iter().collect()).await
+    apply(
+      &dispatcher,
+      (created, true),
+      points.map(Change::Points).into_iter().collect(),
+    )
+    .await
   })
   .await?;
   Ok(answer(&task, not_saved))
+}
+
+/// A new team task's organization as `args` give it, with its `blocking` tasks and `tags` resolved on the server.
+fn new_organization(
+  args: &CreateTask,
+  status: WorkflowStatus,
+  (blocking, tags): (Vec<BlockingTask>, Vec<TagId>),
+) -> Result<TaskOrganization, ToolError> {
+  TaskOrganization::new(
+    status,
+    args.priority.map(Into::into).unwrap_or_default(),
+    args.blocked_reason.clone(),
+    blocking,
+    tags,
+  )
+  .map(|organization| organization.with_no_automatic_merge(args.no_automatic_merge))
+  .map_err(organization_refused)
 }
 
 pub(in crate::app_mcp::tools) async fn update_task(
@@ -161,10 +192,6 @@ pub(in crate::app_mcp::tools) async fn update_task(
   args: &UpdateTask,
 ) -> Result<Value, ToolError> {
   let unsupported = [
-    ("story_points", args.story_points.is_some()),
-    ("tags", args.tags.is_some()),
-    ("blocked_by", args.blocked_by.is_some()),
-    ("no_automatic_merge", args.no_automatic_merge.is_some()),
     ("delivers", args.delivers.is_some()),
     ("base_branch", args.base_branch.is_some()),
   ];
@@ -172,6 +199,7 @@ pub(in crate::app_mcp::tools) async fn update_task(
   if args.budget_tokens.is_some() || args.time_limit_minutes.is_some() {
     return Err(action_refused(ActionError::DecisionRequired(DecisionId::D6)));
   }
+  let points = story_points(args.story_points)?;
   let project = team.reads(services).await?;
   let module = match &args.module {
     Some(Some(named)) => Some(Some(module_named(&project, named).await?)),
@@ -179,6 +207,10 @@ pub(in crate::app_mcp::tools) async fn update_task(
     None => None,
   };
   let task = find(&project, &args.key).await?.task;
+  let blocking = match &args.blocked_by {
+    Some(named) => Some(organized::blockers(&project, named).await?),
+    None => None,
+  };
   let (chosen, current) = pipelines((services, team), args.pipeline.clone(), task.content.pipeline.clone()).await?;
   // Another pipeline runs the task with other steps, profiles and approvals: a person decides that, as on a local
   // project. A task without one may get any team pipeline.
@@ -188,13 +220,22 @@ pub(in crate::app_mcp::tools) async fn update_task(
   {
     widening::allowed(services, vec![Message::new("appMcp.widens.taskPipeline")])?;
   }
-  // Everything refused in advance is refused here, before the first change is sent.
+  // Everything refused in advance is refused here, before the first change is sent: the organization is checked with
+  // the task's tags before any tag is made on the server.
   let mut changes = Vec::new();
   if let Some((base, edited)) = edited_details(&task, args, (current, chosen.or(current)))? {
     changes.push(Change::Details(base, edited));
   }
-  if let Some((base, edited)) = organized(&task, args)? {
+  organized(&task, args, (blocking.clone(), None))?;
+  let tags = match &args.tags {
+    Some(names) => Some(organized::tags(services, team, names).await?),
+    None => None,
+  };
+  if let Some((base, edited)) = organized(&task, args, (blocking, tags))? {
     changes.push(Change::Organization(base, edited));
+  }
+  if let Some(points) = points.filter(|points| task.content.story_points != Some(*points)) {
+    changes.push(Change::Points(points));
   }
   if let Some(module) = module.filter(|module| *module != task.content.module) {
     changes.push(Change::Module(module));
@@ -301,11 +342,22 @@ async fn pipelines(
   .await
 }
 
-/// The organization read of `task` and as `args` change it; `None` when they change nothing of it. A workflow status
-/// change the lifecycle does not have (D4: In progress, In review, Done to Canceled) is refused before any change of
-/// the call is sent; who may make the others the team server decides, by the caller's claim and role.
-fn organized(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskOrganization, TaskOrganization)>, ToolError> {
-  if args.workflow_status.is_none() && args.priority.is_none() && args.blocked_reason.is_none() {
+/// The organization read of `task` and as `args` change it, with the `blocking` tasks and the `tags` they name as
+/// the server resolved them (the task's own where they name none); `None` when they change nothing of it. A workflow
+/// status change the lifecycle does not have (D4: In progress, In review, Done to Canceled) is refused before any
+/// change of the call is sent; who may make the others the team server decides, by the caller's claim and role.
+fn organized(
+  task: &SharedTask,
+  args: &UpdateTask,
+  (blocking, tags): (Option<Vec<BlockingTask>>, Option<Vec<TagId>>),
+) -> Result<Option<(TaskOrganization, TaskOrganization)>, ToolError> {
+  let unchanged = args.workflow_status.is_none()
+    && args.priority.is_none()
+    && args.blocked_reason.is_none()
+    && args.blocked_by.is_none()
+    && args.tags.is_none()
+    && args.no_automatic_merge.is_none();
+  if unchanged {
     return Ok(None);
   }
   let base = task.content.organization().core().map_err(organization_refused)?;
@@ -323,10 +375,11 @@ fn organized(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskOrganiz
       Some(reason) => reason.clone(),
       None => base.blocked_reason().map(str::to_owned),
     },
-    base.dependencies().to_vec(),
-    base.tags().to_vec(),
+    blocking.unwrap_or_else(|| base.dependencies().to_vec()),
+    tags.unwrap_or_else(|| base.tags().to_vec()),
   )
-  .map_err(organization_refused)?;
+  .map_err(organization_refused)?
+  .with_no_automatic_merge(args.no_automatic_merge.unwrap_or(base.no_automatic_merge()));
   Ok((edited != base).then_some((base, edited)))
 }
 
@@ -359,6 +412,10 @@ fn saved(task: &SharedTask) -> Value {
     "workflow_status": Workflow::from(task.content.workflow),
     "priority": Rank::from(task.content.priority),
     "blocked_reason": task.content.blocked_reason,
+    "blocked_by": task.content.blocking,
+    "tags": task.content.tags,
+    "story_points": task.content.story_points,
+    "no_automatic_merge": task.content.no_automatic_merge,
     "module": task.content.module.map(|module| module.to_string()),
     "team": true,
   })

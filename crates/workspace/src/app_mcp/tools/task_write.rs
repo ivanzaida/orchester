@@ -340,7 +340,7 @@ fn placed(
 }
 
 /// The story points given, on the scale.
-fn story_points(given: Option<u32>) -> Result<Option<StoryPoints>, ToolError> {
+pub(super) fn story_points(given: Option<u32>) -> Result<Option<StoryPoints>, ToolError> {
   given
     .map(|points| {
       StoryPoints::new(points).map_err(|_| {
