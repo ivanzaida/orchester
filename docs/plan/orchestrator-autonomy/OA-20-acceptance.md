@@ -64,5 +64,5 @@ Whether the acceptance may be skipped for a module of one task. Built as: never 
 the chat's `create_task` in the turn of the acceptance run's end, as its instructions say: Orchester does not parse a
 report into tasks.
 
-**Not built:** the module form's rows and the Summary's *accepted* state (frames D); a team module's acceptance (a
-team's tasks are made on its server: `start_acceptance` is refused there, a row of the parity table).
+**Not built:** the module form's rows and the Summary's *accepted* state (frames D). A team module's acceptance was
+built with OA-32 on 2026-11-17.

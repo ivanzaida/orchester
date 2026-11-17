@@ -170,14 +170,20 @@ fn acceptance_of(db: &ProjectDb, task: &Task, stale: bool) -> Result<Acceptance,
     Some(run) => db.run_merge(run.id())?,
     None => None,
   };
-  let status = task.organization().status();
   let phase = TaskPhase::of(task, latest, merge.as_ref());
-  Ok(match (status, phase) {
-    (WorkflowStatus::Canceled, _) | (_, TaskPhase::Failed | TaskPhase::Cancelled) => Acceptance::NotPassed,
-    (WorkflowStatus::Done, _) | (_, TaskPhase::Merged) if stale => Acceptance::NotPassed,
-    (WorkflowStatus::Done, _) | (_, TaskPhase::Merged) => Acceptance::Passed,
+  Ok(acceptance_by(Some(task.organization().status()), Some(phase), stale))
+}
+
+/// Where an acceptance task stands, by its workflow status and the phase of its latest run, each `None` while it is
+/// not known here (a team task the server's reading has not seen, or one that never ran here); `stale`: work was
+/// merged into the module's branch after it was made. One rule for a local and a team module.
+pub(crate) const fn acceptance_by(status: Option<WorkflowStatus>, phase: Option<TaskPhase>, stale: bool) -> Acceptance {
+  match (status, phase) {
+    (Some(WorkflowStatus::Canceled), _) | (_, Some(TaskPhase::Failed | TaskPhase::Cancelled)) => Acceptance::NotPassed,
+    (Some(WorkflowStatus::Done), _) | (_, Some(TaskPhase::Merged)) if stale => Acceptance::NotPassed,
+    (Some(WorkflowStatus::Done), _) | (_, Some(TaskPhase::Merged)) => Acceptance::Passed,
     _ => Acceptance::UnderWay,
-  })
+  }
 }
 
 /// Why a module was not delivered.

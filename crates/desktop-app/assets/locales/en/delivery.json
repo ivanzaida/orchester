@@ -13,6 +13,12 @@
     },
     "reading": "Reading delivery…",
     "readFailed": "Delivery couldn't be read",
+    "team": {
+      "counts": "Built from the team's tasks on its server and the runs on this computer: work a teammate merged on their computer isn't counted as delivered.",
+      "more": "The team's server holds more tasks than were read: these figures count the first {{count}}.",
+      "unavailableTitle": "Delivery can't be read now",
+      "unavailableBody": "{{server}} hasn't answered since {{time}}. The figures show again when it does."
+    },
     "unreadRuns": {
       "one": "1 run's record couldn't be read; what it did is left out.",
       "other": "{{count}} runs' records couldn't be read; what they did is left out."
@@ -68,6 +74,10 @@
       "empty": {
         "title": "No tasks yet",
         "detail": "The flow starts with the project's first task."
+      },
+      "team": {
+        "title": "No flow for a team project",
+        "detail": "The team's server keeps no history of a task's workflow status."
       }
     },
     "forecast": {

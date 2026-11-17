@@ -2,12 +2,13 @@
 //! read whole from the team server, so a task the server holds in it that never ran on this computer is among what
 //! the conversation leads. It counts in where the module stands (`get_standing`), with the server's Blocked mark as
 //! *parked by the person*; `/watching` and `get_watches` answer for the project; and the module's watch does not end
-//! while such a task is open. Once its every task is done, work merged into its branch here waits for its delivery,
-//! which the conversation asks of the team server and an Admin or the team's automatic merge decides.
+//! while such a task is open. Once its every task is done, work merged into its branch here waits, as a local module's,
+//! for its acceptance (OA-32) and then its delivery, which the conversation asks of the team server and an Admin or
+//! the team's automatic merge decides.
 
 use orchester_core::{
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId},
+  id::{ChatId, ChatMessageId, TaskId},
   integration::{MergeKind, RunMerge},
   module::delivery::{DeliveryStep, PersonsDelivery},
   orchestrator::{Ceilings, Chat, Subscription, TurnState, WatchMode, WatchTarget, standing::TargetStanding},
@@ -180,6 +181,35 @@ fn team_mcp_a_led_module_whose_work_is_merged_waits_for_its_delivery_until_the_t
   })
   .expect("the merge");
   drop(db);
+  // As a local module: nothing looked at the whole of it without an acceptance pipeline, so its delivery is the
+  // person's.
+  assert_eq!(
+    stands(&checkout).standing.target,
+    TargetStanding::ToDeliver(DeliveryStep::Person(PersonsDelivery::NoAcceptance))
+  );
+  let choose = json!({"project": "Kontur", "module": "Webhooks", "acceptance_pipeline": "delivery",
+    "deliver_when_accepted": true});
+  checkout.call("update_module", &choose).expect("kept here");
+  assert_eq!(
+    stands(&checkout).standing.target,
+    TargetStanding::ToDeliver(DeliveryStep::Accept)
+  );
+
+  // Its acceptance, a task the server holds in the module, is still to run: the module is not done.
+  let acceptance = TaskId::generate();
+  checkout
+    .db()
+    .keep_module_acceptance(server.module, acceptance, Timestamp::now())
+    .expect("kept");
+  let listed = |workflow: &str| json!({"id": acceptance, "number": 8, "key": "KON-8", "workflow": workflow});
+  seen.lock().more_tasks = vec![listed("todo")];
+  refreshed(&checkout);
+  let target = stands(&checkout).standing.target;
+  assert!(!matches!(target, TargetStanding::ToDeliver(_)), "{target:?}");
+
+  // Done on the server, it passed: the delivery is due.
+  seen.lock().more_tasks = vec![listed("done")];
+  refreshed(&checkout);
   assert_eq!(
     stands(&checkout).standing.target,
     TargetStanding::ToDeliver(DeliveryStep::Deliver)

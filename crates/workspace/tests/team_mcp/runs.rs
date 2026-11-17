@@ -114,22 +114,6 @@ fn team_mcp_a_team_task_never_run_here_has_an_empty_conversation_and_no_group() 
 }
 
 #[test]
-fn team_mcp_delivery_of_a_team_module_is_refused_not_missing() {
-  let (server, _seen) = crate::tools::server();
-  let checkout = crate::Checkout::new(Some(&server), &[]);
-
-  // Without a module nothing is computed from the rows this computer keeps of a team's tasks.
-  assert_eq!(
-    checkout.refused("get_delivery", &json!({"project": "Kontur"})),
-    "team_project_unsupported"
-  );
-  let webhooks = json!({"project": "Kontur", "module": "webhooks"});
-  assert_eq!(checkout.refused("get_delivery", &webhooks), "team_project_unsupported");
-  let unknown = json!({"project": "Kontur", "module": "nothing"});
-  assert_eq!(checkout.refused("get_delivery", &unknown), "module_not_found");
-}
-
-#[test]
 fn team_mcp_resume_run_of_an_interrupted_team_run_takes_no_old_claim() {
   let team = started();
   team.settle(|run, now| {

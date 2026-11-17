@@ -43,8 +43,8 @@ removes the difference.
 | Behaviour | Local project | Team project | Why | Closes it |
 | --- | --- | --- | --- | --- |
 | A module has a branch of its own | when the person chose it for the module (`own_branch`): `module/<slug>`, named by Orchester | always: `module/<slug>`, assigned by an Admin | a local module may also merge its tasks into its base branch, as before | stays: the person's choice |
-| The acceptance before a module's delivery (`start_acceptance`) | one task Orchester makes in the module, on the module's acceptance pipeline | refused `team_project_unsupported`: a team's tasks are made on its server, and a team module keeps no acceptance pipeline | the acceptance is kept on this computer | OA-32 (the rest) |
-| What decides a module's delivery (`deliver_module`) | the person; the conversation that leads the module, once it is accepted and *Deliver when accepted* is on | an Admin's authorization or the team's *automatic merge*, on the server; the conversation that leads the module asks once its every task is done and work was merged into its branch on this computer, and stays with the module until it is delivered (`to_deliver`: `deliver`, then `person_team_decides` or `person_team_refused`) | by nature: who lets work reach the base branch (above) | stays |
+| Who may make a module's acceptance task (`start_acceptance`), and the tasks of its findings | the person, and the conversation that leads the module | an Admin, and the conversation that leads the module on an Admin's computer: on a Member's the server refuses its `task.create`, and the task's move into the module, `not_admin`, and nothing is kept | the server's contract: `task.create` and a task's definition route are the Admins' (`docs/cloud-api.md`); a Member who holds the module's claim may make no task in it | not planned yet: needs the team server's contract (found building OA-32 on 2026-11-17) |
+| What decides a module's delivery (`deliver_module`) | the person; the conversation that leads the module, once it is accepted and *Deliver when accepted* is on | an Admin's authorization or the team's *automatic merge*, on the server; the conversation that leads the module asks, as for a local one, once it is accepted and *Deliver when accepted* is on (both kept on this computer, `team_module_acceptance`) for work merged into its branch on this computer, and stays with the module until it is delivered (`to_deliver`: `deliver`, then `person_team_decides` or `person_team_refused`) | by nature: who lets work reach the base branch (above) | stays |
 | A module subscription leads its tasks | every task of the module | every task the server puts in the module, read from the server while the module is watched (those that never ran here too). A task the server moved out of every watched module is in no reading and is led by its old module until it runs again; the tasks without a module and the whole project list only the team tasks that ran here | a reading lists the watched modules, not the project | OA-28 (the rest) |
 | What `/watching` and `get_watches` say waits in a task | the question, the request or the decision by name | for a team task this computer keeps no row of: only that it runs, waits to be merged or stopped | what waits is read with the project's stored tasks | OA-28 (the rest) |
 | Running a task again with a message (`send_message` to a run that ended) | carried out | refused `team_run_again_unsupported`: a team task's next run starts through `run_task` and its team server, which takes no message with it | the server's work start carries no message | OA-29 (the rest) |
@@ -60,7 +60,8 @@ removes the difference.
 | The ceilings of a subscription that leads to the end (OA-09) | held for every task it leads | found for a team task that ran here; none of the calls they bound work for a team run yet | follows from the rows below | OA-29 |
 | Making or changing a profile, instruction, skill or tool through the tools (`save_profile_draft`, `publish_profile`, …), so through the Orchestrator chat | carried out as a draft and a published version | refused `team_no_drafts`: the team keeps no drafts on a computer, and the hub's own forms publish to its server at once. Pipelines are made through the tools in both | a draft is this computer's, and the tools have no call that publishes a profile straight to the team server | not planned yet: found in QA on 2026-11-16 |
 | Returning a task to draft | `return_to_draft` | refused `team_no_queue` | a team task has no queue on this computer | stays: the server's lifecycle has no draft |
-| Forecasts and delivery figures (`get_delivery`) | answer | refused `team_project_unsupported` | not built | OA-36 |
+| Cumulative flow (`get_delivery`, Usage › Delivery) | each day's tasks by workflow status, from each task's history of changes | none (`cumulative_flow: {unavailable: team_no_status_history}`, and the card says so) | the server keeps no history of a task's workflow status | not planned yet: needs the team server's contract |
+| What the delivery figures count as merged (throughput, cycle time, the forecasts' history) | every merge of the project's tasks, in Orchester or found by git | the merges made on this computer: a teammate's computer's are not known here. Usage › Delivery reads at most 2000 of the team's tasks, and says so when there are more | the server keeps no record of when a task's work was merged | not planned yet: needs the team server's contract |
 
 ### What works the same already
 
@@ -75,6 +76,12 @@ removes the difference.
   into its base branch (OA-29). A merge card the person applies takes a team run the same way.
 - Waits and run ends of a team task's runs are kept and start turns, when a subscription leads the task.
 - `list_tasks`, `get_task`, `list_modules` and `get_module` read a team project from its server.
+- A module's acceptance before its delivery (OA-32, 2026-11-17): a team module's acceptance pipeline (one of the
+  team's) and *Deliver when accepted* are kept on this computer and chosen on its page or by `update_module`, by a
+  Member too; `start_acceptance` makes the acceptance task on the team server in the module and starts it through the
+  team's work start; the conversation that leads the module raises *accept*, then *deliver*, by the local rule.
+- `get_delivery` and Usage › Delivery (OA-36, 2026-11-17): built from the team server's tasks and modules and this
+  computer's runs, with the two differences in the table above.
 - A watch on a team task ends on the status the server reports (`docs/design/orchestrator-watch.md`, *Team tasks*).
 
 ### Agent testing

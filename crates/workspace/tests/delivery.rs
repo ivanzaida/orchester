@@ -200,11 +200,12 @@ fn delivery_cumulative_flow_counts_tasks_per_workflow_status_at_each_days_end() 
     ..DeliveryFacts::default()
   };
   let delivery = Delivery::of(&facts, &[], range(1, 3), day(3), SEED);
+  let flow = delivery.flow.expect("a local project's flow");
   let index = |status| FLOW_STATUSES.iter().position(|shown| *shown == status).expect("shown");
-  let count = |day: usize, status| delivery.flow[day].counts[index(status)];
-  assert_eq!((count(0, WorkflowStatus::Todo), delivery.flow[0].total()), (2, 2));
+  let count = |day: usize, status| flow[day].counts[index(status)];
+  assert_eq!((count(0, WorkflowStatus::Todo), flow[0].total()), (2, 2));
   assert_eq!(count(1, WorkflowStatus::InProgress), 1);
-  assert_eq!(delivery.flow[1].total(), 2, "a Canceled task leaves the flow");
+  assert_eq!(flow[1].total(), 2, "a Canceled task leaves the flow");
   assert_eq!((count(2, WorkflowStatus::Done), count(2, WorkflowStatus::Todo)), (1, 1));
 }
 

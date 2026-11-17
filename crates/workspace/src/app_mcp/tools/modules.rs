@@ -101,12 +101,12 @@ pub struct CreateModule {
   /// and the module reaches its base branch by its delivery (deliver_module).
   #[serde(default)]
   pub own_branch: Option<bool>,
-  /// A local project only, for a module with a branch of its own: the published pipeline its acceptance runs on, by
-  /// id or name (start_acceptance).
+  /// For a module with a branch of its own (a team module always has one): the published pipeline its acceptance runs
+  /// on, by id or name, one of the team's for a team module (start_acceptance).
   #[serde(default)]
   pub acceptance_pipeline: Option<String>,
-  /// A local project only, for a module with a branch of its own: whether the conversation that leads it to the end
-  /// may deliver it once its acceptance passed. Off: only the person delivers it.
+  /// For a module with a branch of its own (a team module always has one): whether the conversation that leads it to
+  /// the end may deliver it once its acceptance passed. Off: only the person delivers it.
   #[serde(default)]
   pub deliver_when_accepted: Option<bool>,
 }
@@ -138,10 +138,12 @@ pub struct UpdateModule {
   /// the branch stays in the repository, and the next runs take the module's base branch again.
   #[serde(default)]
   pub own_branch: Option<bool>,
-  /// A local project only: the published pipeline the module's acceptance runs on, by id or name; `null` for none.
+  /// The published pipeline the module's acceptance runs on, by id or name (one of the team's for a team module);
+  /// `null` for none. A team module's is kept on this computer.
   #[serde(default, deserialize_with = "nullable")]
   pub acceptance_pipeline: Option<Option<String>>,
-  /// A local project only: whether the conversation that leads the module to the end may deliver it once accepted.
+  /// Whether the conversation that leads the module to the end may deliver it once accepted; a team module's is kept
+  /// on this computer.
   #[serde(default)]
   pub deliver_when_accepted: Option<bool>,
 }

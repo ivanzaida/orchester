@@ -1,6 +1,7 @@
 # OA-36 · Forecasts and cross-project readings answer for team projects
 
-- **Status:** in progress (`list_tasks` across projects: done 2026-11-14)
+- **Status:** in progress (`list_tasks` across projects: done 2026-11-14; `get_delivery` and Usage › Delivery: done
+  2026-11-17)
 - **Kind:** workspace
 - **Depends on:** —
 - **Branch:** —
@@ -37,6 +38,14 @@ call naming that project gives them; a team project whose server could not be as
 `unreadable_projects` with that reason, and the rest is answered for. Test: `orchester-workspace --test team_mcp
 team_mcp_reads` (the tools test).
 
-**Left:** `get_delivery` for a team project (throughput, cycle times and forecasts from this computer's runs of
-the team's tasks and the server's task list; the cumulative flow needs the server's history of statuses, which this
-computer does not hold), and the reads of `docs/plan.md` S12 step 4.
+**Left:** the reads of `docs/plan.md` S12 step 4.
+
+## `get_delivery` done on 2026-11-17
+
+A team project's figures are built as a local one's (`Delivery::read_team`) from every task and module its team server
+holds, read now, and this computer's runs of those tasks: `get_delivery` answers with `team: true`, and Usage ›
+Delivery reads them through the session's team queries (at most 2000 tasks, which it says when there are more; the
+team's outage card while the server cannot be read). Two figures need the server's contract and are not built: the
+cumulative flow (`{unavailable: team_no_status_history}`; the server keeps no history of a task's workflow status), and
+work merged on a teammate's computer (not known here, so not counted as merged). Both are rows of the parity table.
+Tests: `orchester-workspace --test team_mcp team_mcp_figures`, `--test delivery`.

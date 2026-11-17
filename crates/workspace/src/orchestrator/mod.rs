@@ -51,7 +51,6 @@ pub mod send;
 pub mod settings;
 pub mod stalls;
 pub mod standing;
-mod team_delivery;
 pub mod team_status;
 mod team_task;
 mod told;

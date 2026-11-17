@@ -70,7 +70,7 @@ pub(super) async fn find(project: &TeamProject, key: &str) -> Result<TaskRead, T
 }
 
 /// Every task `filters` keep, following the listing's pages.
-async fn all_tasks(project: &TeamProject, filters: TaskFilters) -> Result<Vec<TaskRead>, TeamReadError> {
+pub(super) async fn all_tasks(project: &TeamProject, filters: TaskFilters) -> Result<Vec<TaskRead>, TeamReadError> {
   let mut tasks = Vec::new();
   let mut after = None;
   loop {
