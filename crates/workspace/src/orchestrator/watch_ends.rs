@@ -140,7 +140,7 @@ impl Work {
   fn with_undelivered(mut self, db: &ProjectDb, led: &HashSet<ModuleId>) -> Result<Self, StoreError> {
     for module in self.modules.iter().filter(|module| led.contains(&module.id())) {
       let step = if self.linked {
-        super::team_delivery::step(db, module.id())?
+        crate::modules::team_delivery::read(db, module.id(), &|task| self.team.status_of(task))?.step
       } else if module.own_branch().is_some() {
         crate::modules::delivery::facts(db, module)?.step()
       } else {

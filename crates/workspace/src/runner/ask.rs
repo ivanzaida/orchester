@@ -138,6 +138,21 @@ impl Runners {
     }
   }
 
+  /// Asks the runner of the project at `root` to cancel run `run`, without starting that runner: one that is not
+  /// attached executes nothing, and answers [`RequestError::NotConnected`].
+  pub fn cancel_run_at(
+    &self,
+    root: &Path,
+    run: RunId,
+  ) -> impl Future<Output = Result<(), RunRequestError>> + Send + use<> {
+    let answer = self.request(Some(root), Command::CancelRun { run });
+    async move {
+      // The task ended without answering, e.g. when the runner stopped meanwhile.
+      let reply = answer?.await.unwrap_or(Err(RequestError::Lost))?;
+      accepted(reply)
+    }
+  }
+
   /// Asks the displayed project's runner to continue interrupted run `run` from its last
   /// checkpoint; returns once it runs again.
   pub async fn continue_run(&self, run: RunId) -> Result<(), RunRequestError> {

@@ -220,6 +220,7 @@ impl Services {
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
       self.runtime.spawn(sharing::project::work::run(
         self.servers.clone(),
+        self.runners.clone(),
         self.runners.run_changes(),
         self.programs.clone(),
       )),

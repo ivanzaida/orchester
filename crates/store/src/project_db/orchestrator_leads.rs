@@ -157,12 +157,16 @@ impl ProjectDb {
     Ok(Some((found.task(), module)))
   }
 
-  /// The target of the subscription of `chat` an event of `task` comes through: the most specific of its own that
-  /// takes the task in ([`event_subscription`]); `None` when none does.
-  pub fn task_came_through(&self, chat: ChatId, task: &Task) -> Result<Option<WatchTarget>, StoreError> {
+  /// The target of the subscription of `chat` an event of task `task`, which is in `module`, comes through: the most
+  /// specific of its own that takes the task in ([`event_subscription`]); `None` when none does.
+  pub fn task_came_through(
+    &self,
+    chat: ChatId,
+    (task, module): (TaskId, Option<ModuleId>),
+  ) -> Result<Option<WatchTarget>, StoreError> {
     let own = Subscriptions::new(self.chat_subscriptions(chat)?)
       .map_err(|error| corrupt("orchestrator subscriptions", error))?;
-    Ok(event_subscription(&own, chat, task.id(), task.module()).map(Subscription::target))
+    Ok(event_subscription(&own, chat, task, module).map(Subscription::target))
   }
 
   /// `target` as a conversation's prompts and tools name it: a task's key and title, a module's name, the project's

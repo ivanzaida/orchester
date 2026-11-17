@@ -3,9 +3,9 @@
 //! in such a turn only for a module its conversation leads to the end (`not_led`), and only at the step the module
 //! waits for (`not_due`): an acceptance once its every task is done and none stands for the branch as it is, within
 //! the acceptances a conversation starts by itself; a delivery once that acceptance passed and *Deliver when accepted*
-//! is on for the module. A team module's delivery is asked for once its every task is done: its team server decides
-//! it, by an Admin's authorization or the team's automatic merge, and the chat authorizes nothing. In a turn a
-//! person's message started, both go to the tool as they are: the person asked.
+//! is on for the module. A team module follows the same steps; its delivery is then its team server's to decide, by an
+//! Admin's authorization or the team's automatic merge, and the chat authorizes nothing. In a turn a person's message
+//! started, both go to the tool as they are: the person asked.
 
 use orchester_core::{
   module::delivery::DeliveryStep,
@@ -53,10 +53,7 @@ pub(super) async fn checked(scope: &ChatScope, name: &str, arguments: &JsonObjec
     } else {
       DeliveryStep::Accept
     };
-    // A team module has no acceptance kept here: its delivery is asked for once its every task is done.
-    let due = stands == TargetStanding::ToDeliver(wanted)
-      || (delivers && stands == TargetStanding::Done && db.sharing()?.is_some());
-    if due {
+    if stands == TargetStanding::ToDeliver(wanted) {
       return Ok(());
     }
     let waits = match stands {

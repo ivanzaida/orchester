@@ -3,7 +3,9 @@
 //! through the session's lurq queries (`crate::team::pages`). The header has no New task in module and no *More
 //! actions*: changing a team module is an Admin's and comes with the team's actions. The Summary is the local one's
 //! layout with, for a member, one calm line naming who changes the module over it (`Read-only line` `HBmrp`), and the
-//! properties as text ([`super::team_properties`]). While the team's data cannot be read, the status line says since
+//! properties as text ([`super::team_properties`]). Under *Work and delivery*, *Delivery* holds the module's acceptance
+//! pipeline and *Deliver when accepted*, which are this computer's ([`super::team_acceptance`]). While the team's data
+//! cannot be read, the status line says since
 //! when (`Unavailable` `losIR`), the outage card stands in the body (`crate::team::outage`) and, 24 under it, a line
 //! names the module's tasks still running on this computer (`s97Htc`), from what was last read of its tasks and this
 //! computer's runs; no module data is shown as current.
@@ -29,7 +31,9 @@ use super::{
   header,
   page::{ModuleScreen, back_only, body_padding, missing, padded, tabs},
   summary::{burndown_line, description},
-  tasks, team_properties,
+  tasks,
+  team_acceptance::{AcceptanceProps, TeamAcceptance},
+  team_properties,
   team_work::{ModuleWork, WorkProps},
   words,
 };
@@ -128,6 +132,13 @@ impl ModuleScreen {
         feed: shown_project.feed.clone(),
       },
     );
+    let acceptance = ctx.mount_keyed::<TeamAcceptance>(
+      "module-team-delivery",
+      AcceptanceProps {
+        project: shown_project.clone(),
+        module: shown.module.id(),
+      },
+    );
     let column = Column::new()
       .id("module-summary-column")
       .flex(1.0)
@@ -136,6 +147,7 @@ impl ModuleScreen {
       .with_children(lock)
       .child(description(ctx, &shown.module))
       .child(work)
+      .child(acceptance)
       .child(tasks::section(ctx, project, (&tasks.tasks, &[]), &self.toggled))
       .with_children(burndown);
     let body = Row::new()

@@ -97,6 +97,8 @@ pub struct ScopeOption {
   pub agent: Option<Arc<str>>,
   pub published: Option<VersionNumber>,
 }
+/// A pipeline a skill's scope can name: its id, its name and its latest version's number, with that version's body.
+pub type PipelineVersion = ((ResourceId, Arc<str>, VersionNumber), Pipeline);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EditorData {
   pub listed: ProjectSkills,
@@ -118,6 +120,26 @@ impl EditorData {
   pub fn stored_in(root: &Path) -> Result<Self, Message> {
     let db = ProjectDb::open(root).map_err(|e| messages::store_error(&e))?;
     let listed = ProjectSkills::load(&db).map_err(|e| messages::store_error(&e))?;
+    let mut pipelines = Vec::new();
+    for resource in db
+      .resources(ResourceKind::Pipeline)
+      .map_err(|e| messages::store_error(&e))?
+    {
+      // A pipeline holds no draft (D-032): its latest version is all its steps.
+      let latest = db
+        .latest_version::<Pipeline>(resource.id())
+        .map_err(|e| messages::store_error(&e))?;
+      if let Some(latest) = latest {
+        let name: Arc<str> = resource.name().as_str().into();
+        pipelines.push(((resource.id(), name, latest.number()), latest.body().clone()));
+      }
+    }
+    let agent_files = db.repository_agent_files().map_err(|e| messages::store_error(&e))?;
+    Ok(Self::checking(listed, &pipelines, agent_files))
+  }
+  /// What a write is checked against: the skills `listed`, the scopes their profiles' roles and `pipelines` (each with
+  /// its id, name and latest version's number, and that version's body) offer, and the repository's `agent_files`.
+  pub fn checking(listed: ProjectSkills, pipelines: &[PipelineVersion], agent_files: RepositoryAgentFiles) -> Self {
     let mut scopes = vec![ScopeOption {
       scope: InstructionScope::Project,
       pipeline: None,
@@ -134,32 +156,19 @@ impl EditorData {
       pipeline: None,
       step: None,
     }));
-    for resource in db
-      .resources(ResourceKind::Pipeline)
-      .map_err(|e| messages::store_error(&e))?
-    {
-      // A pipeline holds no draft (D-032): its latest version is all its steps.
-      let latest = db
-        .latest_version::<Pipeline>(resource.id())
-        .map_err(|e| messages::store_error(&e))?;
-      let Some(body) = latest.as_ref().map(|v| v.body()) else {
-        continue;
-      };
-      let name: Arc<str> = resource.name().as_str().into();
+    for ((id, name, number), body) in pipelines {
       scopes.push(ScopeOption {
-        scope: InstructionScope::Pipeline {
-          pipeline: resource.id(),
-        },
+        scope: InstructionScope::Pipeline { pipeline: *id },
         pipeline: Some(name.clone()),
         step: None,
         available: true,
         agent: None,
-        published: latest.as_ref().map(|version| version.number()),
+        published: Some(*number),
       });
       scopes.extend(body.steps().iter().enumerate().map(|(index, step)| {
         ScopeOption {
           scope: InstructionScope::Step {
-            pipeline: resource.id(),
+            pipeline: *id,
             step: step.key.clone(),
           },
           pipeline: Some(name.clone()),
@@ -177,15 +186,26 @@ impl EditorData {
         }
       }));
     }
-    Ok(Self {
+    Self {
       listed,
       scopes,
       active: Vec::new(),
       repository: RepositoryScan {
         items: Arc::new(Vec::new()),
       },
-      agent_files: db.repository_agent_files().map_err(|e| messages::store_error(&e))?,
-    })
+      agent_files,
+    }
+  }
+  /// What a version published at once (a team skill's next or first) must meet besides [`SkillForm::checked`]: a
+  /// description and a body, and a scope an agent loads it in unless it is `before`'s own, which it may keep.
+  pub fn check_publication(&self, before: Option<&Skill>, body: &Skill) -> Result<(), WriteError> {
+    if before.is_none_or(|before| before.scope() != body.scope()) {
+      self.checked_scope(body.scope())?;
+    }
+    match unpublishable(body) {
+      Some(refusal) => Err(refusal.into()),
+      None => Ok(()),
+    }
   }
   pub fn validate_name(&self, id: Option<ResourceId>, text: &str) -> Result<Name, Message> {
     self.checked_name(id, text).map_err(|(_, message)| message)

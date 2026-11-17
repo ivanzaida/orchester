@@ -4,7 +4,8 @@
 //! tools are made and changed here; an HTTP or database tool is listed by its kind and description alone,
 //! nothing of the secrets it uses. Tools are not removed or archived in this version: the project data
 //! keeps every resource. A tool's agents are the profiles that list it (`used_by`; `docs/design/team-configuration.md`,
-//! "Decided 2026-11-09"): in a local project nothing else lets an agent call it.
+//! "Decided 2026-11-09"): in a local project nothing else lets an agent call it. A team project's tools are the team's,
+//! published on the team server at once ([`super::team_tools`]).
 
 use std::path::Path;
 
@@ -28,6 +29,9 @@ use super::{
   given_by::Givers,
   profiles::{no_draft, state_json},
   project::environment_json,
+  team_profiles::team_of,
+  team_resources::with_own,
+  team_tools,
   tool_input::{self, not_a_command_tool, widenings},
   widening,
 };
@@ -71,9 +75,12 @@ pub(super) const SPECS: &[Spec] = &[
   Spec {
     name: "save_tool_draft",
     description: "Without `tool`, creates a new command tool under `name` as its version 1 in one call (no draft; it \
-                  returns the published tool or a refusal, and in a team project only once the team server accepts \
-                  it; offline it waits in the outbox, waiting_for_server); with `tool`, saves its draft as its editor \
-                  does, which publish_tool publishes as its next version. On an existing tool a field left out keeps its value; a new tool needs `program` and \
+                  returns the published tool or a refusal); with `tool`, saves its draft as its editor does, which \
+                  publish_tool publishes as its next version. A team project's tools are the team's (team, revision: \
+                  its latest version's number) and have no drafts: a save publishes the next version on the team \
+                  server at once (made on that revision when expected_revision is given), a new one is created there \
+                  as v1, each refused as here (person_only), and as team_unreachable, not_admin or version_conflict; \
+                  publish_tool then answers it as it stands. On an existing tool a field left out keeps its value; a new tool needs `program` and \
                   otherwise gets no description, no arguments, timeout 600 seconds, exit code 0, no variables \
                   and output limit 256 KiB. The program is a name found on the search path (the tool's PATH, \
                   else the project's, else the app's; relative folders are skipped) or an absolute path to an \
@@ -138,26 +145,30 @@ pub(super) async fn call(
 async fn list_tools(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |_, db| {
-      Ok((ProjectTools::load(db)?, Givers::read(db)?))
+    across(&services, args.project.as_deref(), |open, db| {
+      let team = team_tools::listed(&services, (open, db))?;
+      Ok((ProjectTools::load(db)?, Givers::read(db)?, team))
     })
   })
   .await?;
-  Ok(read.json("tools", translate, |open, (tools, givers)| {
-    tools
-      .tools
-      .iter()
-      .map(|entry| {
-        let mut value = summary_json(entry, open.project.id());
-        value["used_by"] = givers.of(entry.id);
-        value["command_line"] = json!(command_of(&entry.tool).map(|command| command.command_line()));
-        value
-      })
-      .collect()
+  Ok(read.json("tools", translate, |open, (tools, givers, team)| {
+    // A team project's tools are the team's; this computer's own rows are listed after them.
+    let own = tools.tools.iter().map(|entry| {
+      let mut value = summary_json(entry, open.project.id());
+      value["used_by"] = givers.of(entry.id);
+      value["command_line"] = json!(command_of(&entry.tool).map(|command| command.command_line()));
+      (entry.id, value)
+    });
+    with_own(team, own)
   }))
 }
 
 async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError> {
+  if let Some(team) = team_of(services, &args.project).await?
+    && let Some(id) = team_tools::of(&team, &args.tool)
+  {
+    return team_tools::shown_now(services, &team.open, id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let (open, _) = services.read_project(&args.project)?;
@@ -182,6 +193,12 @@ pub(super) fn tools_with_revision(root: &Path, id: ResourceId) -> Result<(Projec
 }
 
 async fn publish_tool(services: &Services, args: InTool) -> Result<Value, ToolError> {
+  // A team tool's version is published when it is saved: it answers as it stands.
+  if let Some(team) = team_of(services, &args.project).await?
+    && let Some(id) = team_tools::of(&team, &args.tool)
+  {
+    return team_tools::shown_now(services, &team.open, id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -235,11 +252,16 @@ pub(super) fn tool_json(tools: &ProjectTools, entry: &ToolEntry, project: Projec
     "output_limit_kib": command.output_limit().kib(),
     "command_line": command.command_line(),
   })));
-  value["used_by_steps"] = tools
-    .used_by(entry.id)
-    .map(|used| json!({ "pipeline": &*used.pipeline_name, "version": used.version.get(), "step": &*used.step }))
-    .collect();
+  value["used_by_steps"] = used_by_steps(tools, entry.id);
   value
+}
+
+/// The published pipeline steps of `tools`' project that call tool `id`, as `get_tool` lists them.
+pub(super) fn used_by_steps(tools: &ProjectTools, id: ResourceId) -> Value {
+  tools
+    .used_by(id)
+    .map(|used| json!({ "pipeline": &*used.pipeline_name, "version": used.version.get(), "step": &*used.step }))
+    .collect()
 }
 
 /// A tool of `project` as `list_tools` lists it, with its link: its editor.

@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use orchester_core::{run::renews_claim, store::RunStore};
+use orchester_core::{run::at_work, store::RunStore};
 use orchester_store::{ProjectDb, StoreError};
 
 use crate::tasks::detail::run_store_error;
@@ -18,8 +18,8 @@ pub fn work_under_way(root: &Path) -> Result<bool, StoreError> {
     return Ok(true);
   }
   for run in db.active_task_runs()?.into_values() {
-    // The same test as for a team claim's renewal: it runs, and no step of it waits for a person.
-    if db.run(run).map_err(run_store_error)?.as_ref().is_some_and(renews_claim) {
+    // It runs, and no step of it waits for a person.
+    if db.run(run).map_err(run_store_error)?.as_ref().is_some_and(at_work) {
       return Ok(true);
     }
   }

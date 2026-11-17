@@ -150,6 +150,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
     "merge": merge,
     "checks": checks,
     "delivery": super::merge_queue::run_delivery(&db, run.id())?,
+    "team": team::run_state(&db, run.id())?,
     "base_moved": base_moved::of_run(&view),
     "awaiting": {
       "plan_decisions": run.awaiting_plan().len(),

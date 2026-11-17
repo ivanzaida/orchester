@@ -1,14 +1,15 @@
 //! A module's own branch, its deliveries and its acceptances (`orchester_core::module::delivery`,
 //! `docs/plan/orchestrator-autonomy/OA-17-…`, `OA-20-…`): `modules.own_branch` with the acceptance pipeline and
 //! *Deliver when accepted*, kept on this computer as a module's base branch is (a shared module's are never sent);
-//! `module_deliveries`, each merge of a module's branch into its base branch; and `module_acceptances`, the tasks
-//! Orchester made to accept a module.
+//! `team_module_acceptance`, the same two for a team module, whose branch is its server's; `module_deliveries`, each
+//! merge of a module's branch into its base branch; and `module_acceptances`, the tasks Orchester made to accept a
+//! module, a team module's among them by their server ids.
 
 use orchester_core::{
   id::{ModuleId, TaskId},
   module::{
     Module, ModuleError,
-    delivery::{ModuleDelivered, OwnBranch},
+    delivery::{AcceptanceChoice, ModuleDelivered, OwnBranch},
   },
   run::BranchName,
   time::Timestamp,
@@ -104,6 +105,43 @@ impl ProjectDb {
       .query_map([], |row| row.get::<_, String>(0))?
       .collect::<Result<Vec<_>, _>>()?;
     rows.iter().map(|task| parse("acceptance task id", task)).collect()
+  }
+
+  /// Keeps `choice` for the team module `module`, replacing an earlier one.
+  pub fn set_team_module_acceptance(&mut self, module: ModuleId, choice: AcceptanceChoice) -> Result<(), StoreError> {
+    self.connection.execute(
+      "INSERT INTO team_module_acceptance (module_id, acceptance_pipeline, deliver_when_accepted) VALUES (?1, ?2, ?3) \
+       ON CONFLICT (module_id) DO UPDATE SET acceptance_pipeline = excluded.acceptance_pipeline, \
+       deliver_when_accepted = excluded.deliver_when_accepted",
+      params![
+        module.to_string(),
+        choice.acceptance.map(|pipeline| pipeline.to_string()),
+        choice.deliver_when_accepted,
+      ],
+    )?;
+    Ok(())
+  }
+
+  /// What this computer chose for the team module `module`'s acceptance: no pipeline and not delivered once accepted
+  /// while nothing was chosen.
+  pub fn team_module_acceptance(&self, module: ModuleId) -> Result<AcceptanceChoice, StoreError> {
+    let row: Option<(Option<String>, bool)> = self
+      .connection
+      .query_row(
+        "SELECT acceptance_pipeline, deliver_when_accepted FROM team_module_acceptance WHERE module_id = ?1",
+        [module.to_string()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+      )
+      .optional()?;
+    let Some((pipeline, deliver_when_accepted)) = row else {
+      return Ok(AcceptanceChoice::default());
+    };
+    Ok(AcceptanceChoice {
+      acceptance: pipeline
+        .map(|pipeline| parse("team module acceptance pipeline", &pipeline))
+        .transpose()?,
+      deliver_when_accepted,
+    })
   }
 
   /// The acceptance tasks of module `module` with when each was made, oldest first.

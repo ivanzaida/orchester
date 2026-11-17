@@ -1943,9 +1943,8 @@
       "teamBundleMissingBody": "The team server could not read the version of {{resource}} that this run pins, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingTooLarge": "This run's bundle is larger than the team server builds; it takes a file of at most 8 MiB. Ask a team Admin to cut down the files the run pins; nothing was started.",
       "teamRunUnrecorded": "This is a team run whose start did not finish recording its team work on this computer: it has no team record, so it has no claim or work to report under. It is not merged, continued or messaged from here. Nothing was changed.",
-      "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept.",
       "teamTaskUnrecorded": "This run belongs to a team task whose key this computer cannot tell: the run kept no record of the task when it started, and no copy of the task is kept here. Read the task from the team server (get_task) instead.",
-      "teamNoDrafts": "A team project keeps no drafts of the team's profiles, pipelines, instructions, skills or tools on this computer, so this tool does not change them there. Add or change the team's MCP servers with add_mcp_server and update_mcp_server, and the rest in Orchester's Agents hub.",
+      "teamSkillNameKept": "The team skill {{skill}} keeps the name it was made with; leave out the name to publish its next version.",
       "teamMcpNotTeamForm": "This MCP server's latest version is not in the team's form on this computer, so a next version cannot be made on it here. Ask an admin to publish it again from the team server."
     },
     "githubConnectionName": "gh · {{host}}",
@@ -2838,7 +2837,8 @@
       },
       "initWaits": "Nothing is made yet: the first commit of {{project}}'s folder on {{branch}} waits for the person, who applies or dismisses it in the conversation. Tell them what the commit holds and which files look as if they hold secrets, if any.",
       "gitWaits": "Nothing has run yet: {{command}} waits for the person, who applies or dismisses it in the conversation. Tell them what it would lose, as the card lists it.",
-      "mcpWaits": "Nothing is changed yet: the change to the MCP server {{server}} waits for the person, who applies or dismisses it in the conversation. Tell them what it changes, as the card shows it, and where the program or URL came from."
+      "mcpWaits": "Nothing is changed yet: the change to the MCP server {{server}} waits for the person, who applies or dismisses it in the conversation. Tell them what it changes, as the card shows it, and where the program or URL came from.",
+      "teamMcpWaitsForPerson": "In a team project the Orchestrator changes the team's MCP servers only while Let the Orchestrator drive is on, or in a turn your message started: ask for it in this conversation, or change it in Agents › MCP servers. Nothing was changed."
     },
     "mcp": {
       "changed": "The MCP server {{server}}, a secret it names, its program's file or the profiles that choose it changed since this was proposed. Nothing was changed; ask the Orchestrator to propose it again."

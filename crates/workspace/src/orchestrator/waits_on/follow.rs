@@ -10,11 +10,18 @@ use orchester_core::{
   orchestrator::{TaskEvent, TaskEventKind},
   run::{Run, RunWaitsOn, WaitsOnChange},
   store::{ConversationStore, MergeStore, RunStore},
+  task::organization::WorkflowStatus,
   time::Timestamp,
 };
 use orchester_store::{KeptRunWait, ProjectDb, RunWaitEnd, StoreError};
 
-use crate::tasks::{detail::run_store_error, recorded::task_of};
+use crate::{
+  orchestrator::team_status::reading_of,
+  tasks::{
+    detail::run_store_error,
+    recorded::{is_team, task_of},
+  },
+};
 
 /// Ends each active wait of the project in `db` that something ended, at `now`. Writes only for a wait that ends.
 pub(in crate::orchestrator) fn settle(db: &mut ProjectDb, now: Timestamp) -> Result<(), StoreError> {
@@ -44,10 +51,10 @@ fn end_of(db: &ProjectDb, kept: &KeptRunWait) -> Result<Option<RunWaitEnd>, Stor
       branch: wait.base().clone(),
     });
   }
-  if let Some(task) = task_of(db, wait.waited())? {
+  if let Some(status) = waited_status(db, wait.waited())? {
     changes.push(WaitsOnChange::StatusChanged {
-      task: task.id(),
-      status: task.organization().status(),
+      task: wait.waited(),
+      status,
     });
   }
   if let Some(end) = changes.iter().find_map(|change| wait.end(change)) {
@@ -100,6 +107,18 @@ fn merged(db: &ProjectDb, wait: &RunWaitsOn) -> Result<Option<RunId>, StoreError
     }
   }
   Ok(None)
+}
+
+/// The workflow status of waited task `task`: a team task's as the team server last said it, which this computer's
+/// records never hold (`None` while no reading saw it); any other task's as stored. `None` for a task that is gone.
+fn waited_status(db: &ProjectDb, task: TaskId) -> Result<Option<WorkflowStatus>, StoreError> {
+  if let Some(status) = reading_of(db).status_of(task) {
+    return Ok(Some(status));
+  }
+  if is_team(db, task)? {
+    return Ok(None);
+  }
+  Ok(task_of(db, task)?.map(|task| task.organization().status()))
 }
 
 /// The latest run of `task`, if it has one.

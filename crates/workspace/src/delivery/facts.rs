@@ -10,7 +10,10 @@ use orchester_core::{
   id::{ModuleId, StepExecutionId, TaskId},
   run::{AttemptReason, Run},
   store::{ActivityStore, MergeStore, RunStore},
-  task::{Task, TaskStatus, organization::WorkflowStatus},
+  task::{
+    Task, TaskStatus,
+    organization::{OrganizationChange, WorkflowStatus},
+  },
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -87,9 +90,26 @@ pub struct DeliveryFacts {
 impl DeliveryFacts {
   /// The facts of `tasks`, the project's in `db`, as they stand at `now`.
   pub fn read(db: &ProjectDb, tasks: &[Task], now: Timestamp) -> Result<Self, StoreError> {
+    Self::read_with(db, tasks, now, |task| db.task_organization_history(task))
+  }
+
+  /// The facts of a team project's `tasks` as its team server listed them, with this computer's runs of them in `db`,
+  /// as they stand at `now`. The server keeps no history of a task's workflow status, and this computer's copy of
+  /// one is not the server's: each task has the status the server gives it now, and no change before.
+  pub fn read_team(db: &ProjectDb, tasks: &[Task], now: Timestamp) -> Result<Self, StoreError> {
+    Self::read_with(db, tasks, now, |_| Ok(Vec::new()))
+  }
+
+  /// The facts of `tasks`, each task's workflow status changes read by `history`.
+  fn read_with(
+    db: &ProjectDb,
+    tasks: &[Task],
+    now: Timestamp,
+    history: impl Fn(TaskId) -> Result<Vec<OrganizationChange>, StoreError>,
+  ) -> Result<Self, StoreError> {
     let mut facts = Self::default();
     for task in tasks {
-      let history = db.task_organization_history(task.id())?;
+      let history = history(task.id())?;
       let mut runs = Vec::new();
       for listed in db.runs_of_task(task.id()).map_err(run_store_error)? {
         match listed {

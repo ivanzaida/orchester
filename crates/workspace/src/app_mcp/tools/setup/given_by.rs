@@ -10,6 +10,9 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use serde_json::{Value, json};
 
+use super::team_profiles;
+use crate::team_config::TeamConfig;
+
 /// The project's profiles that are not archived, each with the bodies of its latest version and draft.
 pub(super) struct Givers(Vec<(ResourceId, String, Vec<AgentProfile>)>);
 
@@ -26,8 +29,27 @@ impl Givers {
       }
       profiles.push((resource.id(), resource.name().to_string(), bodies));
     }
+    Ok(Self::sorted(profiles))
+  }
+
+  /// The team's profiles in `config`, each with its latest version: in a team project they are the project's own.
+  pub(super) fn team(config: &TeamConfig) -> Self {
+    let profiles = team_profiles::profiles(config)
+      .iter()
+      .map(|profile| {
+        let name = config
+          .name(profile.id)
+          .unwrap_or(profile.body.role().as_str())
+          .to_owned();
+        (profile.id, name, vec![team_profiles::local_form(profile, None)])
+      })
+      .collect();
+    Self::sorted(profiles)
+  }
+
+  fn sorted(mut profiles: Vec<(ResourceId, String, Vec<AgentProfile>)>) -> Self {
     profiles.sort_by_cached_key(|(id, name, _)| (name.to_lowercase(), id.to_string()));
-    Ok(Self(profiles))
+    Self(profiles)
   }
 
   /// The profiles that give `resource`, as `used_by` lists them.

@@ -18,6 +18,11 @@ fn team_mcp_get_run_reads_a_run_without_the_task_row() {
   assert_eq!(by_id["task"], "KON-7");
   assert_eq!(by_id["id"], id.as_str());
   assert_eq!(by_id["status"]["state"], "running");
+  assert_eq!(
+    by_id["team"],
+    json!({"fence": null, "done": null}),
+    "reporting, and not merged here"
+  );
   let number = by_id["number"].as_u64().expect("number");
 
   // The number names a run of a task this computer keeps no row of.
@@ -111,22 +116,6 @@ fn team_mcp_a_team_task_never_run_here_has_an_empty_conversation_and_no_group() 
     checkout.refused("get_conversation", &json!({"project": "Kontur", "task": "KON-99"})),
     "task_not_found"
   );
-}
-
-#[test]
-fn team_mcp_delivery_of_a_team_module_is_refused_not_missing() {
-  let (server, _seen) = crate::tools::server();
-  let checkout = crate::Checkout::new(Some(&server), &[]);
-
-  // Without a module nothing is computed from the rows this computer keeps of a team's tasks.
-  assert_eq!(
-    checkout.refused("get_delivery", &json!({"project": "Kontur"})),
-    "team_project_unsupported"
-  );
-  let webhooks = json!({"project": "Kontur", "module": "webhooks"});
-  assert_eq!(checkout.refused("get_delivery", &webhooks), "team_project_unsupported");
-  let unknown = json!({"project": "Kontur", "module": "nothing"});
-  assert_eq!(checkout.refused("get_delivery", &unknown), "module_not_found");
 }
 
 #[test]

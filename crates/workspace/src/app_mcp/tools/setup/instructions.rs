@@ -7,7 +7,8 @@
 //! profiles that list it (`used_by`; `docs/design/team-configuration.md`, "Decided 2026-11-09"), and the scope and
 //! agents decide it only for a team project's runs, whose execution bundle carries no profile lists. A draft saved
 //! here is marked as automation's on the Instructions page; publishing it reaches agents' prompts, so it is a
-//! person's decision ([`widening::prompt_allowed`], ORC-30).
+//! person's decision ([`widening::prompt_allowed`], ORC-30). A team project's instructions are the team's, published on
+//! the team server at once ([`super::team_instructions`]).
 
 use std::collections::BTreeSet;
 
@@ -30,6 +31,9 @@ use super::{
   },
   given_by::Givers,
   profiles::no_draft,
+  team_instructions,
+  team_profiles::team_of,
+  team_resources::with_own,
   widening,
 };
 use crate::{
@@ -130,22 +134,29 @@ pub async fn list_instructions(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |_, db| {
-      Ok((ProjectInstructions::load(db)?, Givers::read(db)?))
+    across(&services, args.project.as_deref(), |open, db| {
+      let team = team_instructions::listed(&services, (open, db))?;
+      Ok((ProjectInstructions::load(db)?, Givers::read(db)?, team))
     })
   })
   .await?;
-  Ok(read.json("instructions", translate, |open, (data, givers)| {
+  Ok(read.json("instructions", translate, |open, (data, givers, team)| {
     let project = open.project.id();
-    data
+    // A team project's instructions are the team's; this computer's own rows are listed after them.
+    let own = data
       .entries
       .iter()
-      .map(|entry| entry_json((data, givers), entry, project))
-      .collect()
+      .map(|entry| (entry.id, entry_json((data, givers), entry, project)));
+    with_own(team, own)
   }))
 }
 
 pub async fn get_instruction(services: &Services, args: InInstruction) -> Result<Value, ToolError> {
+  if let Some(team) = team_of(services, &args.project).await?
+    && let Some(id) = team_instructions::of(&team, &args.instruction)
+  {
+    return team_instructions::shown_now(services, &team.open, id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
@@ -170,6 +181,10 @@ pub async fn get_instruction(services: &Services, args: InInstruction) -> Result
 }
 
 pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDraft) -> Result<Value, ToolError> {
+  // A team's instruction has no draft on this computer: its next version is published on the team server at once.
+  if let Some(team) = team_of(services, &args.project).await? {
+    return team_instructions::save(services, &team, args).await;
+  }
   let blocked = services.clone();
   let (open, id) = blocking(move || {
     let open = blocked.project(&args.project)?;
@@ -219,6 +234,12 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
 }
 
 pub async fn publish_instruction(services: &Services, args: InInstruction) -> Result<Value, ToolError> {
+  // A team instruction's version is published when it is saved: it answers as it stands.
+  if let Some(team) = team_of(services, &args.project).await?
+    && let Some(id) = team_instructions::of(&team, &args.instruction)
+  {
+    return team_instructions::shown_now(services, &team.open, id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -247,7 +268,7 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
   .await
 }
 
-fn entry_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a InstructionEntry, ToolError> {
+pub(super) fn entry_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a InstructionEntry, ToolError> {
   let lowered = named.to_lowercase();
   // An id names one instruction for certain; a name could also be another instruction's id.
   let by_id = data.entries.iter().find(|entry| entry.id.to_string() == named);
@@ -258,7 +279,7 @@ fn entry_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a Ins
 
 /// The instruction the editor's fields make, refused with its reasons; where it applies and the agents it names that
 /// are left out are `existing`'s, a new instruction's the project and all agents.
-fn instruction(
+pub(super) fn instruction(
   data: &ProjectInstructions,
   args: &SaveInstructionDraft,
   existing: Option<&InstructionEntry>,
@@ -409,7 +430,11 @@ pub(super) fn step_named(pipeline: &PipelineChoice, named: &str) -> Result<StepK
 
 /// An instruction of `project` as Instructions lists it, with the profiles that give it to their agents and its link:
 /// the page, which opens on its library.
-fn entry_json((data, givers): (&ProjectInstructions, &Givers), entry: &InstructionEntry, project: ProjectId) -> Value {
+pub(super) fn entry_json(
+  (data, givers): (&ProjectInstructions, &Givers),
+  entry: &InstructionEntry,
+  project: ProjectId,
+) -> Value {
   let body = &entry.body;
   let applies_in = scope_json(body.scope(), |id| data.pipeline(id).map(|pipeline| &*pipeline.name));
   let agents = match body.targets() {
@@ -466,7 +491,7 @@ pub(super) fn scope_json<'a>(scope: &InstructionScope, pipeline_name: impl Fn(Re
   }
 }
 
-fn write_error(error: &WriteError) -> ToolError {
+pub(super) fn write_error(error: &WriteError) -> ToolError {
   let code = match error {
     WriteError::Unavailable(_) => "variable_unavailable",
     WriteError::Store(StoreError::NoDraft(_)) => return no_draft(),
@@ -480,6 +505,6 @@ fn write_error(error: &WriteError) -> ToolError {
   ToolError::refused(code, vec![error.message()])
 }
 
-fn refused(code: &str, reason: Message) -> ToolError {
+pub(super) fn refused(code: &str, reason: Message) -> ToolError {
   ToolError::refused(code, vec![reason])
 }

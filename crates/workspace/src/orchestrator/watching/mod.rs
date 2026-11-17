@@ -50,8 +50,8 @@ pub struct WatchReads {
   default_order: Arc<str>,
   /// What the team server last said of the team tasks the subscriptions watch; empty for reads made without a folder.
   team: TeamReading,
-  /// A linked project's team tasks that `tasks` holds no row of, with where each stands.
-  team_tasks: Vec<team::TeamTaskRead>,
+  /// A linked project's team tasks that never ran here, which `tasks` does not hold, each with nothing under way.
+  team_tasks: Vec<Task>,
   /// What the work led to the end used of its ceilings; empty for reads made without a database.
   led: led::LedReads,
 }
@@ -83,16 +83,23 @@ impl WatchReads {
   /// computer for a team task), so they read as merged and not as left to merge.
   pub fn read(db: &ProjectDb, repo_root: &Path) -> Result<Self, StoreError> {
     let programs = Programs::processes();
+    let linked = db.sharing()?.is_some();
+    // A team task is read as its runs recorded it, with what waits in its latest run, as a stored task is.
+    let tasks = if linked {
+      ProjectTasks::read_with_recorded(db, repo_root, Some(&programs))?
+    } else {
+      ProjectTasks::read(db, repo_root, Some(&programs))?
+    };
     let mut reads = Self::new(
       db.project().id(),
       db.active_subscriptions()?,
       chat_titles(db)?,
-      ProjectTasks::read(db, repo_root, Some(&programs))?,
+      tasks,
       &db.orchestrator_watch()?,
     );
     reads.team = TeamReading::of(repo_root);
-    if db.sharing()?.is_some() {
-      reads.team_tasks = team::read((db, repo_root, &programs), &reads.tasks.tasks, &reads.team)?;
+    if linked {
+      reads.team_tasks = team::unrun(&reads.tasks.tasks, &reads.team);
     }
     reads.led = led::LedReads::read(db, &reads.subscriptions)?;
     Ok(reads)
@@ -171,11 +178,7 @@ impl WatchReads {
 
   /// Every task the reads hold: the project's stored tasks, then a linked project's team tasks.
   fn every_task(&self) -> impl Iterator<Item = &Task> {
-    self
-      .tasks
-      .tasks
-      .iter()
-      .chain(self.team_tasks.iter().map(|read| &read.task))
+    self.tasks.tasks.iter().chain(&self.team_tasks)
   }
 
   /// Whether `task` is Done or Canceled: a team task as the team server last said, any other as stored.
@@ -186,15 +189,8 @@ impl WatchReads {
       .map_or_else(|| task.organization().status().is_closed(), |status| status.is_closed())
   }
 
-  fn team_task(&self, id: TaskId) -> Option<&team::TeamTaskRead> {
-    self.team_tasks.iter().find(|read| read.task.id() == id)
-  }
-
-  /// Where `task` stands; `None` when its latest run cannot be read.
+  /// Where `task` stands; `None` when its latest run cannot be read. A task that never ran is a draft.
   fn phase(&self, task: &Task) -> Option<TaskPhase> {
-    if let Some(read) = self.team_task(task.id()) {
-      return read.phase;
-    }
     self
       .tasks
       .phases

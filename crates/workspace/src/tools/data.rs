@@ -162,20 +162,32 @@ fn tool_uses<S: ResourceStore>(store: &S) -> Result<Vec<ToolUse>, S::Error> {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
     };
-    for (index, step) in version.body().steps().iter().enumerate() {
-      if let StepKind::Tool { tool: Some(tool) } = &step.kind {
-        uses.push(ToolUse {
-          tool: *tool,
-          pipeline: resource.id(),
-          pipeline_name: resource.name().as_str().into(),
-          version: version.number(),
-          step: step.name.as_str().into(),
-          ordinal: index + 1,
-        });
-      }
-    }
+    let named = (resource.id(), resource.name().as_str().into(), version.number());
+    uses.extend(uses_in(named, version.body()));
   }
   Ok(uses)
+}
+
+/// The steps of `body`, version `version` of pipeline `id` named `name`, that call a tool.
+pub(crate) fn uses_in(
+  (id, name, version): (ResourceId, Arc<str>, VersionNumber),
+  body: &Pipeline,
+) -> impl Iterator<Item = ToolUse> + '_ {
+  body
+    .steps()
+    .iter()
+    .enumerate()
+    .filter_map(move |(index, step)| match &step.kind {
+      StepKind::Tool { tool: Some(tool) } => Some(ToolUse {
+        tool: *tool,
+        pipeline: id,
+        pipeline_name: name.clone(),
+        version,
+        step: step.name.as_str().into(),
+        ordinal: index + 1,
+      }),
+      _ => None,
+    })
 }
 
 /// Creates a tool called `name` as its first version, v1 with no draft, under a slug made from its name. In a team

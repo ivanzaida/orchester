@@ -1,6 +1,6 @@
 # OA-29 · The chat merges, starts and continues team runs as it does local ones
 
-- **Status:** in progress (the chat's merge of a team run: done 2026-11-13; the rest below)
+- **Status:** done but `run_proposed` and a run end's `merging` for a Member's run in no module (2026-11-17; below)
 - **Kind:** workspace
 - **Depends on:** OA-27, OA-28
 - **Branch:** —
@@ -78,3 +78,28 @@ stays its Admin's (`decision_required`, OA-34).
 takes no message), `run_proposed` for a team project (a start is not proposed from this computer's copy), and the
 start of a team task in a turn Orchester started, which is OA-28's rest (the start rule finds a team task by the
 server's reading).
+
+## Done on 2026-11-17
+
+- **A message that runs a team task again** (`send_message` to its run that ended): the message is this computer's
+  content, so it is kept here for the task's next run, as a local run again keeps it, and that run starts through the
+  team server as `run_task` starts it (`app_mcp/tools/team/again.rs`: the start is checked first, refused as
+  `run_task` refuses it before anything is kept, then its claim and `work.start`). The runner gives a message kept for
+  a task's next run to that run's agents whichever way the run started. A start the server or the runner takes later,
+  or refuses once the message is kept, leaves the message queued for the next run, with why.
+  `team_run_again_unsupported` is gone.
+- **The ceilings (OA-09)** bound it as they bound a local run again: one more run of the task, refused
+  `ceiling_reached` past its ceiling in a turn Orchester started.
+- **The start of a team task in a turn Orchester started**, and `park_task`, `wait_on_task` and a task the chat
+  creates coming back to the conversation that watches, find a team task that never ran here and that nothing
+  watches by asking its team server (`orchestrator/team_task.rs`, `found`), as the chat's `run_task` and `watch` did.
+- **A kept run end's `merging`** reads the server's Blocked mark from the last reading of what is watched (which
+  holds every task a subscription leads), so it says the run is left to the person, not that the chat merges it.
+
+Tests: `orchester-workspace --test team_mcp` `run_again::`, `chat_named::`, `led_reads::` (with the whole
+`team_mcp_` binary, 153 tests).
+
+**Still left:** `run_proposed` for a team project; and a run end's `merging` for the run of a task in no module that a
+Member may not merge (no Admin, the team's *Automatic merge* off) still says `merges`, and the turn is then refused
+`admin_required`. Closing it needs the reading to hold the member's role and the team's merge policy, and a reason of
+its own in `MergeLeft`, which the run end's card shows (a UI change, with its design verification).

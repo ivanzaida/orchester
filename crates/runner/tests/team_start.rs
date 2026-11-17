@@ -104,6 +104,11 @@ impl TeamRunner for SchedulerRunner {
       }
     }
   }
+
+  fn cancel_run(&self, run: RunId) -> impl Future<Output = Result<(), RunRequestError>> + Send {
+    let scheduler = self.scheduler.clone();
+    async move { scheduler.cancel_run(run).await.map_err(RunRequestError::Rejected) }
+  }
 }
 
 /// Links the project at `root` to `server`'s project, as a member.

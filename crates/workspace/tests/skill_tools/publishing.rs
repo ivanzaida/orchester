@@ -241,7 +241,7 @@ fn skill_tools_name_the_editors_rule_that_refused_a_write() {
 }
 
 #[test]
-fn skill_tools_and_the_skills_editor_answer_a_member_of_a_shared_project_not_admin() {
+fn skill_tools_and_the_skills_editor_change_nothing_for_a_member_of_a_shared_project() {
   let desktop = Desktop::new();
   desktop.let_automation_widen();
   desktop.ok("save_skill_draft", &make("Checks"));
@@ -275,13 +275,15 @@ fn skill_tools_and_the_skills_editor_answer_a_member_of_a_shared_project_not_adm
     .keep_shared_resource(&team, TaskRevision::FIRST)
     .expect("the skill is the team's");
 
+  // The tools change the team's skills on the team server, which decides who may (`not_admin`); this session never
+  // read the team's configuration, so they have nothing to publish on.
   for args in [
     save(json!({ "skill": "Checks", "body": "# Mine" })),
     save(json!({ "name": "Lint", "description": "Linting.", "body": "# Lint" })),
   ] {
-    assert_eq!(desktop.refused("save_skill_draft", &args), "not_admin", "{args}");
+    assert_eq!(desktop.refused("save_skill_draft", &args), "team_reading", "{args}");
   }
-  assert_eq!(desktop.refused("publish_skill", &publish("Checks")), "not_admin");
+  assert_eq!(desktop.refused("publish_skill", &publish("Checks")), "team_reading");
   let body = Skill::new(
     "Running checks.".into(),
     "# Mine".into(),

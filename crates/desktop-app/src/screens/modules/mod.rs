@@ -24,6 +24,7 @@ mod reading;
 mod save;
 mod summary;
 mod tasks;
+mod team_acceptance;
 mod team_properties;
 mod team_work;
 mod team_work_delivery;

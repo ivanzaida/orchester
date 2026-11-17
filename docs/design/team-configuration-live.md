@@ -110,8 +110,9 @@ configuration in its database as today.
   be reached keeps the edit as typed with why. A rename goes first, as the resource's PATCH on the revision memory
   has, then the steps; when only the name was taken the page says the steps were not saved. A member reads it only.
   The MCP tools `save_pipeline`, `create_pipeline`, `duplicate_pipeline` and `share_pipeline` wait for the server the
-  same way. The tools that draft or publish a profile, instruction, skill or tool refuse a team project
-  (`team_no_drafts`). An admin edits a team profile, instruction, skill and command tool in place in the
+  same way. The tools that save a profile, instruction, skill or command tool publish its next version on the team
+  server at once in a team project (its v1 for a new one), and the publish tools answer it as it stands (2026-11-17,
+  `app_mcp/tools/setup/team_resources.rs`). An admin edits a team profile, instruction, skill and command tool in place in the
   hub's panel (`A26`–`A31` in `acFkz`, `screens/team_hub/edit/`, `agents::team_body_edit`): Save publishes the next
   version at once, a newer version refuses it and reloads the panel, and while the server cannot be reached what was
   typed stays with Save unavailable. A profile is made and edited with one form (`screens/hub/profile_form/`):

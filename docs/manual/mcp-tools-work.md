@@ -669,10 +669,13 @@ On a **team project** the message to a **team run** (told by the run itself: its
 task; a local task's run and a run of the old sharing stream behave as on a local project) goes to the run under the
 claim its work started with (no claim of the old sharing stream is taken). A run of the old sharing stream whose task
 has no definition here (no inputs kept, no cached copy) is refused as `team_task_unrecorded`; a team run whose start
-did not finish recording its team record, as `team_run_unrecorded`. A message that would run
-the task again (`team_run_again_unsupported`) or continue an interrupted
-run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
-server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
+did not finish recording its team record, as `team_run_unrecorded`. A message that continues an interrupted run
+continues it under that claim. A message that runs the task again is kept on this computer for the task's next run,
+which starts through the team server as `run_task` starts it (its claim, then `work.start`); the run's agents read the
+message when they start. That start is checked first and refused as `run_task` refuses it (`task_incomplete`,
+`team_pipeline_missing`, `not_ready_here`, …) before anything is stored; a start the team server or the runner takes
+later, or refuses once the message is kept, leaves the message `queued` for the next run, with why, and a start
+carried out answers `started_run`. A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
 message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
 is stored.
 

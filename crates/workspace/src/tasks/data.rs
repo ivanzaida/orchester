@@ -202,7 +202,21 @@ impl ProjectTasks {
   /// project's tasks without migrating its data. Without `programs` no git runs: a run merged outside Orchester
   /// reads as its stored phase. The tasks' runs are read for the whole project at once ([`ProjectRuns::read`]).
   pub fn read(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
-    Self::read_with(db, (repo_root, programs), &ProjectRuns::read(db)?)
+    Self::read_with(db, (repo_root, programs), (&ProjectRuns::read(db)?, db.tasks()?))
+  }
+
+  /// [`Self::read`] with the team tasks this computer keeps no row of among the tasks, each as its runs recorded it
+  /// ([`super::recorded`]): what waits in a team task's run is read as it is of a stored task's. For what the
+  /// Orchestrator's conversations watch; the task list reads a team project's tasks from its server.
+  pub fn read_with_recorded(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
+    let mut tasks = db.tasks()?;
+    let stored: std::collections::HashSet<TaskId> = tasks.iter().map(Task::id).collect();
+    tasks.extend(
+      super::recorded::all(db)?
+        .into_iter()
+        .filter(|task| !stored.contains(&task.id())),
+    );
+    Self::read_with(db, (repo_root, programs), (&ProjectRuns::read(db)?, tasks))
   }
 
   /// [`Self::read`] with the tasks' runs read task by task, as it read them before ORC-742, for the tests that
@@ -210,16 +224,15 @@ impl ProjectTasks {
   #[cfg(feature = "test-support")]
   pub fn read_task_by_task(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
     let runs = ProjectRuns::read_per_task(db, &db.tasks()?, &db.not_shared_tasks()?)?;
-    Self::read_with(db, (repo_root, programs), &runs)
+    Self::read_with(db, (repo_root, programs), (&runs, db.tasks()?))
   }
 
-  /// [`Self::read`] with the project's `runs` read already.
+  /// [`Self::read`] of `tasks` with the project's `runs` read already.
   fn read_with(
     db: &ProjectDb,
     (repo_root, programs): (&Path, Option<&Programs>),
-    runs: &ProjectRuns,
+    (runs, tasks): (&ProjectRuns, Vec<Task>),
   ) -> Result<Self, StoreError> {
-    let tasks = db.tasks()?;
     let not_shared = db.not_shared_tasks()?;
     let shared = db.sharing()?.is_some();
     let kept_tags = not_shared

@@ -40,6 +40,27 @@ impl OwnBranch {
   }
 }
 
+/// How a team module is accepted and delivered, as this computer chose it: the team server assigns a team module's
+/// branch and keeps neither of these, so each member's computer keeps its own, as a local module's own branch keeps
+/// them ([`OwnBranch`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AcceptanceChoice {
+  /// The team pipeline the module's acceptance runs on; `None`: it has none, and only the person delivers it.
+  pub acceptance: Option<ResourceId>,
+  /// The conversation that leads the module to the end may ask for its delivery once its acceptance passed.
+  pub deliver_when_accepted: bool,
+}
+
+impl AcceptanceChoice {
+  /// `self` as it is kept: *Deliver when accepted* goes off without an acceptance pipeline, which it cannot be without.
+  pub const fn kept(self) -> Self {
+    Self {
+      acceptance: self.acceptance,
+      deliver_when_accepted: self.deliver_when_accepted && self.acceptance.is_some(),
+    }
+  }
+}
+
 /// The branch a module named `name` gets: `module/<slug>`, the slug its name in lower-case letters, digits and
 /// dashes, with `-2`, `-3`, … after it while `taken` says the name is in use. `None` when no such name is a branch
 /// name git takes (which no slug of these characters is).

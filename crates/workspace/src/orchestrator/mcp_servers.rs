@@ -11,6 +11,8 @@
 //! reads it again and refuses it once anything it shows or stands on changed; the widening they were shown is theirs to
 //! decide, as in the window. A secret is only ever named (`NAME@environment`): no tool takes or shows its value.
 
+mod team;
+
 use orchester_core::orchestrator::{
   ActionOutcome, ChatAction,
   change::{Change, ProposedChange},
@@ -62,7 +64,7 @@ const RULES: &str = "Adding a server, or a change that widens what agents may do
   ${secret:NAME@environment} in a variable's value; never type or ask for a secret's value. Refused as the app's own \
   tool refuses it (invalid_server, name_taken, field_not_applicable, program_in_worktree, program_in_repository, \
   program_not_local, in_use, not_found), and when applied, changed_since_proposed once the server, a secret it names, \
-  the program's file or the profiles that choose it changed since it was proposed.";
+  the program's file or the profiles that choose it changed since it was proposed. In a team project the servers are   the team's, on the team server: a change is made at once by the app's own tool (Admins only; what widens is   person_only unless a person lets automation change agent permissions), while you drive or in a turn the person's   message started, never a card; in a turn nobody asked for while you do not drive it waits_for_person.";
 
 /// The chat's MCP server tools as its `tools/list` answers.
 pub fn tools() -> Vec<Tool> {
@@ -133,7 +135,7 @@ pub(super) async fn call(
         Ok(_) => ActionOutcome::Done,
         Err(error) => keep::refusal(error, translate),
       };
-      (result, Some(change), outcome)
+      (result, change, outcome)
     }
     Err(error) => {
       let outcome = keep::refusal(&error, translate);
@@ -149,10 +151,11 @@ pub(super) async fn call(
   result
 }
 
-/// What a call did: a card for the person, or a narrowing made at once with what the tool answered.
+/// What a call did: a card for the person, or a change made at once with what the tool answered (and the card it
+/// would have been, which a team project's change has not: its servers are the team's, read from the team server).
 enum Acted {
   Proposed(ProposedChange),
-  Made(Result<Value, ToolError>, ProposedChange),
+  Made(Result<Value, ToolError>, Option<ProposedChange>),
 }
 
 async fn act(
@@ -162,6 +165,9 @@ async fn act(
   arguments: JsonObject,
 ) -> Result<Acted, ToolError> {
   let operation = operation(name, &arguments)?;
+  if team::of(scope).await? {
+    return team::act((services, translate), scope, setup_tool(operation), arguments).await;
+  }
   let read = services.clone();
   let mcp = blocking(move || preview_mcp(&read, operation, &arguments))
     .await?
@@ -181,7 +187,7 @@ async fn act(
     change: Change::Mcp(Box::new(mcp)),
   };
   Ok(match made {
-    Some(made) => Acted::Made(made, change),
+    Some(made) => Acted::Made(made, Some(change)),
     None => Acted::Proposed(change),
   })
 }

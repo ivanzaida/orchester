@@ -28,7 +28,7 @@ fn at(millis: i64) -> Timestamp {
 }
 
 /// A conversation of the project's chat in a turn the person's message started.
-fn asked(checkout: &Checkout) -> ChatScope {
+pub(super) fn asked(checkout: &Checkout) -> ChatScope {
   let mut db = checkout.db();
   let chat = Chat::named(ChatId::generate(), "Start it and watch", at(10));
   let text = MessageBody::new("Start KON-7 and watch it").expect("text");
@@ -44,7 +44,7 @@ fn asked(checkout: &Checkout) -> ChatScope {
 }
 
 /// The chat's own tool `name`, called with `args` in `scope`.
-fn chat_call(checkout: &Checkout, scope: &ChatScope, name: &str, args: &Value) -> Result<Value, ToolError> {
+pub(super) fn chat_call(checkout: &Checkout, scope: &ChatScope, name: &str, args: &Value) -> Result<Value, ToolError> {
   team_cache::keep_cached_team(&checkout.workspace, checkout.root());
   let runners = Runners::new(
     checkout.root().join("no-runner"),

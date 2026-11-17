@@ -68,8 +68,8 @@ pub fn standing_prompt(event: &StandingEvent) -> String {
     ),
     Raised::Deliver => format!(
       "[Orchester] This conversation leads {target} to the end, every task of it is done and its delivery is due: \
-       a module of this computer's project was accepted for its branch as it is now; a team's module has its work \
-       on the module's branch, and its team server decides the delivery.\n{nobody} Ask for its delivery with \
+       the module was accepted for its branch as it is now, and Deliver when accepted is on for it; a team's module's \
+       delivery is then its team server's to decide.\n{nobody} Ask for its delivery with \
        deliver_module and your reason: it merges the module's branch into its base branch, a team's module once an \
        Admin's authorization or the team's automatic merge allows it. A delivery that is refused (the base moved \
        and the merge conflicts, the person's checkout stands in the way) is the person's, and so is one that waits \

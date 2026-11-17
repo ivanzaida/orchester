@@ -45,12 +45,12 @@ impl MergeStore for ProjectDb {
     if inserted == 0 {
       return Err(StoreError::AlreadyMerged(merge.run));
     }
-    // A run of inputs the team server accepted never changes its task here: the server keeps the task's status, and
-    // whether a merged team run makes its task Done is open (D4). A Done its claim's end recorded first, from git, and
-    // did not send stays not sent (ORC-750).
-    if !super::run_inputs::is_team_run(&transaction, merge.run)?
-      && !super::automatic_status::merged_done_not_sent(&transaction, task, merge.run)?
-    {
+    // A run of inputs the team server accepted never changes its task here: the server keeps the task's status, so the
+    // merge records the Done its holder's desktop sends there (OA-30). A Done its claim's end recorded first, from git,
+    // and did not send stays not sent (ORC-750).
+    if super::run_inputs::is_team_run(&transaction, merge.run)? {
+      super::team_done::record(&transaction, merge.run, merge.merged_at)?;
+    } else if !super::automatic_status::merged_done_not_sent(&transaction, task, merge.run)? {
       super::organization::automatic(
         &transaction,
         task,

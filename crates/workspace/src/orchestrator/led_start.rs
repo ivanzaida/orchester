@@ -33,21 +33,21 @@ use crate::{
   tasks::{detail::run_store_error, recorded},
 };
 
-/// Refuses the chat's start of task `key` of `scope`'s project in a turn nobody asked for. A task its conversation
+/// Refuses the chat's start of `task` of `scope`'s project in a turn nobody asked for. A task its conversation
 /// leads to the end is started in any such turn; one it only follows, only in the turn of a success it merged under an
 /// order (`not_merge_turn`). Refused: a task parked for the person (`parked`), a task another conversation, or none,
 /// leads (`not_led`), a task that has a run already (`already_ran`) unless it is led to the end and its latest run
 /// failed: it is then run again while its ceiling of runs allows (`ceiling_reached` past it), which needs the chat's
 /// reason (`reasoned`; `reason_required` without), and a start past the budget of what leads it (`ceiling_reached`). A
-/// call that names no task is left to the start's own refusal.
-pub(super) async fn led_here(scope: &ChatScope, key: Option<&str>, reasoned: bool) -> Result<(), ToolError> {
-  let Some(named) = key.map(str::to_owned) else {
+/// call that names no task is left to the start's own refusal. The task is found as the chat's tools find it
+/// ([`super::team_task::found`]): a team task that never ran here and that nothing watches too.
+pub(super) async fn led_here(scope: &ChatScope, task: Option<Named>, reasoned: bool) -> Result<(), ToolError> {
+  let Some(task) = task else {
     return Ok(());
   };
   let (root, chat) = (scope.root.clone(), scope.chat);
   let refusal = blocking(move || {
     let db = ProjectDb::open(&root)?;
-    let task = Named::find(&db, &named)?;
     let key = task.key.clone();
     let refused =
       |code: &'static str, message: &'static str| Ok(Some((code, Message::new(message).with("task", key.clone()))));

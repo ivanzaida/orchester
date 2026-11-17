@@ -1,6 +1,7 @@
 # OA-32 · The Orchestrator asks for a team module's delivery, as it delivers a local one
 
-- **Status:** done as a call of its own; the gate before it is local only (2026-11-14)
+- **Status:** done (2026-11-17): the acceptance before a team module's delivery as a local module's; parking the
+  module for its Admin by name is left
 - **Kind:** workspace
 - **Depends on:** OA-17, OA-20, OA-27
 - **Branch:** —
@@ -45,6 +46,27 @@ it in any turn. A local module has no delivery at all until OA-17.
 Admin's authorization or the team's automatic merge; the tool never authorizes. In a turn Orchester started the
 chat may ask for it for a team module it leads to the end once every task of the module is done.
 
-**Left:** the acceptance before a team module's delivery (OA-20 keeps a module's acceptance on this computer and
-makes its task here, which a team project's tasks are not), and parking the module for its Admin by name when the
-server keeps the request waiting: the refusal is told to the chat, which tells the person.
+**Left:** parking the module for its Admin by name when the server keeps the request waiting: the refusal is told to
+the chat, which tells the person.
+
+## The acceptance of a team module (2026-11-17)
+
+- A team module's acceptance pipeline (one of the team's) and *Deliver when accepted* are this computer's choice
+  (`AcceptanceChoice`, the table `team_module_acceptance`): the server keeps neither. They are chosen on the module's
+  Summary (*Delivery*, the module form's rows without *Its own branch*) or by `update_module`, which sends the server
+  nothing for them, so a Member chooses them as an Admin does; `get_module` tells them under `own_branch`.
+- `start_acceptance` reads the module's tasks from the team server, refuses as for a local module (`tasks_open`,
+  `acceptance_under_way`, `already_accepted`, `no_acceptance_pipeline`), makes the task through `create_task`'s
+  `task.create` and move into the module, keeps it in `module_acceptances` by its server id and starts it through
+  `run_task`'s team start. Its brief is the local one: the module's tasks from the server, the steps automation
+  accepted unverified from this computer's runs, the module's branch and the checked-out branch it is delivered into.
+- Where the module stands is the local rule (`DeliveryFacts::step`, `crate::modules::team_delivery`): its
+  acceptance's status from the server's last reading of the watched module, its runs and merges from this computer;
+  then the delivery the server decides. A module without an acceptance pipeline is the person's to deliver, as a local
+  one; the chat's *deliver* step outside a turn the person started needs *accept* passed first, as for a local one.
+- **Needs the server's contract:** `task.create` and a task's definition route are the Admins' on the team server, so
+  on a Member's computer the acceptance task (and the tasks of its findings) is refused `not_admin` and nothing is
+  kept. A Member who holds the module's claim may make no task in it today. Row of the parity table.
+
+Tests: `orchester-workspace --test team_mcp team_mcp_acceptance` and `team_mcp_a_led_module`, `orchester-app --test
+team_qa team_qa_acceptance`.

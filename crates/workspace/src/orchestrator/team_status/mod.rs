@@ -13,13 +13,16 @@
 //!
 //! A watched module is read whole: every task the server puts in it, whether or not it ever ran on this computer, so
 //! a conversation that leads the module knows the tasks it has still to start
-//! (`docs/plan/orchestrator-autonomy/OA-28-…`).
+//! (`docs/plan/orchestrator-autonomy/OA-28-…`). So are the tasks without a module and the whole project while a
+//! subscription watches them: their Blocked marks and statuses are the server's, as a watched module's are. The
+//! reading keeps which team pipelines this session read too, so where a led target stands says whether a team task's
+//! pipeline is ready here, as it says it of a local task's.
 //!
-//! The cost of a reading is bounded by what is watched, never by the project's size: one `GET tasks/{id}` for each
-//! team task a *task* subscription names, and for each watched *module* one request of the task list, filtered to that
-//! module, per `MAX_PAGE_LIMIT` (200) tasks the module holds. A pass stops at the first sign that the server cannot be
-//! asked (signed out, unreachable, a membership that ended); a task it refuses or cannot decode leaves only that task,
-//! or that module, unread.
+//! The cost of a reading is bounded by what is watched: one `GET tasks/{id}` for each team task a *task* subscription
+//! names, for each watched *module* one request of the task list, filtered to that module, per `MAX_PAGE_LIMIT` (200)
+//! tasks the module holds, and while the tasks without a module (or the whole project) are watched, one request per
+//! 200 of those tasks. A pass stops at the first sign that the server cannot be asked (signed out, unreachable, a
+//! membership that ended); a task it refuses or cannot decode leaves only that task, or that list, unread.
 
 mod read;
 
@@ -32,7 +35,7 @@ use std::{
 
 use orchester_core::{
   id::{ModuleId, ProjectId, TaskId},
-  orchestrator::{Subscription, WatchTarget},
+  orchestrator::{Subscription, WatchTarget, standing::Unready},
   project::TaskKey,
   task::{Task, organization::WorkflowStatus},
 };
@@ -43,6 +46,7 @@ use crate::{
   background,
   messages::{self, Message},
   sharing::Servers,
+  team_reads::listed::TeamPipelines,
 };
 
 /// How often the app asks the team server again while a subscription needs its answer.
@@ -58,6 +62,8 @@ pub struct TeamTask {
   pub module: Option<ModuleId>,
   /// Why the server holds it Blocked; `None` while it does not.
   pub blocked: Option<String>,
+  /// The team pipeline the task names, as the server keeps it; `None` while it names none.
+  pub pipeline: Option<String>,
 }
 
 /// The last reading of a project's watched team tasks.
@@ -73,6 +79,9 @@ pub struct TeamReading {
   unreadable: HashSet<TaskId>,
   /// The watched modules whose tasks the server could not be asked to list, or did not answer.
   unreadable_modules: HashSet<ModuleId>,
+  /// The team's pipelines as this session read its configuration when the reading was made: which pipeline a team
+  /// task names is ready here, as a local task's published pipeline is.
+  pipelines: TeamPipelines,
 }
 
 /// What a reading is made for: the project's recorded team tasks, and of them and the project's modules what the
@@ -85,6 +94,18 @@ struct Wants {
   tasks: Vec<TaskId>,
   /// The modules a module subscription names, each read as the server's list of its tasks.
   modules: Vec<ModuleId>,
+  /// What a subscription to the tasks without a module, or to the whole project, watches: read as the server's list
+  /// of those tasks. `None` while no such subscription exists.
+  lists: Option<Listed>,
+}
+
+/// The tasks a subscription that names no module or task watches, read as the server's list of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Listed {
+  /// The tasks in no module.
+  WithoutModule,
+  /// Every task of the project, which holds the tasks in no module too.
+  Project,
 }
 
 /// The reading of each project, by its folder, with what it was made for and when it began.
@@ -127,6 +148,18 @@ impl TeamReading {
   /// The workflow status the team server last gave team task `id`; `None` while no reading saw it.
   pub(super) fn status_of(&self, id: TaskId) -> Option<WorkflowStatus> {
     self.tasks.get(&id).map(|seen| seen.status)
+  }
+
+  /// Whether a team task that names `pipeline` (as the server keeps it) can start here as far as its pipeline goes: it
+  /// names one, and that one is among the team's pipelines this session read, with a published version, as a local
+  /// task's pipeline must be published. While the configuration is not read, a pipeline it names is taken as ready:
+  /// the start checks it again.
+  pub(super) fn pipeline_unready(&self, pipeline: Option<&str>) -> Option<Unready> {
+    match pipeline {
+      None => Some(Unready::NoPipeline),
+      Some(named) if self.pipelines.id(named).is_none() => Some(Unready::PipelineNotReady),
+      Some(_) => None,
+    }
   }
 
   /// The module `task` is in now, for who leads it: where the team server put it, when this reading saw the task; the
@@ -209,7 +242,11 @@ pub async fn refresh(servers: &Servers, root: &Path, max_age: Duration) -> Resul
     });
   }
   let began = Instant::now();
-  let reading = read::pass(servers, &link, &wants).await;
+  let mut reading = read::pass(servers, &link, &wants).await;
+  // A configuration not read yet leaves the team's pipelines unread: a pipeline a task names reads as ready until then.
+  if let Ok(config) = servers.team_read(root).loaded() {
+    reading.pipelines = TeamPipelines::of(&config);
+  }
   let mut readings = READINGS.lock();
   if readings.get(root).is_some_and(|kept| kept.began > began) {
     // Another refresh began after this one and finished first: its reading is the newer.
@@ -254,9 +291,12 @@ fn wanted_in(root: &Path) -> Result<Option<(ProjectId, SharingLink, Wants)>, Sto
     match target {
       WatchTarget::Task(id) if team.contains(&id) && !wants.tasks.contains(&id) => wants.tasks.push(id),
       WatchTarget::Module(id) if !wants.modules.contains(&id) => wants.modules.push(id),
-      _ => {}
+      WatchTarget::Project => wants.lists = Some(Listed::Project),
+      WatchTarget::WithoutModule if wants.lists.is_none() => wants.lists = Some(Listed::WithoutModule),
+      WatchTarget::Task(_) | WatchTarget::Module(_) | WatchTarget::WithoutModule => {}
     }
   }
   wants.team = team;
-  Ok((!wants.tasks.is_empty() || !wants.modules.is_empty()).then_some((db.project().id(), link, wants)))
+  let needed = !wants.tasks.is_empty() || !wants.modules.is_empty() || wants.lists.is_some();
+  Ok(needed.then_some((db.project().id(), link, wants)))
 }

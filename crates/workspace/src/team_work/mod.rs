@@ -22,8 +22,12 @@
 //!   (`claim_lost`, `membership_revoked`, `session_mismatch`, or a newer run carrying the work on) fence the run: it
 //!   reports nothing more, and its run, worktree and unsent reports stay here. A run goes on executing during an
 //!   outage; what waits is only its reports.
-//! - **Heartbeat** ([`heartbeat`]). Only runs at work renew their claims (D1): a run that waits for a person, is paused
-//!   or ended renews nothing, and the server's `decision_required` is an outcome, not a failure to retry.
+//! - **Heartbeat** ([`heartbeat`], OA-31). The claim of each run whose work the server sees running is renewed: one at
+//!   work, waiting for a person, paused by a person or interrupted here. Work the server saw succeed or pause at a
+//!   limit renews nothing (D1), and the server's `decision_required` is an outcome, not a failure to retry. A run whose
+//!   authority the server took away is cancelled here ([`fenced`]).
+//! - **Done after the merge** ([`done`], OA-30). Once a team run's work is merged here, its task is set Done on the
+//!   server by the holder, as a local task's merge sets it Done; a refusal is kept with the run.
 //!
 //! - **Module delivery** ([`delivery`]). The module's holder requests the delivery of the module branch to base; this
 //!   computer merges only on the receipt's `deliver_module` effect and reports the merge, persisted first and retried
@@ -37,7 +41,9 @@ mod branch;
 mod bundle;
 mod bundle_missing;
 pub mod delivery;
+mod done;
 mod error;
+mod fenced;
 mod heartbeat;
 mod here;
 mod last;
@@ -53,7 +59,7 @@ use orchester_api::{
   v2::{AuthorityError, WorkRead},
 };
 use orchester_core::{id::RunId, run::RunStatus, store::RunStore};
-use orchester_store::{ProjectDb, TeamFence, WorkReportState};
+use orchester_store::{MergedDoneState, ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
   branch::{BranchNotFound, branch_tip, checked_out_tip, start_tip},
@@ -62,6 +68,7 @@ pub use self::{
     DeliveryProgress, DeliveryStatus, MergeFailure, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest,
     TeamDeliveryState,
   },
+  done::DoneSent,
   error::TeamWorkError,
   heartbeat::Heartbeat,
   here::{TeamHere, team_here},
@@ -111,11 +118,13 @@ pub struct TeamRunState {
   pub waiting_reports: usize,
   /// Reports the server refused, kept as it refused them.
   pub refused_reports: usize,
+  /// The Done its merge asked the server for, and what became of it; `None` while the run is not merged here.
+  pub done: Option<MergedDoneState>,
 }
 
 impl<R> TeamWork<R> {
-  /// The work of the team project `dispatcher` acts on, started by `runner`. Reporting needs no runner: the
-  /// background reports make it with `()`.
+  /// The work of the team project `dispatcher` acts on, started and stopped by `runner`. Reporting, the heartbeat and
+  /// the Done after a merge need no runner, and take any.
   pub const fn new(dispatcher: Dispatcher, runner: R) -> Self {
     Self { dispatcher, runner }
   }
@@ -146,6 +155,7 @@ impl<R: TeamRunner> TeamWork<R> {
       fence: team.fence,
       waiting_reports: count(WorkReportState::Pending),
       refused_reports: count(WorkReportState::Refused),
+      done: db.merged_done(run)?.map(|done| done.state),
     }))
   }
 }

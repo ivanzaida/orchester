@@ -57,6 +57,12 @@ pub struct Seen {
   pub task_lists: usize,
   /// The server answers `GET capabilities` with `404`, as for a project the caller is no member of.
   pub no_member: bool,
+  /// The server takes a `task.create`, as it does an Admin's, and answers with its one task `KON-7` as the task made.
+  pub takes_creates: bool,
+  /// The server makes the session's `task.create` and takes its moves of a task it made, as an Admin's.
+  pub admin_writes: bool,
+  /// The tasks `task.create` made, as the server holds them now.
+  pub made: Vec<Value>,
 }
 
 /// The routes, and what they saw.
@@ -213,15 +219,7 @@ fn route(
       }
     }
     ("POST", ["commands"]) if request.json()["command"]["kind"] == "task.create" => {
-      let mut seen = seen.lock();
-      seen.task_creates += 1;
-      seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
-      drop(seen);
-      let operation = request.json()["operation_id"].clone();
-      (
-        403,
-        json!({"operation_id": operation, "code": "forbidden", "details": {}}),
-      )
+      task_create(seen, request, &task_read)
     }
     _ => return false,
   };
@@ -229,13 +227,77 @@ fn route(
   true
 }
 
-/// A task's definition route, which refuses a member `403 not_admin`; what it was sent is seen.
+/// `task.create`: refused `403 forbidden`, as a member's is, unless the server takes creates ([`Seen::takes_creates`]:
+/// it answers with its one task `KON-7` as the task made) or the session's writes as an Admin's
+/// ([`Seen::admin_writes`]: a new task in the backlog, numbered after the others); what it was sent is seen.
+fn task_create(seen: &Mutex<Seen>, request: &Request, task_read: &dyn Fn() -> Value) -> (u16, Value) {
+  let mut seen = seen.lock();
+  seen.task_creates += 1;
+  let (body, operation) = (request.json(), request.json()["operation_id"].clone());
+  seen.created_pipeline = body["command"]["content"]["pipeline"].clone();
+  if seen.takes_creates {
+    drop(seen);
+    return (201, created_task(&operation, task_read()));
+  }
+  if !seen.admin_writes {
+    return (
+      403,
+      json!({"operation_id": operation, "code": "forbidden", "details": {}}),
+    );
+  }
+  let number = 100 + seen.made.len();
+  let content = &body["command"]["content"];
+  let attribution = attribution();
+  let task = json!({
+    "id": TaskId::generate(), "number": number, "key": format!("KON-{number}"), "former_key": null, "revision": 1,
+    "title": content["title"], "brief": content["brief"], "criteria": content["criteria"],
+    "pipeline": content["pipeline"], "limits": null, "workflow": "backlog", "priority": "medium", "tags": [],
+    "blocking": [], "blocked_reason": null, "module": null, "release": null, "status": "queued", "has_run": false,
+    "created": attribution, "updated": attribution, "claim": null, "run": null
+  });
+  seen.made.push(task.clone());
+  let result = json!({"kind": "task", "task": task, "effects": []});
+  (
+    201,
+    json!({"operation_id": operation, "state": "committed", "result": result, "cursor": "10"}),
+  )
+}
+
+/// The receipt of the `task.create` of `operation`, committed: `read`, the task as the server reads it, as the task
+/// made.
+fn created_task(operation: &Value, mut read: Value) -> Value {
+  if let Some(task) = read.as_object_mut() {
+    for read_only in ["assignee", "work", "effective_claim", "capabilities"] {
+      task.remove(read_only);
+    }
+  }
+  json!({
+    "operation_id": operation, "state": "committed",
+    "result": {"kind": "task", "task": read, "effects": []}, "cursor": "11"
+  })
+}
+
+/// A task's definition route, which refuses a member `403 not_admin`; what it was sent is seen. A task `task.create`
+/// made takes its move into a module while the server takes the session's writes as an Admin's.
 fn task_edit(seen: &Mutex<Seen>, request: &Request, route: &str) -> (u16, Value) {
   let mut seen = seen.lock();
   seen.task_edits += 1;
   if request.method == "PATCH" {
     seen.edited_pipeline = request.json()["changes"]["pipeline"].clone();
     seen.edited_changes = request.json()["changes"].clone();
+  }
+  let admin = seen.admin_writes;
+  if let Some(made) = seen
+    .made
+    .iter_mut()
+    .find(|made| route.starts_with(made["id"].as_str().unwrap_or("-")))
+    && admin
+  {
+    if request.method == "PATCH" {
+      made["module"] = request.json()["changes"]["module"].clone();
+      made["revision"] = json!(made["revision"].as_u64().unwrap_or(1) + 1);
+    }
+    return (200, json!({ "task": made }));
   }
   if request.token == MEMBER {
     (

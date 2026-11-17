@@ -1,9 +1,11 @@
 //! `get_delivery`: how delivery goes in a project, as its Delivery view reads it (`crate::delivery`): throughput,
 //! cycle and lead time, where agent time goes, cumulative flow over the last days, and when the queued work and each
-//! open module are likely delivered, with the history the forecast rests on. Reading only; nothing is money.
+//! open module are likely delivered, with the history the forecast rests on. Reading only; nothing is money. A team
+//! project's figures are built the same way from its team server's tasks and modules, read now, and this computer's
+//! runs of them; it has no cumulative flow, as the server keeps no history of a task's workflow status.
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ModuleId, ProjectId},
   time::Timestamp,
   usage::{DayRange, local_date},
 };
@@ -49,18 +51,20 @@ pub async fn get_delivery(services: &Services, args: GetDelivery) -> Result<Valu
       "days must be 1 to {LONGEST_DAYS}, not {days}"
     )));
   }
-  // A team project's tasks and modules are its server's, and so is the work that is left in them: neither a forecast
-  // nor the rest of the view is computed from this computer's rows, which would be partial. A module is still told
-  // apart from one the server has not.
+  // A team project's tasks and modules are its server's, read now; the runs that delivered them are this computer's.
   if let Some(team) = team::of_reading(services, &args.project).await? {
-    let tool = match &args.module {
-      Some(named) => {
-        team::get_module(services, &team, named).await?;
-        "get_delivery with a module"
-      }
-      None => "get_delivery",
-    };
-    return Err(team::team_only_on_server(tool));
+    let (tasks, modules, module) = team::delivery_figures(services, &team, args.module.as_deref()).await?;
+    let services = services.clone();
+    return blocking(move || {
+      let (open, db) = services.read_project(&args.project)?;
+      let now = Timestamp::now();
+      let range = last_days(days, local_date(now));
+      let delivery = Delivery::read_team(&db, (&tasks, &modules), range, now)?;
+      let mut answer = delivery_json(open.project.id(), &only_module(delivery, module), days);
+      answer["team"] = json!(true);
+      Ok(answer)
+    })
+    .await;
   }
   let services = services.clone();
   blocking(move || {
@@ -72,16 +76,25 @@ pub async fn get_delivery(services: &Services, args: GetDelivery) -> Result<Valu
       .transpose()?;
     let now = Timestamp::now();
     let range = last_days(days, local_date(now));
-    let mut delivery = Delivery::read(&db, range, now)?;
-    if let Some(module) = module {
-      delivery.forecasts.retain(|forecast| match &forecast.work {
-        Work::Queued => true,
-        Work::Module { id, .. } => *id == module.id(),
-      });
-    }
-    Ok(delivery_json(open.project.id(), &delivery, days))
+    let delivery = Delivery::read(&db, range, now)?;
+    Ok(delivery_json(
+      open.project.id(),
+      &only_module(delivery, module.map(|module| module.id())),
+      days,
+    ))
   })
   .await
+}
+
+/// `delivery` with only the forecast of `module` beside the queued work's, when a module is named.
+fn only_module(mut delivery: Delivery, module: Option<ModuleId>) -> Delivery {
+  if let Some(module) = module {
+    delivery.forecasts.retain(|forecast| match &forecast.work {
+      Work::Queued => true,
+      Work::Module { id, .. } => *id == module,
+    });
+  }
+  delivery
 }
 
 fn delivery_json(project: ProjectId, delivery: &Delivery, days: u64) -> Value {
@@ -188,13 +201,17 @@ fn time_json(time: &WhereTimeGoes) -> Value {
   })
 }
 
+/// The cumulative flow; for a team project, whose server keeps no history of a task's workflow status, that it has
+/// none and why.
 fn flow_json(delivery: &Delivery) -> Value {
+  let Some(flow) = &delivery.flow else {
+    return json!({ "unavailable": "team_no_status_history" });
+  };
   let statuses: Vec<Value> = FLOW_STATUSES
     .iter()
     .map(|status| json!(wire::Workflow::from(*status)))
     .collect();
-  let days: Vec<Value> = delivery
-    .flow
+  let days: Vec<Value> = flow
     .iter()
     .map(|day| json!({ "day": day.date.to_string(), "counts": day.counts }))
     .collect();

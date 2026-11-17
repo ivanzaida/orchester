@@ -9,7 +9,7 @@ use orchester_core::{
 };
 use orchester_store::SharingLink;
 
-use super::{TeamReading, TeamTask, Wants};
+use super::{Listed, TeamReading, TeamTask, Wants};
 use crate::{
   sharing::Servers,
   team_reads::{TeamReadError, TeamSession},
@@ -51,7 +51,7 @@ pub(super) async fn pass(servers: &Servers, link: &SharingLink, wants: &Wants) -
     }
   }
   for &module in &wants.modules {
-    match reader.module(module).await {
+    match reader.list(vec![Some(module)]).await {
       Ok(found) => {
         reading.listed.insert(module);
         reading.tasks.extend(found);
@@ -59,6 +59,17 @@ pub(super) async fn pass(servers: &Servers, link: &SharingLink, wants: &Wants) -
       Err(Unread) => {
         reading.unreadable_modules.insert(module);
       }
+    }
+  }
+  // A list that cannot be read leaves its tasks as the reading saw them otherwise, if it did: what was logged says why.
+  let listed = match wants.lists {
+    Some(Listed::Project) => reader.list(Vec::new()).await,
+    Some(Listed::WithoutModule) => reader.list(vec![None]).await,
+    None => Ok(Vec::new()),
+  };
+  if let Ok(found) = listed {
+    for (id, task) in found {
+      reading.tasks.entry(id).or_insert(task);
     }
   }
   reading
@@ -98,13 +109,14 @@ impl Reader<'_> {
     self.settle(result, "a watched team task")
   }
 
-  /// The tasks the server puts in `module`, by their ids: the pages of its list filtered to the module.
-  async fn module(&mut self, module: ModuleId) -> Result<Vec<(TaskId, TeamTask)>, Unread> {
+  /// The tasks the server puts in `modules` (`None`: in no module; none named: the whole project), by their ids: the
+  /// pages of its list filtered to them.
+  async fn list(&mut self, modules: Vec<Option<ModuleId>>) -> Result<Vec<(TaskId, TeamTask)>, Unread> {
     if self.stopped {
       return Err(Unread);
     }
-    let result = self.fetch_module(module).await;
-    self.settle(result, "the tasks of a watched module")
+    let result = self.fetch_list(modules).await;
+    self.settle(result, "the tasks of a watched module, or of the project")
   }
 
   /// Logs a failure, and stops the pass when the server cannot be asked at all.
@@ -144,13 +156,13 @@ impl Reader<'_> {
     self.ensure_current()
   }
 
-  async fn fetch_module(&self, module: ModuleId) -> Result<Vec<(TaskId, TeamTask)>, TeamReadError> {
+  async fn fetch_list(&self, modules: Vec<Option<ModuleId>>) -> Result<Vec<(TaskId, TeamTask)>, TeamReadError> {
     let mut found = Vec::new();
     let mut after = None;
     loop {
       let request = TaskListRequest {
         filters: TaskFilters {
-          modules: vec![Some(module)],
+          modules: modules.clone(),
           ..TaskFilters::default()
         },
         page: PageRequest::new(after, Some(MAX_PAGE_LIMIT)).expect("the largest page limit is in range"),
@@ -186,5 +198,6 @@ fn team_task(link: &SharingLink, read: &TaskRead) -> Result<TeamTask, TeamReadEr
     status: read.task.content.workflow,
     module: read.task.content.module,
     blocked: read.task.content.blocked_reason.clone(),
+    pipeline: read.task.content.pipeline.clone(),
   })
 }

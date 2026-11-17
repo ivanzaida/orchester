@@ -206,6 +206,10 @@ impl From<Approvals> for ApprovalMode {
 }
 
 pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> Result<Value, ToolError> {
+  // A team's profile has no draft on this computer: its next version is published on the team server at once.
+  if let Some(team) = super::team_profiles::team_of(services, &args.project).await? {
+    return super::team_profile_save::save(services, &team, args).await;
+  }
   let blocked = services.clone();
   let (open, id) = blocking(move || {
     let open = blocked.project(&args.project)?;
@@ -260,7 +264,11 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
 }
 
 /// The project's connection on the account the arguments name, made now when it has none.
-fn account_connection(services: &Services, root: &Path, args: &SaveProfileDraft) -> Result<AgentConnection, ToolError> {
+pub(super) fn account_connection(
+  services: &Services,
+  root: &Path,
+  args: &SaveProfileDraft,
+) -> Result<AgentConnection, ToolError> {
   let id = runs_on::account_connection(services, root, args.cli, &args.account)?;
   ProjectDb::open(root)?
     .connection(id)?
@@ -288,7 +296,7 @@ fn create_published(
 }
 
 /// The profile the editor's fields make, refused with every field's reason.
-fn form(
+pub(super) fn form(
   args: &SaveProfileDraft,
   connection: &AgentConnection,
   (permissions, servers): (&AgentPermissions, &McpServerSelection),
@@ -338,7 +346,7 @@ fn form(
 
 /// The permissions given, each command, folder and site checked as the editor adds it; the browser and the Codex
 /// sandbox not given are `kept`'s, the profile's own (off and on for a new profile).
-fn permissions(
+pub(super) fn permissions(
   given: &Permissions,
   root: &Path,
   kept: Option<&AgentPermissions>,
@@ -389,7 +397,7 @@ fn permissions(
 /// `permissions` with the Codex sandbox the editor offers: off only for a Codex connection of a local project (a shared
 /// project's profiles keep it on in this version). Turning it off anywhere else is refused; one kept off from before,
 /// on another CLI or once the project is shared, is on again, as the editor puts it when the connection changes.
-fn sandbox_offered(
+pub(super) fn sandbox_offered(
   mut permissions: AgentPermissions,
   connection: &AgentConnection,
   (given, shared): (Option<Network>, bool),
@@ -428,7 +436,7 @@ fn browser_permission(given: &Browser, network: &NetworkAccess) -> Result<Browse
 
 /// Refused where the editor offers no such choice on `connection`: permissions its CLI does not
 /// enforce here, and approval switches or MCP servers on a connection whose agents Orchester runs.
-fn offered(
+pub(super) fn offered(
   connection: &AgentConnection,
   permissions: &AgentPermissions,
   args: &SaveProfileDraft,
@@ -514,6 +522,6 @@ const fn missing(kind: GivenKind) -> Missing {
   }
 }
 
-fn refused(code: &str, reason: Message) -> ToolError {
+pub(super) fn refused(code: &str, reason: Message) -> ToolError {
   ToolError::refused(code, vec![reason])
 }
