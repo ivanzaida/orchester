@@ -179,11 +179,11 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | done but `run_proposed` and a run end's `merging` for a Member's run in no module |
 | [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | done but showing a refusal on the task page and a Done recorded as automation's (2026-11-17, `claude/team-lifecycle`) |
 | [OA-31](OA-31-claims-while-work-is-led.md) | A claim holds while its work is led, and a run that lost it stops | contract + workspace + runner | — | in progress: the desktop's side built (2026-11-17, `claude/team-lifecycle`); renewal after success and of module claims needs the server's contract (D1, D8), and the chat's event for a lost claim is open |
-| [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | done as one tool; a team module has no acceptance yet |
+| [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | done (2026-11-17): a team module's acceptance and delivery as a local one's; a Member's computer cannot make the acceptance task (the server's `task.create` is the Admins') |
 | [OA-33](OA-33-module-branch-is-made.md) | A module's branch is made when its first task starts, in both kinds | workspace + runner | OA-17 | done |
 | [OA-34](OA-34-limits-of-team-runs.md) | A team run's limits are raised as a local run's are | contract + workspace | OA-29 | needs decision (contract) |
 | [OA-35](OA-35-team-task-organization.md) | Dependencies between team tasks, and the rest of a task's organization | contract + workspace | — | needs decision (contract) |
-| [OA-36](OA-36-team-reads.md) | Forecasts and cross-project readings answer for team projects | workspace | — | `list_tasks` across projects done; `get_delivery` left |
+| [OA-36](OA-36-team-reads.md) | Forecasts and cross-project readings answer for team projects | workspace | — | `list_tasks` across projects and `get_delivery` done (2026-11-17); no cumulative flow and only this computer's merges for a team (the server's contract); S12 step 4's reads left |
 | **F** | **Proof** | | | |
 | [OA-26](OA-26-unattended-proof.md) | An unattended module, end to end, with the fake agents | tests | OA-01 … OA-03, OA-06, OA-07, OA-09, OA-12 … OA-15, OA-18, OA-21, OA-22 | a local module of three tasks runs end to end; the full scenario and the team run are left |
 

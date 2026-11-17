@@ -2,13 +2,15 @@
 //! tables): when the project's queued work and open modules are likely delivered ([`forecast`]), then *Throughput*
 //! beside *Cycle time*, and *Where time goes* beside *Cumulative flow*, over the last 30, 90 or 365 days. Every chart
 //! reads as a table too. What counts and how is `orchester_workspace::delivery`; it is read off the UI thread, again
-//! whenever the project's runs or tasks change and when the period changes.
+//! whenever the project's runs or tasks change and when the period changes. A team project's are built from what its
+//! team server holds ([`team`]).
 
 mod bars;
 mod cycle;
 mod flow;
 mod flow_chart;
 mod forecast;
+mod team;
 mod throughput;
 mod time;
 mod toolbar;
@@ -33,9 +35,10 @@ use orchester_workspace::{
   messages::{self, Message},
 };
 
+use self::team::{TeamInput, TeamRead};
 pub(crate) use self::toolbar::view_switch;
 use crate::{
-  project::{ShownProject, settled_read::settled_read},
+  project::{ShownProject, TasksState, settled_read::settled_read},
   screens::usage::card::{card_row, footnote},
   theme::UsageSpacing,
   ui::{
@@ -111,28 +114,20 @@ impl Component for DeliveryScreen {
     let DeliveryProps { project, period } = ctx.props::<DeliveryProps>().clone();
     let id = project.open.project.id();
     let name = project.open.project.name().as_str().to_owned();
-    // Again whenever a run changes state, the project's tasks change, or Retry is pressed. What it counts is the runs'
-    // steps and states: a transcript's lines change none of it.
-    let deps = (project.feed.states.get(), project.feed.revision.get(), self.retry.get());
-    let read = read(ctx, &project, period, deps);
-    let failed = read.error.as_ref().filter(|_| read.is_rejected());
-    let content = match (failed, &read.data) {
-      (Some(ReadFailed(message)), _) => {
-        let retry = self.retry.clone();
-        let body = message_text(ctx, message);
-        vec![load_error(
-          ctx,
-          "delivery-load-error",
-          (&ctx.t("delivery.readFailed"), &body),
-          move || retry.update(|count| *count += 1),
-        )]
+    // A team project's figures are built from what its team server holds, read first.
+    let team = match project.feed.tasks.get() {
+      TasksState::Ready(tasks) if tasks.shared => Some(team::read(ctx, &project)),
+      _ => None,
+    };
+    let content = match team {
+      Some(TeamRead::Failed(failure)) => vec![team::unread(ctx, &project, &failure)],
+      Some(TeamRead::Reading) => vec![loading(ctx)],
+      Some(TeamRead::Ready(input)) => {
+        let mut content = team::lines(ctx, &input);
+        content.extend(self.content(ctx, (&project, period), Some(input)));
+        content
       }
-      (None, Some(Read(delivery))) => self.sections(ctx, id, delivery),
-      (None, None) => {
-        // No loading frame draws Delivery: its charts' lines are bones until the period is read.
-        let bones = skeleton::lines(ctx, &[620.0, 480.0, 560.0, 400.0, 520.0]);
-        vec![Skeleton::new("delivery-loading", ctx.t("delivery.reading")).show(ctx, bones)]
-      }
+      None => self.content(ctx, (&project, period), None),
     };
     Column::new()
       // The Delivery view belongs to the Usage screen, as a module's page does to Modules.
@@ -164,6 +159,35 @@ impl Component for DeliveryScreen {
 }
 
 impl DeliveryScreen {
+  /// The figures of `project` over `period`, a team project's from `team`, the team server's tasks and modules; while
+  /// they are read, their bones; when they cannot be, why, with Retry.
+  fn content(
+    &self,
+    ctx: &mut Ctx,
+    (project, period): (&ShownProject, DeliveryPeriod),
+    team: Option<TeamInput>,
+  ) -> Vec<Element> {
+    // Again whenever a run changes state, the project's tasks change, or Retry is pressed. What it counts is the runs'
+    // steps and states: a transcript's lines change none of it.
+    let deps = (project.feed.states.get(), project.feed.revision.get(), self.retry.get());
+    let read = read(ctx, project, period, (deps, team));
+    let failed = read.error.as_ref().filter(|_| read.is_rejected());
+    match (failed, &read.data) {
+      (Some(ReadFailed(message)), _) => {
+        let retry = self.retry.clone();
+        let body = message_text(ctx, message);
+        vec![load_error(
+          ctx,
+          "delivery-load-error",
+          (&ctx.t("delivery.readFailed"), &body),
+          move || retry.update(|count| *count += 1),
+        )]
+      }
+      (None, Some(Read(delivery))) => self.sections(ctx, project.open.project.id(), delivery),
+      (None, None) => vec![loading(ctx)],
+    }
+  }
+
   fn sections(&self, ctx: &mut Ctx, project: orchester_core::id::ProjectId, delivery: &Delivery) -> Vec<Element> {
     let mut sections: Vec<Element> = unread_runs(ctx, delivery.unread_runs).into_iter().collect();
     sections.push(forecast::card(ctx, project, delivery));
@@ -171,7 +195,7 @@ impl DeliveryScreen {
     let cycle = cycle::card(ctx, &delivery.cycle, &self.views);
     sections.push(card_row("delivery-row-flow", vec![throughput, cycle]));
     let time = time::card(ctx, &delivery.time, &self.views);
-    let flow = flow::card(ctx, &delivery.flow, &self.views);
+    let flow = flow::card(ctx, delivery.flow.as_deref(), &self.views);
     sections.push(card_row("delivery-row-time", vec![time, flow]));
     sections
   }
@@ -187,24 +211,45 @@ fn unread_runs(ctx: &Ctx, count: usize) -> Option<Element> {
   Some(footnote("delivery-unread-runs", &text))
 }
 
-/// The delivery of `project` over `period`, read off the UI thread again whenever `deps` change.
-fn read<D>(ctx: &mut Ctx, project: &ShownProject, period: DeliveryPeriod, deps: D) -> FutureState<Read, ReadFailed>
+/// No loading frame draws Delivery: its charts' lines are bones until the period is read.
+fn loading(ctx: &mut Ctx) -> Element {
+  let bones = skeleton::lines(ctx, &[620.0, 480.0, 560.0, 400.0, 520.0]);
+  Skeleton::new("delivery-loading", ctx.t("delivery.reading")).show(ctx, bones)
+}
+
+/// The delivery of `project` over `period`, read off the UI thread again whenever `deps` change; a team project's from
+/// the team server's tasks and modules `deps` end with.
+fn read<D>(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  period: DeliveryPeriod,
+  deps: (D, Option<TeamInput>),
+) -> FutureState<Read, ReadFailed>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
 {
   let root = project.open.repo_root.clone();
-  settled_read(ctx, "delivery", (root, period, deps), |(root, period, _)| async move {
-    background::run(move || {
-      let now = Timestamp::now();
-      let db = orchester_store::ProjectDb::open_read_only(&root)?;
-      Delivery::read(&db, period.range(local_date(now)), now)
-    })
-    .await
-    .map_err(ReadFailed)?
-    .map(|delivery| Read(Arc::new(delivery)))
-    .map_err(|error| {
-      tracing::error!(%error, "cannot read the project's delivery");
-      ReadFailed(messages::store_error(&error))
-    })
-  })
+  settled_read(
+    ctx,
+    "delivery",
+    (root, period, deps),
+    |(root, period, (_, team))| async move {
+      background::run(move || {
+        let now = Timestamp::now();
+        let db = orchester_store::ProjectDb::open_read_only(&root)?;
+        let range = period.range(local_date(now));
+        match team {
+          Some(team) => Delivery::read_team(&db, (&team.tasks, &team.modules), range, now),
+          None => Delivery::read(&db, range, now),
+        }
+      })
+      .await
+      .map_err(ReadFailed)?
+      .map(|delivery| Read(Arc::new(delivery)))
+      .map_err(|error| {
+        tracing::error!(%error, "cannot read the project's delivery");
+        ReadFailed(messages::store_error(&error))
+      })
+    },
+  )
 }

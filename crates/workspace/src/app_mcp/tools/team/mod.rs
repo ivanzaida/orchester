@@ -6,8 +6,10 @@
 //! a link to a server is local, and its tools keep their own paths.
 
 mod again;
+mod acceptance;
 mod bundle_missing;
 mod deliver;
+mod figures;
 mod modules;
 mod outcome;
 mod run;
@@ -24,7 +26,9 @@ use orchester_store::{MergedDoneState, ProjectDb, SharingLink, TeamFence};
 
 pub(super) use self::{
   again::NextRun,
+  acceptance::start_acceptance,
   deliver::{deliver_module, merge_run},
+  figures::read as delivery_figures,
   modules::{create_module, get_module, list_modules, update_module},
   run::run_task,
   tasks::{get_task, list_tasks},

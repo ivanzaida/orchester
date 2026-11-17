@@ -41,7 +41,9 @@ const SERIES_COLORS: [ExtraColor; 5] = [
   ExtraColor::ChartNone,
 ];
 
-pub fn card(ctx: &mut Ctx, flow: &[FlowDay], views: &Signal<Views>) -> Element {
+/// The card of `flow`; `None` for a team project, whose server keeps no history of a task's workflow status, which
+/// the card says in place of the bands.
+pub fn card(ctx: &mut Ctx, flow: Option<&[FlowDay]>, views: &Signal<Views>) -> Element {
   let tabled = views.get().flow;
   let switch = {
     let views = views.clone();
@@ -53,16 +55,27 @@ pub fn card(ctx: &mut Ctx, flow: &[FlowDay], views: &Signal<Views>) -> Element {
     .subtitle(ctx.t("delivery.flow.subtitle"))
     .trailing(switch)
     .fill();
-  if flow.iter().all(|day| day.total() == 0) {
-    let empty = state(
-      "delivery-flow-empty",
-      (
-        Icon::ChartColumn,
-        &ctx.t("delivery.flow.empty.title"),
-        &ctx.t("delivery.flow.empty.detail"),
-      ),
-      None,
-    );
+  let (flow, empty) = match flow {
+    None => (
+      &[][..],
+      Some((
+        "delivery-flow-team",
+        "delivery.flow.team.title",
+        "delivery.flow.team.detail",
+      )),
+    ),
+    Some(flow) if flow.iter().all(|day| day.total() == 0) => (
+      flow,
+      Some((
+        "delivery-flow-empty",
+        "delivery.flow.empty.title",
+        "delivery.flow.empty.detail",
+      )),
+    ),
+    Some(flow) => (flow, None),
+  };
+  if let Some((id, title, detail)) = empty {
+    let empty = state(id, (Icon::ChartColumn, &ctx.t(title), &ctx.t(detail)), None);
     return card.body([state_room(empty)]);
   }
   let body = if tabled {

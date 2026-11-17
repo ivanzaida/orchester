@@ -22,12 +22,14 @@ mod team_deliveries;
 #[path = "../team_work/team_server.rs"]
 mod team_server;
 
+mod acceptance;
 mod bundle_missing;
 mod bundle_schema;
 mod chat_named;
 mod chat_task;
 mod created;
 mod delivery;
+mod figures;
 mod led_module;
 mod led_reads;
 mod local_task;

@@ -125,6 +125,7 @@ mod team_delivery_waits;
 mod team_done;
 mod team_fill_ins;
 mod team_mcp_server;
+mod team_module_acceptance;
 mod team_operations;
 mod team_outbox;
 mod team_pipeline_ids;

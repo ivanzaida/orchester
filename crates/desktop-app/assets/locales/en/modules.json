@@ -165,6 +165,10 @@
       "you": "{{name}} (you)",
       "readOnly": "Only Admins create and change modules: {{admins}}. You claim a module to work on all its tasks.",
       "readOnlyUnnamed": "Only Admins create and change modules. You claim a module to work on all its tasks.",
+      "acceptance": {
+        "foot": "Kept on this computer: the team's server keeps neither, so each of you chooses them.",
+        "deliverHint": "The Orchestrator asks the team's server to deliver the branch when acceptance finds nothing; an Admin or the automatic merge decides"
+      },
       "unavailable": {
         "title": "The modules can't be read now",
         "body": "{{server}} hasn't answered since {{time}}. The modules show again when it does; Orchester keeps no copy of them."

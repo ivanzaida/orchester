@@ -124,8 +124,13 @@ pub fn group(
     .render(ctx);
   let mut rows = vec![own_row];
   if held.own_branch {
-    rows.push(acceptance_row(ctx, &pipelines, acceptance));
-    rows.push(deliver_row(ctx, own, acceptance.get().0.is_some()));
+    let listed = pipelines
+      .data
+      .as_ref()
+      .map_or(&[][..], |pipelines| pipelines.0.as_slice());
+    rows.push(acceptance_row(ctx, listed, acceptance));
+    let hint = ctx.t("modules.form.delivery.deliver.hint");
+    rows.push(deliver_row(ctx, (own, &hint), acceptance.get().0.is_some()));
   }
   SettingGroup::new("module-delivery", ctx.t("modules.form.delivery.title"))
     .rows(rows)
@@ -133,10 +138,11 @@ pub fn group(
     .into()
 }
 
-/// *Acceptance pipeline*: none, or one of the project's published pipelines.
-fn acceptance_row(
+/// *Acceptance pipeline*: none, or one of `pipelines`, the project's published pipelines by name (a team project's are
+/// the team's).
+pub(super) fn acceptance_row(
   ctx: &mut Ctx,
-  pipelines: &FutureState<Pipelines, Message>,
+  pipelines: &[(ResourceId, String)],
   acceptance: &Signal<AcceptancePick>,
 ) -> Element {
   let label = ctx.t("modules.form.delivery.acceptance.label");
@@ -144,13 +150,11 @@ fn acceptance_row(
     AcceptancePick(None),
     ctx.t("modules.form.delivery.acceptance.none").to_string(),
   )];
-  if let Some(Pipelines(pipelines)) = &pipelines.data {
-    options.extend(
-      pipelines
-        .iter()
-        .map(|(id, name)| SelectOption::new(AcceptancePick(Some(*id)), name.clone())),
-    );
-  }
+  options.extend(
+    pipelines
+      .iter()
+      .map(|(id, name)| SelectOption::new(AcceptancePick(Some(*id)), name.clone())),
+  );
   // An id of its own: the row's label is `module-acceptance-label`, which the select would also name its value.
   let select = SelectField::new("module-acceptance-pipeline", label.clone(), acceptance.clone(), options)
     .leading(Icon::Workflow)
@@ -162,8 +166,8 @@ fn acceptance_row(
     .render(ctx)
 }
 
-/// *Deliver when accepted*: off and faded, with why, while the module names no acceptance pipeline.
-fn deliver_row(ctx: &mut Ctx, own: &Signal<OwnPick>, accepted: bool) -> Element {
+/// *Deliver when accepted*, with `hint`: off and faded, with why, while the module names no acceptance pipeline.
+pub(super) fn deliver_row(ctx: &mut Ctx, (own, hint): (&Signal<OwnPick>, &str), accepted: bool) -> Element {
   let label = ctx.t("modules.form.delivery.deliver.label");
   let on = accepted && own.get().deliver_when_accepted;
   let switch = Toggle::new("module-deliver-when-accepted", ToggleKind::Switch, on, label.clone()).hide_label();
@@ -171,7 +175,7 @@ fn deliver_row(ctx: &mut Ctx, own: &Signal<OwnPick>, accepted: bool) -> Element 
   if accepted {
     let switched = own.clone();
     row
-      .hint(ctx.t("modules.form.delivery.deliver.hint"))
+      .hint(hint.to_owned())
       .control(switch.on_change(move |on| switched.update(|pick| pick.deliver_when_accepted = on)))
       .render(ctx)
   } else {

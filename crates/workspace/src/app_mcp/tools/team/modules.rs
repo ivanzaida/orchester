@@ -46,7 +46,9 @@ pub(in crate::app_mcp::tools) async fn get_module(
 ) -> Result<Value, ToolError> {
   let project = team.reads(services).await?;
   let summary = find(&project, named).await?;
-  Ok(summary_json(team.open.project.id(), &summary))
+  let mut page = summary_json(team.open.project.id(), &summary);
+  page["own_branch"] = super::acceptance::own_branch_json(services, team, &summary).await?;
+  Ok(page)
 }
 
 pub(in crate::app_mcp::tools) async fn create_module(
@@ -66,6 +68,8 @@ pub(in crate::app_mcp::tools) async fn create_module(
   };
   let details = form_details(&form)?;
   let module = changed(team, services, ModuleAction::Create { details }).await?;
+  let chosen = (args.acceptance_pipeline.clone().map(Some), args.deliver_when_accepted);
+  super::acceptance::choose(services, team, module.id, chosen).await?;
   Ok(json!({ "module": module_json(team.open.project.id(), &module) }))
 }
 
@@ -78,6 +82,29 @@ pub(in crate::app_mcp::tools) async fn update_module(
     return Err(branch_is_teams());
   }
   let current = find(&team.reads(services).await?, &args.module).await?.module.module;
+  let edits = args.name.is_some()
+    || args.description.is_some()
+    || args.start_date.is_some()
+    || args.target_date.is_some()
+    || args.state.is_some();
+  let module = if edits {
+    edited(services, team, args, current).await?
+  } else {
+    current
+  };
+  // How the module is accepted is this computer's, which a member changes too: it sends nothing to the server.
+  let chosen = (args.acceptance_pipeline.clone(), args.deliver_when_accepted);
+  super::acceptance::choose(services, team, module.id, chosen).await?;
+  Ok(json!({ "module": module_json(team.open.project.id(), &module) }))
+}
+
+/// `current` with the details `args` change, as the server holds it after the edit.
+async fn edited(
+  services: &Services,
+  team: &Team,
+  args: &UpdateModule,
+  current: SharedModule,
+) -> Result<SharedModule, ToolError> {
   let base = current.fields.details().map_err(|_| unreadable())?;
   let day = |given: &Option<Option<String>>, stored: Option<chrono::NaiveDate>| match given {
     Some(value) => value.clone().unwrap_or_default(),
@@ -101,8 +128,7 @@ pub(in crate::app_mcp::tools) async fn update_module(
     base,
     edited,
   };
-  let module = changed(team, services, action).await?;
-  Ok(json!({ "module": module_json(team.open.project.id(), &module) }))
+  changed(team, services, action).await
 }
 
 /// `action` through the project's dispatcher: the module as the server holds it after it.
@@ -125,7 +151,7 @@ pub(super) async fn module_named(project: &TeamProject, named: &str) -> Result<M
 }
 
 /// The module `named` by its id or, ignoring case, its name.
-async fn find(project: &TeamProject, named: &str) -> Result<ModuleSummary, ToolError> {
+pub(super) async fn find(project: &TeamProject, named: &str) -> Result<ModuleSummary, ToolError> {
   if let Ok(id) = named.parse::<ModuleId>() {
     return match read(project, project.module(id)).await {
       Ok(summary) => Ok(summary.into_value()),
@@ -142,7 +168,7 @@ async fn find(project: &TeamProject, named: &str) -> Result<ModuleSummary, ToolE
 }
 
 /// Every module of the project, open and closed, following the listing's pages.
-async fn all_modules(project: &TeamProject) -> Result<Vec<ModuleSummary>, ToolError> {
+pub(super) async fn all_modules(project: &TeamProject) -> Result<Vec<ModuleSummary>, ToolError> {
   let mut modules = Vec::new();
   let mut page = PageRequest::first();
   loop {

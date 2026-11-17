@@ -37,6 +37,7 @@ use super::{
 };
 use crate::{
   messages::{self, Message},
+  modules::team_delivery,
   tasks::{
     data::published_pipelines,
     delivery, hold,
@@ -178,9 +179,11 @@ impl Reads {
       Some(_) | None => false,
     };
     // A module with a branch of its own is not done until that branch is on its base branch; a team module's branch
-    // is its server's, and so is its delivery.
+    // is its server's, and so is its delivery, by the same rule after its acceptance.
     let delivery = match subscription.target() {
-      WatchTarget::Module(id) if db.sharing()?.is_some() => Some(super::team_delivery::step(db, id)?),
+      WatchTarget::Module(id) if db.sharing()?.is_some() => {
+        Some(team_delivery::read(db, id, &|task| self.team.status_of(task))?.step)
+      }
       WatchTarget::Module(id) => match db.module(id)? {
         Some(module) => Some(crate::modules::delivery::facts(db, &module)?.step()),
         None => None,
@@ -404,7 +407,7 @@ pub struct ModuleNow {
 
 /// The modules the events among `entries` are about, as they are now, by entry: for the events whose line names
 /// something of the module (its acceptance can start, it can be delivered). An event of a module that is gone, or
-/// that has no branch of its own any more, has none.
+/// that has no branch of its own any more, has none; a team module's names its acceptance pipeline and no branch.
 pub(super) fn modules_now(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashMap<i64, ModuleNow>, StoreError> {
   let mut now = HashMap::new();
   for entry in entries {
@@ -417,10 +420,13 @@ pub(super) fn modules_now(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashM
     let Some(module) = db.module(id)? else {
       continue;
     };
-    let Some(own) = module.own_branch() else {
-      continue;
+    // A team module's branch is its server's, which this computer keeps no copy of; its acceptance is chosen here.
+    let (pipeline, branch) = match module.own_branch() {
+      Some(own) => (own.acceptance, Some(own.branch.as_str().to_owned())),
+      None if db.sharing()?.is_some() => (db.team_module_acceptance(id)?.acceptance, None),
+      None => continue,
     };
-    let acceptance = match own.acceptance {
+    let acceptance = match pipeline {
       Some(pipeline) => db
         .resource(pipeline)?
         .map(|pipeline| pipeline.name().as_str().to_owned()),
@@ -430,7 +436,7 @@ pub(super) fn modules_now(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashM
       entry.seq,
       ModuleNow {
         acceptance,
-        branch: Some(own.branch.as_str().to_owned()),
+        branch,
         base: module.base().branch().map(|base| base.as_str().to_owned()),
       },
     );

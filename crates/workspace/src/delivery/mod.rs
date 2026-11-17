@@ -12,8 +12,9 @@ use chrono::{Days, NaiveDate};
 pub use orchester_core::forecast;
 use orchester_core::{
   id::ModuleId,
-  module::ModuleState,
+  module::{Module, ModuleState},
   store::TaskStore,
+  task::Task,
   time::Timestamp,
   usage::{DayRange, local_date},
 };
@@ -95,7 +96,8 @@ pub struct Delivery {
   pub throughput: Vec<ThroughputBar>,
   pub cycle: CycleTimes,
   pub time: WhereTimeGoes,
-  pub flow: Vec<FlowDay>,
+  /// `None` for a team project: its team server keeps no history of a task's workflow status to stack.
+  pub flow: Option<Vec<FlowDay>>,
   /// The queued work first, then each open module, oldest first.
   pub forecasts: Vec<WorkForecast>,
   /// Runs whose record could not be read; what they did is left out.
@@ -109,6 +111,21 @@ impl Delivery {
     let facts = DeliveryFacts::read(db, &tasks, now)?;
     let modules = summaries(&db.modules()?, &tasks);
     Ok(Self::of(&facts, &modules, range, local_date(now), forecast::SEED))
+  }
+
+  /// A team project's delivery over `range`, as it stands at `now`: its `tasks` and `modules` as its team server listed
+  /// them, with this computer's runs of them in `db`: work a teammate's computer merged is not known here and is not
+  /// counted as delivered, and there is no cumulative flow ([`DeliveryFacts::read_team`]).
+  pub fn read_team(
+    db: &ProjectDb,
+    (tasks, modules): (&[Task], &[Module]),
+    range: DayRange,
+    now: Timestamp,
+  ) -> Result<Self, StoreError> {
+    let facts = DeliveryFacts::read_team(db, tasks, now)?;
+    let modules = summaries(modules, tasks);
+    let delivery = Self::of(&facts, &modules, range, local_date(now), forecast::SEED);
+    Ok(Self { flow: None, ..delivery })
   }
 
   /// The delivery `facts` give over `range`, with forecasts after `today` of the queued work and of the open
@@ -139,7 +156,7 @@ impl Delivery {
       throughput: series::throughput(facts, range, bucketing),
       cycle: series::cycle_times(facts, range),
       time: series::where_time_goes(facts, range),
-      flow: series::cumulative_flow(facts, range),
+      flow: Some(series::cumulative_flow(facts, range)),
       forecasts,
       unread_runs: facts.unread_runs,
     }

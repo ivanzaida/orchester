@@ -480,4 +480,5 @@ CREATE TABLE run_merges (
   super::service_slots::MIGRATION,
   super::shared_project_key::MIGRATION,
   super::team_done::MIGRATION,
+  super::team_module_acceptance::MIGRATION,
 ];
