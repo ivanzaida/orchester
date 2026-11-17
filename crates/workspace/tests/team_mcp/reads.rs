@@ -37,6 +37,11 @@ pub struct Seen {
   /// The changes the last task edit sent, as sent.
   pub edited_changes: Value,
   pub created_pipeline: Value,
+  /// The content the last `task.create` sent, as sent.
+  pub created_content: Value,
+  /// The team's tags (`SharedTag`s), and how many tag creations reached the server, which refuses a member's.
+  pub tags: Vec<Value>,
+  pub tag_creates: usize,
   /// The fields a test lays over the task the server reads (an object, or null for none): the records of who closed
   /// it or blocked it, as a server of this contract sends them.
   pub task_fields: Value,
@@ -153,8 +158,7 @@ fn route(
   };
   let number = seen.lock().task_number;
   let path = request.path.split('?').next().unwrap_or_default();
-  if let Some(route) = path.strip_prefix(&format!("/api/v1/projects/{project}/tasks/")) {
-    let (status, body) = task_edit(seen, request, route);
+  if let Some((status, body)) = v1(seen, request, (path, &project.to_string())) {
     respond(stream, status, &body);
     return true;
   }
@@ -202,7 +206,7 @@ fn route(
       seen.lock().task_gets += 1;
       (200, task_read())
     }
-    ("GET", ["tasks", _]) => (404, json!({"error": "not_found", "message": "Not found"})),
+    ("GET", ["tasks", id]) => more_task(seen, id, &task_read),
     (_, ["module-list"]) => (200, page(vec![summary()])),
     ("GET", ["modules", id]) if *id == module.to_string() => (200, summary()),
     (_, ["resources", id, "version-list"]) => {
@@ -216,6 +220,7 @@ fn route(
       let mut seen = seen.lock();
       seen.task_creates += 1;
       seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
+      seen.created_content = request.json()["command"]["content"].clone();
       drop(seen);
       let operation = request.json()["operation_id"].clone();
       (
@@ -227,6 +232,37 @@ fn route(
   };
   respond(stream, status, &body);
   true
+}
+
+/// One of the more tasks a test laid out, by its id, as the server reads it; `404` for an id it does not hold.
+fn more_task(seen: &Mutex<Seen>, id: &str, task_read: &dyn Fn() -> Value) -> (u16, Value) {
+  let fields = seen.lock().more_tasks.iter().find(|fields| fields["id"] == id).cloned();
+  let Some(fields) = fields else {
+    return (404, json!({"error": "not_found", "message": "Not found"}));
+  };
+  let mut read = task_read();
+  read
+    .as_object_mut()
+    .expect("a task")
+    .extend(fields.as_object().expect("fields").clone());
+  (200, read)
+}
+
+/// `GET …/tags`, the team's tags; `POST …/tags`, which refuses a member `403 not_admin` as the team server does.
+fn tags(seen: &Mutex<Seen>, request: &Request) -> (u16, Value) {
+  let mut seen = seen.lock();
+  if request.method == "GET" {
+    return (200, json!({"tags": seen.tags}));
+  }
+  seen.tag_creates += 1;
+  if request.token == MEMBER {
+    (
+      403,
+      json!({"error": "not_admin", "message": "Only an admin changes this."}),
+    )
+  } else {
+    (404, json!({"error": "not_found", "message": "tags"}))
+  }
 }
 
 /// A task's definition route, which refuses a member `403 not_admin`; what it was sent is seen.
@@ -300,4 +336,15 @@ fn member_capabilities(seen: &Mutex<Seen>, project: impl serde::Serialize) -> (u
   } else {
     (200, capabilities(project))
   }
+}
+
+/// The `/api/v1` routes of the project: its tags, and a task's definition route; `None` for another path.
+fn v1(seen: &Mutex<Seen>, request: &Request, (path, project): (&str, &str)) -> Option<(u16, Value)> {
+  let prefix = format!("/api/v1/projects/{project}");
+  let rest = path.strip_prefix(&prefix)?;
+  if rest == "/tags" {
+    return Some(tags(seen, request));
+  }
+  let route = rest.strip_prefix("/tasks/")?;
+  Some(task_edit(seen, request, route))
 }

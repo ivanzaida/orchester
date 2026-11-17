@@ -50,6 +50,7 @@ fn task(writer: &mut TaskWriter, operation: OperationId, action: &TaskAction) ->
     TaskAction::Move { task, module, .. } => {
       LocalResult::Changed(writer.set_task_module(*task, *module, ChangeActor::Person)?)
     }
+    TaskAction::Points { .. } => return Err(ActionError::TeamOnly),
   };
   Ok(result)
 }

@@ -4,6 +4,7 @@ use orchester_core::{
   sharing::{ClaimKind, TaskRevision},
   task::{
     TaskStatus,
+    estimate::StoryPoints,
     organization::{ChangeActor, DependencyGate, OrganizationError, Priority, TaskOrganization, WorkflowStatus},
   },
 };
@@ -43,6 +44,10 @@ pub struct Organization {
   pub blocking: Vec<Blocking>,
   #[serde(default)]
   pub blocked_reason: Option<String>,
+  /// *Don't merge automatically* (OA-35): the Orchestrator does not merge the task's runs on its own. Left out when
+  /// off, so a reader older than the field reads every task it had.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub no_automatic_merge: bool,
 }
 
 impl Organization {
@@ -61,6 +66,7 @@ impl Organization {
         .collect(),
       self.tags.clone(),
     )
+    .map(|organization| organization.with_no_automatic_merge(self.no_automatic_merge))
   }
   pub fn from_core(value: &TaskOrganization) -> Self {
     Self {
@@ -76,6 +82,7 @@ impl Organization {
         })
         .collect(),
       blocked_reason: value.blocked_reason().map(str::to_owned),
+      no_automatic_merge: value.no_automatic_merge(),
     }
   }
 }
@@ -110,6 +117,13 @@ pub struct TaskContent {
   /// The project's release the task ships in, as its fix version.
   #[serde(default)]
   pub release: Option<ReleaseId>,
+  /// The task's story points (OA-35), changed as its other details are; left out when it has none, so a server or a
+  /// reader older than the field takes every task it took before.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub story_points: Option<StoryPoints>,
+  /// *Don't merge automatically* (OA-35), as [`Organization::no_automatic_merge`]; left out when off.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub no_automatic_merge: bool,
 }
 impl TaskContent {
   pub fn organization(&self) -> Organization {
@@ -119,6 +133,7 @@ impl TaskContent {
       tags: self.tags.clone(),
       blocking: self.blocking.clone(),
       blocked_reason: self.blocked_reason.clone(),
+      no_automatic_merge: self.no_automatic_merge,
     }
   }
   pub fn set_organization(&mut self, value: &TaskOrganization) {
@@ -128,6 +143,7 @@ impl TaskContent {
     self.tags = organization.tags;
     self.blocking = organization.blocking;
     self.blocked_reason = organization.blocked_reason;
+    self.no_automatic_merge = organization.no_automatic_merge;
   }
 }
 
@@ -250,6 +266,12 @@ pub struct TaskChanges {
   /// none up (`422 release {reason: released}`).
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
   pub release: Option<Option<ReleaseId>>,
+  /// The task's story points (OA-35); `null` takes them off. A server older than the field refuses it (`422`).
+  #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
+  pub story_points: Option<Option<StoryPoints>>,
+  /// *Don't merge automatically* (OA-35). A server older than the field refuses it (`422`).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub no_automatic_merge: Option<bool>,
   #[serde(default, with = "wire::optional_actor")]
   pub actor: Option<ChangeActor>,
 }

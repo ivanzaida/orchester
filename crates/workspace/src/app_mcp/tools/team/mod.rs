@@ -8,6 +8,7 @@
 mod bundle_missing;
 mod deliver;
 mod modules;
+mod organized;
 mod outcome;
 mod run;
 mod tasks;
@@ -16,6 +17,7 @@ mod writes;
 use orchester_api::v2::CallerRole;
 use orchester_core::{
   id::{RunId, TaskId},
+  orchestrator::MergeLeft,
   run::Run,
   store::RunStore,
 };
@@ -279,10 +281,11 @@ pub(super) async fn may_merge_on_base(services: &Services, team: &Team) -> Resul
   ))
 }
 
-/// Why the team server holds the task of `team`'s run `run` blocked now: its *Blocked* reason there; `None` while it
-/// is not blocked. This computer's records of a team task hold what its run started with, never that mark. A server
-/// that cannot be read is the read's refusal.
-pub(super) async fn blocked_reason(services: &Services, team: &Team, run: &str) -> Result<Option<String>, ToolError> {
+/// Why the team server's task of `team`'s run `run` leaves the run's merge to the person now, as the local rule reads
+/// a local task (OA-35): *Don't merge automatically*, its *Blocked* reason, or its blocking tasks the server does not
+/// hold Done; `None` while none holds. This computer's records of a team task hold what its run started with, never
+/// those. A server that cannot be read is the read's refusal.
+pub(super) async fn merge_left(services: &Services, team: &Team, run: &str) -> Result<Option<MergeLeft>, ToolError> {
   let (root, named) = (team.open.repo_root.clone(), run.to_owned());
   let task = blocking(move || {
     let db = ProjectDb::open(&root)?;
@@ -291,13 +294,17 @@ pub(super) async fn blocked_reason(services: &Services, team: &Team, run: &str) 
   })
   .await?;
   let reads = team.reads(services).await?;
-  Ok(
-    tasks::find(&reads, &task.to_string())
-      .await?
-      .task
-      .content
-      .blocked_reason,
-  )
+  let content = tasks::find(&reads, &task.to_string()).await?.task.content;
+  if content.no_automatic_merge {
+    return Ok(Some(MergeLeft::OptedOut));
+  }
+  if let Some(reason) = content.blocked_reason {
+    return Ok(Some(MergeLeft::MarkedBlocked { reason }));
+  }
+  let left = organized::unfinished(&reads, &content.blocking).await?;
+  Ok((!left.is_empty()).then(|| MergeLeft::BlockedByTasks {
+    tasks: left.into_iter().map(|(_, key)| key).collect(),
+  }))
 }
 
 /// A merge a person approved in a proposal is of a local run's own commit, so on a team task's run it is refused:

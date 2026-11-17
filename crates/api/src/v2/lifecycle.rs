@@ -141,7 +141,9 @@ impl LifecycleRequest {
       || changes.tags.is_some()
       || changes.blocking.is_some()
       || changes.module.is_some()
-      || changes.release.is_some();
+      || changes.release.is_some()
+      || changes.story_points.is_some()
+      || changes.no_automatic_merge.is_some();
     Self { actions, other }
   }
 

@@ -184,7 +184,7 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | done as one tool; a team module has no acceptance yet |
 | [OA-33](OA-33-module-branch-is-made.md) | A module's branch is made when its first task starts, in both kinds | workspace + runner | OA-17 | done |
 | [OA-34](OA-34-limits-of-team-runs.md) | A team run's limits are raised as a local run's are | contract + workspace | OA-29 | needs decision (contract) |
-| [OA-35](OA-35-team-task-organization.md) | Dependencies between team tasks, and the rest of a task's organization | contract + workspace | — | needs decision (contract) |
+| [OA-35](OA-35-team-task-organization.md) | Dependencies between team tasks, and the rest of a task's organization | contract + workspace | — | built (2026-11-17, `claude/team-contract`, platform `claude/claims-and-fields`); the run-end follower and story points' source are left |
 | [OA-36](OA-36-team-reads.md) | Forecasts and cross-project readings answer for team projects | workspace | — | `list_tasks` across projects done; `get_delivery` left |
 | **F** | **Proof** | | | |
 | [OA-26](OA-26-unattended-proof.md) | An unattended module, end to end, with the fake agents | tests | OA-01 … OA-03, OA-06, OA-07, OA-09, OA-12 … OA-15, OA-18, OA-21, OA-22 | a local module of three tasks runs end to end; the full scenario and the team run are left |

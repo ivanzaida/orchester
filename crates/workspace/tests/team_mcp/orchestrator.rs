@@ -111,6 +111,22 @@ fn team_mcp_the_chat_leaves_a_team_run_whose_task_the_server_holds_blocked() {
       reason: "Waiting for the staging key".to_owned()
     })
   );
+
+  // *Don't merge automatically* and the tasks that block it are the server's too (OA-35), read as a local task's.
+  team.seen.lock().task_fields = serde_json::json!({"no_automatic_merge": true});
+  assert_eq!(asked(), Some(MergeLeft::OptedOut));
+  let blocker = orchester_core::id::TaskId::generate();
+  team.seen.lock().more_tasks =
+    vec![serde_json::json!({"id": blocker, "number": 8, "key": "KON-8", "workflow": "in_review", "blocking": []})];
+  team.seen.lock().task_fields = serde_json::json!({"blocking": [{"task": blocker, "gate": "merge"}]});
+  assert_eq!(
+    asked(),
+    Some(MergeLeft::BlockedByTasks {
+      tasks: vec!["KON-8".to_owned()]
+    })
+  );
+  team.seen.lock().more_tasks[0]["workflow"] = serde_json::json!("done");
+  assert_eq!(asked(), None, "its blocking task is Done");
 }
 
 #[test]

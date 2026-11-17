@@ -1204,6 +1204,35 @@ Admin closes them. Tests: `crates/api/tests/team_lifecycle`.
 **Not changed here.** The desktop still refuses these changes for a team task (`decision_required` D4) until its actions
 and MCP tools take this path (S12 step 3).
 
+## Team task organization (OA-35)
+
+Decided by the implementing agent on 2026-11-17 on the person's rule that a team task is organized as a local one
+(`docs/design/local-and-team-parity.md`), to confirm with the person. A team task keeps, beside the tags and blocking
+tasks it already had (`TaskContent.tags`, `.blocking` with their gate), its story points and *Don't merge
+automatically*:
+
+- `TaskContent.story_points: StoryPoints?` (1, 2, 3, 5, 8, 13 or 21; another value is a malformed request) and
+  `TaskContent.no_automatic_merge: bool`, so `SharedTask` and `TaskRead` carry them too, and `Organization` (the
+  organization history's `from` and `to`) carries `no_automatic_merge`. Each is **left out when none or off**, so a
+  reader or a server older than the fields reads every task it read before.
+- `TaskChanges.story_points: StoryPoints | null` (present: set or cleared) and `TaskChanges.no_automatic_merge: bool`,
+  left out when unchanged. A server older than them refuses a patch that names them (`deny_unknown_fields`).
+- Who changes them: the task route's rule for every field that is no lifecycle action (`LifecycleRequest::of` counts
+  them as *other*): a workspace Admin, or the server admin; a member is `403 not_admin`. `task.create` (an Admin's)
+  takes them in its content.
+- The server keeps them in `tasks.story_points` and `tasks.no_automatic_merge` (its schema 39), none and off for every
+  task made before; its organization history records `no_automatic_merge` as part of the organization.
+
+The desktop's `create_task` and `update_task` of a team task take `story_points`, `blocked_by` (a blocking task by its
+key or server id among the team's tasks, gate `merge`), `tags` (by name among the team's tags, ignoring case; one the
+team lacks is made there first with `POST …/tags`, an Admin's) and `no_automatic_merge`, and return them; points go as a
+change of their own after the details and the organization. The Orchestrator reads them for a team task as for a local
+one: `run_task` refuses a task whose blocking tasks the server does not hold Done (`invalid_organization`, the local
+refusal), a merge nobody asked for is left to the person for *Don't merge automatically*, a Blocked mark or blocking
+tasks not Done (`MergeLeft::OptedOut`, `MarkedBlocked`, `BlockedByTasks`, read from the server), and where a led module
+stands lists a task blocked by a task of the same reading that is not Done as `blocked_by`. The stand-in team server
+(`test_support`) keeps both fields on its task patch.
+
 ## Team authority releases
 
 A shared project's releases, each task's release and each module's horizon belong to its team server

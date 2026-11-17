@@ -317,6 +317,8 @@ fn task(number: u32, title: &str, by: &UserRef) -> SharedTask {
       blocked_reason: None,
       module: None,
       release: None,
+      story_points: None,
+      no_automatic_merge: false,
     },
     status: TaskStatus::Draft,
     has_run: false,

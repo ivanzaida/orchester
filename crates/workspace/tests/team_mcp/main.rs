@@ -34,6 +34,7 @@ mod mcp_servers;
 mod module_branch;
 mod not_ready;
 mod orchestrator;
+mod organization;
 mod pipelines;
 mod readiness;
 mod reads;

@@ -101,6 +101,8 @@ pub(super) fn create_task(
     blocked_reason: None,
     module: None,
     release: None,
+    story_points: None,
+    no_automatic_merge: false,
   };
   content.set_organization(organization);
   Ok(TeamRequest::unrevised(TeamCommand::TaskCreate { content }))

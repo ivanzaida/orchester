@@ -52,6 +52,12 @@ pub(super) fn team_route(
     Action::Task(TaskAction::Move { task, read, module }) => {
       Definition(definition::task(db, link, (*task, *read), definition::moved(*module))?)
     }
+    Action::Task(TaskAction::Points { task, read, points }) => Definition(definition::task(
+      db,
+      link,
+      (*task, *read),
+      definition::pointed(*points),
+    )?),
     Action::Module(ModuleAction::Create { details }) => Definition(definition::create_module(operation, details)),
     Action::Module(ModuleAction::Edit {
       module,

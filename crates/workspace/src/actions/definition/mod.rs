@@ -17,7 +17,7 @@ use orchester_core::{
   module::ModuleDetails,
   name::Name,
   sharing::TaskRevision,
-  task::{TaskDetails, organization::TaskOrganization},
+  task::{TaskDetails, estimate::StoryPoints, organization::TaskOrganization},
 };
 use orchester_store::ProjectDb;
 
@@ -84,6 +84,14 @@ pub(super) fn moved(module: Option<ModuleId>) -> TaskChanges {
   }
 }
 
+/// A team task's story points (OA-35), or none.
+pub(super) fn pointed(points: Option<StoryPoints>) -> TaskChanges {
+  TaskChanges {
+    story_points: Some(points),
+    ..TaskChanges::default()
+  }
+}
+
 /// The details that changed; the limits' owner is open (D6), and a pipeline is a team pipeline, by its id.
 pub(super) fn detail_changes(
   pipelines: &TeamPipelineCheck<'_>,
@@ -135,6 +143,7 @@ pub(super) fn organization_changes(
     tags: changed(base.tags(), edited.tags()).map(<[_]>::to_vec),
     blocking,
     blocked_reason: changed(&base.blocked_reason(), &edited.blocked_reason()).map(|reason| reason.map(str::to_owned)),
+    no_automatic_merge: changed(&base.no_automatic_merge(), &edited.no_automatic_merge()).copied(),
     ..TaskChanges::default()
   })
 }
@@ -155,7 +164,9 @@ fn some(changes: TaskChanges) -> Result<TaskChanges, ActionError> {
     && changes.tags.is_none()
     && changes.blocking.is_none()
     && changes.blocked_reason.is_none()
-    && changes.module.is_none();
+    && changes.module.is_none()
+    && changes.story_points.is_none()
+    && changes.no_automatic_merge.is_none();
   if nothing {
     return Err(ActionError::NothingToChange);
   }

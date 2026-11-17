@@ -1,9 +1,10 @@
 # OA-35 · Dependencies between team tasks, and the rest of a task's organization
 
-- **Status:** needs decision (what of a task's organization the server keeps, and who may change it); the contract changes here first, then the platform's side
+- **Status:** built (2026-11-17): contract, server and desktop; the run-end follower and story points' source are left
+  (*Left*)
 - **Kind:** contract + workspace
 - **Depends on:** —
-- **Branch:** —
+- **Branch:** `claude/team-contract` (platform: `claude/claims-and-fields`)
 - **Tokens:** —
 
 ## Goal
@@ -34,3 +35,34 @@ files" has nothing to write.
 
 - Contract tests; workspace tests with the stand-in server. Its row leaves the parity table. The platform's change
   is listed as not done here.
+
+## Built (2026-11-17)
+
+Decided by the implementing agent on 2026-11-17, to confirm with the person: the server keeps what a local task keeps of
+its organization, and a member's change of it is refused as for every other detail of a team task (an Admin's, the
+task route's rule; the holder's own change would be a new rule, so it was not made).
+
+- **Found first:** the server kept a team task's tags and blocking tasks already (its `task_links`, `task_tags`); the
+  desktop's tools refused them only because they were not wired. Story points and *Don't merge automatically* were not
+  in the contract.
+- **The contract** (`orchester-api`, `docs/cloud-api.md`, "Team task organization (OA-35)"): `TaskContent` and
+  `TaskRead` carry `story_points` and `no_automatic_merge`, `Organization` carries `no_automatic_merge`, and
+  `TaskChanges` changes them; each is left out when none or off. `LifecycleRequest` counts them as an Admin's.
+- **The server** (platform): schema 39 (`tasks.story_points`, `tasks.no_automatic_merge`), the task route, `task.create`
+  and every task read.
+- **The desktop:** `create_task` and `update_task` take and return them (`app_mcp/tools/team/organized.rs` resolves a
+  blocking task by its key among the team's tasks and a tag by its name among the team's tags, making a tag the team
+  lacks); `TaskAction::Points` sends a team task's points. `run_task` refuses a task whose blocking tasks the server
+  does not hold Done, as a local blocked task is refused; `merge_run` in a turn nobody asked for is left to the person
+  for *Don't merge automatically*, a Blocked mark or unfinished blocking tasks read from the server
+  (`team::merge_left`); where a led module stands lists a team task blocked by a task of the same reading as
+  `blocked_by`.
+- Tests: `crates/workspace/tests/team_mcp/organization.rs`, `orchestrator.rs` (the merge left to the person),
+  `led_module.rs` (the standing); the server's `tests/sharing/task_points.rs`.
+
+## Left
+
+- The follower of a kept run end (`merging`) reads this computer's records, so it still says `merges` for a team task
+  the server holds back; the turn's `merge_run` is refused with the reason.
+- A team task's story points keep no say of who set them, and Orchester does not estimate them.
+- An older server (0.11.4 or older) refuses a patch that names the new fields, and keeps neither.
