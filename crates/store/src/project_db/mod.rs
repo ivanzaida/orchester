@@ -387,4 +387,6 @@ pub enum ProjectMigration {
   ArchiveStopsArchived,
   /// A shared project's copy of the team's configuration dropped.
   TeamCache,
+  /// A shared project given its server project's key.
+  SharedProjectKey,
 }

@@ -11,7 +11,9 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_api::{ResourceCreate, SharedResourceKind, VersionContent, test_support::team_server::TeamServer};
+use orchester_api::{
+  ReferenceTarget, ResourceCreate, SharedResourceKind, VersionContent, test_support::team_server::TeamServer,
+};
 use orchester_app::services::Services;
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, ServerId},
@@ -26,12 +28,14 @@ use orchester_store::{AppDb, ProjectDb, ResourceSharing, SharingLink};
 use serde_json::Value;
 
 /// The team's kinds the seed caches.
+/// The kinds in the order they are held: what a profile names (its MCP servers, tools, skills and instructions) before
+/// it, since its version's references name them and the stand-in takes only references it holds.
 const KINDS: [ResourceKind; 7] = [
-  ResourceKind::AgentProfile,
+  ResourceKind::McpServer,
   ResourceKind::Instruction,
   ResourceKind::Skill,
   ResourceKind::Tool,
-  ResourceKind::McpServer,
+  ResourceKind::AgentProfile,
   ResourceKind::Pipeline,
   ResourceKind::TeamReviewer,
 ];
@@ -65,8 +69,8 @@ pub fn hold_cached(server: &TeamServer, root: &Path) -> Result<(), Box<dyn Error
         slug: resource.slug().as_str().to_owned(),
         name: resource.name().as_str().to_owned(),
         version: VersionContent {
+          references: ReferenceTarget::of_body(shared, &body).unwrap_or_default(),
           body,
-          references: Vec::new(),
         },
       };
       server.hold_resource("kontur", &create, number.get());
@@ -77,7 +81,7 @@ pub fn hold_cached(server: &TeamServer, root: &Path) -> Result<(), Box<dyn Error
 
 /// The body the server confirmed of version `number` of the resource `id` of `kind`; `None` for one not cached from a
 /// server.
-fn server_body(
+pub(super) fn server_body(
   db: &ProjectDb,
   (kind, id): (ResourceKind, ResourceId),
   number: VersionNumber,

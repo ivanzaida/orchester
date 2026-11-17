@@ -184,6 +184,19 @@ pub(crate) fn tool(resource: ResourceId, local: &Tool, secrets: &[Secret]) -> Re
   Ok(team_tool(&team)?)
 }
 
+/// `team`, a version of an agent profile already in the team's form (Agents' *New agent* in a team project): it is sent
+/// as it is, with the references its body names ([`ReferenceTarget::of_profile`]), which the team's server derives
+/// from the body again and takes only when they are the same.
+pub(crate) fn team_profile(team: &TeamAgentProfile) -> Result<Publication, StoreError> {
+  Ok(Publication {
+    body: serde_json::to_value(team).map_err(|error| StoreError::Corrupt {
+      what: "resource body",
+      detail: error.to_string(),
+    })?,
+    references: ReferenceTarget::of_profile(team),
+  })
+}
+
 /// `team`, a version of a team tool already in the team's form, which names its secret by name: it is sent as it is,
 /// with the references its body names ([`ReferenceTarget::of_tool`]).
 pub(crate) fn team_tool(team: &TeamTool) -> Result<Publication, StoreError> {

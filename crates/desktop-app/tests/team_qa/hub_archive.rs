@@ -116,7 +116,9 @@ fn team_qa_hub_archive_cancel_keeps_everything_as_it_is() {
 #[test]
 fn team_qa_hub_archive_without_knowing_what_uses_it_nothing_is_archived() {
   let (mut window, server, _) = on_archive();
-  server.set_down(true);
+  // Only this read fails: a server that is down altogether takes the menu away once the hub knows it cannot be
+  // reached, at a moment of its own.
+  server.fail_used_by("kontur");
   opened_without_lists(&mut window);
   window.until("the failure", |window| {
     window.texts("team-hub-archive-read-failed").is_some()

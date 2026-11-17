@@ -44,12 +44,14 @@ use crate::{
   },
 };
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Props {
   /// The server whose address the page starts with: joining it again with a code.
   pub server: Option<ServerId>,
   /// The step the page opens on: past *Address*, it asks what answers at that server's address as *Continue* does.
   pub step: ConnectStep,
+  /// The address the page starts with when it names no server, as the person typed it where they were sent from.
+  pub address: Option<String>,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -212,8 +214,10 @@ impl ConnectPage {
       return;
     };
     self.seeded.set(true);
-    let Props { server, step } = *ctx.props::<Props>();
+    let Props { server, step, address } = ctx.props::<Props>().clone();
     let Some(entry) = entries.iter().find(|entry| Some(entry.stored.id) == server) else {
+      // Typed elsewhere: the person reads it here and continues themselves.
+      self.address.set(address.unwrap_or_default());
       return;
     };
     let address = entry.address.as_str().to_owned();

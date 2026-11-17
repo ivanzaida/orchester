@@ -478,4 +478,5 @@ CREATE TABLE run_merges (
   super::orchestrator_watch::LEAD_DEFAULTS_MIGRATION,
   super::flaky_tests::MIGRATION,
   super::service_slots::MIGRATION,
+  super::shared_project_key::MIGRATION,
 ];

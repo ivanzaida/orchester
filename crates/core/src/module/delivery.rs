@@ -116,6 +116,11 @@ pub enum PersonsDelivery {
   AcceptanceCeiling,
   /// It is accepted, and *Deliver when accepted* is off for it.
   NotAllowed,
+  /// A team module's delivery was asked of its team server, which decides it: it waits for an Admin's authorization,
+  /// after which it is asked for again.
+  TeamDecides,
+  /// A team module's delivery was refused by its team server, or its merge failed.
+  TeamRefused,
 }
 
 /// What a module whose every task is done waits for before it is on its base branch.
@@ -165,6 +170,8 @@ impl DeliveryStep {
       Self::Person(PersonsDelivery::NoAcceptance) => "person_no_acceptance",
       Self::Person(PersonsDelivery::AcceptanceCeiling) => "person_acceptance_ceiling",
       Self::Person(PersonsDelivery::NotAllowed) => "person_not_allowed",
+      Self::Person(PersonsDelivery::TeamDecides) => "person_team_decides",
+      Self::Person(PersonsDelivery::TeamRefused) => "person_team_refused",
     }
   }
 }

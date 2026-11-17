@@ -259,7 +259,7 @@ Settings' extra parameters, by tab (any other is `unexpected_param`):
 | `automation` | `ask` | `rotate-token` (asks *Rotate the token?* in place) |
 | `accounts` | `account`, `panel` | `account`: an account's id or name, or `claude-default` / `codex-default` (its page); `panel`: `add` (Add account, without `account`), or with `account` `sign_in`, `rename` or `remove` |
 | `orchester` | `server`, `ask`, `invite` | `server`: a team server's id, name or host (its page); `ask`: `sign-out` (the cloud account, or with `server` that server) or `decline` with `invite` (an invite's id) |
-| `connect` | `server`, `step` | `server`: the server whose address Connect a server starts at; `step`: `address`, `compare`, `join` or `username` (a server with its own certificate stays at `compare`, which only a person answers) |
+| `connect` | `server`, `step`, `address` | `server`: the server whose address Connect a server starts at; `step`: `address`, `compare`, `join` or `username` (a server with its own certificate stays at `compare`, which only a person answers); `address`, without `server`: the address the page starts with, as typed (the code column of *Join a team* opens it so) |
 | `invite` | `server`, `project` | `server` and the invite's project slug there |
 
 Errors: `unknown_route` (with the known names), `missing_param`, `unexpected_param`, `invalid_param`, `unknown_tab`

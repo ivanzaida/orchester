@@ -86,3 +86,17 @@ fn domain_modules_group_tasks_and_read_their_burndown() {
     "no target, no ideal line: {page}"
   );
 }
+
+/// A module on a branch of its own with nothing merged into it yet waits for work, not for its delivery (found in QA
+/// on 2026-11-16: it read `delivered`, as if there were nothing left to do).
+#[test]
+fn domain_modules_a_new_module_on_its_own_branch_waits_for_work() {
+  let (mut served, _seeded) = Served::seeded("empty");
+  served.ok(
+    "create_module",
+    &json!({ "project": "Kontur", "name": "Checkout", "own_branch": true }),
+  );
+  let page = served.ok("get_module", &json!({ "project": "Kontur", "module": "Checkout" }));
+  assert_eq!(page["own_branch"]["waits_for"], "work", "{page}");
+  assert!(page["own_branch"]["delivered"].is_null(), "{page}");
+}

@@ -353,8 +353,9 @@ fn hub_body(
   (reading, retry): (bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
-  // Only an admin creates: a member who follows a link to a form sees the kind's list.
-  let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
+  // Only an admin creates: a member who follows a link to a form sees the kind's list. A form an admin opened stays
+  // open, with what was typed, while the team server cannot be reached: Create says then that nothing was sent.
+  let adding = Kind::of_filter(view.filter).filter(|_| view.adding && reach.0);
   let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
   // Under Archived nothing is picked until the person picks it; the list stands beside what archived means.
   let picking = view.filter == HubFilter::Archived && listing.count(view.filter) > 0;

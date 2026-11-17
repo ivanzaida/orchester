@@ -318,3 +318,33 @@ fn standing_raises_work_that_can_start_again_once_what_is_under_way_ends() {
     "A waits to be merged"
   );
 }
+
+/// A turn that started A and kept B back is not asked again once A is under way (found in QA on 2026-11-16: the turn
+/// read the same and kept B back again); it is asked once A ends, or once something new can start.
+#[test]
+fn standing_raises_nothing_new_when_work_it_started_is_under_way() {
+  let can_start = |tasks: &[&str], under_way: &[&str]| Raised::CanStart {
+    tasks: tasks.iter().map(|task| (*task).to_owned()).collect(),
+    under_way: under_way.iter().map(|task| (*task).to_owned()).collect(),
+  };
+  let both = can_start(&["A", "B"], &[]).state();
+  let started = can_start(&["B"], &["A"]);
+  assert!(
+    !started.raises_after(Some(&both)),
+    "A only went from waiting to under way"
+  );
+  assert!(
+    !started.raises_after(Some(&started.state())),
+    "the same state is raised once"
+  );
+  let a_ended = can_start(&["B"], &[]);
+  assert!(a_ended.raises_after(Some(&started.state())), "A ended");
+  let c_new = can_start(&["B", "C"], &["A"]);
+  assert!(c_new.raises_after(Some(&started.state())), "C can start now");
+  assert!(started.raises_after(None), "the first look");
+  assert!(started.raises_after(Some("quiet")), "after a quiet look");
+  assert!(
+    Raised::Accept.raises_after(Some(&started.state())),
+    "every other change"
+  );
+}

@@ -16,7 +16,7 @@ use orchester_core::{
 };
 use orchester_store::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage};
 
-use super::{DeliveryProgress, KeptDelivery, ModuleDeliveries};
+use super::{DeliveryProgress, KeptDelivery, MergeFailure, ModuleDeliveries};
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome},
   tasks::module_delivery::{ModuleMergeError, merge_module_in, module_merged_in},
@@ -140,7 +140,7 @@ impl ModuleDeliveries {
           return Ok(Err(DeliveryProgress::MergeWaiting));
         }
         Err(ModuleMergeError::Merge(error)) => DeliveryMerge::Failed {
-          failure: error.to_string(),
+          failure: MergeFailure::of(&error).kept(),
         },
         Err(ModuleMergeError::Hold(error)) => return Err(TeamWorkError::DeliveryHold(error)),
         Err(ModuleMergeError::Store(error)) => return Err(error.into()),

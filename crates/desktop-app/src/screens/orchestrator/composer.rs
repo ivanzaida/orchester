@@ -367,7 +367,7 @@ fn send(ctx: &mut Ctx, view: &View, sending: &Sending) -> Element {
     .child(icon(glyph, IconSize::Md, ExtraColor::OnAccent.role()));
   let label = ctx.t("orchestrator.composer.send");
   let menu = (&view.menu, &view.menu_anchor);
-  let (button, tip): (Button, Arc<str>) = match sending {
+  let (button, why): (Button, Option<Arc<str>>) = match sending {
     Sending::WhileAnswering(ways) => {
       let empty = ctx.t("orchestrator.composer.sendEmpty");
       return send_menu::split(ctx, (Some(ways), &empty), menu);
@@ -380,22 +380,27 @@ fn send(ctx: &mut Ctx, view: &View, sending: &Sending) -> Element {
       let button = pressable(move || press())
         .describe("state", "enabled")
         .hovered_style(Style::new().background(PaletteColor::AccentHover));
-      (button, label.clone())
+      (button, None)
     }
-    Sending::Busy => (inert(Button::empty()).describe("state", "loading"), label.clone()),
+    Sending::Busy => (inert(Button::empty()).describe("state", "loading"), None),
     Sending::Held(why) | Sending::Empty { why, .. } => (
       inert(Button::empty())
         .describe("state", "disabled")
         .opacity(DISABLED_OPACITY),
-      why.clone(),
+      Some(why.clone()),
     ),
   };
-  let button = button
+  // No tooltip on Send (the person, 2026-11-16): why it cannot send is for the clients that read the window.
+  let button = match why {
+    Some(why) => button.describe("reason", why),
+    None => button,
+  };
+  button
     .id("orchestrator-send")
     .describe("a11y_name", label)
     .flex_shrink(0.0)
     .background(PaletteColor::Accent)
     .rounded(RadiusSize::Md)
-    .child(face);
-  Tooltip::new("orchestrator-send", tip).wrap(ctx, button)
+    .child(face)
+    .into()
 }

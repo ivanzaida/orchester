@@ -5,9 +5,9 @@
 
 use orchester_store::ProjectDb;
 
-use super::tools::ChatScope;
+use super::{led_start::Named, tools::ChatScope};
 use crate::{
-  app_mcp::{ToolError, blocking, find_task},
+  app_mcp::{ToolError, blocking},
   messages::Message,
   tasks::recorded,
 };
@@ -22,14 +22,16 @@ pub(super) async fn marked(scope: &ChatScope, key: Option<&str>) -> Result<(), T
     return Ok(());
   };
   let root = scope.root.clone();
-  let task = blocking(move || find_task(&ProjectDb::open(&root)?, &named)).await?;
-  match task.organization().blocked_reason() {
+  // A team task that never ran on this computer is in no table of it: the team server's last reading holds it and its
+  // Blocked mark ([`Named::find`]).
+  let task = blocking(move || Named::find(&ProjectDb::open(&root)?, &named)).await?;
+  match task.blocked {
     Some(reason) => Err(ToolError::refused(
       "task_blocked",
       vec![
         Message::new("orchestrator.start.markedBlocked")
-          .with("task", task.key().to_string())
-          .with("reason", reason.to_owned()),
+          .with("task", task.key)
+          .with("reason", reason),
       ],
     )),
     None => Ok(()),

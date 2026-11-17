@@ -10,7 +10,7 @@ use orchester_core::{
   integration::base::BaseChoice,
   module::{
     Module,
-    delivery::{Acceptance, DeliveryFacts, ModuleDelivered},
+    delivery::{Acceptance, DeliveryFacts, DeliveryStep, ModuleDelivered},
   },
   orchestrator::{
     AcceptedUnverified,
@@ -122,15 +122,21 @@ pub(super) fn own_branch_json(db: &ProjectDb, module: &Module) -> Result<Value, 
     return Ok(Value::Null);
   };
   let read = facts(db, module)?;
+  let delivered = db.module_delivery(module.id())?;
+  // A branch with nothing merged into it reads as delivered (nothing to deliver); it waits for work first.
+  let waits_for = match read.step() {
+    DeliveryStep::Delivered if delivered.is_none() => "work",
+    step => step.name(),
+  };
   Ok(json!({
     "branch": own.branch.as_str(),
     "acceptance_pipeline": own.acceptance.map(|pipeline| pipeline.to_string()),
     "deliver_when_accepted": own.deliver_when_accepted,
     "acceptances": read.acceptances,
     "acceptance": acceptance_name(read.acceptance),
-    "delivered": db.module_delivery(module.id())?.as_ref().map(delivered_json),
+    "delivered": delivered.as_ref().map(delivered_json),
     // What it waits for once its every task is done.
-    "waits_for": read.step().name(),
+    "waits_for": waits_for,
   }))
 }
 

@@ -77,7 +77,7 @@ impl ModuleScreen {
       Team::Ready(shown, tasks, standing, source) => {
         let top = ready_header(ctx, (id, &shown), tab);
         let body = match tab {
-          ModuleTab::Summary => self.team_summary(ctx, id, (&shown, &tasks), (&standing, source)),
+          ModuleTab::Summary => self.team_summary(ctx, project, (&shown, &tasks), (&standing, source)),
           ModuleTab::Burndown => padded(
             Text::new(&ctx.t("modules.team.page.noBurndown"))
               .id("module-team-no-burndown")
@@ -101,10 +101,11 @@ impl ModuleScreen {
   fn team_summary(
     &self,
     ctx: &mut Ctx,
-    project: ProjectId,
+    shown_project: &ShownProject,
     (shown, tasks): (&Arc<TeamModule>, &TeamTasks),
     (standing, source): (&Standing, TeamSource),
   ) -> Element {
+    let project = shown_project.open.project.id();
     let lock = standing.member().then(|| {
       let words = lock::lock_words(
         ctx,
@@ -124,6 +125,7 @@ impl ModuleScreen {
         module: shown.clone(),
         source,
         standing: standing.clone(),
+        feed: shown_project.feed.clone(),
       },
     );
     let column = Column::new()

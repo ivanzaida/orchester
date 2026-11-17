@@ -5,7 +5,8 @@
 //! MCP server is read as core's `TeamMcpServer`, so the stand-in refuses (`422 invalid`, reason `body`) a body with a
 //! path, a value or a local id, and computes `widens` with core's rules; the other kinds' bodies are kept as sent. A
 //! version's references are checked as the contract says (`422 invalid`, reason `references`): none repeats a target,
-//! and each team resource is an existing, not archived resource of that kind in the same project.
+//! and each team resource is an existing, not archived resource of that kind in the same project; an agent profile's
+//! and a tool's are exactly those its body names, in that order, as the team server derives them from the body.
 //! `GET …/resources/{r}/used-by` answers from the stand-in's own resources and the runs a test pins with
 //! [`TeamServer::pin_run`] (the stand-in builds no execution bundle, so the pins stand in for the bundle's). A repeated
 //! idempotency key returns the first answer. Not served yet: `POST …/resources/import` and the files.
@@ -44,6 +45,8 @@ struct Project {
   answers: HashMap<String, (u16, Value)>,
   /// The runs [`TeamServer::pin_run`] registered.
   runs: Vec<PinnedRun>,
+  /// What uses a resource is answered `500 internal`, once [`TeamServer::fail_used_by`] said so.
+  used_by_fails: bool,
   /// The number of changes made; the event cursor the list is current at.
   cursor: u64,
 }
@@ -255,6 +258,7 @@ pub(super) fn answer((path, query): (&str, &str), body: &str, state: &Mutex<Stat
     ("POST", None) => held.create(body),
     ("PATCH", Some((resource, ""))) => held.patch(resource, body),
     ("GET", Some((resource, "versions"))) => held.versions(resource, query),
+    ("GET", Some((_, "used-by"))) if held.used_by_fails => (500, error("internal")),
     ("GET", Some((resource, "used-by"))) => held.used_by(resource),
     ("POST", Some((resource, "versions"))) => held.publish(resource, body),
     _ => return None,
@@ -302,7 +306,9 @@ impl Project {
     let Some(widens) = widened(create.kind, None, &create.version.body) else {
       return invalid("body");
     };
-    if !self.references_hold(&create.version.references) {
+    if !self.references_hold(&create.version.references)
+      || !derived_hold(create.kind, &create.version.body, &create.version.references)
+    {
       return invalid("references");
     }
     let attribution = self.changed();
@@ -367,12 +373,16 @@ impl Project {
     }
     let kind = serde_json::from_value::<SharedResourceKind>(stored.resource["kind"].clone());
     let Some(widens) = kind
+      .as_ref()
       .ok()
-      .and_then(|kind| widened(kind, Some(&latest["body"]), &publish.body))
+      .and_then(|kind| widened(*kind, Some(&latest["body"]), &publish.body))
     else {
       return invalid("body");
     };
-    if !references_hold {
+    let derived = kind
+      .as_ref()
+      .is_ok_and(|kind| derived_hold(*kind, &publish.body, &publish.references));
+    if !references_hold || !derived {
       return invalid("references");
     }
     let published = version(
@@ -504,4 +514,10 @@ fn now_millis() -> i64 {
     .and_then(|since| i64::try_from(since.as_millis()).ok())
     // A clock before 1970 has no time to give a version; zero is what such a clock reads.
     .unwrap_or_default()
+}
+
+/// Whether `references` are those a body of `kind` names, for the kinds whose body names its own, as the team server
+/// derives them ([`ReferenceTarget::of_body`]); any other kind's are checked only against the project's resources.
+fn derived_hold(kind: SharedResourceKind, body: &Value, references: &[ReferenceTarget]) -> bool {
+  ReferenceTarget::of_body(kind, body).is_none_or(|derived| derived == references)
 }

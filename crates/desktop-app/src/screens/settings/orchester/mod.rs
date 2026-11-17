@@ -140,7 +140,7 @@ impl Invites {
   }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Props {
   pub view: OrchesterView,
 }
@@ -169,13 +169,14 @@ impl Component for OrchesterTab {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let view = ctx.props::<Props>().view;
+    let view = ctx.props::<Props>().view.clone();
     if view.panel == OrchesterPanel::Connect {
       let page = ctx.mount_keyed::<connect::ConnectPage>(
         "settings-orchester-connect",
         connect::Props {
           server: view.server,
           step: view.step,
+          address: view.address,
         },
       );
       return frame::column("orchester-connect-scroll", page);

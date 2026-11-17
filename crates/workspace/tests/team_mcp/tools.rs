@@ -173,6 +173,29 @@ fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   assert_eq!(checkout.refused("return_to_draft", &draft), "team_no_queue");
 }
 
+/// A team task names its module by the module's id or, as `get_module` takes it, by its name ignoring case
+/// (found in QA on 2026-11-16: a name was `module_not_found`); a name the server has no module for sends nothing.
+#[test]
+fn team_mcp_create_task_takes_its_module_by_name() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+
+  let unknown = json!({"project": "Kontur", "title": "Say goodbye", "module": "Nothing like it"});
+  assert_eq!(checkout.refused("create_task", &unknown), "module_not_found");
+  assert_eq!(
+    seen.lock().task_creates,
+    0,
+    "nothing was sent for a module the server does not have"
+  );
+  let named = json!({"project": "Kontur", "title": "Say goodbye", "module": "webhooks"});
+  assert_eq!(checkout.refused("create_task", &named), "not_admin");
+  assert_eq!(
+    seen.lock().task_creates,
+    1,
+    "the module was found by its name and the task sent"
+  );
+}
+
 #[test]
 fn team_mcp_an_update_with_a_refused_change_sends_nothing() {
   let (server, seen) = server();

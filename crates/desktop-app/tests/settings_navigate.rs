@@ -66,6 +66,11 @@ fn settings_navigate_opens_sub_pages_and_questions_and_names_them_back() {
       json!({ "tab": "connect", "server": SERVER, "step": "join" }),
     ),
     (
+      json!({ "route": "settings", "tab": "connect", "address": "team.example" }),
+      "/settings?tab=orchester&panel=connect&address=team.example".to_owned(),
+      json!({ "tab": "connect", "address": "team.example" }),
+    ),
+    (
       json!({ "route": "settings", "tab": "invite", "server": SERVER, "project": "billing" }),
       format!("/settings/invite?server={SERVER}&project=billing"),
       json!({ "tab": "invite", "server": SERVER, "project": "billing" }),
@@ -91,6 +96,10 @@ fn settings_navigate_refuses_what_a_tab_does_not_take() {
     (
       json!({ "route": "settings", "tab": "connect", "step": "compare" }),
       "missing_param",
+    ),
+    (
+      json!({ "route": "settings", "tab": "connect", "server": SERVER, "address": "team.example" }),
+      "invalid_param",
     ),
     (
       json!({ "route": "settings", "tab": "accounts", "panel": "remove" }),
@@ -187,7 +196,9 @@ fn settings_navigate_routes_keep_their_step_and_question() {
       step: ConnectStep::Compare,
       ask: None,
       at: None,
+      address: None,
     },
+    OrchesterView::connect_at("http://team.example:8740"),
     OrchesterView {
       ask: Some(OrchesterAsk::Decline(invite)),
       ..OrchesterView::default()

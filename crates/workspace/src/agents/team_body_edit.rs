@@ -8,7 +8,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, TeamTool, Tool, VersionNumber},
+  resource::{AgentProfile, TeamAgentProfile, TeamTool, Tool, VersionNumber},
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -40,7 +40,8 @@ pub fn latest<B: DeserializeOwned>(config: &TeamConfig, id: ResourceId) -> Optio
 }
 
 /// Publishes `body` as the next version of team resource `id` of the project at `root`, made on version `base`: an
-/// instruction, a skill or a tool, whose body is the team's as it is. The number the team server gave it.
+/// instruction or a skill, whose body is the team's as it is and names no references. The number the team server gave
+/// it.
 pub async fn save<B>(
   servers: &Servers,
   root: &Path,
@@ -98,5 +99,18 @@ pub async fn save_team_tool(
   tool: &TeamTool,
 ) -> Result<VersionNumber, EditRefused> {
   let publication = Publication::of_team_tool(tool)?;
+  servers.publish_team(root, id, (Some(base), publication)).await
+}
+
+/// Publishes `profile`, already in the team's form, as the next version of team profile `id` of the project at `root`,
+/// made on version `base`, with the references its body names ([`Publication::of_team_profile`]), which the team's
+/// server takes only when they are those it derives from the body.
+pub async fn save_team_profile(
+  servers: &Servers,
+  root: &Path,
+  (id, base): (ResourceId, VersionNumber),
+  profile: &TeamAgentProfile,
+) -> Result<VersionNumber, EditRefused> {
+  let publication = Publication::of_team_profile(profile)?;
   servers.publish_team(root, id, (Some(base), publication)).await
 }

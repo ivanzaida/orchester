@@ -362,6 +362,9 @@ also gets events of the target as a whole, each once per state:
   `run_task`, also a task whose run failed, with its reason, while its ceiling of runs allows another. This is what
   starts the first tasks after you chose to have the target led, and the next when an agent frees or a blocker is
   merged.
+  It is raised again when another task can start or one that was under way ends, and not when the tasks the turn just
+  started are under way: a turn that started one and kept the rest back (they would change the same files) is asked
+  again once that one ends.
 - **Stuck**: nothing can start and nothing moves; everything left is parked, waits for you, or is past a ceiling.
   The turn tells you once what each task waits for and what to do; you are told again only when that changes.
 
@@ -369,7 +372,10 @@ Each is a line of the conversation with the turn it started under it: *Work can 
 — nothing they depend on is open*; *Webhooks v2 is stuck: 3 left for you — nothing else can start*, with *Needs you
 ↗* to the Overview's waiting list; for a module with a branch of its own, *… its acceptance can start* with the
 acceptance pipeline's name, *… it can be delivered* with the branch and where it goes, and *… its delivery waits for
-you* with why and *Module ↗*.
+you* with why and *Module ↗*. A team module is led the same way to its delivery: once its every task is done and its
+work is merged into its branch here, the conversation asks the team server for the delivery; an Admin's
+authorization or the team's automatic merge decides it, and while it waits for an Admin the conversation says so
+once and asks nothing again.
 
 A subscription that only follows gets neither, and starts tasks only as before: in the turn of a success it merged
 under an order.

@@ -230,7 +230,7 @@
           "differs": "origin {{origin}} isn't the project's {{hint}}",
           "noHint": "origin {{origin}} · the project names no repository",
           "origin": "origin {{origin}}",
-          "noOrigin": "This checkout has no origin"
+          "noOrigin": "This checkout has no origin on a server"
         },
         "tasks": {
           "downloading": "Downloading tasks",

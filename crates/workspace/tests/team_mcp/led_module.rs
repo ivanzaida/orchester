@@ -2,22 +2,32 @@
 //! read whole from the team server, so a task the server holds in it that never ran on this computer is among what
 //! the conversation leads. It counts in where the module stands (`get_standing`), with the server's Blocked mark as
 //! *parked by the person*; `/watching` and `get_watches` answer for the project; and the module's watch does not end
-//! while such a task is open.
+//! while such a task is open. Once its every task is done, work merged into its branch here waits for its delivery,
+//! which the conversation asks of the team server and an Admin or the team's automatic merge decides.
 
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
+  integration::{MergeKind, RunMerge},
+  module::delivery::{DeliveryStep, PersonsDelivery},
   orchestrator::{Ceilings, Chat, Subscription, TurnState, WatchMode, WatchTarget, standing::TargetStanding},
+  revision::Revision,
+  run::BranchName,
+  store::{MergeStore, RunStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::orchestrator::{
+  leaving::{AppSet, Weak, leaving_of},
   standing::{Led, standing_in},
   watching::WatchReads,
 };
 use serde_json::json;
 
 use crate::{
-  Checkout,
+  Checkout, git,
+  team_runs::{Started, started},
+  team_server::MODULE_BRANCH,
   tools::server,
   watch_ends::{module_watch, refreshed},
 };
@@ -105,5 +115,85 @@ fn team_mcp_a_led_module_has_the_team_task_that_never_ran_here_to_start() {
   // Done on the server, the module is done.
   seen.lock().task_fields = json!({ "workflow": "done" });
   refreshed(&checkout);
+  assert_eq!(stands(&checkout).standing.target, TargetStanding::Done);
+}
+
+#[test]
+fn team_mcp_a_led_module_merges_into_its_own_branch_whatever_the_checkout_holds() {
+  let (server, _seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let target = module_watch(&checkout, server.module);
+  let chat = leading(&checkout, target);
+  std::fs::write(checkout.root().join("notes.txt"), "not committed").expect("a file of the person's");
+
+  let app = AppSet {
+    drives: true,
+    keeps_awake: true,
+  };
+  let told = |chat, target| -> Vec<&'static str> {
+    let left = leaving_of((checkout.root(), &Programs::processes()), (chat, target), app)
+      .expect("read")
+      .expect("it leads the target");
+    left.weak.iter().map(Weak::name).collect()
+  };
+  let module = told(chat, target);
+  assert!(
+    !module.contains(&"checkout_has_changes"),
+    "a team module's work never merges into the checked-out branch: {module:?}"
+  );
+  // A team task in no module merges into the branch the checkout has, as a local one does.
+  let rest = leading(&checkout, WatchTarget::WithoutModule);
+  let loose = told(rest, WatchTarget::WithoutModule);
+  assert!(loose.contains(&"checkout_has_changes"), "{loose:?}");
+}
+
+#[test]
+fn team_mcp_a_led_module_whose_work_is_merged_waits_for_its_delivery_until_the_team_delivers_it() {
+  let Started {
+    checkout,
+    server,
+    run,
+    seen,
+  } = started();
+  let target = module_watch(&checkout, server.module);
+  leading(&checkout, target);
+  let module = json!({"project": "Kontur", "module": "Webhooks"});
+  seen.lock().task_fields = json!({ "workflow": "done" });
+  refreshed(&checkout);
+  assert_eq!(
+    stands(&checkout).standing.target,
+    TargetStanding::Done,
+    "nothing was merged into the module's branch here"
+  );
+
+  // The run's work reached the module's branch on this computer: the module is done once that branch is delivered.
+  let mut db = checkout.db();
+  let mut ended = db.run(run).expect("read").expect("the run");
+  let events = ended.cancel(Timestamp::now()).expect("canceled");
+  db.append_events(&ended, &events).expect("recorded");
+  db.save_run_merge(&RunMerge {
+    run,
+    into: BranchName::new(MODULE_BRANCH).expect("a branch"),
+    revision: Revision::new(&git(checkout.root(), &["rev-parse", MODULE_BRANCH])).expect("a revision"),
+    kind: MergeKind::FastForward,
+    merged_at: Timestamp::now(),
+  })
+  .expect("the merge");
+  drop(db);
+  assert_eq!(
+    stands(&checkout).standing.target,
+    TargetStanding::ToDeliver(DeliveryStep::Deliver)
+  );
+
+  // Asked for, the team's server keeps it waiting for an Admin: that is the person's, and nothing is asked again.
+  assert_eq!(checkout.refused("deliver_module", &module), "delivery_awaiting_admin");
+  assert_eq!(
+    stands(&checkout).standing.target,
+    TargetStanding::ToDeliver(DeliveryStep::Person(PersonsDelivery::TeamDecides))
+  );
+
+  // The team's automatic merge lets the next request through: delivered, the module is done.
+  server.state().automatic_merge = true;
+  checkout.call("deliver_module", &module).expect("delivered");
   assert_eq!(stands(&checkout).standing.target, TargetStanding::Done);
 }

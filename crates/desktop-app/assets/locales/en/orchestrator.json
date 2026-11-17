@@ -338,6 +338,8 @@
       "noAcceptance": "— no acceptance pipeline is chosen",
       "acceptanceCeiling": "— its acceptance did not pass",
       "notAllowed": "— Deliver when accepted is off",
+      "teamDecides": "— an Admin of the team authorizes it",
+      "teamRefused": "— the team's server refused it, or its merge failed",
       "needsYou": "Needs you ↗",
       "module": "Module ↗"
     },
@@ -434,12 +436,21 @@
     },
     "action": {
       "createTask": {
-        "done": "Created a draft",
+        "done": "Created",
         "refused": "Create task · not done"
       },
       "updateTask": {
         "done": "Changed",
+        "canceled": "Canceled",
+        "markedDone": "Marked done",
         "refused": "Change {{task}} · not done"
+      },
+      "module": {
+        "created": "Created module",
+        "changed": "Changed module",
+        "closed": "Closed module",
+        "accepting": "Started the acceptance of",
+        "delivered": "Delivered"
       },
       "runTask": {
         "done": "Started",

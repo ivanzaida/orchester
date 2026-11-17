@@ -17,7 +17,9 @@ use orchester_exec::{local_git::IntegrationLease, programs::Programs};
 use orchester_store::{DeliveryMerge, ProjectDb, TeamDeliveryStage};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, DeliveryAction, DeliveryStep, Intent, TeamOutcome},
-  team_work::{DeliveryProgress, DeliveryStatus, ModuleDeliveries, TeamDeliveryRequest, TeamDeliveryState},
+  team_work::{
+    DeliveryProgress, DeliveryStatus, MergeFailure, ModuleDeliveries, TeamDeliveryRequest, TeamDeliveryState,
+  },
 };
 use tokio::sync::watch;
 
@@ -429,5 +431,41 @@ async fn team_work_delivery_a_crash_between_merge_and_report_recovers_once() {
   assert!(
     matches!(deliveries.recover().await.expect("recovered").as_slice(), []),
     "nothing left to carry on"
+  );
+}
+
+/// A file of the person's checkout stands where the module's branch brings one: the merge is not made, and the
+/// delivery keeps why by its kind, with the file, so its page says what to put aside.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn team_work_delivery_a_merge_a_file_stands_in_the_way_of_keeps_why() {
+  let server = TeamServer::start(crate::fixture::Config::new("Append one line."));
+  let checkout = Checkout::linked(&server);
+  let (base, head) = repository(&checkout);
+  let claim = claim_module(&checkout, &server).await;
+  server.state().automatic_merge = true;
+  let (deliveries, _generation) = person_deliveries(&checkout, &server);
+  fs::write(checkout.root().join("payments.txt"), "the person's own notes\n").expect("an untracked file");
+
+  let asked = request(&server, claim, (&base, &head), None);
+  deliveries.request(asked.clone()).await.expect("carried on");
+
+  let Some(DeliveryMerge::Failed { failure }) = state(&deliveries, asked.operation).merge else {
+    panic!("the merge was made over the person's file");
+  };
+  let why = MergeFailure::read(&failure);
+  assert_eq!(
+    why,
+    MergeFailure::InTheWay {
+      files: vec!["payments.txt".to_owned()]
+    }
+  );
+  assert_eq!(why.message().key, "modules.delivery.inTheWay");
+  assert!(merges(checkout.root()).is_empty(), "nothing was merged");
+  // A failure kept before failures had a kind is read as the words it kept.
+  assert_eq!(
+    MergeFailure::read("git said no"),
+    MergeFailure::Other {
+      detail: "git said no".to_owned()
+    }
   );
 }

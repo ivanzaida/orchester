@@ -139,7 +139,7 @@
       "remote": {
         "same": "This checkout's origin, {{origin}}, matches {{project}}'s hint.",
         "different": "This checkout's origin is {{origin}}; {{project}} was set up for {{hint}}.",
-        "noOrigin": "This checkout has no origin remote",
+        "noOrigin": "This checkout has no origin on a server",
         "noOriginHint": "Orchester can't compare it with {{project}}'s hint, {{hint}}. You can still link it.",
         "noOriginBody": "Orchester can't compare it with a project's repository hint. You can still link it.",
         "noHint": "The project names no repository; nothing to compare.",
@@ -486,7 +486,7 @@
       "added": "Added",
       "matches": "origin {{origin}} matches the project's hint",
       "differs": "origin {{origin}} differs from {{hint}}",
-      "noOrigin": "No origin remote: Orchester can't compare it with the project's hint",
+      "noOrigin": "No origin on a server: Orchester can't compare it with the project's hint",
       "nothingToCompare": "The project names no repository; nothing to compare",
       "linkedElsewhere": "Already linked to {{address}}",
       "anotherProject": "another project",

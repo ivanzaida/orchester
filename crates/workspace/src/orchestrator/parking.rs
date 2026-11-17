@@ -29,12 +29,12 @@ use serde_json::{Value, json};
 use super::{
   decisions, guard,
   keep::{self, Named},
+  led_start,
   own_project::in_own_project,
-  team_status::module_now,
   tools::ChatScope,
 };
 use crate::{
-  app_mcp::{ToolError, Translate, blocking, find_task},
+  app_mcp::{ToolError, Translate, blocking},
   messages::{self, Message},
   runner::Runners,
   tasks::detail::run_store_error,
@@ -148,19 +148,20 @@ async fn park(scope: &ChatScope, arguments: JsonObject) -> Result<Value, ToolErr
   let scope = scope.clone();
   blocking(move || {
     let mut db = ProjectDb::open(&scope.root)?;
-    let task = find_task(&db, &asked.task)?;
-    let key = task.key().to_string();
-    let leads = db.active_subscriptions()?.leading(task.id(), module_now(&db, &task)) == Some(scope.chat);
+    // A team task that never ran here is parked too: it is found as the start's rule finds it.
+    let task = led_start::Named::find(&db, &asked.task)?;
+    let key = task.key.clone();
+    let leads = db.active_subscriptions()?.leading(task.id, task.module) == Some(scope.chat);
     if scope.on_its_own && !leads {
       return Err(ToolError::refused(
         "not_led",
         vec![Message::new("orchestrator.start.notLed").with("task", key)],
       ));
     }
-    let latest = db.runs_of_task(task.id()).map_err(run_store_error)?.pop();
+    let latest = db.runs_of_task(task.id).map_err(run_store_error)?.pop();
     let run = latest.and_then(Result::ok);
     let parking = Parking {
-      task: task.id(),
+      task: task.id,
       run: run.as_ref().map(|run| run.id()),
       needs: asked.needs.into(),
       why,

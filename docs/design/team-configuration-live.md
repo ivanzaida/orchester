@@ -116,6 +116,15 @@ configuration in its database as today.
   version at once, a newer version refuses it and reloads the panel, and while the server cannot be reached what was
   typed stays with Save unavailable. A profile is made and edited with one form (`screens/hub/profile_form/`):
   the create form and the admin's edit have the same *Role*, Agent CLI, model and effort selects and lists with *Add*.
+  What the profile's agents may do is in that form too (2026-11-16, `A38` `DiLWx`, `A39` `cLeY8`,
+  `hub/profile_form/access.rs`): *Repository access*, *Commands* and *Network access* are selects after the effort,
+  each offering what the profile's CLI can enforce on this computer and what the profile holds; a list of allowed
+  commands or hosts a version has is kept as one more option, since the table edits no list, and so are its other
+  permissions (approvals, the Codex sandbox, the browser). A member reads the three as words (`M7` `NyLgu`). Before
+  that a team profile made in the hub was read-only for good, so no team pipeline step of it could write. A profile's
+  version goes with the references its body names (`ReferenceTarget::of_profile`), which the team's server derives
+  from the body and takes only when they are the same (`422 invalid`, `references`); the hub sent none until then, so
+  the server refused every profile made or edited there.
   An instruction, a skill and a command tool are made and edited with one form each too (`screens/hub/forms/`): the
   new one's form, the admin's edit of a team one and a local one's panel draw the same fields (an instruction's format
   and *Text*, a skill's description, files and *SKILL.md*, a tool's kind, description, program, arguments and time

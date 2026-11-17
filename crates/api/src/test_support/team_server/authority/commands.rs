@@ -298,15 +298,13 @@ fn module_capabilities(authority: &Authority, project: &str, index: usize) -> Va
 }
 
 /// Whether the person may acquire, take over and release a subject under `claim`: each `None` when allowed, or why not.
+/// As the team server tells them, they are the account's: a stale claim may be taken over by anyone, its own holder
+/// included (from another session of theirs), and which session holds it is the command's to check.
 const fn claim_rights(claim: &AuthorityClaim) -> (Option<&'static str>, Option<&'static str>, Option<&'static str>) {
   let yours = matches!(claim.holder, Person::You);
   (
     if yours { None } else { Some("claim_required") },
-    if claim.stale && !yours {
-      None
-    } else {
-      Some("claim_required")
-    },
+    if claim.stale { None } else { Some("claim_required") },
     if yours { None } else { Some("claim_required") },
   )
 }

@@ -73,9 +73,7 @@ fn orchestrator_acts_through_the_tools_as_any_client_of_the_app() {
   screen.go(OrchestratorChat::New);
   screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
   screen.until("the created task's line", |screen| {
-    screen
-      .text("orchestrator-conversation")
-      .contains("Created a draft KON-1")
+    screen.text("orchestrator-conversation").contains("Created KON-1")
   });
   let task = screen.db().tasks().expect("tasks").remove(0);
   assert_eq!(task.key().to_string(), "KON-1");
@@ -291,9 +289,7 @@ fn orchestrator_on_codex_acts_through_the_same_tools_confined() {
   );
   screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
   screen.until("the created task's line", |screen| {
-    screen
-      .text("orchestrator-conversation")
-      .contains("Created a draft KON-1")
+    screen.text("orchestrator-conversation").contains("Created KON-1")
   });
   assert_eq!(screen.db().tasks().expect("tasks").remove(0).key().to_string(), "KON-1");
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
@@ -334,4 +330,27 @@ fn orchestrator_turns_scroll_across_the_whole_chat_area() {
     (centre(row.x, row.width) - centre(main.x, main.width)).abs() < 1.0,
     "the column is centred: {row:?} in {main:?}"
   );
+}
+
+/// The lines of what the chat did name a module by its name and a task it closed by what closing did (found in QA on
+/// 2026-11-16: they read *Used create_module* and *Changed*).
+#[test]
+fn orchestrator_lines_name_the_module_and_the_closing_of_a_task() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send(r#"Call create_module {"project":"Kontur","name":"Checkout"}"#);
+  screen.until("the created module's line", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Created module Checkout")
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
+  screen.until("the turn's end", |screen| {
+    screen.text("orchestrator-conversation").contains("Created KON-1") && !screen.exists("orchestrator-thinking")
+  });
+  screen.send(r#"Call update_task {"project":"Kontur","key":"KON-1","workflow_status":"canceled"}"#);
+  screen.until("the canceled task's line", |screen| {
+    screen.text("orchestrator-conversation").contains("Canceled KON-1")
+  });
 }

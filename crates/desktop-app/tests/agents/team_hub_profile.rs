@@ -146,6 +146,14 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
   assert_eq!(agents.text("team-hub-from-team-cli-value"), "Claude Code");
   assert_eq!(agents.text("team-hub-from-team-model-value"), "claude-opus-5-5");
   assert_eq!(agents.text("team-hub-from-team-effort-value"), "High");
+  // What its agents may do, in words (M7): the team's, as its version has it.
+  assert_eq!(agents.text("team-hub-from-team-repository-label"), "Repository access");
+  assert_eq!(agents.text("team-hub-from-team-repository-value"), "Read-only");
+  assert_eq!(
+    agents.text("team-hub-from-team-commands-value"),
+    "Any command in the worktree"
+  );
+  assert_eq!(agents.text("team-hub-from-team-network-value"), "Off");
   assert_eq!(agents.text("team-hub-from-team-mcp-value-0-label"), "gh");
   assert_eq!(agents.text("team-hub-from-team-secrets-value-0-label"), "GITHUB_TOKEN");
   assert_eq!(

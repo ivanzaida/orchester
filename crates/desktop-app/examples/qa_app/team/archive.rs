@@ -66,21 +66,17 @@ pub fn hold(state: State, (server, root): (&TeamServer, &Path)) -> Result<(), Bo
   let cached = db
     .cached_version::<AgentProfile>(builder.id(), VersionNumber::FIRST)?
     .ok_or("the seed caches v1 of Builder")?;
-  // Builder names the team's MCP servers in its body, and its version's references repeat them as the server reads
-  // them; only those are held here, the tools, skills and instructions it names are not on the stand-in.
+  // Builder's version's references are those its body names, as the server derives them, so what it names besides the
+  // MCP servers held above (its tools, skills and instructions) is held too, at the version the seed cached.
   let profile: TeamAgentProfile = serde_json::from_value(cached.server_body.clone())?;
-  let references = ReferenceTarget::of_profile(&profile)
-    .into_iter()
-    .filter(|reference| {
-      matches!(
-        reference,
-        ReferenceTarget::TeamResource {
-          kind: SharedResourceKind::McpServer,
-          ..
-        }
-      )
-    })
-    .collect();
+  let references = ReferenceTarget::of_profile(&profile);
+  for reference in &references {
+    if let ReferenceTarget::TeamResource { kind, id } = reference
+      && *kind != SharedResourceKind::McpServer
+    {
+      hold_named(server, &db, (*kind, *id))?;
+    }
+  }
   hold_one(
     server,
     (
@@ -110,6 +106,28 @@ pub fn prepare(state: State, (server, root): (&TeamServer, &Path)) -> Result<(),
       .map(drop)?,
     _ => {}
   }
+  Ok(())
+}
+
+/// Holds the team resource `id` of `kind` Builder names, at the latest version the seed cached of it, with the
+/// references its body names.
+fn hold_named(
+  server: &TeamServer,
+  db: &ProjectDb,
+  (kind, id): (SharedResourceKind, ResourceId),
+) -> Result<(), Box<dyn Error>> {
+  let resource = db.resource(id)?.ok_or("Builder names a resource of the seed")?;
+  let number = db.latest_version_number(id)?.ok_or("the seed caches a version of it")?;
+  let body = super::hub::server_body(db, (resource.kind(), id), number)?.ok_or("its version is the server's")?;
+  let version = VersionContent {
+    references: ReferenceTarget::of_body(kind, &body).unwrap_or_default(),
+    body,
+  };
+  hold_one(
+    server,
+    (kind, id, resource.slug().as_str(), resource.name().as_str()),
+    version,
+  );
   Ok(())
 }
 

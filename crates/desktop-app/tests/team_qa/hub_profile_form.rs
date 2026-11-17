@@ -5,11 +5,13 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_hub_profile_form`
 
+use lurq::app::events::ScrollPhase;
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{
   id::{ProjectId, ResourceId},
-  resource::ResourceKind,
+  permission::RepositoryAccess,
+  resource::{ResourceKind, TeamAgentProfile},
   store::ResourceStore,
 };
 use serde_json::json;
@@ -120,6 +122,23 @@ fn seeded(window: &orchester_app::test_support::Window, kind: ResourceKind, name
     .id()
 }
 
+/// A wheel down over the form, as far as it goes.
+fn to_end(window: &mut orchester_app::test_support::Window) {
+  let found = window
+    .tree
+    .get_element_by_id_mut("team-hub-panel-scroll")
+    .and_then(|element| element.bounds())
+    .expect("the form's scroll is laid out");
+  let scale = window.tree.scale_factor();
+  let (x, y) = (
+    (found.x + found.width / 2.0) * scale,
+    (found.y + found.height / 2.0) * scale,
+  );
+  window.tree.mouse_move(x, y);
+  window.tree.scroll(x, y, 0.0, -4000.0 * scale, ScrollPhase::Scroll);
+  window.pass();
+}
+
 #[test]
 fn team_qa_hub_profile_form_creates_a_profile_with_its_role_instructions_and_what_it_gives() {
   let (mut window, server, _) = form();
@@ -135,6 +154,8 @@ fn team_qa_hub_profile_form_creates_a_profile_with_its_role_instructions_and_wha
   window.until("the picker closed", |window| {
     window.texts(&format!("{NEW}-menu")).is_none()
   });
+  // The lists are past what its agents may do: under the fold at the design's height.
+  to_end(&mut window);
   window.press("local-hub-profile-add-instructions-button");
   window.press(&format!("local-hub-profile-instructions-{rules}"));
   window.until("the instruction's tag", |window| {
@@ -158,10 +179,62 @@ fn team_qa_hub_profile_form_creates_a_profile_with_its_role_instructions_and_wha
   assert_eq!(body["model"], json!("gpt-5.5"));
 }
 
+/// Chooses the option `label` of the select `id`, as a person's press on it would.
+fn pick(window: &mut orchester_app::test_support::Window, id: &str, label: &str) {
+  let mut select = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .unwrap_or_else(|| panic!("{id} is a select"));
+  let index = select
+    .labels()
+    .iter()
+    .position(|option| &**option == label)
+    .unwrap_or_else(|| panic!("an option {label}"));
+  select.commit(index);
+  window.pass();
+}
+
+/// What a team profile's agents may do is chosen in its form (A38, A39; found missing in QA on 2026-11-16, when no
+/// team pipeline step could write): *Repository access* starts read-only, and a profile made with *Can write* is one
+/// the team's server holds as it was chosen.
+#[test]
+fn team_qa_hub_profile_form_chooses_what_the_profiles_agents_may_do() {
+  let (mut window, server, _) = form();
+  window.set("team-new-profile-role-name-input", "Implementer");
+  window.set("team-new-profile-role-instructions-input", "Implement the task.");
+  choose(&mut window, NEW, ("CodexCli", "gpt-5.5"));
+  assert_eq!(window.text("team-new-profile-repository-label"), "Repository access");
+  assert_eq!(window.text("team-new-profile-repository-input"), "Read-only");
+  pick(&mut window, "team-new-profile-repository-input", "Can write");
+  window.until("the choice", |window| {
+    window.text("team-new-profile-repository-input") == "Can write"
+  });
+  window.press("team-hub-new-create");
+  window.until("the server to take it", |_| {
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, versions)| resource["name"] == "Implementer" && versions.len() == 1)
+  });
+  let held = server.resources("kontur");
+  let (_, versions) = held
+    .iter()
+    .find(|(resource, _)| resource["name"] == "Implementer")
+    .expect("the profile");
+  let made: TeamAgentProfile = serde_json::from_value(versions[0]["body"].clone()).expect("a team profile");
+  assert_eq!(made.permissions().repository(), RepositoryAccess::Write);
+}
+
 /// What each part of the form says: its rows' labels in order, `<prefix>`'s for the role and `<rows>`'s for the rest.
 fn labels_of(window: &mut orchester_app::test_support::Window, (role, rows): (&str, &str)) -> Vec<String> {
   let role_parts = ["name", "responsibilities", "instructions"].map(|part| format!("{role}-{part}-label"));
-  let selects = [format!("{rows}-runs-on-row-label")];
+  let selects = [
+    format!("{rows}-runs-on-row-label"),
+    format!("{rows}-repository-label"),
+    format!("{rows}-commands-label"),
+    format!("{rows}-network-label"),
+  ];
   let lists = ["instructions", "mcp", "tools", "skills"].map(|part| format!("{rows}-{part}-label"));
   role_parts
     .iter()

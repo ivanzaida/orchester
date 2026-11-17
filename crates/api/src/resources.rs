@@ -94,6 +94,22 @@ pub enum ReferenceTarget {
 }
 
 impl ReferenceTarget {
+  /// The references a version of `kind` with `body` names, for the kinds whose body names its own (an agent profile,
+  /// a tool, a team reviewer), as the team server derives them and takes only when they are those sent; `None` for
+  /// the other kinds, whose references are what was sent, and for a body that is not one of `kind`.
+  pub fn of_body(kind: SharedResourceKind, body: &serde_json::Value) -> Option<Vec<Self>> {
+    match kind {
+      SharedResourceKind::AgentProfile => TeamAgentProfile::deserialize(body)
+        .ok()
+        .map(|profile| Self::of_profile(&profile)),
+      SharedResourceKind::Tool => TeamTool::deserialize(body).ok().map(|tool| Self::of_tool(&tool)),
+      SharedResourceKind::TeamReviewer => TeamReviewer::deserialize(body)
+        .ok()
+        .map(|reviewer| Self::of_reviewer(&reviewer)),
+      _ => None,
+    }
+  }
+
   /// The references of a team agent profile's body, the one list a version of it sends: its CLI kind, then its MCP
   /// servers, tools, skills and instructions as team resources, then its secrets by name, each in the body's order. The
   /// body is the source; the references repeat what it names so the server can check the ids exist and read what uses

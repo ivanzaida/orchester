@@ -30,7 +30,9 @@ use orchester_store::{ProjectDb, StoreError};
 use serde_json::{Value, json};
 
 use super::{
-  Team, on_worker,
+  Team,
+  modules::module_named,
+  on_worker,
   outcome::{accepted, action_refused, team_pipeline_required},
   tasks::find,
 };
@@ -38,7 +40,7 @@ use crate::{
   actions::{Accepted, Action, ActionError, ActionOutcome, Definition, Dispatcher, Intent, TaskAction},
   app_mcp::{
     Services,
-    error::{Missing, ToolError},
+    error::ToolError,
     services::blocking,
     tools::{
       setup::widening,
@@ -133,7 +135,10 @@ pub(in crate::app_mcp::tools) async fn create_task(
     Vec::new(),
   )
   .map_err(organization_refused)?;
-  let module = args.module.as_deref().map(module_id).transpose()?;
+  let module = match args.module.as_deref() {
+    Some(named) => Some(module_named(&team.reads(services).await?, named).await?),
+    None => None,
+  };
   let dispatcher = team.dispatcher(services).await?;
   let (task, not_saved) = on_worker(move || async move {
     let created = match carry_out(&dispatcher, TaskAction::Create { details, organization }).await? {
@@ -167,12 +172,13 @@ pub(in crate::app_mcp::tools) async fn update_task(
   if args.budget_tokens.is_some() || args.time_limit_minutes.is_some() {
     return Err(action_refused(ActionError::DecisionRequired(DecisionId::D6)));
   }
+  let project = team.reads(services).await?;
   let module = match &args.module {
-    Some(Some(named)) => Some(Some(module_id(named)?)),
+    Some(Some(named)) => Some(Some(module_named(&project, named).await?)),
     Some(None) => Some(None),
     None => None,
   };
-  let task = find(&team.reads(services).await?, &args.key).await?.task;
+  let task = find(&project, &args.key).await?.task;
   let (chosen, current) = pipelines((services, team), args.pipeline.clone(), task.content.pipeline.clone()).await?;
   // Another pipeline runs the task with other steps, profiles and approvals: a person decides that, as on a local
   // project. A task without one may get any team pipeline.
@@ -385,11 +391,6 @@ fn criteria(given: &[String]) -> Vec<String> {
     .map(|criterion| criterion.trim().to_owned())
     .filter(|criterion| !criterion.is_empty())
     .collect()
-}
-
-/// A team module named by its id: a team project's modules are the server's, never looked up by name here.
-fn module_id(named: &str) -> Result<ModuleId, ToolError> {
-  named.parse().map_err(|_| ToolError::not_found(Missing::Module, named))
 }
 
 fn organization_refused(error: OrganizationError) -> ToolError {

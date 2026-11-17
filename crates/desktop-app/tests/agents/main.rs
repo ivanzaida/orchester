@@ -97,5 +97,6 @@ mod pipeline_step_gate;
 mod pipeline_step_more;
 mod pipeline_step_name;
 mod pipeline_step_polish;
+mod pipeline_step_tests;
 mod usage_navigation;
 mod writable_folders;

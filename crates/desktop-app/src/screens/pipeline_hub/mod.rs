@@ -34,7 +34,7 @@ mod model;
 mod new;
 mod panel;
 mod panel_head;
-mod pick;
+pub(in crate::screens) mod pick;
 mod ready;
 mod rename;
 mod row;

@@ -320,3 +320,26 @@ fn team_qa_hub_keep_another_admins_change_keeps_the_chosen_resource_and_what_was
       .is_some_and(|version| version.join(" ").contains('2'))
   });
 }
+
+/// The team server drops while an admin fills a new tool's form, and answers again: the form stays open through
+/// both, with what was typed, instead of giving way to the kind's list and opening empty again.
+#[test]
+fn team_qa_hub_keep_a_new_form_keeps_what_was_typed_while_the_server_cannot_be_reached() {
+  let (mut window, server) = tool_form();
+  let still = |window: &mut Window| {
+    assert_eq!(window.text("team-hub-panel-title"), "New tool", "the form stays");
+    assert_eq!(value(window, "team-new-tool-name-input"), "cargo-check");
+  };
+  server.set_down(true);
+  keeping_until(&mut window, "the stream to drop", |window| {
+    still(window);
+    says_unreachable(window)
+  });
+  holding(&mut window, "the server stays away", still);
+  server.set_down(false);
+  keeping_until(&mut window, "the server to answer again", |window| {
+    still(window);
+    !says_unreachable(window)
+  });
+  assert!(view(&window).adding, "the route is still the form's");
+}

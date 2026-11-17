@@ -228,6 +228,21 @@ fn team_qa_work_ask_for_delivery_waits_for_an_admin_while_automatic_merge_is_off
   );
 }
 
+/// The delivery line and the branch's line name the branch a delivery asked for here lands on, the one the checkout
+/// has checked out, not `main` (found in QA on 2026-11-16, where the repository's base is `master`).
+#[test]
+fn team_qa_work_the_delivery_names_the_branch_the_checkout_has_checked_out() {
+  let (mut window, _server) = prepared(State::ModuleWork);
+  let root = window.data.repo("repo-kontur");
+  own_repository(&root);
+  git(&root, &["checkout", "--quiet", "-b", "trunk"]);
+  window.navigation().go(module_route(BILLING));
+  let title = says(&mut window, "module-team-delivery-title", "Delivery to trunk");
+  assert_eq!(title, "Delivery to trunk: not requested");
+  let branch = window.text("module-team-branch-detail");
+  assert!(branch.contains("only module delivery takes it to trunk."), "{branch}");
+}
+
 #[test]
 fn team_qa_work_ask_again_asks_once_more_after_a_refused_delivery() {
   let (mut window, server) = on(State::ModuleWork, module_route(BILLING), "module-team-delivery-ask");
@@ -337,4 +352,25 @@ fn team_qa_work_the_automatic_merge_switch_takes_no_mcp_press() {
   window.until("the press to be refused", |window| window.refused_press().is_some());
   assert_eq!(server.policy(), before, "the policy is as it was");
   assert!(window.texts("sharing-policy-conflict").is_none());
+}
+
+/// The person's own module claim went stale (taken before this computer signed in again, which the team server takes
+/// for another session): nothing renews or releases it here, so the page offers the take over, not Release.
+#[test]
+fn team_qa_work_the_persons_own_stale_module_claim_offers_the_take_over() {
+  const BILLING: &str = "0191c7c0-0000-7000-8000-000000200001";
+  let (mut window, server) = on(State::ModuleWork, module_route(BILLING), "module-team-release");
+  assert_eq!(
+    window.text("module-team-claim-title"),
+    "Claimed by you on this computer"
+  );
+  server.module_claim_aged(1, 22, true);
+  window.until("the take over", |window| {
+    window.texts("module-team-take-over").is_some()
+  });
+  assert_eq!(window.text("module-team-claim-title"), "Your module claim is stale");
+  assert!(
+    window.texts("module-team-release").is_none(),
+    "a stale claim is not this session's to release"
+  );
 }

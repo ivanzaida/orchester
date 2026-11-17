@@ -5,8 +5,9 @@ use orchester_api::v2::{AuthorityError, AuthorityErrorCode, DeliveryState, Modul
 use orchester_core::{
   id::{ModuleId, OperationId},
   run::{BranchName, CommitId},
+  time::Timestamp,
 };
-use orchester_store::{DeliveryMerge, TeamDelivery, TeamDeliveryStage};
+use orchester_store::{DeliveryMerge, ProjectDb, StoreError, TeamDelivery, TeamDeliveryStage};
 
 use super::{KeptDelivery, ModuleDeliveries};
 use crate::team_work::TeamWorkError;
@@ -80,6 +81,45 @@ impl ModuleDeliveries {
     }
     Ok(None)
   }
+}
+
+/// What a delivery asked of the team server came to, for the rule that says what its module waits for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Asked {
+  /// The server keeps it delivered.
+  Delivered,
+  /// It waits for an Admin's authorization, or its merge and its report are under way here.
+  Waits,
+  /// The server refused it, or its merge failed.
+  Failed,
+}
+
+/// When the newest delivery of `module` recorded in `db` was asked for and what it came to; `None` when none was
+/// asked for from this computer. A record that cannot be read decides nothing: it is passed over, as a delivery
+/// nobody can carry on.
+pub fn newest_of(db: &ProjectDb, module: ModuleId) -> Result<Option<(Timestamp, Asked)>, StoreError> {
+  for record in db.team_deliveries()?.iter().rev() {
+    let read = match state(record) {
+      Ok(read) => read,
+      Err(error) => {
+        tracing::warn!(%error, "a team delivery's record cannot be read for where its module stands");
+        continue;
+      }
+    };
+    if read.module != module {
+      continue;
+    }
+    let came = match read.status {
+      DeliveryStatus::Delivered => Asked::Delivered,
+      DeliveryStatus::Failed | DeliveryStatus::Refused(_) => Asked::Failed,
+      DeliveryStatus::Requested
+      | DeliveryStatus::AwaitingAuthorization
+      | DeliveryStatus::Authorized { .. }
+      | DeliveryStatus::AuthorizedAutomatically => Asked::Waits,
+    };
+    return Ok(Some((record.requested_at, came)));
+  }
+  Ok(None)
 }
 
 fn state(record: &TeamDelivery) -> Result<TeamDeliveryState, TeamWorkError> {

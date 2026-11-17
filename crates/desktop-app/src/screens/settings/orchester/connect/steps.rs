@@ -15,7 +15,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::client::{PlainHttp, ServerAddress};
-use orchester_workspace::sharing::{Reaching, ServerEntry};
+use orchester_workspace::sharing::{Connection, Reaching, ServerEntry};
 
 use super::{ConnectPage, Found, Stage, join};
 use crate::{
@@ -468,10 +468,11 @@ fn found_head(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Vec<Element> 
 }
 
 /// The server in the list at `found`'s address that this computer is signed in to (`Already connected` in `ZJytn`).
+/// One whose sign-in ended is not: its page sends the person here to join it again with a code.
 fn already_in<'a>(found: &Found, entries: &'a [ServerEntry]) -> Option<&'a ServerEntry> {
   entries
     .iter()
-    .find(|entry| entry.address == found.address && entry.in_use())
+    .find(|entry| entry.address == found.address && entry.in_use() && entry.connection != Some(Connection::SignedOut))
 }
 
 /// *It matches* under the check code, which only a person presses.

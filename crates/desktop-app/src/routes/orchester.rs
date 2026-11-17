@@ -1,7 +1,8 @@
 //! Settings › Orchester Cloud (`vPV73`, `C6qnY`, `MrVql` in the new `orchester.pen`): its column, one team server's
 //! page or *Connect a server*, at the step it opens on, and the question it asks in place, so each state has an
 //! address (`/settings?tab=orchester&server=…&panel=connect&step=compare`, `…&ask=sign-out`,
-//! `…&ask=decline&invite=…`), and the invite row it opens at (`…&panel=invites&at=…`, an `orchester://` link's).
+//! `…&ask=decline&invite=…`), the invite row it opens at (`…&panel=invites&at=…`, an `orchester://` link's) and the
+//! address *Connect a server* starts with (`…&panel=connect&address=…`).
 //! Opening a question is going somewhere; answering it stays a person's.
 
 use orchester_core::id::{InviteId, ServerId};
@@ -17,6 +18,7 @@ const STEP: &str = "step";
 const ASK: &str = "ask";
 const INVITE: &str = "invite";
 const AT: &str = "at";
+const ADDRESS: &str = "address";
 const SIGN_OUT: &str = "sign-out";
 const DECLINE: &str = "decline";
 
@@ -92,7 +94,7 @@ pub enum OrchesterAsk {
 
 /// The team server Settings › Orchester shows (`None`: the cloud account), the panel, the step *Connect a server*
 /// opens on, the question asked in place and the invite whose row it opens at.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct OrchesterView {
   pub server: Option<ServerId>,
   pub panel: OrchesterPanel,
@@ -100,6 +102,8 @@ pub struct OrchesterView {
   pub ask: Option<OrchesterAsk>,
   /// The invite whose row the column scrolls to and rings, as an `orchester://invite/…` link opens it.
   pub at: Option<InviteId>,
+  /// The address *Connect a server* starts with, as the person typed it where they were sent from (*Use a code*).
+  pub address: Option<String>,
 }
 
 impl OrchesterView {
@@ -111,6 +115,15 @@ impl OrchesterView {
       step: ConnectStep::Address,
       ask: None,
       at: None,
+      address: None,
+    }
+  }
+
+  /// *Connect a server* starting with `address` as typed elsewhere.
+  pub fn connect_at(address: &str) -> Self {
+    Self {
+      address: Some(address.trim().to_owned()).filter(|address| !address.is_empty()),
+      ..Self::connect()
     }
   }
 
@@ -122,15 +135,16 @@ impl OrchesterView {
       step: ConnectStep::Address,
       ask: None,
       at: None,
+      address: None,
     }
   }
 
   /// The same place, asking nothing.
-  pub const fn unasked(self) -> Self {
+  pub fn unasked(self) -> Self {
     Self { ask: None, ..self }
   }
 
-  pub(super) fn path(self, settings: String, tab: (&str, &str)) -> String {
+  pub(super) fn path(&self, settings: String, tab: (&str, &str)) -> String {
     let server = self.server.map(|server| server.to_string());
     let panel = (self.panel != OrchesterPanel::Account).then(|| self.panel.name());
     let step = (self.step != ConnectStep::Address).then(|| self.step.name());
@@ -150,6 +164,7 @@ impl OrchesterView {
         (ASK, ask),
         (INVITE, invite.as_deref()),
         (AT, at.as_deref()),
+        (ADDRESS, self.address.as_deref()),
       ],
     )
   }
@@ -182,6 +197,7 @@ impl OrchesterView {
       step,
       ask,
       at,
+      address: params.take(ADDRESS)?,
     })
   }
 }

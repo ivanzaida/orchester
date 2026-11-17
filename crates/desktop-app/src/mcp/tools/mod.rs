@@ -126,7 +126,7 @@ pub fn route_json(route: &Route) -> Value {
         params.insert("panel".to_owned(), json!(view.panel.name()));
       }
     }
-    Route::Orchester(view) => orchester_params(*view, &mut params),
+    Route::Orchester(view) => orchester_params(view, &mut params),
     Route::Invite(target) => {
       params.insert("tab".to_owned(), json!("invite"));
       params.insert("server".to_owned(), json!(target.server.to_string()));
@@ -157,7 +157,7 @@ pub fn route_json(route: &Route) -> Value {
 
 /// Orchester Cloud's place as navigate takes it: its tab (connect for *Connect a server*), the server, the step and
 /// the question asked in place.
-fn orchester_params(view: crate::routes::OrchesterView, params: &mut Map<String, Value>) {
+fn orchester_params(view: &crate::routes::OrchesterView, params: &mut Map<String, Value>) {
   let connect = view.panel == OrchesterPanel::Connect;
   params.insert("tab".to_owned(), json!(if connect { "connect" } else { "orchester" }));
   if let Some(server) = view.server {
@@ -165,6 +165,9 @@ fn orchester_params(view: crate::routes::OrchesterView, params: &mut Map<String,
   }
   if connect && view.step != ConnectStep::Address {
     params.insert("step".to_owned(), json!(view.step.name()));
+  }
+  if let Some(address) = view.address.as_deref().filter(|_| connect) {
+    params.insert("address".to_owned(), json!(address));
   }
   match view.ask {
     Some(OrchesterAsk::SignOut) => {

@@ -67,30 +67,44 @@ pub fn standing_prompt(event: &StandingEvent) -> String {
        the end: the acceptance is started again after them."
     ),
     Raised::Deliver => format!(
-      "[Orchester] This conversation leads {target} to the end, every task of it is done and its acceptance passed \
-       for the branch as it is now.\n{nobody} Ask for its delivery with deliver_module and your reason: it merges \
-       the module's branch into its base branch. A delivery that is refused (the base moved and the merge \
-       conflicts, the person's checkout stands in the way, an Admin's authorization is missing) is the person's: \
-       say what was refused and what they are to do, and deliver nothing by another way."
+      "[Orchester] This conversation leads {target} to the end, every task of it is done and its delivery is due: \
+       a module of this computer's project was accepted for its branch as it is now; a team's module has its work \
+       on the module's branch, and its team server decides the delivery.\n{nobody} Ask for its delivery with \
+       deliver_module and your reason: it merges the module's branch into its base branch, a team's module once an \
+       Admin's authorization or the team's automatic merge allows it. A delivery that is refused (the base moved \
+       and the merge conflicts, the person's checkout stands in the way) is the person's, and so is one that waits \
+       for an Admin's authorization: say what was refused or what it waits for and what they are to do, and \
+       deliver nothing by another way."
     ),
     Raised::DeliveryWaits { why } => {
-      let why = match why {
-        PersonsDelivery::NoAcceptance => {
-          "the module names no acceptance pipeline, so nothing looked at the whole of it: its delivery is the \
-           person's"
-        }
-        PersonsDelivery::AcceptanceCeiling => {
-          "its acceptances did not pass, as many as you start by yourself: what comes next is the person's"
-        }
-        PersonsDelivery::NotAllowed => {
-          "its acceptance passed, and Deliver when accepted is off for it: its delivery is the person's"
-        }
-      };
+      let why = waits_because(*why);
       format!(
         "[Orchester] This conversation leads {target} to the end, and every task of it is done; {why}.\n{nobody} \
          Tell the person once, clearly and briefly, what was done, what the acceptance found if one ran, and that \
          the module waits for them to deliver it, with its link. Start, merge and deliver nothing in this turn."
       )
+    }
+  }
+}
+
+/// Why a module whose every task is done waits for the person, as its turn is told.
+const fn waits_because(why: PersonsDelivery) -> &'static str {
+  match why {
+    PersonsDelivery::NoAcceptance => {
+      "the module names no acceptance pipeline, so nothing looked at the whole of it: its delivery is the person's"
+    }
+    PersonsDelivery::AcceptanceCeiling => {
+      "its acceptances did not pass, as many as you start by yourself: what comes next is the person's"
+    }
+    PersonsDelivery::NotAllowed => {
+      "its acceptance passed, and Deliver when accepted is off for it: its delivery is the person's"
+    }
+    PersonsDelivery::TeamDecides => {
+      "its delivery was asked of the team's server and waits for an Admin's authorization: once an Admin authorized \
+       it, it is delivered from the module's page, or by deliver_module when the person asks"
+    }
+    PersonsDelivery::TeamRefused => {
+      "the team's server refused its delivery, or its merge failed on this computer: what comes next is the person's"
     }
   }
 }

@@ -69,6 +69,8 @@ pub(in crate::screens::orchestrator) fn line(
         PersonsDelivery::NoAcceptance => "orchestrator.standing.noAcceptance",
         PersonsDelivery::AcceptanceCeiling => "orchestrator.standing.acceptanceCeiling",
         PersonsDelivery::NotAllowed => "orchestrator.standing.notAllowed",
+        PersonsDelivery::TeamDecides => "orchestrator.standing.teamDecides",
+        PersonsDelivery::TeamRefused => "orchestrator.standing.teamRefused",
       };
       let place = match event.target {
         WatchTarget::Module(module) => Some((

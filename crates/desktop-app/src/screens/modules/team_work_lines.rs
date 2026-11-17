@@ -118,7 +118,10 @@ pub fn claim(ctx: &Ctx, view: &View<'_>) -> Element {
     );
     return with(strip, abilities.acquire.then(|| claim_button(ctx, view))).into();
   };
-  if claim.stale && !claim.holder.you {
+  // A stale claim is nobody's to use, the person's own included: the team server ties a claim to the sign-in that
+  // took it, so one taken before this computer signed in again, or left unrenewed while it was away, is renewed and
+  // released by nobody. Taking it over is the way on.
+  if claim.stale {
     return stale(ctx, view, claim).into();
   }
   let (picked, renewed) = (moment(ctx, claim.acquired), moment(ctx, claim.renewed));
@@ -154,7 +157,7 @@ fn claim_button(ctx: &Ctx, view: &View<'_>) -> ActionButton {
   )
 }
 
-/// Someone else's stale module claim, with Take over while the server allows it.
+/// A stale module claim, someone else's or the person's own, with Take over while the server allows it.
 fn stale(ctx: &Ctx, view: &View<'_>, claim: &TeamClaim) -> Strip {
   let module = &view.props.module;
   let holder = claim.holder.name.as_str();
@@ -162,8 +165,16 @@ fn stale(ctx: &Ctx, view: &View<'_>, claim: &TeamClaim) -> Strip {
     minutes(claim.renewed, Timestamp::now()),
     minutes(claim.renewed, claim.stale_at),
   );
+  let (title, detail) = if claim.holder.you {
+    (
+      "modules.team.work.staleYoursTitle",
+      "modules.team.work.staleYoursDetail",
+    )
+  } else {
+    ("modules.team.work.staleTitle", "modules.team.work.staleDetail")
+  };
   let detail = ctx.t_args(
-    "modules.team.work.staleDetail",
+    detail,
     [
       ("age", age.as_str()),
       ("minutes", &threshold),
@@ -173,7 +184,7 @@ fn stale(ctx: &Ctx, view: &View<'_>, claim: &TeamClaim) -> Strip {
   let strip = Strip::new(
     "module-team-claim",
     (Icon::ClockAlert, PaletteColor::Warning),
-    ctx.t_args("modules.team.work.staleTitle", [("holder", holder)]),
+    ctx.t_args(title, [("holder", holder)]),
     detail,
   )
   .tone(StripTone::Warning);
@@ -185,6 +196,15 @@ fn stale(ctx: &Ctx, view: &View<'_>, claim: &TeamClaim) -> Strip {
     )
   });
   with(strip, take_over)
+}
+
+/// The branch the module's delivery lands on here, as the lines name it: the one the checkout has checked out, as a
+/// delivery asked for here takes it ([`super::team_work::Recorded`]), else its base branch in words.
+pub fn base_named(ctx: &Ctx, view: &View<'_>) -> String {
+  view.recorded.checked_out.as_ref().map_or_else(
+    || ctx.t("modules.team.work.baseUnknown").to_string(),
+    ToString::to_string,
+  )
 }
 
 /// The module's branch, with *Change* for an Admin.
@@ -200,7 +220,7 @@ pub fn branch(ctx: &Ctx, view: &View<'_>) -> Element {
     "module-team-branch",
     (Icon::GitBranch, PaletteColor::TextSecondary),
     title,
-    ctx.t(key),
+    ctx.t_args(key, [("base", base_named(ctx, view).as_str())]),
   );
   let change = module.abilities.branch.then(|| {
     let (open, typed, current) = (view.changing.clone(), view.branch.clone(), module.branch.clone());
@@ -349,7 +369,10 @@ pub fn branch_dialog(ctx: &mut Ctx, view: &View<'_>) -> Option<Element> {
       dialog::line(
         "module-team-branch-merges",
         Icon::GitMerge,
-        &ctx.t("modules.team.work.branchMerges"),
+        &ctx.t_args(
+          "modules.team.work.branchMerges",
+          [("base", base_named(ctx, view).as_str())],
+        ),
       ),
       dialog::line(
         "module-team-branch-locked",

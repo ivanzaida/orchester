@@ -43,6 +43,9 @@ pub enum Rejection {
   Archived,
   /// Any other content the server says is invalid, without saying why.
   Unspecified,
+  /// A pipeline with a Test step, which a team server from before agent testing rejects whole: no code kept on a
+  /// version stands for it, the pipeline's save tells it from the steps it sent.
+  TestStep,
 }
 
 /// What this computer finds the team cannot take, which it keeps on the version as refused instead of sending it again.
@@ -97,6 +100,7 @@ impl Refusal {
         Rejection::Catalog => "sharing.edit.refused.catalog",
         Rejection::Archived => "sharing.edit.refused.archived",
         Rejection::Unspecified => "sharing.edit.refused.unspecified",
+        Rejection::TestStep => "sharing.edit.refused.testStep",
       }),
       Self::Changed => Message::new("sharing.edit.refused.changed"),
       Self::Local(local) => Message::new(match local {

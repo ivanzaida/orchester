@@ -314,6 +314,26 @@ fn join_team_unreachable_server_offers_try_again() {
 }
 
 #[test]
+fn join_team_a_server_that_needs_a_check_opens_connect_a_server_at_the_typed_address() {
+  let server = TeamServer::start();
+  let mut window = opened(&server, JoinWay::Code);
+  // Plain HTTP to another computer is allowed only in *Connect a server*: nothing is sent from here.
+  let typed = "http://team.example:8740";
+  join_with(&mut window, (typed, CODE));
+
+  shows(&mut window, "join-team-code-needs-settings");
+  window.press("join-team-code-open-connect");
+  shows(&mut window, "orchester-connect-address");
+  window.until("the address typed in the code column", |window| {
+    value(window, "orchester-connect-address") == typed
+  });
+  assert!(
+    !has(&mut window, "orchester-connect-found"),
+    "the person continues themselves"
+  );
+}
+
+#[test]
 fn join_team_only_a_person_joins() {
   let server = TeamServer::start();
   let mut window = opened(&server, JoinWay::Cloud);

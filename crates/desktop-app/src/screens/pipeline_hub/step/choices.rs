@@ -1,5 +1,6 @@
 //! What the Agent picker lists for a step (`Agent picker` `Zn8BM` in K4 `CwLfL`): the project's published profiles,
-//! then its tools, each with what it runs on and, when it is not ready, why in the words readiness uses. The agent the
+//! then its tools, each with what it runs on and, when it is not ready, why in the words readiness uses, and after the
+//! tools the project's test suites, which make the step a Test step. The agent the
 //! step has now is always listed, so that nothing stored is hidden: a profile with only a draft, and one that was
 //! archived or removed (the picker names it *no longer available*). A step that overrides the model as it was stored
 //! says so after the profile's line (*· model: <id>*), which a long line cuts before the CLI and the connection.
@@ -95,11 +96,9 @@ pub(super) fn choices(ctx: &Ctx, assignables: &Assignables, step: &Step) -> Choi
     executors.push(current);
     clis.push(None);
   }
-  if current == Executor::Tests {
-    items.push(tests_item(ctx));
-    executors.push(current);
-    clis.push(None);
-  }
+  items.push(tests_item(ctx));
+  executors.push(Executor::Tests);
+  clis.push(None);
   let cli = match current {
     Executor::Profile(id) => assignables.profile(id).and_then(|profile| profile.provider),
     Executor::Tool(_) | Executor::Unset | Executor::Tests => None,
@@ -243,8 +242,8 @@ fn tool_item(ctx: &Ctx, assignables: &Assignables, tool: &ToolChoice) -> Item {
   }
 }
 
-/// A Test step's own entry, listed only for such a step: Orchester runs the project's test suites itself, so the
-/// picker offers it to no other step (a Test step is made through `save_pipeline`).
+/// A Test step's entry, the last of the tools: Orchester runs the project's test suites itself, and choosing it makes
+/// the step a Test step.
 fn tests_item(ctx: &Ctx) -> Item {
   Item {
     key: "tests".into(),

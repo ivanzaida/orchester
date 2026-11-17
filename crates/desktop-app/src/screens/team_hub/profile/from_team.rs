@@ -1,6 +1,6 @@
 //! *From the team* (`From the team` `o0zHCO` in `Agents · Profile` `NDZXC`): what the team holds of the profile, the
 //! same on every computer, every row a value: *None* where the profile has nothing of a kind, *CLI default* for an
-//! effort it leaves to the CLI (M1 `oPF2o`).
+//! effort it leaves to the CLI (M1 `oPF2o`), and what its agents may do in words after it (M7 `NyLgu`).
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -11,9 +11,12 @@ use lurq::{
 use orchester_workspace::agents::team_profile::{Listed, TeamProfileSheet};
 
 use crate::{
-  screens::team_hub::{
-    rows::{self, FromTeam, Sub},
-    words::cli_key,
+  screens::{
+    hub::profile_form::access,
+    team_hub::{
+      rows::{self, FromTeam, Sub},
+      words::cli_key,
+    },
   },
   theme::{HubText, IconSize},
   ui::agent_mark::AgentMark,
@@ -25,6 +28,7 @@ pub(in crate::screens::team_hub) fn section(
   note: FromTeam,
 ) -> lurq::components::Column {
   let mut rows = vec![runs_with(ctx, sheet)];
+  rows.extend(access::read_rows(ctx, "team-hub-from-team", &sheet.permissions));
   let lists = [
     (
       "instructions",
