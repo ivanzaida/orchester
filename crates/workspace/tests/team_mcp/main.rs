@@ -29,6 +29,7 @@ mod chat_task;
 mod created;
 mod delivery;
 mod led_module;
+mod led_reads;
 mod local_task;
 mod mcp_server_remove;
 mod mcp_servers;

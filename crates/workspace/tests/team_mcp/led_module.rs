@@ -37,7 +37,7 @@ fn at(millis: i64) -> Timestamp {
 }
 
 /// A conversation of the project that leads `target` to the end.
-fn leading(checkout: &Checkout, target: WatchTarget) -> ChatId {
+pub(crate) fn leading(checkout: &Checkout, target: WatchTarget) -> ChatId {
   let mut db = checkout.db();
   let chat = Chat::named(ChatId::generate(), "Leads Webhooks", at(10));
   let person = ChatMessageId::generate();
@@ -53,13 +53,13 @@ fn leading(checkout: &Checkout, target: WatchTarget) -> ChatId {
 }
 
 /// Where the one subscription of the project stands.
-fn stands(checkout: &Checkout) -> Led {
+pub(crate) fn stands(checkout: &Checkout) -> Led {
   let mut all = standing_in(checkout.root()).expect("standing");
   assert_eq!(all.len(), 1, "{all:?}");
   all.remove(0)
 }
 
-fn named(led: &Led) -> Vec<(&str, &str)> {
+pub(crate) fn named(led: &Led) -> Vec<(&str, &str)> {
   led
     .standing
     .tasks

@@ -2,8 +2,10 @@
 //! `docs/plan/orchestrator-autonomy/OA-12-…`): the facts the rule reads, read once from the project database for
 //! every subscription, and for a subscription that leads to the end the events its standing raises in its
 //! conversation, once per state: work can start (OA-13), or the target is stuck (OA-15). A local and a team project
-//! read the same way: a team task is the one its runs recorded, its module and whether it is closed being the team
-//! server's last reading when it saw the task ([`super::team_status`]). A latest run that passed every step and that
+//! read the same way: a team task is the one its runs recorded, its module, its Blocked mark, its pipeline and whether
+//! it is closed being the team server's last reading when it saw the task ([`super::team_status`]); its pipeline is
+//! ready when it is one of the team's this session read, as a local task's is when it is published. A latest run that
+//! passed every step and that
 //! Orchester did not merge is asked of git as the task list asks it ([`crate::tasks::delivery`]): its work merged
 //! into its branch by a person, or by a team mate's computer, is done, not to merge.
 
@@ -118,8 +120,7 @@ impl Reads {
           closed: seen.status.is_closed(),
           phase: TaskPhase::Draft,
           runs: 0,
-          // A team task's pipeline is the team's, whose readiness the server checks when the work starts.
-          unready: None,
+          unready: team.pipeline_unready(seen.pipeline.as_deref()),
           parked: if parked.contains_key(&id) {
             Some(Parked::ByChat)
           } else {
@@ -250,9 +251,14 @@ impl Around1<'_> {
     };
     // An acceptance that did not pass is done as an attempt: its findings become tasks, and it is not run again.
     let closed = closed || (self.acceptance && matches!(phase, TaskPhase::Failed | TaskPhase::Cancelled));
-    // A team task's pipeline is the team's, whose readiness the server checks when the work starts.
+    // A team task's pipeline is one of the team's, which the server names now; this computer's records hold the one its
+    // last run started with, read only while no reading saw the task.
     let unready = match task.details().pipeline {
-      _ if team => None,
+      _ if team => {
+        let recorded = task.details().pipeline.map(|pipeline| pipeline.to_string());
+        let named = self.team.task(task.id()).map_or(recorded, |seen| seen.pipeline.clone());
+        self.team.pipeline_unready(named.as_deref())
+      }
       None => Some(Unready::NoPipeline),
       Some(pipeline) if !self.published.contains(&pipeline) => Some(Unready::PipelineNotReady),
       Some(_) => None,

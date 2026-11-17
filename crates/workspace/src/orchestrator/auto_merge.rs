@@ -21,7 +21,7 @@ use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::Value;
 
-use super::tools::ChatScope;
+use super::{team_status::reading_of, tools::ChatScope};
 use crate::{
   app_mcp::{Services, ToolError, blocking, find_run, setup::team_blocked_reason},
   messages::Message,
@@ -103,10 +103,14 @@ fn left(db: &ProjectDb, run: &Run, route: RunRoute, merge: Merge) -> Result<Opti
   if let Some(steps) = MergeLeft::of_steps(run) {
     return Ok(Some(steps));
   }
-  if let Some(reason) = organization.blocked_reason() {
-    return Ok(Some(MergeLeft::MarkedBlocked {
-      reason: reason.to_owned(),
-    }));
+  // A team task's Blocked mark is the team server's, which its records never hold: the last reading of what the
+  // subscriptions watch holds it, and [`check`] asks the server again before a merge nobody asked for.
+  let on_server = match route {
+    RunRoute::Team => reading_of(db).task(task.id()).and_then(|seen| seen.blocked.clone()),
+    RunRoute::Local | RunRoute::TeamUnrecorded => None,
+  };
+  if let Some(reason) = organization.blocked_reason().map(str::to_owned).or(on_server) {
+    return Ok(Some(MergeLeft::MarkedBlocked { reason }));
   }
   let mut blockers = Vec::new();
   for blocker in db.unfinished_blocking_tasks(task.id())? {

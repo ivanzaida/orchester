@@ -82,6 +82,25 @@ fn team_mcp_the_chat_starts_a_team_task_it_leads_through_the_project_in_a_turn_i
 }
 
 #[test]
+fn team_mcp_a_team_task_the_chat_creates_comes_back_to_the_conversation_that_watches() {
+  let (server, seen) = server();
+  seen.lock().takes_creates = true;
+  let checkout = crate::created::admin(&server);
+  let scope = asked(&checkout);
+  checkout
+    .db()
+    .start_subscription(&Subscription::new(scope.chat, WatchTarget::WithoutModule, "", at(11)))
+    .expect("watches");
+
+  let told = chat_call(&checkout, &scope, "create_task", &json!({"title": "Say hello"})).expect("created");
+
+  // The task is in a module no conversation watches: it becomes this conversation's task subscription.
+  assert_eq!(told["watch"]["kind"], "watched_here", "{told}");
+  let led = checkout.db().active_subscriptions().expect("subscriptions");
+  assert_eq!(led.leading(server.task, Some(server.module)), Some(scope.chat));
+}
+
+#[test]
 fn team_mcp_the_chat_makes_a_team_run_wait_on_a_team_task_that_never_ran_here() {
   let team = started();
   let other = TaskId::generate();
