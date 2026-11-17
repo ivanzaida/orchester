@@ -7,7 +7,7 @@ use orchester_store::ProjectDb;
 
 use super::{led_start::Named, team_task, tools::ChatScope};
 use crate::{
-  app_mcp::{Missing, Services, ToolError, blocking},
+  app_mcp::{Services, ToolError, blocking},
   messages::Message,
   tasks::recorded,
 };
@@ -16,30 +16,28 @@ use crate::{
 const BLOCKED: &str = "tasks.blocked.runUnavailable";
 
 /// Refuses (`task_blocked`) the chat's start of task `key` of `scope`'s project when it is marked Blocked, naming its
-/// reason. A call that names no task is left to the start's own refusal.
-pub(super) async fn marked(services: &Services, scope: &ChatScope, key: Option<&str>) -> Result<(), ToolError> {
-  let Some(named) = key.map(str::to_owned) else {
-    return Ok(());
+/// reason; the task found otherwise. A call that names no task is left to the start's own refusal.
+pub(super) async fn marked(
+  services: &Services,
+  scope: &ChatScope,
+  key: Option<&str>,
+) -> Result<Option<Named>, ToolError> {
+  let Some(named) = key else {
+    return Ok(None);
   };
-  let (root, asked) = (scope.root.clone(), named.clone());
   // A team task that never ran on this computer is in no table of it: the team server's last reading holds it and its
-  // Blocked mark ([`Named::find`]), and one no conversation watches yet is in no reading either: the server is asked.
-  let task = match blocking(move || Named::find(&ProjectDb::open(&root)?, &asked)).await {
-    Err(ToolError::NotFound { .. }) => team_task::asked(services, scope, &named)
-      .await?
-      .ok_or_else(|| ToolError::not_found(Missing::Task, named))?,
-    found => found?,
-  };
-  match task.blocked {
+  // Blocked mark, and one no conversation watches yet is in no reading either: the server is asked.
+  let task = team_task::found(services, scope, named).await?;
+  match &task.blocked {
     Some(reason) => Err(ToolError::refused(
       "task_blocked",
       vec![
         Message::new("orchestrator.start.markedBlocked")
-          .with("task", task.key)
-          .with("reason", reason),
+          .with("task", task.key.clone())
+          .with("reason", reason.clone()),
       ],
     )),
-    None => Ok(()),
+    None => Ok(Some(task)),
   }
 }
 

@@ -4,13 +4,19 @@
 //! subscription: only the person subscribes. Every turn's prompt is told the same from the store
 //! (`orchester_store::ProjectDb::chat_leads`, `orchester_store::ProjectDb::wait_turn_prompt`).
 
-use orchester_core::{id::ChatId, orchestrator::Subscription, task::Task};
+use orchester_core::{
+  id::{ChatId, ModuleId, TaskId},
+  orchestrator::Subscription,
+};
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
-use super::tools::{ChatScope, app_tool};
-use crate::app_mcp::{Services, ToolError, Translate, blocking, find_task};
+use super::{
+  led_start::Named,
+  tools::{ChatScope, app_tool},
+};
+use crate::app_mcp::{Services, ToolError, Translate, blocking};
 
 /// The tool whose answer, in the chat, carries the conversation's subscriptions.
 const GET_CONVERSATION: &str = "get_conversation";
@@ -31,9 +37,12 @@ pub(super) async fn read_tool(
   let (root, chat) = (scope.root.clone(), scope.chat);
   let leads = blocking(move || {
     let db = ProjectDb::open(&root)?;
-    // The tool found the task already; one gone since comes through none of them.
-    let task = asked.and_then(|asked| find_task(&db, &asked).ok());
-    Ok(subscriptions(&db, chat, task.as_ref())?)
+    // The tool found the task already; one gone since comes through none of them. A team task is found as the chat's
+    // tools find it, in the module it is in now.
+    let task = asked
+      .and_then(|asked| Named::find(&db, &asked).ok())
+      .map(|task| (task.id, task.module));
+    Ok(subscriptions(&db, chat, task)?)
   })
   .await?;
   if let Value::Object(answer) = &mut told {
@@ -45,7 +54,7 @@ pub(super) async fn read_tool(
 /// The subscriptions of `chat` that have not ended, in the order they were kept: each one's target and its name, since
 /// when (Unix milliseconds), the person's order, which order applies (`own`, `project_default` or `none`) and its text,
 /// and whether the events of `task` come through it.
-fn subscriptions(db: &ProjectDb, chat: ChatId, task: Option<&Task>) -> Result<Value, StoreError> {
+fn subscriptions(db: &ProjectDb, chat: ChatId, task: Option<(TaskId, Option<ModuleId>)>) -> Result<Value, StoreError> {
   let watch = db.orchestrator_watch()?;
   let default_order = watch.default_order();
   let through = match task {

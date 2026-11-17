@@ -49,17 +49,18 @@ pub fn plan_person_only() -> ToolError {
 }
 
 /// How a message reaches the run: through this computer's own runner and claims, or, for a team task's run, under the
-/// claim its work started with.
+/// claim its work started with, or with the task's next run, which starts through the team server.
 #[derive(Clone, Copy)]
 enum Reach {
   Local,
   Team(TeamThen),
+  TeamAgain,
 }
 
 /// How the message sent `way` in `mode` reaches run `run`. A team task's run (told by the run itself: a local task's
 /// run in a team-linked project is not one) the team server fenced takes no message at all, in any state; a message
-/// that would run the task again is refused before it is stored, because a team task's work starts only through the
-/// team server (`run_task`).
+/// that runs a team task again is kept here for its next run, which starts through the team server as `run_task`
+/// starts it ([`team::NextRun`]).
 fn reach_checked(
   db: &orchester_store::ProjectDb,
   (mode, way): (&ComposerMode, Way),
@@ -74,19 +75,10 @@ fn reach_checked(
   let Some(then) = way.then_in(mode) else {
     return Ok(Reach::Local);
   };
-  TeamThen::try_from(then)
-    .map(Reach::Team)
-    .map_err(|starts| match starts {
-      StartsWork::RunAgain => team_run_again(),
-    })
-}
-
-/// A message that would run a team task again: its work starts only through the team server.
-fn team_run_again() -> ToolError {
-  ToolError::refused(
-    "team_run_again_unsupported",
-    vec![Message::new("appMcp.errors.teamRunAgain")],
-  )
+  Ok(match TeamThen::try_from(then) {
+    Ok(then) => Reach::Team(then),
+    Err(StartsWork::RunAgain) => Reach::TeamAgain,
+  })
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -169,11 +161,7 @@ pub async fn send_message(
       .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
     return reply(&project, run, ("request_plan_changes", Sent::Taken), translate).await;
   }
-  // A message that runs the task again starts a run, which a pipeline that is not ready here cannot: refused before the
-  // message is stored, so a client that sends it again once the person fixed what is missing stores it once.
-  if matches!(prepared.mode, ComposerMode::RunAgain) {
-    ready_to_run_again(services, &project, prepared.detail.task.id()).await?;
-  }
+  let next = next_run_checked(services, (&project, &args.project), (&prepared, reach)).await?;
   let key = IdempotencyKey::generate();
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then, message) = blocking(move || {
@@ -201,7 +189,10 @@ pub async fn send_message(
     key,
     pipeline: &pipeline,
   };
-  let sent = followed(services, (&project, &stored), then, reach).await;
+  let sent = match next {
+    Some(next) => team_again(services, next).await,
+    None => followed(services, (&project, &stored), then, reach).await,
+  };
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)
@@ -221,6 +212,40 @@ async fn followed(
   }
   let servers = (&services.runners, &services.servers, runner);
   follow(servers, (&services.workspace, &services.vault), stored, then).await
+}
+
+/// Checks the run a message that runs the task again starts: a pipeline that is not ready here cannot start it, so it
+/// is refused before the message is stored, and a client that sends it again once the person fixed what is missing
+/// stores it once. A team task's next run, which starts through the team server, is checked as its team start checks it
+/// and given back to be started once the message is stored; `None` for a local task, whose runner starts it.
+async fn next_run_checked(
+  services: &Services,
+  (project, named): (&OpenProject, &str),
+  (prepared, reach): (&Prepared, Reach),
+) -> Result<Option<team::NextRun>, ToolError> {
+  if let (Reach::TeamAgain, Some(run)) = (reach, prepared.run()) {
+    return team::NextRun::checked(services, (named, run)).await.map(Some);
+  }
+  if matches!(prepared.mode, ComposerMode::RunAgain) {
+    ready_to_run_again(services, project, prepared.detail.task.id()).await?;
+  }
+  Ok(None)
+}
+
+/// Starts `next`, the team task's next run, which takes the message kept for it. A start that is refused now, or that
+/// the team server or the runner takes later, leaves the message queued for the next run, with why.
+async fn team_again(services: &Services, next: team::NextRun) -> Sent {
+  let error = match next.start(services).await {
+    Ok(run) => return Sent::Started(run),
+    Err(ToolError::NotReadyHere(refusal)) => return Sent::NotReady(NotStarted::NotReadyHere(refusal)),
+    Err(error) => error,
+  };
+  tracing::info!(?error, "a team task's next run did not start with the message");
+  let reason = match error {
+    ToolError::Refused { reasons, .. } | ToolError::Previewed { reasons, .. } => reasons.into_iter().next(),
+    _ => None,
+  };
+  Sent::Queued(reason.unwrap_or_else(|| Message::new("appMcp.errors.teamStartFailed")))
 }
 
 /// `Ok` when the pipeline of `task` is ready to start here; else the parts it lacks, or why that could not be read.

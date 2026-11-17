@@ -71,9 +71,11 @@ drives (`crates/workspace/src/app_mcp/tools/continue_run.rs`, `tasks/raise.rs`).
 - **Known limits:** accepting a step (`continue_run` `accept`) and resuming are not counted; automation's returns
   count whoever of automation made them; the turn under way is not in what was spent; a task followed by a
   subscription of its own inside a module led to the end has no ceilings.
-- **Team projects:** the ceilings read the task's leading subscription, which for a team task is found only once
-  OA-28 reads its module; until then a team task led through its module has no ceilings, and none of the chat's
-  calls it would bound work for a team run anyway (OA-29).
+- **Team projects:** the ceilings read the task's leading subscription, found for a team task by the module the
+  team server puts it in (OA-28), and they bound every call they bound for a local run: `continue_run` (OA-29,
+  2026-11-14), `run_task`, and since 2026-11-17 a `send_message` that runs a team task again
+  (`orchester-workspace --test team_mcp run_again::`). Raising a team run's limits is refused for its own reason
+  (OA-34).
 
 ## Review (2026-11-13)
 

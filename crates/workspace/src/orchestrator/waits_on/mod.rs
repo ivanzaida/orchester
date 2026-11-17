@@ -15,7 +15,6 @@ use orchester_core::{
   orchestrator::{ActionOutcome, ChatAction, WaitsOnRow},
   project::TaskKey,
   run::{Run, RunWaitsOn, WaitReason, WaitingRun, WaitsOnError},
-  task::Task,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -29,11 +28,13 @@ use serde_json::{Value, json};
 
 use super::{
   keep::{self, Named},
+  led_start::Named as Found,
   own_project::in_own_project,
+  team_task,
   tools::ChatScope,
 };
 use crate::{
-  app_mcp::{Missing, ToolError, Translate, blocking, find_run, find_task},
+  app_mcp::{Missing, Services, ToolError, Translate, blocking, find_run},
   messages::Message,
   runner::Runners,
   tasks::recorded::task_of,
@@ -82,7 +83,7 @@ struct Kept {
 /// Makes the run `arguments` names wait on the task they name in `scope`, and keeps the action, done or refused, in
 /// the conversation; `runners` tell the chat it changed.
 pub(super) async fn call(
-  (translate, runners): (&Translate, &Runners),
+  (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
   mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
@@ -90,7 +91,7 @@ pub(super) async fn call(
   let kept = match in_own_project(scope, &mut arguments) {
     Ok(()) => {
       arguments.remove("project");
-      keep_wait(scope, arguments).await
+      keep_wait(services, scope, arguments).await
     }
     Err(refused) => Err(refused),
   };
@@ -121,23 +122,35 @@ pub(super) async fn call(
   })
 }
 
-async fn keep_wait(scope: &ChatScope, arguments: JsonObject) -> Result<Kept, ToolError> {
+async fn keep_wait(services: &Services, scope: &ChatScope, arguments: JsonObject) -> Result<Kept, ToolError> {
   let asked: WaitOnTask =
     serde_json::from_value(Value::Object(arguments)).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+  // A team task that never ran here, and that nothing watches, is waited on too: it is found as the start finds it.
+  // One nothing answers to is refused below, in the order the wait is checked.
+  let waited = match team_task::found(services, scope, &asked.task).await {
+    Ok(task) => Some(task),
+    Err(ToolError::NotFound { .. }) => None,
+    Err(refused) => return Err(refused),
+  };
   let scope = scope.clone();
   blocking(move || {
     let mut db = ProjectDb::open(&scope.root)?;
-    keep_in(&mut db, &scope, &asked)
+    keep_in(&mut db, &scope, (&asked, waited))
   })
   .await
 }
 
-/// Keeps the wait `asked` names in `db`, the project database of `scope`.
-fn keep_in(db: &mut ProjectDb, scope: &ChatScope, asked: &WaitOnTask) -> Result<Kept, ToolError> {
+/// Keeps the wait `asked` names in `db`, the project database of `scope`, on `waited`, the task it names when one
+/// answers to it.
+fn keep_in(
+  db: &mut ProjectDb,
+  scope: &ChatScope,
+  (asked, waited): (&WaitOnTask, Option<Found>),
+) -> Result<Kept, ToolError> {
   let run = find_run(db, &asked.run)?;
   let number = run.number().get();
   let task = task_of(db, run.task())?.ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
-  let waited = waited_task(db, &asked.task)?;
+  let waited = waited.ok_or_else(|| missing_task(db, &asked.task))?;
   let refused = |error: WaitsOnError| refusal(db, &error, number);
   let waits_for = waits_for(&run).ok_or_else(|| refused(WaitsOnError::NotWaitingForPerson))?;
   let base = run.base_branch().cloned().ok_or_else(|| {
@@ -154,7 +167,7 @@ fn keep_in(db: &mut ProjectDb, scope: &ChatScope, asked: &WaitOnTask) -> Result<
     waits_for,
   };
   // The waited task was found in the chat's own project.
-  let wait = RunWaitsOn::new(waiting, waited.id(), scope.project).map_err(refused)?;
+  let wait = RunWaitsOn::new(waiting, waited.id, scope.project).map_err(refused)?;
   let kept = db.keep_run_wait(&wait, Timestamp::now());
   match kept {
     Ok(()) => {}
@@ -166,21 +179,17 @@ fn keep_in(db: &mut ProjectDb, scope: &ChatScope, asked: &WaitOnTask) -> Result<
     row: WaitsOnRow {
       run: run.id(),
       number,
-      waited: waited.key().to_string(),
+      waited: waited.key,
     },
     base: base.as_str().to_owned(),
   })
 }
 
-/// The task `named` names in `db`; a key of another project's is refused as such.
-fn waited_task(db: &ProjectDb, named: &str) -> Result<Task, ToolError> {
-  let missing = match find_task(db, named) {
-    Ok(task) => return Ok(task),
-    Err(missing) => missing,
-  };
+/// Why no task of `db`'s project answers to `named`: a key of another project's is refused as such.
+fn missing_task(db: &ProjectDb, named: &str) -> ToolError {
   match named.to_uppercase().parse::<TaskKey>() {
-    Ok(key) if key.project() != db.project().key() => Err(refusal(db, &WaitsOnError::OtherProject, 0)),
-    _ => Err(missing),
+    Ok(key) if key.project() != db.project().key() => refusal(db, &WaitsOnError::OtherProject, 0),
+    _ => ToolError::not_found(Missing::Task, named),
   }
 }
 

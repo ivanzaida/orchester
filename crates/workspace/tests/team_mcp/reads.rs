@@ -57,6 +57,8 @@ pub struct Seen {
   pub task_lists: usize,
   /// The server answers `GET capabilities` with `404`, as for a project the caller is no member of.
   pub no_member: bool,
+  /// The server takes a `task.create`, as it does an Admin's, and answers with its one task `KON-7` as the task made.
+  pub takes_creates: bool,
 }
 
 /// The routes, and what they saw.
@@ -213,20 +215,44 @@ fn route(
       }
     }
     ("POST", ["commands"]) if request.json()["command"]["kind"] == "task.create" => {
-      let mut seen = seen.lock();
-      seen.task_creates += 1;
-      seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
-      drop(seen);
-      let operation = request.json()["operation_id"].clone();
-      (
-        403,
-        json!({"operation_id": operation, "code": "forbidden", "details": {}}),
-      )
+      task_create(seen, request, &task_read)
     }
     _ => return false,
   };
   respond(stream, status, &body);
   true
+}
+
+/// `task.create`: refused `403 forbidden`, as a member's is, unless the server takes creates; what it was sent is seen.
+fn task_create(seen: &Mutex<Seen>, request: &Request, task_read: &dyn Fn() -> Value) -> (u16, Value) {
+  let mut seen = seen.lock();
+  seen.task_creates += 1;
+  seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
+  let takes = seen.takes_creates;
+  drop(seen);
+  let operation = request.json()["operation_id"].clone();
+  if takes {
+    (201, created_task(&operation, task_read()))
+  } else {
+    (
+      403,
+      json!({"operation_id": operation, "code": "forbidden", "details": {}}),
+    )
+  }
+}
+
+/// The receipt of the `task.create` of `operation`, committed: `read`, the task as the server reads it, as the task
+/// made.
+fn created_task(operation: &Value, mut read: Value) -> Value {
+  if let Some(task) = read.as_object_mut() {
+    for read_only in ["assignee", "work", "effective_claim", "capabilities"] {
+      task.remove(read_only);
+    }
+  }
+  json!({
+    "operation_id": operation, "state": "committed",
+    "result": {"kind": "task", "task": read, "effects": []}, "cursor": "11"
+  })
 }
 
 /// A task's definition route, which refuses a member `403 not_admin`; what it was sent is seen.

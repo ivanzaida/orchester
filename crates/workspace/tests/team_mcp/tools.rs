@@ -211,23 +211,6 @@ fn team_mcp_an_update_with_a_refused_change_sends_nothing() {
   assert_eq!(seen.task_creates, 0, "no task was created");
 }
 
-#[test]
-fn team_mcp_a_message_does_not_run_a_team_task_again() {
-  let team = crate::team_runs::started();
-  team.settle(|run, now| run.cancel(now).expect("canceled"));
-
-  // A canceled run of a team task: a message would run it again, which only the team server's work start may do.
-  let message = json!({"project": "Kontur", "run": team.run.to_string(), "text": "Try again."});
-  let error = team.checkout.call("send_message", &message).expect_err("refused");
-  assert_eq!(error["error"]["code"], "team_run_again_unsupported", "{error}");
-  assert_eq!(
-    team.server.state().works_made,
-    1,
-    "nothing started beyond the task's first work"
-  );
-  assert_eq!(team.messages(), 0, "the message was not kept");
-}
-
 /// A run of the project's first task with a one-step pipeline published here, started and canceled.
 pub(crate) fn canceled_run(db: &mut orchester_store::ProjectDb) {
   run_from(db, (None, RunBaseSource::CheckedOut));

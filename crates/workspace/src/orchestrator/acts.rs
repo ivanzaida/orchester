@@ -82,7 +82,7 @@ pub(super) async fn act_and_keep(
   let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
   // A task created outside what the conversation watches comes back to it, unless another one leads it.
   let watch = match (&mut result, name == CREATE_TASK && outcome == ActionOutcome::Done) {
-    (Ok(told), true) => created::watch_created(scope, told).await,
+    (Ok(told), true) => created::watch_created(services, scope, told).await,
     _ => None,
   };
   let action = ChatAction {
@@ -287,9 +287,9 @@ async fn start(
   (arguments, reasoned): (&JsonObject, bool),
   drives: bool,
 ) -> Result<Acted, ToolError> {
-  blocked::marked(services, scope, arguments.get("key").and_then(Value::as_str)).await?;
+  let task = blocked::marked(services, scope, arguments.get("key").and_then(Value::as_str)).await?;
   if drives && scope.on_its_own {
-    led_start::led_here(scope, arguments.get("key").and_then(Value::as_str), reasoned).await?;
+    led_start::led_here(scope, task, reasoned).await?;
   }
   // In a turn nobody asked for, a start is only proposed, unless the chat drives.
   if !drives && (scope.on_its_own || !allows_autopilot(scope).await?) {

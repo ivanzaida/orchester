@@ -196,15 +196,12 @@ impl WatchReads {
       id: task.id(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
-      run: match self.team_task(task.id()) {
-        Some(read) => read.run,
-        None => self
-          .tasks
-          .phases
-          .get(&task.id())
-          .and_then(|latest| latest.run())
-          .map(|latest| latest.number),
-      },
+      run: self
+        .tasks
+        .phases
+        .get(&task.id())
+        .and_then(|latest| latest.run())
+        .map(|latest| latest.number),
       going,
       state: Message::new(state),
       note,
