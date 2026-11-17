@@ -43,6 +43,16 @@ pub(super) fn require_resource(
     .ok_or(FillInError::NotTeamResource { resource, kind })
 }
 
+/// Fails unless `by` is the person, or automation while a person lets it change agent permissions (Settings ›
+/// Automation), as for a project's own MCP server.
+pub(super) fn require_widening(workspace: &Workspace, by: Answerer) -> Result<(), FillInError> {
+  match by {
+    Answerer::Person => Ok(()),
+    Answerer::Automation if workspace.automation_changes_permissions()? => Ok(()),
+    Answerer::Automation => Err(FillInError::PersonOnly),
+  }
+}
+
 /// Fails unless `by` is the person.
 pub(super) const fn require_person(by: Answerer) -> Result<(), FillInError> {
   match by {

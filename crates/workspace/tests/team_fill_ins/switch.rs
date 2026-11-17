@@ -47,3 +47,24 @@ fn team_fill_ins_only_a_team_mcp_server_is_turned_on() {
     assert_eq!(team.db().team_mcp_switch(not_a_server).expect("read"), None);
   }
 }
+
+#[test]
+fn team_fill_ins_automation_turns_a_team_mcp_server_on_and_sets_its_program_while_a_person_lets_it_widen() {
+  let team = Team::new();
+  team
+    .workspace
+    .set_automation_changes_permissions(true)
+    .expect("the switch");
+  let server = team.program_server;
+
+  team
+    .workspace
+    .switch_team_mcp_on_here(&team.root, server, true, Answerer::Automation)
+    .expect("turned on");
+  assert_eq!(team.db().team_mcp_switch(server).expect("read"), Some(true));
+  let program = team.program_file();
+  team
+    .workspace
+    .set_team_mcp_program(&team.root, server, &program, Answerer::Automation)
+    .expect("program kept");
+}

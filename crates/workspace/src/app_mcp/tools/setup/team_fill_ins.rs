@@ -2,10 +2,10 @@
 //! in"): `set_reviewer_account` chooses what a team reviewer runs on here (a team profile's account is
 //! `set_profile_account`'s, as a local profile's is), and the team MCP
 //! servers `set_mcp_server_enabled` and `update_mcp_server` name are the team's resources, not the project's own
-//! servers. Turning a team MCP server on lets agents run more here, which the person decided is theirs alone, in the
-//! window (decision 12): over MCP it answers `person_only` always, which the switch *Let automation change agent
-//! permissions* does not lift, before the write of [`crate::team_fill_ins`] is reached. Turning one off is taken. The
-//! program's path on this computer is that window's too: no tool sets it. No tool takes or returns a secret value.
+//! servers. Turning a team MCP server on, and its program's path on this computer (`update_mcp_server` with an
+//! absolute `program`), let agents run more here: refused `person_only` unless a person lets automation change agent
+//! permissions, as for a project's own server (the person, 2026-11-17; it replaces decision 12, which kept them a
+//! person's alone). Turning one off is taken. No tool takes or returns a secret value.
 
 mod reviewer;
 
@@ -33,22 +33,36 @@ pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> R
   }
 }
 
-/// Turns the team MCP server `server` off here, as `set_mcp_server_enabled` does; on is a person's alone, so it is
-/// refused here, with nothing changed and without reaching the write that would take it from a person.
+/// Turns the team MCP server `server` on or off here, as `set_mcp_server_enabled` does: on lets the team's agents use
+/// it on this computer, which is refused `person_only` unless a person lets automation change agent permissions, as
+/// for a project's own server; off is always taken.
 pub(super) fn switch_server(
   services: &Services,
   repo_root: &Path,
   server: &TeamResource,
   enabled: bool,
 ) -> Result<Value, ToolError> {
-  if enabled {
-    return Err(person_only("appMcp.errors.teamMcpOnPersonOnly"));
-  }
   services
     .workspace
-    .switch_team_mcp_on_here(repo_root, server.id, false, Answerer::Automation)
+    .switch_team_mcp_on_here(repo_root, server.id, enabled, Answerer::Automation)
     .map_err(refusal)?;
-  Ok(json!({ "server": { "id": server.id.to_string(), "name": server.name.as_str(), "team": true, "enabled": false } }))
+  Ok(
+    json!({ "server": { "id": server.id.to_string(), "name": server.name.as_str(), "team": true, "enabled": enabled } }),
+  )
+}
+
+/// Sets `program`, an absolute path of this computer, as the program the team MCP server `server` runs here, as its
+/// *Choose…* in Connections does; refused `person_only` unless a person lets automation change agent permissions.
+pub(super) fn set_program(
+  services: &Services,
+  repo_root: &Path,
+  server: &TeamResource,
+  program: &Path,
+) -> Result<(), ToolError> {
+  services
+    .workspace
+    .set_team_mcp_program(repo_root, server.id, program, Answerer::Automation)
+    .map_err(refusal)
 }
 
 /// The team's resource of `kind` that `named` names, by its id or its name, in the team's configuration of the project
