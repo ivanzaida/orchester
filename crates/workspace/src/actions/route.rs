@@ -26,9 +26,11 @@ pub(super) fn team_route(
 ) -> Result<TeamRoute, ActionError> {
   use TeamRoute::{Command, Definition};
   Ok(match action {
-    Action::Task(TaskAction::Create { details, organization }) => {
-      Command(command::create_task(pipelines, details, organization)?)
-    }
+    Action::Task(TaskAction::Create {
+      details,
+      organization,
+      module,
+    }) => Command(command::create_task(pipelines, details, organization, *module)?),
     Action::Task(TaskAction::Edit {
       task,
       read,

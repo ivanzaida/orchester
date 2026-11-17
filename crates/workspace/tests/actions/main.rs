@@ -207,6 +207,7 @@ fn create(title: &str) -> Action {
   Action::Task(TaskAction::Create {
     details: details(title),
     organization: TaskOrganization::default(),
+    module: None,
   })
 }
 

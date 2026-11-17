@@ -55,9 +55,12 @@ pub enum Action {
 /// A task's definition: its details as the task form saves them, its organization, and its module.
 #[derive(Clone, Debug)]
 pub enum TaskAction {
+  /// A new task, in `module` when one is named: a team task is made there at once, which the holder of that module's
+  /// claim may do as an Admin may (OA-32).
   Create {
     details: TaskDetails,
     organization: TaskOrganization,
+    module: Option<ModuleId>,
   },
   /// The details read as `base` at `read`, changed to `edited`.
   Edit {

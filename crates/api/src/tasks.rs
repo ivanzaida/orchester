@@ -275,6 +275,47 @@ pub struct TaskChanges {
   #[serde(default, with = "wire::optional_actor")]
   pub actor: Option<ChangeActor>,
 }
+impl TaskChanges {
+  /// The module these changes move the task into when that is all they change (`actor` aside): the one change of a
+  /// task the holder of that module's claim may make besides an Admin (OA-32, decided 2026-11-17). Every field is
+  /// named, so a field added to the changes has to be decided here.
+  pub fn only_moves_into(&self) -> Option<ModuleId> {
+    let Self {
+      title,
+      brief,
+      criteria,
+      pipeline,
+      limits,
+      status,
+      workflow,
+      priority,
+      tags,
+      blocking,
+      blocked_reason,
+      module,
+      release,
+      story_points,
+      no_automatic_merge,
+      actor: _,
+    } = self;
+    let others = title.is_some()
+      || brief.is_some()
+      || criteria.is_some()
+      || pipeline.is_some()
+      || limits.is_some()
+      || status.is_some()
+      || workflow.is_some()
+      || priority.is_some()
+      || tags.is_some()
+      || blocking.is_some()
+      || blocked_reason.is_some()
+      || release.is_some()
+      || story_points.is_some()
+      || no_automatic_merge.is_some();
+    if others { None } else { module.flatten() }
+  }
+}
+
 pub(crate) fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
   T::deserialize(d).map(Some)
 }

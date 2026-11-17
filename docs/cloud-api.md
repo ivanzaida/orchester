@@ -1233,6 +1233,23 @@ tasks not Done (`MergeLeft::OptedOut`, `MarkedBlocked`, `BlockedByTasks`, read f
 stands lists a task blocked by a task of the same reading that is not Done as `blocked_by`. The stand-in team server
 (`test_support`) keeps both fields on its task patch.
 
+## Tasks made and moved by a module's holder (OA-32)
+
+Decided by the implementing agent on 2026-11-17, to confirm with the person, so that a member's computer that leads a
+team module can make its acceptance task and the tasks of its findings (OA-32), as a local one does:
+
+- `task.create` is a workspace Admin's, as before, **or** the command of a member who holds the claim of the module its
+  `content.module` names, from the session that acquired that claim; the task joins the module's claim as any task made
+  in a claimed module does. A member who holds no module claim of the workspace is `403 forbidden` before the command
+  is decided (and so is the replay of such a receipt once the claim is gone); one who holds another module's claim, or
+  names no module, is `403 forbidden` when it is decided.
+- The task's route (`PATCH …/tasks/{task}`): a patch whose only change is `module` set to a module (`actor` aside;
+  `TaskChanges::only_moves_into`) is the holder's of that module's claim from the session that acquired it, as an
+  Admin's; every other rule of the move stays (a task claimed by someone else cannot join, one under another module's
+  claim cannot leave it). Any other patch keeps the lifecycle and Admin rules: a member's is `403 not_admin`. The team's
+  web app has no session that holds a module claim, so its moves stay an Admin's.
+- The desktop sends a team task's module in `task.create` (`TaskAction::Create { module }`) instead of a move after it.
+
 ## Team run limit raises (OA-34)
 
 D6 for a run's limits, decided by the implementing agent on 2026-11-17 by the option OA-34 proposed, to confirm with

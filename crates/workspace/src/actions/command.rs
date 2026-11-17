@@ -81,6 +81,7 @@ pub(super) fn create_task(
   pipelines: &TeamPipelineCheck<'_>,
   details: &TaskDetails,
   organization: &TaskOrganization,
+  module: Option<ModuleId>,
 ) -> Result<TeamRequest, ActionError> {
   if details.limits != TaskLimits::NONE {
     return Err(ActionError::DecisionRequired(DecisionId::D6));
@@ -99,7 +100,7 @@ pub(super) fn create_task(
     tags: Vec::new(),
     blocking: Vec::new(),
     blocked_reason: None,
-    module: None,
+    module,
     release: None,
     story_points: None,
     no_automatic_merge: false,

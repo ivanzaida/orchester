@@ -11,7 +11,8 @@
 //! the team's tags (made there when the team has none of it), and a member's change of them is `not_admin`. What the
 //! server does not hold of a team task (delivers, the base branch) is refused rather than kept on this computer.
 //!
-//! The server takes a task's details, its organization, its story points and its module as separate changes, so one
+//! A new task is made in its module at once, which the holder of the module's claim may do as an Admin may (OA-32). The
+//! server takes a task's details, its organization, its story points and its module as separate changes, so one
 //! call may send up to four, each on the revision the one before it left. Once one is saved, a later refusal does not
 //! undo it: the tool answers the task as saved, with the changes `not_saved` and why, so a client never sends the saved
 //! part again (a second task, for a create).
@@ -145,16 +146,24 @@ pub(in crate::app_mcp::tools) async fn create_task(
   let organization = organization.with_tags(organized::tags(services, team, &args.tags).await?);
   let dispatcher = team.dispatcher(services).await?;
   let (task, not_saved) = on_worker(move || async move {
-    let created = match carry_out(&dispatcher, TaskAction::Create { details, organization }).await? {
+    let create = TaskAction::Create {
+      details,
+      organization,
+      module,
+    };
+    let created = match carry_out(&dispatcher, create).await? {
       Accepted::Command(receipt) => match receipt.result {
         TeamCommandValue::Task { task, .. } => *task,
         _ => return Err(not_a_task()),
       },
       Accepted::Definition(_) => return Err(not_a_task()),
     };
-    let points = points.map(Change::Points);
-    let moves = module.map(|module| Change::Module(Some(module)));
-    apply(&dispatcher, (created, true), points.into_iter().chain(moves).collect()).await
+    apply(
+      &dispatcher,
+      (created, true),
+      points.map(Change::Points).into_iter().collect(),
+    )
+    .await
   })
   .await?;
   Ok(answer(&task, not_saved))
