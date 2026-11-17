@@ -56,6 +56,30 @@ pub fn reasons(
   Ok(reasons)
 }
 
+/// What `profile` widens beyond a team profile's latest version, its `base` permissions and MCP servers (before its
+/// first: the most restrictive permissions its CLI enforces and no server): its permissions, another CLI it moves to
+/// and an MCP server it adds. A team profile has no version in this project's database, so it is compared with the
+/// version the team server holds.
+pub fn between(
+  (permissions, servers): (&AgentPermissions, &McpServerSelection),
+  (base_cli, cli): (AgentProvider, AgentProvider),
+  profile: &AgentProfile,
+) -> Vec<Message> {
+  let mut reasons: Vec<_> = profile
+    .permissions()
+    .widenings_from(permissions)
+    .into_iter()
+    .map(message)
+    .collect();
+  if base_cli != cli {
+    reasons.push(Message::new("appMcp.widens.account"));
+  }
+  if profile.mcp_servers().adds_to(servers) {
+    reasons.push(Message::new("appMcp.widens.mcpServers"));
+  }
+  reasons
+}
+
 pub fn message(widening: Widening) -> Message {
   Message::new(match widening {
     Widening::Repository => "appMcp.widens.repository",

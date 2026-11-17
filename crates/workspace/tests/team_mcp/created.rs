@@ -72,10 +72,6 @@ fn team_mcp_the_draft_tools_are_refused_in_a_team_project_and_nothing_is_made_or
               "events": "start", "text": "Write the failing test first." }),
     ),
     (
-      "save_profile_draft",
-      json!({ "project": "Kontur", "role": "Reviewer", "connection": "Codex", "model": "gpt-5.5" }),
-    ),
-    (
       "save_skill_draft",
       json!({ "project": "Kontur", "name": "Checks", "description": "Checks the change.", "body": "Look." }),
     ),
@@ -89,12 +85,7 @@ fn team_mcp_the_draft_tools_are_refused_in_a_team_project_and_nothing_is_made_or
     assert_eq!(refused["error"]["code"], "team_no_drafts", "{tool}: {refused}");
   }
   assert_eq!(*asked.lock(), 0, "nothing reached the team server");
-  for kind in [
-    ResourceKind::Instruction,
-    ResourceKind::AgentProfile,
-    ResourceKind::Skill,
-    ResourceKind::Tool,
-  ] {
+  for kind in [ResourceKind::Instruction, ResourceKind::Skill, ResourceKind::Tool] {
     assert!(checkout.db().resources(kind).expect("read").is_empty(), "{kind:?}");
   }
 }

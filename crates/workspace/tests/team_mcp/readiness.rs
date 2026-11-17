@@ -34,7 +34,7 @@ fn name(text: &str) -> Name {
   Name::new(text).expect("name")
 }
 
-fn team_profile(cli: AgentProvider, servers: &[ResourceId], secrets: &[&str]) -> TeamAgentProfile {
+pub(super) fn team_profile(cli: AgentProvider, servers: &[ResourceId], secrets: &[&str]) -> TeamAgentProfile {
   TeamAgentProfile::new(
     name("Builder"),
     String::new(),
@@ -88,17 +88,17 @@ fn team_resource<B: ResourceBody + Clone>(db: &mut ProjectDb, slug: &str, server
   id
 }
 
-fn server_resource(db: &mut ProjectDb, body: Value) -> ResourceId {
+pub(super) fn server_resource(db: &mut ProjectDb, body: Value) -> ResourceId {
   let server: TeamMcpServer = serde_json::from_value(body.clone()).expect("a team MCP server");
   team_resource(db, "knowledge", body, &server)
 }
 
-fn profile_resource(db: &mut ProjectDb, team: &TeamAgentProfile) -> ResourceId {
+pub(super) fn profile_resource(db: &mut ProjectDb, team: &TeamAgentProfile) -> ResourceId {
   let local = AgentProfile::from_team(team, ConnectionId::generate());
   team_resource(db, "builder", serde_json::to_value(team).expect("json"), &local)
 }
 
-fn program_server() -> Value {
+pub(super) fn program_server() -> Value {
   json!({"name": "knowledge", "launch": {"kind": "program", "program": "npx", "variables": ["API_TOKEN"]}})
 }
 

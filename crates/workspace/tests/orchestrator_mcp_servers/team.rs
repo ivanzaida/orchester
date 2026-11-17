@@ -1,6 +1,6 @@
-//! The Orchestrator chat proposes no change to a team project's MCP servers: they are the team's resources, which the
-//! cards do not read. Every proposal is refused at once, before a card is made, and the refusal points to the MCP
-//! server tools.
+//! The Orchestrator chat changes a team project's MCP servers through the app's own MCP server tools, which change the
+//! team's resources on the team server: no card is made of such a change, since a card reads this computer's servers,
+//! and nothing is added to the project's own. A team server this computer cannot reach refuses it as those tools do.
 
 use orchester_core::{
   id::{ProjectId, ServerId},
@@ -32,7 +32,7 @@ fn share(desktop: &Desktop) {
 }
 
 #[test]
-fn chat_mcp_in_a_team_project_every_proposal_is_refused_before_a_card_is_made() {
+fn chat_mcp_in_a_team_project_a_change_goes_to_the_apps_tool_and_no_card_is_made() {
   let desktop = Desktop::new();
   desktop.let_automation_change_permissions(true);
   share(&desktop);
@@ -55,9 +55,10 @@ fn chat_mcp_in_a_team_project_every_proposal_is_refused_before_a_card_is_made() 
   ];
 
   for (tool, arguments) in calls {
+    // The project is linked to a team server nobody signed in to: the app's tool is reached, and refuses as it does.
     let refused = desktop.chat(&desktop.scope, tool, arguments).expect_err(tool);
     let refused = refused.to_json(|message| message.key.to_owned());
-    assert_eq!(
+    assert_ne!(
       refused["error"]["code"], "team_mcp_proposal_unsupported",
       "{tool}: {refused}"
     );

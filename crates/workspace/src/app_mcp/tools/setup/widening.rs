@@ -53,6 +53,12 @@ pub(super) fn check_profile(
   provider: AgentProvider,
 ) -> Result<(), ToolError> {
   let reasons = crate::agents::widening::reasons(db, id, profile, provider)?;
+  check_reasons(services, reasons)
+}
+
+/// [`check_profile`] with what widens already read: refused unless a person lets automation take it, and Autopilot only
+/// while a person also lets automation answer approvals.
+pub(super) fn check_reasons(services: &Services, reasons: Vec<Message>) -> Result<(), ToolError> {
   let auto = crate::agents::widening::answers_in_persons_place(&reasons);
   allowed(services, reasons)?;
   if auto && services.person.is_none() && !services.answers_allowed()? {

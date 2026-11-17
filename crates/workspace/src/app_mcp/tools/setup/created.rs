@@ -46,12 +46,11 @@ pub(super) fn refused(error: &EditRefused) -> ToolError {
   ToolError::refused(code, vec![message])
 }
 
-/// The tools that save or publish a draft of a profile, instruction, skill or tool. A team pipeline's tools
-/// (`save_pipeline`, `create_pipeline`, `duplicate_pipeline`) send it to the team server at once and wait for its
-/// answer instead (D-043), so they are not among them.
-pub(crate) const DRAFT_TOOLS: [&str; 8] = [
-  "save_profile_draft",
-  "publish_profile",
+/// The tools that save or publish a draft of an instruction, skill or tool. A team pipeline's tools
+/// (`save_pipeline`, `create_pipeline`, `duplicate_pipeline`) and a team profile's (`save_profile_draft`,
+/// `publish_profile`, `setup::team_profile_save`) send it to the team server at once and wait for its answer instead
+/// (D-043), so they are not among them.
+pub(crate) const DRAFT_TOOLS: [&str; 6] = [
   "save_instruction_draft",
   "publish_instruction",
   "save_tool_draft",

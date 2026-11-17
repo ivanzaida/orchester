@@ -22,7 +22,7 @@ use super::{
   },
   connections::agent_by_id,
   runs_on::Accounts,
-  widening,
+  team_profiles, widening,
 };
 use crate::{
   agents::{
@@ -62,17 +62,16 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
         picks.insert(*id, db.connection_pick(*id)?.and_then(|pick| pick.account));
       }
       let accounts = Accounts::load(&services)?;
-      Ok((
-        agents,
-        listed,
-        readiness_json::read(&services, db, &open.repo_root)?,
-        (accounts, picks),
-      ))
+      let readiness = readiness_json::read(&services, db, &open.repo_root)?;
+      // A team project's own profiles are the team's resources, read from its configuration.
+      let ids: Vec<ResourceId> = listed.iter().map(|(id, _)| *id).collect();
+      let team = team_profiles::listed_in(&services, (open, db), &readiness, &ids)?;
+      Ok((agents, listed, (readiness, team), (accounts, picks)))
     })
   })
   .await?;
-  Ok(read.json("profiles", translate, |open, (agents, listed, readiness, (accounts, picks))| {
-    listed
+  Ok(read.json("profiles", translate, |open, (agents, listed, (readiness, team), (accounts, picks))| {
+    let own = listed
       .iter()
       .filter_map(|(id, here)| Some((agents.profile(*id)?, here)))
       .map(|(entry, here)| {
@@ -87,12 +86,17 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
           "readiness": readiness_json::resource_of(readiness, entry.id),
           "link": Link::Profile(open.project.id(), entry.id).path(),
         })
-      })
-      .collect()
+      });
+    own.chain(team.iter().cloned()).collect()
   }))
 }
 
 pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
+  if let Some(team) = team_profiles::team_of(services, &args.project).await?
+    && let Ok(profile) = team_profiles::named(&team.config, &args.profile)
+  {
+    return team_profiles::shown_now(services, &team.open, profile.id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
@@ -127,6 +131,12 @@ pub(super) fn profile_with_revision(
 }
 
 pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
+  // A team profile's version is published when it is saved: there is no draft to publish, and it answers as it stands.
+  if let Some(team) = team_profiles::team_of(services, &args.project).await?
+    && let Ok(profile) = team_profiles::named(&team.config, &args.profile)
+  {
+    return team_profiles::shown_now(services, &team.open, profile.id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;

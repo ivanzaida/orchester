@@ -2838,7 +2838,8 @@
       },
       "initWaits": "Nothing is made yet: the first commit of {{project}}'s folder on {{branch}} waits for the person, who applies or dismisses it in the conversation. Tell them what the commit holds and which files look as if they hold secrets, if any.",
       "gitWaits": "Nothing has run yet: {{command}} waits for the person, who applies or dismisses it in the conversation. Tell them what it would lose, as the card lists it.",
-      "mcpWaits": "Nothing is changed yet: the change to the MCP server {{server}} waits for the person, who applies or dismisses it in the conversation. Tell them what it changes, as the card shows it, and where the program or URL came from."
+      "mcpWaits": "Nothing is changed yet: the change to the MCP server {{server}} waits for the person, who applies or dismisses it in the conversation. Tell them what it changes, as the card shows it, and where the program or URL came from.",
+      "teamMcpWaitsForPerson": "In a team project the Orchestrator changes the team's MCP servers only while Let the Orchestrator drive is on, or in a turn your message started: ask for it in this conversation, or change it in Agents › MCP servers. Nothing was changed."
     },
     "mcp": {
       "changed": "The MCP server {{server}}, a secret it names, its program's file or the profiles that choose it changed since this was proposed. Nothing was changed; ask the Orchestrator to propose it again."

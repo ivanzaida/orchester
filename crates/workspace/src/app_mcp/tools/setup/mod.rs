@@ -48,6 +48,8 @@ mod team_mcp_list;
 mod team_mcp_servers;
 mod team_mcp_window;
 mod team_pipeline;
+mod team_profile_save;
+mod team_profiles;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
