@@ -215,25 +215,30 @@ fn route(
       }
     }
     ("POST", ["commands"]) if request.json()["command"]["kind"] == "task.create" => {
-      let mut seen = seen.lock();
-      seen.task_creates += 1;
-      seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
-      let takes = seen.takes_creates;
-      drop(seen);
-      let operation = request.json()["operation_id"].clone();
-      if takes {
-        (201, created_task(&operation, task_read()))
-      } else {
-        (
-          403,
-          json!({"operation_id": operation, "code": "forbidden", "details": {}}),
-        )
-      }
+      task_create(seen, request, &task_read)
     }
     _ => return false,
   };
   respond(stream, status, &body);
   true
+}
+
+/// `task.create`: refused `403 forbidden`, as a member's is, unless the server takes creates; what it was sent is seen.
+fn task_create(seen: &Mutex<Seen>, request: &Request, task_read: &dyn Fn() -> Value) -> (u16, Value) {
+  let mut seen = seen.lock();
+  seen.task_creates += 1;
+  seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
+  let takes = seen.takes_creates;
+  drop(seen);
+  let operation = request.json()["operation_id"].clone();
+  if takes {
+    (201, created_task(&operation, task_read()))
+  } else {
+    (
+      403,
+      json!({"operation_id": operation, "code": "forbidden", "details": {}}),
+    )
+  }
 }
 
 /// The receipt of the `task.create` of `operation`, committed: `read`, the task as the server reads it, as the task
