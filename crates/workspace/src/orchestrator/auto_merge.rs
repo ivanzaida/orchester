@@ -23,7 +23,7 @@ use serde_json::Value;
 
 use super::{team_status::reading_of, tools::ChatScope};
 use crate::{
-  app_mcp::{Services, ToolError, blocking, find_run, setup::team_blocked_reason},
+  app_mcp::{Services, ToolError, blocking, find_run, setup::team_merge_left},
   messages::Message,
   tasks::{
     detail::run_store_error,
@@ -147,14 +147,13 @@ fn latest_succeeded(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
   Ok(!later)
 }
 
-/// Why the chat leaves run `run` of project `project` to the person as the team server reads its task now: the task
-/// is marked Blocked there. `None` for a team task the server does not hold back, and for a local run. This computer's
-/// records of a team task hold what its run started with ([`recorded`]), never that mark, so the rule above cannot
-/// read it: [`check`] asks the server before a merge nobody asked for. A server that cannot be read refuses, and
-/// nothing is merged unseen.
+/// Why the chat leaves run `run` of project `project` to the person as the team server reads its task now (OA-35):
+/// *Don't merge automatically*, its Blocked mark or its blocking tasks not Done there. `None` for a team task the
+/// server does not hold back, and for a local run. This computer's records of a team task hold what its run started
+/// with ([`recorded`]), never those, so the rule above cannot read them: [`check`] asks the server before a merge
+/// nobody asked for. A server that cannot be read refuses, and nothing is merged unseen.
 pub async fn left_on_server(services: &Services, (project, run): (&str, &str)) -> Result<Option<MergeLeft>, ToolError> {
-  let reason = team_blocked_reason(services, (project, run)).await?;
-  Ok(reason.map(|reason| MergeLeft::MarkedBlocked { reason }))
+  team_merge_left(services, (project, run)).await
 }
 
 /// Checks `merge_run` with `arguments` in `scope`'s turn, which nobody asked for, against the rule: a run the rule

@@ -164,6 +164,8 @@ fn changes_beyond_lifecycle(changes: &TaskChanges) -> bool {
     blocking,
     module,
     release,
+    story_points,
+    no_automatic_merge,
     status: _,
     workflow: _,
     blocked_reason: _,
@@ -179,6 +181,8 @@ fn changes_beyond_lifecycle(changes: &TaskChanges) -> bool {
     || blocking.is_some()
     || module.is_some()
     || release.is_some()
+    || story_points.is_some()
+    || no_automatic_merge.is_some()
 }
 
 /// A conflict's outcome by what the subject as it is now says of the edit.

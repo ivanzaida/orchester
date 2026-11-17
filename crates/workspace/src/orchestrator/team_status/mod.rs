@@ -64,6 +64,8 @@ pub struct TeamTask {
   pub blocked: Option<String>,
   /// The team pipeline the task names, as the server keeps it; `None` while it names none.
   pub pipeline: Option<String>,
+  /// The team tasks that block it (OA-35), by their server ids.
+  pub blocking: Vec<TaskId>,
 }
 
 /// The last reading of a project's watched team tasks.
@@ -132,6 +134,22 @@ impl TeamReading {
 
   pub(super) fn task(&self, id: TaskId) -> Option<&TeamTask> {
     self.tasks.get(&id)
+  }
+
+  /// The keys of the tasks blocking team task `id` that this reading saw not Done, as a local task's unfinished
+  /// blocking tasks are read (OA-35: a team task is Done once its work is merged). A blocking task the reading did
+  /// not see is not told here; `run_task` reads every one of them on the server before a start.
+  pub(super) fn unfinished_blockers(&self, id: TaskId) -> Vec<String> {
+    let Some(task) = self.tasks.get(&id) else {
+      return Vec::new();
+    };
+    task
+      .blocking
+      .iter()
+      .filter_map(|blocker| self.tasks.get(blocker))
+      .filter(|blocker| blocker.status != WorkflowStatus::Done)
+      .map(|blocker| blocker.key.to_string())
+      .collect()
   }
 
   pub(super) fn tasks(&self) -> impl Iterator<Item = &TeamTask> {

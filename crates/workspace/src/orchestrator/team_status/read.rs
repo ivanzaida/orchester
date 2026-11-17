@@ -199,5 +199,6 @@ fn team_task(link: &SharingLink, read: &TaskRead) -> Result<TeamTask, TeamReadEr
     module: read.task.content.module,
     blocked: read.task.content.blocked_reason.clone(),
     pipeline: read.task.content.pipeline.clone(),
+    blocking: read.task.content.blocking.iter().map(|link| link.task).collect(),
   })
 }

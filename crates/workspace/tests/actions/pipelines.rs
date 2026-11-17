@@ -43,6 +43,7 @@ fn create_with(pipeline: Option<ResourceId>, limits: TaskLimits) -> Action {
   Action::Task(TaskAction::Create {
     details,
     organization: TaskOrganization::default(),
+    module: None,
   })
 }
 

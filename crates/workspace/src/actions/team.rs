@@ -278,7 +278,8 @@ const fn readable(command: &TeamCommand) -> Option<Readable> {
     | TeamCommand::DeliveryAuthorize { .. }
     | TeamCommand::DeliveryRequest { .. }
     | TeamCommand::DeliveryReport { .. }
-    | TeamCommand::WorkReport(_) => None,
+    | TeamCommand::WorkReport(_)
+    | TeamCommand::WorkRaiseLimits { .. } => None,
   }
 }
 

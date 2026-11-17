@@ -285,6 +285,8 @@ fn authority_reads_task_read_shape() {
       blocked_reason: None,
       module: None,
       release: Some(release),
+      story_points: None,
+      no_automatic_merge: false,
     },
     status: TaskStatus::Queued,
     has_run: true,

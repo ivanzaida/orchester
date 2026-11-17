@@ -337,7 +337,11 @@ fn team_lifecycle_a_new_team_task_carries_no_status() {
     limits: TaskLimits::NONE,
   };
   let organization = TaskOrganization::default().with_status(WorkflowStatus::Done);
-  let outcome = team.dispatch(Action::Task(TaskAction::Create { details, organization }));
+  let outcome = team.dispatch(Action::Task(TaskAction::Create {
+    details,
+    organization,
+    module: None,
+  }));
   assert!(
     matches!(outcome, Err(ActionError::StatusOnCreate(WorkflowStatus::Done))),
     "{outcome:?}"

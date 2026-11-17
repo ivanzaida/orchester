@@ -3,7 +3,7 @@
 
 use orchester_api::v2::{AuthorityError, AuthorityErrorCode, DeliveryState, ModuleDeliveryRead};
 use orchester_core::{
-  id::{ModuleId, OperationId},
+  id::{ClaimId, ModuleId, OperationId},
   run::{BranchName, CommitId},
   time::Timestamp,
 };
@@ -120,6 +120,36 @@ pub fn newest_of(db: &ProjectDb, module: ModuleId) -> Result<Option<(Timestamp, 
     return Ok(Some((record.requested_at, came)));
   }
   Ok(None)
+}
+
+/// The module claims this computer holds for a delivery that still goes on (OA-31): of each module, the claim its
+/// newest delivery was requested under, while it is sent, waits for an Admin's authorization, or its merge or report is
+/// under way here. A delivered, failed or refused one holds nothing the heartbeat should keep. A record that cannot be
+/// read is passed over, as [`newest_of`] passes it over.
+pub(in crate::team_work) fn held_module_claims(db: &ProjectDb) -> Result<Vec<(ModuleId, ClaimId)>, StoreError> {
+  let mut seen = Vec::new();
+  let mut held = Vec::new();
+  for record in db.team_deliveries()?.iter().rev() {
+    let (Ok(kept), Ok(read)) = (serde_json::from_str::<KeptDelivery>(&record.request), state(record)) else {
+      tracing::warn!(operation = %record.operation, "a team delivery's record cannot be read for its module's claim");
+      continue;
+    };
+    if seen.contains(&kept.module) {
+      continue;
+    }
+    seen.push(kept.module);
+    let goes_on = matches!(
+      read.status,
+      DeliveryStatus::Requested
+        | DeliveryStatus::AwaitingAuthorization
+        | DeliveryStatus::Authorized { .. }
+        | DeliveryStatus::AuthorizedAutomatically
+    );
+    if goes_on {
+      held.push((kept.module, kept.claim));
+    }
+  }
+  Ok(held)
 }
 
 fn state(record: &TeamDelivery) -> Result<TeamDeliveryState, TeamWorkError> {

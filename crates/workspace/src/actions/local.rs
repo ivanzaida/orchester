@@ -4,7 +4,10 @@
 use orchester_core::{
   id::{IdempotencyKey, OperationId, TaskId},
   store::TaskStore,
-  task::organization::{ChangeActor, TaskOrganization},
+  task::{
+    TaskUpdate,
+    organization::{ChangeActor, TaskOrganization},
+  },
   time::Timestamp,
 };
 
@@ -32,7 +35,11 @@ pub(super) fn run(
 
 fn task(writer: &mut TaskWriter, operation: OperationId, action: &TaskAction) -> Result<LocalResult, ActionError> {
   let result = match action {
-    TaskAction::Create { details, organization } => {
+    TaskAction::Create {
+      details,
+      organization,
+      module,
+    } => {
       let batch = IdempotencyKey::from_uuid(operation.as_uuid());
       let base = TaskOrganization::default();
       let saved = writer.save_organized(
@@ -41,6 +48,14 @@ fn task(writer: &mut TaskWriter, operation: OperationId, action: &TaskAction) ->
         (&base, organization),
         Timestamp::now(),
       )?;
+      let saved = match saved {
+        // A new task is saved: no one else wrote it meanwhile. It is put in its module as a move of its own.
+        TaskUpdate::Saved(task) if module.is_some() => {
+          writer.set_task_module(task.id(), *module, ChangeActor::Person)?;
+          TaskUpdate::Saved(task.with_module(*module))
+        }
+        other => other,
+      };
       LocalResult::Task(Box::new(saved))
     }
     TaskAction::Edit { task, read, edited, .. } => {
@@ -50,6 +65,7 @@ fn task(writer: &mut TaskWriter, operation: OperationId, action: &TaskAction) ->
     TaskAction::Move { task, module, .. } => {
       LocalResult::Changed(writer.set_task_module(*task, *module, ChangeActor::Person)?)
     }
+    TaskAction::Points { .. } => return Err(ActionError::TeamOnly),
   };
   Ok(result)
 }
