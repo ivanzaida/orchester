@@ -258,7 +258,7 @@ pub async fn call(
     return mcp_servers::call((services, translate, runners), scope, name, arguments).await;
   }
   if watch_tool::is_tool(name) {
-    return watch_tool::call(runners, scope, name, arguments).await;
+    return watch_tool::call((services, runners), scope, name, arguments).await;
   }
   if name == APPLY_PROPOSAL {
     return approval::call((services, translate, runners), scope, arguments).await;

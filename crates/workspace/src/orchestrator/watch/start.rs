@@ -160,7 +160,7 @@ struct Applying<'a> {
 impl Applying<'_> {
   /// Claims `given` and keeps what it means; returns the target as the command names it.
   fn claim(&mut self, db: &mut ProjectDb, given: &NamedTarget) -> Result<NamedTarget, StoreError> {
-    let Some(found) = read::find(db, given.target)? else {
+    let Some(found) = read::find_given(db, given)? else {
       self.watched.gone.push(given.clone());
       return Ok(given.clone());
     };

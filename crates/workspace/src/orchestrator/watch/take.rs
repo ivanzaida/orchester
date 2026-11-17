@@ -27,7 +27,7 @@ pub struct TakenHere {
 /// on SQLite.
 pub fn take_over_in(root: &Path, chat: &Chat, target: &NamedTarget, order: &str) -> Result<TakenHere, WatchError> {
   let mut db = ProjectDb::open(root)?;
-  let found = read::find(&db, target.target)?.ok_or_else(|| WatchError::Gone(vec![target.clone()]))?;
+  let found = read::find_given(&db, target)?.ok_or_else(|| WatchError::Gone(vec![target.clone()]))?;
   let set = db.active_subscriptions()?;
   if set.of(target.target).is_some_and(|led| led.chat() == chat.id()) {
     return Err(WatchError::AlreadyHere);

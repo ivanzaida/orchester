@@ -5,9 +5,9 @@
 
 use orchester_store::ProjectDb;
 
-use super::{led_start::Named, tools::ChatScope};
+use super::{led_start::Named, team_task, tools::ChatScope};
 use crate::{
-  app_mcp::{ToolError, blocking},
+  app_mcp::{Missing, Services, ToolError, blocking},
   messages::Message,
   tasks::recorded,
 };
@@ -17,14 +17,19 @@ const BLOCKED: &str = "tasks.blocked.runUnavailable";
 
 /// Refuses (`task_blocked`) the chat's start of task `key` of `scope`'s project when it is marked Blocked, naming its
 /// reason. A call that names no task is left to the start's own refusal.
-pub(super) async fn marked(scope: &ChatScope, key: Option<&str>) -> Result<(), ToolError> {
+pub(super) async fn marked(services: &Services, scope: &ChatScope, key: Option<&str>) -> Result<(), ToolError> {
   let Some(named) = key.map(str::to_owned) else {
     return Ok(());
   };
-  let root = scope.root.clone();
+  let (root, asked) = (scope.root.clone(), named.clone());
   // A team task that never ran on this computer is in no table of it: the team server's last reading holds it and its
-  // Blocked mark ([`Named::find`]).
-  let task = blocking(move || Named::find(&ProjectDb::open(&root)?, &named)).await?;
+  // Blocked mark ([`Named::find`]), and one no conversation watches yet is in no reading either: the server is asked.
+  let task = match blocking(move || Named::find(&ProjectDb::open(&root)?, &asked)).await {
+    Err(ToolError::NotFound { .. }) => team_task::asked(services, scope, &named)
+      .await?
+      .ok_or_else(|| ToolError::not_found(Missing::Task, named))?,
+    found => found?,
+  };
   match task.blocked {
     Some(reason) => Err(ToolError::refused(
       "task_blocked",

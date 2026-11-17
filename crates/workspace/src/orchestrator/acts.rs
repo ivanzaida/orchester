@@ -287,7 +287,7 @@ async fn start(
   (arguments, reasoned): (&JsonObject, bool),
   drives: bool,
 ) -> Result<Acted, ToolError> {
-  blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
+  blocked::marked(services, scope, arguments.get("key").and_then(Value::as_str)).await?;
   if drives && scope.on_its_own {
     led_start::led_here(scope, arguments.get("key").and_then(Value::as_str), reasoned).await?;
   }
