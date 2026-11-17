@@ -57,7 +57,12 @@ pub(super) fn team_profile(cli: AgentProvider, servers: &[ResourceId], secrets: 
 }
 
 /// A team resource at v1 as the stream caches it: the server holds `server_body`, this computer `local`.
-fn team_resource<B: ResourceBody + Clone>(db: &mut ProjectDb, slug: &str, server_body: Value, local: &B) -> ResourceId {
+pub(super) fn team_resource<B: ResourceBody + Clone>(
+  db: &mut ProjectDb,
+  slug: &str,
+  server_body: Value,
+  local: &B,
+) -> ResourceId {
   let id = db
     .create_resource(
       Slug::new(slug).expect("slug"),

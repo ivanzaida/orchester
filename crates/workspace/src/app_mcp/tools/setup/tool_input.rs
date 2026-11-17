@@ -23,6 +23,8 @@ use serde_json::{Value, json};
 use super::{
   project::{Variable, environment},
   project_tools::{tool_json, tool_named, tools_with_revision},
+  team_profiles::team_of,
+  team_tools,
   tool_program::found_program,
   widening,
 };
@@ -73,6 +75,10 @@ pub struct SaveToolDraft {
 }
 
 pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result<Value, ToolError> {
+  // A team's tool has no draft on this computer: its next version is published on the team server at once.
+  if let Some(team) = team_of(services, &args.project).await? {
+    return team_tools::save(services, &team, args).await;
+  }
   let blocked = services.clone();
   let (open, id, saved) = blocking(move || {
     let open = blocked.project(&args.project)?;
@@ -100,7 +106,8 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
       }
       None => {
         let action = command(&args, None, &project, &open.repo_root)?;
-        let name = new_name(&tools, args.name.as_deref())?;
+        let taken = tools.tools.iter().map(|entry| &*entry.name);
+        let name = new_name(taken, args.name.as_deref())?;
         // A new tool is created as v1, with no draft: the tool's first version, which runs a program with the
         // person's rights, is a person's decision as publishing it is.
         widening::allowed(&blocked, vec![Message::new("appMcp.projectTools.widens.newTool")])?;
@@ -157,7 +164,7 @@ pub(super) use crate::tools::widening::widenings;
 
 /// The command `args` describe over `before` (the tool's command; none for a new tool), its program
 /// found as a step would start it with `project`'s variables, outside `repository`.
-fn command(
+pub(super) fn command(
   args: &SaveToolDraft,
   before: Option<&CommandAction>,
   project: &CommandEnvironment,
@@ -219,12 +226,12 @@ fn exit_codes_error(codes: &[i64]) -> ToolError {
   refused("invalid_tool", reason)
 }
 
-/// A new tool's name: given, valid, and no other tool's, ignoring case, so tools are named apart.
-fn new_name(tools: &ProjectTools, name: Option<&str>) -> Result<Name, ToolError> {
+/// A new tool's name: given, valid, and none of the names `taken`, ignoring case, so tools are named apart.
+pub(super) fn new_name<'a>(taken: impl IntoIterator<Item = &'a str>, name: Option<&str>) -> Result<Name, ToolError> {
   let name =
     Name::new(name.unwrap_or_default()).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
   let lowered = name.as_str().to_lowercase();
-  if tools.tools.iter().any(|entry| entry.name.to_lowercase() == lowered) {
+  if taken.into_iter().any(|taken| taken.to_lowercase() == lowered) {
     return Err(refused(
       "name_taken",
       Message::new("appMcp.projectTools.errors.nameTaken").with("name", name.as_str().to_owned()),
@@ -244,6 +251,6 @@ pub(super) fn not_a_command_tool(name: &str) -> ToolError {
   )
 }
 
-fn refused(code: &str, reason: Message) -> ToolError {
+pub(super) fn refused(code: &str, reason: Message) -> ToolError {
   ToolError::refused(code, vec![reason])
 }

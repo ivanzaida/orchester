@@ -608,6 +608,14 @@ Parameters: `project` (req.), `pipeline` (req.: id or name of one of your own pi
 Instructions are text Orchester adds to agents' prompts, scoped to the project, a role, a pipeline or a step, and
 delivered at start and/or resume. Versioned like profiles (draft → publish).
 
+**In a team project** the instructions are the team's resources, read from the team's configuration this session
+read: each is listed and opened with `team: true` and `revision` (its latest version's number), and has no draft.
+`save_instruction_draft` publishes the next version on the team server at once (without `instruction`, the team's
+new instruction as v1), checked as here and `person_only` as `publish_instruction` is; the agents and pipelines it
+names are the team's. `publish_instruction` answers it as it stands. The team server decides who may (`not_admin`), a
+version someone published first is refused `version_conflict`, and nothing is kept while the server cannot be
+reached (`team_unreachable`). Skills and command tools work the same way.
+
 ### `list_instructions` — read-only · cross-project
 
 Each: id, name, where it applies (`project`, `agent_role`, `pipeline`, `step`), which agents it reaches (`all`,
@@ -652,7 +660,9 @@ Parameters: `project` (req.), `instruction` (req.).
 ## 7. Skills
 
 Skills are packages (a `SKILL.md` body plus reference files) that Orchester gives agents as files they read when a
-task calls for them. Scoped like instructions; versioned (draft → publish).
+task calls for them. Scoped like instructions; versioned (draft → publish). In a team project they are the team's, as
+instructions are (above): `save_skill_draft` publishes the next version at once, made on `expected_revision` when it
+is given, and a team skill keeps its name (`name_not_editable`).
 
 ### `list_skills` — read-only · cross-project
 
@@ -699,7 +709,9 @@ Parameters: `project` (req.), `skill` (req.).
 
 Tools are what **tool steps** of a pipeline call. Kinds are `command`, `http` and `database`; the MCP server edits
 command tools. A command tool runs **in the worktree of the step that calls it, without a shell, with the person's
-rights, network access and no sandbox**, on files the agents before it wrote.
+rights, network access and no sandbox**, on files the agents before it wrote. In a team project they are the team's,
+as instructions are (above): `save_tool_draft` publishes a command tool's next version at once, made on
+`expected_revision` when it is given, under the same `person_only` rules as `publish_tool` here.
 
 ### `list_tools` — read-only · cross-project
 

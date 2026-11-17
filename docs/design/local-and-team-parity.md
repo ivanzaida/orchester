@@ -58,7 +58,7 @@ removes the difference.
 | The prompt of a turn an event started names the subscription it came through, its order and, when it leads to the end, the leading note (OA-18) | by the module the task is in | by the module the task's run started in: a task the server moved since is told by its old module's subscription until it runs again | the store, which builds the prompt, does not hold the server's reading | OA-28 (the rest) |
 | Dependencies between tasks (`blocked_by`), tags, story points, *Don't merge automatically* | kept | refused: the server does not keep them | not in the server's contract | OA-35 |
 | The ceilings of a subscription that leads to the end (OA-09) | held for every task it leads | found for a team task that ran here; none of the calls they bound work for a team run yet | follows from the rows below | OA-29 |
-| Making or changing a profile, instruction, skill or tool through the tools (`save_profile_draft`, `publish_profile`, …), so through the Orchestrator chat | carried out as a draft and a published version | refused `team_no_drafts`: the team keeps no drafts on a computer, and the hub's own forms publish to its server at once. Pipelines are made through the tools in both | a draft is this computer's, and the tools have no call that publishes a profile straight to the team server | not planned yet: found in QA on 2026-11-16 |
+
 | Returning a task to draft | `return_to_draft` | refused `team_no_queue` | a team task has no queue on this computer | stays: the server's lifecycle has no draft |
 | Forecasts and delivery figures (`get_delivery`) | answer | refused `team_project_unsupported` | not built | OA-36 |
 
@@ -75,6 +75,10 @@ removes the difference.
   into its base branch (OA-29). A merge card the person applies takes a team run the same way.
 - Waits and run ends of a team task's runs are kept and start turns, when a subscription leads the task.
 - `list_tasks`, `get_task`, `list_modules` and `get_module` read a team project from its server.
+- Profiles, instructions, skills and command tools are made and changed through the tools, so through the
+  Orchestrator chat, in both kinds: a team project's save publishes the team's next version on its server at once (or
+  its v1), as the hub's Save does, with the same `person_only` rules (`team_mcp`'s `team_profiles` and
+  `team_resources` tests).
 - A watch on a team task ends on the status the server reports (`docs/design/orchestrator-watch.md`, *Team tasks*).
 
 ### Agent testing

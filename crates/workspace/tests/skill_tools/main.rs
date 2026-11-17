@@ -4,7 +4,7 @@
 //! limits, expected_revision); a draft automation saved is marked until a person saves it or it is published;
 //! publishing reaches agents, so it waits for a person's switch and is refused for a blank description or body, a
 //! stale draft and a draft that changed. In a shared project a member has no drafts of the team's skills
-//! (`not_admin`).
+//! (`not_admin`), and the tools publish on the team server ([`publishing`]; `team_mcp`'s `team_resources`).
 
 use std::{fs, sync::Arc};
 

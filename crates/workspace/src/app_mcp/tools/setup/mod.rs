@@ -43,6 +43,7 @@ mod skills;
 mod stacks;
 mod storage;
 mod team_fill_ins;
+mod team_instructions;
 mod team_mcp_body;
 mod team_mcp_list;
 mod team_mcp_servers;
@@ -50,6 +51,9 @@ mod team_mcp_window;
 mod team_pipeline;
 mod team_profile_save;
 mod team_profiles;
+mod team_resources;
+mod team_skills;
+mod team_tools;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -291,9 +295,12 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "save_instruction_draft",
     description: "Without `instruction`, creates a new instruction under `name` as its version 1 in one call (no draft; \
-                  it returns the published instruction or a refusal, and in a team project only once the team server \
-                  accepts it; offline it waits in the outbox, waiting_for_server); with `instruction`, saves its \
-                  draft as its editor does, which publish_instruction publishes as its next version. \
+                  it returns the published instruction or a refusal); with `instruction`, saves its draft as its \
+                  editor does, which publish_instruction publishes as its next version. A team project's \
+                  instructions are the team's (team, revision: its latest version's number) and have no drafts: a save \
+                  publishes the next version on the team server at once, a new one is created there as v1, each \
+                  refused as publish_instruction is (person_only), and as team_unreachable, not_admin or \
+                  version_conflict; publish_instruction then answers it as it stands. \
                   `applies_in` is project, agent_role (with `role`), pipeline (with `pipeline`) or step (with \
                   `pipeline` and `step`): the part of the prompt it sits in; `agents` all, or some roles or \
                   profiles (all with agent_role); `events` start, resume or both. In a local project no instruction \
@@ -404,11 +411,6 @@ pub async fn call(
   arguments: JsonObject,
 ) -> Option<Result<Value, ToolError>> {
   let named = |specs: &[Spec]| specs.iter().any(|spec| spec.name == name);
-  if created::DRAFT_TOOLS.contains(&name)
-    && let Err(refused) = created::refuse_team_drafts(services, &arguments).await
-  {
-    return Some(Err(refused));
-  }
   if named(project_tools::SPECS) {
     return Some(project_tools::call(services, translate, name, Value::Object(arguments)).await);
   }

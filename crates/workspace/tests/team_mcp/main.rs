@@ -43,6 +43,7 @@ mod runs;
 mod share;
 mod team_controls;
 mod team_profiles;
+mod team_resources;
 mod team_runs;
 mod tools;
 mod unrecorded;

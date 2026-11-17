@@ -2,7 +2,8 @@
 //! otherwise the latest version), with where each applies, the profiles that give it to their agents (`used_by`: in a
 //! local project nothing else does; where it applies decides it only for a team project's runs), its versions, and
 //! the tasks whose unfinished runs still hold one of them; `save_skill_draft` and `publish_skill` write them as the
-//! Skills editor does ([`super::skill_input`]).
+//! Skills editor does ([`super::skill_input`]). A team project's skills are the team's, published on the team server
+//! at once ([`super::team_skills`]).
 
 use std::path::Path;
 
@@ -26,6 +27,9 @@ use super::{
   instructions::scope_json,
   profiles::state_json,
   skill_input,
+  team_profiles::team_of,
+  team_resources::with_own,
+  team_skills,
 };
 use crate::{
   app_mcp::{
@@ -69,9 +73,12 @@ pub(super) const SPECS: &[Spec] = &[
   Spec {
     name: "save_skill_draft",
     description: "Without `skill`, creates a new skill under `name` as its version 1 in one call (no draft; it returns \
-                  the published skill or a refusal, and in a team project only once the team server accepts it; \
-                  offline it waits in the outbox, waiting_for_server), its slug made from the name and unique in the \
-                  project. With `skill` (id, name or slug) its draft, a change to a skill that has a version, is \
+                  the published skill or a refusal), its slug made from the name and unique in the project. A team \
+                  project's skills are the team's (team, revision: its latest version's number) and have no drafts: \
+                  a save publishes the next version on the team server at once (made on that revision when \
+                  expected_revision is given; a team skill keeps its name), a new one is created there as v1, each \
+                  refused as publish_skill is (person_only), and as team_unreachable, not_admin or version_conflict; \
+                  publish_skill then answers it as it stands. With `skill` (id, name or slug) its draft, a change to a skill that has a version, is \
                   replaced: a field left out keeps its value, and `name` renames it (its slug stays). A new skill \
                   starts with the project as where it applies and no reference files, and needs a description and a \
                   body (blank_description, blank_body) and, unless a person turned on Let automation change agent \
@@ -136,21 +143,28 @@ pub(super) async fn call(
 async fn list_skills(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |_, db| {
-      Ok((ProjectSkills::load(db)?, Givers::read(db)?))
+    across(&services, args.project.as_deref(), |open, db| {
+      let team = team_skills::listed(&services, (open, db))?;
+      Ok((ProjectSkills::load(db)?, Givers::read(db)?, team))
     })
   })
   .await?;
-  Ok(read.json("skills", translate, |open, (skills, givers)| {
-    skills
+  Ok(read.json("skills", translate, |open, (skills, givers, team)| {
+    // A team project's skills are the team's; this computer's own rows are listed after them.
+    let own = skills
       .entries
       .iter()
-      .map(|entry| summary_json((skills, givers), entry, open.project.id()))
-      .collect()
+      .map(|entry| (entry.id, summary_json((skills, givers), entry, open.project.id())));
+    with_own(team, own)
   }))
 }
 
 async fn get_skill(services: &Services, args: InSkill) -> Result<Value, ToolError> {
+  if let Some(team) = team_of(services, &args.project).await?
+    && let Some(id) = team_skills::of(&team, &args.skill)
+  {
+    return team_skills::shown_now(services, &team.open, id).await;
+  }
   let services = services.clone();
   blocking(move || {
     let (open, _) = services.read_project(&args.project)?;
@@ -175,32 +189,43 @@ pub(super) fn skill_json(root: &Path, id: ResourceId, project: ProjectId) -> Res
     .iter()
     .map(|version| json!({ "version": version.number().get(), "published_at": wire::time(version.published_at()) }))
     .collect();
-  let in_use: Vec<Value> = active(&db)
-    .map_err(|error| ToolError::refused("project_data", vec![error.message()]))?
-    .iter()
-    .filter(|used| used.skill == id)
-    .map(|used| {
-      json!({
-        "task": &*used.task,
-        "version": used.version.get(),
-        "step": used.step.as_deref(),
-        "link": wire::task_link(project, &used.task, TaskPage::Summary),
-      })
-    })
-    .collect();
-  let files: Vec<Value> = entry
-    .body
+  let mut skill = summary_json((&skills, &Givers::read(&db)?), entry, project);
+  opened(&mut skill, &entry.body, (versions, in_use(&db, id, project)?));
+  skill["revision"] = json!(revision);
+  Ok(skill)
+}
+
+/// `skill`, a skill as `list_skills` lists it, with what `get_skill` adds: `body`'s text and reference files, its
+/// published `versions` and the tasks whose unfinished runs still use one (`in_use`).
+pub(super) fn opened(skill: &mut Value, body: &Skill, (versions, in_use): (Vec<Value>, Vec<Value>)) {
+  let files: Vec<Value> = body
     .files()
     .iter()
     .map(|file| json!({ "path": file.path.as_str(), "size": file.size }))
     .collect();
-  let mut skill = summary_json((&skills, &Givers::read(&db)?), entry, project);
-  skill["body"] = json!(entry.body.body());
+  skill["body"] = json!(body.body());
   skill["files"] = json!(files);
   skill["versions"] = json!(versions);
   skill["in_use_by"] = json!(in_use);
-  skill["revision"] = json!(revision);
-  Ok(skill)
+}
+
+/// The tasks of `project`, whose database is `db`, whose unfinished runs still hold a version of skill `id`.
+pub(super) fn in_use(db: &ProjectDb, id: ResourceId, project: ProjectId) -> Result<Vec<Value>, ToolError> {
+  Ok(
+    active(db)
+      .map_err(|error| ToolError::refused("project_data", vec![error.message()]))?
+      .iter()
+      .filter(|used| used.skill == id)
+      .map(|used| {
+        json!({
+          "task": &*used.task,
+          "version": used.version.get(),
+          "step": used.step.as_deref(),
+          "link": wire::task_link(project, &used.task, TaskPage::Summary),
+        })
+      })
+      .collect(),
+  )
 }
 
 /// The project's skill named by its id or else, ignoring case, by its name or slug.
@@ -218,7 +243,11 @@ pub(super) fn skill_named<'a>(skills: &'a ProjectSkills, named: &str) -> Result<
 }
 
 /// A skill of `project` as `list_skills` lists it, with the profiles that give it to their agents and its link.
-fn summary_json((skills, givers): (&ProjectSkills, &Givers), entry: &SkillEntry, project: ProjectId) -> Value {
+pub(super) fn summary_json(
+  (skills, givers): (&ProjectSkills, &Givers),
+  entry: &SkillEntry,
+  project: ProjectId,
+) -> Value {
   json!({
     "id": entry.id.to_string(),
     "name": &*entry.name,

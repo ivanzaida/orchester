@@ -201,31 +201,38 @@ pub(crate) fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreErro
   let profiles = profiles(db)?;
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
-    let latest = db.latest_version::<Pipeline>(id)?;
-    let body = latest.as_ref().map(|version| version.body().clone());
-    if let Some(body) = body {
-      pipelines.push(PipelineChoice {
-        id,
-        name: resource.name().as_str().into(),
-        version: latest.map(|version| version.number()),
-        steps: body
-          .steps()
-          .iter()
-          .enumerate()
-          .map(|(index, step)| StepChoice {
-            key: step.key.clone(),
-            name: step.name.as_str().into(),
-            ordinal: index + 1,
-            role: match &step.kind {
-              StepKind::Agent { profile: Some(id), .. } => {
-                profiles.iter().find(|p| p.id == *id).map(|p| p.role.clone())
-              }
-              _ => None,
-            },
-          })
-          .collect(),
-      });
+    if let Some(latest) = db.latest_version::<Pipeline>(id)? {
+      let named = (id, resource.name().as_str().into(), Some(latest.number()));
+      pipelines.push(pipeline_choice(named, latest.body(), &profiles));
     }
   }
   Ok(pipelines)
+}
+
+/// Pipeline `id` named `name`, at `version`, with the steps of `body`, each agent step with the role of the profile of
+/// `profiles` it runs.
+pub(crate) fn pipeline_choice(
+  (id, name, version): (ResourceId, Arc<str>, Option<VersionNumber>),
+  body: &Pipeline,
+  profiles: &[ProfileChoice],
+) -> PipelineChoice {
+  PipelineChoice {
+    id,
+    name,
+    version,
+    steps: body
+      .steps()
+      .iter()
+      .enumerate()
+      .map(|(index, step)| StepChoice {
+        key: step.key.clone(),
+        name: step.name.as_str().into(),
+        ordinal: index + 1,
+        role: match &step.kind {
+          StepKind::Agent { profile: Some(id), .. } => profiles.iter().find(|p| p.id == *id).map(|p| p.role.clone()),
+          _ => None,
+        },
+      })
+      .collect(),
+  }
 }
