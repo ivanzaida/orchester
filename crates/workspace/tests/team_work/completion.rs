@@ -1,5 +1,6 @@
 //! A team run's success and merge are its own records: they never change its task here, and never make it Done on this
-//! computer (D4: the team server marks it Done by itself when it accepts the delivery, and keeps its status).
+//! computer. The team server keeps its status: the merge asks the holder's desktop to set it Done there
+//! ([`crate::done`], OA-30), not the old sharing stream's automatic statuses.
 
 use orchester_core::{
   integration::{MergeKind, RunMerge},

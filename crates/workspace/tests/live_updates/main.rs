@@ -258,6 +258,16 @@ fn link(db: &mut ProjectDb, server: &TeamServer, role: MemberRole) {
   db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
 }
 
+/// Runners with no runner program: nothing here runs, so nothing is stopped.
+fn no_runners() -> Runners {
+  Runners::new(
+    "no-runner".into(),
+    tokio::runtime::Handle::current(),
+    Activity::new(),
+    SessionEnd::Clean,
+  )
+}
+
 /// Waits until `seen` holds, at most `within`; `what` names it when it does not.
 async fn seen_within(within: Duration, what: &str, mut seen: impl FnMut() -> bool) {
   let start = Instant::now();
@@ -502,6 +512,7 @@ async fn live_updates_a_workflow_status_the_server_could_not_take_goes_with_the_
   let (_runs, changes) = tokio::sync::watch::channel(0);
   let work = tokio::spawn(orchester_workspace::sharing::project::work::run(
     desktop.servers.clone(),
+    no_runners(),
     changes,
     Programs::processes(),
   ));

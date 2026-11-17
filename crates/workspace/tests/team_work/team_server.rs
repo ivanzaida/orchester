@@ -125,6 +125,11 @@ pub struct State {
   /// The `delivery.request` and `delivery.report` commands carried out, not their repeats.
   pub delivery_requests: usize,
   pub delivery_reports: usize,
+  /// The task's workflow status as its wire names it (`todo`, `done`, …), and its revision.
+  pub workflow: String,
+  pub task_revision: u64,
+  /// The task patches the server took.
+  pub task_patches: usize,
 }
 
 /// Routes a test binary adds to the server's own: asked first, without the state's lock, for every request of a known
@@ -172,6 +177,9 @@ impl TeamServer {
       reports_sent: 0,
       delivery_requests: 0,
       delivery_reports: 0,
+      workflow: "todo".to_owned(),
+      task_revision: 1,
+      task_patches: 0,
     }));
     let serving = state.clone();
     thread::spawn(move || {
@@ -237,6 +245,11 @@ fn answer(shared: &Mutex<State>, extra: Option<&Extra>, mut stream: TcpStream) {
     return;
   }
   let mut state = shared.lock();
+  if request.method == "PATCH" && request.path == format!("/api/v1/projects/{}/tasks/{}", state.project, state.task) {
+    let (status, body) = task_patch(&mut state, &request);
+    drop(state);
+    return respond(&mut stream, status, &body);
+  }
   let prefix = format!("/api/v2/projects/{}", state.project);
   let Some(route) = request.path.strip_prefix(&prefix).map(str::to_owned) else {
     return respond(&mut stream, 404, &refusal(None, "not_found"));
@@ -256,6 +269,7 @@ fn answer(shared: &Mutex<State>, extra: Option<&Extra>, mut stream: TcpStream) {
       }
     }
     ("POST", ["heartbeat"]) => heartbeat(&mut state, &request),
+    ("GET", ["tasks", task]) if *task == state.task.to_string() => (200, task_read(&state)),
     _ => (404, refusal(None, "not_found")),
   };
   if status < 300 && request.method != "GET" && std::mem::take(&mut state.lose_next) {
@@ -360,6 +374,54 @@ fn heartbeat(state: &mut State, request: &Request) -> (u16, Value) {
     renewed.push(claim_read(state, claim));
   }
   (200, json!({"renewed": renewed, "lost": lost}))
+}
+
+/// The task as the server's `SharedTask` is.
+fn shared_task(state: &State) -> Value {
+  let attribution = json!({"by": person(), "at": 1});
+  let module = (!state.in_no_module).then_some(state.module);
+  json!({
+    "id": state.task, "number": 7, "key": "KON-7", "former_key": null, "revision": state.task_revision,
+    "title": "Append one line", "brief": "", "criteria": [], "pipeline": null, "limits": null,
+    "workflow": state.workflow, "priority": "none", "tags": [], "blocking": [], "blocked_reason": null,
+    "module": module, "release": null, "status": "draft", "has_run": true, "created": attribution,
+    "updated": attribution, "claim": null, "run": null
+  })
+}
+
+/// `GET …/tasks/{task}`: the task as `TaskRead` is.
+fn task_read(state: &State) -> Value {
+  let mut read = shared_task(state);
+  read["assignee"] = Value::Null;
+  read["work"] = Value::Null;
+  read["effective_claim"] = state
+    .claim
+    .as_ref()
+    .map_or(Value::Null, |claim| claim_read(state, claim.id));
+  read["capabilities"] = json!({"project_id": state.project, "revision": 1, "role": "member",
+    "actions": [{"action": "read", "subject": null, "allowed": true, "reason": null}], "unresolved": []});
+  read
+}
+
+/// `PATCH /api/v1/projects/{p}/tasks/{task}` of the workflow status alone, on the task's revision (D4): the holder of
+/// the task's claim may set it Done, which releases the claim; anyone else is `409 not_holder`.
+fn task_patch(state: &mut State, request: &Request) -> (u16, Value) {
+  let patch = request.json();
+  if patch["revision"].as_u64() != Some(state.task_revision) {
+    return (409, json!({"error": "revision_conflict", "message": "refused"}));
+  }
+  let holder = state.claim.as_ref().is_some_and(|claim| claim.token == request.token);
+  if !holder {
+    return (409, json!({"error": "not_holder", "message": "refused"}));
+  }
+  let workflow = patch["changes"]["workflow"].as_str().expect("a workflow status");
+  workflow.clone_into(&mut state.workflow);
+  state.task_revision += 1;
+  state.task_patches += 1;
+  if workflow == "done" {
+    state.claim = None;
+  }
+  (200, json!({"task": shared_task(state)}))
 }
 
 /// The bundle of work started under `claim` from `base_commit`, kept by its hash.

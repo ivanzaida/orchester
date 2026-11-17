@@ -132,6 +132,7 @@ mod task_identities;
 mod task_snapshots;
 mod tasks;
 mod team_deliveries;
+mod team_done;
 mod team_fill_ins;
 mod team_leaving;
 mod team_operations;
@@ -204,6 +205,7 @@ pub use self::{
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
   team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
+  team_done::{MergedDone, MergedDoneState},
   team_fill_ins::ConnectionPick,
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
   team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},

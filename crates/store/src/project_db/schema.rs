@@ -122,6 +122,7 @@ mod task_pipeline_pin;
 mod team_cache;
 mod team_delivery;
 mod team_delivery_waits;
+mod team_done;
 mod team_fill_ins;
 mod team_mcp_server;
 mod team_operations;

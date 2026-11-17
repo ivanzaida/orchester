@@ -18,6 +18,11 @@ fn team_mcp_get_run_reads_a_run_without_the_task_row() {
   assert_eq!(by_id["task"], "KON-7");
   assert_eq!(by_id["id"], id.as_str());
   assert_eq!(by_id["status"]["state"], "running");
+  assert_eq!(
+    by_id["team"],
+    json!({"fence": null, "done": null}),
+    "reporting, and not merged here"
+  );
   let number = by_id["number"].as_u64().expect("number");
 
   // The number names a run of a task this computer keeps no row of.

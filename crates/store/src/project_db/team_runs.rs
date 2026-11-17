@@ -34,7 +34,8 @@ pub enum TeamFence {
 }
 
 impl TeamFence {
-  const fn text(self) -> &'static str {
+  /// The fence by the server's code that set it.
+  pub const fn text(self) -> &'static str {
     match self {
       Self::ClaimLost => "claim_lost",
       Self::MembershipRevoked => "membership_revoked",

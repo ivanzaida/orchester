@@ -102,6 +102,7 @@ async fn live_updates_claim_ends_a_burst_of_run_changes_makes_no_more_rounds_tha
   let (runs, changes) = watch::channel(0);
   let work = tokio::spawn(orchester_workspace::sharing::project::work::run(
     desktop.servers.clone(),
+    crate::no_runners(),
     changes,
     Programs::processes(),
   ));
