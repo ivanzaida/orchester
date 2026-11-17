@@ -92,7 +92,7 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
     Missing::McpOff { server } => part_of(
       "mcp_off",
       json!({ "server": server_json(*server, all) }),
-      fix(Some("set_mcp_server_enabled"), Some("person")),
+      fix(Some("set_mcp_server_enabled"), Some("ap")),
     ),
     Missing::DecisionConnection { reviewer, problem } => match problem {
       ConnectionProblem::NoneOfKind => part_of(
@@ -119,7 +119,7 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       part_of(
         "mcp_program",
         json!({ "server": server_json(*server, all), "problem": problem }),
-        fix(None, Some("person")),
+        fix(Some("update_mcp_server"), Some("ap")),
       )
     }
     Missing::Secret { name } => part_of("secret", json!({ "name": name.as_str() }), fix(None, Some("person"))),

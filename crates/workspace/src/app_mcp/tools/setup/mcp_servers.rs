@@ -7,7 +7,8 @@
 //! text before anything reads the disk; removing, turning off and dropping exempt tools are always taken. A program
 //! is stored as the fixed file it is, outside the repository, as a command tool's (`tools::program`). A secret is
 //! named, never its value, and only the project's active secrets can be named. In a team project an MCP server may be
-//! the team's (`team_fill_ins`): turning it on and giving it a program are a person's alone, always.
+//! the team's (`team_fill_ins`): turning it on and giving it a program here are a person's, or automation's while a
+//! person lets it change agent permissions, as for a project's own server.
 
 use orchester_core::{
   connection::mcp::{McpServer, McpServerName},

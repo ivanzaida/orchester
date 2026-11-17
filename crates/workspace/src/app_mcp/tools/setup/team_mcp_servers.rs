@@ -7,9 +7,9 @@
 //! every computer, so a person confirms it in the window ([`NotArchived::PersonOnly`]). A new server, and a version
 //! that widens what agents may do ([`team_mcp_body::widenings`]), are a person's decision unless a person lets
 //! automation change agent permissions. A `program` here is the body's program name (`npx`), team data like the rest,
-//! so it widens like any other change; the program's path on this computer is a person's alone (`team_fill_ins`, in
-//! the window) and no tool sets it. Local projects keep `mcp_servers`' own path: their MCP servers are plain rows of
-//! the project, with no versions.
+//! so it widens like any other change; an absolute `program` is the program's path on this computer, kept here by
+//! `team_fill_ins` under the same rule, and publishes nothing. Local projects keep `mcp_servers`' own path: their MCP
+//! servers are plain rows of the project, with no versions.
 
 use orchester_core::{
   id::ResourceId,
@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 use super::{
   created::{create_team, refused},
   mcp_server_input::{AddMcpServer, UpdateMcpServer},
-  team_fill_ins::team_named,
+  team_fill_ins::{self, team_named},
   team_mcp_body as body, team_mcp_names, widening,
 };
 use crate::{
@@ -87,15 +87,26 @@ pub(super) async fn add(services: &Services, args: AddMcpServer) -> Result<Value
   Ok(json!({ "server": server_json(id, &server, 1) }))
 }
 
-pub(super) async fn update(services: &Services, found: Found, args: UpdateMcpServer) -> Result<Value, ToolError> {
+pub(super) async fn update(services: &Services, found: Found, mut args: UpdateMcpServer) -> Result<Value, ToolError> {
   let Found { team, resource } = found;
+  // The team holds a program's name only, so an absolute path can only be this computer's: it is kept here, for every
+  // project of the team server, and publishes nothing.
+  if let Some(path) = args
+    .fields
+    .program
+    .take_if(|program| std::path::Path::new(program).is_absolute())
+  {
+    let (services, root, server) = (services.clone(), team.open.repo_root.clone(), resource.clone());
+    blocking(move || team_fill_ins::set_program(&services, &root, &server, std::path::Path::new(&path))).await?;
+  }
   let (blocked, root) = (services.clone(), team.open.repo_root.clone());
   let latest = latest_of(&resource)?;
   let before = latest.clone();
   let next = blocking(move || {
-    require_admin(&ProjectDb::open(&root)?)?;
     let next = body::changed_server(&before, args.fields)?;
+    // Only a change of the team's version is an Admin's; a program path alone was kept here above.
     if next != before {
+      require_admin(&ProjectDb::open(&root)?)?;
       widening::allowed(&blocked, body::widenings(&before, &next))?;
     }
     Ok(next)

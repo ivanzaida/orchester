@@ -14,9 +14,10 @@ use super::{FillInError, team};
 use crate::{tasks::outside::Outside, team_config::TeamResource, workspace::Workspace};
 
 impl Workspace {
-  /// Sets `program`, the person's choice from *Choose…*, as the program of the team MCP server `server` of the
-  /// project at `repo_root` on this computer. Nothing is guessed or found by name: the path must be absolute and a
-  /// file, and the server must run a local program. It lets agents run that file, so it is a person's alone (`by`).
+  /// Sets `program`, the person's choice from *Choose…* or a tool's, as the program of the team MCP server `server`
+  /// of the project at `repo_root` on this computer. Nothing is guessed or found by name: the path must be absolute and
+  /// a file, and the server must run a local program. It lets agents run that file, so it is a person's (`by`), or
+  /// automation's while a person lets it change agent permissions.
   pub fn set_team_mcp_program(
     &self,
     repo_root: &Path,
@@ -24,7 +25,7 @@ impl Workspace {
     program: &Path,
     by: Answerer,
   ) -> Result<(), FillInError> {
-    team::require_person(by)?;
+    team::require_widening(self, by)?;
     let db = ProjectDb::open(repo_root)?;
     let team_server = team::server_of(&db)?;
     let config = team::config(self, repo_root)?;

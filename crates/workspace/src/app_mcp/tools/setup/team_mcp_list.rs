@@ -35,7 +35,8 @@ pub(super) const SPECS: &[Spec] = &[Spec {
                 and readiness here: ready_here, group (ready, needs_you_here when nobody decided on it here or \
                 something is missing, off_here when it was switched off here) and the missing parts in the order to \
                 fix them, each with the tool that fixes it and who may use it (kind mcp_off: set_mcp_server_enabled, \
-                on is a person's alone; mcp_program: the program's path on this computer, a person's in the app; \
+                on needs Let automation change agent permissions (gate ap); mcp_program: the program's path on this \
+                computer, set by update_mcp_server with an absolute program (gate ap); \
                 secret: a team secret's value, a person's in the app; undecided: what cannot be known yet). A \
                 program's path and a secret's value are never listed. Without `project`, every project's, each \
                 naming its project (unreadable_projects lists the projects that could not be read, with why).",

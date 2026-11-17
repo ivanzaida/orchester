@@ -121,7 +121,10 @@ what is local by nature: connections, program paths, secret values.
 10. The program path of an MCP server is shared by the whole computer; secret values are per project.
 11. Archiving a resource that something uses is not refused: a confirmation modal lists what uses it (*Used by*) and
     which runs will stop.
-12. Only a person in the window turns a team MCP server on here; the MCP tool answers `person_only`.
+12. Turning a team MCP server on here and its program's path on this computer widen what agents may do: a person
+    decides them in the window, or automation through the MCP tools while a person lets it change agent permissions
+    (Settings › Automation), as for a project's own server (changed by the person on 2026-11-17: the Orchestrator
+    does in a team project what it does in a local one; before, the tools answered `person_only` always).
 
 ## What it replaces
 

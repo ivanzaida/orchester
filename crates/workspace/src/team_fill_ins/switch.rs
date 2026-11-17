@@ -10,8 +10,8 @@ use crate::{tasks::outside::Outside, workspace::Workspace};
 
 impl Workspace {
   /// Turns the team MCP server `server` of the project at `repo_root` on or off here. Turning it on lets agents of
-  /// the team's profiles use it, so it is a person's alone (`by`); turning it off is always taken, also for a server
-  /// that is no longer the team's.
+  /// the team's profiles use it, so it is a person's (`by`), or automation's while a person lets it change agent
+  /// permissions; turning it off is always taken, also for a server that is no longer the team's.
   pub fn switch_team_mcp_on_here(
     &self,
     repo_root: &Path,
@@ -21,7 +21,7 @@ impl Workspace {
   ) -> Result<(), FillInError> {
     let mut db = ProjectDb::open(repo_root)?;
     if on {
-      team::require_person(by)?;
+      team::require_widening(self, by)?;
       team::server_of(&db)?;
       team::require_resource(&*team::config(self, repo_root)?, server, ResourceKind::McpServer)?;
       db.set_team_mcp_on_here(server, true)?;

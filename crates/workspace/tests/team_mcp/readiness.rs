@@ -255,7 +255,7 @@ fn team_mcp_readiness_a_server_nobody_decided_on_is_missing_on_and_the_profile_t
   assert_eq!(kinds(&readiness), ["mcp_off", "mcp_program", "secret"]);
   let off = &readiness["missing"][0];
   assert_eq!(off["server"], json!({"id": knowledge.to_string(), "name": "knowledge"}));
-  assert_eq!(off["fix"], json!({"tool": "set_mcp_server_enabled", "gate": "person"}));
+  assert_eq!(off["fix"], json!({"tool": "set_mcp_server_enabled", "gate": "ap"}));
 
   let server = listed_server(&checkout);
   assert_eq!(server["id"], knowledge.to_string());
@@ -267,7 +267,8 @@ fn team_mcp_readiness_a_server_nobody_decided_on_is_missing_on_and_the_profile_t
 }
 
 #[test]
-fn team_mcp_readiness_a_server_switched_off_is_off_here_and_turning_it_on_stays_a_persons() {
+fn team_mcp_readiness_a_server_switched_off_is_off_here_and_turning_it_on_is_a_persons_while_automation_may_not_widen()
+{
   let (_server, checkout, profile, knowledge) = team_with_server();
   let off = kontur(json!({"server": knowledge.to_string(), "enabled": false}));
   checkout.call("set_mcp_server_enabled", &off).expect("switched off");
@@ -295,7 +296,7 @@ fn team_mcp_readiness_a_program_that_is_not_set_or_whose_file_is_gone_is_told_ap
     (program["kind"].as_str(), program["problem"].as_str()),
     (Some("mcp_program"), Some("not_set"))
   );
-  assert_eq!(program["fix"], json!({"tool": null, "gate": "person"}));
+  assert_eq!(program["fix"], json!({"tool": "update_mcp_server", "gate": "ap"}));
 
   let file = program_file(&checkout);
   set_program(&checkout, knowledge, &file);
@@ -569,4 +570,32 @@ fn team_mcp_readiness_a_local_profile_whose_connection_is_gone_is_fixed_in_its_d
     readiness["missing"][0]["fix"],
     json!({"tool": "save_profile_draft", "gate": null})
   );
+}
+
+#[test]
+fn team_mcp_readiness_automation_turns_a_team_server_on_and_sets_its_program_while_a_person_lets_it_widen() {
+  let server = TeamServer::start(crate::fixture::Config::new("Say hello."));
+  let mut ids = None;
+  let widens = crate::Standing {
+    role: "member",
+    widens: true,
+  };
+  let checkout = Checkout::standing(Some(&server), (&[], widens), |db| {
+    let knowledge = server_resource(db, program_server());
+    let profile = profile_resource(db, &team_profile(AgentProvider::CodexCli, &[knowledge], &["API_TOKEN"]));
+    ids = Some((profile, knowledge));
+  });
+  let (_profile, knowledge) = ids.expect("prepared");
+
+  let on = kontur(json!({"server": knowledge.to_string(), "enabled": true}));
+  let turned = checkout.call("set_mcp_server_enabled", &on).expect("turned on");
+  assert_eq!(turned["server"]["enabled"], true, "{turned}");
+  assert!(!kinds(&listed_server(&checkout)["readiness"]).contains(&"mcp_off".to_owned()));
+
+  // An absolute program is this computer's path, kept here; the team's version is not published again.
+  let file = program_file(&checkout);
+  let program = kontur(json!({"server": knowledge.to_string(), "program": file.to_string_lossy()}));
+  let kept = checkout.call("update_mcp_server", &program).expect("kept here");
+  assert_eq!(kept["unchanged"], true, "{kept}");
+  assert!(!kinds(&listed_server(&checkout)["readiness"]).contains(&"mcp_program".to_owned()));
 }
