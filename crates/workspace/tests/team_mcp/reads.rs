@@ -257,7 +257,8 @@ fn task_create(seen: &Mutex<Seen>, request: &Request, task_read: &dyn Fn() -> Va
     "id": TaskId::generate(), "number": number, "key": format!("KON-{number}"), "former_key": null, "revision": 1,
     "title": content["title"], "brief": content["brief"], "criteria": content["criteria"],
     "pipeline": content["pipeline"], "limits": null, "workflow": "backlog", "priority": "medium", "tags": [],
-    "blocking": [], "blocked_reason": null, "module": null, "release": null, "status": "queued", "has_run": false,
+    "blocking": [], "blocked_reason": null, "module": content["module"], "release": null, "status": "queued",
+    "has_run": false,
     "created": attribution, "updated": attribution, "claim": null, "run": null
   });
   seen.made.push(task.clone());
