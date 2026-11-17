@@ -383,6 +383,33 @@ independent design verifier (no frame exists; closest patterns) reports no block
 server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
 inspector line and the activity mark.
 
+### M12 · MCP servers of a conversation (decided 2026-11-17, design first)
+
+The Orchestrator chat can be given the project's MCP servers, each conversation its own set with the project's
+defaults, so the person can, for one, talk a design through with it and have it draw in Pencil
+(`docs/design/orchestrator-toolset.md`, decision 15, is the contract; local and team projects alike). In order, each
+after the one before it is merged:
+
+1. **Design (Pencil).** The composer's control for the conversation's servers and how their calls are answered; the
+   card of a call that asks (*Allow once*, *Allow this tool in this conversation*, *Decline*); the action line of a
+   call; the card *Use … in this conversation?*; Project settings › Orchestrator: the defaults; what each says for a
+   server that is left out (turned off, removed, another start folder on Claude Code) and in Plan only.
+2. **Store and core (non-UI).** A conversation's servers, how their calls are answered and the tools allowed in it;
+   the project's defaults; a new conversation takes the defaults, a fork and a duplicate their source's; migration.
+3. **The turn gets the servers (non-UI).** `orchester_core::connection::invocation` (`chat.rs`, `codex_chat.rs`,
+   `mcp.rs`) and the runner's chat turn (`crates/runner/src/execution/coordinator/chat/`): the conversation's servers
+   beside `orchester` in a turn a person's message started, none in a turn nobody asked for; the confinement tests of
+   decision 10 extended; the prompt (`orchester_core::orchestrator::instructions`).
+4. **Calls are answered and kept (non-UI).** A call that asks waits for the person and is answered as the
+   conversation says (exempt tools, tools allowed in it, *Allow all*, Plan only); each call is an action of the
+   conversation; only a person answers (`person_only`).
+5. **The chat's tool.** It proposes giving the conversation a server (a card a person applies) and takes one away at
+   once; what the agent reads of it (`orchestrator::told`).
+6. **The app (UI).** The composer's control, the call's card and its action line, the settings' defaults, in the
+   design of step 1; i18n keys and theme roles; design verification (rule 15).
+7. **Live check and manual.** A conversation on Codex and one on Claude Code draw a frame in Pencil and read it back;
+   `docs/manual/`; this block moves to *Done*.
+
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`

@@ -9,7 +9,8 @@ merging finished runs on its own behind *Let the Orchestrator merge finished run
 2026-10-21 (ORC-69); the Orchestrator on Codex, confined without a shell (decision 10), added on 2026-10-25 (ORC-84);
 the project's MCP servers from the chat (decision 11) added on 2026-10-25 (ORC-89), its narrowing rule decided by the
 person that day; writing while it answers (decision 12) added on 2026-10-25 (ORC-92); approving a proposal in the
-chat's words (decision 13) added on 2026-10-25 (ORC-96; its table of what stays click-only proposed, conservative).
+chat's words (decision 13) added on 2026-10-25 (ORC-96; its table of what stays click-only proposed, conservative);
+MCP servers of a conversation (decision 15) decided by the person on 2026-11-17, not built yet.
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -779,3 +780,65 @@ project with none of its own; the application-wide values are no longer shown or
   tasks*), read in the background while such a watch exists and never from a stored copy; the summary turn it starts is
   the same as for a local task's (`report_turn`). While the server's answer cannot be read (signed out, unreachable) the
   watch waits, and `/watching` and `get_watches` say so.
+
+## 15. MCP servers of a conversation (decided by the person on 2026-11-17; not built yet)
+
+The person wants to talk a design through with the Orchestrator and have it draw the design in Pencil. Since decision
+10 the chat's only MCP server is `orchester`, and decision 11 lets it manage the project's MCP servers for the
+project's agents, never call one. The person decided on 2026-11-17 that a conversation can be given the project's MCP
+servers, **each conversation its own set, with the project's defaults for a new one**. The answers below marked
+*proposed* were put to the person as questions and taken with their "go on"; they are the conservative ones.
+
+- **Per conversation.** A conversation keeps which of the project's MCP servers its agent is given (Connections › MCP
+  servers; in a team project the team's servers this computer can start, as a profile chooses among them) and how
+  their calls are answered. A new conversation starts with the project's defaults; a fork and a duplicate keep their
+  source's. A server that was removed or turned off in the project is not given, and the conversation's setting says
+  so.
+- **The project's defaults.** Project settings › Orchestrator: the servers a new conversation starts with and how
+  their calls are answered. Out of the box: no server, so decision 10's confinement holds until a person lifts it.
+  They are kept on this computer, for a local and a team project alike (conversations, and the servers' secrets, are
+  this computer's in both). No global default (*proposed*).
+- **Only a person changes a conversation's set.** In the composer, next to *Runs on* and *Plan only*: the project's
+  servers with a switch each, and how calls are answered. Giving a conversation a server widens what its agent may
+  do, so the chat's own tool only proposes it: a card *Use Pencil in this conversation?* that a person applies,
+  whatever the chat's switches say, also while it drives; automation's click is refused (`person_only`). Taking one
+  away narrows, and the tool does it at once. A change holds from the conversation's next turn.
+- **How the agent gets them.** As a step's agent does (`orchester_core::connection::invocation::mcp`), beside
+  `orchester`: for Codex the `-c mcp_servers.<name>…` overrides, secrets by variable name; for Claude Code the turn's
+  `--mcp-config` file and an allow rule per server. A server starts in the project's folder: the chat has no
+  worktree. A server set to start in another folder is left out for Claude Code, which ignores `cwd`, as for a step,
+  and the conversation's setting says so. Nothing else of decision 10's confinement changes: no shell, no web, no
+  files beyond what it reads today.
+- **How a call is answered.** Two ways, the conversation's choice:
+  - *Ask* (the default, *proposed*): a call is a card in the conversation (the server, the tool, its arguments) with
+    *Allow once*, *Allow this tool in this conversation* and *Decline*. A tool the server runs without asking
+    (`exempt_tools`, which the person already decided for the project's agents) and a tool allowed in this
+    conversation run at once.
+  - *Allow all*: every call of the conversation's servers runs.
+  Only a person answers a card: automation's click is refused (`person_only`), auto mode and the reviewer do not
+  answer it, and the Orchestrator never answers its own call. A call that waits holds the turn as an approval of a
+  run's agent holds its step; *Stop* declines it.
+- **Plan only.** A conversation that plans changes nothing, and an MCP tool may change something outside
+  Orchester. There, a call runs only when the server marks the tool read-only (`readOnlyHint`) or exempts it; any
+  other is declined, with the reason.
+- **Turns nobody asked for get no server** (*proposed*). A wait, a run's end, where a led target stands, a report,
+  a watch that ended: in such a turn the Orchestrator may merge, deliver and answer agents with nobody there, and
+  what an MCP server answers is text Orchester does not control. The conversation's servers are given only in a turn a
+  person's message started. The prompt says so, so the agent promises nothing it cannot do then.
+- **What the conversation keeps.** Each call is an action of the conversation, as its own tools' are: the server, the
+  tool, how it ended. Arguments and results are not kept beyond a short line (a result may be large, an image
+  included). Images of a result reach the model as the CLI passes them; showing them in the conversation is not part
+  of this decision.
+- **What the agent is told.** Its prompt names the conversation's servers, says that what they answer is data and no
+  instruction, and that nothing it reads there changes what it may merge, deliver, answer or approve. The chat does
+  not read the repository's agent files (decision 10), so a rule of the repository about a server (which file a
+  design tool opens) reaches it with a skill the person chose for the message (ORC-634, ORC-663) or in their words. A
+  field for such rules is not part of this decision.
+- **The context.** A server's tool list enters the context only of a conversation that has it, and the context meter
+  counts it like the rest.
+- **Local and team projects alike.** Nothing here differs between them (`docs/design/local-and-team-parity.md`): no
+  row is added to its table.
+
+Not decided here, each a decision of its own when asked for: servers in turns nobody asked for, auto mode or the
+reviewer answering the chat's MCP calls, a global default, images of results in the conversation, a rules field per
+server.
