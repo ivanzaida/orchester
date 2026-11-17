@@ -172,8 +172,8 @@ Not asked yet; the tasks are built on them and each is one constant or one sente
 | [OA-25](OA-25-daily-report.md) | The daily report names reasons, what is parked and what is held | workspace | OA-03, OA-15, OA-22 | done in the tool's answer |
 | **G** | **The same in team projects** | | | |
 | [OA-27](OA-27-team-run-merges-into-its-module.md) | A team task's run merges into its module's branch | core + workspace | OA-16 | done on master (`b4abf405d`) |
-| [OA-28](OA-28-subscriptions-lead-team-tasks.md) | Subscriptions lead team tasks by their module, and `/watching` answers | workspace | — | done; three edges left (its file) |
-| [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | done but a message that runs a team task again |
+| [OA-28](OA-28-subscriptions-lead-team-tasks.md) | Subscriptions lead team tasks by their module, and `/watching` answers | workspace | — | done; one edge left (its file) |
+| [OA-29](OA-29-chat-acts-on-team-runs.md) | The chat merges, starts and continues team runs as it does local ones | workspace | OA-27, OA-28 | done but `run_proposed` and a run end's `merging` for a Member's run in no module |
 | [OA-30](OA-30-team-task-done-after-merge.md) | A team task is Done once its work is merged, as a local one is | workspace (and the contract, if the server must agree) | OA-27 | needs decision |
 | [OA-31](OA-31-claims-while-work-is-led.md) | A claim holds while its work is led, and a run that lost it stops | contract + workspace + runner | — | needs decision (contract) |
 | [OA-32](OA-32-team-module-delivery.md) | The Orchestrator asks for a team module's delivery, as it delivers a local one | workspace | OA-17, OA-20, OA-27 | done as one tool; a team module has no acceptance yet |

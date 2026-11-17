@@ -1,6 +1,6 @@
 # OA-28 · Subscriptions lead team tasks by their module, and `/watching` answers
 
-- **Status:** done but for what its last section lists (2026-11-14)
+- **Status:** done but for what its last section lists (2026-11-17)
 - **Kind:** workspace
 - **Depends on:** —
 - **Branch:** —
@@ -93,3 +93,19 @@ the chat's calls).
   a reading lists watched modules, not the project.
 - What waits in a team task (`/watching`'s *waits for an answer*) is not named for a task this computer keeps no row
   of.
+
+## Done on 2026-11-17
+
+- A subscription to the tasks without a module, or to the whole project, reads the server's list of those tasks as a
+  watched module is read (`orchestrator::team_status`, one request per 200 tasks), so it leads every team task in it,
+  those that never ran here too, with the server's status, module and Blocked mark.
+- What waits in a team task's run (`/watching`, `get_watches`) is named as for a stored task: the watch reads read the
+  team tasks as their runs recorded them with the project's tasks (`ProjectTasks::read_with_recorded`).
+- The chat's own start of a team task in a turn Orchester started is covered by a test now
+  (`team_mcp chat_named::`); the binary has a harness for the chat's calls since 1bd02d178.
+
+Tests: `orchester-workspace --test team_mcp led_reads::`, `chat_named::`.
+
+**Left:** a task the server moved out of every watched module, while neither the tasks without a module nor the whole
+project is watched, stays led by the module its run started in until it runs again, and the prompt of its event names
+that module's subscription.

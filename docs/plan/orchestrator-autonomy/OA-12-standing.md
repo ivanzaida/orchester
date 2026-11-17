@@ -61,8 +61,10 @@ There is no such reading. `get_module` lists the tasks; `list_tasks` gives `bloc
   project alike. `get_watches` and `get_module` do not carry it: `get_watches` still refuses a team project, and a
   leading turn is told to read `get_standing` first.
 
-Not read for a team task, each a row of the parity table: a Blocked mark the team server keeps (it does not read as
-parked by the person), whether its pipeline is ready (the server checks that when the work starts), and a team task
-that never ran on this computer (it is not among the tasks at all).
+A team task reads as a local one since 2026-11-17: its Blocked mark is the team server's last reading of what is
+watched (a module, a task, the tasks without a module or the whole project), its pipeline is ready when it is one of
+the team's pipelines this session read with a published version (as a local task's must be published), and a team
+task that never ran on this computer is among the tasks as the reading holds it (OA-28). Tests:
+`orchester-workspace --test team_mcp led_reads::`.
 
 Tests: `orchester-core --test orchestrator_standing` (9), `orchester-workspace --test orchestrator_standing`.
