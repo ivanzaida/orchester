@@ -153,7 +153,13 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
   2026-11-05, `docs/architecture/server.md` row 80): a team task's pipeline is one of the team's pipelines, chosen by
   its resource id; only admins create and publish team pipelines, and a person's own local pipelines are not used for
   team tasks (hidden in a team project). Whoever may edit the task chooses it; the server's task route decides who
-  that is (its Admins today). Still open: the default pipeline and the limits (refused as D6).
+  that is (its Admins today). Still open: the default pipeline and the limits (refused as D6). **Decided for raising a
+  run's limits** (OA-34; decided by the implementing agent on 2026-11-17 by the option OA-34 proposed, to confirm with
+  the person): a workspace Admin sets in its policy a ceiling of the raises the claim's holder may make of a run's
+  limits (`limit_raises`: 1 to 3 raises of a run, each limit by 1 to 50 % at most; off by default); the holder's
+  computer asks the team server with `work.raise_limits` before it raises the run, and the server keeps and counts each
+  raise. With no ceiling the limits stay the Admin's (`decision_required [D6]`). A task's own limits, set on the task,
+  stay open.
 - **D8** — offline continuation, human waits and delivery after an outage. Drawn: running work goes on and reports
   wait; what the server does with a claim that went stale during the outage is named as open.
 

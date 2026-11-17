@@ -226,5 +226,7 @@ pub(super) const fn policy(action: PolicyAction) -> DefinitionEdit {
   DefinitionEdit::Policy(WorkspacePolicyChanges {
     revision: action.read,
     automatic_merge: action.automatic_merge,
+    // The ceiling of limit raises (OA-34) is not this actions: it stays as it is.
+    limit_raises: None,
   })
 }

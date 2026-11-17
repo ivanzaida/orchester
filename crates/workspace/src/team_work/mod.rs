@@ -49,6 +49,7 @@ mod heartbeat;
 mod here;
 mod last;
 mod open;
+mod raise;
 mod release;
 mod reports;
 mod runner;
@@ -75,6 +76,7 @@ pub use self::{
   here::{TeamHere, team_here},
   last::{LastStart, NewestStart, last_start, start_seen},
   open::{OpenStarts, OpenStartsError, forget_runner_refusals, recover_open_starts},
+  raise::RaiseAnswer,
   release::ClaimEnd,
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},

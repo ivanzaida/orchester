@@ -121,6 +121,10 @@ pub struct State {
   pub waits_for_person: bool,
   /// The server is older than OA-31's renewal: its heartbeat renews running work only, and no module claim.
   pub running_only: bool,
+  /// The workspace policy's ceiling of limit raises (OA-34); `None` is off.
+  pub limit_raises: Option<orchester_api::v2::LimitRaises>,
+  /// Each raise kept, by its work and run.
+  pub raises: Vec<(WorkId, String)>,
   pub works_made: usize,
   pub heartbeats: usize,
   /// The module claim renewals the heartbeat made.
@@ -177,6 +181,8 @@ impl TeamServer {
       in_no_module: false,
       waits_for_person: false,
       running_only: false,
+      limit_raises: None,
+      raises: Vec::new(),
       works_made: 0,
       heartbeats: 0,
       module_renewals: 0,

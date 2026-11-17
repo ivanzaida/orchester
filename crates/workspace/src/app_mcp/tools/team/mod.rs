@@ -10,6 +10,7 @@ mod deliver;
 mod modules;
 mod organized;
 mod outcome;
+mod raise;
 mod run;
 mod tasks;
 mod writes;
@@ -26,6 +27,7 @@ use orchester_store::{MergedDoneState, ProjectDb, SharingLink, TeamFence};
 pub(super) use self::{
   deliver::{deliver_module, merge_run},
   modules::{create_module, get_module, list_modules, update_module},
+  raise::{beyond_ceiling, raise_limits},
   run::run_task,
   tasks::{get_task, list_tasks},
   writes::{create_task, update_task},

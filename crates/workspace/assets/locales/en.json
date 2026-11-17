@@ -1917,6 +1917,7 @@
       "teamStatusNotOffered": "A team task cannot be moved from {{from}} to {{to}}. The claim's holder or an Admin marks it Done, an Admin cancels it, reopens it to Backlog or Todo and moves it between Backlog and Todo; In progress and In review follow the task's work. Nothing was sent.",
       "teamStatusOnCreate": "A new team task starts in {{status}}. Create it, then change its status with update_task: the claim's holder or an Admin marks it Done, an Admin cancels it or moves it to Todo. Nothing was sent.",
       "teamActionFailed": "The change could not be carried out with the team server. Nothing was changed on this computer.",
+      "teamRaiseBeyondCeiling": "The team's Admin allows a run's limits to be raised only so far: so many raises of a run, each limit by a share of what it was, and never lifted altogether. This raise goes beyond that, so nothing was raised; a smaller raise may be allowed, or an Admin raises it.",
       "teamFieldUnsupported": "A team task or module keeps no {{fields}} on its server in this version, so nothing was sent. Leave them out.",
       "teamBaseMergeAdmin": "This team task is in no module, so its run merges into the base branch itself. An Admin's computer merges it, or a member's while the team's Automatic merge is on; in a module, its delivery takes an Admin's authorization instead. Nothing was merged.",
       "teamStartNoBranch": "The task is in no module, and the checkout has no branch checked out for its run to start on and merge into. Nothing was started.",

@@ -89,6 +89,7 @@ fn workspace_policy_revision_conflict_shape_and_revision_bounds() {
   let current = WorkspacePolicy {
     revision: PolicyRevision::FIRST.next().expect("next"),
     automatic_merge: true,
+    limit_raises: None,
   };
   let conflict = WorkspacePolicyError::PolicyRevisionConflict { current };
   let wire = json!({"error":"policy_revision_conflict","current":{"revision":2,"automatic_merge":true}});
@@ -122,7 +123,8 @@ fn workspace_policy_changed_event_wire_shape_and_invalid_revision() {
     change.change.policy,
     WorkspacePolicy {
       revision: PolicyRevision::FIRST.next().expect("next"),
-      automatic_merge: true
+      automatic_merge: true,
+      limit_raises: None,
     }
   );
   assert_eq!(serde_json::to_value(&event).expect("serialize"), delta);
@@ -134,4 +136,49 @@ fn workspace_policy_changed_event_wire_shape_and_invalid_revision() {
   let mut missing = delta;
   missing["data"]["policy"] = json!({"automatic_merge":true});
   assert!(serde_json::from_value::<WorkspacePolicyEvent>(missing).is_err());
+}
+
+/// OA-34: the Admin's ceiling of limit raises is a policy field left out while off, set or cleared by a change; a raise
+/// names each limit it raises above what the run had, and the ceiling allows so many raises, each by its share.
+#[test]
+fn workspace_policy_limit_raises_wire_shape_and_ceiling() {
+  use orchester_api::v2::{LimitRaise, LimitRaises, RaiseRefused, RaisedLimit, WorkspacePolicyChanges};
+
+  let ceiling = LimitRaises::new(1, 50).expect("a ceiling");
+  let policy = WorkspacePolicy {
+    revision: PolicyRevision::FIRST,
+    automatic_merge: false,
+    limit_raises: Some(ceiling),
+  };
+  let wire = json!({"revision":1,"automatic_merge":false,"limit_raises":{"per_run":1,"percent":50}});
+  assert_eq!(serde_json::to_value(policy).expect("serialize"), wire);
+  assert_eq!(
+    serde_json::to_value(WorkspacePolicy::default()).expect("serialize"),
+    json!({"revision":1,"automatic_merge":false}),
+    "left out while off"
+  );
+  for (per_run, percent) in [(0, 50), (4, 50), (1, 0), (1, 51)] {
+    assert!(LimitRaises::new(per_run, percent).is_err(), "{per_run} {percent}");
+    let bad = json!({"revision":1,"automatic_merge":false,"limit_raises":{"per_run":per_run,"percent":percent}});
+    assert!(serde_json::from_value::<WorkspacePolicy>(bad).is_err());
+  }
+  let off: WorkspacePolicyChanges =
+    serde_json::from_value(json!({"revision":1,"automatic_merge":false,"limit_raises":null})).expect("off");
+  assert_eq!(off.limit_raises, Some(None));
+  let kept: WorkspacePolicyChanges =
+    serde_json::from_value(json!({"revision":1,"automatic_merge":false})).expect("kept");
+  assert_eq!(kept.limit_raises, None);
+
+  let raise = |to| LimitRaise::new(Some(RaisedLimit::new(1000, to).expect("a raise")), None, None).expect("a raise");
+  assert_eq!(ceiling.allows(0, &raise(1500)), Ok(()));
+  assert_eq!(ceiling.allows(0, &raise(1501)), Err(RaiseRefused::By { most: 1500 }));
+  assert_eq!(
+    ceiling.allows(1, &raise(1100)),
+    Err(RaiseRefused::Raises { allowed: 1 })
+  );
+  assert!(RaisedLimit::new(1000, 1000).is_err() && RaisedLimit::new(0, 10).is_err());
+  assert!(LimitRaise::new(None, None, None).is_err());
+  let wire = json!({"budget_tokens":{"from":1000,"to":1500}});
+  assert_eq!(serde_json::to_value(raise(1500)).expect("serialize"), wire);
+  assert!(serde_json::from_value::<LimitRaise>(json!({})).is_err());
 }

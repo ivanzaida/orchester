@@ -36,6 +36,7 @@ mod not_ready;
 mod orchestrator;
 mod organization;
 mod pipelines;
+mod raise;
 mod readiness;
 mod reads;
 mod ready;

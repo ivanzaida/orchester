@@ -1233,6 +1233,30 @@ tasks not Done (`MergeLeft::OptedOut`, `MarkedBlocked`, `BlockedByTasks`, read f
 stands lists a task blocked by a task of the same reading that is not Done as `blocked_by`. The stand-in team server
 (`test_support`) keeps both fields on its task patch.
 
+## Team run limit raises (OA-34)
+
+D6 for a run's limits, decided by the implementing agent on 2026-11-17 by the option OA-34 proposed, to confirm with
+the person: the holder of a team task's claim may raise a run's limits within a ceiling the workspace's Admin sets,
+the ceiling the Orchestrator keeps for a local run it leads (OA-09); with none the limits stay the Admin's.
+
+- **The ceiling.** `WorkspacePolicy.limit_raises: LimitRaises?` (`{per_run: 1..=3, percent: 1..=50}`), left out while
+  off, which is the default. `WorkspacePolicyChanges.limit_raises`: a ceiling sets it, `null` turns it off, left out it
+  stays as it is; the policy route's rule (an Admin's, on the policy's revision). A server older than the field refuses
+  a change that names it, and reads as no ceiling.
+- **The raise.** `work.raise_limits {authority, run_id, raise}` on `POST /api/v2/projects/{p}/commands`, under the work's
+  exact authority (`work_id` named, as `work.report`), with `raise: LimitRaise` naming each limit it raises,
+  `{budget_tokens?, max_duration_ms?, step_budget_tokens?}`, each `{from, to}` with `0 < from < to` (tokens, or
+  milliseconds); at least one. It answers `{kind:"limits_raised", work_id, run_id, raises, effects:[]}`, `raises` being
+  the run's raises with this one. Refusals, in this order: fencing as `work.report` (`claim_lost`, `session_mismatch`,
+  `404`); work that is not `paused` at its limit, `409 transition_denied`; no ceiling, `409 decision_required [D6]`;
+  one raise more than `per_run` for the same work and run, or a limit above `from + from × percent / 100`, `422
+  invalid` (`LimitRaises::allows`). The server keeps each raise with who made it and when, and audits it.
+- **The desktop.** `continue_run`'s raise of a team run sends the run's queued reports, then the raise, each limit from
+  what the run had; it raises the run only once the server kept the raise. A limit lifted altogether is refused
+  `raise_beyond_ceiling` before anything is sent, and a limit added or lowered is no raise (nothing is asked). The
+  server's `invalid` is `raise_beyond_ceiling`, its `decision_required` the tool's `decision_required` as before. The
+  stand-in team server of the workspace tests keeps the ceiling and the raises.
+
 ## Team authority releases
 
 A shared project's releases, each task's release and each module's horizon belong to its team server

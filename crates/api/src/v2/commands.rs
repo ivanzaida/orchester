@@ -7,15 +7,15 @@
 //! canonical `TaskRead` is published there.
 
 use orchester_core::{
-  id::{ClaimId, ModuleId, OperationId, UserId},
+  id::{ClaimId, ModuleId, OperationId, RunId, UserId, WorkId},
   run::{BranchName, CommitId},
   sharing::TaskRevision,
 };
 use serde::{Deserialize, Serialize};
 
 use super::{
-  AuthorityRef, BundleRef, ClaimRead, DeliveryOutcome, LocalEffect, ModuleDeliveryRead, ModuleRead, Subject, WorkRead,
-  WorkReport, page::nullable,
+  AuthorityRef, BundleRef, ClaimRead, DeliveryOutcome, LimitRaise, LocalEffect, ModuleDeliveryRead, ModuleRead,
+  Subject, WorkRead, WorkReport, page::nullable,
 };
 use crate::{SharedTask, TaskContent, UserRef};
 
@@ -87,6 +87,14 @@ pub enum TeamCommand {
   /// A run's account of the work it carries out under the work's exact authority, ordered per run.
   #[serde(rename = "work.report")]
   WorkReport(WorkReport),
+  /// The holder raises the limits of run `run_id`, stopped at a limit, of the work its exact authority names, within
+  /// the Admin's ceiling (OA-34).
+  #[serde(rename = "work.raise_limits")]
+  WorkRaiseLimits {
+    authority: AuthorityRef,
+    run_id: RunId,
+    raise: LimitRaise,
+  },
 }
 
 impl TeamCommand {
@@ -104,6 +112,7 @@ impl TeamCommand {
       Self::DeliveryRequest { .. } => "delivery.request",
       Self::DeliveryReport { .. } => "delivery.report",
       Self::WorkReport(_) => "work.report",
+      Self::WorkRaiseLimits { .. } => "work.raise_limits",
     }
   }
 }
@@ -154,6 +163,13 @@ pub enum TeamCommandValue {
     delivery: Box<ModuleDeliveryRead>,
     effects: Vec<LocalEffect>,
   },
+  /// `work.raise_limits`: the raise is kept; `raises` counts the run's raises with it.
+  LimitsRaised {
+    work_id: WorkId,
+    run_id: RunId,
+    raises: u32,
+    effects: Vec<LocalEffect>,
+  },
 }
 
 impl TeamCommandValue {
@@ -166,7 +182,8 @@ impl TeamCommandValue {
       | Self::Released { effects, .. }
       | Self::Assignment { effects, .. }
       | Self::Module { effects, .. }
-      | Self::Delivery { effects, .. } => effects,
+      | Self::Delivery { effects, .. }
+      | Self::LimitsRaised { effects, .. } => effects,
     }
   }
 }
