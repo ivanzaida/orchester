@@ -16,10 +16,10 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
-  orchestrator::team_status::module_now,
+  orchestrator::team_status::{module_now, reading_of},
   tasks::{
     detail::run_store_error,
-    recorded::{self, task_of},
+    recorded::{self, is_team, task_of},
   },
 };
 
@@ -46,6 +46,27 @@ pub(super) fn find(db: &ProjectDb, target: WatchTarget) -> Result<Option<Found>,
       .map(|module| found(Some(module.name().as_str().to_owned()), None)),
     WatchTarget::WithoutModule | WatchTarget::Project => Some(found(None, None)),
   })
+}
+
+/// `given` as it stands now ([`find`]). A team task the project keeps only the identity of is there too: the team
+/// server holds it, it never ran here, so no record of this computer defines it, and it is named as `given` names it,
+/// in the module the server's last reading saw it in, if any did. The reading that follows the subscription tells
+/// what became of it.
+pub(super) fn find_given(db: &ProjectDb, given: &NamedTarget) -> Result<Option<Found>, StoreError> {
+  if let Some(found) = find(db, given.target)? {
+    return Ok(Some(found));
+  }
+  let WatchTarget::Task(task) = given.target else {
+    return Ok(None);
+  };
+  if given.name.is_none() || !is_team(db, task)? {
+    return Ok(None);
+  }
+  let module = reading_of(db).task(task).and_then(|seen| seen.module);
+  Ok(Some(Found {
+    named: given.clone(),
+    module,
+  }))
 }
 
 /// `given` named as it is now, or as given when it is gone.

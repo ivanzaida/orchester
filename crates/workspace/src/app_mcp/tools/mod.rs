@@ -68,6 +68,16 @@ use self::{
   specs::{SPECS, Spec},
 };
 use super::{error::ToolError, services::Services};
+
+/// The team task `key` names (its key or its server id) in project `project`, as its team server reads it now;
+/// `None` in a local project and for a local task of a team project. Not found when the server has no such task.
+pub(crate) async fn team_task(
+  services: &Services,
+  project: &str,
+  key: &str,
+) -> Result<Option<orchester_api::v2::TaskRead>, ToolError> {
+  team::read_task(services, project, key).await
+}
 use crate::messages::Message;
 
 /// A message in the words the app shows it, for results that carry the app's own explanations:

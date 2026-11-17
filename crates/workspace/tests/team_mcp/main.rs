@@ -24,6 +24,7 @@ mod team_server;
 
 mod bundle_missing;
 mod bundle_schema;
+mod chat_task;
 mod created;
 mod delivery;
 mod led_module;

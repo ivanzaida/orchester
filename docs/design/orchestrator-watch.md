@@ -267,6 +267,13 @@ started with. A watch (and a stop's *left open* list, and the key and title a ru
 task as `tasks::recorded` gives it: by the key and title its newest run's inputs kept, so a task with no stored row is
 found, not gone.
 
+A team task that never ran here has no such record, and the reading below holds only what is already watched. So the
+chat's `run_task` and its `watch` ask the team server for a task neither names (`orchestrator::team_task`, 2026-11-17:
+a task the chat made a moment ago was answered `task_not_found` and `gone`): the start reads the server's Blocked mark
+and goes on to the team start, and the watch records the task's identity, is kept under the key the server gave, and is
+read with the next reading. A watch of a task kept only as an identity is taken the same way from the commands
+(`watch::read::find_given`).
+
 What a watch ends on is the task's workflow status (Done or Canceled). For a team task that is the team server's, and
 no copy of it on this computer is trusted, not even a row the old sharing stream cached. Decided by the person on
 2026-11-09:

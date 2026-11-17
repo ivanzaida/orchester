@@ -18,9 +18,9 @@ use serde_json::{Value, json};
 
 use super::{StopBy, StopWhat, WatchError, stop_in, watch_asked_in};
 use crate::{
-  app_mcp::{Missing, ToolError, blocking, find_module, find_task},
+  app_mcp::{Missing, Services, ToolError, blocking, find_module, find_task},
   messages::Message,
-  orchestrator::{own_project::in_own_project, tools::ChatScope},
+  orchestrator::{led_start::Named, own_project::in_own_project, team_task, tools::ChatScope},
   runner::Runners,
 };
 
@@ -95,7 +95,7 @@ pub struct UnwatchTargets {
 
 /// Calls `name`, `watch` or `unwatch`, with `arguments` for `scope`'s conversation; `runners` tell the chat it changed.
 pub(in crate::orchestrator) async fn call(
-  runners: &Runners,
+  (services, runners): (&Services, &Runners),
   scope: &ChatScope,
   name: &str,
   mut arguments: JsonObject,
@@ -110,8 +110,9 @@ pub(in crate::orchestrator) async fn call(
   arguments.remove("project");
   let told = if name == WATCH {
     let asked: WatchTargets = parsed(arguments)?;
+    let on_server = on_server(services, scope, &asked.targets).await?;
     let scope = scope.clone();
-    blocking(move || watch(&scope, &asked)).await?
+    blocking(move || watch(&scope, &asked, &on_server)).await?
   } else {
     let asked: UnwatchTargets = parsed(arguments)?;
     let scope = scope.clone();
@@ -125,8 +126,54 @@ fn parsed<T: DeserializeOwned>(arguments: JsonObject) -> Result<T, ToolError> {
   serde_json::from_value(Value::Object(arguments)).map_err(|error| ToolError::InvalidArguments(error.to_string()))
 }
 
-fn watch(scope: &ChatScope, asked: &WatchTargets) -> Result<Value, ToolError> {
-  let (chat, targets) = resolved(scope, &asked.targets)?;
+/// The targets among `named` that name a team task nothing on this computer defines yet (no record of a run, no
+/// reading of a watched module), as the team server holds them: each by the name it was asked by. A name the server
+/// has no task for is left to [`target`], which says what answers to it.
+async fn on_server(
+  services: &Services,
+  scope: &ChatScope,
+  named: &[String],
+) -> Result<Vec<(String, NamedTarget)>, ToolError> {
+  let (root, asked) = (scope.root.clone(), named.to_vec());
+  let unknown = blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    Ok(
+      asked
+        .into_iter()
+        .map(|named| named.trim().to_owned())
+        .filter(|named| !defined_here(&db, named))
+        .collect::<Vec<_>>(),
+    )
+  })
+  .await?;
+  let mut found = Vec::new();
+  for named in unknown {
+    match team_task::asked(services, scope, &named).await {
+      Ok(Some(task)) => {
+        let target = NamedTarget {
+          target: WatchTarget::Task(task.id),
+          name: Some(task.key),
+        };
+        found.push((named, target));
+      }
+      Ok(None) | Err(ToolError::NotFound { .. }) => {}
+      Err(refused) => return Err(refused),
+    }
+  }
+  Ok(found)
+}
+
+/// Whether `named` is a target this computer can name by itself: one of the two words, a task its records or the
+/// server's last reading define, or, when no stored task answers to it, a module.
+fn defined_here(db: &ProjectDb, named: &str) -> bool {
+  named.eq_ignore_ascii_case(WITHOUT_MODULE)
+    || named.eq_ignore_ascii_case(PROJECT)
+    || Named::find(db, named).is_ok()
+    || (find_task(db, named).is_err() && find_module(db, named).is_ok())
+}
+
+fn watch(scope: &ChatScope, asked: &WatchTargets, on_server: &[(String, NamedTarget)]) -> Result<Value, ToolError> {
+  let (chat, targets) = resolved(scope, &asked.targets, on_server)?;
   let watched = watch_asked_in(&scope.root, &chat, &targets, &asked.order).map_err(refusal)?;
   let led: Vec<Value> = watched
     .led_elsewhere
@@ -145,7 +192,7 @@ fn watch(scope: &ChatScope, asked: &WatchTargets) -> Result<Value, ToolError> {
 }
 
 fn unwatch(scope: &ChatScope, asked: &UnwatchTargets) -> Result<Value, ToolError> {
-  let (chat, targets) = resolved(scope, &asked.targets)?;
+  let (chat, targets) = resolved(scope, &asked.targets, &[])?;
   let what = if asked.all {
     StopWhat::All
   } else if targets.is_empty() {
@@ -159,20 +206,32 @@ fn unwatch(scope: &ChatScope, asked: &UnwatchTargets) -> Result<Value, ToolError
   }))
 }
 
-/// `scope`'s conversation as kept, and the targets `named` names in its project.
-fn resolved(scope: &ChatScope, named: &[String]) -> Result<(Chat, Vec<NamedTarget>), ToolError> {
+/// `scope`'s conversation as kept, and the targets `named` names in its project; a name of `on_server` is the team
+/// task the server answered for it.
+fn resolved(
+  scope: &ChatScope,
+  named: &[String],
+  on_server: &[(String, NamedTarget)],
+) -> Result<(Chat, Vec<NamedTarget>), ToolError> {
   let db = ProjectDb::open(&scope.root)?;
   let chat = db
     .chat(scope.chat)?
     .ok_or_else(|| ToolError::not_found(Missing::Conversation, scope.chat.to_string()))?;
   let targets = named
     .iter()
-    .map(|named| target(&db, named.trim()))
+    .map(|named| {
+      let named = named.trim();
+      match on_server.iter().find(|(asked, _)| asked == named) {
+        Some((_, target)) => Ok(target.clone()),
+        None => target(&db, named),
+      }
+    })
     .collect::<Result<_, _>>()?;
   Ok((chat, targets))
 }
 
-/// The target `named` names in `db`: the tasks without a module, the whole project, a task by its key or id, else a
+/// The target `named` names in `db`: the tasks without a module, the whole project, a task by its key or id (as the
+/// project's records or the team server's last reading define it, else as a stored row names it), else a
 /// module by its name or id.
 fn target(db: &ProjectDb, named: &str) -> Result<NamedTarget, ToolError> {
   if named.eq_ignore_ascii_case(WITHOUT_MODULE) {
@@ -185,6 +244,14 @@ fn target(db: &ProjectDb, named: &str) -> Result<NamedTarget, ToolError> {
     return Ok(NamedTarget {
       target: WatchTarget::Project,
       name: None,
+    });
+  }
+  // A team task that never ran here has no stored row to be found by: the server's last reading names it once a
+  // subscription watches it or its module.
+  if let Ok(task) = Named::find(db, named) {
+    return Ok(NamedTarget {
+      target: WatchTarget::Task(task.id),
+      name: Some(task.key),
     });
   }
   if let Ok(task) = find_task(db, named) {
