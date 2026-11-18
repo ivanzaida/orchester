@@ -24,7 +24,10 @@ pub(super) const SPECS: &[Spec] = &[
                   the team's MCP server as v1 on the team server (admins only, a member is refused not_admin; no \
                   draft; offline it waits and the answer says waiting_for_server, and a server the team server \
                   refuses is not created): the team holds names only, so `program` is a name looked up on the search \
-                  path (npx), never a path, `working_directory` is relative, the variables the program needs are \
+                  path (npx); an absolute `program` is this computer's path to a file that is there \
+                  (program_not_a_file otherwise): the team gets the file's name and this computer keeps the path \
+                  (`program_here` in the answer); a relative path is team_path_refused. `working_directory` is \
+                  relative, the variables the program needs are \
                   named in `variable_names` (each takes the team secret of the same name, so each is a secret name) \
                   and the headers a remote server is sent a secret in are `secret_headers`, each `header`, the \
                   `secret` it takes by name and an optional plain-text `prefix` (`Authorization` with `Bearer `), and a value or a secret in `environment` or \
@@ -54,8 +57,10 @@ pub(super) const SPECS: &[Spec] = &[
                   nothing publishes nothing (`unchanged`), and the fields are the team's (`variable_names`, \
                   `secret_headers`; environment and authorization are refused as above). `program` is the team \
                   body's program name (npx), team data like the rest: another one is person_only unless a person \
-                  turned on Let automation change agent permissions, and a path is team_path_refused. The program's \
-                  path on this computer is set by a person in the window, never by a tool. `name` is the body's \
+                  turned on Let automation change agent permissions, and a relative path is team_path_refused. An \
+                  absolute `program` is the program's path on this computer, a file that is there: kept here under \
+                  the same rule, it publishes nothing for it and the answer says `program_here` instead of \
+                  `unchanged`. `name` is the body's \
                   name and is not editable here (name_not_editable): rename the resource in the window. A draft of \
                   the server that differs from the version this computer uses (someone's unpublished edit) is not \
                   replaced: the call is refused (draft_changed). The `url` of a team's server has no query or \

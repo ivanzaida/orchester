@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use orchester_core::{id::ResourceId, resource::ResourceKind, store::ResourceStore};
+use orchester_store::AppDb;
 use orchester_workspace::team_config::TeamConfig;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -401,4 +402,67 @@ fn team_mcp_a_secret_header_names_its_secret_and_prefix_and_a_variable_must_be_a
   let renamed = json!({ "project": "Kontur", "server": "issues", "exempt_tools": ["search"] });
   let kept = checkout.call("update_mcp_server", &renamed).expect("updated");
   assert_eq!(kept["server"]["launch"]["secret_headers"], headers, "{kept}");
+}
+
+/// The program path this computer keeps for team MCP server `id` of the checkout.
+fn program_here(checkout: &Checkout, id: ResourceId) -> Option<std::path::PathBuf> {
+  let link = checkout.db().sharing().expect("read").expect("shared");
+  AppDb::open(&checkout._data.path().join("orchester.db"))
+    .expect("the application database")
+    .mcp_server_program(link.server, id)
+    .expect("read")
+    .map(|kept| kept.program)
+}
+
+#[test]
+fn team_mcp_a_programs_path_is_kept_here_and_the_team_gets_the_files_name() {
+  let (server, seen) = start(Answers::default());
+  let checkout = admin(&server);
+  let path = std::env::current_exe().expect("the test program");
+  let (given, name) = (
+    path.display().to_string(),
+    path
+      .file_name()
+      .and_then(|name| name.to_str())
+      .expect("a name")
+      .to_owned(),
+  );
+
+  let made = checkout
+    .call(
+      "add_mcp_server",
+      &json!({ "project": "Kontur", "name": "docs", "program": given }),
+    )
+    .expect("created");
+
+  assert_eq!(made["program_here"], given.as_str(), "{made}");
+  assert_eq!(
+    seen.lock().created[0]["version"]["body"]["launch"]["program"],
+    name.as_str(),
+    "the team holds the file's name only"
+  );
+  let (id, _) = docs_held(&checkout);
+  assert_eq!(program_here(&checkout, id), Some(path));
+
+  // The path alone: kept here and nothing published, and the answer says what was kept rather than `unchanged`.
+  let again = checkout
+    .call("update_mcp_server", &change(json!({ "program": given })))
+    .expect("kept");
+  assert_eq!(again["program_here"], given.as_str(), "{again}");
+  assert!(again.get("unchanged").is_none(), "{again}");
+  assert_eq!(seen.lock().calls, ["create"]);
+
+  // A path that is no file here is refused before anything is made; a relative one is a path the team cannot hold.
+  let missing = checkout.root().join("missing").join("docs-mcp");
+  let other = |program: String| json!({ "project": "Kontur", "name": "other", "program": program });
+  assert_eq!(
+    checkout.refused("add_mcp_server", &other(missing.display().to_string())),
+    "program_not_a_file"
+  );
+  assert_eq!(
+    checkout.refused("add_mcp_server", &other("tools/docs-mcp".to_owned())),
+    "team_path_refused"
+  );
+  assert_eq!(seen.lock().calls, ["create"], "nothing more was sent");
+  assert_eq!(count(&checkout), 1);
 }

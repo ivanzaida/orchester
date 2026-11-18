@@ -11,7 +11,7 @@ mod reviewer;
 
 use std::{path::Path, sync::Arc};
 
-use orchester_core::{resource::ResourceKind, run::Answerer};
+use orchester_core::{id::ResourceId, resource::ResourceKind, run::Answerer};
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
@@ -56,12 +56,12 @@ pub(super) fn switch_server(
 pub(super) fn set_program(
   services: &Services,
   repo_root: &Path,
-  server: &TeamResource,
+  server: ResourceId,
   program: &Path,
 ) -> Result<(), ToolError> {
   services
     .workspace
-    .set_team_mcp_program(repo_root, server.id, program, Answerer::Automation)
+    .set_team_mcp_program(repo_root, server, program, Answerer::Automation)
     .map_err(refusal)
 }
 

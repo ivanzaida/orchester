@@ -347,20 +347,23 @@ fn domain_team_set_profile_account_refuses_an_account_that_is_not_of_the_profile
 }
 
 #[test]
-fn domain_team_mcp_server_on_is_person_only_always_and_changes_nothing() {
+fn domain_team_mcp_server_on_is_person_only_until_automation_may_widen() {
   let mut team = team();
   let (server, changes) = (team.program_server, team.connection_changes());
-  for let_automation_widen in [false, true] {
-    team.served.let_automation_widen(let_automation_widen);
-    let error = team.served.refused("set_mcp_server_enabled", &enable(server, true));
-    assert_person_only(&error);
-    assert!(!team.on_here(server), "the server stays off here");
-    assert_eq!(team.connection_changes(), changes, "nothing was written or counted");
-  }
+  team.served.let_automation_widen(false);
+  assert_person_only(&team.served.refused("set_mcp_server_enabled", &enable(server, true)));
   // By name too.
   let by_name = json!({ "project": "Kontur", "server": "knowledge", "enabled": true });
   assert_person_only(&team.served.refused("set_mcp_server_enabled", &by_name));
-  assert!(!team.on_here(server));
+  assert!(!team.on_here(server), "the server stays off here");
+  assert_eq!(team.connection_changes(), changes, "nothing was written or counted");
+
+  // As for a project's own server, automation turns it on while a person lets it change agent permissions.
+  team.served.let_automation_widen(true);
+  let on = team.served.ok("set_mcp_server_enabled", &by_name);
+  assert_eq!(on["server"]["enabled"], true, "{on}");
+  assert!(team.on_here(server));
+  assert!(team.connection_changes() > changes);
 }
 
 #[test]
@@ -385,7 +388,7 @@ fn domain_team_mcp_server_off_is_taken_and_counted() {
 }
 
 #[test]
-fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_never_set_by_a_tool() {
+fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_kept_while_automation_may_widen() {
   let mut team = team();
   let path = std::env::current_exe()
     .expect("the test program")
@@ -394,17 +397,14 @@ fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_never_set_by_
   let named = json!({ "project": "Kontur", "server": "knowledge", "program": "uvx" });
   let located = json!({ "project": "Kontur", "server": "knowledge", "program": path });
   let changes = team.connection_changes();
-  for let_automation_widen in [false, true] {
-    team.served.let_automation_widen(let_automation_widen);
-    let refused = team.served.refused("update_mcp_server", &located);
-    assert_eq!(refused["code"], "team_path_refused", "{refused}");
-  }
-  assert_eq!(team.connection_changes(), changes, "a path changed nothing");
 
   // A name is the team's data, which widens: a person's unless they let automation change agent permissions.
   team.served.let_automation_widen(false);
   assert_person_only(&team.served.refused("update_mcp_server", &named));
+  // So is the path here, which lets agents run that file.
+  assert_person_only(&team.served.refused("update_mcp_server", &located));
   assert_eq!(team.connection_changes(), changes);
+  assert!(!team.program_set(team.program_server));
 
   team.served.let_automation_widen(true);
   let sent = team.served.refused("update_mcp_server", &named);
@@ -412,10 +412,9 @@ fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_never_set_by_
     sent["code"], "team_server_not_reached",
     "allowed, it gets as far as the team server, which this project's link names none of: {sent}"
   );
-  assert!(
-    !team.program_set(team.program_server),
-    "no tool sets the path on this computer"
-  );
+  // Allowed, the path is kept here, which needs the team server this fixture's link names none of; that it is kept
+  // and answered as `program_here` is `team_mcp_a_programs_path_is_kept_here_and_the_team_gets_the_files_name` in
+  // the workspace's tests, against a team server.
 }
 
 #[test]
