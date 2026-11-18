@@ -94,8 +94,7 @@ fn domain_team_mcp_server_add_refuses_what_the_team_body_cannot_hold() {
     args
   };
   let cases = [
-    (with(json!({ "program": "/usr/local/bin/npx" })), "team_path_refused"),
-    (with(json!({ "program": r"C:\tools\npx.exe" })), "team_path_refused"),
+    (with(json!({ "program": "tools/npx" })), "team_path_refused"),
     (with(json!({ "working_directory": "/srv/tools" })), "team_path_refused"),
     (
       with(json!({ "environment": [{ "name": "TOKEN", "value": "s3cret" }] })),

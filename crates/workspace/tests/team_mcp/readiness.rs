@@ -120,7 +120,7 @@ fn team_with_server() -> (TeamServer, Checkout, ResourceId, ResourceId) {
   (server, checkout, profile, knowledge)
 }
 
-fn kontur(mut args: Value) -> Value {
+pub(super) fn kontur(mut args: Value) -> Value {
   args["project"] = json!("Kontur");
   args
 }
@@ -132,7 +132,7 @@ fn profile_readiness(checkout: &Checkout, profile: ResourceId) -> Value {
   read["profile"]["readiness"].clone()
 }
 
-fn listed_server(checkout: &Checkout) -> Value {
+pub(super) fn listed_server(checkout: &Checkout) -> Value {
   let read = checkout
     .call("list_team_mcp_servers", &kontur(json!({})))
     .expect("list_team_mcp_servers");
@@ -141,7 +141,7 @@ fn listed_server(checkout: &Checkout) -> Value {
   servers[0].clone()
 }
 
-fn kinds(readiness: &Value) -> Vec<String> {
+pub(super) fn kinds(readiness: &Value) -> Vec<String> {
   readiness["missing"]
     .as_array()
     .expect("missing parts")
@@ -162,7 +162,7 @@ fn add_connection(checkout: &Checkout, provider: AgentProvider, label: &str) {
   checkout.db().create_connection(&made).expect("a connection");
 }
 
-fn program_file(checkout: &Checkout) -> std::path::PathBuf {
+pub(super) fn program_file(checkout: &Checkout) -> std::path::PathBuf {
   let path = checkout.root().join("knowledge-mcp");
   fs::write(&path, "#!/bin/sh\n").expect("a program file");
   path
@@ -570,32 +570,4 @@ fn team_mcp_readiness_a_local_profile_whose_connection_is_gone_is_fixed_in_its_d
     readiness["missing"][0]["fix"],
     json!({"tool": "save_profile_draft", "gate": null})
   );
-}
-
-#[test]
-fn team_mcp_readiness_automation_turns_a_team_server_on_and_sets_its_program_while_a_person_lets_it_widen() {
-  let server = TeamServer::start(crate::fixture::Config::new("Say hello."));
-  let mut ids = None;
-  let widens = crate::Standing {
-    role: "member",
-    widens: true,
-  };
-  let checkout = Checkout::standing(Some(&server), (&[], widens), |db| {
-    let knowledge = server_resource(db, program_server());
-    let profile = profile_resource(db, &team_profile(AgentProvider::CodexCli, &[knowledge], &["API_TOKEN"]));
-    ids = Some((profile, knowledge));
-  });
-  let (_profile, knowledge) = ids.expect("prepared");
-
-  let on = kontur(json!({"server": knowledge.to_string(), "enabled": true}));
-  let turned = checkout.call("set_mcp_server_enabled", &on).expect("turned on");
-  assert_eq!(turned["server"]["enabled"], true, "{turned}");
-  assert!(!kinds(&listed_server(&checkout)["readiness"]).contains(&"mcp_off".to_owned()));
-
-  // An absolute program is this computer's path, kept here; the team's version is not published again.
-  let file = program_file(&checkout);
-  let program = kontur(json!({"server": knowledge.to_string(), "program": file.to_string_lossy()}));
-  let kept = checkout.call("update_mcp_server", &program).expect("kept here");
-  assert_eq!(kept["unchanged"], true, "{kept}");
-  assert!(!kinds(&listed_server(&checkout)["readiness"]).contains(&"mcp_program".to_owned()));
 }

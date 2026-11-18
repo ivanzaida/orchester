@@ -8,8 +8,11 @@
 //! that widens what agents may do ([`team_mcp_body::widenings`]), are a person's decision unless a person lets
 //! automation change agent permissions. A `program` here is the body's program name (`npx`), team data like the rest,
 //! so it widens like any other change; an absolute `program` is the program's path on this computer, kept here by
-//! `team_fill_ins` under the same rule, and publishes nothing. Local projects keep `mcp_servers`' own path: their MCP
+//! `team_fill_ins` under the same rule (`program_here` in the answer): an update publishes nothing for it, and a new
+//! server publishes the file's name as its program. Local projects keep `mcp_servers`' own path: their MCP
 //! servers are plain rows of the project, with no versions.
+
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::ResourceId,
@@ -39,6 +42,7 @@ use crate::{
   },
   tasks::{detail::run_store_error, outside::Outside},
   team_config::{TeamConfig, TeamResource},
+  team_fill_ins::FillInError,
   used_by::{UsedByError, used_by},
 };
 
@@ -63,7 +67,8 @@ pub(super) async fn is_team(services: &Services, project: &str) -> Result<bool, 
   Ok(team::of(services, project).await?.is_some())
 }
 
-pub(super) async fn add(services: &Services, args: AddMcpServer) -> Result<Value, ToolError> {
+pub(super) async fn add(services: &Services, mut args: AddMcpServer) -> Result<Value, ToolError> {
+  let here = program_here(&mut args.fields.program)?;
   let blocked = services.clone();
   let (open, server) = blocking(move || {
     let open = blocked.project(&args.project)?;
@@ -84,20 +89,61 @@ pub(super) async fn add(services: &Services, args: AddMcpServer) -> Result<Value
   };
   let id = create_team(services, &open.repo_root, new).await?;
   services.changes.record(open.project.id(), Outside::Connections);
-  Ok(json!({ "server": server_json(id, &server, 1) }))
+  if let Some(path) = here.clone() {
+    // Taken under the rule `widening::allowed` judged above, for a file checked to be there; what still fails here is
+    // the tool's answer, the server being made.
+    let (services, root) = (services.clone(), open.repo_root.clone());
+    blocking(move || team_fill_ins::set_program(&services, &root, id, &path)).await?;
+  }
+  Ok(answered(server_json(id, &server, 1), here.as_deref(), false))
+}
+
+/// An absolute `program` of a new team server: the team holds the file's name, which each computer looks up on its
+/// search path or sets, and this computer keeps the path. It must be a file here, checked before anything is made.
+fn program_here(program: &mut Option<String>) -> Result<Option<PathBuf>, ToolError> {
+  let Some(path) = program
+    .take_if(|given| Path::new(given).is_absolute())
+    .map(PathBuf::from)
+  else {
+    return Ok(None);
+  };
+  if !path.is_file() {
+    return Err(team_fill_ins::refusal(FillInError::ProgramNotAFile));
+  }
+  let name = path
+    .file_name()
+    .and_then(|name| name.to_str())
+    .expect("a file's path given as text ends in a name that is text");
+  *program = Some(name.to_owned());
+  Ok(Some(path))
+}
+
+/// The tools' answer: `server`, the program path this computer keeps for it when one was given, and whether nothing
+/// changed at all.
+fn answered(server: Value, here: Option<&Path>, unchanged: bool) -> Value {
+  let mut answer = json!({});
+  answer["server"] = server;
+  if let Some(path) = here {
+    answer["program_here"] = json!(path.display().to_string());
+  }
+  if unchanged {
+    answer["unchanged"] = json!(true);
+  }
+  answer
 }
 
 pub(super) async fn update(services: &Services, found: Found, mut args: UpdateMcpServer) -> Result<Value, ToolError> {
   let Found { team, resource } = found;
   // The team holds a program's name only, so an absolute path can only be this computer's: it is kept here, for every
   // project of the team server, and publishes nothing.
-  if let Some(path) = args
+  let here = args
     .fields
     .program
-    .take_if(|program| std::path::Path::new(program).is_absolute())
-  {
-    let (services, root, server) = (services.clone(), team.open.repo_root.clone(), resource.clone());
-    blocking(move || team_fill_ins::set_program(&services, &root, &server, std::path::Path::new(&path))).await?;
+    .take_if(|program| Path::new(program).is_absolute())
+    .map(PathBuf::from);
+  if let Some(path) = here.clone() {
+    let (services, root, server) = (services.clone(), team.open.repo_root.clone(), resource.id);
+    blocking(move || team_fill_ins::set_program(&services, &root, server, &path)).await?;
   }
   let (blocked, root) = (services.clone(), team.open.repo_root.clone());
   let latest = latest_of(&resource)?;
@@ -114,7 +160,8 @@ pub(super) async fn update(services: &Services, found: Found, mut args: UpdateMc
   .await?;
   let number = resource.number().map_or(0, |number| number.get());
   if next == latest {
-    return Ok(json!({ "server": server_json(resource.id, &latest, number), "unchanged": true }));
+    let server = server_json(resource.id, &latest, number);
+    return Ok(answered(server, here.as_deref(), here.is_none()));
   }
   let published = services
     .servers
@@ -126,7 +173,11 @@ pub(super) async fn update(services: &Services, found: Found, mut args: UpdateMc
     .await
     .map_err(|error| refused(&error))?;
   services.changes.record(team.open.project.id(), Outside::Connections);
-  Ok(json!({ "server": server_json(resource.id, &next, published.get()) }))
+  Ok(answered(
+    server_json(resource.id, &next, published.get()),
+    here.as_deref(),
+    false,
+  ))
 }
 
 pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, ToolError> {
@@ -194,7 +245,7 @@ fn server_json(id: ResourceId, server: &TeamMcpServer, version: u32) -> Value {
 }
 
 /// The runs of this computer that pin team MCP server `id` and will be cancelled when the archive reaches it.
-fn stopping_here(root: &std::path::Path, id: ResourceId, team: &TeamConfig) -> Result<Vec<Value>, ToolError> {
+fn stopping_here(root: &Path, id: ResourceId, team: &TeamConfig) -> Result<Vec<Value>, ToolError> {
   let pinning = crate::sharing::sync::pinning(root, id, Some(team)).map_err(|error| match error {
     ArchiveError::Store(error) => ToolError::from(error),
     ArchiveError::Runs(error) => ToolError::from(run_store_error(error)),

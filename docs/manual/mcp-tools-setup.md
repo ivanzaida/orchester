@@ -231,8 +231,10 @@ Always `person_only` unless AP is on. Returns the server as `list_connections` l
 `not_admin` by all three tools, before anything else. `add_mcp_server` creates it as **v1** on the team server (no
 draft); it is `person_only` unless AP is on. Offline, the new server waits in the outbox and the answer carries
 `waiting_for_server: {code: "team_server_unreachable"}`; a server the team server refuses is taken back
-(`team_server_refused`). The team holds names only, so `program` must be a name looked up on the search path (`npx`;
-a path is refused as `team_path_refused`, as is an absolute `working_directory`), `environment` and `authorization`
+(`team_server_refused`). The team holds names only, so `program` is a name looked up on the search path (`npx`). An
+absolute `program` is this computer's path to a file that is there (`program_not_a_file` otherwise): the team gets the
+file's name and this computer keeps the path, and the answer says `program_here`. A relative path is refused as
+`team_path_refused`, as is an absolute `working_directory`. `environment` and `authorization`
 (values, secrets) are refused as `team_value_refused`, and the variables and secret headers are named in
 `variable_names` and `secret_headers` (each header names its secret and prefix; a variable that is not a secret name,
 a secret that is not one or a prefix that is not short plain text is `invalid_server`, and the answer repeats neither
@@ -271,8 +273,9 @@ and the call is refused as `team_server_refused`); a change that changes nothing
 `unchanged: true`. What widens (another program or its arguments, another address, a tool added to `exempt_tools`, a
 different kind of server) is `person_only` unless AP is on. The server keeps its name (`name_not_editable`).
 `program` is the body's program name (`npx`), team data like the rest: changing it is `person_only` unless AP is on,
-and a path is `team_path_refused`. The program's path on this computer is set by a person in the window, never by a
-tool. `name` is the body's name and is not editable here (`name_not_editable`; rename the resource in the window). A
+and a relative path is `team_path_refused`. An absolute `program` is the program's path on this computer, a file that
+is there: kept here under the same rule, it publishes nothing for it, and the answer says `program_here` instead of
+`unchanged`. `name` is the body's name and is not editable here (`name_not_editable`; rename the resource in the window). A
 draft of the server that differs from the version this computer uses is someone's unpublished edit and is never
 replaced: the call is refused as `draft_changed`. A remote server's `url` has no query or fragment (`team_value_refused`,
 in `add_mcp_server` too): a key in it would reach the team server and every member, so a secret goes in
@@ -401,9 +404,9 @@ profile. Reading it opens the project's data only to read it: it migrates and wr
 | `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `set_profile_account` / `pick_profile_connection` |
 | `connection_sign_in` | `cli`, `connection` (id) — the connection the profile runs on needs the CLI's sign-in and its last check found it signed out | none: a person signs in (Connections shows how); `fix: { "tool": null, "gate": "person" }` |
 | `decision_connection` | `reviewer` (id), `problem`: `none_of_kind` (no decision connection: add one) or `pick_needed` (several, none picked for this reviewer) — a team decision reviewer | `save_decision_connection` / `pick_reviewer_connection` |
-| `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
+| `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` unless AP is on, so `gate: "ap"` |
 | `mcp_unsupported` | `server` `{id, name}`, `why`: `more_than_one_secret_header` — a team MCP server this app cannot run as defined | none: only the team can change the server |
-| `mcp_program` | `server`, `problem`: `not_set` or `file_gone` — the team MCP server's program path on this computer | none: a person chooses the file in the app |
+| `mcp_program` | `server`, `problem`: `not_set` or `file_gone` — the team MCP server's program path on this computer | `update_mcp_server` with the program's absolute path (`gate: "ap"`), or a person chooses the file in the app |
 | `secret` | `name` — the team secret has no value here | none: a person gives it in the app |
 | `secret_unreadable` | `name` — the keychain did not say whether the team secret has a value here | none: try again; the keychain has to answer |
 | `local_mcp_program` | `server` `{id, name}`, `problem`: `not_found` (no such file on the `PATH` the agent starts with, or in the project) or `moved` (a fixed file now leads into the repository) — a local project's MCP server a profile chooses and that is turned on | `update_mcp_server` (another program widens: `gate: "ap"`); `not_found` may instead mean installing the program, which no tool does |
